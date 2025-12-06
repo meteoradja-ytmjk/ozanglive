@@ -133,6 +133,41 @@ docker-compose build --no-cache
 docker-compose up -d
 ```
 
+### 🔥 Fresh Install / Replace Total (VPS)
+
+Jika ingin install ulang dengan menimpa semua file (database tetap aman):
+
+```bash
+# One-Line Command
+cd ~/ozanglive && git fetch origin && git reset --hard origin/main && npm install && pm2 restart streamflow
+```
+
+**Step-by-Step:**
+
+```bash
+# 1. Masuk folder aplikasi
+cd ~/ozanglive
+
+# 2. Backup database dulu (PENTING!)
+cp db/streamflow.db db/streamflow.db.backup
+
+# 3. Fetch dan replace semua file dengan versi GitHub
+git fetch origin
+git reset --hard origin/main
+
+# 4. Install dependencies
+npm install
+
+# 5. Restart aplikasi
+pm2 restart streamflow
+
+# 6. Verifikasi
+pm2 status
+pm2 logs streamflow --lines 20
+```
+
+> ⚠️ **Catatan:** Perintah `git reset --hard` akan menimpa SEMUA file local dengan versi dari GitHub. Pastikan backup database sebelum menjalankan!
+
 ---
 
 ## 🐳 Docker Installation
