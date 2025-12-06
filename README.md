@@ -38,6 +38,11 @@
 curl -fsSL https://raw.githubusercontent.com/meteoradja-ytmjk/ozanglive/main/install.sh | bash
 ```
 
+> 💡 **Installer otomatis mendeteksi** jika sudah ada instalasi sebelumnya dan memberikan pilihan:
+> - **Install ulang** - Hapus instalasi lama dan install fresh
+> - **Update saja** - Pertahankan data, update kode terbaru
+> - **Batalkan** - Tidak melakukan apa-apa
+
 ### Manual Installation
 
 ```bash
