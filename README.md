@@ -80,6 +80,61 @@ pm2 startup
 
 ---
 
+## � DUpdate Aplikasi (Tanpa Install Ulang)
+
+Jika aplikasi sudah terinstall di VPS dan ingin update ke versi terbaru:
+
+### Quick Update (One-Line)
+
+```bash
+cd ~/ozanglive && git pull && pm2 restart streamflow
+```
+
+### Update Step-by-Step
+
+```bash
+# 1. Masuk ke folder aplikasi
+cd ~/ozanglive
+
+# 2. Backup database (opsional tapi recommended)
+cp db/streamflow.db db/streamflow.db.backup
+
+# 3. Pull perubahan terbaru dari GitHub
+git pull origin main
+
+# 4. Install dependencies baru (jika ada)
+npm install
+
+# 5. Restart aplikasi
+pm2 restart streamflow
+
+# 6. Cek status
+pm2 status
+```
+
+### Jika Ada Conflict saat Git Pull
+
+```bash
+# Reset local changes dan ambil versi terbaru
+cd ~/ozanglive
+git fetch origin
+git reset --hard origin/main
+npm install
+pm2 restart streamflow
+```
+
+### Update dengan Docker
+
+```bash
+cd ~/ozanglive
+git pull origin main
+docker-compose down
+docker-compose build --no-cache
+docker-compose up -d
+```
+
+---
+
 ## 🐳 Docker Installation
 
 ### Menggunakan Docker Compose (Recommended)
