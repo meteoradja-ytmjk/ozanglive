@@ -805,101 +805,19 @@ app.post('/api/users/role', isAdmin, async (req, res) => {
 });
 
 app.post('/api/users/delete', isAdmin, async (req, res) => {
-  try {
-    const { userId } = req.body;
-    
-    if (!userId) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid user ID'
-      });
-    }
-
-    if (userId == req.session.userId) {
-      return res.status(400).json({
-        success: false,
-        message: 'Cannot delete your own account'
-      });
-    }
-
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
-    }
-
-    await User.delete(userId);
-    
-    res.json({
-      success: true,
-      message: 'User deleted successfully'
-    });
-  } catch (error) {
-    console.error('Error deleting user:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to delete user'
-    });
-  }
+  // User deletion is disabled - return 403 Forbidden
+  return res.status(403).json({
+    success: false,
+    message: 'User deletion is not allowed'
+  });
 });
 
 app.post('/api/users/update', isAdmin, upload.single('avatar'), async (req, res) => {
-  try {
-    const { userId, username, role, status, password, live_limit } = req.body;
-    
-    if (!userId) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid user ID'
-      });
-    }
-
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
-    }
-
-    let avatarPath = user.avatar_path;
-    if (req.file) {
-      avatarPath = `/uploads/avatars/${req.file.filename}`;
-    }
-
-    const updateData = {
-      username: username || user.username,
-      user_role: role || user.user_role,
-      status: status || user.status,
-      avatar_path: avatarPath
-    };
-
-    // Handle live_limit - convert to null if empty/0, otherwise parse as integer
-    if (live_limit !== undefined) {
-      const parsedLimit = parseInt(live_limit, 10);
-      updateData.live_limit = (isNaN(parsedLimit) || parsedLimit <= 0) ? null : parsedLimit;
-    }
-
-    if (password && password.trim() !== '') {
-      const bcrypt = require('bcrypt');
-      updateData.password = await bcrypt.hash(password, 10);
-    }
-
-    await User.updateProfile(userId, updateData);
-    
-    res.json({
-      success: true,
-      message: 'User updated successfully'
-    });
-  } catch (error) {
-    console.error('Error updating user:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to update user'
-    });
-  }
+  // User editing is disabled - return 403 Forbidden
+  return res.status(403).json({
+    success: false,
+    message: 'User editing is not allowed'
+  });
 });
 
 app.post('/api/users/create', isAdmin, upload.single('avatar'), async (req, res) => {

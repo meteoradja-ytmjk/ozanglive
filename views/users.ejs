@@ -125,20 +125,8 @@
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
                 <%= new Date(user.created_at).toLocaleDateString() %>
               </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                <div class="flex space-x-2">
-                  <button onclick="editUser('<%= user.id %>', '<%= user.username %>', '<%= user.user_role %>', '<%= user.status %>', '<%= user.avatar_path || '' %>', '<%= user.live_limit || '' %>')" 
-                    class="text-primary hover:text-accent transition-colors" title="Edit User">
-                    <i class="ti ti-edit"></i>
-                  </button>
-                  
-                  <% if (user.id !== req.session.userId) { %>
-                    <button onclick="deleteUser('<%= user.id %>', '<%= user.username %>')" 
-                      class="text-red-400 hover:text-red-300 transition-colors" title="Delete User">
-                      <i class="ti ti-trash"></i>
-                    </button>
-                  <% } %>
-                </div>
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-500">
+                -
               </td>
             </tr>
           <% }); %>
@@ -162,93 +150,7 @@
   </div>
 </div>
 
-<div id="editModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden transition-opacity">
-  <div class="flex items-center justify-center min-h-screen p-4">
-    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-md border border-gray-600/50 transform transition-all opacity-0 scale-95" id="editModalContent">
-      <div class="flex items-center justify-between p-4 border-b border-gray-600/50">
-        <div class="flex items-center">
-          <h3 class="text-lg font-medium">Edit User</h3>
-        </div>
-        <button onclick="closeEditModal()" class="rounded-full w-8 h-8 flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700/50 transition-colors">
-          <i class="ti ti-x"></i>
-        </button>
-      </div>
-      
-      <div class="p-6">
-        <form id="editUserForm" enctype="multipart/form-data">
-          <input type="hidden" id="editUserId" name="userId">
-          
-          <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-300 mb-2">Profile Picture</label>
-            <div class="flex items-center space-x-4">
-              <div class="h-16 w-16 rounded-full overflow-hidden ring-2 ring-gray-600">
-                <img id="editUserAvatar" src="/images/default-avatar.jpg" alt="User avatar" class="w-full h-full object-cover">
-              </div>
-              <div>
-                <input type="file" id="editAvatarInput" name="avatar" accept="image/*" class="hidden">
-                <button type="button" onclick="document.getElementById('editAvatarInput').click()" 
-                  class="px-3 py-1 bg-primary hover:bg-secondary text-white text-sm rounded-lg transition-colors">
-                  Change Photo
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div class="mb-4">
-            <label for="editUsername" class="block text-sm font-medium text-gray-300 mb-2">Username</label>
-            <input type="text" id="editUsername" name="username" required placeholder="Enter username"
-              class="w-full bg-dark-700 border border-gray-600 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
-          </div>
-
-          <div class="mb-4">
-            <label for="editRole" class="block text-sm font-medium text-gray-300 mb-2">Role</label>
-            <select id="editRole" name="role" 
-              class="w-full bg-dark-700 border border-gray-600 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
-              <option value="member">Member</option>
-              <option value="admin">Admin</option>
-            </select>
-          </div>
-
-          <div class="mb-4">
-            <label for="editStatus" class="block text-sm font-medium text-gray-300 mb-2">Status</label>
-            <select id="editStatus" name="status" 
-              class="w-full bg-dark-700 border border-gray-600 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
-          </div>
-
-          <div class="mb-4">
-            <label for="editLiveLimit" class="block text-sm font-medium text-gray-300 mb-2">
-              Live Limit
-              <span class="text-xs text-gray-500 ml-1">(0 = use default)</span>
-            </label>
-            <input type="number" id="editLiveLimit" name="live_limit" min="0" max="100" placeholder="0"
-              class="w-full bg-dark-700 border border-gray-600 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
-            <p class="text-xs text-gray-500 mt-1">Maximum simultaneous live streams for this user</p>
-          </div>
-
-          <div class="mb-6">
-            <label for="editPassword" class="block text-sm font-medium text-gray-300 mb-2">New Password (optional)</label>
-            <input type="password" id="editPassword" name="password" placeholder="Leave empty to keep current password"
-              class="w-full bg-dark-700 border border-gray-600 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
-          </div>
-        </form>
-      </div>
-      
-      <div class="flex justify-end p-4 border-t border-gray-600/50">
-        <button type="button" onclick="closeEditModal()" 
-          class="px-4 py-2 bg-dark-700 hover:bg-dark-600 text-gray-300 rounded-lg transition-colors mr-3">
-          Cancel
-        </button>
-        <button type="submit" form="editUserForm"
-          class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-lg transition-colors">
-          Save Changes
-        </button>
-      </div>
-    </div>
-  </div>
-</div>
+<!-- Edit Modal removed - User editing is disabled -->
 
 <div id="createModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden transition-opacity">
   <div class="flex items-center justify-center min-h-screen p-4">
@@ -438,34 +340,6 @@ function showToast(message, type = 'success') {
   }, 3000);
 }
 
-function openEditModal(userId, username, role, status, avatar, liveLimit) {
-  document.getElementById('editUserId').value = userId;
-  document.getElementById('editUsername').value = username;
-  document.getElementById('editRole').value = role;
-  document.getElementById('editStatus').value = status;
-  document.getElementById('editPassword').value = '';
-  document.getElementById('editLiveLimit').value = liveLimit || '';
-  
-  const avatarImg = document.getElementById('editUserAvatar');
-  if (avatar && avatar !== 'null' && avatar !== '') {
-    // avatar already contains full path like /uploads/avatars/xxx.png
-    avatarImg.src = avatar;
-  } else {
-    avatarImg.src = '/images/default-avatar.jpg';
-  }
-  
-  const modal = document.getElementById('editModal');
-  const modalContent = document.getElementById('editModalContent');
-  
-  modal.classList.remove('hidden');
-  
-  setTimeout(() => {
-    modal.classList.remove('opacity-0');
-    modalContent.classList.remove('opacity-0', 'scale-95');
-    modalContent.classList.add('opacity-100', 'scale-100');
-  }, 10);
-}
-
 function openCreateModal() {
   document.getElementById('createUsername').value = '';
   document.getElementById('createRole').value = 'member';
@@ -501,35 +375,6 @@ function closeCreateModal() {
   }, 200);
 }
 
-function editUser(userId, username, role, status, avatarPath, liveLimit) {
-  openEditModal(userId, username, role, status, avatarPath, liveLimit);
-}
-
-function closeEditModal() {
-  const modal = document.getElementById('editModal');
-  const modalContent = document.getElementById('editModalContent');
-  
-  modal.classList.add('opacity-0');
-  modalContent.classList.remove('opacity-100', 'scale-100');
-  modalContent.classList.add('opacity-0', 'scale-95');
-  
-  setTimeout(() => {
-    modal.classList.add('hidden');
-    document.getElementById('editUserForm').reset();
-  }, 200);
-}
-
-document.getElementById('editAvatarInput').addEventListener('change', function(e) {
-  const file = e.target.files[0];
-  if (file) {
-    const reader = new FileReader();
-    reader.onload = function(e) {
-      document.getElementById('editUserAvatar').src = e.target.result;
-    };
-    reader.readAsDataURL(file);
-  }
-});
-
 document.getElementById('createAvatarInput').addEventListener('change', function(e) {
   const file = e.target.files[0];
   if (file) {
@@ -539,31 +384,6 @@ document.getElementById('createAvatarInput').addEventListener('change', function
     };
     reader.readAsDataURL(file);
   }
-});
-
-document.getElementById('editUserForm').addEventListener('submit', function(e) {
-  e.preventDefault();
-  
-  const formData = new FormData(this);
-  
-  fetch('/api/users/update', {
-    method: 'POST',
-    body: formData
-  })
-  .then(response => response.json())
-  .then(data => {
-    if (data.success) {
-      showToast('User updated successfully', 'success');
-      closeEditModal();
-      setTimeout(() => location.reload(), 1000);
-    } else {
-      showToast('Error: ' + data.message, 'error');
-    }
-  })
-  .catch(error => {
-    console.error('Error:', error);
-    showToast('An error occurred while updating user', 'error');
-  });
 });
 
 document.getElementById('createUserForm').addEventListener('submit', function(e) {
@@ -590,34 +410,6 @@ document.getElementById('createUserForm').addEventListener('submit', function(e)
     showToast('An error occurred while creating user', 'error');
   });
 });
-
-function deleteUser(userId, username) {
-  const title = 'Delete User';
-  const message = `Are you sure you want to delete user "${username}"? This action cannot be undone.`;
-  
-  showConfirmModal(title, message, () => {
-    fetch('/api/users/delete', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ userId })
-    })
-    .then(response => response.json())
-    .then(data => {
-      if (data.success) {
-        showToast('User deleted successfully', 'success');
-        setTimeout(() => location.reload(), 1000);
-      } else {
-        showToast('Error: ' + data.message, 'error');
-      }
-    })
-    .catch(error => {
-      console.error('Error:', error);
-      showToast('An error occurred while deleting user', 'error');
-    });
-  });
-}
 
 function showConfirmModal(title, message, onConfirm) {
   document.getElementById('modalTitle').textContent = title;
