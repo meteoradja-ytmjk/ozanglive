@@ -11,49 +11,16 @@ echo
 if [ -d "$HOME/ozanglive" ] || pm2 list 2>/dev/null | grep -q "ozanglive"; then
     echo "⚠️  Instalasi OzangLive sudah ada!"
     echo
-    echo "Pilih opsi:"
-    echo "1) Install ulang (hapus data lama)"
-    echo "2) Update saja (pertahankan data)"
-    echo "3) Batalkan"
+    echo "🗑️  Menghapus instalasi lama..."
+    pm2 delete ozanglive 2>/dev/null || true
+    pm2 save 2>/dev/null || true
+    rm -rf "$HOME/ozanglive"
+    echo "✅ Instalasi lama dihapus"
     echo
-    read -p "Pilihan (1/2/3): " choice
-    
-    case $choice in
-        1)
-            echo "🗑️  Menghapus instalasi lama..."
-            pm2 delete ozanglive 2>/dev/null || true
-            pm2 save 2>/dev/null || true
-            rm -rf "$HOME/ozanglive"
-            echo "✅ Instalasi lama dihapus"
-            ;;
-        2)
-            echo "🔄 Mode update..."
-            cd "$HOME/ozanglive"
-            git pull origin main
-            npm install
-            pm2 restart ozanglive
-            echo
-            echo "✅ UPDATE SELESAI!"
-            exit 0
-            ;;
-        3)
-            echo "Instalasi dibatalkan."
-            exit 0
-            ;;
-        *)
-            echo "Pilihan tidak valid. Instalasi dibatalkan."
-            exit 1
-            ;;
-    esac
-else
-    read -p "Mulai instalasi? (y/n): " -n 1 -r
-    echo
-    [[ ! $REPLY =~ ^[Yy]$ ]] && echo "Instalasi dibatalkan." && exit 1
 fi
 
 echo "🔄 Updating sistem..."
 sudo apt update && sudo apt upgrade -y
-
 
 # Cek dan install Node.js jika belum ada
 if ! command -v node &> /dev/null; then
