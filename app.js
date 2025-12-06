@@ -16,10 +16,11 @@ const rateLimit = require('express-rate-limit');
 const User = require('./models/User');
 const { db, checkIfUsersExist } = require('./db/database');
 const systemMonitor = require('./services/systemMonitor');
-const { uploadVideo, upload } = require('./middleware/uploadMiddleware');
+const { uploadVideo, upload, uploadAudio, uploadBackup } = require('./middleware/uploadMiddleware');
 const { ensureDirectories } = require('./utils/storage');
 const { getVideoInfo, generateThumbnail } = require('./utils/videoProcessor');
 const Video = require('./models/Video');
+const Audio = require('./models/Audio');
 const Playlist = require('./models/Playlist');
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
@@ -49,6 +50,23 @@ app.locals.helpers = {
       return req.session.username;
     }
     return 'User';
+  },
+  getRoleBadge: function (req) {
+    if (req.session && req.session.user_role) {
+      const role = req.session.user_role;
+      if (role === 'admin') {
+        return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-500/20 text-blue-400 border border-blue-500/30" title="Administrator - Full system access">
+          <i class="ti ti-shield-check text-xs"></i>
+          <span>Admin</span>
+        </span>`;
+      } else {
+        return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-500/20 text-gray-400 border border-gray-500/30" title="Member - Standard access">
+          <i class="ti ti-user text-xs"></i>
+          <span>Member</span>
+        </span>`;
+      }
+    }
+    return '';
   },
   getAvatar: function (req) {
     if (req.session && req.session.userId) {
@@ -339,21 +357,13 @@ app.get('/signup', async (req, res) => {
 });
 
 app.post('/signup', upload.single('avatar'), async (req, res) => {
-  const { username, password, confirmPassword, user_role, status } = req.body;
+  const { username, password, user_role, status } = req.body;
   
   try {
     if (!username || !password) {
       return res.render('signup', {
         title: 'Sign Up',
         error: 'Username and password are required',
-        success: null
-      });
-    }
-
-    if (password !== confirmPassword) {
-      return res.render('signup', {
-        title: 'Sign Up',
-        error: 'Passwords do not match',
         success: null
       });
     }
@@ -445,10 +455,7 @@ app.post('/setup-account', upload.single('avatar'), [
     .withMessage('Password must be at least 8 characters long')
     .matches(/[a-z]/).withMessage('Password must contain at least one lowercase letter')
     .matches(/[A-Z]/).withMessage('Password must contain at least one uppercase letter')
-    .matches(/[0-9]/).withMessage('Password must contain at least one number'),
-  body('confirmPassword')
-    .custom((value, { req }) => value === req.body.password)
-    .withMessage('Passwords do not match')
+    .matches(/[0-9]/).withMessage('Password must contain at least one number')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -535,12 +542,16 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
 });
 app.get('/gallery', isAuthenticated, async (req, res) => {
   try {
+    const tab = req.query.tab || 'video';
     const videos = await Video.findAll(req.session.userId);
+    const audios = await Audio.findAll(req.session.userId);
     res.render('gallery', {
-      title: 'Video Gallery',
+      title: 'Media Gallery',
       active: 'gallery',
       user: await User.findById(req.session.userId),
-      videos: videos
+      videos: videos,
+      audios: audios,
+      activeTab: tab
     });
   } catch (error) {
     console.error('Gallery error:', error);
@@ -639,6 +650,8 @@ app.delete('/api/history/:id', isAuthenticated, async (req, res) => {
 app.get('/users', isAdmin, async (req, res) => {
   try {
     const users = await User.findAll();
+    const SystemSettingsModel = require('./models/SystemSettings');
+    const defaultLiveLimit = await SystemSettingsModel.getDefaultLiveLimit();
     
     const usersWithStats = await Promise.all(users.map(async (user) => {
       const videoStats = await new Promise((resolve, reject) => {
@@ -688,7 +701,8 @@ app.get('/users', isAdmin, async (req, res) => {
          videoCount: videoStats.count,
          totalVideoSize: videoStats.totalSize > 0 ? formatFileSize(videoStats.totalSize) : null,
          streamCount: streamStats.count,
-         activeStreamCount: activeStreamStats.count
+         activeStreamCount: activeStreamStats.count,
+         defaultLiveLimit: defaultLiveLimit
        };
     }));
     
@@ -833,7 +847,7 @@ app.post('/api/users/delete', isAdmin, async (req, res) => {
 
 app.post('/api/users/update', isAdmin, upload.single('avatar'), async (req, res) => {
   try {
-    const { userId, username, role, status, password } = req.body;
+    const { userId, username, role, status, password, live_limit } = req.body;
     
     if (!userId) {
       return res.status(400).json({
@@ -861,6 +875,12 @@ app.post('/api/users/update', isAdmin, upload.single('avatar'), async (req, res)
       status: status || user.status,
       avatar_path: avatarPath
     };
+
+    // Handle live_limit - convert to null if empty/0, otherwise parse as integer
+    if (live_limit !== undefined) {
+      const parsedLimit = parseInt(live_limit, 10);
+      updateData.live_limit = (isNaN(parsedLimit) || parsedLimit <= 0) ? null : parsedLimit;
+    }
 
     if (password && password.trim() !== '') {
       const bcrypt = require('bcrypt');
@@ -949,6 +969,50 @@ app.get('/api/users/:id/streams', isAdmin, async (req, res) => {
   } catch (error) {
     console.error('Get user streams error:', error);
     res.status(500).json({ success: false, message: 'Failed to get user streams' });
+  }
+});
+
+// Live Limit Settings API
+const SystemSettings = require('./models/SystemSettings');
+const LiveLimitService = require('./services/liveLimitService');
+
+app.get('/api/settings/live-limit', isAdmin, async (req, res) => {
+  try {
+    const defaultLimit = await SystemSettings.getDefaultLiveLimit();
+    res.json({ success: true, defaultLimit });
+  } catch (error) {
+    console.error('Get live limit error:', error);
+    res.status(500).json({ success: false, message: 'Failed to get live limit' });
+  }
+});
+
+app.post('/api/settings/live-limit', isAdmin, async (req, res) => {
+  try {
+    const { limit } = req.body;
+    const parsedLimit = parseInt(limit, 10);
+    
+    if (isNaN(parsedLimit) || parsedLimit < 1) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Live limit must be at least 1' 
+      });
+    }
+    
+    await SystemSettings.setDefaultLiveLimit(parsedLimit);
+    res.json({ success: true, message: 'Live limit updated successfully', limit: parsedLimit });
+  } catch (error) {
+    console.error('Set live limit error:', error);
+    res.status(500).json({ success: false, message: 'Failed to update live limit' });
+  }
+});
+
+app.get('/api/streams/limit-info', isAuthenticated, async (req, res) => {
+  try {
+    const limitInfo = await LiveLimitService.validateAndGetInfo(req.session.userId);
+    res.json({ success: true, ...limitInfo });
+  } catch (error) {
+    console.error('Get limit info error:', error);
+    res.status(500).json({ success: false, message: 'Failed to get limit info' });
   }
 });
 
@@ -1632,6 +1696,35 @@ app.get('/api/stream/content', isAuthenticated, async (req, res) => {
     res.status(500).json({ error: 'Failed to load content' });
   }
 });
+
+// API endpoint for fetching audio list for stream modal
+app.get('/api/stream/audios', isAuthenticated, async (req, res) => {
+  try {
+    const audios = await Audio.findAll(req.session.userId);
+    const formattedAudios = audios.map(audio => {
+      let formattedDuration = 'Unknown';
+      if (audio.duration) {
+        const duration = Math.floor(audio.duration);
+        const minutes = Math.floor(duration / 60);
+        const seconds = Math.floor(duration % 60);
+        formattedDuration = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+      }
+      return {
+        id: audio.id,
+        title: audio.title,
+        name: audio.title,
+        duration: formattedDuration,
+        format: audio.format || 'audio',
+        filepath: audio.filepath
+      };
+    });
+    res.json(formattedAudios);
+  } catch (error) {
+    console.error('Error fetching audios for stream:', error);
+    res.status(500).json({ error: 'Failed to load audios' });
+  }
+});
+
 const Stream = require('./models/Stream');
 const { title } = require('process');
 app.get('/api/streams', isAuthenticated, async (req, res) => {
@@ -1679,9 +1772,22 @@ app.post('/api/streams', isAuthenticated, [
       platform = 'Restream.io';
       platform_icon = 'ti-live-photo';
     }
+    // Parse schedule days if provided
+    let scheduleDays = null;
+    if (req.body.scheduleDays) {
+      try {
+        scheduleDays = typeof req.body.scheduleDays === 'string' 
+          ? JSON.parse(req.body.scheduleDays) 
+          : req.body.scheduleDays;
+      } catch (e) {
+        scheduleDays = null;
+      }
+    }
+    
     const streamData = {
       title: req.body.streamTitle,
       video_id: req.body.videoId || null,
+      audio_id: req.body.audioId || null,
       rtmp_url: req.body.rtmpUrl,
       stream_key: req.body.streamKey,
       platform,
@@ -1691,7 +1797,12 @@ app.post('/api/streams', isAuthenticated, [
       fps: parseInt(req.body.fps) || 30,
       orientation: req.body.orientation || 'horizontal',
       loop_video: req.body.loopVideo === 'true' || req.body.loopVideo === true,
-      use_advanced_settings: req.body.useAdvancedSettings === 'true' || req.body.useAdvancedSettings === true,
+      stream_duration_hours: req.body.streamDuration ? parseInt(req.body.streamDuration) : null,
+      // Recurring schedule fields
+      schedule_type: req.body.scheduleType || 'once',
+      schedule_days: scheduleDays,
+      recurring_time: req.body.recurringTime || null,
+      recurring_enabled: req.body.recurringEnabled === 'true' || req.body.recurringEnabled === true,
       user_id: req.session.userId
     };
     const serverTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -1739,6 +1850,57 @@ app.post('/api/streams', isAuthenticated, [
     res.status(500).json({ success: false, error: 'Failed to create stream' });
   }
 });
+
+// Stream Settings Backup - Export endpoint (MUST be before :id routes)
+const backupService = require('./services/backupService');
+
+app.get('/api/streams/export', isAuthenticated, async (req, res) => {
+  try {
+    const backupData = await backupService.exportStreams(req.session.userId);
+    const filename = `streamflow-backup-${new Date().toISOString().split('T')[0]}.json`;
+    
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(JSON.stringify(backupData, null, 2));
+  } catch (error) {
+    console.error('Error exporting streams:', error);
+    res.status(500).json({ success: false, error: 'Failed to export stream settings' });
+  }
+});
+
+// Stream Settings Backup - Import endpoint
+app.post('/api/streams/import', isAuthenticated, uploadBackup.single('backupFile'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'No file uploaded' });
+    }
+
+    // Read and parse the uploaded file
+    const fileContent = req.file.buffer.toString('utf8');
+    let backupData;
+    
+    try {
+      backupData = JSON.parse(fileContent);
+    } catch (parseError) {
+      return res.status(400).json({ success: false, error: 'Invalid JSON format' });
+    }
+
+    // Import streams
+    const result = await backupService.importStreams(backupData, req.session.userId);
+    
+    res.json({
+      success: true,
+      imported: result.imported,
+      skipped: result.skipped,
+      errors: result.errors,
+      message: `Successfully imported ${result.imported} stream(s). ${result.skipped} skipped.`
+    });
+  } catch (error) {
+    console.error('Error importing streams:', error);
+    res.status(500).json({ success: false, error: 'Failed to import stream settings' });
+  }
+});
+
 app.get('/api/streams/:id', isAuthenticated, async (req, res) => {
   try {
     const stream = await Stream.getStreamWithVideo(req.params.id);
@@ -1809,6 +1971,43 @@ app.put('/api/streams/:id', isAuthenticated, async (req, res) => {
     if (req.body.useAdvancedSettings !== undefined) {
       updateData.use_advanced_settings = req.body.useAdvancedSettings === 'true' || req.body.useAdvancedSettings === true;
     }
+    
+    // Handle stream duration (in hours)
+    if (req.body.streamDuration !== undefined) {
+      updateData.stream_duration_hours = req.body.streamDuration ? parseInt(req.body.streamDuration) : null;
+    }
+    
+    // Handle audio selection
+    if (req.body.audioId !== undefined) {
+      updateData.audio_id = req.body.audioId || null;
+    }
+    
+    // Handle recurring schedule fields
+    if (req.body.scheduleType !== undefined) {
+      updateData.schedule_type = req.body.scheduleType || 'once';
+    }
+    if (req.body.recurringTime !== undefined) {
+      updateData.recurring_time = req.body.recurringTime || null;
+    }
+    if (req.body.scheduleDays !== undefined) {
+      try {
+        const days = typeof req.body.scheduleDays === 'string' 
+          ? JSON.parse(req.body.scheduleDays) 
+          : req.body.scheduleDays;
+        updateData.schedule_days = days ? JSON.stringify(days) : null;
+      } catch (e) {
+        updateData.schedule_days = null;
+      }
+    }
+    if (req.body.recurringEnabled !== undefined) {
+      updateData.recurring_enabled = req.body.recurringEnabled === 'true' || req.body.recurringEnabled === true ? 1 : 0;
+    }
+    
+    // Set status to scheduled for recurring schedules
+    if (updateData.schedule_type && (updateData.schedule_type === 'daily' || updateData.schedule_type === 'weekly')) {
+      updateData.status = 'scheduled';
+    }
+    
     const serverTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     
     function parseLocalDateTime(dateTimeString) {
@@ -1970,6 +2169,72 @@ app.post('/api/streams/:id/status', isAuthenticated, [
     res.status(500).json({ success: false, error: 'Failed to update stream status' });
   }
 });
+// Start stream endpoint
+app.post('/api/streams/:id/start', isAuthenticated, async (req, res) => {
+  try {
+    const streamId = req.params.id;
+    const stream = await Stream.findById(streamId);
+    if (!stream) {
+      return res.status(404).json({ success: false, error: 'Stream not found' });
+    }
+    if (stream.user_id !== req.session.userId) {
+      return res.status(403).json({ success: false, error: 'Not authorized' });
+    }
+    if (stream.status === 'live') {
+      return res.json({ success: false, error: 'Stream is already live' });
+    }
+    if (!stream.video_id) {
+      return res.json({ success: false, error: 'No video attached to this stream' });
+    }
+    const result = await streamingService.startStream(streamId);
+    if (result.success) {
+      const updatedStream = await Stream.getStreamWithVideo(streamId);
+      return res.json({ success: true, stream: updatedStream });
+    } else {
+      // Check if limit reached
+      if (result.limitReached) {
+        return res.status(403).json({ 
+          success: false, 
+          error: result.error || 'Hubungi Admin Untuk Menambah Limit',
+          limitReached: true,
+          activeStreams: result.activeStreams,
+          effectiveLimit: result.effectiveLimit
+        });
+      }
+      return res.status(500).json({ success: false, error: result.error || 'Failed to start stream' });
+    }
+  } catch (error) {
+    console.error('Error starting stream:', error);
+    res.status(500).json({ success: false, error: 'Failed to start stream' });
+  }
+});
+
+// Stop stream endpoint
+app.post('/api/streams/:id/stop', isAuthenticated, async (req, res) => {
+  try {
+    const streamId = req.params.id;
+    const stream = await Stream.findById(streamId);
+    if (!stream) {
+      return res.status(404).json({ success: false, error: 'Stream not found' });
+    }
+    if (stream.user_id !== req.session.userId) {
+      return res.status(403).json({ success: false, error: 'Not authorized' });
+    }
+    if (stream.status === 'live') {
+      const result = await streamingService.stopStream(streamId);
+      if (!result.success) {
+        console.warn('Failed to stop FFmpeg process:', result.error);
+      }
+    }
+    await Stream.updateStatus(streamId, 'offline', req.session.userId);
+    const updatedStream = await Stream.getStreamWithVideo(streamId);
+    return res.json({ success: true, stream: updatedStream });
+  } catch (error) {
+    console.error('Error stopping stream:', error);
+    res.status(500).json({ success: false, error: 'Failed to stop stream' });
+  }
+});
+
 app.get('/api/streams/check-key', isAuthenticated, async (req, res) => {
   try {
     const streamKey = req.query.key;
@@ -2017,6 +2282,7 @@ app.get('/api/streams/:id/logs', isAuthenticated, async (req, res) => {
     res.status(500).json({ success: false, error: 'Failed to fetch stream logs' });
   }
 });
+
 app.get('/playlist', isAuthenticated, async (req, res) => {
   try {
     const playlists = await Playlist.findAll(req.session.userId);
@@ -2252,6 +2518,281 @@ app.get('/api/server-time', (req, res) => {
     formattedTime: formattedTime
   });
 });
+
+// Audio API Routes
+app.post('/api/audios/upload', isAuthenticated, (req, res, next) => {
+  uploadAudio.single('audio')(req, res, (err) => {
+    if (err) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(413).json({ 
+          success: false, 
+          error: 'File too large. Maximum size is 500MB.' 
+        });
+      }
+      return res.status(400).json({ 
+        success: false, 
+        error: err.message 
+      });
+    }
+    next();
+  });
+}, async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'No audio file provided' 
+      });
+    }
+    let title = path.parse(req.file.originalname).name;
+    const filePath = `/uploads/audios/${req.file.filename}`;
+    const fullFilePath = path.join(__dirname, 'public', filePath);
+    const fileSize = req.file.size;
+    
+    // Extract audio metadata using ffprobe
+    ffmpeg.ffprobe(fullFilePath, async (err, metadata) => {
+      if (err) {
+        console.error('Error extracting audio metadata:', err);
+        return res.status(500).json({ 
+          success: false, 
+          error: 'Failed to process audio file' 
+        });
+      }
+      
+      const duration = metadata.format.duration || 0;
+      const format = path.extname(req.file.originalname).replace('.', '').toUpperCase();
+      
+      try {
+        const audioData = {
+          title,
+          filepath: filePath,
+          file_size: fileSize,
+          duration,
+          format,
+          user_id: req.session.userId
+        };
+        const audio = await Audio.create(audioData);
+        res.json({
+          success: true,
+          message: 'Audio uploaded successfully',
+          audio
+        });
+      } catch (dbError) {
+        console.error('Database error:', dbError);
+        res.status(500).json({ 
+          success: false, 
+          error: 'Failed to save audio record' 
+        });
+      }
+    });
+  } catch (error) {
+    console.error('Audio upload error:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to upload audio' 
+    });
+  }
+});
+
+app.get('/api/audios', isAuthenticated, async (req, res) => {
+  try {
+    const audios = await Audio.findAll(req.session.userId);
+    res.json({ success: true, audios });
+  } catch (error) {
+    console.error('Error fetching audios:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch audios' });
+  }
+});
+
+app.post('/api/audios/:id/rename', isAuthenticated, [
+  body('title').trim().isLength({ min: 1 }).withMessage('Title cannot be empty')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, error: errors.array()[0].msg });
+    }
+    const audio = await Audio.findById(req.params.id);
+    if (!audio) {
+      return res.status(404).json({ success: false, error: 'Audio not found' });
+    }
+    if (audio.user_id !== req.session.userId) {
+      return res.status(403).json({ success: false, error: 'Not authorized' });
+    }
+    await Audio.update(req.params.id, { title: req.body.title });
+    res.json({ success: true, message: 'Audio renamed successfully' });
+  } catch (error) {
+    console.error('Error renaming audio:', error);
+    res.status(500).json({ success: false, error: 'Failed to rename audio' });
+  }
+});
+
+app.delete('/api/audios/:id', isAuthenticated, async (req, res) => {
+  try {
+    const audioId = req.params.id;
+    const audio = await Audio.findById(audioId);
+    if (!audio) {
+      return res.status(404).json({ success: false, error: 'Audio not found' });
+    }
+    if (audio.user_id !== req.session.userId) {
+      return res.status(403).json({ success: false, error: 'Not authorized' });
+    }
+    await Audio.delete(audioId);
+    res.json({ success: true, message: 'Audio deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting audio:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete audio' });
+  }
+});
+
+app.get('/stream/audio/:audioId', isAuthenticated, async (req, res) => {
+  try {
+    const audioId = req.params.audioId;
+    const audio = await Audio.findById(audioId);
+    if (!audio) {
+      return res.status(404).send('Audio not found');
+    }
+    if (audio.user_id !== req.session.userId) {
+      return res.status(403).send('Not authorized');
+    }
+    const audioPath = path.join(__dirname, 'public', audio.filepath);
+    if (!fs.existsSync(audioPath)) {
+      return res.status(404).send('Audio file not found');
+    }
+    const stat = fs.statSync(audioPath);
+    const fileSize = stat.size;
+    const range = req.headers.range;
+    
+    const ext = path.extname(audio.filepath).toLowerCase();
+    let contentType = 'audio/mpeg';
+    if (ext === '.wav') contentType = 'audio/wav';
+    else if (ext === '.aac' || ext === '.m4a') contentType = 'audio/aac';
+    
+    if (range) {
+      const parts = range.replace(/bytes=/, '').split('-');
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+      const chunkSize = (end - start) + 1;
+      const file = fs.createReadStream(audioPath, { start, end });
+      res.writeHead(206, {
+        'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': chunkSize,
+        'Content-Type': contentType,
+      });
+      file.pipe(res);
+    } else {
+      res.writeHead(200, {
+        'Content-Length': fileSize,
+        'Content-Type': contentType,
+      });
+      fs.createReadStream(audioPath).pipe(res);
+    }
+  } catch (error) {
+    console.error('Audio streaming error:', error);
+    res.status(500).send('Error streaming audio');
+  }
+});
+
+// Audio Google Drive Import
+app.post('/api/audios/import-drive', isAuthenticated, [
+  body('driveUrl').notEmpty().withMessage('Google Drive URL is required')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, error: errors.array()[0].msg });
+    }
+    const { driveUrl } = req.body;
+    const { extractFileId } = require('./utils/googleDriveService');
+    try {
+      const fileId = extractFileId(driveUrl);
+      const jobId = uuidv4();
+      processGoogleDriveAudioImport(jobId, fileId, req.session.userId)
+        .catch(err => console.error('Audio Drive import failed:', err));
+      return res.json({
+        success: true,
+        message: 'Audio import started',
+        jobId: jobId
+      });
+    } catch (error) {
+      console.error('Google Drive URL parsing error:', error);
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid Google Drive URL format'
+      });
+    }
+  } catch (error) {
+    console.error('Error importing audio from Google Drive:', error);
+    res.status(500).json({ success: false, error: 'Failed to import audio' });
+  }
+});
+
+const audioImportJobs = {};
+async function processGoogleDriveAudioImport(jobId, fileId, userId) {
+  const { downloadFile } = require('./utils/googleDriveService');
+  
+  audioImportJobs[jobId] = {
+    status: 'downloading',
+    progress: 0,
+    message: 'Starting download...'
+  };
+  
+  try {
+    const result = await downloadFile(fileId, (progress) => {
+      audioImportJobs[jobId] = {
+        status: 'downloading',
+        progress: progress.progress,
+        message: `Downloading ${progress.filename}: ${progress.progress}%`
+      };
+    }, 'audios');
+    
+    audioImportJobs[jobId] = {
+      status: 'processing',
+      progress: 100,
+      message: 'Processing audio...'
+    };
+    
+    // Get audio duration using ffprobe
+    const audioFilePath = result.localFilePath;
+    const metadata = await new Promise((resolve, reject) => {
+      ffmpeg.ffprobe(audioFilePath, (err, metadata) => {
+        if (err) return reject(err);
+        resolve(metadata);
+      });
+    });
+    
+    const duration = metadata.format.duration || 0;
+    let format = path.extname(result.filename).toLowerCase().replace('.', '').toUpperCase();
+    if (!format) format = 'MP3';
+    
+    const audioData = {
+      title: path.basename(result.originalFilename, path.extname(result.originalFilename)),
+      filepath: `/uploads/audios/${result.filename}`,
+      file_size: result.fileSize,
+      duration: duration,
+      format: format,
+      user_id: userId
+    };
+    
+    await Audio.create(audioData);
+    
+    audioImportJobs[jobId] = {
+      status: 'completed',
+      progress: 100,
+      message: 'Audio imported successfully'
+    };
+    
+  } catch (error) {
+    console.error('Audio import error:', error);
+    audioImportJobs[jobId] = {
+      status: 'failed',
+      progress: 0,
+      message: error.message || 'Import failed'
+    };
+  }
+}
+
 const server = app.listen(port, '0.0.0.0', async () => {
   const ipAddresses = getLocalIpAddresses();
   console.log(`StreamFlow running at:`);

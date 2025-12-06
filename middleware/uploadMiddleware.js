@@ -44,6 +44,27 @@ const imageFilter = (req, file, cb) => {
   }
 };
 
+const audioStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, paths.audios);
+  },
+  filename: (req, file, cb) => {
+    const uniqueFilename = getUniqueFilename(file.originalname);
+    cb(null, uniqueFilename);
+  }
+});
+
+const audioFilter = (req, file, cb) => {
+  const allowedFormats = ['audio/mpeg', 'audio/wav', 'audio/aac', 'audio/x-m4a', 'audio/mp4'];
+  const fileExt = path.extname(file.originalname).toLowerCase();
+  const allowedExts = ['.mp3', '.wav', '.aac', '.m4a'];
+  if (allowedFormats.includes(file.mimetype) || allowedExts.includes(fileExt)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Only .mp3, .wav, and .aac formats are allowed'), false);
+  }
+};
+
 const uploadVideo = multer({
   storage: videoStorage,
   fileFilter: videoFilter
@@ -54,7 +75,35 @@ const upload = multer({
   fileFilter: imageFilter
 });
 
+const uploadAudio = multer({
+  storage: audioStorage,
+  fileFilter: audioFilter
+});
+
+// JSON backup file filter
+const jsonFilter = (req, file, cb) => {
+  const allowedFormats = ['application/json'];
+  const fileExt = path.extname(file.originalname).toLowerCase();
+  const allowedExts = ['.json'];
+  if (allowedFormats.includes(file.mimetype) || allowedExts.includes(fileExt)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Only .json files are allowed'), false);
+  }
+};
+
+// Memory storage for backup files (no need to save to disk)
+const uploadBackup = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: jsonFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB max
+  }
+});
+
 module.exports = {
   uploadVideo,
-  upload
+  upload,
+  uploadAudio,
+  uploadBackup
 };

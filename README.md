@@ -25,13 +25,29 @@ StreamFlow adalah aplikasi live streaming yang memungkinkan kamu melakukan live 
 - **VPS/Server** dengan minimal 1 Core CPU & 1GB RAM
 - **Port** 7575 (dapat disesuaikan di file [.env](.env))
 
-## ⚡ Quick Installation
+## ⚡ Instalasi Instan (One-Click)
 
-Untuk instalasi otomatis, jalankan perintah berikut:
+### 🚀 VPS/Linux - Copy & Paste!
 
 ```bash
-curl -o install.sh https://raw.githubusercontent.com/bangtutorial/streamflow/main/install.sh && chmod +x install.sh && ./install.sh
+bash <(curl -s https://raw.githubusercontent.com/meteoradja-ytmjk/ozanglive/main/install.sh)
 ```
+
+> ✅ Script akan otomatis install Node.js, FFmpeg, clone repo, setup PM2, dan jalankan aplikasi!
+
+### 🪟 Windows
+
+```powershell
+irm https://raw.githubusercontent.com/meteoradja-ytmjk/ozanglive/main/install.ps1 | iex
+```
+
+### 🐳 Docker
+
+```bash
+curl -s https://raw.githubusercontent.com/meteoradja-ytmjk/ozanglive/main/docker-install.sh | bash
+```
+
+Setelah instalasi selesai, akses: `http://IP_SERVER:7575`
 
 ## 🔧 Manual Installation
 
@@ -73,12 +89,12 @@ sudo apt install git -y
 
 Clone repository:
 ```bash
-git clone https://github.com/bangtutorial/streamflow
+git clone https://github.com/meteoradja-ytmjk/ozanglive
 ```
 
 Masuk ke direktori project:
 ```bash
-cd streamflow
+cd ozanglive
 ```
 
 Install Paket Node.JS:
@@ -143,7 +159,7 @@ sudo npm install -g pm2
 
 Jalankan aplikasi dengan PM2:
 ```bash
-pm2 start app.js --name streamflow
+pm2 start app.js --name ozanglive
 ```
 
 **Setup Auto-Restart saat Server Reboot:**
@@ -167,13 +183,13 @@ pm2 save
 pm2 status
 
 # Restart aplikasi
-pm2 restart streamflow
+pm2 restart ozanglive
 
 # Stop aplikasi
-pm2 stop streamflow
+pm2 stop ozanglive
 
 # Lihat logs aplikasi
-pm2 logs streamflow
+pm2 logs ozanglive
 
 # Monitor resource usage
 pm2 monit
@@ -192,7 +208,7 @@ Contoh: `http://88.12.34.56:7575`
 Jika lupa password atau perlu reset akun:
 
 ```bash
-cd streamflow && node reset-password.js
+cd ozanglive && node reset-password.js
 ```
 
 ## ⏰ Pengaturan Timezone Server
@@ -216,7 +232,7 @@ sudo timedatectl set-timezone Asia/Jakarta
 
 ### Restart aplikasi setelah mengubah timezone:
 ```bash
-pm2 restart streamflow
+pm2 restart ozanglive
 ```
 
 ## 🐳 Docker Deployment
@@ -273,7 +289,7 @@ sudo kill -9 <PID>
 rm db/*.db
 
 # Restart aplikasi untuk membuat database baru
-pm2 restart streamflow
+pm2 restart ozanglive
 ```
 
 ### Docker Troubleshooting
@@ -292,13 +308,11 @@ pm2 restart streamflow
 
 ## 💫 Contributors
 
-[![Contributors](https://contrib.rocks/image?repo=bangtutorial/streamflow)](https://github.com/bangtutorial/streamflow/graphs/contributors)
+[![Contributors](https://contrib.rocks/image?repo=meteoradja-ytmjk/ozanglive)](https://github.com/meteoradja-ytmjk/ozanglive/graphs/contributors)
 
 ## 📄 License
 
-[![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](https://github.com/bangtutorial/streamflow/blob/main/LICENSE)
+[![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](https://github.com/meteoradja-ytmjk/ozanglive/blob/main/LICENSE)
 
 ---
-© 2025 - [Bang Tutorial](https://youtube.com/bangtutorial)
-
-"# ozanglive" 
+© 2025 - OzangLive 

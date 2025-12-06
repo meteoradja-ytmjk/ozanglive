@@ -4,7 +4,8 @@ const ensureDirectories = () => {
   const dirs = [
     path.join(__dirname, '../public/uploads/videos'),
     path.join(__dirname, '../public/uploads/thumbnails'),
-    path.join(__dirname, '../public/uploads/avatars')
+    path.join(__dirname, '../public/uploads/avatars'),
+    path.join(__dirname, '../public/uploads/audios')
   ];
   dirs.forEach(dir => {
     fs.ensureDirSync(dir);
@@ -25,6 +26,7 @@ module.exports = {
   paths: {
     videos: path.join(__dirname, '../public/uploads/videos'),
     thumbnails: path.join(__dirname, '../public/uploads/thumbnails'),
-    avatars: path.join(__dirname, '../public/uploads/avatars')
+    avatars: path.join(__dirname, '../public/uploads/avatars'),
+    audios: path.join(__dirname, '../public/uploads/audios')
   }
 };

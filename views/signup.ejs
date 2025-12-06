@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
   <title>Sign Up - StreamFlow Lite</title>
   <link rel="icon" href="/images/logo_mobile.svg" type="image/svg+xml">
   <link rel="preload" href="/images/logo_mobile.svg" as="image" type="image/svg+xml">
@@ -13,6 +13,19 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.30.0/tabler-icons.min.css">
   <link rel="stylesheet" href="/css/styles.css">
+  <style>
+    /* Mobile fixes for signup */
+    html, body {
+      overflow-x: hidden;
+      width: 100%;
+      min-height: 100%;
+      -webkit-overflow-scrolling: touch;
+    }
+    @supports (-webkit-touch-callout: none) {
+      body { min-height: -webkit-fill-available; }
+    }
+    input { font-size: 16px !important; }
+  </style>
   <script>
     tailwind.config = {
       darkMode: 'class',
@@ -23,16 +36,17 @@
         },
         extend: {
           colors: {
-            'primary': '#0055FF',
-            'secondary': '#0043CA',
+            'primary': '#8B5CF6',
+            'secondary': '#7C3AED',
+            'accent': '#A78BFA',
             'dark': {
-              '900': '#121212',
-              '800': '#252525',
-              '700': '#2D2D2D',
-              '600': '#3D3D3D',
-              '500': '#6E6E6E',
-              '400': '#8F8F8F',
-              '100': '#E5E5E5',
+              '900': '#0F172A',
+              '800': '#1E293B',
+              '700': '#334155',
+              '600': '#475569',
+              '500': '#64748B',
+              '400': '#94A3B8',
+              '100': '#F1F5F9',
             }
           }
         }
@@ -40,9 +54,9 @@
     }
   </script>
 </head>
-<body class="bg-dark-900 text-white font-inter">
+<body class="bg-dark-900 text-white font-inter min-h-screen">
   <div class="min-h-screen flex flex-col">
-    <div class="flex-1 flex items-center justify-center px-6 py-10">
+    <div class="flex-1 flex items-center justify-center px-4 py-6 sm:px-6 sm:py-10">
       <div class="w-full max-w-lg bg-dark-800 rounded-xl shadow-xl p-6 sm:p-8">
       
         <div class="text-center mb-8">
@@ -123,25 +137,8 @@
                 </div>
               </div>
 
-              <div class="pb-3">
-                <label for="confirmPassword" class="text-sm font-medium block mb-2">Confirm Password</label>
-                <div class="relative">
-                  <input type="password" id="confirmPassword" name="confirmPassword"
-                    class="w-full pl-10 pr-12 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:ring-1 focus:ring-primary"
-                    placeholder="Confirm your password" required onkeyup="checkPasswordMatch()">
-                  <i class="ti ti-lock-check absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
-                  <button type="button" onclick="togglePasswordVisibility('confirmPassword', 'confirmPasswordToggle')"
-                    class="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center text-gray-400 hover:text-white transition-colors">
-                    <i class="ti ti-eye text-base" id="confirmPasswordToggle"></i>
-                  </button>
-                </div>
-                <div id="passwordMatch" class="mt-1 text-xs hidden">
-                  <span id="matchText"></span>
-                </div>
-              </div>
-              
               <button type="submit" id="submitBtn"
-                class="w-full bg-primary hover:bg-blue-600 text-white py-2.5 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                class="w-full bg-primary hover:bg-secondary text-white py-2.5 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                 Create Account
               </button>
             </form>
@@ -149,7 +146,7 @@
             <div class="text-center mt-6">
               <p class="text-gray-400 text-sm">
                 Already have an account? 
-                <a href="/login" class="text-primary hover:text-blue-400 transition-colors">Sign in</a>
+                <a href="/login" class="text-primary hover:text-accent transition-colors">Sign in</a>
               </p>
             </div>
       </div>
@@ -217,7 +214,7 @@
           } else if (strength <= 2) {
             element.className = 'h-1 flex-1 bg-yellow-500 rounded';
           } else if (strength <= 3) {
-            element.className = 'h-1 flex-1 bg-blue-500 rounded';
+            element.className = 'h-1 flex-1 bg-violet-500 rounded';
           } else {
             element.className = 'h-1 flex-1 bg-green-500 rounded';
           }
@@ -227,37 +224,12 @@
       });
       
       const strengthLabels = ['Weak', 'Fair', 'Good', 'Strong'];
-      const strengthColors = ['text-red-400', 'text-yellow-400', 'text-blue-400', 'text-green-400'];
+      const strengthColors = ['text-red-400', 'text-yellow-400', 'text-violet-400', 'text-green-400'];
       
       strengthText.textContent = strengthLabels[strength - 1] || 'Very Weak';
       strengthText.className = strengthColors[strength - 1] || 'text-red-400';
     }
 
-    function checkPasswordMatch() {
-      const password = document.getElementById('password').value;
-      const confirmPassword = document.getElementById('confirmPassword').value;
-      const matchDiv = document.getElementById('passwordMatch');
-      const matchText = document.getElementById('matchText');
-      const submitBtn = document.getElementById('submitBtn');
-      
-      if (confirmPassword.length === 0) {
-        matchDiv.classList.add('hidden');
-        submitBtn.disabled = false;
-        return;
-      }
-      
-      matchDiv.classList.remove('hidden');
-      
-      if (password === confirmPassword) {
-        matchText.textContent = 'Passwords match';
-        matchText.className = 'text-green-400';
-        submitBtn.disabled = false;
-      } else {
-        matchText.textContent = 'Passwords do not match';
-        matchText.className = 'text-red-400';
-        submitBtn.disabled = true;
-      }
-    }
   </script>
 </body>
 </html>

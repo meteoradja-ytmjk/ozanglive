@@ -196,6 +196,11 @@ class User {
         fields.push('password = ?');
         values.push(updateData.password);
       }
+
+      if (updateData.live_limit !== undefined) {
+        fields.push('live_limit = ?');
+        values.push(updateData.live_limit);
+      }
       
       if (fields.length === 0) {
         return resolve({ id: userId, message: 'No fields to update' });
@@ -212,6 +217,46 @@ class User {
           return reject(err);
         }
         resolve({ id: userId, changes: this.changes });
+      });
+    });
+  }
+
+  /**
+   * Update user's custom live streaming limit
+   * @param {string} userId - User ID
+   * @param {number|null} limit - Custom limit (null to use default)
+   * @returns {Promise<Object>} Updated user info
+   */
+  static updateLiveLimit(userId, limit) {
+    return new Promise((resolve, reject) => {
+      const validLimit = limit === null || limit === '' || limit === 0 ? null : parseInt(limit, 10);
+      db.run(
+        'UPDATE users SET live_limit = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [validLimit, userId],
+        function (err) {
+          if (err) {
+            console.error('Database error in updateLiveLimit:', err);
+            return reject(err);
+          }
+          resolve({ id: userId, live_limit: validLimit, changes: this.changes });
+        }
+      );
+    });
+  }
+
+  /**
+   * Get user's custom live streaming limit
+   * @param {string} userId - User ID
+   * @returns {Promise<number|null>} Custom limit or null if using default
+   */
+  static getLiveLimit(userId) {
+    return new Promise((resolve, reject) => {
+      db.get('SELECT live_limit FROM users WHERE id = ?', [userId], (err, row) => {
+        if (err) {
+          console.error('Database error in getLiveLimit:', err);
+          return reject(err);
+        }
+        resolve(row ? row.live_limit : null);
       });
     });
   }

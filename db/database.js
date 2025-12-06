@@ -107,6 +107,13 @@ function createTables() {
     }
   });
 
+  // Add schedule_type column to stream_history for recurring stream tracking
+  db.run(`ALTER TABLE stream_history ADD COLUMN schedule_type TEXT DEFAULT 'once'`, (err) => {
+    if (err && !err.message.includes('duplicate column name')) {
+      console.error('Error adding schedule_type column to stream_history:', err.message);
+    }
+  });
+
   db.run(`CREATE TABLE IF NOT EXISTS playlists (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -135,6 +142,24 @@ function createTables() {
       console.error('Error creating playlist_videos table:', err.message);
     }
   });
+
+  db.run(`CREATE TABLE IF NOT EXISTS audios (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    filepath TEXT NOT NULL,
+    file_size INTEGER,
+    duration REAL,
+    format TEXT,
+    user_id TEXT,
+    upload_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  )`, (err) => {
+    if (err) {
+      console.error('Error creating audios table:', err.message);
+    }
+  });
   
   db.run(`ALTER TABLE users ADD COLUMN user_role TEXT DEFAULT 'admin'`, (err) => {
     if (err && !err.message.includes('duplicate column name')) {
@@ -145,6 +170,63 @@ function createTables() {
   db.run(`ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active'`, (err) => {
     if (err && !err.message.includes('duplicate column name')) {
       console.error('Error adding status column:', err.message);
+    }
+  });
+
+  // Add audio_id column to streams table for audio selection feature
+  db.run(`ALTER TABLE streams ADD COLUMN audio_id TEXT`, (err) => {
+    if (err && !err.message.includes('duplicate column name')) {
+      console.error('Error adding audio_id column:', err.message);
+    }
+  });
+
+  // Add stream_duration_hours column to streams table for duration feature
+  db.run(`ALTER TABLE streams ADD COLUMN stream_duration_hours INTEGER`, (err) => {
+    if (err && !err.message.includes('duplicate column name')) {
+      console.error('Error adding stream_duration_hours column:', err.message);
+    }
+  });
+
+  // Add recurring schedule columns to streams table
+  db.run(`ALTER TABLE streams ADD COLUMN schedule_type TEXT DEFAULT 'once'`, (err) => {
+    if (err && !err.message.includes('duplicate column name')) {
+      console.error('Error adding schedule_type column:', err.message);
+    }
+  });
+
+  db.run(`ALTER TABLE streams ADD COLUMN schedule_days TEXT`, (err) => {
+    if (err && !err.message.includes('duplicate column name')) {
+      console.error('Error adding schedule_days column:', err.message);
+    }
+  });
+
+  db.run(`ALTER TABLE streams ADD COLUMN recurring_time TEXT`, (err) => {
+    if (err && !err.message.includes('duplicate column name')) {
+      console.error('Error adding recurring_time column:', err.message);
+    }
+  });
+
+  db.run(`ALTER TABLE streams ADD COLUMN recurring_enabled INTEGER DEFAULT 1`, (err) => {
+    if (err && !err.message.includes('duplicate column name')) {
+      console.error('Error adding recurring_enabled column:', err.message);
+    }
+  });
+
+  // Create system_settings table for global configuration
+  db.run(`CREATE TABLE IF NOT EXISTS system_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  )`, (err) => {
+    if (err) {
+      console.error('Error creating system_settings table:', err.message);
+    }
+  });
+
+  // Add live_limit column to users table for custom live streaming limit per user
+  db.run(`ALTER TABLE users ADD COLUMN live_limit INTEGER DEFAULT NULL`, (err) => {
+    if (err && !err.message.includes('duplicate column name')) {
+      console.error('Error adding live_limit column:', err.message);
     }
   });
 }

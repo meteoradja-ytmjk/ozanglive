@@ -3,7 +3,7 @@
 set -e
 
 echo "================================"
-echo "   StreamFlow Quick Installer  "
+echo "   OzangLive Quick Installer   "
 echo "================================"
 echo
 
@@ -22,8 +22,8 @@ echo "🎬 Installing FFmpeg dan Git..."
 sudo apt install ffmpeg git -y
 
 echo "📥 Clone repository..."
-git clone https://github.com/bangtutorial/streamflow
-cd streamflow
+git clone https://github.com/meteoradja-ytmjk/ozanglive
+cd ozanglive
 
 echo "⚙️ Installing dependencies..."
 npm install
@@ -40,9 +40,10 @@ sudo ufw --force enable
 echo "🚀 Installing PM2..."
 sudo npm install -g pm2
 
-echo "▶️ Starting StreamFlow..."
-pm2 start app.js --name streamflow
+echo "▶️ Starting OzangLive..."
+pm2 start app.js --name ozanglive
 pm2 save
+pm2 startup
 
 echo
 echo "================================"
@@ -57,4 +58,9 @@ echo "📋 Langkah selanjutnya:"
 echo "1. Buka URL di browser"
 echo "2. Buat username & password"
 echo "3. Setelah membuat akun, lakukan Sign Out kemudian login kembali untuk sinkronisasi database"
+echo
+echo "📌 Perintah berguna:"
+echo "   pm2 status        - Cek status"
+echo "   pm2 logs ozanglive - Lihat logs"
+echo "   pm2 restart ozanglive - Restart app"
 echo "================================"

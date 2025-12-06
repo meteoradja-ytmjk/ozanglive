@@ -7,7 +7,7 @@
   </div>
   <div class="flex flex-wrap gap-3">
     <button onclick="openCreatePlaylistModal()"
-      class="flex items-center gap-2 bg-primary hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors">
+      class="flex items-center gap-2 bg-primary hover:bg-secondary text-white px-4 py-2 rounded-lg transition-colors">
       <i class="ti ti-plus"></i>
       <span>Create Playlist</span>
     </button>
@@ -44,10 +44,10 @@
             <div class="flex items-start justify-between mb-2">
               <h3 class="font-semibold text-lg truncate flex-1 pr-2"><%= playlist.name %></h3>
               <div class="flex items-center gap-1 flex-shrink-0">
-                <button class="bg-blue-600 hover:bg-blue-700 text-white w-8 h-8 flex items-center justify-center rounded-lg transition-colors" onclick="viewPlaylist('<%= playlist.id %>')">
+                <button class="bg-primary hover:bg-secondary text-white w-8 h-8 flex items-center justify-center rounded-lg transition-colors" onclick="viewPlaylist('<%= playlist.id %>')">
                   <i class="ti ti-eye text-sm"></i>
                 </button>
-                <button class="bg-green-600 hover:bg-green-700 text-white w-8 h-8 flex items-center justify-center rounded-lg transition-colors" onclick="editPlaylist('<%= playlist.id %>')">
+                <button class="bg-emerald-600 hover:bg-emerald-700 text-white w-8 h-8 flex items-center justify-center rounded-lg transition-colors" onclick="editPlaylist('<%= playlist.id %>')">
                   <i class="ti ti-pencil text-sm"></i>
                 </button>
                 <button class="bg-red-600 hover:bg-red-700 text-white w-8 h-8 flex items-center justify-center rounded-lg transition-colors" onclick="deletePlaylist('<%= playlist.id %>', '<%= playlist.name %>')">
@@ -74,7 +74,7 @@
       <h3 class="text-xl font-semibold mb-2">No playlists yet</h3>
       <p class="text-gray-400 mb-4">Create your first playlist to get started</p>
       <button onclick="openCreatePlaylistModal()" 
-        class="bg-primary hover:bg-blue-600 text-white px-6 py-3 rounded-lg transition-colors">
+        class="bg-primary hover:bg-secondary text-white px-6 py-3 rounded-lg transition-colors">
         <i class="ti ti-plus mr-2"></i>
         Create Playlist
       </button>
@@ -208,7 +208,7 @@
           Cancel
         </button>
         <button type="submit" 
-          class="bg-primary hover:bg-blue-600 text-white px-6 py-2 rounded-lg transition-colors">
+          class="bg-primary hover:bg-secondary text-white px-6 py-2 rounded-lg transition-colors">
           <span id="submitButtonText">Create Playlist</span>
         </button>
       </div>
@@ -238,7 +238,7 @@
         </span>
       </div>
       <div class="flex gap-2">
-        <button id="editPlaylistBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm transition-colors">
+        <button id="editPlaylistBtn" class="bg-primary hover:bg-secondary text-white px-4 py-2 rounded-lg text-sm transition-colors">
           <i class="ti ti-pencil mr-1"></i>
           Edit
         </button>
@@ -527,8 +527,8 @@ document.getElementById('searchVideos').addEventListener('input', function(e) {
 function showToast(message, type = 'info') {
   const toast = document.createElement('div');
   toast.className = `fixed top-4 right-4 px-6 py-3 rounded-lg text-white z-50 ${
-    type === 'success' ? 'bg-green-600' : 
-    type === 'error' ? 'bg-red-600' : 'bg-blue-600'
+    type === 'success' ? 'bg-emerald-600' : 
+    type === 'error' ? 'bg-red-600' : 'bg-primary'
   }`;
   toast.textContent = message;
   

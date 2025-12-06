@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
 const schedulerService = require('./schedulerService');
+const LiveLimitService = require('./liveLimitService');
 const { v4: uuidv4 } = require('uuid');
 const { db } = require('../db/database');
 const Stream = require('../models/Stream');
@@ -16,6 +17,7 @@ if (fs.existsSync('/usr/bin/ffmpeg')) {
   console.log('Using bundled FFmpeg at:', ffmpegPath);
 }
 const Video = require('../models/Video');
+const Audio = require('../models/Audio');
 const activeStreams = new Map();
 const streamLogs = new Map();
 const streamRetryCount = new Map();
@@ -170,54 +172,124 @@ async function buildFFmpegArgs(stream) {
     throw new Error('Video file not found on disk. Please check paths and file existence.');
   }
   
-  const rtmpUrl = `${stream.rtmp_url.replace(/\/$/, '')}/${stream.stream_key}`;
-  const loopOption = stream.loop_video ? '-stream_loop' : '-stream_loop 0';
-  const loopValue = stream.loop_video ? '-1' : '0';
-  if (!stream.use_advanced_settings) {
-    return [
-      '-hwaccel', 'auto',
-      '-loglevel', 'error',
-      '-re',
-      '-fflags', '+genpts+igndts',
-      '-avoid_negative_ts', 'make_zero',
-      loopOption, loopValue,
-      '-i', videoPath,
-      '-c:v', 'copy',
-      '-c:a', 'copy',
-      '-flags', '+global_header',
-      '-bufsize', '4M',
-      '-max_muxing_queue_size', '7000',
-      '-f', 'flv',
-      rtmpUrl
-    ];
+  // Check if audio is selected
+  let audioPath = null;
+  if (stream.audio_id) {
+    const audio = await Audio.findById(stream.audio_id);
+    if (!audio) {
+      throw new Error(`Audio not found for audio_id: ${stream.audio_id}`);
+    }
+    const relativeAudioPath = audio.filepath.startsWith('/') ? audio.filepath.substring(1) : audio.filepath;
+    audioPath = path.join(projectRoot, 'public', relativeAudioPath);
+    if (!fs.existsSync(audioPath)) {
+      console.error(`[StreamingService] CRITICAL: Audio file not found on disk.`);
+      console.error(`[StreamingService] Checked path: ${audioPath}`);
+      throw new Error('Audio file not found on disk. Please check paths and file existence.');
+    }
   }
-  const resolution = stream.resolution || '1280x720';
-  const bitrate = stream.bitrate || 2500;
-  const fps = stream.fps || 30;
-  return [
+  
+  const rtmpUrl = `${stream.rtmp_url.replace(/\/$/, '')}/${stream.stream_key}`;
+  
+  // Calculate duration in seconds if stream_duration_hours is set
+  const durationSeconds = stream.stream_duration_hours ? stream.stream_duration_hours * 3600 : null;
+  
+  // Build FFmpeg args based on whether audio is selected
+  if (audioPath) {
+    // Video + Audio merge with looping
+    return buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds, stream.loop_video);
+  } else {
+    // Video only (preserve original audio)
+    return buildFFmpegArgsVideoOnly(videoPath, rtmpUrl, durationSeconds, stream.loop_video);
+  }
+}
+
+/**
+ * Build FFmpeg args for video + separate audio streaming
+ * Both video and audio will loop independently until duration is reached
+ */
+function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds, loopVideo) {
+  const args = [
     '-hwaccel', 'auto',
     '-loglevel', 'error',
     '-re',
-    '-fflags', '+genpts',
-    '-avoid_negative_ts', 'make_zero',
-    loopOption, loopValue,
-    '-i', videoPath,
-    '-c:v', 'libx264',
-    '-preset', 'veryfast',
-    '-tune', 'zerolatency',
-    '-b:v', `${bitrate}k`,
-    '-maxrate', `${bitrate * 1.5}k`,
-    '-bufsize', `${bitrate * 2}k`,
-    '-pix_fmt', 'yuv420p',
-    '-g', `${fps * 2}`,
-    '-s', resolution,
-    '-r', fps.toString(),
-    '-c:a', 'aac',
-    '-b:a', '128k',
-    '-ar', '44100',
-    '-f', 'flv',
-    rtmpUrl
+    '-fflags', '+genpts+igndts',
+    '-avoid_negative_ts', 'make_zero'
   ];
+  
+  // Video input with looping
+  if (loopVideo) {
+    args.push('-stream_loop', '-1');
+  }
+  args.push('-i', videoPath);
+  
+  // Audio input with looping (always loop audio to match video duration)
+  args.push('-stream_loop', '-1');
+  args.push('-i', audioPath);
+  
+  // Map video from first input, audio from second input
+  args.push('-map', '0:v:0');
+  args.push('-map', '1:a:0');
+  
+  // Video codec - copy to avoid re-encoding
+  args.push('-c:v', 'copy');
+  
+  // Audio codec - encode to AAC for compatibility
+  args.push('-c:a', 'aac');
+  args.push('-b:a', '128k');
+  args.push('-ar', '44100');
+  
+  // Add duration limit if specified
+  if (durationSeconds && durationSeconds > 0) {
+    args.push('-t', durationSeconds.toString());
+  }
+  
+  // Output settings
+  args.push('-flags', '+global_header');
+  args.push('-bufsize', '4M');
+  args.push('-max_muxing_queue_size', '7000');
+  args.push('-f', 'flv');
+  args.push(rtmpUrl);
+  
+  return args;
+}
+
+/**
+ * Build FFmpeg args for video only streaming (preserve original audio)
+ */
+function buildFFmpegArgsVideoOnly(videoPath, rtmpUrl, durationSeconds, loopVideo) {
+  const args = [
+    '-hwaccel', 'auto',
+    '-loglevel', 'error',
+    '-re',
+    '-fflags', '+genpts+igndts',
+    '-avoid_negative_ts', 'make_zero'
+  ];
+  
+  // Video input with looping
+  if (loopVideo) {
+    args.push('-stream_loop', '-1');
+  } else {
+    args.push('-stream_loop', '0');
+  }
+  args.push('-i', videoPath);
+  
+  // Copy both video and audio from original
+  args.push('-c:v', 'copy');
+  args.push('-c:a', 'copy');
+  
+  // Add duration limit if specified
+  if (durationSeconds && durationSeconds > 0) {
+    args.push('-t', durationSeconds.toString());
+  }
+  
+  // Output settings
+  args.push('-flags', '+global_header');
+  args.push('-bufsize', '4M');
+  args.push('-max_muxing_queue_size', '7000');
+  args.push('-f', 'flv');
+  args.push(rtmpUrl);
+  
+  return args;
 }
 async function startStream(streamId) {
   try {
@@ -229,6 +301,20 @@ async function startStream(streamId) {
     if (!stream) {
       return { success: false, error: 'Stream not found' };
     }
+    
+    // Check live limit before starting stream
+    const limitInfo = await LiveLimitService.validateAndGetInfo(stream.user_id);
+    if (!limitInfo.canStart) {
+      console.log(`[StreamingService] User ${stream.user_id} has reached live limit (${limitInfo.activeStreams}/${limitInfo.effectiveLimit})`);
+      return { 
+        success: false, 
+        error: limitInfo.message,
+        limitReached: true,
+        activeStreams: limitInfo.activeStreams,
+        effectiveLimit: limitInfo.effectiveLimit
+      };
+    }
+    
     const startTimeIso = new Date().toISOString();
     const streamStartTime = new Date(startTimeIso);
     const ffmpegArgs = await buildFFmpegArgs(stream);
@@ -515,20 +601,21 @@ async function saveStreamHistory(stream) {
       end_time: stream.end_time || new Date().toISOString(),
       duration: durationSeconds,
       use_advanced_settings: stream.use_advanced_settings ? 1 : 0,
+      schedule_type: stream.schedule_type || 'once',
       user_id: stream.user_id
     };
     return new Promise((resolve, reject) => {
       db.run(
         `INSERT INTO stream_history (
           id, stream_id, title, platform, platform_icon, video_id, video_title,
-          resolution, bitrate, fps, start_time, end_time, duration, use_advanced_settings, user_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          resolution, bitrate, fps, start_time, end_time, duration, use_advanced_settings, schedule_type, user_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           historyData.id, historyData.stream_id, historyData.title,
           historyData.platform, historyData.platform_icon, historyData.video_id, historyData.video_title,
           historyData.resolution, historyData.bitrate, historyData.fps,
           historyData.start_time, historyData.end_time, historyData.duration,
-          historyData.use_advanced_settings, historyData.user_id
+          historyData.use_advanced_settings, historyData.schedule_type, historyData.user_id
         ],
         function (err) {
           if (err) {
@@ -552,5 +639,8 @@ module.exports = {
   getActiveStreams,
   getStreamLogs,
   syncStreamStatuses,
-  saveStreamHistory
+  saveStreamHistory,
+  // Export for testing
+  buildFFmpegArgsWithAudio,
+  buildFFmpegArgsVideoOnly
 };

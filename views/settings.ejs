@@ -18,6 +18,13 @@
         data-tab="security">
         <i class="ti ti-shield-lock mr-2"></i>Security
       </button>
+      <% if (req.session.user_role === 'admin') { %>
+      <button
+        class="settings-tab mr-2 py-2 px-4 text-gray-400 hover:text-white border-b-2 border-transparent hover:border-gray-700 font-medium"
+        data-tab="system">
+        <i class="ti ti-settings mr-2"></i>System
+      </button>
+      <% } %>
     </div>
   </div>
   
@@ -42,7 +49,7 @@
                 </div>
                 <div class="absolute bottom-0 right-0">
                   <label for="profile-upload"
-                    class="flex items-center justify-center w-8 h-8 rounded-full bg-primary hover:bg-blue-600 cursor-pointer shadow-lg transition-colors">
+                    class="flex items-center justify-center w-8 h-8 rounded-full bg-primary hover:bg-secondary cursor-pointer shadow-lg transition-colors">
                     <i class="ti ti-pencil text-white text-sm"></i>
                   </label>
                   <input id="profile-upload" name="avatar" type="file" accept="image/*" class="hidden">
@@ -69,7 +76,7 @@
           
           <div class="pt-4">
             <button type="submit"
-              class="px-4 py-2 bg-primary hover:bg-blue-600 text-white rounded-lg transition-colors">
+              class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-lg transition-colors">
               Save Profile Changes
             </button>
           </div>
@@ -130,7 +137,7 @@
           
           <div class="pt-4">
             <button type="submit"
-              class="px-4 py-2 bg-primary hover:bg-blue-600 text-white rounded-lg transition-colors">
+              class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-lg transition-colors">
               Change Password
             </button>
           </div>
@@ -138,6 +145,46 @@
 
       </div>
     </div>
+
+    <% if (req.session.user_role === 'admin') { %>
+    <div id="system-tab" class="settings-content hidden">
+      <div class="p-6">
+        <h3 class="text-lg font-semibold mb-6">System Settings</h3>
+        
+        <div class="space-y-6">
+          <div class="bg-dark-700 rounded-lg p-4">
+            <h4 class="text-md font-medium mb-4 flex items-center">
+              <i class="ti ti-broadcast mr-2 text-primary"></i>
+              Live Streaming Limits
+            </h4>
+            <p class="text-sm text-gray-400 mb-4">
+              Control the maximum number of simultaneous live streams per member. 
+              Individual users can have custom limits set in User Management.
+            </p>
+            
+            <div class="space-y-4">
+              <div class="space-y-2">
+                <label for="default-live-limit" class="block text-sm font-medium text-gray-300">
+                  Default Live Limit (per member)
+                </label>
+                <div class="flex items-center gap-3">
+                  <input type="number" id="default-live-limit" min="1" max="100" value="1"
+                    class="bg-dark-900 text-white px-4 py-2 rounded-lg w-24 focus:outline-none focus:ring-1 focus:ring-primary">
+                  <button type="button" id="save-live-limit"
+                    class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-lg transition-colors">
+                    Save
+                  </button>
+                </div>
+                <p class="text-xs text-gray-500">
+                  Members without a custom limit will use this default value.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <% } %>
 
   </div>
   
@@ -262,5 +309,50 @@
     <% if (typeof error !== 'undefined' && error) { %>
         showToast('error', '<%= error %>');
     <% } %>
+
+      // Live Limit Settings (Admin only)
+      <% if (req.session.user_role === 'admin') { %>
+      const liveLimitInput = document.getElementById('default-live-limit');
+      const saveLiveLimitBtn = document.getElementById('save-live-limit');
+      
+      // Load current live limit
+      fetch('/api/settings/live-limit')
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            liveLimitInput.value = data.defaultLimit;
+          }
+        })
+        .catch(err => console.error('Error loading live limit:', err));
+      
+      // Save live limit
+      saveLiveLimitBtn.addEventListener('click', async () => {
+        const limit = parseInt(liveLimitInput.value, 10);
+        if (isNaN(limit) || limit < 1) {
+          showToast('error', 'Live limit must be at least 1');
+          return;
+        }
+        
+        try {
+          const res = await fetch('/api/settings/live-limit', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRF-Token': '<%= csrfToken %>'
+            },
+            body: JSON.stringify({ limit })
+          });
+          const data = await res.json();
+          if (data.success) {
+            showToast('success', 'Live limit updated successfully');
+          } else {
+            showToast('error', data.message || 'Failed to update live limit');
+          }
+        } catch (err) {
+          console.error('Error saving live limit:', err);
+          showToast('error', 'Failed to update live limit');
+        }
+      });
+      <% } %>
   });
   </script>

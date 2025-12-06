@@ -23,16 +23,17 @@
         },
         extend: {
           colors: {
-            'primary': '#0055FF',
-            'secondary': '#0043CA',
+            'primary': '#8B5CF6',
+            'secondary': '#7C3AED',
+            'accent': '#A78BFA',
             'dark': {
-              '900': '#121212',
-              '800': '#252525',
-              '700': '#2D2D2D',
-              '600': '#3D3D3D',
-              '500': '#6E6E6E',
-              '400': '#8F8F8F',
-              '100': '#E5E5E5',
+              '900': '#0F172A',
+              '800': '#1E293B',
+              '700': '#334155',
+              '600': '#475569',
+              '500': '#64748B',
+              '400': '#94A3B8',
+              '100': '#F1F5F9',
             }
           }
         }
@@ -109,28 +110,8 @@
                 </div>
               </div>
               
-              <div class="pb-3">
-                <label for="confirm-password" class="text-sm font-medium block mb-2">Confirm Password</label>
-                <div class="relative">
-                  <input type="password" id="confirm-password" name="confirmPassword"
-                    class="w-full pl-10 pr-12 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:ring-1 focus:ring-primary"
-                    placeholder="Confirm your password" required>
-                  <i class="ti ti-lock-check absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
-                  <button type="button" onclick="togglePasswordVisibility('confirm-password', 'confirmPasswordToggle')"
-                    class="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center text-gray-400 hover:text-white transition-colors">
-                    <i class="ti ti-eye text-base" id="confirmPasswordToggle"></i>
-                  </button>
-                </div>
-                <p id="password-match" class="hidden text-green-400 text-xs mt-1">
-                  <i class="ti ti-check mr-1"></i> Passwords match
-                </p>
-                <p id="password-mismatch" class="hidden text-red-400 text-xs mt-1">
-                  <i class="ti ti-x mr-1"></i> Passwords don't match
-                </p>
-              </div>
-              
               <button type="submit"
-                class="w-full bg-primary hover:bg-blue-600 text-white py-2.5 rounded-lg font-medium transition-colors">
+                class="w-full bg-primary hover:bg-secondary text-white py-2.5 rounded-lg font-medium transition-colors">
                 Complete Setup
               </button>
             </form>
@@ -197,20 +178,6 @@
         feedback.className = 'text-xs text-green-500 mt-1';
       }
     });
-    document.getElementById('confirm-password').addEventListener('input', function (e) {
-      const password = document.getElementById('password').value;
-      const confirmPassword = e.target.value;
-      if (confirmPassword === '') {
-        document.getElementById('password-match').classList.add('hidden');
-        document.getElementById('password-mismatch').classList.add('hidden');
-      } else if (password === confirmPassword) {
-        document.getElementById('password-match').classList.remove('hidden');
-        document.getElementById('password-mismatch').classList.add('hidden');
-      } else {
-        document.getElementById('password-match').classList.add('hidden');
-        document.getElementById('password-mismatch').classList.remove('hidden');
-      }
-    });
     function calculatePasswordStrength(password) {
       let score = 0;
       if (password.length >= 8) score += 1;
@@ -222,15 +189,6 @@
         score: Math.min(4, Math.floor(score))
       };
     }
-    document.getElementById('setupForm').addEventListener('submit', function (e) {
-      const password = document.getElementById('password').value;
-      const confirmPassword = document.getElementById('confirm-password').value;
-      if (password !== confirmPassword) {
-        e.preventDefault();
-        document.getElementById('password-mismatch').classList.remove('hidden');
-        document.getElementById('password-match').classList.add('hidden');
-      }
-    });
   </script>
 </body>
 </html>

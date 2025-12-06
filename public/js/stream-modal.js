@@ -1,23 +1,19 @@
 let selectedVideoData = null;
+let selectedAudioData = null;
 let currentOrientation = 'horizontal';
 let isDropdownOpen = false;
+let isAudioDropdownOpen = false;
 const videoSelectorDropdown = document.getElementById('videoSelectorDropdown');
+const audioSelectorDropdown = document.getElementById('audioSelectorDropdown');
 let desktopVideoPlayer = null;
 let mobileVideoPlayer = null;
 let streamKeyTimeout = null;
 let isStreamKeyValid = true;
-let currentPlatform = 'Custom';
+let currentPlatform = 'YouTube';
 function openNewStreamModal() {
   const modal = document.getElementById('newStreamModal');
   document.body.style.overflow = 'hidden';
   modal.classList.remove('hidden');
-  const advancedSettingsContent = document.getElementById('advancedSettingsContent');
-  const advancedSettingsToggle = document.getElementById('advancedSettingsToggle');
-  if (advancedSettingsContent && advancedSettingsToggle) {
-    advancedSettingsContent.classList.add('hidden');
-    const icon = advancedSettingsToggle.querySelector('i');
-    if (icon) icon.style.transform = '';
-  }
   requestAnimationFrame(() => {
     modal.classList.add('active');
   });
@@ -28,13 +24,6 @@ function closeNewStreamModal() {
   document.body.style.overflow = 'auto';
   modal.classList.remove('active');
   resetModalForm();
-  const advancedSettingsContent = document.getElementById('advancedSettingsContent');
-  const advancedSettingsToggle = document.getElementById('advancedSettingsToggle');
-  if (advancedSettingsContent && advancedSettingsToggle) {
-    advancedSettingsContent.classList.add('hidden');
-    const icon = advancedSettingsToggle.querySelector('i');
-    if (icon) icon.style.transform = '';
-  }
   setTimeout(() => {
     modal.classList.add('hidden');
   }, 200);
@@ -69,94 +58,175 @@ function toggleVideoSelector() {
     }
   }
 }
+// Audio Selector Functions
+function toggleAudioSelector() {
+  const dropdown = document.getElementById('audioSelectorDropdown');
+  if (dropdown.classList.contains('hidden')) {
+    dropdown.classList.remove('hidden');
+    isAudioDropdownOpen = true;
+    loadGalleryAudios();
+    const searchInput = document.getElementById('audioSearchInput');
+    if (searchInput) {
+      setTimeout(() => searchInput.focus(), 10);
+    }
+  } else {
+    dropdown.classList.add('hidden');
+    isAudioDropdownOpen = false;
+    const searchInput = document.getElementById('audioSearchInput');
+    if (searchInput) {
+      searchInput.value = '';
+    }
+  }
+}
+
+function selectAudio(audio) {
+  selectedAudioData = audio;
+  document.getElementById('selectedAudio').textContent = audio.title || audio.name;
+  document.getElementById('selectedAudioId').value = audio.id;
+  document.getElementById('clearAudioBtn').classList.remove('hidden');
+  document.getElementById('audioSelectorDropdown').classList.add('hidden');
+  isAudioDropdownOpen = false;
+}
+
+function clearAudioSelection() {
+  selectedAudioData = null;
+  document.getElementById('selectedAudio').textContent = 'No audio selected';
+  document.getElementById('selectedAudioId').value = '';
+  document.getElementById('clearAudioBtn').classList.add('hidden');
+}
+
+async function loadGalleryAudios() {
+  try {
+    const container = document.getElementById('audioListContainer');
+    if (!container) {
+      console.error("Audio list container not found");
+      return;
+    }
+    container.innerHTML = '<div class="text-center py-3"><i class="ti ti-loader animate-spin mr-2"></i>Loading audios...</div>';
+    const response = await fetch('/api/stream/audios');
+    const audios = await response.json();
+    window.allStreamAudios = audios;
+    displayFilteredAudios(audios);
+    const searchInput = document.getElementById('audioSearchInput');
+    if (searchInput) {
+      searchInput.removeEventListener('input', handleAudioSearch);
+      searchInput.addEventListener('input', handleAudioSearch);
+    }
+  } catch (error) {
+    console.error('Error loading audios:', error);
+    const container = document.getElementById('audioListContainer');
+    if (container) {
+      container.innerHTML = `
+        <div class="text-center py-5 text-red-400">
+          <i class="ti ti-alert-circle text-2xl mb-2"></i>
+          <p>Failed to load audios</p>
+          <p class="text-xs text-gray-500 mt-1">Please try again</p>
+        </div>
+      `;
+    }
+  }
+}
+
+function handleAudioSearch(e) {
+  const searchTerm = e.target.value.toLowerCase().trim();
+  if (!window.allStreamAudios) {
+    return;
+  }
+  if (searchTerm === '') {
+    displayFilteredAudios(window.allStreamAudios);
+    return;
+  }
+  const filteredAudios = filterAudios(window.allStreamAudios, searchTerm);
+  displayFilteredAudios(filteredAudios);
+}
+
+function filterAudios(audios, query) {
+  if (!query) return audios;
+  return audios.filter(audio => 
+    (audio.title && audio.title.toLowerCase().includes(query.toLowerCase())) ||
+    (audio.name && audio.name.toLowerCase().includes(query.toLowerCase()))
+  );
+}
+
+function displayFilteredAudios(audios) {
+  const container = document.getElementById('audioListContainer');
+  if (!container) return;
+  container.innerHTML = '';
+  if (audios && audios.length > 0) {
+    audios.forEach(audio => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'w-full flex items-center space-x-3 p-2 rounded hover:bg-dark-600 transition-colors text-left';
+      button.onclick = () => selectAudio(audio);
+      button.innerHTML = `
+        <div class="w-10 h-10 bg-dark-800 rounded flex-shrink-0 flex items-center justify-center">
+          <i class="ti ti-music text-primary"></i>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-medium text-white truncate">${audio.title || audio.name}</p>
+          <p class="text-xs text-gray-400">${audio.duration || 'Unknown'} • ${audio.format || 'audio'}</p>
+        </div>
+      `;
+      container.appendChild(button);
+    });
+  } else {
+    container.innerHTML = `
+      <div class="text-center py-5 text-gray-400">
+        <i class="ti ti-music-off text-2xl mb-2"></i>
+        <p>No audios found</p>
+        <p class="text-xs text-gray-500 mt-1">Upload audio files in Gallery</p>
+      </div>
+    `;
+  }
+}
+
+
+
 function selectVideo(video) {
   selectedVideoData = video;
   const displayText = video.type === 'playlist' ? `[Playlist] ${video.name}` : video.name;
   document.getElementById('selectedVideo').textContent = displayText;
+  
   const videoSelector = document.querySelector('[onclick="toggleVideoSelector()"]');
-  videoSelector.classList.remove('border-red-500');
-  videoSelector.classList.add('border-gray-600');
-  
-  const desktopPreview = document.getElementById('videoPreview');
-  const desktopEmptyPreview = document.getElementById('emptyPreview');
-  const mobilePreview = document.getElementById('videoPreviewMobile');
-  const mobileEmptyPreview = document.getElementById('emptyPreviewMobile');
-  
-  if (desktopVideoPlayer) {
-    desktopVideoPlayer.pause();
-    desktopVideoPlayer.dispose();
-    desktopVideoPlayer = null;
-  }
-  if (mobileVideoPlayer) {
-    mobileVideoPlayer.pause();
-    mobileVideoPlayer.dispose();
-    mobileVideoPlayer = null;
+  if (videoSelector) {
+    videoSelector.classList.remove('border-red-500');
+    videoSelector.classList.add('border-gray-600');
   }
   
-  if (video.type === 'playlist') {
-    desktopPreview.classList.add('hidden');
-    mobilePreview.classList.add('hidden');
-    desktopEmptyPreview.classList.remove('hidden');
-    mobileEmptyPreview.classList.remove('hidden');
-    
-    const desktopEmptyContent = desktopEmptyPreview.querySelector('div');
-    const mobileEmptyContent = mobileEmptyPreview.querySelector('div');
-    
-    if (desktopEmptyContent) {
-      desktopEmptyContent.innerHTML = `
-        <i class="ti ti-playlist text-4xl text-blue-400 mb-2"></i>
-        <p class="text-sm text-gray-300 font-medium">${video.name}</p>
-        <p class="text-xs text-blue-300 mt-1">Playlist selected • ${video.duration || 'Unknown duration'}</p>
-      `;
-    }
-    
-    if (mobileEmptyContent) {
-      mobileEmptyContent.innerHTML = `
-        <i class="ti ti-playlist text-4xl text-blue-400 mb-2"></i>
-        <p class="text-sm text-gray-300 font-medium">${video.name}</p>
-        <p class="text-xs text-blue-300 mt-1">Playlist selected • ${video.duration || 'Unknown duration'}</p>
-      `;
-    }
-  } else {
-    desktopPreview.classList.remove('hidden');
-    mobilePreview.classList.remove('hidden');
-    desktopEmptyPreview.classList.add('hidden');
-    mobileEmptyPreview.classList.add('hidden');
-    
-    const desktopVideoContainer = document.getElementById('videoPreview');
-    const mobileVideoContainer = document.getElementById('videoPreviewMobile');
-    
-    desktopVideoContainer.innerHTML = `
-      <video id="videojs-preview-desktop" class="video-js vjs-default-skin vjs-big-play-centered" controls preload="auto">
-        <source src="${video.url}" type="video/mp4">
-      </video>
-    `;
-    mobileVideoContainer.innerHTML = `
-      <video id="videojs-preview-mobile" class="video-js vjs-default-skin vjs-big-play-centered" controls preload="auto">
-        <source src="${video.url}" type="video/mp4">
-      </video>
-    `;
-    
-    setTimeout(() => {
-      desktopVideoPlayer = videojs('videojs-preview-desktop', {
-        controls: true,
-        autoplay: false,
-        preload: 'auto',
-        fluid: true
-      });
-      mobileVideoPlayer = videojs('videojs-preview-mobile', {
-        controls: true,
-        autoplay: false,
-        preload: 'auto',
-        fluid: true
-      });
-    }, 10);
-  }
-  
+  // Close dropdown immediately after selection (like audio selector)
   document.getElementById('videoSelectorDropdown').classList.add('hidden');
+  isDropdownOpen = false;
+  
+  // Clear search input
+  const searchInput = document.getElementById('videoSearchInput');
+  if (searchInput) searchInput.value = '';
+  
+  // Update hidden input
   const hiddenVideoInput = document.getElementById('selectedVideoId');
   if (hiddenVideoInput) {
     hiddenVideoInput.value = video.id;
+  }
+  
+  // Update preview
+  const desktopEmptyPreview = document.getElementById('emptyPreview');
+  if (desktopEmptyPreview) {
+    if (video.type === 'playlist') {
+      desktopEmptyPreview.innerHTML = `
+        <div class="text-center">
+          <i class="ti ti-playlist text-4xl text-blue-400 mb-2"></i>
+          <p class="text-sm text-gray-300 font-medium">${video.name}</p>
+          <p class="text-xs text-blue-300 mt-1">Playlist • ${video.duration || 'Multiple videos'}</p>
+        </div>
+      `;
+    } else {
+      desktopEmptyPreview.innerHTML = `
+        <div class="text-center">
+          <i class="ti ti-video text-4xl text-green-400 mb-2"></i>
+          <p class="text-sm text-gray-300 font-medium">${video.name}</p>
+          <p class="text-xs text-gray-400 mt-1">${video.resolution} • ${video.duration}</p>
+        </div>
+      `;
+    }
   }
 }
 async function loadGalleryVideos() {
@@ -264,38 +334,57 @@ function displayFilteredVideos(videos) {
 }
 function resetModalForm() {
   const form = document.getElementById('newStreamForm');
-  form.reset();
+  if (form) {
+    form.reset();
+    // Reset edit mode
+    delete form.dataset.editId;
+  }
+  
   selectedVideoData = null;
-  document.getElementById('selectedVideo').textContent = 'Choose a video...';
-  const desktopPreview = document.getElementById('videoPreview');
+  selectedAudioData = null;
+  isDropdownOpen = false;
+  isAudioDropdownOpen = false;
+  
+  // Reset modal title and button
+  const modalTitle = document.querySelector('#newStreamModal h3');
+  const submitBtn = document.querySelector('button[type="submit"][form="newStreamForm"]');
+  if (modalTitle) modalTitle.textContent = 'Create New Stream';
+  if (submitBtn) submitBtn.textContent = 'Create Stream';
+  
+  // Reset video selection
+  const selectedVideoEl = document.getElementById('selectedVideo');
+  const selectedVideoIdEl = document.getElementById('selectedVideoId');
+  if (selectedVideoEl) selectedVideoEl.textContent = 'Choose a video...';
+  if (selectedVideoIdEl) selectedVideoIdEl.value = '';
+  
+  // Reset audio selection
+  const selectedAudioEl = document.getElementById('selectedAudio');
+  const selectedAudioIdEl = document.getElementById('selectedAudioId');
+  const clearAudioBtn = document.getElementById('clearAudioBtn');
+  if (selectedAudioEl) selectedAudioEl.textContent = 'No audio selected';
+  if (selectedAudioIdEl) selectedAudioIdEl.value = '';
+  if (clearAudioBtn) clearAudioBtn.classList.add('hidden');
+  
+  // Reset duration
+  const durationInput = document.getElementById('streamDuration');
+  if (durationInput) durationInput.value = '';
+  
+  // Reset preview
   const desktopEmptyPreview = document.getElementById('emptyPreview');
-  const mobilePreview = document.getElementById('videoPreviewMobile');
-  const mobileEmptyPreview = document.getElementById('emptyPreviewMobile');
-  desktopPreview.classList.add('hidden');
-  mobilePreview.classList.add('hidden');
-  desktopEmptyPreview.classList.remove('hidden');
-  mobileEmptyPreview.classList.remove('hidden');
-  
-  const desktopEmptyContent = desktopEmptyPreview.querySelector('div');
-  const mobileEmptyContent = mobileEmptyPreview.querySelector('div');
-  
-  if (desktopEmptyContent) {
-    desktopEmptyContent.innerHTML = `
-      <i class="ti ti-video text-4xl text-gray-600 mb-2"></i>
-      <p class="text-sm text-gray-500">Select a video to preview</p>
+  if (desktopEmptyPreview) {
+    desktopEmptyPreview.innerHTML = `
+      <div class="text-center">
+        <i class="ti ti-video text-4xl text-gray-600 mb-2"></i>
+        <p class="text-sm text-gray-500">Select a video to preview</p>
+      </div>
     `;
   }
   
-  if (mobileEmptyContent) {
-    mobileEmptyContent.innerHTML = `
-      <i class="ti ti-video text-4xl text-gray-600 mb-2"></i>
-      <p class="text-sm text-gray-500">Select a video to preview</p>
-    `;
-  }
-  
-  if (isDropdownOpen) {
-    toggleVideoSelector();
-  }
+  // Close dropdowns
+  const videoDropdown = document.getElementById('videoSelectorDropdown');
+  const audioDropdown = document.getElementById('audioSelectorDropdown');
+  if (videoDropdown) videoDropdown.classList.add('hidden');
+  if (audioDropdown) audioDropdown.classList.add('hidden');
 }
 function initModal() {
   const modal = document.getElementById('newStreamModal');
@@ -494,3 +583,258 @@ function validateStreamKeyForPlatform(streamKey, platform) {
     });
 }
 document.addEventListener('DOMContentLoaded', initModal);
+
+// Form submission handler
+document.addEventListener('DOMContentLoaded', function() {
+  const form = document.getElementById('newStreamForm');
+  if (form) {
+    form.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      
+      const editId = form.dataset.editId;
+      const isEdit = !!editId;
+      
+      // Validate video selection
+      if (!selectedVideoData && !document.getElementById('selectedVideoId').value) {
+        const videoSelector = document.querySelector('[onclick="toggleVideoSelector()"]');
+        if (videoSelector) {
+          videoSelector.classList.add('border-red-500');
+          videoSelector.classList.remove('border-gray-600');
+        }
+        if (typeof showToast === 'function') {
+          showToast('error', 'Please select a video');
+        } else {
+          alert('Please select a video');
+        }
+        return;
+      }
+      
+      // Get form data
+      const formData = new FormData(form);
+      const scheduleType = formData.get('scheduleType') || 'once';
+      
+      const data = {
+        videoId: selectedVideoData ? selectedVideoData.id : document.getElementById('selectedVideoId').value,
+        audioId: selectedAudioData ? selectedAudioData.id : (document.getElementById('selectedAudioId').value || null),
+        streamTitle: formData.get('streamTitle'),
+        rtmpUrl: formData.get('rtmpUrl') || 'rtmp://a.rtmp.youtube.com/live2',
+        streamKey: formData.get('streamKey'),
+        loopVideo: formData.get('loopVideo') === 'on',
+        streamDuration: formData.get('streamDuration') || null,
+        scheduleStartTime: formData.get('scheduleStartTime') || null,
+        scheduleEndTime: formData.get('scheduleEndTime') || null,
+        // Recurring schedule fields
+        scheduleType: scheduleType,
+        recurringTime: formData.get('recurringTime') || null,
+        scheduleDays: scheduleType === 'weekly' ? (formData.get('scheduleDays') || '[]') : null,
+        recurringEnabled: formData.get('recurringEnabled') === 'on'
+      };
+      
+      try {
+        const url = isEdit ? `/api/streams/${editId}` : '/api/streams';
+        const method = isEdit ? 'PUT' : 'POST';
+        
+        const response = await fetch(url, {
+          method: method,
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(data)
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          closeNewStreamModal();
+          if (typeof showToast === 'function') {
+            showToast('success', isEdit ? 'Stream updated successfully!' : 'Stream created successfully!');
+          }
+          // Reset edit mode
+          delete form.dataset.editId;
+          document.querySelector('#newStreamModal h3').textContent = 'Create New Stream';
+          document.querySelector('button[type="submit"][form="newStreamForm"]').textContent = 'Create Stream';
+          
+          // Reload streams list
+          if (typeof loadStreams === 'function') {
+            loadStreams();
+          } else {
+            window.location.reload();
+          }
+        } else {
+          if (typeof showToast === 'function') {
+            showToast('error', result.error || 'Failed to save stream');
+          } else {
+            alert(result.error || 'Failed to save stream');
+          }
+        }
+      } catch (error) {
+        console.error('Error saving stream:', error);
+        if (typeof showToast === 'function') {
+          showToast('error', 'Failed to save stream. Please try again.');
+        } else {
+          alert('Failed to save stream. Please try again.');
+        }
+      }
+    });
+  }
+});
+
+
+// ============================================
+// RECURRING SCHEDULE FUNCTIONS
+// ============================================
+
+let currentScheduleType = 'once';
+let selectedDays = [];
+
+/**
+ * Set schedule type (once, daily, weekly)
+ */
+function setScheduleType(type) {
+  currentScheduleType = type;
+  document.getElementById('scheduleType').value = type;
+  
+  // Update button styles
+  const buttons = ['scheduleTypeOnce', 'scheduleTypeDaily', 'scheduleTypeWeekly'];
+  buttons.forEach(btnId => {
+    const btn = document.getElementById(btnId);
+    if (btn) {
+      if (btnId === `scheduleType${type.charAt(0).toUpperCase() + type.slice(1)}`) {
+        btn.classList.add('border-primary', 'bg-primary', 'text-white');
+        btn.classList.remove('border-gray-600', 'bg-dark-700', 'text-gray-300');
+      } else {
+        btn.classList.remove('border-primary', 'bg-primary', 'text-white');
+        btn.classList.add('border-gray-600', 'bg-dark-700', 'text-gray-300');
+      }
+    }
+  });
+  
+  // Show/hide appropriate settings
+  const onceSettings = document.getElementById('onceScheduleSettings');
+  const recurringSettings = document.getElementById('recurringScheduleSettings');
+  const weeklyDaysSelector = document.getElementById('weeklyDaysSelector');
+  
+  if (type === 'once') {
+    if (onceSettings) onceSettings.classList.remove('hidden');
+    if (recurringSettings) recurringSettings.classList.add('hidden');
+  } else {
+    if (onceSettings) onceSettings.classList.add('hidden');
+    if (recurringSettings) recurringSettings.classList.remove('hidden');
+    
+    if (type === 'weekly') {
+      if (weeklyDaysSelector) weeklyDaysSelector.classList.remove('hidden');
+    } else {
+      if (weeklyDaysSelector) weeklyDaysSelector.classList.add('hidden');
+    }
+  }
+}
+
+/**
+ * Toggle day selection for weekly schedule
+ */
+function toggleDay(day) {
+  const dayNum = parseInt(day);
+  const index = selectedDays.indexOf(dayNum);
+  
+  if (index > -1) {
+    selectedDays.splice(index, 1);
+  } else {
+    selectedDays.push(dayNum);
+  }
+  
+  // Update hidden input
+  document.getElementById('scheduleDays').value = JSON.stringify(selectedDays);
+  
+  // Update button style
+  const btn = document.querySelector(`[data-day="${day}"]`);
+  if (btn) {
+    if (selectedDays.includes(dayNum)) {
+      btn.classList.add('border-primary', 'bg-primary', 'text-white');
+      btn.classList.remove('border-gray-600', 'bg-dark-700', 'text-gray-300');
+    } else {
+      btn.classList.remove('border-primary', 'bg-primary', 'text-white');
+      btn.classList.add('border-gray-600', 'bg-dark-700', 'text-gray-300');
+    }
+  }
+}
+
+/**
+ * Reset recurring schedule form fields
+ */
+function resetRecurringScheduleForm() {
+  currentScheduleType = 'once';
+  selectedDays = [];
+  
+  // Reset schedule type buttons
+  setScheduleType('once');
+  
+  // Reset day buttons
+  document.querySelectorAll('.day-btn').forEach(btn => {
+    btn.classList.remove('border-primary', 'bg-primary', 'text-white');
+    btn.classList.add('border-gray-600', 'bg-dark-700', 'text-gray-300');
+  });
+  
+  // Reset inputs
+  const recurringTime = document.getElementById('recurringTime');
+  const scheduleDays = document.getElementById('scheduleDays');
+  const recurringEnabled = document.getElementById('recurringEnabled');
+  
+  if (recurringTime) recurringTime.value = '';
+  if (scheduleDays) scheduleDays.value = '[]';
+  if (recurringEnabled) recurringEnabled.checked = true;
+}
+
+/**
+ * Load recurring schedule data into form (for edit mode)
+ */
+function loadRecurringScheduleData(stream) {
+  if (!stream) return;
+  
+  const scheduleType = stream.schedule_type || 'once';
+  setScheduleType(scheduleType);
+  
+  if (scheduleType === 'daily' || scheduleType === 'weekly') {
+    // Set recurring time
+    const recurringTime = document.getElementById('recurringTime');
+    if (recurringTime && stream.recurring_time) {
+      recurringTime.value = stream.recurring_time;
+    }
+    
+    // Set recurring enabled
+    const recurringEnabled = document.getElementById('recurringEnabled');
+    if (recurringEnabled) {
+      recurringEnabled.checked = stream.recurring_enabled !== false && stream.recurring_enabled !== 0;
+    }
+    
+    // Set weekly days
+    if (scheduleType === 'weekly' && stream.schedule_days) {
+      let days = stream.schedule_days;
+      if (typeof days === 'string') {
+        try {
+          days = JSON.parse(days);
+        } catch (e) {
+          days = [];
+        }
+      }
+      
+      selectedDays = Array.isArray(days) ? days : [];
+      document.getElementById('scheduleDays').value = JSON.stringify(selectedDays);
+      
+      // Update day button styles
+      selectedDays.forEach(day => {
+        const btn = document.querySelector(`[data-day="${day}"]`);
+        if (btn) {
+          btn.classList.add('border-primary', 'bg-primary', 'text-white');
+          btn.classList.remove('border-gray-600', 'bg-dark-700', 'text-gray-300');
+        }
+      });
+    }
+  }
+}
+
+// Update the original resetModalForm to include recurring schedule reset
+const originalResetModalForm = resetModalForm;
+resetModalForm = function() {
+  originalResetModalForm();
+  resetRecurringScheduleForm();
+};

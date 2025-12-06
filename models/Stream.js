@@ -6,6 +6,7 @@ class Stream {
     const {
       title,
       video_id,
+      audio_id = null,
       rtmp_url,
       stream_key,
       platform,
@@ -18,25 +19,45 @@ class Stream {
       schedule_time = null,
       end_time = null,
       duration = null,
-      use_advanced_settings = false,
+      stream_duration_hours = null,
+      schedule_type = 'once',
+      schedule_days = null,
+      recurring_time = null,
+      recurring_enabled = true,
       status,
       user_id
     } = streamData;
     const loop_video_int = loop_video ? 1 : 0;
-    const use_advanced_settings_int = use_advanced_settings ? 1 : 0;
-    const final_status = status || (schedule_time ? 'scheduled' : 'offline');
+    const recurring_enabled_int = recurring_enabled ? 1 : 0;
+    const schedule_days_json = schedule_days ? JSON.stringify(schedule_days) : null;
+    
+    // Determine final status based on schedule type
+    let final_status = status;
+    if (!final_status) {
+      if (schedule_type === 'daily' || schedule_type === 'weekly') {
+        final_status = 'scheduled';
+      } else if (schedule_time) {
+        final_status = 'scheduled';
+      } else {
+        final_status = 'offline';
+      }
+    }
     const status_updated_at = new Date().toISOString();
     return new Promise((resolve, reject) => {
       db.run(
         `INSERT INTO streams (
-          id, title, video_id, rtmp_url, stream_key, platform, platform_icon,
+          id, title, video_id, audio_id, rtmp_url, stream_key, platform, platform_icon,
           bitrate, resolution, fps, orientation, loop_video,
-          schedule_time, end_time, duration, status, status_updated_at, use_advanced_settings, user_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          schedule_time, end_time, duration, stream_duration_hours,
+          schedule_type, schedule_days, recurring_time, recurring_enabled,
+          status, status_updated_at, user_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
-          id, title, video_id, rtmp_url, stream_key, platform, platform_icon,
+          id, title, video_id, audio_id, rtmp_url, stream_key, platform, platform_icon,
           bitrate, resolution, fps, orientation, loop_video_int,
-          schedule_time, end_time, duration, final_status, status_updated_at, use_advanced_settings_int, user_id
+          schedule_time, end_time, duration, stream_duration_hours,
+          schedule_type, schedule_days_json, recurring_time, recurring_enabled_int,
+          final_status, status_updated_at, user_id
         ],
         function (err) {
           if (err) {
@@ -50,17 +71,27 @@ class Stream {
   }
   static findById(id) {
     return new Promise((resolve, reject) => {
-      db.get('SELECT * FROM streams WHERE id = ?', [id], (err, row) => {
-        if (err) {
-          console.error('Error finding stream:', err.message);
-          return reject(err);
+      db.get(
+        `SELECT s.*, 
+                v.title AS video_title,
+                a.title AS audio_title
+         FROM streams s
+         LEFT JOIN videos v ON s.video_id = v.id
+         LEFT JOIN audios a ON s.audio_id = a.id
+         WHERE s.id = ?`,
+        [id],
+        (err, row) => {
+          if (err) {
+            console.error('Error finding stream:', err.message);
+            return reject(err);
+          }
+          if (row) {
+            row.loop_video = row.loop_video === 1;
+            row.use_advanced_settings = row.use_advanced_settings === 1;
+          }
+          resolve(row);
         }
-        if (row) {
-          row.loop_video = row.loop_video === 1;
-          row.use_advanced_settings = row.use_advanced_settings === 1;
-        }
-        resolve(row);
-      });
+      );
     });
   }
   static findAll(userId = null, filter = null) {
@@ -74,6 +105,7 @@ class Stream {
                v.resolution AS video_resolution,  
                v.bitrate AS video_bitrate,        
                v.fps AS video_fps,
+               a.title AS audio_title,
                p.name AS playlist_name,
                CASE 
                  WHEN p.id IS NOT NULL THEN 'playlist'
@@ -82,6 +114,7 @@ class Stream {
                END AS video_type
         FROM streams s
         LEFT JOIN videos v ON s.video_id = v.id
+        LEFT JOIN audios a ON s.audio_id = a.id
         LEFT JOIN playlists p ON s.video_id = p.id
       `;
       const params = [];
@@ -267,6 +300,194 @@ class Stream {
         resolve(rows || []);
       });
     });
+  }
+
+  /**
+   * Find all recurring schedules by type (daily or weekly)
+   * @param {string} scheduleType - 'daily' or 'weekly'
+   * @returns {Promise<Array>} Array of streams with recurring schedules
+   */
+  static findRecurringSchedules(scheduleType = null) {
+    return new Promise((resolve, reject) => {
+      let query = `
+        SELECT s.*, 
+               v.title AS video_title, 
+               v.filepath AS video_filepath,
+               v.thumbnail_path AS video_thumbnail, 
+               v.duration AS video_duration,
+               v.resolution AS video_resolution,
+               v.bitrate AS video_bitrate,
+               v.fps AS video_fps
+        FROM streams s
+        LEFT JOIN videos v ON s.video_id = v.id
+        WHERE s.recurring_enabled = 1
+        AND s.schedule_type IN ('daily', 'weekly')
+      `;
+      const params = [];
+      if (scheduleType) {
+        query += ' AND s.schedule_type = ?';
+        params.push(scheduleType);
+      }
+      db.all(query, params, (err, rows) => {
+        if (err) {
+          console.error('Error finding recurring schedules:', err.message);
+          return reject(err);
+        }
+        if (rows) {
+          rows.forEach(row => {
+            row.loop_video = row.loop_video === 1;
+            row.use_advanced_settings = row.use_advanced_settings === 1;
+            row.recurring_enabled = row.recurring_enabled === 1;
+            // Parse schedule_days JSON
+            if (row.schedule_days) {
+              try {
+                row.schedule_days = JSON.parse(row.schedule_days);
+              } catch (e) {
+                row.schedule_days = [];
+              }
+            } else {
+              row.schedule_days = [];
+            }
+          });
+        }
+        resolve(rows || []);
+      });
+    });
+  }
+
+  /**
+   * Update recurring_enabled status for a stream
+   * @param {string} id - Stream ID
+   * @param {boolean} enabled - Enable or disable recurring
+   * @param {string} userId - User ID
+   * @returns {Promise<Object>} Updated stream info
+   */
+  static updateRecurringEnabled(id, enabled, userId) {
+    const recurring_enabled_int = enabled ? 1 : 0;
+    return new Promise((resolve, reject) => {
+      db.run(
+        `UPDATE streams SET 
+          recurring_enabled = ?,
+          updated_at = CURRENT_TIMESTAMP
+         WHERE id = ? AND user_id = ?`,
+        [recurring_enabled_int, id, userId],
+        function (err) {
+          if (err) {
+            console.error('Error updating recurring_enabled:', err.message);
+            return reject(err);
+          }
+          resolve({
+            id,
+            recurring_enabled: enabled,
+            updated: this.changes > 0
+          });
+        }
+      );
+    });
+  }
+
+  /**
+   * Calculate next scheduled time for a recurring stream
+   * @param {Object} stream - Stream object with schedule_type, recurring_time, schedule_days
+   * @returns {Date|null} Next scheduled time or null if not applicable
+   */
+  static getNextScheduledTime(stream) {
+    if (!stream || !stream.recurring_time) {
+      return null;
+    }
+
+    const now = new Date();
+    const [hours, minutes] = stream.recurring_time.split(':').map(Number);
+
+    if (stream.schedule_type === 'daily') {
+      const nextRun = new Date(now);
+      nextRun.setHours(hours, minutes, 0, 0);
+      
+      // If time has passed today, schedule for tomorrow
+      if (nextRun <= now) {
+        nextRun.setDate(nextRun.getDate() + 1);
+      }
+      return nextRun;
+    }
+
+    if (stream.schedule_type === 'weekly') {
+      const scheduleDays = Array.isArray(stream.schedule_days) 
+        ? stream.schedule_days 
+        : (stream.schedule_days ? JSON.parse(stream.schedule_days) : []);
+      
+      if (scheduleDays.length === 0) {
+        return null;
+      }
+
+      // Sort days for easier processing
+      const sortedDays = [...scheduleDays].sort((a, b) => a - b);
+      const currentDay = now.getDay();
+      const currentTime = now.getHours() * 60 + now.getMinutes();
+      const scheduleTime = hours * 60 + minutes;
+
+      // Find next occurrence
+      for (let i = 0; i < 7; i++) {
+        const checkDay = (currentDay + i) % 7;
+        if (sortedDays.includes(checkDay)) {
+          const nextRun = new Date(now);
+          nextRun.setDate(now.getDate() + i);
+          nextRun.setHours(hours, minutes, 0, 0);
+          
+          // If it's today but time has passed, continue to next day
+          if (i === 0 && scheduleTime <= currentTime) {
+            continue;
+          }
+          return nextRun;
+        }
+      }
+
+      // If no day found in current week, get first day of next week
+      const daysUntilNext = (7 - currentDay + sortedDays[0]) % 7 || 7;
+      const nextRun = new Date(now);
+      nextRun.setDate(now.getDate() + daysUntilNext);
+      nextRun.setHours(hours, minutes, 0, 0);
+      return nextRun;
+    }
+
+    return null;
+  }
+
+  /**
+   * Serialize schedule configuration to JSON
+   * @param {Object} scheduleConfig - Schedule configuration object
+   * @returns {string} JSON string
+   */
+  static serializeScheduleConfig(scheduleConfig) {
+    return JSON.stringify({
+      schedule_type: scheduleConfig.schedule_type || 'once',
+      recurring_time: scheduleConfig.recurring_time || null,
+      schedule_days: scheduleConfig.schedule_days || [],
+      recurring_enabled: scheduleConfig.recurring_enabled !== false
+    });
+  }
+
+  /**
+   * Deserialize schedule configuration from JSON
+   * @param {string} jsonString - JSON string
+   * @returns {Object} Schedule configuration object
+   */
+  static deserializeScheduleConfig(jsonString) {
+    try {
+      const config = JSON.parse(jsonString);
+      return {
+        schedule_type: config.schedule_type || 'once',
+        recurring_time: config.recurring_time || null,
+        schedule_days: Array.isArray(config.schedule_days) ? config.schedule_days : [],
+        recurring_enabled: config.recurring_enabled !== false
+      };
+    } catch (e) {
+      return {
+        schedule_type: 'once',
+        recurring_time: null,
+        schedule_days: [],
+        recurring_enabled: true
+      };
+    }
   }
 }
 module.exports = Stream;

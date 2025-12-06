@@ -20,10 +20,11 @@ function extractFileId(driveUrl) {
   throw new Error('Invalid Google Drive URL format');
 }
 
-async function downloadFile(fileId, progressCallback = null) {
+async function downloadFile(fileId, progressCallback = null, targetFolder = 'videos') {
   try {
+    const targetPath = targetFolder === 'audios' ? paths.audios : paths.videos;
     const tempFilename = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const tempPath = path.join(paths.videos, tempFilename);
+    const tempPath = path.join(targetPath, tempFilename);
     
     let response;
     let retryCount = 0;
@@ -144,7 +145,7 @@ async function downloadFile(fileId, progressCallback = null) {
 
           if (fileSize < 1024) {
             fs.unlinkSync(tempPath);
-            reject(new Error('Downloaded file is too small to be a valid video. Please check if the Google Drive link is correct and the file is publicly accessible.'));
+            reject(new Error('Downloaded file is too small. Please check if the Google Drive link is correct and the file is publicly accessible.'));
             return;
           }
 
@@ -157,44 +158,92 @@ async function downloadFile(fileId, progressCallback = null) {
           
           if (fileHeader.includes('<!doctype html') || fileHeader.includes('<html') || fileHeader.includes('<head>')) {
             fs.unlinkSync(tempPath);
-            reject(new Error('Downloaded content is an HTML page, not a video file. The file might be private, require authentication, or the sharing settings are incorrect.'));
+            reject(new Error('Downloaded content is an HTML page, not a media file. The file might be private, require authentication, or the sharing settings are incorrect.'));
             return;
           }
           
-          const validVideoHeaders = [
-            [0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70],
-            [0x00, 0x00, 0x00, 0x1C, 0x66, 0x74, 0x79, 0x70],
-            [0x00, 0x00, 0x00, 0x20, 0x66, 0x74, 0x79, 0x70],
-            [0x1A, 0x45, 0xDF, 0xA3],
-            [0x00, 0x00, 0x01, 0xBA],
-            [0x00, 0x00, 0x01, 0xB3],
-            [0x46, 0x4C, 0x56, 0x01]
-          ];
+          // Determine file type and extension based on target folder
+          let fileExtension = '.mp4';
+          let mimeType = 'video/mp4';
           
-          let isValidVideo = false;
-          for (const header of validVideoHeaders) {
-            let matches = true;
-            for (let i = 0; i < header.length && i < buffer.length; i++) {
-              if (buffer[i] !== header[i]) {
-                matches = false;
+          if (targetFolder === 'audios') {
+            // Check for audio file signatures
+            const validAudioHeaders = [
+              { header: [0x49, 0x44, 0x33], ext: '.mp3', mime: 'audio/mpeg' }, // ID3 (MP3)
+              { header: [0xFF, 0xFB], ext: '.mp3', mime: 'audio/mpeg' }, // MP3 frame sync
+              { header: [0xFF, 0xFA], ext: '.mp3', mime: 'audio/mpeg' }, // MP3 frame sync
+              { header: [0x52, 0x49, 0x46, 0x46], ext: '.wav', mime: 'audio/wav' }, // RIFF (WAV)
+              { header: [0x00, 0x00, 0x00, 0x20, 0x66, 0x74, 0x79, 0x70], ext: '.m4a', mime: 'audio/aac' }, // M4A
+              { header: [0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70], ext: '.m4a', mime: 'audio/aac' }, // M4A
+              { header: [0x00, 0x00, 0x00, 0x1C, 0x66, 0x74, 0x79, 0x70], ext: '.m4a', mime: 'audio/aac' }, // M4A
+            ];
+            
+            let isValidAudio = false;
+            for (const audioType of validAudioHeaders) {
+              let matches = true;
+              for (let i = 0; i < audioType.header.length && i < buffer.length; i++) {
+                if (buffer[i] !== audioType.header[i]) {
+                  matches = false;
+                  break;
+                }
+              }
+              if (matches) {
+                isValidAudio = true;
+                fileExtension = audioType.ext;
+                mimeType = audioType.mime;
                 break;
               }
             }
-            if (matches) {
-              isValidVideo = true;
-              break;
+            
+            // Also check for ftyp (M4A/AAC)
+            if (!isValidAudio && buffer.includes(Buffer.from('ftyp'))) {
+              isValidAudio = true;
+              fileExtension = '.m4a';
+              mimeType = 'audio/aac';
+            }
+            
+            if (!isValidAudio) {
+              // Default to mp3 if we can't detect
+              fileExtension = '.mp3';
+              mimeType = 'audio/mpeg';
+            }
+          } else {
+            // Video validation
+            const validVideoHeaders = [
+              [0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70],
+              [0x00, 0x00, 0x00, 0x1C, 0x66, 0x74, 0x79, 0x70],
+              [0x00, 0x00, 0x00, 0x20, 0x66, 0x74, 0x79, 0x70],
+              [0x1A, 0x45, 0xDF, 0xA3],
+              [0x00, 0x00, 0x01, 0xBA],
+              [0x00, 0x00, 0x01, 0xB3],
+              [0x46, 0x4C, 0x56, 0x01]
+            ];
+            
+            let isValidVideo = false;
+            for (const header of validVideoHeaders) {
+              let matches = true;
+              for (let i = 0; i < header.length && i < buffer.length; i++) {
+                if (buffer[i] !== header[i]) {
+                  matches = false;
+                  break;
+                }
+              }
+              if (matches) {
+                isValidVideo = true;
+                break;
+              }
+            }
+            
+            if (!isValidVideo && !buffer.includes(Buffer.from('ftyp'))) {
+              fs.unlinkSync(tempPath);
+              reject(new Error('Downloaded file does not appear to be a valid video format. Please ensure the Google Drive link points to a video file and is publicly accessible.'));
+              return;
             }
           }
-          
-          if (!isValidVideo && !buffer.includes(Buffer.from('ftyp'))) {
-            fs.unlinkSync(tempPath);
-            reject(new Error('Downloaded file does not appear to be a valid video format. Please ensure the Google Drive link points to a video file and is publicly accessible.'));
-            return;
-          }
 
-          const originalFilename = `gdrive_${fileId}.mp4`;
+          const originalFilename = `gdrive_${fileId}${fileExtension}`;
           const uniqueFilename = getUniqueFilename(originalFilename);
-          const finalPath = path.join(paths.videos, uniqueFilename);
+          const finalPath = path.join(targetPath, uniqueFilename);
           
           fs.renameSync(tempPath, finalPath);
           
@@ -203,7 +252,7 @@ async function downloadFile(fileId, progressCallback = null) {
             filename: uniqueFilename,
             originalFilename: originalFilename,
             localFilePath: finalPath,
-            mimeType: 'video/mp4',
+            mimeType: mimeType,
             fileSize: fileSize
           });
         } catch (error) {
