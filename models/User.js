@@ -187,7 +187,7 @@ class User {
         values.push(updateData.status);
       }
       
-      if (updateData.avatar_path) {
+      if (updateData.avatar_path !== undefined) {
         fields.push('avatar_path = ?');
         values.push(updateData.avatar_path);
       }

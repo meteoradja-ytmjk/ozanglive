@@ -921,7 +921,7 @@ app.post('/api/users/create', isAdmin, upload.single('avatar'), async (req, res)
       });
     }
 
-    let avatarPath = '/uploads/avatars/default-avatar.png';
+    let avatarPath = null;
     if (req.file) {
       avatarPath = `/uploads/avatars/${req.file.filename}`;
     }
@@ -929,7 +929,7 @@ app.post('/api/users/create', isAdmin, upload.single('avatar'), async (req, res)
     const userData = {
       username: username,
       password: password,
-      user_role: role || 'user',
+      user_role: role || 'member',
       status: status || 'active',
       avatar_path: avatarPath
     };

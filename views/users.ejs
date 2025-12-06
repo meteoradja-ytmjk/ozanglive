@@ -447,8 +447,9 @@ function openEditModal(userId, username, role, status, avatar, liveLimit) {
   document.getElementById('editLiveLimit').value = liveLimit || '';
   
   const avatarImg = document.getElementById('editUserAvatar');
-  if (avatar && avatar !== 'null') {
-    avatarImg.src = `/uploads/avatars/${avatar}`;
+  if (avatar && avatar !== 'null' && avatar !== '') {
+    // avatar already contains full path like /uploads/avatars/xxx.png
+    avatarImg.src = avatar;
   } else {
     avatarImg.src = '/images/default-avatar.jpg';
   }
