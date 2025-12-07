@@ -61,17 +61,48 @@ async function checkStreamDurations() {
     }
     const liveStreams = await Stream.findAll(null, 'live');
     for (const stream of liveStreams) {
-      if (stream.duration && stream.start_time && !scheduledTerminations.has(stream.id)) {
-        const startTime = new Date(stream.start_time);
-        const durationMs = stream.duration * 60 * 1000;
-        const shouldEndAt = new Date(startTime.getTime() + durationMs);
-        const now = new Date();
+      // Skip if already has scheduled termination
+      if (scheduledTerminations.has(stream.id)) {
+        continue;
+      }
+
+      const now = new Date();
+      let shouldEndAt = null;
+
+      // Check duration-based end time (stream_duration_hours or duration in minutes)
+      if (stream.start_time) {
+        if (stream.stream_duration_hours && stream.stream_duration_hours > 0) {
+          // Duration in hours
+          const durationMs = stream.stream_duration_hours * 60 * 60 * 1000;
+          const durationEndAt = new Date(new Date(stream.start_time).getTime() + durationMs);
+          shouldEndAt = durationEndAt;
+        } else if (stream.duration && stream.duration > 0) {
+          // Duration in minutes (legacy)
+          const durationMs = stream.duration * 60 * 1000;
+          const durationEndAt = new Date(new Date(stream.start_time).getTime() + durationMs);
+          shouldEndAt = durationEndAt;
+        }
+      }
+
+      // Check schedule end time (for 'once' schedule type)
+      if (stream.end_time) {
+        const scheduleEndAt = new Date(stream.end_time);
+        // Use the earlier of duration end or schedule end
+        if (!shouldEndAt || scheduleEndAt < shouldEndAt) {
+          shouldEndAt = scheduleEndAt;
+        }
+      }
+
+      // If we have an end time, schedule termination
+      if (shouldEndAt) {
         if (shouldEndAt <= now) {
-          console.log(`Stream ${stream.id} exceeded duration, stopping now`);
+          console.log(`[Scheduler] Stream ${stream.id} exceeded end time, stopping now`);
           await streamingService.stopStream(stream.id);
         } else {
           const timeUntilEnd = shouldEndAt.getTime() - now.getTime();
-          scheduleStreamTermination(stream.id, timeUntilEnd / 60000);
+          const minutesUntilEnd = timeUntilEnd / 60000;
+          console.log(`[Scheduler] Stream ${stream.id} will end at ${shouldEndAt.toISOString()} (${minutesUntilEnd.toFixed(1)} minutes)`);
+          scheduleStreamTermination(stream.id, minutesUntilEnd);
         }
       }
     }

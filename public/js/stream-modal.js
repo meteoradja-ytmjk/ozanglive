@@ -689,10 +689,15 @@ let selectedDays = [];
 
 /**
  * Set schedule type (once, daily, weekly)
+ * Handles visibility of schedule settings for both mobile and desktop
  */
 function setScheduleType(type) {
   currentScheduleType = type;
-  document.getElementById('scheduleType').value = type;
+  
+  const scheduleTypeInput = document.getElementById('scheduleType');
+  if (scheduleTypeInput) {
+    scheduleTypeInput.value = type;
+  }
   
   // Update button styles
   const buttons = ['scheduleTypeOnce', 'scheduleTypeDaily', 'scheduleTypeWeekly'];
@@ -709,22 +714,44 @@ function setScheduleType(type) {
     }
   });
   
-  // Show/hide appropriate settings
+  // Show/hide appropriate settings - works for both mobile and desktop
   const onceSettings = document.getElementById('onceScheduleSettings');
   const recurringSettings = document.getElementById('recurringScheduleSettings');
   const weeklyDaysSelector = document.getElementById('weeklyDaysSelector');
   
   if (type === 'once') {
-    if (onceSettings) onceSettings.classList.remove('hidden');
-    if (recurringSettings) recurringSettings.classList.add('hidden');
+    // Show Start/End Stream fields, hide recurring settings
+    if (onceSettings) {
+      onceSettings.classList.remove('hidden');
+      onceSettings.style.display = ''; // Reset any inline display style
+    }
+    if (recurringSettings) {
+      recurringSettings.classList.add('hidden');
+      recurringSettings.style.display = 'none';
+    }
   } else {
-    if (onceSettings) onceSettings.classList.add('hidden');
-    if (recurringSettings) recurringSettings.classList.remove('hidden');
+    // Hide Start/End Stream fields, show recurring settings
+    if (onceSettings) {
+      onceSettings.classList.add('hidden');
+      onceSettings.style.display = 'none';
+    }
+    if (recurringSettings) {
+      recurringSettings.classList.remove('hidden');
+      recurringSettings.style.display = ''; // Reset any inline display style
+    }
     
+    // Show/hide weekly day selector based on type
     if (type === 'weekly') {
-      if (weeklyDaysSelector) weeklyDaysSelector.classList.remove('hidden');
+      if (weeklyDaysSelector) {
+        weeklyDaysSelector.classList.remove('hidden');
+        weeklyDaysSelector.style.display = '';
+      }
     } else {
-      if (weeklyDaysSelector) weeklyDaysSelector.classList.add('hidden');
+      // Daily - hide day selector
+      if (weeklyDaysSelector) {
+        weeklyDaysSelector.classList.add('hidden');
+        weeklyDaysSelector.style.display = 'none';
+      }
     }
   }
 }

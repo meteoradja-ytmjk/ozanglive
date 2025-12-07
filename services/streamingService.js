@@ -448,13 +448,37 @@ async function startStream(streamId) {
       }
     });
     ffmpegProcess.unref();
+    
+    // Schedule stream termination based on duration or end time
     if (typeof schedulerService !== 'undefined') {
-      const durationMinutes = Number(stream.duration);
-      if (Number.isFinite(durationMinutes) && durationMinutes > 0) {
-        const totalDurationMs = durationMinutes * 60 * 1000;
-        const elapsedMs = Math.max(0, Date.now() - streamStartTime.getTime());
-        const remainingMs = Math.max(0, totalDurationMs - elapsedMs);
+      let shouldEndAt = null;
+      const now = Date.now();
+      
+      // Check stream_duration_hours (in hours)
+      if (stream.stream_duration_hours && stream.stream_duration_hours > 0) {
+        const durationMs = stream.stream_duration_hours * 60 * 60 * 1000;
+        shouldEndAt = new Date(streamStartTime.getTime() + durationMs);
+      }
+      // Check duration (in minutes) - legacy field
+      else if (stream.duration && stream.duration > 0) {
+        const durationMs = stream.duration * 60 * 1000;
+        shouldEndAt = new Date(streamStartTime.getTime() + durationMs);
+      }
+      
+      // Check schedule end time (for 'once' schedule type)
+      if (stream.end_time) {
+        const scheduleEndAt = new Date(stream.end_time);
+        // Use the earlier of duration end or schedule end
+        if (!shouldEndAt || scheduleEndAt < shouldEndAt) {
+          shouldEndAt = scheduleEndAt;
+        }
+      }
+      
+      // Schedule termination if we have an end time
+      if (shouldEndAt) {
+        const remainingMs = Math.max(0, shouldEndAt.getTime() - now);
         const remainingMinutes = remainingMs / 60000;
+        console.log(`[StreamingService] Scheduling termination for stream ${streamId} at ${shouldEndAt.toISOString()} (${remainingMinutes.toFixed(1)} minutes)`);
         schedulerService.scheduleStreamTermination(streamId, remainingMinutes);
       }
     }
