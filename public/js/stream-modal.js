@@ -723,34 +723,28 @@ function setScheduleType(type) {
     // Show Start/End Stream fields, hide recurring settings
     if (onceSettings) {
       onceSettings.classList.remove('hidden');
-      onceSettings.style.display = ''; // Reset any inline display style
     }
     if (recurringSettings) {
       recurringSettings.classList.add('hidden');
-      recurringSettings.style.display = 'none';
     }
   } else {
     // Hide Start/End Stream fields, show recurring settings
     if (onceSettings) {
       onceSettings.classList.add('hidden');
-      onceSettings.style.display = 'none';
     }
     if (recurringSettings) {
       recurringSettings.classList.remove('hidden');
-      recurringSettings.style.display = ''; // Reset any inline display style
     }
     
     // Show/hide weekly day selector based on type
     if (type === 'weekly') {
       if (weeklyDaysSelector) {
         weeklyDaysSelector.classList.remove('hidden');
-        weeklyDaysSelector.style.display = '';
       }
     } else {
       // Daily - hide day selector
       if (weeklyDaysSelector) {
         weeklyDaysSelector.classList.add('hidden');
-        weeklyDaysSelector.style.display = 'none';
       }
     }
   }

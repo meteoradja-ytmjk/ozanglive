@@ -204,8 +204,13 @@ body {
   }
   
   /* Grid fixes for mobile */
-  .grid {
+  .grid:not(.hidden) {
     display: grid !important;
+  }
+  
+  /* Ensure hidden elements stay hidden on mobile */
+  .hidden {
+    display: none !important;
   }
   
   /* Button touch targets */
