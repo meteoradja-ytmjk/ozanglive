@@ -1,4 +1,4 @@
-# 🎬 StreamFlow - Cloud Streaming Solution
+# 🎬 Ozang - Cloud Streaming Solution
 
 <p align="center">
   <img src="public/images/logo.png" alt="StreamFlow Logo" width="200">
