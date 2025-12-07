@@ -207,7 +207,7 @@
           </button>
           <button onclick="deleteAllStreams()" class="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors">
             <i class="ti ti-trash"></i>
-            <span>Delete All</span>
+            <span id="deleteAllLabel">Delete All</span>
           </button>
         </div>
       </div>
@@ -247,7 +247,7 @@
         </button>
         <button onclick="deleteAllStreams()" class="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors">
           <i class="ti ti-trash"></i>
-          <span>Delete All</span>
+          <span id="deleteAllLabelMobile">Delete All</span>
         </button>
       </div>
     </div>
@@ -1276,9 +1276,23 @@ function applyStreamFilter(filterValue) {
   if (filterDesktop) filterDesktop.value = filterValue;
   if (filterMobile) filterMobile.value = filterValue;
   
+  // Update Delete All label based on filter
+  updateDeleteAllLabel(filterValue);
+  
   // Filter and render
   const filteredStreams = filterStreams(allStreamsData, filterValue);
   renderStreams(filteredStreams);
+}
+
+// Update Delete All button label based on current filter
+function updateDeleteAllLabel(filterValue) {
+  const labelDesktop = document.getElementById('deleteAllLabel');
+  const labelMobile = document.getElementById('deleteAllLabelMobile');
+  
+  const label = filterValue === 'all' ? 'Delete All' : `Delete ${filterValue}`;
+  
+  if (labelDesktop) labelDesktop.textContent = label;
+  if (labelMobile) labelMobile.textContent = label;
 }
 
 // ============================================
@@ -1292,17 +1306,20 @@ async function deleteAllStreams() {
   if (menuDesktop) menuDesktop.classList.add('hidden');
   if (menuMobile) menuMobile.classList.add('hidden');
   
-  // No toast notifications - silent delete
+  // Get streams to delete based on current filter
+  const streamsToDelete = filterStreams(allStreamsData, currentFilter);
+  
+  if (streamsToDelete.length === 0) return;
+  
+  // Delete each stream in the filtered list
   try {
-    const response = await fetch('/api/streams/all', { method: 'DELETE' });
-    const result = await response.json();
-    
-    if (result.success) {
-      loadStreams();
-      loadLiveLimitInfo();
+    for (const stream of streamsToDelete) {
+      await fetch(`/api/streams/${stream.id}`, { method: 'DELETE' });
     }
+    loadStreams();
+    loadLiveLimitInfo();
   } catch (error) {
-    console.error('Error deleting all streams:', error);
+    console.error('Error deleting streams:', error);
   }
 }
 
