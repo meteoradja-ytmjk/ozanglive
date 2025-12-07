@@ -180,8 +180,11 @@
     <!-- Desktop: All in one row -->
     <div class="hidden sm:flex items-center gap-3">
       <div class="relative w-64">
-        <input type="text" placeholder="Search streams..." class="w-full bg-dark-700 border border-gray-600 text-white pl-9 pr-4 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
-        <i class="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+        <select id="streamFilter" onchange="applyStreamFilter(this.value)" class="w-full bg-dark-700 border border-gray-600 text-white pl-9 pr-4 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary appearance-none cursor-pointer">
+          <option value="all">All Streams</option>
+        </select>
+        <i class="ti ti-filter absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+        <i class="ti ti-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
       </div>
       <button onclick="openNewStreamModal()" class="flex items-center justify-center gap-2 bg-primary hover:bg-secondary text-white px-4 py-2 rounded-lg transition-colors">
         <i class="ti ti-plus"></i>
@@ -198,9 +201,13 @@
             <i class="ti ti-download"></i>
             <span>Export</span>
           </button>
-          <button onclick="triggerImportFile()" class="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-blue-400 hover:bg-blue-500/10 transition-colors">
+          <button onclick="triggerImportFile()" class="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-blue-400 hover:bg-blue-500/10 transition-colors border-b border-gray-600">
             <i class="ti ti-upload"></i>
             <span>Import</span>
+          </button>
+          <button onclick="deleteAllStreams()" class="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors">
+            <i class="ti ti-trash"></i>
+            <span>Delete All</span>
           </button>
         </div>
       </div>
@@ -209,8 +216,11 @@
     <!-- Mobile: Stacked layout -->
     <div class="w-full sm:hidden">
       <div class="relative w-full mb-3">
-        <input type="text" placeholder="Search streams..." class="w-full bg-dark-700 border border-gray-600 text-white pl-9 pr-4 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
-        <i class="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+        <select id="streamFilterMobile" onchange="applyStreamFilter(this.value)" class="w-full bg-dark-700 border border-gray-600 text-white pl-9 pr-4 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary appearance-none cursor-pointer">
+          <option value="all">All Streams</option>
+        </select>
+        <i class="ti ti-filter absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+        <i class="ti ti-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
       </div>
       <div class="grid grid-cols-2 gap-3">
         <button onclick="openNewStreamModal()" class="flex items-center justify-center gap-2 bg-primary hover:bg-secondary text-white px-4 py-2 rounded-lg transition-colors">
@@ -231,9 +241,13 @@
           <i class="ti ti-download"></i>
           <span>Export</span>
         </button>
-        <button onclick="triggerImportFile()" class="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-blue-400 hover:bg-blue-500/10 transition-colors">
+        <button onclick="triggerImportFile()" class="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-blue-400 hover:bg-blue-500/10 transition-colors border-b border-gray-600">
           <i class="ti ti-upload"></i>
           <span>Import</span>
+        </button>
+        <button onclick="deleteAllStreams()" class="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors">
+          <i class="ti ti-trash"></i>
+          <span>Delete All</span>
         </button>
       </div>
     </div>
@@ -585,7 +599,15 @@ async function loadStreams() {
     const data = await response.json();
     
     if (data.success && data.streams) {
-      renderStreams(data.streams);
+      // Store all streams for filtering
+      allStreamsData = data.streams;
+      
+      // Update filter options
+      generateFilterOptions(data.streams);
+      
+      // Apply current filter and render
+      const filteredStreams = filterStreams(data.streams, currentFilter);
+      renderStreams(filteredStreams);
       updateActiveStreamCount(data.streams);
     }
   } catch (error) {
@@ -677,13 +699,18 @@ function renderStreams(streams) {
       <td class="px-3 py-4">
         <span class="text-sm">${stream.platform || 'YouTube'}</span>
       </td>
-      <td class="px-3 py-4">
+      <td class="px-3 py-4 schedule-cell cursor-pointer hover:bg-dark-600/50 rounded" 
+          data-stream-id="${stream.id}"
+          data-schedule-type="${stream.schedule_type || 'once'}"
+          data-recurring-time="${stream.recurring_time || ''}"
+          data-schedule-days="${JSON.stringify(stream.schedule_days || [])}"
+          onclick="createScheduleInlineEdit(this, this.dataset.streamId, {schedule_type: this.dataset.scheduleType, recurring_time: this.dataset.recurringTime, schedule_days: JSON.parse(this.dataset.scheduleDays || '[]')})">
         <div class="flex flex-col gap-0.5">
           <div class="inline-flex">${scheduleTypeBadge}</div>
           <span class="text-sm text-gray-300">${scheduleInfo}</span>
         </div>
       </td>
-      <td class="px-3 py-4">
+      <td class="px-3 py-4 duration-cell cursor-pointer hover:bg-dark-600/50 rounded" onclick="createDurationInlineEdit(this, '${stream.id}', ${stream.stream_duration_hours || 0})">
         <span class="text-sm">${duration}</span>
       </td>
       <td class="px-3 py-4">
@@ -783,8 +810,226 @@ async function stopStream(id) {
   }
 }
 
+// ============================================
+// INLINE EDIT FUNCTIONS
+// ============================================
+
+// Store original values for revert on cancel/error
+let inlineEditOriginalValue = null;
+let activeInlineEdit = null;
+
+// Create inline edit for Duration cell
+function createDurationInlineEdit(cell, streamId, currentValue) {
+  // Prevent multiple edits
+  if (activeInlineEdit) {
+    cancelInlineEdit();
+  }
+  
+  // Store original value
+  inlineEditOriginalValue = currentValue;
+  activeInlineEdit = { cell, streamId, field: 'duration' };
+  
+  // Create input element
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.min = '1';
+  input.max = '168';
+  input.value = currentValue || '';
+  input.className = 'w-16 px-2 py-1 bg-dark-700 border border-primary rounded text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary';
+  input.placeholder = 'Jam';
+  
+  // Save original HTML
+  const originalHTML = cell.innerHTML;
+  cell.dataset.originalHtml = originalHTML;
+  
+  // Replace cell content with input
+  cell.innerHTML = '';
+  cell.appendChild(input);
+  input.focus();
+  input.select();
+  
+  // Handle Enter key to save
+  input.addEventListener('keydown', async (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      await saveDurationInlineEdit(streamId, input.value, cell);
+    } else if (e.key === 'Escape') {
+      cancelInlineEdit();
+    }
+  });
+  
+  // Handle blur to save
+  input.addEventListener('blur', async () => {
+    // Small delay to allow cancel to work
+    setTimeout(async () => {
+      if (activeInlineEdit && activeInlineEdit.streamId === streamId) {
+        await saveDurationInlineEdit(streamId, input.value, cell);
+      }
+    }, 100);
+  });
+}
+
+// Save duration inline edit
+async function saveDurationInlineEdit(streamId, newValue, cell) {
+  const duration = parseInt(newValue, 10);
+  
+  // Validate
+  if (isNaN(duration) || duration < 1) {
+    // Revert to original
+    cell.innerHTML = cell.dataset.originalHtml;
+    activeInlineEdit = null;
+    inlineEditOriginalValue = null;
+    return;
+  }
+  
+  try {
+    const response = await fetch(`/api/streams/${streamId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stream_duration_hours: duration })
+    });
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      // Update cell with new value
+      cell.innerHTML = `<span class="text-sm cursor-pointer hover:text-primary" onclick="createDurationInlineEdit(this.parentElement, '${streamId}', ${duration})">${duration} jam</span>`;
+      showToast('success', 'Duration updated!');
+    } else {
+      // Revert on error
+      cell.innerHTML = cell.dataset.originalHtml;
+      showToast('error', result.error || 'Failed to update duration');
+    }
+  } catch (error) {
+    console.error('Error saving duration:', error);
+    // Revert on error
+    cell.innerHTML = cell.dataset.originalHtml;
+    showToast('error', 'Connection error');
+  }
+  
+  activeInlineEdit = null;
+  inlineEditOriginalValue = null;
+}
+
+// Create inline edit for Schedule cell
+function createScheduleInlineEdit(cell, streamId, currentSchedule) {
+  // Prevent multiple edits
+  if (activeInlineEdit) {
+    cancelInlineEdit();
+  }
+  
+  // Store original value
+  inlineEditOriginalValue = currentSchedule;
+  activeInlineEdit = { cell, streamId, field: 'schedule' };
+  
+  // Save original HTML
+  const originalHTML = cell.innerHTML;
+  cell.dataset.originalHtml = originalHTML;
+  
+  // Create edit container
+  const container = document.createElement('div');
+  container.className = 'flex flex-col gap-2 p-2 bg-dark-700 rounded-lg border border-primary';
+  
+  // Schedule type selector
+  const typeSelect = document.createElement('select');
+  typeSelect.className = 'w-full px-2 py-1 bg-dark-800 border border-gray-600 rounded text-sm text-white focus:outline-none';
+  typeSelect.innerHTML = `
+    <option value="once" ${currentSchedule.schedule_type === 'once' ? 'selected' : ''}>Once</option>
+    <option value="daily" ${currentSchedule.schedule_type === 'daily' ? 'selected' : ''}>Daily</option>
+    <option value="weekly" ${currentSchedule.schedule_type === 'weekly' ? 'selected' : ''}>Weekly</option>
+  `;
+  
+  // Time input
+  const timeInput = document.createElement('input');
+  timeInput.type = 'time';
+  timeInput.className = 'w-full px-2 py-1 bg-dark-800 border border-gray-600 rounded text-sm text-white focus:outline-none [color-scheme:dark]';
+  timeInput.value = currentSchedule.recurring_time || '';
+  
+  // Buttons container
+  const btnContainer = document.createElement('div');
+  btnContainer.className = 'flex gap-1';
+  
+  const saveBtn = document.createElement('button');
+  saveBtn.className = 'flex-1 px-2 py-1 bg-primary hover:bg-secondary text-white text-xs rounded';
+  saveBtn.innerHTML = '<i class="ti ti-check"></i>';
+  saveBtn.onclick = () => saveScheduleInlineEdit(streamId, typeSelect.value, timeInput.value, cell);
+  
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'flex-1 px-2 py-1 bg-gray-600 hover:bg-gray-500 text-white text-xs rounded';
+  cancelBtn.innerHTML = '<i class="ti ti-x"></i>';
+  cancelBtn.onclick = () => cancelInlineEdit();
+  
+  btnContainer.appendChild(saveBtn);
+  btnContainer.appendChild(cancelBtn);
+  
+  container.appendChild(typeSelect);
+  container.appendChild(timeInput);
+  container.appendChild(btnContainer);
+  
+  // Replace cell content
+  cell.innerHTML = '';
+  cell.appendChild(container);
+  typeSelect.focus();
+  
+  // Handle Escape key
+  container.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      cancelInlineEdit();
+    }
+  });
+}
+
+// Save schedule inline edit
+async function saveScheduleInlineEdit(streamId, scheduleType, recurringTime, cell) {
+  try {
+    const updateData = {
+      schedule_type: scheduleType,
+      recurring_time: recurringTime || null
+    };
+    
+    const response = await fetch(`/api/streams/${streamId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updateData)
+    });
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      // Refresh streams to show updated data
+      loadStreams();
+      showToast('success', 'Schedule updated!');
+    } else {
+      // Revert on error
+      cell.innerHTML = cell.dataset.originalHtml;
+      showToast('error', result.error || 'Failed to update schedule');
+    }
+  } catch (error) {
+    console.error('Error saving schedule:', error);
+    // Revert on error
+    cell.innerHTML = cell.dataset.originalHtml;
+    showToast('error', 'Connection error');
+  }
+  
+  activeInlineEdit = null;
+  inlineEditOriginalValue = null;
+}
+
+// Cancel inline edit and revert to original
+function cancelInlineEdit() {
+  if (activeInlineEdit && activeInlineEdit.cell) {
+    activeInlineEdit.cell.innerHTML = activeInlineEdit.cell.dataset.originalHtml || '';
+  }
+  activeInlineEdit = null;
+  inlineEditOriginalValue = null;
+}
+
+// ============================================
+// END INLINE EDIT FUNCTIONS
+// ============================================
+
 async function deleteStream(id) {
-  if (!confirm('Are you sure you want to delete this stream?')) return;
+  // No confirmation dialog - delete immediately for faster workflow
   try {
     const response = await fetch(`/api/streams/${id}`, { method: 'DELETE' });
     const result = await response.json();
@@ -1000,6 +1245,106 @@ async function importStreamSettings(input) {
   // Reset file input
   input.value = '';
 }
+
+// ============================================
+// FILTER FUNCTIONS
+// ============================================
+
+// Store all streams for filtering
+let allStreamsData = [];
+let currentFilter = 'all';
+
+// Generate filter options from stream names
+function generateFilterOptions(streams) {
+  const filterDesktop = document.getElementById('streamFilter');
+  const filterMobile = document.getElementById('streamFilterMobile');
+  
+  if (!filterDesktop || !filterMobile) return;
+  
+  // Extract unique name prefixes (first word or group name)
+  const prefixes = new Map();
+  streams.forEach(stream => {
+    // Get prefix - first word before space or number
+    const title = stream.title || '';
+    const match = title.match(/^([A-Za-z]+)/);
+    const prefix = match ? match[1] : title.split(' ')[0];
+    if (prefix) {
+      const count = prefixes.get(prefix) || 0;
+      prefixes.set(prefix, count + 1);
+    }
+  });
+  
+  // Build options HTML
+  let optionsHtml = '<option value="all">All Streams (' + streams.length + ')</option>';
+  prefixes.forEach((count, prefix) => {
+    optionsHtml += `<option value="${prefix}">${prefix} (${count})</option>`;
+  });
+  
+  // Update both dropdowns
+  filterDesktop.innerHTML = optionsHtml;
+  filterMobile.innerHTML = optionsHtml;
+  
+  // Restore selected filter
+  filterDesktop.value = currentFilter;
+  filterMobile.value = currentFilter;
+}
+
+// Filter streams by selected value
+function filterStreams(streams, filterValue) {
+  if (filterValue === 'all') return streams;
+  
+  return streams.filter(stream => {
+    const title = stream.title || '';
+    return title.toLowerCase().startsWith(filterValue.toLowerCase());
+  });
+}
+
+// Apply filter and re-render
+function applyStreamFilter(filterValue) {
+  currentFilter = filterValue;
+  
+  // Sync both dropdowns
+  const filterDesktop = document.getElementById('streamFilter');
+  const filterMobile = document.getElementById('streamFilterMobile');
+  if (filterDesktop) filterDesktop.value = filterValue;
+  if (filterMobile) filterMobile.value = filterValue;
+  
+  // Filter and render
+  const filteredStreams = filterStreams(allStreamsData, filterValue);
+  renderStreams(filteredStreams);
+}
+
+// ============================================
+// DELETE ALL FUNCTION
+// ============================================
+
+async function deleteAllStreams() {
+  // Close dropdown
+  const menuDesktop = document.getElementById('backupDropdownMenu');
+  const menuMobile = document.getElementById('backupDropdownMenuMobile');
+  if (menuDesktop) menuDesktop.classList.add('hidden');
+  if (menuMobile) menuMobile.classList.add('hidden');
+  
+  try {
+    const response = await fetch('/api/streams/all', { method: 'DELETE' });
+    const result = await response.json();
+    
+    if (result.success) {
+      showToast('success', `Deleted ${result.deleted} stream(s)!`);
+      loadStreams();
+      loadLiveLimitInfo();
+    } else {
+      showToast('error', result.error || 'Failed to delete all streams');
+    }
+  } catch (error) {
+    console.error('Error deleting all streams:', error);
+    showToast('error', 'Connection error');
+  }
+}
+
+// ============================================
+// END FILTER & DELETE ALL FUNCTIONS
+// ============================================
 
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {

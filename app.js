@@ -2067,6 +2067,32 @@ app.put('/api/streams/:id', isAuthenticated, async (req, res) => {
     res.status(500).json({ success: false, error: 'Failed to update stream' });
   }
 });
+// Delete all streams for current user
+app.delete('/api/streams/all', isAuthenticated, async (req, res) => {
+  try {
+    const streams = await Stream.findByUserId(req.session.userId);
+    let deletedCount = 0;
+    
+    for (const stream of streams) {
+      // Stop stream if live
+      if (stream.status === 'live') {
+        try {
+          await streamingService.stopStream(stream.id);
+        } catch (e) {
+          console.error('Error stopping stream during delete all:', e);
+        }
+      }
+      await Stream.delete(stream.id, req.session.userId);
+      deletedCount++;
+    }
+    
+    res.json({ success: true, deleted: deletedCount, message: `Deleted ${deletedCount} stream(s)` });
+  } catch (error) {
+    console.error('Error deleting all streams:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete all streams' });
+  }
+});
+
 app.delete('/api/streams/:id', isAuthenticated, async (req, res) => {
   try {
     const stream = await Stream.findById(req.params.id);
