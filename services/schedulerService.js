@@ -6,6 +6,8 @@ const recentlyTriggeredStreams = new Map(); // Track recently triggered recurrin
 const SCHEDULE_LOOKAHEAD_SECONDS = 60;
 const RECURRING_CHECK_INTERVAL = 60 * 1000; // Check every minute
 const TRIGGER_COOLDOWN_MS = 2 * 60 * 1000; // 2 minute cooldown to prevent double triggers
+const DURATION_CHECK_INTERVAL = 30 * 1000; // Check every 30 seconds for more reliable duration enforcement
+const FORCE_STOP_BUFFER_MS = 60 * 1000; // Force stop streams that exceed duration by more than 1 minute
 
 let streamingService = null;
 let initialized = false;
@@ -20,9 +22,9 @@ function init(streamingServiceInstance) {
   }
   streamingService = streamingServiceInstance;
   initialized = true;
-  console.log('Stream scheduler initialized');
+  console.log('Stream scheduler initialized with 30-second duration check interval');
   scheduleIntervalId = setInterval(checkScheduledStreams, 60 * 1000);
-  durationIntervalId = setInterval(checkStreamDurations, 60 * 1000);
+  durationIntervalId = setInterval(checkStreamDurations, DURATION_CHECK_INTERVAL); // Changed to 30 seconds
   recurringIntervalId = setInterval(checkRecurringSchedules, RECURRING_CHECK_INTERVAL);
   checkScheduledStreams();
   checkStreamDurations();
@@ -60,13 +62,9 @@ async function checkStreamDurations() {
       return;
     }
     const liveStreams = await Stream.findAll(null, 'live');
+    const now = new Date();
+    
     for (const stream of liveStreams) {
-      // Skip if already has scheduled termination
-      if (scheduledTerminations.has(stream.id)) {
-        continue;
-      }
-
-      const now = new Date();
       let shouldEndAt = null;
 
       // Check duration-based end time (stream_duration_hours or duration in minutes)
@@ -93,12 +91,38 @@ async function checkStreamDurations() {
         }
       }
 
-      // If we have an end time, schedule termination
+      // If we have an end time, check if we need to take action
       if (shouldEndAt) {
+        const timeOverdue = now.getTime() - shouldEndAt.getTime();
+        
+        // FORCE STOP: If stream exceeds duration by more than 1 minute, force stop immediately
+        // This is a safety net in case FFmpeg -t and scheduled timer both failed
+        if (timeOverdue > FORCE_STOP_BUFFER_MS) {
+          console.log(`[Scheduler] FORCE STOP: Stream ${stream.id} exceeded end time by ${Math.round(timeOverdue / 1000)}s, forcing stop now`);
+          try {
+            await streamingService.stopStream(stream.id);
+            // Cancel any existing scheduled termination
+            cancelStreamTermination(stream.id);
+          } catch (stopError) {
+            console.error(`[Scheduler] Error force stopping stream ${stream.id}:`, stopError);
+          }
+          continue;
+        }
+        
+        // If stream has exceeded end time (but within buffer), stop it
         if (shouldEndAt <= now) {
           console.log(`[Scheduler] Stream ${stream.id} exceeded end time, stopping now`);
-          await streamingService.stopStream(stream.id);
-        } else {
+          try {
+            await streamingService.stopStream(stream.id);
+            cancelStreamTermination(stream.id);
+          } catch (stopError) {
+            console.error(`[Scheduler] Error stopping overdue stream ${stream.id}:`, stopError);
+          }
+          continue;
+        }
+        
+        // If no scheduled termination exists, create one
+        if (!scheduledTerminations.has(stream.id)) {
           const timeUntilEnd = shouldEndAt.getTime() - now.getTime();
           const minutesUntilEnd = timeUntilEnd / 60000;
           console.log(`[Scheduler] Stream ${stream.id} will end at ${shouldEndAt.toISOString()} (${minutesUntilEnd.toFixed(1)} minutes)`);

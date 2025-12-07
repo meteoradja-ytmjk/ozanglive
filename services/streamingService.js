@@ -24,6 +24,79 @@ const streamRetryCount = new Map();
 const MAX_RETRY_ATTEMPTS = 3;
 const manuallyStoppingStreams = new Set();
 const MAX_LOG_LINES = 100;
+
+// Duration tracking for automatic stream termination
+// Structure: { streamId: { startTime: Date, durationMs: number, expectedEndTime: Date } }
+const streamDurationInfo = new Map();
+
+/**
+ * Set duration info for a stream
+ * @param {string} streamId - Stream ID
+ * @param {Date} startTime - Stream start time
+ * @param {number} durationMs - Duration in milliseconds
+ */
+function setDurationInfo(streamId, startTime, durationMs) {
+  const expectedEndTime = new Date(startTime.getTime() + durationMs);
+  streamDurationInfo.set(streamId, {
+    startTime,
+    durationMs,
+    expectedEndTime
+  });
+  console.log(`[StreamingService] Duration tracking set for stream ${streamId}: start=${startTime.toISOString()}, duration=${durationMs}ms, expectedEnd=${expectedEndTime.toISOString()}`);
+}
+
+/**
+ * Get duration info for a stream
+ * @param {string} streamId - Stream ID
+ * @returns {Object|null} Duration info or null if not set
+ */
+function getDurationInfo(streamId) {
+  return streamDurationInfo.get(streamId) || null;
+}
+
+/**
+ * Clear duration info for a stream
+ * @param {string} streamId - Stream ID
+ */
+function clearDurationInfo(streamId) {
+  if (streamDurationInfo.has(streamId)) {
+    streamDurationInfo.delete(streamId);
+    console.log(`[StreamingService] Duration tracking cleared for stream ${streamId}`);
+  }
+}
+
+/**
+ * Check if stream duration has been exceeded
+ * @param {string} streamId - Stream ID
+ * @returns {boolean} True if duration exceeded
+ */
+function isStreamDurationExceeded(streamId) {
+  const info = getDurationInfo(streamId);
+  if (!info || !info.expectedEndTime) return false;
+  return new Date() >= info.expectedEndTime;
+}
+
+/**
+ * Get remaining time for a stream in milliseconds
+ * @param {string} streamId - Stream ID
+ * @returns {number|null} Remaining time in ms, or null if no duration set
+ */
+function getRemainingTime(streamId) {
+  const info = getDurationInfo(streamId);
+  if (!info || !info.expectedEndTime) return null;
+  return Math.max(0, info.expectedEndTime.getTime() - Date.now());
+}
+
+/**
+ * Check if stream is ending soon (less than 5 minutes remaining)
+ * @param {string} streamId - Stream ID
+ * @returns {boolean} True if ending soon
+ */
+function isStreamEndingSoon(streamId) {
+  const remainingMs = getRemainingTime(streamId);
+  if (remainingMs === null) return false;
+  return remainingMs < 300000; // 5 minutes in ms
+}
 function addStreamLog(streamId, message) {
   if (!streamLogs.has(streamId)) {
     streamLogs.set(streamId, []);
@@ -206,6 +279,11 @@ async function buildFFmpegArgs(stream) {
 /**
  * Build FFmpeg args for video + separate audio streaming
  * Both video and audio will loop independently until duration is reached
+ * 
+ * IMPORTANT: The -t parameter must be placed AFTER all encoding options
+ * and BEFORE the output URL to properly limit output duration.
+ * This ensures FFmpeg stops outputting after the specified duration,
+ * even when input streams are looping infinitely (-stream_loop -1).
  */
 function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds, loopVideo) {
   const args = [
@@ -238,16 +316,19 @@ function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds
   args.push('-b:a', '128k');
   args.push('-ar', '44100');
   
-  // Add duration limit if specified
-  if (durationSeconds && durationSeconds > 0) {
-    args.push('-t', durationSeconds.toString());
-  }
-  
   // Output settings
   args.push('-flags', '+global_header');
   args.push('-bufsize', '4M');
   args.push('-max_muxing_queue_size', '7000');
   args.push('-f', 'flv');
+  
+  // CRITICAL: Duration limit (-t) must be placed just before output URL
+  // This limits the OUTPUT duration, not input duration
+  // When placed here, FFmpeg will stop writing to output after durationSeconds
+  if (durationSeconds && durationSeconds > 0) {
+    args.push('-t', durationSeconds.toString());
+  }
+  
   args.push(rtmpUrl);
   
   return args;
@@ -255,6 +336,11 @@ function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds
 
 /**
  * Build FFmpeg args for video only streaming (preserve original audio)
+ * 
+ * IMPORTANT: The -t parameter must be placed AFTER all encoding options
+ * and BEFORE the output URL to properly limit output duration.
+ * This ensures FFmpeg stops outputting after the specified duration,
+ * even when input streams are looping infinitely (-stream_loop -1).
  */
 function buildFFmpegArgsVideoOnly(videoPath, rtmpUrl, durationSeconds, loopVideo) {
   const args = [
@@ -277,16 +363,19 @@ function buildFFmpegArgsVideoOnly(videoPath, rtmpUrl, durationSeconds, loopVideo
   args.push('-c:v', 'copy');
   args.push('-c:a', 'copy');
   
-  // Add duration limit if specified
-  if (durationSeconds && durationSeconds > 0) {
-    args.push('-t', durationSeconds.toString());
-  }
-  
   // Output settings
   args.push('-flags', '+global_header');
   args.push('-bufsize', '4M');
   args.push('-max_muxing_queue_size', '7000');
   args.push('-f', 'flv');
+  
+  // CRITICAL: Duration limit (-t) must be placed just before output URL
+  // This limits the OUTPUT duration, not input duration
+  // When placed here, FFmpeg will stop writing to output after durationSeconds
+  if (durationSeconds && durationSeconds > 0) {
+    args.push('-t', durationSeconds.toString());
+  }
+  
   args.push(rtmpUrl);
   
   return args;
@@ -348,9 +437,35 @@ async function startStream(streamId) {
       console.log(`[FFMPEG_EXIT] ${streamId}: Code=${code}, Signal=${signal}`);
       const wasActive = activeStreams.delete(streamId);
       const isManualStop = manuallyStoppingStreams.has(streamId);
+      
+      // Check if duration was exceeded - if so, this is a normal termination
+      const durationExceeded = isStreamDurationExceeded(streamId);
+      if (durationExceeded) {
+        console.log(`[StreamingService] Stream ${streamId} ended because duration was reached - NOT restarting`);
+        addStreamLog(streamId, `Stream ended normally - duration limit reached`);
+        clearDurationInfo(streamId);
+        if (wasActive) {
+          try {
+            const streamData = await Stream.findById(streamId);
+            if (streamData) {
+              await Stream.updateStatus(streamId, 'offline', streamData.user_id);
+              const updatedStream = await Stream.findById(streamId);
+              await saveStreamHistory(updatedStream);
+            }
+            if (typeof schedulerService !== 'undefined' && schedulerService.cancelStreamTermination) {
+              schedulerService.handleStreamStopped(streamId);
+            }
+          } catch (error) {
+            console.error(`[StreamingService] Error updating stream status after duration completion: ${error.message}`);
+          }
+        }
+        return;
+      }
+      
       if (isManualStop) {
         console.log(`[StreamingService] Stream ${streamId} was manually stopped, not restarting`);
         manuallyStoppingStreams.delete(streamId);
+        clearDurationInfo(streamId);
         if (wasActive) {
           try {
             await Stream.updateStatus(streamId, 'offline');
@@ -363,12 +478,40 @@ async function startStream(streamId) {
         }
         return;
       }
+      
+      // For SIGSEGV or error exits, check if duration is close to being exceeded
+      // If remaining time is less than 1 minute, don't restart
+      const remainingTime = getRemainingTime(streamId);
+      const shouldNotRestart = remainingTime !== null && remainingTime < 60000; // Less than 1 minute
+      
       if (signal === 'SIGSEGV') {
+        if (shouldNotRestart) {
+          console.log(`[StreamingService] Stream ${streamId} crashed but duration almost reached (${remainingTime}ms remaining) - NOT restarting`);
+          addStreamLog(streamId, `Stream crashed but duration almost reached - not restarting`);
+          clearDurationInfo(streamId);
+          if (wasActive) {
+            try {
+              const streamData = await Stream.findById(streamId);
+              if (streamData) {
+                await Stream.updateStatus(streamId, 'offline', streamData.user_id);
+              }
+              if (typeof schedulerService !== 'undefined' && schedulerService.cancelStreamTermination) {
+                schedulerService.handleStreamStopped(streamId);
+              }
+            } catch (error) {
+              console.error(`[StreamingService] Error updating stream status: ${error.message}`);
+            }
+          }
+          return;
+        }
+        
         const retryCount = streamRetryCount.get(streamId) || 0;
         if (retryCount < MAX_RETRY_ATTEMPTS) {
           streamRetryCount.set(streamId, retryCount + 1);
           console.log(`[StreamingService] FFmpeg crashed with SIGSEGV. Attempting restart #${retryCount + 1} for stream ${streamId}`);
           addStreamLog(streamId, `FFmpeg crashed with SIGSEGV. Attempting restart #${retryCount + 1}`);
+          // Clear duration info before restart - it will be recalculated
+          clearDurationInfo(streamId);
           setTimeout(async () => {
             try {
               const streamInfo = await Stream.findById(streamId);
@@ -394,11 +537,33 @@ async function startStream(streamId) {
         } else {
           console.error(`[StreamingService] Maximum retry attempts (${MAX_RETRY_ATTEMPTS}) reached for stream ${streamId}`);
           addStreamLog(streamId, `Maximum retry attempts (${MAX_RETRY_ATTEMPTS}) reached, stopping stream`);
+          clearDurationInfo(streamId);
         }
       }
       else {
         let errorMessage = '';
         if (code !== 0 && code !== null) {
+          // Check if we should not restart due to duration
+          if (shouldNotRestart) {
+            console.log(`[StreamingService] Stream ${streamId} exited with error but duration almost reached - NOT restarting`);
+            addStreamLog(streamId, `Stream exited with error but duration almost reached - not restarting`);
+            clearDurationInfo(streamId);
+            if (wasActive) {
+              try {
+                const streamData = await Stream.findById(streamId);
+                if (streamData) {
+                  await Stream.updateStatus(streamId, 'offline', streamData.user_id);
+                }
+                if (typeof schedulerService !== 'undefined' && schedulerService.cancelStreamTermination) {
+                  schedulerService.handleStreamStopped(streamId);
+                }
+              } catch (error) {
+                console.error(`[StreamingService] Error updating stream status: ${error.message}`);
+              }
+            }
+            return;
+          }
+          
           errorMessage = `FFmpeg process exited with error code ${code}`;
           addStreamLog(streamId, errorMessage);
           console.error(`[StreamingService] ${errorMessage} for stream ${streamId}`);
@@ -406,6 +571,8 @@ async function startStream(streamId) {
           if (retryCount < MAX_RETRY_ATTEMPTS) {
             streamRetryCount.set(streamId, retryCount + 1);
             console.log(`[StreamingService] FFmpeg exited with code ${code}. Attempting restart #${retryCount + 1} for stream ${streamId}`);
+            // Clear duration info before restart
+            clearDurationInfo(streamId);
             setTimeout(async () => {
               try {
                 const streamInfo = await Stream.findById(streamId);
@@ -424,10 +591,23 @@ async function startStream(streamId) {
             return;
           }
         }
+        
+        // Normal exit (code 0) - this could be FFmpeg -t parameter working correctly
+        if (code === 0) {
+          console.log(`[StreamingService] Stream ${streamId} ended normally with exit code 0`);
+          addStreamLog(streamId, `Stream ended normally`);
+        }
+        
+        clearDurationInfo(streamId);
         if (wasActive) {
           try {
             console.log(`[StreamingService] Updating stream ${streamId} status to offline after FFmpeg exit`);
-            await Stream.updateStatus(streamId, 'offline');
+            const streamData = await Stream.findById(streamId);
+            if (streamData) {
+              await Stream.updateStatus(streamId, 'offline', streamData.user_id);
+              const updatedStream = await Stream.findById(streamId);
+              await saveStreamHistory(updatedStream);
+            }
             if (typeof schedulerService !== 'undefined' && schedulerService.cancelStreamTermination) {
               schedulerService.handleStreamStopped(streamId);
             }
@@ -449,19 +629,31 @@ async function startStream(streamId) {
     });
     ffmpegProcess.unref();
     
+    // Calculate and track stream duration for automatic termination
+    let durationMs = null;
+    const now = Date.now();
+    
+    // Check stream_duration_hours (in hours)
+    if (stream.stream_duration_hours && stream.stream_duration_hours > 0) {
+      durationMs = stream.stream_duration_hours * 60 * 60 * 1000;
+    }
+    // Check duration (in minutes) - legacy field
+    else if (stream.duration && stream.duration > 0) {
+      durationMs = stream.duration * 60 * 1000;
+    }
+    
+    // Set duration tracking if duration is specified
+    if (durationMs && durationMs > 0) {
+      setDurationInfo(streamId, streamStartTime, durationMs);
+      addStreamLog(streamId, `Duration tracking enabled: ${durationMs / 3600000} hours, expected end: ${new Date(streamStartTime.getTime() + durationMs).toISOString()}`);
+    }
+    
     // Schedule stream termination based on duration or end time
     if (typeof schedulerService !== 'undefined') {
       let shouldEndAt = null;
-      const now = Date.now();
       
-      // Check stream_duration_hours (in hours)
-      if (stream.stream_duration_hours && stream.stream_duration_hours > 0) {
-        const durationMs = stream.stream_duration_hours * 60 * 60 * 1000;
-        shouldEndAt = new Date(streamStartTime.getTime() + durationMs);
-      }
-      // Check duration (in minutes) - legacy field
-      else if (stream.duration && stream.duration > 0) {
-        const durationMs = stream.duration * 60 * 1000;
+      // Use duration-based end time if set
+      if (durationMs && durationMs > 0) {
         shouldEndAt = new Date(streamStartTime.getTime() + durationMs);
       }
       
@@ -471,14 +663,24 @@ async function startStream(streamId) {
         // Use the earlier of duration end or schedule end
         if (!shouldEndAt || scheduleEndAt < shouldEndAt) {
           shouldEndAt = scheduleEndAt;
+          // Update duration tracking if schedule end is earlier
+          if (durationMs) {
+            const adjustedDurationMs = scheduleEndAt.getTime() - streamStartTime.getTime();
+            if (adjustedDurationMs > 0 && adjustedDurationMs < durationMs) {
+              setDurationInfo(streamId, streamStartTime, adjustedDurationMs);
+            }
+          }
         }
       }
       
       // Schedule termination if we have an end time
+      // Add 30-second buffer to let FFmpeg -t parameter work first
       if (shouldEndAt) {
         const remainingMs = Math.max(0, shouldEndAt.getTime() - now);
-        const remainingMinutes = remainingMs / 60000;
-        console.log(`[StreamingService] Scheduling termination for stream ${streamId} at ${shouldEndAt.toISOString()} (${remainingMinutes.toFixed(1)} minutes)`);
+        const bufferMs = 30000; // 30 second buffer
+        const remainingWithBufferMs = remainingMs + bufferMs;
+        const remainingMinutes = remainingWithBufferMs / 60000;
+        console.log(`[StreamingService] Scheduling termination for stream ${streamId} at ${shouldEndAt.toISOString()} (${remainingMinutes.toFixed(1)} minutes with 30s buffer)`);
         schedulerService.scheduleStreamTermination(streamId, remainingMinutes);
       }
     }
@@ -503,6 +705,8 @@ async function stopStream(streamId) {
       if (stream && stream.status === 'live') {
         console.log(`[StreamingService] Stream ${streamId} not active in memory but status is 'live' in DB. Fixing status.`);
         await Stream.updateStatus(streamId, 'offline', stream.user_id);
+        // Clean up duration tracking
+        clearDurationInfo(streamId);
         if (typeof schedulerService !== 'undefined' && schedulerService.cancelStreamTermination) {
           schedulerService.handleStreamStopped(streamId);
         }
@@ -521,6 +725,9 @@ async function stopStream(streamId) {
     }
     const stream = await Stream.findById(streamId);
     activeStreams.delete(streamId);
+    
+    // Clean up duration tracking
+    clearDurationInfo(streamId);
     
     const tempConcatFile = path.join(__dirname, '..', 'temp', `playlist_${streamId}.txt`);
     try {
@@ -543,6 +750,8 @@ async function stopStream(streamId) {
     return { success: true, message: 'Stream stopped successfully' };
   } catch (error) {
     manuallyStoppingStreams.delete(streamId);
+    // Clean up duration tracking even on error
+    clearDurationInfo(streamId);
     console.error(`[StreamingService] Error stopping stream ${streamId}:`, error);
     return { success: false, error: error.message };
   }
@@ -664,6 +873,11 @@ module.exports = {
   getStreamLogs,
   syncStreamStatuses,
   saveStreamHistory,
+  // Duration tracking exports
+  getDurationInfo,
+  getRemainingTime,
+  isStreamEndingSoon,
+  isStreamDurationExceeded,
   // Export for testing
   buildFFmpegArgsWithAudio,
   buildFFmpegArgsVideoOnly
