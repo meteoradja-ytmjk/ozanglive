@@ -780,17 +780,16 @@ async function startStream(id) {
       loadStreams();
       loadLiveLimitInfo();
     } else {
-      // Check if limit reached
+      // Only show toast for limit reached - this is important info
       if (result.limitReached) {
         showCenterToast('warning', result.error || 'Hubungi Admin Untuk Menambah Limit');
         loadLiveLimitInfo();
-      } else {
-        showToast('error', result.error || 'Failed to start stream');
       }
+      // No toast for other errors
     }
   } catch (error) {
     console.error('Error starting stream:', error);
-    showToast('error', 'Terjadi kesalahan saat memulai stream');
+    // No toast for errors
   }
 }
 
@@ -801,12 +800,11 @@ async function stopStream(id) {
     if (result.success) {
       loadStreams();
       loadLiveLimitInfo();
-    } else {
-      showToast('error', result.error || 'Failed to stop stream');
     }
+    // No toast for errors
   } catch (error) {
     console.error('Error stopping stream:', error);
-    showToast('error', 'Terjadi kesalahan saat menghentikan stream');
+    // No toast for errors
   }
 }
 
@@ -892,26 +890,23 @@ async function saveDurationInlineEdit(streamId, newValue, cell) {
     const result = await response.json();
     
     if (result.success) {
-      // Update cell with new value
+      // Update cell with new value - no toast
       cell.innerHTML = `<span class="text-sm cursor-pointer hover:text-primary" onclick="createDurationInlineEdit(this.parentElement, '${streamId}', ${duration})">${duration} jam</span>`;
-      showToast('success', 'Duration updated!');
     } else {
-      // Revert on error
+      // Revert on error - no toast
       cell.innerHTML = cell.dataset.originalHtml;
-      showToast('error', result.error || 'Failed to update duration');
     }
   } catch (error) {
     console.error('Error saving duration:', error);
-    // Revert on error
+    // Revert on error - no toast
     cell.innerHTML = cell.dataset.originalHtml;
-    showToast('error', 'Connection error');
   }
   
   activeInlineEdit = null;
   inlineEditOriginalValue = null;
 }
 
-// Create inline edit for Schedule cell
+// Create inline edit for Schedule cell - Simple time input only
 function createScheduleInlineEdit(cell, streamId, currentSchedule) {
   // Prevent multiple edits
   if (activeInlineEdit) {
@@ -926,56 +921,34 @@ function createScheduleInlineEdit(cell, streamId, currentSchedule) {
   const originalHTML = cell.innerHTML;
   cell.dataset.originalHtml = originalHTML;
   
-  // Create edit container
-  const container = document.createElement('div');
-  container.className = 'flex flex-col gap-2 p-2 bg-dark-700 rounded-lg border border-primary';
+  // Create simple time input (like duration)
+  const input = document.createElement('input');
+  input.type = 'time';
+  input.value = currentSchedule.recurring_time || '';
+  input.className = 'w-20 px-2 py-1 bg-dark-700 border border-primary rounded text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary [color-scheme:dark]';
   
-  // Schedule type selector
-  const typeSelect = document.createElement('select');
-  typeSelect.className = 'w-full px-2 py-1 bg-dark-800 border border-gray-600 rounded text-sm text-white focus:outline-none';
-  typeSelect.innerHTML = `
-    <option value="once" ${currentSchedule.schedule_type === 'once' ? 'selected' : ''}>Once</option>
-    <option value="daily" ${currentSchedule.schedule_type === 'daily' ? 'selected' : ''}>Daily</option>
-    <option value="weekly" ${currentSchedule.schedule_type === 'weekly' ? 'selected' : ''}>Weekly</option>
-  `;
-  
-  // Time input
-  const timeInput = document.createElement('input');
-  timeInput.type = 'time';
-  timeInput.className = 'w-full px-2 py-1 bg-dark-800 border border-gray-600 rounded text-sm text-white focus:outline-none [color-scheme:dark]';
-  timeInput.value = currentSchedule.recurring_time || '';
-  
-  // Buttons container
-  const btnContainer = document.createElement('div');
-  btnContainer.className = 'flex gap-1';
-  
-  const saveBtn = document.createElement('button');
-  saveBtn.className = 'flex-1 px-2 py-1 bg-primary hover:bg-secondary text-white text-xs rounded';
-  saveBtn.innerHTML = '<i class="ti ti-check"></i>';
-  saveBtn.onclick = () => saveScheduleInlineEdit(streamId, typeSelect.value, timeInput.value, cell);
-  
-  const cancelBtn = document.createElement('button');
-  cancelBtn.className = 'flex-1 px-2 py-1 bg-gray-600 hover:bg-gray-500 text-white text-xs rounded';
-  cancelBtn.innerHTML = '<i class="ti ti-x"></i>';
-  cancelBtn.onclick = () => cancelInlineEdit();
-  
-  btnContainer.appendChild(saveBtn);
-  btnContainer.appendChild(cancelBtn);
-  
-  container.appendChild(typeSelect);
-  container.appendChild(timeInput);
-  container.appendChild(btnContainer);
-  
-  // Replace cell content
+  // Replace cell content with input
   cell.innerHTML = '';
-  cell.appendChild(container);
-  typeSelect.focus();
+  cell.appendChild(input);
+  input.focus();
   
-  // Handle Escape key
-  container.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
+  // Handle Enter key to save
+  input.addEventListener('keydown', async (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      await saveScheduleInlineEdit(streamId, currentSchedule.schedule_type, input.value, cell);
+    } else if (e.key === 'Escape') {
       cancelInlineEdit();
     }
+  });
+  
+  // Handle blur to save
+  input.addEventListener('blur', async () => {
+    setTimeout(async () => {
+      if (activeInlineEdit && activeInlineEdit.streamId === streamId) {
+        await saveScheduleInlineEdit(streamId, currentSchedule.schedule_type, input.value, cell);
+      }
+    }, 100);
   });
 }
 
@@ -996,19 +969,16 @@ async function saveScheduleInlineEdit(streamId, scheduleType, recurringTime, cel
     const result = await response.json();
     
     if (result.success) {
-      // Refresh streams to show updated data
+      // Refresh streams to show updated data - no toast
       loadStreams();
-      showToast('success', 'Schedule updated!');
     } else {
-      // Revert on error
+      // Revert on error - no toast
       cell.innerHTML = cell.dataset.originalHtml;
-      showToast('error', result.error || 'Failed to update schedule');
     }
   } catch (error) {
     console.error('Error saving schedule:', error);
-    // Revert on error
+    // Revert on error - no toast
     cell.innerHTML = cell.dataset.originalHtml;
-    showToast('error', 'Connection error');
   }
   
   activeInlineEdit = null;
@@ -1030,19 +1000,16 @@ function cancelInlineEdit() {
 
 async function deleteStream(id) {
   // No confirmation dialog - delete immediately for faster workflow
+  // No toast notifications - silent delete
   try {
     const response = await fetch(`/api/streams/${id}`, { method: 'DELETE' });
     const result = await response.json();
     if (result.success) {
       loadStreams();
       loadLiveLimitInfo();
-      showToast('success', 'Stream deleted!');
-    } else {
-      showToast('error', result.error || 'Failed to delete stream');
     }
   } catch (error) {
     console.error('Error deleting stream:', error);
-    showToast('error', 'Terjadi kesalahan saat menghapus stream');
   }
 }
 
@@ -1325,20 +1292,17 @@ async function deleteAllStreams() {
   if (menuDesktop) menuDesktop.classList.add('hidden');
   if (menuMobile) menuMobile.classList.add('hidden');
   
+  // No toast notifications - silent delete
   try {
     const response = await fetch('/api/streams/all', { method: 'DELETE' });
     const result = await response.json();
     
     if (result.success) {
-      showToast('success', `Deleted ${result.deleted} stream(s)!`);
       loadStreams();
       loadLiveLimitInfo();
-    } else {
-      showToast('error', result.error || 'Failed to delete all streams');
     }
   } catch (error) {
     console.error('Error deleting all streams:', error);
-    showToast('error', 'Connection error');
   }
 }
 
