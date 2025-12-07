@@ -100,6 +100,12 @@ Jika aplikasi sudah terinstall di VPS dan ingin update ke versi terbaru:
 ```bash
 cd ~/ozanglive && git pull && pm2 restart streamflow
 ```
+### lakukan ini untuk localhost, jika ada perubahan yang error
+
+```bash
+git pull origin main --rebase
+git push origin main
+```bash
 
 ### Update Step-by-Step
 
