@@ -431,8 +431,51 @@ async function startStream(streamId) {
       detached: true,
       stdio: ['ignore', 'pipe', 'pipe']
     });
+    
+    // Wait for FFmpeg to confirm it's running before updating status
+    let streamConfirmed = false;
+    let earlyExitError = null;
+    
+    // Set up early exit detection
+    const earlyExitPromise = new Promise((resolve) => {
+      ffmpegProcess.once('exit', (code, signal) => {
+        if (!streamConfirmed) {
+          earlyExitError = `FFmpeg exited early with code ${code}, signal: ${signal}`;
+          resolve(false);
+        }
+      });
+      ffmpegProcess.once('error', (err) => {
+        if (!streamConfirmed) {
+          earlyExitError = `FFmpeg error: ${err.message}`;
+          resolve(false);
+        }
+      });
+    });
+    
+    // Wait a short time to detect early failures
+    const confirmationTimeout = new Promise((resolve) => {
+      setTimeout(() => {
+        if (!earlyExitError) {
+          streamConfirmed = true;
+          resolve(true);
+        }
+      }, 2000); // Wait 2 seconds to confirm FFmpeg is running
+    });
+    
+    const isRunning = await Promise.race([earlyExitPromise, confirmationTimeout]);
+    
+    if (!isRunning || earlyExitError) {
+      console.error(`[StreamingService] FFmpeg failed to start for stream ${streamId}: ${earlyExitError}`);
+      addStreamLog(streamId, `Failed to start: ${earlyExitError}`);
+      activeStreams.delete(streamId);
+      return { success: false, error: earlyExitError || 'FFmpeg failed to start' };
+    }
+    
+    // FFmpeg is confirmed running, now update status
     activeStreams.set(streamId, ffmpegProcess);
     await Stream.updateStatus(streamId, 'live', stream.user_id, { startTimeOverride: startTimeIso });
+    console.log(`[StreamingService] Stream ${streamId} confirmed running, status updated to live`);
+    
     ffmpegProcess.stdout.on('data', (data) => {
       const message = data.toString().trim();
       if (message) {
