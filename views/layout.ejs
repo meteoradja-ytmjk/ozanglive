@@ -95,11 +95,14 @@
 
   <div class="flex">
     <!-- Desktop Sidebar -->
-    <div class="hidden lg:flex lg:fixed lg:flex-col w-20 h-screen pt-2 bg-dark-800 shadow-lg overflow-hidden">
-      <div class="flex items-center justify-center h-14 w-14 mx-auto mb-4">
-        <img src="/images/logo.svg" alt="StreamFlow Logo" class="w-9 h-9">
+    <div class="hidden lg:flex lg:fixed lg:flex-col w-20 h-screen pt-2 bg-dark-800 shadow-lg overflow-visible z-20">
+      <!-- Logo meluap keluar sidebar -->
+      <div class="desktop-logo-container">
+        <img src="/images/logo_mobile.svg" alt="StreamFlow Logo" class="desktop-logo">
       </div>
-      <div class="flex-1">
+      <!-- Spacer untuk logo -->
+      <div class="h-12 mb-4"></div>
+      <div class="flex-1 overflow-hidden">
         <a href="/dashboard" class="sidebar-icon group <%= active === 'dashboard' ? 'bg-primary' : '' %>">
           <i class="ti ti-live-photo text-xl"></i>
           <span class="text-xs mt-1">Streams</span>
@@ -128,7 +131,7 @@
         </a>
         <% } %>
       </div>
-      <div class="mt-auto">
+      <div class="mt-auto overflow-hidden">
         <div class="h-px bg-gray-700 w-full"></div>
         <div class="relative" id="profile-menu-container">
           <div class="h-20 flex items-center justify-center px-3 py-4 hover:bg-dark-700/50 transition-colors">
@@ -238,6 +241,25 @@
     border-radius: 8px;
     bottom: 80px;
     left: 15px;
+  }
+  
+  /* Desktop logo overflow styling - CANGGIH! */
+  .desktop-logo-container {
+    position: absolute !important;
+    top: 10px;
+    left: 8px;
+    overflow: visible !important;
+    width: auto !important;
+    height: auto !important;
+    z-index: 50;
+  }
+  
+  .desktop-logo {
+    position: relative;
+    width: auto !important;
+    height: 32px !important;
+    max-width: none !important;
+    filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.3));
   }
   #profile-dropdown.hidden {
     opacity: 0;
