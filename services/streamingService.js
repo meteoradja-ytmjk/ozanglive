@@ -263,8 +263,25 @@ async function buildFFmpegArgs(stream) {
   
   const rtmpUrl = `${stream.rtmp_url.replace(/\/$/, '')}/${stream.stream_key}`;
   
-  // Calculate duration in seconds if stream_duration_hours is set
-  const durationSeconds = stream.stream_duration_hours ? stream.stream_duration_hours * 3600 : null;
+  // Calculate duration in seconds
+  // Priority: stream_duration_hours (in hours) > duration (in minutes) > schedule-based duration
+  let durationSeconds = null;
+  
+  if (stream.stream_duration_hours && stream.stream_duration_hours > 0) {
+    // Duration set in hours (from duration dropdown)
+    durationSeconds = stream.stream_duration_hours * 3600;
+  } else if (stream.duration && stream.duration > 0) {
+    // Duration set in minutes (from schedule end time calculation)
+    durationSeconds = stream.duration * 60;
+  } else if (stream.end_time && stream.schedule_time) {
+    // Calculate duration from schedule times
+    const scheduleStart = new Date(stream.schedule_time);
+    const scheduleEnd = new Date(stream.end_time);
+    const durationMs = scheduleEnd.getTime() - scheduleStart.getTime();
+    if (durationMs > 0) {
+      durationSeconds = Math.floor(durationMs / 1000);
+    }
+  }
   
   // Build FFmpeg args based on whether audio is selected
   if (audioPath) {
@@ -633,13 +650,23 @@ async function startStream(streamId) {
     let durationMs = null;
     const now = Date.now();
     
-    // Check stream_duration_hours (in hours)
+    // Check stream_duration_hours (in hours) - from duration dropdown
     if (stream.stream_duration_hours && stream.stream_duration_hours > 0) {
       durationMs = stream.stream_duration_hours * 60 * 60 * 1000;
     }
-    // Check duration (in minutes) - legacy field
+    // Check duration (in minutes) - from schedule end time calculation
     else if (stream.duration && stream.duration > 0) {
       durationMs = stream.duration * 60 * 1000;
+    }
+    // Calculate from schedule times if available
+    else if (stream.end_time && stream.schedule_time) {
+      const scheduleStart = new Date(stream.schedule_time);
+      const scheduleEnd = new Date(stream.end_time);
+      const scheduleDurationMs = scheduleEnd.getTime() - scheduleStart.getTime();
+      if (scheduleDurationMs > 0) {
+        durationMs = scheduleDurationMs;
+        addStreamLog(streamId, `Duration calculated from schedule: ${scheduleDurationMs / 60000} minutes`);
+      }
     }
     
     // Set duration tracking if duration is specified
@@ -658,17 +685,35 @@ async function startStream(streamId) {
       }
       
       // Check schedule end time (for 'once' schedule type)
-      if (stream.end_time) {
+      // IMPORTANT: For scheduled streams, we should use the DURATION, not the fixed end_time
+      // This ensures the stream runs for the intended duration even if it starts late
+      if (stream.end_time && stream.schedule_time) {
+        const scheduleStartAt = new Date(stream.schedule_time);
         const scheduleEndAt = new Date(stream.end_time);
-        // Use the earlier of duration end or schedule end
+        
+        // Calculate the intended duration from the schedule
+        const intendedDurationMs = scheduleEndAt.getTime() - scheduleStartAt.getTime();
+        
+        if (intendedDurationMs > 0) {
+          // Use the intended duration from actual start time
+          const durationBasedEndAt = new Date(streamStartTime.getTime() + intendedDurationMs);
+          
+          // Use the earlier of: duration-based end OR intended duration from schedule
+          if (!shouldEndAt || durationBasedEndAt < shouldEndAt) {
+            shouldEndAt = durationBasedEndAt;
+            // Update duration tracking
+            setDurationInfo(streamId, streamStartTime, intendedDurationMs);
+            addStreamLog(streamId, `Using scheduled duration: ${intendedDurationMs / 60000} minutes, expected end: ${durationBasedEndAt.toISOString()}`);
+          }
+        }
+      } else if (stream.end_time && !stream.schedule_time) {
+        // For streams with end_time but no schedule_time, use the fixed end_time
+        const scheduleEndAt = new Date(stream.end_time);
         if (!shouldEndAt || scheduleEndAt < shouldEndAt) {
           shouldEndAt = scheduleEndAt;
-          // Update duration tracking if schedule end is earlier
-          if (durationMs) {
-            const adjustedDurationMs = scheduleEndAt.getTime() - streamStartTime.getTime();
-            if (adjustedDurationMs > 0 && adjustedDurationMs < durationMs) {
-              setDurationInfo(streamId, streamStartTime, adjustedDurationMs);
-            }
+          const adjustedDurationMs = scheduleEndAt.getTime() - streamStartTime.getTime();
+          if (adjustedDurationMs > 0) {
+            setDurationInfo(streamId, streamStartTime, adjustedDurationMs);
           }
         }
       }

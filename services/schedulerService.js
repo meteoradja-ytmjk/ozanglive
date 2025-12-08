@@ -70,22 +70,41 @@ async function checkStreamDurations() {
       // Check duration-based end time (stream_duration_hours or duration in minutes)
       if (stream.start_time) {
         if (stream.stream_duration_hours && stream.stream_duration_hours > 0) {
-          // Duration in hours
+          // Duration in hours (from duration dropdown)
           const durationMs = stream.stream_duration_hours * 60 * 60 * 1000;
           const durationEndAt = new Date(new Date(stream.start_time).getTime() + durationMs);
           shouldEndAt = durationEndAt;
+          console.log(`[Scheduler] Stream ${stream.id} using stream_duration_hours: ${stream.stream_duration_hours}h, end at ${durationEndAt.toISOString()}`);
         } else if (stream.duration && stream.duration > 0) {
-          // Duration in minutes (legacy)
+          // Duration in minutes (from schedule calculation)
           const durationMs = stream.duration * 60 * 1000;
           const durationEndAt = new Date(new Date(stream.start_time).getTime() + durationMs);
           shouldEndAt = durationEndAt;
+          console.log(`[Scheduler] Stream ${stream.id} using duration: ${stream.duration}min, end at ${durationEndAt.toISOString()}`);
         }
       }
 
       // Check schedule end time (for 'once' schedule type)
-      if (stream.end_time) {
+      // IMPORTANT: For scheduled streams, calculate duration from schedule, not fixed end_time
+      if (stream.end_time && stream.schedule_time && stream.start_time) {
+        const scheduleStartAt = new Date(stream.schedule_time);
         const scheduleEndAt = new Date(stream.end_time);
-        // Use the earlier of duration end or schedule end
+        const actualStartAt = new Date(stream.start_time);
+        
+        // Calculate the intended duration from the schedule
+        const intendedDurationMs = scheduleEndAt.getTime() - scheduleStartAt.getTime();
+        
+        if (intendedDurationMs > 0) {
+          // Apply intended duration from actual start time
+          const durationBasedEndAt = new Date(actualStartAt.getTime() + intendedDurationMs);
+          
+          if (!shouldEndAt || durationBasedEndAt < shouldEndAt) {
+            shouldEndAt = durationBasedEndAt;
+          }
+        }
+      } else if (stream.end_time) {
+        // For streams with end_time but no schedule_time, use the fixed end_time
+        const scheduleEndAt = new Date(stream.end_time);
         if (!shouldEndAt || scheduleEndAt < shouldEndAt) {
           shouldEndAt = scheduleEndAt;
         }
