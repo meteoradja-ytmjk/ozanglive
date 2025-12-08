@@ -1606,7 +1606,8 @@ app.get('/api/videos/:id/download', isAuthenticated, canDownloadVideos, async (r
     if (!video) {
       return res.status(404).json({ success: false, error: 'Video not found' });
     }
-    if (video.user_id !== req.session.userId) {
+    // Admin can download any video, members can only download their own
+    if (req.user.user_role !== 'admin' && video.user_id !== req.session.userId) {
       return res.status(403).json({ success: false, error: 'Not authorized' });
     }
     const videoPath = path.join(__dirname, 'public', video.filepath);
