@@ -229,6 +229,25 @@ function createTables() {
       console.error('Error adding live_limit column:', err.message);
     }
   });
+
+  // Add permission columns to users table for member permission control
+  db.run(`ALTER TABLE users ADD COLUMN can_view_videos INTEGER DEFAULT 1`, (err) => {
+    if (err && !err.message.includes('duplicate column name')) {
+      console.error('Error adding can_view_videos column:', err.message);
+    }
+  });
+
+  db.run(`ALTER TABLE users ADD COLUMN can_download_videos INTEGER DEFAULT 1`, (err) => {
+    if (err && !err.message.includes('duplicate column name')) {
+      console.error('Error adding can_download_videos column:', err.message);
+    }
+  });
+
+  db.run(`ALTER TABLE users ADD COLUMN can_delete_videos INTEGER DEFAULT 1`, (err) => {
+    if (err && !err.message.includes('duplicate column name')) {
+      console.error('Error adding can_delete_videos column:', err.message);
+    }
+  });
 }
 function checkIfUsersExist() {
   return new Promise((resolve, reject) => {

@@ -40,14 +40,50 @@
   </div>
 </div>
 
+<!-- Bulk Action Bar -->
+<div id="bulkActionBar" class="bg-primary/20 border border-primary/30 rounded-lg p-4 mb-4 hidden">
+  <div class="flex flex-wrap items-center justify-between gap-4">
+    <div class="flex items-center gap-2">
+      <span class="text-white font-medium"><span id="selectedCount">0</span> users selected</span>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      <button onclick="bulkSetPermission('can_view_videos', true)" class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm rounded-lg transition-colors">
+        <i class="ti ti-eye mr-1"></i>Enable View
+      </button>
+      <button onclick="bulkSetPermission('can_view_videos', false)" class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm rounded-lg transition-colors">
+        <i class="ti ti-eye-off mr-1"></i>Disable View
+      </button>
+      <button onclick="bulkSetPermission('can_download_videos', true)" class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm rounded-lg transition-colors">
+        <i class="ti ti-download mr-1"></i>Enable Download
+      </button>
+      <button onclick="bulkSetPermission('can_download_videos', false)" class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm rounded-lg transition-colors">
+        <i class="ti ti-download-off mr-1"></i>Disable Download
+      </button>
+      <button onclick="bulkSetPermission('can_delete_videos', true)" class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm rounded-lg transition-colors">
+        <i class="ti ti-trash mr-1"></i>Enable Delete
+      </button>
+      <button onclick="bulkSetPermission('can_delete_videos', false)" class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm rounded-lg transition-colors">
+        <i class="ti ti-trash-off mr-1"></i>Disable Delete
+      </button>
+      <button onclick="clearSelection()" class="px-3 py-1.5 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded-lg transition-colors">
+        <i class="ti ti-x mr-1"></i>Clear
+      </button>
+    </div>
+  </div>
+</div>
+
 <div class="bg-gray-800 rounded-lg overflow-hidden">
   <div class="overflow-x-auto">
     <table class="w-full">
       <thead class="bg-dark-700">
         <tr>
+          <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+            <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll()" class="w-4 h-4 rounded border-gray-600 bg-dark-700 text-primary focus:ring-primary">
+          </th>
           <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">User</th>
           <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Role</th>
           <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Status</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Permissions</th>
           <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Video</th>
           <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Streaming</th>
           <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Created</th>
@@ -60,7 +96,16 @@
             <tr class="hover:bg-dark-700/50 transition-colors user-row" 
                 data-username="<%= user.username.toLowerCase() %>" 
                 data-role="<%= user.user_role %>" 
-                data-status="<%= user.status %>">
+                data-status="<%= user.status %>"
+                data-user-id="<%= user.id %>"
+                data-can-view="<%= user.can_view_videos !== undefined ? user.can_view_videos : 1 %>"
+                data-can-download="<%= user.can_download_videos !== undefined ? user.can_download_videos : 1 %>"
+                data-can-delete="<%= user.can_delete_videos !== undefined ? user.can_delete_videos : 1 %>">
+              <td class="px-4 py-4 whitespace-nowrap">
+                <% if (user.id !== req.session.userId && user.user_role !== 'admin') { %>
+                  <input type="checkbox" class="user-checkbox w-4 h-4 rounded border-gray-600 bg-dark-700 text-primary focus:ring-primary" data-user-id="<%= user.id %>" onchange="updateSelection()">
+                <% } %>
+              </td>
               <td class="px-6 py-4 whitespace-nowrap">
                 <div class="flex items-center">
                   <div class="flex-shrink-0 h-10 w-10">
@@ -91,6 +136,32 @@
                   <%= user.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' %>">
                   <%= user.status %>
                 </span>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap">
+                <% if (user.user_role === 'admin') { %>
+                  <span class="text-xs text-gray-400">Full Access</span>
+                <% } else { %>
+                  <div class="flex items-center gap-2">
+                    <button onclick="togglePermission('<%= user.id %>', 'can_view_videos', <%= user.can_view_videos !== undefined ? user.can_view_videos : 1 %>)" 
+                      class="permission-btn p-1.5 rounded-lg transition-colors <%= (user.can_view_videos !== undefined ? user.can_view_videos : 1) === 1 ? 'bg-green-600/20 text-green-400 hover:bg-green-600/30' : 'bg-red-600/20 text-red-400 hover:bg-red-600/30' %>" 
+                      title="View Videos: <%= (user.can_view_videos !== undefined ? user.can_view_videos : 1) === 1 ? 'Enabled' : 'Disabled' %>"
+                      id="perm-view-<%= user.id %>">
+                      <i class="ti ti-eye text-sm"></i>
+                    </button>
+                    <button onclick="togglePermission('<%= user.id %>', 'can_download_videos', <%= user.can_download_videos !== undefined ? user.can_download_videos : 1 %>)" 
+                      class="permission-btn p-1.5 rounded-lg transition-colors <%= (user.can_download_videos !== undefined ? user.can_download_videos : 1) === 1 ? 'bg-green-600/20 text-green-400 hover:bg-green-600/30' : 'bg-red-600/20 text-red-400 hover:bg-red-600/30' %>" 
+                      title="Download Videos: <%= (user.can_download_videos !== undefined ? user.can_download_videos : 1) === 1 ? 'Enabled' : 'Disabled' %>"
+                      id="perm-download-<%= user.id %>">
+                      <i class="ti ti-download text-sm"></i>
+                    </button>
+                    <button onclick="togglePermission('<%= user.id %>', 'can_delete_videos', <%= user.can_delete_videos !== undefined ? user.can_delete_videos : 1 %>)" 
+                      class="permission-btn p-1.5 rounded-lg transition-colors <%= (user.can_delete_videos !== undefined ? user.can_delete_videos : 1) === 1 ? 'bg-green-600/20 text-green-400 hover:bg-green-600/30' : 'bg-red-600/20 text-red-400 hover:bg-red-600/30' %>" 
+                      title="Delete Videos: <%= (user.can_delete_videos !== undefined ? user.can_delete_videos : 1) === 1 ? 'Enabled' : 'Disabled' %>"
+                      id="perm-delete-<%= user.id %>">
+                      <i class="ti ti-trash text-sm"></i>
+                    </button>
+                  </div>
+                <% } %>
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400 cursor-pointer hover:bg-gray-700/30 transition-colors" data-user-id="<%= user.id %>" data-username="<%= user.username %>" onclick="showVideoModal(this)">
                 <div class="flex flex-col">
@@ -144,14 +215,14 @@
           <% }); %>
         <% } else { %>
           <tr id="defaultEmptyState">
-            <td colspan="7" class="px-6 py-8 text-center text-gray-400">
+            <td colspan="9" class="px-6 py-8 text-center text-gray-400">
               <i class="ti ti-users text-4xl mb-2"></i>
               <p>No users found</p>
             </td>
           </tr>
         <% } %>
         <tr id="searchEmptyState" class="hidden">
-          <td colspan="7" class="px-6 py-8 text-center text-gray-400">
+          <td colspan="9" class="px-6 py-8 text-center text-gray-400">
             <i class="ti ti-search-off text-4xl mb-2"></i>
             <p>No users match your search criteria</p>
             <p class="text-sm mt-1">Try adjusting your filters or search terms</p>
@@ -878,4 +949,116 @@ function formatDate(dateString) {
       
       return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     }
+
+// Permission Management Functions
+function togglePermission(userId, permission, currentValue) {
+  const newValue = currentValue === 1 ? false : true;
+  
+  fetch('/api/users/permission', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ userId, permission, value: newValue })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      // Update button appearance
+      const permType = permission.replace('can_', '').replace('_videos', '');
+      const btn = document.getElementById(`perm-${permType}-${userId}`);
+      if (btn) {
+        if (newValue) {
+          btn.className = 'permission-btn p-1.5 rounded-lg transition-colors bg-green-600/20 text-green-400 hover:bg-green-600/30';
+          btn.title = btn.title.replace('Disabled', 'Enabled');
+        } else {
+          btn.className = 'permission-btn p-1.5 rounded-lg transition-colors bg-red-600/20 text-red-400 hover:bg-red-600/30';
+          btn.title = btn.title.replace('Enabled', 'Disabled');
+        }
+        // Update onclick with new value
+        btn.setAttribute('onclick', `togglePermission('${userId}', '${permission}', ${newValue ? 1 : 0})`);
+      }
+      showToast('Permission updated successfully', 'success');
+    } else {
+      showToast('Error: ' + data.message, 'error');
+    }
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    showToast('An error occurred while updating permission', 'error');
+  });
+}
+
+// Bulk Selection Functions
+function toggleSelectAll() {
+  const selectAll = document.getElementById('selectAllCheckbox');
+  const checkboxes = document.querySelectorAll('.user-checkbox');
+  
+  checkboxes.forEach(cb => {
+    cb.checked = selectAll.checked;
+  });
+  
+  updateSelection();
+}
+
+function updateSelection() {
+  const checkboxes = document.querySelectorAll('.user-checkbox:checked');
+  const bulkBar = document.getElementById('bulkActionBar');
+  const countSpan = document.getElementById('selectedCount');
+  
+  countSpan.textContent = checkboxes.length;
+  
+  if (checkboxes.length > 0) {
+    bulkBar.classList.remove('hidden');
+  } else {
+    bulkBar.classList.add('hidden');
+  }
+  
+  // Update select all checkbox state
+  const allCheckboxes = document.querySelectorAll('.user-checkbox');
+  const selectAll = document.getElementById('selectAllCheckbox');
+  selectAll.checked = allCheckboxes.length > 0 && checkboxes.length === allCheckboxes.length;
+  selectAll.indeterminate = checkboxes.length > 0 && checkboxes.length < allCheckboxes.length;
+}
+
+function clearSelection() {
+  const checkboxes = document.querySelectorAll('.user-checkbox');
+  checkboxes.forEach(cb => cb.checked = false);
+  document.getElementById('selectAllCheckbox').checked = false;
+  updateSelection();
+}
+
+function bulkSetPermission(permission, value) {
+  const checkboxes = document.querySelectorAll('.user-checkbox:checked');
+  const userIds = Array.from(checkboxes).map(cb => cb.dataset.userId);
+  
+  if (userIds.length === 0) {
+    showToast('No users selected', 'error');
+    return;
+  }
+  
+  const permissions = { [permission]: value };
+  
+  fetch('/api/users/bulk-permissions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ userIds, permissions })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      showToast(data.message, 'success');
+      // Reload page to reflect changes
+      setTimeout(() => location.reload(), 1000);
+    } else {
+      showToast('Error: ' + data.message, 'error');
+    }
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    showToast('An error occurred while updating permissions', 'error');
+  });
+}
 </script>

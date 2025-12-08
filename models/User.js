@@ -260,5 +260,103 @@ class User {
       });
     });
   }
+
+  /**
+   * Update a single permission for a user
+   * @param {string} userId - User ID
+   * @param {string} permission - Permission name (can_view_videos, can_download_videos, can_delete_videos)
+   * @param {boolean} value - Permission value (true = enabled, false = disabled)
+   * @returns {Promise<Object>} Updated permission info
+   */
+  static updatePermission(userId, permission, value) {
+    const validPermissions = ['can_view_videos', 'can_download_videos', 'can_delete_videos'];
+    if (!validPermissions.includes(permission)) {
+      return Promise.reject(new Error('Invalid permission type'));
+    }
+    
+    return new Promise((resolve, reject) => {
+      const permValue = value ? 1 : 0;
+      db.run(
+        `UPDATE users SET ${permission} = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+        [permValue, userId],
+        function (err) {
+          if (err) {
+            console.error('Database error in updatePermission:', err);
+            return reject(err);
+          }
+          resolve({ id: userId, [permission]: permValue, changes: this.changes });
+        }
+      );
+    });
+  }
+
+  /**
+   * Update permissions for multiple users (bulk operation)
+   * @param {string[]} userIds - Array of user IDs
+   * @param {Object} permissions - Object with permission values
+   * @returns {Promise<Object>} Result with updated count
+   */
+  static bulkUpdatePermissions(userIds, permissions) {
+    if (!userIds || userIds.length === 0) {
+      return Promise.reject(new Error('No users selected'));
+    }
+
+    const validPermissions = ['can_view_videos', 'can_download_videos', 'can_delete_videos'];
+    const updates = [];
+    const values = [];
+
+    for (const [key, value] of Object.entries(permissions)) {
+      if (validPermissions.includes(key)) {
+        updates.push(`${key} = ?`);
+        values.push(value ? 1 : 0);
+      }
+    }
+
+    if (updates.length === 0) {
+      return Promise.reject(new Error('No valid permissions to update'));
+    }
+
+    updates.push('updated_at = CURRENT_TIMESTAMP');
+    const placeholders = userIds.map(() => '?').join(',');
+    const sql = `UPDATE users SET ${updates.join(', ')} WHERE id IN (${placeholders})`;
+    
+    return new Promise((resolve, reject) => {
+      db.run(sql, [...values, ...userIds], function (err) {
+        if (err) {
+          console.error('Database error in bulkUpdatePermissions:', err);
+          return reject(err);
+        }
+        resolve({ updatedCount: this.changes, userIds });
+      });
+    });
+  }
+
+  /**
+   * Get user permissions
+   * @param {string} userId - User ID
+   * @returns {Promise<Object>} User permissions
+   */
+  static getPermissions(userId) {
+    return new Promise((resolve, reject) => {
+      db.get(
+        'SELECT can_view_videos, can_download_videos, can_delete_videos FROM users WHERE id = ?',
+        [userId],
+        (err, row) => {
+          if (err) {
+            console.error('Database error in getPermissions:', err);
+            return reject(err);
+          }
+          if (!row) {
+            return resolve(null);
+          }
+          resolve({
+            can_view_videos: row.can_view_videos === 1,
+            can_download_videos: row.can_download_videos === 1,
+            can_delete_videos: row.can_delete_videos === 1
+          });
+        }
+      );
+    });
+  }
 }
 module.exports = User;

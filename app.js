@@ -228,6 +228,77 @@ const isAdmin = async (req, res, next) => {
     res.redirect('/dashboard');
   }
 };
+
+// Permission middleware for member video access control
+const canViewVideos = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.session.userId);
+    if (!user) {
+      return res.redirect('/login');
+    }
+    // Admins always have permission
+    if (user.user_role === 'admin') {
+      req.user = user;
+      return next();
+    }
+    // Check member permission
+    if (user.can_view_videos !== 1) {
+      req.viewPermissionDenied = true;
+    }
+    req.user = user;
+    next();
+  } catch (error) {
+    console.error('View permission middleware error:', error);
+    next();
+  }
+};
+
+const canDownloadVideos = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.session.userId);
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+    // Admins always have permission
+    if (user.user_role === 'admin') {
+      req.user = user;
+      return next();
+    }
+    // Check member permission
+    if (user.can_download_videos !== 1) {
+      return res.status(403).json({ success: false, message: "You don't have permission to download videos" });
+    }
+    req.user = user;
+    next();
+  } catch (error) {
+    console.error('Download permission middleware error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+const canDeleteVideos = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.session.userId);
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+    // Admins always have permission
+    if (user.user_role === 'admin') {
+      req.user = user;
+      return next();
+    }
+    // Check member permission
+    if (user.can_delete_videos !== 1) {
+      return res.status(403).json({ success: false, message: "You don't have permission to delete videos" });
+    }
+    req.user = user;
+    next();
+  } catch (error) {
+    console.error('Delete permission middleware error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
 app.use('/uploads', function (req, res, next) {
   res.header('Cache-Control', 'no-cache');
   res.header('Pragma', 'no-cache');
@@ -540,18 +611,39 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
     res.redirect('/login');
   }
 });
-app.get('/gallery', isAuthenticated, async (req, res) => {
+app.get('/gallery', isAuthenticated, canViewVideos, async (req, res) => {
   try {
     const tab = req.query.tab || 'video';
-    const videos = await Video.findAll(req.session.userId);
+    const user = await User.findById(req.session.userId);
+    
+    // Check view permission for members
+    let videos = [];
+    let viewPermissionDenied = false;
+    
+    if (user.user_role === 'admin' || user.can_view_videos === 1) {
+      videos = await Video.findAll(req.session.userId);
+    } else {
+      viewPermissionDenied = true;
+    }
+    
     const audios = await Audio.findAll(req.session.userId);
+    
+    // Get user permissions for UI
+    const permissions = {
+      can_view_videos: user.user_role === 'admin' || user.can_view_videos === 1,
+      can_download_videos: user.user_role === 'admin' || user.can_download_videos === 1,
+      can_delete_videos: user.user_role === 'admin' || user.can_delete_videos === 1
+    };
+    
     res.render('gallery', {
       title: 'Media Gallery',
       active: 'gallery',
-      user: await User.findById(req.session.userId),
+      user: user,
       videos: videos,
       audios: audios,
-      activeTab: tab
+      activeTab: tab,
+      permissions: permissions,
+      viewPermissionDenied: viewPermissionDenied
     });
   } catch (error) {
     console.error('Gallery error:', error);
@@ -972,6 +1064,119 @@ app.get('/api/users/:id/streams', isAdmin, async (req, res) => {
   }
 });
 
+// Permission Control API
+app.post('/api/users/permission', isAdmin, async (req, res) => {
+  try {
+    const { userId, permission, value } = req.body;
+    
+    const validPermissions = ['can_view_videos', 'can_download_videos', 'can_delete_videos'];
+    if (!userId || !permission || !validPermissions.includes(permission)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid user ID or permission type'
+      });
+    }
+
+    if (userId === req.session.userId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot modify your own permissions'
+      });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    await User.updatePermission(userId, permission, value);
+    
+    res.json({
+      success: true,
+      message: 'Permission updated successfully'
+    });
+  } catch (error) {
+    console.error('Error updating permission:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update permission'
+    });
+  }
+});
+
+app.post('/api/users/bulk-permissions', isAdmin, async (req, res) => {
+  try {
+    const { userIds, permissions } = req.body;
+    
+    if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No users selected'
+      });
+    }
+
+    // Filter out admin's own ID
+    const filteredUserIds = userIds.filter(id => id !== req.session.userId);
+    if (filteredUserIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot modify your own permissions'
+      });
+    }
+
+    const validPermissions = ['can_view_videos', 'can_download_videos', 'can_delete_videos'];
+    const validatedPermissions = {};
+    for (const [key, value] of Object.entries(permissions || {})) {
+      if (validPermissions.includes(key)) {
+        validatedPermissions[key] = value;
+      }
+    }
+
+    if (Object.keys(validatedPermissions).length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No valid permissions to update'
+      });
+    }
+
+    const result = await User.bulkUpdatePermissions(filteredUserIds, validatedPermissions);
+    
+    res.json({
+      success: true,
+      message: `Permissions updated for ${result.updatedCount} users`,
+      updatedCount: result.updatedCount
+    });
+  } catch (error) {
+    console.error('Error bulk updating permissions:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update permissions'
+    });
+  }
+});
+
+app.get('/api/users/:id/permissions', isAdmin, async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const permissions = await User.getPermissions(userId);
+    
+    if (!permissions) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+    
+    res.json({ success: true, permissions });
+  } catch (error) {
+    console.error('Get user permissions error:', error);
+    res.status(500).json({ success: false, message: 'Failed to get user permissions' });
+  }
+});
+
 // Live Limit Settings API
 const SystemSettings = require('./models/SystemSettings');
 const LiveLimitService = require('./services/liveLimitService');
@@ -1367,7 +1572,7 @@ app.get('/api/videos', isAuthenticated, async (req, res) => {
     res.status(500).json({ success: false, error: 'Failed to fetch videos' });
   }
 });
-app.delete('/api/videos/:id', isAuthenticated, async (req, res) => {
+app.delete('/api/videos/:id', isAuthenticated, canDeleteVideos, async (req, res) => {
   try {
     const videoId = req.params.id;
     const video = await Video.findById(videoId);
@@ -1394,6 +1599,27 @@ app.delete('/api/videos/:id', isAuthenticated, async (req, res) => {
     res.status(500).json({ success: false, error: 'Failed to delete video' });
   }
 });
+// Video download endpoint with permission check
+app.get('/api/videos/:id/download', isAuthenticated, canDownloadVideos, async (req, res) => {
+  try {
+    const video = await Video.findById(req.params.id);
+    if (!video) {
+      return res.status(404).json({ success: false, error: 'Video not found' });
+    }
+    if (video.user_id !== req.session.userId) {
+      return res.status(403).json({ success: false, error: 'Not authorized' });
+    }
+    const videoPath = path.join(__dirname, 'public', video.filepath);
+    if (!fs.existsSync(videoPath)) {
+      return res.status(404).json({ success: false, error: 'Video file not found' });
+    }
+    res.download(videoPath, video.title + path.extname(video.filepath));
+  } catch (error) {
+    console.error('Error downloading video:', error);
+    res.status(500).json({ success: false, error: 'Failed to download video' });
+  }
+});
+
 app.post('/api/videos/:id/rename', isAuthenticated, [
   body('title').trim().isLength({ min: 1 }).withMessage('Title cannot be empty')
 ], async (req, res) => {

@@ -116,7 +116,13 @@ function formatDuration(seconds) {
 
 <!-- Video List -->
 <div id="videoGrid" class="flex flex-col gap-2 <%= activeTab === 'audio' ? 'tab-hidden' : 'tab-visible' %>">
-  <% if (videos && videos.length > 0) { %>
+  <% if (typeof viewPermissionDenied !== 'undefined' && viewPermissionDenied) { %>
+    <div class="text-center py-12 bg-gray-800 rounded-lg">
+      <div class="text-red-400 mb-3"><i class="ti ti-lock text-5xl"></i></div>
+      <h3 class="text-lg font-medium text-gray-300 mb-1">Permission Denied</h3>
+      <p class="text-gray-500 text-sm">You do not have permission to view videos. Please contact your administrator.</p>
+    </div>
+  <% } else if (videos && videos.length > 0) { %>
     <% videos.forEach(function(video) { %>
       <div class="video-card bg-gray-800 rounded-lg p-3 flex items-center gap-3 hover:bg-gray-700/50 transition-colors" data-title="<%= video.title.toLowerCase() %>" data-date="<%= video.upload_date %>">
         <!-- Thumbnail -->
@@ -144,12 +150,19 @@ function formatDuration(seconds) {
           <button class="p-2 text-gray-400 hover:text-white hover:bg-gray-600/50 rounded-lg transition-colors" onclick="playVideo('<%= video.id %>', '<%= video.title %>')" title="Play">
             <i class="ti ti-player-play text-lg"></i>
           </button>
+          <% if (typeof permissions !== 'undefined' && permissions.can_download_videos) { %>
+          <button class="p-2 text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors" onclick="downloadVideo('<%= video.id %>', '<%= video.title %>')" title="Download">
+            <i class="ti ti-download text-lg"></i>
+          </button>
+          <% } %>
           <button class="p-2 text-gray-400 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors" onclick="showRenameDialog('<%= video.id %>', '<%= video.title %>')" title="Rename">
             <i class="ti ti-pencil text-lg"></i>
           </button>
+          <% if (typeof permissions !== 'undefined' && permissions.can_delete_videos) { %>
           <button class="p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors" onclick="showDeleteDialog('<%= video.id %>', '<%= video.title %>')" title="Delete">
             <i class="ti ti-trash text-lg"></i>
           </button>
+          <% } %>
         </div>
       </div>
     <% }); %>
@@ -643,6 +656,11 @@ function formatDuration(seconds) {
         else showToast('error', data.error || 'Failed to delete');
       });
     }
+  }
+  
+  // Download video
+  function downloadVideo(videoId, title) {
+    window.location.href = `/api/videos/${videoId}/download`;
   }
   
   // Audio rename/delete
