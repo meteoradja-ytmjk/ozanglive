@@ -68,7 +68,7 @@
 
 ## 5. Checkpoint - Ensure Backend Tests Pass
 
-- [ ] 5.1 Checkpoint
+- [x] 5.1 Checkpoint
   - Ensure all tests pass, ask the user if questions arise.
 
 ## 6. User Management UI Updates
@@ -100,5 +100,5 @@
 
 ## 9. Final Checkpoint
 
-- [ ] 9.1 Final verification
+- [x] 9.1 Final verification
   - Ensure all tests pass, ask the user if questions arise.
