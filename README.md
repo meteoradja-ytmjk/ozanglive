@@ -1,10 +1,6 @@
 # 🎬 Ozang - Cloud Streaming Solution
 
 <p align="center">
-  <img src="public/images/logo.png" alt="StreamFlow Logo" width="200">
-</p>
-
-<p align="center">
   <strong>Solusi streaming cloud dengan FFmpeg untuk live streaming ke berbagai platform</strong>
 </p>
 
