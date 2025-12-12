@@ -26,6 +26,8 @@ const ffmpeg = require('fluent-ffmpeg');
 const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
 const streamingService = require('./services/streamingService');
 const schedulerService = require('./services/schedulerService');
+const YouTubeCredentials = require('./models/YouTubeCredentials');
+const youtubeService = require('./services/youtubeService');
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 process.on('unhandledRejection', (reason, promise) => {
   console.error('-----------------------------------');
@@ -3288,8 +3290,6 @@ app.delete('/api/templates/:id', isAuthenticated, async (req, res) => {
 // ============================================
 // YouTube Sync Routes
 // ============================================
-const YouTubeCredentials = require('./models/YouTubeCredentials');
-const youtubeService = require('./services/youtubeService');
 
 // YouTube Sync Page
 app.get('/youtube', isAuthenticated, async (req, res) => {

@@ -1360,7 +1360,10 @@ function renderStreams(streams) {
         </div>
       </td>
       <td class="px-3 py-4">
-        <span class="text-sm">${stream.platform || 'YouTube'}</span>
+        <div class="flex items-center gap-2">
+          <i class="ti ti-brand-${getPlatformIcon(stream.platform)} text-${getPlatformColor(stream.platform)}"></i>
+          <span class="text-sm">${stream.platform || 'YouTube'}</span>
+        </div>
       </td>
       <td class="px-3 py-4 schedule-cell cursor-pointer hover:bg-dark-600/50 rounded" 
           onclick="editStream('${stream.id}')" title="Click to edit schedule">
@@ -1936,12 +1939,28 @@ function formatDateTime(dateStr) {
 }
 
 function getPlatformIcon(platform) {
-  const icons = { youtube: 'youtube', facebook: 'facebook', twitch: 'twitch', tiktok: 'tiktok' };
+  const icons = { 
+    youtube: 'youtube', 
+    facebook: 'facebook', 
+    twitch: 'twitch', 
+    tiktok: 'tiktok',
+    instagram: 'instagram',
+    'shopee live': 'shopping-bag',
+    'restream.io': 'live-photo'
+  };
   return icons[platform?.toLowerCase()] || 'broadcast';
 }
 
 function getPlatformColor(platform) {
-  const colors = { youtube: 'red-500', facebook: 'blue-500', twitch: 'purple-500', tiktok: 'pink-500' };
+  const colors = { 
+    youtube: 'red-500', 
+    facebook: 'blue-500', 
+    twitch: 'purple-500', 
+    tiktok: 'gray-100',
+    instagram: 'pink-500',
+    'shopee live': 'orange-500',
+    'restream.io': 'teal-500'
+  };
   return colors[platform?.toLowerCase()] || 'gray-400';
 }
 
