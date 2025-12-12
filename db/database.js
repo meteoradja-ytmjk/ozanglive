@@ -180,10 +180,25 @@ function createTables() {
     }
   });
 
-  // Add stream_duration_hours column to streams table for duration feature
+  // Add stream_duration_hours column to streams table for duration feature (deprecated)
   db.run(`ALTER TABLE streams ADD COLUMN stream_duration_hours INTEGER`, (err) => {
     if (err && !err.message.includes('duplicate column name')) {
       console.error('Error adding stream_duration_hours column:', err.message);
+    }
+  });
+
+  // Add stream_duration_minutes column to streams table for duration feature (new format)
+  db.run(`ALTER TABLE streams ADD COLUMN stream_duration_minutes INTEGER`, (err) => {
+    if (err && !err.message.includes('duplicate column name')) {
+      console.error('Error adding stream_duration_minutes column:', err.message);
+    }
+  });
+
+  // Migrate existing data from stream_duration_hours to stream_duration_minutes
+  db.run(`UPDATE streams SET stream_duration_minutes = stream_duration_hours * 60 
+          WHERE stream_duration_hours IS NOT NULL AND stream_duration_minutes IS NULL`, (err) => {
+    if (err) {
+      console.error('Error migrating stream_duration_hours to stream_duration_minutes:', err.message);
     }
   });
 
@@ -209,6 +224,13 @@ function createTables() {
   db.run(`ALTER TABLE streams ADD COLUMN recurring_enabled INTEGER DEFAULT 1`, (err) => {
     if (err && !err.message.includes('duplicate column name')) {
       console.error('Error adding recurring_enabled column:', err.message);
+    }
+  });
+
+  // Add original_settings column to streams table for reset functionality
+  db.run(`ALTER TABLE streams ADD COLUMN original_settings TEXT`, (err) => {
+    if (err && !err.message.includes('duplicate column name')) {
+      console.error('Error adding original_settings column:', err.message);
     }
   });
 
@@ -246,6 +268,53 @@ function createTables() {
   db.run(`ALTER TABLE users ADD COLUMN can_delete_videos INTEGER DEFAULT 1`, (err) => {
     if (err && !err.message.includes('duplicate column name')) {
       console.error('Error adding can_delete_videos column:', err.message);
+    }
+  });
+
+  // Create stream_templates table for reusable stream configurations
+  db.run(`CREATE TABLE IF NOT EXISTS stream_templates (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    video_id TEXT,
+    audio_id TEXT,
+    duration_hours INTEGER DEFAULT 0,
+    duration_minutes INTEGER DEFAULT 0,
+    loop_video INTEGER DEFAULT 1,
+    schedule_type TEXT DEFAULT 'once',
+    recurring_time TEXT,
+    schedule_days TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  )`, (err) => {
+    if (err) {
+      console.error('Error creating stream_templates table:', err.message);
+    }
+  });
+
+  // Create unique index on user_id and name for stream_templates
+  db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_stream_templates_user_name 
+          ON stream_templates(user_id, name)`, (err) => {
+    if (err) {
+      console.error('Error creating unique index on stream_templates:', err.message);
+    }
+  });
+
+  // Create youtube_credentials table for YouTube Sync feature
+  db.run(`CREATE TABLE IF NOT EXISTS youtube_credentials (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL UNIQUE,
+    client_id TEXT NOT NULL,
+    client_secret TEXT NOT NULL,
+    refresh_token TEXT NOT NULL,
+    channel_name TEXT,
+    channel_id TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  )`, (err) => {
+    if (err) {
+      console.error('Error creating youtube_credentials table:', err.message);
     }
   });
 }

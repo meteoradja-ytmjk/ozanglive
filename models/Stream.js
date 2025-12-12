@@ -19,17 +19,19 @@ class Stream {
       schedule_time = null,
       end_time = null,
       duration = null,
-      stream_duration_hours = null,
+      stream_duration_minutes = null,
       schedule_type = 'once',
       schedule_days = null,
       recurring_time = null,
       recurring_enabled = true,
+      original_settings = null,
       status,
       user_id
     } = streamData;
     const loop_video_int = loop_video ? 1 : 0;
     const recurring_enabled_int = recurring_enabled ? 1 : 0;
     const schedule_days_json = schedule_days ? JSON.stringify(schedule_days) : null;
+    const original_settings_json = original_settings ? JSON.stringify(original_settings) : null;
     
     // Determine final status based on schedule type
     let final_status = status;
@@ -43,21 +45,24 @@ class Stream {
       }
     }
     const status_updated_at = new Date().toISOString();
+    
+    console.log(`[Stream.create] Creating stream with duration: ${stream_duration_minutes} minutes`);
+    
     return new Promise((resolve, reject) => {
       db.run(
         `INSERT INTO streams (
           id, title, video_id, audio_id, rtmp_url, stream_key, platform, platform_icon,
           bitrate, resolution, fps, orientation, loop_video,
-          schedule_time, end_time, duration, stream_duration_hours,
+          schedule_time, end_time, duration, stream_duration_minutes,
           schedule_type, schedule_days, recurring_time, recurring_enabled,
-          status, status_updated_at, user_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          original_settings, status, status_updated_at, user_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id, title, video_id, audio_id, rtmp_url, stream_key, platform, platform_icon,
           bitrate, resolution, fps, orientation, loop_video_int,
-          schedule_time, end_time, duration, stream_duration_hours,
+          schedule_time, end_time, duration, stream_duration_minutes,
           schedule_type, schedule_days_json, recurring_time, recurring_enabled_int,
-          final_status, status_updated_at, user_id
+          original_settings_json, final_status, status_updated_at, user_id
         ],
         function (err) {
           if (err) {
@@ -197,30 +202,37 @@ class Stream {
     } else if (status === 'offline') {
       end_time = endTimeOverride || new Date().toISOString();
     }
-    return new Promise((resolve, reject) => {
-      db.run(
-        `UPDATE streams SET 
+    
+    // Build query based on whether userId is provided
+    // If userId is not provided, update by id only (for system operations like scheduler)
+    const query = userId 
+      ? `UPDATE streams SET 
           status = ?, 
           status_updated_at = ?, 
           start_time = CASE WHEN ? IS NOT NULL THEN ? ELSE start_time END, 
           end_time = CASE WHEN ? IS NOT NULL THEN ? ELSE end_time END,
           updated_at = CURRENT_TIMESTAMP
-         WHERE id = ? AND user_id = ?`,
-        [
-          status,
-          status_updated_at,
-          start_time,
-          start_time,
-          end_time,
-          end_time,
-          id,
-          userId
-        ],
+         WHERE id = ? AND user_id = ?`
+      : `UPDATE streams SET 
+          status = ?, 
+          status_updated_at = ?, 
+          start_time = CASE WHEN ? IS NOT NULL THEN ? ELSE start_time END, 
+          end_time = CASE WHEN ? IS NOT NULL THEN ? ELSE end_time END,
+          updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`;
+    
+    const params = userId 
+      ? [status, status_updated_at, start_time, start_time, end_time, end_time, id, userId]
+      : [status, status_updated_at, start_time, start_time, end_time, end_time, id];
+    
+    return new Promise((resolve, reject) => {
+      db.run(query, params,
         function (err) {
           if (err) {
             console.error('Error updating stream status:', err.message);
             return reject(err);
           }
+          console.log(`[Stream.updateStatus] Updated stream ${id} to status '${status}', rows affected: ${this.changes}`);
           resolve({
             id,
             status,
@@ -488,6 +500,252 @@ class Stream {
         recurring_enabled: true
       };
     }
+  }
+
+  /**
+   * Find all scheduled streams for a user (once, daily, weekly)
+   * @param {string} userId - User ID
+   * @returns {Promise<Array>} Array of scheduled streams grouped by type
+   */
+  static findAllScheduled(userId) {
+    return new Promise((resolve, reject) => {
+      const query = `
+        SELECT s.*, 
+               v.title AS video_title, 
+               v.filepath AS video_filepath,
+               v.thumbnail_path AS video_thumbnail, 
+               v.duration AS video_duration,
+               v.resolution AS video_resolution,
+               v.bitrate AS video_bitrate,
+               v.fps AS video_fps,
+               a.title AS audio_title,
+               p.name AS playlist_name,
+               CASE 
+                 WHEN p.id IS NOT NULL THEN 'playlist'
+                 WHEN v.id IS NOT NULL THEN 'video'
+                 ELSE NULL
+               END AS video_type
+        FROM streams s
+        LEFT JOIN videos v ON s.video_id = v.id
+        LEFT JOIN audios a ON s.audio_id = a.id
+        LEFT JOIN playlists p ON s.video_id = p.id
+        WHERE s.user_id = ?
+        AND (
+          (s.schedule_type = 'once' AND s.schedule_time IS NOT NULL)
+          OR (s.schedule_type IN ('daily', 'weekly') AND s.recurring_enabled = 1)
+        )
+        ORDER BY 
+          CASE s.schedule_type 
+            WHEN 'once' THEN 1 
+            WHEN 'daily' THEN 2 
+            WHEN 'weekly' THEN 3 
+          END,
+          s.schedule_time ASC,
+          s.recurring_time ASC
+      `;
+      
+      db.all(query, [userId], (err, rows) => {
+        if (err) {
+          console.error('Error finding all scheduled streams:', err.message);
+          return reject(err);
+        }
+        if (rows) {
+          rows.forEach(row => {
+            row.loop_video = row.loop_video === 1;
+            row.use_advanced_settings = row.use_advanced_settings === 1;
+            row.recurring_enabled = row.recurring_enabled === 1;
+            // Parse schedule_days JSON
+            if (row.schedule_days) {
+              try {
+                row.schedule_days = JSON.parse(row.schedule_days);
+              } catch (e) {
+                row.schedule_days = [];
+              }
+            } else {
+              row.schedule_days = [];
+            }
+          });
+        }
+        resolve(rows || []);
+      });
+    });
+  }
+
+  /**
+   * Group streams by schedule type
+   * @param {Array} streams - Array of stream objects
+   * @returns {Object} Streams grouped by schedule_type
+   */
+  static groupByScheduleType(streams) {
+    return {
+      once: streams.filter(s => s.schedule_type === 'once'),
+      daily: streams.filter(s => s.schedule_type === 'daily'),
+      weekly: streams.filter(s => s.schedule_type === 'weekly')
+    };
+  }
+
+  /**
+   * Filter streams scheduled for today
+   * @param {Array} streams - Array of stream objects
+   * @returns {Array} Streams scheduled for today, sorted by time
+   */
+  static filterTodaySchedules(streams) {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    const todayStreams = streams.filter(stream => {
+      if (stream.schedule_type === 'once' && stream.schedule_time) {
+        const scheduleDate = new Date(stream.schedule_time);
+        return scheduleDate >= today && scheduleDate < tomorrow;
+      }
+      if (stream.schedule_type === 'daily' && stream.recurring_enabled) {
+        return true; // Daily streams run every day
+      }
+      if (stream.schedule_type === 'weekly' && stream.recurring_enabled) {
+        const currentDay = now.getDay();
+        const scheduleDays = Array.isArray(stream.schedule_days) ? stream.schedule_days : [];
+        return scheduleDays.includes(currentDay);
+      }
+      return false;
+    });
+
+    // Sort by time
+    return todayStreams.sort((a, b) => {
+      const timeA = a.schedule_type === 'once' 
+        ? new Date(a.schedule_time).getTime()
+        : Stream.getTimeInMinutes(a.recurring_time);
+      const timeB = b.schedule_type === 'once'
+        ? new Date(b.schedule_time).getTime()
+        : Stream.getTimeInMinutes(b.recurring_time);
+      return timeA - timeB;
+    });
+  }
+
+  /**
+   * Convert HH:MM time string to minutes since midnight
+   * @param {string} timeStr - Time string in HH:MM format
+   * @returns {number} Minutes since midnight
+   */
+  static getTimeInMinutes(timeStr) {
+    if (!timeStr) return 0;
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    return hours * 60 + minutes;
+  }
+
+  /**
+   * Reset stream to original imported settings
+   * @param {string} id - Stream ID
+   * @param {string} userId - User ID
+   * @returns {Promise<{success: boolean, reset: boolean}>}
+   */
+  static resetToOriginal(id, userId) {
+    return new Promise((resolve, reject) => {
+      // First get the stream with original_settings
+      db.get(
+        'SELECT id, original_settings FROM streams WHERE id = ? AND user_id = ?',
+        [id, userId],
+        (err, stream) => {
+          if (err) {
+            console.error('Error finding stream for reset:', err.message);
+            return reject(err);
+          }
+
+          if (!stream) {
+            return resolve({ success: false, reset: false, reason: 'Stream not found' });
+          }
+
+          if (!stream.original_settings) {
+            return resolve({ success: true, reset: false, reason: 'No original settings' });
+          }
+
+          // Parse original settings
+          let originalSettings;
+          try {
+            originalSettings = JSON.parse(stream.original_settings);
+          } catch (e) {
+            console.error('Error parsing original_settings:', e.message);
+            return resolve({ success: false, reset: false, reason: 'Invalid original settings' });
+          }
+
+          // Prepare schedule_days for storage
+          const schedule_days_json = originalSettings.schedule_days 
+            ? JSON.stringify(originalSettings.schedule_days) 
+            : null;
+
+          // Update stream with original values
+          db.run(
+            `UPDATE streams SET 
+              schedule_time = ?,
+              recurring_time = ?,
+              stream_duration_minutes = ?,
+              schedule_type = ?,
+              schedule_days = ?,
+              recurring_enabled = ?,
+              updated_at = CURRENT_TIMESTAMP
+            WHERE id = ? AND user_id = ?`,
+            [
+              originalSettings.schedule_time,
+              originalSettings.recurring_time,
+              originalSettings.stream_duration_minutes,
+              originalSettings.schedule_type || 'once',
+              schedule_days_json,
+              originalSettings.recurring_enabled !== false ? 1 : 0,
+              id,
+              userId
+            ],
+            function (err) {
+              if (err) {
+                console.error('Error resetting stream:', err.message);
+                return reject(err);
+              }
+              resolve({ success: true, reset: this.changes > 0 });
+            }
+          );
+        }
+      );
+    });
+  }
+
+  /**
+   * Reset all streams to original settings for a user
+   * @param {string} userId - User ID
+   * @returns {Promise<{resetCount: number, skippedCount: number}>}
+   */
+  static async resetAllToOriginal(userId) {
+    return new Promise((resolve, reject) => {
+      // Get all streams for user
+      db.all(
+        'SELECT id, original_settings FROM streams WHERE user_id = ?',
+        [userId],
+        async (err, streams) => {
+          if (err) {
+            console.error('Error finding streams for reset:', err.message);
+            return reject(err);
+          }
+
+          let resetCount = 0;
+          let skippedCount = 0;
+
+          for (const stream of streams) {
+            try {
+              const result = await Stream.resetToOriginal(stream.id, userId);
+              if (result.reset) {
+                resetCount++;
+              } else {
+                skippedCount++;
+              }
+            } catch (error) {
+              console.error(`Error resetting stream ${stream.id}:`, error.message);
+              skippedCount++;
+            }
+          }
+
+          resolve({ resetCount, skippedCount });
+        }
+      );
+    });
   }
 }
 module.exports = Stream;

@@ -186,17 +186,42 @@
         <i class="ti ti-filter absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
         <i class="ti ti-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
       </div>
-      <button onclick="openNewStreamModal()" class="flex items-center justify-center gap-2 bg-primary hover:bg-secondary text-white px-4 py-2 rounded-lg transition-colors">
+      <button type="button" onclick="openNewStreamModal()" class="flex items-center justify-center gap-2 bg-primary hover:bg-secondary text-white px-4 py-2 rounded-lg transition-colors">
         <i class="ti ti-plus"></i>
         <span>New Stream</span>
       </button>
+      <div class="relative" id="scheduleDropdown">
+        <button onclick="toggleScheduleDropdown()" class="flex items-center justify-center gap-2 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white px-4 py-2 rounded-lg transition-colors">
+          <i class="ti ti-calendar-event"></i>
+          <span>Schedule</span>
+          <i class="ti ti-chevron-down text-xs"></i>
+        </button>
+        <div id="scheduleDropdownMenu" class="hidden absolute right-0 mt-2 w-40 bg-dark-700 border border-gray-600 rounded-lg shadow-lg z-20 overflow-hidden">
+          <button onclick="openScheduleModal('once')" class="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-white bg-primary hover:bg-secondary transition-colors">
+            <i class="ti ti-calendar"></i>
+            <span>Once</span>
+          </button>
+          <button onclick="openScheduleModal('daily')" class="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-300 hover:bg-dark-600 transition-colors">
+            <i class="ti ti-repeat"></i>
+            <span>Daily</span>
+          </button>
+          <button onclick="openScheduleModal('weekly')" class="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-300 hover:bg-dark-600 transition-colors">
+            <i class="ti ti-calendar-week"></i>
+            <span>Weekly</span>
+          </button>
+        </div>
+      </div>
       <div class="relative" id="backupDropdown">
         <button onclick="toggleBackupDropdown()" class="flex items-center justify-center gap-2 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white px-4 py-2 rounded-lg transition-colors">
           <i class="ti ti-settings-2"></i>
           <span>Backup</span>
           <i class="ti ti-chevron-down text-xs"></i>
         </button>
-        <div id="backupDropdownMenu" class="hidden absolute right-0 mt-2 w-44 bg-dark-700 border border-gray-600 rounded-lg shadow-lg z-20 overflow-hidden">
+        <div id="backupDropdownMenu" class="hidden absolute right-0 mt-2 w-48 bg-dark-700 border border-gray-600 rounded-lg shadow-lg z-20 overflow-hidden">
+          <button onclick="resetAllStreamSettings()" class="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-orange-400 hover:bg-orange-500/10 transition-colors border-b border-gray-600">
+            <i class="ti ti-refresh"></i>
+            <span>Reset All Stream</span>
+          </button>
           <button onclick="exportStreamSettings()" class="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-green-400 hover:bg-green-500/10 transition-colors border-b border-gray-600">
             <i class="ti ti-download"></i>
             <span>Export</span>
@@ -222,21 +247,45 @@
         <i class="ti ti-filter absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
         <i class="ti ti-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
       </div>
-      <div class="grid grid-cols-2 gap-3">
-        <button onclick="openNewStreamModal()" class="flex items-center justify-center gap-2 bg-primary hover:bg-secondary text-white px-4 py-2 rounded-lg transition-colors">
+      <div class="grid grid-cols-3 gap-2">
+        <button type="button" onclick="openNewStreamModal()" class="flex items-center justify-center gap-1 bg-primary hover:bg-secondary text-white px-3 py-2 rounded-lg transition-colors text-sm">
           <i class="ti ti-plus"></i>
-          <span>New Stream</span>
+          <span>New</span>
         </button>
+        <div class="relative" id="scheduleDropdownMobile">
+          <button onclick="toggleScheduleDropdown()" class="w-full flex items-center justify-center gap-1 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white px-3 py-2 rounded-lg transition-colors text-sm">
+            <i class="ti ti-calendar-event"></i>
+            <span>Schedule</span>
+          </button>
+        </div>
         <div class="relative" id="backupDropdownMobile">
-          <button onclick="toggleBackupDropdown()" class="w-full flex items-center justify-center gap-2 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white px-4 py-2 rounded-lg transition-colors">
+          <button onclick="toggleBackupDropdown()" class="w-full flex items-center justify-center gap-1 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white px-3 py-2 rounded-lg transition-colors text-sm">
             <i class="ti ti-settings-2"></i>
             <span>Backup</span>
-            <i class="ti ti-chevron-down text-xs"></i>
           </button>
         </div>
       </div>
+      <!-- Mobile Schedule Dropdown Menu -->
+      <div id="scheduleDropdownMenuMobile" class="hidden absolute left-4 right-4 mt-2 bg-dark-700 border border-gray-600 rounded-lg shadow-lg z-20 overflow-hidden">
+        <button onclick="openScheduleModal('once')" class="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm text-white bg-primary hover:bg-secondary transition-colors">
+          <i class="ti ti-calendar"></i>
+          <span>Once</span>
+        </button>
+        <button onclick="openScheduleModal('daily')" class="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm text-gray-300 hover:bg-dark-600 transition-colors border-t border-gray-600">
+          <i class="ti ti-repeat"></i>
+          <span>Daily</span>
+        </button>
+        <button onclick="openScheduleModal('weekly')" class="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm text-gray-300 hover:bg-dark-600 transition-colors border-t border-gray-600">
+          <i class="ti ti-calendar-week"></i>
+          <span>Weekly</span>
+        </button>
+      </div>
       <!-- Mobile Dropdown Menu -->
-      <div id="backupDropdownMenuMobile" class="hidden absolute right-4 mt-2 w-44 bg-dark-700 border border-gray-600 rounded-lg shadow-lg z-20 overflow-hidden">
+      <div id="backupDropdownMenuMobile" class="hidden absolute right-4 mt-2 w-48 bg-dark-700 border border-gray-600 rounded-lg shadow-lg z-20 overflow-hidden">
+        <button onclick="resetAllStreamSettings()" class="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-orange-400 hover:bg-orange-500/10 transition-colors border-b border-gray-600">
+          <i class="ti ti-refresh"></i>
+          <span>Reset All Stream</span>
+        </button>
         <button onclick="exportStreamSettings()" class="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-green-400 hover:bg-green-500/10 transition-colors border-b border-gray-600">
           <i class="ti ti-download"></i>
           <span>Export</span>
@@ -298,7 +347,7 @@
     <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-lg modal-container flex flex-col max-h-[90vh]">
       <div class="flex-shrink-0 flex items-center justify-between p-4 sm:px-6 sm:py-6 border-b border-gray-700">
         <h3 class="text-lg font-semibold">Create New Stream</h3>
-        <button onclick="closeNewStreamModal()" class="text-gray-400 hover:text-white">
+        <button type="button" onclick="closeNewStreamModal()" class="text-gray-400 hover:text-white">
           <i class="ti ti-x text-xl"></i>
         </button>
       </div>
@@ -361,18 +410,27 @@
           </div>
           
           <!-- Duration and Loop Settings -->
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <label class="text-sm font-medium text-white block mb-2">Duration (Hours)</label>
-              <input type="number" id="streamDuration" name="streamDuration" min="1" max="168" class="w-full px-3 py-2.5 bg-dark-700 border border-gray-600 rounded-lg text-sm" placeholder="e.g. 2, 24">
-            </div>
-            <div class="flex items-center justify-between pt-7">
-              <label class="text-sm text-gray-300">Loop Video & Audio</label>
-              <label class="relative inline-flex items-center cursor-pointer">
-                <input type="checkbox" name="loopVideo" class="sr-only peer" checked>
-                <div class="w-11 h-6 bg-dark-700 rounded-full peer peer-checked:bg-primary"></div>
-                <div class="absolute left-[2px] top-[2px] w-5 h-5 bg-white rounded-full transition-all peer-checked:translate-x-5"></div>
-              </label>
+          <div class="space-y-3">
+            <label class="text-sm font-medium text-white block">Durasi</label>
+            <div class="grid grid-cols-3 gap-3">
+              <div>
+                <label class="text-xs text-gray-400 block mb-1">Jam</label>
+                <input type="number" id="streamDurationHours" name="streamDurationHours" min="0" max="168" class="w-full px-3 py-2.5 bg-dark-700 border border-gray-600 rounded-lg text-sm" placeholder="0">
+              </div>
+              <div>
+                <label class="text-xs text-gray-400 block mb-1">Menit</label>
+                <input type="number" id="streamDurationMinutes" name="streamDurationMinutes" min="0" max="59" class="w-full px-3 py-2.5 bg-dark-700 border border-gray-600 rounded-lg text-sm" placeholder="0">
+              </div>
+              <div class="flex items-end pb-1">
+                <div class="flex items-center justify-between w-full">
+                  <label class="text-xs text-gray-300">Loop</label>
+                  <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" name="loopVideo" class="sr-only peer" checked>
+                    <div class="w-11 h-6 bg-dark-700 rounded-full peer peer-checked:bg-primary"></div>
+                    <div class="absolute left-[2px] top-[2px] w-5 h-5 bg-white rounded-full transition-all peer-checked:translate-x-5"></div>
+                  </label>
+                </div>
+              </div>
             </div>
           </div>
           
@@ -440,9 +498,123 @@
           </div>
         </form>
       </div>
-      <div class="flex-shrink-0 flex items-center justify-end gap-3 p-4 sm:px-6 border-t border-gray-700">
-        <button onclick="closeNewStreamModal()" class="px-5 py-2.5 text-sm font-medium text-gray-300 hover:text-white">Cancel</button>
-        <button type="submit" form="newStreamForm" class="px-5 py-2.5 text-sm font-medium bg-primary hover:bg-secondary text-white rounded-lg">Create Stream</button>
+      <div class="flex-shrink-0 flex items-center justify-end p-4 sm:px-6 border-t border-gray-700">
+        <div class="flex items-center gap-3">
+          <button type="button" onclick="closeNewStreamModal()" class="px-5 py-2.5 text-sm font-medium text-gray-300 hover:text-white">Cancel</button>
+          <button type="submit" form="newStreamForm" class="px-5 py-2.5 text-sm font-medium bg-primary hover:bg-secondary text-white rounded-lg">Create Stream</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+
+<!-- Schedule Modal -->
+<div id="scheduleModal" class="fixed inset-0 bg-black/60 z-50 hidden overflow-y-auto">
+  <div class="flex min-h-screen items-center justify-center p-4">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-2xl flex flex-col max-h-[90vh]">
+      <div class="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-700">
+        <div class="flex items-center gap-3">
+          <h3 class="text-lg font-semibold" id="scheduleModalTitle">Schedule</h3>
+          <div class="flex gap-1">
+            <button onclick="switchScheduleTab('once')" id="scheduleTabOnce" class="px-3 py-1 text-xs rounded-lg bg-primary text-white">Once</button>
+            <button onclick="switchScheduleTab('daily')" id="scheduleTabDaily" class="px-3 py-1 text-xs rounded-lg bg-dark-700 text-gray-300 hover:bg-dark-600">Daily</button>
+            <button onclick="switchScheduleTab('weekly')" id="scheduleTabWeekly" class="px-3 py-1 text-xs rounded-lg bg-dark-700 text-gray-300 hover:bg-dark-600">Weekly</button>
+          </div>
+        </div>
+        <button onclick="closeScheduleModal()" class="text-gray-400 hover:text-white">
+          <i class="ti ti-x text-xl"></i>
+        </button>
+      </div>
+      <div class="p-4 overflow-y-auto flex-grow">
+        <div id="scheduleModalContent" class="space-y-3">
+          <div class="text-center py-8 text-gray-400">
+            <i class="ti ti-loader-2 animate-spin text-2xl"></i>
+            <p class="mt-2">Loading schedules...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Schedule Edit Modal -->
+<div id="scheduleEditModal" class="fixed inset-0 bg-black/60 z-[60] hidden overflow-y-auto">
+  <div class="flex min-h-screen items-center justify-center p-4">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-md flex flex-col max-h-[90vh]">
+      <div class="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-700">
+        <h3 class="text-lg font-semibold">Edit Schedule</h3>
+        <button onclick="closeScheduleEditModal()" class="text-gray-400 hover:text-white">
+          <i class="ti ti-x text-xl"></i>
+        </button>
+      </div>
+      <div class="p-4 overflow-y-auto flex-grow">
+        <form id="scheduleEditForm" class="space-y-4">
+          <input type="hidden" id="scheduleEditStreamId" value="">
+          <input type="hidden" id="scheduleEditType" value="">
+          
+          <div>
+            <label class="text-sm font-medium text-white block mb-2">Stream Title</label>
+            <input type="text" id="scheduleEditTitle" class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none" required>
+          </div>
+          
+          <div id="scheduleEditOnceSettings" class="hidden space-y-4">
+            <div>
+              <label class="text-sm font-medium text-white block mb-2">Start Time</label>
+              <input type="datetime-local" id="scheduleEditStartTime" class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none [color-scheme:dark]">
+            </div>
+            <div>
+              <label class="text-sm font-medium text-white block mb-2">End Time</label>
+              <input type="datetime-local" id="scheduleEditEndTime" class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none [color-scheme:dark]">
+            </div>
+          </div>
+          
+          <div id="scheduleEditRecurringSettings" class="hidden space-y-4">
+            <div>
+              <label class="text-sm font-medium text-white block mb-2">Stream Time</label>
+              <input type="time" id="scheduleEditRecurringTime" class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none [color-scheme:dark]">
+            </div>
+            <div id="scheduleEditWeeklyDays" class="hidden">
+              <label class="text-sm font-medium text-white block mb-2">Days</label>
+              <div class="grid grid-cols-7 gap-1">
+                <button type="button" onclick="toggleScheduleEditDay(0)" data-day="0" class="schedule-edit-day-btn py-2 text-xs rounded-lg border border-gray-600 bg-dark-700 text-gray-300">Sun</button>
+                <button type="button" onclick="toggleScheduleEditDay(1)" data-day="1" class="schedule-edit-day-btn py-2 text-xs rounded-lg border border-gray-600 bg-dark-700 text-gray-300">Mon</button>
+                <button type="button" onclick="toggleScheduleEditDay(2)" data-day="2" class="schedule-edit-day-btn py-2 text-xs rounded-lg border border-gray-600 bg-dark-700 text-gray-300">Tue</button>
+                <button type="button" onclick="toggleScheduleEditDay(3)" data-day="3" class="schedule-edit-day-btn py-2 text-xs rounded-lg border border-gray-600 bg-dark-700 text-gray-300">Wed</button>
+                <button type="button" onclick="toggleScheduleEditDay(4)" data-day="4" class="schedule-edit-day-btn py-2 text-xs rounded-lg border border-gray-600 bg-dark-700 text-gray-300">Thu</button>
+                <button type="button" onclick="toggleScheduleEditDay(5)" data-day="5" class="schedule-edit-day-btn py-2 text-xs rounded-lg border border-gray-600 bg-dark-700 text-gray-300">Fri</button>
+                <button type="button" onclick="toggleScheduleEditDay(6)" data-day="6" class="schedule-edit-day-btn py-2 text-xs rounded-lg border border-gray-600 bg-dark-700 text-gray-300">Sat</button>
+              </div>
+            </div>
+            <div class="flex items-center justify-between">
+              <label class="text-sm text-gray-300">Enable Recurring</label>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" id="scheduleEditRecurringEnabled" class="sr-only peer" checked>
+                <div class="w-11 h-6 bg-dark-700 rounded-full peer peer-checked:bg-primary"></div>
+                <div class="absolute left-[2px] top-[2px] w-5 h-5 bg-white rounded-full transition-all peer-checked:translate-x-5"></div>
+              </label>
+            </div>
+          </div>
+          
+          <div>
+            <label class="text-sm font-medium text-white block mb-2">Duration</label>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="text-xs text-gray-400 block mb-1">Hours</label>
+                <input type="number" id="scheduleEditDurationHours" min="0" max="168" class="w-full px-3 py-2.5 bg-dark-700 border border-gray-600 rounded-lg text-sm focus:border-primary focus:outline-none" placeholder="0">
+              </div>
+              <div>
+                <label class="text-xs text-gray-400 block mb-1">Minutes</label>
+                <input type="number" id="scheduleEditDurationMinutes" min="0" max="59" class="w-full px-3 py-2.5 bg-dark-700 border border-gray-600 rounded-lg text-sm focus:border-primary focus:outline-none" placeholder="0">
+              </div>
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="flex-shrink-0 flex items-center justify-end gap-3 p-4 border-t border-gray-700">
+        <button onclick="closeScheduleEditModal()" class="px-4 py-2 text-sm text-gray-300 hover:text-white">Cancel</button>
+        <button onclick="saveScheduleEdit()" class="px-4 py-2 text-sm bg-primary hover:bg-secondary text-white rounded-lg">Save Changes</button>
       </div>
     </div>
   </div>
@@ -457,6 +629,441 @@
 </div>
 
 <script>
+// Global variables for video/audio selection
+window.selectedVideoData = null;
+window.selectedAudioData = null;
+
+// Open New Stream Modal - always define to ensure it works
+window.openNewStreamModal = function() {
+  const modal = document.getElementById('newStreamModal');
+  if (!modal) {
+    console.error('newStreamModal not found');
+    return;
+  }
+  document.body.style.overflow = 'hidden';
+  modal.classList.remove('hidden');
+  modal.offsetHeight; // Force reflow
+  modal.classList.add('active');
+  
+  // Load videos when modal opens
+  if (typeof window.loadGalleryVideos === 'function') {
+    window.loadGalleryVideos();
+  }
+};
+
+// Close New Stream Modal - always define to ensure it works
+window.closeNewStreamModal = function() {
+  const modal = document.getElementById('newStreamModal');
+  if (!modal) {
+    console.error('newStreamModal not found');
+    return;
+  }
+  document.body.style.overflow = 'auto';
+  modal.classList.remove('active');
+  setTimeout(() => {
+    modal.classList.add('hidden');
+  }, 200);
+  
+  // Reset form state
+  const form = document.getElementById('newStreamForm');
+  if (form) {
+    delete form.dataset.editId;
+  }
+  
+  // Reset modal title and button
+  const modalTitle = document.querySelector('#newStreamModal h3');
+  const submitBtn = document.querySelector('button[type="submit"][form="newStreamForm"]');
+  if (modalTitle) modalTitle.textContent = 'Create New Stream';
+  if (submitBtn) submitBtn.textContent = 'Create Stream';
+};
+
+// Toggle Video Selector - always define to ensure it works
+window.toggleVideoSelector = function() {
+  const dropdown = document.getElementById('videoSelectorDropdown');
+  if (!dropdown) return;
+  if (dropdown.classList.contains('hidden')) {
+    dropdown.classList.remove('hidden');
+    if (typeof window.loadGalleryVideos === 'function') window.loadGalleryVideos();
+    // Focus search input
+    const searchInput = document.getElementById('videoSearchInput');
+    if (searchInput) setTimeout(() => searchInput.focus(), 10);
+  } else {
+    dropdown.classList.add('hidden');
+    // Clear search
+    const searchInput = document.getElementById('videoSearchInput');
+    if (searchInput) searchInput.value = '';
+  }
+};
+
+// Toggle Audio Selector - always define to ensure it works
+window.toggleAudioSelector = function() {
+  const dropdown = document.getElementById('audioSelectorDropdown');
+  if (!dropdown) return;
+  if (dropdown.classList.contains('hidden')) {
+    dropdown.classList.remove('hidden');
+    if (typeof window.loadGalleryAudios === 'function') window.loadGalleryAudios();
+    // Focus search input
+    const searchInput = document.getElementById('audioSearchInput');
+    if (searchInput) setTimeout(() => searchInput.focus(), 10);
+  } else {
+    dropdown.classList.add('hidden');
+    // Clear search
+    const searchInput = document.getElementById('audioSearchInput');
+    if (searchInput) searchInput.value = '';
+  }
+};
+
+// Clear audio selection function
+window.clearAudioSelection = function() {
+  window.selectedAudioData = null;
+  document.getElementById('selectedAudio').textContent = 'No audio selected';
+  document.getElementById('selectedAudioId').value = '';
+  document.getElementById('clearAudioBtn').classList.add('hidden');
+};
+
+// Fallback for loadGalleryVideos - always define to ensure it works
+window.loadGalleryVideos = async function() {
+  const container = document.getElementById('videoListContainer');
+  if (!container) return;
+  container.innerHTML = '<div class="text-center py-3 text-gray-400"><i class="ti ti-loader animate-spin mr-2"></i>Loading...</div>';
+  try {
+    const response = await fetch('/api/stream/content');
+    const content = await response.json();
+    window.allStreamVideos = content;
+    
+    // Always use inline display function for reliability
+    container.innerHTML = '';
+    if (content && content.length > 0) {
+      content.forEach(item => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'w-full flex items-start space-x-3 p-2 rounded hover:bg-dark-600 transition-colors text-left';
+        
+        if (item.type === 'playlist') {
+          btn.innerHTML = `
+            <div class="w-16 h-12 bg-gradient-to-br from-blue-600 to-purple-600 rounded flex-shrink-0 overflow-hidden relative">
+              <img src="${item.thumbnail}" alt="" class="w-full h-full object-cover rounded" onerror="this.src='/images/playlist-thumbnail.svg'">
+              <div class="absolute top-0 right-0 bg-green-500 text-white text-xs px-1 rounded-bl text-[8px] font-bold">PL</div>
+            </div>
+            <div class="flex-1 min-w-0 ml-3 text-left">
+              <p class="text-sm font-medium text-white truncate flex items-center">
+                <i class="ti ti-playlist text-blue-400 mr-1 text-xs"></i>
+                ${item.name}
+              </p>
+              <p class="text-xs text-blue-300">${item.resolution} • ${item.duration}</p>
+            </div>
+          `;
+        } else {
+          btn.innerHTML = `
+            <div class="w-16 h-12 bg-dark-800 rounded flex-shrink-0 overflow-hidden">
+              <img src="${item.thumbnail || '/images/default-thumbnail.jpg'}" alt="" class="w-full h-full object-cover rounded" onerror="this.src='/images/default-thumbnail.jpg'">
+            </div>
+            <div class="flex-1 min-w-0 ml-3 text-left">
+              <p class="text-sm font-medium text-white truncate">${item.name}</p>
+              <p class="text-xs text-gray-400">${item.resolution} • ${item.duration}</p>
+            </div>
+          `;
+        }
+        
+        btn.onclick = () => {
+          // Update selection
+          window.selectedVideoData = item;
+          document.getElementById('selectedVideo').textContent = item.type === 'playlist' ? '[Playlist] ' + item.name : item.name;
+          document.getElementById('selectedVideoId').value = item.id;
+          document.getElementById('videoSelectorDropdown').classList.add('hidden');
+          
+          // Update preview
+          const preview = document.getElementById('emptyPreview');
+          if (preview) {
+            if (item.type === 'playlist') {
+              preview.innerHTML = `
+                <div class="text-center">
+                  <i class="ti ti-playlist text-4xl text-blue-400 mb-2"></i>
+                  <p class="text-sm text-gray-300 font-medium">${item.name}</p>
+                  <p class="text-xs text-blue-300 mt-1">Playlist • ${item.duration || 'Multiple videos'}</p>
+                </div>
+              `;
+            } else {
+              preview.innerHTML = `
+                <div class="text-center">
+                  <i class="ti ti-video text-4xl text-green-400 mb-2"></i>
+                  <p class="text-sm text-gray-300 font-medium">${item.name}</p>
+                  <p class="text-xs text-gray-400 mt-1">${item.resolution} • ${item.duration}</p>
+                </div>
+              `;
+            }
+          }
+        };
+        container.appendChild(btn);
+      });
+      
+      // Setup search
+      const searchInput = document.getElementById('videoSearchInput');
+      if (searchInput) {
+        searchInput.oninput = function() {
+          const term = this.value.toLowerCase().trim();
+          const filtered = term ? content.filter(v => v.name.toLowerCase().includes(term)) : content;
+          window.loadGalleryVideos._displayVideos(filtered, container);
+        };
+      }
+    } else {
+      container.innerHTML = '<div class="text-center py-5 text-gray-400"><i class="ti ti-video-off text-2xl mb-2"></i><p>No videos found</p><p class="text-xs text-gray-500 mt-1">Upload videos in Gallery</p></div>';
+    }
+  } catch (error) {
+    console.error('Error loading videos:', error);
+    container.innerHTML = '<div class="text-center py-3 text-red-400"><i class="ti ti-alert-circle text-2xl mb-2"></i><p>Failed to load videos</p></div>';
+  }
+};
+
+// Helper function for video search filtering
+window.loadGalleryVideos._displayVideos = function(videos, container) {
+  container.innerHTML = '';
+  if (videos && videos.length > 0) {
+    videos.forEach(item => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'w-full flex items-start space-x-3 p-2 rounded hover:bg-dark-600 transition-colors text-left';
+      
+      if (item.type === 'playlist') {
+        btn.innerHTML = `
+          <div class="w-16 h-12 bg-gradient-to-br from-blue-600 to-purple-600 rounded flex-shrink-0 overflow-hidden relative">
+            <img src="${item.thumbnail}" alt="" class="w-full h-full object-cover rounded" onerror="this.src='/images/playlist-thumbnail.svg'">
+            <div class="absolute top-0 right-0 bg-green-500 text-white text-xs px-1 rounded-bl text-[8px] font-bold">PL</div>
+          </div>
+          <div class="flex-1 min-w-0 ml-3 text-left">
+            <p class="text-sm font-medium text-white truncate flex items-center">
+              <i class="ti ti-playlist text-blue-400 mr-1 text-xs"></i>
+              ${item.name}
+            </p>
+            <p class="text-xs text-blue-300">${item.resolution} • ${item.duration}</p>
+          </div>
+        `;
+      } else {
+        btn.innerHTML = `
+          <div class="w-16 h-12 bg-dark-800 rounded flex-shrink-0 overflow-hidden">
+            <img src="${item.thumbnail || '/images/default-thumbnail.jpg'}" alt="" class="w-full h-full object-cover rounded" onerror="this.src='/images/default-thumbnail.jpg'">
+          </div>
+          <div class="flex-1 min-w-0 ml-3 text-left">
+            <p class="text-sm font-medium text-white truncate">${item.name}</p>
+            <p class="text-xs text-gray-400">${item.resolution} • ${item.duration}</p>
+          </div>
+        `;
+      }
+      
+      btn.onclick = () => {
+        window.selectedVideoData = item;
+        document.getElementById('selectedVideo').textContent = item.type === 'playlist' ? '[Playlist] ' + item.name : item.name;
+        document.getElementById('selectedVideoId').value = item.id;
+        document.getElementById('videoSelectorDropdown').classList.add('hidden');
+      };
+      container.appendChild(btn);
+    });
+  } else {
+    container.innerHTML = '<div class="text-center py-5 text-gray-400"><i class="ti ti-search-off text-2xl mb-2"></i><p>No matching content found</p></div>';
+  }
+};
+
+// Fallback for loadGalleryAudios - always define to ensure it works
+window.loadGalleryAudios = async function() {
+  const container = document.getElementById('audioListContainer');
+  if (!container) return;
+  container.innerHTML = '<div class="text-center py-3 text-gray-400"><i class="ti ti-loader animate-spin mr-2"></i>Loading...</div>';
+  try {
+    const response = await fetch('/api/stream/audios');
+    const audios = await response.json();
+    window.allStreamAudios = audios;
+    
+    // Always use inline display function for reliability
+    container.innerHTML = '';
+    if (audios && audios.length > 0) {
+      audios.forEach(audio => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'w-full flex items-center space-x-3 p-2 rounded hover:bg-dark-600 transition-colors text-left';
+        btn.innerHTML = `
+          <div class="w-10 h-10 bg-dark-800 rounded flex-shrink-0 flex items-center justify-center">
+            <i class="ti ti-music text-primary"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-medium text-white truncate">${audio.title || audio.name}</p>
+            <p class="text-xs text-gray-400">${audio.duration || 'Unknown'} • ${audio.format || 'audio'}</p>
+          </div>
+        `;
+        btn.onclick = () => {
+          window.selectedAudioData = audio;
+          document.getElementById('selectedAudio').textContent = audio.title || audio.name;
+          document.getElementById('selectedAudioId').value = audio.id;
+          document.getElementById('clearAudioBtn').classList.remove('hidden');
+          document.getElementById('audioSelectorDropdown').classList.add('hidden');
+        };
+        container.appendChild(btn);
+      });
+      
+      // Setup search
+      const searchInput = document.getElementById('audioSearchInput');
+      if (searchInput) {
+        searchInput.oninput = function() {
+          const term = this.value.toLowerCase().trim();
+          const filtered = term ? audios.filter(a => (a.title || a.name || '').toLowerCase().includes(term)) : audios;
+          window.loadGalleryAudios._displayAudios(filtered, container);
+        };
+      }
+    } else {
+      container.innerHTML = '<div class="text-center py-5 text-gray-400"><i class="ti ti-music-off text-2xl mb-2"></i><p>No audios found</p><p class="text-xs text-gray-500 mt-1">Upload audio files in Gallery</p></div>';
+    }
+  } catch (error) {
+    console.error('Error loading audios:', error);
+    container.innerHTML = '<div class="text-center py-3 text-red-400"><i class="ti ti-alert-circle text-2xl mb-2"></i><p>Failed to load audios</p></div>';
+  }
+};
+
+// Helper function for audio search filtering
+window.loadGalleryAudios._displayAudios = function(audios, container) {
+  container.innerHTML = '';
+  if (audios && audios.length > 0) {
+    audios.forEach(audio => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'w-full flex items-center space-x-3 p-2 rounded hover:bg-dark-600 transition-colors text-left';
+      btn.innerHTML = `
+        <div class="w-10 h-10 bg-dark-800 rounded flex-shrink-0 flex items-center justify-center">
+          <i class="ti ti-music text-primary"></i>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-medium text-white truncate">${audio.title || audio.name}</p>
+          <p class="text-xs text-gray-400">${audio.duration || 'Unknown'} • ${audio.format || 'audio'}</p>
+        </div>
+      `;
+      btn.onclick = () => {
+        window.selectedAudioData = audio;
+        document.getElementById('selectedAudio').textContent = audio.title || audio.name;
+        document.getElementById('selectedAudioId').value = audio.id;
+        document.getElementById('clearAudioBtn').classList.remove('hidden');
+        document.getElementById('audioSelectorDropdown').classList.add('hidden');
+      };
+      container.appendChild(btn);
+    });
+  } else {
+    container.innerHTML = '<div class="text-center py-5 text-gray-400"><i class="ti ti-search-off text-2xl mb-2"></i><p>No matching audios found</p></div>';
+  }
+};
+
+// Fallback for setScheduleType
+window.setScheduleType = function(type) {
+  const scheduleTypeInput = document.getElementById('scheduleType');
+  if (scheduleTypeInput) scheduleTypeInput.value = type;
+  
+  // Update button styles
+  ['scheduleTypeOnce', 'scheduleTypeDaily', 'scheduleTypeWeekly'].forEach(btnId => {
+    const btn = document.getElementById(btnId);
+    if (btn) {
+      const isActive = btnId === 'scheduleType' + type.charAt(0).toUpperCase() + type.slice(1);
+      if (isActive) {
+        btn.classList.add('border-primary', 'bg-primary', 'text-white');
+        btn.classList.remove('border-gray-600', 'bg-dark-700', 'text-gray-300');
+      } else {
+        btn.classList.remove('border-primary', 'bg-primary', 'text-white');
+        btn.classList.add('border-gray-600', 'bg-dark-700', 'text-gray-300');
+      }
+    }
+  });
+  
+  // Show/hide settings
+  const onceSettings = document.getElementById('onceScheduleSettings');
+  const recurringSettings = document.getElementById('recurringScheduleSettings');
+  const weeklyDaysSelector = document.getElementById('weeklyDaysSelector');
+  
+  if (type === 'once') {
+    if (onceSettings) onceSettings.classList.remove('hidden');
+    if (recurringSettings) recurringSettings.classList.add('hidden');
+  } else {
+    if (onceSettings) onceSettings.classList.add('hidden');
+    if (recurringSettings) recurringSettings.classList.remove('hidden');
+    if (weeklyDaysSelector) {
+      if (type === 'weekly') {
+        weeklyDaysSelector.classList.remove('hidden');
+      } else {
+        weeklyDaysSelector.classList.add('hidden');
+      }
+    }
+  }
+};
+
+// Selected days for weekly schedule
+window.selectedDays = [];
+
+// Toggle day selection for weekly schedule
+window.toggleDay = function(day) {
+  const dayNum = parseInt(day);
+  const index = window.selectedDays.indexOf(dayNum);
+  
+  if (index > -1) {
+    window.selectedDays.splice(index, 1);
+  } else {
+    window.selectedDays.push(dayNum);
+  }
+  
+  // Update hidden input
+  const scheduleDaysInput = document.getElementById('scheduleDays');
+  if (scheduleDaysInput) {
+    scheduleDaysInput.value = JSON.stringify(window.selectedDays);
+  }
+  
+  // Update button style
+  const btn = document.querySelector(`[data-day="${day}"]`);
+  if (btn) {
+    if (window.selectedDays.includes(dayNum)) {
+      btn.classList.add('border-primary', 'bg-primary', 'text-white');
+      btn.classList.remove('border-gray-600', 'bg-dark-700', 'text-gray-300');
+    } else {
+      btn.classList.remove('border-primary', 'bg-primary', 'text-white');
+      btn.classList.add('border-gray-600', 'bg-dark-700', 'text-gray-300');
+    }
+  }
+};
+
+// Load recurring schedule data when editing a stream
+window.loadRecurringScheduleData = function(stream) {
+  // Set schedule type
+  window.setScheduleType(stream.schedule_type || 'once');
+  
+  // Set recurring time
+  const recurringTimeInput = document.getElementById('recurringTime');
+  if (recurringTimeInput && stream.recurring_time) {
+    recurringTimeInput.value = stream.recurring_time;
+  }
+  
+  // Set selected days for weekly
+  if (stream.schedule_type === 'weekly' && stream.schedule_days) {
+    const days = Array.isArray(stream.schedule_days) ? stream.schedule_days : JSON.parse(stream.schedule_days || '[]');
+    window.selectedDays = [...days];
+    
+    // Update day buttons
+    document.querySelectorAll('.day-btn').forEach(btn => {
+      const day = parseInt(btn.getAttribute('data-day'));
+      if (window.selectedDays.includes(day)) {
+        btn.classList.add('border-primary', 'bg-primary', 'text-white');
+        btn.classList.remove('border-gray-600', 'bg-dark-700', 'text-gray-300');
+      } else {
+        btn.classList.remove('border-primary', 'bg-primary', 'text-white');
+        btn.classList.add('border-gray-600', 'bg-dark-700', 'text-gray-300');
+      }
+    });
+    
+    // Update hidden input
+    const scheduleDaysInput = document.getElementById('scheduleDays');
+    if (scheduleDaysInput) {
+      scheduleDaysInput.value = JSON.stringify(window.selectedDays);
+    }
+  }
+  
+  // Set recurring enabled
+  const recurringEnabledInput = document.getElementById('recurringEnabled');
+  if (recurringEnabledInput) {
+    recurringEnabledInput.checked = stream.recurring_enabled !== false;
+  }
+};
+
 // Toast Notification Function - redirects to center toast
 function showToast(type, message) {
   showCenterToast(type, message, 5000);
@@ -513,6 +1120,61 @@ function showCenterToast(type, message, duration = 3000) {
     }, 300);
   }, duration);
 }
+
+// ============================================
+// DURATION UTILITY FUNCTIONS
+// ============================================
+
+/**
+ * Calculate total minutes from hours and minutes
+ * @param {number|string} hours - Hours value
+ * @param {number|string} minutes - Minutes value
+ * @returns {number} Total minutes
+ */
+function calculateTotalMinutes(hours, minutes) {
+  const h = parseInt(hours, 10) || 0;
+  const m = parseInt(minutes, 10) || 0;
+  return (h * 60) + m;
+}
+
+/**
+ * Format total minutes to display string
+ * @param {number} totalMinutes - Total minutes
+ * @returns {string} Formatted duration string
+ */
+function formatDuration(totalMinutes) {
+  if (!totalMinutes || totalMinutes <= 0) return '-';
+  
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  
+  if (hours > 0 && minutes > 0) {
+    return `${hours} jam ${minutes} menit`;
+  } else if (hours > 0) {
+    return `${hours} jam`;
+  } else {
+    return `${minutes} menit`;
+  }
+}
+
+/**
+ * Parse total minutes to hours and minutes fields
+ * @param {number} totalMinutes - Total minutes
+ * @returns {Object} Object with hours and minutes properties
+ */
+function parseDurationToFields(totalMinutes) {
+  if (!totalMinutes || totalMinutes <= 0) {
+    return { hours: 0, minutes: 0 };
+  }
+  return {
+    hours: Math.floor(totalMinutes / 60),
+    minutes: totalMinutes % 60
+  };
+}
+
+// ============================================
+// END DURATION UTILITY FUNCTIONS
+// ============================================
 
 // Live Limit Info
 async function loadLiveLimitInfo() {
@@ -593,7 +1255,7 @@ async function loadSystemStats() {
 }
 
 // Load Streams
-async function loadStreams() {
+window.loadStreams = async function loadStreams() {
   try {
     const response = await fetch('/api/streams');
     const data = await response.json();
@@ -626,6 +1288,7 @@ function updateActiveStreamCount(streams) {
 }
 
 function renderStreams(streams) {
+  console.log('renderStreams called with', streams?.length, 'streams');
   const tbody = document.querySelector('table tbody');
   const emptyState = document.getElementById('empty-state');
   const mobileContainer = document.getElementById('mobile-stream-list');
@@ -660,8 +1323,8 @@ function renderStreams(streams) {
     const statusText = stream.status === 'live' ? 'Live' : 
                       stream.status === 'scheduled' ? 'Scheduled' : 'Offline';
     
-    // Format duration as "X jam"
-    const duration = stream.stream_duration_hours ? stream.stream_duration_hours + ' jam' : '-';
+    // Format duration using utility function (supports hours + minutes)
+    const duration = formatDuration(stream.stream_duration_minutes);
     
     // Format schedule info based on schedule type
     let scheduleInfo = '-';
@@ -700,17 +1363,13 @@ function renderStreams(streams) {
         <span class="text-sm">${stream.platform || 'YouTube'}</span>
       </td>
       <td class="px-3 py-4 schedule-cell cursor-pointer hover:bg-dark-600/50 rounded" 
-          data-stream-id="${stream.id}"
-          data-schedule-type="${stream.schedule_type || 'once'}"
-          data-recurring-time="${stream.recurring_time || ''}"
-          data-schedule-days="${JSON.stringify(stream.schedule_days || [])}"
-          onclick="createScheduleInlineEdit(this, this.dataset.streamId, {schedule_type: this.dataset.scheduleType, recurring_time: this.dataset.recurringTime, schedule_days: JSON.parse(this.dataset.scheduleDays || '[]')})">
+          onclick="editStream('${stream.id}')" title="Click to edit schedule">
         <div class="flex flex-col gap-0.5">
           <div class="inline-flex">${scheduleTypeBadge}</div>
           <span class="text-sm text-gray-300">${scheduleInfo}</span>
         </div>
       </td>
-      <td class="px-3 py-4 duration-cell cursor-pointer hover:bg-dark-600/50 rounded" onclick="createDurationInlineEdit(this, '${stream.id}', ${stream.stream_duration_hours || 0})">
+      <td class="px-3 py-4 duration-cell cursor-pointer hover:bg-dark-600/50 rounded" onclick="createDurationInlineEdit(this, '${stream.id}', ${stream.stream_duration_minutes || 0})">
         <span class="text-sm">${duration}</span>
       </td>
       <td class="px-3 py-4">
@@ -719,15 +1378,21 @@ function renderStreams(streams) {
         </span>
       </td>
       <td class="px-3 py-4 text-right">
-        <div class="flex items-center justify-end gap-1">
-          <button onclick="${stream.status === 'live' ? `stopStream('${stream.id}')` : `startStream('${stream.id}')`}" class="p-2 ${stream.status === 'live' ? 'text-red-500 hover:bg-red-500/10' : 'text-green-500 hover:bg-green-500/10'} rounded-lg transition-colors" title="${stream.status === 'live' ? 'Stop' : 'Start'}">
-            <i class="ti ti-player-${stream.status === 'live' ? 'stop' : 'play'} text-lg"></i>
+        <div class="flex items-center justify-end gap-2">
+          <button onclick="${stream.status === 'live' ? `stopStream('${stream.id}')` : `startStream('${stream.id}')`}" class="w-9 h-9 flex items-center justify-center ${stream.status === 'live' ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' : 'bg-green-500/20 text-green-400 hover:bg-green-500/30'} rounded-lg transition-all duration-200 hover:scale-105" title="${stream.status === 'live' ? 'Stop' : 'Start'}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              ${stream.status === 'live' ? '<rect x="6" y="6" width="12" height="12" rx="2"/>' : '<path d="M8 5v14l11-7z"/>'}
+            </svg>
           </button>
-          <button onclick="editStream('${stream.id}')" class="p-2 text-primary hover:bg-primary/10 rounded-lg transition-colors" title="Edit">
-            <i class="ti ti-edit text-lg"></i>
+          <button onclick="editStream('${stream.id}')" class="w-9 h-9 flex items-center justify-center bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 rounded-lg transition-all duration-200 hover:scale-105" title="Edit">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
+            </svg>
           </button>
-          <button onclick="deleteStream('${stream.id}')" class="p-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors" title="Delete">
-            <i class="ti ti-trash text-lg"></i>
+          <button onclick="deleteStream('${stream.id}')" class="w-9 h-9 flex items-center justify-center bg-red-500/20 text-red-400 hover:bg-red-500/30 rounded-lg transition-all duration-200 hover:scale-105" title="Delete">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+            </svg>
           </button>
         </div>
       </td>
@@ -750,15 +1415,21 @@ function renderStreams(streams) {
           <p class="text-xs text-gray-400 truncate">${stream.video_title || 'No video'} • ${duration}</p>
           ${stream.schedule_type !== 'once' ? `<p class="text-xs text-accent truncate">${scheduleTypeBadge} ${scheduleInfo}</p>` : ''}
         </div>
-        <div class="flex items-center gap-0.5 flex-shrink-0">
-          <button onclick="${stream.status === 'live' ? `stopStream('${stream.id}')` : `startStream('${stream.id}')`}" class="p-1.5 ${stream.status === 'live' ? 'text-red-500' : 'text-green-500'} rounded transition-colors">
-            <i class="ti ti-player-${stream.status === 'live' ? 'stop' : 'play'}"></i>
+        <div class="flex items-center gap-1 flex-shrink-0">
+          <button onclick="${stream.status === 'live' ? `stopStream('${stream.id}')` : `startStream('${stream.id}')`}" class="w-8 h-8 flex items-center justify-center ${stream.status === 'live' ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'} rounded-lg">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              ${stream.status === 'live' ? '<rect x="6" y="6" width="12" height="12" rx="2"/>' : '<path d="M8 5v14l11-7z"/>'}
+            </svg>
           </button>
-          <button onclick="editStream('${stream.id}')" class="p-1.5 text-primary rounded transition-colors">
-            <i class="ti ti-edit"></i>
+          <button onclick="editStream('${stream.id}')" class="w-8 h-8 flex items-center justify-center bg-blue-500/20 text-blue-400 rounded-lg">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
+            </svg>
           </button>
-          <button onclick="deleteStream('${stream.id}')" class="p-1.5 text-red-500 rounded transition-colors">
-            <i class="ti ti-trash"></i>
+          <button onclick="deleteStream('${stream.id}')" class="w-8 h-8 flex items-center justify-center bg-red-500/20 text-red-400 rounded-lg">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+            </svg>
           </button>
         </div>
       `;
@@ -816,67 +1487,156 @@ async function stopStream(id) {
 let inlineEditOriginalValue = null;
 let activeInlineEdit = null;
 
-// Create inline edit for Duration cell
-function createDurationInlineEdit(cell, streamId, currentValue) {
+// Duration inline edit state
+let durationBlurTimeout = null;
+let durationSaving = false;
+
+// Create inline edit for Duration cell (supports hours + minutes)
+function createDurationInlineEdit(cell, streamId, currentTotalMinutes) {
+  // If already editing this same cell, don't restart
+  if (activeInlineEdit && activeInlineEdit.streamId === streamId && activeInlineEdit.field === 'duration') {
+    return;
+  }
+  
   // Prevent multiple edits
   if (activeInlineEdit) {
     cancelInlineEdit();
   }
   
+  // Clear any pending blur timeout
+  if (durationBlurTimeout) {
+    clearTimeout(durationBlurTimeout);
+    durationBlurTimeout = null;
+  }
+  
   // Store original value
-  inlineEditOriginalValue = currentValue;
+  inlineEditOriginalValue = currentTotalMinutes;
   activeInlineEdit = { cell, streamId, field: 'duration' };
   
-  // Create input element
-  const input = document.createElement('input');
-  input.type = 'number';
-  input.min = '1';
-  input.max = '168';
-  input.value = currentValue || '';
-  input.className = 'w-16 px-2 py-1 bg-dark-700 border border-primary rounded text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary';
-  input.placeholder = 'Jam';
+  // Parse current value to hours and minutes
+  const { hours, minutes } = parseDurationToFields(currentTotalMinutes);
+  
+  // Create container for inputs
+  const container = document.createElement('div');
+  container.className = 'flex items-center gap-1';
+  
+  // Stop click propagation to prevent cell onclick from re-triggering
+  container.onclick = (e) => e.stopPropagation();
+  
+  // Hours input
+  const hoursInput = document.createElement('input');
+  hoursInput.type = 'number';
+  hoursInput.min = '0';
+  hoursInput.max = '168';
+  hoursInput.value = hours || '';
+  hoursInput.className = 'w-14 px-2 py-1 bg-dark-700 border border-primary rounded text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary text-center';
+  hoursInput.placeholder = '0';
+  hoursInput.id = 'inline-hours';
+  
+  // Label for hours
+  const hoursLabel = document.createElement('span');
+  hoursLabel.className = 'text-xs text-gray-400';
+  hoursLabel.textContent = 'j';
+  
+  // Minutes input
+  const minutesInput = document.createElement('input');
+  minutesInput.type = 'number';
+  minutesInput.min = '0';
+  minutesInput.max = '59';
+  minutesInput.value = minutes || '';
+  minutesInput.className = 'w-14 px-2 py-1 bg-dark-700 border border-primary rounded text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary text-center';
+  minutesInput.placeholder = '0';
+  minutesInput.id = 'inline-minutes';
+  
+  // Label for minutes
+  const minutesLabel = document.createElement('span');
+  minutesLabel.className = 'text-xs text-gray-400';
+  minutesLabel.textContent = 'm';
+  
+  container.appendChild(hoursInput);
+  container.appendChild(hoursLabel);
+  container.appendChild(minutesInput);
+  container.appendChild(minutesLabel);
   
   // Save original HTML
   const originalHTML = cell.innerHTML;
   cell.dataset.originalHtml = originalHTML;
   
-  // Replace cell content with input
+  // Replace cell content with inputs
   cell.innerHTML = '';
-  cell.appendChild(input);
-  input.focus();
-  input.select();
+  cell.appendChild(container);
+  hoursInput.focus();
+  hoursInput.select();
   
-  // Handle Enter key to save
-  input.addEventListener('keydown', async (e) => {
+  // Save function
+  const doSave = async () => {
+    if (durationBlurTimeout) {
+      clearTimeout(durationBlurTimeout);
+      durationBlurTimeout = null;
+    }
+    await saveDurationInlineEdit(streamId, hoursInput.value, minutesInput.value, cell);
+  };
+  
+  // Cancel function
+  const doCancel = () => {
+    if (durationBlurTimeout) {
+      clearTimeout(durationBlurTimeout);
+      durationBlurTimeout = null;
+    }
+    cancelInlineEdit();
+  };
+  
+  // Handle Enter key to save, Escape to cancel
+  const handleKeydown = async (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      await saveDurationInlineEdit(streamId, input.value, cell);
+      await doSave();
     } else if (e.key === 'Escape') {
-      cancelInlineEdit();
+      e.preventDefault();
+      doCancel();
     }
-  });
+  };
   
-  // Handle blur to save
-  input.addEventListener('blur', async () => {
-    // Small delay to allow cancel to work
-    setTimeout(async () => {
-      if (activeInlineEdit && activeInlineEdit.streamId === streamId) {
-        await saveDurationInlineEdit(streamId, input.value, cell);
+  hoursInput.addEventListener('keydown', handleKeydown);
+  minutesInput.addEventListener('keydown', handleKeydown);
+  
+  // Handle blur with longer delay (500ms) to allow clicking between inputs
+  const handleBlur = async () => {
+    if (durationBlurTimeout) clearTimeout(durationBlurTimeout);
+    durationBlurTimeout = setTimeout(async () => {
+      if (activeInlineEdit && activeInlineEdit.streamId === streamId && !durationSaving) {
+        // Check if focus is still on one of our inputs
+        const activeEl = document.activeElement;
+        if (activeEl !== hoursInput && activeEl !== minutesInput) {
+          await saveDurationInlineEdit(streamId, hoursInput.value, minutesInput.value, cell);
+        }
       }
-    }, 100);
-  });
+    }, 500);
+  };
+  
+  hoursInput.addEventListener('blur', handleBlur);
+  minutesInput.addEventListener('blur', handleBlur);
 }
 
-// Save duration inline edit
-async function saveDurationInlineEdit(streamId, newValue, cell) {
-  const duration = parseInt(newValue, 10);
+// Save duration inline edit (supports hours + minutes)
+async function saveDurationInlineEdit(streamId, hoursValue, minutesValue, cell) {
+  // Save lock to prevent duplicate saves
+  if (durationSaving) {
+    return;
+  }
+  durationSaving = true;
   
-  // Validate
-  if (isNaN(duration) || duration < 1) {
+  const hours = parseInt(hoursValue, 10) || 0;
+  const minutes = parseInt(minutesValue, 10) || 0;
+  const totalMinutes = calculateTotalMinutes(hours, minutes);
+  
+  // Validate - allow 0 to clear duration
+  if (totalMinutes < 0) {
     // Revert to original
     cell.innerHTML = cell.dataset.originalHtml;
     activeInlineEdit = null;
     inlineEditOriginalValue = null;
+    durationSaving = false;
     return;
   }
   
@@ -884,14 +1644,18 @@ async function saveDurationInlineEdit(streamId, newValue, cell) {
     const response = await fetch(`/api/streams/${streamId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ stream_duration_hours: duration })
+      body: JSON.stringify({ 
+        streamDurationHours: hours,
+        streamDurationMinutes: minutes
+      })
     });
     
     const result = await response.json();
     
     if (result.success) {
       // Update cell with new value - no toast
-      cell.innerHTML = `<span class="text-sm cursor-pointer hover:text-primary" onclick="createDurationInlineEdit(this.parentElement, '${streamId}', ${duration})">${duration} jam</span>`;
+      const displayText = formatDuration(totalMinutes);
+      cell.innerHTML = `<span class="text-sm cursor-pointer hover:text-primary" onclick="createDurationInlineEdit(this.parentElement, '${streamId}', ${totalMinutes})">${displayText}</span>`;
     } else {
       // Revert on error - no toast
       cell.innerHTML = cell.dataset.originalHtml;
@@ -904,94 +1668,23 @@ async function saveDurationInlineEdit(streamId, newValue, cell) {
   
   activeInlineEdit = null;
   inlineEditOriginalValue = null;
+  durationSaving = false; // Release save lock
 }
 
-// Create inline edit for Schedule cell - Simple time input only
-function createScheduleInlineEdit(cell, streamId, currentSchedule) {
-  // Prevent multiple edits
-  if (activeInlineEdit) {
-    cancelInlineEdit();
-  }
-  
-  // Store original value
-  inlineEditOriginalValue = currentSchedule;
-  activeInlineEdit = { cell, streamId, field: 'schedule' };
-  
-  // Save original HTML
-  const originalHTML = cell.innerHTML;
-  cell.dataset.originalHtml = originalHTML;
-  
-  // Create simple time input (like duration)
-  const input = document.createElement('input');
-  input.type = 'time';
-  input.value = currentSchedule.recurring_time || '';
-  input.className = 'w-20 px-2 py-1 bg-dark-700 border border-primary rounded text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary [color-scheme:dark]';
-  
-  // Replace cell content with input
-  cell.innerHTML = '';
-  cell.appendChild(input);
-  input.focus();
-  
-  // Handle Enter key to save
-  input.addEventListener('keydown', async (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      await saveScheduleInlineEdit(streamId, currentSchedule.schedule_type, input.value, cell);
-    } else if (e.key === 'Escape') {
-      cancelInlineEdit();
-    }
-  });
-  
-  // Handle blur to save
-  input.addEventListener('blur', async () => {
-    setTimeout(async () => {
-      if (activeInlineEdit && activeInlineEdit.streamId === streamId) {
-        await saveScheduleInlineEdit(streamId, currentSchedule.schedule_type, input.value, cell);
-      }
-    }, 100);
-  });
-}
-
-// Save schedule inline edit
-async function saveScheduleInlineEdit(streamId, scheduleType, recurringTime, cell) {
-  try {
-    const updateData = {
-      schedule_type: scheduleType,
-      recurring_time: recurringTime || null
-    };
-    
-    const response = await fetch(`/api/streams/${streamId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updateData)
-    });
-    
-    const result = await response.json();
-    
-    if (result.success) {
-      // Refresh streams to show updated data - no toast
-      loadStreams();
-    } else {
-      // Revert on error - no toast
-      cell.innerHTML = cell.dataset.originalHtml;
-    }
-  } catch (error) {
-    console.error('Error saving schedule:', error);
-    // Revert on error - no toast
-    cell.innerHTML = cell.dataset.originalHtml;
-  }
-  
-  activeInlineEdit = null;
-  inlineEditOriginalValue = null;
-}
-
-// Cancel inline edit and revert to original
+// Cancel inline edit and revert to original (used by duration inline edit)
 function cancelInlineEdit() {
+  // Clear any pending blur timeout
+  if (durationBlurTimeout) {
+    clearTimeout(durationBlurTimeout);
+    durationBlurTimeout = null;
+  }
+  
   if (activeInlineEdit && activeInlineEdit.cell) {
     activeInlineEdit.cell.innerHTML = activeInlineEdit.cell.dataset.originalHtml || '';
   }
   activeInlineEdit = null;
   inlineEditOriginalValue = null;
+  durationSaving = false;
 }
 
 // ============================================
@@ -1030,7 +1723,11 @@ async function editStream(id) {
       // Fill form data
       document.getElementById('streamTitle').value = stream.title || '';
       document.getElementById('streamKey').value = stream.stream_key || '';
-      document.getElementById('streamDuration').value = stream.stream_duration_hours || '';
+      
+      // Parse duration to hours and minutes
+      const { hours, minutes } = parseDurationToFields(stream.stream_duration_minutes);
+      document.getElementById('streamDurationHours').value = hours || '';
+      document.getElementById('streamDurationMinutes').value = minutes || '';
       
       if (stream.schedule_time) {
         const startDate = new Date(stream.schedule_time);
@@ -1101,11 +1798,308 @@ function toggleNetworkDiskDisplay(type) {
   }
 }
 
+// Schedule Dropdown Functions
+function toggleScheduleDropdown() {
+  const menuDesktop = document.getElementById('scheduleDropdownMenu');
+  const menuMobile = document.getElementById('scheduleDropdownMenuMobile');
+  
+  // Close backup dropdown if open
+  const backupMenuDesktop = document.getElementById('backupDropdownMenu');
+  const backupMenuMobile = document.getElementById('backupDropdownMenuMobile');
+  if (backupMenuDesktop) backupMenuDesktop.classList.add('hidden');
+  if (backupMenuMobile) backupMenuMobile.classList.add('hidden');
+  
+  if (menuDesktop) menuDesktop.classList.toggle('hidden');
+  if (menuMobile) menuMobile.classList.toggle('hidden');
+}
+
+// Schedule Modal Functions
+let currentScheduleType = 'once';
+let scheduleEditSelectedDays = [];
+let currentScheduleEditStream = null;
+
+async function openScheduleModal(type) {
+  currentScheduleType = type;
+  
+  // Close dropdown
+  const menuDesktop = document.getElementById('scheduleDropdownMenu');
+  const menuMobile = document.getElementById('scheduleDropdownMenuMobile');
+  if (menuDesktop) menuDesktop.classList.add('hidden');
+  if (menuMobile) menuMobile.classList.add('hidden');
+  
+  // Update tabs
+  switchScheduleTab(type);
+  
+  // Show modal
+  document.getElementById('scheduleModal').classList.remove('hidden');
+  
+  // Load schedules
+  await loadSchedules(type);
+}
+
+function closeScheduleModal() {
+  document.getElementById('scheduleModal').classList.add('hidden');
+}
+
+function switchScheduleTab(type) {
+  currentScheduleType = type;
+  
+  // Update tab buttons
+  ['once', 'daily', 'weekly'].forEach(t => {
+    const btn = document.getElementById('scheduleTab' + t.charAt(0).toUpperCase() + t.slice(1));
+    if (btn) {
+      if (t === type) {
+        btn.className = 'px-3 py-1 text-xs rounded-lg bg-primary text-white';
+      } else {
+        btn.className = 'px-3 py-1 text-xs rounded-lg bg-dark-700 text-gray-300 hover:bg-dark-600';
+      }
+    }
+  });
+  
+  // Load schedules for this type
+  loadSchedules(type);
+}
+
+async function loadSchedules(type) {
+  const content = document.getElementById('scheduleModalContent');
+  content.innerHTML = '<div class="text-center py-8 text-gray-400"><i class="ti ti-loader-2 animate-spin text-2xl"></i><p class="mt-2">Loading...</p></div>';
+  
+  try {
+    const response = await fetch('/api/schedules?type=' + type);
+    const result = await response.json();
+    
+    if (result.success && result.schedules) {
+      renderSchedules(result.schedules, type);
+    } else {
+      content.innerHTML = '<div class="text-center py-8 text-gray-400"><i class="ti ti-calendar-off text-3xl mb-2"></i><p>No ' + type + ' schedules found</p></div>';
+    }
+  } catch (error) {
+    console.error('Error loading schedules:', error);
+    content.innerHTML = '<div class="text-center py-8 text-red-400"><i class="ti ti-alert-circle text-3xl mb-2"></i><p>Failed to load schedules</p></div>';
+  }
+}
+
+function renderSchedules(schedules, type) {
+  const content = document.getElementById('scheduleModalContent');
+  
+  if (!schedules || schedules.length === 0) {
+    content.innerHTML = '<div class="text-center py-8 text-gray-400"><i class="ti ti-calendar-off text-3xl mb-2"></i><p>No ' + type + ' schedules found</p></div>';
+    return;
+  }
+  
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  
+  let html = '';
+  schedules.forEach(stream => {
+    const statusClass = stream.status === 'live' ? 'bg-green-500/20 text-green-400' : 
+                        stream.recurring_enabled !== false ? 'bg-primary/20 text-primary' : 'bg-gray-500/20 text-gray-400';
+    const statusText = stream.status === 'live' ? 'LIVE' : 
+                       stream.recurring_enabled !== false ? (type === 'once' ? 'Scheduled' : 'Active') : 'Paused';
+    
+    let timeInfo = '';
+    if (type === 'once') {
+      timeInfo = stream.schedule_time ? formatDateTime(stream.schedule_time) : '--';
+    } else if (type === 'daily') {
+      timeInfo = 'Daily at ' + (stream.recurring_time || '--');
+    } else if (type === 'weekly') {
+      const days = Array.isArray(stream.schedule_days) ? stream.schedule_days : [];
+      timeInfo = days.map(d => dayNames[d]).join(', ') + ' at ' + (stream.recurring_time || '--');
+    }
+    
+    html += '<div class="flex items-center justify-between bg-dark-700 rounded-lg p-3 hover:bg-dark-600 transition-colors">' +
+      '<div class="flex items-center gap-3 flex-1 min-w-0">' +
+        '<div class="w-10 h-10 bg-dark-600 rounded-lg flex items-center justify-center flex-shrink-0">' +
+          '<i class="ti ti-brand-' + getPlatformIcon(stream.platform) + ' text-' + getPlatformColor(stream.platform) + ' text-lg"></i>' +
+        '</div>' +
+        '<div class="min-w-0">' +
+          '<div class="font-medium text-sm truncate text-white">' + escapeHtml(stream.title) + '</div>' +
+          '<div class="text-xs text-gray-400 truncate">' + timeInfo + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="flex items-center gap-2 flex-shrink-0">' +
+        '<span class="px-2 py-1 text-xs rounded-full ' + statusClass + '">' + statusText + '</span>' +
+        '<button onclick="openScheduleEditModal(\'' + stream.id + '\')" class="w-8 h-8 flex items-center justify-center bg-primary/20 hover:bg-primary text-primary hover:text-white rounded-lg transition-all" title="Edit Schedule">' +
+          '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>' +
+        '</button>' +
+      '</div>' +
+    '</div>';
+  });
+  
+  content.innerHTML = html;
+}
+
+function formatDateTime(dateStr) {
+  if (!dateStr) return '--';
+  const date = new Date(dateStr);
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + 
+         date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+}
+
+function getPlatformIcon(platform) {
+  const icons = { youtube: 'youtube', facebook: 'facebook', twitch: 'twitch', tiktok: 'tiktok' };
+  return icons[platform?.toLowerCase()] || 'broadcast';
+}
+
+function getPlatformColor(platform) {
+  const colors = { youtube: 'red-500', facebook: 'blue-500', twitch: 'purple-500', tiktok: 'pink-500' };
+  return colors[platform?.toLowerCase()] || 'gray-400';
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text || '';
+  return div.innerHTML;
+}
+
+async function openScheduleEditModal(streamId) {
+  try {
+    const response = await fetch('/api/streams/' + streamId);
+    const result = await response.json();
+    
+    if (result.success && result.stream) {
+      currentScheduleEditStream = result.stream;
+      const stream = result.stream;
+      
+      document.getElementById('scheduleEditStreamId').value = streamId;
+      document.getElementById('scheduleEditType').value = stream.schedule_type;
+      document.getElementById('scheduleEditTitle').value = stream.title || '';
+      
+      // Hide all settings first
+      document.getElementById('scheduleEditOnceSettings').classList.add('hidden');
+      document.getElementById('scheduleEditRecurringSettings').classList.add('hidden');
+      document.getElementById('scheduleEditWeeklyDays').classList.add('hidden');
+      
+      if (stream.schedule_type === 'once') {
+        document.getElementById('scheduleEditOnceSettings').classList.remove('hidden');
+        if (stream.schedule_time) {
+          document.getElementById('scheduleEditStartTime').value = new Date(stream.schedule_time).toISOString().slice(0, 16);
+        }
+        if (stream.end_time) {
+          document.getElementById('scheduleEditEndTime').value = new Date(stream.end_time).toISOString().slice(0, 16);
+        }
+      } else {
+        document.getElementById('scheduleEditRecurringSettings').classList.remove('hidden');
+        document.getElementById('scheduleEditRecurringTime').value = stream.recurring_time || '';
+        document.getElementById('scheduleEditRecurringEnabled').checked = stream.recurring_enabled !== false;
+        
+        if (stream.schedule_type === 'weekly') {
+          document.getElementById('scheduleEditWeeklyDays').classList.remove('hidden');
+          scheduleEditSelectedDays = Array.isArray(stream.schedule_days) ? [...stream.schedule_days] : [];
+          updateScheduleEditDayButtons();
+        }
+      }
+      
+      // Duration
+      const totalMinutes = stream.stream_duration_minutes || 0;
+      document.getElementById('scheduleEditDurationHours').value = Math.floor(totalMinutes / 60) || '';
+      document.getElementById('scheduleEditDurationMinutes').value = totalMinutes % 60 || '';
+      
+      document.getElementById('scheduleEditModal').classList.remove('hidden');
+    } else {
+      showToast('error', 'Failed to load stream data');
+    }
+  } catch (error) {
+    console.error('Error loading stream:', error);
+    showToast('error', 'Failed to load stream');
+  }
+}
+
+function closeScheduleEditModal() {
+  document.getElementById('scheduleEditModal').classList.add('hidden');
+  currentScheduleEditStream = null;
+  scheduleEditSelectedDays = [];
+}
+
+function toggleScheduleEditDay(day) {
+  const index = scheduleEditSelectedDays.indexOf(day);
+  if (index > -1) {
+    scheduleEditSelectedDays.splice(index, 1);
+  } else {
+    scheduleEditSelectedDays.push(day);
+  }
+  updateScheduleEditDayButtons();
+}
+
+function updateScheduleEditDayButtons() {
+  document.querySelectorAll('.schedule-edit-day-btn').forEach(btn => {
+    const day = parseInt(btn.getAttribute('data-day'));
+    if (scheduleEditSelectedDays.includes(day)) {
+      btn.classList.add('border-primary', 'bg-primary', 'text-white');
+      btn.classList.remove('border-gray-600', 'bg-dark-700', 'text-gray-300');
+    } else {
+      btn.classList.remove('border-primary', 'bg-primary', 'text-white');
+      btn.classList.add('border-gray-600', 'bg-dark-700', 'text-gray-300');
+    }
+  });
+}
+
+async function saveScheduleEdit() {
+  const streamId = document.getElementById('scheduleEditStreamId').value;
+  if (!streamId || !currentScheduleEditStream) return;
+  
+  const updateData = {
+    title: document.getElementById('scheduleEditTitle').value
+  };
+  
+  const hours = parseInt(document.getElementById('scheduleEditDurationHours').value) || 0;
+  const minutes = parseInt(document.getElementById('scheduleEditDurationMinutes').value) || 0;
+  updateData.stream_duration_minutes = hours * 60 + minutes;
+  
+  if (currentScheduleEditStream.schedule_type === 'once') {
+    const startTime = document.getElementById('scheduleEditStartTime').value;
+    const endTime = document.getElementById('scheduleEditEndTime').value;
+    if (startTime) updateData.schedule_time = new Date(startTime).toISOString();
+    if (endTime) updateData.end_time = new Date(endTime).toISOString();
+  } else {
+    updateData.recurring_time = document.getElementById('scheduleEditRecurringTime').value;
+    updateData.recurring_enabled = document.getElementById('scheduleEditRecurringEnabled').checked;
+    
+    if (currentScheduleEditStream.schedule_type === 'weekly') {
+      updateData.schedule_days = JSON.stringify(scheduleEditSelectedDays);
+    }
+  }
+  
+  try {
+    const response = await fetch('/api/streams/' + streamId, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updateData)
+    });
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      showToast('success', 'Schedule updated');
+      closeScheduleEditModal();
+      loadSchedules(currentScheduleType);
+    } else {
+      showToast('error', result.error || 'Failed to update');
+    }
+  } catch (error) {
+    console.error('Error updating schedule:', error);
+    showToast('error', 'Failed to update schedule');
+  }
+}
+
+// Close modals on outside click
+document.getElementById('scheduleModal')?.addEventListener('click', function(e) {
+  if (e.target === this) closeScheduleModal();
+});
+document.getElementById('scheduleEditModal')?.addEventListener('click', function(e) {
+  if (e.target === this) closeScheduleEditModal();
+});
+
 // Backup/Import Functions
 function toggleBackupDropdown() {
   // Toggle both desktop and mobile menus
   const menuDesktop = document.getElementById('backupDropdownMenu');
   const menuMobile = document.getElementById('backupDropdownMenuMobile');
+  
+  // Close schedule dropdown if open
+  const scheduleMenuDesktop = document.getElementById('scheduleDropdownMenu');
+  const scheduleMenuMobile = document.getElementById('scheduleDropdownMenuMobile');
+  if (scheduleMenuDesktop) scheduleMenuDesktop.classList.add('hidden');
+  if (scheduleMenuMobile) scheduleMenuMobile.classList.add('hidden');
   
   if (menuDesktop) menuDesktop.classList.toggle('hidden');
   if (menuMobile) menuMobile.classList.toggle('hidden');
@@ -1113,6 +2107,7 @@ function toggleBackupDropdown() {
 
 // Close dropdown when clicking outside
 document.addEventListener('click', function(e) {
+  // Backup dropdown
   const dropdownDesktop = document.getElementById('backupDropdown');
   const dropdownMobile = document.getElementById('backupDropdownMobile');
   const menuDesktop = document.getElementById('backupDropdownMenu');
@@ -1124,6 +2119,20 @@ document.addEventListener('click', function(e) {
   if (!clickedInsideDesktop && !clickedInsideMobile) {
     if (menuDesktop) menuDesktop.classList.add('hidden');
     if (menuMobile) menuMobile.classList.add('hidden');
+  }
+  
+  // Schedule dropdown
+  const scheduleDropdownDesktop = document.getElementById('scheduleDropdown');
+  const scheduleDropdownMobile = document.getElementById('scheduleDropdownMobile');
+  const scheduleMenuDesktop = document.getElementById('scheduleDropdownMenu');
+  const scheduleMenuMobile = document.getElementById('scheduleDropdownMenuMobile');
+  
+  const clickedInsideScheduleDesktop = scheduleDropdownDesktop && scheduleDropdownDesktop.contains(e.target);
+  const clickedInsideScheduleMobile = scheduleDropdownMobile && scheduleDropdownMobile.contains(e.target);
+  
+  if (!clickedInsideScheduleDesktop && !clickedInsideScheduleMobile) {
+    if (scheduleMenuDesktop) scheduleMenuDesktop.classList.add('hidden');
+    if (scheduleMenuMobile) scheduleMenuMobile.classList.add('hidden');
   }
 });
 
@@ -1327,6 +2336,110 @@ async function deleteAllStreams() {
 // END FILTER & DELETE ALL FUNCTIONS
 // ============================================
 
+// ============================================
+// FORM SUBMISSION HANDLER
+// ============================================
+
+// Initialize form submission handler
+document.addEventListener('DOMContentLoaded', function() {
+  const form = document.getElementById('newStreamForm');
+  if (form && !form.dataset.handlerAttached) {
+    form.dataset.handlerAttached = 'true';
+    form.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      
+      const editId = form.dataset.editId;
+      const isEdit = !!editId;
+      
+      // Validate video selection
+      if (!window.selectedVideoData && !document.getElementById('selectedVideoId').value) {
+        const videoSelector = document.querySelector('[onclick="toggleVideoSelector()"]');
+        if (videoSelector) {
+          videoSelector.classList.add('border-red-500');
+          videoSelector.classList.remove('border-gray-600');
+        }
+        showToast('error', 'Please select a video');
+        return;
+      }
+      
+      // Get form data
+      const formData = new FormData(form);
+      const scheduleType = formData.get('scheduleType') || 'once';
+      
+      const data = {
+        videoId: window.selectedVideoData ? window.selectedVideoData.id : document.getElementById('selectedVideoId').value,
+        audioId: window.selectedAudioData ? window.selectedAudioData.id : (document.getElementById('selectedAudioId').value || null),
+        streamTitle: formData.get('streamTitle'),
+        rtmpUrl: formData.get('rtmpUrl') || 'rtmp://a.rtmp.youtube.com/live2',
+        streamKey: formData.get('streamKey'),
+        loopVideo: formData.get('loopVideo') === 'on',
+        streamDurationHours: formData.get('streamDurationHours') || 0,
+        streamDurationMinutes: formData.get('streamDurationMinutes') || 0,
+        scheduleStartTime: formData.get('scheduleStartTime') || null,
+        scheduleEndTime: formData.get('scheduleEndTime') || null,
+        scheduleType: scheduleType,
+        recurringTime: formData.get('recurringTime') || null,
+        scheduleDays: scheduleType === 'weekly' ? (formData.get('scheduleDays') || '[]') : null,
+        recurringEnabled: formData.get('recurringEnabled') === 'on'
+      };
+      
+      try {
+        const url = isEdit ? `/api/streams/${editId}` : '/api/streams';
+        const method = isEdit ? 'PUT' : 'POST';
+        
+        const response = await fetch(url, {
+          method: method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          closeNewStreamModal();
+          showToast('success', isEdit ? 'Stream updated!' : 'Stream created!');
+          
+          // Reset edit mode
+          delete form.dataset.editId;
+          document.querySelector('#newStreamModal h3').textContent = 'Create New Stream';
+          document.querySelector('button[type="submit"][form="newStreamForm"]').textContent = 'Create Stream';
+          
+          // Reset form
+          form.reset();
+          window.selectedVideoData = null;
+          window.selectedAudioData = null;
+          window.selectedDays = [];
+          document.getElementById('selectedVideo').textContent = 'Choose a video...';
+          document.getElementById('selectedVideoId').value = '';
+          document.getElementById('selectedAudio').textContent = 'No audio selected';
+          document.getElementById('selectedAudioId').value = '';
+          document.getElementById('clearAudioBtn').classList.add('hidden');
+          document.getElementById('scheduleDays').value = '[]';
+          
+          // Reset day buttons
+          document.querySelectorAll('.day-btn').forEach(btn => {
+            btn.classList.remove('border-primary', 'bg-primary', 'text-white');
+            btn.classList.add('border-gray-600', 'bg-dark-700', 'text-gray-300');
+          });
+          
+          // Reset schedule type to once
+          window.setScheduleType('once');
+          
+          // Reload streams list
+          if (typeof window.loadStreams === 'function') {
+            window.loadStreams();
+          }
+        } else {
+          showToast('error', result.error || 'Failed to save stream');
+        }
+      } catch (error) {
+        console.error('Error saving stream:', error);
+        showToast('error', 'Failed to save stream. Please try again.');
+      }
+    });
+  }
+});
+
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
   loadStreams();
@@ -1371,4 +2484,46 @@ function updateRealtimeClock() {
   document.getElementById('realtime-clock-mobile').textContent = timeStr + ' WIB';
   document.getElementById('realtime-date-mobile').textContent = dateStr;
 }
+
+// Reset all streams to original imported settings
+async function resetAllStreamSettings() {
+  // Close dropdown first
+  document.getElementById('backupDropdownMenu')?.classList.add('hidden');
+  document.getElementById('backupDropdownMenuMobile')?.classList.add('hidden');
+  
+  const confirmMsg = 'Reset all streams to original imported settings?\n\n' +
+    'Settings yang akan di-reset:\n' +
+    '• Schedule time\n' +
+    '• Recurring time\n' +
+    '• Duration\n' +
+    '• Schedule type (once/daily/weekly)\n' +
+    '• Schedule days\n' +
+    '• Recurring enabled\n\n' +
+    'Stream yang tidak di-import dari backup akan dilewati.';
+  
+  if (!confirm(confirmMsg)) return;
+  
+  try {
+    const response = await fetch('/api/streams/reset-all', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': '<%= locals.csrfToken %>'
+      }
+    });
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      await loadStreams();
+      showCenterToast('success', `Reset ${result.resetCount} stream(s). ${result.skippedCount} skipped.`);
+    } else {
+      showCenterToast('error', result.error || 'Failed to reset streams');
+    }
+  } catch (error) {
+    console.error('Error resetting streams:', error);
+    showCenterToast('error', 'Failed to reset streams');
+  }
+}
+
 </script>

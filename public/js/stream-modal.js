@@ -12,18 +12,28 @@ let isStreamKeyValid = true;
 let currentPlatform = 'YouTube';
 function openNewStreamModal() {
   const modal = document.getElementById('newStreamModal');
+  if (!modal) {
+    console.error('newStreamModal not found');
+    return;
+  }
   document.body.style.overflow = 'hidden';
   modal.classList.remove('hidden');
-  requestAnimationFrame(() => {
-    modal.classList.add('active');
-  });
+  // Force reflow before adding active class
+  modal.offsetHeight;
+  modal.classList.add('active');
   loadGalleryVideos();
 }
 function closeNewStreamModal() {
   const modal = document.getElementById('newStreamModal');
+  if (!modal) {
+    console.error('newStreamModal not found');
+    return;
+  }
   document.body.style.overflow = 'auto';
   modal.classList.remove('active');
-  resetModalForm();
+  if (typeof resetModalForm === 'function') {
+    resetModalForm();
+  }
   setTimeout(() => {
     modal.classList.add('hidden');
   }, 200);
@@ -351,6 +361,10 @@ function resetModalForm() {
   if (modalTitle) modalTitle.textContent = 'Create New Stream';
   if (submitBtn) submitBtn.textContent = 'Create Stream';
   
+  // Reset template selector
+  const templateSelector = document.getElementById('templateSelector');
+  if (templateSelector) templateSelector.value = '';
+  
   // Reset video selection
   const selectedVideoEl = document.getElementById('selectedVideo');
   const selectedVideoIdEl = document.getElementById('selectedVideoId');
@@ -365,9 +379,11 @@ function resetModalForm() {
   if (selectedAudioIdEl) selectedAudioIdEl.value = '';
   if (clearAudioBtn) clearAudioBtn.classList.add('hidden');
   
-  // Reset duration
-  const durationInput = document.getElementById('streamDuration');
-  if (durationInput) durationInput.value = '';
+  // Reset duration (hours and minutes)
+  const durationHoursInput = document.getElementById('streamDurationHours');
+  const durationMinutesInput = document.getElementById('streamDurationMinutes');
+  if (durationHoursInput) durationHoursInput.value = '';
+  if (durationMinutesInput) durationMinutesInput.value = '';
   
   // Reset preview
   const desktopEmptyPreview = document.getElementById('emptyPreview');
@@ -620,7 +636,9 @@ document.addEventListener('DOMContentLoaded', function() {
         rtmpUrl: formData.get('rtmpUrl') || 'rtmp://a.rtmp.youtube.com/live2',
         streamKey: formData.get('streamKey'),
         loopVideo: formData.get('loopVideo') === 'on',
-        streamDuration: formData.get('streamDuration') || null,
+        // Duration in hours and minutes (new format)
+        streamDurationHours: formData.get('streamDurationHours') || 0,
+        streamDurationMinutes: formData.get('streamDurationMinutes') || 0,
         scheduleStartTime: formData.get('scheduleStartTime') || null,
         scheduleEndTime: formData.get('scheduleEndTime') || null,
         // Recurring schedule fields

@@ -1,0 +1,306 @@
+<% layout('layout') -%>
+
+<div class="max-w-6xl mx-auto">
+  <!-- Page Header -->
+  <div class="flex items-center justify-between mb-6">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 bg-red-500/20 rounded-lg flex items-center justify-center">
+        <i class="ti ti-brand-youtube text-red-500 text-xl"></i>
+      </div>
+      <div>
+        <h1 class="text-2xl font-bold">YouTube Sync</h1>
+        <p class="text-sm text-gray-400">Create scheduled broadcasts directly to YouTube</p>
+      </div>
+    </div>
+  </div>
+
+  <% if (!credentials) { %>
+  <!-- Credentials Form (Not Connected) -->
+  <div class="bg-gray-800 rounded-lg p-6 shadow-md">
+    <div class="flex items-center gap-3 mb-6">
+      <i class="ti ti-key text-primary text-2xl"></i>
+      <div>
+        <h2 class="text-lg font-semibold">Connect YouTube Account</h2>
+        <p class="text-sm text-gray-400">Enter your API credentials to get started</p>
+      </div>
+    </div>
+    
+    <form id="credentialsForm" class="space-y-4">
+      <div>
+        <label class="text-sm font-medium text-white block mb-2">Client ID <span class="text-red-400">*</span></label>
+        <input type="text" id="clientId" name="clientId" required
+          class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none"
+          placeholder="Enter your Google Client ID">
+      </div>
+      
+      <div>
+        <label class="text-sm font-medium text-white block mb-2">Client Secret <span class="text-red-400">*</span></label>
+        <input type="password" id="clientSecret" name="clientSecret" required
+          class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none"
+          placeholder="Enter your Google Client Secret">
+      </div>
+      
+      <div>
+        <label class="text-sm font-medium text-white block mb-2">Refresh Token <span class="text-red-400">*</span></label>
+        <textarea id="refreshToken" name="refreshToken" required rows="3"
+          class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none resize-none"
+          placeholder="Enter your Refresh Token"></textarea>
+      </div>
+      
+      <div class="bg-dark-700 rounded-lg p-4 border border-gray-600">
+        <p class="text-sm text-gray-400">
+          <i class="ti ti-info-circle text-primary mr-1"></i>
+          Get your credentials from <a href="https://console.cloud.google.com/apis/credentials" target="_blank" class="text-primary hover:underline">Google Cloud Console</a>. 
+          Make sure to enable YouTube Data API v3.
+        </p>
+      </div>
+      
+      <button type="submit" id="connectBtn"
+        class="w-full bg-red-500 hover:bg-red-600 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2">
+        <i class="ti ti-brand-youtube"></i>
+        <span>Connect YouTube Account</span>
+      </button>
+    </form>
+  </div>
+  
+  <% } else { %>
+  <!-- Connected Account -->
+  <div class="bg-gray-800 rounded-lg p-6 shadow-md mb-6">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-4">
+        <div class="w-12 h-12 bg-red-500/20 rounded-full flex items-center justify-center">
+          <i class="ti ti-brand-youtube text-red-500 text-2xl"></i>
+        </div>
+        <div>
+          <h2 class="text-lg font-semibold"><%= credentials.channelName || 'YouTube Channel' %></h2>
+          <p class="text-sm text-gray-400">Connected</p>
+        </div>
+      </div>
+      <button onclick="disconnectYouTube()" 
+        class="bg-dark-700 hover:bg-dark-600 text-gray-300 px-4 py-2 rounded-lg text-sm transition-colors flex items-center gap-2">
+        <i class="ti ti-unlink"></i>
+        <span>Disconnect</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Create Broadcast Button -->
+  <div class="flex items-center justify-between mb-6">
+    <h2 class="text-xl font-semibold">Scheduled Broadcasts</h2>
+    <button onclick="openCreateBroadcastModal()"
+      class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
+      <i class="ti ti-plus"></i>
+      <span>Create Broadcast</span>
+    </button>
+  </div>
+
+  <!-- Broadcasts List -->
+  <% if (broadcasts && broadcasts.length > 0) { %>
+  <div class="grid gap-4">
+    <% broadcasts.forEach(function(broadcast) { %>
+    <div class="bg-gray-800 rounded-lg p-4 shadow-md">
+      <div class="flex flex-col md:flex-row gap-4">
+        <!-- Thumbnail -->
+        <div class="w-full md:w-48 h-28 bg-dark-700 rounded-lg overflow-hidden flex-shrink-0 relative group">
+          <% if (broadcast.thumbnailUrl) { %>
+          <img src="<%= broadcast.thumbnailUrl %>" alt="<%= broadcast.title %>" class="w-full h-full object-cover">
+          <% } else { %>
+          <div class="w-full h-full flex items-center justify-center">
+            <i class="ti ti-photo text-gray-500 text-3xl"></i>
+          </div>
+          <% } %>
+          <button onclick="changeThumbnail('<%= broadcast.id %>')"
+            class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+            <span class="text-white text-sm"><i class="ti ti-camera mr-1"></i>Change</span>
+          </button>
+        </div>
+        
+        <!-- Info -->
+        <div class="flex-1 min-w-0">
+          <div class="flex items-start justify-between gap-2">
+            <h3 class="font-semibold text-lg truncate"><%= broadcast.title %></h3>
+            <span class="px-2 py-1 rounded text-xs font-medium flex-shrink-0
+              <%= broadcast.privacyStatus === 'public' ? 'bg-green-500/20 text-green-400' : 
+                  broadcast.privacyStatus === 'unlisted' ? 'bg-yellow-500/20 text-yellow-400' : 
+                  'bg-gray-500/20 text-gray-400' %>">
+              <%= broadcast.privacyStatus %>
+            </span>
+          </div>
+          
+          <div class="flex items-center gap-4 mt-2 text-sm text-gray-400">
+            <span class="flex items-center gap-1">
+              <i class="ti ti-calendar"></i>
+              <%= new Date(broadcast.scheduledStartTime).toLocaleDateString('en-US', { 
+                weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' 
+              }) %>
+            </span>
+            <span class="flex items-center gap-1">
+              <i class="ti ti-clock"></i>
+              <%= new Date(broadcast.scheduledStartTime).toLocaleTimeString('en-US', { 
+                hour: '2-digit', minute: '2-digit', hour12: false 
+              }) %>
+            </span>
+          </div>
+          
+          <!-- Stream Key -->
+          <div class="mt-3 flex items-center gap-2">
+            <div class="flex-1 bg-dark-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-300 truncate">
+              <%= broadcast.streamKey || 'No stream key' %>
+            </div>
+            <button onclick="copyStreamKey('<%= broadcast.streamKey %>')"
+              class="bg-dark-700 hover:bg-dark-600 px-3 py-2 rounded-lg transition-colors" title="Copy Stream Key">
+              <i class="ti ti-copy"></i>
+            </button>
+          </div>
+        </div>
+        
+        <!-- Actions -->
+        <div class="flex md:flex-col gap-2 flex-shrink-0">
+          <button onclick="deleteBroadcast('<%= broadcast.id %>', '<%= broadcast.title.replace(/'/g, "\\'") %>')"
+            class="flex-1 md:flex-none bg-red-500/10 hover:bg-red-500/20 text-red-400 px-4 py-2 rounded-lg transition-colors flex items-center justify-center gap-2">
+            <i class="ti ti-trash"></i>
+            <span class="md:hidden">Delete</span>
+          </button>
+        </div>
+      </div>
+    </div>
+    <% }); %>
+  </div>
+  <% } else { %>
+  <!-- Empty State -->
+  <div class="bg-gray-800 rounded-lg p-10 text-center">
+    <div class="w-16 h-16 bg-dark-700 rounded-full flex items-center justify-center mx-auto mb-4">
+      <i class="ti ti-broadcast text-gray-500 text-2xl"></i>
+    </div>
+    <p class="text-gray-400 font-medium mb-2">No scheduled broadcasts</p>
+    <p class="text-gray-500 text-sm mb-4">Create your first broadcast to get started</p>
+    <button onclick="openCreateBroadcastModal()"
+      class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors inline-flex items-center gap-2">
+      <i class="ti ti-plus"></i>
+      <span>Create Broadcast</span>
+    </button>
+  </div>
+  <% } %>
+  <% } %>
+</div>
+
+<!-- Create Broadcast Modal -->
+<div id="createBroadcastModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto">
+  <div class="flex min-h-screen items-center justify-center p-4">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-lg">
+      <div class="flex items-center justify-between p-6 border-b border-gray-700">
+        <h3 class="text-lg font-semibold">Create Broadcast</h3>
+        <button onclick="closeCreateBroadcastModal()" class="text-gray-400 hover:text-white">
+          <i class="ti ti-x text-xl"></i>
+        </button>
+      </div>
+      
+      <form id="createBroadcastForm" class="p-6 space-y-4">
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Title <span class="text-red-400">*</span></label>
+          <input type="text" id="broadcastTitle" name="title" required
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none"
+            placeholder="Enter broadcast title">
+        </div>
+        
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Description</label>
+          <textarea id="broadcastDescription" name="description" rows="3"
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none resize-none"
+            placeholder="Enter broadcast description (optional)"></textarea>
+        </div>
+        
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Scheduled Start Time <span class="text-red-400">*</span></label>
+          <input type="datetime-local" id="scheduledStartTime" name="scheduledStartTime" required
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none [color-scheme:dark]">
+          <p class="text-xs text-gray-500 mt-1">Must be at least 10 minutes in the future</p>
+        </div>
+        
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Privacy Status</label>
+          <select id="privacyStatus" name="privacyStatus"
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none">
+            <option value="unlisted">Unlisted</option>
+            <option value="public">Public</option>
+            <option value="private">Private</option>
+          </select>
+        </div>
+        
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Thumbnail</label>
+          <div class="flex items-center gap-4">
+            <div id="thumbnailPreview" class="w-32 h-20 bg-dark-700 rounded-lg overflow-hidden flex items-center justify-center">
+              <i class="ti ti-photo text-gray-500 text-2xl"></i>
+            </div>
+            <div class="flex-1">
+              <input type="file" id="thumbnailFile" name="thumbnail" accept="image/jpeg,image/png"
+                class="hidden" onchange="previewThumbnail(this)">
+              <button type="button" onclick="document.getElementById('thumbnailFile').click()"
+                class="bg-dark-700 hover:bg-dark-600 text-white px-4 py-2 rounded-lg transition-colors text-sm">
+                <i class="ti ti-upload mr-1"></i> Choose Image
+              </button>
+              <p class="text-xs text-gray-500 mt-1">JPG or PNG, max 2MB</p>
+            </div>
+          </div>
+        </div>
+        
+        <div class="pt-4 flex gap-3">
+          <button type="button" onclick="closeCreateBroadcastModal()"
+            class="flex-1 bg-dark-700 hover:bg-dark-600 text-white px-4 py-2.5 rounded-lg transition-colors">
+            Cancel
+          </button>
+          <button type="submit" id="createBroadcastBtn"
+            class="flex-1 bg-red-500 hover:bg-red-600 text-white px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
+            <i class="ti ti-broadcast"></i>
+            <span>Create Broadcast</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Change Thumbnail Modal -->
+<div id="changeThumbnailModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay">
+  <div class="flex min-h-screen items-center justify-center p-4">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-md">
+      <div class="flex items-center justify-between p-6 border-b border-gray-700">
+        <h3 class="text-lg font-semibold">Change Thumbnail</h3>
+        <button onclick="closeChangeThumbnailModal()" class="text-gray-400 hover:text-white">
+          <i class="ti ti-x text-xl"></i>
+        </button>
+      </div>
+      
+      <form id="changeThumbnailForm" class="p-6 space-y-4">
+        <input type="hidden" id="changeThumbnailBroadcastId">
+        
+        <div>
+          <div id="newThumbnailPreview" class="w-full h-40 bg-dark-700 rounded-lg overflow-hidden flex items-center justify-center mb-4">
+            <i class="ti ti-photo text-gray-500 text-3xl"></i>
+          </div>
+          <input type="file" id="newThumbnailFile" name="thumbnail" accept="image/jpeg,image/png" required
+            class="hidden" onchange="previewNewThumbnail(this)">
+          <button type="button" onclick="document.getElementById('newThumbnailFile').click()"
+            class="w-full bg-dark-700 hover:bg-dark-600 text-white px-4 py-2.5 rounded-lg transition-colors">
+            <i class="ti ti-upload mr-1"></i> Choose New Thumbnail
+          </button>
+          <p class="text-xs text-gray-500 mt-2 text-center">JPG or PNG, max 2MB</p>
+        </div>
+        
+        <div class="pt-2 flex gap-3">
+          <button type="button" onclick="closeChangeThumbnailModal()"
+            class="flex-1 bg-dark-700 hover:bg-dark-600 text-white px-4 py-2.5 rounded-lg transition-colors">
+            Cancel
+          </button>
+          <button type="submit" id="uploadThumbnailBtn"
+            class="flex-1 bg-red-500 hover:bg-red-600 text-white px-4 py-2.5 rounded-lg transition-colors">
+            Upload Thumbnail
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script src="/js/youtube.js"></script>

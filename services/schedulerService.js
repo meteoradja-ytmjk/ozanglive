@@ -38,21 +38,27 @@ async function checkScheduledStreams() {
     }
     const now = new Date();
     const lookAheadTime = new Date(now.getTime() + SCHEDULE_LOOKAHEAD_SECONDS * 1000);
+    
+    // Log current time for debugging
+    const currentHours = now.getHours();
+    const currentMinutes = now.getMinutes();
+    console.log(`[Scheduler] Checking once schedules at ${currentHours}:${String(currentMinutes).padStart(2, '0')} (range: ${now.toISOString()} to ${lookAheadTime.toISOString()})`);
+    
     const streams = await Stream.findScheduledInRange(now, lookAheadTime);
     if (streams.length > 0) {
-      console.log(`Found ${streams.length} streams to schedule start`);
+      console.log(`[Scheduler] Found ${streams.length} 'once' streams to start`);
       for (const stream of streams) {
-        console.log(`Starting scheduled stream: ${stream.id} - ${stream.title}`);
+        console.log(`[Scheduler] Starting scheduled stream: ${stream.id} - ${stream.title} (scheduled: ${stream.schedule_time})`);
         const result = await streamingService.startStream(stream.id);
         if (result.success) {
-          console.log(`Successfully started scheduled stream: ${stream.id}`);
+          console.log(`[Scheduler] Successfully started scheduled stream: ${stream.id}`);
         } else {
-          console.error(`Failed to start scheduled stream ${stream.id}: ${result.error}`);
+          console.error(`[Scheduler] Failed to start scheduled stream ${stream.id}: ${result.error}`);
         }
       }
     }
   } catch (error) {
-    console.error('Error checking scheduled streams:', error);
+    console.error('[Scheduler] Error checking scheduled streams:', error);
   }
 }
 async function checkStreamDurations() {
@@ -64,24 +70,40 @@ async function checkStreamDurations() {
     const liveStreams = await Stream.findAll(null, 'live');
     const now = new Date();
     
+    if (liveStreams.length > 0) {
+      console.log(`[Scheduler] Checking durations for ${liveStreams.length} live streams`);
+    }
+    
     for (const stream of liveStreams) {
       let shouldEndAt = null;
 
-      // Check duration-based end time (stream_duration_hours or duration in minutes)
+      // Check duration-based end time (stream_duration_minutes is the primary field)
       if (stream.start_time) {
-        if (stream.stream_duration_hours && stream.stream_duration_hours > 0) {
-          // Duration in hours (from duration dropdown)
+        // First check stream_duration_minutes (new format - in minutes)
+        if (stream.stream_duration_minutes && stream.stream_duration_minutes > 0) {
+          const durationMs = stream.stream_duration_minutes * 60 * 1000;
+          const durationEndAt = new Date(new Date(stream.start_time).getTime() + durationMs);
+          shouldEndAt = durationEndAt;
+          console.log(`[Scheduler] Stream ${stream.id} using stream_duration_minutes: ${stream.stream_duration_minutes}min, start=${stream.start_time}, end at ${durationEndAt.toISOString()}`);
+        }
+        // Fallback to stream_duration_hours (old format - in hours, deprecated)
+        else if (stream.stream_duration_hours && stream.stream_duration_hours > 0) {
           const durationMs = stream.stream_duration_hours * 60 * 60 * 1000;
           const durationEndAt = new Date(new Date(stream.start_time).getTime() + durationMs);
           shouldEndAt = durationEndAt;
-          console.log(`[Scheduler] Stream ${stream.id} using stream_duration_hours: ${stream.stream_duration_hours}h, end at ${durationEndAt.toISOString()}`);
-        } else if (stream.duration && stream.duration > 0) {
-          // Duration in minutes (from schedule calculation)
+          console.log(`[Scheduler] Stream ${stream.id} using stream_duration_hours (deprecated): ${stream.stream_duration_hours}h, end at ${durationEndAt.toISOString()}`);
+        }
+        // Fallback to duration field (from schedule calculation)
+        else if (stream.duration && stream.duration > 0) {
           const durationMs = stream.duration * 60 * 1000;
           const durationEndAt = new Date(new Date(stream.start_time).getTime() + durationMs);
           shouldEndAt = durationEndAt;
-          console.log(`[Scheduler] Stream ${stream.id} using duration: ${stream.duration}min, end at ${durationEndAt.toISOString()}`);
+          console.log(`[Scheduler] Stream ${stream.id} using duration field: ${stream.duration}min, end at ${durationEndAt.toISOString()}`);
+        } else {
+          console.log(`[Scheduler] Stream ${stream.id} has no duration set (stream_duration_minutes=${stream.stream_duration_minutes}, duration=${stream.duration})`);
         }
+      } else {
+        console.log(`[Scheduler] Stream ${stream.id} has no start_time set`);
       }
 
       // Check schedule end time (for 'once' schedule type)
@@ -193,6 +215,32 @@ function handleStreamStopped(streamId) {
 }
 
 /**
+ * Get current time in Asia/Jakarta timezone (WIB)
+ * @param {Date} date - Date object to convert
+ * @returns {Object} Object with hours, minutes, day
+ */
+function getWIBTime(date = new Date()) {
+  // Convert to WIB (UTC+7)
+  const wibOffset = 7 * 60; // 7 hours in minutes
+  const utcMinutes = date.getUTCHours() * 60 + date.getUTCMinutes();
+  const wibMinutes = (utcMinutes + wibOffset) % (24 * 60);
+  
+  const hours = Math.floor(wibMinutes / 60);
+  const minutes = wibMinutes % 60;
+  
+  // Calculate day in WIB
+  const utcDay = date.getUTCDay();
+  const utcHours = date.getUTCHours();
+  // If UTC time + 7 hours crosses midnight, adjust day
+  let day = utcDay;
+  if (utcHours + 7 >= 24) {
+    day = (utcDay + 1) % 7;
+  }
+  
+  return { hours, minutes, day };
+}
+
+/**
  * Check if a daily schedule should trigger now
  * @param {Object} stream - Stream object with recurring_time
  * @param {Date} currentTime - Current time to check against
@@ -206,9 +254,9 @@ function shouldTriggerDaily(stream, currentTime = new Date()) {
   const [schedHours, schedMinutes] = stream.recurring_time.split(':').map(Number);
   const scheduleMinutes = schedHours * 60 + schedMinutes;
   
-  const currentHours = currentTime.getHours();
-  const currentMinutes = currentTime.getMinutes();
-  const currentTotalMinutes = currentHours * 60 + currentMinutes;
+  // Use WIB time for comparison since user inputs time in WIB
+  const wibTime = getWIBTime(currentTime);
+  const currentTotalMinutes = wibTime.hours * 60 + wibTime.minutes;
 
   // 1-minute tolerance for matching
   return Math.abs(currentTotalMinutes - scheduleMinutes) <= 1;
@@ -231,17 +279,16 @@ function shouldTriggerWeekly(stream, currentTime = new Date()) {
   
   if (scheduleDays.length === 0) return false;
 
-  // Check if current day is in schedule
-  const currentDay = currentTime.getDay();
-  if (!scheduleDays.includes(currentDay)) return false;
+  // Use WIB time for comparison since user inputs time in WIB
+  const wibTime = getWIBTime(currentTime);
+  
+  // Check if current day (in WIB) is in schedule
+  if (!scheduleDays.includes(wibTime.day)) return false;
 
   // Check time match
   const [schedHours, schedMinutes] = stream.recurring_time.split(':').map(Number);
   const scheduleMinutes = schedHours * 60 + schedMinutes;
-  
-  const currentHours = currentTime.getHours();
-  const currentMinutes = currentTime.getMinutes();
-  const currentTotalMinutes = currentHours * 60 + currentMinutes;
+  const currentTotalMinutes = wibTime.hours * 60 + wibTime.minutes;
 
   // 1-minute tolerance for matching
   return Math.abs(currentTotalMinutes - scheduleMinutes) <= 1;
@@ -285,24 +332,43 @@ async function checkRecurringSchedules() {
     }
 
     const now = new Date();
+    const wibTime = getWIBTime(now);
+    const currentHours = wibTime.hours;
+    const currentMinutes = wibTime.minutes;
+    const currentDay = wibTime.day;
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    
     const recurringStreams = await Stream.findRecurringSchedules();
     
-    if (recurringStreams.length === 0) return;
+    if (recurringStreams.length === 0) {
+      // Only log occasionally to avoid spam
+      if (currentMinutes % 5 === 0) {
+        console.log(`[Scheduler] No recurring schedules found at ${currentHours}:${String(currentMinutes).padStart(2, '0')} WIB (${dayNames[currentDay]})`);
+      }
+      return;
+    }
 
-    console.log(`[Scheduler] Checking ${recurringStreams.length} recurring schedules at ${now.toISOString()}`);
+    console.log(`[Scheduler] Checking ${recurringStreams.length} recurring schedules at ${currentHours}:${String(currentMinutes).padStart(2, '0')} WIB (${dayNames[currentDay]}) [UTC: ${now.toISOString()}]`);
 
     for (const stream of recurringStreams) {
+      // Always log stream details for debugging
+      console.log(`[Scheduler] Checking stream: id=${stream.id}, title="${stream.title}", type=${stream.schedule_type}, recurring_time=${stream.recurring_time}, enabled=${stream.recurring_enabled}, status=${stream.status}, days=${JSON.stringify(stream.schedule_days)}`);
+      
       // Skip if not enabled
-      if (!stream.recurring_enabled) continue;
+      if (!stream.recurring_enabled) {
+        console.log(`[Scheduler] SKIP: stream ${stream.id} - recurring_enabled is false`);
+        continue;
+      }
 
       // Skip if recently triggered
       if (wasRecentlyTriggered(stream.id)) {
+        console.log(`[Scheduler] SKIP: stream ${stream.id} - recently triggered (cooldown active)`);
         continue;
       }
 
       // Check if stream is already live
       if (stream.status === 'live') {
-        console.log(`[Scheduler] Skipping recurring stream ${stream.id} - already live`);
+        console.log(`[Scheduler] SKIP: stream ${stream.id} - already live`);
         continue;
       }
 
@@ -310,12 +376,30 @@ async function checkRecurringSchedules() {
 
       if (stream.schedule_type === 'daily') {
         shouldTrigger = shouldTriggerDaily(stream, now);
+        // Always log time comparison for daily
+        if (stream.recurring_time) {
+          const [schedHours, schedMinutes] = stream.recurring_time.split(':').map(Number);
+          const scheduleMinutes = schedHours * 60 + schedMinutes;
+          const currentTotalMinutes = currentHours * 60 + currentMinutes;
+          const timeDiff = Math.abs(currentTotalMinutes - scheduleMinutes);
+          console.log(`[Scheduler] Daily time check: scheduled=${schedHours}:${String(schedMinutes).padStart(2, '0')} WIB (${scheduleMinutes}min), current=${currentHours}:${String(currentMinutes).padStart(2, '0')} WIB (${currentTotalMinutes}min), diff=${timeDiff}min, shouldTrigger=${shouldTrigger}`);
+        }
       } else if (stream.schedule_type === 'weekly') {
         shouldTrigger = shouldTriggerWeekly(stream, now);
+        // Always log time and day comparison for weekly
+        if (stream.recurring_time) {
+          const [schedHours, schedMinutes] = stream.recurring_time.split(':').map(Number);
+          const scheduleMinutes = schedHours * 60 + schedMinutes;
+          const currentTotalMinutes = currentHours * 60 + currentMinutes;
+          const timeDiff = Math.abs(currentTotalMinutes - scheduleMinutes);
+          const scheduleDays = Array.isArray(stream.schedule_days) ? stream.schedule_days : [];
+          const dayMatch = scheduleDays.includes(currentDay);
+          console.log(`[Scheduler] Weekly time check: scheduled=${schedHours}:${String(schedMinutes).padStart(2, '0')} WIB on days=[${scheduleDays.join(',')}], current=${currentHours}:${String(currentMinutes).padStart(2, '0')} WIB (${dayNames[currentDay]}=${currentDay}), dayMatch=${dayMatch}, timeDiff=${timeDiff}min, shouldTrigger=${shouldTrigger}`);
+        }
       }
 
       if (shouldTrigger) {
-        console.log(`[Scheduler] Triggering recurring stream: ${stream.id} - ${stream.title} (${stream.schedule_type})`);
+        console.log(`[Scheduler] >>> TRIGGERING recurring stream: ${stream.id} - ${stream.title} (${stream.schedule_type})`);
         
         // Mark as triggered to prevent double triggers
         markAsTriggered(stream.id);
@@ -323,12 +407,12 @@ async function checkRecurringSchedules() {
         try {
           const result = await streamingService.startStream(stream.id);
           if (result.success) {
-            console.log(`[Scheduler] Successfully started recurring stream: ${stream.id}`);
+            console.log(`[Scheduler] >>> Successfully started recurring stream: ${stream.id}`);
           } else {
-            console.error(`[Scheduler] Failed to start recurring stream ${stream.id}: ${result.error}`);
+            console.error(`[Scheduler] >>> Failed to start recurring stream ${stream.id}: ${result.error}`);
           }
         } catch (error) {
-          console.error(`[Scheduler] Error starting recurring stream ${stream.id}:`, error);
+          console.error(`[Scheduler] >>> Error starting recurring stream ${stream.id}:`, error);
         }
 
         // Small delay between starting multiple streams

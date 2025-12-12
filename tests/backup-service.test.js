@@ -24,10 +24,19 @@ const {
   importStreams,
   validateBackupFormat,
   validateStreamConfig,
+  determineImportStatus,
   EXPORT_FIELDS,
   REQUIRED_FIELDS,
   EXCLUDED_FIELDS
 } = require('../services/backupService');
+
+// Helper to create valid date arbitrary
+const validDateStringArb = fc.constantFrom(
+  '2024-01-15T10:00:00.000Z',
+  '2024-06-20T14:30:00.000Z',
+  '2025-03-10T08:00:00.000Z',
+  '2025-12-25T18:00:00.000Z'
+);
 
 // Arbitrary generators for stream configurations
 const streamConfigArb = fc.record({
@@ -35,9 +44,9 @@ const streamConfigArb = fc.record({
   user_id: fc.uuid(),
   video_id: fc.option(fc.uuid(), { nil: null }),
   audio_id: fc.option(fc.uuid(), { nil: null }),
-  title: fc.string({ minLength: 1, maxLength: 100 }),
+  title: fc.stringMatching(/^[a-zA-Z0-9][a-zA-Z0-9 ]{0,99}$/),
   rtmp_url: fc.webUrl(),
-  stream_key: fc.string({ minLength: 10, maxLength: 50 }),
+  stream_key: fc.stringMatching(/^[a-zA-Z0-9]{10,50}$/),
   platform: fc.constantFrom('YouTube', 'Facebook', 'Twitch', 'TikTok'),
   platform_icon: fc.constantFrom('youtube', 'facebook', 'twitch', 'tiktok'),
   bitrate: fc.integer({ min: 1000, max: 10000 }),
@@ -47,24 +56,24 @@ const streamConfigArb = fc.record({
   loop_video: fc.boolean(),
   schedule_type: fc.constantFrom('once', 'daily', 'weekly'),
   schedule_days: fc.option(fc.array(fc.integer({ min: 0, max: 6 }), { minLength: 1, maxLength: 7 }), { nil: null }),
-  recurring_time: fc.option(fc.string(), { nil: null }),
+  recurring_time: fc.option(fc.constantFrom('08:00', '12:00', '18:00', '22:00'), { nil: null }),
   recurring_enabled: fc.boolean(),
   stream_duration_hours: fc.option(fc.integer({ min: 1, max: 168 }), { nil: null }),
   status: fc.constantFrom('live', 'offline', 'scheduled'),
-  status_updated_at: fc.date().map(d => d.toISOString()),
-  start_time: fc.option(fc.date().map(d => d.toISOString()), { nil: null }),
-  end_time: fc.option(fc.date().map(d => d.toISOString()), { nil: null }),
-  schedule_time: fc.option(fc.date().map(d => d.toISOString()), { nil: null }),
+  status_updated_at: validDateStringArb,
+  start_time: fc.option(validDateStringArb, { nil: null }),
+  end_time: fc.option(validDateStringArb, { nil: null }),
+  schedule_time: fc.option(validDateStringArb, { nil: null }),
   duration: fc.option(fc.integer({ min: 0, max: 86400 }), { nil: null }),
-  created_at: fc.date().map(d => d.toISOString()),
-  updated_at: fc.date().map(d => d.toISOString())
+  created_at: validDateStringArb,
+  updated_at: validDateStringArb
 });
 
 // Generator for valid export stream config (only export fields)
 const validExportStreamArb = fc.record({
-  title: fc.string({ minLength: 1, maxLength: 100 }),
+  title: fc.stringMatching(/^[a-zA-Z0-9][a-zA-Z0-9 ]{0,99}$/),
   rtmp_url: fc.webUrl(),
-  stream_key: fc.string({ minLength: 10, maxLength: 50 }),
+  stream_key: fc.stringMatching(/^[a-zA-Z0-9]{10,50}$/),
   platform: fc.constantFrom('YouTube', 'Facebook', 'Twitch'),
   platform_icon: fc.constantFrom('youtube', 'facebook', 'twitch'),
   bitrate: fc.integer({ min: 1000, max: 10000 }),
@@ -74,7 +83,7 @@ const validExportStreamArb = fc.record({
   loop_video: fc.boolean(),
   schedule_type: fc.constantFrom('once', 'daily', 'weekly'),
   schedule_days: fc.option(fc.array(fc.integer({ min: 0, max: 6 })), { nil: null }),
-  recurring_time: fc.option(fc.string(), { nil: null }),
+  recurring_time: fc.option(fc.constantFrom('08:00', '12:00', '18:00', '22:00'), { nil: null }),
   recurring_enabled: fc.boolean(),
   stream_duration_hours: fc.option(fc.integer({ min: 1, max: 168 }), { nil: null })
 });
@@ -129,6 +138,82 @@ describe('Backup Service', () => {
           }
         ),
         { numRuns: 20 }
+      );
+    });
+
+    /**
+     * **Feature: backup-import-fix, Property 1: Export Completeness**
+     * **Validates: Requirements 1.1, 1.2, 1.3**
+     */
+    test('Property 1: Export includes all configuration fields with exact values', async () => {
+      // Generator with all fields including new ones
+      const completeStreamArb = fc.record({
+        id: fc.uuid(),
+        user_id: fc.uuid(),
+        video_id: fc.option(fc.uuid(), { nil: null }),
+        audio_id: fc.option(fc.uuid(), { nil: null }),
+        title: fc.string({ minLength: 1, maxLength: 100 }),
+        rtmp_url: fc.webUrl(),
+        stream_key: fc.string({ minLength: 10, maxLength: 50 }),
+        platform: fc.constantFrom('YouTube', 'Facebook', 'Twitch'),
+        platform_icon: fc.constantFrom('youtube', 'facebook', 'twitch'),
+        bitrate: fc.integer({ min: 1000, max: 10000 }),
+        resolution: fc.constantFrom('1920x1080', '1280x720'),
+        fps: fc.constantFrom(30, 60),
+        orientation: fc.constantFrom('horizontal', 'vertical'),
+        loop_video: fc.boolean(),
+        schedule_type: fc.constantFrom('once', 'daily', 'weekly'),
+        schedule_days: fc.option(fc.array(fc.integer({ min: 0, max: 6 }), { minLength: 1, maxLength: 7 }), { nil: null }),
+        schedule_time: fc.option(validDateStringArb, { nil: null }),
+        recurring_time: fc.option(fc.constantFrom('08:00', '12:00', '18:00'), { nil: null }),
+        recurring_enabled: fc.boolean(),
+        stream_duration_hours: fc.option(fc.integer({ min: 1, max: 8 }), { nil: null }),
+        stream_duration_minutes: fc.option(fc.integer({ min: 30, max: 480 }), { nil: null }),
+        status: fc.constantFrom('live', 'offline', 'scheduled'),
+        created_at: validDateStringArb,
+        updated_at: validDateStringArb
+      });
+
+      await fc.assert(
+        fc.asyncProperty(
+          fc.array(completeStreamArb, { minLength: 1, maxLength: 5 }),
+          fc.uuid(),
+          async (streams, userId) => {
+            // Setup mock data
+            mockStreams.length = 0;
+            streams.forEach(s => {
+              mockStreams.push({ ...s, user_id: userId });
+            });
+
+            const result = await exportStreams(userId);
+
+            // Verify each exported stream has all EXPORT_FIELDS with exact values
+            result.streams.forEach((exportedStream, index) => {
+              const originalStream = streams[index];
+              
+              // Check that all export fields are present with exact values
+              EXPORT_FIELDS.forEach(field => {
+                if (originalStream[field] !== undefined) {
+                  // Use toEqual for schedule_days since it's an array
+                  if (field === 'schedule_days') {
+                    expect(exportedStream[field]).toEqual(originalStream[field]);
+                  } else {
+                    expect(exportedStream[field]).toBe(originalStream[field]);
+                  }
+                }
+              });
+              
+              // Specifically verify new fields are included
+              if (originalStream.schedule_time !== undefined) {
+                expect(exportedStream.schedule_time).toBe(originalStream.schedule_time);
+              }
+              if (originalStream.stream_duration_minutes !== undefined) {
+                expect(exportedStream.stream_duration_minutes).toBe(originalStream.stream_duration_minutes);
+              }
+            });
+          }
+        ),
+        { numRuns: 100 }
       );
     });
 
@@ -227,6 +312,72 @@ describe('Backup Service', () => {
       const result = validateStreamConfig(invalidConfig);
       expect(result.valid).toBe(false);
       expect(result.errors).toContain('Missing required field: stream_key');
+    });
+  });
+
+  describe('determineImportStatus', () => {
+    /**
+     * **Feature: backup-import-fix, Property 2: Import Status Determination**
+     * **Validates: Requirements 2.1, 2.2, 4.1, 4.2, 4.3**
+     */
+    test('Property 2: Import status is determined correctly based on schedule configuration', () => {
+      fc.assert(
+        fc.property(
+          fc.record({
+            title: fc.string({ minLength: 1 }),
+            rtmp_url: fc.webUrl(),
+            stream_key: fc.string({ minLength: 10 }),
+            schedule_type: fc.constantFrom('once', 'daily', 'weekly'),
+            schedule_time: fc.option(validDateStringArb, { nil: null }),
+            recurring_time: fc.option(fc.constantFrom('08:00', '12:00', '18:00', '22:00'), { nil: null }),
+            recurring_enabled: fc.boolean()
+          }),
+          (streamConfig) => {
+            const status = determineImportStatus(streamConfig);
+            
+            // Daily or weekly schedules should be 'scheduled'
+            if (streamConfig.schedule_type === 'daily' || streamConfig.schedule_type === 'weekly') {
+              expect(status).toBe('scheduled');
+              return;
+            }
+            
+            // One-time schedule with schedule_time should be 'scheduled'
+            if (streamConfig.schedule_time) {
+              expect(status).toBe('scheduled');
+              return;
+            }
+            
+            // Otherwise should be 'offline'
+            expect(status).toBe('offline');
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+
+    test('daily schedule type returns scheduled status', () => {
+      const config = { schedule_type: 'daily', title: 'Test', rtmp_url: 'rtmp://test', stream_key: 'key123' };
+      expect(determineImportStatus(config)).toBe('scheduled');
+    });
+
+    test('weekly schedule type returns scheduled status', () => {
+      const config = { schedule_type: 'weekly', title: 'Test', rtmp_url: 'rtmp://test', stream_key: 'key123' };
+      expect(determineImportStatus(config)).toBe('scheduled');
+    });
+
+    test('once schedule type with schedule_time returns scheduled status', () => {
+      const config = { schedule_type: 'once', schedule_time: '2025-12-15T10:00:00Z', title: 'Test', rtmp_url: 'rtmp://test', stream_key: 'key123' };
+      expect(determineImportStatus(config)).toBe('scheduled');
+    });
+
+    test('once schedule type without schedule_time returns offline status', () => {
+      const config = { schedule_type: 'once', title: 'Test', rtmp_url: 'rtmp://test', stream_key: 'key123' };
+      expect(determineImportStatus(config)).toBe('offline');
+    });
+
+    test('no schedule_type defaults to offline', () => {
+      const config = { title: 'Test', rtmp_url: 'rtmp://test', stream_key: 'key123' };
+      expect(determineImportStatus(config)).toBe('offline');
     });
   });
 
@@ -331,18 +482,155 @@ describe('Backup Service', () => {
         { numRuns: 20 }
       );
     });
+
+    /**
+     * **Feature: stream-settings-reset, Property 1: Import preserves original settings**
+     * **Validates: Requirements 1.1**
+     */
+    test('Property 1: Import stores original settings for each stream', async () => {
+      await fc.assert(
+        fc.asyncProperty(
+          fc.array(validExportStreamArb, { minLength: 1, maxLength: 5 }),
+          fc.uuid(),
+          async (streams, userId) => {
+            mockCreateCalls = [];
+            
+            const backupData = { streams };
+            await importStreams(backupData, userId);
+
+            // Verify each created stream has original_settings
+            mockCreateCalls.forEach((createdStream, index) => {
+              const original = streams[index];
+              
+              // Verify original_settings exists
+              expect(createdStream.original_settings).toBeDefined();
+              expect(createdStream.original_settings).not.toBeNull();
+              
+              // Verify original_settings contains correct values
+              const originalSettings = createdStream.original_settings;
+              expect(originalSettings.schedule_type).toBe(original.schedule_type);
+              
+              // Empty strings are converted to null for recurring_time
+              const expectedRecurringTime = original.recurring_time || null;
+              expect(originalSettings.recurring_time).toBe(expectedRecurringTime);
+              
+              expect(originalSettings.recurring_enabled).toBe(original.recurring_enabled);
+              expect(originalSettings.schedule_days).toEqual(original.schedule_days);
+              
+              // Handle duration conversion (hours to minutes)
+              const expectedMinutes = original.stream_duration_minutes || 
+                (original.stream_duration_hours ? original.stream_duration_hours * 60 : null);
+              expect(originalSettings.stream_duration_minutes).toBe(expectedMinutes);
+            });
+          }
+        ),
+        { numRuns: 30 }
+      );
+    });
+
+    /**
+     * **Feature: backup-import-fix, Property 3: Import Field Preservation**
+     * **Validates: Requirements 2.3, 2.4, 3.2, 3.3**
+     */
+    test('Property 3: Import preserves all configuration fields correctly', async () => {
+      // Generator with all fields including schedule_time and stream_duration_minutes
+      // Use valid non-whitespace title and stream_key
+      const fullStreamConfigArb = fc.record({
+        title: fc.stringMatching(/^[a-zA-Z0-9][a-zA-Z0-9 ]{0,99}$/),
+        rtmp_url: fc.webUrl(),
+        stream_key: fc.stringMatching(/^[a-zA-Z0-9]{10,50}$/),
+        platform: fc.constantFrom('YouTube', 'Facebook', 'Twitch'),
+        platform_icon: fc.constantFrom('youtube', 'facebook', 'twitch'),
+        bitrate: fc.integer({ min: 1000, max: 10000 }),
+        resolution: fc.constantFrom('1920x1080', '1280x720'),
+        fps: fc.constantFrom(30, 60),
+        orientation: fc.constantFrom('horizontal', 'vertical'),
+        loop_video: fc.boolean(),
+        schedule_type: fc.constantFrom('once', 'daily', 'weekly'),
+        schedule_days: fc.option(fc.array(fc.integer({ min: 0, max: 6 }), { minLength: 1, maxLength: 7 }), { nil: null }),
+        schedule_time: fc.option(validDateStringArb, { nil: null }),
+        recurring_time: fc.option(fc.constantFrom('08:00', '12:00', '18:00', '22:00'), { nil: null }),
+        recurring_enabled: fc.boolean(),
+        stream_duration_minutes: fc.option(fc.integer({ min: 30, max: 480 }), { nil: null }),
+        stream_duration_hours: fc.option(fc.integer({ min: 1, max: 8 }), { nil: null })
+      });
+
+      await fc.assert(
+        fc.asyncProperty(
+          fc.array(fullStreamConfigArb, { minLength: 1, maxLength: 5 }),
+          fc.uuid(),
+          async (streams, userId) => {
+            mockCreateCalls = [];
+            
+            const backupData = { streams };
+            await importStreams(backupData, userId);
+
+            // Verify each created stream has fields preserved
+            mockCreateCalls.forEach((createdStream, index) => {
+              const original = streams[index];
+              
+              // Verify schedule_time is preserved
+              expect(createdStream.schedule_time).toBe(original.schedule_time || null);
+              
+              // Verify schedule_days is preserved
+              expect(createdStream.schedule_days).toEqual(original.schedule_days || null);
+              
+              // Verify recurring_time is preserved
+              expect(createdStream.recurring_time).toBe(original.recurring_time || null);
+              
+              // Verify recurring_enabled is preserved
+              expect(createdStream.recurring_enabled).toBe(original.recurring_enabled !== false);
+              
+              // Verify stream_duration_minutes is correctly handled
+              const expectedMinutes = original.stream_duration_minutes || 
+                (original.stream_duration_hours ? original.stream_duration_hours * 60 : null);
+              expect(createdStream.stream_duration_minutes).toBe(expectedMinutes);
+              
+              // Verify status is determined correctly
+              const expectedStatus = (original.schedule_type === 'daily' || original.schedule_type === 'weekly' || original.schedule_time) 
+                ? 'scheduled' 
+                : 'offline';
+              expect(createdStream.status).toBe(expectedStatus);
+            });
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
   });
 
 
   /**
-   * **Feature: stream-settings-backup, Property 6: Round-trip consistency**
-   * **Validates: Requirements 1.1, 1.2, 2.3**
+   * **Feature: backup-import-fix, Property 4: Round-trip Consistency**
+   * **Validates: Requirements 3.1**
    */
   describe('Round-trip', () => {
-    test('Property 6: Export then import produces equivalent stream configurations', async () => {
+    test('Property 4: Export then import produces equivalent stream configurations with correct status', async () => {
+      // Generator with all fields including new ones
+      // Use stringMatching to ensure non-whitespace title
+      const fullStreamArb = fc.record({
+        title: fc.stringMatching(/^[a-zA-Z0-9][a-zA-Z0-9 ]{0,99}$/),
+        rtmp_url: fc.webUrl(),
+        stream_key: fc.stringMatching(/^[a-zA-Z0-9]{10,50}$/),
+        platform: fc.constantFrom('YouTube', 'Facebook', 'Twitch'),
+        platform_icon: fc.constantFrom('youtube', 'facebook', 'twitch'),
+        bitrate: fc.integer({ min: 1000, max: 10000 }),
+        resolution: fc.constantFrom('1920x1080', '1280x720'),
+        fps: fc.constantFrom(30, 60),
+        orientation: fc.constantFrom('horizontal', 'vertical'),
+        loop_video: fc.boolean(),
+        schedule_type: fc.constantFrom('once', 'daily', 'weekly'),
+        schedule_days: fc.option(fc.array(fc.integer({ min: 0, max: 6 }), { minLength: 1, maxLength: 7 }), { nil: null }),
+        schedule_time: fc.option(validDateStringArb, { nil: null }),
+        recurring_time: fc.option(fc.constantFrom('08:00', '12:00', '18:00'), { nil: null }),
+        recurring_enabled: fc.boolean(),
+        stream_duration_hours: fc.option(fc.integer({ min: 1, max: 8 }), { nil: null }),
+        stream_duration_minutes: fc.option(fc.integer({ min: 30, max: 480 }), { nil: null })
+      });
+
       await fc.assert(
         fc.asyncProperty(
-          fc.array(validExportStreamArb, { minLength: 1, maxLength: 5 }),
+          fc.array(fullStreamArb, { minLength: 1, maxLength: 5 }),
           fc.uuid(),
           fc.uuid(),
           async (originalStreams, exportUserId, importUserId) => {
@@ -391,12 +679,29 @@ describe('Backup Service', () => {
               expect(createdStream.loop_video).toBe(original.loop_video);
               expect(createdStream.schedule_type).toBe(original.schedule_type);
               
+              // Verify new fields are preserved
+              expect(createdStream.schedule_time).toBe(original.schedule_time || null);
+              expect(createdStream.recurring_time).toBe(original.recurring_time || null);
+              expect(createdStream.recurring_enabled).toBe(original.recurring_enabled !== false);
+              expect(createdStream.schedule_days).toEqual(original.schedule_days || null);
+              
+              // Verify stream_duration_minutes is correctly handled
+              const expectedMinutes = original.stream_duration_minutes || 
+                (original.stream_duration_hours ? original.stream_duration_hours * 60 : null);
+              expect(createdStream.stream_duration_minutes).toBe(expectedMinutes);
+              
+              // Verify status is determined correctly based on schedule
+              const expectedStatus = (original.schedule_type === 'daily' || original.schedule_type === 'weekly' || original.schedule_time) 
+                ? 'scheduled' 
+                : 'offline';
+              expect(createdStream.status).toBe(expectedStatus);
+              
               // Verify imported stream belongs to import user
               expect(createdStream.user_id).toBe(importUserId);
             });
           }
         ),
-        { numRuns: 20 }
+        { numRuns: 100 }
       );
     });
   });

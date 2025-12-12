@@ -122,6 +122,16 @@ app.locals.helpers = {
     const minutes = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');
     const secs = Math.floor(seconds % 60).toString().padStart(2, '0');
     return `${hours}:${minutes}:${secs}`;
+  },
+  formatTime: function (isoString) {
+    if (!isoString) return '--';
+    const date = new Date(isoString);
+    return date.toLocaleTimeString('en-US', {
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    });
   }
 };
 app.use(session({
@@ -667,6 +677,42 @@ app.get('/settings', isAuthenticated, async (req, res) => {
     res.redirect('/login');
   }
 });
+// Schedule page - shows all scheduled streams
+app.get('/schedule', isAuthenticated, async (req, res) => {
+  try {
+    const streams = await Stream.findAllScheduled(req.session.userId);
+    
+    // Compute next run time for recurring streams
+    streams.forEach(stream => {
+      if (stream.schedule_type === 'daily' || stream.schedule_type === 'weekly') {
+        stream.nextRunTime = Stream.getNextScheduledTime(stream);
+      }
+    });
+    
+    // Group streams by schedule type
+    const grouped = Stream.groupByScheduleType(streams);
+    
+    // Filter today's schedules
+    const todaySchedules = Stream.filterTodaySchedules(streams);
+    
+    res.render('schedule', {
+      active: 'schedule',
+      title: 'Schedule',
+      streams: streams,
+      grouped: grouped,
+      todaySchedules: todaySchedules,
+      helpers: app.locals.helpers
+    });
+  } catch (error) {
+    console.error('Error fetching schedules:', error);
+    res.status(500).render('error', {
+      title: 'Error',
+      message: 'Failed to load schedules',
+      error: error
+    });
+  }
+});
+
 app.get('/history', isAuthenticated, async (req, res) => {
   try {
     const db = require('./db/database').db;
@@ -1954,6 +2000,30 @@ app.get('/api/stream/audios', isAuthenticated, async (req, res) => {
 
 const Stream = require('./models/Stream');
 const { title } = require('process');
+
+// API endpoint for schedules (used by dashboard modal)
+app.get('/api/schedules', isAuthenticated, async (req, res) => {
+  try {
+    const type = req.query.type || 'once';
+    const allSchedules = await Stream.findAllScheduled(req.session.userId);
+    
+    // Filter by type
+    const schedules = allSchedules.filter(s => s.schedule_type === type);
+    
+    // Add nextRunTime for recurring schedules
+    schedules.forEach(stream => {
+      if (stream.schedule_type === 'daily' || stream.schedule_type === 'weekly') {
+        stream.nextRunTime = Stream.getNextScheduledTime(stream);
+      }
+    });
+    
+    res.json({ success: true, schedules });
+  } catch (error) {
+    console.error('Error fetching schedules:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch schedules' });
+  }
+});
+
 app.get('/api/streams', isAuthenticated, async (req, res) => {
   try {
     const filter = req.query.filter;
@@ -1971,6 +2041,12 @@ app.post('/api/streams', isAuthenticated, [
 ], async (req, res) => {
   try {
     console.log('Session userId for stream creation:', req.session.userId);
+    console.log('[API] Received stream data:', JSON.stringify({
+      scheduleType: req.body.scheduleType,
+      recurringTime: req.body.recurringTime,
+      recurringEnabled: req.body.recurringEnabled,
+      scheduleDays: req.body.scheduleDays
+    }));
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({ success: false, error: errors.array()[0].msg });
@@ -2024,7 +2100,14 @@ app.post('/api/streams', isAuthenticated, [
       fps: parseInt(req.body.fps) || 30,
       orientation: req.body.orientation || 'horizontal',
       loop_video: req.body.loopVideo === 'true' || req.body.loopVideo === true,
-      stream_duration_hours: req.body.streamDuration ? parseInt(req.body.streamDuration) : null,
+      // Duration in minutes (stored as stream_duration_minutes in DB)
+      stream_duration_minutes: (() => {
+        const hours = parseInt(req.body.streamDurationHours) || 0;
+        const minutes = parseInt(req.body.streamDurationMinutes) || 0;
+        const totalMinutes = (hours * 60) + minutes;
+        console.log(`[API] Duration calculation: ${hours}h + ${minutes}m = ${totalMinutes} total minutes`);
+        return totalMinutes > 0 ? totalMinutes : null;
+      })(),
       // Recurring schedule fields
       schedule_type: req.body.scheduleType || 'once',
       schedule_days: scheduleDays,
@@ -2067,9 +2150,18 @@ app.post('/api/streams', isAuthenticated, [
       streamData.end_time = scheduleEndDate.toISOString();
     }
     
+    // Set status based on schedule type
     if (!streamData.status) {
-      streamData.status = 'offline';
+      if (streamData.schedule_type === 'daily' || streamData.schedule_type === 'weekly') {
+        // Recurring schedules should be 'scheduled' status
+        streamData.status = 'scheduled';
+      } else {
+        streamData.status = 'offline';
+      }
     }
+    
+    console.log(`[API] Creating stream with schedule_type=${streamData.schedule_type}, recurring_time=${streamData.recurring_time}, recurring_enabled=${streamData.recurring_enabled}, status=${streamData.status}`);
+    
     const stream = await Stream.create(streamData);
     res.json({ success: true, stream });
   } catch (error) {
@@ -2125,6 +2217,23 @@ app.post('/api/streams/import', isAuthenticated, uploadBackup.single('backupFile
   } catch (error) {
     console.error('Error importing streams:', error);
     res.status(500).json({ success: false, error: 'Failed to import stream settings' });
+  }
+});
+
+// Stream Settings - Reset all streams to original imported settings
+app.post('/api/streams/reset-all', isAuthenticated, async (req, res) => {
+  try {
+    const result = await Stream.resetAllToOriginal(req.session.userId);
+    
+    res.json({
+      success: true,
+      resetCount: result.resetCount,
+      skippedCount: result.skippedCount,
+      message: `Reset ${result.resetCount} stream(s) to original settings. ${result.skippedCount} skipped.`
+    });
+  } catch (error) {
+    console.error('Error resetting streams:', error);
+    res.status(500).json({ success: false, error: 'Failed to reset stream settings' });
   }
 });
 
@@ -2199,9 +2308,12 @@ app.put('/api/streams/:id', isAuthenticated, async (req, res) => {
       updateData.use_advanced_settings = req.body.useAdvancedSettings === 'true' || req.body.useAdvancedSettings === true;
     }
     
-    // Handle stream duration (in hours)
-    if (req.body.streamDuration !== undefined) {
-      updateData.stream_duration_hours = req.body.streamDuration ? parseInt(req.body.streamDuration) : null;
+    // Handle stream duration (in minutes - new format: hours + minutes)
+    if (req.body.streamDurationHours !== undefined || req.body.streamDurationMinutes !== undefined) {
+      const hours = parseInt(req.body.streamDurationHours) || 0;
+      const minutes = parseInt(req.body.streamDurationMinutes) || 0;
+      const totalMinutes = (hours * 60) + minutes;
+      updateData.stream_duration_minutes = totalMinutes > 0 ? totalMinutes : null;
     }
     
     // Handle audio selection
@@ -3045,6 +3157,428 @@ async function processGoogleDriveAudioImport(jobId, fileId, userId) {
     };
   }
 }
+
+// ============================================
+// STREAM TEMPLATES API
+// ============================================
+const StreamTemplate = require('./models/StreamTemplate');
+
+// GET all templates for current user
+app.get('/api/templates', isAuthenticated, async (req, res) => {
+  try {
+    const templates = await StreamTemplate.findByUserId(req.session.userId);
+    res.json({ success: true, templates });
+  } catch (error) {
+    console.error('Error fetching templates:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch templates' });
+  }
+});
+
+// GET single template by ID
+app.get('/api/templates/:id', isAuthenticated, async (req, res) => {
+  try {
+    const template = await StreamTemplate.findById(req.params.id);
+    if (!template || template.user_id !== req.session.userId) {
+      return res.status(404).json({ success: false, error: 'Template not found' });
+    }
+    res.json({ success: true, template });
+  } catch (error) {
+    console.error('Error fetching template:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch template' });
+  }
+});
+
+// POST create new template
+app.post('/api/templates', isAuthenticated, async (req, res) => {
+  try {
+    const { name, video_id, audio_id, duration_hours, duration_minutes, loop_video, schedule_type, recurring_time, schedule_days, overwrite } = req.body;
+    
+    if (!name || name.trim() === '') {
+      return res.status(400).json({ success: false, error: 'Template name is required' });
+    }
+    
+    // Check if name already exists
+    const existing = await StreamTemplate.findByName(req.session.userId, name.trim());
+    if (existing && !overwrite) {
+      return res.status(409).json({ 
+        success: false, 
+        error: 'Template name already exists',
+        existingId: existing.id
+      });
+    }
+    
+    // If overwrite, delete existing first
+    if (existing && overwrite) {
+      await StreamTemplate.delete(existing.id, req.session.userId);
+    }
+    
+    const template = await StreamTemplate.create({
+      user_id: req.session.userId,
+      name: name.trim(),
+      video_id: video_id || null,
+      audio_id: audio_id || null,
+      duration_hours: parseInt(duration_hours, 10) || 0,
+      duration_minutes: parseInt(duration_minutes, 10) || 0,
+      loop_video: loop_video !== false,
+      schedule_type: schedule_type || 'once',
+      recurring_time: recurring_time || null,
+      schedule_days: schedule_days || null
+    });
+    
+    res.json({ success: true, template });
+  } catch (error) {
+    console.error('Error creating template:', error);
+    res.status(500).json({ success: false, error: 'Failed to create template' });
+  }
+});
+
+// PUT update template
+app.put('/api/templates/:id', isAuthenticated, async (req, res) => {
+  try {
+    const template = await StreamTemplate.findById(req.params.id);
+    if (!template || template.user_id !== req.session.userId) {
+      return res.status(404).json({ success: false, error: 'Template not found' });
+    }
+    
+    const { name, video_id, audio_id, duration_hours, duration_minutes, loop_video, schedule_type, recurring_time, schedule_days } = req.body;
+    
+    // Check if new name conflicts with existing template
+    if (name && name.trim() !== template.name) {
+      const nameExists = await StreamTemplate.nameExists(req.session.userId, name.trim(), req.params.id);
+      if (nameExists) {
+        return res.status(409).json({ success: false, error: 'Template name already exists' });
+      }
+    }
+    
+    const updateData = {};
+    if (name !== undefined) updateData.name = name.trim();
+    if (video_id !== undefined) updateData.video_id = video_id;
+    if (audio_id !== undefined) updateData.audio_id = audio_id;
+    if (duration_hours !== undefined) updateData.duration_hours = parseInt(duration_hours, 10) || 0;
+    if (duration_minutes !== undefined) updateData.duration_minutes = parseInt(duration_minutes, 10) || 0;
+    if (loop_video !== undefined) updateData.loop_video = loop_video;
+    if (schedule_type !== undefined) updateData.schedule_type = schedule_type;
+    if (recurring_time !== undefined) updateData.recurring_time = recurring_time;
+    if (schedule_days !== undefined) updateData.schedule_days = schedule_days;
+    
+    const updated = await StreamTemplate.update(req.params.id, updateData);
+    res.json({ success: true, template: updated });
+  } catch (error) {
+    console.error('Error updating template:', error);
+    res.status(500).json({ success: false, error: 'Failed to update template' });
+  }
+});
+
+// DELETE template
+app.delete('/api/templates/:id', isAuthenticated, async (req, res) => {
+  try {
+    const template = await StreamTemplate.findById(req.params.id);
+    if (!template || template.user_id !== req.session.userId) {
+      return res.status(404).json({ success: false, error: 'Template not found' });
+    }
+    
+    await StreamTemplate.delete(req.params.id, req.session.userId);
+    res.json({ success: true, message: 'Template deleted' });
+  } catch (error) {
+    console.error('Error deleting template:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete template' });
+  }
+});
+
+// ============================================
+// YouTube Sync Routes
+// ============================================
+const YouTubeCredentials = require('./models/YouTubeCredentials');
+const youtubeService = require('./services/youtubeService');
+
+// YouTube Sync Page
+app.get('/youtube', isAuthenticated, async (req, res) => {
+  try {
+    const credentials = await YouTubeCredentials.findByUserId(req.session.userId);
+    let broadcasts = [];
+    
+    if (credentials) {
+      try {
+        const accessToken = await youtubeService.getAccessToken(
+          credentials.clientId,
+          credentials.clientSecret,
+          credentials.refreshToken
+        );
+        broadcasts = await youtubeService.listBroadcasts(accessToken);
+      } catch (err) {
+        console.error('Error fetching broadcasts:', err.message);
+      }
+    }
+    
+    res.render('youtube', {
+      title: 'YouTube Sync',
+      active: 'youtube',
+      credentials,
+      broadcasts
+    });
+  } catch (error) {
+    console.error('YouTube page error:', error);
+    res.status(500).render('error', {
+      title: 'Error',
+      message: 'Failed to load YouTube Sync page'
+    });
+  }
+});
+
+// Save YouTube credentials
+app.post('/api/youtube/credentials', isAuthenticated, async (req, res) => {
+  try {
+    const { clientId, clientSecret, refreshToken } = req.body;
+    
+    if (!clientId || !clientSecret || !refreshToken) {
+      return res.status(400).json({
+        success: false,
+        error: 'Client ID, Client Secret, and Refresh Token are required'
+      });
+    }
+    
+    // Validate credentials
+    const validation = await youtubeService.validateCredentials(clientId, clientSecret, refreshToken);
+    
+    if (!validation.valid) {
+      return res.status(400).json({
+        success: false,
+        error: validation.error || 'Invalid credentials'
+      });
+    }
+    
+    // Save credentials
+    await YouTubeCredentials.save(req.session.userId, {
+      clientId,
+      clientSecret,
+      refreshToken,
+      channelName: validation.channelName,
+      channelId: validation.channelId
+    });
+    
+    res.json({
+      success: true,
+      channelName: validation.channelName,
+      channelId: validation.channelId
+    });
+  } catch (error) {
+    console.error('Error saving YouTube credentials:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to save credentials'
+    });
+  }
+});
+
+// Check if credentials exist
+app.get('/api/youtube/credentials', isAuthenticated, async (req, res) => {
+  try {
+    const credentials = await YouTubeCredentials.findByUserId(req.session.userId);
+    res.json({
+      success: true,
+      hasCredentials: !!credentials,
+      channelName: credentials?.channelName || null,
+      channelId: credentials?.channelId || null
+    });
+  } catch (error) {
+    console.error('Error checking YouTube credentials:', error);
+    res.status(500).json({ success: false, error: 'Failed to check credentials' });
+  }
+});
+
+// Remove YouTube credentials
+app.delete('/api/youtube/credentials', isAuthenticated, async (req, res) => {
+  try {
+    await YouTubeCredentials.delete(req.session.userId);
+    res.json({ success: true, message: 'Credentials removed' });
+  } catch (error) {
+    console.error('Error removing YouTube credentials:', error);
+    res.status(500).json({ success: false, error: 'Failed to remove credentials' });
+  }
+});
+
+// List YouTube broadcasts
+app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
+  try {
+    const credentials = await YouTubeCredentials.findByUserId(req.session.userId);
+    
+    if (!credentials) {
+      return res.status(400).json({
+        success: false,
+        error: 'YouTube account not connected'
+      });
+    }
+    
+    const accessToken = await youtubeService.getAccessToken(
+      credentials.clientId,
+      credentials.clientSecret,
+      credentials.refreshToken
+    );
+    
+    const broadcasts = await youtubeService.listBroadcasts(accessToken);
+    res.json({ success: true, broadcasts });
+  } catch (error) {
+    console.error('Error listing broadcasts:', error);
+    res.status(500).json({ success: false, error: 'Failed to list broadcasts' });
+  }
+});
+
+// Create YouTube broadcast
+app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'), async (req, res) => {
+  try {
+    const credentials = await YouTubeCredentials.findByUserId(req.session.userId);
+    
+    if (!credentials) {
+      return res.status(400).json({
+        success: false,
+        error: 'YouTube account not connected'
+      });
+    }
+    
+    const { title, description, scheduledStartTime, privacyStatus } = req.body;
+    
+    if (!title || !scheduledStartTime) {
+      return res.status(400).json({
+        success: false,
+        error: 'Title and scheduled start time are required'
+      });
+    }
+    
+    // Validate scheduled time (at least 10 minutes in future)
+    const scheduledDate = new Date(scheduledStartTime);
+    const minTime = new Date(Date.now() + 10 * 60 * 1000);
+    
+    if (scheduledDate < minTime) {
+      return res.status(400).json({
+        success: false,
+        error: 'Scheduled start time must be at least 10 minutes in the future'
+      });
+    }
+    
+    const accessToken = await youtubeService.getAccessToken(
+      credentials.clientId,
+      credentials.clientSecret,
+      credentials.refreshToken
+    );
+    
+    const broadcast = await youtubeService.createBroadcast(accessToken, {
+      title,
+      description: description || '',
+      scheduledStartTime,
+      privacyStatus: privacyStatus || 'unlisted'
+    });
+    
+    // Upload thumbnail if provided
+    if (req.file) {
+      try {
+        const thumbnailResult = await youtubeService.uploadThumbnail(
+          accessToken,
+          broadcast.broadcastId,
+          req.file.buffer
+        );
+        broadcast.thumbnailUrl = thumbnailResult.thumbnailUrl;
+      } catch (thumbErr) {
+        console.error('Error uploading thumbnail:', thumbErr.message);
+      }
+    }
+    
+    res.json({ success: true, broadcast });
+  } catch (error) {
+    console.error('Error creating broadcast:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to create broadcast'
+    });
+  }
+});
+
+// Delete YouTube broadcast
+app.delete('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
+  try {
+    const credentials = await YouTubeCredentials.findByUserId(req.session.userId);
+    
+    if (!credentials) {
+      return res.status(400).json({
+        success: false,
+        error: 'YouTube account not connected'
+      });
+    }
+    
+    const accessToken = await youtubeService.getAccessToken(
+      credentials.clientId,
+      credentials.clientSecret,
+      credentials.refreshToken
+    );
+    
+    await youtubeService.deleteBroadcast(accessToken, req.params.id);
+    res.json({ success: true, message: 'Broadcast deleted' });
+  } catch (error) {
+    console.error('Error deleting broadcast:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to delete broadcast'
+    });
+  }
+});
+
+// Upload/change thumbnail for broadcast
+app.post('/api/youtube/broadcasts/:id/thumbnail', isAuthenticated, upload.single('thumbnail'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: 'No thumbnail file provided'
+      });
+    }
+    
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg'];
+    if (!allowedTypes.includes(req.file.mimetype)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid file type. Only JPG and PNG are allowed'
+      });
+    }
+    
+    // Validate file size (max 2MB)
+    const maxSize = 2 * 1024 * 1024;
+    if (req.file.size > maxSize) {
+      return res.status(400).json({
+        success: false,
+        error: 'File too large. Maximum size is 2MB'
+      });
+    }
+    
+    const credentials = await YouTubeCredentials.findByUserId(req.session.userId);
+    
+    if (!credentials) {
+      return res.status(400).json({
+        success: false,
+        error: 'YouTube account not connected'
+      });
+    }
+    
+    const accessToken = await youtubeService.getAccessToken(
+      credentials.clientId,
+      credentials.clientSecret,
+      credentials.refreshToken
+    );
+    
+    const result = await youtubeService.uploadThumbnail(
+      accessToken,
+      req.params.id,
+      req.file.buffer
+    );
+    
+    res.json({ success: true, thumbnailUrl: result.thumbnailUrl });
+  } catch (error) {
+    console.error('Error uploading thumbnail:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to upload thumbnail'
+    });
+  }
+});
 
 const server = app.listen(port, '0.0.0.0', async () => {
   const ipAddresses = getLocalIpAddresses();

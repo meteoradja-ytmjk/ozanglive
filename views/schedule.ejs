@@ -1,0 +1,651 @@
+<% layout('layout') -%>
+<div class="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+  <div>
+    <h2 class="text-2xl font-bold">Stream Schedule</h2>
+    <p class="text-gray-400 text-sm mt-1">View and manage your streaming schedules</p>
+  </div>
+  <div class="flex items-center gap-3">
+    <div class="w-40">
+      <select id="schedule-filter"
+        class="bg-dark-700 border border-gray-600 text-white px-4 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary w-full">
+        <option value="all">All Schedules</option>
+        <option value="once">Once</option>
+        <option value="daily">Daily</option>
+        <option value="weekly">Weekly</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<!-- Today's Schedule Section -->
+<div class="bg-gray-800 rounded-lg shadow-md p-4 mb-6">
+  <div class="flex items-center gap-2 mb-4">
+    <i class="ti ti-calendar-event text-primary text-xl"></i>
+    <h3 class="text-lg font-semibold">Today's Schedule</h3>
+    <span class="text-xs text-gray-400">(<%= new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }) %>)</span>
+  </div>
+  
+  <% if (todaySchedules && todaySchedules.length > 0) { %>
+    <div class="space-y-3">
+      <% todaySchedules.forEach(function(stream) { %>
+        <div class="flex items-center justify-between bg-dark-700 rounded-lg p-3 schedule-item" data-type="<%= stream.schedule_type %>">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-dark-600 rounded-lg flex items-center justify-center">
+              <i class="ti ti-brand-<%= helpers.getPlatformIcon(stream.platform) %> text-<%= helpers.getPlatformColor(stream.platform) %>"></i>
+            </div>
+            <div>
+              <div class="font-medium text-sm"><%= stream.title %></div>
+              <div class="text-xs text-gray-400">
+                <% if (stream.schedule_type === 'once') { %>
+                  <%= helpers.formatTime(stream.schedule_time) %>
+                <% } else { %>
+                  <%= stream.recurring_time %>
+                <% } %>
+                <span class="mx-1">•</span>
+                <span class="capitalize"><%= stream.schedule_type %></span>
+              </div>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="px-2 py-1 text-xs rounded-full <%= stream.status === 'live' ? 'bg-green-500/20 text-green-400' : 'bg-primary/20 text-primary' %>">
+              <%= stream.status === 'live' ? 'LIVE' : 'Scheduled' %>
+            </span>
+            <button onclick="editStream('<%= stream.id %>')" class="p-1.5 text-gray-400 hover:text-primary transition-colors" title="Edit Stream">
+              <i class="ti ti-edit"></i>
+            </button>
+          </div>
+        </div>
+      <% }); %>
+    </div>
+  <% } else { %>
+    <div class="text-center py-6 text-gray-400">
+      <i class="ti ti-calendar-off text-3xl mb-2"></i>
+      <p>No streams scheduled for today</p>
+    </div>
+  <% } %>
+</div>
+
+<!-- All Schedules Section -->
+<div class="space-y-6">
+  <!-- Once Schedules -->
+  <% if (grouped.once && grouped.once.length > 0) { %>
+  <div class="schedule-section" data-section="once">
+    <div class="flex items-center gap-2 mb-3">
+      <i class="ti ti-calendar text-blue-400"></i>
+      <h3 class="font-semibold">One-time Schedules</h3>
+      <span class="text-xs text-gray-400">(<%= grouped.once.length %>)</span>
+    </div>
+    
+    <!-- Desktop Table -->
+    <div class="hidden md:block bg-gray-800 rounded-lg shadow-md overflow-hidden">
+      <table class="min-w-full divide-y divide-gray-700">
+        <thead class="bg-dark-700">
+          <tr>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Stream</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Platform</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Scheduled Time</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Duration</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Status</th>
+            <th class="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-700">
+          <% grouped.once.forEach(function(stream) { %>
+          <tr class="hover:bg-dark-700/50 schedule-item" data-type="once">
+            <td class="px-4 py-3">
+              <div class="font-medium text-sm"><%= stream.title %></div>
+              <div class="text-xs text-gray-400"><%= stream.video_title || 'No video' %></div>
+            </td>
+            <td class="px-4 py-3">
+              <div class="flex items-center gap-1">
+                <i class="ti ti-brand-<%= helpers.getPlatformIcon(stream.platform) %> text-<%= helpers.getPlatformColor(stream.platform) %>"></i>
+                <span class="text-sm"><%= stream.platform || 'Custom' %></span>
+              </div>
+            </td>
+            <td class="px-4 py-3 text-sm"><%= helpers.formatDateTime(stream.schedule_time) %></td>
+            <td class="px-4 py-3 text-sm text-gray-400">
+              <% if (stream.stream_duration_hours) { %>
+                <%= stream.stream_duration_hours %>h
+              <% } else if (stream.duration) { %>
+                <%= Math.floor(stream.duration / 60) %>h <%= stream.duration % 60 %>m
+              <% } else { %>
+                --
+              <% } %>
+            </td>
+            <td class="px-4 py-3">
+              <span class="px-2 py-1 text-xs rounded-full <%= stream.status === 'live' ? 'bg-green-500/20 text-green-400' : stream.status === 'scheduled' ? 'bg-primary/20 text-primary' : 'bg-gray-500/20 text-gray-400' %>">
+                <%= stream.status === 'live' ? 'LIVE' : stream.status === 'scheduled' ? 'Scheduled' : 'Offline' %>
+              </span>
+            </td>
+            <td class="px-4 py-3 text-right">
+              <button onclick="editStream('<%= stream.id %>')" class="p-1.5 text-gray-400 hover:text-primary transition-colors" title="Edit Stream">
+                <i class="ti ti-edit"></i>
+              </button>
+            </td>
+          </tr>
+          <% }); %>
+        </tbody>
+      </table>
+    </div>
+    
+    <!-- Mobile Cards -->
+    <div class="md:hidden space-y-2">
+      <% grouped.once.forEach(function(stream) { %>
+      <div class="bg-gray-800 rounded-lg p-3 schedule-item" data-type="once">
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center gap-2">
+            <i class="ti ti-brand-<%= helpers.getPlatformIcon(stream.platform) %> text-<%= helpers.getPlatformColor(stream.platform) %>"></i>
+            <span class="font-medium text-sm"><%= stream.title %></span>
+          </div>
+          <span class="px-2 py-0.5 text-xs rounded-full <%= stream.status === 'live' ? 'bg-green-500/20 text-green-400' : 'bg-primary/20 text-primary' %>">
+            <%= stream.status === 'live' ? 'LIVE' : 'Scheduled' %>
+          </span>
+        </div>
+        <div class="flex items-center justify-between text-xs text-gray-400">
+          <span><%= helpers.formatDateTime(stream.schedule_time) %></span>
+          <button onclick="editStream('<%= stream.id %>')" class="text-primary">Edit</button>
+        </div>
+      </div>
+      <% }); %>
+    </div>
+  </div>
+  <% } %>
+
+  <!-- Daily Schedules -->
+  <% if (grouped.daily && grouped.daily.length > 0) { %>
+  <div class="schedule-section" data-section="daily">
+    <div class="flex items-center gap-2 mb-3">
+      <i class="ti ti-repeat text-green-400"></i>
+      <h3 class="font-semibold">Daily Schedules</h3>
+      <span class="text-xs text-gray-400">(<%= grouped.daily.length %>)</span>
+    </div>
+    
+    <!-- Desktop Table -->
+    <div class="hidden md:block bg-gray-800 rounded-lg shadow-md overflow-hidden">
+      <table class="min-w-full divide-y divide-gray-700">
+        <thead class="bg-dark-700">
+          <tr>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Stream</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Platform</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Time</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Next Run</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Status</th>
+            <th class="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-700">
+          <% grouped.daily.forEach(function(stream) { %>
+          <tr class="hover:bg-dark-700/50 schedule-item" data-type="daily">
+            <td class="px-4 py-3">
+              <div class="font-medium text-sm"><%= stream.title %></div>
+              <div class="text-xs text-gray-400"><%= stream.video_title || 'No video' %></div>
+            </td>
+            <td class="px-4 py-3">
+              <div class="flex items-center gap-1">
+                <i class="ti ti-brand-<%= helpers.getPlatformIcon(stream.platform) %> text-<%= helpers.getPlatformColor(stream.platform) %>"></i>
+                <span class="text-sm"><%= stream.platform || 'Custom' %></span>
+              </div>
+            </td>
+            <td class="px-4 py-3 text-sm"><%= stream.recurring_time || '--' %></td>
+            <td class="px-4 py-3 text-sm text-gray-400">
+              <% if (stream.nextRunTime) { %>
+                <%= helpers.formatDateTime(stream.nextRunTime) %>
+              <% } else { %>
+                --
+              <% } %>
+            </td>
+            <td class="px-4 py-3">
+              <span class="px-2 py-1 text-xs rounded-full <%= stream.status === 'live' ? 'bg-green-500/20 text-green-400' : stream.recurring_enabled ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400' %>">
+                <%= stream.status === 'live' ? 'LIVE' : stream.recurring_enabled ? 'Active' : 'Paused' %>
+              </span>
+            </td>
+            <td class="px-4 py-3 text-right">
+              <button onclick="editStream('<%= stream.id %>')" class="p-1.5 text-gray-400 hover:text-primary transition-colors" title="Edit Stream">
+                <i class="ti ti-edit"></i>
+              </button>
+            </td>
+          </tr>
+          <% }); %>
+        </tbody>
+      </table>
+    </div>
+    
+    <!-- Mobile Cards -->
+    <div class="md:hidden space-y-2">
+      <% grouped.daily.forEach(function(stream) { %>
+      <div class="bg-gray-800 rounded-lg p-3 schedule-item" data-type="daily">
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center gap-2">
+            <i class="ti ti-brand-<%= helpers.getPlatformIcon(stream.platform) %> text-<%= helpers.getPlatformColor(stream.platform) %>"></i>
+            <span class="font-medium text-sm"><%= stream.title %></span>
+          </div>
+          <span class="px-2 py-0.5 text-xs rounded-full <%= stream.recurring_enabled ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400' %>">
+            <%= stream.recurring_enabled ? 'Active' : 'Paused' %>
+          </span>
+        </div>
+        <div class="flex items-center justify-between text-xs text-gray-400">
+          <span>Daily at <%= stream.recurring_time %></span>
+          <button onclick="editStream('<%= stream.id %>')" class="text-primary">Edit</button>
+        </div>
+      </div>
+      <% }); %>
+    </div>
+  </div>
+  <% } %>
+
+
+  <!-- Weekly Schedules -->
+  <% if (grouped.weekly && grouped.weekly.length > 0) { %>
+  <div class="schedule-section" data-section="weekly">
+    <div class="flex items-center gap-2 mb-3">
+      <i class="ti ti-calendar-week text-purple-400"></i>
+      <h3 class="font-semibold">Weekly Schedules</h3>
+      <span class="text-xs text-gray-400">(<%= grouped.weekly.length %>)</span>
+    </div>
+    
+    <!-- Desktop Table -->
+    <div class="hidden md:block bg-gray-800 rounded-lg shadow-md overflow-hidden">
+      <table class="min-w-full divide-y divide-gray-700">
+        <thead class="bg-dark-700">
+          <tr>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Stream</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Platform</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Days</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Time</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Next Run</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Status</th>
+            <th class="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-700">
+          <% grouped.weekly.forEach(function(stream) { %>
+          <tr class="hover:bg-dark-700/50 schedule-item" data-type="weekly">
+            <td class="px-4 py-3">
+              <div class="font-medium text-sm"><%= stream.title %></div>
+              <div class="text-xs text-gray-400"><%= stream.video_title || 'No video' %></div>
+            </td>
+            <td class="px-4 py-3">
+              <div class="flex items-center gap-1">
+                <i class="ti ti-brand-<%= helpers.getPlatformIcon(stream.platform) %> text-<%= helpers.getPlatformColor(stream.platform) %>"></i>
+                <span class="text-sm"><%= stream.platform || 'Custom' %></span>
+              </div>
+            </td>
+            <td class="px-4 py-3 text-sm">
+              <% const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']; %>
+              <% const days = Array.isArray(stream.schedule_days) ? stream.schedule_days : []; %>
+              <%= days.map(d => dayNames[d]).join(', ') || '--' %>
+            </td>
+            <td class="px-4 py-3 text-sm"><%= stream.recurring_time || '--' %></td>
+            <td class="px-4 py-3 text-sm text-gray-400">
+              <% if (stream.nextRunTime) { %>
+                <%= helpers.formatDateTime(stream.nextRunTime) %>
+              <% } else { %>
+                --
+              <% } %>
+            </td>
+            <td class="px-4 py-3">
+              <span class="px-2 py-1 text-xs rounded-full <%= stream.status === 'live' ? 'bg-green-500/20 text-green-400' : stream.recurring_enabled ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400' %>">
+                <%= stream.status === 'live' ? 'LIVE' : stream.recurring_enabled ? 'Active' : 'Paused' %>
+              </span>
+            </td>
+            <td class="px-4 py-3 text-right">
+              <button onclick="editStream('<%= stream.id %>')" class="p-1.5 text-gray-400 hover:text-primary transition-colors" title="Edit Stream">
+                <i class="ti ti-edit"></i>
+              </button>
+            </td>
+          </tr>
+          <% }); %>
+        </tbody>
+      </table>
+    </div>
+    
+    <!-- Mobile Cards -->
+    <div class="md:hidden space-y-2">
+      <% grouped.weekly.forEach(function(stream) { %>
+      <div class="bg-gray-800 rounded-lg p-3 schedule-item" data-type="weekly">
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center gap-2">
+            <i class="ti ti-brand-<%= helpers.getPlatformIcon(stream.platform) %> text-<%= helpers.getPlatformColor(stream.platform) %>"></i>
+            <span class="font-medium text-sm"><%= stream.title %></span>
+          </div>
+          <span class="px-2 py-0.5 text-xs rounded-full <%= stream.recurring_enabled ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400' %>">
+            <%= stream.recurring_enabled ? 'Active' : 'Paused' %>
+          </span>
+        </div>
+        <div class="text-xs text-gray-400 mb-1">
+          <% const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']; %>
+          <% const days = Array.isArray(stream.schedule_days) ? stream.schedule_days : []; %>
+          <%= days.map(d => dayNames[d]).join(', ') %> at <%= stream.recurring_time %>
+        </div>
+        <div class="flex items-center justify-between text-xs text-gray-400">
+          <span>Next: <%= stream.nextRunTime ? helpers.formatDateTime(stream.nextRunTime) : '--' %></span>
+          <button onclick="editStream('<%= stream.id %>')" class="text-primary">Edit</button>
+        </div>
+      </div>
+      <% }); %>
+    </div>
+  </div>
+  <% } %>
+
+  <!-- Empty State -->
+  <% if ((!grouped.once || grouped.once.length === 0) && (!grouped.daily || grouped.daily.length === 0) && (!grouped.weekly || grouped.weekly.length === 0)) { %>
+  <div class="bg-gray-800 rounded-lg shadow-md p-10 text-center">
+    <div class="flex flex-col items-center">
+      <div class="w-16 h-16 rounded-full bg-dark-700 flex items-center justify-center mb-4">
+        <i class="ti ti-calendar-off text-gray-500 text-2xl"></i>
+      </div>
+      <p class="text-gray-400 font-medium mb-2">No scheduled streams</p>
+      <p class="text-gray-500 text-sm max-w-sm mb-4">Create a stream with a schedule to see it here</p>
+      <a href="/dashboard" class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-lg transition-colors text-sm">
+        <i class="ti ti-plus mr-1"></i>Create Stream
+      </a>
+    </div>
+  </div>
+  <% } %>
+</div>
+
+
+<!-- Edit Schedule Modal -->
+<div id="editScheduleModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto">
+  <div class="flex min-h-screen items-center justify-center p-4">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-md modal-container flex flex-col max-h-[90vh]">
+      <div class="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-700">
+        <h3 class="text-lg font-semibold">Edit Schedule</h3>
+        <button onclick="closeEditModal()" class="text-gray-400 hover:text-white">
+          <i class="ti ti-x text-xl"></i>
+        </button>
+      </div>
+      <div class="p-4 overflow-y-auto flex-grow">
+        <form id="editScheduleForm" class="space-y-4">
+          <input type="hidden" id="editStreamId" value="">
+          
+          <!-- Stream Title -->
+          <div>
+            <label class="text-sm font-medium text-white block mb-2">Stream Title</label>
+            <input type="text" id="editStreamTitle" class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none" required>
+          </div>
+          
+          <!-- Schedule Type Display -->
+          <div>
+            <label class="text-sm font-medium text-white block mb-2">Schedule Type</label>
+            <div id="editScheduleTypeDisplay" class="px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg text-gray-400"></div>
+          </div>
+          
+          <!-- Once Schedule Settings -->
+          <div id="editOnceSettings" class="hidden space-y-4">
+            <div>
+              <label class="text-sm font-medium text-white block mb-2">Start Time</label>
+              <input type="datetime-local" id="editScheduleTime" class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none [color-scheme:dark]">
+            </div>
+            <div>
+              <label class="text-sm font-medium text-white block mb-2">End Time</label>
+              <input type="datetime-local" id="editEndTime" class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none [color-scheme:dark]">
+            </div>
+          </div>
+          
+          <!-- Recurring Schedule Settings -->
+          <div id="editRecurringSettings" class="hidden space-y-4">
+            <div>
+              <label class="text-sm font-medium text-white block mb-2">Stream Time</label>
+              <input type="time" id="editRecurringTime" class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none [color-scheme:dark]">
+            </div>
+            
+            <!-- Weekly Days -->
+            <div id="editWeeklyDays" class="hidden">
+              <label class="text-sm font-medium text-white block mb-2">Days</label>
+              <div class="grid grid-cols-7 gap-1">
+                <button type="button" onclick="toggleEditDay(0)" data-day="0" class="edit-day-btn py-2 text-xs rounded-lg border border-gray-600 bg-dark-700 text-gray-300 hover:border-primary transition-colors text-center">Sun</button>
+                <button type="button" onclick="toggleEditDay(1)" data-day="1" class="edit-day-btn py-2 text-xs rounded-lg border border-gray-600 bg-dark-700 text-gray-300 hover:border-primary transition-colors text-center">Mon</button>
+                <button type="button" onclick="toggleEditDay(2)" data-day="2" class="edit-day-btn py-2 text-xs rounded-lg border border-gray-600 bg-dark-700 text-gray-300 hover:border-primary transition-colors text-center">Tue</button>
+                <button type="button" onclick="toggleEditDay(3)" data-day="3" class="edit-day-btn py-2 text-xs rounded-lg border border-gray-600 bg-dark-700 text-gray-300 hover:border-primary transition-colors text-center">Wed</button>
+                <button type="button" onclick="toggleEditDay(4)" data-day="4" class="edit-day-btn py-2 text-xs rounded-lg border border-gray-600 bg-dark-700 text-gray-300 hover:border-primary transition-colors text-center">Thu</button>
+                <button type="button" onclick="toggleEditDay(5)" data-day="5" class="edit-day-btn py-2 text-xs rounded-lg border border-gray-600 bg-dark-700 text-gray-300 hover:border-primary transition-colors text-center">Fri</button>
+                <button type="button" onclick="toggleEditDay(6)" data-day="6" class="edit-day-btn py-2 text-xs rounded-lg border border-gray-600 bg-dark-700 text-gray-300 hover:border-primary transition-colors text-center">Sat</button>
+              </div>
+            </div>
+            
+            <!-- Recurring Enabled -->
+            <div class="flex items-center justify-between">
+              <label class="text-sm text-gray-300">Enable Recurring</label>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" id="editRecurringEnabled" class="sr-only peer" checked>
+                <div class="w-11 h-6 bg-dark-700 rounded-full peer peer-checked:bg-primary"></div>
+                <div class="absolute left-[2px] top-[2px] w-5 h-5 bg-white rounded-full transition-all peer-checked:translate-x-5"></div>
+              </label>
+            </div>
+          </div>
+          
+          <!-- Duration -->
+          <div>
+            <label class="text-sm font-medium text-white block mb-2">Duration</label>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="text-xs text-gray-400 block mb-1">Hours</label>
+                <input type="number" id="editDurationHours" min="0" max="168" class="w-full px-3 py-2.5 bg-dark-700 border border-gray-600 rounded-lg text-sm focus:border-primary focus:outline-none" placeholder="0">
+              </div>
+              <div>
+                <label class="text-xs text-gray-400 block mb-1">Minutes</label>
+                <input type="number" id="editDurationMinutes" min="0" max="59" class="w-full px-3 py-2.5 bg-dark-700 border border-gray-600 rounded-lg text-sm focus:border-primary focus:outline-none" placeholder="0">
+              </div>
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="flex-shrink-0 flex items-center justify-end gap-3 p-4 border-t border-gray-700">
+        <button onclick="closeEditModal()" class="px-4 py-2 text-sm text-gray-300 hover:text-white">Cancel</button>
+        <button onclick="saveScheduleEdit()" class="px-4 py-2 text-sm bg-primary hover:bg-secondary text-white rounded-lg">Save Changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast Notification -->
+<div id="toast" class="fixed bottom-4 right-4 bg-dark-800 text-white px-4 py-3 rounded-lg shadow-lg z-50 hidden transform transition-all duration-300">
+  <div class="flex items-center gap-2">
+    <i id="toast-icon" class="ti"></i>
+    <span id="toast-message"></span>
+  </div>
+</div>
+
+
+<script>
+  let currentEditStream = null;
+  let editSelectedDays = [];
+
+  // Filter functionality
+  document.addEventListener('DOMContentLoaded', function() {
+    const filterSelect = document.getElementById('schedule-filter');
+    
+    filterSelect.addEventListener('change', function() {
+      const filterValue = this.value;
+      const sections = document.querySelectorAll('.schedule-section');
+      const items = document.querySelectorAll('.schedule-item');
+      
+      if (filterValue === 'all') {
+        sections.forEach(s => s.style.display = '');
+        items.forEach(i => i.style.display = '');
+      } else {
+        sections.forEach(section => {
+          const sectionType = section.getAttribute('data-section');
+          section.style.display = sectionType === filterValue ? '' : 'none';
+        });
+        items.forEach(item => {
+          const itemType = item.getAttribute('data-type');
+          if (!item.closest('.schedule-section')) {
+            item.style.display = itemType === filterValue ? '' : 'none';
+          }
+        });
+      }
+    });
+  });
+
+  // Edit Stream Function
+  async function editStream(id) {
+    try {
+      const response = await fetch(`/api/streams/${id}`);
+      const result = await response.json();
+      
+      if (result.success && result.stream) {
+        currentEditStream = result.stream;
+        const stream = result.stream;
+        
+        // Fill form
+        document.getElementById('editStreamId').value = id;
+        document.getElementById('editStreamTitle').value = stream.title || '';
+        
+        // Schedule type display
+        const typeDisplay = document.getElementById('editScheduleTypeDisplay');
+        typeDisplay.textContent = stream.schedule_type ? stream.schedule_type.charAt(0).toUpperCase() + stream.schedule_type.slice(1) : 'Once';
+        
+        // Hide all settings first
+        document.getElementById('editOnceSettings').classList.add('hidden');
+        document.getElementById('editRecurringSettings').classList.add('hidden');
+        document.getElementById('editWeeklyDays').classList.add('hidden');
+        
+        // Show relevant settings based on schedule type
+        if (stream.schedule_type === 'once') {
+          document.getElementById('editOnceSettings').classList.remove('hidden');
+          if (stream.schedule_time) {
+            document.getElementById('editScheduleTime').value = new Date(stream.schedule_time).toISOString().slice(0, 16);
+          }
+          if (stream.end_time) {
+            document.getElementById('editEndTime').value = new Date(stream.end_time).toISOString().slice(0, 16);
+          }
+        } else if (stream.schedule_type === 'daily' || stream.schedule_type === 'weekly') {
+          document.getElementById('editRecurringSettings').classList.remove('hidden');
+          document.getElementById('editRecurringTime').value = stream.recurring_time || '';
+          document.getElementById('editRecurringEnabled').checked = stream.recurring_enabled !== false;
+          
+          if (stream.schedule_type === 'weekly') {
+            document.getElementById('editWeeklyDays').classList.remove('hidden');
+            editSelectedDays = Array.isArray(stream.schedule_days) ? [...stream.schedule_days] : [];
+            updateEditDayButtons();
+          }
+        }
+        
+        // Duration
+        const totalMinutes = stream.stream_duration_minutes || 0;
+        document.getElementById('editDurationHours').value = Math.floor(totalMinutes / 60) || '';
+        document.getElementById('editDurationMinutes').value = totalMinutes % 60 || '';
+        
+        // Show modal
+        document.getElementById('editScheduleModal').classList.remove('hidden');
+      } else {
+        showToast('error', 'Failed to load stream data');
+      }
+    } catch (error) {
+      console.error('Error loading stream:', error);
+      showToast('error', 'Failed to load stream');
+    }
+  }
+
+  function closeEditModal() {
+    document.getElementById('editScheduleModal').classList.add('hidden');
+    currentEditStream = null;
+    editSelectedDays = [];
+  }
+
+  function toggleEditDay(day) {
+    const index = editSelectedDays.indexOf(day);
+    if (index > -1) {
+      editSelectedDays.splice(index, 1);
+    } else {
+      editSelectedDays.push(day);
+    }
+    updateEditDayButtons();
+  }
+
+  function updateEditDayButtons() {
+    document.querySelectorAll('.edit-day-btn').forEach(btn => {
+      const day = parseInt(btn.getAttribute('data-day'));
+      if (editSelectedDays.includes(day)) {
+        btn.classList.add('border-primary', 'bg-primary', 'text-white');
+        btn.classList.remove('border-gray-600', 'bg-dark-700', 'text-gray-300');
+      } else {
+        btn.classList.remove('border-primary', 'bg-primary', 'text-white');
+        btn.classList.add('border-gray-600', 'bg-dark-700', 'text-gray-300');
+      }
+    });
+  }
+
+  async function saveScheduleEdit() {
+    const streamId = document.getElementById('editStreamId').value;
+    if (!streamId || !currentEditStream) return;
+    
+    const updateData = {
+      title: document.getElementById('editStreamTitle').value
+    };
+    
+    // Get duration
+    const hours = parseInt(document.getElementById('editDurationHours').value) || 0;
+    const minutes = parseInt(document.getElementById('editDurationMinutes').value) || 0;
+    updateData.stream_duration_minutes = hours * 60 + minutes;
+    
+    // Schedule type specific data
+    if (currentEditStream.schedule_type === 'once') {
+      const scheduleTime = document.getElementById('editScheduleTime').value;
+      const endTime = document.getElementById('editEndTime').value;
+      if (scheduleTime) updateData.schedule_time = new Date(scheduleTime).toISOString();
+      if (endTime) updateData.end_time = new Date(endTime).toISOString();
+    } else if (currentEditStream.schedule_type === 'daily' || currentEditStream.schedule_type === 'weekly') {
+      updateData.recurring_time = document.getElementById('editRecurringTime').value;
+      updateData.recurring_enabled = document.getElementById('editRecurringEnabled').checked;
+      
+      if (currentEditStream.schedule_type === 'weekly') {
+        updateData.schedule_days = JSON.stringify(editSelectedDays);
+      }
+    }
+    
+    try {
+      const response = await fetch(`/api/streams/${streamId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updateData)
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        showToast('success', 'Schedule updated successfully');
+        closeEditModal();
+        // Reload page to show updated data
+        setTimeout(() => location.reload(), 1000);
+      } else {
+        showToast('error', result.error || 'Failed to update schedule');
+      }
+    } catch (error) {
+      console.error('Error updating schedule:', error);
+      showToast('error', 'Failed to update schedule');
+    }
+  }
+
+  function showToast(type, message) {
+    const toast = document.getElementById('toast');
+    const icon = document.getElementById('toast-icon');
+    const msg = document.getElementById('toast-message');
+    
+    icon.className = 'ti ' + (type === 'success' ? 'ti-check text-green-400' : 'ti-x text-red-400');
+    msg.textContent = message;
+    
+    toast.classList.remove('hidden');
+    setTimeout(() => toast.classList.add('hidden'), 3000);
+  }
+
+  // Close modal on outside click
+  document.getElementById('editScheduleModal').addEventListener('click', function(e) {
+    if (e.target === this) closeEditModal();
+  });
+
+  // Auto-apply filter from URL query parameter
+  (function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const filterParam = urlParams.get('filter');
+    if (filterParam && ['once', 'daily', 'weekly'].includes(filterParam)) {
+      const filterSelect = document.getElementById('schedule-filter');
+      if (filterSelect) {
+        filterSelect.value = filterParam;
+        filterSelect.dispatchEvent(new Event('change'));
+      }
+    }
+  })();
+</script>

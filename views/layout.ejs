@@ -118,10 +118,10 @@
           <span class="text-xs mt-1">Playlist</span>
           <span class="sidebar-tooltip group-hover:scale-100">Playlist Manager</span>
         </a>
-        <a href="/history" class="sidebar-icon group <%= active === 'history' ? 'bg-primary' : '' %>">
-          <i class="ti ti-clock-hour-4 text-xl"></i>
-          <span class="text-xs mt-1">History</span>
-          <span class="sidebar-tooltip group-hover:scale-100">Stream History</span>
+        <a href="/youtube" class="sidebar-icon group <%= active === 'youtube' ? 'bg-red-500' : '' %>">
+          <i class="ti ti-brand-youtube text-xl"></i>
+          <span class="text-xs mt-1">YouTube</span>
+          <span class="sidebar-tooltip group-hover:scale-100">YouTube Sync</span>
         </a>
         <% if (req.session && req.session.user_role === 'admin') { %>
         <a href="/users" class="sidebar-icon group <%= active === 'users' ? 'bg-primary' : '' %>">
@@ -193,8 +193,8 @@
       <a href="/playlist" class="bottom-nav-item <%= active === 'playlist' ? 'bottom-nav-active' : '' %>">
         <i class="ti ti-list-details"></i><span>Playlist</span>
       </a>
-      <a href="/history" class="bottom-nav-item <%= active === 'history' ? 'bottom-nav-active' : '' %>">
-        <i class="ti ti-clock-hour-4"></i><span>History</span>
+      <a href="/youtube" class="bottom-nav-item <%= active === 'youtube' ? 'bottom-nav-active' : '' %>" style="<%= active === 'youtube' ? 'color: #EF4444;' : '' %>">
+        <i class="ti ti-brand-youtube"></i><span>YouTube</span>
       </a>
       <button id="mobile-profile-btn" class="bottom-nav-item">
         <div class="relative">

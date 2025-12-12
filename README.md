@@ -314,7 +314,56 @@ docker-compose logs -f --tail=100
 # File logs
 tail -f logs/app.log
 ```
+### JIKA MUNCUL EADDRINUSE: address already in use 0.0.0.0:7575 DI localhost
 
+Artinya: Port 7575 sudah dipakai oleh program lain, jadi server tidak bisa jalan.
+
+Kamu bisa memilih salah satu dari 3 solusi berikut:
+
+✅ SOLUSI 1: Ganti port di kode Node.js
+
+Di file app.js atau server.js, ubah port:
+
+const PORT = 8080; // atau port lain
+
+
+Lalu jalankan ulang:
+
+node app.js
+
+✅ SOLUSI 2: Matikan program yang memakai port 7575
+Windows
+
+Cek proses yang memakai port:
+```bash
+netstat -ano | findstr :7575
+```
+
+Nanti keluar PID (misalnya 12345), lalu hentikan:
+```bash
+taskkill /PID 12345 /F
+```
+
+✅ SOLUSI 3: Restart Node.js yang masih berjalan
+
+Kadang ada proses Node.js tersangkut.
+```bash
+taskkill /IM node.exe /F
+```
+
+Lalu jalankan ulang aplikasi:
+```bash
+npm start
+```
+Jika mau cepat:
+
+Paling mudah ketik:
+
+```bash
+taskkill /IM node.exe /F
+```
+
+Lalu jalankan lagi aplikasi.
 ---
 
 ## 📁 Struktur Folder
