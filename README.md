@@ -365,6 +365,42 @@ taskkill /IM node.exe /F
 
 Lalu jalankan lagi aplikasi.
 ---
+### JIKA MUNCUL EADDRINUSE: address already in use 0.0.0.0:7575 DI VPS
+Error EADDRINUSE berarti port 7575 sudah digunakan oleh proses lain. Ini bukan masalah kode, tapi ada instance aplikasi yang masih berjalan.
+
+Solusi di VPS:
+
+Jalankan perintah berikut untuk menghentikan proses yang menggunakan port 7575:
+
+# Cari proses yang menggunakan port 7575
+
+```bash
+sudo lsof -i :7575
+
+# Atau langsung kill proses di port tersebut
+
+
+sudo fuser -k 7575/tcp
+
+# Kemudian jalankan ulang aplikasi
+
+
+npm start
+```
+Atau jika menggunakan PM2:
+
+# Restart dengan PM2
+
+```bash
+pm2 restart streamflow
+
+# Atau stop dulu lalu start
+pm2 stop streamflow
+pm2 start streamflow
+Jika menggunakan systemd:
+```
+sudo systemctl restart streamflow
+Setelah port dibebaskan, aplikasi akan berjalan normal dan route /youtube akan berfungsi.
 
 ## 📁 Struktur Folder
 
