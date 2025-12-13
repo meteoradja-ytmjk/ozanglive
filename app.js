@@ -2384,7 +2384,14 @@ app.put('/api/streams/:id', isAuthenticated, async (req, res) => {
       }
     } else if ('scheduleStartTime' in req.body && !req.body.scheduleStartTime) {
       updateData.schedule_time = null;
-      updateData.status = 'offline';
+      // FIXED: Only set to offline if not a recurring schedule
+      // For recurring schedules (daily/weekly), keep status as 'scheduled'
+      const scheduleType = updateData.schedule_type || stream.schedule_type;
+      if (scheduleType === 'daily' || scheduleType === 'weekly') {
+        updateData.status = 'scheduled';
+      } else {
+        updateData.status = 'offline';
+      }
       
       if (req.body.scheduleEndTime) {
         const scheduleEndDate = parseLocalDateTime(req.body.scheduleEndTime);

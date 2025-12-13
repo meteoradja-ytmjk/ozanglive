@@ -31,6 +31,28 @@ const MAX_LOG_LINES = 100;
 const streamDurationInfo = new Map();
 
 /**
+ * Determine the correct status after a stream ends
+ * For recurring streams (daily/weekly), status should be 'scheduled' so they can run again
+ * For one-time streams, status should be 'offline'
+ * 
+ * @param {Object} stream - Stream object from database
+ * @returns {string} The status to set ('offline' or 'scheduled')
+ */
+function getStatusAfterStreamEnd(stream) {
+  if (!stream) return 'offline';
+  
+  // For recurring streams (daily/weekly) that are enabled, set back to 'scheduled'
+  if ((stream.schedule_type === 'daily' || stream.schedule_type === 'weekly') && 
+      stream.recurring_enabled) {
+    console.log(`[StreamingService] Recurring stream ${stream.id} (${stream.schedule_type}) - setting status to 'scheduled'`);
+    return 'scheduled';
+  }
+  
+  // For one-time streams or disabled recurring streams, set to 'offline'
+  return 'offline';
+}
+
+/**
  * Set duration info for a stream
  * @param {string} streamId - Stream ID
  * @param {Date} startTime - Stream start time
@@ -211,21 +233,21 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
   
   fs.writeFileSync(concatFile, concatContent);
   
-  // OPTIMIZED: Non-advanced mode uses copy (minimal CPU)
+  // Non-advanced mode uses copy (minimal CPU) with proper buffering for smooth audio
   if (!stream.use_advanced_settings) {
-    console.log('[StreamingService] Using OPTIMIZED playlist mode: threads=2, bufsize=1M, copy mode');
+    console.log('[StreamingService] Using playlist mode: copy, bufsize=2M');
     const args = [
       // CPU optimization: limit threads per stream
       '-threads', '2',
-      '-thread_queue_size', '512',
+      '-thread_queue_size', '2048',     // FIXED: Increased to prevent audio drops
       '-hwaccel', 'auto',
-      // Reduce FFmpeg's internal processing priority
-      '-probesize', '32',
-      '-analyzeduration', '0',
+      // FIXED: Proper probesize and analyzeduration for audio sync
+      '-probesize', '5000000',          // 5MB
+      '-analyzeduration', '5000000',    // 5 seconds
       '-loglevel', 'error',
       '-re',
-      // Handle corrupt frames gracefully
-      '-fflags', '+genpts+igndts+discardcorrupt+nobuffer',
+      // Handle corrupt frames gracefully - REMOVED nobuffer
+      '-fflags', '+genpts+igndts+discardcorrupt',
       '-avoid_negative_ts', 'make_zero',
       '-f', 'concat',
       '-safe', '0',
@@ -233,9 +255,9 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
       '-c:v', 'copy',
       '-c:a', 'copy',
       '-flags', '+global_header',
-      '-bufsize', '512k',            // Further reduced for copy mode
-      '-max_muxing_queue_size', '1024', // Further reduced for copy mode
-      '-flvflags', 'no_duration_filesize', // Reduce FLV overhead
+      '-bufsize', '2000k',              // FIXED: Increased for smooth playback
+      '-max_muxing_queue_size', '4096', // FIXED: Increased to prevent audio drops
+      '-flvflags', 'no_duration_filesize',
       '-f', 'flv'
     ];
     
@@ -249,35 +271,35 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
     return args;
   }
   
-  // OPTIMIZED: Advanced mode uses ultrafast preset (lower CPU than veryfast)
+  // Advanced mode uses ultrafast preset with proper buffering for smooth audio
   const resolution = stream.resolution || '1280x720';
   const bitrate = stream.bitrate || 2500;
   const fps = stream.fps || 30;
   
-  console.log('[StreamingService] Using OPTIMIZED playlist mode: threads=2, ultrafast preset, encoding');
+  console.log('[StreamingService] Using playlist mode: ultrafast preset, encoding');
   const advancedArgs = [
     // CPU optimization: limit threads per stream
     '-threads', '2',
-    '-thread_queue_size', '512',
+    '-thread_queue_size', '2048',       // FIXED: Increased to prevent audio drops
     '-hwaccel', 'auto',
-    // Reduce FFmpeg's internal processing priority
-    '-probesize', '32',
-    '-analyzeduration', '0',
+    // FIXED: Proper probesize and analyzeduration for audio sync
+    '-probesize', '5000000',            // 5MB
+    '-analyzeduration', '5000000',      // 5 seconds
     '-loglevel', 'error',
     '-re',
-    // Handle corrupt frames gracefully
-    '-fflags', '+genpts+discardcorrupt+nobuffer',
+    // Handle corrupt frames gracefully - REMOVED nobuffer
+    '-fflags', '+genpts+discardcorrupt',
     '-avoid_negative_ts', 'make_zero',
     '-f', 'concat',
     '-safe', '0',
     '-i', concatFile,
     '-c:v', 'libx264',
-    '-preset', 'ultrafast',         // Changed from veryfast for lower CPU
-    '-profile:v', 'baseline',       // YouTube compatible, lowest CPU
+    '-preset', 'ultrafast',
+    '-profile:v', 'baseline',
     '-tune', 'zerolatency',
     '-b:v', `${bitrate}k`,
     '-maxrate', `${bitrate * 1.5}k`,
-    '-bufsize', `${Math.min(bitrate * 2, 2000)}k`, // Cap buffer size
+    '-bufsize', `${Math.max(bitrate * 2, 4000)}k`, // FIXED: Minimum 4M buffer
     '-pix_fmt', 'yuv420p',
     '-g', `${fps * 2}`,
     '-s', resolution,
@@ -285,7 +307,7 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
     '-c:a', 'aac',
     '-b:a', '128k',
     '-ar', '44100',
-    '-flvflags', 'no_duration_filesize', // Reduce FLV overhead
+    '-flvflags', 'no_duration_filesize',
     '-f', 'flv'
   ];
   
@@ -393,15 +415,15 @@ function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds
   const args = [
     // CPU optimization: limit threads per stream
     '-threads', '2',
-    '-thread_queue_size', '512',
+    '-thread_queue_size', '2048',       // FIXED: Increased from 512 to prevent audio drops
     '-hwaccel', 'auto',
-    // Reduce FFmpeg's internal processing priority
-    '-probesize', '32',
-    '-analyzeduration', '0',
+    // FIXED: Increased probesize and analyzeduration for better audio sync
+    '-probesize', '5000000',            // 5MB - enough to analyze audio properly
+    '-analyzeduration', '5000000',      // 5 seconds - analyze audio/video sync
     '-loglevel', 'error',
     '-re',
-    // Handle corrupt frames gracefully
-    '-fflags', '+genpts+igndts+discardcorrupt+nobuffer',
+    // Handle corrupt frames gracefully - REMOVED nobuffer to prevent audio stuttering
+    '-fflags', '+genpts+igndts+discardcorrupt',
     '-avoid_negative_ts', 'make_zero'
   ];
   
@@ -422,26 +444,26 @@ function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds
   // Video codec - copy to avoid re-encoding (minimal CPU)
   args.push('-c:v', 'copy');
   
-  // Audio codec - try copy first for AAC files, otherwise encode with ultrafast settings
+  // Audio codec - try copy first for AAC files, otherwise encode with good quality
   if (canCopyAudio) {
     // AAC audio can be copied directly (ZERO CPU for audio)
     args.push('-c:a', 'copy');
     console.log('[StreamingService] Audio is AAC - using copy mode (zero CPU)');
   } else {
-    // Need to encode to AAC - use minimal CPU settings
+    // Need to encode to AAC - use good quality settings to prevent stuttering
     args.push('-c:a', 'aac');
-    args.push('-b:a', '96k');           // Reduced from 128k for lower CPU
+    args.push('-b:a', '128k');          // FIXED: Increased from 96k for better quality
     args.push('-ar', '44100');
     args.push('-ac', '2');              // Stereo
-    args.push('-aac_coder', 'fast');    // Fastest AAC encoder
-    console.log('[StreamingService] Audio needs encoding - using fast AAC encoder');
+    args.push('-profile:a', 'aac_low'); // LC-AAC profile for compatibility
+    console.log('[StreamingService] Audio needs encoding - using AAC encoder at 128k');
   }
   
-  // Output settings - OPTIMIZED for low memory and CPU
+  // Output settings - balanced for quality and performance
   args.push('-flags', '+global_header');
-  args.push('-bufsize', '512k');            // Further reduced for lower memory
-  args.push('-max_muxing_queue_size', '1024'); // Further reduced
-  args.push('-flvflags', 'no_duration_filesize'); // Reduce FLV overhead
+  args.push('-bufsize', '2000k');           // FIXED: Increased buffer for smoother playback
+  args.push('-max_muxing_queue_size', '4096'); // FIXED: Increased to prevent audio drops
+  args.push('-flvflags', 'no_duration_filesize');
   args.push('-f', 'flv');
   
   // CRITICAL: Duration limit (-t) must be placed just before output URL
@@ -452,7 +474,7 @@ function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds
   
   args.push(rtmpUrl);
   
-  console.log(`[StreamingService] Using OPTIMIZED audio-merge mode: threads=2, video copy, audio ${canCopyAudio ? 'copy' : 'fast-aac'}`);
+  console.log(`[StreamingService] Using audio-merge mode: video copy, audio ${canCopyAudio ? 'copy' : 'aac-128k'}, bufsize=2M`);
   
   return args;
 }
@@ -474,15 +496,15 @@ function buildFFmpegArgsVideoOnly(videoPath, rtmpUrl, durationSeconds, loopVideo
   const args = [
     // CPU optimization: limit threads per stream (allows more concurrent streams)
     '-threads', '2',
-    '-thread_queue_size', '512',
+    '-thread_queue_size', '2048',       // FIXED: Increased from 512 to prevent audio drops
     '-hwaccel', 'auto',
-    // Reduce FFmpeg's internal processing priority
-    '-probesize', '32',
-    '-analyzeduration', '0',
+    // FIXED: Increased probesize and analyzeduration for better audio sync
+    '-probesize', '5000000',            // 5MB - enough to analyze audio properly
+    '-analyzeduration', '5000000',      // 5 seconds - analyze audio/video sync
     '-loglevel', 'error',
     '-re',
-    // Handle corrupt frames gracefully to prevent sudden stops
-    '-fflags', '+genpts+igndts+discardcorrupt+nobuffer',
+    // Handle corrupt frames gracefully - REMOVED nobuffer to prevent audio stuttering
+    '-fflags', '+genpts+igndts+discardcorrupt',
     '-avoid_negative_ts', 'make_zero'
   ];
   
@@ -498,16 +520,14 @@ function buildFFmpegArgsVideoOnly(videoPath, rtmpUrl, durationSeconds, loopVideo
   args.push('-c:v', 'copy');
   args.push('-c:a', 'copy');
   
-  // Output settings - ULTRA OPTIMIZED for minimal memory and CPU
+  // Output settings - balanced for quality and performance
   args.push('-flags', '+global_header');
-  args.push('-bufsize', '512k');            // Further reduced for copy mode
-  args.push('-max_muxing_queue_size', '1024'); // Further reduced for copy mode
-  args.push('-flvflags', 'no_duration_filesize'); // Reduce FLV overhead
+  args.push('-bufsize', '2000k');           // FIXED: Increased buffer for smoother playback
+  args.push('-max_muxing_queue_size', '4096'); // FIXED: Increased to prevent audio drops
+  args.push('-flvflags', 'no_duration_filesize');
   args.push('-f', 'flv');
   
   // CRITICAL: Duration limit (-t) must be placed just before output URL
-  // This limits the OUTPUT duration, not input duration
-  // When placed here, FFmpeg will stop writing to output after durationSeconds
   if (durationSeconds && durationSeconds > 0) {
     console.log(`[StreamingService] FFmpeg -t parameter set: ${durationSeconds} seconds`);
     args.push('-t', durationSeconds.toString());
@@ -515,7 +535,7 @@ function buildFFmpegArgsVideoOnly(videoPath, rtmpUrl, durationSeconds, loopVideo
   
   args.push(rtmpUrl);
   
-  console.log('[StreamingService] Using OPTIMIZED video-only mode: threads=2, bufsize=1M, copy mode');
+  console.log('[StreamingService] Using video-only mode: copy mode, bufsize=2M');
   
   return args;
 }
@@ -630,7 +650,9 @@ async function startStream(streamId) {
           try {
             const streamData = await Stream.findById(streamId);
             if (streamData) {
-              await Stream.updateStatus(streamId, 'offline', streamData.user_id);
+              // FIXED: Use correct status based on schedule type
+              const newStatus = getStatusAfterStreamEnd(streamData);
+              await Stream.updateStatus(streamId, newStatus, streamData.user_id);
               const updatedStream = await Stream.findById(streamId);
               await saveStreamHistory(updatedStream);
             }
@@ -651,7 +673,10 @@ async function startStream(streamId) {
         clearDurationInfo(streamId);
         if (wasActive) {
           try {
-            await Stream.updateStatus(streamId, 'offline');
+            // FIXED: Use correct status based on schedule type
+            const streamData = await Stream.findById(streamId);
+            const newStatus = getStatusAfterStreamEnd(streamData);
+            await Stream.updateStatus(streamId, newStatus, streamData?.user_id);
             if (typeof schedulerService !== 'undefined' && schedulerService.cancelStreamTermination) {
               schedulerService.handleStreamStopped(streamId);
             }
@@ -676,7 +701,9 @@ async function startStream(streamId) {
             try {
               const streamData = await Stream.findById(streamId);
               if (streamData) {
-                await Stream.updateStatus(streamId, 'offline', streamData.user_id);
+                // FIXED: Use correct status based on schedule type
+                const newStatus = getStatusAfterStreamEnd(streamData);
+                await Stream.updateStatus(streamId, newStatus, streamData.user_id);
               }
               if (typeof schedulerService !== 'undefined' && schedulerService.cancelStreamTermination) {
                 schedulerService.handleStreamStopped(streamId);
@@ -702,7 +729,9 @@ async function startStream(streamId) {
                 const result = await startStream(streamId);
                 if (!result.success) {
                   console.error(`[StreamingService] Failed to restart stream: ${result.error}`);
-                  await Stream.updateStatus(streamId, 'offline');
+                  // FIXED: Use correct status based on schedule type
+                  const newStatus = getStatusAfterStreamEnd(streamInfo);
+                  await Stream.updateStatus(streamId, newStatus);
                 }
               } else {
                 console.error(`[StreamingService] Cannot restart stream ${streamId}: not found in database`);
@@ -710,6 +739,7 @@ async function startStream(streamId) {
             } catch (error) {
               console.error(`[StreamingService] Error during stream restart: ${error.message}`);
               try {
+                // Fallback to offline if we can't determine schedule type
                 await Stream.updateStatus(streamId, 'offline');
               } catch (dbError) {
                 console.error(`Error updating stream status: ${dbError.message}`);
@@ -735,7 +765,9 @@ async function startStream(streamId) {
               try {
                 const streamData = await Stream.findById(streamId);
                 if (streamData) {
-                  await Stream.updateStatus(streamId, 'offline', streamData.user_id);
+                  // FIXED: Use correct status based on schedule type
+                  const newStatus = getStatusAfterStreamEnd(streamData);
+                  await Stream.updateStatus(streamId, newStatus, streamData.user_id);
                 }
                 if (typeof schedulerService !== 'undefined' && schedulerService.cancelStreamTermination) {
                   schedulerService.handleStreamStopped(streamId);
@@ -763,7 +795,9 @@ async function startStream(streamId) {
                   const result = await startStream(streamId);
                   if (!result.success) {
                     console.error(`[StreamingService] Failed to restart stream: ${result.error}`);
-                    await Stream.updateStatus(streamId, 'offline');
+                    // FIXED: Use correct status based on schedule type
+                    const newStatus = getStatusAfterStreamEnd(streamInfo);
+                    await Stream.updateStatus(streamId, newStatus);
                   }
                 }
               } catch (error) {
@@ -784,10 +818,12 @@ async function startStream(streamId) {
         clearDurationInfo(streamId);
         if (wasActive) {
           try {
-            console.log(`[StreamingService] Updating stream ${streamId} status to offline after FFmpeg exit`);
             const streamData = await Stream.findById(streamId);
+            // FIXED: Use correct status based on schedule type
+            const newStatus = getStatusAfterStreamEnd(streamData);
+            console.log(`[StreamingService] Updating stream ${streamId} status to '${newStatus}' after FFmpeg exit`);
             if (streamData) {
-              await Stream.updateStatus(streamId, 'offline', streamData.user_id);
+              await Stream.updateStatus(streamId, newStatus, streamData.user_id);
               const updatedStream = await Stream.findById(streamId);
               await saveStreamHistory(updatedStream);
             }
@@ -805,7 +841,10 @@ async function startStream(streamId) {
       console.error(`[FFMPEG_PROCESS_ERROR] ${streamId}: ${err.message}`);
       activeStreams.delete(streamId);
       try {
-        await Stream.updateStatus(streamId, 'offline');
+        // FIXED: Try to get stream data to determine correct status
+        const streamData = await Stream.findById(streamId);
+        const newStatus = getStatusAfterStreamEnd(streamData);
+        await Stream.updateStatus(streamId, newStatus);
       } catch (error) {
         console.error(`Error updating stream status: ${error.message}`);
       }
@@ -858,7 +897,9 @@ async function stopStream(streamId) {
       const stream = await Stream.findById(streamId);
       if (stream && stream.status === 'live') {
         console.log(`[StreamingService] Stream ${streamId} not active in memory but status is 'live' in DB. Fixing status.`);
-        await Stream.updateStatus(streamId, 'offline', stream.user_id);
+        // FIXED: Use correct status based on schedule type
+        const newStatus = getStatusAfterStreamEnd(stream);
+        await Stream.updateStatus(streamId, newStatus, stream.user_id);
         // Clean up duration tracking
         clearDurationInfo(streamId);
         if (typeof schedulerService !== 'undefined' && schedulerService.cancelStreamTermination) {
@@ -894,7 +935,9 @@ async function stopStream(streamId) {
     }
     
     if (stream) {
-      await Stream.updateStatus(streamId, 'offline', stream.user_id);
+      // FIXED: Use correct status based on schedule type
+      const newStatus = getStatusAfterStreamEnd(stream);
+      await Stream.updateStatus(streamId, newStatus, stream.user_id);
       const updatedStream = await Stream.findById(streamId);
       await saveStreamHistory(updatedStream);
     }
@@ -918,8 +961,10 @@ async function syncStreamStatuses() {
       const isReallyActive = activeStreams.has(stream.id);
       if (!isReallyActive) {
         console.log(`[StreamingService] Found inconsistent stream ${stream.id}: marked as 'live' in DB but not active in memory`);
-        await Stream.updateStatus(stream.id, 'offline');
-        console.log(`[StreamingService] Updated stream ${stream.id} status to 'offline'`);
+        // FIXED: Use correct status based on schedule type
+        const newStatus = getStatusAfterStreamEnd(stream);
+        await Stream.updateStatus(stream.id, newStatus);
+        console.log(`[StreamingService] Updated stream ${stream.id} status to '${newStatus}'`);
       }
     }
     const activeStreamIds = Array.from(activeStreams.keys());
