@@ -203,27 +203,17 @@ class Stream {
       end_time = endTimeOverride || new Date().toISOString();
     }
     
-    // Build query based on whether userId is provided
-    // If userId is not provided, update by id only (for system operations like scheduler)
-    const query = userId 
-      ? `UPDATE streams SET 
-          status = ?, 
-          status_updated_at = ?, 
-          start_time = CASE WHEN ? IS NOT NULL THEN ? ELSE start_time END, 
-          end_time = CASE WHEN ? IS NOT NULL THEN ? ELSE end_time END,
-          updated_at = CURRENT_TIMESTAMP
-         WHERE id = ? AND user_id = ?`
-      : `UPDATE streams SET 
-          status = ?, 
-          status_updated_at = ?, 
-          start_time = CASE WHEN ? IS NOT NULL THEN ? ELSE start_time END, 
-          end_time = CASE WHEN ? IS NOT NULL THEN ? ELSE end_time END,
-          updated_at = CURRENT_TIMESTAMP
-         WHERE id = ?`;
+    // FIXED: Always update by id only to avoid user_id mismatch issues
+    // The user_id check was causing status updates to fail when scheduler starts streams
+    const query = `UPDATE streams SET 
+        status = ?, 
+        status_updated_at = ?, 
+        start_time = CASE WHEN ? IS NOT NULL THEN ? ELSE start_time END, 
+        end_time = CASE WHEN ? IS NOT NULL THEN ? ELSE end_time END,
+        updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`;
     
-    const params = userId 
-      ? [status, status_updated_at, start_time, start_time, end_time, end_time, id, userId]
-      : [status, status_updated_at, start_time, start_time, end_time, end_time, id];
+    const params = [status, status_updated_at, start_time, start_time, end_time, end_time, id];
     
     return new Promise((resolve, reject) => {
       db.run(query, params,
@@ -232,7 +222,13 @@ class Stream {
             console.error('Error updating stream status:', err.message);
             return reject(err);
           }
-          console.log(`[Stream.updateStatus] Updated stream ${id} to status '${status}', rows affected: ${this.changes}`);
+          
+          if (this.changes === 0) {
+            console.warn(`[Stream.updateStatus] WARNING: No rows updated for stream ${id} to status '${status}'`);
+          } else {
+            console.log(`[Stream.updateStatus] Updated stream ${id} to status '${status}', rows affected: ${this.changes}`);
+          }
+          
           resolve({
             id,
             status,
