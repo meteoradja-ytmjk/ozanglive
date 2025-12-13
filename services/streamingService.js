@@ -160,6 +160,14 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
   const projectRoot = path.resolve(__dirname, '..');
   const rtmpUrl = `${stream.rtmp_url.replace(/\/$/, '')}/${stream.stream_key}`;
   
+  // Calculate duration using centralized calculator
+  const durationSeconds = calculateDurationSeconds(stream);
+  if (durationSeconds) {
+    console.log(`[StreamingService] Playlist FFmpeg duration: ${formatDuration(durationSeconds)}`);
+  } else {
+    console.log('[StreamingService] No duration set for playlist - stream will run until playlist ends or loop exhausts');
+  }
+  
   let videoPaths = [];
   
   if (playlist.is_shuffle || playlist.shuffle) {
@@ -206,15 +214,18 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
   // OPTIMIZED: Non-advanced mode uses copy (minimal CPU)
   if (!stream.use_advanced_settings) {
     console.log('[StreamingService] Using OPTIMIZED playlist mode: threads=2, bufsize=1M, copy mode');
-    return [
+    const args = [
       // CPU optimization: limit threads per stream
       '-threads', '2',
       '-thread_queue_size', '512',
       '-hwaccel', 'auto',
+      // Reduce FFmpeg's internal processing priority
+      '-probesize', '32',
+      '-analyzeduration', '0',
       '-loglevel', 'error',
       '-re',
       // Handle corrupt frames gracefully
-      '-fflags', '+genpts+igndts+discardcorrupt',
+      '-fflags', '+genpts+igndts+discardcorrupt+nobuffer',
       '-avoid_negative_ts', 'make_zero',
       '-f', 'concat',
       '-safe', '0',
@@ -222,12 +233,20 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
       '-c:v', 'copy',
       '-c:a', 'copy',
       '-flags', '+global_header',
-      '-bufsize', '1M',              // Reduced from 4M
-      '-max_muxing_queue_size', '2048', // Reduced from 7000
+      '-bufsize', '512k',            // Further reduced for copy mode
+      '-max_muxing_queue_size', '1024', // Further reduced for copy mode
       '-flvflags', 'no_duration_filesize', // Reduce FLV overhead
-      '-f', 'flv',
-      rtmpUrl
+      '-f', 'flv'
     ];
+    
+    // CRITICAL: Add duration limit just before output URL
+    if (durationSeconds && durationSeconds > 0) {
+      console.log(`[StreamingService] Playlist FFmpeg -t parameter set: ${durationSeconds} seconds`);
+      args.push('-t', durationSeconds.toString());
+    }
+    
+    args.push(rtmpUrl);
+    return args;
   }
   
   // OPTIMIZED: Advanced mode uses ultrafast preset (lower CPU than veryfast)
@@ -236,15 +255,18 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
   const fps = stream.fps || 30;
   
   console.log('[StreamingService] Using OPTIMIZED playlist mode: threads=2, ultrafast preset, encoding');
-  return [
+  const advancedArgs = [
     // CPU optimization: limit threads per stream
     '-threads', '2',
     '-thread_queue_size', '512',
     '-hwaccel', 'auto',
+    // Reduce FFmpeg's internal processing priority
+    '-probesize', '32',
+    '-analyzeduration', '0',
     '-loglevel', 'error',
     '-re',
     // Handle corrupt frames gracefully
-    '-fflags', '+genpts+discardcorrupt',
+    '-fflags', '+genpts+discardcorrupt+nobuffer',
     '-avoid_negative_ts', 'make_zero',
     '-f', 'concat',
     '-safe', '0',
@@ -264,9 +286,17 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
     '-b:a', '128k',
     '-ar', '44100',
     '-flvflags', 'no_duration_filesize', // Reduce FLV overhead
-    '-f', 'flv',
-    rtmpUrl
+    '-f', 'flv'
   ];
+  
+  // CRITICAL: Add duration limit just before output URL
+  if (durationSeconds && durationSeconds > 0) {
+    console.log(`[StreamingService] Playlist (advanced) FFmpeg -t parameter set: ${durationSeconds} seconds`);
+    advancedArgs.push('-t', durationSeconds.toString());
+  }
+  
+  advancedArgs.push(rtmpUrl);
+  return advancedArgs;
 }
 
 async function buildFFmpegArgs(stream) {
@@ -356,15 +386,22 @@ async function buildFFmpegArgs(stream) {
  * even when input streams are looping infinitely (-stream_loop -1).
  */
 function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds, loopVideo) {
+  // Check if audio is already AAC (can be copied without re-encoding)
+  const audioExt = path.extname(audioPath).toLowerCase();
+  const canCopyAudio = ['.aac', '.m4a'].includes(audioExt);
+  
   const args = [
     // CPU optimization: limit threads per stream
     '-threads', '2',
     '-thread_queue_size', '512',
     '-hwaccel', 'auto',
+    // Reduce FFmpeg's internal processing priority
+    '-probesize', '32',
+    '-analyzeduration', '0',
     '-loglevel', 'error',
     '-re',
     // Handle corrupt frames gracefully
-    '-fflags', '+genpts+igndts+discardcorrupt',
+    '-fflags', '+genpts+igndts+discardcorrupt+nobuffer',
     '-avoid_negative_ts', 'make_zero'
   ];
   
@@ -385,21 +422,29 @@ function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds
   // Video codec - copy to avoid re-encoding (minimal CPU)
   args.push('-c:v', 'copy');
   
-  // Audio codec - encode to AAC for compatibility (required for merge)
-  args.push('-c:a', 'aac');
-  args.push('-b:a', '128k');
-  args.push('-ar', '44100');
+  // Audio codec - try copy first for AAC files, otherwise encode with ultrafast settings
+  if (canCopyAudio) {
+    // AAC audio can be copied directly (ZERO CPU for audio)
+    args.push('-c:a', 'copy');
+    console.log('[StreamingService] Audio is AAC - using copy mode (zero CPU)');
+  } else {
+    // Need to encode to AAC - use minimal CPU settings
+    args.push('-c:a', 'aac');
+    args.push('-b:a', '96k');           // Reduced from 128k for lower CPU
+    args.push('-ar', '44100');
+    args.push('-ac', '2');              // Stereo
+    args.push('-aac_coder', 'fast');    // Fastest AAC encoder
+    console.log('[StreamingService] Audio needs encoding - using fast AAC encoder');
+  }
   
   // Output settings - OPTIMIZED for low memory and CPU
   args.push('-flags', '+global_header');
-  args.push('-bufsize', '1M');              // Reduced from 4M
-  args.push('-max_muxing_queue_size', '2048'); // Reduced from 7000
+  args.push('-bufsize', '512k');            // Further reduced for lower memory
+  args.push('-max_muxing_queue_size', '1024'); // Further reduced
   args.push('-flvflags', 'no_duration_filesize'); // Reduce FLV overhead
   args.push('-f', 'flv');
   
   // CRITICAL: Duration limit (-t) must be placed just before output URL
-  // This limits the OUTPUT duration, not input duration
-  // When placed here, FFmpeg will stop writing to output after durationSeconds
   if (durationSeconds && durationSeconds > 0) {
     console.log(`[StreamingService] FFmpeg -t parameter set: ${durationSeconds} seconds`);
     args.push('-t', durationSeconds.toString());
@@ -407,7 +452,7 @@ function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds
   
   args.push(rtmpUrl);
   
-  console.log('[StreamingService] Using OPTIMIZED audio-merge mode: threads=2, bufsize=1M, video copy + audio AAC');
+  console.log(`[StreamingService] Using OPTIMIZED audio-merge mode: threads=2, video copy, audio ${canCopyAudio ? 'copy' : 'fast-aac'}`);
   
   return args;
 }
@@ -431,10 +476,13 @@ function buildFFmpegArgsVideoOnly(videoPath, rtmpUrl, durationSeconds, loopVideo
     '-threads', '2',
     '-thread_queue_size', '512',
     '-hwaccel', 'auto',
+    // Reduce FFmpeg's internal processing priority
+    '-probesize', '32',
+    '-analyzeduration', '0',
     '-loglevel', 'error',
     '-re',
     // Handle corrupt frames gracefully to prevent sudden stops
-    '-fflags', '+genpts+igndts+discardcorrupt',
+    '-fflags', '+genpts+igndts+discardcorrupt+nobuffer',
     '-avoid_negative_ts', 'make_zero'
   ];
   
@@ -450,10 +498,10 @@ function buildFFmpegArgsVideoOnly(videoPath, rtmpUrl, durationSeconds, loopVideo
   args.push('-c:v', 'copy');
   args.push('-c:a', 'copy');
   
-  // Output settings - OPTIMIZED for low memory and CPU
+  // Output settings - ULTRA OPTIMIZED for minimal memory and CPU
   args.push('-flags', '+global_header');
-  args.push('-bufsize', '1M');              // Reduced from 4M
-  args.push('-max_muxing_queue_size', '2048'); // Reduced from 7000
+  args.push('-bufsize', '512k');            // Further reduced for copy mode
+  args.push('-max_muxing_queue_size', '1024'); // Further reduced for copy mode
   args.push('-flvflags', 'no_duration_filesize'); // Reduce FLV overhead
   args.push('-f', 'flv');
   

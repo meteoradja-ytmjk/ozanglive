@@ -40,22 +40,42 @@ async function checkScheduledStreams() {
     const now = new Date();
     const lookAheadTime = new Date(now.getTime() + SCHEDULE_LOOKAHEAD_SECONDS * 1000);
     
-    // Log current time for debugging
+    // Log current time for debugging (use local time for readability)
     const currentHours = now.getHours();
     const currentMinutes = now.getMinutes();
-    console.log(`[Scheduler] Checking once schedules at ${currentHours}:${String(currentMinutes).padStart(2, '0')} (range: ${now.toISOString()} to ${lookAheadTime.toISOString()})`);
+    console.log(`[Scheduler] Checking once schedules at ${currentHours}:${String(currentMinutes).padStart(2, '0')} local (${now.toISOString()})`);
     
     const streams = await Stream.findScheduledInRange(now, lookAheadTime);
     if (streams.length > 0) {
       console.log(`[Scheduler] Found ${streams.length} 'once' streams to start`);
       for (const stream of streams) {
-        console.log(`[Scheduler] Starting scheduled stream: ${stream.id} - ${stream.title} (scheduled: ${stream.schedule_time})`);
+        // Check if stream was recently triggered to prevent double starts
+        if (wasRecentlyTriggered(stream.id)) {
+          console.log(`[Scheduler] SKIP: stream ${stream.id} - recently triggered (cooldown active)`);
+          continue;
+        }
+        
+        const scheduleTime = new Date(stream.schedule_time);
+        const timeDiffMs = now.getTime() - scheduleTime.getTime();
+        const timeDiffMinutes = timeDiffMs / 60000;
+        
+        console.log(`[Scheduler] Starting scheduled stream: ${stream.id} - ${stream.title}`);
+        console.log(`[Scheduler]   Scheduled: ${stream.schedule_time}, Diff: ${timeDiffMinutes.toFixed(1)} minutes`);
+        
+        // Mark as triggered before starting
+        markAsTriggered(stream.id);
+        
         const result = await streamingService.startStream(stream.id);
         if (result.success) {
           console.log(`[Scheduler] Successfully started scheduled stream: ${stream.id}`);
         } else {
           console.error(`[Scheduler] Failed to start scheduled stream ${stream.id}: ${result.error}`);
+          // Remove from triggered list if failed so it can retry
+          recentlyTriggeredStreams.delete(stream.id);
         }
+        
+        // Small delay between starting multiple streams
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
     }
   } catch (error) {
@@ -181,28 +201,55 @@ function handleStreamStopped(streamId) {
 
 /**
  * Get current time in Asia/Jakarta timezone (WIB)
+ * Uses Intl.DateTimeFormat for accurate timezone conversion
  * @param {Date} date - Date object to convert
  * @returns {Object} Object with hours, minutes, day
  */
 function getWIBTime(date = new Date()) {
-  // Convert to WIB (UTC+7)
-  const wibOffset = 7 * 60; // 7 hours in minutes
-  const utcMinutes = date.getUTCHours() * 60 + date.getUTCMinutes();
-  const wibMinutes = (utcMinutes + wibOffset) % (24 * 60);
-  
-  const hours = Math.floor(wibMinutes / 60);
-  const minutes = wibMinutes % 60;
-  
-  // Calculate day in WIB
-  const utcDay = date.getUTCDay();
-  const utcHours = date.getUTCHours();
-  // If UTC time + 7 hours crosses midnight, adjust day
-  let day = utcDay;
-  if (utcHours + 7 >= 24) {
-    day = (utcDay + 1) % 7;
+  try {
+    // Use Intl.DateTimeFormat for accurate timezone conversion
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Jakarta',
+      hour: 'numeric',
+      minute: 'numeric',
+      weekday: 'short',
+      hour12: false
+    });
+    
+    const parts = formatter.formatToParts(date);
+    let hours = 0, minutes = 0, dayName = '';
+    
+    for (const part of parts) {
+      if (part.type === 'hour') hours = parseInt(part.value, 10);
+      if (part.type === 'minute') minutes = parseInt(part.value, 10);
+      if (part.type === 'weekday') dayName = part.value;
+    }
+    
+    // Convert day name to number (0=Sun, 1=Mon, etc.)
+    const dayMap = { 'Sun': 0, 'Mon': 1, 'Tue': 2, 'Wed': 3, 'Thu': 4, 'Fri': 5, 'Sat': 6 };
+    const day = dayMap[dayName] ?? date.getDay();
+    
+    return { hours, minutes, day };
+  } catch (e) {
+    // Fallback to manual calculation if Intl fails
+    console.warn('[Scheduler] Intl.DateTimeFormat failed, using manual WIB calculation');
+    const wibOffset = 7 * 60; // 7 hours in minutes
+    const utcMinutes = date.getUTCHours() * 60 + date.getUTCMinutes();
+    const wibMinutes = (utcMinutes + wibOffset) % (24 * 60);
+    
+    const hours = Math.floor(wibMinutes / 60);
+    const minutes = wibMinutes % 60;
+    
+    // Calculate day in WIB
+    const utcDay = date.getUTCDay();
+    const utcHours = date.getUTCHours();
+    let day = utcDay;
+    if (utcHours + 7 >= 24) {
+      day = (utcDay + 1) % 7;
+    }
+    
+    return { hours, minutes, day };
   }
-  
-  return { hours, minutes, day };
 }
 
 /**
@@ -223,8 +270,14 @@ function shouldTriggerDaily(stream, currentTime = new Date()) {
   const wibTime = getWIBTime(currentTime);
   const currentTotalMinutes = wibTime.hours * 60 + wibTime.minutes;
 
-  // 1-minute tolerance for matching
-  return Math.abs(currentTotalMinutes - scheduleMinutes) <= 1;
+  // Calculate time difference
+  const timeDiff = currentTotalMinutes - scheduleMinutes;
+  
+  // Trigger if:
+  // - Within 1 minute before scheduled time (early trigger)
+  // - Up to 5 minutes after scheduled time (catch missed schedules)
+  // This ensures we don't miss schedules due to timing issues
+  return timeDiff >= -1 && timeDiff <= 5;
 }
 
 /**
@@ -255,8 +308,14 @@ function shouldTriggerWeekly(stream, currentTime = new Date()) {
   const scheduleMinutes = schedHours * 60 + schedMinutes;
   const currentTotalMinutes = wibTime.hours * 60 + wibTime.minutes;
 
-  // 1-minute tolerance for matching
-  return Math.abs(currentTotalMinutes - scheduleMinutes) <= 1;
+  // Calculate time difference
+  const timeDiff = currentTotalMinutes - scheduleMinutes;
+  
+  // Trigger if:
+  // - Within 1 minute before scheduled time (early trigger)
+  // - Up to 5 minutes after scheduled time (catch missed schedules)
+  // This ensures we don't miss schedules due to timing issues
+  return timeDiff >= -1 && timeDiff <= 5;
 }
 
 /**

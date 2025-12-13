@@ -280,8 +280,13 @@ class Stream {
   }
   static findScheduledInRange(startTime, endTime) {
     return new Promise((resolve, reject) => {
-      const startTimeStr = startTime.toISOString();
       const endTimeStr = endTime.toISOString();
+      // FIXED: Include streams that are scheduled but may have been missed
+      // Look for streams scheduled up to 5 minutes in the past to catch any that were missed
+      const missedWindowMs = 5 * 60 * 1000; // 5 minutes
+      const missedStartTime = new Date(startTime.getTime() - missedWindowMs);
+      const missedStartTimeStr = missedStartTime.toISOString();
+      
       const query = `
         SELECT s.*, 
                v.title AS video_title, 
@@ -294,11 +299,13 @@ class Stream {
         FROM streams s
         LEFT JOIN videos v ON s.video_id = v.id
         WHERE s.status = 'scheduled'
+        AND s.schedule_type = 'once'
         AND s.schedule_time IS NOT NULL
         AND s.schedule_time >= ?
         AND s.schedule_time <= ?
       `;
-      db.all(query, [startTimeStr, endTimeStr], (err, rows) => {
+      console.log(`[Stream.findScheduledInRange] Searching from ${missedStartTimeStr} to ${endTimeStr}`);
+      db.all(query, [missedStartTimeStr, endTimeStr], (err, rows) => {
         if (err) {
           console.error('Error finding scheduled streams:', err.message);
           return reject(err);
@@ -308,6 +315,7 @@ class Stream {
             row.loop_video = row.loop_video === 1;
             row.use_advanced_settings = row.use_advanced_settings === 1;
           });
+          console.log(`[Stream.findScheduledInRange] Found ${rows.length} scheduled streams`);
         }
         resolve(rows || []);
       });
