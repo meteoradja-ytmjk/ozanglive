@@ -8,6 +8,7 @@ const { v4: uuidv4 } = require('uuid');
 const { db } = require('../db/database');
 const Stream = require('../models/Stream');
 const Playlist = require('../models/Playlist');
+const { calculateDurationSeconds, calculateRemainingDuration, formatDuration } = require('../utils/durationCalculator');
 let ffmpegPath;
 if (fs.existsSync('/usr/bin/ffmpeg')) {
   ffmpegPath = '/usr/bin/ffmpeg';
@@ -34,15 +35,31 @@ const streamDurationInfo = new Map();
  * @param {string} streamId - Stream ID
  * @param {Date} startTime - Stream start time
  * @param {number} durationMs - Duration in milliseconds
+ * @returns {boolean} True if duration was set successfully
  */
 function setDurationInfo(streamId, startTime, durationMs) {
+  // Validate durationMs is positive
+  if (!durationMs || durationMs <= 0) {
+    console.log(`[StreamingService] Duration tracking skipped for stream ${streamId}: invalid duration (${durationMs}ms)`);
+    return false;
+  }
+  
   const expectedEndTime = new Date(startTime.getTime() + durationMs);
+  const minutes = durationMs / 60000;
+  const seconds = durationMs / 1000;
+  
   streamDurationInfo.set(streamId, {
     startTime,
     durationMs,
-    expectedEndTime
+    expectedEndTime,
+    originalDurationMs: durationMs // Store original for restart calculation
   });
-  console.log(`[StreamingService] Duration tracking set for stream ${streamId}: start=${startTime.toISOString()}, duration=${durationMs}ms, expectedEnd=${expectedEndTime.toISOString()}`);
+  
+  // Log with consistent format: "Duration set: X minutes (Y seconds)"
+  console.log(`[StreamingService] Duration set: ${minutes.toFixed(1)} minutes (${seconds} seconds)`);
+  console.log(`[StreamingService] Stream ${streamId} expected end: ${expectedEndTime.toISOString()}`);
+  
+  return true;
 }
 
 /**
@@ -96,6 +113,31 @@ function isStreamEndingSoon(streamId) {
   const remainingMs = getRemainingTime(streamId);
   if (remainingMs === null) return false;
   return remainingMs < 300000; // 5 minutes in ms
+}
+
+/**
+ * Get original duration for a stream (for restart calculation)
+ * @param {string} streamId - Stream ID
+ * @returns {number|null} Original duration in ms, or null if not set
+ */
+function getOriginalDurationMs(streamId) {
+  const info = getDurationInfo(streamId);
+  if (!info) return null;
+  return info.originalDurationMs || info.durationMs || null;
+}
+
+/**
+ * Calculate remaining duration for stream restart
+ * Uses the original start time and duration to calculate how much time is left
+ * @param {string} streamId - Stream ID
+ * @returns {number} Remaining duration in milliseconds (minimum 0)
+ */
+function calculateStreamRemainingDuration(streamId) {
+  const info = getDurationInfo(streamId);
+  if (!info || !info.startTime || !info.originalDurationMs) {
+    return 0;
+  }
+  return calculateRemainingDuration(info.startTime, info.originalDurationMs);
 }
 function addStreamLog(streamId, message) {
   if (!streamLogs.has(streamId)) {
@@ -278,24 +320,14 @@ async function buildFFmpegArgs(stream) {
   
   const rtmpUrl = `${stream.rtmp_url.replace(/\/$/, '')}/${stream.stream_key}`;
   
-  // Calculate duration in seconds
-  // Priority: stream_duration_hours (in hours) > duration (in minutes) > schedule-based duration
-  let durationSeconds = null;
+  // Calculate duration using centralized calculator
+  // Priority: stream_duration_minutes > schedule calculation > stream_duration_hours > duration
+  const durationSeconds = calculateDurationSeconds(stream);
   
-  if (stream.stream_duration_hours && stream.stream_duration_hours > 0) {
-    // Duration set in hours (from duration dropdown)
-    durationSeconds = stream.stream_duration_hours * 3600;
-  } else if (stream.duration && stream.duration > 0) {
-    // Duration set in minutes (from schedule end time calculation)
-    durationSeconds = stream.duration * 60;
-  } else if (stream.end_time && stream.schedule_time) {
-    // Calculate duration from schedule times
-    const scheduleStart = new Date(stream.schedule_time);
-    const scheduleEnd = new Date(stream.end_time);
-    const durationMs = scheduleEnd.getTime() - scheduleStart.getTime();
-    if (durationMs > 0) {
-      durationSeconds = Math.floor(durationMs / 1000);
-    }
+  if (durationSeconds) {
+    console.log(`[StreamingService] FFmpeg duration: ${formatDuration(durationSeconds)}`);
+  } else {
+    console.log('[StreamingService] No duration set for FFmpeg - stream will run indefinitely');
   }
   
   // Build FFmpeg args based on whether audio is selected
@@ -369,6 +401,7 @@ function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds
   // This limits the OUTPUT duration, not input duration
   // When placed here, FFmpeg will stop writing to output after durationSeconds
   if (durationSeconds && durationSeconds > 0) {
+    console.log(`[StreamingService] FFmpeg -t parameter set: ${durationSeconds} seconds`);
     args.push('-t', durationSeconds.toString());
   }
   
@@ -428,6 +461,7 @@ function buildFFmpegArgsVideoOnly(videoPath, rtmpUrl, durationSeconds, loopVideo
   // This limits the OUTPUT duration, not input duration
   // When placed here, FFmpeg will stop writing to output after durationSeconds
   if (durationSeconds && durationSeconds > 0) {
+    console.log(`[StreamingService] FFmpeg -t parameter set: ${durationSeconds} seconds`);
     args.push('-t', durationSeconds.toString());
   }
   
@@ -541,8 +575,8 @@ async function startStream(streamId) {
       // Check if duration was exceeded - if so, this is a normal termination
       const durationExceeded = isStreamDurationExceeded(streamId);
       if (durationExceeded) {
-        console.log(`[StreamingService] Stream ${streamId} ended because duration was reached - NOT restarting`);
-        addStreamLog(streamId, `Stream ended normally - duration limit reached`);
+        console.log(`[StreamingService] Stream ${streamId} stop reason: duration reached`);
+        addStreamLog(streamId, `Stream stop reason: duration reached`);
         clearDurationInfo(streamId);
         if (wasActive) {
           try {
@@ -563,7 +597,8 @@ async function startStream(streamId) {
       }
       
       if (isManualStop) {
-        console.log(`[StreamingService] Stream ${streamId} was manually stopped, not restarting`);
+        console.log(`[StreamingService] Stream ${streamId} stop reason: manual stop`);
+        addStreamLog(streamId, `Stream stop reason: manual stop`);
         manuallyStoppingStreams.delete(streamId);
         clearDurationInfo(streamId);
         if (wasActive) {
@@ -729,88 +764,31 @@ async function startStream(streamId) {
     });
     ffmpegProcess.unref();
     
-    // Calculate and track stream duration for automatic termination
-    let durationMs = null;
+    // Calculate and track stream duration using centralized calculator
     const now = Date.now();
-    
-    // Check stream_duration_hours (in hours) - from duration dropdown
-    if (stream.stream_duration_hours && stream.stream_duration_hours > 0) {
-      durationMs = stream.stream_duration_hours * 60 * 60 * 1000;
-    }
-    // Check duration (in minutes) - from schedule end time calculation
-    else if (stream.duration && stream.duration > 0) {
-      durationMs = stream.duration * 60 * 1000;
-    }
-    // Calculate from schedule times if available
-    else if (stream.end_time && stream.schedule_time) {
-      const scheduleStart = new Date(stream.schedule_time);
-      const scheduleEnd = new Date(stream.end_time);
-      const scheduleDurationMs = scheduleEnd.getTime() - scheduleStart.getTime();
-      if (scheduleDurationMs > 0) {
-        durationMs = scheduleDurationMs;
-        addStreamLog(streamId, `Duration calculated from schedule: ${scheduleDurationMs / 60000} minutes`);
-      }
-    }
+    const durationSeconds = calculateDurationSeconds(stream);
+    const durationMs = durationSeconds ? durationSeconds * 1000 : null;
     
     // Set duration tracking if duration is specified
     if (durationMs && durationMs > 0) {
-      setDurationInfo(streamId, streamStartTime, durationMs);
-      addStreamLog(streamId, `Duration tracking enabled: ${durationMs / 3600000} hours, expected end: ${new Date(streamStartTime.getTime() + durationMs).toISOString()}`);
+      const trackingSet = setDurationInfo(streamId, streamStartTime, durationMs);
+      if (trackingSet) {
+        addStreamLog(streamId, `Duration tracking enabled: ${formatDuration(durationSeconds)}`);
+      }
+    } else {
+      addStreamLog(streamId, `No duration set - stream will run indefinitely`);
     }
     
-    // Schedule stream termination based on duration or end time
-    if (typeof schedulerService !== 'undefined') {
-      let shouldEndAt = null;
+    // Schedule stream termination based on duration
+    if (typeof schedulerService !== 'undefined' && durationMs && durationMs > 0) {
+      const shouldEndAt = new Date(streamStartTime.getTime() + durationMs);
+      const remainingMs = Math.max(0, shouldEndAt.getTime() - now);
+      const bufferMs = 30000; // 30 second buffer to let FFmpeg -t work first
+      const remainingWithBufferMs = remainingMs + bufferMs;
+      const remainingMinutes = remainingWithBufferMs / 60000;
       
-      // Use duration-based end time if set
-      if (durationMs && durationMs > 0) {
-        shouldEndAt = new Date(streamStartTime.getTime() + durationMs);
-      }
-      
-      // Check schedule end time (for 'once' schedule type)
-      // IMPORTANT: For scheduled streams, we should use the DURATION, not the fixed end_time
-      // This ensures the stream runs for the intended duration even if it starts late
-      if (stream.end_time && stream.schedule_time) {
-        const scheduleStartAt = new Date(stream.schedule_time);
-        const scheduleEndAt = new Date(stream.end_time);
-        
-        // Calculate the intended duration from the schedule
-        const intendedDurationMs = scheduleEndAt.getTime() - scheduleStartAt.getTime();
-        
-        if (intendedDurationMs > 0) {
-          // Use the intended duration from actual start time
-          const durationBasedEndAt = new Date(streamStartTime.getTime() + intendedDurationMs);
-          
-          // Use the earlier of: duration-based end OR intended duration from schedule
-          if (!shouldEndAt || durationBasedEndAt < shouldEndAt) {
-            shouldEndAt = durationBasedEndAt;
-            // Update duration tracking
-            setDurationInfo(streamId, streamStartTime, intendedDurationMs);
-            addStreamLog(streamId, `Using scheduled duration: ${intendedDurationMs / 60000} minutes, expected end: ${durationBasedEndAt.toISOString()}`);
-          }
-        }
-      } else if (stream.end_time && !stream.schedule_time) {
-        // For streams with end_time but no schedule_time, use the fixed end_time
-        const scheduleEndAt = new Date(stream.end_time);
-        if (!shouldEndAt || scheduleEndAt < shouldEndAt) {
-          shouldEndAt = scheduleEndAt;
-          const adjustedDurationMs = scheduleEndAt.getTime() - streamStartTime.getTime();
-          if (adjustedDurationMs > 0) {
-            setDurationInfo(streamId, streamStartTime, adjustedDurationMs);
-          }
-        }
-      }
-      
-      // Schedule termination if we have an end time
-      // Add 30-second buffer to let FFmpeg -t parameter work first
-      if (shouldEndAt) {
-        const remainingMs = Math.max(0, shouldEndAt.getTime() - now);
-        const bufferMs = 30000; // 30 second buffer
-        const remainingWithBufferMs = remainingMs + bufferMs;
-        const remainingMinutes = remainingWithBufferMs / 60000;
-        console.log(`[StreamingService] Scheduling termination for stream ${streamId} at ${shouldEndAt.toISOString()} (${remainingMinutes.toFixed(1)} minutes with 30s buffer)`);
-        schedulerService.scheduleStreamTermination(streamId, remainingMinutes);
-      }
+      console.log(`[StreamingService] Scheduling termination for stream ${streamId} at ${shouldEndAt.toISOString()} (${remainingMinutes.toFixed(1)} minutes with 30s buffer)`);
+      schedulerService.scheduleStreamTermination(streamId, remainingMinutes);
     }
     return {
       success: true,

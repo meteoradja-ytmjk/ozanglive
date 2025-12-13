@@ -1,5 +1,6 @@
 const Stream = require('../models/Stream');
 const { parseScheduleDays } = require('../utils/scheduleValidator');
+const { calculateDurationSeconds, formatDuration } = require('../utils/durationCalculator');
 
 const scheduledTerminations = new Map();
 const recentlyTriggeredStreams = new Map(); // Track recently triggered recurring streams
@@ -77,59 +78,23 @@ async function checkStreamDurations() {
     for (const stream of liveStreams) {
       let shouldEndAt = null;
 
-      // Check duration-based end time (stream_duration_minutes is the primary field)
-      if (stream.start_time) {
-        // First check stream_duration_minutes (new format - in minutes)
-        if (stream.stream_duration_minutes && stream.stream_duration_minutes > 0) {
-          const durationMs = stream.stream_duration_minutes * 60 * 1000;
-          const durationEndAt = new Date(new Date(stream.start_time).getTime() + durationMs);
-          shouldEndAt = durationEndAt;
-          console.log(`[Scheduler] Stream ${stream.id} using stream_duration_minutes: ${stream.stream_duration_minutes}min, start=${stream.start_time}, end at ${durationEndAt.toISOString()}`);
-        }
-        // Fallback to stream_duration_hours (old format - in hours, deprecated)
-        else if (stream.stream_duration_hours && stream.stream_duration_hours > 0) {
-          const durationMs = stream.stream_duration_hours * 60 * 60 * 1000;
-          const durationEndAt = new Date(new Date(stream.start_time).getTime() + durationMs);
-          shouldEndAt = durationEndAt;
-          console.log(`[Scheduler] Stream ${stream.id} using stream_duration_hours (deprecated): ${stream.stream_duration_hours}h, end at ${durationEndAt.toISOString()}`);
-        }
-        // Fallback to duration field (from schedule calculation)
-        else if (stream.duration && stream.duration > 0) {
-          const durationMs = stream.duration * 60 * 1000;
-          const durationEndAt = new Date(new Date(stream.start_time).getTime() + durationMs);
-          shouldEndAt = durationEndAt;
-          console.log(`[Scheduler] Stream ${stream.id} using duration field: ${stream.duration}min, end at ${durationEndAt.toISOString()}`);
-        } else {
-          console.log(`[Scheduler] Stream ${stream.id} has no duration set (stream_duration_minutes=${stream.stream_duration_minutes}, duration=${stream.duration})`);
-        }
-      } else {
-        console.log(`[Scheduler] Stream ${stream.id} has no start_time set`);
+      // CRITICAL: Use actual start_time, not schedule_time for end time calculation
+      if (!stream.start_time) {
+        console.log(`[Scheduler] Stream ${stream.id} has no start_time set, skipping duration check`);
+        continue;
       }
 
-      // Check schedule end time (for 'once' schedule type)
-      // IMPORTANT: For scheduled streams, calculate duration from schedule, not fixed end_time
-      if (stream.end_time && stream.schedule_time && stream.start_time) {
-        const scheduleStartAt = new Date(stream.schedule_time);
-        const scheduleEndAt = new Date(stream.end_time);
-        const actualStartAt = new Date(stream.start_time);
-        
-        // Calculate the intended duration from the schedule
-        const intendedDurationMs = scheduleEndAt.getTime() - scheduleStartAt.getTime();
-        
-        if (intendedDurationMs > 0) {
-          // Apply intended duration from actual start time
-          const durationBasedEndAt = new Date(actualStartAt.getTime() + intendedDurationMs);
-          
-          if (!shouldEndAt || durationBasedEndAt < shouldEndAt) {
-            shouldEndAt = durationBasedEndAt;
-          }
-        }
-      } else if (stream.end_time) {
-        // For streams with end_time but no schedule_time, use the fixed end_time
-        const scheduleEndAt = new Date(stream.end_time);
-        if (!shouldEndAt || scheduleEndAt < shouldEndAt) {
-          shouldEndAt = scheduleEndAt;
-        }
+      const actualStartTime = new Date(stream.start_time);
+      
+      // Use centralized duration calculator for consistent priority
+      const durationSeconds = calculateDurationSeconds(stream);
+      
+      if (durationSeconds && durationSeconds > 0) {
+        const durationMs = durationSeconds * 1000;
+        shouldEndAt = new Date(actualStartTime.getTime() + durationMs);
+        console.log(`[Scheduler] Stream ${stream.id}: start=${actualStartTime.toISOString()}, duration=${formatDuration(durationSeconds)}, end=${shouldEndAt.toISOString()}`);
+      } else {
+        console.log(`[Scheduler] Stream ${stream.id} has no duration set`);
       }
 
       // If we have an end time, check if we need to take action
