@@ -93,6 +93,15 @@ class Stream {
           if (row) {
             row.loop_video = row.loop_video === 1;
             row.use_advanced_settings = row.use_advanced_settings === 1;
+            row.recurring_enabled = row.recurring_enabled === 1;
+            // Parse schedule_days JSON if present
+            if (row.schedule_days && typeof row.schedule_days === 'string') {
+              try {
+                row.schedule_days = JSON.parse(row.schedule_days);
+              } catch (e) {
+                row.schedule_days = [];
+              }
+            }
           }
           resolve(row);
         }
@@ -146,6 +155,15 @@ class Stream {
           rows.forEach(row => {
             row.loop_video = row.loop_video === 1;
             row.use_advanced_settings = row.use_advanced_settings === 1;
+            row.recurring_enabled = row.recurring_enabled === 1;
+            // Parse schedule_days JSON if present
+            if (row.schedule_days && typeof row.schedule_days === 'string') {
+              try {
+                row.schedule_days = JSON.parse(row.schedule_days);
+              } catch (e) {
+                row.schedule_days = [];
+              }
+            }
           });
         }
         resolve(rows || []);
@@ -268,6 +286,15 @@ class Stream {
           if (row) {
             row.loop_video = row.loop_video === 1;
             row.use_advanced_settings = row.use_advanced_settings === 1;
+            row.recurring_enabled = row.recurring_enabled === 1;
+            // Parse schedule_days JSON if present
+            if (row.schedule_days && typeof row.schedule_days === 'string') {
+              try {
+                row.schedule_days = JSON.parse(row.schedule_days);
+              } catch (e) {
+                row.schedule_days = [];
+              }
+            }
           }
           resolve(row);
         }

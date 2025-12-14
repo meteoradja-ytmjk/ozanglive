@@ -41,9 +41,11 @@ const streamDurationInfo = new Map();
 function getStatusAfterStreamEnd(stream) {
   if (!stream) return 'offline';
   
+  // Handle recurring_enabled as both boolean and integer (SQLite stores as 0/1)
+  const isRecurringEnabled = stream.recurring_enabled === true || stream.recurring_enabled === 1;
+  
   // For recurring streams (daily/weekly) that are enabled, set back to 'scheduled'
-  if ((stream.schedule_type === 'daily' || stream.schedule_type === 'weekly') && 
-      stream.recurring_enabled) {
+  if ((stream.schedule_type === 'daily' || stream.schedule_type === 'weekly') && isRecurringEnabled) {
     console.log(`[StreamingService] Recurring stream ${stream.id} (${stream.schedule_type}) - setting status to 'scheduled'`);
     return 'scheduled';
   }
