@@ -73,7 +73,59 @@ if (credentialsForm) {
   });
 }
 
-// Disconnect YouTube
+// Disconnect specific YouTube account
+async function disconnectAccount(accountId, channelName) {
+  if (!confirm(`Are you sure you want to disconnect "${channelName}"?`)) {
+    return;
+  }
+  
+  try {
+    const response = await fetch(`/api/youtube/credentials/${accountId}`, {
+      method: 'DELETE',
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      showToast('YouTube account disconnected');
+      setTimeout(() => window.location.reload(), 1000);
+    } else {
+      showToast(data.error || 'Failed to disconnect', 'error');
+    }
+  } catch (error) {
+    console.error('Error:', error);
+    showToast('An error occurred', 'error');
+  }
+}
+
+// Set primary account
+async function setPrimaryAccount(accountId) {
+  try {
+    const response = await fetch(`/api/youtube/credentials/${accountId}/primary`, {
+      method: 'PUT',
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      showToast('Primary account updated');
+      setTimeout(() => window.location.reload(), 1000);
+    } else {
+      showToast(data.error || 'Failed to set primary', 'error');
+    }
+  } catch (error) {
+    console.error('Error:', error);
+    showToast('An error occurred', 'error');
+  }
+}
+
+// Legacy disconnect function for backward compatibility
 async function disconnectYouTube() {
   if (!confirm('Are you sure you want to disconnect your YouTube account?')) {
     return;
@@ -101,8 +153,64 @@ async function disconnectYouTube() {
   }
 }
 
-// Fetch available stream keys
-async function fetchStreams() {
+// Add Account Modal
+function openAddAccountModal() {
+  document.getElementById('addAccountModal').classList.remove('hidden');
+}
+
+function closeAddAccountModal() {
+  document.getElementById('addAccountModal').classList.add('hidden');
+  document.getElementById('addAccountForm').reset();
+}
+
+// Add Account Form Handler
+const addAccountForm = document.getElementById('addAccountForm');
+if (addAccountForm) {
+  addAccountForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const addBtn = document.getElementById('addAccountBtn');
+    const originalText = addBtn.innerHTML;
+    addBtn.innerHTML = '<i class="ti ti-loader animate-spin"></i> Adding...';
+    addBtn.disabled = true;
+    
+    try {
+      const formData = {
+        clientId: document.getElementById('newClientId').value,
+        clientSecret: document.getElementById('newClientSecret').value,
+        refreshToken: document.getElementById('newRefreshToken').value
+      };
+      
+      const response = await fetch('/api/youtube/credentials', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': getCsrfToken()
+        },
+        body: JSON.stringify(formData)
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        showToast('YouTube account added successfully!');
+        closeAddAccountModal();
+        setTimeout(() => window.location.reload(), 1000);
+      } else {
+        showToast(data.error || 'Failed to add account', 'error');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      showToast('An error occurred', 'error');
+    } finally {
+      addBtn.innerHTML = originalText;
+      addBtn.disabled = false;
+    }
+  });
+}
+
+// Fetch available stream keys for specific account
+async function fetchStreams(accountId = null) {
   const select = document.getElementById('streamKeySelect');
   const loading = document.getElementById('streamKeyLoading');
   
@@ -111,7 +219,12 @@ async function fetchStreams() {
   loading.classList.remove('hidden');
   
   try {
-    const response = await fetch('/api/youtube/streams', {
+    let url = '/api/youtube/streams';
+    if (accountId) {
+      url += `?accountId=${accountId}`;
+    }
+    
+    const response = await fetch(url, {
       headers: {
         'X-CSRF-Token': getCsrfToken()
       }
@@ -134,6 +247,14 @@ async function fetchStreams() {
     console.error('Error fetching streams:', error);
   } finally {
     loading.classList.add('hidden');
+  }
+}
+
+// Handle account change in create broadcast modal
+function onAccountChange(accountId) {
+  if (accountId) {
+    fetchStreams(accountId);
+    fetchChannelDefaults(accountId);
   }
 }
 
@@ -328,13 +449,18 @@ function previewAndUploadThumbnail(input) {
 let currentTags = [];
 
 // Fetch channel defaults for auto-fill
-async function fetchChannelDefaults() {
+async function fetchChannelDefaults(accountId = null) {
   const tagsLoading = document.getElementById('tagsLoading');
   
   if (tagsLoading) tagsLoading.classList.remove('hidden');
   
   try {
-    const response = await fetch('/api/youtube/channel-defaults', {
+    let url = '/api/youtube/channel-defaults';
+    if (accountId) {
+      url += `?accountId=${accountId}`;
+    }
+    
+    const response = await fetch(url, {
       headers: {
         'X-CSRF-Token': getCsrfToken()
       }
@@ -490,10 +616,14 @@ function openCreateBroadcastModal() {
   // Initialize tag input
   initTagInput();
   
-  // Fetch streams, thumbnails, and channel defaults
-  fetchStreams();
+  // Get selected account ID
+  const accountSelect = document.getElementById('accountSelect');
+  const accountId = accountSelect ? accountSelect.value : null;
+  
+  // Fetch streams, thumbnails, and channel defaults for selected account
+  fetchStreams(accountId);
   fetchThumbnails();
-  fetchChannelDefaults();
+  fetchChannelDefaults(accountId);
 }
 
 function closeCreateBroadcastModal() {
@@ -534,6 +664,13 @@ if (createBroadcastForm) {
     
     try {
       const formData = new FormData();
+      
+      // Add account ID
+      const accountSelect = document.getElementById('accountSelect');
+      if (accountSelect && accountSelect.value) {
+        formData.append('accountId', accountSelect.value);
+      }
+      
       formData.append('title', document.getElementById('broadcastTitle').value);
       formData.append('description', document.getElementById('broadcastDescription').value);
       formData.append('scheduledStartTime', document.getElementById('scheduledStartTime').value);
@@ -593,13 +730,18 @@ if (createBroadcastForm) {
 }
 
 // Delete Broadcast
-async function deleteBroadcast(broadcastId, title) {
+async function deleteBroadcast(broadcastId, title, accountId = null) {
   if (!confirm(`Are you sure you want to delete "${title}"?`)) {
     return;
   }
   
   try {
-    const response = await fetch(`/api/youtube/broadcasts/${broadcastId}`, {
+    let url = `/api/youtube/broadcasts/${broadcastId}`;
+    if (accountId) {
+      url += `?accountId=${accountId}`;
+    }
+    
+    const response = await fetch(url, {
       method: 'DELETE',
       headers: {
         'X-CSRF-Token': getCsrfToken()
@@ -617,6 +759,76 @@ async function deleteBroadcast(broadcastId, title) {
   } catch (error) {
     console.error('Error:', error);
     showToast('An error occurred', 'error');
+  }
+}
+
+// Edit Broadcast
+async function editBroadcast(broadcastId, accountId) {
+  // For now, show a message that edit is coming soon
+  // Full implementation requires YouTube API update broadcast endpoint
+  showToast('Edit feature coming soon. Please use YouTube Studio for now.', 'info');
+}
+
+// Open Edit Broadcast Modal
+function openEditBroadcastModal(broadcast) {
+  document.getElementById('editBroadcastId').value = broadcast.id;
+  document.getElementById('editAccountId').value = broadcast.accountId;
+  document.getElementById('editBroadcastTitle').value = broadcast.title || '';
+  document.getElementById('editBroadcastDescription').value = broadcast.description || '';
+  document.getElementById('editPrivacyStatus').value = broadcast.privacyStatus || 'unlisted';
+  
+  // Format datetime for input
+  if (broadcast.scheduledStartTime) {
+    const date = new Date(broadcast.scheduledStartTime);
+    const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+    document.getElementById('editScheduledStartTime').value = localDate.toISOString().slice(0, 16);
+  }
+  
+  document.getElementById('editBroadcastModal').classList.remove('hidden');
+}
+
+function closeEditBroadcastModal() {
+  document.getElementById('editBroadcastModal').classList.add('hidden');
+  document.getElementById('editBroadcastForm').reset();
+}
+
+// Reuse Broadcast - opens create modal with pre-filled data
+async function reuseBroadcast(broadcastId, accountId) {
+  // Open create modal
+  openCreateBroadcastModal();
+  
+  // Fetch broadcast details and pre-fill
+  try {
+    const response = await fetch(`/api/youtube/broadcasts?accountId=${accountId}`, {
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (data.success && data.broadcasts) {
+      const broadcast = data.broadcasts.find(b => b.id === broadcastId);
+      if (broadcast) {
+        // Pre-fill form with broadcast data
+        document.getElementById('broadcastTitle').value = broadcast.title || '';
+        document.getElementById('broadcastDescription').value = broadcast.description || '';
+        document.getElementById('privacyStatus').value = broadcast.privacyStatus || 'unlisted';
+        
+        // Select the account
+        const accountSelect = document.getElementById('accountSelect');
+        if (accountSelect) {
+          accountSelect.value = accountId;
+        }
+        
+        // Clear scheduled time - user must set new time
+        document.getElementById('scheduledStartTime').value = '';
+        
+        showToast('Broadcast settings copied. Please set a new schedule time.', 'info');
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching broadcast for reuse:', error);
   }
 }
 

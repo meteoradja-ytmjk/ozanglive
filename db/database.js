@@ -301,20 +301,109 @@ function createTables() {
     }
   });
 
-  // Create youtube_credentials table for YouTube Sync feature
+  // Create youtube_credentials table for YouTube Sync feature (supports multiple accounts per user)
   db.run(`CREATE TABLE IF NOT EXISTS youtube_credentials (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id TEXT NOT NULL UNIQUE,
+    user_id TEXT NOT NULL,
     client_id TEXT NOT NULL,
     client_secret TEXT NOT NULL,
     refresh_token TEXT NOT NULL,
     channel_name TEXT,
     channel_id TEXT,
+    is_primary INTEGER DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE(user_id, channel_id)
   )`, (err) => {
     if (err) {
       console.error('Error creating youtube_credentials table:', err.message);
+    }
+  });
+
+  // Add is_primary column to youtube_credentials for multiple accounts support
+  db.run(`ALTER TABLE youtube_credentials ADD COLUMN is_primary INTEGER DEFAULT 0`, (err) => {
+    if (err && !err.message.includes('duplicate column name')) {
+      console.error('Error adding is_primary column to youtube_credentials:', err.message);
+    }
+  });
+
+  // Migration: Set existing single accounts as primary
+  db.run(`UPDATE youtube_credentials SET is_primary = 1 WHERE is_primary = 0 AND id IN (
+    SELECT MIN(id) FROM youtube_credentials GROUP BY user_id
+  )`, (err) => {
+    if (err) {
+      console.error('Error setting primary accounts:', err.message);
+    }
+  });
+
+  // Migration: Remove old UNIQUE constraint on user_id and add new one on (user_id, channel_id)
+  // This is done by checking if the old constraint exists and recreating the table if needed
+  migrateYouTubeCredentialsTable();
+}
+
+/**
+ * Migrate youtube_credentials table to support multiple accounts per user
+ * This removes the UNIQUE constraint on user_id and adds UNIQUE on (user_id, channel_id)
+ */
+function migrateYouTubeCredentialsTable() {
+  // Check if migration is needed by trying to insert a test record
+  db.get(`SELECT sql FROM sqlite_master WHERE type='table' AND name='youtube_credentials'`, (err, row) => {
+    if (err || !row) return;
+    
+    // Check if old schema has UNIQUE on user_id only (not combined with channel_id)
+    const sql = row.sql;
+    if (sql.includes('user_id TEXT NOT NULL UNIQUE') && !sql.includes('UNIQUE(user_id, channel_id)')) {
+      console.log('Migrating youtube_credentials table for multiple accounts support...');
+      
+      db.serialize(() => {
+        // Create new table with updated schema
+        db.run(`CREATE TABLE IF NOT EXISTS youtube_credentials_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id TEXT NOT NULL,
+          client_id TEXT NOT NULL,
+          client_secret TEXT NOT NULL,
+          refresh_token TEXT NOT NULL,
+          channel_name TEXT,
+          channel_id TEXT,
+          is_primary INTEGER DEFAULT 0,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+          UNIQUE(user_id, channel_id)
+        )`, (err) => {
+          if (err) {
+            console.error('Error creating new youtube_credentials table:', err.message);
+            return;
+          }
+        });
+
+        // Copy existing data and set as primary
+        db.run(`INSERT INTO youtube_credentials_new 
+          (id, user_id, client_id, client_secret, refresh_token, channel_name, channel_id, is_primary, created_at)
+          SELECT id, user_id, client_id, client_secret, refresh_token, channel_name, channel_id, 1, created_at
+          FROM youtube_credentials`, (err) => {
+          if (err) {
+            console.error('Error copying data to new youtube_credentials table:', err.message);
+            return;
+          }
+        });
+
+        // Drop old table
+        db.run(`DROP TABLE youtube_credentials`, (err) => {
+          if (err) {
+            console.error('Error dropping old youtube_credentials table:', err.message);
+            return;
+          }
+        });
+
+        // Rename new table
+        db.run(`ALTER TABLE youtube_credentials_new RENAME TO youtube_credentials`, (err) => {
+          if (err) {
+            console.error('Error renaming youtube_credentials table:', err.message);
+            return;
+          }
+          console.log('Successfully migrated youtube_credentials table for multiple accounts support');
+        });
+      });
     }
   });
 }

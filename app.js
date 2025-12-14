@@ -3380,33 +3380,45 @@ app.delete('/api/templates/:id', isAuthenticated, async (req, res) => {
 });
 
 // ============================================
-// YouTube Sync Routes
+// YouTube Sync Routes (Multiple Accounts Support)
 // ============================================
 
-// YouTube Sync Page
+// YouTube Sync Page - displays all connected accounts and their broadcasts
 app.get('/youtube', isAuthenticated, async (req, res) => {
   try {
-    const credentials = await YouTubeCredentials.findByUserId(req.session.userId);
-    let broadcasts = [];
+    // Get all connected YouTube accounts for this user
+    const accounts = await YouTubeCredentials.findAllByUserId(req.session.userId);
+    let allBroadcasts = [];
     
-    if (credentials) {
+    // Fetch broadcasts from all connected accounts
+    for (const account of accounts) {
       try {
         const accessToken = await youtubeService.getAccessToken(
-          credentials.clientId,
-          credentials.clientSecret,
-          credentials.refreshToken
+          account.clientId,
+          account.clientSecret,
+          account.refreshToken
         );
-        broadcasts = await youtubeService.listBroadcasts(accessToken);
+        const broadcasts = await youtubeService.listBroadcasts(accessToken);
+        // Add account info to each broadcast
+        allBroadcasts = allBroadcasts.concat(broadcasts.map(b => ({
+          ...b,
+          accountId: account.id,
+          channelName: account.channelName
+        })));
       } catch (err) {
-        console.error('Error fetching broadcasts:', err.message);
+        console.error(`Error fetching broadcasts for account ${account.channelName}:`, err.message);
       }
     }
+    
+    // Sort broadcasts by scheduled time
+    allBroadcasts.sort((a, b) => new Date(a.scheduledStartTime) - new Date(b.scheduledStartTime));
     
     res.render('youtube', {
       title: 'YouTube Sync',
       active: 'youtube',
-      credentials,
-      broadcasts
+      accounts,
+      credentials: accounts.length > 0 ? accounts[0] : null, // For backward compatibility
+      broadcasts: allBroadcasts
     });
   } catch (error) {
     console.error('YouTube page error:', error);
@@ -3417,7 +3429,7 @@ app.get('/youtube', isAuthenticated, async (req, res) => {
   }
 });
 
-// Save YouTube credentials
+// Add new YouTube account (supports multiple accounts)
 app.post('/api/youtube/credentials', isAuthenticated, async (req, res) => {
   try {
     const { clientId, clientSecret, refreshToken } = req.body;
@@ -3439,8 +3451,17 @@ app.post('/api/youtube/credentials', isAuthenticated, async (req, res) => {
       });
     }
     
-    // Save credentials
-    await YouTubeCredentials.save(req.session.userId, {
+    // Check if this channel is already connected
+    const existingChannel = await YouTubeCredentials.existsByChannel(req.session.userId, validation.channelId);
+    if (existingChannel) {
+      return res.status(400).json({
+        success: false,
+        error: 'This YouTube channel is already connected'
+      });
+    }
+    
+    // Create new credentials (supports multiple accounts)
+    const created = await YouTubeCredentials.create(req.session.userId, {
       clientId,
       clientSecret,
       refreshToken,
@@ -3450,27 +3471,51 @@ app.post('/api/youtube/credentials', isAuthenticated, async (req, res) => {
     
     res.json({
       success: true,
+      id: created.id,
       channelName: validation.channelName,
-      channelId: validation.channelId
+      channelId: validation.channelId,
+      isPrimary: created.isPrimary
     });
   } catch (error) {
     console.error('Error saving YouTube credentials:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to save credentials'
+      error: error.message || 'Failed to save credentials'
     });
   }
 });
 
-// Check if credentials exist
-app.get('/api/youtube/credentials', isAuthenticated, async (req, res) => {
+// Get all connected YouTube accounts
+app.get('/api/youtube/accounts', isAuthenticated, async (req, res) => {
   try {
-    const credentials = await YouTubeCredentials.findByUserId(req.session.userId);
+    const accounts = await YouTubeCredentials.findAllByUserId(req.session.userId);
     res.json({
       success: true,
-      hasCredentials: !!credentials,
-      channelName: credentials?.channelName || null,
-      channelId: credentials?.channelId || null
+      accounts: accounts.map(a => ({
+        id: a.id,
+        channelName: a.channelName,
+        channelId: a.channelId,
+        isPrimary: a.isPrimary,
+        createdAt: a.createdAt
+      }))
+    });
+  } catch (error) {
+    console.error('Error fetching YouTube accounts:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch accounts' });
+  }
+});
+
+// Check if credentials exist (backward compatibility)
+app.get('/api/youtube/credentials', isAuthenticated, async (req, res) => {
+  try {
+    const accounts = await YouTubeCredentials.findAllByUserId(req.session.userId);
+    const primary = accounts.find(a => a.isPrimary) || accounts[0];
+    res.json({
+      success: true,
+      hasCredentials: accounts.length > 0,
+      accountCount: accounts.length,
+      channelName: primary?.channelName || null,
+      channelId: primary?.channelId || null
     });
   } catch (error) {
     console.error('Error checking YouTube credentials:', error);
@@ -3478,14 +3523,59 @@ app.get('/api/youtube/credentials', isAuthenticated, async (req, res) => {
   }
 });
 
-// Remove YouTube credentials
-app.delete('/api/youtube/credentials', isAuthenticated, async (req, res) => {
+// Remove specific YouTube account by ID
+app.delete('/api/youtube/credentials/:id', isAuthenticated, async (req, res) => {
   try {
-    await YouTubeCredentials.delete(req.session.userId);
-    res.json({ success: true, message: 'Credentials removed' });
+    const credentialId = parseInt(req.params.id);
+    
+    // Verify the credential belongs to this user
+    const credential = await YouTubeCredentials.findById(credentialId);
+    if (!credential || credential.userId !== req.session.userId) {
+      return res.status(404).json({ success: false, error: 'Account not found' });
+    }
+    
+    await YouTubeCredentials.deleteById(credentialId);
+    
+    // If deleted account was primary, set another as primary
+    const remaining = await YouTubeCredentials.findAllByUserId(req.session.userId);
+    if (remaining.length > 0 && !remaining.some(a => a.isPrimary)) {
+      await YouTubeCredentials.setPrimary(req.session.userId, remaining[0].id);
+    }
+    
+    res.json({ success: true, message: 'Account disconnected' });
   } catch (error) {
     console.error('Error removing YouTube credentials:', error);
     res.status(500).json({ success: false, error: 'Failed to remove credentials' });
+  }
+});
+
+// Remove all YouTube credentials (backward compatibility)
+app.delete('/api/youtube/credentials', isAuthenticated, async (req, res) => {
+  try {
+    await YouTubeCredentials.delete(req.session.userId);
+    res.json({ success: true, message: 'All credentials removed' });
+  } catch (error) {
+    console.error('Error removing YouTube credentials:', error);
+    res.status(500).json({ success: false, error: 'Failed to remove credentials' });
+  }
+});
+
+// Set primary YouTube account
+app.put('/api/youtube/credentials/:id/primary', isAuthenticated, async (req, res) => {
+  try {
+    const credentialId = parseInt(req.params.id);
+    
+    // Verify the credential belongs to this user
+    const credential = await YouTubeCredentials.findById(credentialId);
+    if (!credential || credential.userId !== req.session.userId) {
+      return res.status(404).json({ success: false, error: 'Account not found' });
+    }
+    
+    await YouTubeCredentials.setPrimary(req.session.userId, credentialId);
+    res.json({ success: true, message: 'Primary account updated' });
+  } catch (error) {
+    console.error('Error setting primary account:', error);
+    res.status(500).json({ success: false, error: 'Failed to set primary account' });
   }
 });
 
@@ -3614,10 +3704,22 @@ app.delete('/api/thumbnails/:filename', isAuthenticated, async (req, res) => {
   }
 });
 
-// List YouTube streams (stream keys)
+// List YouTube streams (stream keys) - supports accountId parameter
 app.get('/api/youtube/streams', isAuthenticated, async (req, res) => {
   try {
-    const credentials = await YouTubeCredentials.findByUserId(req.session.userId);
+    const accountId = req.query.accountId ? parseInt(req.query.accountId) : null;
+    let credentials;
+    
+    if (accountId) {
+      // Get specific account
+      credentials = await YouTubeCredentials.findById(accountId);
+      if (!credentials || credentials.userId !== req.session.userId) {
+        return res.status(404).json({ success: false, error: 'Account not found' });
+      }
+    } else {
+      // Get primary/first account
+      credentials = await YouTubeCredentials.findByUserId(req.session.userId);
+    }
     
     if (!credentials) {
       return res.status(400).json({
@@ -3633,17 +3735,27 @@ app.get('/api/youtube/streams', isAuthenticated, async (req, res) => {
     );
     
     const streams = await youtubeService.listStreams(accessToken);
-    res.json({ success: true, streams });
+    res.json({ success: true, streams, accountId: credentials.id });
   } catch (error) {
     console.error('Error listing streams:', error);
     res.status(500).json({ success: false, error: 'Failed to list stream keys' });
   }
 });
 
-// Get YouTube channel defaults for auto-fill
+// Get YouTube channel defaults for auto-fill - supports accountId parameter
 app.get('/api/youtube/channel-defaults', isAuthenticated, async (req, res) => {
   try {
-    const credentials = await YouTubeCredentials.findByUserId(req.session.userId);
+    const accountId = req.query.accountId ? parseInt(req.query.accountId) : null;
+    let credentials;
+    
+    if (accountId) {
+      credentials = await YouTubeCredentials.findById(accountId);
+      if (!credentials || credentials.userId !== req.session.userId) {
+        return res.status(404).json({ success: false, error: 'Account not found' });
+      }
+    } else {
+      credentials = await YouTubeCredentials.findByUserId(req.session.userId);
+    }
     
     if (!credentials) {
       return res.status(400).json({
@@ -3659,43 +3771,88 @@ app.get('/api/youtube/channel-defaults', isAuthenticated, async (req, res) => {
     );
     
     const defaults = await youtubeService.getChannelDefaults(accessToken);
-    res.json({ success: true, defaults });
+    res.json({ success: true, defaults, accountId: credentials.id });
   } catch (error) {
     console.error('Error fetching channel defaults:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch channel defaults' });
   }
 });
 
-// List YouTube broadcasts
+// List YouTube broadcasts - supports accountId parameter
 app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
   try {
-    const credentials = await YouTubeCredentials.findByUserId(req.session.userId);
+    const accountId = req.query.accountId ? parseInt(req.query.accountId) : null;
     
-    if (!credentials) {
-      return res.status(400).json({
-        success: false,
-        error: 'YouTube account not connected'
+    if (accountId) {
+      // Get broadcasts for specific account
+      const credentials = await YouTubeCredentials.findById(accountId);
+      if (!credentials || credentials.userId !== req.session.userId) {
+        return res.status(404).json({ success: false, error: 'Account not found' });
+      }
+      
+      const accessToken = await youtubeService.getAccessToken(
+        credentials.clientId,
+        credentials.clientSecret,
+        credentials.refreshToken
+      );
+      
+      const broadcasts = await youtubeService.listBroadcasts(accessToken);
+      res.json({ 
+        success: true, 
+        broadcasts: broadcasts.map(b => ({ ...b, accountId: credentials.id, channelName: credentials.channelName }))
       });
+    } else {
+      // Get broadcasts from all accounts
+      const accounts = await YouTubeCredentials.findAllByUserId(req.session.userId);
+      
+      if (accounts.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'YouTube account not connected'
+        });
+      }
+      
+      let allBroadcasts = [];
+      for (const account of accounts) {
+        try {
+          const accessToken = await youtubeService.getAccessToken(
+            account.clientId,
+            account.clientSecret,
+            account.refreshToken
+          );
+          const broadcasts = await youtubeService.listBroadcasts(accessToken);
+          allBroadcasts = allBroadcasts.concat(broadcasts.map(b => ({
+            ...b,
+            accountId: account.id,
+            channelName: account.channelName
+          })));
+        } catch (err) {
+          console.error(`Error fetching broadcasts for ${account.channelName}:`, err.message);
+        }
+      }
+      
+      res.json({ success: true, broadcasts: allBroadcasts });
     }
-    
-    const accessToken = await youtubeService.getAccessToken(
-      credentials.clientId,
-      credentials.clientSecret,
-      credentials.refreshToken
-    );
-    
-    const broadcasts = await youtubeService.listBroadcasts(accessToken);
-    res.json({ success: true, broadcasts });
   } catch (error) {
     console.error('Error listing broadcasts:', error);
     res.status(500).json({ success: false, error: 'Failed to list broadcasts' });
   }
 });
 
-// Create YouTube broadcast
+// Create YouTube broadcast - supports accountId parameter
 app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'), async (req, res) => {
   try {
-    const credentials = await YouTubeCredentials.findByUserId(req.session.userId);
+    const accountId = req.body.accountId ? parseInt(req.body.accountId) : null;
+    let credentials;
+    
+    if (accountId) {
+      credentials = await YouTubeCredentials.findById(accountId);
+      if (!credentials || credentials.userId !== req.session.userId) {
+        return res.status(404).json({ success: false, error: 'Account not found' });
+      }
+    } else {
+      credentials = await YouTubeCredentials.findByUserId(req.session.userId);
+    }
     
     if (!credentials) {
       return res.status(400).json({
@@ -3796,16 +3953,35 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
   }
 });
 
-// Delete YouTube broadcast
+// Delete YouTube broadcast - supports accountId parameter
 app.delete('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
   try {
-    const credentials = await YouTubeCredentials.findByUserId(req.session.userId);
+    const accountId = req.query.accountId ? parseInt(req.query.accountId) : null;
+    let credentials;
     
-    if (!credentials) {
-      return res.status(400).json({
-        success: false,
-        error: 'YouTube account not connected'
-      });
+    if (accountId) {
+      credentials = await YouTubeCredentials.findById(accountId);
+      if (!credentials || credentials.userId !== req.session.userId) {
+        return res.status(404).json({ success: false, error: 'Account not found' });
+      }
+    } else {
+      // Try to find the account that owns this broadcast by checking all accounts
+      const accounts = await YouTubeCredentials.findAllByUserId(req.session.userId);
+      for (const account of accounts) {
+        try {
+          const accessToken = await youtubeService.getAccessToken(
+            account.clientId,
+            account.clientSecret,
+            account.refreshToken
+          );
+          await youtubeService.deleteBroadcast(accessToken, req.params.id);
+          return res.json({ success: true, message: 'Broadcast deleted' });
+        } catch (err) {
+          // Continue to next account if this one doesn't own the broadcast
+          continue;
+        }
+      }
+      return res.status(404).json({ success: false, error: 'Broadcast not found' });
     }
     
     const accessToken = await youtubeService.getAccessToken(
@@ -3825,7 +4001,7 @@ app.delete('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
   }
 });
 
-// Upload/change thumbnail for broadcast
+// Upload/change thumbnail for broadcast - supports accountId parameter
 app.post('/api/youtube/broadcasts/:id/thumbnail', isAuthenticated, upload.single('thumbnail'), async (req, res) => {
   try {
     if (!req.file) {
@@ -3853,7 +4029,17 @@ app.post('/api/youtube/broadcasts/:id/thumbnail', isAuthenticated, upload.single
       });
     }
     
-    const credentials = await YouTubeCredentials.findByUserId(req.session.userId);
+    const accountId = req.body.accountId ? parseInt(req.body.accountId) : null;
+    let credentials;
+    
+    if (accountId) {
+      credentials = await YouTubeCredentials.findById(accountId);
+      if (!credentials || credentials.userId !== req.session.userId) {
+        return res.status(404).json({ success: false, error: 'Account not found' });
+      }
+    } else {
+      credentials = await YouTubeCredentials.findByUserId(req.session.userId);
+    }
     
     if (!credentials) {
       return res.status(400).json({

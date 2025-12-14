@@ -14,8 +14,8 @@
     </div>
   </div>
 
-  <% if (!credentials) { %>
-  <!-- Credentials Form (Not Connected) -->
+  <% if (!accounts || accounts.length === 0) { %>
+  <!-- Credentials Form (No Accounts Connected) -->
   <div class="bg-gray-800 rounded-lg p-6 shadow-md">
     <div class="flex items-center gap-3 mb-6">
       <i class="ti ti-key text-primary text-2xl"></i>
@@ -64,23 +64,48 @@
   </div>
   
   <% } else { %>
-  <!-- Connected Account -->
+  <!-- Connected Accounts Section -->
   <div class="bg-gray-800 rounded-lg p-6 shadow-md mb-6">
-    <div class="flex items-center justify-between">
-      <div class="flex items-center gap-4">
-        <div class="w-12 h-12 bg-red-500/20 rounded-full flex items-center justify-center">
-          <i class="ti ti-brand-youtube text-red-500 text-2xl"></i>
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-lg font-semibold">Connected Accounts (<%= accounts.length %>)</h2>
+      <button onclick="openAddAccountModal()" 
+        class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-2">
+        <i class="ti ti-plus"></i>
+        <span>Add Account</span>
+      </button>
+    </div>
+    
+    <div class="space-y-3">
+      <% accounts.forEach(function(account) { %>
+      <div class="flex items-center justify-between p-3 bg-dark-700 rounded-lg">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center">
+            <i class="ti ti-brand-youtube text-red-500 text-lg"></i>
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="font-medium"><%= account.channelName || 'YouTube Channel' %></span>
+              <% if (account.isPrimary) { %>
+              <span class="px-1.5 py-0.5 bg-primary/20 text-primary text-xs rounded">Primary</span>
+              <% } %>
+            </div>
+            <p class="text-xs text-gray-400">Connected</p>
+          </div>
         </div>
-        <div>
-          <h2 class="text-lg font-semibold"><%= credentials.channelName || 'YouTube Channel' %></h2>
-          <p class="text-sm text-gray-400">Connected</p>
+        <div class="flex items-center gap-2">
+          <% if (!account.isPrimary) { %>
+          <button onclick="setPrimaryAccount(<%= account.id %>)" 
+            class="text-gray-400 hover:text-white px-2 py-1 text-sm transition-colors" title="Set as Primary">
+            <i class="ti ti-star"></i>
+          </button>
+          <% } %>
+          <button onclick="disconnectAccount(<%= account.id %>, '<%= (account.channelName || 'this account').replace(/'/g, "\\'") %>')" 
+            class="text-gray-400 hover:text-red-400 px-2 py-1 text-sm transition-colors" title="Disconnect">
+            <i class="ti ti-unlink"></i>
+          </button>
         </div>
       </div>
-      <button onclick="disconnectYouTube()" 
-        class="bg-dark-700 hover:bg-dark-600 text-gray-300 px-4 py-2 rounded-lg text-sm transition-colors flex items-center gap-2">
-        <i class="ti ti-unlink"></i>
-        <span>Disconnect</span>
-      </button>
+      <% }); %>
     </div>
   </div>
 
@@ -118,7 +143,15 @@
         <!-- Info -->
         <div class="flex-1 min-w-0">
           <div class="flex items-start justify-between gap-2">
-            <h3 class="font-semibold text-lg truncate"><%= broadcast.title %></h3>
+            <div class="flex items-center gap-2">
+              <h3 class="font-semibold text-lg truncate"><%= broadcast.title %></h3>
+              <% if (broadcast.channelName) { %>
+              <span class="px-2 py-0.5 bg-red-500/20 text-red-400 text-xs rounded flex items-center gap-1">
+                <i class="ti ti-brand-youtube text-xs"></i>
+                <%= broadcast.channelName %>
+              </span>
+              <% } %>
+            </div>
             <span class="px-2 py-1 rounded text-xs font-medium flex-shrink-0
               <%= broadcast.privacyStatus === 'public' ? 'bg-green-500/20 text-green-400' : 
                   broadcast.privacyStatus === 'unlisted' ? 'bg-yellow-500/20 text-yellow-400' : 
@@ -156,10 +189,20 @@
         
         <!-- Actions -->
         <div class="flex md:flex-col gap-2 flex-shrink-0">
-          <button onclick="deleteBroadcast('<%= broadcast.id %>', '<%= broadcast.title.replace(/'/g, "\\'") %>')"
-            class="flex-1 md:flex-none bg-red-500/10 hover:bg-red-500/20 text-red-400 px-4 py-2 rounded-lg transition-colors flex items-center justify-center gap-2">
+          <button onclick="reuseBroadcast('<%= broadcast.id %>', <%= broadcast.accountId %>)"
+            class="flex-1 md:flex-none bg-primary/10 hover:bg-primary/20 text-primary px-3 py-2 rounded-lg transition-colors flex items-center justify-center gap-1" title="Reuse">
+            <i class="ti ti-copy"></i>
+            <span class="md:hidden text-sm">Reuse</span>
+          </button>
+          <button onclick="editBroadcast('<%= broadcast.id %>', <%= broadcast.accountId %>)"
+            class="flex-1 md:flex-none bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 px-3 py-2 rounded-lg transition-colors flex items-center justify-center gap-1" title="Edit">
+            <i class="ti ti-edit"></i>
+            <span class="md:hidden text-sm">Edit</span>
+          </button>
+          <button onclick="deleteBroadcast('<%= broadcast.id %>', '<%= broadcast.title.replace(/'/g, "\\'") %>', <%= broadcast.accountId %>)"
+            class="flex-1 md:flex-none bg-red-500/10 hover:bg-red-500/20 text-red-400 px-3 py-2 rounded-lg transition-colors flex items-center justify-center gap-1" title="Delete">
             <i class="ti ti-trash"></i>
-            <span class="md:hidden">Delete</span>
+            <span class="md:hidden text-sm">Delete</span>
           </button>
         </div>
       </div>
@@ -196,6 +239,20 @@
       </div>
       
       <form id="createBroadcastForm" class="p-6 space-y-4">
+        <!-- Account Selector -->
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">YouTube Account <span class="text-red-400">*</span></label>
+          <select id="accountSelect" name="accountId" required
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none"
+            onchange="onAccountChange(this.value)">
+            <% if (accounts && accounts.length > 0) { %>
+              <% accounts.forEach(function(account) { %>
+              <option value="<%= account.id %>" <%= account.isPrimary ? 'selected' : '' %>><%= account.channelName || 'YouTube Channel' %></option>
+              <% }); %>
+            <% } %>
+          </select>
+        </div>
+        
         <div>
           <label class="text-sm font-medium text-white block mb-2">Title <span class="text-red-400">*</span></label>
           <input type="text" id="broadcastTitle" name="title" required
@@ -397,6 +454,124 @@
           <button type="submit" id="uploadThumbnailBtn"
             class="flex-1 bg-red-500 hover:bg-red-600 text-white px-4 py-2.5 rounded-lg transition-colors">
             Upload Thumbnail
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Add Account Modal -->
+<div id="addAccountModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto">
+  <div class="flex min-h-screen items-center justify-center p-4">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-lg">
+      <div class="flex items-center justify-between p-6 border-b border-gray-700">
+        <h3 class="text-lg font-semibold">Add YouTube Account</h3>
+        <button onclick="closeAddAccountModal()" class="text-gray-400 hover:text-white">
+          <i class="ti ti-x text-xl"></i>
+        </button>
+      </div>
+      
+      <form id="addAccountForm" class="p-6 space-y-4">
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Client ID <span class="text-red-400">*</span></label>
+          <input type="text" id="newClientId" name="clientId" required
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none"
+            placeholder="Enter your Google Client ID">
+        </div>
+        
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Client Secret <span class="text-red-400">*</span></label>
+          <input type="password" id="newClientSecret" name="clientSecret" required
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none"
+            placeholder="Enter your Google Client Secret">
+        </div>
+        
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Refresh Token <span class="text-red-400">*</span></label>
+          <textarea id="newRefreshToken" name="refreshToken" required rows="3"
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none resize-none"
+            placeholder="Enter your Refresh Token"></textarea>
+        </div>
+        
+        <div class="bg-dark-700 rounded-lg p-4 border border-gray-600">
+          <p class="text-sm text-gray-400">
+            <i class="ti ti-info-circle text-primary mr-1"></i>
+            Get your credentials from <a href="https://console.cloud.google.com/apis/credentials" target="_blank" class="text-primary hover:underline">Google Cloud Console</a>. 
+            Make sure to enable YouTube Data API v3.
+          </p>
+        </div>
+        
+        <div class="pt-4 flex gap-3">
+          <button type="button" onclick="closeAddAccountModal()"
+            class="flex-1 bg-dark-700 hover:bg-dark-600 text-white px-4 py-2.5 rounded-lg transition-colors">
+            Cancel
+          </button>
+          <button type="submit" id="addAccountBtn"
+            class="flex-1 bg-red-500 hover:bg-red-600 text-white px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
+            <i class="ti ti-brand-youtube"></i>
+            <span>Add Account</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Broadcast Modal -->
+<div id="editBroadcastModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto">
+  <div class="flex min-h-screen items-center justify-center p-4">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-lg">
+      <div class="flex items-center justify-between p-6 border-b border-gray-700">
+        <h3 class="text-lg font-semibold">Edit Broadcast</h3>
+        <button onclick="closeEditBroadcastModal()" class="text-gray-400 hover:text-white">
+          <i class="ti ti-x text-xl"></i>
+        </button>
+      </div>
+      
+      <form id="editBroadcastForm" class="p-6 space-y-4">
+        <input type="hidden" id="editBroadcastId" name="broadcastId">
+        <input type="hidden" id="editAccountId" name="accountId">
+        
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Title <span class="text-red-400">*</span></label>
+          <input type="text" id="editBroadcastTitle" name="title" required
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none"
+            placeholder="Enter broadcast title">
+        </div>
+        
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Description</label>
+          <textarea id="editBroadcastDescription" name="description" rows="3"
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none resize-none"
+            placeholder="Enter broadcast description (optional)"></textarea>
+        </div>
+        
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Scheduled Start Time <span class="text-red-400">*</span></label>
+          <input type="datetime-local" id="editScheduledStartTime" name="scheduledStartTime" required
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none [color-scheme:dark]">
+        </div>
+        
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Privacy Status</label>
+          <select id="editPrivacyStatus" name="privacyStatus"
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none">
+            <option value="unlisted">Unlisted</option>
+            <option value="public">Public</option>
+            <option value="private">Private</option>
+          </select>
+        </div>
+        
+        <div class="pt-4 flex gap-3">
+          <button type="button" onclick="closeEditBroadcastModal()"
+            class="flex-1 bg-dark-700 hover:bg-dark-600 text-white px-4 py-2.5 rounded-lg transition-colors">
+            Cancel
+          </button>
+          <button type="submit" id="updateBroadcastBtn"
+            class="flex-1 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
+            <i class="ti ti-check"></i>
+            <span>Update Broadcast</span>
           </button>
         </div>
       </form>
