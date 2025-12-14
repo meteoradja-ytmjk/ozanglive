@@ -241,6 +241,59 @@
           <p class="text-xs text-gray-500 mt-1">Select existing stream key or create new one</p>
         </div>
         
+        <!-- Tags Field -->
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">
+            Tags
+            <span id="tagsAutoFillIndicator" class="hidden ml-2 text-xs text-green-400" title="Auto-filled from YouTube defaults">
+              <i class="ti ti-sparkles"></i> Auto-filled
+            </span>
+          </label>
+          <div class="relative">
+            <div id="tagsContainer" class="min-h-[42px] px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg focus-within:border-primary flex flex-wrap gap-2 items-center">
+              <!-- Tag chips will be rendered here -->
+              <input type="text" id="tagInput" 
+                class="flex-1 min-w-[100px] bg-transparent border-none outline-none text-white text-sm"
+                placeholder="Add tag and press Enter">
+            </div>
+            <div id="tagsLoading" class="hidden absolute right-3 top-1/2 -translate-y-1/2">
+              <i class="ti ti-loader animate-spin text-gray-400"></i>
+            </div>
+          </div>
+          <p class="text-xs text-gray-500 mt-1">Press Enter to add tags. Max 500 characters total.</p>
+          <input type="hidden" id="tagsHidden" name="tags" value="">
+        </div>
+
+        <!-- Monetization Field -->
+        <div id="monetizationField" class="hidden">
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" id="monetizationEnabled" name="monetizationEnabled" 
+              class="w-5 h-5 rounded border-gray-600 bg-dark-700 text-red-500 focus:ring-red-500 focus:ring-offset-0">
+            <div>
+              <span class="text-sm font-medium text-white">Enable Monetization</span>
+              <span id="monetizationAutoFillIndicator" class="hidden ml-2 text-xs text-green-400" title="Auto-filled from YouTube defaults">
+                <i class="ti ti-sparkles"></i>
+              </span>
+              <p class="text-xs text-gray-500">Allow ads on this broadcast</p>
+            </div>
+          </label>
+        </div>
+
+        <!-- Altered Content Field -->
+        <div>
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" id="alteredContent" name="alteredContent" 
+              class="w-5 h-5 rounded border-gray-600 bg-dark-700 text-red-500 focus:ring-red-500 focus:ring-offset-0">
+            <div>
+              <span class="text-sm font-medium text-white">Altered Content (AI-generated)</span>
+              <span id="alteredContentAutoFillIndicator" class="hidden ml-2 text-xs text-green-400" title="Auto-filled from YouTube defaults">
+                <i class="ti ti-sparkles"></i>
+              </span>
+              <p class="text-xs text-gray-500">This content contains realistic altered or synthetic media</p>
+            </div>
+          </label>
+        </div>
+
         <div>
           <label class="text-sm font-medium text-white block mb-2">Thumbnail</label>
           

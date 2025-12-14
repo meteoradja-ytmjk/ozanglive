@@ -76,26 +76,39 @@ class YouTubeService {
    * @param {string} accessToken - Access token
    * @param {Object} data - Broadcast data
    * @param {string} [data.streamId] - Optional existing stream ID to bind
+   * @param {string[]} [data.tags] - Optional tags for the broadcast
+   * @param {boolean} [data.monetizationEnabled] - Optional monetization status
+   * @param {boolean} [data.alteredContent] - Optional altered content declaration
    * @returns {Promise<{broadcastId: string, streamKey: string, rtmpUrl: string}>}
    */
-  async createBroadcast(accessToken, { title, description, scheduledStartTime, privacyStatus, streamId }) {
+  async createBroadcast(accessToken, { title, description, scheduledStartTime, privacyStatus, streamId, tags, monetizationEnabled, alteredContent }) {
     const oauth2Client = new google.auth.OAuth2();
     oauth2Client.setCredentials({ access_token: accessToken });
     
     const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
     
+    // Build snippet with optional tags
+    const snippet = {
+      title: title,
+      description: description || '',
+      scheduledStartTime: new Date(scheduledStartTime).toISOString()
+    };
+    
+    // Add tags if provided (YouTube API accepts tags in snippet)
+    if (tags && Array.isArray(tags) && tags.length > 0) {
+      snippet.tags = tags;
+    }
+    
     // Create the broadcast
     const broadcastResponse = await youtube.liveBroadcasts.insert({
       part: 'snippet,status,contentDetails',
       requestBody: {
-        snippet: {
-          title: title,
-          description: description || '',
-          scheduledStartTime: new Date(scheduledStartTime).toISOString()
-        },
+        snippet,
         status: {
           privacyStatus: privacyStatus || 'unlisted',
-          selfDeclaredMadeForKids: false
+          selfDeclaredMadeForKids: false,
+          // Note: monetization and altered content are typically set via video update after creation
+          // as liveBroadcasts.insert doesn't directly support these fields
         },
         contentDetails: {
           enableAutoStart: false,
@@ -266,6 +279,44 @@ class YouTubeService {
     });
     
     return true;
+  }
+
+  /**
+   * Get channel default settings for broadcasts
+   * @param {string} accessToken - Access token
+   * @returns {Promise<{title: string, description: string, tags: string[], monetizationEnabled: boolean, alteredContent: boolean, categoryId: string}>}
+   */
+  async getChannelDefaults(accessToken) {
+    const oauth2Client = new google.auth.OAuth2();
+    oauth2Client.setCredentials({ access_token: accessToken });
+    
+    const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+    
+    // Fetch channel with brandingSettings and status for monetization info
+    const response = await youtube.channels.list({
+      part: 'brandingSettings,status,snippet',
+      mine: true
+    });
+    
+    if (!response.data.items || response.data.items.length === 0) {
+      throw new Error('No channel found for this account');
+    }
+    
+    const channel = response.data.items[0];
+    const brandingSettings = channel.brandingSettings || {};
+    const channelSettings = brandingSettings.channel || {};
+    
+    // Extract default values from branding settings
+    // Note: YouTube API doesn't expose all live dashboard defaults directly
+    // We use what's available from brandingSettings
+    return {
+      title: channelSettings.defaultTab || '',
+      description: channelSettings.description || '',
+      tags: channelSettings.keywords ? channelSettings.keywords.split(',').map(t => t.trim()).filter(t => t) : [],
+      monetizationEnabled: channel.status?.isLinked || false,
+      alteredContent: false, // YouTube API doesn't expose this default, user must set
+      categoryId: channelSettings.defaultCategory || '20' // Default to Gaming category
+    };
   }
 
   /**

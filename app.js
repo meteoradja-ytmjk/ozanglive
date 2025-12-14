@@ -3547,6 +3547,32 @@ app.get('/api/youtube/streams', isAuthenticated, async (req, res) => {
   }
 });
 
+// Get YouTube channel defaults for auto-fill
+app.get('/api/youtube/channel-defaults', isAuthenticated, async (req, res) => {
+  try {
+    const credentials = await YouTubeCredentials.findByUserId(req.session.userId);
+    
+    if (!credentials) {
+      return res.status(400).json({
+        success: false,
+        error: 'YouTube account not connected'
+      });
+    }
+    
+    const accessToken = await youtubeService.getAccessToken(
+      credentials.clientId,
+      credentials.clientSecret,
+      credentials.refreshToken
+    );
+    
+    const defaults = await youtubeService.getChannelDefaults(accessToken);
+    res.json({ success: true, defaults });
+  } catch (error) {
+    console.error('Error fetching channel defaults:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch channel defaults' });
+  }
+});
+
 // List YouTube broadcasts
 app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
   try {
@@ -3585,7 +3611,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       });
     }
     
-    const { title, description, scheduledStartTime, privacyStatus, streamId } = req.body;
+    const { title, description, scheduledStartTime, privacyStatus, streamId, tags, monetizationEnabled, alteredContent } = req.body;
     
     if (!title || !scheduledStartTime) {
       return res.status(400).json({
@@ -3605,6 +3631,16 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       });
     }
     
+    // Parse tags if provided as JSON string
+    let parsedTags = [];
+    if (tags) {
+      try {
+        parsedTags = typeof tags === 'string' ? JSON.parse(tags) : tags;
+      } catch (e) {
+        parsedTags = [];
+      }
+    }
+    
     const accessToken = await youtubeService.getAccessToken(
       credentials.clientId,
       credentials.clientSecret,
@@ -3616,7 +3652,10 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       description: description || '',
       scheduledStartTime,
       privacyStatus: privacyStatus || 'unlisted',
-      streamId: streamId || null
+      streamId: streamId || null,
+      tags: parsedTags,
+      monetizationEnabled: monetizationEnabled === 'true' || monetizationEnabled === true,
+      alteredContent: alteredContent === 'true' || alteredContent === true
     });
     
     // Upload thumbnail if provided (either file upload or gallery selection)

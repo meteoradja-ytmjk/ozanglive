@@ -201,6 +201,168 @@ function selectGalleryThumbnail(element, url, path) {
   document.getElementById('selectedThumbnailPath').value = path;
 }
 
+// Tags state
+let currentTags = [];
+
+// Fetch channel defaults for auto-fill
+async function fetchChannelDefaults() {
+  const tagsLoading = document.getElementById('tagsLoading');
+  
+  if (tagsLoading) tagsLoading.classList.remove('hidden');
+  
+  try {
+    const response = await fetch('/api/youtube/channel-defaults', {
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (data.success && data.defaults) {
+      populateFormWithDefaults(data.defaults);
+    }
+  } catch (error) {
+    console.error('Error fetching channel defaults:', error);
+    // Form remains usable with empty values - non-blocking warning
+    showToast('Could not load YouTube defaults', 'info');
+  } finally {
+    if (tagsLoading) tagsLoading.classList.add('hidden');
+  }
+}
+
+// Populate form with defaults from YouTube
+function populateFormWithDefaults(defaults) {
+  // Populate title if available
+  const titleInput = document.getElementById('broadcastTitle');
+  if (defaults.title && titleInput && !titleInput.value) {
+    titleInput.value = defaults.title;
+  }
+  
+  // Populate description if available
+  const descInput = document.getElementById('broadcastDescription');
+  if (defaults.description && descInput && !descInput.value) {
+    descInput.value = defaults.description;
+  }
+  
+  // Populate tags
+  if (defaults.tags && defaults.tags.length > 0) {
+    currentTags = [...defaults.tags];
+    renderTags();
+    const indicator = document.getElementById('tagsAutoFillIndicator');
+    if (indicator) indicator.classList.remove('hidden');
+  }
+  
+  // Handle monetization field
+  const monetizationField = document.getElementById('monetizationField');
+  const monetizationCheckbox = document.getElementById('monetizationEnabled');
+  if (monetizationField && monetizationCheckbox) {
+    if (defaults.monetizationEnabled) {
+      monetizationField.classList.remove('hidden');
+      monetizationCheckbox.checked = true;
+      const indicator = document.getElementById('monetizationAutoFillIndicator');
+      if (indicator) indicator.classList.remove('hidden');
+    } else {
+      monetizationField.classList.add('hidden');
+    }
+  }
+  
+  // Handle altered content
+  const alteredCheckbox = document.getElementById('alteredContent');
+  if (alteredCheckbox && defaults.alteredContent) {
+    alteredCheckbox.checked = defaults.alteredContent;
+    const indicator = document.getElementById('alteredContentAutoFillIndicator');
+    if (indicator) indicator.classList.remove('hidden');
+  }
+}
+
+// Render tags as chips
+function renderTags() {
+  const container = document.getElementById('tagsContainer');
+  const input = document.getElementById('tagInput');
+  const hiddenInput = document.getElementById('tagsHidden');
+  
+  if (!container || !input) return;
+  
+  // Remove existing tag chips
+  container.querySelectorAll('.tag-chip').forEach(chip => chip.remove());
+  
+  // Add tag chips before the input
+  currentTags.forEach(tag => {
+    const chip = document.createElement('span');
+    chip.className = 'tag-chip inline-flex items-center gap-1 px-2 py-1 bg-red-500/20 text-red-400 rounded text-sm';
+    chip.innerHTML = `
+      ${escapeHtml(tag)}
+      <button type="button" class="hover:text-red-300" onclick="removeTag('${escapeHtml(tag)}')">
+        <i class="ti ti-x text-xs"></i>
+      </button>
+    `;
+    container.insertBefore(chip, input);
+  });
+  
+  // Update hidden input with tags as JSON
+  if (hiddenInput) {
+    hiddenInput.value = JSON.stringify(currentTags);
+  }
+}
+
+// Add a new tag
+function addTag(tag) {
+  const trimmedTag = tag.trim();
+  if (!trimmedTag) return;
+  
+  // Check if tag already exists
+  if (currentTags.includes(trimmedTag)) {
+    showToast('Tag already exists', 'error');
+    return;
+  }
+  
+  // Check total characters limit (500)
+  const totalChars = currentTags.join(',').length + trimmedTag.length + (currentTags.length > 0 ? 1 : 0);
+  if (totalChars > 500) {
+    showToast('Tags exceed 500 character limit', 'error');
+    return;
+  }
+  
+  currentTags.push(trimmedTag);
+  renderTags();
+}
+
+// Remove a tag
+function removeTag(tag) {
+  currentTags = currentTags.filter(t => t !== tag);
+  renderTags();
+}
+
+// Escape HTML to prevent XSS
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// Initialize tag input handler
+function initTagInput() {
+  const tagInput = document.getElementById('tagInput');
+  if (!tagInput) return;
+  
+  tagInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addTag(tagInput.value);
+      tagInput.value = '';
+    }
+  });
+  
+  // Also add on blur
+  tagInput.addEventListener('blur', () => {
+    if (tagInput.value.trim()) {
+      addTag(tagInput.value);
+      tagInput.value = '';
+    }
+  });
+}
+
 // Create Broadcast Modal
 function openCreateBroadcastModal() {
   document.getElementById('createBroadcastModal').classList.remove('hidden');
@@ -210,9 +372,17 @@ function openCreateBroadcastModal() {
   const minDateStr = minDate.toISOString().slice(0, 16);
   document.getElementById('scheduledStartTime').min = minDateStr;
   
-  // Fetch streams and thumbnails
+  // Reset tags
+  currentTags = [];
+  renderTags();
+  
+  // Initialize tag input
+  initTagInput();
+  
+  // Fetch streams, thumbnails, and channel defaults
   fetchStreams();
   fetchThumbnails();
+  fetchChannelDefaults();
 }
 
 function closeCreateBroadcastModal() {
@@ -226,6 +396,21 @@ function closeCreateBroadcastModal() {
     item.classList.remove('border-primary', 'border-red-500');
     item.classList.add('border-transparent');
   });
+  
+  // Reset tags
+  currentTags = [];
+  renderTags();
+  
+  // Hide auto-fill indicators
+  const indicators = ['tagsAutoFillIndicator', 'monetizationAutoFillIndicator', 'alteredContentAutoFillIndicator'];
+  indicators.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.add('hidden');
+  });
+  
+  // Hide monetization field
+  const monetizationField = document.getElementById('monetizationField');
+  if (monetizationField) monetizationField.classList.add('hidden');
 }
 
 // Preview thumbnail before upload
@@ -285,6 +470,23 @@ if (createBroadcastForm) {
       const streamId = document.getElementById('streamKeySelect').value;
       if (streamId) {
         formData.append('streamId', streamId);
+      }
+      
+      // Add tags
+      if (currentTags.length > 0) {
+        formData.append('tags', JSON.stringify(currentTags));
+      }
+      
+      // Add monetization status
+      const monetizationCheckbox = document.getElementById('monetizationEnabled');
+      if (monetizationCheckbox) {
+        formData.append('monetizationEnabled', monetizationCheckbox.checked);
+      }
+      
+      // Add altered content status
+      const alteredCheckbox = document.getElementById('alteredContent');
+      if (alteredCheckbox) {
+        formData.append('alteredContent', alteredCheckbox.checked);
       }
       
       // Add thumbnail - either file upload or gallery selection
