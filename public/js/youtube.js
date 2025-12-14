@@ -101,6 +101,106 @@ async function disconnectYouTube() {
   }
 }
 
+// Fetch available stream keys
+async function fetchStreams() {
+  const select = document.getElementById('streamKeySelect');
+  const loading = document.getElementById('streamKeyLoading');
+  
+  if (!select) return;
+  
+  loading.classList.remove('hidden');
+  
+  try {
+    const response = await fetch('/api/youtube/streams', {
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+    
+    const data = await response.json();
+    
+    // Clear existing options except first
+    select.innerHTML = '<option value="">Create new stream key</option>';
+    
+    if (data.success && data.streams && data.streams.length > 0) {
+      data.streams.forEach(stream => {
+        const option = document.createElement('option');
+        option.value = stream.id;
+        option.textContent = `${stream.title} (${stream.resolution} @ ${stream.frameRate})`;
+        select.appendChild(option);
+      });
+    }
+  } catch (error) {
+    console.error('Error fetching streams:', error);
+  } finally {
+    loading.classList.add('hidden');
+  }
+}
+
+// Fetch available thumbnails from gallery
+async function fetchThumbnails() {
+  const grid = document.getElementById('thumbnailGalleryGrid');
+  const loading = document.getElementById('thumbnailGalleryLoading');
+  const empty = document.getElementById('thumbnailGalleryEmpty');
+  
+  if (!grid) return;
+  
+  grid.innerHTML = '';
+  loading.classList.remove('hidden');
+  empty.classList.add('hidden');
+  
+  try {
+    const response = await fetch('/api/thumbnails', {
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (data.success && data.thumbnails && data.thumbnails.length > 0) {
+      data.thumbnails.forEach(thumb => {
+        const div = document.createElement('div');
+        div.className = 'thumbnail-item w-full aspect-video bg-dark-700 rounded cursor-pointer overflow-hidden border-2 border-transparent hover:border-primary transition-colors';
+        div.innerHTML = `<img src="${thumb.url}" class="w-full h-full object-cover" alt="Thumbnail">`;
+        div.dataset.path = thumb.path;
+        div.onclick = () => selectGalleryThumbnail(div, thumb.url, thumb.path);
+        grid.appendChild(div);
+      });
+    } else {
+      empty.classList.remove('hidden');
+    }
+  } catch (error) {
+    console.error('Error fetching thumbnails:', error);
+    empty.classList.remove('hidden');
+  } finally {
+    loading.classList.add('hidden');
+  }
+}
+
+// Select thumbnail from gallery
+function selectGalleryThumbnail(element, url, path) {
+  // Clear file input
+  document.getElementById('thumbnailFile').value = '';
+  
+  // Remove selection from all thumbnails
+  document.querySelectorAll('.thumbnail-item').forEach(item => {
+    item.classList.remove('border-primary', 'border-red-500');
+    item.classList.add('border-transparent');
+  });
+  
+  // Add selection to clicked thumbnail
+  element.classList.remove('border-transparent');
+  element.classList.add('border-red-500');
+  
+  // Update preview
+  document.getElementById('thumbnailPreview').innerHTML = 
+    `<img src="${url}" class="w-full h-full object-cover">`;
+  
+  // Set hidden input for path
+  document.getElementById('selectedThumbnailPath').value = path;
+}
+
 // Create Broadcast Modal
 function openCreateBroadcastModal() {
   document.getElementById('createBroadcastModal').classList.remove('hidden');
@@ -109,12 +209,23 @@ function openCreateBroadcastModal() {
   const minDate = new Date(Date.now() + 11 * 60 * 1000);
   const minDateStr = minDate.toISOString().slice(0, 16);
   document.getElementById('scheduledStartTime').min = minDateStr;
+  
+  // Fetch streams and thumbnails
+  fetchStreams();
+  fetchThumbnails();
 }
 
 function closeCreateBroadcastModal() {
   document.getElementById('createBroadcastModal').classList.add('hidden');
   document.getElementById('createBroadcastForm').reset();
   document.getElementById('thumbnailPreview').innerHTML = '<i class="ti ti-photo text-gray-500 text-2xl"></i>';
+  document.getElementById('selectedThumbnailPath').value = '';
+  
+  // Clear thumbnail selection
+  document.querySelectorAll('.thumbnail-item').forEach(item => {
+    item.classList.remove('border-primary', 'border-red-500');
+    item.classList.add('border-transparent');
+  });
 }
 
 // Preview thumbnail before upload
@@ -135,6 +246,13 @@ function previewThumbnail(input) {
       input.value = '';
       return;
     }
+    
+    // Clear gallery selection when uploading new file
+    document.getElementById('selectedThumbnailPath').value = '';
+    document.querySelectorAll('.thumbnail-item').forEach(item => {
+      item.classList.remove('border-primary', 'border-red-500');
+      item.classList.add('border-transparent');
+    });
     
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -163,9 +281,20 @@ if (createBroadcastForm) {
       formData.append('scheduledStartTime', document.getElementById('scheduledStartTime').value);
       formData.append('privacyStatus', document.getElementById('privacyStatus').value);
       
+      // Add stream key if selected
+      const streamId = document.getElementById('streamKeySelect').value;
+      if (streamId) {
+        formData.append('streamId', streamId);
+      }
+      
+      // Add thumbnail - either file upload or gallery selection
       const thumbnailFile = document.getElementById('thumbnailFile').files[0];
+      const thumbnailPath = document.getElementById('selectedThumbnailPath').value;
+      
       if (thumbnailFile) {
         formData.append('thumbnail', thumbnailFile);
+      } else if (thumbnailPath) {
+        formData.append('thumbnailPath', thumbnailPath);
       }
       
       const response = await fetch('/api/youtube/broadcasts', {

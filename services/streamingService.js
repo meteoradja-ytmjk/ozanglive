@@ -956,42 +956,62 @@ async function stopStream(streamId) {
 async function syncStreamStatuses() {
   try {
     console.log('[StreamingService] Syncing stream statuses...');
-    const liveStreams = await Stream.findAll(null, 'live');
+    
+    let liveStreams = [];
+    try {
+      liveStreams = await Stream.findAll(null, 'live');
+    } catch (dbError) {
+      console.error('[StreamingService] Database error finding live streams:', dbError.message);
+      return; // Don't crash, just skip this sync
+    }
+    
     for (const stream of liveStreams) {
-      const isReallyActive = activeStreams.has(stream.id);
-      if (!isReallyActive) {
-        console.log(`[StreamingService] Found inconsistent stream ${stream.id}: marked as 'live' in DB but not active in memory`);
-        // FIXED: Use correct status based on schedule type
-        const newStatus = getStatusAfterStreamEnd(stream);
-        await Stream.updateStatus(stream.id, newStatus);
-        console.log(`[StreamingService] Updated stream ${stream.id} status to '${newStatus}'`);
+      try {
+        const isReallyActive = activeStreams.has(stream.id);
+        if (!isReallyActive) {
+          console.log(`[StreamingService] Found inconsistent stream ${stream.id}: marked as 'live' in DB but not active in memory`);
+          // FIXED: Use correct status based on schedule type
+          const newStatus = getStatusAfterStreamEnd(stream);
+          await Stream.updateStatus(stream.id, newStatus);
+          console.log(`[StreamingService] Updated stream ${stream.id} status to '${newStatus}'`);
+        }
+      } catch (streamError) {
+        console.error(`[StreamingService] Error syncing stream ${stream.id}:`, streamError.message);
+        // Continue with next stream
       }
     }
+    
     const activeStreamIds = Array.from(activeStreams.keys());
     for (const streamId of activeStreamIds) {
-      const stream = await Stream.findById(streamId);
-      if (!stream || stream.status !== 'live') {
-        console.log(`[StreamingService] Found inconsistent stream ${streamId}: active in memory but not 'live' in DB`);
-        if (stream) {
-          await Stream.updateStatus(streamId, 'live');
-          console.log(`[StreamingService] Updated stream ${streamId} status to 'live'`);
-        } else {
-          console.log(`[StreamingService] Stream ${streamId} not found in DB, removing from active streams`);
-          const process = activeStreams.get(streamId);
-          if (process) {
-            try {
-              process.kill('SIGTERM');
-            } catch (error) {
-              console.error(`[StreamingService] Error killing orphaned process: ${error.message}`);
+      try {
+        const stream = await Stream.findById(streamId);
+        if (!stream || stream.status !== 'live') {
+          console.log(`[StreamingService] Found inconsistent stream ${streamId}: active in memory but not 'live' in DB`);
+          if (stream) {
+            await Stream.updateStatus(streamId, 'live');
+            console.log(`[StreamingService] Updated stream ${streamId} status to 'live'`);
+          } else {
+            console.log(`[StreamingService] Stream ${streamId} not found in DB, removing from active streams`);
+            const ffmpegProcess = activeStreams.get(streamId);
+            if (ffmpegProcess) {
+              try {
+                ffmpegProcess.kill('SIGTERM');
+              } catch (killError) {
+                console.error(`[StreamingService] Error killing orphaned process: ${killError.message}`);
+              }
             }
+            activeStreams.delete(streamId);
           }
-          activeStreams.delete(streamId);
         }
+      } catch (streamError) {
+        console.error(`[StreamingService] Error syncing active stream ${streamId}:`, streamError.message);
+        // Continue with next stream
       }
     }
     console.log(`[StreamingService] Stream status sync completed. Active streams: ${activeStreamIds.length}`);
   } catch (error) {
-    console.error('[StreamingService] Error syncing stream statuses:', error);
+    console.error('[StreamingService] Error syncing stream statuses:', error.message);
+    // Don't rethrow - let the sync continue on next interval
   }
 }
 // OPTIMIZED: Increased from 5 to 10 minutes to reduce CPU overhead

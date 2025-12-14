@@ -29,16 +29,67 @@ const schedulerService = require('./services/schedulerService');
 const YouTubeCredentials = require('./models/YouTubeCredentials');
 const youtubeService = require('./services/youtubeService');
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
+// Track if we're shutting down to prevent multiple shutdown attempts
+let isShuttingDown = false;
+
 process.on('unhandledRejection', (reason, promise) => {
   console.error('-----------------------------------');
   console.error('UNHANDLED REJECTION AT:', promise);
   console.error('REASON:', reason);
+  console.error('Stack:', reason?.stack || 'No stack trace');
   console.error('-----------------------------------');
+  // Don't exit - just log and continue
+  // This prevents the app from crashing on unhandled promise rejections
 });
+
 process.on('uncaughtException', (error) => {
   console.error('-----------------------------------');
   console.error('UNCAUGHT EXCEPTION:', error);
+  console.error('Stack:', error?.stack || 'No stack trace');
   console.error('-----------------------------------');
+  
+  // For critical errors, attempt graceful shutdown
+  if (!isShuttingDown) {
+    isShuttingDown = true;
+    console.error('Attempting graceful shutdown...');
+    
+    // Give the app 10 seconds to clean up before force exit
+    setTimeout(() => {
+      console.error('Forced shutdown after timeout');
+      process.exit(1);
+    }, 10000).unref();
+    
+    // Try to stop all active streams gracefully
+    try {
+      const activeStreams = streamingService.getActiveStreams();
+      console.log(`Stopping ${activeStreams.length} active streams before shutdown...`);
+      Promise.all(activeStreams.map(id => streamingService.stopStream(id).catch(() => {})))
+        .finally(() => {
+          console.log('Graceful shutdown complete');
+          process.exit(1);
+        });
+    } catch (e) {
+      console.error('Error during graceful shutdown:', e);
+      process.exit(1);
+    }
+  }
+});
+
+// Handle SIGTERM and SIGINT for graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('Received SIGTERM signal');
+  if (!isShuttingDown) {
+    isShuttingDown = true;
+    process.exit(0);
+  }
+});
+
+process.on('SIGINT', () => {
+  console.log('Received SIGINT signal');
+  if (!isShuttingDown) {
+    isShuttingDown = true;
+    process.exit(0);
+  }
 });
 const app = express();
 app.set("trust proxy", 1);
@@ -136,13 +187,22 @@ app.locals.helpers = {
     });
   }
 };
+// Validate SESSION_SECRET exists
+const sessionSecret = process.env.SESSION_SECRET;
+if (!sessionSecret) {
+  console.error('WARNING: SESSION_SECRET is not set in .env file!');
+  console.error('Please add SESSION_SECRET to your .env file.');
+  console.error('Generate one using: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"');
+  console.error('Using a temporary secret for development - DO NOT USE IN PRODUCTION!');
+}
+
 app.use(session({
   store: new SQLiteStore({
     db: 'sessions.db',
     dir: './db/',
     table: 'sessions'
   }),
-  secret: process.env.SESSION_SECRET,
+  secret: sessionSecret || require('crypto').randomBytes(32).toString('hex'),
   resave: false,
   saveUninitialized: false,
   rolling: true,
@@ -609,6 +669,31 @@ app.post('/setup-account', upload.single('avatar'), [
 });
 app.get('/', (req, res) => {
   res.redirect('/dashboard');
+});
+
+// Health check endpoint - no authentication required
+// Used for monitoring if the application is running
+app.get('/health', (req, res) => {
+  try {
+    const activeStreams = streamingService.getActiveStreams();
+    res.json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      memory: {
+        used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+        total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024),
+        unit: 'MB'
+      },
+      activeStreams: activeStreams.length
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'error',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 app.get('/dashboard', isAuthenticated, async (req, res) => {
   try {
@@ -3404,6 +3489,64 @@ app.delete('/api/youtube/credentials', isAuthenticated, async (req, res) => {
   }
 });
 
+// List uploaded thumbnails
+app.get('/api/thumbnails', isAuthenticated, async (req, res) => {
+  try {
+    const thumbnailsDir = path.join(__dirname, 'public', 'uploads', 'thumbnails');
+    
+    // Check if directory exists
+    if (!fs.existsSync(thumbnailsDir)) {
+      return res.json({ success: true, thumbnails: [] });
+    }
+    
+    const files = fs.readdirSync(thumbnailsDir);
+    const thumbnails = files
+      .filter(file => /\.(jpg|jpeg|png)$/i.test(file))
+      .map(file => ({
+        filename: file,
+        path: `/uploads/thumbnails/${file}`,
+        url: `/uploads/thumbnails/${file}`
+      }))
+      .sort((a, b) => {
+        // Sort by modification time (newest first)
+        const statA = fs.statSync(path.join(thumbnailsDir, a.filename));
+        const statB = fs.statSync(path.join(thumbnailsDir, b.filename));
+        return statB.mtime - statA.mtime;
+      });
+    
+    res.json({ success: true, thumbnails });
+  } catch (error) {
+    console.error('Error listing thumbnails:', error);
+    res.status(500).json({ success: false, error: 'Failed to list thumbnails' });
+  }
+});
+
+// List YouTube streams (stream keys)
+app.get('/api/youtube/streams', isAuthenticated, async (req, res) => {
+  try {
+    const credentials = await YouTubeCredentials.findByUserId(req.session.userId);
+    
+    if (!credentials) {
+      return res.status(400).json({
+        success: false,
+        error: 'YouTube account not connected'
+      });
+    }
+    
+    const accessToken = await youtubeService.getAccessToken(
+      credentials.clientId,
+      credentials.clientSecret,
+      credentials.refreshToken
+    );
+    
+    const streams = await youtubeService.listStreams(accessToken);
+    res.json({ success: true, streams });
+  } catch (error) {
+    console.error('Error listing streams:', error);
+    res.status(500).json({ success: false, error: 'Failed to list stream keys' });
+  }
+});
+
 // List YouTube broadcasts
 app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
   try {
@@ -3442,7 +3585,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       });
     }
     
-    const { title, description, scheduledStartTime, privacyStatus } = req.body;
+    const { title, description, scheduledStartTime, privacyStatus, streamId } = req.body;
     
     if (!title || !scheduledStartTime) {
       return res.status(400).json({
@@ -3472,11 +3615,15 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       title,
       description: description || '',
       scheduledStartTime,
-      privacyStatus: privacyStatus || 'unlisted'
+      privacyStatus: privacyStatus || 'unlisted',
+      streamId: streamId || null
     });
     
-    // Upload thumbnail if provided
+    // Upload thumbnail if provided (either file upload or gallery selection)
+    const thumbnailPath = req.body.thumbnailPath;
+    
     if (req.file) {
+      // Handle file upload
       try {
         const thumbnailResult = await youtubeService.uploadThumbnail(
           accessToken,
@@ -3486,6 +3633,22 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         broadcast.thumbnailUrl = thumbnailResult.thumbnailUrl;
       } catch (thumbErr) {
         console.error('Error uploading thumbnail:', thumbErr.message);
+      }
+    } else if (thumbnailPath) {
+      // Handle gallery selection
+      try {
+        const fullPath = path.join(__dirname, 'public', thumbnailPath);
+        if (fs.existsSync(fullPath)) {
+          const imageBuffer = fs.readFileSync(fullPath);
+          const thumbnailResult = await youtubeService.uploadThumbnail(
+            accessToken,
+            broadcast.broadcastId,
+            imageBuffer
+          );
+          broadcast.thumbnailUrl = thumbnailResult.thumbnailUrl;
+        }
+      } catch (thumbErr) {
+        console.error('Error uploading gallery thumbnail:', thumbErr.message);
       }
     }
     
@@ -3597,22 +3760,50 @@ const server = app.listen(port, '0.0.0.0', async () => {
   } else {
     console.log(`  http://localhost:${port}`);
   }
+  
+  // Reset live streams to offline on startup (in case of crash recovery)
   try {
     const streams = await Stream.findAll(null, 'live');
     if (streams && streams.length > 0) {
       console.log(`Resetting ${streams.length} live streams to offline state...`);
       for (const stream of streams) {
-        await Stream.updateStatus(stream.id, 'offline');
+        try {
+          await Stream.updateStatus(stream.id, 'offline');
+        } catch (updateError) {
+          console.error(`Error resetting stream ${stream.id}:`, updateError.message);
+        }
       }
     }
   } catch (error) {
-    console.error('Error resetting stream statuses:', error);
+    console.error('Error resetting stream statuses:', error.message);
+    // Don't crash on startup - continue running
   }
-  schedulerService.init(streamingService);
+  
+  // Initialize scheduler
+  try {
+    schedulerService.init(streamingService);
+  } catch (error) {
+    console.error('Error initializing scheduler:', error.message);
+    // Don't crash - scheduler can be retried
+  }
+  
+  // Sync stream statuses
   try {
     await streamingService.syncStreamStatuses();
   } catch (error) {
-    console.error('Failed to sync stream statuses:', error);
+    console.error('Failed to sync stream statuses:', error.message);
+    // Don't crash - sync will retry on interval
+  }
+  
+  console.log('StreamFlow startup complete');
+});
+
+// Handle server errors
+server.on('error', (error) => {
+  if (error.code === 'EADDRINUSE') {
+    console.error(`Port ${port} is already in use. Please close the other application or use a different port.`);
+  } else {
+    console.error('Server error:', error);
   }
 });
 

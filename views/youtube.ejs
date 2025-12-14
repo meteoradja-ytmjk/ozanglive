@@ -228,7 +228,36 @@
         </div>
         
         <div>
+          <label class="text-sm font-medium text-white block mb-2">Stream Key</label>
+          <div class="relative">
+            <select id="streamKeySelect" name="streamId"
+              class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none">
+              <option value="">Create new stream key</option>
+            </select>
+            <div id="streamKeyLoading" class="hidden absolute right-3 top-1/2 -translate-y-1/2">
+              <i class="ti ti-loader animate-spin text-gray-400"></i>
+            </div>
+          </div>
+          <p class="text-xs text-gray-500 mt-1">Select existing stream key or create new one</p>
+        </div>
+        
+        <div>
           <label class="text-sm font-medium text-white block mb-2">Thumbnail</label>
+          
+          <!-- Thumbnail Gallery -->
+          <div id="thumbnailGallery" class="mb-3">
+            <div id="thumbnailGalleryGrid" class="grid grid-cols-4 gap-2 mb-2">
+              <!-- Thumbnails will be loaded here -->
+            </div>
+            <div id="thumbnailGalleryLoading" class="hidden text-center py-4">
+              <i class="ti ti-loader animate-spin text-gray-400"></i>
+              <span class="text-gray-500 text-sm ml-2">Loading thumbnails...</span>
+            </div>
+            <div id="thumbnailGalleryEmpty" class="hidden text-center py-2">
+              <span class="text-gray-500 text-xs">No uploaded thumbnails</span>
+            </div>
+          </div>
+          
           <div class="flex items-center gap-4">
             <div id="thumbnailPreview" class="w-32 h-20 bg-dark-700 rounded-lg overflow-hidden flex items-center justify-center">
               <i class="ti ti-photo text-gray-500 text-2xl"></i>
@@ -236,9 +265,10 @@
             <div class="flex-1">
               <input type="file" id="thumbnailFile" name="thumbnail" accept="image/jpeg,image/png"
                 class="hidden" onchange="previewThumbnail(this)">
+              <input type="hidden" id="selectedThumbnailPath" name="thumbnailPath" value="">
               <button type="button" onclick="document.getElementById('thumbnailFile').click()"
                 class="bg-dark-700 hover:bg-dark-600 text-white px-4 py-2 rounded-lg transition-colors text-sm">
-                <i class="ti ti-upload mr-1"></i> Choose Image
+                <i class="ti ti-upload mr-1"></i> Upload New
               </button>
               <p class="text-xs text-gray-500 mt-1">JPG or PNG, max 2MB</p>
             </div>

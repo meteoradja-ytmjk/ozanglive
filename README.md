@@ -402,6 +402,154 @@ Jika menggunakan systemd:
 sudo systemctl restart streamflow
 Setelah port dibebaskan, aplikasi akan berjalan normal dan route /youtube akan berfungsi.
 
+
+
+#📺 YouTube API Setup (OAuth + Refresh Token)
+
+Panduan ini menjelaskan cara menghubungkan aplikasi/web ke YouTube menggunakan YouTube Data API v3 dengan OAuth 2.0, sehingga aplikasi bisa:
+
+Membuat & menjadwalkan live
+
+Mengelola livestream otomatis
+
+Tidak perlu login ulang (pakai refresh token)
+
+1️⃣ Persiapan Awal
+Syarat:
+
+Akun Google
+
+Channel YouTube aktif (livestream enabled)
+
+Akses ke Google Cloud Console
+
+2️⃣ Buat Project di Google Cloud
+
+Buka Google Cloud Console
+
+Klik Select Project → New Project
+
+Isi nama project (contoh: youtube-live-app)
+
+Klik Create
+
+3️⃣ Aktifkan YouTube Data API
+
+Masuk APIs & Services → Library
+
+Cari YouTube Data API v3
+
+Klik Enable
+
+4️⃣ Atur OAuth Consent Screen
+
+Masuk APIs & Services → OAuth consent screen
+
+Pilih External
+
+Isi:
+
+App name
+
+User support email
+
+Developer contact email
+
+Scopes → Add:
+
+https://www.googleapis.com/auth/youtube
+
+
+Test users
+
+Tambahkan email Google yang akan login
+
+Save
+
+ℹ️ Mode Testing sudah cukup (tidak perlu verifikasi Google)
+
+5️⃣ Buat OAuth Client ID
+
+Masuk APIs & Services → Credentials
+
+Klik Create Credentials → OAuth Client ID
+
+Pilih:
+
+Application type: Web application
+
+Isi:
+
+Name: bebas
+
+Authorized redirect URIs:
+
+https://developers.google.com/oauthplayground
+
+
+Klik Create
+
+📌 Simpan:
+
+CLIENT_ID
+
+CLIENT_SECRET
+
+6️⃣ Generate Refresh Token (Paling Mudah)
+Menggunakan OAuth Playground
+
+Buka:
+👉 https://developers.google.com/oauthplayground
+
+Klik ⚙️ (Settings):
+
+✅ Use your own OAuth credentials
+
+Masukkan:
+
+Client ID
+
+Client Secret
+
+Scope:
+
+https://www.googleapis.com/auth/youtube
+
+
+Klik Authorize APIs
+
+Login Google & Allow
+
+Klik Exchange authorization code for tokens
+
+Salin:
+
+Refresh Token
+
+7️⃣ Kredensial yang Dibutuhkan Aplikasi
+
+Aplikasi membutuhkan 3 data utama:
+
+CLIENT_ID=xxxxxxxx.apps.googleusercontent.com
+CLIENT_SECRET=xxxxxxxx
+REFRESH_TOKEN=xxxxxxxx
+
+
+📌 Refresh token tidak kedaluwarsa (kecuali dicabut manual)
+
+8️⃣ Cara Kerja Singkat OAuth YouTube
+Refresh Token
+     ↓
+Access Token (otomatis, tiap 1 jam)
+     ↓
+YouTube Data API (create / schedule / manage live)
+
+
+👉 Aplikasi tidak perlu login ulang
+
+
+
+
 ## 📁 Struktur Folder
 
 ```

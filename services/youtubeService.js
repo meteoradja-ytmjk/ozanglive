@@ -75,9 +75,10 @@ class YouTubeService {
    * Create a scheduled broadcast on YouTube
    * @param {string} accessToken - Access token
    * @param {Object} data - Broadcast data
+   * @param {string} [data.streamId] - Optional existing stream ID to bind
    * @returns {Promise<{broadcastId: string, streamKey: string, rtmpUrl: string}>}
    */
-  async createBroadcast(accessToken, { title, description, scheduledStartTime, privacyStatus }) {
+  async createBroadcast(accessToken, { title, description, scheduledStartTime, privacyStatus, streamId }) {
     const oauth2Client = new google.auth.OAuth2();
     oauth2Client.setCredentials({ access_token: accessToken });
     
@@ -108,22 +109,39 @@ class YouTubeService {
     
     const broadcast = broadcastResponse.data;
     
-    // Create a stream to bind to the broadcast
-    const streamResponse = await youtube.liveStreams.insert({
-      part: 'snippet,cdn',
-      requestBody: {
-        snippet: {
-          title: `Stream for ${title}`
-        },
-        cdn: {
-          frameRate: '30fps',
-          ingestionType: 'rtmp',
-          resolution: '1080p'
-        }
-      }
-    });
+    let stream;
     
-    const stream = streamResponse.data;
+    // Use existing stream or create new one
+    if (streamId) {
+      // Fetch existing stream info
+      const streamResponse = await youtube.liveStreams.list({
+        part: 'snippet,cdn',
+        id: streamId
+      });
+      
+      if (!streamResponse.data.items || streamResponse.data.items.length === 0) {
+        throw new Error('Stream not found');
+      }
+      
+      stream = streamResponse.data.items[0];
+    } else {
+      // Create a new stream
+      const streamResponse = await youtube.liveStreams.insert({
+        part: 'snippet,cdn',
+        requestBody: {
+          snippet: {
+            title: `Stream for ${title}`
+          },
+          cdn: {
+            frameRate: '30fps',
+            ingestionType: 'rtmp',
+            resolution: '1080p'
+          }
+        }
+      });
+      
+      stream = streamResponse.data;
+    }
     
     // Bind the stream to the broadcast
     await youtube.liveBroadcasts.bind({
@@ -200,6 +218,35 @@ class YouTubeService {
     }));
     
     return result;
+  }
+
+  /**
+   * List available live streams (stream keys)
+   * @param {string} accessToken - Access token
+   * @returns {Promise<Array<{id: string, title: string, streamKey: string, rtmpUrl: string, resolution: string, frameRate: string}>>}
+   */
+  async listStreams(accessToken) {
+    const oauth2Client = new google.auth.OAuth2();
+    oauth2Client.setCredentials({ access_token: accessToken });
+    
+    const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+    
+    const response = await youtube.liveStreams.list({
+      part: 'snippet,cdn',
+      mine: true,
+      maxResults: 50
+    });
+    
+    const streams = response.data.items || [];
+    
+    return streams.map(stream => ({
+      id: stream.id,
+      title: stream.snippet.title,
+      streamKey: stream.cdn?.ingestionInfo?.streamName || '',
+      rtmpUrl: stream.cdn?.ingestionInfo?.ingestionAddress || 'rtmp://a.rtmp.youtube.com/live2',
+      resolution: stream.cdn?.resolution || 'variable',
+      frameRate: stream.cdn?.frameRate || 'variable'
+    }));
   }
 
   /**
