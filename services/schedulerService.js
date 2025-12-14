@@ -24,12 +24,40 @@ function init(streamingServiceInstance) {
   streamingService = streamingServiceInstance;
   initialized = true;
   console.log('Stream scheduler initialized with 30-second duration check interval');
-  scheduleIntervalId = setInterval(checkScheduledStreams, 60 * 1000);
-  durationIntervalId = setInterval(checkStreamDurations, DURATION_CHECK_INTERVAL); // Changed to 30 seconds
-  recurringIntervalId = setInterval(checkRecurringSchedules, RECURRING_CHECK_INTERVAL);
-  checkScheduledStreams();
-  checkStreamDurations();
-  checkRecurringSchedules();
+  
+  // Wrap interval callbacks with error handling to prevent crashes
+  const safeCheckScheduledStreams = async () => {
+    try {
+      await checkScheduledStreams();
+    } catch (error) {
+      console.error('[Scheduler] Error in checkScheduledStreams interval:', error.message);
+    }
+  };
+  
+  const safeCheckStreamDurations = async () => {
+    try {
+      await checkStreamDurations();
+    } catch (error) {
+      console.error('[Scheduler] Error in checkStreamDurations interval:', error.message);
+    }
+  };
+  
+  const safeCheckRecurringSchedules = async () => {
+    try {
+      await checkRecurringSchedules();
+    } catch (error) {
+      console.error('[Scheduler] Error in checkRecurringSchedules interval:', error.message);
+    }
+  };
+  
+  scheduleIntervalId = setInterval(safeCheckScheduledStreams, 60 * 1000);
+  durationIntervalId = setInterval(safeCheckStreamDurations, DURATION_CHECK_INTERVAL);
+  recurringIntervalId = setInterval(safeCheckRecurringSchedules, RECURRING_CHECK_INTERVAL);
+  
+  // Initial checks with error handling
+  safeCheckScheduledStreams();
+  safeCheckStreamDurations();
+  safeCheckRecurringSchedules();
 }
 async function checkScheduledStreams() {
   try {

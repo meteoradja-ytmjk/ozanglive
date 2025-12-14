@@ -402,12 +402,68 @@ function closeDatabase() {
 async function checkConnectivity() {
   const startTime = Date.now();
   return new Promise((resolve) => {
+    // Add timeout to prevent hanging
+    const timeout = setTimeout(() => {
+      resolve({ connected: false, latency: 5000, error: 'Database query timeout' });
+    }, 5000);
+    
     db.get('SELECT 1 as test', [], (err) => {
+      clearTimeout(timeout);
       const latency = Date.now() - startTime;
       if (err) {
         resolve({ connected: false, latency, error: err.message });
       } else {
         resolve({ connected: true, latency });
+      }
+    });
+  });
+}
+
+/**
+ * Safe database query wrapper with timeout and error handling
+ * @param {string} sql - SQL query
+ * @param {Array} params - Query parameters
+ * @param {number} timeoutMs - Timeout in milliseconds (default 30s)
+ * @returns {Promise<any>}
+ */
+function safeDbQuery(sql, params = [], timeoutMs = 30000) {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error(`Database query timeout after ${timeoutMs}ms`));
+    }, timeoutMs);
+    
+    db.all(sql, params, (err, rows) => {
+      clearTimeout(timeout);
+      if (err) {
+        console.error('[Database] Query error:', err.message);
+        reject(err);
+      } else {
+        resolve(rows);
+      }
+    });
+  });
+}
+
+/**
+ * Safe database run wrapper with timeout and error handling
+ * @param {string} sql - SQL statement
+ * @param {Array} params - Query parameters
+ * @param {number} timeoutMs - Timeout in milliseconds (default 30s)
+ * @returns {Promise<{lastID: number, changes: number}>}
+ */
+function safeDbRun(sql, params = [], timeoutMs = 30000) {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error(`Database run timeout after ${timeoutMs}ms`));
+    }, timeoutMs);
+    
+    db.run(sql, params, function(err) {
+      clearTimeout(timeout);
+      if (err) {
+        console.error('[Database] Run error:', err.message);
+        reject(err);
+      } else {
+        resolve({ lastID: this.lastID, changes: this.changes });
       }
     });
   });
@@ -432,6 +488,8 @@ module.exports = {
   verifyTables,
   checkConnectivity,
   closeDatabase,
+  safeDbQuery,
+  safeDbRun,
   isDbInitialized: () => dbInitialized,
   getInitError: () => dbInitError,
   REQUIRED_TABLES

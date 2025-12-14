@@ -7,7 +7,14 @@
     "start": "node app.js",
     "dev": "nodemon app.js",
     "generate-secret": "node generate-secret.js",
-    "test": "jest --forceExit"
+    "test": "jest --forceExit",
+    "pm2:start": "pm2 start ecosystem.config.js",
+    "pm2:stop": "pm2 stop streamflow",
+    "pm2:restart": "pm2 restart streamflow",
+    "pm2:reload": "pm2 reload streamflow",
+    "pm2:logs": "pm2 logs streamflow",
+    "pm2:status": "pm2 status",
+    "pm2:monit": "pm2 monit"
   },
   "dependencies": {
     "@ffmpeg-installer/ffmpeg": "^1.1.0",

@@ -4,7 +4,8 @@
 
 
 
-  - [ ] 1.1 Update db/database.js to ensure proper initialization order
+  - [x] 1.1 Update db/database.js to ensure proper initialization order
+
     - Add table verification function
     - Ensure waitForDbInit() properly waits for all tables
 
@@ -19,12 +20,16 @@
 
     - **Validates: Requirements 1.1, 1.4**
 
+
+
 - [x] 2. Fix Application Startup Sequence in app.js
+
 
 
   - [ ] 2.1 Update app.js to wait for database before starting services
     - Move server.listen inside async startup function
     - Wait for waitForDbInit() before initializing scheduler
+
     - Add proper error handling for startup failures
     - _Requirements: 1.1, 1.2_
   - [ ] 2.2 Fix Stream.findAll query to not depend on playlists table
@@ -35,6 +40,7 @@
 
 - [ ] 3. Checkpoint - Ensure database initialization works
   - Ensure all tests pass, ask the user if questions arise.
+
 
 - [-] 4. Improve Session Secret Handling
 
@@ -51,9 +57,13 @@
     - **Property 3: Session Error Handling**
     - **Validates: Requirements 2.2**
 
-- [ ] 5. Enhance Error Handling in Services
+- [-] 5. Enhance Error Handling in Services
+
+
+
   - [ ] 5.1 Update streamingService.js error handling
     - Wrap database operations with try-catch
+
     - Ensure stream crashes don't crash main application
     - _Requirements: 3.1, 3.2, 6.2_
   - [ ] 5.2 Update schedulerService.js error handling
@@ -61,7 +71,8 @@
 
     - Ensure scheduler continues running after errors
     - _Requirements: 3.1, 3.3_
-  - [ ] 5.3 Write property test for database error independence
+  - [x] 5.3 Write property test for database error independence
+
     - **Property 4: Database Error Independence**
 
     - **Validates: Requirements 3.1, 3.2, 3.3**
@@ -76,6 +87,8 @@
     - Stop all active streams before exit
     - Clear all intervals and timeouts
     - Close database connection properly
+
+
 
 
 
@@ -94,6 +107,7 @@
     - _Requirements: 5.1, 5.2, 5.3_
   - [ ] 8.2 Write property test for health check completeness
     - **Property 6: Health Check Completeness**
+
     - **Validates: Requirements 5.1, 5.2, 5.3**
 
 - [ ] 9. Improve Unhandled Rejection Handling

@@ -151,12 +151,57 @@ process.on('unhandledRejection', (reason, promise) => {
   // This prevents the app from crashing on unhandled promise rejections
 });
 
+// Memory monitoring - check every 5 minutes and warn if memory usage is high
+const MEMORY_CHECK_INTERVAL = 5 * 60 * 1000; // 5 minutes
+const MEMORY_WARNING_THRESHOLD = 0.85; // 85% of heap
+const MEMORY_CRITICAL_THRESHOLD = 0.95; // 95% of heap
+
+setInterval(() => {
+  try {
+    const memUsage = process.memoryUsage();
+    const heapUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024);
+    const heapTotalMB = Math.round(memUsage.heapTotal / 1024 / 1024);
+    const heapUsageRatio = memUsage.heapUsed / memUsage.heapTotal;
+    
+    if (heapUsageRatio > MEMORY_CRITICAL_THRESHOLD) {
+      console.error(`[Memory] CRITICAL: Memory usage at ${(heapUsageRatio * 100).toFixed(1)}% (${heapUsedMB}MB/${heapTotalMB}MB)`);
+      console.error('[Memory] Attempting garbage collection...');
+      if (global.gc) {
+        global.gc();
+      }
+    } else if (heapUsageRatio > MEMORY_WARNING_THRESHOLD) {
+      console.warn(`[Memory] WARNING: Memory usage at ${(heapUsageRatio * 100).toFixed(1)}% (${heapUsedMB}MB/${heapTotalMB}MB)`);
+    }
+  } catch (e) {
+    console.error('[Memory] Error checking memory:', e.message);
+  }
+}, MEMORY_CHECK_INTERVAL);
+
 process.on('uncaughtException', (error) => {
   console.error('-----------------------------------');
   console.error('[ERROR] UNCAUGHT EXCEPTION');
   console.error('Error:', error);
   console.error('Stack:', error?.stack || 'No stack trace');
   console.error('-----------------------------------');
+  
+  // Check if this is a recoverable error
+  const recoverableErrors = [
+    'ECONNRESET',
+    'EPIPE',
+    'ETIMEDOUT',
+    'ECONNREFUSED',
+    'ENOTFOUND',
+    'EAI_AGAIN'
+  ];
+  
+  const isRecoverable = recoverableErrors.some(code => 
+    error.code === code || (error.message && error.message.includes(code))
+  );
+  
+  if (isRecoverable) {
+    console.error('[ERROR] Recoverable error detected, continuing...');
+    return;
+  }
   
   // For critical errors, attempt graceful shutdown
   gracefulShutdown('uncaughtException', 1);
@@ -4252,6 +4297,23 @@ app.use((req, res) => {
     error: {}
   });
 });
+
+// Watchdog to detect event loop blocking
+let lastWatchdogTime = Date.now();
+const WATCHDOG_INTERVAL = 10000; // Check every 10 seconds
+const WATCHDOG_THRESHOLD = 30000; // Alert if blocked for more than 30 seconds
+
+setInterval(() => {
+  const now = Date.now();
+  const elapsed = now - lastWatchdogTime;
+  
+  if (elapsed > WATCHDOG_THRESHOLD) {
+    console.error(`[Watchdog] Event loop was blocked for ${elapsed}ms!`);
+    console.error('[Watchdog] This may indicate a synchronous operation blocking the server');
+  }
+  
+  lastWatchdogTime = now;
+}, WATCHDOG_INTERVAL);
 
 // Start server after database is ready
 async function startServer() {

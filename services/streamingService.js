@@ -1017,7 +1017,14 @@ async function syncStreamStatuses() {
   }
 }
 // OPTIMIZED: Increased from 5 to 10 minutes to reduce CPU overhead
-setInterval(syncStreamStatuses, 10 * 60 * 1000);
+// Wrapped with error handling to prevent crashes
+setInterval(async () => {
+  try {
+    await syncStreamStatuses();
+  } catch (error) {
+    console.error('[StreamingService] Error in syncStreamStatuses interval:', error.message);
+  }
+}, 10 * 60 * 1000);
 function isStreamActive(streamId) {
   return activeStreams.has(streamId);
 }
