@@ -77,21 +77,24 @@ class YouTubeService {
    * @param {Object} data - Broadcast data
    * @param {string} [data.streamId] - Optional existing stream ID to bind
    * @param {string[]} [data.tags] - Optional tags for the broadcast
+   * @param {string} [data.categoryId] - Optional category ID
    * @param {boolean} [data.monetizationEnabled] - Optional monetization status
+   * @param {string} [data.adFrequency] - Optional ad frequency (high/medium/low)
    * @param {boolean} [data.alteredContent] - Optional altered content declaration
    * @returns {Promise<{broadcastId: string, streamKey: string, rtmpUrl: string}>}
    */
-  async createBroadcast(accessToken, { title, description, scheduledStartTime, privacyStatus, streamId, tags, monetizationEnabled, alteredContent }) {
+  async createBroadcast(accessToken, { title, description, scheduledStartTime, privacyStatus, streamId, tags, categoryId, monetizationEnabled, adFrequency, alteredContent }) {
     const oauth2Client = new google.auth.OAuth2();
     oauth2Client.setCredentials({ access_token: accessToken });
     
     const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
     
-    // Build snippet with optional tags
+    // Build snippet with optional tags and category
     const snippet = {
       title: title,
       description: description || '',
-      scheduledStartTime: new Date(scheduledStartTime).toISOString()
+      scheduledStartTime: new Date(scheduledStartTime).toISOString(),
+      categoryId: categoryId || '20' // Default to Gaming
     };
     
     // Add tags if provided (YouTube API accepts tags in snippet)
@@ -106,9 +109,10 @@ class YouTubeService {
         snippet,
         status: {
           privacyStatus: privacyStatus || 'unlisted',
-          selfDeclaredMadeForKids: false,
-          // Note: monetization and altered content are typically set via video update after creation
-          // as liveBroadcasts.insert doesn't directly support these fields
+          selfDeclaredMadeForKids: false
+          // Note: monetization settings (enableMonetization, adFrequency) and altered content 
+          // are typically managed through YouTube Studio or separate API calls
+          // The liveBroadcasts API doesn't directly support these fields
         },
         contentDetails: {
           enableAutoStart: false,

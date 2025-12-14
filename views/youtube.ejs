@@ -264,38 +264,98 @@
           <input type="hidden" id="tagsHidden" name="tags" value="">
         </div>
 
-        <!-- Monetization Field -->
-        <div id="monetizationField" class="hidden">
-          <label class="flex items-center gap-3 cursor-pointer">
-            <input type="checkbox" id="monetizationEnabled" name="monetizationEnabled" 
-              class="w-5 h-5 rounded border-gray-600 bg-dark-700 text-red-500 focus:ring-red-500 focus:ring-offset-0">
-            <div>
-              <span class="text-sm font-medium text-white">Enable Monetization</span>
-              <span id="monetizationAutoFillIndicator" class="hidden ml-2 text-xs text-green-400" title="Auto-filled from YouTube defaults">
-                <i class="ti ti-sparkles"></i>
-              </span>
-              <p class="text-xs text-gray-500">Allow ads on this broadcast</p>
-            </div>
+        <!-- Category Field -->
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">
+            Category
+            <span id="categoryAutoFillIndicator" class="hidden ml-2 text-xs text-green-400" title="Auto-filled from YouTube defaults">
+              <i class="ti ti-sparkles"></i> Auto-filled
+            </span>
           </label>
+          <select id="categoryId" name="categoryId"
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none">
+            <option value="1">Film & Animation</option>
+            <option value="2">Autos & Vehicles</option>
+            <option value="10">Music</option>
+            <option value="15">Pets & Animals</option>
+            <option value="17">Sports</option>
+            <option value="18">Short Movies</option>
+            <option value="19">Travel & Events</option>
+            <option value="20" selected>Gaming</option>
+            <option value="21">Videoblogging</option>
+            <option value="22">People & Blogs</option>
+            <option value="23">Comedy</option>
+            <option value="24">Entertainment</option>
+            <option value="25">News & Politics</option>
+            <option value="26">Howto & Style</option>
+            <option value="27">Education</option>
+            <option value="28">Science & Technology</option>
+            <option value="29">Nonprofits & Activism</option>
+          </select>
+        </div>
+
+        <!-- Monetization Field -->
+        <div id="monetizationField">
+          <label class="text-sm font-medium text-white block mb-2">
+            Monetization
+            <span id="monetizationAutoFillIndicator" class="hidden ml-2 text-xs text-green-400" title="Auto-filled from YouTube defaults">
+              <i class="ti ti-sparkles"></i>
+            </span>
+          </label>
+          <div class="flex gap-4 mb-2">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="radio" name="monetizationStatus" value="on" id="monetizationOn"
+                class="w-4 h-4 border-gray-600 bg-dark-700 text-red-500 focus:ring-red-500 focus:ring-offset-0"
+                onchange="toggleAdFrequency()">
+              <span class="text-sm text-white">On</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="radio" name="monetizationStatus" value="off" id="monetizationOff" checked
+                class="w-4 h-4 border-gray-600 bg-dark-700 text-red-500 focus:ring-red-500 focus:ring-offset-0"
+                onchange="toggleAdFrequency()">
+              <span class="text-sm text-white">Off</span>
+            </label>
+          </div>
+          <!-- Ad Frequency (shown when monetization is On) -->
+          <div id="adFrequencyField" class="hidden mt-2">
+            <label class="text-xs text-gray-400 block mb-1">Ad Frequency</label>
+            <select id="adFrequency" name="adFrequency"
+              class="w-full px-4 py-2 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none text-sm">
+              <option value="high">High - Maximum ads</option>
+              <option value="medium" selected>Medium - Balanced</option>
+              <option value="low">Low - Fewer ads</option>
+            </select>
+          </div>
         </div>
 
         <!-- Altered Content Field -->
         <div>
-          <label class="flex items-center gap-3 cursor-pointer">
-            <input type="checkbox" id="alteredContent" name="alteredContent" 
-              class="w-5 h-5 rounded border-gray-600 bg-dark-700 text-red-500 focus:ring-red-500 focus:ring-offset-0">
-            <div>
-              <span class="text-sm font-medium text-white">Altered Content (AI-generated)</span>
-              <span id="alteredContentAutoFillIndicator" class="hidden ml-2 text-xs text-green-400" title="Auto-filled from YouTube defaults">
-                <i class="ti ti-sparkles"></i>
-              </span>
-              <p class="text-xs text-gray-500">This content contains realistic altered or synthetic media</p>
-            </div>
+          <label class="text-sm font-medium text-white block mb-2">
+            Altered Content (AI-generated)
+            <span id="alteredContentAutoFillIndicator" class="hidden ml-2 text-xs text-green-400" title="Auto-filled from YouTube defaults">
+              <i class="ti ti-sparkles"></i>
+            </span>
           </label>
+          <div class="flex gap-4">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="radio" name="alteredContent" value="yes" id="alteredContentYes"
+                class="w-4 h-4 border-gray-600 bg-dark-700 text-red-500 focus:ring-red-500 focus:ring-offset-0">
+              <span class="text-sm text-white">Yes</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="radio" name="alteredContent" value="no" id="alteredContentNo" checked
+                class="w-4 h-4 border-gray-600 bg-dark-700 text-red-500 focus:ring-red-500 focus:ring-offset-0">
+              <span class="text-sm text-white">No</span>
+            </label>
+          </div>
+          <p class="text-xs text-gray-500 mt-1">Does this content contain realistic altered or synthetic media?</p>
         </div>
 
         <div>
-          <label class="text-sm font-medium text-white block mb-2">Thumbnail</label>
+          <label class="text-sm font-medium text-white block mb-2">
+            Thumbnail
+            <span id="thumbnailCount" class="ml-2 text-xs text-gray-400">(0/20)</span>
+          </label>
           
           <!-- Thumbnail Gallery -->
           <div id="thumbnailGallery" class="mb-3">
@@ -307,7 +367,7 @@
               <span class="text-gray-500 text-sm ml-2">Loading thumbnails...</span>
             </div>
             <div id="thumbnailGalleryEmpty" class="hidden text-center py-2">
-              <span class="text-gray-500 text-xs">No uploaded thumbnails</span>
+              <span class="text-gray-500 text-xs">No uploaded thumbnails. Upload your first thumbnail below.</span>
             </div>
           </div>
           
@@ -317,13 +377,13 @@
             </div>
             <div class="flex-1">
               <input type="file" id="thumbnailFile" name="thumbnail" accept="image/jpeg,image/png"
-                class="hidden" onchange="previewThumbnail(this)">
+                class="hidden" onchange="previewAndUploadThumbnail(this)">
               <input type="hidden" id="selectedThumbnailPath" name="thumbnailPath" value="">
-              <button type="button" onclick="document.getElementById('thumbnailFile').click()"
+              <button type="button" id="uploadThumbnailGalleryBtn" onclick="document.getElementById('thumbnailFile').click()"
                 class="bg-dark-700 hover:bg-dark-600 text-white px-4 py-2 rounded-lg transition-colors text-sm">
-                <i class="ti ti-upload mr-1"></i> Upload New
+                <i class="ti ti-upload mr-1"></i> Upload to Gallery
               </button>
-              <p class="text-xs text-gray-500 mt-1">JPG or PNG, max 2MB</p>
+              <p class="text-xs text-gray-500 mt-1">JPG or PNG, max 2MB. Max 20 thumbnails per user.</p>
             </div>
           </div>
         </div>

@@ -3489,14 +3489,15 @@ app.delete('/api/youtube/credentials', isAuthenticated, async (req, res) => {
   }
 });
 
-// List uploaded thumbnails
+// List uploaded thumbnails (per user, max 20)
 app.get('/api/thumbnails', isAuthenticated, async (req, res) => {
   try {
-    const thumbnailsDir = path.join(__dirname, 'public', 'uploads', 'thumbnails');
+    const userId = req.session.userId;
+    const thumbnailsDir = path.join(__dirname, 'public', 'uploads', 'thumbnails', String(userId));
     
     // Check if directory exists
     if (!fs.existsSync(thumbnailsDir)) {
-      return res.json({ success: true, thumbnails: [] });
+      return res.json({ success: true, thumbnails: [], count: 0, maxAllowed: 20 });
     }
     
     const files = fs.readdirSync(thumbnailsDir);
@@ -3504,8 +3505,8 @@ app.get('/api/thumbnails', isAuthenticated, async (req, res) => {
       .filter(file => /\.(jpg|jpeg|png)$/i.test(file))
       .map(file => ({
         filename: file,
-        path: `/uploads/thumbnails/${file}`,
-        url: `/uploads/thumbnails/${file}`
+        path: `/uploads/thumbnails/${userId}/${file}`,
+        url: `/uploads/thumbnails/${userId}/${file}`
       }))
       .sort((a, b) => {
         // Sort by modification time (newest first)
@@ -3514,10 +3515,91 @@ app.get('/api/thumbnails', isAuthenticated, async (req, res) => {
         return statB.mtime - statA.mtime;
       });
     
-    res.json({ success: true, thumbnails });
+    res.json({ success: true, thumbnails, count: thumbnails.length, maxAllowed: 20 });
   } catch (error) {
     console.error('Error listing thumbnails:', error);
     res.status(500).json({ success: false, error: 'Failed to list thumbnails' });
+  }
+});
+
+// Upload thumbnail to user's gallery (max 20)
+app.post('/api/thumbnails', isAuthenticated, upload.single('thumbnail'), async (req, res) => {
+  try {
+    const userId = req.session.userId;
+    const thumbnailsDir = path.join(__dirname, 'public', 'uploads', 'thumbnails', String(userId));
+    
+    // Create user's thumbnail directory if not exists
+    if (!fs.existsSync(thumbnailsDir)) {
+      fs.mkdirSync(thumbnailsDir, { recursive: true });
+    }
+    
+    // Check current count
+    const existingFiles = fs.readdirSync(thumbnailsDir).filter(file => /\.(jpg|jpeg|png)$/i.test(file));
+    if (existingFiles.length >= 20) {
+      // Delete uploaded temp file
+      if (req.file && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Maximum 20 thumbnails allowed. Please delete some before uploading new ones.' 
+      });
+    }
+    
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'No file uploaded' });
+    }
+    
+    // Move file to user's thumbnail directory
+    const newFilename = `thumb_${Date.now()}_${req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+    const newPath = path.join(thumbnailsDir, newFilename);
+    
+    // If file was uploaded to temp location, move it
+    if (req.file.path !== newPath) {
+      fs.renameSync(req.file.path, newPath);
+    }
+    
+    res.json({ 
+      success: true, 
+      thumbnail: {
+        filename: newFilename,
+        path: `/uploads/thumbnails/${userId}/${newFilename}`,
+        url: `/uploads/thumbnails/${userId}/${newFilename}`
+      },
+      count: existingFiles.length + 1,
+      maxAllowed: 20
+    });
+  } catch (error) {
+    console.error('Error uploading thumbnail:', error);
+    res.status(500).json({ success: false, error: 'Failed to upload thumbnail' });
+  }
+});
+
+// Delete thumbnail from user's gallery
+app.delete('/api/thumbnails/:filename', isAuthenticated, async (req, res) => {
+  try {
+    const userId = req.session.userId;
+    const filename = req.params.filename;
+    
+    // Validate filename to prevent directory traversal
+    if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+      return res.status(400).json({ success: false, error: 'Invalid filename' });
+    }
+    
+    const thumbnailPath = path.join(__dirname, 'public', 'uploads', 'thumbnails', String(userId), filename);
+    
+    // Check if file exists and belongs to user
+    if (!fs.existsSync(thumbnailPath)) {
+      return res.status(404).json({ success: false, error: 'Thumbnail not found' });
+    }
+    
+    // Delete the file
+    fs.unlinkSync(thumbnailPath);
+    
+    res.json({ success: true, message: 'Thumbnail deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting thumbnail:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete thumbnail' });
   }
 });
 
@@ -3611,7 +3693,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       });
     }
     
-    const { title, description, scheduledStartTime, privacyStatus, streamId, tags, monetizationEnabled, alteredContent } = req.body;
+    const { title, description, scheduledStartTime, privacyStatus, streamId, tags, categoryId, monetizationEnabled, adFrequency, alteredContent } = req.body;
     
     if (!title || !scheduledStartTime) {
       return res.status(400).json({
@@ -3654,7 +3736,9 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       privacyStatus: privacyStatus || 'unlisted',
       streamId: streamId || null,
       tags: parsedTags,
+      categoryId: categoryId || '20',
       monetizationEnabled: monetizationEnabled === 'true' || monetizationEnabled === true,
+      adFrequency: adFrequency || 'medium',
       alteredContent: alteredContent === 'true' || alteredContent === true
     });
     

@@ -137,11 +137,13 @@ async function fetchStreams() {
   }
 }
 
-// Fetch available thumbnails from gallery
+// Fetch available thumbnails from gallery (per user)
 async function fetchThumbnails() {
   const grid = document.getElementById('thumbnailGalleryGrid');
   const loading = document.getElementById('thumbnailGalleryLoading');
   const empty = document.getElementById('thumbnailGalleryEmpty');
+  const countEl = document.getElementById('thumbnailCount');
+  const uploadBtn = document.getElementById('uploadThumbnailGalleryBtn');
   
   if (!grid) return;
   
@@ -158,12 +160,36 @@ async function fetchThumbnails() {
     
     const data = await response.json();
     
+    // Update count display
+    if (countEl) {
+      countEl.textContent = `(${data.count || 0}/${data.maxAllowed || 20})`;
+    }
+    
+    // Disable upload button if at max
+    if (uploadBtn && data.count >= data.maxAllowed) {
+      uploadBtn.disabled = true;
+      uploadBtn.classList.add('opacity-50', 'cursor-not-allowed');
+      uploadBtn.title = 'Maximum 20 thumbnails reached. Delete some to upload new ones.';
+    } else if (uploadBtn) {
+      uploadBtn.disabled = false;
+      uploadBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+      uploadBtn.title = '';
+    }
+    
     if (data.success && data.thumbnails && data.thumbnails.length > 0) {
       data.thumbnails.forEach(thumb => {
         const div = document.createElement('div');
-        div.className = 'thumbnail-item w-full aspect-video bg-dark-700 rounded cursor-pointer overflow-hidden border-2 border-transparent hover:border-primary transition-colors';
-        div.innerHTML = `<img src="${thumb.url}" class="w-full h-full object-cover" alt="Thumbnail">`;
+        div.className = 'thumbnail-item w-full aspect-video bg-dark-700 rounded cursor-pointer overflow-hidden border-2 border-transparent hover:border-primary transition-colors relative group';
+        div.innerHTML = `
+          <img src="${thumb.url}" class="w-full h-full object-cover" alt="Thumbnail">
+          <button type="button" onclick="event.stopPropagation(); deleteThumbnail('${thumb.filename}')" 
+            class="absolute top-1 right-1 w-6 h-6 bg-red-500/80 hover:bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+            title="Delete thumbnail">
+            <i class="ti ti-x text-white text-xs"></i>
+          </button>
+        `;
         div.dataset.path = thumb.path;
+        div.dataset.filename = thumb.filename;
         div.onclick = () => selectGalleryThumbnail(div, thumb.url, thumb.path);
         grid.appendChild(div);
       });
@@ -175,6 +201,106 @@ async function fetchThumbnails() {
     empty.classList.remove('hidden');
   } finally {
     loading.classList.add('hidden');
+  }
+}
+
+// Upload thumbnail to user's gallery
+async function uploadThumbnailToGallery(file) {
+  try {
+    const formData = new FormData();
+    formData.append('thumbnail', file);
+    
+    const response = await fetch('/api/thumbnails', {
+      method: 'POST',
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      },
+      body: formData
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      showToast('Thumbnail uploaded to gallery');
+      // Refresh gallery
+      fetchThumbnails();
+      // Auto-select the newly uploaded thumbnail
+      if (data.thumbnail) {
+        document.getElementById('selectedThumbnailPath').value = data.thumbnail.path;
+        document.getElementById('thumbnailPreview').innerHTML = 
+          `<img src="${data.thumbnail.url}" class="w-full h-full object-cover">`;
+      }
+      return true;
+    } else {
+      showToast(data.error || 'Failed to upload thumbnail', 'error');
+      return false;
+    }
+  } catch (error) {
+    console.error('Error uploading thumbnail:', error);
+    showToast('Failed to upload thumbnail', 'error');
+    return false;
+  }
+}
+
+// Delete thumbnail from user's gallery
+async function deleteThumbnail(filename) {
+  if (!confirm('Are you sure you want to delete this thumbnail?')) {
+    return;
+  }
+  
+  try {
+    const response = await fetch(`/api/thumbnails/${encodeURIComponent(filename)}`, {
+      method: 'DELETE',
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      showToast('Thumbnail deleted');
+      // Clear selection if deleted thumbnail was selected
+      const selectedPath = document.getElementById('selectedThumbnailPath').value;
+      if (selectedPath && selectedPath.includes(filename)) {
+        document.getElementById('selectedThumbnailPath').value = '';
+        document.getElementById('thumbnailPreview').innerHTML = '<i class="ti ti-photo text-gray-500 text-2xl"></i>';
+      }
+      // Refresh gallery
+      fetchThumbnails();
+    } else {
+      showToast(data.error || 'Failed to delete thumbnail', 'error');
+    }
+  } catch (error) {
+    console.error('Error deleting thumbnail:', error);
+    showToast('Failed to delete thumbnail', 'error');
+  }
+}
+
+// Preview and upload thumbnail to gallery
+function previewAndUploadThumbnail(input) {
+  if (input.files && input.files[0]) {
+    const file = input.files[0];
+    
+    // Validate file type
+    if (!['image/jpeg', 'image/png', 'image/jpg'].includes(file.type)) {
+      showToast('Only JPG and PNG files are allowed', 'error');
+      input.value = '';
+      return;
+    }
+    
+    // Validate file size (2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      showToast('File size must be less than 2MB', 'error');
+      input.value = '';
+      return;
+    }
+    
+    // Upload to gallery
+    uploadThumbnailToGallery(file);
+    
+    // Clear input for next upload
+    input.value = '';
   }
 }
 
@@ -231,6 +357,20 @@ async function fetchChannelDefaults() {
   }
 }
 
+// Toggle ad frequency field based on monetization status
+function toggleAdFrequency() {
+  const monetizationOn = document.getElementById('monetizationOn');
+  const adFrequencyField = document.getElementById('adFrequencyField');
+  
+  if (monetizationOn && adFrequencyField) {
+    if (monetizationOn.checked) {
+      adFrequencyField.classList.remove('hidden');
+    } else {
+      adFrequencyField.classList.add('hidden');
+    }
+  }
+}
+
 // Populate form with defaults from YouTube
 function populateFormWithDefaults(defaults) {
   // Populate title if available
@@ -253,24 +393,29 @@ function populateFormWithDefaults(defaults) {
     if (indicator) indicator.classList.remove('hidden');
   }
   
-  // Handle monetization field
-  const monetizationField = document.getElementById('monetizationField');
-  const monetizationCheckbox = document.getElementById('monetizationEnabled');
-  if (monetizationField && monetizationCheckbox) {
-    if (defaults.monetizationEnabled) {
-      monetizationField.classList.remove('hidden');
-      monetizationCheckbox.checked = true;
-      const indicator = document.getElementById('monetizationAutoFillIndicator');
-      if (indicator) indicator.classList.remove('hidden');
-    } else {
-      monetizationField.classList.add('hidden');
-    }
+  // Handle category
+  const categorySelect = document.getElementById('categoryId');
+  if (categorySelect && defaults.categoryId) {
+    categorySelect.value = defaults.categoryId;
+    const indicator = document.getElementById('categoryAutoFillIndicator');
+    if (indicator) indicator.classList.remove('hidden');
   }
   
-  // Handle altered content
-  const alteredCheckbox = document.getElementById('alteredContent');
-  if (alteredCheckbox && defaults.alteredContent) {
-    alteredCheckbox.checked = defaults.alteredContent;
+  // Handle monetization (on/off with frequency)
+  if (defaults.monetizationEnabled) {
+    const monetizationOn = document.getElementById('monetizationOn');
+    if (monetizationOn) {
+      monetizationOn.checked = true;
+      toggleAdFrequency();
+    }
+    const indicator = document.getElementById('monetizationAutoFillIndicator');
+    if (indicator) indicator.classList.remove('hidden');
+  }
+  
+  // Handle altered content (yes/no)
+  if (defaults.alteredContent) {
+    const alteredYes = document.getElementById('alteredContentYes');
+    if (alteredYes) alteredYes.checked = true;
     const indicator = document.getElementById('alteredContentAutoFillIndicator');
     if (indicator) indicator.classList.remove('hidden');
   }
@@ -402,50 +547,27 @@ function closeCreateBroadcastModal() {
   renderTags();
   
   // Hide auto-fill indicators
-  const indicators = ['tagsAutoFillIndicator', 'monetizationAutoFillIndicator', 'alteredContentAutoFillIndicator'];
+  const indicators = ['tagsAutoFillIndicator', 'monetizationAutoFillIndicator', 'alteredContentAutoFillIndicator', 'categoryAutoFillIndicator'];
   indicators.forEach(id => {
     const el = document.getElementById(id);
     if (el) el.classList.add('hidden');
   });
   
-  // Hide monetization field
-  const monetizationField = document.getElementById('monetizationField');
-  if (monetizationField) monetizationField.classList.add('hidden');
+  // Reset monetization to Off and hide ad frequency
+  const monetizationOff = document.getElementById('monetizationOff');
+  if (monetizationOff) monetizationOff.checked = true;
+  const adFrequencyField = document.getElementById('adFrequencyField');
+  if (adFrequencyField) adFrequencyField.classList.add('hidden');
+  
+  // Reset altered content to No
+  const alteredNo = document.getElementById('alteredContentNo');
+  if (alteredNo) alteredNo.checked = true;
 }
 
-// Preview thumbnail before upload
+// Preview thumbnail (legacy - kept for compatibility)
 function previewThumbnail(input) {
-  if (input.files && input.files[0]) {
-    const file = input.files[0];
-    
-    // Validate file type
-    if (!['image/jpeg', 'image/png', 'image/jpg'].includes(file.type)) {
-      showToast('Only JPG and PNG files are allowed', 'error');
-      input.value = '';
-      return;
-    }
-    
-    // Validate file size (2MB)
-    if (file.size > 2 * 1024 * 1024) {
-      showToast('File size must be less than 2MB', 'error');
-      input.value = '';
-      return;
-    }
-    
-    // Clear gallery selection when uploading new file
-    document.getElementById('selectedThumbnailPath').value = '';
-    document.querySelectorAll('.thumbnail-item').forEach(item => {
-      item.classList.remove('border-primary', 'border-red-500');
-      item.classList.add('border-transparent');
-    });
-    
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      document.getElementById('thumbnailPreview').innerHTML = 
-        `<img src="${e.target.result}" class="w-full h-full object-cover">`;
-    };
-    reader.readAsDataURL(file);
-  }
+  // Redirect to new upload function
+  previewAndUploadThumbnail(input);
 }
 
 // Create Broadcast Form Handler
@@ -477,25 +599,34 @@ if (createBroadcastForm) {
         formData.append('tags', JSON.stringify(currentTags));
       }
       
-      // Add monetization status
-      const monetizationCheckbox = document.getElementById('monetizationEnabled');
-      if (monetizationCheckbox) {
-        formData.append('monetizationEnabled', monetizationCheckbox.checked);
+      // Add category
+      const categorySelect = document.getElementById('categoryId');
+      if (categorySelect) {
+        formData.append('categoryId', categorySelect.value);
       }
       
-      // Add altered content status
-      const alteredCheckbox = document.getElementById('alteredContent');
-      if (alteredCheckbox) {
-        formData.append('alteredContent', alteredCheckbox.checked);
+      // Add monetization status (on/off) and frequency
+      const monetizationOn = document.getElementById('monetizationOn');
+      if (monetizationOn) {
+        formData.append('monetizationEnabled', monetizationOn.checked);
+        if (monetizationOn.checked) {
+          const adFrequency = document.getElementById('adFrequency');
+          if (adFrequency) {
+            formData.append('adFrequency', adFrequency.value);
+          }
+        }
       }
       
-      // Add thumbnail - either file upload or gallery selection
-      const thumbnailFile = document.getElementById('thumbnailFile').files[0];
+      // Add altered content status (yes/no)
+      const alteredYes = document.getElementById('alteredContentYes');
+      if (alteredYes) {
+        formData.append('alteredContent', alteredYes.checked);
+      }
+      
+      // Add thumbnail from gallery selection only (thumbnails are pre-uploaded to gallery)
       const thumbnailPath = document.getElementById('selectedThumbnailPath').value;
       
-      if (thumbnailFile) {
-        formData.append('thumbnail', thumbnailFile);
-      } else if (thumbnailPath) {
+      if (thumbnailPath) {
         formData.append('thumbnailPath', thumbnailPath);
       }
       
