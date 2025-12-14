@@ -1,21 +1,136 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
-const bcrypt = require('bcrypt');
 const dbDir = path.join(__dirname);
 if (!fs.existsSync(dbDir)) {
   fs.mkdirSync(dbDir, { recursive: true });
 }
 const dbPath = path.join(dbDir, 'streamflow.db');
+
+// Track database initialization state
+let dbInitialized = false;
+let dbInitPromise = null;
+let dbInitError = null;
+
+// Required tables that must exist before app can start
+const REQUIRED_TABLES = [
+  'users', 'videos', 'streams', 'stream_history',
+  'playlists', 'playlist_videos', 'audios',
+  'system_settings', 'stream_templates', 'youtube_credentials'
+];
+
 const db = new sqlite3.Database(dbPath, (err) => {
   if (err) {
     console.error('Error connecting to database:', err.message);
+    dbInitError = err;
   } else {
-    createTables();
+    dbInitPromise = createTables();
   }
 });
-function createTables() {
-  db.run(`CREATE TABLE IF NOT EXISTS users (
+
+/**
+ * Wait for database to be fully initialized
+ * Throws error if initialization failed
+ * @returns {Promise<void>}
+ */
+async function waitForDbInit() {
+  if (dbInitError) {
+    throw new Error(`Database connection failed: ${dbInitError.message}`);
+  }
+  if (dbInitialized) return;
+  if (dbInitPromise) {
+    await dbInitPromise;
+  }
+  // Double-check initialization succeeded
+  if (dbInitError) {
+    throw new Error(`Database initialization failed: ${dbInitError.message}`);
+  }
+}
+
+/**
+ * Verify all required tables exist in the database
+ * @returns {Promise<{success: boolean, missingTables: string[]}>}
+ */
+async function verifyTables() {
+  return new Promise((resolve, reject) => {
+    db.all(
+      `SELECT name FROM sqlite_master WHERE type='table'`,
+      [],
+      (err, rows) => {
+        if (err) {
+          console.error('Error verifying tables:', err.message);
+          return reject(err);
+        }
+        const existingTables = rows.map(r => r.name);
+        const missingTables = REQUIRED_TABLES.filter(t => !existingTables.includes(t));
+        
+        if (missingTables.length > 0) {
+          console.warn(`[Database] Missing tables: ${missingTables.join(', ')}`);
+        } else {
+          console.log('[Database] All required tables verified');
+        }
+        
+        resolve({
+          success: missingTables.length === 0,
+          missingTables,
+          existingTables
+        });
+      }
+    );
+  });
+}
+
+/**
+ * Run a single table creation query and return a promise
+ * @param {string} sql - SQL query to run
+ * @param {string} tableName - Name of table for logging
+ * @returns {Promise<void>}
+ */
+function runTableQuery(sql, tableName) {
+  return new Promise((resolve, reject) => {
+    db.run(sql, (err) => {
+      if (err) {
+        // Ignore "duplicate column" errors for ALTER TABLE
+        if (err.message && err.message.includes('duplicate column name')) {
+          resolve();
+          return;
+        }
+        console.error(`Error with ${tableName}:`, err.message);
+        reject(err);
+      } else {
+        resolve();
+      }
+    });
+  });
+}
+
+async function createTables() {
+  try {
+    // Create all tables sequentially to ensure proper order
+    await createCoreTablesAsync();
+    
+    // Verify all tables were created
+    const verification = await verifyTables();
+    if (!verification.success) {
+      console.error('[Database] Some tables failed to create:', verification.missingTables);
+      // Don't throw - some tables might be created by migrations
+    }
+    
+    dbInitialized = true;
+    console.log('[Database] Database tables initialized successfully');
+  } catch (error) {
+    console.error('[Database] Failed to initialize database:', error.message);
+    dbInitError = error;
+    throw error;
+  }
+}
+
+/**
+ * Create all core tables asynchronously with proper error handling
+ */
+async function createCoreTablesAsync() {
+  // Create tables in order of dependencies
+  await runTableQuery(`CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
     username TEXT UNIQUE NOT NULL,
     password TEXT NOT NULL,
@@ -25,12 +140,9 @@ function createTables() {
     status TEXT DEFAULT 'active',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  )`, (err) => {
-    if (err) {
-      console.error('Error creating users table:', err.message);
-    }
-  });
-  db.run(`CREATE TABLE IF NOT EXISTS videos (
+  )`, 'users');
+
+  await runTableQuery(`CREATE TABLE IF NOT EXISTS videos (
     id TEXT PRIMARY KEY,
     title TEXT NOT NULL,
     filepath TEXT NOT NULL,
@@ -46,12 +158,9 @@ function createTables() {
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id)
-  )`, (err) => {
-    if (err) {
-      console.error('Error creating videos table:', err.message);
-    }
-  });
-  db.run(`CREATE TABLE IF NOT EXISTS streams (
+  )`, 'videos');
+
+  await runTableQuery(`CREATE TABLE IF NOT EXISTS streams (
     id TEXT PRIMARY KEY,
     title TEXT NOT NULL,
     video_id TEXT,
@@ -76,12 +185,9 @@ function createTables() {
     user_id TEXT,
     FOREIGN KEY (user_id) REFERENCES users(id),
     FOREIGN KEY (video_id) REFERENCES videos(id)
-  )`, (err) => {
-    if (err) {
-      console.error('Error creating streams table:', err.message);
-    }
-  });
-  db.run(`CREATE TABLE IF NOT EXISTS stream_history (
+  )`, 'streams');
+
+  await runTableQuery(`CREATE TABLE IF NOT EXISTS stream_history (
     id TEXT PRIMARY KEY,
     stream_id TEXT,
     title TEXT NOT NULL,
@@ -101,20 +207,12 @@ function createTables() {
     FOREIGN KEY (user_id) REFERENCES users(id),
     FOREIGN KEY (stream_id) REFERENCES streams(id),
     FOREIGN KEY (video_id) REFERENCES videos(id)
-  )`, (err) => {
-    if (err) {
-      console.error('Error creating stream_history table:', err.message);
-    }
-  });
+  )`, 'stream_history');
 
-  // Add schedule_type column to stream_history for recurring stream tracking
-  db.run(`ALTER TABLE stream_history ADD COLUMN schedule_type TEXT DEFAULT 'once'`, (err) => {
-    if (err && !err.message.includes('duplicate column name')) {
-      console.error('Error adding schedule_type column to stream_history:', err.message);
-    }
-  });
+  // Add schedule_type column to stream_history
+  await runTableQuery(`ALTER TABLE stream_history ADD COLUMN schedule_type TEXT DEFAULT 'once'`, 'stream_history.schedule_type');
 
-  db.run(`CREATE TABLE IF NOT EXISTS playlists (
+  await runTableQuery(`CREATE TABLE IF NOT EXISTS playlists (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     description TEXT,
@@ -123,13 +221,9 @@ function createTables() {
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id)
-  )`, (err) => {
-    if (err) {
-      console.error('Error creating playlists table:', err.message);
-    }
-  });
+  )`, 'playlists');
 
-  db.run(`CREATE TABLE IF NOT EXISTS playlist_videos (
+  await runTableQuery(`CREATE TABLE IF NOT EXISTS playlist_videos (
     id TEXT PRIMARY KEY,
     playlist_id TEXT NOT NULL,
     video_id TEXT NOT NULL,
@@ -137,13 +231,9 @@ function createTables() {
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE,
     FOREIGN KEY (video_id) REFERENCES videos(id) ON DELETE CASCADE
-  )`, (err) => {
-    if (err) {
-      console.error('Error creating playlist_videos table:', err.message);
-    }
-  });
+  )`, 'playlist_videos');
 
-  db.run(`CREATE TABLE IF NOT EXISTS audios (
+  await runTableQuery(`CREATE TABLE IF NOT EXISTS audios (
     id TEXT PRIMARY KEY,
     title TEXT NOT NULL,
     filepath TEXT NOT NULL,
@@ -155,124 +245,37 @@ function createTables() {
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id)
-  )`, (err) => {
-    if (err) {
-      console.error('Error creating audios table:', err.message);
-    }
-  });
-  
-  db.run(`ALTER TABLE users ADD COLUMN user_role TEXT DEFAULT 'admin'`, (err) => {
-    if (err && !err.message.includes('duplicate column name')) {
-      console.error('Error adding user_role column:', err.message);
-    }
-  });
-  
-  db.run(`ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active'`, (err) => {
-    if (err && !err.message.includes('duplicate column name')) {
-      console.error('Error adding status column:', err.message);
-    }
-  });
+  )`, 'audios');
 
-  // Add audio_id column to streams table for audio selection feature
-  db.run(`ALTER TABLE streams ADD COLUMN audio_id TEXT`, (err) => {
-    if (err && !err.message.includes('duplicate column name')) {
-      console.error('Error adding audio_id column:', err.message);
-    }
-  });
+  // Add columns to users table
+  await runTableQuery(`ALTER TABLE users ADD COLUMN user_role TEXT DEFAULT 'admin'`, 'users.user_role');
+  await runTableQuery(`ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active'`, 'users.status');
+  await runTableQuery(`ALTER TABLE users ADD COLUMN live_limit INTEGER DEFAULT NULL`, 'users.live_limit');
+  await runTableQuery(`ALTER TABLE users ADD COLUMN can_view_videos INTEGER DEFAULT 1`, 'users.can_view_videos');
+  await runTableQuery(`ALTER TABLE users ADD COLUMN can_download_videos INTEGER DEFAULT 1`, 'users.can_download_videos');
+  await runTableQuery(`ALTER TABLE users ADD COLUMN can_delete_videos INTEGER DEFAULT 1`, 'users.can_delete_videos');
 
-  // Add stream_duration_hours column to streams table for duration feature (deprecated)
-  db.run(`ALTER TABLE streams ADD COLUMN stream_duration_hours INTEGER`, (err) => {
-    if (err && !err.message.includes('duplicate column name')) {
-      console.error('Error adding stream_duration_hours column:', err.message);
-    }
-  });
+  // Add columns to streams table
+  await runTableQuery(`ALTER TABLE streams ADD COLUMN audio_id TEXT`, 'streams.audio_id');
+  await runTableQuery(`ALTER TABLE streams ADD COLUMN stream_duration_hours INTEGER`, 'streams.stream_duration_hours');
+  await runTableQuery(`ALTER TABLE streams ADD COLUMN stream_duration_minutes INTEGER`, 'streams.stream_duration_minutes');
+  await runTableQuery(`ALTER TABLE streams ADD COLUMN schedule_type TEXT DEFAULT 'once'`, 'streams.schedule_type');
+  await runTableQuery(`ALTER TABLE streams ADD COLUMN schedule_days TEXT`, 'streams.schedule_days');
+  await runTableQuery(`ALTER TABLE streams ADD COLUMN recurring_time TEXT`, 'streams.recurring_time');
+  await runTableQuery(`ALTER TABLE streams ADD COLUMN recurring_enabled INTEGER DEFAULT 1`, 'streams.recurring_enabled');
+  await runTableQuery(`ALTER TABLE streams ADD COLUMN original_settings TEXT`, 'streams.original_settings');
 
-  // Add stream_duration_minutes column to streams table for duration feature (new format)
-  db.run(`ALTER TABLE streams ADD COLUMN stream_duration_minutes INTEGER`, (err) => {
-    if (err && !err.message.includes('duplicate column name')) {
-      console.error('Error adding stream_duration_minutes column:', err.message);
-    }
-  });
+  // Migrate stream_duration_hours to stream_duration_minutes
+  await runTableQuery(`UPDATE streams SET stream_duration_minutes = stream_duration_hours * 60 
+          WHERE stream_duration_hours IS NOT NULL AND stream_duration_minutes IS NULL`, 'streams.duration_migration');
 
-  // Migrate existing data from stream_duration_hours to stream_duration_minutes
-  db.run(`UPDATE streams SET stream_duration_minutes = stream_duration_hours * 60 
-          WHERE stream_duration_hours IS NOT NULL AND stream_duration_minutes IS NULL`, (err) => {
-    if (err) {
-      console.error('Error migrating stream_duration_hours to stream_duration_minutes:', err.message);
-    }
-  });
-
-  // Add recurring schedule columns to streams table
-  db.run(`ALTER TABLE streams ADD COLUMN schedule_type TEXT DEFAULT 'once'`, (err) => {
-    if (err && !err.message.includes('duplicate column name')) {
-      console.error('Error adding schedule_type column:', err.message);
-    }
-  });
-
-  db.run(`ALTER TABLE streams ADD COLUMN schedule_days TEXT`, (err) => {
-    if (err && !err.message.includes('duplicate column name')) {
-      console.error('Error adding schedule_days column:', err.message);
-    }
-  });
-
-  db.run(`ALTER TABLE streams ADD COLUMN recurring_time TEXT`, (err) => {
-    if (err && !err.message.includes('duplicate column name')) {
-      console.error('Error adding recurring_time column:', err.message);
-    }
-  });
-
-  db.run(`ALTER TABLE streams ADD COLUMN recurring_enabled INTEGER DEFAULT 1`, (err) => {
-    if (err && !err.message.includes('duplicate column name')) {
-      console.error('Error adding recurring_enabled column:', err.message);
-    }
-  });
-
-  // Add original_settings column to streams table for reset functionality
-  db.run(`ALTER TABLE streams ADD COLUMN original_settings TEXT`, (err) => {
-    if (err && !err.message.includes('duplicate column name')) {
-      console.error('Error adding original_settings column:', err.message);
-    }
-  });
-
-  // Create system_settings table for global configuration
-  db.run(`CREATE TABLE IF NOT EXISTS system_settings (
+  await runTableQuery(`CREATE TABLE IF NOT EXISTS system_settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  )`, (err) => {
-    if (err) {
-      console.error('Error creating system_settings table:', err.message);
-    }
-  });
+  )`, 'system_settings');
 
-  // Add live_limit column to users table for custom live streaming limit per user
-  db.run(`ALTER TABLE users ADD COLUMN live_limit INTEGER DEFAULT NULL`, (err) => {
-    if (err && !err.message.includes('duplicate column name')) {
-      console.error('Error adding live_limit column:', err.message);
-    }
-  });
-
-  // Add permission columns to users table for member permission control
-  db.run(`ALTER TABLE users ADD COLUMN can_view_videos INTEGER DEFAULT 1`, (err) => {
-    if (err && !err.message.includes('duplicate column name')) {
-      console.error('Error adding can_view_videos column:', err.message);
-    }
-  });
-
-  db.run(`ALTER TABLE users ADD COLUMN can_download_videos INTEGER DEFAULT 1`, (err) => {
-    if (err && !err.message.includes('duplicate column name')) {
-      console.error('Error adding can_download_videos column:', err.message);
-    }
-  });
-
-  db.run(`ALTER TABLE users ADD COLUMN can_delete_videos INTEGER DEFAULT 1`, (err) => {
-    if (err && !err.message.includes('duplicate column name')) {
-      console.error('Error adding can_delete_videos column:', err.message);
-    }
-  });
-
-  // Create stream_templates table for reusable stream configurations
-  db.run(`CREATE TABLE IF NOT EXISTS stream_templates (
+  await runTableQuery(`CREATE TABLE IF NOT EXISTS stream_templates (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
     name TEXT NOT NULL,
@@ -287,22 +290,12 @@ function createTables() {
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id)
-  )`, (err) => {
-    if (err) {
-      console.error('Error creating stream_templates table:', err.message);
-    }
-  });
+  )`, 'stream_templates');
 
-  // Create unique index on user_id and name for stream_templates
-  db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_stream_templates_user_name 
-          ON stream_templates(user_id, name)`, (err) => {
-    if (err) {
-      console.error('Error creating unique index on stream_templates:', err.message);
-    }
-  });
+  await runTableQuery(`CREATE UNIQUE INDEX IF NOT EXISTS idx_stream_templates_user_name 
+          ON stream_templates(user_id, name)`, 'stream_templates.index');
 
-  // Create youtube_credentials table for YouTube Sync feature (supports multiple accounts per user)
-  db.run(`CREATE TABLE IF NOT EXISTS youtube_credentials (
+  await runTableQuery(`CREATE TABLE IF NOT EXISTS youtube_credentials (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id TEXT NOT NULL,
     client_id TEXT NOT NULL,
@@ -314,103 +307,116 @@ function createTables() {
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     UNIQUE(user_id, channel_id)
-  )`, (err) => {
-    if (err) {
-      console.error('Error creating youtube_credentials table:', err.message);
-    }
-  });
+  )`, 'youtube_credentials');
 
-  // Add is_primary column to youtube_credentials for multiple accounts support
-  db.run(`ALTER TABLE youtube_credentials ADD COLUMN is_primary INTEGER DEFAULT 0`, (err) => {
-    if (err && !err.message.includes('duplicate column name')) {
-      console.error('Error adding is_primary column to youtube_credentials:', err.message);
-    }
-  });
+  await runTableQuery(`ALTER TABLE youtube_credentials ADD COLUMN is_primary INTEGER DEFAULT 0`, 'youtube_credentials.is_primary');
 
-  // Migration: Set existing single accounts as primary
-  db.run(`UPDATE youtube_credentials SET is_primary = 1 WHERE is_primary = 0 AND id IN (
+  // Set existing single accounts as primary
+  await runTableQuery(`UPDATE youtube_credentials SET is_primary = 1 WHERE is_primary = 0 AND id IN (
     SELECT MIN(id) FROM youtube_credentials GROUP BY user_id
-  )`, (err) => {
-    if (err) {
-      console.error('Error setting primary accounts:', err.message);
-    }
-  });
+  )`, 'youtube_credentials.primary_migration');
 
-  // Migration: Remove old UNIQUE constraint on user_id and add new one on (user_id, channel_id)
-  // This is done by checking if the old constraint exists and recreating the table if needed
-  migrateYouTubeCredentialsTable();
+  // Run migration for youtube_credentials table if needed
+  await migrateYouTubeCredentialsTableAsync();
+}
+
+// Old createCoreTables function removed - replaced with createCoreTablesAsync above
+
+/**
+ * Migrate youtube_credentials table to support multiple accounts per user (async version)
+ * This removes the UNIQUE constraint on user_id and adds UNIQUE on (user_id, channel_id)
+ * @returns {Promise<void>}
+ */
+async function migrateYouTubeCredentialsTableAsync() {
+  return new Promise((resolve) => {
+    db.get(`SELECT sql FROM sqlite_master WHERE type='table' AND name='youtube_credentials'`, (err, row) => {
+      if (err || !row) {
+        resolve();
+        return;
+      }
+      
+      const sql = row.sql;
+      if (sql.includes('user_id TEXT NOT NULL UNIQUE') && !sql.includes('UNIQUE(user_id, channel_id)')) {
+        console.log('[Database] Migrating youtube_credentials table for multiple accounts support...');
+        
+        db.serialize(() => {
+          db.run(`CREATE TABLE IF NOT EXISTS youtube_credentials_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            client_id TEXT NOT NULL,
+            client_secret TEXT NOT NULL,
+            refresh_token TEXT NOT NULL,
+            channel_name TEXT,
+            channel_id TEXT,
+            is_primary INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            UNIQUE(user_id, channel_id)
+          )`);
+
+          db.run(`INSERT OR IGNORE INTO youtube_credentials_new 
+            (id, user_id, client_id, client_secret, refresh_token, channel_name, channel_id, is_primary, created_at)
+            SELECT id, user_id, client_id, client_secret, refresh_token, channel_name, channel_id, 1, created_at
+            FROM youtube_credentials`);
+
+          db.run(`DROP TABLE IF EXISTS youtube_credentials`);
+
+          db.run(`ALTER TABLE youtube_credentials_new RENAME TO youtube_credentials`, (err) => {
+            if (err) {
+              console.error('[Database] Error renaming youtube_credentials table:', err.message);
+            } else {
+              console.log('[Database] Successfully migrated youtube_credentials table');
+            }
+            resolve();
+          });
+        });
+      } else {
+        resolve();
+      }
+    });
+  });
 }
 
 /**
- * Migrate youtube_credentials table to support multiple accounts per user
- * This removes the UNIQUE constraint on user_id and adds UNIQUE on (user_id, channel_id)
+ * Close database connection gracefully
+ * @returns {Promise<void>}
  */
-function migrateYouTubeCredentialsTable() {
-  // Check if migration is needed by trying to insert a test record
-  db.get(`SELECT sql FROM sqlite_master WHERE type='table' AND name='youtube_credentials'`, (err, row) => {
-    if (err || !row) return;
-    
-    // Check if old schema has UNIQUE on user_id only (not combined with channel_id)
-    const sql = row.sql;
-    if (sql.includes('user_id TEXT NOT NULL UNIQUE') && !sql.includes('UNIQUE(user_id, channel_id)')) {
-      console.log('Migrating youtube_credentials table for multiple accounts support...');
-      
-      db.serialize(() => {
-        // Create new table with updated schema
-        db.run(`CREATE TABLE IF NOT EXISTS youtube_credentials_new (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          user_id TEXT NOT NULL,
-          client_id TEXT NOT NULL,
-          client_secret TEXT NOT NULL,
-          refresh_token TEXT NOT NULL,
-          channel_name TEXT,
-          channel_id TEXT,
-          is_primary INTEGER DEFAULT 0,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-          UNIQUE(user_id, channel_id)
-        )`, (err) => {
-          if (err) {
-            console.error('Error creating new youtube_credentials table:', err.message);
-            return;
-          }
-        });
+function closeDatabase() {
+  return new Promise((resolve, reject) => {
+    db.close((err) => {
+      if (err) {
+        console.error('[Database] Error closing database:', err.message);
+        reject(err);
+      } else {
+        console.log('[Database] Database connection closed');
+        resolve();
+      }
+    });
+  });
+}
 
-        // Copy existing data and set as primary
-        db.run(`INSERT INTO youtube_credentials_new 
-          (id, user_id, client_id, client_secret, refresh_token, channel_name, channel_id, is_primary, created_at)
-          SELECT id, user_id, client_id, client_secret, refresh_token, channel_name, channel_id, 1, created_at
-          FROM youtube_credentials`, (err) => {
-          if (err) {
-            console.error('Error copying data to new youtube_credentials table:', err.message);
-            return;
-          }
-        });
-
-        // Drop old table
-        db.run(`DROP TABLE youtube_credentials`, (err) => {
-          if (err) {
-            console.error('Error dropping old youtube_credentials table:', err.message);
-            return;
-          }
-        });
-
-        // Rename new table
-        db.run(`ALTER TABLE youtube_credentials_new RENAME TO youtube_credentials`, (err) => {
-          if (err) {
-            console.error('Error renaming youtube_credentials table:', err.message);
-            return;
-          }
-          console.log('Successfully migrated youtube_credentials table for multiple accounts support');
-        });
-      });
-    }
+/**
+ * Check database connectivity
+ * @returns {Promise<{connected: boolean, latency: number}>}
+ */
+async function checkConnectivity() {
+  const startTime = Date.now();
+  return new Promise((resolve) => {
+    db.get('SELECT 1 as test', [], (err) => {
+      const latency = Date.now() - startTime;
+      if (err) {
+        resolve({ connected: false, latency, error: err.message });
+      } else {
+        resolve({ connected: true, latency });
+      }
+    });
   });
 }
 function checkIfUsersExist() {
   return new Promise((resolve, reject) => {
     db.get('SELECT COUNT(*) as count FROM users', [], (err, result) => {
       if (err) {
+        console.error('[Database] Error checking users:', err.message);
         reject(err);
         return;
       }
@@ -418,7 +424,15 @@ function checkIfUsersExist() {
     });
   });
 }
+
 module.exports = {
   db,
-  checkIfUsersExist
+  checkIfUsersExist,
+  waitForDbInit,
+  verifyTables,
+  checkConnectivity,
+  closeDatabase,
+  isDbInitialized: () => dbInitialized,
+  getInitError: () => dbInitError,
+  REQUIRED_TABLES
 };

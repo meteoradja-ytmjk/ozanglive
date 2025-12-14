@@ -110,6 +110,7 @@ class Stream {
   }
   static findAll(userId = null, filter = null) {
     return new Promise((resolve, reject) => {
+      // Query without playlist join to avoid errors if table doesn't exist
       let query = `
         SELECT s.*, 
                v.title AS video_title, 
@@ -120,16 +121,10 @@ class Stream {
                v.bitrate AS video_bitrate,        
                v.fps AS video_fps,
                a.title AS audio_title,
-               p.name AS playlist_name,
-               CASE 
-                 WHEN p.id IS NOT NULL THEN 'playlist'
-                 WHEN v.id IS NOT NULL THEN 'video'
-                 ELSE NULL
-               END AS video_type
+               'video' AS video_type
         FROM streams s
         LEFT JOIN videos v ON s.video_id = v.id
         LEFT JOIN audios a ON s.audio_id = a.id
-        LEFT JOIN playlists p ON s.video_id = p.id
       `;
       const params = [];
       if (userId) {
@@ -267,15 +262,9 @@ class Stream {
                 v.filepath AS video_filepath, 
                 v.thumbnail_path AS video_thumbnail, 
                 v.duration AS video_duration,
-                p.name AS playlist_name,
-                CASE 
-                  WHEN p.id IS NOT NULL THEN 'playlist'
-                  WHEN v.id IS NOT NULL THEN 'video'
-                  ELSE NULL
-                END AS video_type
+                'video' AS video_type
          FROM streams s
          LEFT JOIN videos v ON s.video_id = v.id
-         LEFT JOIN playlists p ON s.video_id = p.id
          WHERE s.id = ?`,
         [id],
         (err, row) => {
@@ -550,16 +539,10 @@ class Stream {
                v.bitrate AS video_bitrate,
                v.fps AS video_fps,
                a.title AS audio_title,
-               p.name AS playlist_name,
-               CASE 
-                 WHEN p.id IS NOT NULL THEN 'playlist'
-                 WHEN v.id IS NOT NULL THEN 'video'
-                 ELSE NULL
-               END AS video_type
+               'video' AS video_type
         FROM streams s
         LEFT JOIN videos v ON s.video_id = v.id
         LEFT JOIN audios a ON s.audio_id = a.id
-        LEFT JOIN playlists p ON s.video_id = p.id
         WHERE s.user_id = ?
         AND (
           (s.schedule_type = 'once' AND s.schedule_time IS NOT NULL)

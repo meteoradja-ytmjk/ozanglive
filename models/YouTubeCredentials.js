@@ -1,5 +1,4 @@
 const { db } = require('../db/database');
-const { v4: uuidv4 } = require('uuid');
 
 class YouTubeCredentials {
   /**

@@ -14,7 +14,7 @@ const bcrypt = require('bcrypt');
 const { body, validationResult } = require('express-validator');
 const rateLimit = require('express-rate-limit');
 const User = require('./models/User');
-const { db, checkIfUsersExist } = require('./db/database');
+const { db, checkIfUsersExist, waitForDbInit, verifyTables, checkConnectivity, closeDatabase } = require('./db/database');
 const systemMonitor = require('./services/systemMonitor');
 const { uploadVideo, upload, uploadAudio, uploadBackup } = require('./middleware/uploadMiddleware');
 const { ensureDirectories } = require('./utils/storage');
@@ -31,11 +31,120 @@ const youtubeService = require('./services/youtubeService');
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 // Track if we're shutting down to prevent multiple shutdown attempts
 let isShuttingDown = false;
+let httpServer = null;
+const activeIntervals = [];
+const activeTimeouts = [];
+
+// Store interval/timeout references for cleanup
+const originalSetInterval = global.setInterval;
+const originalSetTimeout = global.setTimeout;
+const originalClearInterval = global.clearInterval;
+const originalClearTimeout = global.clearTimeout;
+
+global.setInterval = function(...args) {
+  const id = originalSetInterval.apply(this, args);
+  activeIntervals.push(id);
+  return id;
+};
+
+global.setTimeout = function(...args) {
+  const id = originalSetTimeout.apply(this, args);
+  activeTimeouts.push(id);
+  return id;
+};
+
+global.clearInterval = function(id) {
+  const index = activeIntervals.indexOf(id);
+  if (index > -1) activeIntervals.splice(index, 1);
+  return originalClearInterval.call(this, id);
+};
+
+global.clearTimeout = function(id) {
+  const index = activeTimeouts.indexOf(id);
+  if (index > -1) activeTimeouts.splice(index, 1);
+  return originalClearTimeout.call(this, id);
+};
+
+/**
+ * Perform graceful shutdown of the application
+ * @param {string} signal - Signal that triggered shutdown
+ * @param {number} exitCode - Exit code to use
+ */
+async function gracefulShutdown(signal, exitCode = 0) {
+  if (isShuttingDown) {
+    console.log('[Shutdown] Already shutting down, ignoring signal');
+    return;
+  }
+  
+  isShuttingDown = true;
+  console.log(`[Shutdown] Received ${signal}, starting graceful shutdown...`);
+  
+  // Force exit after 30 seconds
+  const forceExitTimeout = setTimeout(() => {
+    console.error('[Shutdown] Force exit after 30 second timeout');
+    process.exit(exitCode || 1);
+  }, 30000);
+  forceExitTimeout.unref();
+  
+  try {
+    // 1. Stop accepting new connections
+    if (httpServer) {
+      console.log('[Shutdown] Closing HTTP server...');
+      await new Promise((resolve) => {
+        httpServer.close(() => {
+          console.log('[Shutdown] HTTP server closed');
+          resolve();
+        });
+      });
+    }
+    
+    // 2. Stop all active streams
+    try {
+      const activeStreams = streamingService.getActiveStreams();
+      if (activeStreams.length > 0) {
+        console.log(`[Shutdown] Stopping ${activeStreams.length} active streams...`);
+        await Promise.all(activeStreams.map(id => 
+          streamingService.stopStream(id).catch(err => {
+            console.error(`[Shutdown] Error stopping stream ${id}:`, err.message);
+          })
+        ));
+        console.log('[Shutdown] All streams stopped');
+      }
+    } catch (e) {
+      console.error('[Shutdown] Error stopping streams:', e.message);
+    }
+    
+    // 3. Clear all intervals and timeouts
+    console.log(`[Shutdown] Clearing ${activeIntervals.length} intervals and ${activeTimeouts.length} timeouts...`);
+    activeIntervals.forEach(id => originalClearInterval(id));
+    activeTimeouts.forEach(id => originalClearTimeout(id));
+    activeIntervals.length = 0;
+    activeTimeouts.length = 0;
+    
+    // 4. Close database connection
+    try {
+      console.log('[Shutdown] Closing database connection...');
+      await closeDatabase();
+    } catch (e) {
+      console.error('[Shutdown] Error closing database:', e.message);
+    }
+    
+    console.log('[Shutdown] Graceful shutdown complete');
+    clearTimeout(forceExitTimeout);
+    process.exit(exitCode);
+    
+  } catch (error) {
+    console.error('[Shutdown] Error during graceful shutdown:', error);
+    clearTimeout(forceExitTimeout);
+    process.exit(exitCode || 1);
+  }
+}
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('-----------------------------------');
-  console.error('UNHANDLED REJECTION AT:', promise);
-  console.error('REASON:', reason);
+  console.error('[ERROR] UNHANDLED REJECTION');
+  console.error('Promise:', promise);
+  console.error('Reason:', reason);
   console.error('Stack:', reason?.stack || 'No stack trace');
   console.error('-----------------------------------');
   // Don't exit - just log and continue
@@ -44,53 +153,18 @@ process.on('unhandledRejection', (reason, promise) => {
 
 process.on('uncaughtException', (error) => {
   console.error('-----------------------------------');
-  console.error('UNCAUGHT EXCEPTION:', error);
+  console.error('[ERROR] UNCAUGHT EXCEPTION');
+  console.error('Error:', error);
   console.error('Stack:', error?.stack || 'No stack trace');
   console.error('-----------------------------------');
   
   // For critical errors, attempt graceful shutdown
-  if (!isShuttingDown) {
-    isShuttingDown = true;
-    console.error('Attempting graceful shutdown...');
-    
-    // Give the app 10 seconds to clean up before force exit
-    setTimeout(() => {
-      console.error('Forced shutdown after timeout');
-      process.exit(1);
-    }, 10000).unref();
-    
-    // Try to stop all active streams gracefully
-    try {
-      const activeStreams = streamingService.getActiveStreams();
-      console.log(`Stopping ${activeStreams.length} active streams before shutdown...`);
-      Promise.all(activeStreams.map(id => streamingService.stopStream(id).catch(() => {})))
-        .finally(() => {
-          console.log('Graceful shutdown complete');
-          process.exit(1);
-        });
-    } catch (e) {
-      console.error('Error during graceful shutdown:', e);
-      process.exit(1);
-    }
-  }
+  gracefulShutdown('uncaughtException', 1);
 });
 
 // Handle SIGTERM and SIGINT for graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('Received SIGTERM signal');
-  if (!isShuttingDown) {
-    isShuttingDown = true;
-    process.exit(0);
-  }
-});
-
-process.on('SIGINT', () => {
-  console.log('Received SIGINT signal');
-  if (!isShuttingDown) {
-    isShuttingDown = true;
-    process.exit(0);
-  }
-});
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM', 0));
+process.on('SIGINT', () => gracefulShutdown('SIGINT', 0));
 const app = express();
 app.set("trust proxy", 1);
 const port = process.env.PORT || 7575;
@@ -187,13 +261,19 @@ app.locals.helpers = {
     });
   }
 };
-// Validate SESSION_SECRET exists
-const sessionSecret = process.env.SESSION_SECRET;
+// Validate SESSION_SECRET exists and generate secure fallback if not
+let sessionSecret = process.env.SESSION_SECRET;
 if (!sessionSecret) {
-  console.error('WARNING: SESSION_SECRET is not set in .env file!');
-  console.error('Please add SESSION_SECRET to your .env file.');
-  console.error('Generate one using: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"');
-  console.error('Using a temporary secret for development - DO NOT USE IN PRODUCTION!');
+  console.warn('[Session] WARNING: SESSION_SECRET is not set in .env file!');
+  console.warn('[Session] Generating a temporary secret - DO NOT USE IN PRODUCTION!');
+  console.warn('[Session] Generate a permanent secret using: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"');
+  sessionSecret = require('crypto').randomBytes(32).toString('hex');
+}
+
+// Validate secret is not empty or too short
+if (!sessionSecret || sessionSecret.length < 16) {
+  console.error('[Session] CRITICAL: SESSION_SECRET is too short or invalid!');
+  sessionSecret = require('crypto').randomBytes(32).toString('hex');
 }
 
 app.use(session({
@@ -202,7 +282,7 @@ app.use(session({
     dir: './db/',
     table: 'sessions'
   }),
-  secret: sessionSecret || require('crypto').randomBytes(32).toString('hex'),
+  secret: sessionSecret,
   resave: false,
   saveUninitialized: false,
   rolling: true,
@@ -212,6 +292,19 @@ app.use(session({
     maxAge: 24 * 60 * 60 * 1000
   }
 }));
+
+// Session error handling middleware
+app.use((err, req, res, next) => {
+  if (err && err.message && err.message.includes('session')) {
+    console.error('[Session] Session error:', err.message);
+    return res.status(500).render('error', {
+      title: 'Session Error',
+      message: 'A session error occurred. Please try refreshing the page.',
+      error: process.env.NODE_ENV === 'development' ? err : {}
+    });
+  }
+  next(err);
+});
 app.use(async (req, res, next) => {
   if (req.session && req.session.userId) {
     try {
@@ -673,11 +766,31 @@ app.get('/', (req, res) => {
 
 // Health check endpoint - no authentication required
 // Used for monitoring if the application is running
-app.get('/health', (req, res) => {
+app.get('/health', async (req, res) => {
   try {
     const activeStreams = streamingService.getActiveStreams();
-    res.json({
-      status: 'ok',
+    
+    // Check database connectivity
+    let dbStatus = { connected: false, latency: 0 };
+    try {
+      dbStatus = await checkConnectivity();
+    } catch (dbErr) {
+      dbStatus = { connected: false, latency: 0, error: dbErr.message };
+    }
+    
+    // Determine overall status
+    const components = {
+      database: dbStatus.connected ? 'healthy' : 'unhealthy',
+      streaming: 'healthy',
+      scheduler: 'healthy'
+    };
+    
+    const isHealthy = Object.values(components).every(s => s === 'healthy');
+    const status = isHealthy ? 'ok' : 'degraded';
+    const statusCode = isHealthy ? 200 : 503;
+    
+    res.status(statusCode).json({
+      status,
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
       memory: {
@@ -685,13 +798,23 @@ app.get('/health', (req, res) => {
         total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024),
         unit: 'MB'
       },
-      activeStreams: activeStreams.length
+      database: {
+        connected: dbStatus.connected,
+        latency: dbStatus.latency
+      },
+      activeStreams: activeStreams.length,
+      components
     });
   } catch (error) {
     res.status(500).json({
       status: 'error',
       error: error.message,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      components: {
+        database: 'unknown',
+        streaming: 'unknown',
+        scheduler: 'unknown'
+      }
     });
   }
 });
@@ -4070,63 +4193,149 @@ app.post('/api/youtube/broadcasts/:id/thumbnail', isAuthenticated, upload.single
   }
 });
 
-const server = app.listen(port, '0.0.0.0', async () => {
-  const ipAddresses = getLocalIpAddresses();
-  console.log(`StreamFlow running at:`);
-  if (ipAddresses && ipAddresses.length > 0) {
-    ipAddresses.forEach(ip => {
-      console.log(`  http://${ip}:${port}`);
-    });
-  } else {
-    console.log(`  http://localhost:${port}`);
+// Global error handler - catches any unhandled errors in routes
+app.use((err, req, res, next) => {
+  console.error('Global error handler caught:', err);
+  console.error('Stack:', err.stack);
+  
+  // Don't leak error details in production
+  const isDev = process.env.NODE_ENV !== 'production';
+  
+  // Check if headers already sent
+  if (res.headersSent) {
+    return next(err);
   }
   
-  // Reset live streams to offline on startup (in case of crash recovery)
+  // Handle different error types
+  if (err.code === 'EBADCSRFTOKEN') {
+    return res.status(403).render('error', {
+      title: 'Error',
+      message: 'Session expired. Please refresh and try again.',
+      error: isDev ? err : {}
+    });
+  }
+  
+  // Default error response
+  res.status(err.status || 500);
+  
+  // Check if request expects JSON
+  if (req.xhr || req.headers.accept?.includes('application/json')) {
+    return res.json({
+      success: false,
+      error: isDev ? err.message : 'An unexpected error occurred'
+    });
+  }
+  
+  // Render error page
+  res.render('error', {
+    title: 'Error',
+    message: isDev ? err.message : 'An unexpected error occurred',
+    error: isDev ? err : {}
+  });
+});
+
+// 404 handler - must be after all routes
+app.use((req, res) => {
+  res.status(404);
+  
+  // Check if request expects JSON
+  if (req.xhr || req.headers.accept?.includes('application/json')) {
+    return res.json({
+      success: false,
+      error: 'Not found'
+    });
+  }
+  
+  res.render('error', {
+    title: '404 Not Found',
+    message: 'The page you are looking for does not exist.',
+    error: {}
+  });
+});
+
+// Start server after database is ready
+async function startServer() {
+  // Wait for database to be fully initialized
   try {
-    const streams = await Stream.findAll(null, 'live');
-    if (streams && streams.length > 0) {
-      console.log(`Resetting ${streams.length} live streams to offline state...`);
-      for (const stream of streams) {
-        try {
-          await Stream.updateStatus(stream.id, 'offline');
-        } catch (updateError) {
-          console.error(`Error resetting stream ${stream.id}:`, updateError.message);
+    console.log('[Startup] Waiting for database initialization...');
+    await waitForDbInit();
+    
+    // Verify all tables exist
+    const verification = await verifyTables();
+    if (!verification.success) {
+      console.warn(`[Startup] Warning: Missing tables: ${verification.missingTables.join(', ')}`);
+    }
+    
+    console.log('[Startup] Database ready, starting server...');
+  } catch (dbError) {
+    console.error('[Startup] Database initialization error:', dbError.message);
+    console.error('[Startup] Attempting to continue - tables might already exist');
+  }
+  
+  httpServer = app.listen(port, '0.0.0.0', async () => {
+    const ipAddresses = getLocalIpAddresses();
+    console.log(`StreamFlow running at:`);
+    if (ipAddresses && ipAddresses.length > 0) {
+      ipAddresses.forEach(ip => {
+        console.log(`  http://${ip}:${port}`);
+      });
+    } else {
+      console.log(`  http://localhost:${port}`);
+    }
+    
+    // Reset live streams to offline on startup (in case of crash recovery)
+    try {
+      const streams = await Stream.findAll(null, 'live');
+      if (streams && streams.length > 0) {
+        console.log(`Resetting ${streams.length} live streams to offline state...`);
+        for (const stream of streams) {
+          try {
+            await Stream.updateStatus(stream.id, 'offline');
+          } catch (updateError) {
+            console.error(`Error resetting stream ${stream.id}:`, updateError.message);
+          }
         }
       }
+    } catch (error) {
+      console.error('Error resetting stream statuses:', error.message);
+      // Don't crash on startup - continue running
     }
-  } catch (error) {
-    console.error('Error resetting stream statuses:', error.message);
-    // Don't crash on startup - continue running
-  }
+    
+    // Initialize scheduler
+    try {
+      schedulerService.init(streamingService);
+    } catch (error) {
+      console.error('Error initializing scheduler:', error.message);
+      // Don't crash - scheduler can be retried
+    }
+    
+    // Sync stream statuses
+    try {
+      await streamingService.syncStreamStatuses();
+    } catch (error) {
+      console.error('Failed to sync stream statuses:', error.message);
+      // Don't crash - sync will retry on interval
+    }
+    
+    console.log('StreamFlow startup complete');
+  });
   
-  // Initialize scheduler
-  try {
-    schedulerService.init(streamingService);
-  } catch (error) {
-    console.error('Error initializing scheduler:', error.message);
-    // Don't crash - scheduler can be retried
-  }
-  
-  // Sync stream statuses
-  try {
-    await streamingService.syncStreamStatuses();
-  } catch (error) {
-    console.error('Failed to sync stream statuses:', error.message);
-    // Don't crash - sync will retry on interval
-  }
-  
-  console.log('StreamFlow startup complete');
-});
+  // Handle server errors
+  httpServer.on('error', (error) => {
+    if (error.code === 'EADDRINUSE') {
+      console.error(`[Startup] Port ${port} is already in use. Please close the other application or use a different port.`);
+    } else {
+      console.error('[Startup] Server error:', error);
+    }
+  });
 
-// Handle server errors
-server.on('error', (error) => {
-  if (error.code === 'EADDRINUSE') {
-    console.error(`Port ${port} is already in use. Please close the other application or use a different port.`);
-  } else {
-    console.error('Server error:', error);
-  }
-});
+  httpServer.timeout = 30 * 60 * 1000;
+  httpServer.keepAliveTimeout = 30 * 60 * 1000;
+  httpServer.headersTimeout = 30 * 60 * 1000;
+}
 
-server.timeout = 30 * 60 * 1000;
-server.keepAliveTimeout = 30 * 60 * 1000;
-server.headersTimeout = 30 * 60 * 1000;
+// Start the server
+startServer().catch(err => {
+  console.error('Failed to start server:', err);
+  process.exit(1);
+});

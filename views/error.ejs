@@ -59,10 +59,16 @@
           </div>
         </div>
 
-        <h2 class="text-xl font-bold mb-4">Error</h2>
+        <h2 class="text-xl font-bold mb-4"><%= title || 'Error' %></h2>
         <p class="text-gray-400 mb-6">
-          <%= error %>
+          <%= message || error || 'An unexpected error occurred' %>
         </p>
+        <% if (typeof error === 'object' && error && error.stack) { %>
+        <details class="text-left text-xs text-gray-500 mt-4">
+          <summary class="cursor-pointer hover:text-gray-400">Technical Details</summary>
+          <pre class="mt-2 p-2 bg-dark-700 rounded overflow-x-auto"><%= error.stack %></pre>
+        </details>
+        <% } %>
 
         <a href="/"
           class="inline-block bg-primary hover:bg-secondary text-white py-2.5 px-6 rounded-lg font-medium transition-colors">
