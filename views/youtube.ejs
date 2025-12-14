@@ -294,61 +294,19 @@
           </select>
         </div>
 
-        <!-- Monetization Field -->
-        <div id="monetizationField">
-          <label class="text-sm font-medium text-white block mb-2">
-            Monetization
-            <span id="monetizationAutoFillIndicator" class="hidden ml-2 text-xs text-green-400" title="Auto-filled from YouTube defaults">
-              <i class="ti ti-sparkles"></i>
-            </span>
-          </label>
-          <div class="flex gap-4 mb-2">
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input type="radio" name="monetizationStatus" value="on" id="monetizationOn"
-                class="w-4 h-4 border-gray-600 bg-dark-700 text-red-500 focus:ring-red-500 focus:ring-offset-0"
-                onchange="toggleAdFrequency()">
-              <span class="text-sm text-white">On</span>
-            </label>
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input type="radio" name="monetizationStatus" value="off" id="monetizationOff" checked
-                class="w-4 h-4 border-gray-600 bg-dark-700 text-red-500 focus:ring-red-500 focus:ring-offset-0"
-                onchange="toggleAdFrequency()">
-              <span class="text-sm text-white">Off</span>
-            </label>
+        <!-- YouTube Studio Settings Notice -->
+        <div class="bg-dark-700 rounded-lg p-4 border border-gray-600">
+          <div class="flex items-start gap-3">
+            <i class="ti ti-info-circle text-yellow-500 text-lg mt-0.5"></i>
+            <div>
+              <p class="text-sm text-gray-300 font-medium">Additional Settings</p>
+              <p class="text-xs text-gray-400 mt-1">
+                Monetization, Ad Frequency, and Altered Content settings must be configured directly in 
+                <a href="https://studio.youtube.com" target="_blank" class="text-red-400 hover:underline">YouTube Studio</a> 
+                after creating the broadcast. The YouTube API does not support these settings.
+              </p>
+            </div>
           </div>
-          <!-- Ad Frequency (shown when monetization is On) -->
-          <div id="adFrequencyField" class="hidden mt-2">
-            <label class="text-xs text-gray-400 block mb-1">Ad Frequency</label>
-            <select id="adFrequency" name="adFrequency"
-              class="w-full px-4 py-2 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none text-sm">
-              <option value="high">High - Maximum ads</option>
-              <option value="medium" selected>Medium - Balanced</option>
-              <option value="low">Low - Fewer ads</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- Altered Content Field -->
-        <div>
-          <label class="text-sm font-medium text-white block mb-2">
-            Altered Content (AI-generated)
-            <span id="alteredContentAutoFillIndicator" class="hidden ml-2 text-xs text-green-400" title="Auto-filled from YouTube defaults">
-              <i class="ti ti-sparkles"></i>
-            </span>
-          </label>
-          <div class="flex gap-4">
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input type="radio" name="alteredContent" value="yes" id="alteredContentYes"
-                class="w-4 h-4 border-gray-600 bg-dark-700 text-red-500 focus:ring-red-500 focus:ring-offset-0">
-              <span class="text-sm text-white">Yes</span>
-            </label>
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input type="radio" name="alteredContent" value="no" id="alteredContentNo" checked
-                class="w-4 h-4 border-gray-600 bg-dark-700 text-red-500 focus:ring-red-500 focus:ring-offset-0">
-              <span class="text-sm text-white">No</span>
-            </label>
-          </div>
-          <p class="text-xs text-gray-500 mt-1">Does this content contain realistic altered or synthetic media?</p>
         </div>
 
         <div>

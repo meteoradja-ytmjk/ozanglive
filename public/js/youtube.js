@@ -204,6 +204,26 @@ async function fetchThumbnails() {
   }
 }
 
+// Select thumbnail from gallery
+function selectGalleryThumbnail(element, url, path) {
+  // Remove selection from all thumbnails
+  document.querySelectorAll('.thumbnail-item').forEach(item => {
+    item.classList.remove('border-primary', 'border-red-500');
+    item.classList.add('border-transparent');
+  });
+  
+  // Add selection to clicked thumbnail
+  element.classList.remove('border-transparent');
+  element.classList.add('border-red-500');
+  
+  // Update preview
+  document.getElementById('thumbnailPreview').innerHTML = 
+    `<img src="${url}" class="w-full h-full object-cover">`;
+  
+  // Set hidden input for path
+  document.getElementById('selectedThumbnailPath').value = path;
+}
+
 // Upload thumbnail to user's gallery
 async function uploadThumbnailToGallery(file) {
   try {
@@ -304,29 +324,6 @@ function previewAndUploadThumbnail(input) {
   }
 }
 
-// Select thumbnail from gallery
-function selectGalleryThumbnail(element, url, path) {
-  // Clear file input
-  document.getElementById('thumbnailFile').value = '';
-  
-  // Remove selection from all thumbnails
-  document.querySelectorAll('.thumbnail-item').forEach(item => {
-    item.classList.remove('border-primary', 'border-red-500');
-    item.classList.add('border-transparent');
-  });
-  
-  // Add selection to clicked thumbnail
-  element.classList.remove('border-transparent');
-  element.classList.add('border-red-500');
-  
-  // Update preview
-  document.getElementById('thumbnailPreview').innerHTML = 
-    `<img src="${url}" class="w-full h-full object-cover">`;
-  
-  // Set hidden input for path
-  document.getElementById('selectedThumbnailPath').value = path;
-}
-
 // Tags state
 let currentTags = [];
 
@@ -350,24 +347,9 @@ async function fetchChannelDefaults() {
     }
   } catch (error) {
     console.error('Error fetching channel defaults:', error);
-    // Form remains usable with empty values - non-blocking warning
     showToast('Could not load YouTube defaults', 'info');
   } finally {
     if (tagsLoading) tagsLoading.classList.add('hidden');
-  }
-}
-
-// Toggle ad frequency field based on monetization status
-function toggleAdFrequency() {
-  const monetizationOn = document.getElementById('monetizationOn');
-  const adFrequencyField = document.getElementById('adFrequencyField');
-  
-  if (monetizationOn && adFrequencyField) {
-    if (monetizationOn.checked) {
-      adFrequencyField.classList.remove('hidden');
-    } else {
-      adFrequencyField.classList.add('hidden');
-    }
   }
 }
 
@@ -401,24 +383,8 @@ function populateFormWithDefaults(defaults) {
     if (indicator) indicator.classList.remove('hidden');
   }
   
-  // Handle monetization (on/off with frequency)
-  if (defaults.monetizationEnabled) {
-    const monetizationOn = document.getElementById('monetizationOn');
-    if (monetizationOn) {
-      monetizationOn.checked = true;
-      toggleAdFrequency();
-    }
-    const indicator = document.getElementById('monetizationAutoFillIndicator');
-    if (indicator) indicator.classList.remove('hidden');
-  }
-  
-  // Handle altered content (yes/no)
-  if (defaults.alteredContent) {
-    const alteredYes = document.getElementById('alteredContentYes');
-    if (alteredYes) alteredYes.checked = true;
-    const indicator = document.getElementById('alteredContentAutoFillIndicator');
-    if (indicator) indicator.classList.remove('hidden');
-  }
+  // Note: Monetization, Ad Frequency, and Altered Content settings 
+  // are not supported by YouTube API and must be set in YouTube Studio
 }
 
 // Render tags as chips
@@ -547,28 +513,13 @@ function closeCreateBroadcastModal() {
   renderTags();
   
   // Hide auto-fill indicators
-  const indicators = ['tagsAutoFillIndicator', 'monetizationAutoFillIndicator', 'alteredContentAutoFillIndicator', 'categoryAutoFillIndicator'];
+  const indicators = ['tagsAutoFillIndicator', 'categoryAutoFillIndicator'];
   indicators.forEach(id => {
     const el = document.getElementById(id);
     if (el) el.classList.add('hidden');
   });
-  
-  // Reset monetization to Off and hide ad frequency
-  const monetizationOff = document.getElementById('monetizationOff');
-  if (monetizationOff) monetizationOff.checked = true;
-  const adFrequencyField = document.getElementById('adFrequencyField');
-  if (adFrequencyField) adFrequencyField.classList.add('hidden');
-  
-  // Reset altered content to No
-  const alteredNo = document.getElementById('alteredContentNo');
-  if (alteredNo) alteredNo.checked = true;
 }
 
-// Preview thumbnail (legacy - kept for compatibility)
-function previewThumbnail(input) {
-  // Redirect to new upload function
-  previewAndUploadThumbnail(input);
-}
 
 // Create Broadcast Form Handler
 const createBroadcastForm = document.getElementById('createBroadcastForm');
@@ -605,27 +556,11 @@ if (createBroadcastForm) {
         formData.append('categoryId', categorySelect.value);
       }
       
-      // Add monetization status (on/off) and frequency
-      const monetizationOn = document.getElementById('monetizationOn');
-      if (monetizationOn) {
-        formData.append('monetizationEnabled', monetizationOn.checked);
-        if (monetizationOn.checked) {
-          const adFrequency = document.getElementById('adFrequency');
-          if (adFrequency) {
-            formData.append('adFrequency', adFrequency.value);
-          }
-        }
-      }
+      // Note: Monetization, Ad Frequency, and Altered Content are not supported by YouTube API
+      // These must be configured in YouTube Studio after creating the broadcast
       
-      // Add altered content status (yes/no)
-      const alteredYes = document.getElementById('alteredContentYes');
-      if (alteredYes) {
-        formData.append('alteredContent', alteredYes.checked);
-      }
-      
-      // Add thumbnail from gallery selection only (thumbnails are pre-uploaded to gallery)
+      // Add thumbnail from gallery selection
       const thumbnailPath = document.getElementById('selectedThumbnailPath').value;
-      
       if (thumbnailPath) {
         formData.append('thumbnailPath', thumbnailPath);
       }

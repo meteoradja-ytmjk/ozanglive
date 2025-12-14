@@ -3522,8 +3522,24 @@ app.get('/api/thumbnails', isAuthenticated, async (req, res) => {
   }
 });
 
+// Thumbnail upload middleware (memory storage)
+const thumbnailUpload = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: (req, file, cb) => {
+    const allowedFormats = ['image/jpeg', 'image/jpg', 'image/png'];
+    if (allowedFormats.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only JPG and PNG files are allowed'), false);
+    }
+  },
+  limits: {
+    fileSize: 2 * 1024 * 1024 // 2MB max
+  }
+});
+
 // Upload thumbnail to user's gallery (max 20)
-app.post('/api/thumbnails', isAuthenticated, upload.single('thumbnail'), async (req, res) => {
+app.post('/api/thumbnails', isAuthenticated, thumbnailUpload.single('thumbnail'), async (req, res) => {
   try {
     const userId = req.session.userId;
     const thumbnailsDir = path.join(__dirname, 'public', 'uploads', 'thumbnails', String(userId));
@@ -3536,10 +3552,6 @@ app.post('/api/thumbnails', isAuthenticated, upload.single('thumbnail'), async (
     // Check current count
     const existingFiles = fs.readdirSync(thumbnailsDir).filter(file => /\.(jpg|jpeg|png)$/i.test(file));
     if (existingFiles.length >= 20) {
-      // Delete uploaded temp file
-      if (req.file && fs.existsSync(req.file.path)) {
-        fs.unlinkSync(req.file.path);
-      }
       return res.status(400).json({ 
         success: false, 
         error: 'Maximum 20 thumbnails allowed. Please delete some before uploading new ones.' 
@@ -3550,14 +3562,13 @@ app.post('/api/thumbnails', isAuthenticated, upload.single('thumbnail'), async (
       return res.status(400).json({ success: false, error: 'No file uploaded' });
     }
     
-    // Move file to user's thumbnail directory
-    const newFilename = `thumb_${Date.now()}_${req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+    // Save file to user's thumbnail directory
+    const ext = path.extname(req.file.originalname).toLowerCase() || '.jpg';
+    const newFilename = `thumb_${Date.now()}${ext}`;
     const newPath = path.join(thumbnailsDir, newFilename);
     
-    // If file was uploaded to temp location, move it
-    if (req.file.path !== newPath) {
-      fs.renameSync(req.file.path, newPath);
-    }
+    // Write buffer to file
+    fs.writeFileSync(newPath, req.file.buffer);
     
     res.json({ 
       success: true, 
