@@ -2,6 +2,27 @@
 
 PM2 adalah process manager untuk Node.js yang menyediakan fitur auto-restart, monitoring, dan log management.
 
+## Quick Setup untuk VPS (Recommended)
+
+```bash
+# 1. Install PM2
+npm install -g pm2
+
+# 2. Start aplikasi
+cd ~/ozanglive
+pm2 start ecosystem.config.js
+
+# 3. Setup auto-start saat boot
+pm2 startup
+pm2 save
+
+# 4. Setup health monitor cron (optional tapi recommended)
+chmod +x scripts/health-monitor.sh
+crontab -e
+# Tambahkan baris ini:
+# */5 * * * * /root/ozanglive/scripts/health-monitor.sh >> /root/ozanglive/logs/health-monitor.log 2>&1
+```
+
 ## Instalasi PM2
 
 ```bash
@@ -114,3 +135,69 @@ Opsi yang bisa diubah:
 - `max_restarts` - Maksimal restart
 - `restart_delay` - Delay sebelum restart
 - `cron_restart` - Jadwal restart berkala (uncomment untuk mengaktifkan)
+
+
+## Setup Cron Health Monitor (Untuk VPS)
+
+Health monitor akan mengecek aplikasi setiap 5 menit dan restart otomatis jika tidak responsif:
+
+```bash
+# Buat script executable
+chmod +x scripts/health-monitor.sh
+
+# Edit crontab
+crontab -e
+
+# Tambahkan baris ini (sesuaikan path):
+*/5 * * * * /root/ozanglive/scripts/health-monitor.sh >> /root/ozanglive/logs/health-monitor.log 2>&1
+```
+
+## Optimasi untuk VPS 1GB RAM
+
+Konfigurasi sudah dioptimasi untuk VPS dengan RAM terbatas:
+- Heap Node.js dibatasi 512MB
+- Auto-restart jika memory > 700MB
+- Garbage collection lebih sering
+- Daily restart jam 4 pagi untuk mencegah memory buildup
+
+## One-Line Update Command
+
+Untuk update dari git dan restart:
+
+```bash
+cd ~/ozanglive && git fetch origin && git reset --hard origin/main && npm install && pm2 restart streamflow
+```
+
+## Troubleshooting VPS
+
+### Aplikasi Tidak Bisa Diakses tapi Streaming Jalan
+
+Ini biasanya karena Node.js crash tapi FFmpeg tetap jalan. Solusi:
+
+```bash
+# Restart aplikasi
+pm2 restart streamflow
+
+# Cek log untuk penyebab crash
+pm2 logs streamflow --err --lines 100
+```
+
+### Memory Tinggi
+
+```bash
+# Cek memory usage
+pm2 monit
+
+# Force restart untuk clear memory
+pm2 restart streamflow
+```
+
+### Cek Status Kesehatan
+
+```bash
+# Via curl
+curl http://localhost:7575/health
+
+# Via PM2
+pm2 status
+```

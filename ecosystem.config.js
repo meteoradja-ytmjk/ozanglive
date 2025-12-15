@@ -32,15 +32,15 @@ module.exports = {
       instances: 1, // Single instance (streaming apps shouldn't use cluster mode)
       exec_mode: 'fork', // Fork mode for single instance
       
-      // Auto-restart configuration
+      // Auto-restart configuration - MORE AGGRESSIVE
       autorestart: true,
       watch: false, // Don't watch for file changes in production
-      max_restarts: 10, // Maximum restarts within min_uptime
-      min_uptime: '10s', // Minimum uptime to consider app started
-      restart_delay: 4000, // Wait 4 seconds before restarting
+      max_restarts: 50, // Allow more restarts (was 10)
+      min_uptime: '5s', // Faster detection (was 10s)
+      restart_delay: 2000, // Faster restart (was 4000)
       
-      // Memory management
-      max_memory_restart: '1G', // Restart if memory exceeds 1GB
+      // Memory management - LOWER THRESHOLD for 1GB VPS
+      max_memory_restart: '700M', // Restart at 700MB (was 1G) - leave room for FFmpeg
       
       // Environment variables
       env: {
@@ -60,21 +60,23 @@ module.exports = {
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
       merge_logs: true,
       
-      // Graceful shutdown
-      kill_timeout: 30000, // Wait 30 seconds for graceful shutdown
-      listen_timeout: 10000, // Wait 10 seconds for app to listen
+      // Graceful shutdown - FASTER
+      kill_timeout: 15000, // 15 seconds (was 30)
+      listen_timeout: 8000, // 8 seconds (was 10)
       
-      // Crash handling
-      exp_backoff_restart_delay: 100, // Exponential backoff for restarts
+      // Crash handling - FASTER RECOVERY
+      exp_backoff_restart_delay: 50, // Faster backoff (was 100)
       
-      // Node.js arguments
+      // Node.js arguments - OPTIMIZED FOR LOW MEMORY VPS
       node_args: [
-        '--max-old-space-size=1024', // Limit heap to 1GB
-        '--expose-gc' // Allow manual garbage collection
+        '--max-old-space-size=512', // Limit heap to 512MB (was 1024)
+        '--expose-gc', // Allow manual garbage collection
+        '--optimize-for-size', // Optimize for memory
+        '--gc-interval=100' // More frequent GC
       ],
       
-      // Cron restart (optional - restart every day at 4 AM)
-      // cron_restart: '0 4 * * *',
+      // Cron restart - ENABLED: restart every day at 4 AM to prevent memory buildup
+      cron_restart: '0 4 * * *',
       
       // Source map support for better error traces
       source_map_support: true

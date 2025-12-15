@@ -151,10 +151,15 @@ process.on('unhandledRejection', (reason, promise) => {
   // This prevents the app from crashing on unhandled promise rejections
 });
 
-// Memory monitoring - check every 5 minutes and warn if memory usage is high
-const MEMORY_CHECK_INTERVAL = 5 * 60 * 1000; // 5 minutes
-const MEMORY_WARNING_THRESHOLD = 0.85; // 85% of heap
-const MEMORY_CRITICAL_THRESHOLD = 0.95; // 95% of heap
+// Memory monitoring - check every 2 minutes (more frequent for low-memory VPS)
+const MEMORY_CHECK_INTERVAL = 2 * 60 * 1000; // 2 minutes
+const MEMORY_WARNING_THRESHOLD = 0.70; // 70% of heap (lower for 1GB VPS)
+const MEMORY_CRITICAL_THRESHOLD = 0.85; // 85% of heap
+
+// Self-healing: Track consecutive failures and restart if needed
+let consecutiveHealthFailures = 0;
+const MAX_HEALTH_FAILURES = 3; // Restart after 3 consecutive failures
+const SELF_HEALTH_CHECK_INTERVAL = 60 * 1000; // Check every 1 minute
 
 setInterval(() => {
   try {
@@ -176,6 +181,52 @@ setInterval(() => {
     console.error('[Memory] Error checking memory:', e.message);
   }
 }, MEMORY_CHECK_INTERVAL);
+
+// Self-healing health check - detect if server is hanging
+setInterval(async () => {
+  try {
+    // Check database connectivity
+    const dbStatus = await checkConnectivity();
+    
+    if (!dbStatus.connected) {
+      consecutiveHealthFailures++;
+      console.error(`[SelfHeal] Database check failed (${consecutiveHealthFailures}/${MAX_HEALTH_FAILURES})`);
+    } else if (dbStatus.latency > 5000) {
+      consecutiveHealthFailures++;
+      console.error(`[SelfHeal] Database slow: ${dbStatus.latency}ms (${consecutiveHealthFailures}/${MAX_HEALTH_FAILURES})`);
+    } else {
+      // Reset counter on success
+      if (consecutiveHealthFailures > 0) {
+        console.log('[SelfHeal] Health check passed, resetting failure counter');
+      }
+      consecutiveHealthFailures = 0;
+    }
+    
+    // Check memory usage - force GC if high
+    const memUsage = process.memoryUsage();
+    const heapUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024);
+    
+    // For 1GB VPS, if heap > 400MB, try to free memory
+    if (heapUsedMB > 400 && global.gc) {
+      console.log(`[SelfHeal] High memory (${heapUsedMB}MB), running GC...`);
+      global.gc();
+    }
+    
+    // If too many failures, exit and let PM2 restart
+    if (consecutiveHealthFailures >= MAX_HEALTH_FAILURES) {
+      console.error('[SelfHeal] Too many consecutive failures, triggering restart...');
+      process.exit(1); // PM2 will restart
+    }
+  } catch (error) {
+    consecutiveHealthFailures++;
+    console.error(`[SelfHeal] Health check error: ${error.message} (${consecutiveHealthFailures}/${MAX_HEALTH_FAILURES})`);
+    
+    if (consecutiveHealthFailures >= MAX_HEALTH_FAILURES) {
+      console.error('[SelfHeal] Too many consecutive failures, triggering restart...');
+      process.exit(1);
+    }
+  }
+}, SELF_HEALTH_CHECK_INTERVAL);
 
 process.on('uncaughtException', (error) => {
   console.error('-----------------------------------');
