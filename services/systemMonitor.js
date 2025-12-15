@@ -3,13 +3,35 @@ const si = require('systeminformation');
 let previousNetworkData = null;
 let previousTimestamp = null;
 
+// Cache for system stats to prevent blocking
+let cachedStats = null;
+let lastCacheTime = 0;
+const CACHE_TTL = 5000; // Cache for 5 seconds
+
+/**
+ * Wrap a promise with timeout to prevent hanging
+ */
+function withTimeout(promise, ms, fallback) {
+  return Promise.race([
+    promise,
+    new Promise((resolve) => setTimeout(() => resolve(fallback), ms))
+  ]);
+}
+
 async function getSystemStats() {
+  // Return cached stats if fresh
+  const now = Date.now();
+  if (cachedStats && (now - lastCacheTime) < CACHE_TTL) {
+    return { ...cachedStats, timestamp: now };
+  }
+  
   try {
+    // Use timeout to prevent hanging - 10 second max
     const [cpuData, memData, networkData, diskData] = await Promise.all([
-      si.currentLoad(),
-      si.mem(),
-      si.networkStats(),
-      getDiskUsage()
+      withTimeout(si.currentLoad(), 3000, { currentLoad: 0, cpus: [] }),
+      withTimeout(si.mem(), 3000, { total: 0, active: 0, available: 0 }),
+      withTimeout(si.networkStats(), 3000, []),
+      withTimeout(getDiskUsage(), 3000, { total: "0 GB", used: "0 GB", free: "0 GB", usagePercent: 0, drive: "N/A" })
     ]);
     
     const cpuUsage = cpuData.currentLoad || cpuData.avg || 0;
@@ -24,7 +46,7 @@ async function getSystemStats() {
       }
     };
     
-    return {
+    const stats = {
       cpu: {
         usage: Math.round(cpuUsage),
         cores: cpuData.cpus ? cpuData.cpus.length : 0
@@ -33,15 +55,27 @@ async function getSystemStats() {
         total: formatMemory(memData.total),
         used: formatMemory(memData.active),
         free: formatMemory(memData.available),
-        usagePercent: Math.round((memData.active / memData.total) * 100)
+        usagePercent: memData.total > 0 ? Math.round((memData.active / memData.total) * 100) : 0
       },
       network: networkSpeed,
       disk: diskData,
       platform: process.platform,
-      timestamp: Date.now()
+      timestamp: now
     };
+    
+    // Update cache
+    cachedStats = stats;
+    lastCacheTime = now;
+    
+    return stats;
   } catch (error) {
-    console.error('Error getting system stats:', error);
+    console.error('Error getting system stats:', error.message);
+    
+    // Return cached stats if available, otherwise return defaults
+    if (cachedStats) {
+      return { ...cachedStats, timestamp: Date.now() };
+    }
+    
     return {
       cpu: { usage: 0, cores: 0 },
       memory: { total: "0 GB", used: "0 GB", free: "0 GB", usagePercent: 0 },

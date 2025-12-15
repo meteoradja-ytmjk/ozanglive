@@ -450,6 +450,23 @@ app.use('/uploads', function (req, res, next) {
 app.use(express.urlencoded({ extended: true, limit: '10gb' }));
 app.use(express.json({ limit: '10gb' }));
 
+// Request timeout middleware - prevent hanging requests
+app.use((req, res, next) => {
+  // Set timeout for all requests (60 seconds)
+  req.setTimeout(60000, () => {
+    console.error(`[Timeout] Request timeout: ${req.method} ${req.url}`);
+    if (!res.headersSent) {
+      res.status(408).json({ error: 'Request timeout' });
+    }
+  });
+  
+  res.setTimeout(60000, () => {
+    console.error(`[Timeout] Response timeout: ${req.method} ${req.url}`);
+  });
+  
+  next();
+});
+
 const csrfProtection = function (req, res, next) {
   if ((req.path === '/login' && req.method === 'POST') ||
     (req.path === '/setup-account' && req.method === 'POST')) {
