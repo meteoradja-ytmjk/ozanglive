@@ -1,4 +1,4 @@
-const { spawn } = require('child_process');
+const { spawn, exec } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
@@ -84,6 +84,39 @@ function cleanupOldStreamData() {
   if (cleanedLogs > 0 || cleanedRetry > 0 || cleanedDuration > 0) {
     console.log(`[StreamingService] Memory cleanup: logs=${cleanedLogs}, retry=${cleanedRetry}, duration=${cleanedDuration}`);
   }
+}
+
+/**
+ * Check if FFmpeg is streaming to a specific RTMP URL
+ * This is used to detect if a stream is still running after app restart
+ * @param {string} streamKey - The stream key to search for
+ * @returns {Promise<boolean>} True if FFmpeg process found streaming to this key
+ */
+async function isFFmpegStreamingToKey(streamKey) {
+  if (!streamKey) return false;
+  
+  return new Promise((resolve) => {
+    // Use pgrep/ps to find FFmpeg processes
+    const isWindows = process.platform === 'win32';
+    const cmd = isWindows 
+      ? `tasklist /FI "IMAGENAME eq ffmpeg.exe" /FO CSV`
+      : `ps aux | grep -E "ffmpeg.*${streamKey}" | grep -v grep`;
+    
+    exec(cmd, { timeout: 5000 }, (error, stdout) => {
+      if (error) {
+        // No process found or command failed
+        resolve(false);
+        return;
+      }
+      
+      // Check if output contains the stream key
+      const found = stdout && stdout.includes(streamKey);
+      if (found) {
+        console.log(`[StreamingService] Found active FFmpeg process for stream key: ${streamKey.substring(0, 10)}...`);
+      }
+      resolve(found);
+    });
+  });
 }
 
 /**
@@ -1025,10 +1058,22 @@ async function syncStreamStatuses() {
     
     for (const stream of liveStreams) {
       try {
-        const isReallyActive = activeStreams.has(stream.id);
-        if (!isReallyActive) {
-          console.log(`[StreamingService] Found inconsistent stream ${stream.id}: marked as 'live' in DB but not active in memory`);
-          // FIXED: Use correct status based on schedule type
+        const isInMemory = activeStreams.has(stream.id);
+        
+        if (!isInMemory) {
+          // Stream not in memory - check if FFmpeg is actually still running
+          // This handles the case where app restarted but FFmpeg is still streaming
+          const isFFmpegRunning = await isFFmpegStreamingToKey(stream.stream_key);
+          
+          if (isFFmpegRunning) {
+            // FFmpeg is still running! Keep status as 'live'
+            console.log(`[StreamingService] Stream ${stream.id} not in memory but FFmpeg still running - keeping 'live' status`);
+            // Note: We can't control this FFmpeg process, but status stays accurate
+            continue;
+          }
+          
+          // FFmpeg not running - update status
+          console.log(`[StreamingService] Stream ${stream.id}: not in memory and FFmpeg not running - updating status`);
           const newStatus = getStatusAfterStreamEnd(stream);
           await Stream.updateStatus(stream.id, newStatus);
           console.log(`[StreamingService] Updated stream ${stream.id} status to '${newStatus}'`);
@@ -1072,7 +1117,7 @@ async function syncStreamStatuses() {
     // Don't rethrow - let the sync continue on next interval
   }
 }
-// OPTIMIZED: Increased from 5 to 10 minutes to reduce CPU overhead
+// OPTIMIZED: Sync every 5 minutes to keep status accurate
 // Wrapped with error handling to prevent crashes
 setInterval(async () => {
   try {
@@ -1080,7 +1125,7 @@ setInterval(async () => {
   } catch (error) {
     console.error('[StreamingService] Error in syncStreamStatuses interval:', error.message);
   }
-}, 10 * 60 * 1000);
+}, 5 * 60 * 1000); // 5 minutes
 function isStreamActive(streamId) {
   return activeStreams.has(streamId);
 }
@@ -1158,6 +1203,7 @@ module.exports = {
   getStreamLogs,
   syncStreamStatuses,
   saveStreamHistory,
+  isFFmpegStreamingToKey, // Check if FFmpeg is running for a stream key
   // Duration tracking exports
   getDurationInfo,
   getRemainingTime,

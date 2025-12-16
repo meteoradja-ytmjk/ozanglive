@@ -4420,22 +4420,18 @@ async function startServer() {
       console.log(`  http://localhost:${port}`);
     }
     
-    // Reset live streams to offline on startup (in case of crash recovery)
+    // FIXED: Don't reset live streams on startup - let syncStreamStatuses handle it
+    // The old code was resetting ALL live streams to offline, even if FFmpeg was still running
+    // This caused status mismatch when the app restarted but streams were still active
     try {
-      const streams = await Stream.findAll(null, 'live');
-      if (streams && streams.length > 0) {
-        console.log(`Resetting ${streams.length} live streams to offline state...`);
-        for (const stream of streams) {
-          try {
-            await Stream.updateStatus(stream.id, 'offline');
-          } catch (updateError) {
-            console.error(`Error resetting stream ${stream.id}:`, updateError.message);
-          }
-        }
+      const liveStreams = await Stream.findAll(null, 'live');
+      if (liveStreams && liveStreams.length > 0) {
+        console.log(`[Startup] Found ${liveStreams.length} streams marked as 'live' in database`);
+        console.log('[Startup] Status will be verified by syncStreamStatuses after scheduler init');
+        // Don't reset here - syncStreamStatuses will check if FFmpeg is actually running
       }
     } catch (error) {
-      console.error('Error resetting stream statuses:', error.message);
-      // Don't crash on startup - continue running
+      console.error('[Startup] Error checking live streams:', error.message);
     }
     
     // Initialize scheduler
