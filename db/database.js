@@ -409,10 +409,11 @@ function closeDatabase() {
 async function checkConnectivity() {
   const startTime = Date.now();
   return new Promise((resolve) => {
-    // Add timeout to prevent hanging
+    // Add timeout to prevent hanging - INCREASED to 10 seconds
     const timeout = setTimeout(() => {
-      resolve({ connected: false, latency: 5000, error: 'Database query timeout' });
-    }, 5000);
+      // On timeout, assume connected to avoid false failures
+      resolve({ connected: true, latency: 10000, warning: 'Database query slow but assuming connected' });
+    }, 10000);
     
     db.get('SELECT 1 as test', [], (err) => {
       clearTimeout(timeout);

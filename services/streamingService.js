@@ -87,8 +87,31 @@ function cleanupOldStreamData() {
 }
 
 /**
+ * Check if any FFmpeg process is currently running
+ * @returns {Promise<boolean>} True if any FFmpeg process is running
+ */
+async function isAnyFFmpegRunning() {
+  return new Promise((resolve) => {
+    const isWindows = process.platform === 'win32';
+    const cmd = isWindows 
+      ? `tasklist /FI "IMAGENAME eq ffmpeg.exe" /NH`
+      : `pgrep -x ffmpeg`;
+    
+    exec(cmd, { timeout: 5000 }, (error, stdout) => {
+      if (error) {
+        resolve(false);
+        return;
+      }
+      // Check if any FFmpeg process found
+      const hasFFmpeg = stdout && stdout.trim().length > 0;
+      resolve(hasFFmpeg);
+    });
+  });
+}
+
+/**
  * Check if FFmpeg is streaming to a specific RTMP URL
- * This is used to detect if a stream is still running after app restart
+ * Uses multiple methods to detect running FFmpeg processes
  * @param {string} streamKey - The stream key to search for
  * @returns {Promise<boolean>} True if FFmpeg process found streaming to this key
  */
@@ -96,23 +119,35 @@ async function isFFmpegStreamingToKey(streamKey) {
   if (!streamKey) return false;
   
   return new Promise((resolve) => {
-    // Use pgrep/ps to find FFmpeg processes
     const isWindows = process.platform === 'win32';
-    const cmd = isWindows 
-      ? `tasklist /FI "IMAGENAME eq ffmpeg.exe" /FO CSV`
-      : `ps aux | grep -E "ffmpeg.*${streamKey}" | grep -v grep`;
     
-    exec(cmd, { timeout: 5000 }, (error, stdout) => {
+    // On Linux, use ps with wide output to see full command line
+    // Escape special characters in stream key for grep
+    const escapedKey = streamKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    
+    const cmd = isWindows 
+      ? `wmic process where "name='ffmpeg.exe'" get commandline /format:list`
+      : `ps auxww | grep ffmpeg | grep -v grep`;
+    
+    exec(cmd, { timeout: 10000, maxBuffer: 1024 * 1024 }, (error, stdout) => {
       if (error) {
-        // No process found or command failed
+        // Command failed - assume FFmpeg might still be running
+        // Don't change status on error
+        console.log(`[StreamingService] FFmpeg check command failed: ${error.message}`);
+        resolve(true); // Assume running to be safe
+        return;
+      }
+      
+      if (!stdout || stdout.trim().length === 0) {
+        // No FFmpeg processes at all
         resolve(false);
         return;
       }
       
       // Check if output contains the stream key
-      const found = stdout && stdout.includes(streamKey);
+      const found = stdout.includes(streamKey);
       if (found) {
-        console.log(`[StreamingService] Found active FFmpeg process for stream key: ${streamKey.substring(0, 10)}...`);
+        console.log(`[StreamingService] Found FFmpeg process with stream key: ${streamKey.substring(0, 8)}...`);
       }
       resolve(found);
     });
@@ -1048,6 +1083,10 @@ async function syncStreamStatuses() {
   try {
     console.log('[StreamingService] Syncing stream statuses...');
     
+    // First check if ANY FFmpeg is running
+    const anyFFmpegRunning = await isAnyFFmpegRunning();
+    console.log(`[StreamingService] Any FFmpeg running: ${anyFFmpegRunning}`);
+    
     let liveStreams = [];
     try {
       liveStreams = await Stream.findAll(null, 'live');
@@ -1056,31 +1095,58 @@ async function syncStreamStatuses() {
       return; // Don't crash, just skip this sync
     }
     
+    if (liveStreams.length === 0) {
+      console.log('[StreamingService] No live streams in database');
+    } else {
+      console.log(`[StreamingService] Found ${liveStreams.length} live streams in database`);
+    }
+    
     for (const stream of liveStreams) {
       try {
         const isInMemory = activeStreams.has(stream.id);
         
-        if (!isInMemory) {
-          // Stream not in memory - check if FFmpeg is actually still running
-          // This handles the case where app restarted but FFmpeg is still streaming
-          const isFFmpegRunning = await isFFmpegStreamingToKey(stream.stream_key);
+        if (isInMemory) {
+          // Stream is in memory - it's definitely running from this app instance
+          console.log(`[StreamingService] Stream ${stream.id} is active in memory - status OK`);
+          continue;
+        }
+        
+        // Stream not in memory - be VERY careful before changing status
+        // If ANY FFmpeg is running, check if it's this stream's key
+        if (anyFFmpegRunning) {
+          const isThisStreamRunning = await isFFmpegStreamingToKey(stream.stream_key);
           
-          if (isFFmpegRunning) {
-            // FFmpeg is still running! Keep status as 'live'
-            console.log(`[StreamingService] Stream ${stream.id} not in memory but FFmpeg still running - keeping 'live' status`);
-            // Note: We can't control this FFmpeg process, but status stays accurate
+          if (isThisStreamRunning) {
+            // FFmpeg is running with this stream key - keep status as 'live'
+            console.log(`[StreamingService] Stream ${stream.id} - FFmpeg running with this key - keeping 'live'`);
             continue;
           }
           
-          // FFmpeg not running - update status
-          console.log(`[StreamingService] Stream ${stream.id}: not in memory and FFmpeg not running - updating status`);
-          const newStatus = getStatusAfterStreamEnd(stream);
-          await Stream.updateStatus(stream.id, newStatus);
-          console.log(`[StreamingService] Updated stream ${stream.id} status to '${newStatus}'`);
+          // FFmpeg is running but not with this stream's key
+          // Still be conservative - maybe the check failed
+          // Only update if stream has been "live" for more than 30 minutes without activity
+          const startTime = stream.start_time ? new Date(stream.start_time) : null;
+          const now = new Date();
+          const runningMinutes = startTime ? (now - startTime) / 60000 : 0;
+          
+          // If stream started recently (< 30 min), don't change status
+          // This prevents false positives during app restarts
+          if (runningMinutes < 30) {
+            console.log(`[StreamingService] Stream ${stream.id} started ${runningMinutes.toFixed(0)} min ago - keeping 'live' (conservative)`);
+            continue;
+          }
         }
+        
+        // No FFmpeg running at all, or stream has been "live" for a long time
+        // Safe to update status
+        console.log(`[StreamingService] Stream ${stream.id}: no FFmpeg detected - updating status`);
+        const newStatus = getStatusAfterStreamEnd(stream);
+        await Stream.updateStatus(stream.id, newStatus);
+        console.log(`[StreamingService] Updated stream ${stream.id} status to '${newStatus}'`);
+        
       } catch (streamError) {
         console.error(`[StreamingService] Error syncing stream ${stream.id}:`, streamError.message);
-        // Continue with next stream
+        // On error, DON'T change status - be conservative
       }
     }
     
@@ -1117,15 +1183,16 @@ async function syncStreamStatuses() {
     // Don't rethrow - let the sync continue on next interval
   }
 }
-// OPTIMIZED: Sync every 5 minutes to keep status accurate
-// Wrapped with error handling to prevent crashes
+// OPTIMIZED: Sync every 15 minutes - be conservative to avoid false status changes
+// The sync is mainly for cleanup, not for real-time status
+// Real-time status is handled by FFmpeg exit events
 setInterval(async () => {
   try {
     await syncStreamStatuses();
   } catch (error) {
     console.error('[StreamingService] Error in syncStreamStatuses interval:', error.message);
   }
-}, 5 * 60 * 1000); // 5 minutes
+}, 15 * 60 * 1000); // 15 minutes
 function isStreamActive(streamId) {
   return activeStreams.has(streamId);
 }
@@ -1204,6 +1271,7 @@ module.exports = {
   syncStreamStatuses,
   saveStreamHistory,
   isFFmpegStreamingToKey, // Check if FFmpeg is running for a stream key
+  isAnyFFmpegRunning, // Check if any FFmpeg process is running
   // Duration tracking exports
   getDurationInfo,
   getRemainingTime,

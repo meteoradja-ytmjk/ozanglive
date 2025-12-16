@@ -151,15 +151,15 @@ process.on('unhandledRejection', (reason, promise) => {
   // This prevents the app from crashing on unhandled promise rejections
 });
 
-// OPTIMIZED: Memory monitoring - check every 5 minutes (was 2 minutes)
-const MEMORY_CHECK_INTERVAL = 5 * 60 * 1000; // 5 minutes
-const MEMORY_WARNING_THRESHOLD = 0.65; // 65% of heap (lower threshold for earlier GC)
-const MEMORY_CRITICAL_THRESHOLD = 0.80; // 80% of heap (lower for 1GB VPS)
+// Memory monitoring - check every 10 minutes (less frequent to reduce overhead)
+const MEMORY_CHECK_INTERVAL = 10 * 60 * 1000; // 10 minutes
+const MEMORY_WARNING_THRESHOLD = 0.75; // 75% of heap
+const MEMORY_CRITICAL_THRESHOLD = 0.90; // 90% of heap - only critical at very high usage
 
-// Self-healing: Track consecutive failures and restart if needed
+// Self-healing: Track consecutive failures - MORE TOLERANT
 let consecutiveHealthFailures = 0;
-const MAX_HEALTH_FAILURES = 3; // Restart after 3 consecutive failures
-const SELF_HEALTH_CHECK_INTERVAL = 2 * 60 * 1000; // OPTIMIZED: Check every 2 minutes (was 1 minute)
+const MAX_HEALTH_FAILURES = 10; // INCREASED: Restart only after 10 consecutive failures (was 3)
+const SELF_HEALTH_CHECK_INTERVAL = 5 * 60 * 1000; // Check every 5 minutes (was 2 minutes)
 
 setInterval(() => {
   try {
@@ -209,29 +209,28 @@ setInterval(async () => {
       consecutiveHealthFailures = 0;
     }
     
-    // Check memory usage - force GC if high
+    // Check memory usage - force GC if high (but don't restart)
     const memUsage = process.memoryUsage();
     const heapUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024);
     
-    // OPTIMIZED: Lower threshold to 350MB for 1GB VPS
-    if (heapUsedMB > 350 && global.gc) {
+    // Only run GC if heap is above 450MB (more tolerant for 1GB VPS)
+    if (heapUsedMB > 450 && global.gc) {
       console.log(`[SelfHeal] High memory (${heapUsedMB}MB), running GC...`);
       global.gc();
     }
     
-    // If too many failures, exit and let PM2 restart
+    // REMOVED: Don't auto-restart on health check failures
+    // This was causing the app to crash while streams were still running
+    // PM2 will handle restarts if the app truly crashes
     if (consecutiveHealthFailures >= MAX_HEALTH_FAILURES) {
-      console.error('[SelfHeal] Too many consecutive failures, triggering restart...');
-      process.exit(1); // PM2 will restart
+      console.error(`[SelfHeal] ${consecutiveHealthFailures} consecutive failures - logging only, NOT restarting`);
+      // Reset counter to avoid log spam
+      consecutiveHealthFailures = 0;
     }
   } catch (error) {
     consecutiveHealthFailures++;
     console.error(`[SelfHeal] Health check error: ${error.message} (${consecutiveHealthFailures}/${MAX_HEALTH_FAILURES})`);
-    
-    if (consecutiveHealthFailures >= MAX_HEALTH_FAILURES) {
-      console.error('[SelfHeal] Too many consecutive failures, triggering restart...');
-      process.exit(1);
-    }
+    // Don't restart - just log the error
   }
 }, SELF_HEALTH_CHECK_INTERVAL);
 
@@ -4442,13 +4441,14 @@ async function startServer() {
       // Don't crash - scheduler can be retried
     }
     
-    // Sync stream statuses
-    try {
-      await streamingService.syncStreamStatuses();
-    } catch (error) {
-      console.error('Failed to sync stream statuses:', error.message);
-      // Don't crash - sync will retry on interval
-    }
+    // REMOVED: Don't sync stream statuses on startup
+    // This was causing live streams to be incorrectly marked as offline
+    // The periodic sync (every 15 min) will handle cleanup later
+    // Status changes should only happen when:
+    // 1. User manually starts/stops a stream
+    // 2. FFmpeg process exits (handled by exit event)
+    // 3. Duration is reached (handled by scheduler)
+    console.log('[Startup] Skipping initial sync - status will be managed by events');
     
     console.log('StreamFlow startup complete');
   });

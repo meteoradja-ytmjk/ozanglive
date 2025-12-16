@@ -4,12 +4,12 @@ const { calculateDurationSeconds, formatDuration } = require('../utils/durationC
 
 const scheduledTerminations = new Map();
 const recentlyTriggeredStreams = new Map(); // Track recently triggered recurring streams
-const SCHEDULE_LOOKAHEAD_SECONDS = 60;
-const RECURRING_CHECK_INTERVAL = 2 * 60 * 1000; // OPTIMIZED: Check every 2 minutes (was 1 minute)
-const TRIGGER_COOLDOWN_MS = 2 * 60 * 1000; // 2 minute cooldown to prevent double triggers
-const DURATION_CHECK_INTERVAL = 60 * 1000; // OPTIMIZED: Check every 60 seconds (was 30 seconds)
-const FORCE_STOP_BUFFER_MS = 60 * 1000; // Force stop streams that exceed duration by more than 1 minute
-const CLEANUP_INTERVAL = 5 * 60 * 1000; // Clean up old entries every 5 minutes
+const SCHEDULE_LOOKAHEAD_SECONDS = 120; // INCREASED: Look ahead 2 minutes
+const RECURRING_CHECK_INTERVAL = 3 * 60 * 1000; // OPTIMIZED: Check every 3 minutes (was 2 minutes)
+const TRIGGER_COOLDOWN_MS = 3 * 60 * 1000; // 3 minute cooldown to prevent double triggers
+const DURATION_CHECK_INTERVAL = 2 * 60 * 1000; // OPTIMIZED: Check every 2 minutes (was 60 seconds)
+const FORCE_STOP_BUFFER_MS = 2 * 60 * 1000; // Force stop streams that exceed duration by more than 2 minutes
+const CLEANUP_INTERVAL = 10 * 60 * 1000; // Clean up old entries every 10 minutes
 
 let streamingService = null;
 let initialized = false;
@@ -52,9 +52,10 @@ function init(streamingServiceInstance) {
     }
   };
   
-  scheduleIntervalId = setInterval(safeCheckScheduledStreams, 60 * 1000);
-  durationIntervalId = setInterval(safeCheckStreamDurations, DURATION_CHECK_INTERVAL);
-  recurringIntervalId = setInterval(safeCheckRecurringSchedules, RECURRING_CHECK_INTERVAL);
+  // OPTIMIZED: Less frequent checks to reduce CPU/memory usage
+  scheduleIntervalId = setInterval(safeCheckScheduledStreams, 2 * 60 * 1000); // Every 2 minutes
+  durationIntervalId = setInterval(safeCheckStreamDurations, DURATION_CHECK_INTERVAL); // Every 2 minutes
+  recurringIntervalId = setInterval(safeCheckRecurringSchedules, RECURRING_CHECK_INTERVAL); // Every 3 minutes
   
   // MEMORY OPTIMIZATION: Periodic cleanup of old entries
   cleanupIntervalId = setInterval(() => {
