@@ -275,6 +275,10 @@ async function createCoreTablesAsync() {
   await runTableQuery(`ALTER TABLE streams ADD COLUMN recurring_time TEXT`, 'streams.recurring_time');
   await runTableQuery(`ALTER TABLE streams ADD COLUMN recurring_enabled INTEGER DEFAULT 1`, 'streams.recurring_enabled');
   await runTableQuery(`ALTER TABLE streams ADD COLUMN original_settings TEXT`, 'streams.original_settings');
+  
+  // YouTube status sync columns
+  await runTableQuery(`ALTER TABLE streams ADD COLUMN youtube_broadcast_id TEXT`, 'streams.youtube_broadcast_id');
+  await runTableQuery(`ALTER TABLE streams ADD COLUMN youtube_lifecycle_status TEXT`, 'streams.youtube_lifecycle_status');
 
   // Migrate stream_duration_hours to stream_duration_minutes
   await runTableQuery(`UPDATE streams SET stream_duration_minutes = stream_duration_hours * 60 

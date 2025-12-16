@@ -4,6 +4,7 @@ const path = require('path');
 const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
 const schedulerService = require('./schedulerService');
 const LiveLimitService = require('./liveLimitService');
+const youtubeStatusSync = require('./youtubeStatusSync');
 const { v4: uuidv4 } = require('uuid');
 const { db } = require('../db/database');
 const Stream = require('../models/Stream');
@@ -770,6 +771,17 @@ async function startStream(streamId) {
     await Stream.updateStatus(streamId, 'live', stream.user_id, { startTimeOverride: startTimeIso });
     console.log(`[StreamingService] Stream ${streamId} confirmed running, status updated to live`);
     
+    // Start YouTube status sync if platform is YouTube
+    if (stream.platform === 'YouTube' && stream.stream_key) {
+      try {
+        youtubeStatusSync.setStreamingService(module.exports);
+        await youtubeStatusSync.startMonitoring(streamId, stream.user_id, stream.stream_key);
+      } catch (ytErr) {
+        console.log(`[StreamingService] YouTube status sync not started: ${ytErr.message}`);
+        // Continue without sync - not critical
+      }
+    }
+    
     ffmpegProcess.stdout.on('data', (data) => {
       const message = data.toString().trim();
       if (message) {
@@ -1060,6 +1072,9 @@ async function startStream(streamId) {
 }
 async function stopStream(streamId) {
   try {
+    // Stop YouTube status sync monitoring first
+    youtubeStatusSync.stopMonitoring(streamId);
+    
     const ffmpegProcess = activeStreams.get(streamId);
     const isActive = ffmpegProcess !== undefined;
     console.log(`[StreamingService] Stop request for stream ${streamId}, isActive: ${isActive}`);
@@ -1302,6 +1317,24 @@ async function saveStreamHistory(stream) {
     return false;
   }
 }
+/**
+ * Get YouTube status for a stream
+ * @param {string} streamId - Stream ID
+ * @returns {{lifeCycleStatus: string, displayStatus: string, lastChecked: Date} | null}
+ */
+function getYouTubeStatus(streamId) {
+  return youtubeStatusSync.getYouTubeStatus(streamId);
+}
+
+/**
+ * Check if a stream is being monitored for YouTube status
+ * @param {string} streamId - Stream ID
+ * @returns {boolean}
+ */
+function isYouTubeMonitored(streamId) {
+  return youtubeStatusSync.isMonitoring(streamId);
+}
+
 module.exports = {
   startStream,
   stopStream,
@@ -1317,6 +1350,9 @@ module.exports = {
   getRemainingTime,
   isStreamEndingSoon,
   isStreamDurationExceeded,
+  // YouTube status sync exports
+  getYouTubeStatus,
+  isYouTubeMonitored,
   // Export for testing
   buildFFmpegArgsWithAudio,
   buildFFmpegArgsVideoOnly

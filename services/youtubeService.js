@@ -348,6 +348,167 @@ class YouTubeService {
       thumbnailUrl: response.data.items?.[0]?.default?.url || ''
     };
   }
+
+  /**
+   * Get broadcast status by ID
+   * Used for status sync to check if broadcast is still active
+   * @param {string} accessToken - Access token
+   * @param {string} broadcastId - Broadcast ID
+   * @returns {Promise<{lifeCycleStatus: string, exists: boolean, error?: string}>}
+   */
+  async getBroadcastStatus(accessToken, broadcastId) {
+    try {
+      const oauth2Client = new google.auth.OAuth2();
+      oauth2Client.setCredentials({ access_token: accessToken });
+      
+      const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+      
+      const response = await youtube.liveBroadcasts.list({
+        part: 'status',
+        id: broadcastId
+      });
+      
+      if (!response.data.items || response.data.items.length === 0) {
+        return { exists: false, lifeCycleStatus: null };
+      }
+      
+      const broadcast = response.data.items[0];
+      return {
+        exists: true,
+        lifeCycleStatus: broadcast.status.lifeCycleStatus
+      };
+    } catch (error) {
+      // Check for quota exceeded error
+      if (error.code === 403 && error.message?.includes('quota')) {
+        return { exists: true, lifeCycleStatus: null, error: 'quota_exceeded' };
+      }
+      // For other errors, assume broadcast might still exist
+      return { exists: true, lifeCycleStatus: null, error: error.message };
+    }
+  }
+
+  /**
+   * Find broadcast by stream key
+   * Searches active broadcasts (live, testing, ready) to find one matching the stream key
+   * @param {string} accessToken - Access token
+   * @param {string} streamKey - Stream key to search for
+   * @returns {Promise<{broadcastId: string, lifeCycleStatus: string} | null>}
+   */
+  async findBroadcastByStreamKey(accessToken, streamKey) {
+    try {
+      const oauth2Client = new google.auth.OAuth2();
+      oauth2Client.setCredentials({ access_token: accessToken });
+      
+      const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+      
+      // Get all active broadcasts (live, testing, ready, upcoming)
+      const statuses = ['active', 'upcoming'];
+      let allBroadcasts = [];
+      
+      for (const status of statuses) {
+        try {
+          const response = await youtube.liveBroadcasts.list({
+            part: 'status,contentDetails',
+            broadcastStatus: status,
+            maxResults: 50
+          });
+          
+          if (response.data.items) {
+            allBroadcasts = allBroadcasts.concat(response.data.items);
+          }
+        } catch (err) {
+          console.log(`[YouTubeService] Error fetching ${status} broadcasts:`, err.message);
+        }
+      }
+      
+      // For each broadcast, get the bound stream and check stream key
+      for (const broadcast of allBroadcasts) {
+        if (!broadcast.contentDetails?.boundStreamId) continue;
+        
+        try {
+          const streamResponse = await youtube.liveStreams.list({
+            part: 'cdn',
+            id: broadcast.contentDetails.boundStreamId
+          });
+          
+          if (streamResponse.data.items && streamResponse.data.items.length > 0) {
+            const stream = streamResponse.data.items[0];
+            const broadcastStreamKey = stream.cdn?.ingestionInfo?.streamName;
+            
+            if (broadcastStreamKey === streamKey) {
+              return {
+                broadcastId: broadcast.id,
+                lifeCycleStatus: broadcast.status.lifeCycleStatus
+              };
+            }
+          }
+        } catch (err) {
+          console.log(`[YouTubeService] Error fetching stream for broadcast ${broadcast.id}:`, err.message);
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('[YouTubeService] Error finding broadcast by stream key:', error.message);
+      return null;
+    }
+  }
+
+  /**
+   * List active broadcasts (live and testing status)
+   * Used for status sync to monitor ongoing broadcasts
+   * @param {string} accessToken - Access token
+   * @returns {Promise<Array<{id: string, streamKey: string, lifeCycleStatus: string}>>}
+   */
+  async listActiveBroadcasts(accessToken) {
+    try {
+      const oauth2Client = new google.auth.OAuth2();
+      oauth2Client.setCredentials({ access_token: accessToken });
+      
+      const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+      
+      // Get active broadcasts (includes live and testing)
+      const response = await youtube.liveBroadcasts.list({
+        part: 'status,contentDetails',
+        broadcastStatus: 'active',
+        maxResults: 50
+      });
+      
+      const broadcasts = response.data.items || [];
+      const result = [];
+      
+      // Get stream key for each broadcast
+      for (const broadcast of broadcasts) {
+        let streamKey = '';
+        
+        if (broadcast.contentDetails?.boundStreamId) {
+          try {
+            const streamResponse = await youtube.liveStreams.list({
+              part: 'cdn',
+              id: broadcast.contentDetails.boundStreamId
+            });
+            
+            if (streamResponse.data.items && streamResponse.data.items.length > 0) {
+              streamKey = streamResponse.data.items[0].cdn?.ingestionInfo?.streamName || '';
+            }
+          } catch (err) {
+            console.log(`[YouTubeService] Error fetching stream for broadcast ${broadcast.id}:`, err.message);
+          }
+        }
+        
+        result.push({
+          id: broadcast.id,
+          streamKey,
+          lifeCycleStatus: broadcast.status.lifeCycleStatus
+        });
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('[YouTubeService] Error listing active broadcasts:', error.message);
+      return [];
+    }
+  }
 }
 
 module.exports = new YouTubeService();

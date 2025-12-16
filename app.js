@@ -2327,6 +2327,39 @@ app.get('/api/streams', isAuthenticated, async (req, res) => {
     res.status(500).json({ success: false, error: 'Failed to fetch streams' });
   }
 });
+
+// Get YouTube status for a stream
+app.get('/api/streams/:id/youtube-status', isAuthenticated, async (req, res) => {
+  try {
+    const streamId = req.params.id;
+    const stream = await Stream.findById(streamId);
+    
+    if (!stream) {
+      return res.status(404).json({ success: false, error: 'Stream not found' });
+    }
+    
+    // Check if stream belongs to user
+    if (stream.user_id !== req.session.userId) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+    
+    // Get YouTube status from streaming service
+    const youtubeStatus = streamingService.getYouTubeStatus(streamId);
+    const isMonitored = streamingService.isYouTubeMonitored(streamId);
+    
+    res.json({
+      success: true,
+      streamId,
+      platform: stream.platform,
+      isYouTube: stream.platform === 'YouTube',
+      isMonitored,
+      youtubeStatus: youtubeStatus || null
+    });
+  } catch (error) {
+    console.error('Error fetching YouTube status:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch YouTube status' });
+  }
+});
 app.post('/api/streams', isAuthenticated, [
   body('streamTitle').trim().isLength({ min: 1 }).withMessage('Title is required'),
   body('rtmpUrl').trim().isLength({ min: 1 }).withMessage('RTMP URL is required'),
