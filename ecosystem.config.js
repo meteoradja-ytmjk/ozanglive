@@ -32,20 +32,23 @@ module.exports = {
       instances: 1, // Single instance (streaming apps shouldn't use cluster mode)
       exec_mode: 'fork', // Fork mode for single instance
       
-      // Auto-restart configuration - MORE AGGRESSIVE
+      // Auto-restart configuration - BALANCED for stability
       autorestart: true,
       watch: false, // Don't watch for file changes in production
-      max_restarts: 50, // Allow more restarts (was 10)
-      min_uptime: '5s', // Faster detection (was 10s)
-      restart_delay: 2000, // Faster restart (was 4000)
+      max_restarts: 100, // Allow many restarts (app should be resilient)
+      min_uptime: '10s', // Wait 10 seconds before considering app stable
+      restart_delay: 3000, // Wait 3 seconds between restarts
       
-      // Memory management - MORE TOLERANT for 1GB VPS
-      max_memory_restart: '800M', // INCREASED: Restart at 800MB (was 600M) - give more room before restart
+      // Memory management - CONSERVATIVE for 1GB VPS
+      // CRITICAL: Set lower to prevent OOM killer from killing the process
+      max_memory_restart: '600M', // Restart at 600MB to leave room for system
       
       // Environment variables
       env: {
         NODE_ENV: 'production',
-        PORT: 7575
+        PORT: 7575,
+        // CRITICAL: Disable Node.js memory warnings that can cause issues
+        NODE_OPTIONS: '--max-old-space-size=512 --no-warnings'
       },
       
       env_development: {
@@ -53,33 +56,40 @@ module.exports = {
         PORT: 7575
       },
       
-      // Logging
+      // Logging - OPTIMIZED to prevent disk space issues
       log_file: './logs/pm2-combined.log',
       out_file: './logs/pm2-out.log',
       error_file: './logs/pm2-error.log',
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
       merge_logs: true,
+      max_size: '50M', // Rotate logs at 50MB
+      retain: 3, // Keep only 3 log files
       
-      // Graceful shutdown - FASTER
-      kill_timeout: 15000, // 15 seconds (was 30)
-      listen_timeout: 8000, // 8 seconds (was 10)
+      // Graceful shutdown
+      kill_timeout: 20000, // 20 seconds to allow cleanup
+      listen_timeout: 10000, // 10 seconds to start listening
       
-      // Crash handling - FASTER RECOVERY
-      exp_backoff_restart_delay: 50, // Faster backoff (was 100)
+      // Crash handling - STABLE recovery
+      exp_backoff_restart_delay: 100, // Start with 100ms delay
       
-      // Node.js arguments - BALANCED for 1GB VPS (not too aggressive)
-      node_args: [
-        '--max-old-space-size=512', // INCREASED: Allow up to 512MB heap (was 400MB)
-        '--expose-gc', // Allow manual garbage collection
-        '--optimize-for-size' // Optimize for memory
-        // REMOVED: --gc-interval and --max-semi-space-size (too aggressive, can cause issues)
-      ],
+      // Node.js arguments - REMOVED from here, using NODE_OPTIONS instead
+      // This prevents issues with argument parsing
+      node_args: [],
       
-      // Cron restart - ENABLED: restart every day at 4 AM to prevent memory buildup
+      // Cron restart - ENABLED: restart every day at 4 AM WIB to prevent memory buildup
       cron_restart: '0 4 * * *',
       
       // Source map support for better error traces
-      source_map_support: true
+      source_map_support: true,
+      
+      // CRITICAL: Don't combine with other processes
+      combine_logs: false,
+      
+      // CRITICAL: Increase wait time for ready signal
+      wait_ready: true,
+      
+      // CRITICAL: Don't kill on SIGINT during development
+      treekill: true
     }
   ]
 };

@@ -341,6 +341,9 @@ class Stream {
    */
   static findRecurringSchedules(scheduleType = null) {
     return new Promise((resolve, reject) => {
+      // OPTIMIZED: Exclude live streams at DB level to reduce processing
+      // Include 'scheduled' and 'offline' status for recurring streams
+      // (offline status may occur if stream was stopped manually or due to error)
       let query = `
         SELECT s.*, 
                v.title AS video_title, 
@@ -354,6 +357,7 @@ class Stream {
         LEFT JOIN videos v ON s.video_id = v.id
         WHERE s.recurring_enabled = 1
         AND s.schedule_type IN ('daily', 'weekly')
+        AND s.status IN ('scheduled', 'offline')
       `;
       const params = [];
       if (scheduleType) {

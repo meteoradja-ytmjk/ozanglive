@@ -24,12 +24,16 @@ const db = new sqlite3.Database(dbPath, (err) => {
     console.error('Error connecting to database:', err.message);
     dbInitError = err;
   } else {
-    // Optimize SQLite for better performance
-    db.run('PRAGMA journal_mode = WAL'); // Write-Ahead Logging for better concurrency
-    db.run('PRAGMA synchronous = NORMAL'); // Faster writes, still safe
-    db.run('PRAGMA cache_size = 10000'); // Increase cache
-    db.run('PRAGMA temp_store = MEMORY'); // Store temp tables in memory
-    db.run('PRAGMA busy_timeout = 30000'); // Wait 30 seconds if database is locked
+    // Optimize SQLite for better performance and stability
+    db.serialize(() => {
+      db.run('PRAGMA journal_mode = WAL'); // Write-Ahead Logging for better concurrency
+      db.run('PRAGMA synchronous = NORMAL'); // Faster writes, still safe
+      db.run('PRAGMA cache_size = 5000'); // REDUCED: Lower cache for 1GB VPS (was 10000)
+      db.run('PRAGMA temp_store = MEMORY'); // Store temp tables in memory
+      db.run('PRAGMA busy_timeout = 60000'); // INCREASED: Wait 60 seconds if database is locked (was 30)
+      db.run('PRAGMA wal_autocheckpoint = 1000'); // Checkpoint every 1000 pages
+      db.run('PRAGMA mmap_size = 0'); // DISABLED: Memory mapping can cause issues on low-memory systems
+    });
     
     dbInitPromise = createTables();
   }

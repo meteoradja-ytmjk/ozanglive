@@ -4,12 +4,13 @@ const { calculateDurationSeconds, formatDuration } = require('../utils/durationC
 
 const scheduledTerminations = new Map();
 const recentlyTriggeredStreams = new Map(); // Track recently triggered recurring streams
-const SCHEDULE_LOOKAHEAD_SECONDS = 120; // INCREASED: Look ahead 2 minutes
-const RECURRING_CHECK_INTERVAL = 3 * 60 * 1000; // OPTIMIZED: Check every 3 minutes (was 2 minutes)
-const TRIGGER_COOLDOWN_MS = 3 * 60 * 1000; // 3 minute cooldown to prevent double triggers
-const DURATION_CHECK_INTERVAL = 2 * 60 * 1000; // OPTIMIZED: Check every 2 minutes (was 60 seconds)
+const SCHEDULE_LOOKAHEAD_SECONDS = 180; // Look ahead 3 minutes for one-time schedules
+const RECURRING_CHECK_INTERVAL = 60 * 1000; // Check recurring schedules every 1 minute (CRITICAL for accuracy)
+const ONCE_SCHEDULE_CHECK_INTERVAL = 60 * 1000; // Check one-time schedules every 1 minute
+const TRIGGER_COOLDOWN_MS = 10 * 60 * 1000; // 10 minute cooldown to prevent double triggers (longer than any check interval)
+const DURATION_CHECK_INTERVAL = 2 * 60 * 1000; // Check durations every 2 minutes
 const FORCE_STOP_BUFFER_MS = 2 * 60 * 1000; // Force stop streams that exceed duration by more than 2 minutes
-const CLEANUP_INTERVAL = 10 * 60 * 1000; // Clean up old entries every 10 minutes
+const CLEANUP_INTERVAL = 60 * 60 * 1000; // Clean up stale entries every 1 hour
 
 let streamingService = null;
 let initialized = false;
@@ -25,7 +26,7 @@ function init(streamingServiceInstance) {
   }
   streamingService = streamingServiceInstance;
   initialized = true;
-  console.log('Stream scheduler initialized with 30-second duration check interval');
+  console.log('[Scheduler] Stream scheduler initialized');
   
   // Wrap interval callbacks with error handling to prevent crashes
   const safeCheckScheduledStreams = async () => {
@@ -52,17 +53,45 @@ function init(streamingServiceInstance) {
     }
   };
   
-  // OPTIMIZED: Less frequent checks to reduce CPU/memory usage
-  scheduleIntervalId = setInterval(safeCheckScheduledStreams, 2 * 60 * 1000); // Every 2 minutes
-  durationIntervalId = setInterval(safeCheckStreamDurations, DURATION_CHECK_INTERVAL); // Every 2 minutes
-  recurringIntervalId = setInterval(safeCheckRecurringSchedules, RECURRING_CHECK_INTERVAL); // Every 3 minutes
+  // Schedule checks - more frequent for better accuracy
+  scheduleIntervalId = setInterval(safeCheckScheduledStreams, ONCE_SCHEDULE_CHECK_INTERVAL); // Every 1 minute for one-time schedules
+  durationIntervalId = setInterval(safeCheckStreamDurations, DURATION_CHECK_INTERVAL); // Every 2 minutes for duration checks
+  recurringIntervalId = setInterval(safeCheckRecurringSchedules, RECURRING_CHECK_INTERVAL); // Every 1 minute for recurring schedules
   
-  // REMOVED: Cleanup interval - not needed, maps are small
+  // MEMORY MANAGEMENT: Cleanup stale entries from Maps
+  cleanupIntervalId = setInterval(cleanupStaleMaps, CLEANUP_INTERVAL);
   
-  // Initial checks with error handling
+  console.log('[Scheduler] Intervals set: once-schedules=1min, recurring=1min, duration=2min, cleanup=1hr');
+  
+  // Initial checks with error handling (run immediately on startup)
   safeCheckScheduledStreams();
   safeCheckStreamDurations();
   safeCheckRecurringSchedules();
+}
+
+/**
+ * Clean up stale entries from Maps to prevent memory leaks
+ */
+function cleanupStaleMaps() {
+  try {
+    const now = Date.now();
+    let cleaned = 0;
+    
+    // Clean recentlyTriggeredStreams - remove entries older than 2x cooldown
+    const maxAge = TRIGGER_COOLDOWN_MS * 2;
+    for (const [streamId, timestamp] of recentlyTriggeredStreams) {
+      if (now - timestamp > maxAge) {
+        recentlyTriggeredStreams.delete(streamId);
+        cleaned++;
+      }
+    }
+    
+    if (cleaned > 0) {
+      console.log(`[Scheduler] Cleaned ${cleaned} stale entries from recentlyTriggeredStreams`);
+    }
+  } catch (error) {
+    console.error('[Scheduler] Error during cleanup:', error.message);
+  }
 }
 async function checkScheduledStreams() {
   try {
@@ -73,12 +102,10 @@ async function checkScheduledStreams() {
     const now = new Date();
     const lookAheadTime = new Date(now.getTime() + SCHEDULE_LOOKAHEAD_SECONDS * 1000);
     
-    // OPTIMIZED: Only log every 5 minutes to reduce log spam
+    // Log every check to help debugging
     const currentHours = now.getHours();
     const currentMinutes = now.getMinutes();
-    if (currentMinutes % 5 === 0) {
-      console.log(`[Scheduler] Checking once schedules at ${currentHours}:${String(currentMinutes).padStart(2, '0')} local`);
-    }
+    console.log(`[Scheduler] Checking once schedules at ${currentHours}:${String(currentMinutes).padStart(2, '0')} local, lookAhead=${SCHEDULE_LOOKAHEAD_SECONDS}s`);
     
     let streams = [];
     try {
@@ -350,14 +377,16 @@ function shouldTriggerDaily(stream, currentTime = new Date()) {
   const wibTime = getWIBTime(currentTime);
   const currentTotalMinutes = wibTime.hours * 60 + wibTime.minutes;
 
-  // Calculate time difference
+  // Calculate time difference (positive = current time is after scheduled time)
   const timeDiff = currentTotalMinutes - scheduleMinutes;
   
   // Trigger if:
-  // - Within 1 minute before scheduled time (early trigger)
-  // - Up to 5 minutes after scheduled time (catch missed schedules)
+  // - Within 2 minutes before scheduled time (early trigger for accuracy)
+  // - Up to 10 minutes after scheduled time (catch missed schedules due to app restart, etc.)
   // This ensures we don't miss schedules due to timing issues
-  return timeDiff >= -1 && timeDiff <= 5;
+  const shouldTrigger = timeDiff >= -2 && timeDiff <= 10;
+  
+  return shouldTrigger;
 }
 
 /**
@@ -388,14 +417,16 @@ function shouldTriggerWeekly(stream, currentTime = new Date()) {
   const scheduleMinutes = schedHours * 60 + schedMinutes;
   const currentTotalMinutes = wibTime.hours * 60 + wibTime.minutes;
 
-  // Calculate time difference
+  // Calculate time difference (positive = current time is after scheduled time)
   const timeDiff = currentTotalMinutes - scheduleMinutes;
   
   // Trigger if:
-  // - Within 1 minute before scheduled time (early trigger)
-  // - Up to 5 minutes after scheduled time (catch missed schedules)
+  // - Within 2 minutes before scheduled time (early trigger for accuracy)
+  // - Up to 10 minutes after scheduled time (catch missed schedules due to app restart, etc.)
   // This ensures we don't miss schedules due to timing issues
-  return timeDiff >= -1 && timeDiff <= 5;
+  const shouldTrigger = timeDiff >= -2 && timeDiff <= 10;
+  
+  return shouldTrigger;
 }
 
 /**
@@ -451,14 +482,14 @@ async function checkRecurringSchedules() {
     }
     
     if (recurringStreams.length === 0) {
-      // Only log occasionally to avoid spam
-      if (currentMinutes % 5 === 0) {
-        console.log(`[Scheduler] No recurring schedules found at ${currentHours}:${String(currentMinutes).padStart(2, '0')} WIB (${dayNames[currentDay]})`);
-      }
+      // Log every time to help debugging
+      console.log(`[Scheduler] No recurring schedules found at ${currentHours}:${String(currentMinutes).padStart(2, '0')} WIB (${dayNames[currentDay]})`);
       return;
     }
 
-    console.log(`[Scheduler] Checking ${recurringStreams.length} recurring schedules at ${currentHours}:${String(currentMinutes).padStart(2, '0')} WIB (${dayNames[currentDay]}) [UTC: ${now.toISOString()}]`);
+    console.log(`[Scheduler] ========== RECURRING CHECK ==========`);
+    console.log(`[Scheduler] Current time: ${currentHours}:${String(currentMinutes).padStart(2, '0')} WIB (${dayNames[currentDay]}) [UTC: ${now.toISOString()}]`);
+    console.log(`[Scheduler] Found ${recurringStreams.length} recurring schedules to check`);
 
     for (const stream of recurringStreams) {
       try {

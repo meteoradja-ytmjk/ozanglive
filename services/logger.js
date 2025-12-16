@@ -71,10 +71,15 @@ function writeToLogFile(level, ...args) {
   }
 }
 
-// Periodic flush
-setInterval(() => {
+// Periodic flush - interval will be tracked by app.js global override
+const flushIntervalId = setInterval(() => {
   flushLogBuffer();
 }, FLUSH_INTERVAL);
+
+// Ensure interval is cleaned up on process exit
+process.on('exit', () => {
+  clearInterval(flushIntervalId);
+});
 
 // Flush on exit
 process.on('beforeExit', () => {

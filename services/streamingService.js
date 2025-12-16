@@ -30,8 +30,61 @@ const MAX_LOG_LINES = 50; // OPTIMIZED: Reduced from 100 to 50 to save memory
 // Structure: { streamId: { startTime: Date, durationMs: number, expectedEndTime: Date } }
 const streamDurationInfo = new Map();
 
-// SIMPLIFIED: Removed periodic cleanup interval - was causing overhead
-// Maps will be cleaned up naturally when streams stop
+// MEMORY MANAGEMENT: Periodic cleanup of stale entries
+// This prevents memory leaks from orphaned entries
+const CLEANUP_INTERVAL = 30 * 60 * 1000; // Every 30 minutes
+
+/**
+ * Clean up stale entries from Maps to prevent memory leaks
+ * Only removes entries for streams that are no longer active
+ */
+function cleanupStaleMaps() {
+  try {
+    const activeIds = new Set(activeStreams.keys());
+    let cleaned = 0;
+    
+    // Clean streamLogs for inactive streams (keep last 10 entries for debugging)
+    for (const [id] of streamLogs) {
+      if (!activeIds.has(id)) {
+        streamLogs.delete(id);
+        cleaned++;
+      }
+    }
+    
+    // Clean streamRetryCount for inactive streams
+    for (const [id] of streamRetryCount) {
+      if (!activeIds.has(id)) {
+        streamRetryCount.delete(id);
+        cleaned++;
+      }
+    }
+    
+    // Clean streamDurationInfo for inactive streams
+    for (const [id] of streamDurationInfo) {
+      if (!activeIds.has(id)) {
+        streamDurationInfo.delete(id);
+        cleaned++;
+      }
+    }
+    
+    // Clean manuallyStoppingStreams for inactive streams
+    for (const id of manuallyStoppingStreams) {
+      if (!activeIds.has(id)) {
+        manuallyStoppingStreams.delete(id);
+        cleaned++;
+      }
+    }
+    
+    if (cleaned > 0) {
+      console.log(`[StreamingService] Cleaned ${cleaned} stale entries from Maps`);
+    }
+  } catch (error) {
+    console.error('[StreamingService] Error during cleanup:', error.message);
+  }
+}
+
+// Start cleanup interval (will be tracked by app.js global override)
+setInterval(cleanupStaleMaps, CLEANUP_INTERVAL);
 
 /**
  * Check if any FFmpeg process is currently running

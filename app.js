@@ -175,17 +175,43 @@ process.on('uncaughtException', (error) => {
   console.error('-----------------------------------');
   
   // Check if this is a recoverable error
+  // EXPANDED: Added more recoverable error codes
   const recoverableErrors = [
     'ECONNRESET',
     'EPIPE',
     'ETIMEDOUT',
     'ECONNREFUSED',
     'ENOTFOUND',
-    'EAI_AGAIN'
+    'EAI_AGAIN',
+    'ECONNABORTED',
+    'EHOSTUNREACH',
+    'ENETUNREACH',
+    'ENOENT',
+    'EBUSY',
+    'SQLITE_BUSY',
+    'SQLITE_LOCKED',
+    'ERR_STREAM_DESTROYED',
+    'ERR_STREAM_WRITE_AFTER_END',
+    'ERR_HTTP_HEADERS_SENT'
+  ];
+  
+  // Also check for common recoverable error messages
+  const recoverableMessages = [
+    'socket hang up',
+    'read ECONNRESET',
+    'write EPIPE',
+    'connect ETIMEDOUT',
+    'getaddrinfo',
+    'SQLITE_BUSY',
+    'database is locked',
+    'Cannot read properties of null',
+    'Cannot read properties of undefined'
   ];
   
   const isRecoverable = recoverableErrors.some(code => 
     error.code === code || (error.message && error.message.includes(code))
+  ) || recoverableMessages.some(msg => 
+    error.message && error.message.includes(msg)
   );
   
   if (isRecoverable) {
@@ -311,12 +337,17 @@ if (!sessionSecret || sessionSecret.length < 16) {
   sessionSecret = require('crypto').randomBytes(32).toString('hex');
 }
 
+// Create session store with cleanup
+const sessionStore = new SQLiteStore({
+  db: 'sessions.db',
+  dir: './db/',
+  table: 'sessions',
+  // CRITICAL: Enable session cleanup to prevent database bloat
+  cleanupInterval: 900000 // Clean expired sessions every 15 minutes (900000ms)
+});
+
 app.use(session({
-  store: new SQLiteStore({
-    db: 'sessions.db',
-    dir: './db/',
-    table: 'sessions'
-  }),
+  store: sessionStore,
   secret: sessionSecret,
   resave: false,
   saveUninitialized: false,
@@ -4370,6 +4401,12 @@ async function startServer() {
     console.log('[Startup] Skipping initial sync - status will be managed by events');
     
     console.log('StreamFlow startup complete');
+    
+    // Signal to PM2 that app is ready
+    if (process.send) {
+      process.send('ready');
+      console.log('[Startup] Sent ready signal to PM2');
+    }
   });
   
   // Handle server errors
@@ -4381,9 +4418,13 @@ async function startServer() {
     }
   });
 
-  httpServer.timeout = 30 * 60 * 1000;
-  httpServer.keepAliveTimeout = 30 * 60 * 1000;
-  httpServer.headersTimeout = 30 * 60 * 1000;
+  // OPTIMIZED: Reduced timeouts to prevent resource exhaustion
+  httpServer.timeout = 5 * 60 * 1000; // 5 minutes (was 30)
+  httpServer.keepAliveTimeout = 2 * 60 * 1000; // 2 minutes (was 30)
+  httpServer.headersTimeout = 65 * 1000; // 65 seconds (must be > keepAliveTimeout)
+  
+  // Limit max connections to prevent resource exhaustion on 1GB VPS
+  httpServer.maxConnections = 100;
 }
 
 // Start the server
