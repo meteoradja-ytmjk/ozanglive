@@ -165,24 +165,41 @@ async function checkStreamDurations() {
         const actualStartTime = new Date(stream.start_time);
         
         // Use centralized duration calculator for consistent priority
-        const durationSeconds = calculateDurationSeconds(stream);
+        // IMPORTANT: For recurring streams, we must use stream_duration_minutes directly
+        // because schedule_time/end_time may contain old values from previous runs
+        let durationSeconds = null;
+        
+        // Priority 1: stream_duration_minutes (most reliable for recurring streams)
+        if (stream.stream_duration_minutes && stream.stream_duration_minutes > 0) {
+          durationSeconds = stream.stream_duration_minutes * 60;
+          console.log(`[Scheduler] Stream ${stream.id}: Using stream_duration_minutes: ${stream.stream_duration_minutes} minutes (${durationSeconds} seconds)`);
+        } else {
+          // Fallback to centralized calculator for other cases
+          durationSeconds = calculateDurationSeconds(stream);
+        }
         
         if (durationSeconds && durationSeconds > 0) {
           const durationMs = durationSeconds * 1000;
           shouldEndAt = new Date(actualStartTime.getTime() + durationMs);
-          console.log(`[Scheduler] Stream ${stream.id}: start=${actualStartTime.toISOString()}, duration=${formatDuration(durationSeconds)}, end=${shouldEndAt.toISOString()}`);
+          const remainingMs = shouldEndAt.getTime() - now.getTime();
+          const remainingMinutes = remainingMs / 60000;
+          console.log(`[Scheduler] Stream ${stream.id}: start=${actualStartTime.toISOString()}, duration=${formatDuration(durationSeconds)}, end=${shouldEndAt.toISOString()}, remaining=${remainingMinutes.toFixed(1)} minutes`);
         } else {
-          console.log(`[Scheduler] Stream ${stream.id} has no duration set`);
+          console.log(`[Scheduler] Stream ${stream.id} has no duration set - will run indefinitely`);
         }
 
         // If we have an end time, check if we need to take action
         if (shouldEndAt) {
           const timeOverdue = now.getTime() - shouldEndAt.getTime();
+          const timeOverdueMinutes = timeOverdue / 60000;
           
-          // FORCE STOP: If stream exceeds duration by more than 1 minute, force stop immediately
+          // Log duration fields for debugging
+          console.log(`[Scheduler] Stream ${stream.id} duration fields: stream_duration_minutes=${stream.stream_duration_minutes}, schedule_time=${stream.schedule_time}, end_time=${stream.end_time}`);
+          
+          // FORCE STOP: If stream exceeds duration by more than 2 minutes, force stop immediately
           // This is a safety net in case FFmpeg -t and scheduled timer both failed
           if (timeOverdue > FORCE_STOP_BUFFER_MS) {
-            console.log(`[Scheduler] FORCE STOP: Stream ${stream.id} exceeded end time by ${Math.round(timeOverdue / 1000)}s, forcing stop now`);
+            console.log(`[Scheduler] FORCE STOP: Stream ${stream.id} exceeded end time by ${timeOverdueMinutes.toFixed(1)} minutes, forcing stop now`);
             try {
               await streamingService.stopStream(stream.id);
               // Cancel any existing scheduled termination
@@ -195,7 +212,7 @@ async function checkStreamDurations() {
           
           // If stream has exceeded end time (but within buffer), stop it
           if (shouldEndAt <= now) {
-            console.log(`[Scheduler] Stream ${stream.id} exceeded end time, stopping now`);
+            console.log(`[Scheduler] Stream ${stream.id} exceeded end time by ${timeOverdueMinutes.toFixed(1)} minutes, stopping now`);
             try {
               await streamingService.stopStream(stream.id);
               cancelStreamTermination(stream.id);

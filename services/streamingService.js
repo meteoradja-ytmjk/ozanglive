@@ -255,10 +255,24 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
   const projectRoot = path.resolve(__dirname, '..');
   const rtmpUrl = `${stream.rtmp_url.replace(/\/$/, '')}/${stream.stream_key}`;
   
-  // Calculate duration using centralized calculator
-  const durationSeconds = calculateDurationSeconds(stream);
+  // Calculate duration - prioritize stream_duration_minutes directly
+  // This is critical for recurring streams where schedule_time/end_time may be stale
+  let durationSeconds = null;
+  
+  // Priority 1: stream_duration_minutes (most reliable)
+  if (stream.stream_duration_minutes && stream.stream_duration_minutes > 0) {
+    durationSeconds = stream.stream_duration_minutes * 60;
+    console.log(`[StreamingService] Playlist using stream_duration_minutes: ${stream.stream_duration_minutes} minutes (${durationSeconds} seconds)`);
+  } else {
+    // Fallback to centralized calculator
+    durationSeconds = calculateDurationSeconds(stream);
+    if (durationSeconds) {
+      console.log(`[StreamingService] Playlist using calculated duration: ${formatDuration(durationSeconds)}`);
+    }
+  }
+  
   if (durationSeconds) {
-    console.log(`[StreamingService] Playlist FFmpeg duration: ${formatDuration(durationSeconds)}`);
+    console.log(`[StreamingService] Playlist FFmpeg -t will be set to: ${durationSeconds} seconds (${durationSeconds / 60} minutes)`);
   } else {
     console.log('[StreamingService] No duration set for playlist - stream will run until playlist ends or loop exhausts');
   }
@@ -445,12 +459,24 @@ async function buildFFmpegArgs(stream) {
   
   const rtmpUrl = `${stream.rtmp_url.replace(/\/$/, '')}/${stream.stream_key}`;
   
-  // Calculate duration using centralized calculator
-  // Priority: stream_duration_minutes > schedule calculation > stream_duration_hours > duration
-  const durationSeconds = calculateDurationSeconds(stream);
+  // Calculate duration - prioritize stream_duration_minutes directly
+  // This is critical for recurring streams where schedule_time/end_time may be stale
+  let durationSeconds = null;
+  
+  // Priority 1: stream_duration_minutes (most reliable)
+  if (stream.stream_duration_minutes && stream.stream_duration_minutes > 0) {
+    durationSeconds = stream.stream_duration_minutes * 60;
+    console.log(`[StreamingService] FFmpeg using stream_duration_minutes: ${stream.stream_duration_minutes} minutes (${durationSeconds} seconds)`);
+  } else {
+    // Fallback to centralized calculator for other cases
+    durationSeconds = calculateDurationSeconds(stream);
+    if (durationSeconds) {
+      console.log(`[StreamingService] FFmpeg using calculated duration: ${formatDuration(durationSeconds)}`);
+    }
+  }
   
   if (durationSeconds) {
-    console.log(`[StreamingService] FFmpeg duration: ${formatDuration(durationSeconds)}`);
+    console.log(`[StreamingService] FFmpeg -t will be set to: ${durationSeconds} seconds (${durationSeconds / 60} minutes)`);
   } else {
     console.log('[StreamingService] No duration set for FFmpeg - stream will run indefinitely');
   }
@@ -924,19 +950,37 @@ async function startStream(streamId) {
     });
     ffmpegProcess.unref();
     
-    // Calculate and track stream duration using centralized calculator
+    // Calculate and track stream duration
+    // IMPORTANT: For recurring streams, prioritize stream_duration_minutes directly
+    // because schedule_time/end_time may contain old values from previous runs
     const now = Date.now();
-    const durationSeconds = calculateDurationSeconds(stream);
+    let durationSeconds = null;
+    
+    // Priority 1: stream_duration_minutes (most reliable)
+    if (stream.stream_duration_minutes && stream.stream_duration_minutes > 0) {
+      durationSeconds = stream.stream_duration_minutes * 60;
+      console.log(`[StreamingService] Using stream_duration_minutes: ${stream.stream_duration_minutes} minutes (${durationSeconds} seconds)`);
+    } else {
+      // Fallback to centralized calculator
+      durationSeconds = calculateDurationSeconds(stream);
+    }
+    
     const durationMs = durationSeconds ? durationSeconds * 1000 : null;
+    
+    // Log all duration-related fields for debugging
+    console.log(`[StreamingService] Stream ${streamId} duration fields: stream_duration_minutes=${stream.stream_duration_minutes}, schedule_time=${stream.schedule_time}, end_time=${stream.end_time}, duration=${stream.duration}`);
+    console.log(`[StreamingService] Stream ${streamId} calculated duration: ${durationSeconds ? formatDuration(durationSeconds) : 'not set'}`);
     
     // Set duration tracking if duration is specified
     if (durationMs && durationMs > 0) {
       const trackingSet = setDurationInfo(streamId, streamStartTime, durationMs);
       if (trackingSet) {
         addStreamLog(streamId, `Duration tracking enabled: ${formatDuration(durationSeconds)}`);
+        console.log(`[StreamingService] Duration tracking set: stream will end at ${new Date(streamStartTime.getTime() + durationMs).toISOString()}`);
       }
     } else {
       addStreamLog(streamId, `No duration set - stream will run indefinitely`);
+      console.log(`[StreamingService] WARNING: No duration set for stream ${streamId} - will run indefinitely`);
     }
     
     // Schedule stream termination based on duration
