@@ -151,88 +151,21 @@ process.on('unhandledRejection', (reason, promise) => {
   // This prevents the app from crashing on unhandled promise rejections
 });
 
-// Memory monitoring - check every 10 minutes (less frequent to reduce overhead)
-const MEMORY_CHECK_INTERVAL = 10 * 60 * 1000; // 10 minutes
-const MEMORY_WARNING_THRESHOLD = 0.75; // 75% of heap
-const MEMORY_CRITICAL_THRESHOLD = 0.90; // 90% of heap - only critical at very high usage
+// SIMPLIFIED: Removed aggressive memory monitoring and self-healing
+// These were causing more problems than they solved
+// PM2 will handle restarts if needed via max_memory_restart
 
-// Self-healing: Track consecutive failures - MORE TOLERANT
-let consecutiveHealthFailures = 0;
-const MAX_HEALTH_FAILURES = 10; // INCREASED: Restart only after 10 consecutive failures (was 3)
-const SELF_HEALTH_CHECK_INTERVAL = 5 * 60 * 1000; // Check every 5 minutes (was 2 minutes)
-
+// Simple memory logging every 30 minutes (just for info, no action)
 setInterval(() => {
   try {
     const memUsage = process.memoryUsage();
     const heapUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024);
-    const heapTotalMB = Math.round(memUsage.heapTotal / 1024 / 1024);
-    const heapUsageRatio = memUsage.heapUsed / memUsage.heapTotal;
     const rssMB = Math.round(memUsage.rss / 1024 / 1024);
-    
-    if (heapUsageRatio > MEMORY_CRITICAL_THRESHOLD) {
-      console.error(`[Memory] CRITICAL: Heap ${heapUsedMB}MB/${heapTotalMB}MB (${(heapUsageRatio * 100).toFixed(0)}%), RSS ${rssMB}MB`);
-      if (global.gc) {
-        global.gc();
-        // Log after GC
-        const afterGC = process.memoryUsage();
-        console.log(`[Memory] After GC: Heap ${Math.round(afterGC.heapUsed / 1024 / 1024)}MB`);
-      }
-    } else if (heapUsageRatio > MEMORY_WARNING_THRESHOLD) {
-      console.warn(`[Memory] WARNING: Heap ${heapUsedMB}MB/${heapTotalMB}MB (${(heapUsageRatio * 100).toFixed(0)}%)`);
-      // Proactive GC at warning level
-      if (global.gc) {
-        global.gc();
-      }
-    }
+    console.log(`[Memory] Heap: ${heapUsedMB}MB, RSS: ${rssMB}MB`);
   } catch (e) {
-    console.error('[Memory] Error checking memory:', e.message);
+    // Ignore errors
   }
-}, MEMORY_CHECK_INTERVAL);
-
-// Self-healing health check - detect if server is hanging
-setInterval(async () => {
-  try {
-    // Check database connectivity
-    const dbStatus = await checkConnectivity();
-    
-    if (!dbStatus.connected) {
-      consecutiveHealthFailures++;
-      console.error(`[SelfHeal] Database check failed (${consecutiveHealthFailures}/${MAX_HEALTH_FAILURES})`);
-    } else if (dbStatus.latency > 5000) {
-      consecutiveHealthFailures++;
-      console.error(`[SelfHeal] Database slow: ${dbStatus.latency}ms (${consecutiveHealthFailures}/${MAX_HEALTH_FAILURES})`);
-    } else {
-      // Reset counter on success - only log if recovering from failure
-      if (consecutiveHealthFailures > 0) {
-        console.log('[SelfHeal] Health check passed, resetting failure counter');
-      }
-      consecutiveHealthFailures = 0;
-    }
-    
-    // Check memory usage - force GC if high (but don't restart)
-    const memUsage = process.memoryUsage();
-    const heapUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024);
-    
-    // Only run GC if heap is above 450MB (more tolerant for 1GB VPS)
-    if (heapUsedMB > 450 && global.gc) {
-      console.log(`[SelfHeal] High memory (${heapUsedMB}MB), running GC...`);
-      global.gc();
-    }
-    
-    // REMOVED: Don't auto-restart on health check failures
-    // This was causing the app to crash while streams were still running
-    // PM2 will handle restarts if the app truly crashes
-    if (consecutiveHealthFailures >= MAX_HEALTH_FAILURES) {
-      console.error(`[SelfHeal] ${consecutiveHealthFailures} consecutive failures - logging only, NOT restarting`);
-      // Reset counter to avoid log spam
-      consecutiveHealthFailures = 0;
-    }
-  } catch (error) {
-    consecutiveHealthFailures++;
-    console.error(`[SelfHeal] Health check error: ${error.message} (${consecutiveHealthFailures}/${MAX_HEALTH_FAILURES})`);
-    // Don't restart - just log the error
-  }
-}, SELF_HEALTH_CHECK_INTERVAL);
+}, 30 * 60 * 1000); // Every 30 minutes
 
 process.on('uncaughtException', (error) => {
   console.error('-----------------------------------');
@@ -4372,22 +4305,8 @@ app.use((req, res) => {
   });
 });
 
-// Watchdog to detect event loop blocking
-let lastWatchdogTime = Date.now();
-const WATCHDOG_INTERVAL = 10000; // Check every 10 seconds
-const WATCHDOG_THRESHOLD = 30000; // Alert if blocked for more than 30 seconds
-
-setInterval(() => {
-  const now = Date.now();
-  const elapsed = now - lastWatchdogTime;
-  
-  if (elapsed > WATCHDOG_THRESHOLD) {
-    console.error(`[Watchdog] Event loop was blocked for ${elapsed}ms!`);
-    console.error('[Watchdog] This may indicate a synchronous operation blocking the server');
-  }
-  
-  lastWatchdogTime = now;
-}, WATCHDOG_INTERVAL);
+// REMOVED: Watchdog interval - was adding unnecessary overhead
+// The app should run without constant monitoring
 
 // Start server after database is ready
 async function startServer() {

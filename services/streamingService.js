@@ -30,61 +30,8 @@ const MAX_LOG_LINES = 50; // OPTIMIZED: Reduced from 100 to 50 to save memory
 // Structure: { streamId: { startTime: Date, durationMs: number, expectedEndTime: Date } }
 const streamDurationInfo = new Map();
 
-// MEMORY OPTIMIZATION: Periodic cleanup of old logs and data
-const LOG_CLEANUP_INTERVAL = 10 * 60 * 1000; // Clean every 10 minutes
-const LOG_MAX_AGE_MS = 30 * 60 * 1000; // Keep logs for max 30 minutes
-
-setInterval(() => {
-  cleanupOldStreamData();
-}, LOG_CLEANUP_INTERVAL);
-
-/**
- * Clean up old stream data to prevent memory leaks
- */
-function cleanupOldStreamData() {
-  const now = Date.now();
-  let cleanedLogs = 0;
-  let cleanedRetry = 0;
-  let cleanedDuration = 0;
-  
-  // Clean up logs for inactive streams
-  for (const [streamId, logs] of streamLogs.entries()) {
-    if (!activeStreams.has(streamId)) {
-      // Check if logs are old
-      if (logs.length > 0) {
-        const lastLog = logs[logs.length - 1];
-        const logTime = new Date(lastLog.timestamp).getTime();
-        if (now - logTime > LOG_MAX_AGE_MS) {
-          streamLogs.delete(streamId);
-          cleanedLogs++;
-        }
-      }
-    }
-  }
-  
-  // Clean up retry counts for inactive streams
-  for (const [streamId] of streamRetryCount.entries()) {
-    if (!activeStreams.has(streamId)) {
-      streamRetryCount.delete(streamId);
-      cleanedRetry++;
-    }
-  }
-  
-  // Clean up duration info for inactive streams
-  for (const [streamId] of streamDurationInfo.entries()) {
-    if (!activeStreams.has(streamId)) {
-      streamDurationInfo.delete(streamId);
-      cleanedDuration++;
-    }
-  }
-  
-  // Clean up manuallyStoppingStreams
-  manuallyStoppingStreams.clear();
-  
-  if (cleanedLogs > 0 || cleanedRetry > 0 || cleanedDuration > 0) {
-    console.log(`[StreamingService] Memory cleanup: logs=${cleanedLogs}, retry=${cleanedRetry}, duration=${cleanedDuration}`);
-  }
-}
+// SIMPLIFIED: Removed periodic cleanup interval - was causing overhead
+// Maps will be cleaned up naturally when streams stop
 
 /**
  * Check if any FFmpeg process is currently running
@@ -1183,16 +1130,12 @@ async function syncStreamStatuses() {
     // Don't rethrow - let the sync continue on next interval
   }
 }
-// OPTIMIZED: Sync every 15 minutes - be conservative to avoid false status changes
-// The sync is mainly for cleanup, not for real-time status
-// Real-time status is handled by FFmpeg exit events
-setInterval(async () => {
-  try {
-    await syncStreamStatuses();
-  } catch (error) {
-    console.error('[StreamingService] Error in syncStreamStatuses interval:', error.message);
-  }
-}, 15 * 60 * 1000); // 15 minutes
+// REMOVED: Automatic sync interval - was causing status to change incorrectly
+// Status is now only managed by:
+// 1. startStream() - sets to 'live'
+// 2. stopStream() - sets to 'offline' or 'scheduled'
+// 3. FFmpeg exit event - handles crashes
+// syncStreamStatuses() can still be called manually if needed
 function isStreamActive(streamId) {
   return activeStreams.has(streamId);
 }

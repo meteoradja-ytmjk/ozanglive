@@ -57,35 +57,12 @@ function init(streamingServiceInstance) {
   durationIntervalId = setInterval(safeCheckStreamDurations, DURATION_CHECK_INTERVAL); // Every 2 minutes
   recurringIntervalId = setInterval(safeCheckRecurringSchedules, RECURRING_CHECK_INTERVAL); // Every 3 minutes
   
-  // MEMORY OPTIMIZATION: Periodic cleanup of old entries
-  cleanupIntervalId = setInterval(() => {
-    cleanupOldEntries();
-  }, CLEANUP_INTERVAL);
+  // REMOVED: Cleanup interval - not needed, maps are small
   
   // Initial checks with error handling
   safeCheckScheduledStreams();
   safeCheckStreamDurations();
   safeCheckRecurringSchedules();
-}
-
-/**
- * Clean up old entries from Maps to prevent memory leaks
- */
-function cleanupOldEntries() {
-  const now = Date.now();
-  let cleanedCount = 0;
-  
-  // Clean up recentlyTriggeredStreams older than cooldown period
-  for (const [streamId, timestamp] of recentlyTriggeredStreams.entries()) {
-    if (now - timestamp > TRIGGER_COOLDOWN_MS * 2) {
-      recentlyTriggeredStreams.delete(streamId);
-      cleanedCount++;
-    }
-  }
-  
-  if (cleanedCount > 0) {
-    console.log(`[Scheduler] Cleaned up ${cleanedCount} old entries from recentlyTriggeredStreams`);
-  }
 }
 async function checkScheduledStreams() {
   try {
