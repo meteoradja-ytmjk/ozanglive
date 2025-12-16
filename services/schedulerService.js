@@ -5,16 +5,18 @@ const { calculateDurationSeconds, formatDuration } = require('../utils/durationC
 const scheduledTerminations = new Map();
 const recentlyTriggeredStreams = new Map(); // Track recently triggered recurring streams
 const SCHEDULE_LOOKAHEAD_SECONDS = 60;
-const RECURRING_CHECK_INTERVAL = 60 * 1000; // Check every minute
+const RECURRING_CHECK_INTERVAL = 2 * 60 * 1000; // OPTIMIZED: Check every 2 minutes (was 1 minute)
 const TRIGGER_COOLDOWN_MS = 2 * 60 * 1000; // 2 minute cooldown to prevent double triggers
-const DURATION_CHECK_INTERVAL = 30 * 1000; // Check every 30 seconds for more reliable duration enforcement
+const DURATION_CHECK_INTERVAL = 60 * 1000; // OPTIMIZED: Check every 60 seconds (was 30 seconds)
 const FORCE_STOP_BUFFER_MS = 60 * 1000; // Force stop streams that exceed duration by more than 1 minute
+const CLEANUP_INTERVAL = 5 * 60 * 1000; // Clean up old entries every 5 minutes
 
 let streamingService = null;
 let initialized = false;
 let scheduleIntervalId = null;
 let durationIntervalId = null;
 let recurringIntervalId = null;
+let cleanupIntervalId = null;
 
 function init(streamingServiceInstance) {
   if (initialized) {
@@ -54,10 +56,35 @@ function init(streamingServiceInstance) {
   durationIntervalId = setInterval(safeCheckStreamDurations, DURATION_CHECK_INTERVAL);
   recurringIntervalId = setInterval(safeCheckRecurringSchedules, RECURRING_CHECK_INTERVAL);
   
+  // MEMORY OPTIMIZATION: Periodic cleanup of old entries
+  cleanupIntervalId = setInterval(() => {
+    cleanupOldEntries();
+  }, CLEANUP_INTERVAL);
+  
   // Initial checks with error handling
   safeCheckScheduledStreams();
   safeCheckStreamDurations();
   safeCheckRecurringSchedules();
+}
+
+/**
+ * Clean up old entries from Maps to prevent memory leaks
+ */
+function cleanupOldEntries() {
+  const now = Date.now();
+  let cleanedCount = 0;
+  
+  // Clean up recentlyTriggeredStreams older than cooldown period
+  for (const [streamId, timestamp] of recentlyTriggeredStreams.entries()) {
+    if (now - timestamp > TRIGGER_COOLDOWN_MS * 2) {
+      recentlyTriggeredStreams.delete(streamId);
+      cleanedCount++;
+    }
+  }
+  
+  if (cleanedCount > 0) {
+    console.log(`[Scheduler] Cleaned up ${cleanedCount} old entries from recentlyTriggeredStreams`);
+  }
 }
 async function checkScheduledStreams() {
   try {
@@ -68,10 +95,12 @@ async function checkScheduledStreams() {
     const now = new Date();
     const lookAheadTime = new Date(now.getTime() + SCHEDULE_LOOKAHEAD_SECONDS * 1000);
     
-    // Log current time for debugging (use local time for readability)
+    // OPTIMIZED: Only log every 5 minutes to reduce log spam
     const currentHours = now.getHours();
     const currentMinutes = now.getMinutes();
-    console.log(`[Scheduler] Checking once schedules at ${currentHours}:${String(currentMinutes).padStart(2, '0')} local (${now.toISOString()})`);
+    if (currentMinutes % 5 === 0) {
+      console.log(`[Scheduler] Checking once schedules at ${currentHours}:${String(currentMinutes).padStart(2, '0')} local`);
+    }
     
     let streams = [];
     try {
@@ -140,7 +169,8 @@ async function checkStreamDurations() {
     
     const now = new Date();
     
-    if (liveStreams.length > 0) {
+    // OPTIMIZED: Only log if there are live streams to check
+    if (liveStreams.length > 0 && new Date().getMinutes() % 5 === 0) {
       console.log(`[Scheduler] Checking durations for ${liveStreams.length} live streams`);
     }
     

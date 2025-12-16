@@ -151,15 +151,15 @@ process.on('unhandledRejection', (reason, promise) => {
   // This prevents the app from crashing on unhandled promise rejections
 });
 
-// Memory monitoring - check every 2 minutes (more frequent for low-memory VPS)
-const MEMORY_CHECK_INTERVAL = 2 * 60 * 1000; // 2 minutes
-const MEMORY_WARNING_THRESHOLD = 0.70; // 70% of heap (lower for 1GB VPS)
-const MEMORY_CRITICAL_THRESHOLD = 0.85; // 85% of heap
+// OPTIMIZED: Memory monitoring - check every 5 minutes (was 2 minutes)
+const MEMORY_CHECK_INTERVAL = 5 * 60 * 1000; // 5 minutes
+const MEMORY_WARNING_THRESHOLD = 0.65; // 65% of heap (lower threshold for earlier GC)
+const MEMORY_CRITICAL_THRESHOLD = 0.80; // 80% of heap (lower for 1GB VPS)
 
 // Self-healing: Track consecutive failures and restart if needed
 let consecutiveHealthFailures = 0;
 const MAX_HEALTH_FAILURES = 3; // Restart after 3 consecutive failures
-const SELF_HEALTH_CHECK_INTERVAL = 60 * 1000; // Check every 1 minute
+const SELF_HEALTH_CHECK_INTERVAL = 2 * 60 * 1000; // OPTIMIZED: Check every 2 minutes (was 1 minute)
 
 setInterval(() => {
   try {
@@ -167,15 +167,22 @@ setInterval(() => {
     const heapUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024);
     const heapTotalMB = Math.round(memUsage.heapTotal / 1024 / 1024);
     const heapUsageRatio = memUsage.heapUsed / memUsage.heapTotal;
+    const rssMB = Math.round(memUsage.rss / 1024 / 1024);
     
     if (heapUsageRatio > MEMORY_CRITICAL_THRESHOLD) {
-      console.error(`[Memory] CRITICAL: Memory usage at ${(heapUsageRatio * 100).toFixed(1)}% (${heapUsedMB}MB/${heapTotalMB}MB)`);
-      console.error('[Memory] Attempting garbage collection...');
+      console.error(`[Memory] CRITICAL: Heap ${heapUsedMB}MB/${heapTotalMB}MB (${(heapUsageRatio * 100).toFixed(0)}%), RSS ${rssMB}MB`);
+      if (global.gc) {
+        global.gc();
+        // Log after GC
+        const afterGC = process.memoryUsage();
+        console.log(`[Memory] After GC: Heap ${Math.round(afterGC.heapUsed / 1024 / 1024)}MB`);
+      }
+    } else if (heapUsageRatio > MEMORY_WARNING_THRESHOLD) {
+      console.warn(`[Memory] WARNING: Heap ${heapUsedMB}MB/${heapTotalMB}MB (${(heapUsageRatio * 100).toFixed(0)}%)`);
+      // Proactive GC at warning level
       if (global.gc) {
         global.gc();
       }
-    } else if (heapUsageRatio > MEMORY_WARNING_THRESHOLD) {
-      console.warn(`[Memory] WARNING: Memory usage at ${(heapUsageRatio * 100).toFixed(1)}% (${heapUsedMB}MB/${heapTotalMB}MB)`);
     }
   } catch (e) {
     console.error('[Memory] Error checking memory:', e.message);
@@ -195,7 +202,7 @@ setInterval(async () => {
       consecutiveHealthFailures++;
       console.error(`[SelfHeal] Database slow: ${dbStatus.latency}ms (${consecutiveHealthFailures}/${MAX_HEALTH_FAILURES})`);
     } else {
-      // Reset counter on success
+      // Reset counter on success - only log if recovering from failure
       if (consecutiveHealthFailures > 0) {
         console.log('[SelfHeal] Health check passed, resetting failure counter');
       }
@@ -206,8 +213,8 @@ setInterval(async () => {
     const memUsage = process.memoryUsage();
     const heapUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024);
     
-    // For 1GB VPS, if heap > 400MB, try to free memory
-    if (heapUsedMB > 400 && global.gc) {
+    // OPTIMIZED: Lower threshold to 350MB for 1GB VPS
+    if (heapUsedMB > 350 && global.gc) {
       console.log(`[SelfHeal] High memory (${heapUsedMB}MB), running GC...`);
       global.gc();
     }

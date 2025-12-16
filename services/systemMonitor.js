@@ -3,10 +3,10 @@ const si = require('systeminformation');
 let previousNetworkData = null;
 let previousTimestamp = null;
 
-// Cache for system stats to prevent blocking
+// Cache for system stats to prevent blocking - OPTIMIZED
 let cachedStats = null;
 let lastCacheTime = 0;
-const CACHE_TTL = 5000; // Cache for 5 seconds
+const CACHE_TTL = 10000; // OPTIMIZED: Cache for 10 seconds (was 5 seconds)
 
 /**
  * Wrap a promise with timeout to prevent hanging

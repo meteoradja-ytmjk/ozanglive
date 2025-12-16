@@ -39,8 +39,8 @@ module.exports = {
       min_uptime: '5s', // Faster detection (was 10s)
       restart_delay: 2000, // Faster restart (was 4000)
       
-      // Memory management - LOWER THRESHOLD for 1GB VPS
-      max_memory_restart: '700M', // Restart at 700MB (was 1G) - leave room for FFmpeg
+      // Memory management - AGGRESSIVE for 1GB VPS
+      max_memory_restart: '600M', // OPTIMIZED: Restart at 600MB (was 700M) - leave more room for FFmpeg
       
       // Environment variables
       env: {
@@ -67,12 +67,13 @@ module.exports = {
       // Crash handling - FASTER RECOVERY
       exp_backoff_restart_delay: 50, // Faster backoff (was 100)
       
-      // Node.js arguments - OPTIMIZED FOR LOW MEMORY VPS
+      // Node.js arguments - AGGRESSIVE MEMORY OPTIMIZATION for 1GB VPS
       node_args: [
-        '--max-old-space-size=512', // Limit heap to 512MB (was 1024)
+        '--max-old-space-size=400', // OPTIMIZED: Limit heap to 400MB (was 512MB)
         '--expose-gc', // Allow manual garbage collection
         '--optimize-for-size', // Optimize for memory
-        '--gc-interval=100' // More frequent GC
+        '--gc-interval=50', // OPTIMIZED: More frequent GC (was 100)
+        '--max-semi-space-size=16' // Limit young generation to 16MB
       ],
       
       // Cron restart - ENABLED: restart every day at 4 AM to prevent memory buildup

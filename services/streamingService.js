@@ -24,11 +24,67 @@ const streamLogs = new Map();
 const streamRetryCount = new Map();
 const MAX_RETRY_ATTEMPTS = 3;
 const manuallyStoppingStreams = new Set();
-const MAX_LOG_LINES = 100;
+const MAX_LOG_LINES = 50; // OPTIMIZED: Reduced from 100 to 50 to save memory
 
 // Duration tracking for automatic stream termination
 // Structure: { streamId: { startTime: Date, durationMs: number, expectedEndTime: Date } }
 const streamDurationInfo = new Map();
+
+// MEMORY OPTIMIZATION: Periodic cleanup of old logs and data
+const LOG_CLEANUP_INTERVAL = 10 * 60 * 1000; // Clean every 10 minutes
+const LOG_MAX_AGE_MS = 30 * 60 * 1000; // Keep logs for max 30 minutes
+
+setInterval(() => {
+  cleanupOldStreamData();
+}, LOG_CLEANUP_INTERVAL);
+
+/**
+ * Clean up old stream data to prevent memory leaks
+ */
+function cleanupOldStreamData() {
+  const now = Date.now();
+  let cleanedLogs = 0;
+  let cleanedRetry = 0;
+  let cleanedDuration = 0;
+  
+  // Clean up logs for inactive streams
+  for (const [streamId, logs] of streamLogs.entries()) {
+    if (!activeStreams.has(streamId)) {
+      // Check if logs are old
+      if (logs.length > 0) {
+        const lastLog = logs[logs.length - 1];
+        const logTime = new Date(lastLog.timestamp).getTime();
+        if (now - logTime > LOG_MAX_AGE_MS) {
+          streamLogs.delete(streamId);
+          cleanedLogs++;
+        }
+      }
+    }
+  }
+  
+  // Clean up retry counts for inactive streams
+  for (const [streamId] of streamRetryCount.entries()) {
+    if (!activeStreams.has(streamId)) {
+      streamRetryCount.delete(streamId);
+      cleanedRetry++;
+    }
+  }
+  
+  // Clean up duration info for inactive streams
+  for (const [streamId] of streamDurationInfo.entries()) {
+    if (!activeStreams.has(streamId)) {
+      streamDurationInfo.delete(streamId);
+      cleanedDuration++;
+    }
+  }
+  
+  // Clean up manuallyStoppingStreams
+  manuallyStoppingStreams.clear();
+  
+  if (cleanedLogs > 0 || cleanedRetry > 0 || cleanedDuration > 0) {
+    console.log(`[StreamingService] Memory cleanup: logs=${cleanedLogs}, retry=${cleanedRetry}, duration=${cleanedDuration}`);
+  }
+}
 
 /**
  * Determine the correct status after a stream ends
