@@ -934,7 +934,8 @@ function copyStreamKey(streamKey) {
 // Go to Edit Stream Schedule - shortcut from YouTube Sync page
 async function goToEditStream(streamKey) {
   if (!streamKey) {
-    showToast('No stream key available', 'error');
+    // No stream key, just go to schedule page
+    window.location.href = '/schedule';
     return;
   }
   
@@ -948,14 +949,16 @@ async function goToEditStream(streamKey) {
     const data = await response.json();
     
     if (data.success && data.stream) {
-      // Redirect to schedule page with edit parameter
+      // Stream found, redirect to schedule page with edit parameter
       window.location.href = `/schedule?edit=${data.stream.id}`;
     } else {
-      showToast(data.message || 'Stream not found in schedule', 'error');
+      // Stream not found by stream_key, just go to schedule page
+      window.location.href = '/schedule';
     }
   } catch (error) {
     console.error('Error finding stream:', error);
-    showToast('Failed to find stream', 'error');
+    // On error, just go to schedule page
+    window.location.href = '/schedule';
   }
 }
 
