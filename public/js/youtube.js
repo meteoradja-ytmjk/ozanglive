@@ -931,6 +931,34 @@ function copyStreamKey(streamKey) {
   });
 }
 
+// Go to Edit Stream Schedule - shortcut from YouTube Sync page
+async function goToEditStream(streamKey) {
+  if (!streamKey) {
+    showToast('No stream key available', 'error');
+    return;
+  }
+  
+  try {
+    const response = await fetch(`/api/streams/by-stream-key/${encodeURIComponent(streamKey)}`, {
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (data.success && data.stream) {
+      // Redirect to schedule page with edit parameter
+      window.location.href = `/schedule?edit=${data.stream.id}`;
+    } else {
+      showToast(data.message || 'Stream not found in schedule', 'error');
+    }
+  } catch (error) {
+    console.error('Error finding stream:', error);
+    showToast('Failed to find stream', 'error');
+  }
+}
+
 // Change Thumbnail Modal
 function changeThumbnail(broadcastId) {
   document.getElementById('changeThumbnailBroadcastId').value = broadcastId;

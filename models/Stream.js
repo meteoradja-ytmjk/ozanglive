@@ -765,5 +765,46 @@ class Stream {
       );
     });
   }
+
+  /**
+   * Find stream by stream_key for a specific user
+   * @param {string} streamKey - The stream key to search for
+   * @param {string} userId - User ID
+   * @returns {Promise<Object|null>} Stream object if found, null otherwise
+   */
+  static findByStreamKey(streamKey, userId) {
+    return new Promise((resolve, reject) => {
+      db.get(
+        `SELECT s.*, 
+                v.title AS video_title,
+                a.title AS audio_title
+         FROM streams s
+         LEFT JOIN videos v ON s.video_id = v.id
+         LEFT JOIN audios a ON s.audio_id = a.id
+         WHERE s.stream_key = ? AND s.user_id = ?`,
+        [streamKey, userId],
+        (err, row) => {
+          if (err) {
+            console.error('Error finding stream by stream_key:', err.message);
+            return reject(err);
+          }
+          if (row) {
+            row.loop_video = row.loop_video === 1;
+            row.use_advanced_settings = row.use_advanced_settings === 1;
+            row.recurring_enabled = row.recurring_enabled === 1;
+            // Parse schedule_days JSON if present
+            if (row.schedule_days && typeof row.schedule_days === 'string') {
+              try {
+                row.schedule_days = JSON.parse(row.schedule_days);
+              } catch (e) {
+                row.schedule_days = [];
+              }
+            }
+          }
+          resolve(row || null);
+        }
+      );
+    });
+  }
 }
 module.exports = Stream;

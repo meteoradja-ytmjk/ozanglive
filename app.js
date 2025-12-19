@@ -2563,6 +2563,26 @@ app.post('/api/streams/reset-all', isAuthenticated, async (req, res) => {
   }
 });
 
+// Find stream by stream_key - for YouTube Sync page shortcut to edit stream
+app.get('/api/streams/by-stream-key/:streamKey', isAuthenticated, async (req, res) => {
+  try {
+    const streamKey = req.params.streamKey;
+    if (!streamKey || streamKey.trim() === '') {
+      return res.status(400).json({ success: false, error: 'Stream key is required' });
+    }
+    
+    const stream = await Stream.findByStreamKey(streamKey, req.session.userId);
+    if (!stream) {
+      return res.status(404).json({ success: false, message: 'Stream not found in schedule' });
+    }
+    
+    res.json({ success: true, stream });
+  } catch (error) {
+    console.error('Error finding stream by stream_key:', error);
+    res.status(500).json({ success: false, error: 'Failed to find stream' });
+  }
+});
+
 app.get('/api/streams/:id', isAuthenticated, async (req, res) => {
   try {
     const stream = await Stream.getStreamWithVideo(req.params.id);

@@ -170,9 +170,9 @@
               <div class="flex-1 bg-dark-700 rounded px-2 py-1.5 font-mono text-xs text-gray-300 truncate">
                 <%= broadcast.streamKey || 'No stream key' %>
               </div>
-              <button onclick="copyStreamKey('<%= broadcast.streamKey || '' %>')"
-                class="bg-dark-700 hover:bg-dark-600 p-1.5 rounded transition-colors flex-shrink-0" title="Copy Stream Key">
-                <i class="ti ti-copy text-sm"></i>
+              <button onclick="goToEditStream('<%= broadcast.streamKey || '' %>')"
+                class="bg-dark-700 hover:bg-dark-600 p-1.5 rounded transition-colors flex-shrink-0" title="Edit Stream Schedule">
+                <i class="ti ti-edit text-sm"></i>
               </button>
             </div>
           </td>
@@ -241,9 +241,9 @@
         <div class="flex-1 bg-dark-700 rounded-lg px-3 py-2.5 font-mono text-xs text-gray-300 truncate">
           <%= broadcast.streamKey || 'No stream key' %>
         </div>
-        <button onclick="copyStreamKey('<%= broadcast.streamKey || '' %>')"
-          class="bg-dark-700 hover:bg-dark-600 p-2.5 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" title="Copy Stream Key">
-          <i class="ti ti-copy"></i>
+        <button onclick="goToEditStream('<%= broadcast.streamKey || '' %>')"
+          class="bg-dark-700 hover:bg-dark-600 p-2.5 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" title="Edit Stream Schedule">
+          <i class="ti ti-edit"></i>
         </button>
       </div>
       
