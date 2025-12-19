@@ -121,90 +121,149 @@
 
   <!-- Broadcasts List -->
   <% if (broadcasts && broadcasts.length > 0) { %>
-  <div class="grid gap-4">
-    <% broadcasts.forEach(function(broadcast) { %>
-    <div class="bg-gray-800 rounded-lg p-4 shadow-md">
-      <div class="flex flex-col md:flex-row gap-4">
-        <!-- Thumbnail -->
-        <div class="w-full md:w-48 h-28 bg-dark-700 rounded-lg overflow-hidden flex-shrink-0 relative group">
-          <% if (broadcast.thumbnailUrl) { %>
-          <img src="<%= broadcast.thumbnailUrl %>" alt="<%= broadcast.title %>" class="w-full h-full object-cover">
-          <% } else { %>
-          <div class="w-full h-full flex items-center justify-center">
-            <i class="ti ti-photo text-gray-500 text-3xl"></i>
-          </div>
-          <% } %>
-          <button onclick="changeThumbnail('<%= broadcast.id %>')"
-            class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-            <span class="text-white text-sm"><i class="ti ti-camera mr-1"></i>Change</span>
-          </button>
-        </div>
-        
-        <!-- Info -->
-        <div class="flex-1 min-w-0">
-          <div class="flex items-start justify-between gap-2">
+  
+  <!-- Desktop Table View -->
+  <div class="hidden md:block bg-gray-800 rounded-lg shadow-md overflow-hidden">
+    <table class="min-w-full divide-y divide-gray-700">
+      <thead class="bg-dark-700">
+        <tr>
+          <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase w-12">No</th>
+          <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Broadcast</th>
+          <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase w-40">Schedule</th>
+          <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase w-72">Stream Key</th>
+          <th class="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase w-32">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-700">
+        <% broadcasts.forEach(function(broadcast, index) { %>
+        <tr class="hover:bg-dark-700/50">
+          <td class="px-4 py-3 text-sm text-gray-400 font-medium"><%= index + 1 %></td>
+          <td class="px-4 py-3">
             <div class="flex items-center gap-2">
-              <h3 class="font-semibold text-lg truncate"><%= broadcast.title %></h3>
+              <span class="font-medium text-sm truncate max-w-xs"><%= broadcast.title %></span>
               <% if (broadcast.channelName) { %>
-              <span class="px-2 py-0.5 bg-red-500/20 text-red-400 text-xs rounded flex items-center gap-1">
+              <span class="px-2 py-0.5 bg-red-500/20 text-red-400 text-xs rounded flex items-center gap-1 flex-shrink-0">
                 <i class="ti ti-brand-youtube text-xs"></i>
                 <%= broadcast.channelName %>
               </span>
               <% } %>
+              <span class="px-2 py-0.5 rounded text-xs font-medium flex-shrink-0
+                <%= broadcast.privacyStatus === 'public' ? 'bg-green-500/20 text-green-400' : 
+                    broadcast.privacyStatus === 'unlisted' ? 'bg-yellow-500/20 text-yellow-400' : 
+                    'bg-gray-500/20 text-gray-400' %>">
+                <%= broadcast.privacyStatus %>
+              </span>
             </div>
-            <span class="px-2 py-1 rounded text-xs font-medium flex-shrink-0
-              <%= broadcast.privacyStatus === 'public' ? 'bg-green-500/20 text-green-400' : 
-                  broadcast.privacyStatus === 'unlisted' ? 'bg-yellow-500/20 text-yellow-400' : 
-                  'bg-gray-500/20 text-gray-400' %>">
-              <%= broadcast.privacyStatus %>
-            </span>
-          </div>
-          
-          <div class="flex items-center gap-4 mt-2 text-sm text-gray-400">
-            <span class="flex items-center gap-1">
-              <i class="ti ti-calendar"></i>
-              <%= new Date(broadcast.scheduledStartTime).toLocaleDateString('en-US', { 
-                weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' 
-              }) %>
-            </span>
-            <span class="flex items-center gap-1">
-              <i class="ti ti-clock"></i>
-              <%= new Date(broadcast.scheduledStartTime).toLocaleTimeString('en-US', { 
-                hour: '2-digit', minute: '2-digit', hour12: false 
-              }) %>
-            </span>
-          </div>
-          
-          <!-- Stream Key -->
-          <div class="mt-3 flex items-center gap-2">
-            <div class="flex-1 bg-dark-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-300 truncate">
-              <%= broadcast.streamKey || 'No stream key' %>
+          </td>
+          <td class="px-4 py-3 text-sm text-gray-400">
+            <div class="flex items-center gap-1">
+              <i class="ti ti-calendar text-xs"></i>
+              <%= new Date(broadcast.scheduledStartTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) %>
             </div>
-            <button onclick="copyStreamKey('<%= broadcast.streamKey %>')"
-              class="bg-dark-700 hover:bg-dark-600 px-3 py-2 rounded-lg transition-colors" title="Copy Stream Key">
-              <i class="ti ti-copy"></i>
-            </button>
-          </div>
+            <div class="flex items-center gap-1 text-xs">
+              <i class="ti ti-clock text-xs"></i>
+              <%= new Date(broadcast.scheduledStartTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) %>
+            </div>
+          </td>
+          <td class="px-4 py-3">
+            <div class="flex items-center gap-2">
+              <div class="flex-1 bg-dark-700 rounded px-2 py-1.5 font-mono text-xs text-gray-300 truncate">
+                <%= broadcast.streamKey || 'No stream key' %>
+              </div>
+              <button onclick="copyStreamKey('<%= broadcast.streamKey || '' %>')"
+                class="bg-dark-700 hover:bg-dark-600 p-1.5 rounded transition-colors flex-shrink-0" title="Copy Stream Key">
+                <i class="ti ti-copy text-sm"></i>
+              </button>
+            </div>
+          </td>
+          <td class="px-4 py-3 text-right">
+            <div class="flex items-center justify-end gap-1">
+              <button onclick="editBroadcast('<%= broadcast.id %>', <%= broadcast.accountId %>)"
+                class="p-1.5 text-gray-400 hover:text-blue-400 transition-colors" title="Edit">
+                <i class="ti ti-edit"></i>
+              </button>
+              <button onclick="reuseBroadcast('<%= broadcast.id %>', <%= broadcast.accountId %>)"
+                class="p-1.5 text-gray-400 hover:text-primary transition-colors" title="Copy/Reuse">
+                <i class="ti ti-copy"></i>
+              </button>
+              <button onclick="deleteBroadcast('<%= broadcast.id %>', '<%= broadcast.title.replace(/'/g, "\\'") %>', <%= broadcast.accountId %>)"
+                class="p-1.5 text-gray-400 hover:text-red-400 transition-colors" title="Delete">
+                <i class="ti ti-trash"></i>
+              </button>
+            </div>
+          </td>
+        </tr>
+        <% }); %>
+      </tbody>
+    </table>
+  </div>
+  
+  <!-- Mobile Card View -->
+  <div class="md:hidden space-y-3">
+    <% broadcasts.forEach(function(broadcast, index) { %>
+    <div class="bg-gray-800 rounded-lg p-4 shadow-md">
+      <!-- Header: Number, Title, Status -->
+      <div class="flex items-start justify-between gap-2 mb-2">
+        <div class="flex items-center gap-2 min-w-0">
+          <span class="text-primary font-bold text-sm">#<%= index + 1 %></span>
+          <span class="font-medium text-sm truncate"><%= broadcast.title %></span>
         </div>
-        
-        <!-- Actions -->
-        <div class="flex md:flex-col gap-2 flex-shrink-0">
-          <button onclick="reuseBroadcast('<%= broadcast.id %>', <%= broadcast.accountId %>)"
-            class="flex-1 md:flex-none bg-primary/10 hover:bg-primary/20 text-primary px-3 py-2 rounded-lg transition-colors flex items-center justify-center gap-1" title="Reuse">
-            <i class="ti ti-copy"></i>
-            <span class="md:hidden text-sm">Reuse</span>
-          </button>
-          <button onclick="editBroadcast('<%= broadcast.id %>', <%= broadcast.accountId %>)"
-            class="flex-1 md:flex-none bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 px-3 py-2 rounded-lg transition-colors flex items-center justify-center gap-1" title="Edit">
-            <i class="ti ti-edit"></i>
-            <span class="md:hidden text-sm">Edit</span>
-          </button>
-          <button onclick="deleteBroadcast('<%= broadcast.id %>', '<%= broadcast.title.replace(/'/g, "\\'") %>', <%= broadcast.accountId %>)"
-            class="flex-1 md:flex-none bg-red-500/10 hover:bg-red-500/20 text-red-400 px-3 py-2 rounded-lg transition-colors flex items-center justify-center gap-1" title="Delete">
-            <i class="ti ti-trash"></i>
-            <span class="md:hidden text-sm">Delete</span>
-          </button>
+        <span class="px-2 py-0.5 rounded text-xs font-medium flex-shrink-0
+          <%= broadcast.privacyStatus === 'public' ? 'bg-green-500/20 text-green-400' : 
+              broadcast.privacyStatus === 'unlisted' ? 'bg-yellow-500/20 text-yellow-400' : 
+              'bg-gray-500/20 text-gray-400' %>">
+          <%= broadcast.privacyStatus %>
+        </span>
+      </div>
+      
+      <!-- Channel Name -->
+      <% if (broadcast.channelName) { %>
+      <div class="flex items-center gap-1 text-xs text-red-400 mb-2">
+        <i class="ti ti-brand-youtube"></i>
+        <span><%= broadcast.channelName %></span>
+      </div>
+      <% } %>
+      
+      <!-- Schedule -->
+      <div class="flex items-center gap-3 text-xs text-gray-400 mb-3">
+        <span class="flex items-center gap-1">
+          <i class="ti ti-calendar"></i>
+          <%= new Date(broadcast.scheduledStartTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) %>
+        </span>
+        <span class="flex items-center gap-1">
+          <i class="ti ti-clock"></i>
+          <%= new Date(broadcast.scheduledStartTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) %>
+        </span>
+      </div>
+      
+      <!-- Stream Key -->
+      <div class="flex items-center gap-2 mb-3">
+        <div class="flex-1 bg-dark-700 rounded-lg px-3 py-2.5 font-mono text-xs text-gray-300 truncate">
+          <%= broadcast.streamKey || 'No stream key' %>
         </div>
+        <button onclick="copyStreamKey('<%= broadcast.streamKey || '' %>')"
+          class="bg-dark-700 hover:bg-dark-600 p-2.5 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" title="Copy Stream Key">
+          <i class="ti ti-copy"></i>
+        </button>
+      </div>
+      
+      <!-- Action Buttons -->
+      <div class="flex items-center gap-2">
+        <button onclick="editBroadcast('<%= broadcast.id %>', <%= broadcast.accountId %>)"
+          class="flex-1 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 px-3 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-1 min-h-[44px] active:bg-blue-500/30">
+          <i class="ti ti-edit"></i>
+          <span class="text-sm">Edit</span>
+        </button>
+        <button onclick="reuseBroadcast('<%= broadcast.id %>', <%= broadcast.accountId %>)"
+          class="flex-1 bg-primary/10 hover:bg-primary/20 text-primary px-3 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-1 min-h-[44px] active:bg-primary/30">
+          <i class="ti ti-copy"></i>
+          <span class="text-sm">Copy</span>
+        </button>
+        <button onclick="deleteBroadcast('<%= broadcast.id %>', '<%= broadcast.title.replace(/'/g, "\\'") %>', <%= broadcast.accountId %>)"
+          class="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 px-3 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-1 min-h-[44px] active:bg-red-500/30">
+          <i class="ti ti-trash"></i>
+          <span class="text-sm">Delete</span>
+        </button>
       </div>
     </div>
     <% }); %>
