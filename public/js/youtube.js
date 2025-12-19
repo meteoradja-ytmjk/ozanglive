@@ -931,37 +931,6 @@ function copyStreamKey(streamKey) {
   });
 }
 
-// Go to Edit Stream Schedule - shortcut from YouTube Sync page
-async function goToEditStream(streamKey) {
-  if (!streamKey) {
-    // No stream key, just go to schedule page
-    window.location.href = '/schedule';
-    return;
-  }
-  
-  try {
-    const response = await fetch(`/api/streams/by-stream-key/${encodeURIComponent(streamKey)}`, {
-      headers: {
-        'X-CSRF-Token': getCsrfToken()
-      }
-    });
-    
-    const data = await response.json();
-    
-    if (data.success && data.stream) {
-      // Stream found, redirect to schedule page with edit parameter
-      window.location.href = `/schedule?edit=${data.stream.id}`;
-    } else {
-      // Stream not found by stream_key, just go to schedule page
-      window.location.href = '/schedule';
-    }
-  } catch (error) {
-    console.error('Error finding stream:', error);
-    // On error, just go to schedule page
-    window.location.href = '/schedule';
-  }
-}
-
 // Change Thumbnail Modal
 function changeThumbnail(broadcastId) {
   document.getElementById('changeThumbnailBroadcastId').value = broadcastId;
