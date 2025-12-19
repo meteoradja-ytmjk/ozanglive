@@ -764,9 +764,32 @@ async function deleteBroadcast(broadcastId, title, accountId = null) {
 
 // Edit Broadcast
 async function editBroadcast(broadcastId, accountId) {
-  // For now, show a message that edit is coming soon
-  // Full implementation requires YouTube API update broadcast endpoint
-  showToast('Edit feature coming soon. Please use YouTube Studio for now.', 'info');
+  try {
+    // Fetch broadcast details
+    const response = await fetch(`/api/youtube/broadcasts?accountId=${accountId}`, {
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (data.success && data.broadcasts) {
+      const broadcast = data.broadcasts.find(b => b.id === broadcastId);
+      if (broadcast) {
+        // Add accountId to broadcast object for the modal
+        broadcast.accountId = accountId;
+        openEditBroadcastModal(broadcast);
+      } else {
+        showToast('Broadcast not found', 'error');
+      }
+    } else {
+      showToast(data.error || 'Failed to load broadcast', 'error');
+    }
+  } catch (error) {
+    console.error('Error fetching broadcast:', error);
+    showToast('Failed to load broadcast', 'error');
+  }
 }
 
 // Open Edit Broadcast Modal
@@ -790,6 +813,61 @@ function openEditBroadcastModal(broadcast) {
 function closeEditBroadcastModal() {
   document.getElementById('editBroadcastModal').classList.add('hidden');
   document.getElementById('editBroadcastForm').reset();
+}
+
+// Edit Broadcast Form Handler
+const editBroadcastForm = document.getElementById('editBroadcastForm');
+if (editBroadcastForm) {
+  editBroadcastForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const updateBtn = document.getElementById('updateBroadcastBtn');
+    const originalText = updateBtn.innerHTML;
+    updateBtn.innerHTML = '<i class="ti ti-loader animate-spin"></i> Updating...';
+    updateBtn.disabled = true;
+    
+    try {
+      const broadcastId = document.getElementById('editBroadcastId').value;
+      const accountId = document.getElementById('editAccountId').value;
+      
+      const updateData = {
+        title: document.getElementById('editBroadcastTitle').value,
+        description: document.getElementById('editBroadcastDescription').value,
+        scheduledStartTime: document.getElementById('editScheduledStartTime').value,
+        privacyStatus: document.getElementById('editPrivacyStatus').value
+      };
+      
+      let url = `/api/youtube/broadcasts/${broadcastId}`;
+      if (accountId) {
+        url += `?accountId=${accountId}`;
+      }
+      
+      const response = await fetch(url, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': getCsrfToken()
+        },
+        body: JSON.stringify(updateData)
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        showToast('Broadcast updated successfully!');
+        closeEditBroadcastModal();
+        setTimeout(() => window.location.reload(), 1000);
+      } else {
+        showToast(data.error || 'Failed to update broadcast', 'error');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      showToast('An error occurred', 'error');
+    } finally {
+      updateBtn.innerHTML = originalText;
+      updateBtn.disabled = false;
+    }
+  });
 }
 
 // Reuse Broadcast - opens create modal with pre-filled data

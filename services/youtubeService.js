@@ -286,6 +286,67 @@ class YouTubeService {
   }
 
   /**
+   * Update a broadcast
+   * @param {string} accessToken - Access token
+   * @param {string} broadcastId - Broadcast ID to update
+   * @param {Object} data - Update data
+   * @param {string} [data.title] - New title
+   * @param {string} [data.description] - New description
+   * @param {string} [data.scheduledStartTime] - New scheduled start time
+   * @param {string} [data.privacyStatus] - New privacy status
+   * @returns {Promise<Object>} Updated broadcast info
+   */
+  async updateBroadcast(accessToken, broadcastId, { title, description, scheduledStartTime, privacyStatus }) {
+    const oauth2Client = new google.auth.OAuth2();
+    oauth2Client.setCredentials({ access_token: accessToken });
+    
+    const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+    
+    // First, get the current broadcast to preserve existing values
+    const currentResponse = await youtube.liveBroadcasts.list({
+      part: 'snippet,status',
+      id: broadcastId
+    });
+    
+    if (!currentResponse.data.items || currentResponse.data.items.length === 0) {
+      throw new Error('Broadcast not found');
+    }
+    
+    const current = currentResponse.data.items[0];
+    
+    // Build update request
+    const updateRequest = {
+      id: broadcastId,
+      snippet: {
+        title: title || current.snippet.title,
+        description: description !== undefined ? description : current.snippet.description,
+        scheduledStartTime: scheduledStartTime ? new Date(scheduledStartTime).toISOString() : current.snippet.scheduledStartTime
+      },
+      status: {
+        privacyStatus: privacyStatus || current.status.privacyStatus,
+        selfDeclaredMadeForKids: current.status.selfDeclaredMadeForKids || false
+      }
+    };
+    
+    // Update the broadcast
+    const response = await youtube.liveBroadcasts.update({
+      part: 'snippet,status',
+      requestBody: updateRequest
+    });
+    
+    const broadcast = response.data;
+    
+    return {
+      id: broadcast.id,
+      title: broadcast.snippet.title,
+      description: broadcast.snippet.description,
+      scheduledStartTime: broadcast.snippet.scheduledStartTime,
+      privacyStatus: broadcast.status.privacyStatus,
+      thumbnailUrl: broadcast.snippet.thumbnails?.default?.url || ''
+    };
+  }
+
+  /**
    * Get channel default settings for broadcasts
    * @param {string} accessToken - Access token
    * @returns {Promise<{title: string, description: string, tags: string[], monetizationEnabled: boolean, alteredContent: boolean, categoryId: string}>}

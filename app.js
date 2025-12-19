@@ -4192,6 +4192,67 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
   }
 });
 
+// Update YouTube broadcast - supports accountId parameter
+app.put('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
+  try {
+    const accountId = req.query.accountId ? parseInt(req.query.accountId) : null;
+    const { title, description, scheduledStartTime, privacyStatus } = req.body;
+    
+    let credentials;
+    
+    if (accountId) {
+      credentials = await YouTubeCredentials.findById(accountId);
+      if (!credentials || credentials.userId !== req.session.userId) {
+        return res.status(404).json({ success: false, error: 'Account not found' });
+      }
+    } else {
+      // Try to find the account that owns this broadcast by checking all accounts
+      const accounts = await YouTubeCredentials.findAllByUserId(req.session.userId);
+      for (const account of accounts) {
+        try {
+          const accessToken = await youtubeService.getAccessToken(
+            account.clientId,
+            account.clientSecret,
+            account.refreshToken
+          );
+          const result = await youtubeService.updateBroadcast(accessToken, req.params.id, {
+            title,
+            description,
+            scheduledStartTime,
+            privacyStatus
+          });
+          return res.json({ success: true, broadcast: result });
+        } catch (err) {
+          // Continue to next account if this one doesn't own the broadcast
+          continue;
+        }
+      }
+      return res.status(404).json({ success: false, error: 'Broadcast not found' });
+    }
+    
+    const accessToken = await youtubeService.getAccessToken(
+      credentials.clientId,
+      credentials.clientSecret,
+      credentials.refreshToken
+    );
+    
+    const result = await youtubeService.updateBroadcast(accessToken, req.params.id, {
+      title,
+      description,
+      scheduledStartTime,
+      privacyStatus
+    });
+    
+    res.json({ success: true, broadcast: result });
+  } catch (error) {
+    console.error('Error updating broadcast:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to update broadcast'
+    });
+  }
+});
+
 // Delete YouTube broadcast - supports accountId parameter
 app.delete('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
   try {
