@@ -14,6 +14,10 @@
     - Add "No" column header
     - Display sequential number for each broadcast using forEach index + 1
     - _Requirements: 1.1, 1.2_
+
+
+
+
   - [x] 1.3 Restructure broadcast info columns
 
     - Combine title, channel name, and privacy status in one column

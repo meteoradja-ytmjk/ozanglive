@@ -16,7 +16,8 @@ let dbInitError = null;
 const REQUIRED_TABLES = [
   'users', 'videos', 'streams', 'stream_history',
   'playlists', 'playlist_videos', 'audios',
-  'system_settings', 'stream_templates', 'youtube_credentials'
+  'system_settings', 'stream_templates', 'youtube_credentials',
+  'broadcast_templates'
 ];
 
 const db = new sqlite3.Database(dbPath, (err) => {
@@ -333,6 +334,28 @@ async function createCoreTablesAsync() {
 
   // Run migration for youtube_credentials table if needed
   await migrateYouTubeCredentialsTableAsync();
+
+  // Create broadcast_templates table for YouTube broadcast templates
+  await runTableQuery(`CREATE TABLE IF NOT EXISTS broadcast_templates (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    account_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT,
+    privacy_status TEXT DEFAULT 'unlisted',
+    tags TEXT,
+    category_id TEXT DEFAULT '20',
+    thumbnail_path TEXT,
+    stream_id TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (account_id) REFERENCES youtube_credentials(id) ON DELETE CASCADE
+  )`, 'broadcast_templates');
+
+  await runTableQuery(`CREATE UNIQUE INDEX IF NOT EXISTS idx_broadcast_templates_user_name 
+          ON broadcast_templates(user_id, name)`, 'broadcast_templates.index');
 }
 
 // Old createCoreTables function removed - replaced with createCoreTablesAsync above

@@ -112,11 +112,18 @@
   <!-- Create Broadcast Button -->
   <div class="flex items-center justify-between mb-6">
     <h2 class="text-xl font-semibold">Scheduled Broadcasts</h2>
-    <button onclick="openCreateBroadcastModal()"
-      class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
-      <i class="ti ti-plus"></i>
-      <span>Create Broadcast</span>
-    </button>
+    <div class="flex items-center gap-2">
+      <button onclick="openTemplateLibraryModal()"
+        class="bg-primary/20 hover:bg-primary/30 text-primary px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
+        <i class="ti ti-template"></i>
+        <span>Templates</span>
+      </button>
+      <button onclick="openCreateBroadcastModal()"
+        class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
+        <i class="ti ti-plus"></i>
+        <span>Create Broadcast</span>
+      </button>
+    </div>
   </div>
 
   <!-- Broadcasts List -->
@@ -166,22 +173,34 @@
             </div>
           </td>
           <td class="px-4 py-3">
-            <div class="bg-dark-700 rounded px-2 py-1.5 font-mono text-xs text-gray-300 truncate">
-              <%= broadcast.streamKey || 'No stream key' %>
+            <div class="flex items-center gap-2">
+              <div class="flex-1 bg-dark-700 rounded px-2 py-1.5 font-mono text-xs text-gray-300 truncate">
+                <%= broadcast.streamKey || 'No stream key' %>
+              </div>
+              <% if (broadcast.streamKey) { %>
+              <button onclick="copyStreamKey('<%= broadcast.streamKey %>')"
+                class="p-1.5 text-gray-400 hover:text-green-400 transition-colors flex-shrink-0" title="Copy Stream Key">
+                <i class="ti ti-clipboard"></i>
+              </button>
+              <% } %>
             </div>
           </td>
           <td class="px-4 py-3 text-right">
             <div class="flex items-center justify-end gap-1">
+              <button onclick="openSaveAsTemplateModal('<%= broadcast.id %>', <%= broadcast.accountId %>, '<%= broadcast.title.replace(/'/g, "\\'") %>', '<%= broadcast.privacyStatus %>', '<%= broadcast.categoryId || '20' %>')"
+                class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-yellow-400 hover:bg-yellow-500/10 rounded transition-colors" title="Save as Template">
+                <i class="ti ti-template"></i>
+              </button>
               <button onclick="editBroadcast('<%= broadcast.id %>', <%= broadcast.accountId %>)"
-                class="p-1.5 text-gray-400 hover:text-blue-400 transition-colors" title="Edit">
+                class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 rounded transition-colors" title="Edit">
                 <i class="ti ti-edit"></i>
               </button>
               <button onclick="reuseBroadcast('<%= broadcast.id %>', <%= broadcast.accountId %>)"
-                class="p-1.5 text-gray-400 hover:text-primary transition-colors" title="Copy/Reuse">
+                class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-primary hover:bg-primary/10 rounded transition-colors" title="Copy/Reuse">
                 <i class="ti ti-copy"></i>
               </button>
               <button onclick="deleteBroadcast('<%= broadcast.id %>', '<%= broadcast.title.replace(/'/g, "\\'") %>', <%= broadcast.accountId %>)"
-                class="p-1.5 text-gray-400 hover:text-red-400 transition-colors" title="Delete">
+                class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors" title="Delete">
                 <i class="ti ti-trash"></i>
               </button>
             </div>
@@ -231,26 +250,35 @@
       </div>
       
       <!-- Stream Key -->
-      <div class="bg-dark-700 rounded-lg px-3 py-2.5 font-mono text-xs text-gray-300 truncate mb-3">
-        <%= broadcast.streamKey || 'No stream key' %>
+      <div class="flex items-center gap-2 mb-3">
+        <div class="flex-1 bg-dark-700 rounded-lg px-3 py-2.5 font-mono text-xs text-gray-300 truncate">
+          <%= broadcast.streamKey || 'No stream key' %>
+        </div>
+        <% if (broadcast.streamKey) { %>
+        <button onclick="copyStreamKey('<%= broadcast.streamKey %>')"
+          class="bg-dark-700 hover:bg-green-500/20 text-gray-400 hover:text-green-400 px-3 py-2.5 rounded-lg transition-colors flex items-center justify-center min-h-[44px] min-w-[44px] active:bg-green-500/30" title="Copy Stream Key">
+          <i class="ti ti-clipboard"></i>
+        </button>
+        <% } %>
       </div>
       
       <!-- Action Buttons -->
-      <div class="flex items-center gap-2">
+      <div class="grid grid-cols-4 gap-2">
+        <button onclick="openSaveAsTemplateModal('<%= broadcast.id %>', <%= broadcast.accountId %>, '<%= broadcast.title.replace(/'/g, "\\'") %>', '<%= broadcast.privacyStatus %>', '<%= broadcast.categoryId || '20' %>')"
+          class="bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 px-2 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-1 min-h-[44px] active:bg-yellow-500/30">
+          <i class="ti ti-template"></i>
+        </button>
         <button onclick="editBroadcast('<%= broadcast.id %>', <%= broadcast.accountId %>)"
-          class="flex-1 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 px-3 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-1 min-h-[44px] active:bg-blue-500/30">
+          class="bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 px-2 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-1 min-h-[44px] active:bg-blue-500/30">
           <i class="ti ti-edit"></i>
-          <span class="text-sm">Edit</span>
         </button>
         <button onclick="reuseBroadcast('<%= broadcast.id %>', <%= broadcast.accountId %>)"
-          class="flex-1 bg-primary/10 hover:bg-primary/20 text-primary px-3 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-1 min-h-[44px] active:bg-primary/30">
+          class="bg-primary/10 hover:bg-primary/20 text-primary px-2 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-1 min-h-[44px] active:bg-primary/30">
           <i class="ti ti-copy"></i>
-          <span class="text-sm">Copy</span>
         </button>
         <button onclick="deleteBroadcast('<%= broadcast.id %>', '<%= broadcast.title.replace(/'/g, "\\'") %>', <%= broadcast.accountId %>)"
-          class="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 px-3 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-1 min-h-[44px] active:bg-red-500/30">
+          class="bg-red-500/10 hover:bg-red-500/20 text-red-400 px-2 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-1 min-h-[44px] active:bg-red-500/30">
           <i class="ti ti-trash"></i>
-          <span class="text-sm">Delete</span>
         </button>
       </div>
     </div>
@@ -622,6 +650,275 @@
           </button>
         </div>
       </form>
+    </div>
+  </div>
+</div>
+
+<!-- Template Library Modal -->
+<div id="templateLibraryModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto">
+  <div class="flex min-h-screen items-center justify-center p-4">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-2xl">
+      <div class="flex items-center justify-between p-6 border-b border-gray-700">
+        <h3 class="text-lg font-semibold">Template Library</h3>
+        <button onclick="closeTemplateLibraryModal()" class="text-gray-400 hover:text-white">
+          <i class="ti ti-x text-xl"></i>
+        </button>
+      </div>
+      
+      <div class="p-6">
+        <div class="flex items-center justify-between mb-4">
+          <p class="text-sm text-gray-400">Manage your broadcast templates</p>
+          <button onclick="openCreateTemplateModal()"
+            class="bg-primary hover:bg-primary/80 text-white px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-2">
+            <i class="ti ti-plus"></i>
+            <span>New Template</span>
+          </button>
+        </div>
+        
+        <div id="templateList" class="space-y-3">
+          <div id="templateListLoading" class="text-center py-8">
+            <i class="ti ti-loader animate-spin text-gray-400 text-2xl"></i>
+            <p class="text-gray-500 text-sm mt-2">Loading templates...</p>
+          </div>
+          <div id="templateListEmpty" class="hidden text-center py-8">
+            <div class="w-16 h-16 bg-dark-700 rounded-full flex items-center justify-center mx-auto mb-4">
+              <i class="ti ti-template text-gray-500 text-2xl"></i>
+            </div>
+            <p class="text-gray-400 font-medium mb-2">No templates yet</p>
+            <p class="text-gray-500 text-sm">Create your first template to get started</p>
+          </div>
+          <div id="templateListContent" class="hidden space-y-3">
+            <!-- Templates will be rendered here -->
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Save as Template Modal -->
+<div id="saveAsTemplateModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay">
+  <div class="flex min-h-screen items-center justify-center p-4">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-md">
+      <div class="flex items-center justify-between p-6 border-b border-gray-700">
+        <h3 class="text-lg font-semibold">Save as Template</h3>
+        <button onclick="closeSaveAsTemplateModal()" class="text-gray-400 hover:text-white">
+          <i class="ti ti-x text-xl"></i>
+        </button>
+      </div>
+      
+      <form id="saveAsTemplateForm" class="p-6 space-y-4">
+        <input type="hidden" id="saveTemplateBroadcastId">
+        <input type="hidden" id="saveTemplateAccountId">
+        
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Template Name <span class="text-red-400">*</span></label>
+          <input type="text" id="saveTemplateName" name="name" required
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none"
+            placeholder="Enter template name">
+        </div>
+        
+        <div id="saveTemplatePreview" class="bg-dark-700 rounded-lg p-4 border border-gray-600">
+          <p class="text-sm text-gray-400 mb-2">Settings to save:</p>
+          <div class="text-xs text-gray-500 space-y-1">
+            <p><span class="text-gray-400">Title:</span> <span id="previewTitle">-</span></p>
+            <p><span class="text-gray-400">Privacy:</span> <span id="previewPrivacy">-</span></p>
+            <p><span class="text-gray-400">Category:</span> <span id="previewCategory">-</span></p>
+          </div>
+        </div>
+        
+        <div class="pt-2 flex gap-3">
+          <button type="button" onclick="closeSaveAsTemplateModal()"
+            class="flex-1 bg-dark-700 hover:bg-dark-600 text-white px-4 py-2.5 rounded-lg transition-colors">
+            Cancel
+          </button>
+          <button type="submit" id="saveTemplateBtn"
+            class="flex-1 bg-primary hover:bg-primary/80 text-white px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
+            <i class="ti ti-device-floppy"></i>
+            <span>Save Template</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Create Template Modal -->
+<div id="createTemplateModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto">
+  <div class="flex min-h-screen items-center justify-center p-4">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-lg">
+      <div class="flex items-center justify-between p-6 border-b border-gray-700">
+        <h3 class="text-lg font-semibold">Create New Template</h3>
+        <button onclick="closeCreateTemplateModal()" class="text-gray-400 hover:text-white">
+          <i class="ti ti-x text-xl"></i>
+        </button>
+      </div>
+      
+      <form id="createTemplateForm" class="p-6 space-y-4">
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Template Name <span class="text-red-400">*</span></label>
+          <input type="text" id="templateName" name="name" required
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none"
+            placeholder="Enter template name">
+        </div>
+        
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">YouTube Account <span class="text-red-400">*</span></label>
+          <select id="templateAccountSelect" name="accountId" required
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none">
+            <% if (accounts && accounts.length > 0) { %>
+              <% accounts.forEach(function(account) { %>
+              <option value="<%= account.id %>" <%= account.isPrimary ? 'selected' : '' %>><%= account.channelName || 'YouTube Channel' %></option>
+              <% }); %>
+            <% } %>
+          </select>
+        </div>
+        
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Title <span class="text-red-400">*</span></label>
+          <input type="text" id="templateTitle" name="title" required
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none"
+            placeholder="Enter broadcast title">
+        </div>
+        
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Description</label>
+          <textarea id="templateDescription" name="description" rows="3"
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none resize-none"
+            placeholder="Enter broadcast description (optional)"></textarea>
+        </div>
+        
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Privacy Status</label>
+          <select id="templatePrivacyStatus" name="privacyStatus"
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none">
+            <option value="unlisted">Unlisted</option>
+            <option value="public">Public</option>
+            <option value="private">Private</option>
+          </select>
+        </div>
+        
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Category</label>
+          <select id="templateCategoryId" name="categoryId"
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none">
+            <option value="1">Film & Animation</option>
+            <option value="2">Autos & Vehicles</option>
+            <option value="10">Music</option>
+            <option value="15">Pets & Animals</option>
+            <option value="17">Sports</option>
+            <option value="20" selected>Gaming</option>
+            <option value="22">People & Blogs</option>
+            <option value="24">Entertainment</option>
+            <option value="28">Science & Technology</option>
+          </select>
+        </div>
+        
+        <div class="pt-4 flex gap-3">
+          <button type="button" onclick="closeCreateTemplateModal()"
+            class="flex-1 bg-dark-700 hover:bg-dark-600 text-white px-4 py-2.5 rounded-lg transition-colors">
+            Cancel
+          </button>
+          <button type="submit" id="createTemplateBtn"
+            class="flex-1 bg-primary hover:bg-primary/80 text-white px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
+            <i class="ti ti-template"></i>
+            <span>Create Template</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Bulk Create Modal -->
+<div id="bulkCreateModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto">
+  <div class="flex min-h-screen items-center justify-center p-4">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-lg">
+      <div class="flex items-center justify-between p-6 border-b border-gray-700">
+        <h3 class="text-lg font-semibold">Bulk Create Broadcasts</h3>
+        <button onclick="closeBulkCreateModal()" class="text-gray-400 hover:text-white">
+          <i class="ti ti-x text-xl"></i>
+        </button>
+      </div>
+      
+      <form id="bulkCreateForm" class="p-6 space-y-4">
+        <input type="hidden" id="bulkCreateTemplateId">
+        
+        <div class="bg-dark-700 rounded-lg p-4 border border-gray-600 mb-4">
+          <p class="text-sm text-gray-400">Template: <span id="bulkCreateTemplateName" class="text-white font-medium">-</span></p>
+        </div>
+        
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <label class="text-sm font-medium text-white">Schedule Times</label>
+            <button type="button" onclick="addBulkSchedule()"
+              class="text-primary hover:text-primary/80 text-sm flex items-center gap-1">
+              <i class="ti ti-plus"></i>
+              Add Schedule
+            </button>
+          </div>
+          <div id="bulkScheduleList" class="space-y-2">
+            <!-- Schedule inputs will be added here -->
+          </div>
+        </div>
+        
+        <div class="pt-4 flex gap-3">
+          <button type="button" onclick="closeBulkCreateModal()"
+            class="flex-1 bg-dark-700 hover:bg-dark-600 text-white px-4 py-2.5 rounded-lg transition-colors">
+            Cancel
+          </button>
+          <button type="submit" id="bulkCreateBtn"
+            class="flex-1 bg-red-500 hover:bg-red-600 text-white px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
+            <i class="ti ti-broadcast"></i>
+            <span>Create All</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Bulk Create Result Modal -->
+<div id="bulkCreateResultModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay">
+  <div class="flex min-h-screen items-center justify-center p-4">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-md">
+      <div class="flex items-center justify-between p-6 border-b border-gray-700">
+        <h3 class="text-lg font-semibold">Bulk Create Results</h3>
+        <button onclick="closeBulkCreateResultModal()" class="text-gray-400 hover:text-white">
+          <i class="ti ti-x text-xl"></i>
+        </button>
+      </div>
+      
+      <div class="p-6">
+        <div id="bulkCreateResultSummary" class="grid grid-cols-3 gap-4 mb-4">
+          <div class="bg-dark-700 rounded-lg p-3 text-center">
+            <p class="text-2xl font-bold text-white" id="bulkResultTotal">0</p>
+            <p class="text-xs text-gray-400">Total</p>
+          </div>
+          <div class="bg-green-500/20 rounded-lg p-3 text-center">
+            <p class="text-2xl font-bold text-green-400" id="bulkResultSuccess">0</p>
+            <p class="text-xs text-gray-400">Success</p>
+          </div>
+          <div class="bg-red-500/20 rounded-lg p-3 text-center">
+            <p class="text-2xl font-bold text-red-400" id="bulkResultFailed">0</p>
+            <p class="text-xs text-gray-400">Failed</p>
+          </div>
+        </div>
+        
+        <div id="bulkCreateErrors" class="hidden">
+          <p class="text-sm text-gray-400 mb-2">Errors:</p>
+          <div id="bulkCreateErrorList" class="bg-dark-700 rounded-lg p-3 max-h-40 overflow-y-auto text-xs text-red-400 space-y-1">
+            <!-- Errors will be listed here -->
+          </div>
+        </div>
+        
+        <div class="pt-4">
+          <button type="button" onclick="closeBulkCreateResultModal()"
+            class="w-full bg-primary hover:bg-primary/80 text-white px-4 py-2.5 rounded-lg transition-colors">
+            Done
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </div>

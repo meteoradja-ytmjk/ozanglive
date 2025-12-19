@@ -1031,3 +1031,488 @@ document.addEventListener('keydown', (e) => {
     });
   }
 });
+
+// ==========================================
+// Template Management Functions
+// ==========================================
+
+// Template Library Modal
+function openTemplateLibraryModal() {
+  document.getElementById('templateLibraryModal').classList.remove('hidden');
+  loadTemplates();
+}
+
+function closeTemplateLibraryModal() {
+  document.getElementById('templateLibraryModal').classList.add('hidden');
+}
+
+// Load templates from API
+async function loadTemplates() {
+  const loading = document.getElementById('templateListLoading');
+  const empty = document.getElementById('templateListEmpty');
+  const content = document.getElementById('templateListContent');
+  
+  loading.classList.remove('hidden');
+  empty.classList.add('hidden');
+  content.classList.add('hidden');
+  
+  try {
+    const response = await fetch('/api/youtube/templates', {
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (data.success && data.templates && data.templates.length > 0) {
+      renderTemplateList(data.templates);
+      content.classList.remove('hidden');
+    } else {
+      empty.classList.remove('hidden');
+    }
+  } catch (error) {
+    console.error('Error loading templates:', error);
+    showToast('Failed to load templates', 'error');
+    empty.classList.remove('hidden');
+  } finally {
+    loading.classList.add('hidden');
+  }
+}
+
+// Render template list
+function renderTemplateList(templates) {
+  const content = document.getElementById('templateListContent');
+  content.innerHTML = '';
+  
+  templates.forEach(template => {
+    const div = document.createElement('div');
+    div.className = 'bg-dark-700 rounded-lg p-4';
+    div.innerHTML = `
+      <div class="flex items-start justify-between gap-4">
+        <div class="flex-1 min-w-0">
+          <h4 class="font-medium text-white truncate">${escapeHtml(template.name)}</h4>
+          <p class="text-sm text-gray-400 truncate">${escapeHtml(template.title)}</p>
+          <div class="flex items-center gap-2 mt-1">
+            <span class="text-xs text-red-400 flex items-center gap-1">
+              <i class="ti ti-brand-youtube"></i>
+              ${escapeHtml(template.channel_name || 'Unknown Channel')}
+            </span>
+            <span class="text-xs text-gray-500">
+              ${new Date(template.created_at).toLocaleDateString()}
+            </span>
+          </div>
+        </div>
+        <div class="flex items-center gap-1 flex-shrink-0">
+          <button onclick="createFromTemplate('${template.id}')"
+            class="p-2 text-gray-400 hover:text-green-400 hover:bg-green-500/10 rounded transition-colors" title="Create Broadcast">
+            <i class="ti ti-broadcast"></i>
+          </button>
+          <button onclick="openBulkCreateModal('${template.id}', '${escapeHtml(template.name)}')"
+            class="p-2 text-gray-400 hover:text-primary hover:bg-primary/10 rounded transition-colors" title="Bulk Create">
+            <i class="ti ti-stack-2"></i>
+          </button>
+          <button onclick="editTemplate('${template.id}')"
+            class="p-2 text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 rounded transition-colors" title="Edit">
+            <i class="ti ti-edit"></i>
+          </button>
+          <button onclick="deleteTemplate('${template.id}', '${escapeHtml(template.name)}')"
+            class="p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors" title="Delete">
+            <i class="ti ti-trash"></i>
+          </button>
+        </div>
+      </div>
+    `;
+    content.appendChild(div);
+  });
+}
+
+// Create Template Modal
+function openCreateTemplateModal() {
+  closeTemplateLibraryModal();
+  document.getElementById('createTemplateModal').classList.remove('hidden');
+}
+
+function closeCreateTemplateModal() {
+  document.getElementById('createTemplateModal').classList.add('hidden');
+  document.getElementById('createTemplateForm').reset();
+}
+
+// Create Template Form Handler
+const createTemplateForm = document.getElementById('createTemplateForm');
+if (createTemplateForm) {
+  createTemplateForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const createBtn = document.getElementById('createTemplateBtn');
+    const originalText = createBtn.innerHTML;
+    createBtn.innerHTML = '<i class="ti ti-loader animate-spin"></i> Creating...';
+    createBtn.disabled = true;
+    
+    try {
+      const templateData = {
+        name: document.getElementById('templateName').value,
+        accountId: document.getElementById('templateAccountSelect').value,
+        title: document.getElementById('templateTitle').value,
+        description: document.getElementById('templateDescription').value,
+        privacyStatus: document.getElementById('templatePrivacyStatus').value,
+        categoryId: document.getElementById('templateCategoryId').value
+      };
+      
+      const response = await fetch('/api/youtube/templates', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': getCsrfToken()
+        },
+        body: JSON.stringify(templateData)
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        showToast('Template created successfully!');
+        closeCreateTemplateModal();
+        openTemplateLibraryModal();
+      } else {
+        showToast(data.error || 'Failed to create template', 'error');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      showToast('An error occurred', 'error');
+    } finally {
+      createBtn.innerHTML = originalText;
+      createBtn.disabled = false;
+    }
+  });
+}
+
+// Save as Template Modal
+function openSaveAsTemplateModal(broadcastId, accountId, title, privacyStatus, categoryId) {
+  document.getElementById('saveTemplateBroadcastId').value = broadcastId;
+  document.getElementById('saveTemplateAccountId').value = accountId;
+  document.getElementById('previewTitle').textContent = title || '-';
+  document.getElementById('previewPrivacy').textContent = privacyStatus || '-';
+  document.getElementById('previewCategory').textContent = categoryId || '-';
+  document.getElementById('saveAsTemplateModal').classList.remove('hidden');
+}
+
+function closeSaveAsTemplateModal() {
+  document.getElementById('saveAsTemplateModal').classList.add('hidden');
+  document.getElementById('saveAsTemplateForm').reset();
+}
+
+// Save as Template Form Handler
+const saveAsTemplateForm = document.getElementById('saveAsTemplateForm');
+if (saveAsTemplateForm) {
+  saveAsTemplateForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const saveBtn = document.getElementById('saveTemplateBtn');
+    const originalText = saveBtn.innerHTML;
+    saveBtn.innerHTML = '<i class="ti ti-loader animate-spin"></i> Saving...';
+    saveBtn.disabled = true;
+    
+    try {
+      const broadcastId = document.getElementById('saveTemplateBroadcastId').value;
+      const accountId = document.getElementById('saveTemplateAccountId').value;
+      const name = document.getElementById('saveTemplateName').value;
+      
+      // Fetch broadcast details first
+      const broadcastResponse = await fetch(`/api/youtube/broadcasts?accountId=${accountId}`, {
+        headers: {
+          'X-CSRF-Token': getCsrfToken()
+        }
+      });
+      
+      const broadcastData = await broadcastResponse.json();
+      
+      if (!broadcastData.success) {
+        throw new Error('Failed to fetch broadcast details');
+      }
+      
+      const broadcast = broadcastData.broadcasts.find(b => b.id === broadcastId);
+      if (!broadcast) {
+        throw new Error('Broadcast not found');
+      }
+      
+      // Create template from broadcast
+      const templateData = {
+        name: name,
+        accountId: accountId,
+        title: broadcast.title,
+        description: broadcast.description || '',
+        privacyStatus: broadcast.privacyStatus || 'unlisted',
+        tags: broadcast.tags || null,
+        categoryId: broadcast.categoryId || '20',
+        thumbnailPath: broadcast.thumbnailPath || null
+      };
+      
+      const response = await fetch('/api/youtube/templates', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': getCsrfToken()
+        },
+        body: JSON.stringify(templateData)
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        showToast('Template saved successfully!');
+        closeSaveAsTemplateModal();
+      } else {
+        showToast(data.error || 'Failed to save template', 'error');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      showToast(error.message || 'An error occurred', 'error');
+    } finally {
+      saveBtn.innerHTML = originalText;
+      saveBtn.disabled = false;
+    }
+  });
+}
+
+// Delete Template
+async function deleteTemplate(templateId, templateName) {
+  if (!confirm(`Are you sure you want to delete template "${templateName}"?`)) {
+    return;
+  }
+  
+  try {
+    const response = await fetch(`/api/youtube/templates/${templateId}`, {
+      method: 'DELETE',
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      showToast('Template deleted');
+      loadTemplates();
+    } else {
+      showToast(data.error || 'Failed to delete template', 'error');
+    }
+  } catch (error) {
+    console.error('Error:', error);
+    showToast('An error occurred', 'error');
+  }
+}
+
+// Edit Template
+async function editTemplate(templateId) {
+  try {
+    const response = await fetch(`/api/youtube/templates/${templateId}`, {
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (data.success && data.template) {
+      closeTemplateLibraryModal();
+      
+      // Pre-fill create template form for editing
+      document.getElementById('templateName').value = data.template.name;
+      document.getElementById('templateAccountSelect').value = data.template.account_id;
+      document.getElementById('templateTitle').value = data.template.title;
+      document.getElementById('templateDescription').value = data.template.description || '';
+      document.getElementById('templatePrivacyStatus').value = data.template.privacy_status || 'unlisted';
+      document.getElementById('templateCategoryId').value = data.template.category_id || '20';
+      
+      // Store template ID for update
+      document.getElementById('createTemplateForm').dataset.editId = templateId;
+      
+      // Change button text
+      document.getElementById('createTemplateBtn').innerHTML = '<i class="ti ti-check"></i><span>Update Template</span>';
+      document.querySelector('#createTemplateModal h3').textContent = 'Edit Template';
+      
+      document.getElementById('createTemplateModal').classList.remove('hidden');
+    } else {
+      showToast(data.error || 'Failed to load template', 'error');
+    }
+  } catch (error) {
+    console.error('Error:', error);
+    showToast('An error occurred', 'error');
+  }
+}
+
+// Create Broadcast from Template
+async function createFromTemplate(templateId) {
+  try {
+    const response = await fetch(`/api/youtube/templates/${templateId}`, {
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (data.success && data.template) {
+      closeTemplateLibraryModal();
+      openCreateBroadcastModal();
+      
+      // Pre-fill form with template data
+      const template = data.template;
+      document.getElementById('accountSelect').value = template.account_id;
+      document.getElementById('broadcastTitle').value = template.title;
+      document.getElementById('broadcastDescription').value = template.description || '';
+      document.getElementById('privacyStatus').value = template.privacy_status || 'unlisted';
+      document.getElementById('categoryId').value = template.category_id || '20';
+      
+      // Set tags if available
+      if (template.tags && Array.isArray(template.tags)) {
+        currentTags = [...template.tags];
+        renderTags();
+      }
+      
+      showToast('Template loaded. Please set schedule time.', 'info');
+    } else {
+      showToast(data.error || 'Failed to load template', 'error');
+    }
+  } catch (error) {
+    console.error('Error:', error);
+    showToast('An error occurred', 'error');
+  }
+}
+
+// Bulk Create Modal
+let bulkScheduleCount = 0;
+
+function openBulkCreateModal(templateId, templateName) {
+  closeTemplateLibraryModal();
+  document.getElementById('bulkCreateTemplateId').value = templateId;
+  document.getElementById('bulkCreateTemplateName').textContent = templateName;
+  document.getElementById('bulkScheduleList').innerHTML = '';
+  bulkScheduleCount = 0;
+  
+  // Add initial schedule
+  addBulkSchedule();
+  
+  document.getElementById('bulkCreateModal').classList.remove('hidden');
+}
+
+function closeBulkCreateModal() {
+  document.getElementById('bulkCreateModal').classList.add('hidden');
+  document.getElementById('bulkCreateForm').reset();
+  document.getElementById('bulkScheduleList').innerHTML = '';
+  bulkScheduleCount = 0;
+}
+
+// Add schedule input for bulk create
+function addBulkSchedule() {
+  bulkScheduleCount++;
+  const list = document.getElementById('bulkScheduleList');
+  
+  const minDate = new Date(Date.now() + 11 * 60 * 1000);
+  const minDateStr = minDate.toISOString().slice(0, 16);
+  
+  const div = document.createElement('div');
+  div.className = 'flex items-center gap-2';
+  div.id = `bulkSchedule${bulkScheduleCount}`;
+  div.innerHTML = `
+    <span class="text-sm text-gray-400 w-6">${bulkScheduleCount}.</span>
+    <input type="datetime-local" name="schedule[]" required min="${minDateStr}"
+      class="flex-1 px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none text-sm [color-scheme:dark]">
+    <button type="button" onclick="removeBulkSchedule(${bulkScheduleCount})"
+      class="p-2 text-gray-400 hover:text-red-400 transition-colors ${bulkScheduleCount === 1 ? 'invisible' : ''}">
+      <i class="ti ti-x"></i>
+    </button>
+  `;
+  list.appendChild(div);
+}
+
+// Remove schedule input
+function removeBulkSchedule(index) {
+  const element = document.getElementById(`bulkSchedule${index}`);
+  if (element) {
+    element.remove();
+    // Re-number remaining schedules
+    const schedules = document.querySelectorAll('#bulkScheduleList > div');
+    schedules.forEach((div, i) => {
+      div.querySelector('span').textContent = `${i + 1}.`;
+    });
+  }
+}
+
+// Bulk Create Form Handler
+const bulkCreateForm = document.getElementById('bulkCreateForm');
+if (bulkCreateForm) {
+  bulkCreateForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const createBtn = document.getElementById('bulkCreateBtn');
+    const originalText = createBtn.innerHTML;
+    createBtn.innerHTML = '<i class="ti ti-loader animate-spin"></i> Creating...';
+    createBtn.disabled = true;
+    
+    try {
+      const templateId = document.getElementById('bulkCreateTemplateId').value;
+      const scheduleInputs = document.querySelectorAll('input[name="schedule[]"]');
+      const schedules = Array.from(scheduleInputs).map(input => input.value).filter(v => v);
+      
+      if (schedules.length === 0) {
+        showToast('Please add at least one schedule', 'error');
+        return;
+      }
+      
+      const response = await fetch(`/api/youtube/templates/${templateId}/bulk-create`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': getCsrfToken()
+        },
+        body: JSON.stringify({ schedules })
+      });
+      
+      const data = await response.json();
+      
+      closeBulkCreateModal();
+      showBulkCreateResult(data);
+      
+    } catch (error) {
+      console.error('Error:', error);
+      showToast('An error occurred', 'error');
+    } finally {
+      createBtn.innerHTML = originalText;
+      createBtn.disabled = false;
+    }
+  });
+}
+
+// Show Bulk Create Result
+function showBulkCreateResult(result) {
+  document.getElementById('bulkResultTotal').textContent = result.total || 0;
+  document.getElementById('bulkResultSuccess').textContent = result.success || 0;
+  document.getElementById('bulkResultFailed').textContent = result.failed || 0;
+  
+  const errorsSection = document.getElementById('bulkCreateErrors');
+  const errorList = document.getElementById('bulkCreateErrorList');
+  
+  if (result.errors && result.errors.length > 0) {
+    errorsSection.classList.remove('hidden');
+    errorList.innerHTML = result.errors.map(err => 
+      `<p>${new Date(err.schedule).toLocaleString()}: ${escapeHtml(err.error)}</p>`
+    ).join('');
+  } else {
+    errorsSection.classList.add('hidden');
+  }
+  
+  document.getElementById('bulkCreateResultModal').classList.remove('hidden');
+}
+
+function closeBulkCreateResultModal() {
+  document.getElementById('bulkCreateResultModal').classList.add('hidden');
+  // Reload page to show new broadcasts
+  window.location.reload();
+}
+
+// Add Save as Template button to broadcast actions
+function addSaveAsTemplateButton(broadcastId, accountId, title, privacyStatus, categoryId) {
+  openSaveAsTemplateModal(broadcastId, accountId, title, privacyStatus, categoryId);
+}

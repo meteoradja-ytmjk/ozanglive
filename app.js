@@ -28,6 +28,7 @@ const streamingService = require('./services/streamingService');
 const schedulerService = require('./services/schedulerService');
 const YouTubeCredentials = require('./models/YouTubeCredentials');
 const youtubeService = require('./services/youtubeService');
+const BroadcastTemplate = require('./models/BroadcastTemplate');
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 // Track if we're shutting down to prevent multiple shutdown attempts
 let isShuttingDown = false;
@@ -4386,6 +4387,320 @@ app.post('/api/youtube/broadcasts/:id/thumbnail', isAuthenticated, upload.single
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to upload thumbnail'
+    });
+  }
+});
+
+// ==================== BROADCAST TEMPLATE API ====================
+
+// Create new broadcast template
+app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
+  try {
+    const { name, title, description, privacyStatus, tags, categoryId, thumbnailPath, streamId, accountId } = req.body;
+    
+    if (!name || !title || !accountId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Name, title, and accountId are required'
+      });
+    }
+
+    // Verify account belongs to user
+    const credentials = await YouTubeCredentials.findById(parseInt(accountId));
+    if (!credentials || credentials.userId !== req.session.userId) {
+      return res.status(404).json({ success: false, error: 'Account not found' });
+    }
+
+    const template = await BroadcastTemplate.create({
+      user_id: req.session.userId,
+      account_id: parseInt(accountId),
+      name,
+      title,
+      description: description || null,
+      privacy_status: privacyStatus || 'unlisted',
+      tags: tags || null,
+      category_id: categoryId || '20',
+      thumbnail_path: thumbnailPath || null,
+      stream_id: streamId || null
+    });
+
+    res.json({ success: true, template });
+  } catch (error) {
+    console.error('Error creating broadcast template:', error);
+    res.status(error.message.includes('already exists') ? 400 : 500).json({
+      success: false,
+      error: error.message || 'Failed to create template'
+    });
+  }
+});
+
+// Get all templates for user
+app.get('/api/youtube/templates', isAuthenticated, async (req, res) => {
+  try {
+    const templates = await BroadcastTemplate.findByUserId(req.session.userId);
+    res.json({ success: true, templates });
+  } catch (error) {
+    console.error('Error fetching broadcast templates:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to fetch templates'
+    });
+  }
+});
+
+// Get template by ID
+app.get('/api/youtube/templates/:id', isAuthenticated, async (req, res) => {
+  try {
+    const template = await BroadcastTemplate.findById(req.params.id);
+    
+    if (!template) {
+      return res.status(404).json({ success: false, error: 'Template not found' });
+    }
+    
+    if (template.user_id !== req.session.userId) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+
+    res.json({ success: true, template });
+  } catch (error) {
+    console.error('Error fetching broadcast template:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to fetch template'
+    });
+  }
+});
+
+// Update template
+app.put('/api/youtube/templates/:id', isAuthenticated, async (req, res) => {
+  try {
+    const template = await BroadcastTemplate.findById(req.params.id);
+    
+    if (!template) {
+      return res.status(404).json({ success: false, error: 'Template not found' });
+    }
+    
+    if (template.user_id !== req.session.userId) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+
+    const { name, title, description, privacyStatus, tags, categoryId, thumbnailPath, streamId, accountId } = req.body;
+    
+    const updateData = {};
+    if (name !== undefined) updateData.name = name;
+    if (title !== undefined) updateData.title = title;
+    if (description !== undefined) updateData.description = description;
+    if (privacyStatus !== undefined) updateData.privacy_status = privacyStatus;
+    if (tags !== undefined) updateData.tags = tags;
+    if (categoryId !== undefined) updateData.category_id = categoryId;
+    if (thumbnailPath !== undefined) updateData.thumbnail_path = thumbnailPath;
+    if (streamId !== undefined) updateData.stream_id = streamId;
+    if (accountId !== undefined) updateData.account_id = parseInt(accountId);
+
+    const result = await BroadcastTemplate.update(req.params.id, updateData);
+    res.json({ success: true, template: result });
+  } catch (error) {
+    console.error('Error updating broadcast template:', error);
+    res.status(error.message.includes('already exists') ? 400 : 500).json({
+      success: false,
+      error: error.message || 'Failed to update template'
+    });
+  }
+});
+
+// Delete template
+app.delete('/api/youtube/templates/:id', isAuthenticated, async (req, res) => {
+  try {
+    const result = await BroadcastTemplate.delete(req.params.id, req.session.userId);
+    
+    if (!result.deleted) {
+      return res.status(404).json({ success: false, error: 'Template not found' });
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting broadcast template:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to delete template'
+    });
+  }
+});
+
+// Create broadcast from template
+app.post('/api/youtube/templates/:id/create-broadcast', isAuthenticated, async (req, res) => {
+  try {
+    const { scheduledStartTime } = req.body;
+    
+    if (!scheduledStartTime) {
+      return res.status(400).json({
+        success: false,
+        error: 'Scheduled start time is required'
+      });
+    }
+
+    // Get template
+    const template = await BroadcastTemplate.findById(req.params.id);
+    if (!template) {
+      return res.status(404).json({ success: false, error: 'Template not found' });
+    }
+    if (template.user_id !== req.session.userId) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+
+    // Get YouTube credentials
+    const credentials = await YouTubeCredentials.findById(template.account_id);
+    if (!credentials) {
+      return res.status(400).json({
+        success: false,
+        error: 'YouTube account not found'
+      });
+    }
+
+    // Get access token
+    const accessToken = await youtubeService.getAccessToken(
+      credentials.clientId,
+      credentials.clientSecret,
+      credentials.refreshToken
+    );
+
+    // Create broadcast on YouTube
+    const broadcast = await youtubeService.createBroadcast(accessToken, {
+      title: template.title,
+      description: template.description || '',
+      scheduledStartTime: new Date(scheduledStartTime).toISOString(),
+      privacyStatus: template.privacy_status || 'unlisted',
+      tags: template.tags || [],
+      categoryId: template.category_id || '20',
+      streamId: template.stream_id || null
+    });
+
+    // Upload thumbnail if template has one
+    if (template.thumbnail_path) {
+      try {
+        const thumbnailBuffer = fs.readFileSync(path.join(__dirname, 'public', template.thumbnail_path));
+        await youtubeService.uploadThumbnail(accessToken, broadcast.id, thumbnailBuffer);
+      } catch (thumbError) {
+        console.error('Error uploading thumbnail:', thumbError);
+        // Continue without thumbnail
+      }
+    }
+
+    res.json({
+      success: true,
+      broadcast: {
+        id: broadcast.id,
+        title: broadcast.title,
+        scheduledStartTime: broadcast.scheduledStartTime,
+        streamKey: broadcast.streamKey
+      }
+    });
+  } catch (error) {
+    console.error('Error creating broadcast from template:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to create broadcast'
+    });
+  }
+});
+
+// Bulk create broadcasts from template
+app.post('/api/youtube/templates/:id/bulk-create', isAuthenticated, async (req, res) => {
+  try {
+    const { schedules } = req.body;
+    
+    if (!schedules || !Array.isArray(schedules) || schedules.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'At least one schedule is required'
+      });
+    }
+
+    // Get template
+    const template = await BroadcastTemplate.findById(req.params.id);
+    if (!template) {
+      return res.status(404).json({ success: false, error: 'Template not found' });
+    }
+    if (template.user_id !== req.session.userId) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+
+    // Get YouTube credentials
+    const credentials = await YouTubeCredentials.findById(template.account_id);
+    if (!credentials) {
+      return res.status(400).json({
+        success: false,
+        error: 'YouTube account not found'
+      });
+    }
+
+    // Get access token
+    const accessToken = await youtubeService.getAccessToken(
+      credentials.clientId,
+      credentials.clientSecret,
+      credentials.refreshToken
+    );
+
+    const results = {
+      total: schedules.length,
+      success: 0,
+      failed: 0,
+      broadcasts: [],
+      errors: []
+    };
+
+    // Create broadcasts for each schedule
+    for (const schedule of schedules) {
+      try {
+        const broadcast = await youtubeService.createBroadcast(accessToken, {
+          title: template.title,
+          description: template.description || '',
+          scheduledStartTime: new Date(schedule).toISOString(),
+          privacyStatus: template.privacy_status || 'unlisted',
+          tags: template.tags || [],
+          categoryId: template.category_id || '20',
+          streamId: template.stream_id || null
+        });
+
+        // Upload thumbnail if template has one
+        if (template.thumbnail_path) {
+          try {
+            const thumbnailBuffer = fs.readFileSync(path.join(__dirname, 'public', template.thumbnail_path));
+            await youtubeService.uploadThumbnail(accessToken, broadcast.id, thumbnailBuffer);
+          } catch (thumbError) {
+            console.error('Error uploading thumbnail for bulk create:', thumbError);
+          }
+        }
+
+        results.success++;
+        results.broadcasts.push({
+          id: broadcast.id,
+          title: broadcast.title,
+          scheduledStartTime: broadcast.scheduledStartTime,
+          streamKey: broadcast.streamKey
+        });
+      } catch (error) {
+        results.failed++;
+        results.errors.push({
+          schedule,
+          error: error.message
+        });
+      }
+    }
+
+    // Return 207 Multi-Status if there were partial failures
+    const statusCode = results.failed > 0 && results.success > 0 ? 207 : 
+                       results.failed === results.total ? 500 : 200;
+
+    res.status(statusCode).json({
+      success: results.failed === 0,
+      ...results
+    });
+  } catch (error) {
+    console.error('Error bulk creating broadcasts:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to bulk create broadcasts'
     });
   }
 });
