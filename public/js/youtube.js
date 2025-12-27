@@ -216,13 +216,15 @@ async function fetchStreams(accountId = null) {
   
   if (!select) return;
   
-  loading.classList.remove('hidden');
+  if (loading) loading.classList.remove('hidden');
   
   try {
     let url = '/api/youtube/streams';
     if (accountId) {
       url += `?accountId=${accountId}`;
     }
+    
+    console.log('[fetchStreams] Fetching from:', url);
     
     const response = await fetch(url, {
       headers: {
@@ -231,22 +233,26 @@ async function fetchStreams(accountId = null) {
     });
     
     const data = await response.json();
+    console.log('[fetchStreams] Response:', data);
     
     // Clear existing options except first
     select.innerHTML = '<option value="">Create new stream key</option>';
     
     if (data.success && data.streams && data.streams.length > 0) {
+      console.log('[fetchStreams] Found', data.streams.length, 'stream keys');
       data.streams.forEach(stream => {
         const option = document.createElement('option');
         option.value = stream.id;
         option.textContent = `${stream.title} (${stream.resolution} @ ${stream.frameRate})`;
         select.appendChild(option);
       });
+    } else {
+      console.log('[fetchStreams] No stream keys found or error:', data.error || 'empty response');
     }
   } catch (error) {
-    console.error('Error fetching streams:', error);
+    console.error('[fetchStreams] Error:', error);
   } finally {
-    loading.classList.add('hidden');
+    if (loading) loading.classList.add('hidden');
   }
 }
 
@@ -451,8 +457,13 @@ let currentTags = [];
 // Fetch channel defaults for auto-fill
 async function fetchChannelDefaults(accountId = null) {
   const tagsLoading = document.getElementById('tagsLoading');
+  const titleLoading = document.getElementById('titleLoading');
+  const descriptionLoading = document.getElementById('descriptionLoading');
   
+  // Show loading indicators
   if (tagsLoading) tagsLoading.classList.remove('hidden');
+  if (titleLoading) titleLoading.classList.remove('hidden');
+  if (descriptionLoading) descriptionLoading.classList.remove('hidden');
   
   try {
     let url = '/api/youtube/channel-defaults';
@@ -474,9 +485,23 @@ async function fetchChannelDefaults(accountId = null) {
   } catch (error) {
     console.error('Error fetching channel defaults:', error);
     showToast('Could not load YouTube defaults', 'info');
+    // Hide auto-fill indicators on failure
+    hideAutoFillIndicators();
   } finally {
+    // Hide loading indicators
     if (tagsLoading) tagsLoading.classList.add('hidden');
+    if (titleLoading) titleLoading.classList.add('hidden');
+    if (descriptionLoading) descriptionLoading.classList.add('hidden');
   }
+}
+
+// Hide all auto-fill indicators
+function hideAutoFillIndicators() {
+  const indicators = ['titleAutoFillIndicator', 'descriptionAutoFillIndicator', 'tagsAutoFillIndicator'];
+  indicators.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.add('hidden');
+  });
 }
 
 // Populate form with defaults from YouTube
@@ -485,12 +510,16 @@ function populateFormWithDefaults(defaults) {
   const titleInput = document.getElementById('broadcastTitle');
   if (defaults.title && titleInput && !titleInput.value) {
     titleInput.value = defaults.title;
+    const indicator = document.getElementById('titleAutoFillIndicator');
+    if (indicator) indicator.classList.remove('hidden');
   }
   
   // Populate description if available
   const descInput = document.getElementById('broadcastDescription');
   if (defaults.description && descInput && !descInput.value) {
     descInput.value = defaults.description;
+    const indicator = document.getElementById('descriptionAutoFillIndicator');
+    if (indicator) indicator.classList.remove('hidden');
   }
   
   // Populate tags
@@ -501,13 +530,8 @@ function populateFormWithDefaults(defaults) {
     if (indicator) indicator.classList.remove('hidden');
   }
   
-  // Handle category
-  const categorySelect = document.getElementById('categoryId');
-  if (categorySelect && defaults.categoryId) {
-    categorySelect.value = defaults.categoryId;
-    const indicator = document.getElementById('categoryAutoFillIndicator');
-    if (indicator) indicator.classList.remove('hidden');
-  }
+  // Note: Category field has been removed from UI
+  // Default category (Gaming - 20) is used internally by backend
   
   // Note: Monetization, Ad Frequency, and Altered Content settings 
   // are not supported by YouTube API and must be set in YouTube Studio
@@ -642,12 +666,8 @@ function closeCreateBroadcastModal() {
   currentTags = [];
   renderTags();
   
-  // Hide auto-fill indicators
-  const indicators = ['tagsAutoFillIndicator', 'categoryAutoFillIndicator'];
-  indicators.forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.classList.add('hidden');
-  });
+  // Hide all auto-fill indicators
+  hideAutoFillIndicators();
 }
 
 
@@ -687,11 +707,7 @@ if (createBroadcastForm) {
         formData.append('tags', JSON.stringify(currentTags));
       }
       
-      // Add category
-      const categorySelect = document.getElementById('categoryId');
-      if (categorySelect) {
-        formData.append('categoryId', categorySelect.value);
-      }
+      // Note: Category field removed from UI, backend uses default value (Gaming - 20)
       
       // Note: Monetization, Ad Frequency, and Altered Content are not supported by YouTube API
       // These must be configured in YouTube Studio after creating the broadcast
@@ -1085,13 +1101,38 @@ function renderTemplateList(templates) {
   const content = document.getElementById('templateListContent');
   content.innerHTML = '';
   
-  templates.forEach(template => {
+  templates.forEach((template, index) => {
+    const isMulti = template.isMultiBroadcast && template.broadcasts && template.broadcasts.length > 1;
+    const broadcastCount = isMulti ? template.broadcasts.length : 1;
+    const hasRecurring = template.recurring_enabled;
+    
+    // Build recurring info HTML for desktop
+    let recurringHtmlDesktop = '';
+    if (hasRecurring) {
+      const patternText = formatRecurringPattern(template.recurring_pattern, template.recurring_days, template.recurring_time);
+      const nextRunText = formatNextRun(template.next_run_at);
+      recurringHtmlDesktop = `
+        <div class="flex items-center gap-2 mt-2 text-xs">
+          <span class="px-2 py-0.5 bg-green-500/20 text-green-400 rounded flex items-center gap-1">
+            <i class="ti ti-repeat"></i>
+            ${escapeHtml(patternText)}
+          </span>
+          <span class="text-gray-500">Next: ${escapeHtml(nextRunText)}</span>
+        </div>
+      `;
+    }
+    
     const div = document.createElement('div');
-    div.className = 'bg-dark-700 rounded-lg p-4';
+    div.className = 'template-list-item';
     div.innerHTML = `
-      <div class="flex items-start justify-between gap-4">
+      <!-- Desktop Layout -->
+      <div class="hidden md:flex items-start justify-between gap-4 bg-dark-700 rounded-lg p-4">
         <div class="flex-1 min-w-0">
-          <h4 class="font-medium text-white truncate">${escapeHtml(template.name)}</h4>
+          <div class="flex items-center gap-2">
+            <h4 class="font-medium text-white truncate">${escapeHtml(template.name)}</h4>
+            ${isMulti ? `<span class="px-1.5 py-0.5 bg-primary/20 text-primary text-xs rounded">${broadcastCount} broadcasts</span>` : ''}
+            ${hasRecurring ? `<span class="recurring-badge px-1.5 py-0.5 bg-green-500/20 text-green-400 text-xs rounded flex items-center gap-0.5"><i class="ti ti-repeat text-[10px]"></i> Auto</span>` : ''}
+          </div>
           <p class="text-sm text-gray-400 truncate">${escapeHtml(template.title)}</p>
           <div class="flex items-center gap-2 mt-1">
             <span class="text-xs text-red-400 flex items-center gap-1">
@@ -1102,23 +1143,72 @@ function renderTemplateList(templates) {
               ${new Date(template.created_at).toLocaleDateString()}
             </span>
           </div>
+          ${recurringHtmlDesktop}
         </div>
-        <div class="flex items-center gap-1 flex-shrink-0">
-          <button onclick="createFromTemplate('${template.id}')"
-            class="p-2 text-gray-400 hover:text-green-400 hover:bg-green-500/10 rounded transition-colors" title="Create Broadcast">
-            <i class="ti ti-broadcast"></i>
+        <div class="flex items-center gap-2 flex-shrink-0">
+          ${!isMulti ? `
+          <button onclick="toggleTemplateRecurring('${template.id}', ${hasRecurring})"
+            class="recurring-toggle px-3 py-1.5 ${hasRecurring ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'} hover:opacity-80 rounded-lg transition-colors text-sm flex items-center gap-1" title="${hasRecurring ? 'Disable Recurring' : 'Enable Recurring'}" data-recurring="${hasRecurring}">
+            <i class="ti ti-repeat"></i>
+            <span>${hasRecurring ? 'On' : 'Off'}</span>
           </button>
+          ` : ''}
+          <button onclick="recreateFromTemplate('${template.id}')"
+            class="px-3 py-1.5 bg-green-500/10 hover:bg-green-500/20 text-green-400 rounded-lg transition-colors text-sm flex items-center gap-1" title="Re-create Broadcasts">
+            <i class="ti ti-refresh"></i>
+            <span>Re-create</span>
+          </button>
+          ${!isMulti ? `
           <button onclick="openBulkCreateModal('${template.id}', '${escapeHtml(template.name)}')"
-            class="p-2 text-gray-400 hover:text-primary hover:bg-primary/10 rounded transition-colors" title="Bulk Create">
+            class="px-3 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg transition-colors text-sm flex items-center gap-1" title="Bulk Create">
             <i class="ti ti-stack-2"></i>
+            <span>Bulk</span>
           </button>
+          ` : ''}
           <button onclick="editTemplate('${template.id}')"
-            class="p-2 text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 rounded transition-colors" title="Edit">
+            class="px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-lg transition-colors text-sm flex items-center gap-1" title="Edit">
             <i class="ti ti-edit"></i>
           </button>
           <button onclick="deleteTemplate('${template.id}', '${escapeHtml(template.name)}')"
-            class="p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors" title="Delete">
+            class="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors text-sm flex items-center gap-1" title="Delete">
             <i class="ti ti-trash"></i>
+          </button>
+        </div>
+      </div>
+      
+      <!-- Mobile Layout - Simple List -->
+      <div class="md:hidden flex items-center gap-2 px-3 py-2.5 bg-dark-700/50 hover:bg-dark-700 rounded-lg transition-colors">
+        <span class="text-primary font-semibold text-xs w-5 flex-shrink-0">${index + 1}</span>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm text-white truncate">${escapeHtml(template.name)}</p>
+          <p class="text-[10px] text-gray-500 truncate">${escapeHtml(template.title)}</p>
+        </div>
+        ${hasRecurring ? `<span class="px-1.5 py-0.5 bg-green-500/20 text-green-400 text-[10px] rounded flex-shrink-0"><i class="ti ti-repeat text-[8px]"></i></span>` : ''}
+        ${isMulti ? `<span class="px-1.5 py-0.5 bg-primary/20 text-primary text-[10px] rounded flex-shrink-0">${broadcastCount}</span>` : ''}
+        <div class="flex items-center gap-0.5 flex-shrink-0">
+          <button onclick="recreateFromTemplate('${template.id}')"
+            class="w-8 h-8 flex items-center justify-center text-green-400 hover:bg-green-500/20 rounded transition-colors" title="Re-create">
+            <i class="ti ti-refresh text-sm"></i>
+          </button>
+          ${!isMulti ? `
+          <button onclick="openBulkCreateModal('${template.id}', '${escapeHtml(template.name)}')"
+            class="w-8 h-8 flex items-center justify-center text-primary hover:bg-primary/20 rounded transition-colors" title="Bulk Create">
+            <i class="ti ti-stack-2 text-sm"></i>
+          </button>
+          ` : ''}
+          <button onclick="editTemplate('${template.id}')"
+            class="w-8 h-8 flex items-center justify-center text-blue-400 hover:bg-blue-500/20 rounded transition-colors" title="Edit">
+            <i class="ti ti-edit text-sm"></i>
+          </button>
+          ${!isMulti ? `
+          <button onclick="toggleTemplateRecurring('${template.id}', ${hasRecurring})"
+            class="recurring-toggle w-8 h-8 flex items-center justify-center ${hasRecurring ? 'text-green-400 hover:bg-green-500/20' : 'text-gray-400 hover:bg-gray-500/20'} rounded transition-colors" title="${hasRecurring ? 'Disable Recurring' : 'Enable Recurring'}" data-recurring="${hasRecurring}">
+            <i class="ti ti-repeat text-sm"></i>
+          </button>
+          ` : ''}
+          <button onclick="deleteTemplate('${template.id}', '${escapeHtml(template.name)}')"
+            class="w-8 h-8 flex items-center justify-center text-red-400 hover:bg-red-500/20 rounded transition-colors" title="Delete">
+            <i class="ti ti-trash text-sm"></i>
           </button>
         </div>
       </div>
@@ -1131,11 +1221,66 @@ function renderTemplateList(templates) {
 function openCreateTemplateModal() {
   closeTemplateLibraryModal();
   document.getElementById('createTemplateModal').classList.remove('hidden');
+  
+  // Load stream keys for the selected account
+  const accountId = document.getElementById('templateAccountSelect').value;
+  if (accountId) {
+    fetchTemplateStreamKeys(accountId);
+  }
+}
+
+// Fetch stream keys for template modal
+async function fetchTemplateStreamKeys(accountId) {
+  const select = document.getElementById('templateStreamKeySelect');
+  const loading = document.getElementById('templateStreamKeyLoading');
+  
+  if (!select) return;
+  
+  if (loading) loading.classList.remove('hidden');
+  
+  try {
+    const response = await fetch(`/api/youtube/streams?accountId=${accountId}`, {
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+    
+    const data = await response.json();
+    
+    // Clear existing options except first
+    select.innerHTML = '<option value="">-- Select Stream Key (Optional) --</option>';
+    
+    if (data.success && data.streams && data.streams.length > 0) {
+      data.streams.forEach(stream => {
+        const option = document.createElement('option');
+        option.value = stream.id;
+        option.textContent = `${stream.title} (${stream.resolution} @ ${stream.frameRate})`;
+        select.appendChild(option);
+      });
+    }
+  } catch (error) {
+    console.error('Error fetching stream keys:', error);
+  } finally {
+    if (loading) loading.classList.add('hidden');
+  }
+}
+
+// Handle account change in template modal
+function onTemplateAccountChange(accountId) {
+  if (accountId) {
+    fetchTemplateStreamKeys(accountId);
+  }
 }
 
 function closeCreateTemplateModal() {
   document.getElementById('createTemplateModal').classList.add('hidden');
   document.getElementById('createTemplateForm').reset();
+  // Reset recurring fields
+  resetRecurringFields();
+  // Reset edit mode
+  delete document.getElementById('createTemplateForm').dataset.editId;
+  document.getElementById('createTemplateBtn').innerHTML = '<i class="ti ti-template"></i><span>Create Template</span>';
+  document.querySelector('#createTemplateModal h3').textContent = 'Create New Template';
 }
 
 // Create Template Form Handler
@@ -1144,23 +1289,41 @@ if (createTemplateForm) {
   createTemplateForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     
+    // Validate recurring config
+    if (!validateRecurringConfig()) {
+      return;
+    }
+    
     const createBtn = document.getElementById('createTemplateBtn');
     const originalText = createBtn.innerHTML;
     createBtn.innerHTML = '<i class="ti ti-loader animate-spin"></i> Creating...';
     createBtn.disabled = true;
     
     try {
+      // Get recurring data
+      const recurringData = getRecurringDataFromForm();
+      
       const templateData = {
         name: document.getElementById('templateName').value,
         accountId: document.getElementById('templateAccountSelect').value,
         title: document.getElementById('templateTitle').value,
         description: document.getElementById('templateDescription').value,
         privacyStatus: document.getElementById('templatePrivacyStatus').value,
-        categoryId: document.getElementById('templateCategoryId').value
+        streamId: document.getElementById('templateStreamKeySelect').value || null,
+        // Include recurring data
+        recurringEnabled: recurringData.recurring_enabled,
+        recurringPattern: recurringData.recurring_pattern,
+        recurringTime: recurringData.recurring_time,
+        recurringDays: recurringData.recurring_days
       };
       
-      const response = await fetch('/api/youtube/templates', {
-        method: 'POST',
+      // Check if editing
+      const editId = createTemplateForm.dataset.editId;
+      const url = editId ? `/api/youtube/templates/${editId}` : '/api/youtube/templates';
+      const method = editId ? 'PUT' : 'POST';
+      
+      const response = await fetch(url, {
+        method: method,
         headers: {
           'Content-Type': 'application/json',
           'X-CSRF-Token': getCsrfToken()
@@ -1171,7 +1334,7 @@ if (createTemplateForm) {
       const data = await response.json();
       
       if (data.success) {
-        showToast('Template created successfully!');
+        showToast(editId ? 'Template updated successfully!' : 'Template created successfully!');
         closeCreateTemplateModal();
         openTemplateLibraryModal();
       } else {
@@ -1188,12 +1351,11 @@ if (createTemplateForm) {
 }
 
 // Save as Template Modal
-function openSaveAsTemplateModal(broadcastId, accountId, title, privacyStatus, categoryId) {
+function openSaveAsTemplateModal(broadcastId, accountId, title, privacyStatus) {
   document.getElementById('saveTemplateBroadcastId').value = broadcastId;
   document.getElementById('saveTemplateAccountId').value = accountId;
   document.getElementById('previewTitle').textContent = title || '-';
   document.getElementById('previewPrivacy').textContent = privacyStatus || '-';
-  document.getElementById('previewCategory').textContent = categoryId || '-';
   document.getElementById('saveAsTemplateModal').classList.remove('hidden');
 }
 
@@ -1218,6 +1380,8 @@ if (saveAsTemplateForm) {
       const accountId = document.getElementById('saveTemplateAccountId').value;
       const name = document.getElementById('saveTemplateName').value;
       
+      console.log('[saveAsTemplate] Fetching broadcast details for:', broadcastId);
+      
       // Fetch broadcast details first
       const broadcastResponse = await fetch(`/api/youtube/broadcasts?accountId=${accountId}`, {
         headers: {
@@ -1231,12 +1395,16 @@ if (saveAsTemplateForm) {
         throw new Error('Failed to fetch broadcast details');
       }
       
+      console.log('[saveAsTemplate] All broadcasts:', broadcastData.broadcasts.map(b => ({ id: b.id, title: b.title, streamId: b.streamId, streamKey: b.streamKey })));
+      
       const broadcast = broadcastData.broadcasts.find(b => b.id === broadcastId);
       if (!broadcast) {
         throw new Error('Broadcast not found');
       }
       
-      // Create template from broadcast
+      console.log('[saveAsTemplate] Found broadcast:', { id: broadcast.id, title: broadcast.title, streamId: broadcast.streamId, streamKey: broadcast.streamKey });
+      
+      // Create template from broadcast - include streamId for reuse
       const templateData = {
         name: name,
         accountId: accountId,
@@ -1244,9 +1412,12 @@ if (saveAsTemplateForm) {
         description: broadcast.description || '',
         privacyStatus: broadcast.privacyStatus || 'unlisted',
         tags: broadcast.tags || null,
-        categoryId: broadcast.categoryId || '20',
-        thumbnailPath: broadcast.thumbnailPath || null
+        categoryId: broadcast.categoryId || '22',
+        thumbnailPath: broadcast.thumbnailPath || null,
+        streamId: broadcast.streamId || null  // Save stream ID for reuse
       };
+      
+      console.log('[saveAsTemplate] Sending templateData with streamId:', templateData.streamId);
       
       const response = await fetch('/api/youtube/templates', {
         method: 'POST',
@@ -1260,6 +1431,7 @@ if (saveAsTemplateForm) {
       const data = await response.json();
       
       if (data.success) {
+        console.log('[saveAsTemplate] Template saved successfully with stream_id:', data.template?.stream_id);
         showToast('Template saved successfully!');
         closeSaveAsTemplateModal();
       } else {
@@ -1303,7 +1475,7 @@ async function deleteTemplate(templateId, templateName) {
   }
 }
 
-// Edit Template
+// Edit Template - Opens simplified modal for recurring schedule only
 async function editTemplate(templateId) {
   try {
     const response = await fetch(`/api/youtube/templates/${templateId}`, {
@@ -1316,23 +1488,7 @@ async function editTemplate(templateId) {
     
     if (data.success && data.template) {
       closeTemplateLibraryModal();
-      
-      // Pre-fill create template form for editing
-      document.getElementById('templateName').value = data.template.name;
-      document.getElementById('templateAccountSelect').value = data.template.account_id;
-      document.getElementById('templateTitle').value = data.template.title;
-      document.getElementById('templateDescription').value = data.template.description || '';
-      document.getElementById('templatePrivacyStatus').value = data.template.privacy_status || 'unlisted';
-      document.getElementById('templateCategoryId').value = data.template.category_id || '20';
-      
-      // Store template ID for update
-      document.getElementById('createTemplateForm').dataset.editId = templateId;
-      
-      // Change button text
-      document.getElementById('createTemplateBtn').innerHTML = '<i class="ti ti-check"></i><span>Update Template</span>';
-      document.querySelector('#createTemplateModal h3').textContent = 'Edit Template';
-      
-      document.getElementById('createTemplateModal').classList.remove('hidden');
+      openEditTemplateModal(data.template);
     } else {
       showToast(data.error || 'Failed to load template', 'error');
     }
@@ -1340,6 +1496,161 @@ async function editTemplate(templateId) {
     console.error('Error:', error);
     showToast('An error occurred', 'error');
   }
+}
+
+// Open Edit Template Modal (Recurring Schedule Only)
+function openEditTemplateModal(template) {
+  document.getElementById('editTemplateId').value = template.id;
+  document.getElementById('editTemplateName').textContent = template.name;
+  
+  // Set recurring enabled
+  const recurringEnabled = document.getElementById('editRecurringEnabled');
+  recurringEnabled.checked = template.recurring_enabled || false;
+  
+  // Show/hide recurring fields
+  const container = document.getElementById('editRecurringFieldsContainer');
+  if (template.recurring_enabled) {
+    container.classList.remove('hidden');
+  } else {
+    container.classList.add('hidden');
+  }
+  
+  // Set pattern
+  if (template.recurring_pattern) {
+    const patternRadio = document.querySelector(`input[name="editRecurringPattern"][value="${template.recurring_pattern}"]`);
+    if (patternRadio) patternRadio.checked = true;
+  }
+  
+  // Set time
+  if (template.recurring_time) {
+    document.getElementById('editRecurringTime').value = template.recurring_time;
+  }
+  
+  // Set days
+  document.querySelectorAll('input[name="editRecurringDays"]').forEach(cb => cb.checked = false);
+  if (template.recurring_days && Array.isArray(template.recurring_days)) {
+    template.recurring_days.forEach(day => {
+      const checkbox = document.querySelector(`input[name="editRecurringDays"][value="${day.toLowerCase()}"]`);
+      if (checkbox) checkbox.checked = true;
+    });
+  }
+  
+  // Show/hide days container
+  const daysContainer = document.getElementById('editRecurringDaysContainer');
+  if (template.recurring_pattern === 'weekly') {
+    daysContainer.classList.remove('hidden');
+  } else {
+    daysContainer.classList.add('hidden');
+  }
+  
+  document.getElementById('editTemplateModal').classList.remove('hidden');
+}
+
+function closeEditTemplateModal() {
+  document.getElementById('editTemplateModal').classList.add('hidden');
+  document.getElementById('editTemplateForm').reset();
+}
+
+// Toggle recurring fields in edit modal
+function toggleEditRecurringFields() {
+  const enabled = document.getElementById('editRecurringEnabled').checked;
+  const container = document.getElementById('editRecurringFieldsContainer');
+  
+  if (enabled) {
+    container.classList.remove('hidden');
+  } else {
+    container.classList.add('hidden');
+  }
+}
+
+// Toggle days selection in edit modal
+function toggleEditDaysSelection() {
+  const pattern = document.querySelector('input[name="editRecurringPattern"]:checked')?.value;
+  const daysContainer = document.getElementById('editRecurringDaysContainer');
+  
+  if (pattern === 'weekly') {
+    daysContainer.classList.remove('hidden');
+  } else {
+    daysContainer.classList.add('hidden');
+  }
+}
+
+// Edit Template Form Handler
+const editTemplateForm = document.getElementById('editTemplateForm');
+if (editTemplateForm) {
+  editTemplateForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const updateBtn = document.getElementById('updateTemplateBtn');
+    const originalText = updateBtn.innerHTML;
+    updateBtn.innerHTML = '<i class="ti ti-loader animate-spin"></i> Saving...';
+    updateBtn.disabled = true;
+    
+    try {
+      const templateId = document.getElementById('editTemplateId').value;
+      const recurringEnabled = document.getElementById('editRecurringEnabled').checked;
+      
+      const updateData = {
+        recurring_enabled: recurringEnabled
+      };
+      
+      if (recurringEnabled) {
+        const pattern = document.querySelector('input[name="editRecurringPattern"]:checked')?.value;
+        const time = document.getElementById('editRecurringTime').value;
+        
+        if (!pattern) {
+          showToast('Please select a pattern', 'error');
+          return;
+        }
+        if (!time) {
+          showToast('Please set a time', 'error');
+          return;
+        }
+        
+        updateData.recurring_pattern = pattern;
+        updateData.recurring_time = time;
+        
+        if (pattern === 'weekly') {
+          const days = Array.from(document.querySelectorAll('input[name="editRecurringDays"]:checked'))
+            .map(cb => cb.value);
+          
+          if (days.length === 0) {
+            document.getElementById('editRecurringDaysError').classList.remove('hidden');
+            showToast('Please select at least one day', 'error');
+            return;
+          }
+          
+          updateData.recurring_days = days;
+        }
+      }
+      
+      const response = await fetch(`/api/youtube/templates/${templateId}/recurring`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': getCsrfToken()
+        },
+        body: JSON.stringify(updateData)
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        showToast('Template updated successfully!');
+        closeEditTemplateModal();
+        // Refresh template library if open
+        loadTemplates();
+      } else {
+        showToast(data.error || 'Failed to update template', 'error');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      showToast('An error occurred', 'error');
+    } finally {
+      updateBtn.innerHTML = originalText;
+      updateBtn.disabled = false;
+    }
+  });
 }
 
 // Create Broadcast from Template
@@ -1363,7 +1674,7 @@ async function createFromTemplate(templateId) {
       document.getElementById('broadcastTitle').value = template.title;
       document.getElementById('broadcastDescription').value = template.description || '';
       document.getElementById('privacyStatus').value = template.privacy_status || 'unlisted';
-      document.getElementById('categoryId').value = template.category_id || '20';
+      // Note: Category field removed from UI
       
       // Set tags if available
       if (template.tags && Array.isArray(template.tags)) {
@@ -1513,6 +1824,619 @@ function closeBulkCreateResultModal() {
 }
 
 // Add Save as Template button to broadcast actions
-function addSaveAsTemplateButton(broadcastId, accountId, title, privacyStatus, categoryId) {
-  openSaveAsTemplateModal(broadcastId, accountId, title, privacyStatus, categoryId);
+function addSaveAsTemplateButton(broadcastId, accountId, title, privacyStatus) {
+  openSaveAsTemplateModal(broadcastId, accountId, title, privacyStatus);
+}
+
+// ==========================================
+// Multi-Select Broadcast Functions
+// ==========================================
+
+// Get selected broadcasts
+function getSelectedBroadcasts() {
+  const checkboxes = document.querySelectorAll('.broadcast-checkbox:checked');
+  const broadcasts = [];
+  const seenIds = new Set();
+  
+  checkboxes.forEach(cb => {
+    try {
+      const data = JSON.parse(cb.dataset.broadcast);
+      // Avoid duplicates (desktop + mobile checkboxes)
+      if (!seenIds.has(data.id)) {
+        seenIds.add(data.id);
+        broadcasts.push(data);
+      }
+    } catch (e) {
+      console.error('Error parsing broadcast data:', e);
+    }
+  });
+  return broadcasts;
+}
+
+// Sync checkboxes between desktop and mobile views
+function syncCheckboxes(checkbox) {
+  const broadcastId = checkbox.dataset.broadcastId;
+  if (!broadcastId) return;
+  
+  // Find all checkboxes with the same broadcast ID and sync their state
+  const allCheckboxes = document.querySelectorAll(`.broadcast-checkbox[data-broadcast-id="${broadcastId}"]`);
+  allCheckboxes.forEach(cb => {
+    if (cb !== checkbox) {
+      cb.checked = checkbox.checked;
+    }
+  });
+}
+
+// Update selection count display
+function updateSelectionCount() {
+  const selected = getSelectedBroadcasts();
+  const countEl = document.getElementById('selectedCount');
+  const actionsEl = document.getElementById('selectionActions');
+  
+  if (countEl) {
+    countEl.textContent = `${selected.length} selected`;
+  }
+  
+  if (actionsEl) {
+    if (selected.length > 0) {
+      actionsEl.classList.remove('hidden');
+      actionsEl.classList.add('flex');
+    } else {
+      actionsEl.classList.add('hidden');
+      actionsEl.classList.remove('flex');
+    }
+  }
+  
+  // Update select all checkbox state
+  const selectAllCheckbox = document.getElementById('selectAllBroadcasts');
+  const allCheckboxes = document.querySelectorAll('.broadcast-checkbox');
+  if (selectAllCheckbox && allCheckboxes.length > 0) {
+    selectAllCheckbox.checked = selected.length === allCheckboxes.length;
+    selectAllCheckbox.indeterminate = selected.length > 0 && selected.length < allCheckboxes.length;
+  }
+}
+
+// Toggle select all broadcasts
+function toggleSelectAll(checkbox) {
+  const allCheckboxes = document.querySelectorAll('.broadcast-checkbox');
+  allCheckboxes.forEach(cb => {
+    cb.checked = checkbox.checked;
+  });
+  updateSelectionCount();
+}
+
+// Clear all selections
+function clearSelection() {
+  const allCheckboxes = document.querySelectorAll('.broadcast-checkbox');
+  allCheckboxes.forEach(cb => {
+    cb.checked = false;
+  });
+  const selectAllCheckbox = document.getElementById('selectAllBroadcasts');
+  if (selectAllCheckbox) {
+    selectAllCheckbox.checked = false;
+    selectAllCheckbox.indeterminate = false;
+  }
+  updateSelectionCount();
+}
+
+// Save selected broadcasts as template
+function saveSelectedAsTemplate() {
+  const selected = getSelectedBroadcasts();
+  
+  if (selected.length === 0) {
+    showToast('Please select at least one broadcast', 'error');
+    return;
+  }
+  
+  // Open multi-save template modal
+  openMultiSaveTemplateModal(selected);
+}
+
+// Delete selected broadcasts
+async function deleteSelectedBroadcasts() {
+  const selected = getSelectedBroadcasts();
+  
+  if (selected.length === 0) {
+    showToast('Please select at least one broadcast', 'error');
+    return;
+  }
+  
+  if (!confirm(`Are you sure you want to delete ${selected.length} broadcast(s)?`)) {
+    return;
+  }
+  
+  let successCount = 0;
+  let failCount = 0;
+  
+  for (const broadcast of selected) {
+    try {
+      let url = `/api/youtube/broadcasts/${broadcast.id}`;
+      if (broadcast.accountId) {
+        url += `?accountId=${broadcast.accountId}`;
+      }
+      
+      const response = await fetch(url, {
+        method: 'DELETE',
+        headers: {
+          'X-CSRF-Token': getCsrfToken()
+        }
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        successCount++;
+      } else {
+        failCount++;
+      }
+    } catch (error) {
+      console.error('Error deleting broadcast:', error);
+      failCount++;
+    }
+  }
+  
+  if (failCount === 0) {
+    showToast(`Successfully deleted ${successCount} broadcast(s)`);
+  } else {
+    showToast(`Deleted ${successCount}/${selected.length}. ${failCount} failed.`, 'error');
+  }
+  
+  setTimeout(() => window.location.reload(), 1000);
+}
+
+// Multi-Save Template Modal
+function openMultiSaveTemplateModal(broadcasts) {
+  // Store broadcasts data
+  window.selectedBroadcastsForTemplate = broadcasts;
+  
+  // Update preview
+  const previewEl = document.getElementById('multiTemplatePreview');
+  if (previewEl) {
+    previewEl.innerHTML = broadcasts.map((b, i) => `
+      <div class="flex items-center gap-2 text-xs">
+        <span class="text-gray-500">${i + 1}.</span>
+        <span class="text-white truncate">${escapeHtml(b.title)}</span>
+        <span class="text-gray-500">(${b.privacyStatus})</span>
+      </div>
+    `).join('');
+  }
+  
+  document.getElementById('multiSaveTemplateModal').classList.remove('hidden');
+}
+
+function closeMultiSaveTemplateModal() {
+  document.getElementById('multiSaveTemplateModal').classList.add('hidden');
+  document.getElementById('multiSaveTemplateForm').reset();
+  window.selectedBroadcastsForTemplate = null;
+}
+
+// Multi-Save Template Form Handler
+const multiSaveTemplateForm = document.getElementById('multiSaveTemplateForm');
+if (multiSaveTemplateForm) {
+  multiSaveTemplateForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const saveBtn = document.getElementById('multiSaveTemplateBtn');
+    const originalText = saveBtn.innerHTML;
+    saveBtn.innerHTML = '<i class="ti ti-loader animate-spin"></i> Saving...';
+    saveBtn.disabled = true;
+    
+    try {
+      const broadcasts = window.selectedBroadcastsForTemplate;
+      const templateName = document.getElementById('multiTemplateName').value;
+      
+      if (!broadcasts || broadcasts.length === 0) {
+        throw new Error('No broadcasts selected');
+      }
+      
+      // Create template with all broadcast data - include streamId for reuse
+      const templateData = {
+        name: templateName,
+        accountId: broadcasts[0].accountId,
+        broadcasts: broadcasts.map(b => ({
+          title: b.title,
+          description: b.description || '',
+          privacyStatus: b.privacyStatus || 'unlisted',
+          streamId: b.streamId || null,  // Save stream ID for reuse
+          streamKey: b.streamKey || '',
+          categoryId: b.categoryId || '22',
+          tags: b.tags || []
+        }))
+      };
+      
+      console.log('[multiSaveTemplate] Saving template with broadcasts:', templateData.broadcasts.map(b => ({ title: b.title, streamId: b.streamId })));
+      
+      const response = await fetch('/api/youtube/templates/multi', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': getCsrfToken()
+        },
+        body: JSON.stringify(templateData)
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        showToast(`Template "${templateName}" saved with ${broadcasts.length} broadcast(s)!`);
+        closeMultiSaveTemplateModal();
+        clearSelection();
+      } else {
+        showToast(data.error || 'Failed to save template', 'error');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      showToast(error.message || 'An error occurred', 'error');
+    } finally {
+      saveBtn.innerHTML = originalText;
+      saveBtn.disabled = false;
+    }
+  });
+}
+
+// Re-create broadcasts from template
+async function recreateFromTemplate(templateId) {
+  try {
+    const response = await fetch(`/api/youtube/templates/${templateId}`, {
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (data.success && data.template) {
+      closeTemplateLibraryModal();
+      
+      // Check if template has multiple broadcasts
+      if (data.template.broadcasts && data.template.broadcasts.length > 0) {
+        openRecreateFromTemplateModal(data.template);
+      } else {
+        // Single broadcast template - use existing flow
+        createFromTemplate(templateId);
+      }
+    } else {
+      showToast(data.error || 'Failed to load template', 'error');
+    }
+  } catch (error) {
+    console.error('Error:', error);
+    showToast('An error occurred', 'error');
+  }
+}
+
+// Open Re-create from Template Modal
+function openRecreateFromTemplateModal(template) {
+  window.currentRecreateTemplate = template;
+  
+  document.getElementById('recreateTemplateName').textContent = template.name;
+  
+  // Render broadcast list with schedule inputs
+  const listEl = document.getElementById('recreateBroadcastList');
+  const broadcasts = template.broadcasts || [template];
+  
+  listEl.innerHTML = broadcasts.map((b, i) => {
+    const minDate = new Date(Date.now() + 11 * 60 * 1000);
+    const minDateStr = minDate.toISOString().slice(0, 16);
+    
+    return `
+      <div class="bg-dark-700 rounded-lg p-3 space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="font-medium text-sm text-white">${i + 1}. ${escapeHtml(b.title)}</span>
+          <span class="text-xs text-gray-500">${b.privacyStatus}</span>
+        </div>
+        ${b.streamKey ? `<div class="text-xs text-gray-400 font-mono truncate">Key: ${escapeHtml(b.streamKey)}</div>` : ''}
+        <div>
+          <label class="text-xs text-gray-400 block mb-1">Schedule Time</label>
+          <input type="datetime-local" name="recreateSchedule[]" required min="${minDateStr}"
+            class="w-full px-3 py-2 bg-dark-600 border border-gray-600 rounded-lg focus:border-primary focus:outline-none text-sm [color-scheme:dark]">
+        </div>
+      </div>
+    `;
+  }).join('');
+  
+  document.getElementById('recreateFromTemplateModal').classList.remove('hidden');
+}
+
+function closeRecreateFromTemplateModal() {
+  document.getElementById('recreateFromTemplateModal').classList.add('hidden');
+  window.currentRecreateTemplate = null;
+}
+
+// Re-create Form Handler
+const recreateFromTemplateForm = document.getElementById('recreateFromTemplateForm');
+if (recreateFromTemplateForm) {
+  recreateFromTemplateForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const createBtn = document.getElementById('recreateBtn');
+    const originalText = createBtn.innerHTML;
+    createBtn.innerHTML = '<i class="ti ti-loader animate-spin"></i> Creating...';
+    createBtn.disabled = true;
+    
+    try {
+      const template = window.currentRecreateTemplate;
+      const scheduleInputs = document.querySelectorAll('input[name="recreateSchedule[]"]');
+      const schedules = Array.from(scheduleInputs).map(input => input.value).filter(v => v);
+      
+      const broadcasts = template.broadcasts || [template];
+      
+      if (schedules.length !== broadcasts.length) {
+        showToast('Please set schedule time for all broadcasts', 'error');
+        return;
+      }
+      
+      // Create broadcasts one by one
+      const results = { total: broadcasts.length, success: 0, failed: 0, errors: [] };
+      
+      for (let i = 0; i < broadcasts.length; i++) {
+        const broadcast = broadcasts[i];
+        const schedule = schedules[i];
+        
+        try {
+          const formData = new FormData();
+          formData.append('accountId', template.account_id);
+          formData.append('title', broadcast.title);
+          formData.append('description', broadcast.description || '');
+          formData.append('scheduledStartTime', schedule);
+          formData.append('privacyStatus', broadcast.privacyStatus || 'unlisted');
+          // Note: Category field removed, backend uses default value
+          
+          if (broadcast.tags && broadcast.tags.length > 0) {
+            formData.append('tags', JSON.stringify(broadcast.tags));
+          }
+          
+          // Use streamId to reuse the same stream key
+          if (broadcast.streamId) {
+            formData.append('streamId', broadcast.streamId);
+            console.log('[recreate] Using streamId:', broadcast.streamId);
+          } else if (template.stream_id) {
+            // Fallback to template's stream_id for single broadcast templates
+            formData.append('streamId', template.stream_id);
+            console.log('[recreate] Using template stream_id:', template.stream_id);
+          }
+          
+          const response = await fetch('/api/youtube/broadcasts', {
+            method: 'POST',
+            headers: {
+              'X-CSRF-Token': getCsrfToken()
+            },
+            body: formData
+          });
+          
+          const data = await response.json();
+          
+          if (data.success) {
+            results.success++;
+          } else {
+            results.failed++;
+            results.errors.push({ title: broadcast.title, error: data.error });
+          }
+        } catch (err) {
+          results.failed++;
+          results.errors.push({ title: broadcast.title, error: err.message });
+        }
+      }
+      
+      closeRecreateFromTemplateModal();
+      
+      // Show results
+      if (results.failed === 0) {
+        showToast(`Successfully created ${results.success} broadcast(s)!`);
+        setTimeout(() => window.location.reload(), 1000);
+      } else {
+        showToast(`Created ${results.success}/${results.total} broadcasts. ${results.failed} failed.`, 'error');
+        console.error('Failed broadcasts:', results.errors);
+        setTimeout(() => window.location.reload(), 2000);
+      }
+      
+    } catch (error) {
+      console.error('Error:', error);
+      showToast('An error occurred', 'error');
+    } finally {
+      createBtn.innerHTML = originalText;
+      createBtn.disabled = false;
+    }
+  });
+}
+
+// ============================================
+// RECURRING SCHEDULE MANAGEMENT
+// ============================================
+
+// Toggle recurring fields visibility
+function toggleRecurringFields() {
+  const enabled = document.getElementById('templateRecurringEnabled').checked;
+  const container = document.getElementById('recurringFieldsContainer');
+  
+  if (enabled) {
+    container.classList.remove('hidden');
+    // Set default pattern to daily if none selected
+    const dailyRadio = document.querySelector('input[name="recurringPattern"][value="daily"]');
+    if (dailyRadio && !document.querySelector('input[name="recurringPattern"]:checked')) {
+      dailyRadio.checked = true;
+    }
+  } else {
+    container.classList.add('hidden');
+  }
+}
+
+// Toggle days selection visibility based on pattern
+function toggleDaysSelection() {
+  const pattern = document.querySelector('input[name="recurringPattern"]:checked')?.value;
+  const daysContainer = document.getElementById('recurringDaysContainer');
+  
+  if (pattern === 'weekly') {
+    daysContainer.classList.remove('hidden');
+  } else {
+    daysContainer.classList.add('hidden');
+    // Clear days selection when switching to daily
+    document.querySelectorAll('input[name="recurringDays"]').forEach(cb => cb.checked = false);
+  }
+}
+
+// Get recurring data from form
+function getRecurringDataFromForm() {
+  const enabled = document.getElementById('templateRecurringEnabled').checked;
+  
+  if (!enabled) {
+    return {
+      recurring_enabled: false,
+      recurring_pattern: null,
+      recurring_time: null,
+      recurring_days: null
+    };
+  }
+  
+  const pattern = document.querySelector('input[name="recurringPattern"]:checked')?.value;
+  const time = document.getElementById('templateRecurringTime').value;
+  const days = pattern === 'weekly' 
+    ? Array.from(document.querySelectorAll('input[name="recurringDays"]:checked')).map(cb => cb.value)
+    : null;
+  
+  return {
+    recurring_enabled: true,
+    recurring_pattern: pattern,
+    recurring_time: time,
+    recurring_days: days
+  };
+}
+
+// Validate recurring configuration
+function validateRecurringConfig() {
+  const enabled = document.getElementById('templateRecurringEnabled').checked;
+  
+  if (!enabled) return true;
+  
+  const pattern = document.querySelector('input[name="recurringPattern"]:checked')?.value;
+  const time = document.getElementById('templateRecurringTime').value;
+  
+  if (!pattern) {
+    showToast('Please select a recurring pattern', 'error');
+    return false;
+  }
+  
+  if (!time) {
+    showToast('Please set a recurring time', 'error');
+    return false;
+  }
+  
+  if (pattern === 'weekly') {
+    const days = document.querySelectorAll('input[name="recurringDays"]:checked');
+    if (days.length === 0) {
+      document.getElementById('recurringDaysError').classList.remove('hidden');
+      showToast('Please select at least one day for weekly schedule', 'error');
+      return false;
+    }
+    document.getElementById('recurringDaysError').classList.add('hidden');
+  }
+  
+  return true;
+}
+
+// Populate recurring fields in form (for editing)
+function populateRecurringFields(template) {
+  const enabledCheckbox = document.getElementById('templateRecurringEnabled');
+  
+  if (template.recurring_enabled) {
+    enabledCheckbox.checked = true;
+    toggleRecurringFields();
+    
+    // Set pattern
+    const patternRadio = document.querySelector(`input[name="recurringPattern"][value="${template.recurring_pattern}"]`);
+    if (patternRadio) {
+      patternRadio.checked = true;
+      toggleDaysSelection();
+    }
+    
+    // Set time
+    if (template.recurring_time) {
+      document.getElementById('templateRecurringTime').value = template.recurring_time;
+    }
+    
+    // Set days for weekly
+    if (template.recurring_pattern === 'weekly' && template.recurring_days) {
+      const days = Array.isArray(template.recurring_days) ? template.recurring_days : [];
+      days.forEach(day => {
+        const checkbox = document.querySelector(`input[name="recurringDays"][value="${day}"]`);
+        if (checkbox) checkbox.checked = true;
+      });
+    }
+  } else {
+    enabledCheckbox.checked = false;
+    toggleRecurringFields();
+  }
+}
+
+// Reset recurring fields
+function resetRecurringFields() {
+  document.getElementById('templateRecurringEnabled').checked = false;
+  document.getElementById('recurringFieldsContainer').classList.add('hidden');
+  document.getElementById('recurringDaysContainer').classList.add('hidden');
+  document.getElementById('templateRecurringTime').value = '';
+  document.querySelectorAll('input[name="recurringPattern"]').forEach(r => r.checked = false);
+  document.querySelectorAll('input[name="recurringDays"]').forEach(cb => cb.checked = false);
+  document.getElementById('recurringDaysError').classList.add('hidden');
+}
+
+// Toggle recurring for a template (quick toggle from list)
+async function toggleTemplateRecurring(templateId, currentEnabled) {
+  try {
+    const response = await fetch(`/api/youtube/templates/${templateId}/recurring/toggle`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getCsrfToken()
+      },
+      body: JSON.stringify({ enabled: !currentEnabled })
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      showToast(data.recurring_enabled ? 'Recurring enabled' : 'Recurring disabled');
+      loadTemplates(); // Refresh list
+    } else {
+      showToast(data.error || 'Failed to toggle recurring', 'error');
+    }
+  } catch (error) {
+    console.error('Error toggling recurring:', error);
+    showToast('Failed to toggle recurring', 'error');
+  }
+}
+
+// Format next run time for display
+function formatNextRun(nextRunAt) {
+  if (!nextRunAt) return 'Not scheduled';
+  
+  const date = new Date(nextRunAt);
+  const now = new Date();
+  const diffMs = date - now;
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  
+  if (diffMs < 0) return 'Overdue';
+  if (diffHours < 24) {
+    return `Today at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  }
+  if (diffDays === 1) {
+    return `Tomorrow at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  }
+  return date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }) + 
+         ` at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+}
+
+// Format recurring pattern for display
+function formatRecurringPattern(pattern, days, time) {
+  if (pattern === 'daily') {
+    return `Daily at ${time}`;
+  }
+  if (pattern === 'weekly' && days && days.length > 0) {
+    const dayNames = {
+      monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu',
+      friday: 'Fri', saturday: 'Sat', sunday: 'Sun'
+    };
+    const dayList = days.map(d => dayNames[d] || d).join(', ');
+    return `Weekly (${dayList}) at ${time}`;
+  }
+  return 'Unknown pattern';
 }

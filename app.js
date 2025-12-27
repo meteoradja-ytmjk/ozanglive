@@ -2196,6 +2196,207 @@ async function processGoogleDriveImport(jobId, fileId, userId) {
     }, 5 * 60 * 1000);
   }
 }
+
+// Batch Google Drive Import for Videos
+const batchImportJobs = {};
+
+app.post('/api/videos/import-drive-batch', isAuthenticated, [
+  body('driveUrls').isArray({ min: 1 }).withMessage('At least one Google Drive URL is required')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, error: errors.array()[0].msg });
+    }
+    
+    const { driveUrls } = req.body;
+    const { extractFileId } = require('./utils/googleDriveService');
+    
+    // Validate and extract file IDs
+    const files = [];
+    for (let i = 0; i < driveUrls.length; i++) {
+      try {
+        const fileId = extractFileId(driveUrls[i]);
+        files.push({ index: i, link: driveUrls[i], fileId });
+      } catch (error) {
+        return res.status(400).json({
+          success: false,
+          error: `Invalid Google Drive URL at position ${i + 1}: ${error.message}`
+        });
+      }
+    }
+    
+    const batchId = uuidv4();
+    
+    // Start batch processing
+    processBatchVideoImport(batchId, files, req.session.userId)
+      .catch(err => console.error('Batch video import failed:', err));
+    
+    return res.json({
+      success: true,
+      message: 'Batch import started',
+      batchId: batchId,
+      totalFiles: files.length
+    });
+  } catch (error) {
+    console.error('Error starting batch import:', error);
+    res.status(500).json({ success: false, error: 'Failed to start batch import' });
+  }
+});
+
+app.get('/api/videos/import-batch-status/:batchId', isAuthenticated, async (req, res) => {
+  const batchId = req.params.batchId;
+  if (!batchImportJobs[batchId]) {
+    return res.status(404).json({ success: false, error: 'Batch import job not found' });
+  }
+  
+  const job = batchImportJobs[batchId];
+  const summary = {
+    total: job.files.length,
+    completed: job.files.filter(f => f.status === 'completed').length,
+    failed: job.files.filter(f => f.status === 'failed').length,
+    pending: job.files.filter(f => f.status === 'pending').length,
+    processing: job.files.filter(f => f.status === 'downloading' || f.status === 'processing').length
+  };
+  
+  return res.json({
+    success: true,
+    status: {
+      batchId,
+      isComplete: job.isComplete,
+      isCancelled: job.isCancelled,
+      files: job.files,
+      summary
+    }
+  });
+});
+
+app.post('/api/videos/import-batch-cancel/:batchId', isAuthenticated, async (req, res) => {
+  const batchId = req.params.batchId;
+  if (!batchImportJobs[batchId]) {
+    return res.status(404).json({ success: false, error: 'Batch import job not found' });
+  }
+  
+  batchImportJobs[batchId].isCancelled = true;
+  
+  return res.json({
+    success: true,
+    message: 'Batch import cancelled'
+  });
+});
+
+async function processBatchVideoImport(batchId, files, userId) {
+  const { downloadFile } = require('./utils/googleDriveService');
+  const { getVideoInfo, generateThumbnail } = require('./utils/videoProcessor');
+  const ffmpeg = require('fluent-ffmpeg');
+  
+  // Initialize batch job
+  batchImportJobs[batchId] = {
+    isComplete: false,
+    isCancelled: false,
+    files: files.map(f => ({
+      index: f.index,
+      link: f.link,
+      fileId: f.fileId,
+      status: 'pending',
+      progress: 0,
+      message: 'Waiting...',
+      error: null,
+      resultId: null
+    }))
+  };
+  
+  // Process files sequentially
+  for (let i = 0; i < files.length; i++) {
+    // Check if cancelled
+    if (batchImportJobs[batchId].isCancelled) {
+      break;
+    }
+    
+    const file = batchImportJobs[batchId].files[i];
+    file.status = 'downloading';
+    file.message = 'Starting download...';
+    
+    try {
+      // Download file
+      const result = await downloadFile(file.fileId, (progress) => {
+        file.progress = progress.progress;
+        file.message = `Downloading: ${progress.progress}%`;
+      });
+      
+      file.status = 'processing';
+      file.progress = 100;
+      file.message = 'Processing video...';
+      
+      // Get video info
+      const videoInfo = await getVideoInfo(result.localFilePath);
+      
+      // Get metadata
+      const metadata = await new Promise((resolve, reject) => {
+        ffmpeg.ffprobe(result.localFilePath, (err, metadata) => {
+          if (err) return reject(err);
+          resolve(metadata);
+        });
+      });
+      
+      let resolution = '';
+      let bitrate = null;
+      
+      const videoStream = metadata.streams.find(stream => stream.codec_type === 'video');
+      if (videoStream) {
+        resolution = `${videoStream.width}x${videoStream.height}`;
+      }
+      
+      if (metadata.format && metadata.format.bit_rate) {
+        bitrate = Math.round(parseInt(metadata.format.bit_rate) / 1000);
+      }
+      
+      // Generate thumbnail
+      const thumbnailName = path.basename(result.filename, path.extname(result.filename)) + '.jpg';
+      const thumbnailRelativePath = await generateThumbnail(result.localFilePath, thumbnailName)
+        .then(() => `/uploads/thumbnails/${thumbnailName}`)
+        .catch(() => null);
+      
+      let format = path.extname(result.filename).toLowerCase().replace('.', '');
+      if (!format) format = 'mp4';
+      
+      // Create video record
+      const videoData = {
+        title: path.basename(result.originalFilename, path.extname(result.originalFilename)),
+        filepath: `/uploads/videos/${result.filename}`,
+        thumbnail_path: thumbnailRelativePath,
+        file_size: result.fileSize,
+        duration: videoInfo.duration,
+        format: format,
+        resolution: resolution,
+        bitrate: bitrate,
+        user_id: userId
+      };
+      
+      const video = await Video.create(videoData);
+      
+      file.status = 'completed';
+      file.progress = 100;
+      file.message = 'Video imported successfully';
+      file.resultId = video.id;
+      
+    } catch (error) {
+      console.error(`Error importing file ${i}:`, error);
+      file.status = 'failed';
+      file.progress = 0;
+      file.message = error.message || 'Import failed';
+      file.error = error.message || 'Import failed';
+    }
+  }
+  
+  batchImportJobs[batchId].isComplete = true;
+  
+  // Clean up after 10 minutes
+  setTimeout(() => {
+    delete batchImportJobs[batchId];
+  }, 10 * 60 * 1000);
+}
+
 app.get('/api/stream/videos', isAuthenticated, async (req, res) => {
   try {
     const videos = await Video.findAll(req.session.userId);
@@ -2503,7 +2704,7 @@ const backupService = require('./services/backupService');
 app.get('/api/streams/export', isAuthenticated, async (req, res) => {
   try {
     const backupData = await backupService.exportStreams(req.session.userId);
-    const filename = `streamflow-backup-${new Date().toISOString().split('T')[0]}.json`;
+    const filename = `ozanglive-backup-${new Date().toISOString().split('T')[0]}.json`;
     
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
@@ -2544,6 +2745,66 @@ app.post('/api/streams/import', isAuthenticated, uploadBackup.single('backupFile
   } catch (error) {
     console.error('Error importing streams:', error);
     res.status(500).json({ success: false, error: 'Failed to import stream settings' });
+  }
+});
+
+// Comprehensive Backup - Export all data endpoint
+app.post('/api/backup/export-all', isAuthenticated, async (req, res) => {
+  try {
+    const { categories } = req.body || {};
+    const backupData = await backupService.comprehensiveExport(req.session.userId, categories);
+    const filename = `ozanglive-full-backup-${new Date().toISOString().split('T')[0]}.json`;
+    
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(backupService.formatBackupJson(backupData));
+  } catch (error) {
+    console.error('Error exporting all data:', error);
+    res.status(500).json({ success: false, error: 'Failed to export data' });
+  }
+});
+
+// Comprehensive Backup - Import all data endpoint
+app.post('/api/backup/import-all', isAuthenticated, uploadBackup.single('backupFile'), async (req, res) => {
+  try {
+    let backupData;
+    
+    // Handle file upload or JSON body
+    if (req.file) {
+      const fileContent = req.file.buffer.toString('utf8');
+      try {
+        backupData = JSON.parse(fileContent);
+      } catch (parseError) {
+        return res.status(400).json({ success: false, error: 'Invalid JSON format' });
+      }
+    } else if (req.body && req.body.backup) {
+      backupData = req.body.backup;
+    } else {
+      return res.status(400).json({ success: false, error: 'No backup data provided' });
+    }
+
+    // Get import options
+    const options = {
+      skipDuplicates: req.body.skipDuplicates !== false,
+      overwrite: req.body.overwrite === true
+    };
+
+    // Import all data
+    const result = await backupService.comprehensiveImport(backupData, req.session.userId, options);
+    
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    res.json({
+      success: true,
+      results: result.results,
+      warnings: result.warnings,
+      message: 'Import completed successfully'
+    });
+  } catch (error) {
+    console.error('Error importing all data:', error);
+    res.status(500).json({ success: false, error: 'Failed to import data' });
   }
 });
 
@@ -3512,6 +3773,182 @@ async function processGoogleDriveAudioImport(jobId, fileId, userId) {
   }
 }
 
+// Batch Google Drive Import for Audio
+const batchAudioImportJobs = {};
+
+app.post('/api/audios/import-drive-batch', isAuthenticated, [
+  body('driveUrls').isArray({ min: 1 }).withMessage('At least one Google Drive URL is required')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, error: errors.array()[0].msg });
+    }
+    
+    const { driveUrls } = req.body;
+    const { extractFileId } = require('./utils/googleDriveService');
+    
+    // Validate and extract file IDs
+    const files = [];
+    for (let i = 0; i < driveUrls.length; i++) {
+      try {
+        const fileId = extractFileId(driveUrls[i]);
+        files.push({ index: i, link: driveUrls[i], fileId });
+      } catch (error) {
+        return res.status(400).json({
+          success: false,
+          error: `Invalid Google Drive URL at position ${i + 1}: ${error.message}`
+        });
+      }
+    }
+    
+    const batchId = uuidv4();
+    
+    // Start batch processing
+    processBatchAudioImport(batchId, files, req.session.userId)
+      .catch(err => console.error('Batch audio import failed:', err));
+    
+    return res.json({
+      success: true,
+      message: 'Batch audio import started',
+      batchId: batchId,
+      totalFiles: files.length
+    });
+  } catch (error) {
+    console.error('Error starting batch audio import:', error);
+    res.status(500).json({ success: false, error: 'Failed to start batch import' });
+  }
+});
+
+app.get('/api/audios/import-batch-status/:batchId', isAuthenticated, async (req, res) => {
+  const batchId = req.params.batchId;
+  if (!batchAudioImportJobs[batchId]) {
+    return res.status(404).json({ success: false, error: 'Batch import job not found' });
+  }
+  
+  const job = batchAudioImportJobs[batchId];
+  const summary = {
+    total: job.files.length,
+    completed: job.files.filter(f => f.status === 'completed').length,
+    failed: job.files.filter(f => f.status === 'failed').length,
+    pending: job.files.filter(f => f.status === 'pending').length,
+    processing: job.files.filter(f => f.status === 'downloading' || f.status === 'processing').length
+  };
+  
+  return res.json({
+    success: true,
+    status: {
+      batchId,
+      isComplete: job.isComplete,
+      isCancelled: job.isCancelled,
+      files: job.files,
+      summary
+    }
+  });
+});
+
+app.post('/api/audios/import-batch-cancel/:batchId', isAuthenticated, async (req, res) => {
+  const batchId = req.params.batchId;
+  if (!batchAudioImportJobs[batchId]) {
+    return res.status(404).json({ success: false, error: 'Batch import job not found' });
+  }
+  
+  batchAudioImportJobs[batchId].isCancelled = true;
+  
+  return res.json({
+    success: true,
+    message: 'Batch audio import cancelled'
+  });
+});
+
+async function processBatchAudioImport(batchId, files, userId) {
+  const { downloadFile } = require('./utils/googleDriveService');
+  
+  // Initialize batch job
+  batchAudioImportJobs[batchId] = {
+    isComplete: false,
+    isCancelled: false,
+    files: files.map(f => ({
+      index: f.index,
+      link: f.link,
+      fileId: f.fileId,
+      status: 'pending',
+      progress: 0,
+      message: 'Waiting...',
+      error: null,
+      resultId: null
+    }))
+  };
+  
+  // Process files sequentially
+  for (let i = 0; i < files.length; i++) {
+    // Check if cancelled
+    if (batchAudioImportJobs[batchId].isCancelled) {
+      break;
+    }
+    
+    const file = batchAudioImportJobs[batchId].files[i];
+    file.status = 'downloading';
+    file.message = 'Starting download...';
+    
+    try {
+      // Download file
+      const result = await downloadFile(file.fileId, (progress) => {
+        file.progress = progress.progress;
+        file.message = `Downloading: ${progress.progress}%`;
+      }, 'audios');
+      
+      file.status = 'processing';
+      file.progress = 100;
+      file.message = 'Processing audio...';
+      
+      // Get audio duration using ffprobe
+      const audioFilePath = result.localFilePath;
+      const metadata = await new Promise((resolve, reject) => {
+        ffmpeg.ffprobe(audioFilePath, (err, metadata) => {
+          if (err) return reject(err);
+          resolve(metadata);
+        });
+      });
+      
+      const duration = metadata.format.duration || 0;
+      let format = path.extname(result.filename).toLowerCase().replace('.', '').toUpperCase();
+      if (!format) format = 'MP3';
+      
+      // Create audio record
+      const audioData = {
+        title: path.basename(result.originalFilename, path.extname(result.originalFilename)),
+        filepath: `/uploads/audios/${result.filename}`,
+        file_size: result.fileSize,
+        duration: duration,
+        format: format,
+        user_id: userId
+      };
+      
+      const audio = await Audio.create(audioData);
+      
+      file.status = 'completed';
+      file.progress = 100;
+      file.message = 'Audio imported successfully';
+      file.resultId = audio.id;
+      
+    } catch (error) {
+      console.error(`Error importing audio file ${i}:`, error);
+      file.status = 'failed';
+      file.progress = 0;
+      file.message = error.message || 'Import failed';
+      file.error = error.message || 'Import failed';
+    }
+  }
+  
+  batchAudioImportJobs[batchId].isComplete = true;
+  
+  // Clean up after 10 minutes
+  setTimeout(() => {
+    delete batchAudioImportJobs[batchId];
+  }, 10 * 60 * 1000);
+}
+
 // ============================================
 // STREAM TEMPLATES API
 // ============================================
@@ -3970,10 +4407,13 @@ app.get('/api/youtube/streams', isAuthenticated, async (req, res) => {
     const accountId = req.query.accountId ? parseInt(req.query.accountId) : null;
     let credentials;
     
+    console.log('[/api/youtube/streams] Request with accountId:', accountId);
+    
     if (accountId) {
       // Get specific account
       credentials = await YouTubeCredentials.findById(accountId);
       if (!credentials || credentials.userId !== req.session.userId) {
+        console.log('[/api/youtube/streams] Account not found or unauthorized');
         return res.status(404).json({ success: false, error: 'Account not found' });
       }
     } else {
@@ -3982,11 +4422,14 @@ app.get('/api/youtube/streams', isAuthenticated, async (req, res) => {
     }
     
     if (!credentials) {
+      console.log('[/api/youtube/streams] No YouTube account connected');
       return res.status(400).json({
         success: false,
         error: 'YouTube account not connected'
       });
     }
+    
+    console.log('[/api/youtube/streams] Using account:', credentials.channelName);
     
     const accessToken = await youtubeService.getAccessToken(
       credentials.clientId,
@@ -3995,9 +4438,11 @@ app.get('/api/youtube/streams', isAuthenticated, async (req, res) => {
     );
     
     const streams = await youtubeService.listStreams(accessToken);
+    console.log('[/api/youtube/streams] Found', streams.length, 'streams');
+    
     res.json({ success: true, streams, accountId: credentials.id });
   } catch (error) {
-    console.error('Error listing streams:', error);
+    console.error('[/api/youtube/streams] Error:', error.message);
     res.status(500).json({ success: false, error: 'Failed to list stream keys' });
   }
 });
@@ -4164,7 +4609,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       privacyStatus: privacyStatus || 'unlisted',
       streamId: streamId || null,
       tags: parsedTags,
-      categoryId: categoryId || '20',
+      categoryId: categoryId || '22',
       monetizationEnabled: monetizationEnabled === 'true' || monetizationEnabled === true,
       adFrequency: adFrequency || 'medium',
       alteredContent: alteredContent === 'true' || alteredContent === true
@@ -4398,6 +4843,8 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
   try {
     const { name, title, description, privacyStatus, tags, categoryId, thumbnailPath, streamId, accountId } = req.body;
     
+    console.log('[create-template] Received streamId:', streamId);
+    
     if (!name || !title || !accountId) {
       return res.status(400).json({
         success: false,
@@ -4419,10 +4866,12 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
       description: description || null,
       privacy_status: privacyStatus || 'unlisted',
       tags: tags || null,
-      category_id: categoryId || '20',
+      category_id: categoryId || '22',
       thumbnail_path: thumbnailPath || null,
       stream_id: streamId || null
     });
+
+    console.log('[create-template] Created template with stream_id:', template.stream_id);
 
     res.json({ success: true, template });
   } catch (error) {
@@ -4434,16 +4883,116 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
   }
 });
 
+// Create multi-broadcast template (save multiple broadcasts as one template)
+app.post('/api/youtube/templates/multi', isAuthenticated, async (req, res) => {
+  try {
+    const { name, accountId, broadcasts } = req.body;
+    
+    if (!name || !accountId || !broadcasts || broadcasts.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Name, accountId, and broadcasts are required'
+      });
+    }
+
+    // Verify account belongs to user
+    const credentials = await YouTubeCredentials.findById(parseInt(accountId));
+    if (!credentials || credentials.userId !== req.session.userId) {
+      return res.status(404).json({ success: false, error: 'Account not found' });
+    }
+
+    // Ensure each broadcast has streamId preserved
+    const broadcastsWithStreamId = broadcasts.map(b => ({
+      title: b.title,
+      description: b.description || '',
+      privacyStatus: b.privacyStatus || 'unlisted',
+      streamId: b.streamId || null,  // Preserve stream ID
+      streamKey: b.streamKey || '',
+      categoryId: b.categoryId || '22',
+      tags: b.tags || []
+    }));
+
+    console.log('[templates/multi] Saving broadcasts with streamIds:', broadcastsWithStreamId.map(b => ({ title: b.title, streamId: b.streamId })));
+
+    // Create template with broadcasts data stored as JSON
+    const template = await BroadcastTemplate.create({
+      user_id: req.session.userId,
+      account_id: parseInt(accountId),
+      name,
+      title: broadcasts[0].title, // Use first broadcast title as main title
+      description: JSON.stringify(broadcastsWithStreamId), // Store all broadcasts as JSON in description
+      privacy_status: broadcasts[0].privacyStatus || 'unlisted',
+      tags: broadcasts[0].tags || null,
+      category_id: broadcasts[0].categoryId || '22',
+      thumbnail_path: null,
+      stream_id: broadcasts[0].streamId || null  // Save first broadcast's stream_id
+    });
+
+    res.json({ success: true, template, broadcastCount: broadcasts.length });
+  } catch (error) {
+    console.error('Error creating multi-broadcast template:', error);
+    res.status(error.message.includes('already exists') ? 400 : 500).json({
+      success: false,
+      error: error.message || 'Failed to create template'
+    });
+  }
+});
+
 // Get all templates for user
 app.get('/api/youtube/templates', isAuthenticated, async (req, res) => {
   try {
     const templates = await BroadcastTemplate.findByUserId(req.session.userId);
+    
+    // Parse broadcasts from description if it's a multi-broadcast template
+    templates.forEach(template => {
+      try {
+        if (template.description && template.description.startsWith('[')) {
+          template.broadcasts = JSON.parse(template.description);
+          template.isMultiBroadcast = true;
+        }
+      } catch (e) {
+        // Not a multi-broadcast template, keep description as is
+      }
+    });
+    
     res.json({ success: true, templates });
   } catch (error) {
     console.error('Error fetching broadcast templates:', error);
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to fetch templates'
+    });
+  }
+});
+
+
+// Get all templates with recurring enabled (must be before :id route)
+app.get('/api/youtube/templates/recurring', isAuthenticated, async (req, res) => {
+  try {
+    const templates = await BroadcastTemplate.findWithRecurringEnabled();
+    
+    // Filter to only user's templates
+    const userTemplates = templates.filter(t => t.user_id === req.session.userId);
+
+    res.json({
+      success: true,
+      templates: userTemplates.map(t => ({
+        id: t.id,
+        name: t.name,
+        title: t.title,
+        channel_name: t.channel_name,
+        recurring_pattern: t.recurring_pattern,
+        recurring_time: t.recurring_time,
+        recurring_days: t.recurring_days,
+        next_run_at: t.next_run_at,
+        last_run_at: t.last_run_at
+      }))
+    });
+  } catch (error) {
+    console.error('Error getting recurring templates:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to get recurring templates'
     });
   }
 });
@@ -4459,6 +5008,16 @@ app.get('/api/youtube/templates/:id', isAuthenticated, async (req, res) => {
     
     if (template.user_id !== req.session.userId) {
       return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+
+    // Parse broadcasts from description if it's a multi-broadcast template
+    try {
+      if (template.description && template.description.startsWith('[')) {
+        template.broadcasts = JSON.parse(template.description);
+        template.isMultiBroadcast = true;
+      }
+    } catch (e) {
+      // Not a multi-broadcast template, keep description as is
     }
 
     res.json({ success: true, template });
@@ -4527,6 +5086,128 @@ app.delete('/api/youtube/templates/:id', isAuthenticated, async (req, res) => {
   }
 });
 
+// Update recurring configuration for a template
+app.put('/api/youtube/templates/:id/recurring', isAuthenticated, async (req, res) => {
+  try {
+    const { recurring_enabled, recurring_pattern, recurring_time, recurring_days } = req.body;
+    
+    // Get template first to verify ownership
+    const template = await BroadcastTemplate.findById(req.params.id);
+    if (!template) {
+      return res.status(404).json({ success: false, error: 'Template not found' });
+    }
+    if (template.user_id !== req.session.userId) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+
+    // Validate recurring configuration
+    const { validateRecurringConfig, calculateNextRun, formatNextRunAt } = require('./utils/recurringUtils');
+    const validation = validateRecurringConfig({
+      recurring_enabled,
+      recurring_pattern,
+      recurring_time,
+      recurring_days
+    });
+
+    if (!validation.valid) {
+      return res.status(400).json({
+        success: false,
+        error: validation.errors.join(', ')
+      });
+    }
+
+    // Calculate next_run_at if enabling
+    let next_run_at = null;
+    if (recurring_enabled) {
+      const nextRun = calculateNextRun({
+        recurring_pattern,
+        recurring_time,
+        recurring_days
+      });
+      next_run_at = formatNextRunAt(nextRun);
+    }
+
+    // Update template
+    const result = await BroadcastTemplate.updateRecurring(req.params.id, {
+      recurring_enabled,
+      recurring_pattern,
+      recurring_time,
+      recurring_days,
+      next_run_at
+    });
+
+    res.json({
+      success: true,
+      template: result
+    });
+  } catch (error) {
+    console.error('Error updating template recurring:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to update recurring configuration'
+    });
+  }
+});
+
+// Toggle recurring on/off for a template
+app.post('/api/youtube/templates/:id/recurring/toggle', isAuthenticated, async (req, res) => {
+  try {
+    const { enabled } = req.body;
+    
+    // Get template first to verify ownership and get config
+    const template = await BroadcastTemplate.findById(req.params.id);
+    if (!template) {
+      return res.status(404).json({ success: false, error: 'Template not found' });
+    }
+    if (template.user_id !== req.session.userId) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+
+    // If enabling, validate that recurring config exists
+    if (enabled) {
+      if (!template.recurring_pattern || !template.recurring_time) {
+        return res.status(400).json({
+          success: false,
+          error: 'Cannot enable recurring: pattern and time must be configured first'
+        });
+      }
+      if (template.recurring_pattern === 'weekly' && (!template.recurring_days || template.recurring_days.length === 0)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Cannot enable recurring: weekly pattern requires days to be selected'
+        });
+      }
+    }
+
+    // Calculate next_run_at if enabling
+    let next_run_at = null;
+    if (enabled) {
+      const { calculateNextRun, formatNextRunAt } = require('./utils/recurringUtils');
+      const nextRun = calculateNextRun({
+        recurring_pattern: template.recurring_pattern,
+        recurring_time: template.recurring_time,
+        recurring_days: template.recurring_days
+      });
+      next_run_at = formatNextRunAt(nextRun);
+    }
+
+    // Toggle recurring
+    const result = await BroadcastTemplate.toggleRecurring(req.params.id, enabled, next_run_at);
+
+    res.json({
+      success: true,
+      recurring_enabled: enabled,
+      next_run_at: next_run_at
+    });
+  } catch (error) {
+    console.error('Error toggling template recurring:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to toggle recurring'
+    });
+  }
+});
+
 // Create broadcast from template
 app.post('/api/youtube/templates/:id/create-broadcast', isAuthenticated, async (req, res) => {
   try {
@@ -4548,6 +5229,12 @@ app.post('/api/youtube/templates/:id/create-broadcast', isAuthenticated, async (
       return res.status(403).json({ success: false, error: 'Access denied' });
     }
 
+    console.log('[create-broadcast-from-template] Template:', {
+      id: template.id,
+      name: template.name,
+      stream_id: template.stream_id
+    });
+
     // Get YouTube credentials
     const credentials = await YouTubeCredentials.findById(template.account_id);
     if (!credentials) {
@@ -4564,6 +5251,8 @@ app.post('/api/youtube/templates/:id/create-broadcast', isAuthenticated, async (
       credentials.refreshToken
     );
 
+    console.log('[create-broadcast-from-template] Using streamId:', template.stream_id);
+
     // Create broadcast on YouTube
     const broadcast = await youtubeService.createBroadcast(accessToken, {
       title: template.title,
@@ -4571,9 +5260,11 @@ app.post('/api/youtube/templates/:id/create-broadcast', isAuthenticated, async (
       scheduledStartTime: new Date(scheduledStartTime).toISOString(),
       privacyStatus: template.privacy_status || 'unlisted',
       tags: template.tags || [],
-      categoryId: template.category_id || '20',
+      categoryId: template.category_id || '22',
       streamId: template.stream_id || null
     });
+
+    console.log('[create-broadcast-from-template] Created broadcast with streamKey:', broadcast.streamKey);
 
     // Upload thumbnail if template has one
     if (template.thumbnail_path) {
@@ -4658,7 +5349,7 @@ app.post('/api/youtube/templates/:id/bulk-create', isAuthenticated, async (req, 
           scheduledStartTime: new Date(schedule).toISOString(),
           privacyStatus: template.privacy_status || 'unlisted',
           tags: template.tags || [],
-          categoryId: template.category_id || '20',
+          categoryId: template.category_id || '22',
           streamId: template.stream_id || null
         });
 
@@ -4702,6 +5393,194 @@ app.post('/api/youtube/templates/:id/bulk-create', isAuthenticated, async (req, 
       success: false,
       error: error.message || 'Failed to bulk create broadcasts'
     });
+  }
+});
+
+// ============================================
+// RECURRING BROADCAST SCHEDULES API
+// ============================================
+const RecurringSchedule = require('./models/RecurringSchedule');
+const scheduleService = require('./services/scheduleService');
+
+// Get all recurring schedules for user
+app.get('/api/recurring-schedules', isAuthenticated, async (req, res) => {
+  try {
+    const schedules = await RecurringSchedule.findByUserId(req.session.userId);
+    res.json({ success: true, schedules });
+  } catch (error) {
+    console.error('Error fetching recurring schedules:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch schedules' });
+  }
+});
+
+// Create recurring schedule
+app.post('/api/recurring-schedules', isAuthenticated, async (req, res) => {
+  try {
+    const { name, pattern, schedule_time, days_of_week, template_id, title_template, description, privacy_status, tags, account_id } = req.body;
+    
+    // Validate required fields
+    if (!name || !pattern || !schedule_time || !account_id) {
+      return res.status(400).json({ success: false, error: 'Missing required fields' });
+    }
+    
+    // Must have either template_id or title_template
+    if (!template_id && !title_template) {
+      return res.status(400).json({ success: false, error: 'Please select a template or provide a title template' });
+    }
+    
+    // Validate weekly schedule has days
+    if (pattern === 'weekly') {
+      const days = Array.isArray(days_of_week) ? days_of_week : [];
+      if (days.length === 0) {
+        return res.status(400).json({ success: false, error: 'Weekly schedule requires at least one day selected' });
+      }
+    }
+    
+    const schedule = await RecurringSchedule.create({
+      user_id: req.session.userId,
+      account_id,
+      name,
+      pattern,
+      schedule_time,
+      days_of_week: Array.isArray(days_of_week) ? JSON.stringify(days_of_week) : days_of_week,
+      template_id: template_id || null,
+      title_template: title_template || null,
+      description,
+      privacy_status: privacy_status || 'unlisted',
+      tags: Array.isArray(tags) ? JSON.stringify(tags) : tags
+    });
+    
+    // Schedule the job
+    await scheduleService.scheduleJob(schedule);
+    
+    res.json({ success: true, schedule });
+  } catch (error) {
+    console.error('Error creating recurring schedule:', error);
+    res.status(500).json({ success: false, error: error.message || 'Failed to create schedule' });
+  }
+});
+
+// Get single recurring schedule
+app.get('/api/recurring-schedules/:id', isAuthenticated, async (req, res) => {
+  try {
+    const schedule = await RecurringSchedule.findById(req.params.id);
+    if (!schedule || schedule.user_id !== req.session.userId) {
+      return res.status(404).json({ success: false, error: 'Schedule not found' });
+    }
+    res.json({ success: true, schedule });
+  } catch (error) {
+    console.error('Error fetching recurring schedule:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch schedule' });
+  }
+});
+
+// Update recurring schedule
+app.put('/api/recurring-schedules/:id', isAuthenticated, async (req, res) => {
+  try {
+    const schedule = await RecurringSchedule.findById(req.params.id);
+    if (!schedule || schedule.user_id !== req.session.userId) {
+      return res.status(404).json({ success: false, error: 'Schedule not found' });
+    }
+    
+    const { name, pattern, schedule_time, days_of_week, template_id, title_template, description, privacy_status, tags, account_id } = req.body;
+    
+    // Validate weekly schedule has days
+    if (pattern === 'weekly') {
+      const days = Array.isArray(days_of_week) ? days_of_week : [];
+      if (days.length === 0) {
+        return res.status(400).json({ success: false, error: 'Weekly schedule requires at least one day selected' });
+      }
+    }
+    
+    const updateData = {};
+    if (name !== undefined) updateData.name = name;
+    if (pattern !== undefined) updateData.pattern = pattern;
+    if (schedule_time !== undefined) updateData.schedule_time = schedule_time;
+    if (days_of_week !== undefined) updateData.days_of_week = Array.isArray(days_of_week) ? days_of_week : JSON.parse(days_of_week || '[]');
+    if (template_id !== undefined) updateData.template_id = template_id;
+    if (title_template !== undefined) updateData.title_template = title_template;
+    if (description !== undefined) updateData.description = description;
+    if (privacy_status !== undefined) updateData.privacy_status = privacy_status;
+    if (tags !== undefined) updateData.tags = Array.isArray(tags) ? tags : JSON.parse(tags || '[]');
+    if (account_id !== undefined) updateData.account_id = account_id;
+    
+    await RecurringSchedule.update(req.params.id, updateData);
+    
+    // Reload the schedule job
+    await scheduleService.reloadSchedule(req.params.id);
+    
+    const updated = await RecurringSchedule.findById(req.params.id);
+    res.json({ success: true, schedule: updated });
+  } catch (error) {
+    console.error('Error updating recurring schedule:', error);
+    res.status(500).json({ success: false, error: error.message || 'Failed to update schedule' });
+  }
+});
+
+// Delete recurring schedule
+app.delete('/api/recurring-schedules/:id', isAuthenticated, async (req, res) => {
+  try {
+    const result = await RecurringSchedule.delete(req.params.id, req.session.userId);
+    if (!result.deleted) {
+      return res.status(404).json({ success: false, error: 'Schedule not found' });
+    }
+    
+    // Cancel the job
+    scheduleService.cancelJob(req.params.id);
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting recurring schedule:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete schedule' });
+  }
+});
+
+// Toggle recurring schedule active status
+app.post('/api/recurring-schedules/:id/toggle', isAuthenticated, async (req, res) => {
+  try {
+    const schedule = await RecurringSchedule.findById(req.params.id);
+    if (!schedule || schedule.user_id !== req.session.userId) {
+      return res.status(404).json({ success: false, error: 'Schedule not found' });
+    }
+    
+    const newStatus = !schedule.is_active;
+    await RecurringSchedule.toggleActive(req.params.id, newStatus);
+    
+    // Reload or cancel the job based on new status
+    if (newStatus) {
+      await scheduleService.reloadSchedule(req.params.id);
+    } else {
+      scheduleService.cancelJob(req.params.id);
+    }
+    
+    res.json({ success: true, is_active: newStatus });
+  } catch (error) {
+    console.error('Error toggling recurring schedule:', error);
+    res.status(500).json({ success: false, error: 'Failed to toggle schedule' });
+  }
+});
+
+// Run recurring schedule now (manual trigger)
+app.post('/api/recurring-schedules/:id/run-now', isAuthenticated, async (req, res) => {
+  try {
+    const schedules = await RecurringSchedule.findActiveSchedules();
+    const schedule = schedules.find(s => s.id === req.params.id && s.user_id === req.session.userId);
+    
+    if (!schedule) {
+      return res.status(404).json({ success: false, error: 'Schedule not found or not active' });
+    }
+    
+    console.log(`[API] Manual trigger for schedule: ${schedule.name}`);
+    const result = await scheduleService.executeSchedule(schedule);
+    
+    res.json({ 
+      success: true, 
+      message: 'Broadcast created successfully',
+      broadcastId: result.broadcastId 
+    });
+  } catch (error) {
+    console.error('Error running schedule manually:', error);
+    res.status(500).json({ success: false, error: error.message || 'Failed to run schedule' });
   }
 });
 
@@ -4789,7 +5668,7 @@ async function startServer() {
   
   httpServer = app.listen(port, '0.0.0.0', async () => {
     const ipAddresses = getLocalIpAddresses();
-    console.log(`StreamFlow running at:`);
+    console.log(`OzangLive running at:`);
     if (ipAddresses && ipAddresses.length > 0) {
       ipAddresses.forEach(ip => {
         console.log(`  http://${ip}:${port}`);
@@ -4820,6 +5699,15 @@ async function startServer() {
       // Don't crash - scheduler can be retried
     }
     
+    // Initialize recurring broadcast schedule service
+    try {
+      console.log('[Startup] Initializing recurring schedule service...');
+      await scheduleService.init();
+    } catch (error) {
+      console.error('[Startup] Error initializing recurring schedule service:', error.message);
+      // Don't crash - schedule service can be retried
+    }
+    
     // REMOVED: Don't sync stream statuses on startup
     // This was causing live streams to be incorrectly marked as offline
     // The periodic sync (every 15 min) will handle cleanup later
@@ -4829,7 +5717,7 @@ async function startServer() {
     // 3. Duration is reached (handled by scheduler)
     console.log('[Startup] Skipping initial sync - status will be managed by events');
     
-    console.log('StreamFlow startup complete');
+    console.log('OzangLive startup complete');
     
     // Signal to PM2 that app is ready
     if (process.send) {

@@ -41,7 +41,7 @@ class BroadcastFormState {
     this.tags = Array.isArray(defaults.tags) ? [...defaults.tags] : [];
     this.monetizationEnabled = defaults.monetizationEnabled || false;
     this.alteredContent = defaults.alteredContent || false;
-    this.categoryId = defaults.categoryId || '20';
+    this.categoryId = defaults.categoryId || '22';
     this.isAutoFilled = true;
   }
 

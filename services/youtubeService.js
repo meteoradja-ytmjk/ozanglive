@@ -89,12 +89,14 @@ class YouTubeService {
     
     const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
     
+    console.log('[YouTubeService.createBroadcast] Received streamId:', streamId);
+    
     // Build snippet with optional tags and category
     const snippet = {
       title: title,
       description: description || '',
       scheduledStartTime: new Date(scheduledStartTime).toISOString(),
-      categoryId: categoryId || '20' // Default to Gaming
+      categoryId: categoryId || '22' // Default to People & Blogs
     };
     
     // Add tags if provided (YouTube API accepts tags in snippet)
@@ -130,6 +132,7 @@ class YouTubeService {
     
     // Use existing stream or create new one
     if (streamId) {
+      console.log('[YouTubeService.createBroadcast] Using existing stream:', streamId);
       // Fetch existing stream info
       const streamResponse = await youtube.liveStreams.list({
         part: 'snippet,cdn',
@@ -137,11 +140,28 @@ class YouTubeService {
       });
       
       if (!streamResponse.data.items || streamResponse.data.items.length === 0) {
-        throw new Error('Stream not found');
+        console.log('[YouTubeService.createBroadcast] Stream not found, creating new one');
+        // Stream not found, create a new one
+        const newStreamResponse = await youtube.liveStreams.insert({
+          part: 'snippet,cdn',
+          requestBody: {
+            snippet: {
+              title: `Stream for ${title}`
+            },
+            cdn: {
+              frameRate: '30fps',
+              ingestionType: 'rtmp',
+              resolution: '1080p'
+            }
+          }
+        });
+        stream = newStreamResponse.data;
+      } else {
+        stream = streamResponse.data.items[0];
+        console.log('[YouTubeService.createBroadcast] Found existing stream:', stream.snippet.title);
       }
-      
-      stream = streamResponse.data.items[0];
     } else {
+      console.log('[YouTubeService.createBroadcast] No streamId provided, creating new stream');
       // Create a new stream
       const streamResponse = await youtube.liveStreams.insert({
         part: 'snippet,cdn',
@@ -166,6 +186,8 @@ class YouTubeService {
       id: broadcast.id,
       streamId: stream.id
     });
+    
+    console.log('[YouTubeService.createBroadcast] Bound stream:', stream.id, 'with key:', stream.cdn.ingestionInfo.streamName);
     
     return {
       broadcastId: broadcast.id,
@@ -202,9 +224,11 @@ class YouTubeService {
     // Get stream info for each broadcast
     const result = await Promise.all(broadcasts.map(async (broadcast) => {
       let streamKey = '';
+      let streamId = null;
       let rtmpUrl = 'rtmp://a.rtmp.youtube.com/live2';
       
       if (broadcast.contentDetails?.boundStreamId) {
+        streamId = broadcast.contentDetails.boundStreamId;
         try {
           const streamResponse = await youtube.liveStreams.list({
             part: 'cdn',
@@ -229,6 +253,7 @@ class YouTubeService {
         privacyStatus: broadcast.status.privacyStatus,
         lifeCycleStatus: broadcast.status.lifeCycleStatus,
         thumbnailUrl: broadcast.snippet.thumbnails?.medium?.url || broadcast.snippet.thumbnails?.default?.url || '',
+        streamId,
         streamKey,
         rtmpUrl
       };
@@ -248,6 +273,8 @@ class YouTubeService {
     
     const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
     
+    console.log('[YouTubeService.listStreams] Fetching streams...');
+    
     const response = await youtube.liveStreams.list({
       part: 'snippet,cdn',
       mine: true,
@@ -255,8 +282,9 @@ class YouTubeService {
     });
     
     const streams = response.data.items || [];
+    console.log('[YouTubeService.listStreams] Raw response items:', streams.length);
     
-    return streams.map(stream => ({
+    const result = streams.map(stream => ({
       id: stream.id,
       title: stream.snippet.title,
       streamKey: stream.cdn?.ingestionInfo?.streamName || '',
@@ -264,6 +292,10 @@ class YouTubeService {
       resolution: stream.cdn?.resolution || 'variable',
       frameRate: stream.cdn?.frameRate || 'variable'
     }));
+    
+    console.log('[YouTubeService.listStreams] Mapped streams:', result.map(s => s.title));
+    
+    return result;
   }
 
   /**
@@ -348,6 +380,7 @@ class YouTubeService {
 
   /**
    * Get channel default settings for broadcasts
+   * Fetches from channel branding settings and last broadcast for better defaults
    * @param {string} accessToken - Access token
    * @returns {Promise<{title: string, description: string, tags: string[], monetizationEnabled: boolean, alteredContent: boolean, categoryId: string}>}
    */
@@ -358,29 +391,53 @@ class YouTubeService {
     const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
     
     // Fetch channel with brandingSettings and status for monetization info
-    const response = await youtube.channels.list({
+    const channelResponse = await youtube.channels.list({
       part: 'brandingSettings,status,snippet',
       mine: true
     });
     
-    if (!response.data.items || response.data.items.length === 0) {
+    if (!channelResponse.data.items || channelResponse.data.items.length === 0) {
       throw new Error('No channel found for this account');
     }
     
-    const channel = response.data.items[0];
+    const channel = channelResponse.data.items[0];
     const brandingSettings = channel.brandingSettings || {};
     const channelSettings = brandingSettings.channel || {};
     
-    // Extract default values from branding settings
-    // Note: YouTube API doesn't expose all live dashboard defaults directly
-    // We use what's available from brandingSettings
+    // Try to get defaults from the most recent broadcast
+    let lastBroadcastDefaults = { title: '', description: '', tags: [] };
+    try {
+      const broadcastsResponse = await youtube.liveBroadcasts.list({
+        part: 'snippet',
+        broadcastStatus: 'upcoming',
+        maxResults: 1
+      });
+      
+      if (broadcastsResponse.data.items && broadcastsResponse.data.items.length > 0) {
+        const lastBroadcast = broadcastsResponse.data.items[0];
+        lastBroadcastDefaults = {
+          title: lastBroadcast.snippet.title || '',
+          description: lastBroadcast.snippet.description || '',
+          tags: lastBroadcast.snippet.tags || []
+        };
+      }
+    } catch (err) {
+      console.log('[YouTubeService] Could not fetch last broadcast for defaults:', err.message);
+    }
+    
+    // Use channel keywords as fallback for tags
+    const channelKeywords = channelSettings.keywords 
+      ? channelSettings.keywords.split(/[,\s]+/).map(t => t.trim().replace(/^"|"$/g, '')).filter(t => t)
+      : [];
+    
+    // Return combined defaults - prefer last broadcast values, fallback to channel settings
     return {
-      title: channelSettings.defaultTab || '',
-      description: channelSettings.description || '',
-      tags: channelSettings.keywords ? channelSettings.keywords.split(',').map(t => t.trim()).filter(t => t) : [],
+      title: lastBroadcastDefaults.title || channelSettings.title || '',
+      description: lastBroadcastDefaults.description || channelSettings.description || '',
+      tags: lastBroadcastDefaults.tags.length > 0 ? lastBroadcastDefaults.tags : channelKeywords,
       monetizationEnabled: channel.status?.isLinked || false,
       alteredContent: false, // YouTube API doesn't expose this default, user must set
-      categoryId: channelSettings.defaultCategory || '20' // Default to Gaming category
+      categoryId: channelSettings.defaultCategory || '22' // Default to People & Blogs category
     };
   }
 

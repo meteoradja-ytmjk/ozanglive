@@ -1,10 +1,10 @@
 #!/bin/bash
 
-# StreamFlow Diagnostic Script
+# OzangLive Diagnostic Script
 # Run this on VPS to diagnose issues
 
 echo "=========================================="
-echo "   StreamFlow Diagnostic Report"
+echo "   OzangLive Diagnostic Report"
 echo "=========================================="
 echo ""
 
@@ -31,17 +31,17 @@ echo ""
 
 # PM2 Process Info
 echo "=== PM2 Process Details ==="
-pm2 describe streamflow 2>/dev/null || echo "streamflow not found in PM2"
+pm2 describe ozanglive 2>/dev/null || echo "ozanglive not found in PM2"
 echo ""
 
 # Recent PM2 Logs (last 50 lines)
 echo "=== Recent PM2 Logs (last 50 lines) ==="
-pm2 logs streamflow --nostream --lines 50 2>/dev/null || echo "No logs available"
+pm2 logs ozanglive --nostream --lines 50 2>/dev/null || echo "No logs available"
 echo ""
 
 # Recent Error Logs
 echo "=== Recent Error Logs (last 30 lines) ==="
-pm2 logs streamflow --err --nostream --lines 30 2>/dev/null || echo "No error logs"
+pm2 logs ozanglive --err --nostream --lines 30 2>/dev/null || echo "No error logs"
 echo ""
 
 # Check if app is responding
@@ -74,7 +74,7 @@ echo "   Diagnostic Complete"
 echo "=========================================="
 echo ""
 echo "If app is not responding, try:"
-echo "  pm2 restart streamflow"
+echo "  pm2 restart ozanglive"
 echo ""
 echo "To see live logs:"
-echo "  pm2 logs streamflow"
+echo "  pm2 logs ozanglive"

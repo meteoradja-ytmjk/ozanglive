@@ -65,11 +65,14 @@
   
   <% } else { %>
   <!-- Connected Accounts Section -->
-  <div class="bg-gray-800 rounded-lg p-6 shadow-md mb-6">
-    <div class="flex items-center justify-between mb-4">
-      <h2 class="text-lg font-semibold">Connected Accounts (<%= accounts.length %>)</h2>
+  <div class="bg-gradient-to-br from-gray-800 to-gray-800/90 rounded-xl p-4 sm:p-6 shadow-lg border border-gray-700/50 mb-6">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+      <h2 class="text-lg font-semibold flex items-center gap-2">
+        <span>Connected Accounts</span>
+        <span class="bg-primary/20 text-primary text-sm px-2 py-0.5 rounded-full"><%= accounts.length %></span>
+      </h2>
       <button onclick="openAddAccountModal()" 
-        class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-2">
+        class="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-4 py-2 rounded-xl text-sm transition-all duration-200 flex items-center justify-center gap-2 font-medium shadow-lg shadow-red-500/25">
         <i class="ti ti-plus"></i>
         <span>Add Account</span>
       </button>
@@ -77,31 +80,34 @@
     
     <div class="space-y-3">
       <% accounts.forEach(function(account) { %>
-      <div class="flex items-center justify-between p-3 bg-dark-700 rounded-lg">
+      <div class="flex items-center justify-between p-3 sm:p-4 bg-dark-700/80 rounded-xl border border-gray-600/30">
         <div class="flex items-center gap-3">
-          <div class="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center">
-            <i class="ti ti-brand-youtube text-red-500 text-lg"></i>
+          <div class="w-11 h-11 bg-gradient-to-br from-red-500/30 to-red-600/20 rounded-xl flex items-center justify-center">
+            <i class="ti ti-brand-youtube text-red-400 text-xl"></i>
           </div>
           <div>
-            <div class="flex items-center gap-2">
-              <span class="font-medium"><%= account.channelName || 'YouTube Channel' %></span>
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="font-semibold text-white"><%= account.channelName || 'YouTube Channel' %></span>
               <% if (account.isPrimary) { %>
-              <span class="px-1.5 py-0.5 bg-primary/20 text-primary text-xs rounded">Primary</span>
+              <span class="px-2 py-0.5 bg-primary/20 text-primary text-xs rounded-full font-medium">Primary</span>
               <% } %>
             </div>
-            <p class="text-xs text-gray-400">Connected</p>
+            <p class="text-xs text-green-400 flex items-center gap-1 mt-0.5">
+              <i class="ti ti-circle-check text-xs"></i>
+              Connected
+            </p>
           </div>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-1">
           <% if (!account.isPrimary) { %>
           <button onclick="setPrimaryAccount(<%= account.id %>)" 
-            class="text-gray-400 hover:text-white px-2 py-1 text-sm transition-colors" title="Set as Primary">
-            <i class="ti ti-star"></i>
+            class="w-9 h-9 flex items-center justify-center text-gray-400 hover:text-yellow-400 hover:bg-yellow-500/10 rounded-lg transition-colors" title="Set as Primary">
+            <i class="ti ti-star text-lg"></i>
           </button>
           <% } %>
           <button onclick="disconnectAccount(<%= account.id %>, '<%= (account.channelName || 'this account').replace(/'/g, "\\'") %>')" 
-            class="text-gray-400 hover:text-red-400 px-2 py-1 text-sm transition-colors" title="Disconnect">
-            <i class="ti ti-unlink"></i>
+            class="w-9 h-9 flex items-center justify-center text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors" title="Disconnect">
+            <i class="ti ti-unlink text-lg"></i>
           </button>
         </div>
       </div>
@@ -109,19 +115,39 @@
     </div>
   </div>
 
-  <!-- Create Broadcast Button -->
-  <div class="flex items-center justify-between mb-6">
-    <h2 class="text-xl font-semibold">Scheduled Broadcasts</h2>
-    <div class="flex items-center gap-2">
+  <!-- Scheduled Broadcasts Header -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+    <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+      <h2 class="text-xl font-semibold">Scheduled Broadcasts</h2>
+      <!-- Selection Actions (hidden by default) -->
+      <div id="selectionActions" class="hidden flex flex-wrap items-center gap-2">
+        <span id="selectedCount" class="text-sm text-gray-400 bg-dark-700 px-2 py-1 rounded">0 selected</span>
+        <button onclick="saveSelectedAsTemplate()"
+          class="bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-1">
+          <i class="ti ti-template"></i>
+          <span>Save as Template</span>
+        </button>
+        <button onclick="deleteSelectedBroadcasts()"
+          class="bg-red-500/20 hover:bg-red-500/30 text-red-400 px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-1">
+          <i class="ti ti-trash"></i>
+          <span>Delete All</span>
+        </button>
+        <button onclick="clearSelection()"
+          class="text-gray-400 hover:text-white px-2 py-1 text-sm transition-colors">
+          <i class="ti ti-x"></i>
+        </button>
+      </div>
+    </div>
+    <div class="header-buttons grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex-shrink-0">
       <button onclick="openTemplateLibraryModal()"
-        class="bg-primary/20 hover:bg-primary/30 text-primary px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
-        <i class="ti ti-template"></i>
+        class="bg-primary/20 hover:bg-primary/30 text-primary px-4 py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2 font-medium">
+        <i class="ti ti-template text-lg"></i>
         <span>Templates</span>
       </button>
       <button onclick="openCreateBroadcastModal()"
-        class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
-        <i class="ti ti-plus"></i>
-        <span>Create Broadcast</span>
+        class="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-4 py-2.5 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 font-medium shadow-lg shadow-red-500/25">
+        <i class="ti ti-plus text-lg"></i>
+        <span>Create</span>
       </button>
     </div>
   </div>
@@ -129,160 +155,99 @@
   <!-- Broadcasts List -->
   <% if (broadcasts && broadcasts.length > 0) { %>
   
-  <!-- Desktop Table View -->
-  <div class="hidden md:block bg-gray-800 rounded-lg shadow-md overflow-hidden">
-    <table class="min-w-full divide-y divide-gray-700">
-      <thead class="bg-dark-700">
-        <tr>
-          <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase w-12">No</th>
-          <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Broadcast</th>
-          <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase w-40">Schedule</th>
-          <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase w-72">Stream Key</th>
-          <th class="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase w-32">Actions</th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-gray-700">
-        <% broadcasts.forEach(function(broadcast, index) { %>
-        <tr class="hover:bg-dark-700/50">
-          <td class="px-4 py-3 text-sm text-gray-400 font-medium"><%= index + 1 %></td>
-          <td class="px-4 py-3">
-            <div class="flex items-center gap-2">
-              <span class="font-medium text-sm truncate max-w-xs"><%= broadcast.title %></span>
-              <% if (broadcast.channelName) { %>
-              <span class="px-2 py-0.5 bg-red-500/20 text-red-400 text-xs rounded flex items-center gap-1 flex-shrink-0">
-                <i class="ti ti-brand-youtube text-xs"></i>
-                <%= broadcast.channelName %>
-              </span>
-              <% } %>
-              <span class="px-2 py-0.5 rounded text-xs font-medium flex-shrink-0
-                <%= broadcast.privacyStatus === 'public' ? 'bg-green-500/20 text-green-400' : 
-                    broadcast.privacyStatus === 'unlisted' ? 'bg-yellow-500/20 text-yellow-400' : 
-                    'bg-gray-500/20 text-gray-400' %>">
-                <%= broadcast.privacyStatus %>
-              </span>
-            </div>
-          </td>
-          <td class="px-4 py-3 text-sm text-gray-400">
-            <div class="flex items-center gap-1">
-              <i class="ti ti-calendar text-xs"></i>
-              <%= new Date(broadcast.scheduledStartTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) %>
-            </div>
-            <div class="flex items-center gap-1 text-xs">
-              <i class="ti ti-clock text-xs"></i>
-              <%= new Date(broadcast.scheduledStartTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) %>
-            </div>
-          </td>
-          <td class="px-4 py-3">
-            <div class="flex items-center gap-2">
-              <div class="flex-1 bg-dark-700 rounded px-2 py-1.5 font-mono text-xs text-gray-300 truncate">
-                <%= broadcast.streamKey || 'No stream key' %>
-              </div>
-              <% if (broadcast.streamKey) { %>
-              <button onclick="copyStreamKey('<%= broadcast.streamKey %>')"
-                class="p-1.5 text-gray-400 hover:text-green-400 transition-colors flex-shrink-0" title="Copy Stream Key">
-                <i class="ti ti-clipboard"></i>
-              </button>
-              <% } %>
-            </div>
-          </td>
-          <td class="px-4 py-3 text-right">
-            <div class="flex items-center justify-end gap-1">
-              <button onclick="openSaveAsTemplateModal('<%= broadcast.id %>', <%= broadcast.accountId %>, '<%= broadcast.title.replace(/'/g, "\\'") %>', '<%= broadcast.privacyStatus %>', '<%= broadcast.categoryId || '20' %>')"
-                class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-yellow-400 hover:bg-yellow-500/10 rounded transition-colors" title="Save as Template">
-                <i class="ti ti-template"></i>
-              </button>
-              <button onclick="editBroadcast('<%= broadcast.id %>', <%= broadcast.accountId %>)"
-                class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 rounded transition-colors" title="Edit">
-                <i class="ti ti-edit"></i>
-              </button>
-              <button onclick="reuseBroadcast('<%= broadcast.id %>', <%= broadcast.accountId %>)"
-                class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-primary hover:bg-primary/10 rounded transition-colors" title="Copy/Reuse">
-                <i class="ti ti-copy"></i>
-              </button>
-              <button onclick="deleteBroadcast('<%= broadcast.id %>', '<%= broadcast.title.replace(/'/g, "\\'") %>', <%= broadcast.accountId %>)"
-                class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors" title="Delete">
-                <i class="ti ti-trash"></i>
-              </button>
-            </div>
-          </td>
-        </tr>
-        <% }); %>
-      </tbody>
-    </table>
-  </div>
-  
-  <!-- Mobile Card View -->
-  <div class="md:hidden space-y-3">
-    <% broadcasts.forEach(function(broadcast, index) { %>
-    <div class="bg-gray-800 rounded-lg p-4 shadow-md">
-      <!-- Header: Number, Title, Status -->
-      <div class="flex items-start justify-between gap-2 mb-2">
-        <div class="flex items-center gap-2 min-w-0">
-          <span class="text-primary font-bold text-sm">#<%= index + 1 %></span>
-          <span class="font-medium text-sm truncate"><%= broadcast.title %></span>
-        </div>
-        <span class="px-2 py-0.5 rounded text-xs font-medium flex-shrink-0
-          <%= broadcast.privacyStatus === 'public' ? 'bg-green-500/20 text-green-400' : 
-              broadcast.privacyStatus === 'unlisted' ? 'bg-yellow-500/20 text-yellow-400' : 
-              'bg-gray-500/20 text-gray-400' %>">
-          <%= broadcast.privacyStatus %>
-        </span>
+  <!-- Compact List View (Desktop & Mobile) -->
+  <div class="bg-gray-800 rounded-lg shadow-md overflow-hidden">
+    <!-- List Header (Desktop only) -->
+    <div class="hidden md:flex items-center gap-2 px-3 py-2 bg-dark-700 border-b border-gray-700 text-xs font-medium text-gray-400 uppercase">
+      <div class="w-8 text-center">
+        <input type="checkbox" id="selectAllBroadcasts" onchange="toggleSelectAll(this)"
+          class="w-4 h-4 rounded border-gray-600 bg-dark-700 text-primary focus:ring-primary cursor-pointer">
       </div>
-      
-      <!-- Channel Name -->
-      <% if (broadcast.channelName) { %>
-      <div class="flex items-center gap-1 text-xs text-red-400 mb-2">
-        <i class="ti ti-brand-youtube"></i>
-        <span><%= broadcast.channelName %></span>
-      </div>
-      <% } %>
-      
-      <!-- Schedule -->
-      <div class="flex items-center gap-3 text-xs text-gray-400 mb-3">
-        <span class="flex items-center gap-1">
-          <i class="ti ti-calendar"></i>
-          <%= new Date(broadcast.scheduledStartTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) %>
-        </span>
-        <span class="flex items-center gap-1">
-          <i class="ti ti-clock"></i>
-          <%= new Date(broadcast.scheduledStartTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) %>
-        </span>
-      </div>
-      
-      <!-- Stream Key -->
-      <div class="flex items-center gap-2 mb-3">
-        <div class="flex-1 bg-dark-700 rounded-lg px-3 py-2.5 font-mono text-xs text-gray-300 truncate">
-          <%= broadcast.streamKey || 'No stream key' %>
-        </div>
-        <% if (broadcast.streamKey) { %>
-        <button onclick="copyStreamKey('<%= broadcast.streamKey %>')"
-          class="bg-dark-700 hover:bg-green-500/20 text-gray-400 hover:text-green-400 px-3 py-2.5 rounded-lg transition-colors flex items-center justify-center min-h-[44px] min-w-[44px] active:bg-green-500/30" title="Copy Stream Key">
-          <i class="ti ti-clipboard"></i>
-        </button>
-        <% } %>
-      </div>
-      
-      <!-- Action Buttons -->
-      <div class="grid grid-cols-4 gap-2">
-        <button onclick="openSaveAsTemplateModal('<%= broadcast.id %>', <%= broadcast.accountId %>, '<%= broadcast.title.replace(/'/g, "\\'") %>', '<%= broadcast.privacyStatus %>', '<%= broadcast.categoryId || '20' %>')"
-          class="bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 px-2 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-1 min-h-[44px] active:bg-yellow-500/30">
-          <i class="ti ti-template"></i>
-        </button>
-        <button onclick="editBroadcast('<%= broadcast.id %>', <%= broadcast.accountId %>)"
-          class="bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 px-2 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-1 min-h-[44px] active:bg-blue-500/30">
-          <i class="ti ti-edit"></i>
-        </button>
-        <button onclick="reuseBroadcast('<%= broadcast.id %>', <%= broadcast.accountId %>)"
-          class="bg-primary/10 hover:bg-primary/20 text-primary px-2 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-1 min-h-[44px] active:bg-primary/30">
-          <i class="ti ti-copy"></i>
-        </button>
-        <button onclick="deleteBroadcast('<%= broadcast.id %>', '<%= broadcast.title.replace(/'/g, "\\'") %>', <%= broadcast.accountId %>)"
-          class="bg-red-500/10 hover:bg-red-500/20 text-red-400 px-2 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-1 min-h-[44px] active:bg-red-500/30">
-          <i class="ti ti-trash"></i>
-        </button>
-      </div>
+      <div class="w-8 text-center">No</div>
+      <div class="flex-1">Title</div>
+      <div class="w-20 text-center">Status</div>
+      <div class="w-40">Stream Key</div>
+      <div class="w-24 text-center">Actions</div>
     </div>
-    <% }); %>
+    
+    <!-- List Items -->
+    <div class="divide-y divide-gray-700/50">
+      <% broadcasts.forEach(function(broadcast, index) { %>
+      <div class="broadcast-list-item broadcast-row hover:bg-dark-700/30 transition-colors" data-broadcast-id="<%= broadcast.id %>" data-account-id="<%= broadcast.accountId %>">
+        <!-- Desktop Row -->
+        <div class="hidden md:flex items-center gap-2 px-3 py-2">
+          <div class="w-8 text-center">
+            <input type="checkbox" class="broadcast-checkbox w-4 h-4 rounded border-gray-600 bg-dark-700 text-primary focus:ring-primary cursor-pointer"
+              data-broadcast-id="<%= broadcast.id %>"
+              data-broadcast='<%= JSON.stringify({id: broadcast.id, accountId: broadcast.accountId, title: broadcast.title, description: broadcast.description || "", privacyStatus: broadcast.privacyStatus, streamId: broadcast.streamId || null, streamKey: broadcast.streamKey || "", categoryId: broadcast.categoryId || "22", tags: broadcast.tags || []}) %>'
+              onchange="syncCheckboxes(this); updateSelectionCount()">
+          </div>
+          <div class="w-8 text-center text-sm text-primary font-semibold"><%= index + 1 %></div>
+          <div class="flex-1 min-w-0">
+            <span class="text-sm text-white truncate block"><%= broadcast.title %></span>
+          </div>
+          <div class="w-20 text-center">
+            <span class="px-2 py-0.5 rounded text-xs font-medium uppercase
+              <%= broadcast.privacyStatus === 'public' ? 'bg-green-500/20 text-green-400' : 
+                  broadcast.privacyStatus === 'unlisted' ? 'bg-yellow-500/20 text-yellow-400' : 
+                  'bg-gray-500/20 text-gray-400' %>">
+              <%= broadcast.privacyStatus %>
+            </span>
+          </div>
+          <div class="w-40">
+            <span class="item-streamkey font-mono text-xs text-gray-400 truncate block cursor-pointer hover:text-primary" 
+              onclick="copyStreamKey('<%= broadcast.streamKey || '' %>')" title="Click to copy">
+              <%= broadcast.streamKey ? broadcast.streamKey.substring(0, 20) + '...' : '-' %>
+            </span>
+          </div>
+          <div class="w-24 flex items-center justify-center gap-1">
+            <button onclick="editBroadcast('<%= broadcast.id %>', <%= broadcast.accountId %>)"
+              class="action-btn w-8 h-8 flex items-center justify-center text-blue-400 hover:bg-blue-500/20 rounded-md transition-colors" title="Edit">
+              <i class="ti ti-edit text-sm"></i>
+            </button>
+            <button onclick="reuseBroadcast('<%= broadcast.id %>', <%= broadcast.accountId %>)"
+              class="action-btn w-8 h-8 flex items-center justify-center text-green-400 hover:bg-green-500/20 rounded-md transition-colors" title="Sync">
+              <i class="ti ti-refresh text-sm"></i>
+            </button>
+            <button onclick="deleteBroadcast('<%= broadcast.id %>', '<%= broadcast.title.replace(/'/g, "\\'") %>', <%= broadcast.accountId %>)"
+              class="action-btn w-8 h-8 flex items-center justify-center text-red-400 hover:bg-red-500/20 rounded-md transition-colors" title="Delete">
+              <i class="ti ti-trash text-sm"></i>
+            </button>
+          </div>
+        </div>
+        
+        <!-- Mobile Row (Simple List) -->
+        <div class="md:hidden flex items-center gap-2 px-3 py-2">
+          <input type="checkbox" class="broadcast-checkbox w-4 h-4 rounded border-gray-600 bg-dark-700 text-primary focus:ring-primary cursor-pointer flex-shrink-0"
+            data-broadcast-id="<%= broadcast.id %>"
+            data-broadcast='<%= JSON.stringify({id: broadcast.id, accountId: broadcast.accountId, title: broadcast.title, description: broadcast.description || "", privacyStatus: broadcast.privacyStatus, streamId: broadcast.streamId || null, streamKey: broadcast.streamKey || "", categoryId: broadcast.categoryId || "22", tags: broadcast.tags || []}) %>'
+            onchange="syncCheckboxes(this); updateSelectionCount()">
+          <span class="text-primary font-semibold text-xs w-5 flex-shrink-0"><%= index + 1 %></span>
+          <span class="flex-1 text-xs text-white truncate min-w-0"><%= broadcast.title %></span>
+          <span class="px-1.5 py-0.5 rounded text-[10px] font-medium uppercase flex-shrink-0
+            <%= broadcast.privacyStatus === 'public' ? 'bg-green-500/20 text-green-400' : 
+                broadcast.privacyStatus === 'unlisted' ? 'bg-yellow-500/20 text-yellow-400' : 
+                'bg-gray-500/20 text-gray-400' %>">
+            <%= broadcast.privacyStatus.substring(0, 3) %>
+          </span>
+          <div class="flex items-center gap-0.5 flex-shrink-0">
+            <button onclick="editBroadcast('<%= broadcast.id %>', <%= broadcast.accountId %>)"
+              class="w-9 h-9 flex items-center justify-center text-blue-400 hover:bg-blue-500/20 rounded transition-colors" title="Edit">
+              <i class="ti ti-edit text-sm"></i>
+            </button>
+            <button onclick="reuseBroadcast('<%= broadcast.id %>', <%= broadcast.accountId %>)"
+              class="w-9 h-9 flex items-center justify-center text-green-400 hover:bg-green-500/20 rounded transition-colors" title="Sync">
+              <i class="ti ti-refresh text-sm"></i>
+            </button>
+            <button onclick="deleteBroadcast('<%= broadcast.id %>', '<%= broadcast.title.replace(/'/g, "\\'") %>', <%= broadcast.accountId %>)"
+              class="w-9 h-9 flex items-center justify-center text-red-400 hover:bg-red-500/20 rounded transition-colors" title="Delete">
+              <i class="ti ti-trash text-sm"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+      <% }); %>
+    </div>
   </div>
   <% } else { %>
   <!-- Empty State -->
@@ -329,17 +294,37 @@
         </div>
         
         <div>
-          <label class="text-sm font-medium text-white block mb-2">Title <span class="text-red-400">*</span></label>
-          <input type="text" id="broadcastTitle" name="title" required
-            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none"
-            placeholder="Enter broadcast title">
+          <label class="text-sm font-medium text-white block mb-2">
+            Title <span class="text-red-400">*</span>
+            <span id="titleAutoFillIndicator" class="hidden ml-2 text-xs text-green-400" title="Auto-filled from YouTube defaults">
+              <i class="ti ti-sparkles"></i> Auto-filled
+            </span>
+          </label>
+          <div class="relative">
+            <input type="text" id="broadcastTitle" name="title" required
+              class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none"
+              placeholder="Enter broadcast title">
+            <div id="titleLoading" class="hidden absolute right-3 top-1/2 -translate-y-1/2">
+              <i class="ti ti-loader animate-spin text-gray-400"></i>
+            </div>
+          </div>
         </div>
         
         <div>
-          <label class="text-sm font-medium text-white block mb-2">Description</label>
-          <textarea id="broadcastDescription" name="description" rows="3"
-            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none resize-none"
-            placeholder="Enter broadcast description (optional)"></textarea>
+          <label class="text-sm font-medium text-white block mb-2">
+            Description
+            <span id="descriptionAutoFillIndicator" class="hidden ml-2 text-xs text-green-400" title="Auto-filled from YouTube defaults">
+              <i class="ti ti-sparkles"></i> Auto-filled
+            </span>
+          </label>
+          <div class="relative">
+            <textarea id="broadcastDescription" name="description" rows="3"
+              class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none resize-none"
+              placeholder="Enter broadcast description (optional)"></textarea>
+            <div id="descriptionLoading" class="hidden absolute right-3 top-3">
+              <i class="ti ti-loader animate-spin text-gray-400"></i>
+            </div>
+          </div>
         </div>
         
         <div>
@@ -394,36 +379,6 @@
           </div>
           <p class="text-xs text-gray-500 mt-1">Press Enter to add tags. Max 500 characters total.</p>
           <input type="hidden" id="tagsHidden" name="tags" value="">
-        </div>
-
-        <!-- Category Field -->
-        <div>
-          <label class="text-sm font-medium text-white block mb-2">
-            Category
-            <span id="categoryAutoFillIndicator" class="hidden ml-2 text-xs text-green-400" title="Auto-filled from YouTube defaults">
-              <i class="ti ti-sparkles"></i> Auto-filled
-            </span>
-          </label>
-          <select id="categoryId" name="categoryId"
-            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none">
-            <option value="1">Film & Animation</option>
-            <option value="2">Autos & Vehicles</option>
-            <option value="10">Music</option>
-            <option value="15">Pets & Animals</option>
-            <option value="17">Sports</option>
-            <option value="18">Short Movies</option>
-            <option value="19">Travel & Events</option>
-            <option value="20" selected>Gaming</option>
-            <option value="21">Videoblogging</option>
-            <option value="22">People & Blogs</option>
-            <option value="23">Comedy</option>
-            <option value="24">Entertainment</option>
-            <option value="25">News & Politics</option>
-            <option value="26">Howto & Style</option>
-            <option value="27">Education</option>
-            <option value="28">Science & Technology</option>
-            <option value="29">Nonprofits & Activism</option>
-          </select>
         </div>
 
         <!-- YouTube Studio Settings Notice -->
@@ -656,38 +611,30 @@
 
 <!-- Template Library Modal -->
 <div id="templateLibraryModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto">
-  <div class="flex min-h-screen items-center justify-center p-4">
-    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-2xl">
-      <div class="flex items-center justify-between p-6 border-b border-gray-700">
-        <h3 class="text-lg font-semibold">Template Library</h3>
-        <button onclick="closeTemplateLibraryModal()" class="text-gray-400 hover:text-white">
-          <i class="ti ti-x text-xl"></i>
+  <div class="flex min-h-screen items-center justify-center p-2 sm:p-4">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+      <!-- Compact Header -->
+      <div class="flex items-center justify-between p-3 sm:p-4 border-b border-gray-700 flex-shrink-0">
+        <h3 class="text-base sm:text-lg font-semibold">Templates</h3>
+        <button onclick="closeTemplateLibraryModal()" class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors">
+          <i class="ti ti-x text-lg"></i>
         </button>
       </div>
       
-      <div class="p-6">
-        <div class="flex items-center justify-between mb-4">
-          <p class="text-sm text-gray-400">Manage your broadcast templates</p>
-          <button onclick="openCreateTemplateModal()"
-            class="bg-primary hover:bg-primary/80 text-white px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-2">
-            <i class="ti ti-plus"></i>
-            <span>New Template</span>
-          </button>
-        </div>
-        
-        <div id="templateList" class="space-y-3">
+      <div class="p-2 sm:p-4 overflow-y-auto flex-1">
+        <div id="templateList">
           <div id="templateListLoading" class="text-center py-8">
             <i class="ti ti-loader animate-spin text-gray-400 text-2xl"></i>
-            <p class="text-gray-500 text-sm mt-2">Loading templates...</p>
+            <p class="text-gray-500 text-sm mt-2">Loading...</p>
           </div>
           <div id="templateListEmpty" class="hidden text-center py-8">
-            <div class="w-16 h-16 bg-dark-700 rounded-full flex items-center justify-center mx-auto mb-4">
-              <i class="ti ti-template text-gray-500 text-2xl"></i>
+            <div class="w-12 h-12 bg-dark-700 rounded-full flex items-center justify-center mx-auto mb-3">
+              <i class="ti ti-template text-gray-500 text-xl"></i>
             </div>
-            <p class="text-gray-400 font-medium mb-2">No templates yet</p>
-            <p class="text-gray-500 text-sm">Create your first template to get started</p>
+            <p class="text-gray-400 text-sm mb-1">No templates</p>
+            <p class="text-gray-500 text-xs">Create your first template</p>
           </div>
-          <div id="templateListContent" class="hidden space-y-3">
+          <div id="templateListContent" class="hidden">
             <!-- Templates will be rendered here -->
           </div>
         </div>
@@ -723,7 +670,6 @@
           <div class="text-xs text-gray-500 space-y-1">
             <p><span class="text-gray-400">Title:</span> <span id="previewTitle">-</span></p>
             <p><span class="text-gray-400">Privacy:</span> <span id="previewPrivacy">-</span></p>
-            <p><span class="text-gray-400">Category:</span> <span id="previewCategory">-</span></p>
           </div>
         </div>
         
@@ -764,7 +710,7 @@
         
         <div>
           <label class="text-sm font-medium text-white block mb-2">YouTube Account <span class="text-red-400">*</span></label>
-          <select id="templateAccountSelect" name="accountId" required
+          <select id="templateAccountSelect" name="accountId" required onchange="onTemplateAccountChange(this.value)"
             class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none">
             <% if (accounts && accounts.length > 0) { %>
               <% accounts.forEach(function(account) { %>
@@ -772,6 +718,20 @@
               <% }); %>
             <% } %>
           </select>
+        </div>
+        
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Stream Key</label>
+          <div class="relative">
+            <select id="templateStreamKeySelect" name="streamId"
+              class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none">
+              <option value="">-- Select Stream Key (Optional) --</option>
+            </select>
+            <span id="templateStreamKeyLoading" class="absolute right-3 top-1/2 -translate-y-1/2 hidden">
+              <i class="ti ti-loader animate-spin text-gray-400"></i>
+            </span>
+          </div>
+          <p class="text-xs text-gray-500 mt-1">Select a stream key to reuse for broadcasts created from this template</p>
         </div>
         
         <div>
@@ -798,20 +758,82 @@
           </select>
         </div>
         
-        <div>
-          <label class="text-sm font-medium text-white block mb-2">Category</label>
-          <select id="templateCategoryId" name="categoryId"
-            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none">
-            <option value="1">Film & Animation</option>
-            <option value="2">Autos & Vehicles</option>
-            <option value="10">Music</option>
-            <option value="15">Pets & Animals</option>
-            <option value="17">Sports</option>
-            <option value="20" selected>Gaming</option>
-            <option value="22">People & Blogs</option>
-            <option value="24">Entertainment</option>
-            <option value="28">Science & Technology</option>
-          </select>
+        <!-- Recurring Schedule Section -->
+        <div class="border-t border-gray-700 pt-4 mt-4">
+          <div class="flex items-center justify-between mb-3">
+            <label class="text-sm font-medium text-white flex items-center gap-2">
+              <i class="ti ti-repeat text-primary"></i>
+              Recurring Schedule
+            </label>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="templateRecurringEnabled" name="recurringEnabled" class="sr-only peer" onchange="toggleRecurringFields()">
+              <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+            </label>
+          </div>
+          
+          <div id="recurringFieldsContainer" class="hidden space-y-3">
+            <div>
+              <label class="text-sm font-medium text-gray-400 block mb-2">Pattern</label>
+              <div class="flex gap-4">
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="radio" name="recurringPattern" value="daily" class="w-4 h-4 text-primary bg-dark-700 border-gray-600 focus:ring-primary" onchange="toggleDaysSelection()">
+                  <span class="text-sm text-white">Daily</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="radio" name="recurringPattern" value="weekly" class="w-4 h-4 text-primary bg-dark-700 border-gray-600 focus:ring-primary" onchange="toggleDaysSelection()">
+                  <span class="text-sm text-white">Weekly</span>
+                </label>
+              </div>
+            </div>
+            
+            <div>
+              <label class="text-sm font-medium text-gray-400 block mb-2">Time</label>
+              <input type="time" id="templateRecurringTime" name="recurringTime"
+                class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none [color-scheme:dark]">
+            </div>
+            
+            <div id="recurringDaysContainer" class="hidden">
+              <label class="text-sm font-medium text-gray-400 block mb-2">Days</label>
+              <div class="flex flex-wrap gap-2">
+                <label class="flex items-center gap-1.5 px-3 py-1.5 bg-dark-600 rounded-lg cursor-pointer hover:bg-dark-500 transition-colors">
+                  <input type="checkbox" name="recurringDays" value="monday" class="w-4 h-4 text-primary bg-dark-700 border-gray-600 rounded focus:ring-primary">
+                  <span class="text-xs text-white">Mon</span>
+                </label>
+                <label class="flex items-center gap-1.5 px-3 py-1.5 bg-dark-600 rounded-lg cursor-pointer hover:bg-dark-500 transition-colors">
+                  <input type="checkbox" name="recurringDays" value="tuesday" class="w-4 h-4 text-primary bg-dark-700 border-gray-600 rounded focus:ring-primary">
+                  <span class="text-xs text-white">Tue</span>
+                </label>
+                <label class="flex items-center gap-1.5 px-3 py-1.5 bg-dark-600 rounded-lg cursor-pointer hover:bg-dark-500 transition-colors">
+                  <input type="checkbox" name="recurringDays" value="wednesday" class="w-4 h-4 text-primary bg-dark-700 border-gray-600 rounded focus:ring-primary">
+                  <span class="text-xs text-white">Wed</span>
+                </label>
+                <label class="flex items-center gap-1.5 px-3 py-1.5 bg-dark-600 rounded-lg cursor-pointer hover:bg-dark-500 transition-colors">
+                  <input type="checkbox" name="recurringDays" value="thursday" class="w-4 h-4 text-primary bg-dark-700 border-gray-600 rounded focus:ring-primary">
+                  <span class="text-xs text-white">Thu</span>
+                </label>
+                <label class="flex items-center gap-1.5 px-3 py-1.5 bg-dark-600 rounded-lg cursor-pointer hover:bg-dark-500 transition-colors">
+                  <input type="checkbox" name="recurringDays" value="friday" class="w-4 h-4 text-primary bg-dark-700 border-gray-600 rounded focus:ring-primary">
+                  <span class="text-xs text-white">Fri</span>
+                </label>
+                <label class="flex items-center gap-1.5 px-3 py-1.5 bg-dark-600 rounded-lg cursor-pointer hover:bg-dark-500 transition-colors">
+                  <input type="checkbox" name="recurringDays" value="saturday" class="w-4 h-4 text-primary bg-dark-700 border-gray-600 rounded focus:ring-primary">
+                  <span class="text-xs text-white">Sat</span>
+                </label>
+                <label class="flex items-center gap-1.5 px-3 py-1.5 bg-dark-600 rounded-lg cursor-pointer hover:bg-dark-500 transition-colors">
+                  <input type="checkbox" name="recurringDays" value="sunday" class="w-4 h-4 text-primary bg-dark-700 border-gray-600 rounded focus:ring-primary">
+                  <span class="text-xs text-white">Sun</span>
+                </label>
+              </div>
+              <p id="recurringDaysError" class="hidden text-xs text-red-400 mt-1">Please select at least one day</p>
+            </div>
+            
+            <div class="bg-dark-600/50 rounded-lg p-3 border border-gray-600/50">
+              <p class="text-xs text-gray-400">
+                <i class="ti ti-info-circle text-primary mr-1"></i>
+                When enabled, broadcasts will be automatically created based on this schedule.
+              </p>
+            </div>
+          </div>
         </div>
         
         <div class="pt-4 flex gap-3">
@@ -919,6 +941,207 @@
           </button>
         </div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Template Modal (Recurring Schedule Only) -->
+<div id="editTemplateModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto">
+  <div class="flex min-h-screen items-center justify-center p-4">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-md">
+      <div class="flex items-center justify-between p-6 border-b border-gray-700">
+        <h3 class="text-lg font-semibold">Edit Recurring Schedule</h3>
+        <button onclick="closeEditTemplateModal()" class="text-gray-400 hover:text-white">
+          <i class="ti ti-x text-xl"></i>
+        </button>
+      </div>
+      
+      <form id="editTemplateForm" class="p-6 space-y-4">
+        <input type="hidden" id="editTemplateId">
+        
+        <!-- Template Info (Read-only) -->
+        <div class="bg-dark-700 rounded-lg p-4 border border-gray-600">
+          <p class="text-sm text-gray-400 mb-1">Template</p>
+          <p class="text-white font-medium" id="editTemplateName">-</p>
+        </div>
+        
+        <!-- Recurring Schedule Section -->
+        <div class="border-t border-gray-700 pt-4">
+          <div class="flex items-center justify-between mb-3">
+            <label class="text-sm font-medium text-white flex items-center gap-2">
+              <i class="ti ti-repeat text-primary"></i>
+              Recurring Schedule
+            </label>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="editRecurringEnabled" name="recurringEnabled" class="sr-only peer" onchange="toggleEditRecurringFields()">
+              <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+            </label>
+          </div>
+          
+          <div id="editRecurringFieldsContainer" class="hidden space-y-3">
+            <div>
+              <label class="text-sm font-medium text-gray-400 block mb-2">Pattern</label>
+              <div class="flex gap-4">
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="radio" name="editRecurringPattern" value="daily" class="w-4 h-4 text-primary bg-dark-700 border-gray-600 focus:ring-primary" onchange="toggleEditDaysSelection()">
+                  <span class="text-sm text-white">Daily</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="radio" name="editRecurringPattern" value="weekly" class="w-4 h-4 text-primary bg-dark-700 border-gray-600 focus:ring-primary" onchange="toggleEditDaysSelection()">
+                  <span class="text-sm text-white">Weekly</span>
+                </label>
+              </div>
+            </div>
+            
+            <div>
+              <label class="text-sm font-medium text-gray-400 block mb-2">Time</label>
+              <input type="time" id="editRecurringTime" name="recurringTime"
+                class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none [color-scheme:dark]">
+            </div>
+            
+            <div id="editRecurringDaysContainer" class="hidden">
+              <label class="text-sm font-medium text-gray-400 block mb-2">Days</label>
+              <div class="flex flex-wrap gap-2">
+                <label class="flex items-center gap-1.5 px-3 py-1.5 bg-dark-600 rounded-lg cursor-pointer hover:bg-dark-500 transition-colors">
+                  <input type="checkbox" name="editRecurringDays" value="monday" class="w-4 h-4 text-primary bg-dark-700 border-gray-600 rounded focus:ring-primary">
+                  <span class="text-xs text-white">Mon</span>
+                </label>
+                <label class="flex items-center gap-1.5 px-3 py-1.5 bg-dark-600 rounded-lg cursor-pointer hover:bg-dark-500 transition-colors">
+                  <input type="checkbox" name="editRecurringDays" value="tuesday" class="w-4 h-4 text-primary bg-dark-700 border-gray-600 rounded focus:ring-primary">
+                  <span class="text-xs text-white">Tue</span>
+                </label>
+                <label class="flex items-center gap-1.5 px-3 py-1.5 bg-dark-600 rounded-lg cursor-pointer hover:bg-dark-500 transition-colors">
+                  <input type="checkbox" name="editRecurringDays" value="wednesday" class="w-4 h-4 text-primary bg-dark-700 border-gray-600 rounded focus:ring-primary">
+                  <span class="text-xs text-white">Wed</span>
+                </label>
+                <label class="flex items-center gap-1.5 px-3 py-1.5 bg-dark-600 rounded-lg cursor-pointer hover:bg-dark-500 transition-colors">
+                  <input type="checkbox" name="editRecurringDays" value="thursday" class="w-4 h-4 text-primary bg-dark-700 border-gray-600 rounded focus:ring-primary">
+                  <span class="text-xs text-white">Thu</span>
+                </label>
+                <label class="flex items-center gap-1.5 px-3 py-1.5 bg-dark-600 rounded-lg cursor-pointer hover:bg-dark-500 transition-colors">
+                  <input type="checkbox" name="editRecurringDays" value="friday" class="w-4 h-4 text-primary bg-dark-700 border-gray-600 rounded focus:ring-primary">
+                  <span class="text-xs text-white">Fri</span>
+                </label>
+                <label class="flex items-center gap-1.5 px-3 py-1.5 bg-dark-600 rounded-lg cursor-pointer hover:bg-dark-500 transition-colors">
+                  <input type="checkbox" name="editRecurringDays" value="saturday" class="w-4 h-4 text-primary bg-dark-700 border-gray-600 rounded focus:ring-primary">
+                  <span class="text-xs text-white">Sat</span>
+                </label>
+                <label class="flex items-center gap-1.5 px-3 py-1.5 bg-dark-600 rounded-lg cursor-pointer hover:bg-dark-500 transition-colors">
+                  <input type="checkbox" name="editRecurringDays" value="sunday" class="w-4 h-4 text-primary bg-dark-700 border-gray-600 rounded focus:ring-primary">
+                  <span class="text-xs text-white">Sun</span>
+                </label>
+              </div>
+              <p id="editRecurringDaysError" class="hidden text-xs text-red-400 mt-1">Please select at least one day</p>
+            </div>
+            
+            <div class="bg-dark-600/50 rounded-lg p-3 border border-gray-600/50">
+              <p class="text-xs text-gray-400">
+                <i class="ti ti-info-circle text-primary mr-1"></i>
+                When enabled, broadcasts will be automatically created based on this schedule.
+              </p>
+            </div>
+          </div>
+        </div>
+        
+        <div class="pt-4 flex gap-3">
+          <button type="button" onclick="closeEditTemplateModal()"
+            class="flex-1 bg-dark-700 hover:bg-dark-600 text-white px-4 py-2.5 rounded-lg transition-colors">
+            Cancel
+          </button>
+          <button type="submit" id="updateTemplateBtn"
+            class="flex-1 bg-primary hover:bg-primary/80 text-white px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
+            <i class="ti ti-check"></i>
+            <span>Save Changes</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div id="multiSaveTemplateModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay">
+  <div class="flex min-h-screen items-center justify-center p-4">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-md">
+      <div class="flex items-center justify-between p-6 border-b border-gray-700">
+        <h3 class="text-lg font-semibold">Save Selected as Template</h3>
+        <button onclick="closeMultiSaveTemplateModal()" class="text-gray-400 hover:text-white">
+          <i class="ti ti-x text-xl"></i>
+        </button>
+      </div>
+      
+      <form id="multiSaveTemplateForm" class="p-6 space-y-4">
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Template Name <span class="text-red-400">*</span></label>
+          <input type="text" id="multiTemplateName" name="name" required
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none"
+            placeholder="Enter template name">
+        </div>
+        
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Broadcasts to save:</label>
+          <div id="multiTemplatePreview" class="bg-dark-700 rounded-lg p-3 max-h-40 overflow-y-auto space-y-2">
+            <!-- Preview will be rendered here -->
+          </div>
+        </div>
+        
+        <div class="bg-dark-700 rounded-lg p-4 border border-gray-600">
+          <p class="text-xs text-gray-400">
+            <i class="ti ti-info-circle text-primary mr-1"></i>
+            Template akan menyimpan semua data broadcast termasuk judul, deskripsi, privacy status, dan stream key.
+          </p>
+        </div>
+        
+        <div class="pt-2 flex gap-3">
+          <button type="button" onclick="closeMultiSaveTemplateModal()"
+            class="flex-1 bg-dark-700 hover:bg-dark-600 text-white px-4 py-2.5 rounded-lg transition-colors">
+            Cancel
+          </button>
+          <button type="submit" id="multiSaveTemplateBtn"
+            class="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
+            <i class="ti ti-template"></i>
+            <span>Save Template</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Re-create from Template Modal -->
+<div id="recreateFromTemplateModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto">
+  <div class="flex min-h-screen items-center justify-center p-4">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-lg">
+      <div class="flex items-center justify-between p-6 border-b border-gray-700">
+        <h3 class="text-lg font-semibold">Re-create Broadcasts</h3>
+        <button onclick="closeRecreateFromTemplateModal()" class="text-gray-400 hover:text-white">
+          <i class="ti ti-x text-xl"></i>
+        </button>
+      </div>
+      
+      <form id="recreateFromTemplateForm" class="p-6 space-y-4">
+        <div class="bg-dark-700 rounded-lg p-3 border border-gray-600 mb-4">
+          <p class="text-sm text-gray-400">Template: <span id="recreateTemplateName" class="text-white font-medium">-</span></p>
+        </div>
+        
+        <div>
+          <label class="text-sm font-medium text-white block mb-3">Set schedule for each broadcast:</label>
+          <div id="recreateBroadcastList" class="space-y-3 max-h-80 overflow-y-auto">
+            <!-- Broadcast items with schedule inputs will be rendered here -->
+          </div>
+        </div>
+        
+        <div class="pt-4 flex gap-3">
+          <button type="button" onclick="closeRecreateFromTemplateModal()"
+            class="flex-1 bg-dark-700 hover:bg-dark-600 text-white px-4 py-2.5 rounded-lg transition-colors">
+            Cancel
+          </button>
+          <button type="submit" id="recreateBtn"
+            class="flex-1 bg-red-500 hover:bg-red-600 text-white px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
+            <i class="ti ti-broadcast"></i>
+            <span>Create All</span>
+          </button>
+        </div>
+      </form>
     </div>
   </div>
 </div>

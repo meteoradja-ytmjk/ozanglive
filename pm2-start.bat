@@ -1,9 +1,9 @@
 @echo off
-REM PM2 Start Script for StreamFlow (Windows)
-REM This script helps manage the StreamFlow application with PM2
+REM PM2 Start Script for OzangLive (Windows)
+REM This script helps manage the OzangLive application with PM2
 
 echo ========================================
-echo    StreamFlow PM2 Manager
+echo    OzangLive PM2 Manager
 echo ========================================
 
 REM Check if PM2 is installed
@@ -27,24 +27,24 @@ if "%1"=="delete" goto delete
 goto usage
 
 :start
-echo Starting StreamFlow...
+echo Starting OzangLive...
 pm2 start ecosystem.config.js
 pm2 save
 goto done
 
 :stop
-echo Stopping StreamFlow...
-pm2 stop streamflow
+echo Stopping OzangLive...
+pm2 stop ozanglive
 goto done
 
 :restart
-echo Restarting StreamFlow...
-pm2 restart streamflow
+echo Restarting OzangLive...
+pm2 restart ozanglive
 goto done
 
 :reload
-echo Reloading StreamFlow (zero-downtime)...
-pm2 reload streamflow
+echo Reloading OzangLive (zero-downtime)...
+pm2 reload ozanglive
 goto done
 
 :status
@@ -52,7 +52,7 @@ pm2 status
 goto done
 
 :logs
-pm2 logs streamflow --lines 100
+pm2 logs ozanglive --lines 100
 goto done
 
 :monit
@@ -63,27 +63,27 @@ goto done
 echo Setting up PM2 to start on system boot...
 pm2-startup install
 pm2 save
-echo PM2 will now auto-start StreamFlow on system boot
+echo PM2 will now auto-start OzangLive on system boot
 goto done
 
 :delete
-echo Removing StreamFlow from PM2...
-pm2 delete streamflow
+echo Removing OzangLive from PM2...
+pm2 delete ozanglive
 goto done
 
 :usage
 echo Usage: pm2-start.bat [command]
 echo.
 echo Commands:
-echo   start   - Start StreamFlow with PM2
-echo   stop    - Stop StreamFlow
-echo   restart - Restart StreamFlow
+echo   start   - Start OzangLive with PM2
+echo   stop    - Stop OzangLive
+echo   restart - Restart OzangLive
 echo   reload  - Zero-downtime reload
 echo   status  - Show PM2 process status
 echo   logs    - View application logs
 echo   monit   - Open PM2 monitoring dashboard
 echo   startup - Configure PM2 to start on system boot
-echo   delete  - Remove StreamFlow from PM2
+echo   delete  - Remove OzangLive from PM2
 goto end
 
 :done

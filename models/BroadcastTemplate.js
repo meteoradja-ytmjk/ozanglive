@@ -3,6 +3,38 @@ const { db } = require('../db/database');
 
 class BroadcastTemplate {
   /**
+   * Parse row data to proper format (JSON fields, booleans)
+   * @param {Object} row - Database row
+   * @returns {Object} Parsed row
+   */
+  static parseRow(row) {
+    if (!row) return null;
+    
+    // Parse tags JSON
+    if (row.tags) {
+      try {
+        row.tags = JSON.parse(row.tags);
+      } catch (e) {
+        row.tags = [];
+      }
+    }
+    
+    // Parse recurring_days JSON
+    if (row.recurring_days) {
+      try {
+        row.recurring_days = JSON.parse(row.recurring_days);
+      } catch (e) {
+        row.recurring_days = [];
+      }
+    }
+    
+    // Convert recurring_enabled to boolean
+    row.recurring_enabled = !!row.recurring_enabled;
+    
+    return row;
+  }
+
+  /**
    * Create a new broadcast template
    * @param {Object} templateData - Template data
    * @returns {Promise<Object>} Created template
@@ -19,7 +51,13 @@ class BroadcastTemplate {
       tags = null,
       category_id = '20',
       thumbnail_path = null,
-      stream_id = null
+      stream_id = null,
+      // Recurring fields
+      recurring_enabled = false,
+      recurring_pattern = null,
+      recurring_time = null,
+      recurring_days = null,
+      next_run_at = null
     } = templateData;
 
     // Validate required fields
@@ -32,17 +70,36 @@ class BroadcastTemplate {
       return Promise.reject(new Error('Template name cannot be empty'));
     }
 
+    // Validate recurring configuration
+    if (recurring_enabled) {
+      if (!recurring_pattern || !['daily', 'weekly'].includes(recurring_pattern)) {
+        return Promise.reject(new Error('Recurring pattern must be daily or weekly'));
+      }
+      if (!recurring_time) {
+        return Promise.reject(new Error('Recurring time is required when recurring is enabled'));
+      }
+      if (recurring_pattern === 'weekly') {
+        const days = Array.isArray(recurring_days) ? recurring_days : [];
+        if (days.length === 0) {
+          return Promise.reject(new Error('Weekly schedule requires at least one day selected'));
+        }
+      }
+    }
+
     const tagsJson = Array.isArray(tags) ? JSON.stringify(tags) : tags;
+    const daysJson = Array.isArray(recurring_days) ? JSON.stringify(recurring_days) : recurring_days;
 
     return new Promise((resolve, reject) => {
       db.run(
         `INSERT INTO broadcast_templates (
           id, user_id, account_id, name, title, description,
-          privacy_status, tags, category_id, thumbnail_path, stream_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          privacy_status, tags, category_id, thumbnail_path, stream_id,
+          recurring_enabled, recurring_pattern, recurring_time, recurring_days, next_run_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id, user_id, account_id, name.trim(), title, description,
-          privacy_status, tagsJson, category_id, thumbnail_path, stream_id
+          privacy_status, tagsJson, category_id, thumbnail_path, stream_id,
+          recurring_enabled ? 1 : 0, recurring_pattern, recurring_time, daysJson, next_run_at
         ],
         function (err) {
           if (err) {
@@ -64,6 +121,12 @@ class BroadcastTemplate {
             category_id,
             thumbnail_path,
             stream_id,
+            recurring_enabled: !!recurring_enabled,
+            recurring_pattern,
+            recurring_time,
+            recurring_days: Array.isArray(recurring_days) ? recurring_days : null,
+            next_run_at,
+            last_run_at: null,
             created_at: new Date().toISOString()
           });
         }
@@ -89,14 +152,7 @@ class BroadcastTemplate {
             console.error('Error finding broadcast template:', err.message);
             return reject(err);
           }
-          if (row && row.tags) {
-            try {
-              row.tags = JSON.parse(row.tags);
-            } catch (e) {
-              row.tags = [];
-            }
-          }
-          resolve(row || null);
+          resolve(BroadcastTemplate.parseRow(row));
         }
       );
     });
@@ -121,18 +177,7 @@ class BroadcastTemplate {
             console.error('Error finding broadcast templates:', err.message);
             return reject(err);
           }
-          if (rows) {
-            rows.forEach(row => {
-              if (row.tags) {
-                try {
-                  row.tags = JSON.parse(row.tags);
-                } catch (e) {
-                  row.tags = [];
-                }
-              }
-            });
-          }
-          resolve(rows || []);
+          resolve((rows || []).map(row => BroadcastTemplate.parseRow(row)));
         }
       );
     });
@@ -157,14 +202,7 @@ class BroadcastTemplate {
             console.error('Error finding broadcast template by name:', err.message);
             return reject(err);
           }
-          if (row && row.tags) {
-            try {
-              row.tags = JSON.parse(row.tags);
-            } catch (e) {
-              row.tags = [];
-            }
-          }
-          resolve(row || null);
+          resolve(BroadcastTemplate.parseRow(row));
         }
       );
     });
@@ -184,6 +222,12 @@ class BroadcastTemplate {
       if (key === 'tags' && Array.isArray(value)) {
         fields.push(`${key} = ?`);
         values.push(JSON.stringify(value));
+      } else if (key === 'recurring_days' && Array.isArray(value)) {
+        fields.push(`${key} = ?`);
+        values.push(JSON.stringify(value));
+      } else if (key === 'recurring_enabled') {
+        fields.push(`${key} = ?`);
+        values.push(value ? 1 : 0);
       } else if (key === 'name' && typeof value === 'string') {
         if (!value.trim()) {
           throw new Error('Template name cannot be empty');
@@ -280,6 +324,148 @@ class BroadcastTemplate {
             return reject(err);
           }
           resolve(row.count);
+        }
+      );
+    });
+  }
+
+  /**
+   * Find all templates with recurring enabled
+   * @returns {Promise<Array>} Array of templates with recurring enabled
+   */
+  static findWithRecurringEnabled() {
+    return new Promise((resolve, reject) => {
+      db.all(
+        `SELECT bt.*, yc.channel_name, yc.client_id, yc.client_secret, yc.refresh_token
+         FROM broadcast_templates bt
+         LEFT JOIN youtube_credentials yc ON bt.account_id = yc.id
+         WHERE bt.recurring_enabled = 1
+         ORDER BY bt.next_run_at ASC`,
+        [],
+        (err, rows) => {
+          if (err) {
+            console.error('Error finding recurring templates:', err.message);
+            return reject(err);
+          }
+          resolve((rows || []).map(row => BroadcastTemplate.parseRow(row)));
+        }
+      );
+    });
+  }
+
+  /**
+   * Update recurring configuration for a template
+   * @param {string} id - Template ID
+   * @param {Object} recurringData - Recurring configuration
+   * @returns {Promise<Object>} Updated template
+   */
+  static updateRecurring(id, recurringData) {
+    const {
+      recurring_enabled,
+      recurring_pattern,
+      recurring_time,
+      recurring_days,
+      next_run_at
+    } = recurringData;
+
+    // Validate recurring configuration if enabling
+    if (recurring_enabled) {
+      if (!recurring_pattern || !['daily', 'weekly'].includes(recurring_pattern)) {
+        return Promise.reject(new Error('Recurring pattern must be daily or weekly'));
+      }
+      if (!recurring_time) {
+        return Promise.reject(new Error('Recurring time is required'));
+      }
+      if (recurring_pattern === 'weekly') {
+        const days = Array.isArray(recurring_days) ? recurring_days : [];
+        if (days.length === 0) {
+          return Promise.reject(new Error('Weekly schedule requires at least one day selected'));
+        }
+      }
+    }
+
+    const daysJson = Array.isArray(recurring_days) ? JSON.stringify(recurring_days) : recurring_days;
+
+    return new Promise((resolve, reject) => {
+      db.run(
+        `UPDATE broadcast_templates 
+         SET recurring_enabled = ?, recurring_pattern = ?, recurring_time = ?, 
+             recurring_days = ?, next_run_at = ?, updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        [recurring_enabled ? 1 : 0, recurring_pattern, recurring_time, daysJson, next_run_at, id],
+        function (err) {
+          if (err) {
+            console.error('Error updating recurring config:', err.message);
+            return reject(err);
+          }
+          resolve({ 
+            id, 
+            recurring_enabled: !!recurring_enabled,
+            recurring_pattern,
+            recurring_time,
+            recurring_days: Array.isArray(recurring_days) ? recurring_days : null,
+            next_run_at,
+            updated: this.changes > 0 
+          });
+        }
+      );
+    });
+  }
+
+  /**
+   * Toggle recurring enabled status
+   * @param {string} id - Template ID
+   * @param {boolean} enabled - New enabled status
+   * @param {string} nextRunAt - Next run timestamp (required when enabling)
+   * @returns {Promise<Object>} Update result
+   */
+  static toggleRecurring(id, enabled, nextRunAt = null) {
+    return new Promise((resolve, reject) => {
+      const query = enabled
+        ? `UPDATE broadcast_templates 
+           SET recurring_enabled = 1, next_run_at = ?, updated_at = CURRENT_TIMESTAMP 
+           WHERE id = ?`
+        : `UPDATE broadcast_templates 
+           SET recurring_enabled = 0, updated_at = CURRENT_TIMESTAMP 
+           WHERE id = ?`;
+      
+      const params = enabled ? [nextRunAt, id] : [id];
+
+      db.run(query, params, function (err) {
+        if (err) {
+          console.error('Error toggling recurring:', err.message);
+          return reject(err);
+        }
+        resolve({ 
+          success: true, 
+          updated: this.changes > 0, 
+          recurring_enabled: enabled,
+          next_run_at: enabled ? nextRunAt : null
+        });
+      });
+    });
+  }
+
+  /**
+   * Update last run timestamp and calculate next run
+   * @param {string} id - Template ID
+   * @param {string} lastRunAt - Last run timestamp
+   * @param {string} nextRunAt - Next run timestamp
+   * @returns {Promise<Object>} Update result
+   */
+  static updateLastRun(id, lastRunAt, nextRunAt) {
+    return new Promise((resolve, reject) => {
+      db.run(
+        `UPDATE broadcast_templates 
+         SET last_run_at = ?, next_run_at = ?, updated_at = CURRENT_TIMESTAMP 
+         WHERE id = ?`,
+        [lastRunAt, nextRunAt, id],
+        function (err) {
+          if (err) {
+            console.error('Error updating last run:', err.message);
+            return reject(err);
+          }
+          resolve({ success: true, updated: this.changes > 0 });
         }
       );
     });

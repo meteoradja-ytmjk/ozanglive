@@ -11,9 +11,9 @@
  * Usage:
  *   Install PM2: npm install -g pm2
  *   Start app:   pm2 start ecosystem.config.js
- *   Stop app:    pm2 stop streamflow
- *   Restart:     pm2 restart streamflow
- *   View logs:   pm2 logs streamflow
+ *   Stop app:    pm2 stop ozanglive
+ *   Restart:     pm2 restart ozanglive
+ *   View logs:   pm2 logs ozanglive
  *   Monitor:     pm2 monit
  *   Status:      pm2 status
  *   
@@ -25,7 +25,7 @@
 module.exports = {
   apps: [
     {
-      name: 'streamflow',
+      name: 'ozanglive',
       script: 'app.js',
       
       // Instance configuration

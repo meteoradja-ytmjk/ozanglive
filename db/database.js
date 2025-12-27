@@ -17,7 +17,7 @@ const REQUIRED_TABLES = [
   'users', 'videos', 'streams', 'stream_history',
   'playlists', 'playlist_videos', 'audios',
   'system_settings', 'stream_templates', 'youtube_credentials',
-  'broadcast_templates'
+  'broadcast_templates', 'recurring_schedules'
 ];
 
 const db = new sqlite3.Database(dbPath, (err) => {
@@ -356,6 +356,52 @@ async function createCoreTablesAsync() {
 
   await runTableQuery(`CREATE UNIQUE INDEX IF NOT EXISTS idx_broadcast_templates_user_name 
           ON broadcast_templates(user_id, name)`, 'broadcast_templates.index');
+
+  // Add recurring columns to broadcast_templates table
+  await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN recurring_enabled INTEGER DEFAULT 0`, 'broadcast_templates.recurring_enabled');
+  await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN recurring_pattern TEXT`, 'broadcast_templates.recurring_pattern');
+  await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN recurring_time TEXT`, 'broadcast_templates.recurring_time');
+  await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN recurring_days TEXT`, 'broadcast_templates.recurring_days');
+  await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN last_run_at TEXT`, 'broadcast_templates.last_run_at');
+  await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN next_run_at TEXT`, 'broadcast_templates.next_run_at');
+
+  // Create index for recurring templates lookup
+  await runTableQuery(`CREATE INDEX IF NOT EXISTS idx_broadcast_templates_recurring 
+          ON broadcast_templates(recurring_enabled)`, 'broadcast_templates.recurring_index');
+
+  // Create recurring_schedules table for scheduled recurring broadcasts
+  await runTableQuery(`CREATE TABLE IF NOT EXISTS recurring_schedules (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    account_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    pattern TEXT NOT NULL CHECK(pattern IN ('daily', 'weekly')),
+    schedule_time TEXT NOT NULL,
+    days_of_week TEXT,
+    template_id TEXT,
+    title_template TEXT,
+    description TEXT,
+    privacy_status TEXT DEFAULT 'unlisted',
+    tags TEXT,
+    category_id TEXT DEFAULT '20',
+    is_active INTEGER DEFAULT 1,
+    last_run_at TEXT,
+    next_run_at TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (account_id) REFERENCES youtube_credentials(id) ON DELETE CASCADE,
+    FOREIGN KEY (template_id) REFERENCES broadcast_templates(id) ON DELETE SET NULL
+  )`, 'recurring_schedules');
+
+  await runTableQuery(`CREATE INDEX IF NOT EXISTS idx_recurring_schedules_user 
+          ON recurring_schedules(user_id)`, 'recurring_schedules.user_index');
+
+  await runTableQuery(`CREATE INDEX IF NOT EXISTS idx_recurring_schedules_active 
+          ON recurring_schedules(is_active)`, 'recurring_schedules.active_index');
+
+  // Add template_id column to existing recurring_schedules table if not exists
+  await runTableQuery(`ALTER TABLE recurring_schedules ADD COLUMN template_id TEXT REFERENCES broadcast_templates(id) ON DELETE SET NULL`, 'recurring_schedules.template_id_column', true);
 }
 
 // Old createCoreTables function removed - replaced with createCoreTablesAsync above

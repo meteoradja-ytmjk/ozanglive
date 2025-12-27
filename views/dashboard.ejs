@@ -1,55 +1,55 @@
 <% layout('layout') -%>
 <!-- Mobile Stats Cards -->
 <div class="grid grid-cols-2 md:hidden gap-3 mb-6">
-  <div class="bg-gray-800 rounded-lg p-4 shadow-md neon-panel neon-bottom-right">
+  <div class="bg-gray-800 rounded-lg p-4 shadow-md neon-panel neon-bottom-right gradient-border hover-lift">
     <div class="neon-inner-glow"></div>
     <div class="flex items-center justify-between mb-2 relative z-10">
       <h3 class="text-sm font-semibold">Active Streams</h3>
-      <div class="w-7 h-7 bg-dark-700 rounded-lg flex items-center justify-center">
-        <i class="ti ti-antenna-bars-5 text-white text-sm font-loaded"></i>
+      <div class="w-7 h-7 icon-gradient-bg rounded-lg flex items-center justify-center">
+        <i class="ti ti-antenna-bars-5 text-primary text-sm font-loaded"></i>
       </div>
     </div>
-    <p class="text-xl font-bold relative z-10">
-      <span id="active-streams-mobile">0</span><span id="live-limit-mobile" class="text-xs text-gray-400 font-normal"> / 1</span>
+    <p class="text-xl font-bold relative z-10 text-primary">
+      <span id="active-streams-mobile" class="count-up">0</span><span id="live-limit-mobile" class="text-xs text-gray-400 font-normal"> / 1</span>
     </p>
     <div id="limit-warning-mobile" class="hidden text-xs text-red-400 mt-1 relative z-10">
       <i class="ti ti-alert-circle mr-1"></i>Limit tercapai
     </div>
   </div>
-  <div class="bg-gray-800 rounded-lg p-4 shadow-md neon-panel neon-bottom-left">
+  <div class="bg-gray-800 rounded-lg p-4 shadow-md neon-panel neon-bottom-left gradient-border hover-lift">
     <div class="neon-inner-glow"></div>
     <div class="flex items-center justify-between mb-2 relative z-10">
       <h3 class="text-sm font-semibold">CPU Usage</h3>
-      <div class="w-7 h-7 bg-dark-700 rounded-lg flex items-center justify-center">
-        <i class="ti ti-cpu-2 text-white text-sm font-loaded"></i>
+      <div class="w-7 h-7 icon-gradient-bg-blue rounded-lg flex items-center justify-center">
+        <i class="ti ti-cpu-2 text-blue-400 text-sm font-loaded"></i>
       </div>
     </div>
-    <p class="text-xl font-bold relative z-10"><span id="cpu-usage-mobile">0</span>%</p>
-    <div class="w-full bg-gray-700 rounded-full h-1.5 mt-1 relative z-10">
-      <div id="cpu-bar-mobile" class="bg-primary h-1.5 rounded-full" style="width: 0%"></div>
+    <p class="text-xl font-bold relative z-10"><span id="cpu-usage-mobile" class="count-up">0</span>%</p>
+    <div class="w-full bg-gray-700 rounded-full h-1.5 mt-1 relative z-10 overflow-hidden">
+      <div id="cpu-bar-mobile" class="h-1.5 rounded-full progress-fade-blue" style="width: 0%"></div>
     </div>
   </div>
-  <div class="bg-gray-800 rounded-lg p-4 shadow-md neon-panel neon-top-right">
+  <div class="bg-gray-800 rounded-lg p-4 shadow-md neon-panel neon-top-right gradient-border hover-lift">
     <div class="neon-inner-glow"></div>
     <div class="flex items-center justify-between mb-2 relative z-10">
       <h3 class="text-sm font-semibold">Memory</h3>
-      <div class="w-7 h-7 bg-dark-700 rounded-lg flex items-center justify-center">
-        <i class="ti ti-server-2 text-white text-sm font-loaded"></i>
+      <div class="w-7 h-7 icon-gradient-bg-green rounded-lg flex items-center justify-center">
+        <i class="ti ti-server-2 text-green-400 text-sm font-loaded"></i>
       </div>
     </div>
     <p class="text-lg font-bold relative z-10">
-      <span id="memory-usage-mobile">0 MB</span><span id="memory-total-mobile" class="text-xs text-gray-400"> / 0 MB</span>
+      <span id="memory-usage-mobile" class="count-up">0 MB</span><span id="memory-total-mobile" class="text-xs text-gray-400"> / 0 MB</span>
     </p>
-    <div class="w-full bg-gray-700 rounded-full h-1.5 mt-1 relative z-10">
-      <div id="memory-bar-mobile" class="bg-primary h-1.5 rounded-full" style="width: 0%"></div>
+    <div class="w-full bg-gray-700 rounded-full h-1.5 mt-1 relative z-10 overflow-hidden">
+      <div id="memory-bar-mobile" class="h-1.5 rounded-full progress-fade-green" style="width: 0%"></div>
     </div>
   </div>
-  <div class="bg-gray-800 rounded-lg p-4 shadow-md neon-panel neon-top-left">
+  <div class="bg-gray-800 rounded-lg p-4 shadow-md neon-panel neon-top-left gradient-border hover-lift">
     <div class="neon-inner-glow"></div>
     <div class="flex items-center justify-between mb-2 relative z-10">
       <h3 class="text-sm font-semibold" id="network-disk-title-mobile">Internet Speed</h3>
-      <div class="w-7 h-7 bg-dark-700 hover:bg-dark-600 rounded-lg flex items-center justify-center cursor-pointer" onclick="toggleNetworkDiskDisplay('mobile')">
-        <i class="ti ti-world-upload text-white text-sm font-loaded" id="toggle-icon-mobile"></i>
+      <div class="w-7 h-7 icon-gradient-bg-orange hover:bg-dark-600 rounded-lg flex items-center justify-center cursor-pointer" onclick="toggleNetworkDiskDisplay('mobile')">
+        <i class="ti ti-world-upload text-orange-400 text-sm font-loaded" id="toggle-icon-mobile"></i>
       </div>
     </div>
     <div id="network-content-mobile" class="space-y-1 relative z-10">
@@ -64,10 +64,10 @@
     </div>
     <div id="disk-content-mobile" class="relative z-10" style="display: none;">
       <p class="text-lg font-bold">
-        <span id="disk-used-mobile">0 GB</span><span id="disk-total-mobile" class="text-xs text-gray-400"> / 0 GB</span>
+        <span id="disk-used-mobile" class="count-up">0 GB</span><span id="disk-total-mobile" class="text-xs text-gray-400"> / 0 GB</span>
       </p>
-      <div class="w-full bg-gray-700 rounded-full h-1.5 mt-1">
-        <div id="disk-bar-mobile" class="bg-primary h-1.5 rounded-full" style="width: 0%"></div>
+      <div class="w-full bg-gray-700 rounded-full h-1.5 mt-1 overflow-hidden">
+        <div id="disk-bar-mobile" class="h-1.5 rounded-full progress-fade-orange" style="width: 0%"></div>
       </div>
     </div>
   </div>
@@ -75,55 +75,55 @@
 
 <!-- Desktop Stats Cards -->
 <div class="hidden md:grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-  <div class="bg-gray-800 rounded-lg p-6 shadow-md neon-panel neon-bottom-right">
+  <div class="bg-gray-800 rounded-lg p-6 shadow-md neon-panel neon-bottom-right gradient-border hover-lift particles">
     <div class="neon-inner-glow"></div>
     <div class="flex items-center justify-between relative z-10">
       <h3 class="text-lg font-semibold">Active Streams</h3>
-      <div class="w-10 h-10 bg-dark-700 rounded-lg flex items-center justify-center">
-        <i class="ti ti-antenna-bars-5 text-xl text-white font-loaded"></i>
+      <div class="w-10 h-10 icon-gradient-bg rounded-lg flex items-center justify-center float">
+        <i class="ti ti-antenna-bars-5 text-xl text-primary font-loaded"></i>
       </div>
     </div>
-    <p class="text-3xl font-bold mt-2 relative z-10">
-      <span id="active-streams-desktop">0</span><span id="live-limit-desktop" class="text-sm text-gray-400 font-normal"> / 1</span>
+    <p class="text-3xl font-bold mt-2 relative z-10 stat-glow text-primary">
+      <span id="active-streams-desktop" class="count-up">0</span><span id="live-limit-desktop" class="text-sm text-gray-400 font-normal"> / 1</span>
     </p>
     <div id="limit-warning-desktop" class="hidden text-sm text-red-400 mt-2 relative z-10">
       <i class="ti ti-alert-circle mr-1"></i>Limit tercapai
     </div>
   </div>
-  <div class="bg-gray-800 rounded-lg p-6 shadow-md neon-panel neon-bottom-left">
+  <div class="bg-gray-800 rounded-lg p-6 shadow-md neon-panel neon-bottom-left gradient-border hover-lift particles">
     <div class="neon-inner-glow"></div>
     <div class="flex items-center justify-between relative z-10">
       <h3 class="text-lg font-semibold">CPU Usage</h3>
-      <div class="w-10 h-10 bg-dark-700 rounded-lg flex items-center justify-center">
-        <i class="ti ti-cpu-2 text-xl text-white font-loaded"></i>
+      <div class="w-10 h-10 icon-gradient-bg-blue rounded-lg flex items-center justify-center float">
+        <i class="ti ti-cpu-2 text-xl text-blue-400 font-loaded"></i>
       </div>
     </div>
-    <p class="text-3xl font-bold mt-2 relative z-10"><span id="cpu-usage">0</span>%</p>
-    <div class="w-full bg-gray-700 rounded-full h-2.5 mt-2 relative z-10">
-      <div id="cpu-bar" class="bg-primary h-2.5 rounded-full" style="width: 0%"></div>
+    <p class="text-3xl font-bold mt-2 relative z-10"><span id="cpu-usage" class="count-up">0</span>%</p>
+    <div class="w-full bg-gray-700 rounded-full h-2.5 mt-2 relative z-10 overflow-hidden">
+      <div id="cpu-bar" class="h-2.5 rounded-full progress-fade-blue" style="width: 0%"></div>
     </div>
   </div>
-  <div class="bg-gray-800 rounded-lg p-6 shadow-md neon-panel neon-top-right">
+  <div class="bg-gray-800 rounded-lg p-6 shadow-md neon-panel neon-top-right gradient-border hover-lift particles">
     <div class="neon-inner-glow"></div>
     <div class="flex items-center justify-between relative z-10">
       <h3 class="text-lg font-semibold">Memory</h3>
-      <div class="w-10 h-10 bg-dark-700 rounded-lg flex items-center justify-center">
-        <i class="ti ti-server-2 text-xl text-white font-loaded"></i>
+      <div class="w-10 h-10 icon-gradient-bg-green rounded-lg flex items-center justify-center float">
+        <i class="ti ti-server-2 text-xl text-green-400 font-loaded"></i>
       </div>
     </div>
     <p class="text-3xl font-bold mt-2 relative z-10">
-      <span id="memory-usage">0 MB</span><span id="memory-total" class="text-sm text-gray-400"> / 0 MB</span>
+      <span id="memory-usage" class="count-up">0 MB</span><span id="memory-total" class="text-sm text-gray-400"> / 0 MB</span>
     </p>
-    <div class="w-full bg-gray-700 rounded-full h-2.5 mt-2 relative z-10">
-      <div id="memory-bar" class="bg-primary h-2.5 rounded-full" style="width: 0%"></div>
+    <div class="w-full bg-gray-700 rounded-full h-2.5 mt-2 relative z-10 overflow-hidden">
+      <div id="memory-bar" class="h-2.5 rounded-full progress-fade-green" style="width: 0%"></div>
     </div>
   </div>
-  <div class="bg-gray-800 rounded-lg p-6 shadow-md neon-panel neon-top-left">
+  <div class="bg-gray-800 rounded-lg p-6 shadow-md neon-panel neon-top-left gradient-border hover-lift particles">
     <div class="neon-inner-glow"></div>
     <div class="flex items-center justify-between relative z-10">
       <h3 class="text-lg font-semibold" id="network-disk-title">Internet Speed</h3>
-      <div class="w-10 h-10 bg-dark-700 hover:bg-dark-600 rounded-lg flex items-center justify-center cursor-pointer" onclick="toggleNetworkDiskDisplay('desktop')" title="Click to switch">
-        <i class="ti ti-world-upload text-xl text-white font-loaded" id="toggle-icon-desktop"></i>
+      <div class="w-10 h-10 icon-gradient-bg-orange hover:bg-dark-600 rounded-lg flex items-center justify-center cursor-pointer float" onclick="toggleNetworkDiskDisplay('desktop')" title="Click to switch">
+        <i class="ti ti-world-upload text-xl text-orange-400 font-loaded" id="toggle-icon-desktop"></i>
       </div>
     </div>
     <div id="network-content-desktop" class="mt-2 space-y-2 relative z-10">
@@ -138,10 +138,10 @@
     </div>
     <div id="disk-content-desktop" class="mt-2 relative z-10" style="display: none;">
       <p class="text-3xl font-bold">
-        <span id="disk-used">0 GB</span><span id="disk-total" class="text-sm text-gray-400"> / 0 GB</span>
+        <span id="disk-used" class="count-up">0 GB</span><span id="disk-total" class="text-sm text-gray-400"> / 0 GB</span>
       </p>
-      <div class="w-full bg-gray-700 rounded-full h-2.5 mt-2">
-        <div id="disk-bar" class="bg-primary h-2.5 rounded-full" style="width: 0%"></div>
+      <div class="w-full bg-gray-700 rounded-full h-2.5 mt-2 overflow-hidden">
+        <div id="disk-bar" class="h-2.5 rounded-full progress-fade-orange" style="width: 0%"></div>
       </div>
     </div>
   </div>

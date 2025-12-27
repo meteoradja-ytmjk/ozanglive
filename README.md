@@ -1,11 +1,11 @@
-# # 🎬 Ozang - Cloud Streaming Solution
+# 🎬 OzangLive - Cloud Streaming Solution
 
 <p align="center">
   <strong>Solusi streaming cloud dengan FFmpeg untuk live streaming ke berbagai platform</strong>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-2.1.0-blue.svg" alt="Version">
+  <img src="https://img.shields.io/badge/version-2.2.0-blue.svg" alt="Version">
   <img src="https://img.shields.io/badge/node-%3E%3D18.0.0-green.svg" alt="Node">
   <img src="https://img.shields.io/badge/license-MIT-orange.svg" alt="License">
 </p>
@@ -14,15 +14,42 @@
 
 ## ✨ Fitur Utama
 
-- 🎥 **Multi-Platform Streaming** - YouTube, Facebook, Twitch, TikTok, Instagram, Shopee Live, Restream.io
-- 📅 **Scheduled Streaming** - Jadwalkan streaming sekali, harian, atau mingguan
-- 🔄 **Loop Video** - Putar video secara berulang
-- 🎵 **Audio Overlay** - Tambahkan audio background ke stream
-- 📁 **Playlist Support** - Buat playlist video untuk streaming
-- 👥 **Multi-User** - Dukungan multiple user dengan role Admin/Member
-- 📊 **Dashboard Monitoring** - Monitor status streaming real-time
-- 📜 **Stream History** - Riwayat streaming lengkap
-- 🔒 **Secure** - Session management & rate limiting
+### 🎥 Streaming
+- **Multi-Platform Streaming** - YouTube, Facebook, Twitch, TikTok, Instagram, Shopee Live, Restream.io
+- **Scheduled Streaming** - Jadwalkan streaming sekali, harian, atau mingguan
+- **Loop Video** - Putar video secara berulang
+- **Audio Overlay** - Tambahkan audio background ke stream
+- **Playlist Support** - Buat playlist video untuk streaming
+
+### 📺 YouTube Integration
+- **YouTube Sync** - Buat scheduled live broadcasts langsung dari OzangLive
+- **Multi-Account** - Kelola beberapa akun YouTube sekaligus
+- **Broadcast Templates** - Simpan template untuk broadcast berulang
+- **Recurring Schedules** - Jadwal otomatis harian/mingguan untuk broadcast YouTube
+- **Auto Status Sync** - Sinkronisasi status stream dengan YouTube secara otomatis
+
+### 📁 Media Management
+- **Video Gallery** - Upload dan kelola video untuk streaming
+- **Multiple File Upload** - Upload banyak file sekaligus dengan queue manager
+- **Google Drive Import** - Import video langsung dari Google Drive
+- **Thumbnail Support** - Upload thumbnail untuk broadcast YouTube
+
+### 💾 Backup & Restore
+- **Comprehensive Backup** - Export semua data (streams, YouTube credentials, templates, schedules, playlists)
+- **Selective Export** - Pilih kategori data yang ingin di-export
+- **Easy Import** - Restore data dari file backup JSON
+- **Duplicate Handling** - Skip atau overwrite data duplikat saat import
+
+### 👥 User Management
+- **Multi-User** - Dukungan multiple user dengan role Admin/Member
+- **Live Limit** - Batasi jumlah stream live per user
+- **Dashboard Monitoring** - Monitor status streaming real-time
+- **Stream History** - Riwayat streaming lengkap
+
+### 🔒 Security
+- **Session Management** - Secure session handling
+- **Rate Limiting** - Proteksi dari abuse
+- **CSRF Protection** - Cross-site request forgery protection
 
 ---
 
@@ -80,28 +107,22 @@ sudo ufw --force enable
 sudo npm install -g pm2
 
 # 10. Start aplikasi
-pm2 start app.js --name streamflow
+pm2 start ecosystem.config.js
 pm2 save
 pm2 startup
 ```
 
 ---
 
-##   DUpdate Aplikasi (Tanpa Install Ulang)
+## 🔄 Update Aplikasi (Tanpa Install Ulang)
 
 Jika aplikasi sudah terinstall di VPS dan ingin update ke versi terbaru:
 
 ### Quick Update (One-Line)
 
 ```bash
-cd ~/ozanglive && git pull && pm2 restart streamflow
+cd ~/ozanglive && git pull && pm2 restart ozanglive
 ```
-### lakukan ini untuk localhost, jika ada perubahan yang error
-
-```bash
-git pull origin main --rebase
-git push origin main
-```bash
 
 ### Update Step-by-Step
 
@@ -119,7 +140,7 @@ git pull origin main
 npm install
 
 # 5. Restart aplikasi
-pm2 restart streamflow
+pm2 restart ozanglive
 
 # 6. Cek status
 pm2 status
@@ -133,7 +154,7 @@ cd ~/ozanglive
 git fetch origin
 git reset --hard origin/main
 npm install
-pm2 restart streamflow
+pm2 restart ozanglive
 ```
 
 ### Update dengan Docker
@@ -152,31 +173,7 @@ Jika ingin install ulang dengan menimpa semua file (database tetap aman):
 
 ```bash
 # One-Line Command
-cd ~/ozanglive && git fetch origin && git reset --hard origin/main && npm install && pm2 restart streamflow
-```
-
-**Step-by-Step:**
-
-```bash
-# 1. Masuk folder aplikasi
-cd ~/ozanglive
-
-# 2. Backup database dulu (PENTING!)
-cp db/streamflow.db db/streamflow.db.backup
-
-# 3. Fetch dan replace semua file dengan versi GitHub
-git fetch origin
-git reset --hard origin/main
-
-# 4. Install dependencies
-npm install
-
-# 5. Restart aplikasi
-pm2 restart streamflow
-
-# 6. Verifikasi
-pm2 status
-pm2 logs streamflow --lines 20
+cd ~/ozanglive && git fetch origin && git reset --hard origin/main && npm install && pm2 restart ozanglive
 ```
 
 > ⚠️ **Catatan:** Perintah `git reset --hard` akan menimpa SEMUA file local dengan versi dari GitHub. Pastikan backup database sebelum menjalankan!
@@ -206,17 +203,17 @@ docker-compose up -d
 
 ```bash
 # Build image
-docker build -t streamflow .
+docker build -t ozanglive .
 
 # Run container
 docker run -d \
-  --name streamflow \
+  --name ozanglive \
   -p 7575:7575 \
   -v $(pwd)/db:/app/db \
   -v $(pwd)/logs:/app/logs \
   -v $(pwd)/public/uploads:/app/public/uploads \
   --restart unless-stopped \
-  streamflow
+  ozanglive
 ```
 
 ---
@@ -253,16 +250,16 @@ node generate-secret.js
 pm2 status
 
 # Lihat logs real-time
-pm2 logs streamflow
+pm2 logs ozanglive
 
 # Restart aplikasi
-pm2 restart streamflow
+pm2 restart ozanglive
 
 # Stop aplikasi
-pm2 stop streamflow
+pm2 stop ozanglive
 
 # Delete dari PM2
-pm2 delete streamflow
+pm2 delete ozanglive
 
 # Monitor resource usage
 pm2 monit
@@ -296,7 +293,7 @@ sudo netstat -tlnp | grep 7575
 
 ```bash
 # Dengan PM2
-pm2 restart streamflow
+pm2 restart ozanglive
 
 # Dengan Docker
 docker-compose restart
@@ -306,7 +303,7 @@ docker-compose restart
 
 ```bash
 # PM2 logs
-pm2 logs streamflow --lines 100
+pm2 logs ozanglive --lines 100
 
 # Docker logs
 docker-compose logs -f --tail=100
@@ -314,246 +311,90 @@ docker-compose logs -f --tail=100
 # File logs
 tail -f logs/app.log
 ```
-### JIKA MUNCUL EADDRINUSE: address already in use 0.0.0.0:7575 DI localhost
 
-Artinya: Port 7575 sudah dipakai oleh program lain, jadi server tidak bisa jalan.
+### JIKA MUNCUL EADDRINUSE: address already in use 0.0.0.0:7575
 
-Kamu bisa memilih salah satu dari 3 solusi berikut:
+**Di localhost (Windows):**
 
-✅ SOLUSI 1: Ganti port di kode Node.js
-
-Di file app.js atau server.js, ubah port:
-
-const PORT = 8080; // atau port lain
-
-
-Lalu jalankan ulang:
-
-node app.js
-
-✅ SOLUSI 2: Matikan program yang memakai port 7575
-Windows
-
-Cek proses yang memakai port:
 ```bash
+# Cek proses yang memakai port
 netstat -ano | findstr :7575
-```
 
-Nanti keluar PID (misalnya 12345), lalu hentikan:
-```bash
+# Kill proses (ganti 12345 dengan PID)
 taskkill /PID 12345 /F
-```
 
-✅ SOLUSI 3: Restart Node.js yang masih berjalan
-
-Kadang ada proses Node.js tersangkut.
-```bash
+# Atau kill semua Node.js
 taskkill /IM node.exe /F
 ```
 
-Lalu jalankan ulang aplikasi:
-```bash
-npm start
-```
-Jika mau cepat:
-
-Paling mudah ketik:
+**Di VPS:**
 
 ```bash
-taskkill /IM node.exe /F
-```
-
-Lalu jalankan lagi aplikasi.
----
-### JIKA MUNCUL EADDRINUSE: address already in use 0.0.0.0:7575 DI VPS
-Error EADDRINUSE berarti port 7575 sudah digunakan oleh proses lain. Ini bukan masalah kode, tapi ada instance aplikasi yang masih berjalan.
-
-Solusi di VPS:
-
-Jalankan perintah berikut untuk menghentikan proses yang menggunakan port 7575:
-
-# Cari proses yang menggunakan port 7575
-
-```bash
-sudo lsof -i :7575
-
-# Atau langsung kill proses di port tersebut
-
-
+# Cari dan kill proses di port 7575
 sudo fuser -k 7575/tcp
 
-# Kemudian jalankan ulang aplikasi
-
-
-npm start
+# Restart aplikasi
+pm2 restart ozanglive
 ```
-Atau jika menggunakan PM2:
 
-# Restart dengan PM2
+---
 
-```bash
-pm2 restart streamflow
+## 📺 YouTube API Setup (OAuth + Refresh Token)
 
-# Atau stop dulu lalu start
-pm2 stop streamflow
-pm2 start streamflow
-Jika menggunakan systemd:
-```
-sudo systemctl restart streamflow
-Setelah port dibebaskan, aplikasi akan berjalan normal dan route /youtube akan berfungsi.
+### 1️⃣ Buat Project di Google Cloud
 
+1. Buka [Google Cloud Console](https://console.cloud.google.com)
+2. Klik **Select Project** → **New Project**
+3. Isi nama project (contoh: `youtube-live-app`)
+4. Klik **Create**
 
+### 2️⃣ Aktifkan YouTube Data API
 
-#📺 YouTube API Setup (OAuth + Refresh Token)
+1. Masuk **APIs & Services** → **Library**
+2. Cari **YouTube Data API v3**
+3. Klik **Enable**
 
-Panduan ini menjelaskan cara menghubungkan aplikasi/web ke YouTube menggunakan YouTube Data API v3 dengan OAuth 2.0, sehingga aplikasi bisa:
+### 3️⃣ Atur OAuth Consent Screen
 
-Membuat & menjadwalkan live
+1. Masuk **APIs & Services** → **OAuth consent screen**
+2. Pilih **External**
+3. Isi: App name, User support email, Developer contact email
+4. Scopes → Add: `https://www.googleapis.com/auth/youtube`
+5. Test users → Tambahkan email Google yang akan login
+6. Save
 
-Mengelola livestream otomatis
+### 4️⃣ Buat OAuth Client ID
 
-Tidak perlu login ulang (pakai refresh token)
+1. Masuk **APIs & Services** → **Credentials**
+2. Klik **Create Credentials** → **OAuth Client ID**
+3. Pilih **Web application**
+4. Authorized redirect URIs: `https://developers.google.com/oauthplayground`
+5. Klik **Create**
+6. 📌 Simpan **CLIENT_ID** dan **CLIENT_SECRET**
 
-1️⃣ Persiapan Awal
-Syarat:
+### 5️⃣ Generate Refresh Token
 
-Akun Google
+1. Buka [OAuth Playground](https://developers.google.com/oauthplayground)
+2. Klik ⚙️ (Settings) → ✅ Use your own OAuth credentials
+3. Masukkan Client ID dan Client Secret
+4. Scope: `https://www.googleapis.com/auth/youtube`
+5. Klik **Authorize APIs** → Login Google & Allow
+6. Klik **Exchange authorization code for tokens**
+7. 📌 Salin **Refresh Token**
 
-Channel YouTube aktif (livestream enabled)
+### 6️⃣ Masukkan Credentials di OzangLive
 
-Akses ke Google Cloud Console
+1. Buka menu **YouTube** di OzangLive
+2. Klik **Tambah Akun**
+3. Masukkan Client ID, Client Secret, dan Refresh Token
+4. Klik **Simpan**
 
-2️⃣ Buat Project di Google Cloud
-
-Buka Google Cloud Console
-
-Klik Select Project → New Project
-
-Isi nama project (contoh: youtube-live-app)
-
-Klik Create
-
-3️⃣ Aktifkan YouTube Data API
-
-Masuk APIs & Services → Library
-
-Cari YouTube Data API v3
-
-Klik Enable
-
-4️⃣ Atur OAuth Consent Screen
-
-Masuk APIs & Services → OAuth consent screen
-
-Pilih External
-
-Isi:
-
-App name
-
-User support email
-
-Developer contact email
-
-Scopes → Add:
-
-https://www.googleapis.com/auth/youtube
-
-
-Test users
-
-Tambahkan email Google yang akan login
-
-Save
-
-ℹ️ Mode Testing sudah cukup (tidak perlu verifikasi Google)
-
-5️⃣ Buat OAuth Client ID
-
-Masuk APIs & Services → Credentials
-
-Klik Create Credentials → OAuth Client ID
-
-Pilih:
-
-Application type: Web application
-
-Isi:
-
-Name: bebas
-
-Authorized redirect URIs:
-
-https://developers.google.com/oauthplayground
-
-
-Klik Create
-
-📌 Simpan:
-
-CLIENT_ID
-
-CLIENT_SECRET
-
-6️⃣ Generate Refresh Token (Paling Mudah)
-Menggunakan OAuth Playground
-
-Buka:
-👉 https://developers.google.com/oauthplayground
-
-Klik ⚙️ (Settings):
-
-✅ Use your own OAuth credentials
-
-Masukkan:
-
-Client ID
-
-Client Secret
-
-Scope:
-
-https://www.googleapis.com/auth/youtube
-
-
-Klik Authorize APIs
-
-Login Google & Allow
-
-Klik Exchange authorization code for tokens
-
-Salin:
-
-Refresh Token
-
-7️⃣ Kredensial yang Dibutuhkan Aplikasi
-
-Aplikasi membutuhkan 3 data utama:
-
-CLIENT_ID=xxxxxxxx.apps.googleusercontent.com
-CLIENT_SECRET=xxxxxxxx
-REFRESH_TOKEN=xxxxxxxx
-
-
-📌 Refresh token tidak kedaluwarsa (kecuali dicabut manual)
-
-8️⃣ Cara Kerja Singkat OAuth YouTube
-Refresh Token
-     ↓
-Access Token (otomatis, tiap 1 jam)
-     ↓
-YouTube Data API (create / schedule / manage live)
-
-
-👉 Aplikasi tidak perlu login ulang
-
-
-
+---
 
 ## 📁 Struktur Folder
 
 ```
-streamflow/
+ozanglive/
 ├── app.js              # Main application
 ├── db/                 # SQLite database
 │   └── streamflow.db
@@ -651,8 +492,8 @@ server {
 
 Jika mengalami masalah:
 
-1. Cek logs: `pm2 logs streamflow`
-2. Restart aplikasi: `pm2 restart streamflow`
+1. Cek logs: `pm2 logs ozanglive`
+2. Restart aplikasi: `pm2 restart ozanglive`
 3. Buka issue di GitHub
 
 ---
@@ -664,5 +505,5 @@ MIT License - Lihat [LICENSE.md](LICENSE.md)
 ---
 
 <p align="center">
-  Made with ❤️ by Bang Tutorial
+  Made with ❤️ by ozanglive
 </p>

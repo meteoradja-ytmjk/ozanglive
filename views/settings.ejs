@@ -18,6 +18,11 @@
         data-tab="security">
         <i class="ti ti-shield-lock mr-2"></i>Security
       </button>
+      <button
+        class="settings-tab mr-2 py-2 px-4 text-gray-400 hover:text-white border-b-2 border-transparent hover:border-gray-700 font-medium"
+        data-tab="backup">
+        <i class="ti ti-database-export mr-2"></i>Backup
+      </button>
       <% if (req.session.user_role === 'admin') { %>
       <button
         class="settings-tab mr-2 py-2 px-4 text-gray-400 hover:text-white border-b-2 border-transparent hover:border-gray-700 font-medium"
@@ -143,6 +148,132 @@
           </div>
         </form>
 
+      </div>
+    </div>
+
+    <!-- Backup & Restore Tab -->
+    <div id="backup-tab" class="settings-content hidden">
+      <div class="p-6">
+        <h3 class="text-lg font-semibold mb-6">Backup & Restore</h3>
+        
+        <div class="space-y-6">
+          <!-- Export Section -->
+          <div class="bg-dark-700 rounded-lg p-4">
+            <h4 class="text-md font-medium mb-4 flex items-center">
+              <i class="ti ti-download mr-2 text-primary"></i>
+              Export Data
+            </h4>
+            <p class="text-sm text-gray-400 mb-4">
+              Export semua data Anda termasuk streams, YouTube credentials, broadcast templates, recurring schedules, stream templates, dan playlists.
+            </p>
+            
+            <div class="space-y-4">
+              <div class="space-y-2">
+                <label class="block text-sm font-medium text-gray-300 mb-2">Pilih kategori untuk di-export:</label>
+                <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <label class="flex items-center space-x-2 text-sm text-gray-300">
+                    <input type="checkbox" class="export-category rounded bg-dark-900 border-gray-600 text-primary focus:ring-primary" value="streams" checked>
+                    <span>Streams</span>
+                  </label>
+                  <label class="flex items-center space-x-2 text-sm text-gray-300">
+                    <input type="checkbox" class="export-category rounded bg-dark-900 border-gray-600 text-primary focus:ring-primary" value="youtube_credentials" checked>
+                    <span>YouTube Credentials</span>
+                  </label>
+                  <label class="flex items-center space-x-2 text-sm text-gray-300">
+                    <input type="checkbox" class="export-category rounded bg-dark-900 border-gray-600 text-primary focus:ring-primary" value="broadcast_templates" checked>
+                    <span>Broadcast Templates</span>
+                  </label>
+                  <label class="flex items-center space-x-2 text-sm text-gray-300">
+                    <input type="checkbox" class="export-category rounded bg-dark-900 border-gray-600 text-primary focus:ring-primary" value="recurring_schedules" checked>
+                    <span>Recurring Schedules</span>
+                  </label>
+                  <label class="flex items-center space-x-2 text-sm text-gray-300">
+                    <input type="checkbox" class="export-category rounded bg-dark-900 border-gray-600 text-primary focus:ring-primary" value="stream_templates" checked>
+                    <span>Stream Templates</span>
+                  </label>
+                  <label class="flex items-center space-x-2 text-sm text-gray-300">
+                    <input type="checkbox" class="export-category rounded bg-dark-900 border-gray-600 text-primary focus:ring-primary" value="playlists" checked>
+                    <span>Playlists</span>
+                  </label>
+                </div>
+              </div>
+              
+              <div class="flex gap-3">
+                <button type="button" id="export-all-btn"
+                  class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-lg transition-colors flex items-center">
+                  <i class="ti ti-download mr-2"></i>
+                  Export Semua Data
+                </button>
+                <button type="button" id="select-all-categories"
+                  class="px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded-lg transition-colors text-sm">
+                  Pilih Semua
+                </button>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Import Section -->
+          <div class="bg-dark-700 rounded-lg p-4">
+            <h4 class="text-md font-medium mb-4 flex items-center">
+              <i class="ti ti-upload mr-2 text-green-400"></i>
+              Import Data
+            </h4>
+            <p class="text-sm text-gray-400 mb-4">
+              Restore data dari file backup JSON. Data yang sudah ada dapat di-skip atau di-overwrite.
+            </p>
+            
+            <form id="import-all-form" enctype="multipart/form-data" class="space-y-4">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              
+              <div class="space-y-2">
+                <label class="block text-sm font-medium text-gray-300">File Backup</label>
+                <div class="flex items-center gap-3">
+                  <input type="file" id="import-file" name="backupFile" accept=".json"
+                    class="bg-dark-900 text-white px-4 py-2 rounded-lg w-full max-w-md focus:outline-none focus:ring-1 focus:ring-primary file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:bg-primary file:text-white file:cursor-pointer">
+                </div>
+              </div>
+              
+              <div class="space-y-2">
+                <label class="block text-sm font-medium text-gray-300 mb-2">Opsi Import:</label>
+                <div class="flex flex-col gap-2">
+                  <label class="flex items-center space-x-2 text-sm text-gray-300">
+                    <input type="checkbox" id="skip-duplicates" name="skipDuplicates" checked
+                      class="rounded bg-dark-900 border-gray-600 text-primary focus:ring-primary">
+                    <span>Skip data duplikat (berdasarkan nama/channel)</span>
+                  </label>
+                </div>
+              </div>
+              
+              <button type="submit" id="import-all-btn"
+                class="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-colors flex items-center">
+                <i class="ti ti-upload mr-2"></i>
+                Import Data
+              </button>
+            </form>
+            
+            <!-- Import Results -->
+            <div id="import-results" class="hidden mt-4 p-4 bg-dark-900 rounded-lg">
+              <h5 class="text-sm font-medium text-gray-300 mb-2">Hasil Import:</h5>
+              <div id="import-results-content" class="text-sm text-gray-400"></div>
+            </div>
+          </div>
+          
+          <!-- Legacy Export (Streams Only) -->
+          <div class="bg-dark-700 rounded-lg p-4">
+            <h4 class="text-md font-medium mb-4 flex items-center">
+              <i class="ti ti-broadcast mr-2 text-yellow-400"></i>
+              Export Streams Saja (Legacy)
+            </h4>
+            <p class="text-sm text-gray-400 mb-4">
+              Export hanya konfigurasi streams untuk kompatibilitas dengan format backup lama.
+            </p>
+            <a href="/api/streams/export"
+              class="inline-flex items-center px-4 py-2 bg-yellow-600 hover:bg-yellow-500 text-white rounded-lg transition-colors">
+              <i class="ti ti-download mr-2"></i>
+              Export Streams
+            </a>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -354,5 +485,128 @@
         }
       });
       <% } %>
+
+      // Backup & Restore functionality
+      const exportAllBtn = document.getElementById('export-all-btn');
+      const selectAllCategoriesBtn = document.getElementById('select-all-categories');
+      const importAllForm = document.getElementById('import-all-form');
+      const importResults = document.getElementById('import-results');
+      const importResultsContent = document.getElementById('import-results-content');
+
+      // Select all categories
+      selectAllCategoriesBtn.addEventListener('click', () => {
+        const checkboxes = document.querySelectorAll('.export-category');
+        const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+        checkboxes.forEach(cb => cb.checked = !allChecked);
+        selectAllCategoriesBtn.textContent = allChecked ? 'Pilih Semua' : 'Hapus Semua';
+      });
+
+      // Export all data
+      exportAllBtn.addEventListener('click', async () => {
+        const checkboxes = document.querySelectorAll('.export-category:checked');
+        const categories = Array.from(checkboxes).map(cb => cb.value);
+        
+        if (categories.length === 0) {
+          showToast('error', 'Pilih minimal satu kategori untuk di-export');
+          return;
+        }
+
+        exportAllBtn.disabled = true;
+        exportAllBtn.innerHTML = '<i class="ti ti-loader animate-spin mr-2"></i>Exporting...';
+
+        try {
+          const res = await fetch('/api/backup/export-all', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRF-Token': '<%= csrfToken %>'
+            },
+            body: JSON.stringify({ categories })
+          });
+
+          if (!res.ok) throw new Error('Export failed');
+
+          const blob = await res.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `ozanglive-full-backup-${new Date().toISOString().split('T')[0]}.json`;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          a.remove();
+
+          showToast('success', 'Data berhasil di-export');
+        } catch (err) {
+          console.error('Export error:', err);
+          showToast('error', 'Gagal export data');
+        } finally {
+          exportAllBtn.disabled = false;
+          exportAllBtn.innerHTML = '<i class="ti ti-download mr-2"></i>Export Semua Data';
+        }
+      });
+
+      // Import all data
+      importAllForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const fileInput = document.getElementById('import-file');
+        if (!fileInput.files.length) {
+          showToast('error', 'Pilih file backup untuk di-import');
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append('backupFile', fileInput.files[0]);
+        formData.append('skipDuplicates', document.getElementById('skip-duplicates').checked);
+
+        const importBtn = document.getElementById('import-all-btn');
+        importBtn.disabled = true;
+        importBtn.innerHTML = '<i class="ti ti-loader animate-spin mr-2"></i>Importing...';
+
+        try {
+          const res = await fetch('/api/backup/import-all', {
+            method: 'POST',
+            headers: {
+              'X-CSRF-Token': '<%= csrfToken %>'
+            },
+            body: formData
+          });
+
+          const data = await res.json();
+
+          if (data.success) {
+            showToast('success', 'Import berhasil');
+            
+            // Show results
+            let resultsHtml = '<ul class="list-disc list-inside space-y-1">';
+            for (const [category, result] of Object.entries(data.results || {})) {
+              resultsHtml += `<li><strong>${category}:</strong> ${result.imported} imported, ${result.skipped} skipped</li>`;
+            }
+            resultsHtml += '</ul>';
+            
+            if (data.warnings && data.warnings.length > 0) {
+              resultsHtml += '<div class="mt-2 text-yellow-400"><strong>Warnings:</strong><ul class="list-disc list-inside">';
+              data.warnings.forEach(w => resultsHtml += `<li>${w}</li>`);
+              resultsHtml += '</ul></div>';
+            }
+            
+            importResultsContent.innerHTML = resultsHtml;
+            importResults.classList.remove('hidden');
+          } else {
+            showToast('error', data.error || 'Import gagal');
+            if (data.details) {
+              importResultsContent.innerHTML = `<div class="text-red-400">${data.details.join('<br>')}</div>`;
+              importResults.classList.remove('hidden');
+            }
+          }
+        } catch (err) {
+          console.error('Import error:', err);
+          showToast('error', 'Gagal import data');
+        } finally {
+          importBtn.disabled = false;
+          importBtn.innerHTML = '<i class="ti ti-upload mr-2"></i>Import Data';
+        }
+      });
   });
   </script>

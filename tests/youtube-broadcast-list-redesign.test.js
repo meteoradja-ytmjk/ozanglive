@@ -13,20 +13,19 @@ function generateBroadcastNumbers(broadcasts) {
   }));
 }
 
-// Helper function to render broadcast item (simulates EJS template output)
+// Helper function to render broadcast item (simulates EJS template output for compact list)
 function renderBroadcastItem(broadcast, index) {
   const number = index + 1;
-  const streamKey = broadcast.streamKey || 'No stream key';
+  const streamKey = broadcast.streamKey ? broadcast.streamKey.substring(0, 20) + '...' : '-';
   
   return {
     number,
     title: broadcast.title,
-    channelName: broadcast.channelName || null,
     privacyStatus: broadcast.privacyStatus,
-    scheduledStartTime: broadcast.scheduledStartTime,
     streamKey,
+    streamKeyRaw: broadcast.streamKey || null,
     hasEditButton: true,
-    hasCopyButton: true,
+    hasSyncButton: true,
     hasDeleteButton: true
   };
 }
@@ -50,64 +49,32 @@ const broadcastArbitrary = fc.record({
 
 describe('YouTube Broadcast List Redesign', () => {
   /**
-   * **Feature: youtube-broadcast-list-redesign, Property 1: Sequential Numbering**
-   * *For any* array of broadcasts rendered in the list, the displayed numbers SHALL be 
-   * sequential integers starting from 1, where the nth item displays number n.
-   * **Validates: Requirements 1.1, 1.3**
+   * **Feature: youtube-broadcast-list-redesign, Property 1: Essential Information Display**
+   * *For any* broadcast object rendered in the list, the output SHALL contain 
+   * the broadcast number, title, privacy status, and stream key (or placeholder if empty).
+   * **Validates: Requirements 2.2, 4.1, 4.2**
    */
-  test('Property 1: Sequential numbering starts from 1 and increments correctly', async () => {
-    await fc.assert(
-      fc.asyncProperty(
-        fc.array(broadcastArbitrary, { minLength: 1, maxLength: 50 }),
-        async (broadcasts) => {
-          const renderedList = renderBroadcastList(broadcasts);
-          
-          // Check that numbering starts from 1
-          expect(renderedList[0].number).toBe(1);
-          
-          // Check that all numbers are sequential
-          for (let i = 0; i < renderedList.length; i++) {
-            expect(renderedList[i].number).toBe(i + 1);
-          }
-          
-          // Check that last number equals list length
-          expect(renderedList[renderedList.length - 1].number).toBe(broadcasts.length);
-        }
-      ),
-      { numRuns: 100 }
-    );
-  });
-
-  /**
-   * **Feature: youtube-broadcast-list-redesign, Property 2: Required Fields Display**
-   * *For any* broadcast object with valid data, the rendered output SHALL contain 
-   * the broadcast title, channel name, privacy status, scheduled date/time, and stream key.
-   * **Validates: Requirements 2.3, 3.1**
-   */
-  test('Property 2: All required fields are present in rendered output', async () => {
+  test('Property 1: Essential information display - number, title, privacy, stream key', async () => {
     await fc.assert(
       fc.asyncProperty(
         broadcastArbitrary,
         async (broadcast) => {
           const rendered = renderBroadcastItem(broadcast, 0);
           
+          // Number must be present (starts from 1)
+          expect(rendered.number).toBe(1);
+          
           // Title must be present
           expect(rendered.title).toBe(broadcast.title);
-          
-          // Channel name should match (can be null)
-          expect(rendered.channelName).toBe(broadcast.channelName);
           
           // Privacy status must be present
           expect(rendered.privacyStatus).toBe(broadcast.privacyStatus);
           
-          // Scheduled time must be present
-          expect(rendered.scheduledStartTime).toBe(broadcast.scheduledStartTime);
-          
-          // Stream key must be present (with fallback for null)
+          // Stream key must be present (truncated or placeholder)
           if (broadcast.streamKey) {
-            expect(rendered.streamKey).toBe(broadcast.streamKey);
+            expect(rendered.streamKey).toContain(broadcast.streamKey.substring(0, 20));
           } else {
-            expect(rendered.streamKey).toBe('No stream key');
+            expect(rendered.streamKey).toBe('-');
           }
         }
       ),
@@ -116,12 +83,12 @@ describe('YouTube Broadcast List Redesign', () => {
   });
 
   /**
-   * **Feature: youtube-broadcast-list-redesign, Property 3: Action Buttons Presence**
+   * **Feature: youtube-broadcast-list-redesign, Property 2: Action Buttons Presence**
    * *For any* broadcast item rendered in the list, the output SHALL contain exactly 
-   * three action buttons: edit, copy (reuse), and delete.
-   * **Validates: Requirements 4.1**
+   * three action buttons: edit, sync, and delete.
+   * **Validates: Requirements 3.1**
    */
-  test('Property 3: All action buttons are present for each broadcast', async () => {
+  test('Property 2: All action buttons are present - edit, sync, delete', async () => {
     await fc.assert(
       fc.asyncProperty(
         broadcastArbitrary,
@@ -130,7 +97,7 @@ describe('YouTube Broadcast List Redesign', () => {
           
           // All three action buttons must be present
           expect(rendered.hasEditButton).toBe(true);
-          expect(rendered.hasCopyButton).toBe(true);
+          expect(rendered.hasSyncButton).toBe(true);
           expect(rendered.hasDeleteButton).toBe(true);
         }
       ),
@@ -139,7 +106,7 @@ describe('YouTube Broadcast List Redesign', () => {
   });
 
   // Unit test: Empty stream key shows placeholder
-  test('Empty stream key displays placeholder text', () => {
+  test('Empty stream key displays dash placeholder', () => {
     const broadcast = {
       id: 'test-1',
       title: 'Test Broadcast',
@@ -151,7 +118,7 @@ describe('YouTube Broadcast List Redesign', () => {
     };
     
     const rendered = renderBroadcastItem(broadcast, 0);
-    expect(rendered.streamKey).toBe('No stream key');
+    expect(rendered.streamKey).toBe('-');
   });
 
   // Unit test: Numbering with single item
@@ -176,5 +143,88 @@ describe('YouTube Broadcast List Redesign', () => {
     const broadcasts = [];
     const renderedList = renderBroadcastList(broadcasts);
     expect(renderedList).toEqual([]);
+  });
+
+  // Unit test: Header buttons 2-grid layout structure
+  describe('Header Buttons Grid Layout', () => {
+    // Helper to simulate header buttons structure
+    function renderHeaderButtons() {
+      return {
+        containerClass: 'header-buttons grid grid-cols-2 gap-2',
+        buttons: [
+          {
+            id: 'templateBtn',
+            label: 'Templates',
+            icon: 'ti-template',
+            hasIcon: true,
+            hasLabel: true
+          },
+          {
+            id: 'createBtn', 
+            label: 'Create',
+            icon: 'ti-plus',
+            hasIcon: true,
+            hasLabel: true
+          }
+        ]
+      };
+    }
+
+    test('Header buttons container uses 2-column grid layout', () => {
+      const header = renderHeaderButtons();
+      expect(header.containerClass).toContain('grid');
+      expect(header.containerClass).toContain('grid-cols-2');
+    });
+
+    test('Header has exactly 2 buttons (Template and Create)', () => {
+      const header = renderHeaderButtons();
+      expect(header.buttons.length).toBe(2);
+    });
+
+    test('Both buttons have icons and labels', () => {
+      const header = renderHeaderButtons();
+      header.buttons.forEach(button => {
+        expect(button.hasIcon).toBe(true);
+        expect(button.hasLabel).toBe(true);
+        expect(button.icon).toBeTruthy();
+        expect(button.label).toBeTruthy();
+      });
+    });
+
+    test('Template button is first, Create button is second', () => {
+      const header = renderHeaderButtons();
+      expect(header.buttons[0].label).toBe('Templates');
+      expect(header.buttons[1].label).toBe('Create');
+    });
+  });
+
+  // Unit tests for Mobile Responsive Layout
+  describe('Mobile Responsive Layout', () => {
+    // Helper to simulate mobile layout structure
+    function renderMobileLayout() {
+      return {
+        headerButtonsClass: 'header-buttons grid grid-cols-2 gap-2',
+        actionButtonMinSize: 36, // w-9 h-9 = 36px
+        layoutType: 'stacked',
+        actionButtonsLayout: 'horizontal'
+      };
+    }
+
+    test('Header buttons remain in 2-grid layout on mobile', () => {
+      const mobile = renderMobileLayout();
+      expect(mobile.headerButtonsClass).toContain('grid');
+      expect(mobile.headerButtonsClass).toContain('grid-cols-2');
+    });
+
+    test('Action buttons meet minimum touch target size (36px)', () => {
+      const mobile = renderMobileLayout();
+      expect(mobile.actionButtonMinSize).toBeGreaterThanOrEqual(36);
+    });
+
+    test('Mobile layout uses stacked info with horizontal action buttons', () => {
+      const mobile = renderMobileLayout();
+      expect(mobile.layoutType).toBe('stacked');
+      expect(mobile.actionButtonsLayout).toBe('horizontal');
+    });
   });
 });

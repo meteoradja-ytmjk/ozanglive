@@ -1,12 +1,12 @@
 #!/bin/bash
 
-# StreamFlow Health Monitor Script
+# OzangLive Health Monitor Script
 # Run this as a cron job every 5 minutes:
 # */5 * * * * /path/to/ozanglive/scripts/health-monitor.sh >> /path/to/ozanglive/logs/health-monitor.log 2>&1
 
 # Configuration
 APP_URL="http://localhost:7575/health"
-APP_NAME="streamflow"
+APP_NAME="ozanglive"
 MAX_RETRIES=3
 RETRY_DELAY=10
 LOG_FILE="./logs/health-monitor.log"

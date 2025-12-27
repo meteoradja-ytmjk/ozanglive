@@ -1,4 +1,4 @@
-# PM2 Process Manager Guide for StreamFlow
+# PM2 Process Manager Guide for OzangLive
 
 PM2 adalah process manager untuk Node.js yang menyediakan fitur auto-restart, monitoring, dan log management.
 
@@ -59,7 +59,7 @@ pm2-start.bat start     # Windows
 
 ### Auto-Start saat Boot
 
-Untuk menjalankan StreamFlow otomatis saat server/komputer dinyalakan:
+Untuk menjalankan OzangLive otomatis saat server/komputer dinyalakan:
 
 ```bash
 # Generate startup script
@@ -104,7 +104,7 @@ pm2 status
 
 ### Log Real-time
 ```bash
-pm2 logs streamflow --lines 100
+pm2 logs ozanglive --lines 100
 ```
 
 ## Troubleshooting
@@ -112,18 +112,18 @@ pm2 logs streamflow --lines 100
 ### Aplikasi Terus Restart
 Cek log untuk melihat penyebab crash:
 ```bash
-pm2 logs streamflow --err --lines 200
+pm2 logs ozanglive --err --lines 200
 ```
 
 ### Memory Tinggi
 Restart manual untuk membersihkan memory:
 ```bash
-pm2 restart streamflow
+pm2 restart ozanglive
 ```
 
 ### Menghapus dari PM2
 ```bash
-pm2 delete streamflow
+pm2 delete ozanglive
 ```
 
 ## Konfigurasi Lanjutan
@@ -165,7 +165,7 @@ Konfigurasi sudah dioptimasi untuk VPS dengan RAM terbatas:
 Untuk update dari git dan restart:
 
 ```bash
-cd ~/ozanglive && git fetch origin && git reset --hard origin/main && npm install && pm2 restart streamflow
+cd ~/ozanglive && git fetch origin && git reset --hard origin/main && npm install && pm2 restart ozanglive
 ```
 
 ## Troubleshooting VPS
@@ -176,10 +176,10 @@ Ini biasanya karena Node.js crash tapi FFmpeg tetap jalan. Solusi:
 
 ```bash
 # Restart aplikasi
-pm2 restart streamflow
+pm2 restart ozanglive
 
 # Cek log untuk penyebab crash
-pm2 logs streamflow --err --lines 100
+pm2 logs ozanglive --err --lines 100
 ```
 
 ### Memory Tinggi
@@ -189,7 +189,7 @@ pm2 logs streamflow --err --lines 100
 pm2 monit
 
 # Force restart untuk clear memory
-pm2 restart streamflow
+pm2 restart ozanglive
 ```
 
 ### Cek Status Kesehatan
