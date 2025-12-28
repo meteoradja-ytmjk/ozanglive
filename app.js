@@ -679,11 +679,32 @@ app.get('/signup', async (req, res) => {
 app.post('/signup', upload.single('avatar'), async (req, res) => {
   const { username, password, user_role, status } = req.body;
   
+  // Username validation regex - only allow letters, numbers, and underscores
+  const VALID_USERNAME_REGEX = /^[a-zA-Z0-9_]+$/;
+  
   try {
     if (!username || !password) {
       return res.render('signup', {
         title: 'Sign Up',
         error: 'Username and password are required',
+        success: null
+      });
+    }
+
+    // Validate username format to prevent SQL injection and XSS
+    if (!VALID_USERNAME_REGEX.test(username)) {
+      return res.render('signup', {
+        title: 'Sign Up',
+        error: 'Username can only contain letters, numbers, and underscores',
+        success: null
+      });
+    }
+
+    // Validate username length
+    if (username.length < 3 || username.length > 20) {
+      return res.render('signup', {
+        title: 'Sign Up',
+        error: 'Username must be between 3 and 20 characters',
         success: null
       });
     }
@@ -1338,10 +1359,29 @@ app.post('/api/users/create', isAdmin, upload.single('avatar'), async (req, res)
   try {
     const { username, role, status, password } = req.body;
     
+    // Username validation regex - only allow letters, numbers, and underscores
+    const VALID_USERNAME_REGEX = /^[a-zA-Z0-9_]+$/;
+    
     if (!username || !password) {
       return res.status(400).json({
         success: false,
         message: 'Username and password are required'
+      });
+    }
+
+    // Validate username format to prevent SQL injection and XSS
+    if (!VALID_USERNAME_REGEX.test(username)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Username can only contain letters, numbers, and underscores'
+      });
+    }
+
+    // Validate username length
+    if (username.length < 3 || username.length > 20) {
+      return res.status(400).json({
+        success: false,
+        message: 'Username must be between 3 and 20 characters'
       });
     }
 
