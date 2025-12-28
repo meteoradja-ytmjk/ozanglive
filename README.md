@@ -312,6 +312,16 @@ sqlite3 db/streamflow.db "DELETE FROM users WHERE id = 'f53ed9e0-ba33-4fd1-8626-
 # Verifikasi
 sqlite3 db/streamflow.db "SELECT id, username FROM users;"
 ```
+```bash
+cd ~/ozanglive
+npm start
+```
+
+## 📊 Bersihkan VPS
+```bash
+chmod +x scripts/cleanup-vps.sh
+sudo ./scripts/cleanup-vps.sh
+```
 
 ## 📁 Struktur Project
 
