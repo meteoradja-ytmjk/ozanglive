@@ -112,7 +112,16 @@
 ```bash
 curl -fsSL https://raw.githubusercontent.com/meteoradja-ytmjk/ozanglive/main/install.sh | bash
 ```
+### Untuk reset VPS jika Sebelumnya sudah ada / Terinstal 
 
+```bash
+curl -fsSL https://raw.githubusercontent.com/meteoradja-ytmjk/ozanglive/main/uninstall.sh | bash
+```
+
+> 💡 **Installer otomatis mendeteksi** jika sudah ada instalasi sebelumnya dan memberikan pilihan:
+> - **Install ulang** - Hapus instalasi lama dan install fresh
+> - **Update saja** - Pertahankan data, update kode terbaru
+> - **Batalkan** - Tidak melakukan apa-apa
 > 💡 Installer otomatis mendeteksi instalasi sebelumnya dan memberikan pilihan: **Install ulang**, **Update saja**, atau **Batalkan**
 
 ### Manual Installation

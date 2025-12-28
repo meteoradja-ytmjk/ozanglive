@@ -9,8 +9,8 @@ const StorageService = require('../services/storageService');
  */
 const checkStorageLimit = async (req, res, next) => {
   try {
-    // Get user from session
-    const userId = req.session?.user?.id;
+    // Get user from session - userId is stored directly in session, not in session.user.id
+    const userId = req.session?.userId;
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
