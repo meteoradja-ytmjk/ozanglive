@@ -11,16 +11,26 @@ const checkStorageLimit = async (req, res, next) => {
   try {
     // Get user from session - userId is stored directly in session, not in session.user.id
     const userId = req.session?.userId;
+    
+    // Debug logging
+    console.log('[StorageLimit] Checking storage limit for userId:', userId);
+    console.log('[StorageLimit] Session exists:', !!req.session);
+    
     if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      console.log('[StorageLimit] No userId found in session, skipping storage check');
+      // Instead of returning 401, just skip the storage check and let isAuthenticated handle auth
+      return next();
     }
 
     // Get content-length header for file size estimation
     const contentLength = parseInt(req.headers['content-length'], 10);
     if (!contentLength || isNaN(contentLength)) {
       // If no content-length, allow the upload and check after
+      console.log('[StorageLimit] No content-length header, allowing upload');
       return next();
     }
+
+    console.log('[StorageLimit] Content-Length:', contentLength);
 
     // Check if user can upload
     const result = await StorageService.canUpload(userId, contentLength);
