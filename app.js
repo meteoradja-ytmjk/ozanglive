@@ -423,7 +423,19 @@ app.use(express.json({ limit: '10gb' }));
 
 // Request timeout middleware - prevent hanging requests
 app.use((req, res, next) => {
-  // Set timeout for all requests (60 seconds)
+  // Skip timeout for upload endpoints - they need more time for large files
+  const isUploadEndpoint = req.path.includes('/api/videos/upload') || 
+                           req.path.includes('/api/audios/upload') ||
+                           req.path.includes('/api/drive/import');
+  
+  if (isUploadEndpoint) {
+    // No timeout for upload endpoints
+    req.setTimeout(0);
+    res.setTimeout(0);
+    return next();
+  }
+  
+  // Set timeout for all other requests (60 seconds)
   req.setTimeout(60000, () => {
     console.error(`[Timeout] Request timeout: ${req.method} ${req.url}`);
     if (!res.headersSent) {

@@ -364,6 +364,9 @@ class FileQueueManager {
           } catch (e) {
             reject(new Error('Invalid server response'));
           }
+        } else if (xhr.status === 401) {
+          // Unauthorized - session expired or not logged in
+          reject(new Error('Unauthorized - please login again'));
         } else if (xhr.status === 413) {
           // Storage limit exceeded
           try {
@@ -375,6 +378,9 @@ class FileQueueManager {
           } catch (e) {
             reject(new Error('Storage limit exceeded'));
           }
+        } else if (xhr.status === 408) {
+          // Request timeout
+          reject(new Error('Upload timeout - file may be too large'));
         } else {
           try {
             const response = JSON.parse(xhr.responseText);
