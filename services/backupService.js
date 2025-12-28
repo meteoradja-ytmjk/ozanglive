@@ -926,6 +926,194 @@ async function comprehensiveImport(backupData, userId, options = {}) {
   return results;
 }
 
+// Template-only export fields (excludes account-specific and system fields)
+const TEMPLATE_EXPORT_FIELDS = [
+  'name',
+  'title',
+  'description',
+  'privacy_status',
+  'tags',
+  'category_id',
+  'recurring_enabled',
+  'recurring_pattern',
+  'recurring_time',
+  'recurring_days'
+];
+
+/**
+ * Export templates only (standalone template backup)
+ * @param {string} userId - User ID
+ * @returns {Promise<Object>} Template backup object with metadata
+ */
+async function exportTemplatesOnly(userId) {
+  const templates = await BroadcastTemplate.findByUserId(userId);
+  
+  const exportedTemplates = templates.map(template => {
+    const exported = {};
+    TEMPLATE_EXPORT_FIELDS.forEach(field => {
+      if (template[field] !== undefined) {
+        exported[field] = template[field];
+      }
+    });
+    return exported;
+  });
+
+  return {
+    metadata: {
+      exportDate: new Date().toISOString(),
+      appVersion: '1.0.0',
+      exportType: 'templates',
+      totalTemplates: exportedTemplates.length
+    },
+    templates: exportedTemplates
+  };
+}
+
+/**
+ * Validate template backup file format
+ * @param {Object} data - Parsed JSON data
+ * @returns {{valid: boolean, errors: string[], templateCount: number}}
+ */
+function validateTemplateBackup(data) {
+  const errors = [];
+  let templateCount = 0;
+
+  if (!data || typeof data !== 'object') {
+    errors.push('Invalid backup format: data must be an object');
+    return { valid: false, errors, templateCount: 0 };
+  }
+
+  // Check for metadata
+  if (!data.metadata) {
+    errors.push('Invalid backup format: missing metadata');
+    return { valid: false, errors, templateCount: 0 };
+  }
+
+  // Check for templates array
+  if (!Array.isArray(data.templates)) {
+    errors.push('Invalid backup format: missing templates array');
+    return { valid: false, errors, templateCount: 0 };
+  }
+
+  templateCount = data.templates.length;
+
+  return { valid: true, errors, templateCount };
+}
+
+/**
+ * Validate single template for import
+ * @param {Object} template - Template object
+ * @returns {{valid: boolean, errors: string[]}}
+ */
+function validateTemplateForImport(template) {
+  const errors = [];
+  
+  // Check required fields
+  if (!template.name || (typeof template.name === 'string' && template.name.trim() === '')) {
+    errors.push('Missing required field: name');
+  }
+  if (!template.title || (typeof template.title === 'string' && template.title.trim() === '')) {
+    errors.push('Missing required field: title');
+  }
+  
+  // Validate recurring config if enabled
+  if (template.recurring_enabled) {
+    if (!template.recurring_pattern || !['daily', 'weekly'].includes(template.recurring_pattern)) {
+      errors.push('Invalid recurring_pattern: must be daily or weekly');
+    }
+    if (!template.recurring_time) {
+      errors.push('Missing recurring_time when recurring is enabled');
+    }
+    if (template.recurring_pattern === 'weekly') {
+      if (!template.recurring_days || !Array.isArray(template.recurring_days) || template.recurring_days.length === 0) {
+        errors.push('Weekly schedule requires at least one day selected');
+      }
+    }
+  }
+
+  return { valid: errors.length === 0, errors };
+}
+
+/**
+ * Import templates only (standalone template import)
+ * @param {Object} backupData - Parsed backup JSON
+ * @param {string} userId - User ID
+ * @param {string} accountId - Default account ID for imported templates
+ * @param {Object} options - Import options (skipDuplicates)
+ * @returns {Promise<{imported: number, skipped: number, errors: string[]}>}
+ */
+async function importTemplatesOnly(backupData, userId, accountId, options = {}) {
+  const result = { imported: 0, skipped: 0, errors: [] };
+  
+  // Validate backup format first
+  const formatValidation = validateTemplateBackup(backupData);
+  if (!formatValidation.valid) {
+    result.errors = formatValidation.errors;
+    return result;
+  }
+
+  if (!Array.isArray(backupData.templates)) {
+    return result;
+  }
+
+  for (let i = 0; i < backupData.templates.length; i++) {
+    const template = backupData.templates[i];
+    const validation = validateTemplateForImport(template);
+
+    if (!validation.valid) {
+      result.skipped++;
+      result.errors.push(`templates[${i}]: ${validation.errors.join(', ')}`);
+      continue;
+    }
+
+    try {
+      // Check for duplicate by name
+      const exists = await BroadcastTemplate.findByName(userId, template.name);
+      if (exists) {
+        if (options.skipDuplicates) {
+          result.skipped++;
+          result.errors.push(`templates[${i}]: Template "${template.name}" already exists (skipped)`);
+          continue;
+        }
+        // If not skipping, still skip but with different message
+        result.skipped++;
+        result.errors.push(`templates[${i}]: Template "${template.name}" already exists`);
+        continue;
+      }
+
+      await BroadcastTemplate.create({
+        user_id: userId,
+        account_id: accountId,
+        name: template.name,
+        title: template.title,
+        description: template.description || null,
+        privacy_status: template.privacy_status || 'unlisted',
+        tags: template.tags || null,
+        category_id: template.category_id || '20',
+        recurring_enabled: template.recurring_enabled || false,
+        recurring_pattern: template.recurring_pattern || null,
+        recurring_time: template.recurring_time || null,
+        recurring_days: template.recurring_days || null
+      });
+      result.imported++;
+    } catch (error) {
+      result.skipped++;
+      result.errors.push(`templates[${i}]: ${error.message}`);
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Format template backup as pretty-printed JSON string
+ * @param {Object} backup - Backup object
+ * @returns {string} Pretty-printed JSON
+ */
+function formatTemplateBackupJson(backup) {
+  return JSON.stringify(backup, null, 2);
+}
+
 module.exports = {
   exportStreams,
   importStreams,
@@ -941,6 +1129,14 @@ module.exports = {
   comprehensiveImport,
   validateComprehensiveBackup,
   formatBackupJson,
+  // Template-specific functions
+  exportTemplatesOnly,
+  validateTemplateBackup,
+  validateTemplateForImport,
+  importTemplatesOnly,
+  formatTemplateBackupJson,
+  TEMPLATE_EXPORT_FIELDS,
+  // Constants
   EXPORT_FIELDS,
   REQUIRED_FIELDS,
   EXCLUDED_FIELDS,

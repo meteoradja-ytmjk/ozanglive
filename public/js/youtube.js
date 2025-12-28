@@ -2440,3 +2440,242 @@ function formatRecurringPattern(pattern, days, time) {
   }
   return 'Unknown pattern';
 }
+
+// ============================================
+// Template Export/Import Functions
+// ============================================
+
+// Store parsed import data
+let importBackupData = null;
+
+/**
+ * Export templates to JSON file
+ */
+async function exportTemplates() {
+  try {
+    showToast('Exporting templates...', 'info');
+    
+    // Trigger download via API
+    const response = await fetch('/api/youtube/templates/export', {
+      method: 'GET',
+      credentials: 'same-origin'
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Export failed');
+    }
+    
+    // Get filename from Content-Disposition header or generate one
+    const contentDisposition = response.headers.get('Content-Disposition');
+    let filename = 'templates-backup.json';
+    if (contentDisposition) {
+      const match = contentDisposition.match(/filename="(.+)"/);
+      if (match) filename = match[1];
+    }
+    
+    // Create blob and download
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    
+    showToast('Templates exported successfully', 'success');
+  } catch (error) {
+    console.error('Error exporting templates:', error);
+    showToast(error.message || 'Failed to export templates', 'error');
+  }
+}
+
+/**
+ * Open import template modal
+ */
+function openImportTemplateModal() {
+  // Reset state
+  importBackupData = null;
+  document.getElementById('importTemplateFile').value = '';
+  document.getElementById('importFileName').classList.add('hidden');
+  document.getElementById('importPreview').classList.add('hidden');
+  document.getElementById('importError').classList.add('hidden');
+  document.getElementById('importOptions').classList.add('hidden');
+  document.getElementById('confirmImportBtn').disabled = true;
+  document.getElementById('skipDuplicates').checked = true;
+  
+  document.getElementById('importTemplateModal').classList.remove('hidden');
+}
+
+/**
+ * Close import template modal
+ */
+function closeImportTemplateModal() {
+  document.getElementById('importTemplateModal').classList.add('hidden');
+  importBackupData = null;
+}
+
+/**
+ * Preview import file and validate
+ */
+function previewImportFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  
+  // Show filename
+  document.getElementById('importFileName').textContent = file.name;
+  document.getElementById('importFileName').classList.remove('hidden');
+  
+  // Hide previous states
+  document.getElementById('importPreview').classList.add('hidden');
+  document.getElementById('importError').classList.add('hidden');
+  document.getElementById('importOptions').classList.add('hidden');
+  document.getElementById('confirmImportBtn').disabled = true;
+  
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      
+      // Validate format
+      if (!data.metadata || !Array.isArray(data.templates)) {
+        showImportError('Invalid backup format: missing metadata or templates array');
+        return;
+      }
+      
+      // Store data for import
+      importBackupData = data;
+      
+      // Show preview
+      document.getElementById('importTemplateCount').textContent = data.templates.length;
+      document.getElementById('importExportDate').textContent = data.metadata.exportDate 
+        ? new Date(data.metadata.exportDate).toLocaleString() 
+        : 'Unknown';
+      
+      document.getElementById('importPreview').classList.remove('hidden');
+      document.getElementById('importOptions').classList.remove('hidden');
+      document.getElementById('confirmImportBtn').disabled = false;
+      
+    } catch (parseError) {
+      showImportError('Invalid JSON file: ' + parseError.message);
+    }
+  };
+  
+  reader.onerror = function() {
+    showImportError('Failed to read file');
+  };
+  
+  reader.readAsText(file);
+}
+
+/**
+ * Show import error message
+ */
+function showImportError(message) {
+  document.getElementById('importErrorMessage').textContent = message;
+  document.getElementById('importError').classList.remove('hidden');
+  document.getElementById('confirmImportBtn').disabled = true;
+  importBackupData = null;
+}
+
+/**
+ * Confirm and execute import
+ */
+async function confirmImportTemplates() {
+  if (!importBackupData) {
+    showToast('No valid file selected', 'error');
+    return;
+  }
+  
+  const confirmBtn = document.getElementById('confirmImportBtn');
+  const originalText = confirmBtn.innerHTML;
+  
+  try {
+    // Show loading state
+    confirmBtn.disabled = true;
+    confirmBtn.innerHTML = '<i class="ti ti-loader animate-spin"></i> Importing...';
+    
+    const skipDuplicates = document.getElementById('skipDuplicates').checked;
+    
+    // Create form data
+    const formData = new FormData();
+    const blob = new Blob([JSON.stringify(importBackupData)], { type: 'application/json' });
+    formData.append('file', blob, 'import.json');
+    formData.append('skipDuplicates', skipDuplicates);
+    
+    const response = await fetch('/api/youtube/templates/import', {
+      method: 'POST',
+      credentials: 'same-origin',
+      body: formData
+    });
+    
+    const result = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(result.error || 'Import failed');
+    }
+    
+    // Close import modal
+    closeImportTemplateModal();
+    
+    // Show results
+    showImportResults(result.results);
+    
+    // Refresh template list
+    loadTemplates();
+    
+  } catch (error) {
+    console.error('Error importing templates:', error);
+    showToast(error.message || 'Failed to import templates', 'error');
+  } finally {
+    confirmBtn.disabled = false;
+    confirmBtn.innerHTML = originalText;
+  }
+}
+
+/**
+ * Show import results modal
+ */
+function showImportResults(results) {
+  document.getElementById('importedCount').textContent = results.imported || 0;
+  document.getElementById('skippedCount').textContent = results.skipped || 0;
+  
+  const errorsList = document.getElementById('importErrorsList');
+  const errorsContent = document.getElementById('importErrorsContent');
+  
+  if (results.errors && results.errors.length > 0) {
+    errorsContent.innerHTML = results.errors.map(err => 
+      `<p class="text-yellow-400">${escapeHtml(err)}</p>`
+    ).join('');
+    errorsList.classList.remove('hidden');
+  } else {
+    errorsList.classList.add('hidden');
+  }
+  
+  document.getElementById('importResultModal').classList.remove('hidden');
+  
+  // Show toast based on results
+  if (results.imported > 0) {
+    showToast(`Successfully imported ${results.imported} template(s)`, 'success');
+  } else if (results.skipped > 0) {
+    showToast('No templates imported (all skipped)', 'warning');
+  }
+}
+
+/**
+ * Close import result modal
+ */
+function closeImportResultModal() {
+  document.getElementById('importResultModal').classList.add('hidden');
+}
+
+/**
+ * Escape HTML to prevent XSS
+ */
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}

@@ -4999,6 +4999,95 @@ app.post('/api/youtube/templates/multi', isAuthenticated, async (req, res) => {
   }
 });
 
+// Export templates to JSON file
+app.get('/api/youtube/templates/export', isAuthenticated, async (req, res) => {
+  try {
+    const backup = await backupService.exportTemplatesOnly(req.session.userId);
+    const jsonString = backupService.formatTemplateBackupJson(backup);
+    
+    // Generate filename with timestamp
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const filename = `templates-backup-${timestamp}.json`;
+    
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(jsonString);
+  } catch (error) {
+    console.error('Error exporting templates:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to export templates'
+    });
+  }
+});
+
+// Import templates from JSON file
+app.post('/api/youtube/templates/import', isAuthenticated, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: 'No file uploaded'
+      });
+    }
+    
+    // Parse JSON file
+    let backupData;
+    try {
+      backupData = JSON.parse(req.file.buffer.toString('utf8'));
+    } catch (parseError) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid JSON file'
+      });
+    }
+    
+    // Validate backup format
+    const validation = backupService.validateTemplateBackup(backupData);
+    if (!validation.valid) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid backup format',
+        details: validation.errors
+      });
+    }
+    
+    // Get account ID from request or use primary account
+    let accountId = req.body.accountId;
+    if (!accountId) {
+      const accounts = await YouTubeCredentials.findAllByUserId(req.session.userId);
+      const primaryAccount = accounts.find(a => a.isPrimary) || accounts[0];
+      if (!primaryAccount) {
+        return res.status(400).json({
+          success: false,
+          error: 'No YouTube account connected. Please connect an account first.'
+        });
+      }
+      accountId = primaryAccount.id;
+    }
+    
+    // Import templates
+    const skipDuplicates = req.body.skipDuplicates === 'true' || req.body.skipDuplicates === true;
+    const result = await backupService.importTemplatesOnly(
+      backupData,
+      req.session.userId,
+      accountId,
+      { skipDuplicates }
+    );
+    
+    res.json({
+      success: true,
+      results: result
+    });
+  } catch (error) {
+    console.error('Error importing templates:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to import templates'
+    });
+  }
+});
+
 // Get all templates for user
 app.get('/api/youtube/templates', isAuthenticated, async (req, res) => {
   try {

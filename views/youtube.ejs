@@ -613,12 +613,20 @@
 <div id="templateLibraryModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto">
   <div class="flex min-h-screen items-center justify-center p-2 sm:p-4">
     <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
-      <!-- Compact Header -->
+      <!-- Compact Header with Export/Import buttons -->
       <div class="flex items-center justify-between p-3 sm:p-4 border-b border-gray-700 flex-shrink-0">
         <h3 class="text-base sm:text-lg font-semibold">Templates</h3>
-        <button onclick="closeTemplateLibraryModal()" class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors">
-          <i class="ti ti-x text-lg"></i>
-        </button>
+        <div class="flex items-center gap-2">
+          <button onclick="exportTemplates()" class="w-8 h-8 flex items-center justify-center text-green-400 hover:text-green-300 hover:bg-green-500/20 rounded-lg transition-colors" title="Export Templates">
+            <i class="ti ti-download text-lg"></i>
+          </button>
+          <button onclick="openImportTemplateModal()" class="w-8 h-8 flex items-center justify-center text-blue-400 hover:text-blue-300 hover:bg-blue-500/20 rounded-lg transition-colors" title="Import Templates">
+            <i class="ti ti-upload text-lg"></i>
+          </button>
+          <button onclick="closeTemplateLibraryModal()" class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors">
+            <i class="ti ti-x text-lg"></i>
+          </button>
+        </div>
       </div>
       
       <div class="p-2 sm:p-4 overflow-y-auto flex-1">
@@ -1142,6 +1150,125 @@
           </button>
         </div>
       </form>
+    </div>
+  </div>
+</div>
+
+<!-- Import Template Modal -->
+<div id="importTemplateModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto">
+  <div class="flex min-h-screen items-center justify-center p-4">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-md">
+      <div class="flex items-center justify-between p-6 border-b border-gray-700">
+        <h3 class="text-lg font-semibold">Import Templates</h3>
+        <button onclick="closeImportTemplateModal()" class="text-gray-400 hover:text-white">
+          <i class="ti ti-x text-xl"></i>
+        </button>
+      </div>
+      
+      <div class="p-6 space-y-4">
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Select JSON File</label>
+          <div class="relative">
+            <input type="file" id="importTemplateFile" accept=".json,application/json"
+              class="hidden" onchange="previewImportFile(this)">
+            <button type="button" onclick="document.getElementById('importTemplateFile').click()"
+              class="w-full bg-dark-700 hover:bg-dark-600 text-white px-4 py-3 rounded-lg transition-colors flex items-center justify-center gap-2 border border-gray-600 border-dashed">
+              <i class="ti ti-file-upload text-xl"></i>
+              <span>Choose File</span>
+            </button>
+          </div>
+          <p id="importFileName" class="text-xs text-gray-500 mt-2 hidden"></p>
+        </div>
+        
+        <!-- Preview Area -->
+        <div id="importPreview" class="hidden bg-dark-700 rounded-lg p-4 border border-gray-600">
+          <div class="flex items-center gap-3 mb-3">
+            <div class="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
+              <i class="ti ti-file-check text-blue-400 text-xl"></i>
+            </div>
+            <div>
+              <p class="text-sm text-white font-medium">File Valid</p>
+              <p class="text-xs text-gray-400">Ready to import</p>
+            </div>
+          </div>
+          <div class="space-y-1 text-sm">
+            <p class="text-gray-400">Templates: <span id="importTemplateCount" class="text-white font-medium">0</span></p>
+            <p class="text-gray-400">Export Date: <span id="importExportDate" class="text-white">-</span></p>
+          </div>
+        </div>
+        
+        <!-- Error Area -->
+        <div id="importError" class="hidden bg-red-500/10 rounded-lg p-4 border border-red-500/30">
+          <div class="flex items-center gap-2 text-red-400">
+            <i class="ti ti-alert-circle"></i>
+            <span id="importErrorMessage" class="text-sm">Invalid file format</span>
+          </div>
+        </div>
+        
+        <!-- Options -->
+        <div id="importOptions" class="hidden">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" id="skipDuplicates" checked
+              class="w-4 h-4 rounded border-gray-600 bg-dark-700 text-primary focus:ring-primary">
+            <span class="text-sm text-gray-300">Skip templates with duplicate names</span>
+          </label>
+        </div>
+        
+        <div class="pt-2 flex gap-3">
+          <button type="button" onclick="closeImportTemplateModal()"
+            class="flex-1 bg-dark-700 hover:bg-dark-600 text-white px-4 py-2.5 rounded-lg transition-colors">
+            Cancel
+          </button>
+          <button type="button" id="confirmImportBtn" onclick="confirmImportTemplates()" disabled
+            class="flex-1 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
+            <i class="ti ti-upload"></i>
+            <span>Import</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Import Result Modal -->
+<div id="importResultModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto">
+  <div class="flex min-h-screen items-center justify-center p-4">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-md">
+      <div class="flex items-center justify-between p-6 border-b border-gray-700">
+        <h3 class="text-lg font-semibold">Import Results</h3>
+        <button onclick="closeImportResultModal()" class="text-gray-400 hover:text-white">
+          <i class="ti ti-x text-xl"></i>
+        </button>
+      </div>
+      
+      <div class="p-6 space-y-4">
+        <!-- Success Summary -->
+        <div class="grid grid-cols-2 gap-3">
+          <div class="bg-green-500/10 rounded-lg p-4 border border-green-500/30 text-center">
+            <p id="importedCount" class="text-2xl font-bold text-green-400">0</p>
+            <p class="text-xs text-gray-400">Imported</p>
+          </div>
+          <div class="bg-yellow-500/10 rounded-lg p-4 border border-yellow-500/30 text-center">
+            <p id="skippedCount" class="text-2xl font-bold text-yellow-400">0</p>
+            <p class="text-xs text-gray-400">Skipped</p>
+          </div>
+        </div>
+        
+        <!-- Errors List -->
+        <div id="importErrorsList" class="hidden">
+          <p class="text-sm font-medium text-gray-300 mb-2">Details:</p>
+          <div id="importErrorsContent" class="bg-dark-700 rounded-lg p-3 max-h-40 overflow-y-auto text-xs text-gray-400 space-y-1">
+            <!-- Error messages will be rendered here -->
+          </div>
+        </div>
+        
+        <div class="pt-2">
+          <button type="button" onclick="closeImportResultModal()"
+            class="w-full bg-primary hover:bg-primary/80 text-white px-4 py-2.5 rounded-lg transition-colors">
+            Done
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </div>
