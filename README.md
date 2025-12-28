@@ -278,6 +278,31 @@ tail -f logs/app.log
 | **Network** | 10 Mbps upload | 50 Mbps upload |
 
 ---
+## 📊 Delet User
+```bash
+# Install sqlite3 dulu
+sudo apt install sqlite3 -y
+```bash
+
+```bash
+# Masuk ke folder aplikasi
+cd /home/Ozang88/ozanglive
+
+# Hapus user
+sqlite3 db/streamflow.db "DELETE FROM users WHERE id = 'f53ed9e0-ba33-4fd1-8626-b4b51a4bc8da';"
+
+# Verifikasi sudah terhapus
+sqlite3 db/streamflow.db "SELECT id, username FROM users;"
+```
+lalu
+```bash
+cd /home/Ozang88/ozanglive
+
+sqlite3 db/streamflow.db "DELETE FROM users WHERE id = 'f53ed9e0-ba33-4fd1-8626-b4b51a4bc8da';"
+
+# Verifikasi
+sqlite3 db/streamflow.db "SELECT id, username FROM users;"
+```
 
 ## 📁 Struktur Project
 
