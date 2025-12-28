@@ -1,6 +1,8 @@
 const { db, checkIfUsersExist } = require('../db/database');
 const bcrypt = require('bcrypt');
 const { v4: uuidv4 } = require('uuid');
+const { validateUsername } = require('../utils/usernameValidator');
+
 class User {
   static findByEmail(email) {
     return new Promise((resolve, reject) => {
@@ -35,6 +37,12 @@ class User {
   }
   static async create(userData) {
     try {
+      // Validate username before creating user
+      const usernameValidation = validateUsername(userData.username);
+      if (!usernameValidation.isValid) {
+        throw new Error(usernameValidation.error);
+      }
+
       const hashedPassword = await bcrypt.hash(userData.password, 10);
       const userId = uuidv4();
       return new Promise((resolve, reject) => {
@@ -173,6 +181,11 @@ class User {
       const values = [];
       
       if (updateData.username) {
+        // Validate username before updating
+        const usernameValidation = validateUsername(updateData.username);
+        if (!usernameValidation.isValid) {
+          return reject(new Error(usernameValidation.error));
+        }
         fields.push('username = ?');
         values.push(updateData.username);
       }
