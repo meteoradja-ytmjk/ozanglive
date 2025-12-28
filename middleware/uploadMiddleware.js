@@ -1,6 +1,49 @@
 const multer = require('multer');
 const path = require('path');
 const { getUniqueFilename, paths } = require('../utils/storage');
+const StorageService = require('../services/storageService');
+
+/**
+ * Middleware to check storage limit before upload
+ * Must be used BEFORE multer middleware
+ */
+const checkStorageLimit = async (req, res, next) => {
+  try {
+    // Get user from session
+    const userId = req.session?.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Get content-length header for file size estimation
+    const contentLength = parseInt(req.headers['content-length'], 10);
+    if (!contentLength || isNaN(contentLength)) {
+      // If no content-length, allow the upload and check after
+      return next();
+    }
+
+    // Check if user can upload
+    const result = await StorageService.canUpload(userId, contentLength);
+    
+    if (!result.allowed) {
+      const storageInfo = await StorageService.getStorageInfo(userId);
+      return res.status(413).json({
+        error: 'Storage limit exceeded',
+        message: `Storage limit exceeded. Current usage: ${storageInfo.formatted.usage}, Limit: ${storageInfo.formatted.limit}`,
+        currentUsage: result.currentUsage,
+        limit: result.limit,
+        remaining: result.remaining,
+        formatted: storageInfo.formatted
+      });
+    }
+
+    next();
+  } catch (error) {
+    console.error('Error checking storage limit:', error);
+    // On error, allow upload to proceed (fail open)
+    next();
+  }
+};
 
 const videoStorage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -105,5 +148,6 @@ module.exports = {
   uploadVideo,
   upload,
   uploadAudio,
-  uploadBackup
+  uploadBackup,
+  checkStorageLimit
 };

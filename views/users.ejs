@@ -130,7 +130,8 @@
                     data-role="<%= user.user_role %>"
                     data-status="<%= user.status %>"
                     data-avatar="<%= user.avatar_path || '' %>"
-                    data-live-limit="<%= user.live_limit || '' %>">
+                    data-live-limit="<%= user.live_limit || '' %>"
+                    data-storage-limit="<%= user.storage_limit || '' %>">
                     <i class="ti ti-edit"></i>
                   </button>
                   
@@ -230,6 +231,25 @@
             <input type="number" id="editLiveLimit" name="live_limit" min="0" max="100" placeholder="0"
               class="w-full bg-dark-700 border border-gray-600 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
             <p class="text-xs text-gray-500 mt-1">Maximum simultaneous live streams for this user</p>
+          </div>
+
+          <div class="mb-4">
+            <label for="editStorageLimit" class="block text-sm font-medium text-gray-300 mb-2">
+              Storage Limit
+              <span class="text-xs text-gray-500 ml-1">(0 = unlimited)</span>
+            </label>
+            <div class="flex gap-2">
+              <input type="number" id="editStorageLimitValue" min="0" placeholder="0"
+                class="flex-1 bg-dark-700 border border-gray-600 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
+              <select id="editStorageLimitUnit" class="w-24 bg-dark-700 border border-gray-600 text-white px-2 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
+                <option value="1073741824">GB</option>
+                <option value="1048576">MB</option>
+                <option value="1099511627776">TB</option>
+              </select>
+            </div>
+            <input type="hidden" id="editStorageLimit" name="storage_limit">
+            <p class="text-xs text-gray-500 mt-1">Maximum storage space for this user</p>
+            <p class="text-xs text-gray-400 mt-1" id="editStorageUsage"></p>
           </div>
 
           <div class="mb-6">
@@ -442,13 +462,48 @@ function showToast(message, type = 'success') {
   }, 3000);
 }
 
-function openEditModal(userId, username, role, status, avatar, liveLimit) {
+function openEditModal(userId, username, role, status, avatar, liveLimit, storageLimit) {
   document.getElementById('editUserId').value = userId;
   document.getElementById('editUsername').value = username;
   document.getElementById('editRole').value = role;
   document.getElementById('editStatus').value = status;
   document.getElementById('editPassword').value = '';
   document.getElementById('editLiveLimit').value = liveLimit || '';
+  
+  // Set storage limit
+  const storageLimitValue = document.getElementById('editStorageLimitValue');
+  const storageLimitUnit = document.getElementById('editStorageLimitUnit');
+  const storageLimitHidden = document.getElementById('editStorageLimit');
+  
+  if (storageLimit && storageLimit > 0) {
+    // Convert bytes to appropriate unit
+    if (storageLimit >= 1099511627776) { // TB
+      storageLimitValue.value = Math.round(storageLimit / 1099511627776);
+      storageLimitUnit.value = '1099511627776';
+    } else if (storageLimit >= 1073741824) { // GB
+      storageLimitValue.value = Math.round(storageLimit / 1073741824);
+      storageLimitUnit.value = '1073741824';
+    } else { // MB
+      storageLimitValue.value = Math.round(storageLimit / 1048576);
+      storageLimitUnit.value = '1048576';
+    }
+    storageLimitHidden.value = storageLimit;
+  } else {
+    storageLimitValue.value = '';
+    storageLimitUnit.value = '1073741824';
+    storageLimitHidden.value = '';
+  }
+  
+  // Fetch and display current storage usage
+  fetch(`/api/users/${userId}/storage`)
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        const usageEl = document.getElementById('editStorageUsage');
+        usageEl.textContent = `Current usage: ${data.storage.formatted.usage}`;
+      }
+    })
+    .catch(err => console.error('Error fetching storage:', err));
   
   const avatarImg = document.getElementById('editUserAvatar');
   if (avatar && avatar !== 'null' && avatar !== '') {
@@ -519,9 +574,24 @@ document.addEventListener('DOMContentLoaded', function() {
       const status = this.dataset.status;
       const avatar = this.dataset.avatar;
       const liveLimit = this.dataset.liveLimit;
-      openEditModal(userId, username, role, status, avatar, liveLimit);
+      const storageLimit = this.dataset.storageLimit;
+      openEditModal(userId, username, role, status, avatar, liveLimit, storageLimit);
     });
   });
+  
+  // Handle storage limit input changes
+  const storageLimitValue = document.getElementById('editStorageLimitValue');
+  const storageLimitUnit = document.getElementById('editStorageLimitUnit');
+  const storageLimitHidden = document.getElementById('editStorageLimit');
+  
+  function updateStorageLimitHidden() {
+    const value = parseInt(storageLimitValue.value) || 0;
+    const unit = parseInt(storageLimitUnit.value);
+    storageLimitHidden.value = value > 0 ? value * unit : '';
+  }
+  
+  if (storageLimitValue) storageLimitValue.addEventListener('input', updateStorageLimitHidden);
+  if (storageLimitUnit) storageLimitUnit.addEventListener('change', updateStorageLimitHidden);
   
   // Handle delete button clicks
   document.querySelectorAll('.delete-user-btn').forEach(btn => {

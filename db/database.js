@@ -276,6 +276,7 @@ async function createCoreTablesAsync() {
   await runTableQuery(`ALTER TABLE users ADD COLUMN can_view_videos INTEGER DEFAULT 1`, 'users.can_view_videos');
   await runTableQuery(`ALTER TABLE users ADD COLUMN can_download_videos INTEGER DEFAULT 1`, 'users.can_download_videos');
   await runTableQuery(`ALTER TABLE users ADD COLUMN can_delete_videos INTEGER DEFAULT 1`, 'users.can_delete_videos');
+  await runTableQuery(`ALTER TABLE users ADD COLUMN storage_limit INTEGER DEFAULT NULL`, 'users.storage_limit');
 
   // Add columns to streams table
   await runTableQuery(`ALTER TABLE streams ADD COLUMN audio_id TEXT`, 'streams.audio_id');
@@ -300,6 +301,9 @@ async function createCoreTablesAsync() {
     value TEXT NOT NULL,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   )`, 'system_settings');
+
+  // Insert default storage limit setting
+  await runTableQuery(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('default_storage_limit', 'null')`, 'system_settings.default_storage_limit');
 
   await runTableQuery(`CREATE TABLE IF NOT EXISTS stream_templates (
     id TEXT PRIMARY KEY,

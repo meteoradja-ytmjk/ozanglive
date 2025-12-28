@@ -310,6 +310,29 @@
                   Members without a custom limit will use this default value.
                 </p>
               </div>
+
+              <div class="space-y-2 mt-6 pt-6 border-t border-gray-700">
+                <label for="default-storage-limit" class="block text-sm font-medium text-gray-300">
+                  Default Storage Limit (per member)
+                </label>
+                <div class="flex items-center gap-3">
+                  <input type="number" id="default-storage-limit-value" min="0" placeholder="0"
+                    class="bg-dark-900 text-white px-4 py-2 rounded-lg w-24 focus:outline-none focus:ring-1 focus:ring-primary">
+                  <select id="default-storage-limit-unit" class="bg-dark-900 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
+                    <option value="1073741824">GB</option>
+                    <option value="1048576">MB</option>
+                    <option value="1099511627776">TB</option>
+                  </select>
+                  <button type="button" id="save-storage-limit"
+                    class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-lg transition-colors">
+                    Save
+                  </button>
+                </div>
+                <p class="text-xs text-gray-500">
+                  Set to 0 for unlimited storage. New members will use this default value.
+                </p>
+                <p class="text-xs text-gray-400" id="current-default-storage-limit"></p>
+              </div>
             </div>
           </div>
         </div>
@@ -484,6 +507,80 @@
           showToast('error', 'Failed to update live limit');
         }
       });
+
+      // Storage Limit Settings
+      const storageLimitValue = document.getElementById('default-storage-limit-value');
+      const storageLimitUnit = document.getElementById('default-storage-limit-unit');
+      const saveStorageLimitBtn = document.getElementById('save-storage-limit');
+      const currentStorageLimitText = document.getElementById('current-default-storage-limit');
+
+      // Load current storage limit
+      fetch('/api/settings/default-storage-limit')
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            if (data.defaultLimit && data.defaultLimit > 0) {
+              // Convert bytes to appropriate unit
+              if (data.defaultLimit >= 1099511627776) { // TB
+                storageLimitValue.value = Math.round(data.defaultLimit / 1099511627776);
+                storageLimitUnit.value = '1099511627776';
+              } else if (data.defaultLimit >= 1073741824) { // GB
+                storageLimitValue.value = Math.round(data.defaultLimit / 1073741824);
+                storageLimitUnit.value = '1073741824';
+              } else { // MB
+                storageLimitValue.value = Math.round(data.defaultLimit / 1048576);
+                storageLimitUnit.value = '1048576';
+              }
+              currentStorageLimitText.textContent = `Current: ${data.formatted}`;
+            } else {
+              storageLimitValue.value = '';
+              currentStorageLimitText.textContent = 'Current: Unlimited';
+            }
+          }
+        })
+        .catch(err => console.error('Error loading storage limit:', err));
+
+      // Save storage limit
+      saveStorageLimitBtn.addEventListener('click', async () => {
+        const value = parseInt(storageLimitValue.value) || 0;
+        const unit = parseInt(storageLimitUnit.value);
+        const limit = value > 0 ? value * unit : null;
+        
+        try {
+          const res = await fetch('/api/settings/default-storage-limit', {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRF-Token': '<%= csrfToken %>'
+            },
+            body: JSON.stringify({ limit })
+          });
+          const data = await res.json();
+          if (data.success) {
+            showToast('success', 'Default storage limit updated successfully');
+            // Update display
+            if (limit) {
+              const formatted = formatBytes(limit);
+              currentStorageLimitText.textContent = `Current: ${formatted}`;
+            } else {
+              currentStorageLimitText.textContent = 'Current: Unlimited';
+            }
+          } else {
+            showToast('error', data.message || 'Failed to update storage limit');
+          }
+        } catch (err) {
+          console.error('Error saving storage limit:', err);
+          showToast('error', 'Failed to update storage limit');
+        }
+      });
+
+      function formatBytes(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+      }
       <% } %>
 
       // Backup & Restore functionality

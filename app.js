@@ -16,7 +16,7 @@ const rateLimit = require('express-rate-limit');
 const User = require('./models/User');
 const { db, checkIfUsersExist, waitForDbInit, verifyTables, checkConnectivity, closeDatabase } = require('./db/database');
 const systemMonitor = require('./services/systemMonitor');
-const { uploadVideo, upload, uploadAudio, uploadBackup } = require('./middleware/uploadMiddleware');
+const { uploadVideo, upload, uploadAudio, uploadBackup, checkStorageLimit } = require('./middleware/uploadMiddleware');
 const { ensureDirectories } = require('./utils/storage');
 const { getVideoInfo, generateThumbnail } = require('./utils/videoProcessor');
 const Video = require('./models/Video');
@@ -1300,7 +1300,7 @@ app.post('/api/users/delete', isAdmin, async (req, res) => {
 
 app.post('/api/users/update', isAdmin, upload.single('avatar'), async (req, res) => {
   try {
-    const { userId, username, role, status, password, live_limit } = req.body;
+    const { userId, username, role, status, password, live_limit, storage_limit } = req.body;
     
     if (!userId) {
       return res.status(400).json({
@@ -1333,6 +1333,12 @@ app.post('/api/users/update', isAdmin, upload.single('avatar'), async (req, res)
     if (live_limit !== undefined) {
       const parsedLimit = parseInt(live_limit, 10);
       updateData.live_limit = (isNaN(parsedLimit) || parsedLimit <= 0) ? null : parsedLimit;
+    }
+
+    // Handle storage_limit - convert to null if empty/0, otherwise parse as integer
+    if (storage_limit !== undefined) {
+      const parsedStorageLimit = parseInt(storage_limit, 10);
+      updateData.storage_limit = (isNaN(parsedStorageLimit) || parsedStorageLimit <= 0) ? null : parsedStorageLimit;
     }
 
     if (password && password.trim() !== '') {
@@ -1554,6 +1560,68 @@ app.get('/api/users/:id/permissions', isAdmin, async (req, res) => {
   } catch (error) {
     console.error('Get user permissions error:', error);
     res.status(500).json({ success: false, message: 'Failed to get user permissions' });
+  }
+});
+
+// Storage Limit API
+const StorageService = require('./services/storageService');
+
+app.get('/api/users/:id/storage', isAuthenticated, async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const currentUser = req.session.user;
+    
+    // Allow users to view their own storage, admins can view any user
+    if (currentUser.id !== userId && currentUser.user_role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied'
+      });
+    }
+    
+    const storageInfo = await StorageService.getStorageInfo(userId);
+    res.json({ success: true, storage: storageInfo });
+  } catch (error) {
+    console.error('Get user storage error:', error);
+    res.status(500).json({ success: false, message: 'Failed to get storage info' });
+  }
+});
+
+app.put('/api/users/:id/storage-limit', isAdmin, async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const { limit } = req.body;
+    
+    const result = await User.updateStorageLimit(userId, limit);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('Update storage limit error:', error);
+    res.status(400).json({ success: false, message: error.message });
+  }
+});
+
+app.get('/api/settings/default-storage-limit', isAdmin, async (req, res) => {
+  try {
+    const defaultLimit = await StorageService.getDefaultStorageLimit();
+    res.json({ 
+      success: true, 
+      defaultLimit,
+      formatted: StorageService.formatBytes(defaultLimit)
+    });
+  } catch (error) {
+    console.error('Get default storage limit error:', error);
+    res.status(500).json({ success: false, message: 'Failed to get default storage limit' });
+  }
+});
+
+app.put('/api/settings/default-storage-limit', isAdmin, async (req, res) => {
+  try {
+    const { limit } = req.body;
+    await StorageService.setDefaultStorageLimit(limit);
+    res.json({ success: true, message: 'Default storage limit updated' });
+  } catch (error) {
+    console.error('Update default storage limit error:', error);
+    res.status(500).json({ success: false, message: 'Failed to update default storage limit' });
   }
 });
 
@@ -1788,7 +1856,7 @@ app.post('/settings/integrations/gdrive', isAuthenticated, [
     });
   }
 });
-app.post('/upload/video', isAuthenticated, uploadVideo.single('video'), async (req, res) => {
+app.post('/upload/video', isAuthenticated, checkStorageLimit, uploadVideo.single('video'), async (req, res) => {
   try {
     console.log('Upload request received:', req.file);
     console.log('Session userId for upload:', req.session.userId);
@@ -1837,7 +1905,7 @@ app.post('/upload/video', isAuthenticated, uploadVideo.single('video'), async (r
     });
   }
 });
-app.post('/api/videos/upload', isAuthenticated, (req, res, next) => {
+app.post('/api/videos/upload', isAuthenticated, checkStorageLimit, (req, res, next) => {
   uploadVideo.single('video')(req, res, (err) => {
     if (err) {
       if (err.code === 'LIMIT_FILE_SIZE') {
@@ -3560,7 +3628,7 @@ app.get('/api/server-time', (req, res) => {
 });
 
 // Audio API Routes
-app.post('/api/audios/upload', isAuthenticated, (req, res, next) => {
+app.post('/api/audios/upload', isAuthenticated, checkStorageLimit, (req, res, next) => {
   uploadAudio.single('audio')(req, res, (err) => {
     if (err) {
       if (err.code === 'LIMIT_FILE_SIZE') {
@@ -5022,7 +5090,7 @@ app.get('/api/youtube/templates/export', isAuthenticated, async (req, res) => {
 });
 
 // Import templates from JSON file
-app.post('/api/youtube/templates/import', isAuthenticated, upload.single('file'), async (req, res) => {
+app.post('/api/youtube/templates/import', isAuthenticated, uploadBackup.single('file'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({

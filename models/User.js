@@ -43,19 +43,23 @@ class User {
         throw new Error(usernameValidation.error);
       }
 
+      // Get default storage limit from system settings
+      const StorageService = require('../services/storageService');
+      const defaultStorageLimit = await StorageService.getDefaultStorageLimit();
+
       const hashedPassword = await bcrypt.hash(userData.password, 10);
       const userId = uuidv4();
       return new Promise((resolve, reject) => {
         db.run(
-          'INSERT INTO users (id, username, password, avatar_path, user_role, status) VALUES (?, ?, ?, ?, ?, ?)',
-          [userId, userData.username, hashedPassword, userData.avatar_path || null, userData.user_role || 'admin', userData.status || 'active'],
+          'INSERT INTO users (id, username, password, avatar_path, user_role, status, storage_limit) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [userId, userData.username, hashedPassword, userData.avatar_path || null, userData.user_role || 'admin', userData.status || 'active', defaultStorageLimit],
           function (err) {
             if (err) {
               console.error("DB error during user creation:", err);
               return reject(err);
             }
             console.log("User created successfully with ID:", userId);
-            resolve({ id: userId, username: userData.username, user_role: userData.user_role || 'admin', status: userData.status || 'active' });
+            resolve({ id: userId, username: userData.username, user_role: userData.user_role || 'admin', status: userData.status || 'active', storage_limit: defaultStorageLimit });
           }
         );
       });
@@ -214,6 +218,11 @@ class User {
         fields.push('live_limit = ?');
         values.push(updateData.live_limit);
       }
+
+      if (updateData.storage_limit !== undefined) {
+        fields.push('storage_limit = ?');
+        values.push(updateData.storage_limit);
+      }
       
       if (fields.length === 0) {
         return resolve({ id: userId, message: 'No fields to update' });
@@ -369,6 +378,55 @@ class User {
           });
         }
       );
+    });
+  }
+
+  /**
+   * Update user's storage limit
+   * @param {string} userId - User ID
+   * @param {number|null} limit - Storage limit in bytes (null for unlimited)
+   * @returns {Promise<Object>} Updated user info
+   */
+  static updateStorageLimit(userId, limit) {
+    return new Promise((resolve, reject) => {
+      // Validate limit: must be positive integer or null
+      let validLimit = null;
+      if (limit !== null && limit !== '' && limit !== undefined) {
+        const parsed = parseInt(limit, 10);
+        if (isNaN(parsed) || parsed < 0) {
+          return reject(new Error('Invalid storage limit. Must be a positive number or null'));
+        }
+        validLimit = parsed === 0 ? null : parsed;
+      }
+
+      db.run(
+        'UPDATE users SET storage_limit = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [validLimit, userId],
+        function (err) {
+          if (err) {
+            console.error('Database error in updateStorageLimit:', err);
+            return reject(err);
+          }
+          resolve({ id: userId, storage_limit: validLimit, changes: this.changes });
+        }
+      );
+    });
+  }
+
+  /**
+   * Get user's storage limit
+   * @param {string} userId - User ID
+   * @returns {Promise<number|null>} Storage limit in bytes or null if unlimited
+   */
+  static getStorageLimit(userId) {
+    return new Promise((resolve, reject) => {
+      db.get('SELECT storage_limit FROM users WHERE id = ?', [userId], (err, row) => {
+        if (err) {
+          console.error('Database error in getStorageLimit:', err);
+          return reject(err);
+        }
+        resolve(row ? row.storage_limit : null);
+      });
     });
   }
 }

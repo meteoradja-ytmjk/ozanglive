@@ -364,6 +364,17 @@ class FileQueueManager {
           } catch (e) {
             reject(new Error('Invalid server response'));
           }
+        } else if (xhr.status === 413) {
+          // Storage limit exceeded
+          try {
+            const response = JSON.parse(xhr.responseText);
+            const errorMsg = response.message || 'Storage limit exceeded';
+            const details = response.formatted ? 
+              `\nCurrent: ${response.formatted.usage}\nLimit: ${response.formatted.limit}` : '';
+            reject(new Error(errorMsg + details));
+          } catch (e) {
+            reject(new Error('Storage limit exceeded'));
+          }
         } else {
           try {
             const response = JSON.parse(xhr.responseText);
