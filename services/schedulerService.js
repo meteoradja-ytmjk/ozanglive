@@ -174,9 +174,10 @@ async function checkStreamDurations() {
     
     const now = new Date();
     
-    // OPTIMIZED: Only log if there are live streams to check
-    if (liveStreams.length > 0 && new Date().getMinutes() % 5 === 0) {
-      console.log(`[Scheduler] Checking durations for ${liveStreams.length} live streams`);
+    // OPTIMIZED: Log more frequently when streams are close to ending
+    // Always log if there are live streams to help debugging duration issues
+    if (liveStreams.length > 0) {
+      console.log(`[Scheduler] Checking durations for ${liveStreams.length} live streams at ${now.toISOString()}`);
     }
     
     for (const stream of liveStreams) {

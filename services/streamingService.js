@@ -771,6 +771,27 @@ async function startStream(streamId) {
     await Stream.updateStatus(streamId, 'live', stream.user_id, { startTimeOverride: startTimeIso });
     console.log(`[StreamingService] Stream ${streamId} confirmed running, status updated to live`);
     
+    // CRITICAL: Set duration tracking for automatic termination
+    // Use stream_duration_minutes as the primary source (most reliable for recurring streams)
+    if (stream.stream_duration_minutes && stream.stream_duration_minutes > 0) {
+      const durationMs = stream.stream_duration_minutes * 60 * 1000;
+      setDurationInfo(streamId, streamStartTime, durationMs);
+      console.log(`[StreamingService] Duration tracking set for stream ${streamId}: ${stream.stream_duration_minutes} minutes (${durationMs}ms)`);
+      addStreamLog(streamId, `Duration tracking set: ${stream.stream_duration_minutes} minutes`);
+    } else {
+      // Fallback to calculated duration from durationCalculator
+      const durationSeconds = calculateDurationSeconds(stream);
+      if (durationSeconds && durationSeconds > 0) {
+        const durationMs = durationSeconds * 1000;
+        setDurationInfo(streamId, streamStartTime, durationMs);
+        console.log(`[StreamingService] Duration tracking set for stream ${streamId}: ${durationSeconds / 60} minutes (${durationMs}ms) [calculated]`);
+        addStreamLog(streamId, `Duration tracking set: ${durationSeconds / 60} minutes (calculated)`);
+      } else {
+        console.log(`[StreamingService] No duration set for stream ${streamId} - will run indefinitely`);
+        addStreamLog(streamId, `No duration set - stream will run indefinitely`);
+      }
+    }
+    
     // Start YouTube status sync if platform is YouTube
     if (stream.platform === 'YouTube' && stream.stream_key) {
       try {

@@ -3,6 +3,8 @@
  * Manages automatic broadcast creation based on templates with recurring enabled
  */
 
+const fs = require('fs');
+const path = require('path');
 const BroadcastTemplate = require('../models/BroadcastTemplate');
 const youtubeService = require('./youtubeService');
 const { calculateNextRun, formatNextRunAt, replaceTitlePlaceholders, isScheduleMissed } = require('../utils/recurringUtils');
@@ -282,6 +284,11 @@ class ScheduleService {
             const result = await youtubeService.createBroadcast(accessToken, broadcastData);
             results.push(result);
             console.log(`[ScheduleService] Broadcast ${i + 1} created: ${result.broadcastId || result.id}`);
+            
+            // Upload thumbnail if broadcast has one (from multi-broadcast template)
+            if (b.thumbnailPath) {
+              await this.uploadThumbnailForBroadcast(accessToken, result.broadcastId || result.id, b.thumbnailPath);
+            }
           } catch (err) {
             console.error(`[ScheduleService] Failed to create broadcast ${i + 1}:`, err.message);
           }
@@ -315,6 +322,11 @@ class ScheduleService {
         const result = await youtubeService.createBroadcast(accessToken, broadcastData);
         results.push(result);
         console.log(`[ScheduleService] Broadcast created: ${result.broadcastId || result.id}`);
+        
+        // Upload thumbnail if template has one
+        if (template.thumbnail_path) {
+          await this.uploadThumbnailForBroadcast(accessToken, result.broadcastId || result.id, template.thumbnail_path);
+        }
       }
       
       // Update last run and calculate next run
@@ -345,6 +357,38 @@ class ScheduleService {
       
       console.error(`[ScheduleService] All retries failed for template: ${template.name}`);
       throw error;
+    }
+  }
+
+  /**
+   * Upload thumbnail for a broadcast
+   * @param {string} accessToken - YouTube access token
+   * @param {string} broadcastId - Broadcast ID to upload thumbnail for
+   * @param {string} thumbnailPath - Path to thumbnail file relative to /public
+   * @returns {Promise<boolean>} True if upload successful, false otherwise
+   */
+  async uploadThumbnailForBroadcast(accessToken, broadcastId, thumbnailPath) {
+    if (!thumbnailPath) {
+      return false;
+    }
+
+    try {
+      const fullPath = path.join(__dirname, '..', 'public', thumbnailPath);
+      
+      // Check if file exists before reading
+      if (!fs.existsSync(fullPath)) {
+        console.warn(`[ScheduleService] Thumbnail not found: ${thumbnailPath}`);
+        return false;
+      }
+
+      const thumbnailBuffer = fs.readFileSync(fullPath);
+      await youtubeService.uploadThumbnail(accessToken, broadcastId, thumbnailBuffer);
+      console.log(`[ScheduleService] Thumbnail uploaded for broadcast: ${broadcastId}`);
+      return true;
+    } catch (error) {
+      console.error(`[ScheduleService] Thumbnail upload failed for ${broadcastId}:`, error.message);
+      // Continue without failing - thumbnail is optional
+      return false;
     }
   }
 

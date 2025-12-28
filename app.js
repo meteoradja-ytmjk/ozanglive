@@ -3267,12 +3267,14 @@ app.get('/playlist', isAuthenticated, async (req, res) => {
   try {
     const playlists = await Playlist.findAll(req.session.userId);
     const videos = await Video.findAll(req.session.userId);
+    const audios = await Audio.findAll(req.session.userId);
     res.render('playlist', {
       title: 'Playlist',
       active: 'playlist',
       user: await User.findById(req.session.userId),
       playlists: playlists,
-      videos: videos
+      videos: videos,
+      audios: audios
     });
   } catch (error) {
     console.error('Playlist error:', error);
@@ -3313,9 +3315,17 @@ app.post('/api/playlists', isAuthenticated, [
 
     const playlist = await Playlist.create(playlistData);
     
+    // Add videos
     if (req.body.videos && Array.isArray(req.body.videos) && req.body.videos.length > 0) {
       for (let i = 0; i < req.body.videos.length; i++) {
         await Playlist.addVideo(playlist.id, req.body.videos[i], i + 1);
+      }
+    }
+    
+    // Add audios
+    if (req.body.audios && Array.isArray(req.body.audios) && req.body.audios.length > 0) {
+      for (let i = 0; i < req.body.audios.length; i++) {
+        await Playlist.addAudio(playlist.id, req.body.audios[i], i + 1);
       }
     }
     
@@ -3328,7 +3338,7 @@ app.post('/api/playlists', isAuthenticated, [
 
 app.get('/api/playlists/:id', isAuthenticated, async (req, res) => {
   try {
-    const playlist = await Playlist.findByIdWithVideos(req.params.id);
+    const playlist = await Playlist.findByIdWithMedia(req.params.id);
     if (!playlist) {
       return res.status(404).json({ success: false, error: 'Playlist not found' });
     }
@@ -3370,6 +3380,7 @@ app.put('/api/playlists/:id', isAuthenticated, [
 
     const updatedPlaylist = await Playlist.update(req.params.id, updateData);
     
+    // Update videos
     if (req.body.videos && Array.isArray(req.body.videos)) {
       const existingVideos = await Playlist.findByIdWithVideos(req.params.id);
       if (existingVideos && existingVideos.videos) {
@@ -3380,6 +3391,15 @@ app.put('/api/playlists/:id', isAuthenticated, [
       
       for (let i = 0; i < req.body.videos.length; i++) {
         await Playlist.addVideo(req.params.id, req.body.videos[i], i + 1);
+      }
+    }
+    
+    // Update audios
+    if (req.body.audios && Array.isArray(req.body.audios)) {
+      await Playlist.clearAudios(req.params.id);
+      
+      for (let i = 0; i < req.body.audios.length; i++) {
+        await Playlist.addAudio(req.params.id, req.body.audios[i], i + 1);
       }
     }
     
@@ -4901,7 +4921,7 @@ app.post('/api/youtube/templates/multi', isAuthenticated, async (req, res) => {
       return res.status(404).json({ success: false, error: 'Account not found' });
     }
 
-    // Ensure each broadcast has streamId preserved
+    // Ensure each broadcast has streamId and thumbnailPath preserved
     const broadcastsWithStreamId = broadcasts.map(b => ({
       title: b.title,
       description: b.description || '',
@@ -4909,10 +4929,11 @@ app.post('/api/youtube/templates/multi', isAuthenticated, async (req, res) => {
       streamId: b.streamId || null,  // Preserve stream ID
       streamKey: b.streamKey || '',
       categoryId: b.categoryId || '22',
-      tags: b.tags || []
+      tags: b.tags || [],
+      thumbnailPath: b.thumbnailPath || b.thumbnail_path || null  // Preserve thumbnail path
     }));
 
-    console.log('[templates/multi] Saving broadcasts with streamIds:', broadcastsWithStreamId.map(b => ({ title: b.title, streamId: b.streamId })));
+    console.log('[templates/multi] Saving broadcasts with streamIds:', broadcastsWithStreamId.map(b => ({ title: b.title, streamId: b.streamId, thumbnailPath: b.thumbnailPath })));
 
     // Create template with broadcasts data stored as JSON
     const template = await BroadcastTemplate.create({

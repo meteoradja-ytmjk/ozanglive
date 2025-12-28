@@ -6,11 +6,13 @@ class Playlist {
     return new Promise((resolve, reject) => {
       db.all(
         `SELECT p.*, 
-         COUNT(pv.id) as video_count,
-         GROUP_CONCAT(v.thumbnail_path) as thumbnails
+         COUNT(DISTINCT pv.id) as video_count,
+         COUNT(DISTINCT pa.id) as audio_count,
+         GROUP_CONCAT(DISTINCT v.thumbnail_path) as thumbnails
          FROM playlists p 
          LEFT JOIN playlist_videos pv ON p.id = pv.playlist_id 
          LEFT JOIN videos v ON pv.video_id = v.id
+         LEFT JOIN playlist_audios pa ON p.id = pa.playlist_id
          WHERE p.user_id = ? 
          GROUP BY p.id
          ORDER BY p.updated_at DESC`,
@@ -59,6 +61,52 @@ class Playlist {
             }
             playlist.videos = videos;
             resolve(playlist);
+          }
+        );
+      });
+    });
+  }
+
+  static findByIdWithMedia(id) {
+    return new Promise((resolve, reject) => {
+      db.get('SELECT * FROM playlists WHERE id = ?', [id], (err, playlist) => {
+        if (err) {
+          return reject(err);
+        }
+        if (!playlist) {
+          return resolve(null);
+        }
+
+        // Get videos
+        db.all(
+          `SELECT v.*, pv.position 
+           FROM playlist_videos pv 
+           JOIN videos v ON pv.video_id = v.id 
+           WHERE pv.playlist_id = ? 
+           ORDER BY pv.position ASC`,
+          [id],
+          (err, videos) => {
+            if (err) {
+              return reject(err);
+            }
+            playlist.videos = videos || [];
+
+            // Get audios
+            db.all(
+              `SELECT a.*, pa.position 
+               FROM playlist_audios pa 
+               JOIN audios a ON pa.audio_id = a.id 
+               WHERE pa.playlist_id = ? 
+               ORDER BY pa.position ASC`,
+              [id],
+              (err, audios) => {
+                if (err) {
+                  return reject(err);
+                }
+                playlist.audios = audios || [];
+                resolve(playlist);
+              }
+            );
           }
         );
       });
@@ -188,6 +236,112 @@ class Playlist {
     return new Promise((resolve, reject) => {
       db.get(
         'SELECT MAX(position) as max_position FROM playlist_videos WHERE playlist_id = ?',
+        [playlistId],
+        (err, row) => {
+          if (err) {
+            return reject(err);
+          }
+          resolve((row.max_position || 0) + 1);
+        }
+      );
+    });
+  }
+
+  static addAudio(playlistId, audioId, position) {
+    const id = uuidv4();
+    return new Promise((resolve, reject) => {
+      db.run(
+        'INSERT INTO playlist_audios (id, playlist_id, audio_id, position) VALUES (?, ?, ?, ?)',
+        [id, playlistId, audioId, position],
+        function (err) {
+          if (err) {
+            return reject(err);
+          }
+          resolve({ id, playlist_id: playlistId, audio_id: audioId, position });
+        }
+      );
+    });
+  }
+
+  static removeAudio(playlistId, audioId) {
+    return new Promise((resolve, reject) => {
+      db.run(
+        'DELETE FROM playlist_audios WHERE playlist_id = ? AND audio_id = ?',
+        [playlistId, audioId],
+        function (err) {
+          if (err) {
+            return reject(err);
+          }
+          resolve({ deleted: this.changes > 0 });
+        }
+      );
+    });
+  }
+
+  static clearAudios(playlistId) {
+    return new Promise((resolve, reject) => {
+      db.run(
+        'DELETE FROM playlist_audios WHERE playlist_id = ?',
+        [playlistId],
+        function (err) {
+          if (err) {
+            return reject(err);
+          }
+          resolve({ deleted: this.changes });
+        }
+      );
+    });
+  }
+
+  static updateAudioPositions(playlistId, audioPositions) {
+    return new Promise((resolve, reject) => {
+      db.serialize(() => {
+        db.run('BEGIN TRANSACTION');
+        
+        let completed = 0;
+        let hasError = false;
+
+        if (audioPositions.length === 0) {
+          db.run('COMMIT', (err) => {
+            if (err) {
+              return reject(err);
+            }
+            resolve({ updated: true });
+          });
+          return;
+        }
+
+        audioPositions.forEach(({ audioId, position }) => {
+          db.run(
+            'UPDATE playlist_audios SET position = ? WHERE playlist_id = ? AND audio_id = ?',
+            [position, playlistId, audioId],
+            function (err) {
+              if (err && !hasError) {
+                hasError = true;
+                db.run('ROLLBACK');
+                return reject(err);
+              }
+              
+              completed++;
+              if (completed === audioPositions.length && !hasError) {
+                db.run('COMMIT', (err) => {
+                  if (err) {
+                    return reject(err);
+                  }
+                  resolve({ updated: true });
+                });
+              }
+            }
+          );
+        });
+      });
+    });
+  }
+
+  static getAudioNextPosition(playlistId) {
+    return new Promise((resolve, reject) => {
+      db.get(
+        'SELECT MAX(position) as max_position FROM playlist_audios WHERE playlist_id = ?',
         [playlistId],
         (err, row) => {
           if (err) {

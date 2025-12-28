@@ -84,14 +84,15 @@ function formatDuration(seconds) {
   </div>
 </div>
 
-<!-- Tab Navigation - Mobile: 2 column grid, Desktop: flex -->
-<div class="grid grid-cols-2 md:flex border-b border-gray-700 mb-6">
+<!-- Tab Navigation - Professional style with dividers -->
+<div class="flex w-full border border-gray-600 rounded-lg mb-6 overflow-hidden bg-gray-800/50">
   <button onclick="switchTab('video')" id="videoTab"
-    class="flex-1 md:flex-none px-4 md:px-6 py-3 font-medium transition-colors text-center md:text-left <%= activeTab !== 'audio' ? 'text-primary border-b-2 border-primary' : 'text-gray-400 hover:text-white' %>">
+    class="flex-1 px-4 md:px-6 py-3 font-medium transition-colors text-center <%= activeTab !== 'audio' ? 'bg-primary/20 text-primary border-b-2 border-primary' : 'text-gray-400 hover:text-white hover:bg-gray-700/50' %>">
     <i class="ti ti-video mr-2"></i>Videos (<%= videos ? videos.length : 0 %>)
   </button>
+  <div class="w-px bg-gray-600"></div>
   <button onclick="switchTab('audio')" id="audioTab"
-    class="flex-1 md:flex-none px-4 md:px-6 py-3 font-medium transition-colors text-center md:text-left <%= activeTab === 'audio' ? 'text-green-500 border-b-2 border-green-500' : 'text-gray-400 hover:text-white' %>">
+    class="flex-1 px-4 md:px-6 py-3 font-medium transition-colors text-center <%= activeTab === 'audio' ? 'bg-green-500/20 text-green-500 border-b-2 border-green-500' : 'text-gray-400 hover:text-white hover:bg-gray-700/50' %>">
     <i class="ti ti-music mr-2"></i>Audio (<%= audios ? audios.length : 0 %>)
   </button>
 </div>
@@ -588,8 +589,8 @@ function formatDuration(seconds) {
       videoGrid.classList.add('tab-hidden');
       audioGrid.classList.remove('tab-hidden');
       audioGrid.classList.add('tab-visible');
-      videoTab.className = 'flex-1 md:flex-none px-4 md:px-6 py-3 font-medium transition-colors text-center md:text-left text-gray-400 hover:text-white';
-      audioTab.className = 'flex-1 md:flex-none px-4 md:px-6 py-3 font-medium transition-colors text-center md:text-left text-green-500 border-b-2 border-green-500';
+      videoTab.className = 'flex-1 px-4 md:px-6 py-3 font-medium transition-colors text-center text-gray-400 hover:text-white hover:bg-gray-700/50';
+      audioTab.className = 'flex-1 px-4 md:px-6 py-3 font-medium transition-colors text-center bg-green-500/20 text-green-500 border-b-2 border-green-500';
       
       // Desktop buttons
       if (uploadVideoBtnDesktop) uploadVideoBtnDesktop.style.display = 'none';
@@ -612,8 +613,8 @@ function formatDuration(seconds) {
       videoGrid.classList.add('tab-visible');
       audioGrid.classList.remove('tab-visible');
       audioGrid.classList.add('tab-hidden');
-      videoTab.className = 'flex-1 md:flex-none px-4 md:px-6 py-3 font-medium transition-colors text-center md:text-left text-primary border-b-2 border-primary';
-      audioTab.className = 'flex-1 md:flex-none px-4 md:px-6 py-3 font-medium transition-colors text-center md:text-left text-gray-400 hover:text-white';
+      videoTab.className = 'flex-1 px-4 md:px-6 py-3 font-medium transition-colors text-center bg-primary/20 text-primary border-b-2 border-primary';
+      audioTab.className = 'flex-1 px-4 md:px-6 py-3 font-medium transition-colors text-center text-gray-400 hover:text-white hover:bg-gray-700/50';
       
       // Desktop buttons
       if (uploadVideoBtnDesktop) uploadVideoBtnDesktop.style.display = 'flex';

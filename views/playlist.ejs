@@ -59,7 +59,10 @@
           </div>
           
           <div class="flex items-center justify-between text-sm text-gray-400 mt-auto">
-            <span><%= playlist.video_count || 0 %> videos</span>
+            <span class="flex items-center gap-2">
+              <span><i class="ti ti-video mr-1"></i><%= playlist.video_count || 0 %></span>
+              <span><i class="ti ti-music mr-1"></i><%= playlist.audio_count || 0 %></span>
+            </span>
             <span class="flex items-center gap-1">
               <i class="ti ti-<%= (playlist.shuffle || playlist.is_shuffle) ? 'arrows-shuffle' : 'list-numbers' %>"></i>
               <%= (playlist.shuffle || playlist.is_shuffle) ? 'Shuffle' : 'Sequential' %>
@@ -152,12 +155,25 @@
       </div>
       
       <div>
-        <label class="block text-sm font-medium mb-3">Select Videos</label>
+        <label class="block text-sm font-medium mb-3">Select Media</label>
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <!-- Available Videos -->
+          <!-- Available Media (Left Column) -->
           <div>
-            <h4 class="text-sm font-medium mb-3 text-gray-300">Available Videos</h4>
-            <div class="bg-dark-700 rounded-lg border border-gray-600 shadow-lg">
+            <!-- Tab Buttons for Available Media -->
+            <div class="flex w-full mb-3 border border-gray-600 rounded-lg overflow-hidden bg-gray-800/50">
+              <button type="button" id="availableVideosTab" onclick="switchAvailableTab('videos')" 
+                class="flex-1 px-4 py-2 text-sm font-medium text-center border-b-2 border-primary text-primary bg-primary/20">
+                <i class="ti ti-video mr-1"></i>Videos
+              </button>
+              <div class="w-px bg-gray-600"></div>
+              <button type="button" id="availableAudiosTab" onclick="switchAvailableTab('audios')" 
+                class="flex-1 px-4 py-2 text-sm font-medium text-center border-b-2 border-transparent text-gray-400 hover:text-white hover:bg-gray-700/50">
+                <i class="ti ti-music mr-1"></i>Audios
+              </button>
+            </div>
+            
+            <!-- Available Videos Panel -->
+            <div id="availableVideosPanel" class="bg-dark-700 rounded-lg border border-gray-600 shadow-lg">
               <div class="p-2 border-b border-gray-600/50">
                 <div class="relative">
                   <input type="text" id="searchVideos" placeholder="Search videos..."
@@ -165,19 +181,20 @@
                   <i class="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
                 </div>
               </div>
-              <div id="availableVideos" class="p-2 space-y-1 max-h-60 overflow-y-auto custom-scrollbar">
+              <div id="availableVideos" class="p-2 space-y-1 min-h-[220px] max-h-60 overflow-y-auto custom-scrollbar">
                 <% if (videos && videos.length > 0) { %>
-                  <% videos.forEach(function(video) { %>
-                    <button type="button" class="w-full flex items-center space-x-3 p-2 rounded hover:bg-dark-600 transition-colors" 
-                            data-video-id="<%= video.id %>" onclick="addVideoToPlaylist('<%= video.id %>')">
+                  <% videos.forEach(function(video, index) { %>
+                    <button type="button" class="w-full flex items-center gap-3 p-2 rounded hover:bg-dark-600 transition-colors" 
+                            data-video-id="<%= video.id %>" onclick="addVideoToPlaylist('<%= video.id %>')" style="text-align: left;">
+                      <span class="w-6 text-xs text-gray-500 flex-shrink-0" style="text-align: center;"><%= index + 1 %></span>
                       <div class="w-16 h-12 bg-dark-800 rounded flex-shrink-0 overflow-hidden">
                         <img src="<%= video.thumbnail_path %>" alt="<%= video.title %>" 
                              class="w-full h-full object-cover rounded" 
                              onerror="this.src='/images/default-thumbnail.jpg'">
                       </div>
-                      <div class="flex-1 min-w-0 ml-3">
-                        <p class="text-sm font-medium text-white truncate"><%= video.title %></p>
-                        <p class="text-xs text-gray-400">
+                      <div class="flex-1 min-w-0" style="text-align: left;">
+                        <p class="text-sm font-medium text-white truncate" style="text-align: left;"><%= video.title %></p>
+                        <p class="text-xs text-gray-400" style="text-align: left;">
                           <%= video.duration ? Math.floor(video.duration / 60) + ':' + String(Math.floor(video.duration % 60)).padStart(2, '0') : '0:00' %>
                         </p>
                       </div>
@@ -188,14 +205,66 @@
                 <% } %>
               </div>
             </div>
+            
+            <!-- Available Audios Panel -->
+            <div id="availableAudiosPanel" class="bg-dark-700 rounded-lg border border-gray-600 shadow-lg hidden">
+              <div class="p-2 border-b border-gray-600/50">
+                <div class="relative">
+                  <input type="text" id="searchAudios" placeholder="Search audios..."
+                    class="w-full bg-dark-800 text-white pl-8 pr-4 py-2 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary border border-gray-700">
+                  <i class="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                </div>
+              </div>
+              <div id="availableAudios" class="p-2 space-y-1 min-h-[220px] max-h-60 overflow-y-auto custom-scrollbar">
+                <% if (typeof audios !== 'undefined' && audios && audios.length > 0) { %>
+                  <% audios.forEach(function(audio, index) { %>
+                    <button type="button" class="w-full flex items-center gap-3 p-2 rounded hover:bg-dark-600 transition-colors" 
+                            data-audio-id="<%= audio.id %>" onclick="addAudioToPlaylist('<%= audio.id %>')" style="text-align: left;">
+                      <span class="w-6 text-xs text-gray-500 flex-shrink-0" style="text-align: center;"><%= index + 1 %></span>
+                      <div class="w-12 h-12 bg-dark-800 rounded flex-shrink-0 flex items-center justify-center">
+                        <i class="ti ti-music text-xl text-primary"></i>
+                      </div>
+                      <div class="flex-1 min-w-0" style="text-align: left;">
+                        <p class="text-sm font-medium text-white truncate" style="text-align: left;"><%= audio.title %></p>
+                        <p class="text-xs text-gray-400" style="text-align: left;">
+                          <%= audio.duration ? Math.floor(audio.duration / 60) + ':' + String(Math.floor(audio.duration % 60)).padStart(2, '0') : '0:00' %>
+                        </p>
+                      </div>
+                    </button>
+                  <% }); %>
+                <% } else { %>
+                  <div class="text-center py-5 text-gray-400"><p>No audios available</p></div>
+                <% } %>
+              </div>
+            </div>
           </div>
           
-          <!-- Selected Videos -->
+          <!-- Selected Media (Right Column) -->
           <div>
-            <h4 class="text-sm font-medium mb-3 text-gray-300">Playlist Videos</h4>
-            <div class="bg-dark-700 rounded-lg p-3 max-h-80 overflow-y-auto custom-scrollbar">
+            <!-- Tab Buttons for Selected Media -->
+            <div class="flex w-full mb-3 border border-gray-600 rounded-lg overflow-hidden bg-gray-800/50">
+              <button type="button" id="selectedVideosTab" onclick="switchSelectedTab('videos')" 
+                class="flex-1 px-4 py-2 text-sm font-medium text-center border-b-2 border-primary text-primary bg-primary/20">
+                <i class="ti ti-video mr-1"></i>Playlist Videos
+              </button>
+              <div class="w-px bg-gray-600"></div>
+              <button type="button" id="selectedAudiosTab" onclick="switchSelectedTab('audios')" 
+                class="flex-1 px-4 py-2 text-sm font-medium text-center border-b-2 border-transparent text-gray-400 hover:text-white hover:bg-gray-700/50">
+                <i class="ti ti-music mr-1"></i>Playlist Audios
+              </button>
+            </div>
+            
+            <!-- Selected Videos Panel -->
+            <div id="selectedVideosPanel" class="bg-dark-700 rounded-lg border border-gray-600 p-3 min-h-[280px] max-h-80 overflow-y-auto custom-scrollbar">
               <div id="selectedVideos" class="space-y-2 min-h-[100px]">
                 <p id="noVideosMessage" class="text-gray-400 text-sm text-center py-8">No videos selected</p>
+              </div>
+            </div>
+            
+            <!-- Selected Audios Panel -->
+            <div id="selectedAudiosPanel" class="bg-dark-700 rounded-lg border border-gray-600 p-3 min-h-[280px] max-h-80 overflow-y-auto custom-scrollbar hidden">
+              <div id="selectedAudios" class="space-y-2 min-h-[100px]">
+                <p id="noAudiosMessage" class="text-gray-400 text-sm text-center py-8">No audios selected</p>
               </div>
             </div>
           </div>
@@ -253,18 +322,73 @@
 
 <script>
 let selectedVideos = [];
+let selectedAudios = [];
 let currentPlaylistId = null;
 let allVideos = <%- JSON.stringify(videos || []) %>;
+let allAudios = <%- JSON.stringify(audios || []) %>;
+
+// Tab switching functions
+function switchAvailableTab(tab) {
+  const videosTab = document.getElementById('availableVideosTab');
+  const audiosTab = document.getElementById('availableAudiosTab');
+  const videosPanel = document.getElementById('availableVideosPanel');
+  const audiosPanel = document.getElementById('availableAudiosPanel');
+  
+  if (tab === 'videos') {
+    videosTab.classList.add('border-primary', 'text-primary', 'bg-primary/20');
+    videosTab.classList.remove('border-transparent', 'text-gray-400', 'hover:bg-gray-700/50');
+    audiosTab.classList.remove('border-primary', 'text-primary', 'bg-primary/20');
+    audiosTab.classList.add('border-transparent', 'text-gray-400', 'hover:bg-gray-700/50');
+    videosPanel.classList.remove('hidden');
+    audiosPanel.classList.add('hidden');
+  } else {
+    audiosTab.classList.add('border-primary', 'text-primary', 'bg-primary/20');
+    audiosTab.classList.remove('border-transparent', 'text-gray-400', 'hover:bg-gray-700/50');
+    videosTab.classList.remove('border-primary', 'text-primary', 'bg-primary/20');
+    videosTab.classList.add('border-transparent', 'text-gray-400', 'hover:bg-gray-700/50');
+    audiosPanel.classList.remove('hidden');
+    videosPanel.classList.add('hidden');
+  }
+}
+
+function switchSelectedTab(tab) {
+  const videosTab = document.getElementById('selectedVideosTab');
+  const audiosTab = document.getElementById('selectedAudiosTab');
+  const videosPanel = document.getElementById('selectedVideosPanel');
+  const audiosPanel = document.getElementById('selectedAudiosPanel');
+  
+  if (tab === 'videos') {
+    videosTab.classList.add('border-primary', 'text-primary', 'bg-primary/20');
+    videosTab.classList.remove('border-transparent', 'text-gray-400', 'hover:bg-gray-700/50');
+    audiosTab.classList.remove('border-primary', 'text-primary', 'bg-primary/20');
+    audiosTab.classList.add('border-transparent', 'text-gray-400', 'hover:bg-gray-700/50');
+    videosPanel.classList.remove('hidden');
+    audiosPanel.classList.add('hidden');
+  } else {
+    audiosTab.classList.add('border-primary', 'text-primary', 'bg-primary/20');
+    audiosTab.classList.remove('border-transparent', 'text-gray-400', 'hover:bg-gray-700/50');
+    videosTab.classList.remove('border-primary', 'text-primary', 'bg-primary/20');
+    videosTab.classList.add('border-transparent', 'text-gray-400', 'hover:bg-gray-700/50');
+    audiosPanel.classList.remove('hidden');
+    videosPanel.classList.add('hidden');
+  }
+}
 
 function openCreatePlaylistModal() {
   currentPlaylistId = null;
   selectedVideos = [];
+  selectedAudios = [];
   document.getElementById('modalTitle').textContent = 'Create New Playlist';
   document.getElementById('submitButtonText').textContent = 'Create Playlist';
   document.getElementById('playlistForm').reset();
   document.getElementById('playlistId').value = '';
+  // Reset tabs to default (videos)
+  switchAvailableTab('videos');
+  switchSelectedTab('videos');
   updateSelectedVideosDisplay();
   updateAvailableVideosDisplay();
+  updateSelectedAudiosDisplay();
+  updateAvailableAudiosDisplay();
   document.getElementById('playlistModal').classList.remove('hidden');
   document.getElementById('playlistModal').classList.add('flex');
 }
@@ -334,22 +458,123 @@ function updateAvailableVideosDisplay() {
   if (availableVideos.length === 0) {
     container.innerHTML = '<div class="text-center py-5 text-gray-400"><p>All videos have been added to playlist</p></div>';
   } else {
-    container.innerHTML = availableVideos.map(video => `
-      <button type="button" class="w-full flex items-center space-x-3 p-2 rounded hover:bg-dark-600 transition-colors" 
-              data-video-id="${video.id}" onclick="addVideoToPlaylist('${video.id}')">
+    container.innerHTML = availableVideos.map((video, index) => `
+      <button type="button" class="w-full flex items-center gap-3 p-2 rounded hover:bg-dark-600 transition-colors" 
+              data-video-id="${video.id}" onclick="addVideoToPlaylist('${video.id}')" style="text-align: left;">
+        <span class="w-6 text-xs text-gray-500 flex-shrink-0" style="text-align: center;">${index + 1}</span>
         <div class="w-16 h-12 bg-dark-800 rounded flex-shrink-0 overflow-hidden">
           <img src="${video.thumbnail_path}" alt="${video.title}" 
                class="w-full h-full object-cover rounded" 
                onerror="this.src='/images/default-thumbnail.jpg'">
         </div>
-        <div class="flex-1 min-w-0 ml-3">
-          <p class="text-sm font-medium text-white truncate">${video.title}</p>
-          <p class="text-xs text-gray-400">
+        <div class="flex-1 min-w-0" style="text-align: left;">
+          <p class="text-sm font-medium text-white truncate" style="text-align: left;">${video.title}</p>
+          <p class="text-xs text-gray-400" style="text-align: left;">
             ${video.duration ? Math.floor(video.duration / 60) + ':' + String(Math.floor(video.duration % 60)).padStart(2, '0') : '0:00'}
           </p>
         </div>
       </button>
     `).join('');
+  }
+}
+
+// Audio selection functions
+function addAudioToPlaylist(audioId) {
+  const audio = allAudios.find(a => a.id == audioId);
+  if (audio && !selectedAudios.find(a => a.id == audioId)) {
+    selectedAudios.push(audio);
+    updateSelectedAudiosDisplay();
+    updateAvailableAudiosDisplay();
+  }
+}
+
+function removeAudioFromPlaylist(audioId) {
+  selectedAudios = selectedAudios.filter(a => a.id != audioId);
+  updateSelectedAudiosDisplay();
+  updateAvailableAudiosDisplay();
+}
+
+function updateSelectedAudiosDisplay() {
+  const container = document.getElementById('selectedAudios');
+  if (!container) return;
+  
+  if (selectedAudios.length === 0) {
+    container.innerHTML = '<p class="text-gray-400 text-sm text-center py-8">No audios selected</p>';
+  } else {
+    container.innerHTML = selectedAudios.map((audio, index) => `
+      <div class="flex items-center gap-3 p-2 bg-gray-600 rounded" data-audio-id="${audio.id}">
+        <div class="cursor-move">
+          <i class="ti ti-grip-vertical text-gray-400"></i>
+        </div>
+        <div class="w-10 h-10 bg-dark-800 rounded flex items-center justify-center flex-shrink-0">
+          <i class="ti ti-music text-primary"></i>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-medium truncate">${audio.title}</p>
+          <p class="text-xs text-gray-400">
+            ${audio.duration ? Math.floor(audio.duration / 60) + ':' + String(Math.floor(audio.duration % 60)).padStart(2, '0') : '0:00'}
+          </p>
+        </div>
+        <button onclick="removeAudioFromPlaylist('${audio.id}')" class="text-red-400 hover:text-red-300">
+          <i class="ti ti-x"></i>
+        </button>
+      </div>
+    `).join('');
+    
+    setTimeout(() => {
+      initializeAudioDragAndDrop();
+    }, 100);
+  }
+}
+
+function updateAvailableAudiosDisplay() {
+  const container = document.getElementById('availableAudios');
+  if (!container) return;
+  
+  const selectedAudioIds = selectedAudios.map(a => a.id);
+  const availableAudios = allAudios.filter(audio => !selectedAudioIds.includes(audio.id));
+  
+  if (availableAudios.length === 0) {
+    container.innerHTML = '<div class="text-center py-5 text-gray-400"><p>All audios have been added to playlist</p></div>';
+  } else {
+    container.innerHTML = availableAudios.map((audio, index) => `
+      <button type="button" class="w-full flex items-center gap-3 p-2 rounded hover:bg-dark-600 transition-colors" 
+              data-audio-id="${audio.id}" onclick="addAudioToPlaylist('${audio.id}')" style="text-align: left;">
+        <span class="w-6 text-xs text-gray-500 flex-shrink-0" style="text-align: center;">${index + 1}</span>
+        <div class="w-12 h-12 bg-dark-800 rounded flex-shrink-0 flex items-center justify-center">
+          <i class="ti ti-music text-xl text-primary"></i>
+        </div>
+        <div class="flex-1 min-w-0" style="text-align: left;">
+          <p class="text-sm font-medium text-white truncate" style="text-align: left;">${audio.title}</p>
+          <p class="text-xs text-gray-400" style="text-align: left;">
+            ${audio.duration ? Math.floor(audio.duration / 60) + ':' + String(Math.floor(audio.duration % 60)).padStart(2, '0') : '0:00'}
+          </p>
+        </div>
+      </button>
+    `).join('');
+  }
+}
+
+function initializeAudioDragAndDrop() {
+  const selectedAudiosContainer = document.getElementById('selectedAudios');
+  if (selectedAudiosContainer && selectedAudios.length > 0) {
+    new Sortable(selectedAudiosContainer, {
+      animation: 150,
+      ghostClass: 'sortable-ghost',
+      chosenClass: 'sortable-chosen',
+      dragClass: 'sortable-drag',
+      handle: '.cursor-move',
+      onEnd: function(evt) {
+        const oldIndex = evt.oldIndex;
+        const newIndex = evt.newIndex;
+        
+        if (oldIndex !== newIndex) {
+          const movedAudio = selectedAudios.splice(oldIndex, 1)[0];
+          selectedAudios.splice(newIndex, 0, movedAudio);
+          updateSelectedAudiosDisplay();
+        }
+      }
+    });
   }
 }
 
@@ -361,6 +586,7 @@ function editPlaylist(playlistId) {
         const playlist = data.playlist;
         currentPlaylistId = playlistId;
         selectedVideos = playlist.videos || [];
+        selectedAudios = playlist.audios || [];
         
         document.getElementById('modalTitle').textContent = 'Edit Playlist';
         document.getElementById('submitButtonText').textContent = 'Update Playlist';
@@ -369,8 +595,14 @@ function editPlaylist(playlistId) {
         document.getElementById('playlistDescription').value = playlist.description || '';
         document.getElementById('playlistShuffle').value = (playlist.shuffle || playlist.is_shuffle) ? "true" : "false";
         
+        // Reset tabs to default (videos)
+        switchAvailableTab('videos');
+        switchSelectedTab('videos');
+        
         updateSelectedVideosDisplay();
         updateAvailableVideosDisplay();
+        updateSelectedAudiosDisplay();
+        updateAvailableAudiosDisplay();
         document.getElementById('playlistModal').classList.remove('hidden');
         document.getElementById('playlistModal').classList.add('flex');
       }
@@ -390,7 +622,10 @@ function viewPlaylist(playlistId) {
         
         document.getElementById('viewPlaylistTitle').textContent = playlist.name;
         document.getElementById('viewPlaylistDescription').textContent = playlist.description || 'No description';
-        document.getElementById('viewVideoCount').textContent = `${playlist.videos?.length || 0} videos`;
+        
+        const videoCount = playlist.videos?.length || 0;
+        const audioCount = playlist.audios?.length || 0;
+        document.getElementById('viewVideoCount').textContent = `${videoCount} videos, ${audioCount} audios`;
         
         const playbackModeEl = document.getElementById('viewPlaybackMode');
         playbackModeEl.innerHTML = (playlist.shuffle || playlist.is_shuffle)
@@ -398,9 +633,13 @@ function viewPlaylist(playlistId) {
           : '<i class="ti ti-list-numbers"></i> Sequential';
         
         const videosContainer = document.getElementById('playlistVideos');
+        let contentHtml = '';
+        
+        // Videos section
         if (playlist.videos && playlist.videos.length > 0) {
-          videosContainer.innerHTML = playlist.videos.map((video, index) => `
-            <div class="flex items-center gap-3 p-3 bg-gray-700 rounded">
+          contentHtml += '<h4 class="text-sm font-medium text-gray-300 mb-2"><i class="ti ti-video mr-1"></i>Videos</h4>';
+          contentHtml += playlist.videos.map((video, index) => `
+            <div class="flex items-center gap-3 p-3 bg-gray-700 rounded mb-2">
               <span class="text-gray-400 text-sm w-6">${index + 1}</span>
               <img src="${video.thumbnail_path}" alt="${video.title}" class="w-16 h-10 object-cover rounded">
               <div class="flex-1 min-w-0">
@@ -411,9 +650,32 @@ function viewPlaylist(playlistId) {
               </div>
             </div>
           `).join('');
-        } else {
-          videosContainer.innerHTML = '<p class="text-gray-400 text-center py-8">No videos in this playlist</p>';
         }
+        
+        // Audios section
+        if (playlist.audios && playlist.audios.length > 0) {
+          contentHtml += '<h4 class="text-sm font-medium text-gray-300 mb-2 mt-4"><i class="ti ti-music mr-1"></i>Audios</h4>';
+          contentHtml += playlist.audios.map((audio, index) => `
+            <div class="flex items-center gap-3 p-3 bg-gray-700 rounded mb-2">
+              <span class="text-gray-400 text-sm w-6">${index + 1}</span>
+              <div class="w-10 h-10 bg-dark-800 rounded flex items-center justify-center flex-shrink-0">
+                <i class="ti ti-music text-primary"></i>
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="font-medium truncate">${audio.title}</p>
+                <p class="text-xs text-gray-400">
+                  ${audio.duration ? Math.floor(audio.duration / 60) + ':' + String(Math.floor(audio.duration % 60)).padStart(2, '0') : '0:00'}
+                </p>
+              </div>
+            </div>
+          `).join('');
+        }
+        
+        if (!contentHtml) {
+          contentHtml = '<p class="text-gray-400 text-center py-8">No media in this playlist</p>';
+        }
+        
+        videosContainer.innerHTML = contentHtml;
         
         document.getElementById('editPlaylistBtn').onclick = () => {
           closeViewPlaylistModal();
@@ -463,7 +725,8 @@ document.getElementById('playlistForm').addEventListener('submit', function(e) {
     name: formData.get('name'),
     description: formData.get('description'),
     shuffle: formData.get('shuffle') === 'true',
-    videos: selectedVideos.map(video => video.id)
+    videos: selectedVideos.map(video => video.id),
+    audios: selectedAudios.map(audio => audio.id)
   };
   
   const url = currentPlaylistId ? `/api/playlists/${currentPlaylistId}` : '/api/playlists';
@@ -505,18 +768,50 @@ document.getElementById('searchVideos').addEventListener('input', function(e) {
   if (filteredVideos.length === 0) {
     container.innerHTML = '<div class="text-center py-5 text-gray-400"><p>No videos found</p></div>';
   } else {
-    container.innerHTML = filteredVideos.map(video => `
-      <button type="button" class="w-full flex items-center space-x-3 p-2 rounded hover:bg-dark-600 transition-colors" 
-              data-video-id="${video.id}" onclick="addVideoToPlaylist('${video.id}')">
+    container.innerHTML = filteredVideos.map((video, index) => `
+      <button type="button" class="w-full flex items-center gap-3 p-2 rounded hover:bg-dark-600 transition-colors" 
+              data-video-id="${video.id}" onclick="addVideoToPlaylist('${video.id}')" style="text-align: left;">
+        <span class="w-6 text-xs text-gray-500 flex-shrink-0" style="text-align: center;">${index + 1}</span>
         <div class="w-16 h-12 bg-dark-800 rounded flex-shrink-0 overflow-hidden">
           <img src="${video.thumbnail_path}" alt="${video.title}" 
                class="w-full h-full object-cover rounded" 
                onerror="this.src='/images/default-thumbnail.jpg'">
         </div>
-        <div class="flex-1 min-w-0 ml-3">
-          <p class="text-sm font-medium text-white truncate">${video.title}</p>
-          <p class="text-xs text-gray-400">
+        <div class="flex-1 min-w-0" style="text-align: left;">
+          <p class="text-sm font-medium text-white truncate" style="text-align: left;">${video.title}</p>
+          <p class="text-xs text-gray-400" style="text-align: left;">
             ${video.duration ? Math.floor(video.duration / 60) + ':' + String(Math.floor(video.duration % 60)).padStart(2, '0') : '0:00'}
+          </p>
+        </div>
+      </button>
+    `).join('');
+  }
+});
+
+document.getElementById('searchAudios').addEventListener('input', function(e) {
+  const searchTerm = e.target.value.toLowerCase();
+  const container = document.getElementById('availableAudios');
+  const selectedAudioIds = selectedAudios.map(a => a.id);
+  
+  const filteredAudios = allAudios.filter(audio => 
+    !selectedAudioIds.includes(audio.id) && 
+    audio.title.toLowerCase().includes(searchTerm)
+  );
+  
+  if (filteredAudios.length === 0) {
+    container.innerHTML = '<div class="text-center py-5 text-gray-400"><p>No audios found</p></div>';
+  } else {
+    container.innerHTML = filteredAudios.map((audio, index) => `
+      <button type="button" class="w-full flex items-center gap-3 p-2 rounded hover:bg-dark-600 transition-colors" 
+              data-audio-id="${audio.id}" onclick="addAudioToPlaylist('${audio.id}')" style="text-align: left;">
+        <span class="w-6 text-xs text-gray-500 flex-shrink-0" style="text-align: center;">${index + 1}</span>
+        <div class="w-12 h-12 bg-dark-800 rounded flex-shrink-0 flex items-center justify-center">
+          <i class="ti ti-music text-xl text-primary"></i>
+        </div>
+        <div class="flex-1 min-w-0" style="text-align: left;">
+          <p class="text-sm font-medium text-white truncate" style="text-align: left;">${audio.title}</p>
+          <p class="text-xs text-gray-400" style="text-align: left;">
+            ${audio.duration ? Math.floor(audio.duration / 60) + ':' + String(Math.floor(audio.duration % 60)).padStart(2, '0') : '0:00'}
           </p>
         </div>
       </button>

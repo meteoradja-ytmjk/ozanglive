@@ -15,7 +15,7 @@ let dbInitError = null;
 // Required tables that must exist before app can start
 const REQUIRED_TABLES = [
   'users', 'videos', 'streams', 'stream_history',
-  'playlists', 'playlist_videos', 'audios',
+  'playlists', 'playlist_videos', 'playlist_audios', 'audios',
   'system_settings', 'stream_templates', 'youtube_credentials',
   'broadcast_templates', 'recurring_schedules'
 ];
@@ -244,6 +244,16 @@ async function createCoreTablesAsync() {
     FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE,
     FOREIGN KEY (video_id) REFERENCES videos(id) ON DELETE CASCADE
   )`, 'playlist_videos');
+
+  await runTableQuery(`CREATE TABLE IF NOT EXISTS playlist_audios (
+    id TEXT PRIMARY KEY,
+    playlist_id TEXT NOT NULL,
+    audio_id TEXT NOT NULL,
+    position INTEGER NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE,
+    FOREIGN KEY (audio_id) REFERENCES audios(id) ON DELETE CASCADE
+  )`, 'playlist_audios');
 
   await runTableQuery(`CREATE TABLE IF NOT EXISTS audios (
     id TEXT PRIMARY KEY,
