@@ -6,10 +6,13 @@
  * for determining stream duration.
  * 
  * Priority Order:
- * 1. stream_duration_minutes (primary field, in minutes)
- * 2. end_time - schedule_time (calculated from schedule)
+ * 1. stream_duration_minutes (primary field, in minutes) - ALWAYS takes priority
+ * 2. end_time - schedule_time (calculated from schedule) - ONLY if stream_duration_minutes is not set
  * 3. stream_duration_hours (deprecated, in hours)
  * 4. duration (legacy field, in minutes)
+ * 
+ * IMPORTANT: If stream_duration_minutes is set (even to 0), end_time is NOT used for duration.
+ * If both stream_duration_minutes and end_time are empty/null, stream runs UNLIMITED.
  */
 
 /**
@@ -21,7 +24,7 @@
  * @param {string} [stream.schedule_time] - Scheduled start time (ISO format)
  * @param {number} [stream.stream_duration_hours] - Duration in hours (deprecated)
  * @param {number} [stream.duration] - Duration in minutes (legacy)
- * @returns {number|null} Duration in seconds or null if not set
+ * @returns {number|null} Duration in seconds or null if not set (unlimited)
  */
 function calculateDurationSeconds(stream) {
   if (!stream) {
@@ -30,6 +33,7 @@ function calculateDurationSeconds(stream) {
   }
 
   // Priority 1: stream_duration_minutes (primary field)
+  // If user explicitly set duration (hours + minutes), this takes absolute priority
   if (stream.stream_duration_minutes && stream.stream_duration_minutes > 0) {
     const seconds = stream.stream_duration_minutes * 60;
     console.log(`[DurationCalculator] Using stream_duration_minutes: ${stream.stream_duration_minutes} minutes (${seconds} seconds)`);
@@ -37,6 +41,8 @@ function calculateDurationSeconds(stream) {
   }
 
   // Priority 2: Calculate from schedule times (end_time - schedule_time)
+  // ONLY used if stream_duration_minutes is NOT set
+  // For ONCE schedules, end_time can be used to calculate duration
   if (stream.end_time && stream.schedule_time) {
     const scheduleStart = new Date(stream.schedule_time);
     const scheduleEnd = new Date(stream.end_time);
@@ -68,7 +74,8 @@ function calculateDurationSeconds(stream) {
     return seconds;
   }
 
-  console.log('[DurationCalculator] No valid duration found');
+  // No duration set - stream will run UNLIMITED
+  console.log('[DurationCalculator] No valid duration found - stream will run UNLIMITED');
   return null;
 }
 

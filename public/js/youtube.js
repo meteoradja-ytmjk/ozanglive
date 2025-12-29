@@ -1417,7 +1417,10 @@ if (saveAsTemplateForm) {
         streamId: broadcast.streamId || null  // Save stream ID for reuse
       };
       
-      console.log('[saveAsTemplate] Sending templateData with streamId:', templateData.streamId);
+      console.log('[saveAsTemplate] Sending templateData:', {
+        ...templateData,
+        privacyStatus: templateData.privacyStatus
+      });
       
       const response = await fetch('/api/youtube/templates', {
         method: 'POST',

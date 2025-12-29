@@ -105,7 +105,7 @@ async function checkScheduledStreams() {
     // Log every check to help debugging
     const currentHours = now.getHours();
     const currentMinutes = now.getMinutes();
-    console.log(`[Scheduler] Checking once schedules at ${currentHours}:${String(currentMinutes).padStart(2, '0')} local, lookAhead=${SCHEDULE_LOOKAHEAD_SECONDS}s`);
+    console.log(`[Scheduler] Checking ONCE schedules at ${currentHours}:${String(currentMinutes).padStart(2, '0')} local (${now.toISOString()}), lookAhead=${SCHEDULE_LOOKAHEAD_SECONDS}s`);
     
     let streams = [];
     try {
@@ -129,17 +129,25 @@ async function checkScheduledStreams() {
           const timeDiffMs = now.getTime() - scheduleTime.getTime();
           const timeDiffMinutes = timeDiffMs / 60000;
           
-          console.log(`[Scheduler] Starting scheduled stream: ${stream.id} - ${stream.title}`);
+          // FIXED: Only start if schedule time has passed or is within 1 minute
+          // This prevents starting streams too early
+          if (timeDiffMs < -60000) {
+            console.log(`[Scheduler] SKIP: stream ${stream.id} - scheduled for ${scheduleTime.toISOString()}, still ${Math.abs(timeDiffMinutes).toFixed(1)} minutes away`);
+            continue;
+          }
+          
+          console.log(`[Scheduler] >>> STARTING scheduled ONCE stream: ${stream.id} - ${stream.title}`);
           console.log(`[Scheduler]   Scheduled: ${stream.schedule_time}, Diff: ${timeDiffMinutes.toFixed(1)} minutes`);
+          console.log(`[Scheduler]   Duration: ${stream.stream_duration_minutes || 'unlimited'} minutes`);
           
           // Mark as triggered before starting
           markAsTriggered(stream.id);
           
           const result = await streamingService.startStream(stream.id);
           if (result.success) {
-            console.log(`[Scheduler] Successfully started scheduled stream: ${stream.id}`);
+            console.log(`[Scheduler] >>> Successfully started scheduled ONCE stream: ${stream.id}`);
           } else {
-            console.error(`[Scheduler] Failed to start scheduled stream ${stream.id}: ${result.error}`);
+            console.error(`[Scheduler] >>> Failed to start scheduled ONCE stream ${stream.id}: ${result.error}`);
             // Remove from triggered list if failed so it can retry
             recentlyTriggeredStreams.delete(stream.id);
           }
@@ -151,6 +159,9 @@ async function checkScheduledStreams() {
           // Continue with next stream, don't crash
         }
       }
+    } else {
+      // Log when no streams found to help debugging
+      console.log(`[Scheduler] No ONCE streams found in range`);
     }
   } catch (error) {
     console.error('[Scheduler] Error checking scheduled streams:', error.message);

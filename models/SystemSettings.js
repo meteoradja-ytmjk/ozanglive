@@ -64,6 +64,47 @@ class SystemSettings {
     const validLimit = Math.max(1, parseInt(limit, 10) || 1);
     return this.set('default_live_limit', validLimit.toString());
   }
+
+  /**
+   * Get auto-approve registration setting
+   * @returns {Promise<boolean>} True if auto-approve is enabled, false otherwise
+   */
+  static async getAutoApproveRegistration() {
+    const value = await this.get('auto_approve_registration');
+    return value === 'enabled';
+  }
+
+  /**
+   * Set auto-approve registration setting
+   * @param {boolean} enabled - Whether to enable auto-approve
+   * @returns {Promise<Object>} Result with key and value
+   */
+  static async setAutoApproveRegistration(enabled) {
+    return this.set('auto_approve_registration', enabled ? 'enabled' : 'disabled');
+  }
+
+  /**
+   * Get default live limit for new user registrations
+   * @returns {Promise<number>} Default live limit (0 = unlimited)
+   */
+  static async getDefaultLiveLimitForRegistration() {
+    const value = await this.get('default_live_limit_registration');
+    if (value === null) {
+      return 0; // Default unlimited
+    }
+    const parsed = parseInt(value, 10);
+    return isNaN(parsed) || parsed < 0 ? 0 : parsed;
+  }
+
+  /**
+   * Set default live limit for new user registrations
+   * @param {number} limit - Live limit value (0 = unlimited)
+   * @returns {Promise<Object>} Result with key and value
+   */
+  static async setDefaultLiveLimitForRegistration(limit) {
+    const validLimit = Math.max(0, parseInt(limit, 10) || 0);
+    return this.set('default_live_limit_registration', validLimit.toString());
+  }
 }
 
 module.exports = SystemSettings;

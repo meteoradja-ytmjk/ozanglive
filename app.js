@@ -743,19 +743,28 @@ app.post('/signup', upload.single('avatar'), async (req, res) => {
       avatarPath = `/uploads/avatars/${req.file.filename}`;
     }
 
+    // Get auto-approve and default live limit settings
+    const autoApprove = await SystemSettings.getAutoApproveRegistration();
+    const defaultLiveLimit = await SystemSettings.getDefaultLiveLimitForRegistration();
+
     const newUser = await User.create({
       username,
       password,
       avatar_path: avatarPath,
       user_role: user_role || 'member',
-      status: status || 'inactive'
+      status: autoApprove ? 'active' : 'inactive',
+      live_limit: defaultLiveLimit === 0 ? null : defaultLiveLimit
     });
 
     if (newUser) {
+      const successMessage = autoApprove 
+        ? 'Account created successfully! You can now login.'
+        : 'Account created successfully! Please wait for admin approval to activate your account.';
+      
       return res.render('signup', {
         title: 'Sign Up',
         error: null,
-        success: 'Account created successfully! Please wait for admin approval to activate your account.'
+        success: successMessage
       });
     } else {
       return res.render('signup', {
@@ -1668,6 +1677,64 @@ app.post('/api/settings/live-limit', isAdmin, async (req, res) => {
   } catch (error) {
     console.error('Set live limit error:', error);
     res.status(500).json({ success: false, message: 'Failed to update live limit' });
+  }
+});
+
+// Auto-approve registration settings
+app.get('/api/settings/auto-approve', isAdmin, async (req, res) => {
+  try {
+    const enabled = await SystemSettings.getAutoApproveRegistration();
+    res.json({ success: true, enabled });
+  } catch (error) {
+    console.error('Get auto-approve error:', error);
+    res.status(500).json({ success: false, message: 'Failed to get auto-approve setting' });
+  }
+});
+
+app.post('/api/settings/auto-approve', isAdmin, async (req, res) => {
+  try {
+    const { enabled } = req.body;
+    await SystemSettings.setAutoApproveRegistration(!!enabled);
+    res.json({ success: true, message: 'Auto-approve setting updated successfully', enabled: !!enabled });
+  } catch (error) {
+    console.error('Set auto-approve error:', error);
+    res.status(500).json({ success: false, message: 'Failed to update auto-approve setting' });
+  }
+});
+
+// Default live limit for new registrations
+app.get('/api/settings/default-live-limit-registration', isAdmin, async (req, res) => {
+  try {
+    const limit = await SystemSettings.getDefaultLiveLimitForRegistration();
+    res.json({ success: true, limit, isUnlimited: limit === 0 });
+  } catch (error) {
+    console.error('Get default live limit registration error:', error);
+    res.status(500).json({ success: false, message: 'Failed to get default live limit' });
+  }
+});
+
+app.post('/api/settings/default-live-limit-registration', isAdmin, async (req, res) => {
+  try {
+    const { limit } = req.body;
+    const parsedLimit = parseInt(limit, 10) || 0;
+    
+    if (parsedLimit < 0) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Live limit cannot be negative' 
+      });
+    }
+    
+    await SystemSettings.setDefaultLiveLimitForRegistration(parsedLimit);
+    res.json({ 
+      success: true, 
+      message: parsedLimit === 0 ? 'Default live limit set to unlimited' : `Default live limit set to ${parsedLimit}`,
+      limit: parsedLimit,
+      isUnlimited: parsedLimit === 0
+    });
+  } catch (error) {
+    console.error('Set default live limit registration error:', error);
+    res.status(500).json({ success: false, message: 'Failed to update default live limit' });
   }
 });
 
@@ -2749,6 +2816,7 @@ app.post('/api/streams', isAuthenticated, [
       orientation: req.body.orientation || 'horizontal',
       loop_video: req.body.loopVideo === 'true' || req.body.loopVideo === true,
       // Duration in minutes (stored as stream_duration_minutes in DB)
+      // Priority: If user sets duration (hours + minutes), use that and ignore end_time for duration
       stream_duration_minutes: (() => {
         const hours = parseInt(req.body.streamDurationHours) || 0;
         const minutes = parseInt(req.body.streamDurationMinutes) || 0;
@@ -2763,6 +2831,10 @@ app.post('/api/streams', isAuthenticated, [
       recurring_enabled: req.body.recurringEnabled === 'true' || req.body.recurringEnabled === true,
       user_id: req.session.userId
     };
+    
+    // Calculate if user has set explicit duration
+    const hasExplicitDuration = streamData.stream_duration_minutes && streamData.stream_duration_minutes > 0;
+    
     const serverTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     
     function parseLocalDateTime(dateTimeString) {
@@ -2778,7 +2850,8 @@ app.post('/api/streams', isAuthenticated, [
       streamData.schedule_time = scheduleStartDate.toISOString();
       streamData.status = 'scheduled';
       
-      if (req.body.scheduleEndTime) {
+      // Only use end_time for duration calculation if user hasn't set explicit duration
+      if (req.body.scheduleEndTime && !hasExplicitDuration) {
         const scheduleEndDate = parseLocalDateTime(req.body.scheduleEndTime);
         
         if (scheduleEndDate <= scheduleStartDate) {
@@ -2791,8 +2864,17 @@ app.post('/api/streams', isAuthenticated, [
         streamData.end_time = scheduleEndDate.toISOString();
         const durationMs = scheduleEndDate - scheduleStartDate;
         const durationMinutes = Math.round(durationMs / (1000 * 60));
+        // Set stream_duration_minutes from end_time calculation
+        streamData.stream_duration_minutes = durationMinutes > 0 ? durationMinutes : null;
         streamData.duration = durationMinutes > 0 ? durationMinutes : null;
+        console.log(`[API] Duration from end_time: ${durationMinutes} minutes`);
+      } else if (req.body.scheduleEndTime && hasExplicitDuration) {
+        // User set both duration and end_time - use duration, but still store end_time for reference
+        const scheduleEndDate = parseLocalDateTime(req.body.scheduleEndTime);
+        streamData.end_time = scheduleEndDate.toISOString();
+        console.log(`[API] Using explicit duration (${streamData.stream_duration_minutes} min), end_time stored for reference only`);
       }
+      // If no end_time and no duration, stream will be unlimited
     } else if (req.body.scheduleEndTime) {
       const scheduleEndDate = parseLocalDateTime(req.body.scheduleEndTime);
       streamData.end_time = scheduleEndDate.toISOString();
@@ -2808,7 +2890,7 @@ app.post('/api/streams', isAuthenticated, [
       }
     }
     
-    console.log(`[API] Creating stream with schedule_type=${streamData.schedule_type}, recurring_time=${streamData.recurring_time}, recurring_enabled=${streamData.recurring_enabled}, status=${streamData.status}`);
+    console.log(`[API] Creating stream with schedule_type=${streamData.schedule_type}, recurring_time=${streamData.recurring_time}, recurring_enabled=${streamData.recurring_enabled}, status=${streamData.status}, duration=${streamData.stream_duration_minutes} min`);
     
     const stream = await Stream.create(streamData);
     res.json({ success: true, stream });
@@ -3037,11 +3119,15 @@ app.put('/api/streams/:id', isAuthenticated, async (req, res) => {
     }
     
     // Handle stream duration (in minutes - new format: hours + minutes)
+    // IMPORTANT: If user sets duration, this takes priority over end_time
+    let hasExplicitDuration = false;
     if (req.body.streamDurationHours !== undefined || req.body.streamDurationMinutes !== undefined) {
       const hours = parseInt(req.body.streamDurationHours) || 0;
       const minutes = parseInt(req.body.streamDurationMinutes) || 0;
       const totalMinutes = (hours * 60) + minutes;
       updateData.stream_duration_minutes = totalMinutes > 0 ? totalMinutes : null;
+      hasExplicitDuration = totalMinutes > 0;
+      console.log(`[API Update] Duration set: ${hours}h + ${minutes}m = ${totalMinutes} minutes, hasExplicitDuration=${hasExplicitDuration}`);
     }
     
     // Handle audio selection
@@ -3090,7 +3176,8 @@ app.put('/api/streams/:id', isAuthenticated, async (req, res) => {
       updateData.schedule_time = scheduleStartDate.toISOString();
       updateData.status = 'scheduled';
       
-      if (req.body.scheduleEndTime) {
+      // FIXED: Only use end_time for duration if user hasn't set explicit duration
+      if (req.body.scheduleEndTime && !hasExplicitDuration) {
         const scheduleEndDate = parseLocalDateTime(req.body.scheduleEndTime);
         
         if (scheduleEndDate <= scheduleStartDate) {
@@ -3103,10 +3190,22 @@ app.put('/api/streams/:id', isAuthenticated, async (req, res) => {
         updateData.end_time = scheduleEndDate.toISOString();
         const durationMs = scheduleEndDate - scheduleStartDate;
         const durationMinutes = Math.round(durationMs / (1000 * 60));
+        // Only set duration from end_time if no explicit duration
+        updateData.stream_duration_minutes = durationMinutes > 0 ? durationMinutes : null;
         updateData.duration = durationMinutes > 0 ? durationMinutes : null;
+        console.log(`[API Update] Duration from end_time: ${durationMinutes} minutes`);
+      } else if (req.body.scheduleEndTime && hasExplicitDuration) {
+        // User set both duration and end_time - use duration, store end_time for reference only
+        const scheduleEndDate = parseLocalDateTime(req.body.scheduleEndTime);
+        updateData.end_time = scheduleEndDate.toISOString();
+        console.log(`[API Update] Using explicit duration (${updateData.stream_duration_minutes} min), end_time stored for reference only`);
       } else if ('scheduleEndTime' in req.body && req.body.scheduleEndTime === '') {
+        // End time cleared - if no explicit duration, stream will be unlimited
         updateData.end_time = null;
-        updateData.duration = null;
+        if (!hasExplicitDuration) {
+          updateData.duration = null;
+          console.log(`[API Update] End time cleared, no duration set - stream will be UNLIMITED`);
+        }
       }
     } else if ('scheduleStartTime' in req.body && !req.body.scheduleStartTime) {
       updateData.schedule_time = null;
@@ -3124,15 +3223,21 @@ app.put('/api/streams/:id', isAuthenticated, async (req, res) => {
         updateData.end_time = scheduleEndDate.toISOString();
       } else if ('scheduleEndTime' in req.body && req.body.scheduleEndTime === '') {
         updateData.end_time = null;
-        updateData.duration = null;
+        if (!hasExplicitDuration) {
+          updateData.duration = null;
+        }
       }
     } else if (req.body.scheduleEndTime) {
       const scheduleEndDate = parseLocalDateTime(req.body.scheduleEndTime);
       updateData.end_time = scheduleEndDate.toISOString();
     } else if ('scheduleEndTime' in req.body && req.body.scheduleEndTime === '') {
       updateData.end_time = null;
-      updateData.duration = null;
+      if (!hasExplicitDuration) {
+        updateData.duration = null;
+      }
     }
+    
+    console.log(`[API Update] Final updateData: schedule_time=${updateData.schedule_time}, end_time=${updateData.end_time}, stream_duration_minutes=${updateData.stream_duration_minutes}, status=${updateData.status}`);
     
     const updatedStream = await Stream.update(req.params.id, updateData);
     res.json({ success: true, stream: updatedStream });
@@ -3235,18 +3340,38 @@ app.post('/api/streams/:id/status', isAuthenticated, [
         if (!result.success) {
           console.warn('Failed to stop FFmpeg process:', result.error);
         }
-        await Stream.update(streamId, {
-          schedule_time: null
-        });
-        console.log(`Reset schedule_time for stopped stream ${streamId}`);
+        // For one-time schedules, reset schedule_time
+        if (stream.schedule_type === 'once') {
+          await Stream.update(streamId, {
+            schedule_time: null
+          });
+          console.log(`Reset schedule_time for stopped stream ${streamId}`);
+        }
+        // streamingService.stopStream already sets the correct status based on schedule type
+        // So we don't need to update status again here
+        const updatedStream = await Stream.getStreamWithVideo(streamId);
+        return res.json({ success: true, stream: updatedStream });
       } else if (stream.status === 'scheduled') {
-        await Stream.update(streamId, {
-          schedule_time: null,
-          status: 'offline'
-        });
-        console.log(`Scheduled stream ${streamId} was cancelled`);
+        // For scheduled streams that haven't started yet, set to offline
+        // But for recurring streams, keep them as scheduled
+        if (stream.schedule_type === 'once') {
+          await Stream.update(streamId, {
+            schedule_time: null,
+            status: 'offline'
+          });
+          console.log(`Scheduled stream ${streamId} was cancelled`);
+        } else {
+          // For recurring streams (daily/weekly), just disable the recurring
+          // but keep status as scheduled so user can re-enable later
+          console.log(`Recurring stream ${streamId} stop requested - keeping scheduled status`);
+        }
       }
-      const result = await Stream.updateStatus(streamId, 'offline', req.session.userId);
+      // Determine correct status based on schedule type
+      const isRecurringEnabled = stream.recurring_enabled === true || stream.recurring_enabled === 1;
+      const isRecurring = (stream.schedule_type === 'daily' || stream.schedule_type === 'weekly') && isRecurringEnabled;
+      const finalStatus = isRecurring ? 'scheduled' : 'offline';
+      
+      const result = await Stream.updateStatus(streamId, finalStatus, req.session.userId);
       if (!result.updated) {
         return res.status(404).json({
           success: false,
@@ -3325,8 +3450,18 @@ app.post('/api/streams/:id/stop', isAuthenticated, async (req, res) => {
       if (!result.success) {
         console.warn('Failed to stop FFmpeg process:', result.error);
       }
+      // streamingService.stopStream already sets the correct status based on schedule type
+      // So we just need to get the updated stream
+      const updatedStream = await Stream.getStreamWithVideo(streamId);
+      return res.json({ success: true, stream: updatedStream });
     }
-    await Stream.updateStatus(streamId, 'offline', req.session.userId);
+    
+    // For non-live streams, determine correct status based on schedule type
+    const isRecurringEnabled = stream.recurring_enabled === true || stream.recurring_enabled === 1;
+    const isRecurring = (stream.schedule_type === 'daily' || stream.schedule_type === 'weekly') && isRecurringEnabled;
+    const finalStatus = isRecurring ? 'scheduled' : 'offline';
+    
+    await Stream.updateStatus(streamId, finalStatus, req.session.userId);
     const updatedStream = await Stream.getStreamWithVideo(streamId);
     return res.json({ success: true, stream: updatedStream });
   } catch (error) {
@@ -5053,7 +5188,12 @@ app.post('/api/youtube/templates/multi', isAuthenticated, async (req, res) => {
       thumbnailPath: b.thumbnailPath || b.thumbnail_path || null  // Preserve thumbnail path
     }));
 
-    console.log('[templates/multi] Saving broadcasts with streamIds:', broadcastsWithStreamId.map(b => ({ title: b.title, streamId: b.streamId, thumbnailPath: b.thumbnailPath })));
+    console.log('[templates/multi] Saving broadcasts with data:', broadcastsWithStreamId.map(b => ({ 
+      title: b.title, 
+      streamId: b.streamId, 
+      thumbnailPath: b.thumbnailPath,
+      privacyStatus: b.privacyStatus 
+    })));
 
     // Create template with broadcasts data stored as JSON
     const template = await BroadcastTemplate.create({

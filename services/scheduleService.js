@@ -267,6 +267,9 @@ class ScheduleService {
           // Calculate scheduled start time (10 + i*2 minutes from now to stagger)
           const scheduledStartTime = new Date(now.getTime() + (10 + i * 2) * 60 * 1000);
           
+          // Log broadcast privacy status for debugging
+          console.log(`[ScheduleService] Broadcast ${i + 1} privacyStatus from template: ${b.privacyStatus}`);
+          
           const broadcastData = {
             title,
             description,
@@ -278,6 +281,7 @@ class ScheduleService {
           };
           
           console.log(`[ScheduleService] Creating broadcast ${i + 1}/${broadcasts.length}: ${title}`);
+          console.log(`[ScheduleService] Using privacyStatus: ${broadcastData.privacyStatus}`);
           console.log(`[ScheduleService] Using streamId: ${b.streamId || 'none (will create new)'}`);
           
           try {
@@ -306,6 +310,9 @@ class ScheduleService {
         // Calculate scheduled start time (10 minutes from now)
         const scheduledStartTime = new Date(now.getTime() + 10 * 60 * 1000);
         
+        // Log template privacy_status for debugging
+        console.log(`[ScheduleService] Template privacy_status: ${template.privacy_status}`);
+        
         const broadcastData = {
           title,
           description,
@@ -317,6 +324,7 @@ class ScheduleService {
         };
         
         console.log(`[ScheduleService] Creating single broadcast: ${title}`);
+        console.log(`[ScheduleService] Using privacyStatus: ${broadcastData.privacyStatus}`);
         console.log(`[ScheduleService] Using streamId: ${template.stream_id || 'none (will create new)'}`);
         
         const result = await youtubeService.createBroadcast(accessToken, broadcastData);

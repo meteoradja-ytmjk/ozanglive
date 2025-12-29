@@ -335,6 +335,50 @@
               </div>
             </div>
           </div>
+
+          <!-- User Registration Settings -->
+          <div class="bg-dark-700 rounded-lg p-4">
+            <h4 class="text-md font-medium mb-4 flex items-center">
+              <i class="ti ti-user-plus mr-2 text-green-400"></i>
+              User Registration Settings
+            </h4>
+            <p class="text-sm text-gray-400 mb-4">
+              Configure how new user registrations are handled.
+            </p>
+            
+            <div class="space-y-4">
+              <!-- Auto-Approve Toggle -->
+              <div class="flex items-center justify-between py-2">
+                <div>
+                  <label class="text-sm font-medium text-gray-300">Auto-Approve New Users</label>
+                  <p class="text-xs text-gray-500">When enabled, new users will be automatically activated without admin approval</p>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" id="auto-approve-toggle" class="sr-only peer">
+                  <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                </label>
+              </div>
+
+              <!-- Default Live Limit for Registration -->
+              <div class="space-y-2 pt-4 border-t border-gray-700">
+                <label for="default-live-limit-reg" class="block text-sm font-medium text-gray-300">
+                  Default Live Limit for New Users
+                </label>
+                <div class="flex items-center gap-3">
+                  <input type="number" id="default-live-limit-reg" min="0" max="100" value="0"
+                    class="bg-dark-900 text-white px-4 py-2 rounded-lg w-24 focus:outline-none focus:ring-1 focus:ring-primary">
+                  <button type="button" id="save-live-limit-reg"
+                    class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-lg transition-colors">
+                    Save
+                  </button>
+                </div>
+                <p class="text-xs text-gray-500">
+                  Set to 0 for unlimited. This limit will be applied to new user registrations.
+                </p>
+                <p class="text-xs text-gray-400" id="current-live-limit-reg"></p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -581,6 +625,88 @@
         const i = Math.floor(Math.log(bytes) / Math.log(k));
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
       }
+
+      // Auto-Approve Registration Settings
+      const autoApproveToggle = document.getElementById('auto-approve-toggle');
+      const liveLimitRegInput = document.getElementById('default-live-limit-reg');
+      const saveLiveLimitRegBtn = document.getElementById('save-live-limit-reg');
+      const currentLiveLimitRegText = document.getElementById('current-live-limit-reg');
+
+      // Load auto-approve setting
+      fetch('/api/settings/auto-approve')
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            autoApproveToggle.checked = data.enabled;
+          }
+        })
+        .catch(err => console.error('Error loading auto-approve setting:', err));
+
+      // Save auto-approve setting on toggle
+      autoApproveToggle.addEventListener('change', async () => {
+        try {
+          const res = await fetch('/api/settings/auto-approve', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRF-Token': '<%= csrfToken %>'
+            },
+            body: JSON.stringify({ enabled: autoApproveToggle.checked })
+          });
+          const data = await res.json();
+          if (data.success) {
+            showToast('success', autoApproveToggle.checked ? 'Auto-approve enabled' : 'Auto-approve disabled');
+          } else {
+            showToast('error', data.message || 'Failed to update auto-approve setting');
+            autoApproveToggle.checked = !autoApproveToggle.checked; // Revert on error
+          }
+        } catch (err) {
+          console.error('Error saving auto-approve setting:', err);
+          showToast('error', 'Failed to update auto-approve setting');
+          autoApproveToggle.checked = !autoApproveToggle.checked; // Revert on error
+        }
+      });
+
+      // Load default live limit for registration
+      fetch('/api/settings/default-live-limit-registration')
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            liveLimitRegInput.value = data.limit;
+            currentLiveLimitRegText.textContent = data.isUnlimited ? 'Current: Unlimited' : `Current: ${data.limit}`;
+          }
+        })
+        .catch(err => console.error('Error loading default live limit for registration:', err));
+
+      // Save default live limit for registration
+      saveLiveLimitRegBtn.addEventListener('click', async () => {
+        const limit = parseInt(liveLimitRegInput.value, 10) || 0;
+        if (limit < 0) {
+          showToast('error', 'Live limit cannot be negative');
+          return;
+        }
+        
+        try {
+          const res = await fetch('/api/settings/default-live-limit-registration', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRF-Token': '<%= csrfToken %>'
+            },
+            body: JSON.stringify({ limit })
+          });
+          const data = await res.json();
+          if (data.success) {
+            showToast('success', data.message);
+            currentLiveLimitRegText.textContent = data.isUnlimited ? 'Current: Unlimited' : `Current: ${data.limit}`;
+          } else {
+            showToast('error', data.message || 'Failed to update default live limit');
+          }
+        } catch (err) {
+          console.error('Error saving default live limit for registration:', err);
+          showToast('error', 'Failed to update default live limit');
+        }
+      });
       <% } %>
 
       // Backup & Restore functionality
