@@ -1183,16 +1183,25 @@ async function loadLiveLimitInfo() {
     const data = await response.json();
     
     if (data.success) {
-      // Update desktop
-      document.getElementById('live-limit-desktop').textContent = ' / ' + data.effectiveLimit;
-      // Update mobile
-      document.getElementById('live-limit-mobile').textContent = ' / ' + data.effectiveLimit;
+      // Check if admin (unlimited)
+      const limitDisplay = data.isAdmin ? '∞' : data.effectiveLimit;
       
-      // Show warning if limit reached
+      // Update desktop
+      document.getElementById('live-limit-desktop').textContent = ' / ' + limitDisplay;
+      // Update mobile
+      document.getElementById('live-limit-mobile').textContent = ' / ' + limitDisplay;
+      
+      // Add green color for unlimited
+      if (data.isAdmin) {
+        document.getElementById('live-limit-desktop').classList.add('text-green-400');
+        document.getElementById('live-limit-mobile').classList.add('text-green-400');
+      }
+      
+      // Show warning if limit reached (never for admin)
       const warningDesktop = document.getElementById('limit-warning-desktop');
       const warningMobile = document.getElementById('limit-warning-mobile');
       
-      if (!data.canStart) {
+      if (!data.canStart && !data.isAdmin) {
         warningDesktop.classList.remove('hidden');
         warningMobile.classList.remove('hidden');
       } else {

@@ -223,14 +223,14 @@
             </select>
           </div>
 
-          <div class="mb-4">
+          <div class="mb-4" id="liveLimitContainer">
             <label for="editLiveLimit" class="block text-sm font-medium text-gray-300 mb-2">
               Live Limit
-              <span class="text-xs text-gray-500 ml-1">(0 = use default)</span>
+              <span class="text-xs text-gray-500 ml-1" id="liveLimitHint">(0 = use default)</span>
             </label>
             <input type="number" id="editLiveLimit" name="live_limit" min="0" max="100" placeholder="0"
               class="w-full bg-dark-700 border border-gray-600 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
-            <p class="text-xs text-gray-500 mt-1">Maximum simultaneous live streams for this user</p>
+            <p class="text-xs text-gray-500 mt-1" id="liveLimitDesc">Maximum simultaneous live streams for this user</p>
           </div>
 
           <div class="mb-4">
@@ -442,6 +442,37 @@
 <script>
 let currentAction = null;
 
+// Function to update Live Limit UI based on role
+function updateLiveLimitUI(role, liveLimit) {
+  const liveLimitInput = document.getElementById('editLiveLimit');
+  const liveLimitHint = document.getElementById('liveLimitHint');
+  const liveLimitDesc = document.getElementById('liveLimitDesc');
+  
+  if (role === 'admin') {
+    liveLimitInput.value = '';
+    liveLimitInput.placeholder = 'Unlimited';
+    liveLimitInput.disabled = true;
+    liveLimitInput.classList.add('bg-gray-600', 'cursor-not-allowed');
+    liveLimitHint.textContent = '(Admin = Unlimited)';
+    liveLimitHint.classList.remove('text-gray-500');
+    liveLimitHint.classList.add('text-green-400');
+    liveLimitDesc.textContent = 'Admin users have unlimited live streams';
+    liveLimitDesc.classList.remove('text-gray-500');
+    liveLimitDesc.classList.add('text-green-400');
+  } else {
+    liveLimitInput.value = liveLimit || '';
+    liveLimitInput.placeholder = '0';
+    liveLimitInput.disabled = false;
+    liveLimitInput.classList.remove('bg-gray-600', 'cursor-not-allowed');
+    liveLimitHint.textContent = '(0 = use default)';
+    liveLimitHint.classList.remove('text-green-400');
+    liveLimitHint.classList.add('text-gray-500');
+    liveLimitDesc.textContent = 'Maximum simultaneous live streams for this user';
+    liveLimitDesc.classList.remove('text-green-400');
+    liveLimitDesc.classList.add('text-gray-500');
+  }
+}
+
 function showToast(message, type = 'success') {
   const toast = document.getElementById('toast');
   const toastIcon = document.getElementById('toast-icon');
@@ -468,7 +499,9 @@ function openEditModal(userId, username, role, status, avatar, liveLimit, storag
   document.getElementById('editRole').value = role;
   document.getElementById('editStatus').value = status;
   document.getElementById('editPassword').value = '';
-  document.getElementById('editLiveLimit').value = liveLimit || '';
+  
+  // Handle live limit based on role
+  updateLiveLimitUI(role, liveLimit);
   
   // Set storage limit
   const storageLimitValue = document.getElementById('editStorageLimitValue');
@@ -565,6 +598,15 @@ function editUser(userId, username, role, status, avatarPath, liveLimit) {
 
 // Event delegation for edit and delete buttons
 document.addEventListener('DOMContentLoaded', function() {
+  // Handle role change to update live limit UI
+  const editRoleSelect = document.getElementById('editRole');
+  if (editRoleSelect) {
+    editRoleSelect.addEventListener('change', function() {
+      const currentLiveLimit = document.getElementById('editLiveLimit').value;
+      updateLiveLimitUI(this.value, currentLiveLimit);
+    });
+  }
+  
   // Handle edit button clicks
   document.querySelectorAll('.edit-user-btn').forEach(btn => {
     btn.addEventListener('click', function() {
