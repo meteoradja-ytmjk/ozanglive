@@ -4,12 +4,39 @@ const SystemSettings = require('../models/SystemSettings');
 
 class LiveLimitService {
   /**
+   * Check if user is admin
+   * @param {string} userId - User ID
+   * @returns {Promise<boolean>} True if user is admin
+   */
+  static isAdmin(userId) {
+    return new Promise((resolve, reject) => {
+      db.get(
+        "SELECT role FROM users WHERE id = ?",
+        [userId],
+        (err, row) => {
+          if (err) {
+            console.error('Error checking admin role:', err.message);
+            return reject(err);
+          }
+          resolve(row && row.role === 'admin');
+        }
+      );
+    });
+  }
+
+  /**
    * Get the effective live limit for a user
-   * Returns custom limit if set, otherwise returns default limit
+   * Returns unlimited (Infinity) for admin, custom limit if set, otherwise returns default limit
    * @param {string} userId - User ID
    * @returns {Promise<number>} Effective live limit
    */
   static async getEffectiveLimit(userId) {
+    // Admin always has unlimited
+    const isAdmin = await this.isAdmin(userId);
+    if (isAdmin) {
+      return Infinity;
+    }
+    
     const customLimit = await User.getLiveLimit(userId);
     if (customLimit !== null && customLimit > 0) {
       return customLimit;
@@ -55,6 +82,25 @@ class LiveLimitService {
    * @returns {Promise<Object>} Validation info object
    */
   static async validateAndGetInfo(userId) {
+    const isAdmin = await this.isAdmin(userId);
+    
+    // Admin always has unlimited
+    if (isAdmin) {
+      const activeStreams = await this.countActiveStreams(userId);
+      return {
+        userId,
+        effectiveLimit: Infinity,
+        activeStreams,
+        canStart: true,
+        isCustomLimit: false,
+        isAdmin: true,
+        defaultLimit: await SystemSettings.getDefaultLiveLimit(),
+        customLimit: null,
+        message: null,
+        displayLimit: 'Unlimited'
+      };
+    }
+    
     const customLimit = await User.getLiveLimit(userId);
     const defaultLimit = await SystemSettings.getDefaultLiveLimit();
     const isCustomLimit = customLimit !== null && customLimit > 0;
@@ -68,9 +114,11 @@ class LiveLimitService {
       activeStreams,
       canStart,
       isCustomLimit,
+      isAdmin: false,
       defaultLimit,
       customLimit,
-      message: canStart ? null : 'Hubungi Admin Untuk Menambah Limit'
+      message: canStart ? null : 'Hubungi Admin Untuk Menambah Limit',
+      displayLimit: effectiveLimit.toString()
     };
   }
 }
