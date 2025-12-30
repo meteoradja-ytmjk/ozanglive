@@ -2,10 +2,86 @@
 
 set -e
 
+# ================================
+# PASSWORD VALIDATION FUNCTIONS
+# ================================
+
+# Fungsi untuk validasi password
+# Returns: 0 jika password benar, 1 jika salah
+validate_password() {
+    local input_password="$1"
+    local correct_password="1988"
+    
+    if [ "$input_password" = "$correct_password" ]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Fungsi untuk menampilkan pesan gagal
+show_failure_message() {
+    echo
+    echo "================================"
+    echo "❌ INSTALASI DIBATALKAN"
+    echo "================================"
+    echo
+    echo "Password salah 3 kali berturut-turut."
+    echo "Untuk mendapatkan password instalasi,"
+    echo "silakan hubungi developer:"
+    echo
+    echo "📱 WhatsApp: 089621453431"
+    echo
+    echo "================================"
+}
+
+# Fungsi untuk meminta password dari user
+# Returns: 0 jika password benar, 1 jika gagal setelah 3 percobaan
+prompt_password() {
+    local max_attempts=3
+    local attempt=1
+    
+    echo "🔐 Instalasi ini memerlukan password."
+    echo "   Hubungi developer untuk mendapatkan password."
+    echo
+    
+    while [ $attempt -le $max_attempts ]; do
+        echo -n "🔑 Masukkan password instalasi: "
+        read -s password
+        echo
+        
+        if validate_password "$password"; then
+            echo
+            echo "✅ Password benar! Melanjutkan instalasi..."
+            echo
+            return 0
+        else
+            remaining=$((max_attempts - attempt))
+            if [ $remaining -gt 0 ]; then
+                echo "❌ Password salah! Sisa percobaan: $remaining"
+                echo
+            fi
+            attempt=$((attempt + 1))
+        fi
+    done
+    
+    # Gagal setelah 3 percobaan
+    show_failure_message
+    return 1
+}
+
 echo "================================"
 echo "   OzangLive Quick Installer   "
 echo "================================"
 echo
+
+# ================================
+# PASSWORD VALIDATION
+# ================================
+# Meminta password sebelum instalasi dimulai
+if ! prompt_password; then
+    exit 1
+fi
 
 # Cek apakah sudah ada instalasi sebelumnya
 if [ -d "$HOME/ozanglive" ] || pm2 list 2>/dev/null | grep -q "ozanglive"; then

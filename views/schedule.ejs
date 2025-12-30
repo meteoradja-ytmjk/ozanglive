@@ -452,6 +452,24 @@
   let currentEditStream = null;
   let editSelectedDays = [];
 
+  /**
+   * Convert ISO UTC string to datetime-local input format (local time)
+   * This fixes the timezone issue where toISOString() returns UTC time
+   * @param {string} isoString - ISO 8601 UTC string from database
+   * @returns {string} - Format YYYY-MM-DDTHH:MM in local timezone
+   */
+  function formatDateTimeLocal(isoString) {
+    if (!isoString) return '';
+    const date = new Date(isoString);
+    if (isNaN(date.getTime())) return '';
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  }
+
   // Filter functionality
   document.addEventListener('DOMContentLoaded', function() {
     const filterSelect = document.getElementById('schedule-filter');
@@ -507,10 +525,10 @@
         if (stream.schedule_type === 'once') {
           document.getElementById('editOnceSettings').classList.remove('hidden');
           if (stream.schedule_time) {
-            document.getElementById('editScheduleTime').value = new Date(stream.schedule_time).toISOString().slice(0, 16);
+            document.getElementById('editScheduleTime').value = formatDateTimeLocal(stream.schedule_time);
           }
           if (stream.end_time) {
-            document.getElementById('editEndTime').value = new Date(stream.end_time).toISOString().slice(0, 16);
+            document.getElementById('editEndTime').value = formatDateTimeLocal(stream.end_time);
           }
         } else if (stream.schedule_type === 'daily' || stream.schedule_type === 'weekly') {
           document.getElementById('editRecurringSettings').classList.remove('hidden');
@@ -574,26 +592,28 @@
     if (!streamId || !currentEditStream) return;
     
     const updateData = {
-      title: document.getElementById('editStreamTitle').value
+      streamTitle: document.getElementById('editStreamTitle').value
     };
     
-    // Get duration
+    // Get duration - send as separate hours and minutes for API
     const hours = parseInt(document.getElementById('editDurationHours').value) || 0;
     const minutes = parseInt(document.getElementById('editDurationMinutes').value) || 0;
-    updateData.stream_duration_minutes = hours * 60 + minutes;
+    updateData.streamDurationHours = hours;
+    updateData.streamDurationMinutes = minutes;
     
     // Schedule type specific data
     if (currentEditStream.schedule_type === 'once') {
       const scheduleTime = document.getElementById('editScheduleTime').value;
       const endTime = document.getElementById('editEndTime').value;
-      if (scheduleTime) updateData.schedule_time = new Date(scheduleTime).toISOString();
-      if (endTime) updateData.end_time = new Date(endTime).toISOString();
+      // Send datetime-local format directly - API will parse it correctly
+      if (scheduleTime) updateData.scheduleStartTime = scheduleTime;
+      if (endTime) updateData.scheduleEndTime = endTime;
     } else if (currentEditStream.schedule_type === 'daily' || currentEditStream.schedule_type === 'weekly') {
-      updateData.recurring_time = document.getElementById('editRecurringTime').value;
-      updateData.recurring_enabled = document.getElementById('editRecurringEnabled').checked;
+      updateData.recurringTime = document.getElementById('editRecurringTime').value;
+      updateData.recurringEnabled = document.getElementById('editRecurringEnabled').checked;
       
       if (currentEditStream.schedule_type === 'weekly') {
-        updateData.schedule_days = JSON.stringify(editSelectedDays);
+        updateData.scheduleDays = JSON.stringify(editSelectedDays);
       }
     }
     

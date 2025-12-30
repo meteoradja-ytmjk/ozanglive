@@ -629,6 +629,24 @@
 </div>
 
 <script>
+/**
+ * Convert ISO UTC string to datetime-local input format (local time)
+ * This fixes the timezone issue where toISOString() returns UTC time
+ * @param {string} isoString - ISO 8601 UTC string from database
+ * @returns {string} - Format YYYY-MM-DDTHH:MM in local timezone
+ */
+function formatDateTimeLocal(isoString) {
+  if (!isoString) return '';
+  const date = new Date(isoString);
+  if (isNaN(date.getTime())) return '';
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
 // Global variables for video/audio selection
 window.selectedVideoData = null;
 window.selectedAudioData = null;
@@ -1799,12 +1817,10 @@ async function editStream(id) {
       document.getElementById('streamDurationMinutes').value = minutes || '';
       
       if (stream.schedule_time) {
-        const startDate = new Date(stream.schedule_time);
-        document.getElementById('scheduleStartTime').value = startDate.toISOString().slice(0, 16);
+        document.getElementById('scheduleStartTime').value = formatDateTimeLocal(stream.schedule_time);
       }
       if (stream.end_time) {
-        const endDate = new Date(stream.end_time);
-        document.getElementById('scheduleEndTime').value = endDate.toISOString().slice(0, 16);
+        document.getElementById('scheduleEndTime').value = formatDateTimeLocal(stream.end_time);
       }
       
       // Set video selection
@@ -2057,10 +2073,10 @@ async function openScheduleEditModal(streamId) {
       if (stream.schedule_type === 'once') {
         document.getElementById('scheduleEditOnceSettings').classList.remove('hidden');
         if (stream.schedule_time) {
-          document.getElementById('scheduleEditStartTime').value = new Date(stream.schedule_time).toISOString().slice(0, 16);
+          document.getElementById('scheduleEditStartTime').value = formatDateTimeLocal(stream.schedule_time);
         }
         if (stream.end_time) {
-          document.getElementById('scheduleEditEndTime').value = new Date(stream.end_time).toISOString().slice(0, 16);
+          document.getElementById('scheduleEditEndTime').value = formatDateTimeLocal(stream.end_time);
         }
       } else {
         document.getElementById('scheduleEditRecurringSettings').classList.remove('hidden');
