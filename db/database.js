@@ -580,9 +580,28 @@ function checkIfUsersExist() {
   });
 }
 
+/**
+ * Check if any admin user exists in the database
+ * Used for first-time setup to determine if admin account needs to be created
+ * @returns {Promise<boolean>}
+ */
+function checkIfAdminExists() {
+  return new Promise((resolve, reject) => {
+    db.get("SELECT COUNT(*) as count FROM users WHERE user_role = 'admin' AND status = 'active'", [], (err, result) => {
+      if (err) {
+        console.error('[Database] Error checking admin users:', err.message);
+        reject(err);
+        return;
+      }
+      resolve(result.count > 0);
+    });
+  });
+}
+
 module.exports = {
   db,
   checkIfUsersExist,
+  checkIfAdminExists,
   waitForDbInit,
   verifyTables,
   checkConnectivity,

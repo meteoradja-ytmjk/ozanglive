@@ -14,7 +14,7 @@ const bcrypt = require('bcrypt');
 const { body, validationResult } = require('express-validator');
 const rateLimit = require('express-rate-limit');
 const User = require('./models/User');
-const { db, checkIfUsersExist, waitForDbInit, verifyTables, checkConnectivity, closeDatabase } = require('./db/database');
+const { db, checkIfUsersExist, checkIfAdminExists, waitForDbInit, verifyTables, checkConnectivity, closeDatabase } = require('./db/database');
 const systemMonitor = require('./services/systemMonitor');
 const { uploadVideo, upload, uploadAudio, uploadBackup, checkStorageLimit } = require('./middleware/uploadMiddleware');
 const { ensureDirectories } = require('./utils/storage');
@@ -605,8 +605,9 @@ app.get('/login', async (req, res) => {
     return res.redirect('/dashboard');
   }
   try {
-    const usersExist = await checkIfUsersExist();
-    if (!usersExist) {
+    // Check if any active admin exists, not just any user
+    const adminExists = await checkIfAdminExists();
+    if (!adminExists) {
       return res.redirect('/setup-account');
     }
     res.render('login', {
@@ -669,8 +670,9 @@ app.get('/signup', async (req, res) => {
     return res.redirect('/dashboard');
   }
   try {
-    const usersExist = await checkIfUsersExist();
-    if (!usersExist) {
+    // Check if any active admin exists, not just any user
+    const adminExists = await checkIfAdminExists();
+    if (!adminExists) {
       return res.redirect('/setup-account');
     }
     res.render('signup', {
@@ -785,8 +787,9 @@ app.post('/signup', upload.single('avatar'), async (req, res) => {
 
 app.get('/setup-account', async (req, res) => {
   try {
-    const usersExist = await checkIfUsersExist();
-    if (usersExist && !req.session.userId) {
+    // Check if any active admin exists
+    const adminExists = await checkIfAdminExists();
+    if (adminExists && !req.session.userId) {
       return res.redirect('/login');
     }
     if (req.session.userId) {
@@ -838,8 +841,9 @@ app.post('/setup-account', upload.single('avatar'), [
       });
     }
     const avatarPath = req.file ? `/uploads/avatars/${req.file.filename}` : null;
-    const usersExist = await checkIfUsersExist();
-    if (!usersExist) {
+    // Check if any active admin exists (not just any user)
+    const adminExists = await checkIfAdminExists();
+    if (!adminExists) {
       try {
         const user = await User.create({
           username: req.body.username,
