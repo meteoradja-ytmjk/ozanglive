@@ -127,19 +127,28 @@ class Stream {
         LEFT JOIN audios a ON s.audio_id = a.id
       `;
       const params = [];
+      const conditions = [];
+      
       if (userId) {
-        query += ' WHERE s.user_id = ?';
+        conditions.push('s.user_id = ?');
         params.push(userId);
-        if (filter) {
-          if (filter === 'live') {
-            query += " AND s.status = 'live'";
-          } else if (filter === 'scheduled') {
-            query += " AND s.status = 'scheduled'";
-          } else if (filter === 'offline') {
-            query += " AND s.status = 'offline'";
-          }
+      }
+      
+      // FIXED: Apply filter regardless of userId
+      if (filter) {
+        if (filter === 'live') {
+          conditions.push("s.status = 'live'");
+        } else if (filter === 'scheduled') {
+          conditions.push("s.status = 'scheduled'");
+        } else if (filter === 'offline') {
+          conditions.push("s.status = 'offline'");
         }
       }
+      
+      if (conditions.length > 0) {
+        query += ' WHERE ' + conditions.join(' AND ');
+      }
+      
       query += ' ORDER BY s.created_at DESC';
       db.all(query, params, (err, rows) => {
         if (err) {
@@ -210,23 +219,35 @@ class Stream {
     const { startTimeOverride = null, endTimeOverride = null } = options;
     let start_time = null;
     let end_time = null;
+    let clear_start_time = false;
+    
     if (status === 'live') {
       start_time = startTimeOverride || new Date().toISOString();
     } else if (status === 'offline') {
       end_time = endTimeOverride || new Date().toISOString();
+    } else if (status === 'scheduled') {
+      // FIXED: Clear start_time when status changes to 'scheduled'
+      // This is important for recurring streams to prevent duration check
+      // from using old start_time values
+      clear_start_time = true;
     }
     
     // FIXED: Always update by id only to avoid user_id mismatch issues
     // The user_id check was causing status updates to fail when scheduler starts streams
+    // FIXED: Clear start_time when status is 'scheduled' to prevent stale duration checks
     const query = `UPDATE streams SET 
         status = ?, 
         status_updated_at = ?, 
-        start_time = CASE WHEN ? IS NOT NULL THEN ? ELSE start_time END, 
+        start_time = CASE 
+          WHEN ? = 1 THEN NULL 
+          WHEN ? IS NOT NULL THEN ? 
+          ELSE start_time 
+        END, 
         end_time = CASE WHEN ? IS NOT NULL THEN ? ELSE end_time END,
         updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`;
     
-    const params = [status, status_updated_at, start_time, start_time, end_time, end_time, id];
+    const params = [status, status_updated_at, clear_start_time ? 1 : 0, start_time, start_time, end_time, end_time, id];
     
     return new Promise((resolve, reject) => {
       db.run(query, params,
@@ -239,14 +260,14 @@ class Stream {
           if (this.changes === 0) {
             console.warn(`[Stream.updateStatus] WARNING: No rows updated for stream ${id} to status '${status}'`);
           } else {
-            console.log(`[Stream.updateStatus] Updated stream ${id} to status '${status}', rows affected: ${this.changes}`);
+            console.log(`[Stream.updateStatus] Updated stream ${id} to status '${status}'${clear_start_time ? ' (start_time cleared)' : ''}, rows affected: ${this.changes}`);
           }
           
           resolve({
             id,
             status,
             status_updated_at,
-            start_time,
+            start_time: clear_start_time ? null : start_time,
             end_time,
             updated: this.changes > 0
           });

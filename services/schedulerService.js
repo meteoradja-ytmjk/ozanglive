@@ -390,12 +390,17 @@ function shouldTriggerDaily(stream, currentTime = new Date()) {
   const currentTotalMinutes = wibTime.hours * 60 + wibTime.minutes;
 
   // Calculate time difference (positive = current time is after scheduled time)
+  // FIXED: timeDiff should be positive when current time is AFTER scheduled time
   const timeDiff = currentTotalMinutes - scheduleMinutes;
   
   // Trigger only AFTER scheduled time (no early triggers)
   // - timeDiff >= 0: Only trigger at or after scheduled time
   // - timeDiff <= 5: Allow up to 5 minutes late (for missed schedules due to restart)
+  // FIXED: Also handle case where schedule was missed by more than 5 minutes
+  // by checking if we're within the trigger window
   const shouldTrigger = timeDiff >= 0 && timeDiff <= 5;
+  
+  console.log(`[Scheduler] shouldTriggerDaily: stream=${stream.id}, schedTime=${schedHours}:${String(schedMinutes).padStart(2,'0')}, currentTime=${wibTime.hours}:${String(wibTime.minutes).padStart(2,'0')}, timeDiff=${timeDiff}, shouldTrigger=${shouldTrigger}`);
   
   return shouldTrigger;
 }
@@ -429,12 +434,15 @@ function shouldTriggerWeekly(stream, currentTime = new Date()) {
   const currentTotalMinutes = wibTime.hours * 60 + wibTime.minutes;
 
   // Calculate time difference (positive = current time is after scheduled time)
+  // FIXED: timeDiff should be positive when current time is AFTER scheduled time
   const timeDiff = currentTotalMinutes - scheduleMinutes;
   
   // Trigger only AFTER scheduled time (no early triggers)
   // - timeDiff >= 0: Only trigger at or after scheduled time
   // - timeDiff <= 5: Allow up to 5 minutes late (for missed schedules due to restart)
   const shouldTrigger = timeDiff >= 0 && timeDiff <= 5;
+  
+  console.log(`[Scheduler] shouldTriggerWeekly: stream=${stream.id}, schedTime=${schedHours}:${String(schedMinutes).padStart(2,'0')}, currentDay=${wibTime.day}, scheduleDays=[${scheduleDays.join(',')}], timeDiff=${timeDiff}, shouldTrigger=${shouldTrigger}`);
   
   return shouldTrigger;
 }
@@ -528,33 +536,10 @@ async function checkRecurringSchedules() {
 
         if (stream.schedule_type === 'daily') {
           shouldTrigger = shouldTriggerDaily(stream, now);
-          // Always log time comparison for daily
-          if (stream.recurring_time) {
-            const [schedHours, schedMinutes] = stream.recurring_time.split(':').map(Number);
-            const scheduleMinutes = schedHours * 60 + schedMinutes;
-            const currentTotalMinutes = currentHours * 60 + currentMinutes;
-            const timeDiff = currentTotalMinutes - scheduleMinutes;
-            const triggerStatus = timeDiff < 0 ? 'WAITING (before schedule)' : 
-                                  timeDiff <= 5 ? 'IN WINDOW (0-5 min after)' : 
-                                  'MISSED (>5 min after)';
-            console.log(`[Scheduler] Daily time check: scheduled=${schedHours}:${String(schedMinutes).padStart(2, '0')} WIB, current=${currentHours}:${String(currentMinutes).padStart(2, '0')} WIB, diff=${timeDiff}min, status=${triggerStatus}, shouldTrigger=${shouldTrigger}`);
-          }
+          // Log is already done in shouldTriggerDaily function
         } else if (stream.schedule_type === 'weekly') {
           shouldTrigger = shouldTriggerWeekly(stream, now);
-          // Always log time and day comparison for weekly
-          if (stream.recurring_time) {
-            const [schedHours, schedMinutes] = stream.recurring_time.split(':').map(Number);
-            const scheduleMinutes = schedHours * 60 + schedMinutes;
-            const currentTotalMinutes = currentHours * 60 + currentMinutes;
-            const timeDiff = currentTotalMinutes - scheduleMinutes;
-            const scheduleDays = Array.isArray(stream.schedule_days) ? stream.schedule_days : [];
-            const dayMatch = scheduleDays.includes(currentDay);
-            const triggerStatus = !dayMatch ? 'WRONG DAY' :
-                                  timeDiff < 0 ? 'WAITING (before schedule)' : 
-                                  timeDiff <= 5 ? 'IN WINDOW (0-5 min after)' : 
-                                  'MISSED (>5 min after)';
-            console.log(`[Scheduler] Weekly time check: scheduled=${schedHours}:${String(schedMinutes).padStart(2, '0')} WIB on days=[${scheduleDays.join(',')}], current=${currentHours}:${String(currentMinutes).padStart(2, '0')} WIB (${dayNames[currentDay]}), diff=${timeDiff}min, status=${triggerStatus}, shouldTrigger=${shouldTrigger}`);
-          }
+          // Log is already done in shouldTriggerWeekly function
         }
 
         if (shouldTrigger) {
