@@ -460,6 +460,7 @@
             <div>
               <label class="text-sm font-medium text-white block mb-2">End Stream</label>
               <input type="datetime-local" id="scheduleEndTime" name="scheduleEndTime" class="w-full px-3 py-2.5 bg-dark-700 border border-gray-600 rounded-lg text-sm [color-scheme:dark]">
+              <p class="text-xs text-gray-500 mt-1">Jika Durasi diisi, End Stream akan di-disable</p>
             </div>
           </div>
           
@@ -667,6 +668,13 @@ window.openNewStreamModal = function() {
   if (typeof window.loadGalleryVideos === 'function') {
     window.loadGalleryVideos();
   }
+  
+  // Initialize mutual exclusion for duration/end time (for once schedule)
+  setTimeout(() => {
+    if (typeof window.initDurationEndTimeMutualExclusion === 'function') {
+      window.initDurationEndTimeMutualExclusion();
+    }
+  }, 100);
 };
 
 // Close New Stream Modal - always define to ensure it works
@@ -686,6 +694,7 @@ window.closeNewStreamModal = function() {
   const form = document.getElementById('newStreamForm');
   if (form) {
     delete form.dataset.editId;
+    form.reset();
   }
   
   // Reset modal title and button
@@ -693,6 +702,60 @@ window.closeNewStreamModal = function() {
   const submitBtn = document.querySelector('button[type="submit"][form="newStreamForm"]');
   if (modalTitle) modalTitle.textContent = 'Create New Stream';
   if (submitBtn) submitBtn.textContent = 'Create Stream';
+  
+  // Reset duration/end time field states
+  const durationHours = document.getElementById('streamDurationHours');
+  const durationMinutes = document.getElementById('streamDurationMinutes');
+  const endTime = document.getElementById('scheduleEndTime');
+  const startTime = document.getElementById('scheduleStartTime');
+  
+  if (durationHours) {
+    durationHours.disabled = false;
+    durationHours.classList.remove('opacity-50', 'cursor-not-allowed');
+    durationHours.value = '';
+  }
+  if (durationMinutes) {
+    durationMinutes.disabled = false;
+    durationMinutes.classList.remove('opacity-50', 'cursor-not-allowed');
+    durationMinutes.value = '';
+  }
+  if (endTime) {
+    endTime.disabled = false;
+    endTime.classList.remove('opacity-50', 'cursor-not-allowed');
+    endTime.value = '';
+  }
+  if (startTime) {
+    startTime.value = '';
+  }
+  
+  // Reset video/audio selection
+  window.selectedVideoData = null;
+  window.selectedAudioData = null;
+  const selectedVideo = document.getElementById('selectedVideo');
+  const selectedVideoId = document.getElementById('selectedVideoId');
+  const selectedAudio = document.getElementById('selectedAudio');
+  const selectedAudioId = document.getElementById('selectedAudioId');
+  const clearAudioBtn = document.getElementById('clearAudioBtn');
+  
+  if (selectedVideo) selectedVideo.textContent = 'Select a video';
+  if (selectedVideoId) selectedVideoId.value = '';
+  if (selectedAudio) selectedAudio.textContent = 'No audio selected';
+  if (selectedAudioId) selectedAudioId.value = '';
+  if (clearAudioBtn) clearAudioBtn.classList.add('hidden');
+  
+  // Reset schedule type to once
+  if (typeof window.setScheduleType === 'function') {
+    window.setScheduleType('once');
+  }
+  
+  // Reset selected days
+  window.selectedDays = [];
+  document.querySelectorAll('.day-btn').forEach(btn => {
+    btn.classList.remove('border-primary', 'bg-primary', 'text-white');
+    btn.classList.add('border-gray-600', 'bg-dark-700', 'text-gray-300');
+  });
+  const scheduleDaysInput = document.getElementById('scheduleDays');
+  if (scheduleDaysInput) scheduleDaysInput.value = '[]';
 };
 
 // Toggle Video Selector - always define to ensure it works
@@ -994,6 +1057,8 @@ window.setScheduleType = function(type) {
   if (type === 'once') {
     if (onceSettings) onceSettings.classList.remove('hidden');
     if (recurringSettings) recurringSettings.classList.add('hidden');
+    // Initialize duration/endTime mutual exclusion for once schedule
+    initDurationEndTimeMutualExclusion();
   } else {
     if (onceSettings) onceSettings.classList.add('hidden');
     if (recurringSettings) recurringSettings.classList.remove('hidden');
@@ -1004,6 +1069,73 @@ window.setScheduleType = function(type) {
         weeklyDaysSelector.classList.add('hidden');
       }
     }
+  }
+};
+
+// Mutual exclusion between Duration (Hours/Minutes) and End Stream
+// If Duration is filled, End Stream is disabled and vice versa
+window.initDurationEndTimeMutualExclusion = function() {
+  const durationHours = document.getElementById('streamDurationHours');
+  const durationMinutes = document.getElementById('streamDurationMinutes');
+  const endTime = document.getElementById('scheduleEndTime');
+  
+  if (!durationHours || !durationMinutes || !endTime) return;
+  
+  // Remove existing listeners to prevent duplicates
+  durationHours.removeEventListener('input', handleDurationChange);
+  durationMinutes.removeEventListener('input', handleDurationChange);
+  endTime.removeEventListener('input', handleEndTimeChange);
+  
+  // Add new listeners
+  durationHours.addEventListener('input', handleDurationChange);
+  durationMinutes.addEventListener('input', handleDurationChange);
+  endTime.addEventListener('input', handleEndTimeChange);
+  
+  // Initial state check
+  updateDurationEndTimeState();
+};
+
+window.handleDurationChange = function() {
+  updateDurationEndTimeState();
+};
+
+window.handleEndTimeChange = function() {
+  updateDurationEndTimeState();
+};
+
+window.updateDurationEndTimeState = function() {
+  const durationHours = document.getElementById('streamDurationHours');
+  const durationMinutes = document.getElementById('streamDurationMinutes');
+  const endTime = document.getElementById('scheduleEndTime');
+  
+  if (!durationHours || !durationMinutes || !endTime) return;
+  
+  const hours = parseInt(durationHours.value) || 0;
+  const minutes = parseInt(durationMinutes.value) || 0;
+  const hasDuration = hours > 0 || minutes > 0;
+  const hasEndTime = endTime.value && endTime.value.trim() !== '';
+  
+  // If duration is filled, disable end time
+  if (hasDuration) {
+    endTime.disabled = true;
+    endTime.classList.add('opacity-50', 'cursor-not-allowed');
+    endTime.value = ''; // Clear end time when duration is set
+  } 
+  // If end time is filled, disable duration
+  else if (hasEndTime) {
+    durationHours.disabled = true;
+    durationMinutes.disabled = true;
+    durationHours.classList.add('opacity-50', 'cursor-not-allowed');
+    durationMinutes.classList.add('opacity-50', 'cursor-not-allowed');
+  } 
+  // Neither is filled, enable both
+  else {
+    endTime.disabled = false;
+    endTime.classList.remove('opacity-50', 'cursor-not-allowed');
+    durationHours.disabled = false;
+    durationMinutes.disabled = false;
+    durationHours.classList.remove('opacity-50', 'cursor-not-allowed');
+    durationMinutes.classList.remove('opacity-50', 'cursor-not-allowed');
   }
 };
 
@@ -1816,11 +1948,37 @@ async function editStream(id) {
       document.getElementById('streamDurationHours').value = hours || '';
       document.getElementById('streamDurationMinutes').value = minutes || '';
       
+      // Reset disabled state before setting values
+      const durationHoursEl = document.getElementById('streamDurationHours');
+      const durationMinutesEl = document.getElementById('streamDurationMinutes');
+      const endTimeEl = document.getElementById('scheduleEndTime');
+      
+      if (durationHoursEl) {
+        durationHoursEl.disabled = false;
+        durationHoursEl.classList.remove('opacity-50', 'cursor-not-allowed');
+      }
+      if (durationMinutesEl) {
+        durationMinutesEl.disabled = false;
+        durationMinutesEl.classList.remove('opacity-50', 'cursor-not-allowed');
+      }
+      if (endTimeEl) {
+        endTimeEl.disabled = false;
+        endTimeEl.classList.remove('opacity-50', 'cursor-not-allowed');
+      }
+      
+      // Set schedule times - preserve original values from database
       if (stream.schedule_time) {
         document.getElementById('scheduleStartTime').value = formatDateTimeLocal(stream.schedule_time);
+      } else {
+        document.getElementById('scheduleStartTime').value = '';
       }
-      if (stream.end_time) {
+      
+      // Only set end_time if duration is NOT set (mutual exclusion)
+      const hasDuration = (hours > 0 || minutes > 0);
+      if (stream.end_time && !hasDuration) {
         document.getElementById('scheduleEndTime').value = formatDateTimeLocal(stream.end_time);
+      } else {
+        document.getElementById('scheduleEndTime').value = '';
       }
       
       // Set video selection
@@ -1850,6 +2008,14 @@ async function editStream(id) {
       // Load recurring schedule data
       if (typeof loadRecurringScheduleData === 'function') {
         loadRecurringScheduleData(stream);
+      }
+      
+      // Initialize mutual exclusion after setting values
+      if (stream.schedule_type === 'once') {
+        setTimeout(() => {
+          initDurationEndTimeMutualExclusion();
+          updateDurationEndTimeState();
+        }, 100);
       }
       
       // Store stream ID for update

@@ -3199,7 +3199,11 @@ app.put('/api/streams/:id', isAuthenticated, async (req, res) => {
         const scheduleEndDate = parseLocalDateTime(req.body.scheduleEndTime);
         updateData.end_time = scheduleEndDate.toISOString();
         console.log(`[API Update] Using explicit duration (${updateData.stream_duration_minutes} min), end_time stored for reference only`);
-      } else if ('scheduleEndTime' in req.body && req.body.scheduleEndTime === '') {
+      } else if (hasExplicitDuration) {
+        // Duration is set, clear end_time (mutual exclusion)
+        updateData.end_time = null;
+        console.log(`[API Update] Duration set (${updateData.stream_duration_minutes} min), clearing end_time (mutual exclusion)`);
+      } else if ('scheduleEndTime' in req.body && (req.body.scheduleEndTime === '' || req.body.scheduleEndTime === null)) {
         // End time cleared - if no explicit duration, stream will be unlimited
         updateData.end_time = null;
         if (!hasExplicitDuration) {

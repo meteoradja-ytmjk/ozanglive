@@ -374,12 +374,13 @@
           <!-- Once Schedule Settings -->
           <div id="editOnceSettings" class="hidden space-y-4">
             <div>
-              <label class="text-sm font-medium text-white block mb-2">Start Time</label>
+              <label class="text-sm font-medium text-white block mb-2">Start Stream</label>
               <input type="datetime-local" id="editScheduleTime" class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none [color-scheme:dark]">
             </div>
             <div>
-              <label class="text-sm font-medium text-white block mb-2">End Time</label>
+              <label class="text-sm font-medium text-white block mb-2">End Stream</label>
               <input type="datetime-local" id="editEndTime" class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none [color-scheme:dark]">
+              <p class="text-xs text-gray-500 mt-1">Jika Durasi diisi, End Stream akan di-disable</p>
             </div>
           </div>
           
@@ -416,18 +417,19 @@
           </div>
           
           <!-- Duration -->
-          <div>
-            <label class="text-sm font-medium text-white block mb-2">Duration</label>
+          <div id="editDurationSection">
+            <label class="text-sm font-medium text-white block mb-2">Durasi</label>
             <div class="grid grid-cols-2 gap-3">
               <div>
-                <label class="text-xs text-gray-400 block mb-1">Hours</label>
+                <label class="text-xs text-gray-400 block mb-1">Jam</label>
                 <input type="number" id="editDurationHours" min="0" max="168" class="w-full px-3 py-2.5 bg-dark-700 border border-gray-600 rounded-lg text-sm focus:border-primary focus:outline-none" placeholder="0">
               </div>
               <div>
-                <label class="text-xs text-gray-400 block mb-1">Minutes</label>
+                <label class="text-xs text-gray-400 block mb-1">Menit</label>
                 <input type="number" id="editDurationMinutes" min="0" max="59" class="w-full px-3 py-2.5 bg-dark-700 border border-gray-600 rounded-lg text-sm focus:border-primary focus:outline-none" placeholder="0">
               </div>
             </div>
+            <p id="editDurationHint" class="text-xs text-gray-500 mt-1 hidden">Durasi akan digunakan sebagai prioritas utama</p>
           </div>
         </form>
       </div>
@@ -521,15 +523,39 @@
         document.getElementById('editRecurringSettings').classList.add('hidden');
         document.getElementById('editWeeklyDays').classList.add('hidden');
         
+        // Reset disabled states
+        resetEditFieldStates();
+        
+        // Duration - parse from stream_duration_minutes
+        const totalMinutes = stream.stream_duration_minutes || 0;
+        const durationHours = Math.floor(totalMinutes / 60);
+        const durationMinutes = totalMinutes % 60;
+        document.getElementById('editDurationHours').value = durationHours || '';
+        document.getElementById('editDurationMinutes').value = durationMinutes || '';
+        
+        const hasDuration = totalMinutes > 0;
+        
         // Show relevant settings based on schedule type
         if (stream.schedule_type === 'once') {
           document.getElementById('editOnceSettings').classList.remove('hidden');
+          
+          // Set schedule time (start time) - preserve original value
           if (stream.schedule_time) {
             document.getElementById('editScheduleTime').value = formatDateTimeLocal(stream.schedule_time);
+          } else {
+            document.getElementById('editScheduleTime').value = '';
           }
-          if (stream.end_time) {
+          
+          // Set end time only if duration is NOT set (mutual exclusion)
+          if (stream.end_time && !hasDuration) {
             document.getElementById('editEndTime').value = formatDateTimeLocal(stream.end_time);
+          } else {
+            document.getElementById('editEndTime').value = '';
           }
+          
+          // Initialize mutual exclusion for once schedule
+          initEditDurationEndTimeMutualExclusion();
+          updateEditDurationEndTimeState();
         } else if (stream.schedule_type === 'daily' || stream.schedule_type === 'weekly') {
           document.getElementById('editRecurringSettings').classList.remove('hidden');
           document.getElementById('editRecurringTime').value = stream.recurring_time || '';
@@ -542,11 +568,6 @@
           }
         }
         
-        // Duration
-        const totalMinutes = stream.stream_duration_minutes || 0;
-        document.getElementById('editDurationHours').value = Math.floor(totalMinutes / 60) || '';
-        document.getElementById('editDurationMinutes').value = totalMinutes % 60 || '';
-        
         // Show modal
         document.getElementById('editScheduleModal').classList.remove('hidden');
       } else {
@@ -557,11 +578,116 @@
       showToast('error', 'Failed to load stream');
     }
   }
+  
+  // Reset all edit field states
+  function resetEditFieldStates() {
+    const durationHours = document.getElementById('editDurationHours');
+    const durationMinutes = document.getElementById('editDurationMinutes');
+    const endTime = document.getElementById('editEndTime');
+    
+    if (durationHours) {
+      durationHours.disabled = false;
+      durationHours.classList.remove('opacity-50', 'cursor-not-allowed');
+    }
+    if (durationMinutes) {
+      durationMinutes.disabled = false;
+      durationMinutes.classList.remove('opacity-50', 'cursor-not-allowed');
+    }
+    if (endTime) {
+      endTime.disabled = false;
+      endTime.classList.remove('opacity-50', 'cursor-not-allowed');
+    }
+  }
+  
+  // Initialize mutual exclusion between Duration and End Time in edit modal
+  function initEditDurationEndTimeMutualExclusion() {
+    const durationHours = document.getElementById('editDurationHours');
+    const durationMinutes = document.getElementById('editDurationMinutes');
+    const endTime = document.getElementById('editEndTime');
+    
+    if (!durationHours || !durationMinutes || !endTime) return;
+    
+    // Remove existing listeners
+    durationHours.removeEventListener('input', handleEditDurationChange);
+    durationMinutes.removeEventListener('input', handleEditDurationChange);
+    endTime.removeEventListener('input', handleEditEndTimeChange);
+    
+    // Add new listeners
+    durationHours.addEventListener('input', handleEditDurationChange);
+    durationMinutes.addEventListener('input', handleEditDurationChange);
+    endTime.addEventListener('input', handleEditEndTimeChange);
+  }
+  
+  function handleEditDurationChange() {
+    updateEditDurationEndTimeState();
+  }
+  
+  function handleEditEndTimeChange() {
+    updateEditDurationEndTimeState();
+  }
+  
+  function updateEditDurationEndTimeState() {
+    const durationHours = document.getElementById('editDurationHours');
+    const durationMinutes = document.getElementById('editDurationMinutes');
+    const endTime = document.getElementById('editEndTime');
+    const durationHint = document.getElementById('editDurationHint');
+    
+    if (!durationHours || !durationMinutes || !endTime) return;
+    
+    const hours = parseInt(durationHours.value) || 0;
+    const minutes = parseInt(durationMinutes.value) || 0;
+    const hasDuration = hours > 0 || minutes > 0;
+    const hasEndTime = endTime.value && endTime.value.trim() !== '';
+    
+    // If duration is filled, disable end time
+    if (hasDuration) {
+      endTime.disabled = true;
+      endTime.classList.add('opacity-50', 'cursor-not-allowed');
+      endTime.value = ''; // Clear end time when duration is set
+      durationHours.disabled = false;
+      durationMinutes.disabled = false;
+      durationHours.classList.remove('opacity-50', 'cursor-not-allowed');
+      durationMinutes.classList.remove('opacity-50', 'cursor-not-allowed');
+      if (durationHint) durationHint.classList.remove('hidden');
+    } 
+    // If end time is filled, disable duration
+    else if (hasEndTime) {
+      durationHours.disabled = true;
+      durationMinutes.disabled = true;
+      durationHours.classList.add('opacity-50', 'cursor-not-allowed');
+      durationMinutes.classList.add('opacity-50', 'cursor-not-allowed');
+      endTime.disabled = false;
+      endTime.classList.remove('opacity-50', 'cursor-not-allowed');
+      if (durationHint) durationHint.classList.add('hidden');
+    } 
+    // Neither is filled, enable both
+    else {
+      endTime.disabled = false;
+      endTime.classList.remove('opacity-50', 'cursor-not-allowed');
+      durationHours.disabled = false;
+      durationMinutes.disabled = false;
+      durationHours.classList.remove('opacity-50', 'cursor-not-allowed');
+      durationMinutes.classList.remove('opacity-50', 'cursor-not-allowed');
+      if (durationHint) durationHint.classList.add('hidden');
+    }
+  }
 
   function closeEditModal() {
     document.getElementById('editScheduleModal').classList.add('hidden');
     currentEditStream = null;
     editSelectedDays = [];
+    
+    // Reset field states
+    resetEditFieldStates();
+    
+    // Clear form values
+    document.getElementById('editStreamId').value = '';
+    document.getElementById('editStreamTitle').value = '';
+    document.getElementById('editScheduleTime').value = '';
+    document.getElementById('editEndTime').value = '';
+    document.getElementById('editDurationHours').value = '';
+    document.getElementById('editDurationMinutes').value = '';
+    document.getElementById('editRecurringTime').value = '';
   }
 
   function toggleEditDay(day) {
@@ -601,13 +727,23 @@
     updateData.streamDurationHours = hours;
     updateData.streamDurationMinutes = minutes;
     
+    const hasDuration = hours > 0 || minutes > 0;
+    
     // Schedule type specific data
     if (currentEditStream.schedule_type === 'once') {
       const scheduleTime = document.getElementById('editScheduleTime').value;
       const endTime = document.getElementById('editEndTime').value;
-      // Send datetime-local format directly - API will parse it correctly
+      
+      // Always send start time
       if (scheduleTime) updateData.scheduleStartTime = scheduleTime;
-      if (endTime) updateData.scheduleEndTime = endTime;
+      
+      // Only send end time if duration is NOT set (mutual exclusion)
+      // If duration is set, clear end time
+      if (hasDuration) {
+        updateData.scheduleEndTime = null; // Clear end time when duration is set
+      } else if (endTime) {
+        updateData.scheduleEndTime = endTime;
+      }
     } else if (currentEditStream.schedule_type === 'daily' || currentEditStream.schedule_type === 'weekly') {
       updateData.recurringTime = document.getElementById('editRecurringTime').value;
       updateData.recurringEnabled = document.getElementById('editRecurringEnabled').checked;
