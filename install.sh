@@ -42,6 +42,13 @@ prompt_password() {
     local attempt=1
     local password=""
     
+    # Cek apakah /dev/tty tersedia untuk input interaktif
+    if [ ! -t 0 ] && [ ! -e /dev/tty ]; then
+        echo "❌ Error: Tidak dapat membaca input interaktif."
+        echo "   Jalankan script secara langsung, bukan via pipe."
+        return 1
+    fi
+    
     echo "🔐 Instalasi ini memerlukan password."
     echo "   Hubungi developer untuk mendapatkan password."
     echo
@@ -49,10 +56,10 @@ prompt_password() {
     while [ $attempt -le $max_attempts ]; do
         printf "🔑 Masukkan password instalasi: "
         
-        # Matikan echo untuk input password
-        stty -echo 2>/dev/null || true
-        read -r password
-        stty echo 2>/dev/null || true
+        # Baca password dari /dev/tty (terminal langsung) untuk mendukung curl | bash
+        stty -echo 2>/dev/null </dev/tty || true
+        read -r password </dev/tty
+        stty echo 2>/dev/null </dev/tty || true
         echo
         
         # Cek jika password kosong
