@@ -390,21 +390,18 @@ function shouldTriggerDaily(stream, currentTime = new Date()) {
   const currentTotalMinutes = wibTime.hours * 60 + wibTime.minutes;
 
   // Calculate time difference (positive = current time is after scheduled time)
-  // FIXED: timeDiff should be positive when current time is AFTER scheduled time
   const timeDiff = currentTotalMinutes - scheduleMinutes;
   
   // Trigger only AFTER scheduled time (no early triggers)
   // - timeDiff >= 0: Only trigger at or after scheduled time
   // - timeDiff <= 5: Allow up to 5 minutes late (for missed schedules due to restart)
-  // FIXED: Also handle case where schedule was missed by more than 5 minutes
-  // by checking if we're within the trigger window
   const shouldTrigger = timeDiff >= 0 && timeDiff <= 5;
   
   // Log trigger decision
-  const triggerStatus = timeDiff < 0 ? 'WAITING' : 
+  const triggerStatus = timeDiff < 0 ? `WAITING (before schedule)` : 
                         timeDiff <= 5 ? 'TRIGGER_WINDOW' : 
                         'MISSED';
-  console.log(`[Scheduler] shouldTriggerDaily: stream=${stream.id}, schedTime=${schedHours}:${String(schedMinutes).padStart(2,'0')}, currentTime=${wibTime.hours}:${String(wibTime.minutes).padStart(2,'0')}, timeDiff=${timeDiff}min, status=${triggerStatus}, shouldTrigger=${shouldTrigger}`);
+  console.log(`[Scheduler] Daily time check: scheduled=${schedHours}:${String(schedMinutes).padStart(2,'0')} WIB, current=${wibTime.hours}:${String(wibTime.minutes).padStart(2,'0')} WIB, diff=${timeDiff}min, status=${triggerStatus}, shouldTrigger=${shouldTrigger}`);
   
   return shouldTrigger;
 }
@@ -416,37 +413,54 @@ function shouldTriggerDaily(stream, currentTime = new Date()) {
  * @returns {boolean} True if should trigger
  */
 function shouldTriggerWeekly(stream, currentTime = new Date()) {
-  if (!stream.recurring_enabled) return false;
-  if (stream.schedule_type !== 'weekly') return false;
-  if (!stream.recurring_time) return false;
+  // Use WIB time for comparison since user inputs time in WIB
+  const wibTime = getWIBTime(currentTime);
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  
+  if (!stream.recurring_enabled) {
+    console.log(`[Scheduler] Weekly time check: stream=${stream.id} - SKIP (recurring_enabled=false)`);
+    return false;
+  }
+  if (stream.schedule_type !== 'weekly') {
+    return false;
+  }
+  if (!stream.recurring_time) {
+    console.log(`[Scheduler] Weekly time check: stream=${stream.id} - SKIP (no recurring_time)`);
+    return false;
+  }
   
   const scheduleDays = Array.isArray(stream.schedule_days) 
     ? stream.schedule_days 
     : parseScheduleDays(stream.schedule_days);
   
-  if (scheduleDays.length === 0) return false;
+  if (scheduleDays.length === 0) {
+    console.log(`[Scheduler] Weekly time check: stream=${stream.id} - SKIP (no schedule_days)`);
+    return false;
+  }
 
-  // Use WIB time for comparison since user inputs time in WIB
-  const wibTime = getWIBTime(currentTime);
-  
-  // Check if current day (in WIB) is in schedule
-  if (!scheduleDays.includes(wibTime.day)) return false;
-
-  // Check time match
   const [schedHours, schedMinutes] = stream.recurring_time.split(':').map(Number);
   const scheduleMinutes = schedHours * 60 + schedMinutes;
   const currentTotalMinutes = wibTime.hours * 60 + wibTime.minutes;
-
-  // Calculate time difference (positive = current time is after scheduled time)
-  // FIXED: timeDiff should be positive when current time is AFTER scheduled time
   const timeDiff = currentTotalMinutes - scheduleMinutes;
   
+  // Check if current day (in WIB) is in schedule
+  const isDayMatch = scheduleDays.includes(wibTime.day);
+  
+  if (!isDayMatch) {
+    console.log(`[Scheduler] Weekly time check: scheduled=${schedHours}:${String(schedMinutes).padStart(2,'0')} WIB on days=[${scheduleDays.map(d => dayNames[d]).join(',')}], current=${wibTime.hours}:${String(wibTime.minutes).padStart(2,'0')} WIB (${dayNames[wibTime.day]}), diff=${timeDiff}min, status=WRONG DAY, shouldTrigger=false`);
+    return false;
+  }
+
   // Trigger only AFTER scheduled time (no early triggers)
   // - timeDiff >= 0: Only trigger at or after scheduled time
   // - timeDiff <= 5: Allow up to 5 minutes late (for missed schedules due to restart)
   const shouldTrigger = timeDiff >= 0 && timeDiff <= 5;
   
-  console.log(`[Scheduler] shouldTriggerWeekly: stream=${stream.id}, schedTime=${schedHours}:${String(schedMinutes).padStart(2,'0')}, currentDay=${wibTime.day}, scheduleDays=[${scheduleDays.join(',')}], timeDiff=${timeDiff}, shouldTrigger=${shouldTrigger}`);
+  const triggerStatus = timeDiff < 0 ? 'WAITING' : 
+                        timeDiff <= 5 ? 'TRIGGER_WINDOW' : 
+                        'MISSED';
+  
+  console.log(`[Scheduler] Weekly time check: scheduled=${schedHours}:${String(schedMinutes).padStart(2,'0')} WIB on days=[${scheduleDays.map(d => dayNames[d]).join(',')}], current=${wibTime.hours}:${String(wibTime.minutes).padStart(2,'0')} WIB (${dayNames[wibTime.day]}), diff=${timeDiff}min, status=${triggerStatus}, shouldTrigger=${shouldTrigger}`);
   
   return shouldTrigger;
 }
