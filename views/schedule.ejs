@@ -118,9 +118,17 @@
               </span>
             </td>
             <td class="px-4 py-3 text-right">
-              <button onclick="editStream('<%= stream.id %>')" class="p-1.5 text-gray-400 hover:text-primary transition-colors" title="Edit Stream">
-                <i class="ti ti-edit"></i>
-              </button>
+              <div class="flex items-center justify-end gap-1">
+                <button onclick="toggleStream('<%= stream.id %>', '<%= stream.status %>')" class="w-8 h-8 flex items-center justify-center <%= stream.status === 'live' ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' : 'bg-green-500/20 text-green-400 hover:bg-green-500/30' %> rounded-lg" title="<%= stream.status === 'live' ? 'Stop' : 'Start' %>">
+                  <i class="ti <%= stream.status === 'live' ? 'ti-player-stop' : 'ti-player-play' %>"></i>
+                </button>
+                <button onclick="editStream('<%= stream.id %>')" class="w-8 h-8 flex items-center justify-center bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 rounded-lg" title="Edit Stream">
+                  <i class="ti ti-edit"></i>
+                </button>
+                <button onclick="deleteStream('<%= stream.id %>')" class="w-8 h-8 flex items-center justify-center bg-red-500/20 text-red-400 hover:bg-red-500/30 rounded-lg" title="Delete Stream">
+                  <i class="ti ti-trash"></i>
+                </button>
+              </div>
             </td>
           </tr>
           <% }); %>
@@ -141,9 +149,19 @@
             <%= stream.status === 'live' ? 'LIVE' : 'Scheduled' %>
           </span>
         </div>
-        <div class="flex items-center justify-between text-xs text-gray-400">
+        <div class="text-xs text-gray-400 mb-2">
           <span><%= helpers.formatDateTime(stream.schedule_time) %></span>
-          <button onclick="editStream('<%= stream.id %>')" class="text-primary">Edit</button>
+        </div>
+        <div class="flex items-center justify-end gap-2">
+          <button onclick="toggleStream('<%= stream.id %>', '<%= stream.status %>')" class="px-3 py-1.5 text-xs rounded-lg <%= stream.status === 'live' ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400' %>">
+            <i class="ti <%= stream.status === 'live' ? 'ti-player-stop' : 'ti-player-play' %> mr-1"></i><%= stream.status === 'live' ? 'Stop' : 'Start' %>
+          </button>
+          <button onclick="editStream('<%= stream.id %>')" class="px-3 py-1.5 text-xs rounded-lg bg-blue-500/20 text-blue-400">
+            <i class="ti ti-edit mr-1"></i>Edit
+          </button>
+          <button onclick="deleteStream('<%= stream.id %>')" class="px-3 py-1.5 text-xs rounded-lg bg-red-500/20 text-red-400">
+            <i class="ti ti-trash mr-1"></i>Delete
+          </button>
         </div>
       </div>
       <% }); %>
@@ -200,9 +218,17 @@
               </span>
             </td>
             <td class="px-4 py-3 text-right">
-              <button onclick="editStream('<%= stream.id %>')" class="p-1.5 text-gray-400 hover:text-primary transition-colors" title="Edit Stream">
-                <i class="ti ti-edit"></i>
-              </button>
+              <div class="flex items-center justify-end gap-1">
+                <button onclick="toggleStream('<%= stream.id %>', '<%= stream.status %>')" class="w-8 h-8 flex items-center justify-center <%= stream.status === 'live' ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' : 'bg-green-500/20 text-green-400 hover:bg-green-500/30' %> rounded-lg" title="<%= stream.status === 'live' ? 'Stop' : 'Start' %>">
+                  <i class="ti <%= stream.status === 'live' ? 'ti-player-stop' : 'ti-player-play' %>"></i>
+                </button>
+                <button onclick="editStream('<%= stream.id %>')" class="w-8 h-8 flex items-center justify-center bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 rounded-lg" title="Edit Stream">
+                  <i class="ti ti-edit"></i>
+                </button>
+                <button onclick="deleteStream('<%= stream.id %>')" class="w-8 h-8 flex items-center justify-center bg-red-500/20 text-red-400 hover:bg-red-500/30 rounded-lg" title="Delete Stream">
+                  <i class="ti ti-trash"></i>
+                </button>
+              </div>
             </td>
           </tr>
           <% }); %>
@@ -219,13 +245,23 @@
             <i class="ti ti-brand-<%= helpers.getPlatformIcon(stream.platform) %> text-<%= helpers.getPlatformColor(stream.platform) %>"></i>
             <span class="font-medium text-sm"><%= stream.title %></span>
           </div>
-          <span class="px-2 py-0.5 text-xs rounded-full <%= stream.recurring_enabled ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400' %>">
-            <%= stream.recurring_enabled ? 'Active' : 'Paused' %>
+          <span class="px-2 py-0.5 text-xs rounded-full <%= stream.status === 'live' ? 'bg-green-500/20 text-green-400' : stream.recurring_enabled ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400' %>">
+            <%= stream.status === 'live' ? 'LIVE' : stream.recurring_enabled ? 'Active' : 'Paused' %>
           </span>
         </div>
-        <div class="flex items-center justify-between text-xs text-gray-400">
+        <div class="text-xs text-gray-400 mb-2">
           <span>Daily at <%= stream.recurring_time %></span>
-          <button onclick="editStream('<%= stream.id %>')" class="text-primary">Edit</button>
+        </div>
+        <div class="flex items-center justify-end gap-2">
+          <button onclick="toggleStream('<%= stream.id %>', '<%= stream.status %>')" class="px-3 py-1.5 text-xs rounded-lg <%= stream.status === 'live' ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400' %>">
+            <i class="ti <%= stream.status === 'live' ? 'ti-player-stop' : 'ti-player-play' %> mr-1"></i><%= stream.status === 'live' ? 'Stop' : 'Start' %>
+          </button>
+          <button onclick="editStream('<%= stream.id %>')" class="px-3 py-1.5 text-xs rounded-lg bg-blue-500/20 text-blue-400">
+            <i class="ti ti-edit mr-1"></i>Edit
+          </button>
+          <button onclick="deleteStream('<%= stream.id %>')" class="px-3 py-1.5 text-xs rounded-lg bg-red-500/20 text-red-400">
+            <i class="ti ti-trash mr-1"></i>Delete
+          </button>
         </div>
       </div>
       <% }); %>
@@ -289,9 +325,17 @@
               </span>
             </td>
             <td class="px-4 py-3 text-right">
-              <button onclick="editStream('<%= stream.id %>')" class="p-1.5 text-gray-400 hover:text-primary transition-colors" title="Edit Stream">
-                <i class="ti ti-edit"></i>
-              </button>
+              <div class="flex items-center justify-end gap-1">
+                <button onclick="toggleStream('<%= stream.id %>', '<%= stream.status %>')" class="w-8 h-8 flex items-center justify-center <%= stream.status === 'live' ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' : 'bg-green-500/20 text-green-400 hover:bg-green-500/30' %> rounded-lg" title="<%= stream.status === 'live' ? 'Stop' : 'Start' %>">
+                  <i class="ti <%= stream.status === 'live' ? 'ti-player-stop' : 'ti-player-play' %>"></i>
+                </button>
+                <button onclick="editStream('<%= stream.id %>')" class="w-8 h-8 flex items-center justify-center bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 rounded-lg" title="Edit Stream">
+                  <i class="ti ti-edit"></i>
+                </button>
+                <button onclick="deleteStream('<%= stream.id %>')" class="w-8 h-8 flex items-center justify-center bg-red-500/20 text-red-400 hover:bg-red-500/30 rounded-lg" title="Delete Stream">
+                  <i class="ti ti-trash"></i>
+                </button>
+              </div>
             </td>
           </tr>
           <% }); %>
@@ -308,8 +352,8 @@
             <i class="ti ti-brand-<%= helpers.getPlatformIcon(stream.platform) %> text-<%= helpers.getPlatformColor(stream.platform) %>"></i>
             <span class="font-medium text-sm"><%= stream.title %></span>
           </div>
-          <span class="px-2 py-0.5 text-xs rounded-full <%= stream.recurring_enabled ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400' %>">
-            <%= stream.recurring_enabled ? 'Active' : 'Paused' %>
+          <span class="px-2 py-0.5 text-xs rounded-full <%= stream.status === 'live' ? 'bg-green-500/20 text-green-400' : stream.recurring_enabled ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400' %>">
+            <%= stream.status === 'live' ? 'LIVE' : stream.recurring_enabled ? 'Active' : 'Paused' %>
           </span>
         </div>
         <div class="text-xs text-gray-400 mb-1">
@@ -317,9 +361,19 @@
           <% const days = Array.isArray(stream.schedule_days) ? stream.schedule_days : []; %>
           <%= days.map(d => dayNames[d]).join(', ') %> at <%= stream.recurring_time %>
         </div>
-        <div class="flex items-center justify-between text-xs text-gray-400">
+        <div class="text-xs text-gray-400 mb-2">
           <span>Next: <%= stream.nextRunTime ? helpers.formatDateTime(stream.nextRunTime) : '--' %></span>
-          <button onclick="editStream('<%= stream.id %>')" class="text-primary">Edit</button>
+        </div>
+        <div class="flex items-center justify-end gap-2">
+          <button onclick="toggleStream('<%= stream.id %>', '<%= stream.status %>')" class="px-3 py-1.5 text-xs rounded-lg <%= stream.status === 'live' ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400' %>">
+            <i class="ti <%= stream.status === 'live' ? 'ti-player-stop' : 'ti-player-play' %> mr-1"></i><%= stream.status === 'live' ? 'Stop' : 'Start' %>
+          </button>
+          <button onclick="editStream('<%= stream.id %>')" class="px-3 py-1.5 text-xs rounded-lg bg-blue-500/20 text-blue-400">
+            <i class="ti ti-edit mr-1"></i>Edit
+          </button>
+          <button onclick="deleteStream('<%= stream.id %>')" class="px-3 py-1.5 text-xs rounded-lg bg-red-500/20 text-red-400">
+            <i class="ti ti-trash mr-1"></i>Delete
+          </button>
         </div>
       </div>
       <% }); %>
@@ -781,11 +835,74 @@
     const icon = document.getElementById('toast-icon');
     const msg = document.getElementById('toast-message');
     
-    icon.className = 'ti ' + (type === 'success' ? 'ti-check text-green-400' : 'ti-x text-red-400');
+    // Handle different toast types
+    let iconClass = 'ti-check text-green-400';
+    if (type === 'error') {
+      iconClass = 'ti-x text-red-400';
+    } else if (type === 'info') {
+      iconClass = 'ti-info-circle text-blue-400';
+    }
+    
+    icon.className = 'ti ' + iconClass;
     msg.textContent = message;
     
     toast.classList.remove('hidden');
     setTimeout(() => toast.classList.add('hidden'), 3000);
+  }
+
+  // Toggle stream (Start/Stop)
+  async function toggleStream(streamId, currentStatus) {
+    const action = currentStatus === 'live' ? 'stop' : 'start';
+    const actionText = action === 'start' ? 'Starting' : 'Stopping';
+    
+    showToast('info', `${actionText} stream...`);
+    
+    try {
+      const response = await fetch(`/api/streams/${streamId}/${action}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        showToast('success', `Stream ${action === 'start' ? 'started' : 'stopped'} successfully`);
+        // Reload page to show updated status
+        setTimeout(() => location.reload(), 1500);
+      } else {
+        showToast('error', result.error || `Failed to ${action} stream`);
+      }
+    } catch (error) {
+      console.error(`Error ${action}ing stream:`, error);
+      showToast('error', `Failed to ${action} stream`);
+    }
+  }
+
+  // Delete stream
+  async function deleteStream(streamId) {
+    if (!confirm('Are you sure you want to delete this stream? This action cannot be undone.')) {
+      return;
+    }
+    
+    try {
+      const response = await fetch(`/api/streams/${streamId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        showToast('success', 'Stream deleted successfully');
+        // Reload page to show updated list
+        setTimeout(() => location.reload(), 1000);
+      } else {
+        showToast('error', result.error || 'Failed to delete stream');
+      }
+    } catch (error) {
+      console.error('Error deleting stream:', error);
+      showToast('error', 'Failed to delete stream');
+    }
   }
 
   // Close modal on outside click

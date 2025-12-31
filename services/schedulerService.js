@@ -400,7 +400,11 @@ function shouldTriggerDaily(stream, currentTime = new Date()) {
   // by checking if we're within the trigger window
   const shouldTrigger = timeDiff >= 0 && timeDiff <= 5;
   
-  console.log(`[Scheduler] shouldTriggerDaily: stream=${stream.id}, schedTime=${schedHours}:${String(schedMinutes).padStart(2,'0')}, currentTime=${wibTime.hours}:${String(wibTime.minutes).padStart(2,'0')}, timeDiff=${timeDiff}, shouldTrigger=${shouldTrigger}`);
+  // Log trigger decision
+  const triggerStatus = timeDiff < 0 ? 'WAITING' : 
+                        timeDiff <= 5 ? 'TRIGGER_WINDOW' : 
+                        'MISSED';
+  console.log(`[Scheduler] shouldTriggerDaily: stream=${stream.id}, schedTime=${schedHours}:${String(schedMinutes).padStart(2,'0')}, currentTime=${wibTime.hours}:${String(wibTime.minutes).padStart(2,'0')}, timeDiff=${timeDiff}min, status=${triggerStatus}, shouldTrigger=${shouldTrigger}`);
   
   return shouldTrigger;
 }
