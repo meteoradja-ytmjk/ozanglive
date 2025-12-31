@@ -11,14 +11,14 @@ class LiveLimitService {
   static isAdmin(userId) {
     return new Promise((resolve, reject) => {
       db.get(
-        "SELECT role FROM users WHERE id = ?",
+        "SELECT user_role FROM users WHERE id = ?",
         [userId],
         (err, row) => {
           if (err) {
             console.error('Error checking admin role:', err.message);
             return reject(err);
           }
-          resolve(row && row.role === 'admin');
+          resolve(row && row.user_role === 'admin');
         }
       );
     });
