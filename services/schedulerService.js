@@ -392,15 +392,16 @@ function shouldTriggerDaily(stream, currentTime = new Date()) {
   // Calculate time difference (positive = current time is after scheduled time)
   const timeDiff = currentTotalMinutes - scheduleMinutes;
   
-  // Trigger only AFTER scheduled time (no early triggers)
+  // FIXED: Trigger within a wider window to handle scheduler check intervals
   // - timeDiff >= 0: Only trigger at or after scheduled time
-  // - timeDiff <= 5: Allow up to 5 minutes late (for missed schedules due to restart)
-  const shouldTrigger = timeDiff >= 0 && timeDiff <= 5;
+  // - timeDiff <= 2: Allow up to 2 minutes late (scheduler checks every 1 minute)
+  // The cooldown mechanism prevents double triggers
+  const shouldTrigger = timeDiff >= 0 && timeDiff <= 2;
   
   // Log trigger decision
-  const triggerStatus = timeDiff < 0 ? `WAITING (before schedule)` : 
-                        timeDiff <= 5 ? 'TRIGGER_WINDOW' : 
-                        'MISSED';
+  const triggerStatus = timeDiff < 0 ? `WAITING (${Math.abs(timeDiff)} min before schedule)` : 
+                        timeDiff <= 2 ? 'TRIGGER_WINDOW' : 
+                        `MISSED (${timeDiff} min late)`;
   console.log(`[Scheduler] Daily time check: scheduled=${schedHours}:${String(schedMinutes).padStart(2,'0')} WIB, current=${wibTime.hours}:${String(wibTime.minutes).padStart(2,'0')} WIB, diff=${timeDiff}min, status=${triggerStatus}, shouldTrigger=${shouldTrigger}`);
   
   return shouldTrigger;
@@ -451,14 +452,15 @@ function shouldTriggerWeekly(stream, currentTime = new Date()) {
     return false;
   }
 
-  // Trigger only AFTER scheduled time (no early triggers)
+  // FIXED: Trigger within a wider window to handle scheduler check intervals
   // - timeDiff >= 0: Only trigger at or after scheduled time
-  // - timeDiff <= 5: Allow up to 5 minutes late (for missed schedules due to restart)
-  const shouldTrigger = timeDiff >= 0 && timeDiff <= 5;
+  // - timeDiff <= 2: Allow up to 2 minutes late (scheduler checks every 1 minute)
+  // The cooldown mechanism prevents double triggers
+  const shouldTrigger = timeDiff >= 0 && timeDiff <= 2;
   
-  const triggerStatus = timeDiff < 0 ? 'WAITING' : 
-                        timeDiff <= 5 ? 'TRIGGER_WINDOW' : 
-                        'MISSED';
+  const triggerStatus = timeDiff < 0 ? `WAITING (${Math.abs(timeDiff)} min before schedule)` : 
+                        timeDiff <= 2 ? 'TRIGGER_WINDOW' : 
+                        `MISSED (${timeDiff} min late)`;
   
   console.log(`[Scheduler] Weekly time check: scheduled=${schedHours}:${String(schedMinutes).padStart(2,'0')} WIB on days=[${scheduleDays.map(d => dayNames[d]).join(',')}], current=${wibTime.hours}:${String(wibTime.minutes).padStart(2,'0')} WIB (${dayNames[wibTime.day]}), diff=${timeDiff}min, status=${triggerStatus}, shouldTrigger=${shouldTrigger}`);
   

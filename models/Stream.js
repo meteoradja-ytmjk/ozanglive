@@ -315,13 +315,13 @@ class Stream {
     return new Promise((resolve, reject) => {
       const endTimeStr = endTime.toISOString();
       // FIXED: Include streams that are scheduled but may have been missed
-      // Look for streams scheduled up to 5 minutes in the past to catch any that were missed
-      const missedWindowMs = 5 * 60 * 1000; // 5 minutes
+      // Look for streams scheduled up to 10 minutes in the past to catch any that were missed
+      const missedWindowMs = 10 * 60 * 1000; // 10 minutes (increased from 5)
       const missedStartTime = new Date(startTime.getTime() - missedWindowMs);
       const missedStartTimeStr = missedStartTime.toISOString();
       
-      // FIXED: Use datetime() function for proper ISO string comparison in SQLite
-      // This ensures timezone-aware comparison works correctly
+      // FIXED: Use simple string comparison for ISO 8601 format
+      // ISO 8601 strings are lexicographically sortable
       const query = `
         SELECT s.*, 
                v.title AS video_title, 
@@ -336,8 +336,8 @@ class Stream {
         WHERE s.status = 'scheduled'
         AND s.schedule_type = 'once'
         AND s.schedule_time IS NOT NULL
-        AND datetime(s.schedule_time) >= datetime(?)
-        AND datetime(s.schedule_time) <= datetime(?)
+        AND s.schedule_time >= ?
+        AND s.schedule_time <= ?
       `;
       console.log(`[Stream.findScheduledInRange] Searching from ${missedStartTimeStr} to ${endTimeStr}`);
       console.log(`[Stream.findScheduledInRange] Current time: ${startTime.toISOString()}`);

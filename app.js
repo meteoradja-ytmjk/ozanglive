@@ -2832,7 +2832,8 @@ app.post('/api/streams', isAuthenticated, [
       schedule_type: req.body.scheduleType || 'once',
       schedule_days: scheduleDays,
       recurring_time: req.body.recurringTime || null,
-      recurring_enabled: req.body.recurringEnabled === 'true' || req.body.recurringEnabled === true,
+      // FIXED: Handle all possible truthy values for recurring_enabled
+      recurring_enabled: req.body.recurringEnabled === 'true' || req.body.recurringEnabled === true || req.body.recurringEnabled === 'on' || req.body.recurringEnabled === 1,
       user_id: req.session.userId
     };
     
@@ -3157,12 +3158,22 @@ app.put('/api/streams/:id', isAuthenticated, async (req, res) => {
       }
     }
     if (req.body.recurringEnabled !== undefined) {
-      updateData.recurring_enabled = req.body.recurringEnabled === 'true' || req.body.recurringEnabled === true ? 1 : 0;
+      // FIXED: Handle all possible truthy values for recurring_enabled
+      updateData.recurring_enabled = (req.body.recurringEnabled === 'true' || req.body.recurringEnabled === true || req.body.recurringEnabled === 'on' || req.body.recurringEnabled === 1) ? 1 : 0;
     }
     
     // Set status to scheduled for recurring schedules
     if (updateData.schedule_type && (updateData.schedule_type === 'daily' || updateData.schedule_type === 'weekly')) {
       updateData.status = 'scheduled';
+    }
+    
+    // FIXED: For 'once' schedule type, set status based on whether schedule_time is set
+    // This ensures that when user changes from daily/weekly to once with a schedule_time,
+    // the status is correctly set to 'scheduled'
+    if (updateData.schedule_type === 'once' || (!updateData.schedule_type && stream.schedule_type === 'once')) {
+      // Status will be set later based on scheduleStartTime
+      // If scheduleStartTime is set, status will be 'scheduled'
+      // If scheduleStartTime is not set, status will be 'offline'
     }
     
     const serverTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -3245,7 +3256,26 @@ app.put('/api/streams/:id', isAuthenticated, async (req, res) => {
       }
     }
     
-    console.log(`[API Update] Final updateData: schedule_time=${updateData.schedule_time}, end_time=${updateData.end_time}, stream_duration_minutes=${updateData.stream_duration_minutes}, status=${updateData.status}`);
+    // FIXED: Ensure status is correctly set for 'once' schedule type
+    // If schedule_type is 'once' and no schedule_time is set, status should be 'offline'
+    const finalScheduleType = updateData.schedule_type || stream.schedule_type;
+    const finalScheduleTime = updateData.schedule_time !== undefined ? updateData.schedule_time : stream.schedule_time;
+    
+    if (finalScheduleType === 'once') {
+      if (finalScheduleTime) {
+        // Once schedule with schedule_time should be 'scheduled'
+        if (!updateData.status) {
+          updateData.status = 'scheduled';
+        }
+      } else {
+        // Once schedule without schedule_time should be 'offline'
+        if (!updateData.status) {
+          updateData.status = 'offline';
+        }
+      }
+    }
+    
+    console.log(`[API Update] Final updateData: schedule_type=${finalScheduleType}, schedule_time=${updateData.schedule_time}, end_time=${updateData.end_time}, stream_duration_minutes=${updateData.stream_duration_minutes}, status=${updateData.status}`);
     
     const updatedStream = await Stream.update(req.params.id, updateData);
     res.json({ success: true, stream: updatedStream });
