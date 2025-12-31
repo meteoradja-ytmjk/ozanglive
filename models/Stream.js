@@ -448,7 +448,73 @@ class Stream {
   }
 
   /**
+   * Get current time in Asia/Jakarta timezone (WIB)
+   * Uses Intl.DateTimeFormat for accurate timezone conversion
+   * @param {Date} date - Date object to convert
+   * @returns {Object} Object with hours, minutes, day, year, month, dayOfMonth
+   */
+  static getWIBTime(date = new Date()) {
+    try {
+      // Use Intl.DateTimeFormat for accurate timezone conversion
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Jakarta',
+        hour: 'numeric',
+        minute: 'numeric',
+        weekday: 'short',
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric',
+        hour12: false
+      });
+      
+      const parts = formatter.formatToParts(date);
+      let hours = 0, minutes = 0, dayName = '', year = 0, month = 0, dayOfMonth = 0;
+      
+      for (const part of parts) {
+        if (part.type === 'hour') hours = parseInt(part.value, 10);
+        if (part.type === 'minute') minutes = parseInt(part.value, 10);
+        if (part.type === 'weekday') dayName = part.value;
+        if (part.type === 'year') year = parseInt(part.value, 10);
+        if (part.type === 'month') month = parseInt(part.value, 10);
+        if (part.type === 'day') dayOfMonth = parseInt(part.value, 10);
+      }
+      
+      // Convert day name to number (0=Sun, 1=Mon, etc.)
+      const dayMap = { 'Sun': 0, 'Mon': 1, 'Tue': 2, 'Wed': 3, 'Thu': 4, 'Fri': 5, 'Sat': 6 };
+      const day = dayMap[dayName] ?? date.getDay();
+      
+      return { hours, minutes, day, year, month, dayOfMonth };
+    } catch (e) {
+      // Fallback to manual calculation if Intl fails
+      const wibOffset = 7 * 60; // 7 hours in minutes
+      const utcMinutes = date.getUTCHours() * 60 + date.getUTCMinutes();
+      const wibMinutes = (utcMinutes + wibOffset) % (24 * 60);
+      
+      const hours = Math.floor(wibMinutes / 60);
+      const minutes = wibMinutes % 60;
+      
+      // Calculate day in WIB
+      const utcDay = date.getUTCDay();
+      const utcHours = date.getUTCHours();
+      let day = utcDay;
+      if (utcHours + 7 >= 24) {
+        day = (utcDay + 1) % 7;
+      }
+      
+      return { 
+        hours, 
+        minutes, 
+        day,
+        year: date.getFullYear(),
+        month: date.getMonth() + 1,
+        dayOfMonth: date.getDate()
+      };
+    }
+  }
+
+  /**
    * Calculate next scheduled time for a recurring stream
+   * Uses WIB (Asia/Jakarta) timezone for consistency with scheduler
    * @param {Object} stream - Stream object with schedule_type, recurring_time, schedule_days
    * @returns {Date|null} Next scheduled time or null if not applicable
    */
@@ -458,14 +524,20 @@ class Stream {
     }
 
     const now = new Date();
+    const wibNow = this.getWIBTime(now);
     const [hours, minutes] = stream.recurring_time.split(':').map(Number);
 
     if (stream.schedule_type === 'daily') {
+      // Create date in WIB context
       const nextRun = new Date(now);
       nextRun.setHours(hours, minutes, 0, 0);
       
-      // If time has passed today, schedule for tomorrow
-      if (nextRun <= now) {
+      // Compare using WIB time
+      const currentTimeWIB = wibNow.hours * 60 + wibNow.minutes;
+      const scheduleTimeWIB = hours * 60 + minutes;
+      
+      // If time has passed today in WIB, schedule for tomorrow
+      if (scheduleTimeWIB <= currentTimeWIB) {
         nextRun.setDate(nextRun.getDate() + 1);
       }
       return nextRun;
@@ -482,20 +554,22 @@ class Stream {
 
       // Sort days for easier processing
       const sortedDays = [...scheduleDays].sort((a, b) => a - b);
-      const currentDay = now.getDay();
-      const currentTime = now.getHours() * 60 + now.getMinutes();
-      const scheduleTime = hours * 60 + minutes;
+      
+      // Use WIB day and time for comparison
+      const currentDayWIB = wibNow.day;
+      const currentTimeWIB = wibNow.hours * 60 + wibNow.minutes;
+      const scheduleTimeWIB = hours * 60 + minutes;
 
-      // Find next occurrence
+      // Find next occurrence based on WIB day
       for (let i = 0; i < 7; i++) {
-        const checkDay = (currentDay + i) % 7;
+        const checkDay = (currentDayWIB + i) % 7;
         if (sortedDays.includes(checkDay)) {
           const nextRun = new Date(now);
           nextRun.setDate(now.getDate() + i);
           nextRun.setHours(hours, minutes, 0, 0);
           
-          // If it's today but time has passed, continue to next day
-          if (i === 0 && scheduleTime <= currentTime) {
+          // If it's today in WIB but time has passed, continue to next day
+          if (i === 0 && scheduleTimeWIB <= currentTimeWIB) {
             continue;
           }
           return nextRun;
@@ -503,7 +577,7 @@ class Stream {
       }
 
       // If no day found in current week, get first day of next week
-      const daysUntilNext = (7 - currentDay + sortedDays[0]) % 7 || 7;
+      const daysUntilNext = (7 - currentDayWIB + sortedDays[0]) % 7 || 7;
       const nextRun = new Date(now);
       nextRun.setDate(now.getDate() + daysUntilNext);
       nextRun.setHours(hours, minutes, 0, 0);
