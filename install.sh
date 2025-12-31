@@ -40,15 +40,31 @@ show_failure_message() {
 prompt_password() {
     local max_attempts=3
     local attempt=1
+    local password=""
     
     echo "🔐 Instalasi ini memerlukan password."
     echo "   Hubungi developer untuk mendapatkan password."
     echo
     
     while [ $attempt -le $max_attempts ]; do
-        echo -n "🔑 Masukkan password instalasi: "
-        read -s password
+        printf "🔑 Masukkan password instalasi: "
+        
+        # Matikan echo untuk input password
+        stty -echo 2>/dev/null || true
+        read -r password
+        stty echo 2>/dev/null || true
         echo
+        
+        # Cek jika password kosong
+        if [ -z "$password" ]; then
+            remaining=$((max_attempts - attempt))
+            if [ $remaining -gt 0 ]; then
+                echo "❌ Password tidak boleh kosong! Sisa percobaan: $remaining"
+                echo
+            fi
+            attempt=$((attempt + 1))
+            continue
+        fi
         
         if validate_password "$password"; then
             echo
