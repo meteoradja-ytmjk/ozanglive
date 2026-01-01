@@ -1,74 +1,66 @@
 <% layout('layout') -%>
-<!-- Mobile Stats Cards -->
-<div class="grid grid-cols-2 md:hidden gap-3 mb-6">
-  <div class="bg-gray-800 rounded-lg p-4 shadow-md neon-panel neon-bottom-right gradient-border hover-lift">
-    <div class="neon-inner-glow"></div>
-    <div class="flex items-center justify-between mb-2 relative z-10">
-      <h3 class="text-sm font-semibold">Active Streams</h3>
-      <div class="w-7 h-7 icon-gradient-bg rounded-lg flex items-center justify-center">
-        <i class="ti ti-antenna-bars-5 text-primary text-sm font-loaded"></i>
+<!-- Mobile Stats Bar Animation Styles -->
+<style>
+  @keyframes bounceUp {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-3px); }
+  }
+  @keyframes bounceDown {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(3px); }
+  }
+  .animate-bounce-up { animation: bounceUp 1s ease-in-out infinite; }
+  .animate-bounce-down { animation: bounceDown 1s ease-in-out infinite; animation-delay: 0.5s; }
+</style>
+
+<!-- Mobile Stats Bar - Minimalist Design -->
+<div class="md:hidden mb-4">
+  <div class="bg-gray-800/90 backdrop-blur-md rounded-2xl px-4 py-3 shadow-lg">
+    <div class="flex items-center justify-between">
+      <!-- Live Streams -->
+      <div class="flex items-center gap-1.5">
+        <i class="ti ti-broadcast text-lg text-violet-400"></i>
+        <span id="active-streams-mobile" class="text-violet-400 font-semibold">0</span>
+        <span class="text-gray-500 text-xs">live</span>
       </div>
-    </div>
-    <p class="text-xl font-bold relative z-10 text-primary">
-      <span id="active-streams-mobile" class="count-up">0</span><span id="live-limit-mobile" class="text-xs text-gray-400 font-normal"> / 1</span>
-    </p>
-    <div id="limit-warning-mobile" class="hidden text-xs text-red-400 mt-1 relative z-10">
-      <i class="ti ti-alert-circle mr-1"></i>Limit tercapai
+      
+      <!-- CPU -->
+      <div class="flex items-center gap-1.5">
+        <i class="ti ti-cpu text-lg text-sky-400"></i>
+        <span><span id="cpu-usage-mobile" class="text-sky-400 font-semibold">0</span><span class="text-gray-500 text-xs">%</span></span>
+      </div>
+      
+      <!-- Storage -->
+      <div class="flex items-center gap-1.5">
+        <i class="ti ti-database text-lg text-emerald-400"></i>
+        <span id="memory-usage-mobile" class="text-emerald-400 font-semibold">0GB</span>
+      </div>
+      
+      <!-- Network -->
+      <div class="flex items-center gap-1">
+        <i class="ti ti-wifi text-lg text-amber-400"></i>
+        <span class="text-emerald-400 animate-bounce-up">↑</span>
+        <span class="text-sky-400 animate-bounce-down">↓</span>
+      </div>
     </div>
   </div>
-  <div class="bg-gray-800 rounded-lg p-4 shadow-md neon-panel neon-bottom-left gradient-border hover-lift">
-    <div class="neon-inner-glow"></div>
-    <div class="flex items-center justify-between mb-2 relative z-10">
-      <h3 class="text-sm font-semibold">CPU Usage</h3>
-      <div class="w-7 h-7 icon-gradient-bg-blue rounded-lg flex items-center justify-center">
-        <i class="ti ti-cpu-2 text-blue-400 text-sm font-loaded"></i>
-      </div>
-    </div>
-    <p class="text-xl font-bold relative z-10"><span id="cpu-usage-mobile" class="count-up">0</span>%</p>
-    <div class="w-full bg-gray-700 rounded-full h-1.5 mt-1 relative z-10 overflow-hidden">
-      <div id="cpu-bar-mobile" class="h-1.5 rounded-full progress-fade-blue" style="width: 0%"></div>
-    </div>
-  </div>
-  <div class="bg-gray-800 rounded-lg p-4 shadow-md neon-panel neon-top-right gradient-border hover-lift">
-    <div class="neon-inner-glow"></div>
-    <div class="flex items-center justify-between mb-2 relative z-10">
-      <h3 class="text-sm font-semibold">Memory</h3>
-      <div class="w-7 h-7 icon-gradient-bg-green rounded-lg flex items-center justify-center">
-        <i class="ti ti-server-2 text-green-400 text-sm font-loaded"></i>
-      </div>
-    </div>
-    <p class="text-lg font-bold relative z-10">
-      <span id="memory-usage-mobile" class="count-up">0 MB</span><span id="memory-total-mobile" class="text-xs text-gray-400"> / 0 MB</span>
-    </p>
-    <div class="w-full bg-gray-700 rounded-full h-1.5 mt-1 relative z-10 overflow-hidden">
-      <div id="memory-bar-mobile" class="h-1.5 rounded-full progress-fade-green" style="width: 0%"></div>
-    </div>
-  </div>
-  <div class="bg-gray-800 rounded-lg p-4 shadow-md neon-panel neon-top-left gradient-border hover-lift">
-    <div class="neon-inner-glow"></div>
-    <div class="flex items-center justify-between mb-2 relative z-10">
-      <h3 class="text-sm font-semibold" id="network-disk-title-mobile">Internet Speed</h3>
-      <div class="w-7 h-7 icon-gradient-bg-orange hover:bg-dark-600 rounded-lg flex items-center justify-center cursor-pointer" onclick="toggleNetworkDiskDisplay('mobile')">
-        <i class="ti ti-world-upload text-orange-400 text-sm font-loaded" id="toggle-icon-mobile"></i>
-      </div>
-    </div>
-    <div id="network-content-mobile" class="space-y-1 relative z-10">
-      <div class="flex justify-between items-center">
-        <i class="ti ti-arrow-big-up-filled text-indigo-400 text-base font-loaded"></i>
-        <span id="upload-speed-mobile" class="text-sm font-bold text-indigo-400">0 Mbps</span>
-      </div>
-      <div class="flex justify-between items-center">
-        <i class="ti ti-arrow-big-down-filled text-teal-400 text-base font-loaded"></i>
-        <span id="download-speed-mobile" class="text-sm font-bold text-teal-400">0 Mbps</span>
-      </div>
-    </div>
-    <div id="disk-content-mobile" class="relative z-10" style="display: none;">
-      <p class="text-lg font-bold">
-        <span id="disk-used-mobile" class="count-up">0 GB</span><span id="disk-total-mobile" class="text-xs text-gray-400"> / 0 GB</span>
-      </p>
-      <div class="w-full bg-gray-700 rounded-full h-1.5 mt-1 overflow-hidden">
-        <div id="disk-bar-mobile" class="h-1.5 rounded-full progress-fade-orange" style="width: 0%"></div>
-      </div>
+  
+  <!-- Hidden elements for compatibility -->
+  <div class="hidden">
+    <span id="live-limit-mobile"></span>
+    <div id="limit-warning-mobile"></div>
+    <div id="cpu-bar-mobile"></div>
+    <div id="memory-bar-mobile"></div>
+    <span id="memory-total-mobile"></span>
+    <span id="network-disk-title-mobile"></span>
+    <span id="toggle-icon-mobile"></span>
+    <div id="network-content-mobile"></div>
+    <span id="upload-speed-mobile"></span>
+    <span id="download-speed-mobile"></span>
+    <div id="disk-content-mobile">
+      <span id="disk-used-mobile"></span>
+      <span id="disk-total-mobile"></span>
+      <div id="disk-bar-mobile"></div>
     </div>
   </div>
 </div>
@@ -1382,19 +1374,27 @@ async function loadSystemStats() {
     const memTotal = stats.memory?.total || '0 MB';
     const memPercent = stats.memory?.usagePercent || 0;
     document.getElementById('memory-usage').textContent = memUsed;
-    document.getElementById('memory-usage-mobile').textContent = memUsed;
     document.getElementById('memory-total').textContent = ' / ' + memTotal;
-    document.getElementById('memory-total-mobile').textContent = ' / ' + memTotal;
     document.getElementById('memory-bar').style.width = memPercent + '%';
     document.getElementById('memory-bar-mobile').style.width = memPercent + '%';
+    
+    // Mobile memory - compact format (e.g., "17GB")
+    const memUsedCompact = memUsed.replace(' ', '').replace('MB', 'MB').replace('GB', 'GB');
+    const memTotalCompact = memTotal.replace(' ', '').replace('MB', 'MB').replace('GB', 'GB');
+    document.getElementById('memory-usage-mobile').textContent = memUsedCompact;
+    document.getElementById('memory-total-mobile').textContent = memTotalCompact;
     
     // Network - use formatted strings
     const uploadSpeed = stats.network?.uploadFormatted || '0 Mbps';
     const downloadSpeed = stats.network?.downloadFormatted || '0 Mbps';
     document.getElementById('upload-speed').textContent = uploadSpeed;
-    document.getElementById('upload-speed-mobile').textContent = uploadSpeed;
     document.getElementById('download-speed').textContent = downloadSpeed;
-    document.getElementById('download-speed-mobile').textContent = downloadSpeed;
+    
+    // Mobile network - compact format (e.g., "660 Kbps" -> "660Kbps")
+    const uploadCompact = uploadSpeed.replace(' ', '').replace('Mbps', 'Mbps').replace('Kbps', 'Kbps');
+    const downloadCompact = downloadSpeed.replace(' ', '').replace('Mbps', 'Mbps').replace('Kbps', 'Kbps');
+    document.getElementById('upload-speed-mobile').textContent = uploadCompact;
+    document.getElementById('download-speed-mobile').textContent = downloadCompact;
     
     // Disk - use formatted strings
     if (stats.disk) {

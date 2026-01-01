@@ -8,7 +8,8 @@
   </div>
   
   <div class="mb-6 border-b border-gray-700">
-    <div class="flex flex-wrap -mb-px">
+    <!-- Desktop tabs -->
+    <div class="hidden sm:flex flex-wrap -mb-px">
       <button class="settings-tab active mr-2 py-2 px-4 text-primary border-b-2 border-primary font-medium"
         data-tab="profile">
         <i class="ti ti-user mr-2"></i>Profile
@@ -28,6 +29,39 @@
         class="settings-tab mr-2 py-2 px-4 text-gray-400 hover:text-white border-b-2 border-transparent hover:border-gray-700 font-medium"
         data-tab="system">
         <i class="ti ti-settings mr-2"></i>System
+      </button>
+      <% } %>
+    </div>
+    
+    <!-- Mobile tabs - grid rata kanan kiri -->
+    <% if (req.session.user_role === 'admin') { %>
+    <div class="sm:hidden grid grid-cols-4 -mb-px">
+    <% } else { %>
+    <div class="sm:hidden grid grid-cols-3 -mb-px">
+    <% } %>
+      <button class="settings-tab active py-3 flex flex-col items-center justify-center text-primary border-b-2 border-primary"
+        data-tab="profile">
+        <i class="ti ti-user text-lg mb-1"></i>
+        <span class="text-xs font-medium">Profile</span>
+      </button>
+      <button
+        class="settings-tab py-3 flex flex-col items-center justify-center text-gray-400 border-b-2 border-transparent"
+        data-tab="security">
+        <i class="ti ti-shield-lock text-lg mb-1"></i>
+        <span class="text-xs font-medium">Security</span>
+      </button>
+      <button
+        class="settings-tab py-3 flex flex-col items-center justify-center text-gray-400 border-b-2 border-transparent"
+        data-tab="backup">
+        <i class="ti ti-database-export text-lg mb-1"></i>
+        <span class="text-xs font-medium">Backup</span>
+      </button>
+      <% if (req.session.user_role === 'admin') { %>
+      <button
+        class="settings-tab py-3 flex flex-col items-center justify-center text-gray-400 border-b-2 border-transparent"
+        data-tab="system">
+        <i class="ti ti-settings text-lg mb-1"></i>
+        <span class="text-xs font-medium">System</span>
       </button>
       <% } %>
     </div>
