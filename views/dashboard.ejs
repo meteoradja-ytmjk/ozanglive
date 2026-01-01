@@ -141,18 +141,12 @@
 
 <!-- Streaming Status Section -->
 <div class="mt-8">
-  <!-- Mobile: Title with clock on right -->
+  <!-- Mobile: Title with clock on right (clickable to toggle) -->
   <div class="flex sm:hidden items-center justify-between mb-4">
     <h2 class="text-xl font-bold">Streaming Status</h2>
-    <div class="flex flex-col items-end text-xs text-gray-400">
-      <div class="flex items-center gap-1">
-        <i class="ti ti-clock text-primary font-loaded"></i>
-        <span id="realtime-clock-mobile">--:--:--</span>
-      </div>
-      <div class="flex items-center gap-1">
-        <i class="ti ti-calendar text-primary font-loaded"></i>
-        <span id="realtime-date-mobile">--/--/----</span>
-      </div>
+    <div id="mobileClockToggle" onclick="toggleMobileClock()" class="flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity">
+      <i id="mobileClockIcon" class="ti ti-clock text-primary text-lg font-loaded"></i>
+      <span id="realtime-clock-mobile" class="text-base font-semibold text-white">--:--:--</span>
     </div>
   </div>
   
@@ -2724,6 +2718,14 @@ document.addEventListener('DOMContentLoaded', function() {
   setInterval(updateRealtimeClock, 1000);
 });
 
+// Mobile clock toggle state
+let mobileShowDate = false;
+
+function toggleMobileClock() {
+  mobileShowDate = !mobileShowDate;
+  updateRealtimeClock();
+}
+
 // Realtime Clock Indonesia (WIB)
 function updateRealtimeClock() {
   const now = new Date();
@@ -2747,9 +2749,17 @@ function updateRealtimeClock() {
   // Desktop
   document.getElementById('realtime-clock').textContent = timeStr + ' WIB';
   document.getElementById('realtime-date').textContent = dateStr;
-  // Mobile
-  document.getElementById('realtime-clock-mobile').textContent = timeStr + ' WIB';
-  document.getElementById('realtime-date-mobile').textContent = dateStr;
+  
+  // Mobile - toggle between clock and date
+  const mobileClockEl = document.getElementById('realtime-clock-mobile');
+  const mobileClockIcon = document.getElementById('mobileClockIcon');
+  if (mobileShowDate) {
+    mobileClockEl.textContent = dateStr;
+    mobileClockIcon.className = 'ti ti-calendar text-primary font-loaded';
+  } else {
+    mobileClockEl.textContent = timeStr + ' WIB';
+    mobileClockIcon.className = 'ti ti-clock text-primary font-loaded';
+  }
 }
 
 // Reset all streams to original imported settings
