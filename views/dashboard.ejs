@@ -30,10 +30,10 @@
         <span><span id="cpu-usage-mobile" class="text-sky-400 font-semibold">0</span><span class="text-gray-500 text-xs">%</span></span>
       </div>
       
-      <!-- Storage -->
+      <!-- RAM/Memory -->
       <div class="flex items-center gap-1.5">
-        <i class="ti ti-database text-lg text-emerald-400"></i>
-        <span id="memory-usage-mobile" class="text-emerald-400 font-semibold">0GB</span>
+        <i class="ti ti-server-2 text-lg text-emerald-400"></i>
+        <span id="memory-usage-mobile" class="text-emerald-400 font-semibold">0MB</span>
       </div>
       
       <!-- Network -->
@@ -1372,10 +1372,9 @@ async function loadSystemStats() {
     document.getElementById('memory-bar').style.width = memPercent + '%';
     document.getElementById('memory-bar-mobile').style.width = memPercent + '%';
     
-    // Mobile memory - compact format (e.g., "17GB")
-    const memUsedCompact = memUsed.replace(' ', '').replace('MB', 'MB').replace('GB', 'GB');
-    const memTotalCompact = memTotal.replace(' ', '').replace('MB', 'MB').replace('GB', 'GB');
-    document.getElementById('memory-usage-mobile').textContent = memUsedCompact;
+    // Mobile memory - show total RAM capacity (e.g., "8GB")
+    const memTotalCompact = memTotal.replace(' ', '');
+    document.getElementById('memory-usage-mobile').textContent = memTotalCompact;
     document.getElementById('memory-total-mobile').textContent = memTotalCompact;
     
     // Network - use formatted strings
