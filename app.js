@@ -29,6 +29,7 @@ const schedulerService = require('./services/schedulerService');
 const YouTubeCredentials = require('./models/YouTubeCredentials');
 const youtubeService = require('./services/youtubeService');
 const BroadcastTemplate = require('./models/BroadcastTemplate');
+const SystemSettings = require('./models/SystemSettings');
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 // Track if we're shutting down to prevent multiple shutdown attempts
 let isShuttingDown = false;
@@ -1651,7 +1652,6 @@ app.put('/api/settings/default-storage-limit', isAdmin, async (req, res) => {
 });
 
 // Live Limit Settings API
-const SystemSettings = require('./models/SystemSettings');
 const LiveLimitService = require('./services/liveLimitService');
 
 app.get('/api/settings/live-limit', isAdmin, async (req, res) => {
