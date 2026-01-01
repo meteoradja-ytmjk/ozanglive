@@ -167,10 +167,10 @@
   </div>
 </div>
 
-<div id="editModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden transition-opacity">
+<div id="editModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden transition-opacity overflow-y-auto">
   <div class="flex items-center justify-center min-h-screen p-4">
-    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-md border border-gray-600/50 transform transition-all opacity-0 scale-95" id="editModalContent">
-      <div class="flex items-center justify-between p-4 border-b border-gray-600/50">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-md border border-gray-600/50 transform transition-all opacity-0 scale-95 flex flex-col max-h-[90vh]" id="editModalContent">
+      <div class="flex items-center justify-between p-4 border-b border-gray-600/50 flex-shrink-0">
         <div class="flex items-center">
           <h3 class="text-lg font-medium">Edit User</h3>
         </div>
@@ -179,7 +179,7 @@
         </button>
       </div>
       
-      <div class="p-6">
+      <div class="p-6 overflow-y-auto flex-1">
         <form id="editUserForm" enctype="multipart/form-data">
           <input type="hidden" id="editUserId" name="userId">
           
@@ -260,7 +260,7 @@
         </form>
       </div>
       
-      <div class="flex justify-end p-4 border-t border-gray-600/50">
+      <div class="flex justify-end p-4 border-t border-gray-600/50 flex-shrink-0">
         <button type="button" onclick="closeEditModal()" 
           class="px-4 py-2 bg-dark-700 hover:bg-dark-600 text-gray-300 rounded-lg transition-colors mr-3">
           Cancel
@@ -274,10 +274,10 @@
   </div>
 </div>
 
-<div id="createModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden transition-opacity">
+<div id="createModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden transition-opacity overflow-y-auto">
   <div class="flex items-center justify-center min-h-screen p-4">
-    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-md border border-gray-600/50 transform transition-all opacity-0 scale-95" id="createModalContent">
-      <div class="flex items-center justify-between p-4 border-b border-gray-600/50">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-md border border-gray-600/50 transform transition-all opacity-0 scale-95 flex flex-col max-h-[90vh]" id="createModalContent">
+      <div class="flex items-center justify-between p-4 border-b border-gray-600/50 flex-shrink-0">
         <div class="flex items-center">
           <h3 class="text-lg font-medium">Create New User</h3>
         </div>
@@ -286,7 +286,7 @@
         </button>
       </div>
       
-      <div class="p-6">
+      <div class="p-6 overflow-y-auto flex-1">
         <form id="createUserForm" enctype="multipart/form-data">
           <div class="mb-4">
             <label class="block text-sm font-medium text-gray-300 mb-2">Profile Picture</label>
@@ -336,7 +336,7 @@
         </form>
       </div>
       
-      <div class="flex justify-end p-4 border-t border-gray-600/50">
+      <div class="flex justify-end p-4 border-t border-gray-600/50 flex-shrink-0">
         <button type="button" onclick="closeCreateModal()" 
           class="px-4 py-2 bg-dark-700 hover:bg-dark-600 text-gray-300 rounded-lg transition-colors mr-3">
           Cancel
