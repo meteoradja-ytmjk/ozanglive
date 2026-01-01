@@ -26,24 +26,6 @@ function formatDuration(seconds) {
   }
 </style>
 
-<!-- Storage Usage Bar -->
-<div id="storageUsageBar" class="bg-gray-800 rounded-lg p-4 mb-6">
-  <div class="flex items-center justify-between mb-2">
-    <div class="flex items-center gap-2">
-      <i class="ti ti-database text-gray-400"></i>
-      <span class="text-sm font-medium text-gray-300">Storage Usage</span>
-    </div>
-    <span id="storageUsageText" class="text-sm text-gray-400">Loading...</span>
-  </div>
-  <div class="w-full bg-gray-700 rounded-full h-2.5">
-    <div id="storageUsageProgress" class="h-2.5 rounded-full bg-primary transition-all duration-300" style="width: 0%"></div>
-  </div>
-  <div class="flex justify-between mt-1">
-    <span id="storageUsageDetails" class="text-xs text-gray-500"></span>
-    <span id="storageUsageStatus" class="text-xs"></span>
-  </div>
-</div>
-
 <div class="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
   <div>
     <h2 class="text-2xl font-bold">Media Gallery</h2>
@@ -664,50 +646,6 @@ function formatDuration(seconds) {
     setTimeout(() => toast.classList.add('hidden'), 3000);
   }
 
-  // Load and display storage usage
-  function loadStorageUsage() {
-    fetch('/api/users/<%= user.id %>/storage')
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) {
-          const storage = data.storage;
-          const usageText = document.getElementById('storageUsageText');
-          const usageProgress = document.getElementById('storageUsageProgress');
-          const usageDetails = document.getElementById('storageUsageDetails');
-          const usageStatus = document.getElementById('storageUsageStatus');
-          
-          if (storage.limit) {
-            usageText.textContent = `${storage.formatted.usage} / ${storage.formatted.limit}`;
-            usageProgress.style.width = `${Math.min(storage.percentage, 100)}%`;
-            usageDetails.textContent = `Videos: ${storage.formatted.videos} | Audio: ${storage.formatted.audios}`;
-            
-            // Set color based on status
-            if (storage.status === 'critical') {
-              usageProgress.className = 'h-2.5 rounded-full bg-red-500 transition-all duration-300';
-              usageStatus.textContent = 'Storage Full';
-              usageStatus.className = 'text-xs text-red-400';
-            } else if (storage.status === 'warning') {
-              usageProgress.className = 'h-2.5 rounded-full bg-yellow-500 transition-all duration-300';
-              usageStatus.textContent = 'Running Low';
-              usageStatus.className = 'text-xs text-yellow-400';
-            } else {
-              usageProgress.className = 'h-2.5 rounded-full bg-primary transition-all duration-300';
-              usageStatus.textContent = '';
-            }
-          } else {
-            usageText.textContent = `${storage.formatted.usage} / Unlimited`;
-            usageProgress.style.width = '0%';
-            usageDetails.textContent = `Videos: ${storage.formatted.videos} | Audio: ${storage.formatted.audios}`;
-            usageStatus.textContent = '';
-          }
-        }
-      })
-      .catch(err => {
-        console.error('Error loading storage usage:', err);
-        document.getElementById('storageUsageText').textContent = 'Unable to load';
-      });
-  }
-  
   // Video Upload Modal
   function openUploadModal() {
     const modal = document.getElementById('uploadModal');
@@ -952,9 +890,6 @@ function formatDuration(seconds) {
   
   // File upload handlers
   document.addEventListener('DOMContentLoaded', function() {
-    // Load storage usage
-    loadStorageUsage();
-    
     // Initialize tab display on page load - ensure correct visibility
     const videoGrid = document.getElementById('videoGrid');
     const audioGrid = document.getElementById('audioGrid');
