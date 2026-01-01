@@ -141,8 +141,8 @@
 
 <!-- Streaming Status Section -->
 <div class="mt-8">
-  <!-- Mobile: Title with clock on right (clickable to toggle) -->
-  <div class="flex sm:hidden items-center justify-between mb-4">
+  <!-- Mobile: Title with clock on right -->
+  <div class="flex md:hidden items-center justify-between mb-4">
     <h2 class="text-xl font-bold">Streaming Status</h2>
     <div id="mobileClockToggle" onclick="toggleMobileClock()" class="flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity">
       <i id="mobileClockIcon" class="ti ti-clock text-primary text-lg font-loaded"></i>
@@ -150,9 +150,9 @@
     </div>
   </div>
   
-  <div class="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between mb-6">
+  <div class="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between mb-6">
     <!-- Desktop: Title with clock -->
-    <div class="hidden sm:flex items-center gap-3">
+    <div class="hidden md:flex items-center gap-3">
       <h2 class="text-xl font-bold">Streaming Status</h2>
       <div class="flex items-center gap-2 text-sm text-gray-400">
         <i class="ti ti-clock text-primary font-loaded"></i>
@@ -164,7 +164,7 @@
     </div>
     
     <!-- Desktop: All in one row -->
-    <div class="hidden sm:flex items-center gap-3">
+    <div class="hidden md:flex items-center gap-3">
       <div class="relative w-64">
         <select id="streamFilter" onchange="applyStreamFilter(this.value)" class="w-full bg-dark-700 border border-gray-600 text-white pl-9 pr-4 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary appearance-none cursor-pointer">
           <option value="all">All Streams</option>
@@ -225,7 +225,7 @@
     </div>
     
     <!-- Mobile: Stacked layout -->
-    <div class="w-full sm:hidden">
+    <div class="w-full md:hidden">
       <div class="relative w-full mb-3">
         <select id="streamFilterMobile" onchange="applyStreamFilter(this.value)" class="w-full bg-dark-700 border border-gray-600 text-white pl-9 pr-4 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary appearance-none cursor-pointer">
           <option value="all">All Streams</option>
