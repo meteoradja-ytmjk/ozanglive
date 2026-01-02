@@ -12,6 +12,12 @@
         <p class="text-sm text-gray-400">Create scheduled broadcasts directly to YouTube</p>
       </div>
     </div>
+    <!-- Guide Button -->
+    <button onclick="openYouTubeGuideModal()" 
+      class="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-4 py-2 rounded-xl text-sm transition-all duration-200 flex items-center gap-2 font-medium shadow-lg shadow-blue-500/25">
+      <i class="ti ti-help-circle text-lg"></i>
+      <span>Panduan API</span>
+    </button>
   </div>
 
   <% if (!accounts || accounts.length === 0) { %>
@@ -1272,5 +1278,135 @@
     </div>
   </div>
 </div>
+
+<!-- YouTube API Guide Modal -->
+<div id="youtubeGuideModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto">
+  <div class="flex min-h-screen items-center justify-center p-4">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
+      <div class="flex items-center justify-between p-6 border-b border-gray-700 sticky top-0 bg-dark-800 z-10">
+        <h3 class="text-lg font-semibold flex items-center gap-2">
+          <i class="ti ti-brand-youtube text-red-500"></i>
+          YouTube API Setup
+        </h3>
+        <button onclick="closeYouTubeGuideModal()" class="text-gray-400 hover:text-white">
+          <i class="ti ti-x text-xl"></i>
+        </button>
+      </div>
+      
+      <div class="p-6 overflow-y-auto max-h-[calc(90vh-80px)] space-y-6">
+        <!-- Step 1 -->
+        <div class="bg-dark-700 rounded-lg p-4 border border-gray-600">
+          <h4 class="text-primary font-semibold mb-2 flex items-center gap-2">
+            <span class="w-6 h-6 bg-primary/20 rounded-full flex items-center justify-center text-sm">1</span>
+            Buat Project di Google Cloud
+          </h4>
+          <ol class="text-sm text-gray-300 space-y-1 ml-8 list-decimal">
+            <li>Buka <a href="https://console.cloud.google.com" target="_blank" class="text-primary hover:underline">Google Cloud Console</a></li>
+            <li><strong>Select Project</strong> → <strong>New Project</strong> → Buat project baru</li>
+          </ol>
+        </div>
+
+        <!-- Step 2 -->
+        <div class="bg-dark-700 rounded-lg p-4 border border-gray-600">
+          <h4 class="text-primary font-semibold mb-2 flex items-center gap-2">
+            <span class="w-6 h-6 bg-primary/20 rounded-full flex items-center justify-center text-sm">2</span>
+            Aktifkan YouTube Data API
+          </h4>
+          <ol class="text-sm text-gray-300 space-y-1 ml-8 list-decimal">
+            <li><strong>APIs & Services</strong> → <strong>Library</strong></li>
+            <li>Cari <strong>YouTube Data API v3</strong> → <strong>Enable</strong></li>
+          </ol>
+        </div>
+
+        <!-- Step 3 -->
+        <div class="bg-dark-700 rounded-lg p-4 border border-gray-600">
+          <h4 class="text-primary font-semibold mb-2 flex items-center gap-2">
+            <span class="w-6 h-6 bg-primary/20 rounded-full flex items-center justify-center text-sm">3</span>
+            Setup OAuth Consent Screen
+          </h4>
+          <ol class="text-sm text-gray-300 space-y-1 ml-8 list-decimal">
+            <li><strong>APIs & Services</strong> → <strong>OAuth consent screen</strong></li>
+            <li>Pilih <strong>External</strong> → Isi informasi yang diperlukan</li>
+            <li>Tambahkan scope: <code class="bg-dark-600 px-1 rounded text-xs">https://www.googleapis.com/auth/youtube</code></li>
+            <li>Tambahkan email ke <strong>Test users</strong></li>
+          </ol>
+        </div>
+
+        <!-- Step 4 -->
+        <div class="bg-dark-700 rounded-lg p-4 border border-gray-600">
+          <h4 class="text-primary font-semibold mb-2 flex items-center gap-2">
+            <span class="w-6 h-6 bg-primary/20 rounded-full flex items-center justify-center text-sm">4</span>
+            Buat OAuth Client ID
+          </h4>
+          <ol class="text-sm text-gray-300 space-y-1 ml-8 list-decimal">
+            <li><strong>APIs & Services</strong> → <strong>Credentials</strong> → <strong>Create Credentials</strong> → <strong>OAuth Client ID</strong></li>
+            <li>Pilih <strong>Web application</strong></li>
+            <li>Authorized redirect URIs: <code class="bg-dark-600 px-1 rounded text-xs">https://developers.google.com/oauthplayground</code></li>
+            <li>Simpan <strong class="text-yellow-400">CLIENT_ID</strong> dan <strong class="text-yellow-400">CLIENT_SECRET</strong></li>
+          </ol>
+        </div>
+
+        <!-- Step 5 -->
+        <div class="bg-dark-700 rounded-lg p-4 border border-gray-600">
+          <h4 class="text-primary font-semibold mb-2 flex items-center gap-2">
+            <span class="w-6 h-6 bg-primary/20 rounded-full flex items-center justify-center text-sm">5</span>
+            Generate Refresh Token
+          </h4>
+          <ol class="text-sm text-gray-300 space-y-1 ml-8 list-decimal">
+            <li>Buka <a href="https://developers.google.com/oauthplayground" target="_blank" class="text-primary hover:underline">OAuth Playground</a></li>
+            <li>⚙️ Settings → ✅ <strong>Use your own OAuth credentials</strong></li>
+            <li>Masukkan Client ID & Client Secret</li>
+            <li>Scope: <code class="bg-dark-600 px-1 rounded text-xs">https://www.googleapis.com/auth/youtube</code></li>
+            <li><strong>Authorize APIs</strong> → Login → <strong>Exchange authorization code for tokens</strong></li>
+            <li>Salin <strong class="text-green-400">Refresh Token</strong></li>
+          </ol>
+        </div>
+
+        <!-- Step 6 -->
+        <div class="bg-gradient-to-r from-red-500/20 to-red-600/10 rounded-lg p-4 border border-red-500/30">
+          <h4 class="text-red-400 font-semibold mb-2 flex items-center gap-2">
+            <span class="w-6 h-6 bg-red-500/20 rounded-full flex items-center justify-center text-sm">6</span>
+            Masukkan di OzangLive
+          </h4>
+          <p class="text-sm text-gray-300 ml-8">
+            Menu <strong>YouTube</strong> → <strong>Tambah Akun</strong> → Masukkan credentials → <strong>Simpan</strong>
+          </p>
+        </div>
+
+        <!-- Footer -->
+        <div class="text-center pt-4 border-t border-gray-700">
+          <p class="text-gray-400 text-sm">Semoga berhasil, Amiin 🤲</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// YouTube Guide Modal Functions
+function openYouTubeGuideModal() {
+  document.getElementById('youtubeGuideModal').classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeYouTubeGuideModal() {
+  document.getElementById('youtubeGuideModal').classList.add('hidden');
+  document.body.style.overflow = '';
+}
+
+// Close modal when clicking outside
+document.getElementById('youtubeGuideModal').addEventListener('click', function(e) {
+  if (e.target === this) {
+    closeYouTubeGuideModal();
+  }
+});
+
+// Close modal with Escape key
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape' && !document.getElementById('youtubeGuideModal').classList.contains('hidden')) {
+    closeYouTubeGuideModal();
+  }
+});
+</script>
 
 <script src="/js/youtube.js"></script>
