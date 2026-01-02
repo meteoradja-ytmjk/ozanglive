@@ -275,6 +275,34 @@ tail -f logs/app.log
 ```
 
 ---
+Untuk kernel upgrade yang bikin proses install stuck/gagal. Coba ini:
+
+1. Fix dpkg yang mungkin terkunci:
+```bash
+sudo killall dpkg apt apt-get 2>/dev/null
+sudo rm -f /var/lib/dpkg/lock*
+sudo rm -f /var/lib/apt/lists/lock
+sudo rm -f /var/cache/apt/archives/lock
+sudo dpkg --configure -a
+```
+2. Set non-interactive supaya gak muncul dialog lagi:
+```bash
+export DEBIAN_FRONTEND=noninteractive
+```
+3. Update sistem tanpa dialog:
+```bash
+sudo apt-get update
+sudo apt-get upgrade -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"
+```
+4. Reboot dulu biar kernel baru aktif:
+```bash
+sudo reboot
+```
+5. Setelah reboot, baru jalankan install ulang:
+```bash
+export DEBIAN_FRONTEND=noninteractive
+./install.sh
+```
 
 ## 📊 System Requirements
 

@@ -31,9 +31,17 @@ const MAX_LOG_LINES = 50; // OPTIMIZED: Reduced from 100 to 50 to save memory
 // Structure: { streamId: { startTime: Date, durationMs: number, expectedEndTime: Date } }
 const streamDurationInfo = new Map();
 
+// PID tracking for FFmpeg process verification
+// Structure: { streamId: pid }
+const streamPids = new Map();
+
 // MEMORY MANAGEMENT: Periodic cleanup of stale entries
 // This prevents memory leaks from orphaned entries
 const CLEANUP_INTERVAL = 30 * 60 * 1000; // Every 30 minutes
+
+// PROCESS HEALTH CHECK: Verify FFmpeg processes are still running
+// This catches cases where FFmpeg dies without triggering exit event
+const PROCESS_CHECK_INTERVAL = 30 * 1000; // Every 30 seconds
 
 /**
  * Clean up stale entries from Maps to prevent memory leaks
@@ -68,6 +76,14 @@ function cleanupStaleMaps() {
       }
     }
     
+    // Clean streamPids for inactive streams
+    for (const [id] of streamPids) {
+      if (!activeIds.has(id)) {
+        streamPids.delete(id);
+        cleaned++;
+      }
+    }
+    
     // Clean manuallyStoppingStreams for inactive streams
     for (const id of manuallyStoppingStreams) {
       if (!activeIds.has(id)) {
@@ -86,6 +102,166 @@ function cleanupStaleMaps() {
 
 // Start cleanup interval (will be tracked by app.js global override)
 setInterval(cleanupStaleMaps, CLEANUP_INTERVAL);
+
+/**
+ * Check if a specific process is still running by PID
+ * @param {number} pid - Process ID to check
+ * @returns {Promise<boolean>} True if process is running
+ */
+async function isProcessRunning(pid) {
+  if (!pid) return false;
+  
+  return new Promise((resolve) => {
+    const isWindows = process.platform === 'win32';
+    const cmd = isWindows 
+      ? `tasklist /FI "PID eq ${pid}" /NH`
+      : `ps -p ${pid} -o pid=`;
+    
+    exec(cmd, { timeout: 5000 }, (error, stdout) => {
+      if (error) {
+        resolve(false);
+        return;
+      }
+      // Check if PID is in output
+      const hasProcess = stdout && stdout.includes(pid.toString());
+      resolve(hasProcess);
+    });
+  });
+}
+
+/**
+ * Periodic health check for all active streams
+ * Verifies FFmpeg processes are still running and updates status if not
+ */
+async function checkStreamProcessHealth() {
+  try {
+    const activeStreamIds = Array.from(activeStreams.keys());
+    
+    if (activeStreamIds.length === 0) {
+      return; // No active streams to check
+    }
+    
+    console.log(`[ProcessHealthCheck] Checking ${activeStreamIds.length} active streams...`);
+    
+    for (const streamId of activeStreamIds) {
+      try {
+        const ffmpegProcess = activeStreams.get(streamId);
+        const pid = streamPids.get(streamId);
+        
+        // Method 1: Check if process object is still valid
+        let processAlive = false;
+        if (ffmpegProcess && !ffmpegProcess.killed) {
+          // Try to check if process is still running
+          try {
+            // Sending signal 0 checks if process exists without killing it
+            process.kill(ffmpegProcess.pid, 0);
+            processAlive = true;
+          } catch (e) {
+            // Process doesn't exist
+            processAlive = false;
+          }
+        }
+        
+        // Method 2: Double-check with PID if available
+        if (!processAlive && pid) {
+          processAlive = await isProcessRunning(pid);
+        }
+        
+        // Method 3: Check if FFmpeg is streaming to this stream's key
+        if (!processAlive) {
+          const stream = await Stream.findById(streamId);
+          if (stream && stream.stream_key) {
+            processAlive = await isFFmpegStreamingToKey(stream.stream_key);
+          }
+        }
+        
+        if (!processAlive) {
+          console.log(`[ProcessHealthCheck] Stream ${streamId}: FFmpeg process NOT running, updating status`);
+          
+          // Clean up
+          activeStreams.delete(streamId);
+          streamPids.delete(streamId);
+          clearDurationInfo(streamId);
+          
+          // Update database status
+          const stream = await Stream.findById(streamId);
+          if (stream && stream.status === 'live') {
+            const newStatus = getStatusAfterStreamEnd(stream);
+            await Stream.updateStatus(streamId, newStatus, stream.user_id);
+            console.log(`[ProcessHealthCheck] Updated stream ${streamId} status to '${newStatus}'`);
+            addStreamLog(streamId, `Process health check: FFmpeg not running, status updated to '${newStatus}'`);
+            
+            // Save history
+            const updatedStream = await Stream.findById(streamId);
+            await saveStreamHistory(updatedStream);
+            
+            // Cancel any scheduled termination
+            if (typeof schedulerService !== 'undefined' && schedulerService.handleStreamStopped) {
+              schedulerService.handleStreamStopped(streamId);
+            }
+          }
+        } else {
+          // Process is alive, log occasionally for debugging
+          const durationInfo = getDurationInfo(streamId);
+          if (durationInfo) {
+            const remainingMs = getRemainingTime(streamId);
+            const remainingMin = remainingMs ? (remainingMs / 60000).toFixed(1) : 'unlimited';
+            console.log(`[ProcessHealthCheck] Stream ${streamId}: OK (remaining: ${remainingMin} min)`);
+          }
+        }
+      } catch (streamError) {
+        console.error(`[ProcessHealthCheck] Error checking stream ${streamId}:`, streamError.message);
+      }
+    }
+    
+    // Also check database for "live" streams not in memory
+    // This catches cases where app restarted or FFmpeg died without cleanup
+    try {
+      const liveStreams = await Stream.findAll(null, 'live');
+      for (const stream of liveStreams) {
+        // Skip if already in activeStreams (already checked above)
+        if (activeStreams.has(stream.id)) continue;
+        
+        // Stream is "live" in DB but not in memory - verify FFmpeg is actually running
+        let isActuallyRunning = false;
+        
+        if (stream.stream_key) {
+          isActuallyRunning = await isFFmpegStreamingToKey(stream.stream_key);
+        }
+        
+        if (!isActuallyRunning) {
+          // Check how long it's been "live" - only update if > 2 minutes
+          // This prevents false positives during app startup
+          const startTime = stream.start_time ? new Date(stream.start_time) : null;
+          const now = new Date();
+          const runningMinutes = startTime ? (now - startTime) / 60000 : 999;
+          
+          if (runningMinutes > 2) {
+            console.log(`[ProcessHealthCheck] DB stream ${stream.id}: marked 'live' but no FFmpeg process found (running ${runningMinutes.toFixed(1)} min)`);
+            const newStatus = getStatusAfterStreamEnd(stream);
+            await Stream.updateStatus(stream.id, newStatus, stream.user_id);
+            console.log(`[ProcessHealthCheck] Updated DB stream ${stream.id} status to '${newStatus}'`);
+            
+            // Save history
+            const updatedStream = await Stream.findById(stream.id);
+            await saveStreamHistory(updatedStream);
+          } else {
+            console.log(`[ProcessHealthCheck] DB stream ${stream.id}: recently started (${runningMinutes.toFixed(1)} min), keeping 'live'`);
+          }
+        } else {
+          console.log(`[ProcessHealthCheck] DB stream ${stream.id}: FFmpeg running (external process)`);
+        }
+      }
+    } catch (dbError) {
+      console.error(`[ProcessHealthCheck] Error checking database streams:`, dbError.message);
+    }
+  } catch (error) {
+    console.error('[ProcessHealthCheck] Error during health check:', error.message);
+  }
+}
+
+// Start process health check interval
+setInterval(checkStreamProcessHealth, PROCESS_CHECK_INTERVAL);
 
 /**
  * Check if any FFmpeg process is currently running
@@ -763,11 +939,17 @@ async function startStream(streamId) {
       console.error(`[StreamingService] FFmpeg failed to start for stream ${streamId}: ${earlyExitError}`);
       addStreamLog(streamId, `Failed to start: ${earlyExitError}`);
       activeStreams.delete(streamId);
+      streamPids.delete(streamId);
       return { success: false, error: earlyExitError || 'FFmpeg failed to start' };
     }
     
     // FFmpeg is confirmed running, now update status
     activeStreams.set(streamId, ffmpegProcess);
+    // Track PID for process health monitoring
+    if (ffmpegProcess.pid) {
+      streamPids.set(streamId, ffmpegProcess.pid);
+      console.log(`[StreamingService] Stream ${streamId} PID: ${ffmpegProcess.pid}`);
+    }
     await Stream.updateStatus(streamId, 'live', stream.user_id, { startTimeOverride: startTimeIso });
     console.log(`[StreamingService] Stream ${streamId} confirmed running, status updated to live`);
     
@@ -823,6 +1005,7 @@ async function startStream(streamId) {
       addStreamLog(streamId, `Stream ended with code ${code}, signal: ${signal}`);
       console.log(`[FFMPEG_EXIT] ${streamId}: Code=${code}, Signal=${signal}`);
       const wasActive = activeStreams.delete(streamId);
+      streamPids.delete(streamId); // Clean up PID tracking
       const isManualStop = manuallyStoppingStreams.has(streamId);
       
       // Check if duration was exceeded - if so, this is a normal termination
@@ -1025,6 +1208,8 @@ async function startStream(streamId) {
       addStreamLog(streamId, `Error in stream process: ${err.message}`);
       console.error(`[FFMPEG_PROCESS_ERROR] ${streamId}: ${err.message}`);
       activeStreams.delete(streamId);
+      streamPids.delete(streamId); // Clean up PID tracking
+      clearDurationInfo(streamId); // Clean up duration tracking
       try {
         // FIXED: Try to get stream data to determine correct status
         const streamData = await Stream.findById(streamId);
@@ -1126,6 +1311,7 @@ async function stopStream(streamId) {
     }
     const stream = await Stream.findById(streamId);
     activeStreams.delete(streamId);
+    streamPids.delete(streamId); // Clean up PID tracking
     
     // Clean up duration tracking
     clearDurationInfo(streamId);
@@ -1250,6 +1436,7 @@ async function syncStreamStatuses() {
               }
             }
             activeStreams.delete(streamId);
+            streamPids.delete(streamId); // Clean up PID tracking
           }
         }
       } catch (streamError) {
@@ -1263,11 +1450,14 @@ async function syncStreamStatuses() {
     // Don't rethrow - let the sync continue on next interval
   }
 }
-// REMOVED: Automatic sync interval - was causing status to change incorrectly
-// Status is now only managed by:
+
+// Process health check runs every 30 seconds to detect dead FFmpeg processes
+// This catches cases where FFmpeg dies without triggering exit event
+// Status is now managed by:
 // 1. startStream() - sets to 'live'
 // 2. stopStream() - sets to 'offline' or 'scheduled'
-// 3. FFmpeg exit event - handles crashes
+// 3. FFmpeg exit event - handles normal exits
+// 4. checkStreamProcessHealth() - catches zombie/dead processes
 // syncStreamStatuses() can still be called manually if needed
 function isStreamActive(streamId) {
   return activeStreams.has(streamId);
