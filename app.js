@@ -2181,7 +2181,9 @@ app.get('/stream/:videoId', isAuthenticated, async (req, res) => {
     if (!video) {
       return res.status(404).send('Video not found');
     }
-    if (video.user_id !== req.session.userId) {
+    // Allow admin to access all videos, members can only access their own
+    const user = await User.findById(req.session.userId);
+    if (user.user_role !== 'admin' && video.user_id !== req.session.userId) {
       return res.status(403).send('You do not have permission to access this video');
     }
     const videoPath = path.join(__dirname, 'public', video.filepath);
@@ -3945,7 +3947,9 @@ app.get('/stream/audio/:audioId', isAuthenticated, async (req, res) => {
     if (!audio) {
       return res.status(404).send('Audio not found');
     }
-    if (audio.user_id !== req.session.userId) {
+    // Allow admin to access all audios, members can only access their own
+    const user = await User.findById(req.session.userId);
+    if (user.user_role !== 'admin' && audio.user_id !== req.session.userId) {
       return res.status(403).send('Not authorized');
     }
     const audioPath = path.join(__dirname, 'public', audio.filepath);
