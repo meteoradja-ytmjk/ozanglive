@@ -617,10 +617,8 @@ app.get('/login', async (req, res) => {
     });
   } catch (error) {
     console.error('Error checking for users:', error);
-    res.render('login', {
-      title: 'Login',
-      error: 'System error. Please try again.'
-    });
+    // If database error occurs (e.g., fresh install), redirect to setup
+    return res.redirect('/setup-account');
   }
 });
 app.post('/login', loginDelayMiddleware, loginLimiter, async (req, res) => {
@@ -683,11 +681,8 @@ app.get('/signup', async (req, res) => {
     });
   } catch (error) {
     console.error('Error loading signup page:', error);
-    res.render('signup', {
-      title: 'Sign Up',
-      error: 'System error. Please try again.',
-      success: null
-    });
+    // If database error occurs (e.g., fresh install), redirect to setup
+    return res.redirect('/setup-account');
   }
 });
 
@@ -806,7 +801,12 @@ app.get('/setup-account', async (req, res) => {
     });
   } catch (error) {
     console.error('Setup account error:', error);
-    res.redirect('/login');
+    // On error (e.g., fresh install with no tables yet), show setup page anyway
+    res.render('setup-account', {
+      title: 'Complete Your Account',
+      user: {},
+      error: null
+    });
   }
 });
 app.post('/setup-account', upload.single('avatar'), [

@@ -569,13 +569,31 @@ function safeDbRun(sql, params = [], timeoutMs = 30000) {
 }
 function checkIfUsersExist() {
   return new Promise((resolve, reject) => {
-    db.get('SELECT COUNT(*) as count FROM users', [], (err, result) => {
+    // First check if users table exists
+    db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='users'", [], (err, tableExists) => {
       if (err) {
-        console.error('[Database] Error checking users:', err.message);
-        reject(err);
+        console.error('[Database] Error checking users table:', err.message);
+        // On error, assume no users exist
+        resolve(false);
         return;
       }
-      resolve(result.count > 0);
+      
+      if (!tableExists) {
+        // Table doesn't exist yet, no users
+        resolve(false);
+        return;
+      }
+      
+      // Table exists, check for users
+      db.get('SELECT COUNT(*) as count FROM users', [], (err, result) => {
+        if (err) {
+          console.error('[Database] Error checking users:', err.message);
+          // On error, assume no users exist
+          resolve(false);
+          return;
+        }
+        resolve(result.count > 0);
+      });
     });
   });
 }
@@ -587,13 +605,31 @@ function checkIfUsersExist() {
  */
 function checkIfAdminExists() {
   return new Promise((resolve, reject) => {
-    db.get("SELECT COUNT(*) as count FROM users WHERE user_role = 'admin' AND status = 'active'", [], (err, result) => {
+    // First check if users table exists
+    db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='users'", [], (err, tableExists) => {
       if (err) {
-        console.error('[Database] Error checking admin users:', err.message);
-        reject(err);
+        console.error('[Database] Error checking users table:', err.message);
+        // On error, assume no admin exists to allow setup
+        resolve(false);
         return;
       }
-      resolve(result.count > 0);
+      
+      if (!tableExists) {
+        // Table doesn't exist yet, no admin
+        resolve(false);
+        return;
+      }
+      
+      // Table exists, check for active admin
+      db.get("SELECT COUNT(*) as count FROM users WHERE user_role = 'admin' AND status = 'active'", [], (err, result) => {
+        if (err) {
+          console.error('[Database] Error checking admin users:', err.message);
+          // On error, assume no admin exists to allow setup
+          resolve(false);
+          return;
+        }
+        resolve(result.count > 0);
+      });
     });
   });
 }
