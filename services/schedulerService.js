@@ -4,12 +4,12 @@ const { calculateDurationSeconds, formatDuration } = require('../utils/durationC
 
 const scheduledTerminations = new Map();
 const recentlyTriggeredStreams = new Map(); // Track recently triggered recurring streams
-const SCHEDULE_LOOKAHEAD_SECONDS = 60; // Look ahead 1 minute for one-time schedules (reduced from 3 min to prevent early triggers)
+const SCHEDULE_LOOKAHEAD_SECONDS = 30; // FIXED: Reduced to 30 seconds to prevent early triggers
 const RECURRING_CHECK_INTERVAL = 60 * 1000; // Check recurring schedules every 1 minute (CRITICAL for accuracy)
-const ONCE_SCHEDULE_CHECK_INTERVAL = 60 * 1000; // Check one-time schedules every 1 minute
+const ONCE_SCHEDULE_CHECK_INTERVAL = 30 * 1000; // FIXED: Check one-time schedules every 30 seconds for better precision
 const TRIGGER_COOLDOWN_MS = 10 * 60 * 1000; // 10 minute cooldown to prevent double triggers (longer than any check interval)
-const DURATION_CHECK_INTERVAL = 2 * 60 * 1000; // Check durations every 2 minutes
-const FORCE_STOP_BUFFER_MS = 2 * 60 * 1000; // Force stop streams that exceed duration by more than 2 minutes
+const DURATION_CHECK_INTERVAL = 30 * 1000; // FIXED: Check durations every 30 seconds for precise stopping
+const FORCE_STOP_BUFFER_MS = 30 * 1000; // FIXED: Reduced to 30 seconds - force stop if exceeded by 30s
 const CLEANUP_INTERVAL = 60 * 60 * 1000; // Clean up stale entries every 1 hour
 
 let streamingService = null;
@@ -54,14 +54,14 @@ function init(streamingServiceInstance) {
   };
   
   // Schedule checks - more frequent for better accuracy
-  scheduleIntervalId = setInterval(safeCheckScheduledStreams, ONCE_SCHEDULE_CHECK_INTERVAL); // Every 1 minute for one-time schedules
-  durationIntervalId = setInterval(safeCheckStreamDurations, DURATION_CHECK_INTERVAL); // Every 2 minutes for duration checks
+  scheduleIntervalId = setInterval(safeCheckScheduledStreams, ONCE_SCHEDULE_CHECK_INTERVAL); // Every 30 seconds for one-time schedules
+  durationIntervalId = setInterval(safeCheckStreamDurations, DURATION_CHECK_INTERVAL); // Every 30 seconds for duration checks
   recurringIntervalId = setInterval(safeCheckRecurringSchedules, RECURRING_CHECK_INTERVAL); // Every 1 minute for recurring schedules
   
   // MEMORY MANAGEMENT: Cleanup stale entries from Maps
   cleanupIntervalId = setInterval(cleanupStaleMaps, CLEANUP_INTERVAL);
   
-  console.log('[Scheduler] Intervals set: once-schedules=1min, recurring=1min, duration=2min, cleanup=1hr');
+  console.log('[Scheduler] Intervals set: once-schedules=30s, recurring=1min, duration=30s, cleanup=1hr');
   
   // Initial checks with error handling (run immediately on startup)
   safeCheckScheduledStreams();
@@ -129,15 +129,16 @@ async function checkScheduledStreams() {
           const timeDiffMs = now.getTime() - scheduleTime.getTime();
           const timeDiffMinutes = timeDiffMs / 60000;
           
-          // FIXED: Only start if schedule time has passed or is within 1 minute
-          // This prevents starting streams too early
-          if (timeDiffMs < -60000) {
-            console.log(`[Scheduler] SKIP: stream ${stream.id} - scheduled for ${scheduleTime.toISOString()}, still ${Math.abs(timeDiffMinutes).toFixed(1)} minutes away`);
+          // FIXED: Only start if schedule time has PASSED (timeDiffMs >= 0)
+          // This ensures stream starts AT or AFTER the scheduled time, never before
+          // Allow up to 30 seconds early to account for check interval timing
+          if (timeDiffMs < -30000) {
+            console.log(`[Scheduler] SKIP: stream ${stream.id} - scheduled for ${scheduleTime.toISOString()}, still ${Math.abs(timeDiffMinutes).toFixed(2)} minutes away`);
             continue;
           }
           
           console.log(`[Scheduler] >>> STARTING scheduled ONCE stream: ${stream.id} - ${stream.title}`);
-          console.log(`[Scheduler]   Scheduled: ${stream.schedule_time}, Diff: ${timeDiffMinutes.toFixed(1)} minutes`);
+          console.log(`[Scheduler]   Scheduled: ${stream.schedule_time}, Diff: ${timeDiffMinutes.toFixed(2)} minutes`);
           console.log(`[Scheduler]   Duration: ${stream.stream_duration_minutes || 'unlimited'} minutes`);
           
           // Mark as triggered before starting
@@ -249,9 +250,10 @@ async function checkStreamDurations() {
             continue;
           }
           
-          // If stream has exceeded end time (but within buffer), stop it
+          // FIXED: If stream has exceeded end time, stop it immediately
+          // No buffer - stop as soon as duration is reached
           if (shouldEndAt <= now) {
-            console.log(`[Scheduler] Stream ${stream.id} exceeded end time by ${timeOverdueMinutes.toFixed(1)} minutes, stopping now`);
+            console.log(`[Scheduler] Stream ${stream.id} exceeded end time by ${timeOverdueMinutes.toFixed(2)} minutes, stopping now`);
             try {
               await streamingService.stopStream(stream.id);
               cancelStreamTermination(stream.id);
@@ -265,7 +267,7 @@ async function checkStreamDurations() {
           if (!scheduledTerminations.has(stream.id)) {
             const timeUntilEnd = shouldEndAt.getTime() - now.getTime();
             const minutesUntilEnd = timeUntilEnd / 60000;
-            console.log(`[Scheduler] Stream ${stream.id} will end at ${shouldEndAt.toISOString()} (${minutesUntilEnd.toFixed(1)} minutes)`);
+            console.log(`[Scheduler] Stream ${stream.id} will end at ${shouldEndAt.toISOString()} (${minutesUntilEnd.toFixed(2)} minutes)`);
             scheduleStreamTermination(stream.id, minutesUntilEnd);
           }
         }
@@ -392,15 +394,15 @@ function shouldTriggerDaily(stream, currentTime = new Date()) {
   // Calculate time difference (positive = current time is after scheduled time)
   const timeDiff = currentTotalMinutes - scheduleMinutes;
   
-  // FIXED: Trigger within a wider window to handle scheduler check intervals
-  // - timeDiff >= 0: Only trigger at or after scheduled time
-  // - timeDiff <= 2: Allow up to 2 minutes late (scheduler checks every 1 minute)
+  // FIXED: Trigger only at exact minute or up to 1 minute late
+  // - timeDiff >= 0: Only trigger at or after scheduled time (NEVER before)
+  // - timeDiff <= 1: Allow up to 1 minute late (scheduler checks every 1 minute)
   // The cooldown mechanism prevents double triggers
-  const shouldTrigger = timeDiff >= 0 && timeDiff <= 2;
+  const shouldTrigger = timeDiff >= 0 && timeDiff <= 1;
   
   // Log trigger decision
   const triggerStatus = timeDiff < 0 ? `WAITING (${Math.abs(timeDiff)} min before schedule)` : 
-                        timeDiff <= 2 ? 'TRIGGER_WINDOW' : 
+                        timeDiff <= 1 ? 'TRIGGER_WINDOW' : 
                         `MISSED (${timeDiff} min late)`;
   console.log(`[Scheduler] Daily time check: scheduled=${schedHours}:${String(schedMinutes).padStart(2,'0')} WIB, current=${wibTime.hours}:${String(wibTime.minutes).padStart(2,'0')} WIB, diff=${timeDiff}min, status=${triggerStatus}, shouldTrigger=${shouldTrigger}`);
   
@@ -452,14 +454,14 @@ function shouldTriggerWeekly(stream, currentTime = new Date()) {
     return false;
   }
 
-  // FIXED: Trigger within a wider window to handle scheduler check intervals
-  // - timeDiff >= 0: Only trigger at or after scheduled time
-  // - timeDiff <= 2: Allow up to 2 minutes late (scheduler checks every 1 minute)
+  // FIXED: Trigger only at exact minute or up to 1 minute late
+  // - timeDiff >= 0: Only trigger at or after scheduled time (NEVER before)
+  // - timeDiff <= 1: Allow up to 1 minute late (scheduler checks every 1 minute)
   // The cooldown mechanism prevents double triggers
-  const shouldTrigger = timeDiff >= 0 && timeDiff <= 2;
+  const shouldTrigger = timeDiff >= 0 && timeDiff <= 1;
   
   const triggerStatus = timeDiff < 0 ? `WAITING (${Math.abs(timeDiff)} min before schedule)` : 
-                        timeDiff <= 2 ? 'TRIGGER_WINDOW' : 
+                        timeDiff <= 1 ? 'TRIGGER_WINDOW' : 
                         `MISSED (${timeDiff} min late)`;
   
   console.log(`[Scheduler] Weekly time check: scheduled=${schedHours}:${String(schedMinutes).padStart(2,'0')} WIB on days=[${scheduleDays.map(d => dayNames[d]).join(',')}], current=${wibTime.hours}:${String(wibTime.minutes).padStart(2,'0')} WIB (${dayNames[wibTime.day]}), diff=${timeDiff}min, status=${triggerStatus}, shouldTrigger=${shouldTrigger}`);

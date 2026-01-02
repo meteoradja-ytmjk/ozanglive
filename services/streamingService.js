@@ -1255,14 +1255,17 @@ async function startStream(streamId) {
     }
     
     // Schedule stream termination based on duration
+    // FIXED: No buffer added - FFmpeg -t parameter handles exact duration
+    // The scheduler termination is a backup in case FFmpeg -t fails
     if (typeof schedulerService !== 'undefined' && durationMs && durationMs > 0) {
       const shouldEndAt = new Date(streamStartTime.getTime() + durationMs);
       const remainingMs = Math.max(0, shouldEndAt.getTime() - now);
-      const bufferMs = 30000; // 30 second buffer to let FFmpeg -t work first
-      const remainingWithBufferMs = remainingMs + bufferMs;
-      const remainingMinutes = remainingWithBufferMs / 60000;
+      // FIXED: No buffer - use exact remaining time
+      // FFmpeg -t parameter is the primary duration control
+      // This scheduled termination is only a safety backup
+      const remainingMinutes = remainingMs / 60000;
       
-      console.log(`[StreamingService] Scheduling termination for stream ${streamId} at ${shouldEndAt.toISOString()} (${remainingMinutes.toFixed(1)} minutes with 30s buffer)`);
+      console.log(`[StreamingService] Scheduling termination for stream ${streamId} at ${shouldEndAt.toISOString()} (${remainingMinutes.toFixed(2)} minutes exact)`);
       schedulerService.scheduleStreamTermination(streamId, remainingMinutes);
     }
     return {
