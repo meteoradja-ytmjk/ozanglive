@@ -5,6 +5,7 @@ const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
 const schedulerService = require('./schedulerService');
 const LiveLimitService = require('./liveLimitService');
 const youtubeStatusSync = require('./youtubeStatusSync');
+const rtmpHealthMonitor = require('./rtmpHealthMonitor');
 const { v4: uuidv4 } = require('uuid');
 const { db } = require('../db/database');
 const Stream = require('../models/Stream');
@@ -978,11 +979,26 @@ async function startStream(streamId) {
     if (stream.platform === 'YouTube' && stream.stream_key) {
       try {
         youtubeStatusSync.setStreamingService(module.exports);
+        youtubeStatusSync.setRTMPHealthMonitor(rtmpHealthMonitor);
         await youtubeStatusSync.startMonitoring(streamId, stream.user_id, stream.stream_key);
       } catch (ytErr) {
         console.log(`[StreamingService] YouTube status sync not started: ${ytErr.message}`);
         // Continue without sync - not critical
       }
+    }
+    
+    // Start RTMP health monitoring for auto-reconnect
+    // This ensures the stream stays connected for the full duration
+    try {
+      rtmpHealthMonitor.setStreamingService(module.exports);
+      const durationForMonitor = stream.stream_duration_minutes 
+        ? stream.stream_duration_minutes * 60 * 1000 
+        : (calculateDurationSeconds(stream) ? calculateDurationSeconds(stream) * 1000 : null);
+      rtmpHealthMonitor.startMonitoring(streamId, streamStartTime, durationForMonitor);
+      console.log(`[StreamingService] RTMP health monitoring started for stream ${streamId}`);
+    } catch (healthErr) {
+      console.log(`[StreamingService] RTMP health monitor not started: ${healthErr.message}`);
+      // Continue without health monitoring - not critical
     }
     
     ffmpegProcess.stdout.on('data', (data) => {
@@ -999,6 +1015,27 @@ async function startStream(streamId) {
         if (!message.includes('frame=')) {
           console.error(`[FFMPEG_STDERR] ${streamId}: ${message}`);
         }
+        
+        // Detect RTMP connection errors that might cause YouTube to disconnect
+        const connectionErrors = [
+          'Connection refused',
+          'Connection timed out',
+          'Connection reset',
+          'Broken pipe',
+          'RTMP_Connect',
+          'RTMP_ReadPacket',
+          'Server error',
+          'Failed to connect'
+        ];
+        
+        const hasConnectionError = connectionErrors.some(err => 
+          message.toLowerCase().includes(err.toLowerCase())
+        );
+        
+        if (hasConnectionError) {
+          console.error(`[StreamingService] RTMP connection error detected for stream ${streamId}: ${message}`);
+          addStreamLog(streamId, `[WARNING] RTMP connection error detected - may need reconnect`);
+        }
       }
     });
     ffmpegProcess.on('exit', async (code, signal) => {
@@ -1006,6 +1043,10 @@ async function startStream(streamId) {
       console.log(`[FFMPEG_EXIT] ${streamId}: Code=${code}, Signal=${signal}`);
       const wasActive = activeStreams.delete(streamId);
       streamPids.delete(streamId); // Clean up PID tracking
+      
+      // Stop RTMP health monitoring on exit
+      rtmpHealthMonitor.stopMonitoring(streamId);
+      
       const isManualStop = manuallyStoppingStreams.has(streamId);
       
       // Check if duration was exceeded - if so, this is a normal termination
@@ -1284,6 +1325,9 @@ async function stopStream(streamId) {
     // Stop YouTube status sync monitoring first
     youtubeStatusSync.stopMonitoring(streamId);
     
+    // Stop RTMP health monitoring
+    rtmpHealthMonitor.stopMonitoring(streamId);
+    
     const ffmpegProcess = activeStreams.get(streamId);
     const isActive = ffmpegProcess !== undefined;
     console.log(`[StreamingService] Stop request for stream ${streamId}, isActive: ${isActive}`);
@@ -1549,6 +1593,24 @@ function isYouTubeMonitored(streamId) {
   return youtubeStatusSync.isMonitoring(streamId);
 }
 
+/**
+ * Get RTMP health monitor status for a stream
+ * @param {string} streamId - Stream ID
+ * @returns {Object|null}
+ */
+function getRTMPHealthStatus(streamId) {
+  return rtmpHealthMonitor.getMonitorStatus(streamId);
+}
+
+/**
+ * Check if a stream is being monitored for RTMP health
+ * @param {string} streamId - Stream ID
+ * @returns {boolean}
+ */
+function isRTMPHealthMonitored(streamId) {
+  return rtmpHealthMonitor.isMonitoring(streamId);
+}
+
 module.exports = {
   startStream,
   stopStream,
@@ -1567,6 +1629,9 @@ module.exports = {
   // YouTube status sync exports
   getYouTubeStatus,
   isYouTubeMonitored,
+  // RTMP health monitor exports
+  getRTMPHealthStatus,
+  isRTMPHealthMonitored,
   // Export for testing
   buildFFmpegArgsWithAudio,
   buildFFmpegArgsVideoOnly

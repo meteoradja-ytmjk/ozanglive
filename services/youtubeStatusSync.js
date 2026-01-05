@@ -4,6 +4,10 @@
  * Monitors YouTube broadcast status and syncs with local stream status.
  * When a broadcast ends on YouTube (complete/revoked/deleted), 
  * the local FFmpeg process is stopped automatically.
+ * 
+ * IMPORTANT: This service now works with RTMPHealthMonitor to handle
+ * reconnection scenarios. If YouTube broadcast dies but stream should
+ * still be running, RTMPHealthMonitor will attempt to reconnect.
  */
 
 const YouTubeCredentials = require('../models/YouTubeCredentials');
@@ -19,15 +23,18 @@ const STATUS_DISPLAY = {
   'revoked': 'Dibatalkan'
 };
 
-// Polling interval: 60 seconds
-const POLLING_INTERVAL_MS = 60 * 1000;
+// Polling interval: 30 seconds (reduced from 60 for faster detection)
+const POLLING_INTERVAL_MS = 30 * 1000;
 
 // Quota cooldown: 1 hour
 const QUOTA_COOLDOWN_MS = 60 * 60 * 1000;
 
+// Grace period before stopping stream (allows reconnect attempt)
+const GRACE_PERIOD_MS = 60 * 1000; // 1 minute
+
 class YouTubeStatusSync {
   constructor() {
-    // Map of streamId -> { intervalId, broadcastId, userId, lastStatus, lastChecked }
+    // Map of streamId -> { intervalId, broadcastId, userId, lastStatus, lastChecked, disconnectedAt }
     this.activeChecks = new Map();
     
     // Timestamp when quota cooldown ends (null = no cooldown)
@@ -35,6 +42,9 @@ class YouTubeStatusSync {
     
     // Reference to streamingService (set via setStreamingService)
     this.streamingService = null;
+    
+    // Reference to rtmpHealthMonitor (set via setRTMPHealthMonitor)
+    this.rtmpHealthMonitor = null;
   }
 
   /**
@@ -43,6 +53,14 @@ class YouTubeStatusSync {
    */
   setStreamingService(streamingService) {
     this.streamingService = streamingService;
+  }
+
+  /**
+   * Set reference to RTMP health monitor (to avoid circular dependency)
+   * @param {Object} rtmpHealthMonitor - RTMPHealthMonitor instance
+   */
+  setRTMPHealthMonitor(rtmpHealthMonitor) {
+    this.rtmpHealthMonitor = rtmpHealthMonitor;
   }
 
   /**
@@ -144,7 +162,8 @@ class YouTubeStatusSync {
         userId,
         credentials,
         lastStatus: broadcast.lifeCycleStatus,
-        lastChecked: new Date()
+        lastChecked: new Date(),
+        disconnectedAt: null
       });
 
       console.log(`[YouTubeStatusSync] Started monitoring stream ${streamId} (broadcast: ${broadcast.broadcastId})`);
@@ -217,11 +236,30 @@ class YouTubeStatusSync {
         return;
       }
 
-      // Broadcast deleted
+      // Broadcast deleted - give grace period for reconnect
       if (!result.exists) {
-        console.log(`[YouTubeStatusSync] Broadcast ${check.broadcastId} deleted, stopping stream ${streamId}`);
+        if (!check.disconnectedAt) {
+          check.disconnectedAt = Date.now();
+          console.log(`[YouTubeStatusSync] Broadcast ${check.broadcastId} not found, starting grace period for stream ${streamId}`);
+          return;
+        }
+        
+        // Check if grace period has passed
+        const disconnectedDuration = Date.now() - check.disconnectedAt;
+        if (disconnectedDuration < GRACE_PERIOD_MS) {
+          console.log(`[YouTubeStatusSync] Stream ${streamId} in grace period (${Math.round(disconnectedDuration / 1000)}s / ${GRACE_PERIOD_MS / 1000}s)`);
+          return;
+        }
+        
+        console.log(`[YouTubeStatusSync] Broadcast ${check.broadcastId} deleted, grace period expired, stopping stream ${streamId}`);
         await this.stopStreamAndCleanup(streamId, 'broadcast_deleted');
         return;
+      }
+
+      // Broadcast exists - reset disconnected state
+      if (check.disconnectedAt) {
+        console.log(`[YouTubeStatusSync] Stream ${streamId} reconnected to YouTube`);
+        check.disconnectedAt = null;
       }
 
       // Update last status
@@ -233,8 +271,20 @@ class YouTubeStatusSync {
         console.log(`[YouTubeStatusSync] Stream ${streamId} broadcast status changed: ${previousStatus} -> ${result.lifeCycleStatus}`);
       }
 
-      // Check if broadcast ended
+      // Check if broadcast ended - but only stop if it's a definitive end
+      // 'complete' means the broadcast was properly ended
+      // 'revoked' means it was cancelled
       if (result.lifeCycleStatus === 'complete' || result.lifeCycleStatus === 'revoked') {
+        // Check if RTMP health monitor thinks stream should still be running
+        if (this.rtmpHealthMonitor) {
+          const healthStatus = this.rtmpHealthMonitor.getMonitorStatus(streamId);
+          if (healthStatus && healthStatus.remainingMs && healthStatus.remainingMs > 60000) {
+            // Stream should still be running - let RTMP health monitor handle reconnect
+            console.log(`[YouTubeStatusSync] Broadcast ended but ${Math.round(healthStatus.remainingMs / 60000)} min remaining - allowing reconnect`);
+            return;
+          }
+        }
+        
         console.log(`[YouTubeStatusSync] Broadcast ${check.broadcastId} ended (${result.lifeCycleStatus}), stopping stream ${streamId}`);
         await this.stopStreamAndCleanup(streamId, result.lifeCycleStatus);
         return;

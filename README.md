@@ -166,9 +166,16 @@ docker-compose up -d
 ```bash
 cd ~/ozanglive && git pull && npm install && pm2 restart ozanglive
 ```
+### Jika adamasalah di Quick Update
+```bash
+cd ~/ozanglive
+git reset --hard HEAD
+git pull
+npm install
+pm2 restart ozanglive
+```
 
 ### Fresh Install (Replace Total)
-
 ```bash
 cd ~/ozanglive && git fetch origin && git reset --hard origin/main && npm install && pm2 restart ozanglive
 ```
