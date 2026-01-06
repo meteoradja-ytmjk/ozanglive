@@ -414,25 +414,23 @@
 
 <div id="streamModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 opacity-0 pointer-events-none transition-opacity duration-300">
   <div class="flex items-center justify-center min-h-screen p-4">
-    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-2xl border border-gray-600/50 transform transition-transform duration-300 scale-95" id="streamModalContent">
-      <div class="flex items-center justify-between p-4 border-b border-gray-600/50">
-        <div class="flex items-center">
-          <h3 class="text-lg font-medium" id="streamModalTitle">Stream Collection</h3>
-        </div>
-        <button onclick="closeStreamModal()" class="rounded-full w-8 h-8 flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700/50 transition-colors">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-xl border border-gray-600/50 transform transition-transform duration-300 scale-95" id="streamModalContent">
+      <div class="flex items-center justify-between px-4 py-3 border-b border-gray-600/50">
+        <h3 class="text-base font-medium" id="streamModalTitle">Stream Collection</h3>
+        <button onclick="closeStreamModal()" class="rounded-full w-7 h-7 flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700/50 transition-colors">
           <i class="ti ti-x"></i>
         </button>
       </div>
       
-      <div class="p-6 max-h-96 overflow-y-auto">
-        <div id="streamList" class="space-y-3">
+      <div class="p-4 max-h-80 overflow-y-auto">
+        <div id="streamList">
         </div>
-        <div id="streamEmptyState" class="text-center py-12 hidden">
-          <div class="w-16 h-16 bg-gray-600/30 rounded-full flex items-center justify-center mx-auto mb-4">
-            <i class="ti ti-broadcast-off text-2xl text-gray-400"></i>
+        <div id="streamEmptyState" class="text-center py-8 hidden">
+          <div class="w-12 h-12 bg-gray-600/30 rounded-full flex items-center justify-center mx-auto mb-3">
+            <i class="ti ti-broadcast-off text-xl text-gray-400"></i>
           </div>
-          <h4 class="text-lg font-medium text-gray-300 mb-2">No Streams Found</h4>
-          <p class="text-gray-400 text-sm">This user hasn't created any streams yet.</p>
+          <h4 class="text-sm font-medium text-gray-300 mb-1">No Streams Found</h4>
+          <p class="text-gray-400 text-xs">This user hasn't created any streams yet.</p>
         </div>
       </div>
     </div>
@@ -937,43 +935,62 @@ function showStreamModal(element) {
       const emptyState = document.getElementById('streamEmptyState');
       
       if (data.success && data.streams && data.streams.length > 0) {
-        streamList.innerHTML = data.streams.map(stream => `
-          <div class="flex items-center justify-between p-4 bg-dark-700 rounded-lg border border-gray-600/50 hover:bg-dark-600/50 transition-colors">
-            <div class="flex items-center space-x-4">
-              <div class="w-16 h-12 bg-gray-600 rounded-lg overflow-hidden flex-shrink-0">
-                ${stream.video_thumbnail ? 
-                  `<img src="${stream.video_thumbnail}" alt="${stream.title}" class="w-full h-full object-cover" onerror="this.onerror=null; this.parentElement.innerHTML='<i class=\\'ti ti-broadcast text-gray-400 text-lg\\' style=\\'display: flex; align-items: center; justify-content: center; height: 100%;\\' ></i>';">` :
-                  `<i class="ti ti-broadcast text-gray-400 text-lg" style="display: flex; align-items: center; justify-content: center; height: 100%;"></i>`
-                }
-              </div>
-              <div class="flex-1 min-w-0">
-                <p class="text-white font-medium truncate">${stream.title}</p>
-                <div class="flex items-center space-x-2 mt-1">
-                  <p class="text-gray-400 text-sm">${stream.platform || 'Unknown Platform'}</p>
-                  <span class="text-gray-500">•</span>
-                  <p class="text-gray-400 text-sm">${formatDate(stream.created_at)}</p>
-                </div>
-              </div>
-            </div>
-            <div class="text-right flex-shrink-0">
-              <div class="flex flex-col items-end space-y-1">
-                <span class="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-md ${
-                  stream.status === 'live' ? 'bg-red-600/20 text-red-300 border border-red-600/30' : 
-                  stream.status === 'scheduled' ? 'bg-yellow-600/20 text-yellow-300 border border-yellow-600/30' :
-                  'bg-gray-600/20 text-gray-300 border border-gray-600/30'
-                }">
-                  ${stream.status === 'live' ? 
-                    '<span class="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse mr-1.5"></span>Live' : 
-                    stream.status === 'scheduled' ? 'Scheduled' : 'Offline'
-                  }
-                </span>
-                ${stream.start_time ? `<span class="text-xs text-gray-400">Started: ${formatDate(stream.start_time)}</span>` : 
-                  stream.status === 'scheduled' ? `<span class="text-xs text-gray-400">Not started yet</span>` :
-                  `<span class="text-xs text-gray-400">Never started</span>`}
-              </div>
-            </div>
+        // Desktop: Table view, Mobile: Card view
+        streamList.innerHTML = `
+          <!-- Desktop Table View -->
+          <div class="hidden md:block overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-dark-600 text-gray-400 text-xs uppercase">
+                <tr>
+                  <th class="px-3 py-2 text-left">Title</th>
+                  <th class="px-3 py-2 text-left">Platform</th>
+                  <th class="px-3 py-2 text-left">Created</th>
+                  <th class="px-3 py-2 text-center">Status</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-700">
+                ${data.streams.map(stream => `
+                  <tr class="hover:bg-dark-600/50 transition-colors">
+                    <td class="px-3 py-2">
+                      <span class="text-white font-medium truncate block max-w-[200px]" title="${stream.title}">${stream.title}</span>
+                    </td>
+                    <td class="px-3 py-2 text-gray-400">${stream.platform || '-'}</td>
+                    <td class="px-3 py-2 text-gray-400 whitespace-nowrap">${formatDateShort(stream.created_at)}</td>
+                    <td class="px-3 py-2 text-center">
+                      <span class="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded ${
+                        stream.status === 'live' ? 'bg-red-600/20 text-red-300' : 
+                        stream.status === 'scheduled' ? 'bg-yellow-600/20 text-yellow-300' :
+                        'bg-gray-600/20 text-gray-400'
+                      }">
+                        ${stream.status === 'live' ? '<span class="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse mr-1"></span>' : ''}
+                        ${stream.status === 'live' ? 'Live' : stream.status === 'scheduled' ? 'Scheduled' : 'Offline'}
+                      </span>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
           </div>
-        `).join('');
+          <!-- Mobile Card View -->
+          <div class="md:hidden space-y-2">
+            ${data.streams.map(stream => `
+              <div class="flex items-center justify-between p-3 bg-dark-700 rounded-lg">
+                <div class="flex-1 min-w-0 mr-3">
+                  <p class="text-white text-sm font-medium truncate">${stream.title}</p>
+                  <p class="text-gray-400 text-xs mt-0.5">${stream.platform || '-'} • ${formatDateShort(stream.created_at)}</p>
+                </div>
+                <span class="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded flex-shrink-0 ${
+                  stream.status === 'live' ? 'bg-red-600/20 text-red-300' : 
+                  stream.status === 'scheduled' ? 'bg-yellow-600/20 text-yellow-300' :
+                  'bg-gray-600/20 text-gray-400'
+                }">
+                  ${stream.status === 'live' ? '<span class="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse mr-1"></span>' : ''}
+                  ${stream.status === 'live' ? 'Live' : stream.status === 'scheduled' ? 'Scheduled' : 'Offline'}
+                </span>
+              </div>
+            `).join('')}
+          </div>
+        `;
         emptyState.classList.add('hidden');
       } else {
         streamList.innerHTML = '';
@@ -984,6 +1001,12 @@ function showStreamModal(element) {
       console.error('Error fetching streams:', error);
       document.getElementById('streamList').innerHTML = '<p class="text-red-400 text-center">Error loading streams</p>';
     });
+}
+
+function formatDateShort(dateString) {
+  if (!dateString) return '-';
+  const date = new Date(dateString);
+  return date.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
 function closeVideoModal() {
