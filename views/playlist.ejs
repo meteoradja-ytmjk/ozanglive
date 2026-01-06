@@ -426,18 +426,27 @@ function updateSelectedVideosDisplay() {
     container.innerHTML = '<p class="text-gray-400 text-sm text-center py-8">No videos selected</p>';
   } else {
     container.innerHTML = selectedVideos.map((video, index) => `
-      <div class="flex items-center gap-3 p-2 bg-gray-600 rounded" data-video-id="${video.id}">
-        <div class="cursor-move">
+      <div class="flex items-center gap-2 p-2 bg-gray-600 rounded" data-video-id="${video.id}">
+        <div class="cursor-move flex-shrink-0">
           <i class="ti ti-grip-vertical text-gray-400"></i>
         </div>
-        <img src="${video.thumbnail_path}" alt="${video.title}" class="w-12 h-8 object-cover rounded">
+        <span class="text-xs text-gray-400 w-5 text-center flex-shrink-0">${index + 1}</span>
+        <img src="${video.thumbnail_path}" alt="${video.title}" class="w-12 h-8 object-cover rounded flex-shrink-0" onerror="this.src='/images/default-thumbnail.jpg'">
         <div class="flex-1 min-w-0">
           <p class="text-sm font-medium truncate">${video.title}</p>
           <p class="text-xs text-gray-400">
             ${video.duration ? Math.floor(video.duration / 60) + ':' + String(Math.floor(video.duration % 60)).padStart(2, '0') : '0:00'}
           </p>
         </div>
-        <button onclick="removeVideoFromPlaylist('${video.id}')" class="text-red-400 hover:text-red-300">
+        <div class="flex flex-col gap-0.5 flex-shrink-0">
+          <button type="button" onclick="moveVideoUp(${index})" class="w-6 h-5 flex items-center justify-center rounded ${index === 0 ? 'text-gray-600 cursor-not-allowed' : 'text-gray-400 hover:text-white hover:bg-gray-500'}" ${index === 0 ? 'disabled' : ''} title="Move Up">
+            <i class="ti ti-chevron-up text-sm"></i>
+          </button>
+          <button type="button" onclick="moveVideoDown(${index})" class="w-6 h-5 flex items-center justify-center rounded ${index === selectedVideos.length - 1 ? 'text-gray-600 cursor-not-allowed' : 'text-gray-400 hover:text-white hover:bg-gray-500'}" ${index === selectedVideos.length - 1 ? 'disabled' : ''} title="Move Down">
+            <i class="ti ti-chevron-down text-sm"></i>
+          </button>
+        </div>
+        <button type="button" onclick="removeVideoFromPlaylist('${video.id}')" class="text-red-400 hover:text-red-300 flex-shrink-0">
           <i class="ti ti-x"></i>
         </button>
       </div>
@@ -502,10 +511,11 @@ function updateSelectedAudiosDisplay() {
     container.innerHTML = '<p class="text-gray-400 text-sm text-center py-8">No audios selected</p>';
   } else {
     container.innerHTML = selectedAudios.map((audio, index) => `
-      <div class="flex items-center gap-3 p-2 bg-gray-600 rounded" data-audio-id="${audio.id}">
-        <div class="cursor-move">
+      <div class="flex items-center gap-2 p-2 bg-gray-600 rounded" data-audio-id="${audio.id}">
+        <div class="cursor-move flex-shrink-0">
           <i class="ti ti-grip-vertical text-gray-400"></i>
         </div>
+        <span class="text-xs text-gray-400 w-5 text-center flex-shrink-0">${index + 1}</span>
         <div class="w-10 h-10 bg-dark-800 rounded flex items-center justify-center flex-shrink-0">
           <i class="ti ti-music text-primary"></i>
         </div>
@@ -515,7 +525,15 @@ function updateSelectedAudiosDisplay() {
             ${audio.duration ? Math.floor(audio.duration / 60) + ':' + String(Math.floor(audio.duration % 60)).padStart(2, '0') : '0:00'}
           </p>
         </div>
-        <button onclick="removeAudioFromPlaylist('${audio.id}')" class="text-red-400 hover:text-red-300">
+        <div class="flex flex-col gap-0.5 flex-shrink-0">
+          <button type="button" onclick="moveAudioUp(${index})" class="w-6 h-5 flex items-center justify-center rounded ${index === 0 ? 'text-gray-600 cursor-not-allowed' : 'text-gray-400 hover:text-white hover:bg-gray-500'}" ${index === 0 ? 'disabled' : ''} title="Move Up">
+            <i class="ti ti-chevron-up text-sm"></i>
+          </button>
+          <button type="button" onclick="moveAudioDown(${index})" class="w-6 h-5 flex items-center justify-center rounded ${index === selectedAudios.length - 1 ? 'text-gray-600 cursor-not-allowed' : 'text-gray-400 hover:text-white hover:bg-gray-500'}" ${index === selectedAudios.length - 1 ? 'disabled' : ''} title="Move Down">
+            <i class="ti ti-chevron-down text-sm"></i>
+          </button>
+        </div>
+        <button type="button" onclick="removeAudioFromPlaylist('${audio.id}')" class="text-red-400 hover:text-red-300 flex-shrink-0">
           <i class="ti ti-x"></i>
         </button>
       </div>
@@ -854,6 +872,42 @@ function initializeDragAndDrop() {
       }
     });
   }
+}
+
+// Move video up in playlist
+function moveVideoUp(index) {
+  if (index <= 0 || index >= selectedVideos.length) return;
+  const temp = selectedVideos[index];
+  selectedVideos[index] = selectedVideos[index - 1];
+  selectedVideos[index - 1] = temp;
+  updateSelectedVideosDisplay();
+}
+
+// Move video down in playlist
+function moveVideoDown(index) {
+  if (index < 0 || index >= selectedVideos.length - 1) return;
+  const temp = selectedVideos[index];
+  selectedVideos[index] = selectedVideos[index + 1];
+  selectedVideos[index + 1] = temp;
+  updateSelectedVideosDisplay();
+}
+
+// Move audio up in playlist
+function moveAudioUp(index) {
+  if (index <= 0 || index >= selectedAudios.length) return;
+  const temp = selectedAudios[index];
+  selectedAudios[index] = selectedAudios[index - 1];
+  selectedAudios[index - 1] = temp;
+  updateSelectedAudiosDisplay();
+}
+
+// Move audio down in playlist
+function moveAudioDown(index) {
+  if (index < 0 || index >= selectedAudios.length - 1) return;
+  const temp = selectedAudios[index];
+  selectedAudios[index] = selectedAudios[index + 1];
+  selectedAudios[index + 1] = temp;
+  updateSelectedAudiosDisplay();
 }
 
 function filterPlaylists() {
