@@ -707,10 +707,15 @@ if (createBroadcastForm) {
         formData.append('tags', JSON.stringify(currentTags));
       }
       
-      // Note: Category field removed from UI, backend uses default value (Gaming - 20)
+      // Add category ID (default: 22 - People & Blogs)
+      const categoryId = document.getElementById('categoryId').value;
+      formData.append('categoryId', categoryId || '22');
       
-      // Note: Monetization, Ad Frequency, and Altered Content are not supported by YouTube API
-      // These must be configured in YouTube Studio after creating the broadcast
+      // Add Additional Settings (auto-start and auto-stop)
+      const enableAutoStart = document.getElementById('enableAutoStart').checked;
+      const enableAutoStop = document.getElementById('enableAutoStop').checked;
+      formData.append('enableAutoStart', enableAutoStart);
+      formData.append('enableAutoStop', enableAutoStop);
       
       // Add thumbnail from gallery selection
       const thumbnailPath = document.getElementById('selectedThumbnailPath').value;
@@ -1309,6 +1314,7 @@ if (createTemplateForm) {
         title: document.getElementById('templateTitle').value,
         description: document.getElementById('templateDescription').value,
         privacyStatus: document.getElementById('templatePrivacyStatus').value,
+        categoryId: document.getElementById('templateCategoryId').value || '22',
         streamId: document.getElementById('templateStreamKeySelect').value || null,
         // Include recurring data
         recurringEnabled: recurringData.recurring_enabled,
@@ -2681,4 +2687,538 @@ function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
+}
+
+// ============================================
+// Thumbnail Upload for Edit Broadcast
+// ============================================
+
+let editThumbnailFile = null;
+
+/**
+ * Preview thumbnail before upload in edit modal
+ */
+function previewEditThumbnail(input) {
+  const file = input.files[0];
+  if (!file) return;
+  
+  // Validate file type
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg'];
+  if (!allowedTypes.includes(file.type)) {
+    showToast('Only JPG and PNG files are allowed', 'error');
+    input.value = '';
+    return;
+  }
+  
+  // Validate file size (max 2MB)
+  if (file.size > 2 * 1024 * 1024) {
+    showToast('File too large. Maximum size is 2MB', 'error');
+    input.value = '';
+    return;
+  }
+  
+  editThumbnailFile = file;
+  
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const preview = document.getElementById('editThumbnailPreview');
+    preview.innerHTML = `<img src="${e.target.result}" class="w-full h-full object-cover">`;
+  };
+  reader.readAsDataURL(file);
+}
+
+/**
+ * Upload thumbnail for broadcast
+ */
+async function uploadEditThumbnail(broadcastId, accountId) {
+  if (!editThumbnailFile) return true; // No file to upload
+  
+  try {
+    const formData = new FormData();
+    formData.append('thumbnail', editThumbnailFile);
+    formData.append('accountId', accountId);
+    
+    const response = await fetch(`/api/youtube/broadcasts/${broadcastId}/thumbnail`, {
+      method: 'POST',
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      },
+      body: formData
+    });
+    
+    const data = await response.json();
+    
+    if (!data.success) {
+      console.error('Thumbnail upload failed:', data.error);
+      return false;
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error uploading thumbnail:', error);
+    return false;
+  }
+}
+
+// ============================================
+// Title Manager Functions
+// ============================================
+
+let titleSuggestions = [];
+let titleManagerContext = 'edit'; // 'edit' or 'create'
+
+/**
+ * Open Title Manager Modal
+ */
+function openTitleManagerModal(context = 'edit') {
+  titleManagerContext = context;
+  document.getElementById('titleManagerModal').classList.remove('hidden');
+  loadTitleSuggestions();
+}
+
+/**
+ * Close Title Manager Modal
+ */
+function closeTitleManagerModal() {
+  document.getElementById('titleManagerModal').classList.add('hidden');
+}
+
+/**
+ * Load title suggestions from API
+ */
+async function loadTitleSuggestions(category = null) {
+  const listEl = document.getElementById('titleManagerList');
+  listEl.innerHTML = '<div class="text-center py-4 text-gray-500 text-sm"><i class="ti ti-loader animate-spin"></i> Loading...</div>';
+  
+  try {
+    let url = '/api/title-suggestions';
+    if (category) url += `?category=${encodeURIComponent(category)}`;
+    
+    const response = await fetch(url, {
+      headers: { 'X-CSRF-Token': getCsrfToken() }
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      titleSuggestions = data.titles || [];
+      renderTitleManagerList();
+    } else {
+      listEl.innerHTML = '<div class="text-center py-4 text-red-400 text-sm">Failed to load titles</div>';
+    }
+  } catch (error) {
+    console.error('Error loading titles:', error);
+    listEl.innerHTML = '<div class="text-center py-4 text-red-400 text-sm">Failed to load titles</div>';
+  }
+}
+
+/**
+ * Render title manager list
+ */
+function renderTitleManagerList() {
+  const listEl = document.getElementById('titleManagerList');
+  
+  if (titleSuggestions.length === 0) {
+    listEl.innerHTML = `
+      <div class="text-center py-6 text-gray-500">
+        <i class="ti ti-list text-2xl mb-2"></i>
+        <p class="text-sm">No titles saved yet</p>
+        <p class="text-xs">Add your first title above</p>
+      </div>
+    `;
+    return;
+  }
+  
+  listEl.innerHTML = titleSuggestions.map(title => `
+    <div class="flex items-center gap-2 p-2 bg-dark-600 rounded-lg hover:bg-dark-500 transition-colors group">
+      <button type="button" onclick="selectTitle('${escapeHtml(title.id)}', '${escapeHtml(title.title.replace(/'/g, "\\'"))}')"
+        class="flex-1 text-left text-sm text-white truncate hover:text-primary">
+        ${escapeHtml(title.title)}
+      </button>
+      <span class="text-xs text-gray-500 px-2">${title.use_count || 0}x</span>
+      <button type="button" onclick="deleteTitleSuggestion('${escapeHtml(title.id)}')"
+        class="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 p-1 transition-opacity">
+        <i class="ti ti-trash text-sm"></i>
+      </button>
+    </div>
+  `).join('');
+}
+
+/**
+ * Add new title suggestion
+ */
+async function addNewTitle() {
+  const input = document.getElementById('newTitleInput');
+  const title = input.value.trim();
+  
+  if (!title) {
+    showToast('Please enter a title', 'error');
+    return;
+  }
+  
+  const category = document.getElementById('titleCategoryFilter').value || 'general';
+  
+  try {
+    const response = await fetch('/api/title-suggestions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getCsrfToken()
+      },
+      body: JSON.stringify({ title, category })
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      input.value = '';
+      showToast('Title added');
+      loadTitleSuggestions(category === '' ? null : category);
+    } else {
+      showToast(data.error || 'Failed to add title', 'error');
+    }
+  } catch (error) {
+    console.error('Error adding title:', error);
+    showToast('Failed to add title', 'error');
+  }
+}
+
+/**
+ * Select title from manager
+ */
+async function selectTitle(id, title) {
+  // Set title in the appropriate input
+  const inputId = titleManagerContext === 'edit' ? 'editBroadcastTitle' : 'broadcastTitle';
+  const input = document.getElementById(inputId);
+  if (input) {
+    input.value = title;
+  }
+  
+  // Increment use count
+  try {
+    await fetch(`/api/title-suggestions/${id}/use`, {
+      method: 'POST',
+      headers: { 'X-CSRF-Token': getCsrfToken() }
+    });
+  } catch (error) {
+    console.error('Error incrementing use count:', error);
+  }
+  
+  closeTitleManagerModal();
+  showToast('Title selected');
+}
+
+/**
+ * Delete title suggestion
+ */
+async function deleteTitleSuggestion(id) {
+  if (!confirm('Delete this title?')) return;
+  
+  try {
+    const response = await fetch(`/api/title-suggestions/${id}`, {
+      method: 'DELETE',
+      headers: { 'X-CSRF-Token': getCsrfToken() }
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      showToast('Title deleted');
+      const category = document.getElementById('titleCategoryFilter').value;
+      loadTitleSuggestions(category === '' ? null : category);
+    } else {
+      showToast(data.error || 'Failed to delete title', 'error');
+    }
+  } catch (error) {
+    console.error('Error deleting title:', error);
+    showToast('Failed to delete title', 'error');
+  }
+}
+
+/**
+ * Filter titles by category
+ */
+function filterTitlesByCategory(category) {
+  loadTitleSuggestions(category === '' ? null : category);
+}
+
+/**
+ * Search title suggestions (for autocomplete)
+ */
+let titleSearchTimeout = null;
+
+async function searchTitleSuggestions(keyword, context = 'edit') {
+  clearTimeout(titleSearchTimeout);
+  
+  const dropdownId = context === 'edit' ? 'editTitleSuggestions' : 'titleSuggestions';
+  const dropdown = document.getElementById(dropdownId);
+  
+  if (!keyword || keyword.length < 2) {
+    dropdown.classList.add('hidden');
+    return;
+  }
+  
+  titleSearchTimeout = setTimeout(async () => {
+    try {
+      const response = await fetch(`/api/title-suggestions/search?q=${encodeURIComponent(keyword)}`, {
+        headers: { 'X-CSRF-Token': getCsrfToken() }
+      });
+      
+      const data = await response.json();
+      
+      if (data.success && data.titles.length > 0) {
+        dropdown.innerHTML = data.titles.map(t => `
+          <button type="button" onclick="selectTitleFromDropdown('${escapeHtml(t.id)}', '${escapeHtml(t.title.replace(/'/g, "\\'"))}', '${context}')"
+            class="w-full text-left px-3 py-2 text-sm text-white hover:bg-dark-600 transition-colors truncate">
+            ${escapeHtml(t.title)}
+          </button>
+        `).join('');
+        dropdown.classList.remove('hidden');
+      } else {
+        dropdown.classList.add('hidden');
+      }
+    } catch (error) {
+      console.error('Error searching titles:', error);
+    }
+  }, 300);
+}
+
+/**
+ * Show title suggestions dropdown
+ */
+function showTitleSuggestions(context = 'edit') {
+  // Load popular titles when focusing
+  loadPopularTitles(context);
+}
+
+/**
+ * Load popular titles for dropdown
+ */
+async function loadPopularTitles(context = 'edit') {
+  const dropdownId = context === 'edit' ? 'editTitleSuggestions' : 'titleSuggestions';
+  const dropdown = document.getElementById(dropdownId);
+  
+  try {
+    const response = await fetch('/api/title-suggestions/popular?limit=5', {
+      headers: { 'X-CSRF-Token': getCsrfToken() }
+    });
+    
+    const data = await response.json();
+    
+    if (data.success && data.titles.length > 0) {
+      dropdown.innerHTML = `
+        <div class="px-3 py-1 text-xs text-gray-500 border-b border-gray-600">Popular Titles</div>
+        ${data.titles.map(t => `
+          <button type="button" onclick="selectTitleFromDropdown('${escapeHtml(t.id)}', '${escapeHtml(t.title.replace(/'/g, "\\'"))}', '${context}')"
+            class="w-full text-left px-3 py-2 text-sm text-white hover:bg-dark-600 transition-colors truncate">
+            ${escapeHtml(t.title)}
+          </button>
+        `).join('')}
+      `;
+      dropdown.classList.remove('hidden');
+    }
+  } catch (error) {
+    console.error('Error loading popular titles:', error);
+  }
+}
+
+/**
+ * Toggle title dropdown
+ */
+function toggleTitleDropdown(context = 'edit') {
+  const dropdownId = context === 'edit' ? 'editTitleSuggestions' : 'titleSuggestions';
+  const dropdown = document.getElementById(dropdownId);
+  
+  if (dropdown.classList.contains('hidden')) {
+    loadPopularTitles(context);
+  } else {
+    dropdown.classList.add('hidden');
+  }
+}
+
+/**
+ * Select title from dropdown
+ */
+async function selectTitleFromDropdown(id, title, context = 'edit') {
+  const inputId = context === 'edit' ? 'editBroadcastTitle' : 'broadcastTitle';
+  const dropdownId = context === 'edit' ? 'editTitleSuggestions' : 'titleSuggestions';
+  
+  document.getElementById(inputId).value = title;
+  document.getElementById(dropdownId).classList.add('hidden');
+  
+  // Increment use count
+  try {
+    await fetch(`/api/title-suggestions/${id}/use`, {
+      method: 'POST',
+      headers: { 'X-CSRF-Token': getCsrfToken() }
+    });
+  } catch (error) {
+    console.error('Error incrementing use count:', error);
+  }
+}
+
+// Hide title dropdown when clicking outside
+document.addEventListener('click', function(e) {
+  const editDropdown = document.getElementById('editTitleSuggestions');
+  const createDropdown = document.getElementById('titleSuggestions');
+  
+  if (editDropdown && !e.target.closest('#editBroadcastTitle') && !e.target.closest('#editTitleSuggestions')) {
+    editDropdown.classList.add('hidden');
+  }
+  if (createDropdown && !e.target.closest('#broadcastTitle') && !e.target.closest('#titleSuggestions')) {
+    createDropdown.classList.add('hidden');
+  }
+});
+
+// Update Edit Broadcast Form Handler to include thumbnail upload
+const originalEditBroadcastForm = document.getElementById('editBroadcastForm');
+if (originalEditBroadcastForm) {
+  // Remove existing listener and add new one
+  const newForm = originalEditBroadcastForm.cloneNode(true);
+  originalEditBroadcastForm.parentNode.replaceChild(newForm, originalEditBroadcastForm);
+  
+  newForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const updateBtn = document.getElementById('updateBroadcastBtn');
+    const originalText = updateBtn.innerHTML;
+    updateBtn.innerHTML = '<i class="ti ti-loader animate-spin"></i> Updating...';
+    updateBtn.disabled = true;
+    
+    try {
+      const broadcastId = document.getElementById('editBroadcastId').value;
+      const accountId = document.getElementById('editAccountId').value;
+      
+      // Upload thumbnail first if selected
+      if (editThumbnailFile) {
+        const thumbnailSuccess = await uploadEditThumbnail(broadcastId, accountId);
+        if (!thumbnailSuccess) {
+          showToast('Thumbnail upload failed, but continuing with update...', 'warning');
+        }
+      }
+      
+      const updateData = {
+        title: document.getElementById('editBroadcastTitle').value,
+        description: document.getElementById('editBroadcastDescription').value,
+        scheduledStartTime: document.getElementById('editScheduledStartTime').value,
+        privacyStatus: document.getElementById('editPrivacyStatus').value
+      };
+      
+      let url = `/api/youtube/broadcasts/${broadcastId}`;
+      if (accountId) {
+        url += `?accountId=${accountId}`;
+      }
+      
+      const response = await fetch(url, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': getCsrfToken()
+        },
+        body: JSON.stringify(updateData)
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        showToast('Broadcast updated successfully!');
+        closeEditBroadcastModal();
+        setTimeout(() => window.location.reload(), 1000);
+      } else {
+        showToast(data.error || 'Failed to update broadcast', 'error');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      showToast('An error occurred', 'error');
+    } finally {
+      updateBtn.innerHTML = originalText;
+      updateBtn.disabled = false;
+      editThumbnailFile = null;
+    }
+  });
+}
+
+// Override closeEditBroadcastModal to reset thumbnail
+const originalCloseEditBroadcastModal = window.closeEditBroadcastModal;
+window.closeEditBroadcastModal = function() {
+  document.getElementById('editBroadcastModal').classList.add('hidden');
+  document.getElementById('editBroadcastForm').reset();
+  
+  // Reset thumbnail preview
+  const preview = document.getElementById('editThumbnailPreview');
+  if (preview) {
+    preview.innerHTML = '<i class="ti ti-photo text-gray-500 text-2xl"></i>';
+  }
+  editThumbnailFile = null;
+  
+  // Reset file input
+  const fileInput = document.getElementById('editThumbnailFile');
+  if (fileInput) fileInput.value = '';
+};
+
+// Override openEditBroadcastModal to show existing thumbnail
+const originalOpenEditBroadcastModal = window.openEditBroadcastModal;
+window.openEditBroadcastModal = function(broadcast) {
+  document.getElementById('editBroadcastId').value = broadcast.id;
+  document.getElementById('editAccountId').value = broadcast.accountId;
+  document.getElementById('editBroadcastTitle').value = broadcast.title || '';
+  document.getElementById('editBroadcastDescription').value = broadcast.description || '';
+  document.getElementById('editPrivacyStatus').value = broadcast.privacyStatus || 'unlisted';
+  
+  // Format datetime for input
+  if (broadcast.scheduledStartTime) {
+    const date = new Date(broadcast.scheduledStartTime);
+    const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+    document.getElementById('editScheduledStartTime').value = localDate.toISOString().slice(0, 16);
+  }
+  
+  // Show existing thumbnail if available
+  const preview = document.getElementById('editThumbnailPreview');
+  if (preview) {
+    if (broadcast.thumbnailUrl) {
+      preview.innerHTML = `<img src="${broadcast.thumbnailUrl}" class="w-full h-full object-cover" onerror="this.parentElement.innerHTML='<i class=\\'ti ti-photo text-gray-500 text-2xl\\'></i>'">`;
+    } else {
+      preview.innerHTML = '<i class="ti ti-photo text-gray-500 text-2xl"></i>';
+    }
+  }
+  
+  editThumbnailFile = null;
+  document.getElementById('editBroadcastModal').classList.remove('hidden');
+};
+
+
+/**
+ * Save current title from input to Title Manager
+ */
+async function saveCurrentTitleToManager(context = 'edit') {
+  const inputId = context === 'edit' ? 'editBroadcastTitle' : 'broadcastTitle';
+  const input = document.getElementById(inputId);
+  const title = input ? input.value.trim() : '';
+  
+  if (!title) {
+    showToast('Please enter a title first', 'error');
+    return;
+  }
+  
+  try {
+    const response = await fetch('/api/title-suggestions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getCsrfToken()
+      },
+      body: JSON.stringify({ title, category: 'general' })
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      showToast('Title saved to manager');
+    } else {
+      showToast(data.error || 'Failed to save title', 'error');
+    }
+  } catch (error) {
+    console.error('Error saving title:', error);
+    showToast('Failed to save title', 'error');
+  }
 }

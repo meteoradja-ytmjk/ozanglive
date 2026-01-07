@@ -83,13 +83,14 @@ class YouTubeService {
    * @param {boolean} [data.alteredContent] - Optional altered content declaration
    * @returns {Promise<{broadcastId: string, streamKey: string, rtmpUrl: string}>}
    */
-  async createBroadcast(accessToken, { title, description, scheduledStartTime, privacyStatus, streamId, tags, categoryId, monetizationEnabled, adFrequency, alteredContent }) {
+  async createBroadcast(accessToken, { title, description, scheduledStartTime, privacyStatus, streamId, tags, categoryId, enableAutoStart, enableAutoStop, monetizationEnabled, adFrequency, alteredContent }) {
     const oauth2Client = new google.auth.OAuth2();
     oauth2Client.setCredentials({ access_token: accessToken });
     
     const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
     
     console.log('[YouTubeService.createBroadcast] Received streamId:', streamId);
+    console.log('[YouTubeService.createBroadcast] Settings: autoStart=%s, autoStop=%s', enableAutoStart, enableAutoStop);
     
     // Build snippet with optional tags and category
     const snippet = {
@@ -104,25 +105,30 @@ class YouTubeService {
       snippet.tags = tags;
     }
     
+    // Build contentDetails with auto-start/stop settings
+    const contentDetails = {
+      enableAutoStart: enableAutoStart === true || enableAutoStart === 'true',
+      enableAutoStop: enableAutoStop !== false && enableAutoStop !== 'false', // Default true
+      monitorStream: {
+        enableMonitorStream: false
+      },
+      // Record from start - always enabled for replay
+      recordFromStart: true
+    };
+    
+    // Build status with privacy settings
+    const status = {
+      privacyStatus: privacyStatus || 'unlisted',
+      selfDeclaredMadeForKids: false
+    };
+    
     // Create the broadcast
     const broadcastResponse = await youtube.liveBroadcasts.insert({
       part: 'snippet,status,contentDetails',
       requestBody: {
         snippet,
-        status: {
-          privacyStatus: privacyStatus || 'unlisted',
-          selfDeclaredMadeForKids: false
-          // Note: monetization settings (enableMonetization, adFrequency) and altered content 
-          // are typically managed through YouTube Studio or separate API calls
-          // The liveBroadcasts API doesn't directly support these fields
-        },
-        contentDetails: {
-          enableAutoStart: false,
-          enableAutoStop: true,
-          monitorStream: {
-            enableMonitorStream: false
-          }
-        }
+        status,
+        contentDetails
       }
     });
     

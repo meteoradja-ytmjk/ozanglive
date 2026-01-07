@@ -416,6 +416,25 @@ async function createCoreTablesAsync() {
 
   // Add template_id column to existing recurring_schedules table if not exists
   await runTableQuery(`ALTER TABLE recurring_schedules ADD COLUMN template_id TEXT REFERENCES broadcast_templates(id) ON DELETE SET NULL`, 'recurring_schedules.template_id_column', true);
+
+  // Create title_suggestions table for managing potential broadcast titles
+  await runTableQuery(`CREATE TABLE IF NOT EXISTS title_suggestions (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    category TEXT DEFAULT 'general',
+    use_count INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE(user_id, title)
+  )`, 'title_suggestions');
+
+  await runTableQuery(`CREATE INDEX IF NOT EXISTS idx_title_suggestions_user 
+          ON title_suggestions(user_id)`, 'title_suggestions.user_index');
+
+  await runTableQuery(`CREATE INDEX IF NOT EXISTS idx_title_suggestions_category 
+          ON title_suggestions(user_id, category)`, 'title_suggestions.category_index');
 }
 
 // Old createCoreTables function removed - replaced with createCoreTablesAsync above
