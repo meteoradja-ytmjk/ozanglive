@@ -4982,7 +4982,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
 app.put('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
   try {
     const accountId = req.query.accountId ? parseInt(req.query.accountId) : null;
-    const { title, description, scheduledStartTime, privacyStatus } = req.body;
+    const { title, description, scheduledStartTime, privacyStatus, categoryId } = req.body;
     
     let credentials;
     
@@ -5005,7 +5005,8 @@ app.put('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
             title,
             description,
             scheduledStartTime,
-            privacyStatus
+            privacyStatus,
+            categoryId
           });
           return res.json({ success: true, broadcast: result });
         } catch (err) {
@@ -5026,7 +5027,8 @@ app.put('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
       title,
       description,
       scheduledStartTime,
-      privacyStatus
+      privacyStatus,
+      categoryId
     });
     
     res.json({ success: true, broadcast: result });

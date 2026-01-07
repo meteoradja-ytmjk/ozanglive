@@ -3094,14 +3094,21 @@ if (originalEditBroadcastForm) {
         const thumbnailSuccess = await uploadEditThumbnail(broadcastId, accountId);
         if (!thumbnailSuccess) {
           showToast('Thumbnail upload failed, but continuing with update...', 'warning');
+        } else {
+          showToast('Thumbnail uploaded successfully!');
         }
       }
+      
+      // Get category value
+      const categorySelect = document.getElementById('editCategoryId');
+      const categoryId = categorySelect ? categorySelect.value : '22';
       
       const updateData = {
         title: document.getElementById('editBroadcastTitle').value,
         description: document.getElementById('editBroadcastDescription').value,
         scheduledStartTime: document.getElementById('editScheduledStartTime').value,
-        privacyStatus: document.getElementById('editPrivacyStatus').value
+        privacyStatus: document.getElementById('editPrivacyStatus').value,
+        categoryId: categoryId
       };
       
       let url = `/api/youtube/broadcasts/${broadcastId}`;
@@ -3154,6 +3161,10 @@ window.closeEditBroadcastModal = function() {
   // Reset file input
   const fileInput = document.getElementById('editThumbnailFile');
   if (fileInput) fileInput.value = '';
+  
+  // Reset category to default
+  const categorySelect = document.getElementById('editCategoryId');
+  if (categorySelect) categorySelect.value = '22';
 };
 
 // Override openEditBroadcastModal to show existing thumbnail
@@ -3164,6 +3175,12 @@ window.openEditBroadcastModal = function(broadcast) {
   document.getElementById('editBroadcastTitle').value = broadcast.title || '';
   document.getElementById('editBroadcastDescription').value = broadcast.description || '';
   document.getElementById('editPrivacyStatus').value = broadcast.privacyStatus || 'unlisted';
+  
+  // Set category - preserve existing value
+  const categorySelect = document.getElementById('editCategoryId');
+  if (categorySelect) {
+    categorySelect.value = broadcast.categoryId || '22';
+  }
   
   // Format datetime for input
   if (broadcast.scheduledStartTime) {

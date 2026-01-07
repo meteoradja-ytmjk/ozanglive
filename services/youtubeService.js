@@ -258,6 +258,8 @@ class YouTubeService {
         scheduledStartTime: broadcast.snippet.scheduledStartTime,
         privacyStatus: broadcast.status.privacyStatus,
         lifeCycleStatus: broadcast.status.lifeCycleStatus,
+        categoryId: broadcast.snippet.categoryId || '22',
+        tags: broadcast.snippet.tags || [],
         thumbnailUrl: broadcast.snippet.thumbnails?.medium?.url || broadcast.snippet.thumbnails?.default?.url || '',
         streamId,
         streamKey,
@@ -332,9 +334,10 @@ class YouTubeService {
    * @param {string} [data.description] - New description
    * @param {string} [data.scheduledStartTime] - New scheduled start time
    * @param {string} [data.privacyStatus] - New privacy status
+   * @param {string} [data.categoryId] - Category ID
    * @returns {Promise<Object>} Updated broadcast info
    */
-  async updateBroadcast(accessToken, broadcastId, { title, description, scheduledStartTime, privacyStatus }) {
+  async updateBroadcast(accessToken, broadcastId, { title, description, scheduledStartTime, privacyStatus, categoryId }) {
     const oauth2Client = new google.auth.OAuth2();
     oauth2Client.setCredentials({ access_token: accessToken });
     
@@ -352,19 +355,25 @@ class YouTubeService {
     
     const current = currentResponse.data.items[0];
     
-    // Build update request
+    // Build update request - preserve all existing values if not provided
     const updateRequest = {
       id: broadcastId,
       snippet: {
-        title: title || current.snippet.title,
+        title: title !== undefined ? title : current.snippet.title,
         description: description !== undefined ? description : current.snippet.description,
-        scheduledStartTime: scheduledStartTime ? new Date(scheduledStartTime).toISOString() : current.snippet.scheduledStartTime
+        scheduledStartTime: scheduledStartTime ? new Date(scheduledStartTime).toISOString() : current.snippet.scheduledStartTime,
+        categoryId: categoryId !== undefined ? categoryId : (current.snippet.categoryId || '22')
       },
       status: {
-        privacyStatus: privacyStatus || current.status.privacyStatus,
+        privacyStatus: privacyStatus !== undefined ? privacyStatus : current.status.privacyStatus,
         selfDeclaredMadeForKids: current.status.selfDeclaredMadeForKids || false
       }
     };
+    
+    // Preserve tags if they exist
+    if (current.snippet.tags && current.snippet.tags.length > 0) {
+      updateRequest.snippet.tags = current.snippet.tags;
+    }
     
     // Update the broadcast
     const response = await youtube.liveBroadcasts.update({
@@ -380,6 +389,7 @@ class YouTubeService {
       description: broadcast.snippet.description,
       scheduledStartTime: broadcast.snippet.scheduledStartTime,
       privacyStatus: broadcast.status.privacyStatus,
+      categoryId: broadcast.snippet.categoryId || '22',
       thumbnailUrl: broadcast.snippet.thumbnails?.default?.url || ''
     };
   }
