@@ -2313,10 +2313,22 @@ async function processGoogleDriveImport(jobId, fileId, userId) {
   
   try {
     const result = await downloadFile(fileId, (progress) => {
+      let progressPercent = progress.progress;
+      let message = '';
+      
+      if (progressPercent === -1 || progressPercent < 0) {
+        // Unknown file size - show downloaded bytes
+        const downloadedMB = (progress.downloaded / 1024 / 1024).toFixed(2);
+        message = `Downloading: ${downloadedMB} MB downloaded...`;
+        progressPercent = 0; // Keep progress bar at 0 for unknown size
+      } else {
+        message = `Downloading: ${progressPercent}%`;
+      }
+      
       importJobs[jobId] = {
         status: 'downloading',
-        progress: progress.progress,
-        message: `Downloading ${progress.filename}: ${progress.progress}%`
+        progress: progressPercent,
+        message: message
       };
     });
     
@@ -2514,8 +2526,15 @@ async function processBatchVideoImport(batchId, files, userId) {
     try {
       // Download file
       const result = await downloadFile(file.fileId, (progress) => {
-        file.progress = progress.progress;
-        file.message = `Downloading: ${progress.progress}%`;
+        let progressPercent = progress.progress;
+        if (progressPercent === -1 || progressPercent < 0) {
+          const downloadedMB = (progress.downloaded / 1024 / 1024).toFixed(2);
+          file.progress = 0;
+          file.message = `Downloading: ${downloadedMB} MB downloaded...`;
+        } else {
+          file.progress = progressPercent;
+          file.message = `Downloading: ${progressPercent}%`;
+        }
       });
       
       file.status = 'processing';
@@ -4038,10 +4057,21 @@ async function processGoogleDriveAudioImport(jobId, fileId, userId) {
   
   try {
     const result = await downloadFile(fileId, (progress) => {
+      let progressPercent = progress.progress;
+      let message = '';
+      
+      if (progressPercent === -1 || progressPercent < 0) {
+        const downloadedMB = (progress.downloaded / 1024 / 1024).toFixed(2);
+        message = `Downloading: ${downloadedMB} MB downloaded...`;
+        progressPercent = 0;
+      } else {
+        message = `Downloading: ${progressPercent}%`;
+      }
+      
       audioImportJobs[jobId] = {
         status: 'downloading',
-        progress: progress.progress,
-        message: `Downloading ${progress.filename}: ${progress.progress}%`
+        progress: progressPercent,
+        message: message
       };
     }, 'audios');
     
@@ -4212,8 +4242,15 @@ async function processBatchAudioImport(batchId, files, userId) {
     try {
       // Download file
       const result = await downloadFile(file.fileId, (progress) => {
-        file.progress = progress.progress;
-        file.message = `Downloading: ${progress.progress}%`;
+        let progressPercent = progress.progress;
+        if (progressPercent === -1 || progressPercent < 0) {
+          const downloadedMB = (progress.downloaded / 1024 / 1024).toFixed(2);
+          file.progress = 0;
+          file.message = `Downloading: ${downloadedMB} MB downloaded...`;
+        } else {
+          file.progress = progressPercent;
+          file.message = `Downloading: ${progressPercent}%`;
+        }
       }, 'audios');
       
       file.status = 'processing';
