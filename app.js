@@ -375,7 +375,24 @@ app.use((err, req, res, next) => {
   next(err);
 });
 app.use(async (req, res, next) => {
+  // Skip user loading for upload endpoints to improve performance
+  const isUploadEndpoint = req.path.includes('/api/videos/upload') || 
+                           req.path.includes('/api/audios/upload') ||
+                           req.path.includes('/upload/video') ||
+                           req.path.includes('/upload/audio');
+  
   if (req.session && req.session.userId) {
+    // For upload endpoints, only set minimal session data
+    if (isUploadEndpoint) {
+      res.locals.user = {
+        id: req.session.userId,
+        username: req.session.username,
+        avatar_path: req.session.avatar_path
+      };
+      res.locals.req = req;
+      return next();
+    }
+    
     try {
       const user = await User.findById(req.session.userId);
       if (user) {
@@ -420,8 +437,41 @@ app.use('/uploads', function (req, res, next) {
   res.header('Expires', '0');
   next();
 });
-app.use(express.urlencoded({ extended: true, limit: '10gb' }));
-app.use(express.json({ limit: '10gb' }));
+
+// Skip body parsing for upload endpoints - multer handles multipart/form-data
+const skipBodyParserPaths = [
+  '/api/videos/upload',
+  '/api/audios/upload',
+  '/upload/video',
+  '/upload/audio',
+  '/settings/avatar'
+];
+
+app.use((req, res, next) => {
+  // Skip body parsing for upload endpoints
+  if (skipBodyParserPaths.some(p => req.path.startsWith(p))) {
+    return next();
+  }
+  // Skip if content-type is multipart (file upload)
+  const contentType = req.headers['content-type'] || '';
+  if (contentType.includes('multipart/form-data')) {
+    return next();
+  }
+  express.urlencoded({ extended: true, limit: '50mb' })(req, res, next);
+});
+
+app.use((req, res, next) => {
+  // Skip body parsing for upload endpoints
+  if (skipBodyParserPaths.some(p => req.path.startsWith(p))) {
+    return next();
+  }
+  // Skip if content-type is multipart (file upload)
+  const contentType = req.headers['content-type'] || '';
+  if (contentType.includes('multipart/form-data')) {
+    return next();
+  }
+  express.json({ limit: '50mb' })(req, res, next);
+});
 
 // Request timeout middleware - prevent hanging requests
 app.use((req, res, next) => {

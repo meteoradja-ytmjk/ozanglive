@@ -117,17 +117,27 @@ const audioFilter = (req, file, cb) => {
 
 const uploadVideo = multer({
   storage: videoStorage,
-  fileFilter: videoFilter
+  fileFilter: videoFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024 * 1024, // 10GB max
+    fieldSize: 10 * 1024 * 1024 * 1024
+  }
 });
 
 const upload = multer({
   storage: avatarStorage,
-  fileFilter: imageFilter
+  fileFilter: imageFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB max for avatars
+  }
 });
 
 const uploadAudio = multer({
   storage: audioStorage,
-  fileFilter: audioFilter
+  fileFilter: audioFilter,
+  limits: {
+    fileSize: 500 * 1024 * 1024 // 500MB max for audio
+  }
 });
 
 // JSON backup file filter
