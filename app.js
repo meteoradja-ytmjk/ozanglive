@@ -6141,6 +6141,180 @@ app.delete('/api/title-suggestions/:id', isAuthenticated, async (req, res) => {
   }
 });
 
+// ============================================
+// System Update API Endpoints (Admin only)
+// ============================================
+
+// Get current version
+app.get('/api/system/version', isAuthenticated, async (req, res) => {
+  try {
+    const packageJson = require('./package.json');
+    res.json({
+      success: true,
+      currentVersion: packageJson.version || 'Unknown'
+    });
+  } catch (error) {
+    console.error('Error getting version:', error);
+    res.status(500).json({ success: false, error: 'Failed to get version' });
+  }
+});
+
+// Check for updates
+app.get('/api/system/check-update', isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    const { execSync } = require('child_process');
+    const packageJson = require('./package.json');
+    const currentVersion = packageJson.version || '0.0.0';
+    
+    // Get the app directory
+    const appDir = __dirname;
+    
+    // Fetch latest from remote
+    try {
+      execSync('git fetch origin', { cwd: appDir, encoding: 'utf8', timeout: 30000 });
+    } catch (fetchErr) {
+      console.error('Git fetch error:', fetchErr.message);
+      return res.json({
+        success: false,
+        error: 'Failed to fetch updates from repository. Make sure git is installed and configured.'
+      });
+    }
+    
+    // Check if there are updates available
+    let behindCount = 0;
+    let changelog = [];
+    
+    try {
+      // Get current branch
+      const currentBranch = execSync('git rev-parse --abbrev-ref HEAD', { cwd: appDir, encoding: 'utf8' }).trim();
+      
+      // Count commits behind
+      const behindOutput = execSync(`git rev-list HEAD..origin/${currentBranch} --count`, { cwd: appDir, encoding: 'utf8' }).trim();
+      behindCount = parseInt(behindOutput, 10) || 0;
+      
+      // Get changelog (commit messages)
+      if (behindCount > 0) {
+        const logOutput = execSync(`git log HEAD..origin/${currentBranch} --oneline --no-merges -n 10`, { cwd: appDir, encoding: 'utf8' });
+        changelog = logOutput.trim().split('\n').filter(l => l.trim()).map(l => {
+          // Remove commit hash prefix
+          return l.replace(/^[a-f0-9]+\s+/, '');
+        });
+      }
+      
+      // Try to get remote package.json version
+      let latestVersion = currentVersion;
+      try {
+        const remotePackage = execSync(`git show origin/${currentBranch}:package.json`, { cwd: appDir, encoding: 'utf8' });
+        const remotePkg = JSON.parse(remotePackage);
+        latestVersion = remotePkg.version || currentVersion;
+      } catch (e) {
+        // If can't get remote version, use current + indicator
+        if (behindCount > 0) {
+          latestVersion = `${currentVersion}+${behindCount}`;
+        }
+      }
+      
+      res.json({
+        success: true,
+        currentVersion,
+        latestVersion,
+        updateAvailable: behindCount > 0,
+        commitsAhead: 0,
+        commitsBehind: behindCount,
+        changelog
+      });
+    } catch (gitErr) {
+      console.error('Git check error:', gitErr.message);
+      res.json({
+        success: false,
+        error: 'Failed to check for updates. Repository may not be properly configured.'
+      });
+    }
+  } catch (error) {
+    console.error('Error checking for updates:', error);
+    res.status(500).json({ success: false, error: 'Failed to check for updates' });
+  }
+});
+
+// Perform update
+app.post('/api/system/perform-update', isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    const { exec } = require('child_process');
+    const { promisify } = require('util');
+    const execAsync = promisify(exec);
+    const appDir = __dirname;
+    const log = [];
+    
+    const addLog = (message) => {
+      console.log(`[Update] ${message}`);
+      log.push(message);
+    };
+    
+    addLog('Starting update process...');
+    
+    // Step 1: Git pull
+    addLog('Pulling latest changes from repository...');
+    try {
+      const { stdout: pullOutput } = await execAsync('git pull', { cwd: appDir, timeout: 60000 });
+      addLog(pullOutput.trim() || 'Git pull completed');
+    } catch (pullErr) {
+      addLog(`Git pull error: ${pullErr.message}`);
+      return res.json({
+        success: false,
+        error: 'Failed to pull updates from repository',
+        log
+      });
+    }
+    
+    // Step 2: npm install
+    addLog('Installing dependencies...');
+    try {
+      const { stdout: npmOutput } = await execAsync('npm install --production', { cwd: appDir, timeout: 300000 });
+      const npmLines = npmOutput.trim().split('\n').slice(-3).join('\n');
+      addLog(npmLines || 'npm install completed');
+    } catch (npmErr) {
+      addLog(`npm install warning: ${npmErr.message}`);
+      // Don't fail on npm warnings, continue
+    }
+    
+    addLog('Update completed successfully!');
+    addLog('Restarting application...');
+    
+    // Send response before restart
+    res.json({
+      success: true,
+      message: 'Update completed successfully. Application will restart.',
+      log
+    });
+    
+    // Step 3: Restart PM2 (delayed to allow response to be sent)
+    setTimeout(async () => {
+      try {
+        // Try PM2 restart first
+        await execAsync('pm2 restart ozanglive', { cwd: appDir, timeout: 30000 });
+      } catch (pm2Err) {
+        console.log('[Update] PM2 restart failed, trying alternative methods...');
+        try {
+          // Try PM2 with ecosystem file
+          await execAsync('pm2 restart ecosystem.config.js', { cwd: appDir, timeout: 30000 });
+        } catch (e) {
+          console.log('[Update] Ecosystem restart failed, process will exit for manual restart');
+          // Exit process - systemd or PM2 should restart it
+          process.exit(0);
+        }
+      }
+    }, 2000);
+    
+  } catch (error) {
+    console.error('Error performing update:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to perform update',
+      log: [`Error: ${error.message}`]
+    });
+  }
+});
+
 // Global error handler - catches any unhandled errors in routes
 app.use((err, req, res, next) => {
   console.error('Global error handler caught:', err);

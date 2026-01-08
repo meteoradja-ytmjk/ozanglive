@@ -2890,6 +2890,8 @@ async function loadEditThumbnailHistory() {
       thumbnails.forEach(thumb => {
         const div = document.createElement('div');
         div.className = 'thumbnail-history-item aspect-video bg-dark-700 rounded cursor-pointer overflow-hidden border-2 border-transparent hover:border-primary transition-colors';
+        div.dataset.path = thumb.path; // Add data-path for auto-rotate selection
+        div.dataset.url = thumb.url;
         div.innerHTML = `<img src="${thumb.url}" class="w-full h-full object-cover" alt="Thumbnail">`;
         div.onclick = () => selectHistoryThumbnail(thumb.url, thumb.path);
         historyContainer.appendChild(div);
