@@ -9,16 +9,10 @@ const StorageService = require('../services/storageService');
  */
 const checkStorageLimit = async (req, res, next) => {
   try {
-    // Get user from session - userId is stored directly in session, not in session.user.id
     const userId = req.session?.userId;
     
-    // Debug logging
-    console.log('[StorageLimit] Checking storage limit for userId:', userId);
-    console.log('[StorageLimit] Session exists:', !!req.session);
-    
     if (!userId) {
-      console.log('[StorageLimit] No userId found in session, skipping storage check');
-      // Instead of returning 401, just skip the storage check and let isAuthenticated handle auth
+      // Skip storage check, let isAuthenticated handle auth
       return next();
     }
 
@@ -26,24 +20,27 @@ const checkStorageLimit = async (req, res, next) => {
     const contentLength = parseInt(req.headers['content-length'], 10);
     if (!contentLength || isNaN(contentLength)) {
       // If no content-length, allow the upload and check after
-      console.log('[StorageLimit] No content-length header, allowing upload');
       return next();
     }
 
-    console.log('[StorageLimit] Content-Length:', contentLength);
+    // Quick check - get limit first (cached)
+    const limit = await StorageService.getUserStorageLimit(userId);
+    
+    // If no limit set, allow upload immediately
+    if (!limit || limit === 0) {
+      return next();
+    }
 
-    // Check if user can upload
+    // Only calculate usage if there's a limit
     const result = await StorageService.canUpload(userId, contentLength);
     
     if (!result.allowed) {
-      const storageInfo = await StorageService.getStorageInfo(userId);
       return res.status(413).json({
         error: 'Storage limit exceeded',
-        message: `Storage limit exceeded. Current usage: ${storageInfo.formatted.usage}, Limit: ${storageInfo.formatted.limit}`,
+        message: `Storage limit exceeded. Current usage: ${StorageService.formatBytes(result.currentUsage)}, Limit: ${StorageService.formatBytes(result.limit)}`,
         currentUsage: result.currentUsage,
         limit: result.limit,
-        remaining: result.remaining,
-        formatted: storageInfo.formatted
+        remaining: result.remaining
       });
     }
 

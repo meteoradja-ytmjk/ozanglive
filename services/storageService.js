@@ -1,5 +1,9 @@
 const { db } = require('../db/database');
 
+// Simple in-memory cache for storage limits
+const storageLimitCache = new Map();
+const CACHE_TTL = 60000; // 1 minute cache
+
 class StorageService {
   /**
    * Calculate total storage usage for a user
@@ -8,30 +12,27 @@ class StorageService {
    */
   static async calculateUsage(userId) {
     return new Promise((resolve, reject) => {
-      const videoQuery = `SELECT COALESCE(SUM(file_size), 0) as total FROM videos WHERE user_id = ?`;
-      const audioQuery = `SELECT COALESCE(SUM(file_size), 0) as total FROM audios WHERE user_id = ?`;
+      // Use single query with UNION for better performance
+      const query = `
+        SELECT 
+          COALESCE((SELECT SUM(file_size) FROM videos WHERE user_id = ?), 0) as videoBytes,
+          COALESCE((SELECT SUM(file_size) FROM audios WHERE user_id = ?), 0) as audioBytes
+      `;
 
-      db.get(videoQuery, [userId], (err, videoResult) => {
+      db.get(query, [userId, userId], (err, result) => {
         if (err) {
-          console.error('Error calculating video storage:', err.message);
+          console.error('Error calculating storage:', err.message);
           return reject(err);
         }
 
-        db.get(audioQuery, [userId], (err, audioResult) => {
-          if (err) {
-            console.error('Error calculating audio storage:', err.message);
-            return reject(err);
-          }
+        const videoBytes = result?.videoBytes || 0;
+        const audioBytes = result?.audioBytes || 0;
+        const totalBytes = videoBytes + audioBytes;
 
-          const videoBytes = videoResult?.total || 0;
-          const audioBytes = audioResult?.total || 0;
-          const totalBytes = videoBytes + audioBytes;
-
-          resolve({
-            totalBytes,
-            videoBytes,
-            audioBytes
-          });
+        resolve({
+          totalBytes,
+          videoBytes,
+          audioBytes
         });
       });
     });
@@ -87,20 +88,43 @@ class StorageService {
   }
 
   /**
-   * Get user's storage limit from database
+   * Get user's storage limit from database (with caching)
    * @param {string} userId - User ID
    * @returns {Promise<number|null>}
    */
   static async getUserStorageLimit(userId) {
+    // Check cache first
+    const cached = storageLimitCache.get(userId);
+    if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
+      return cached.limit;
+    }
+
     return new Promise((resolve, reject) => {
       db.get('SELECT storage_limit FROM users WHERE id = ?', [userId], (err, row) => {
         if (err) {
           console.error('Error getting storage limit:', err.message);
           return reject(err);
         }
-        resolve(row?.storage_limit || null);
+        const limit = row?.storage_limit || null;
+        
+        // Cache the result
+        storageLimitCache.set(userId, { limit, timestamp: Date.now() });
+        
+        resolve(limit);
       });
     });
+  }
+
+  /**
+   * Clear storage limit cache for a user
+   * @param {string} userId - User ID
+   */
+  static clearCache(userId) {
+    if (userId) {
+      storageLimitCache.delete(userId);
+    } else {
+      storageLimitCache.clear();
+    }
   }
 
   /**
