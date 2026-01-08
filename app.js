@@ -4984,6 +4984,16 @@ app.put('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
     const accountId = req.query.accountId ? parseInt(req.query.accountId) : null;
     const { title, description, scheduledStartTime, privacyStatus, categoryId } = req.body;
     
+    console.log('[API] Update broadcast request:', {
+      broadcastId: req.params.id,
+      accountId,
+      title,
+      description: description ? description.substring(0, 50) + '...' : null,
+      scheduledStartTime,
+      privacyStatus,
+      categoryId
+    });
+    
     let credentials;
     
     if (accountId) {
@@ -5008,6 +5018,7 @@ app.put('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
             privacyStatus,
             categoryId
           });
+          console.log('[API] Update broadcast success:', result);
           return res.json({ success: true, broadcast: result });
         } catch (err) {
           // Continue to next account if this one doesn't own the broadcast
@@ -5030,6 +5041,8 @@ app.put('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
       privacyStatus,
       categoryId
     });
+    
+    console.log('[API] Update broadcast success:', result);
     
     res.json({ success: true, broadcast: result });
   } catch (error) {
@@ -5099,6 +5112,14 @@ app.post('/api/youtube/broadcasts/:id/thumbnail', isAuthenticated, upload.single
       });
     }
     
+    console.log('[Thumbnail Upload] File received:', {
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: req.file.size,
+      broadcastId: req.params.id,
+      accountId: req.body.accountId
+    });
+    
     // Validate file type
     const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg'];
     if (!allowedTypes.includes(req.file.mimetype)) {
@@ -5142,11 +5163,17 @@ app.post('/api/youtube/broadcasts/:id/thumbnail', isAuthenticated, upload.single
       credentials.refreshToken
     );
     
+    // Normalize mimetype for YouTube API
+    const mimeType = req.file.mimetype === 'image/jpg' ? 'image/jpeg' : req.file.mimetype;
+    
     const result = await youtubeService.uploadThumbnail(
       accessToken,
       req.params.id,
-      req.file.buffer
+      req.file.buffer,
+      mimeType
     );
+    
+    console.log('[Thumbnail Upload] Success:', result);
     
     res.json({ success: true, thumbnailUrl: result.thumbnailUrl });
   } catch (error) {

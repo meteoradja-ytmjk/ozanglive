@@ -343,6 +343,9 @@ class YouTubeService {
     
     const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
     
+    console.log('[YouTubeService.updateBroadcast] Updating broadcast:', broadcastId);
+    console.log('[YouTubeService.updateBroadcast] Input categoryId:', categoryId);
+    
     // First, get the current broadcast to preserve existing values
     const currentResponse = await youtube.liveBroadcasts.list({
       part: 'snippet,status',
@@ -354,18 +357,26 @@ class YouTubeService {
     }
     
     const current = currentResponse.data.items[0];
+    console.log('[YouTubeService.updateBroadcast] Current categoryId:', current.snippet.categoryId);
+    
+    // Determine final categoryId - use provided value or keep existing
+    const finalCategoryId = categoryId !== undefined && categoryId !== null && categoryId !== '' 
+      ? String(categoryId) 
+      : (current.snippet.categoryId || '22');
+    
+    console.log('[YouTubeService.updateBroadcast] Final categoryId:', finalCategoryId);
     
     // Build update request - preserve all existing values if not provided
     const updateRequest = {
       id: broadcastId,
       snippet: {
-        title: title !== undefined ? title : current.snippet.title,
+        title: title !== undefined && title !== '' ? title : current.snippet.title,
         description: description !== undefined ? description : current.snippet.description,
         scheduledStartTime: scheduledStartTime ? new Date(scheduledStartTime).toISOString() : current.snippet.scheduledStartTime,
-        categoryId: categoryId !== undefined ? categoryId : (current.snippet.categoryId || '22')
+        categoryId: finalCategoryId
       },
       status: {
-        privacyStatus: privacyStatus !== undefined ? privacyStatus : current.status.privacyStatus,
+        privacyStatus: privacyStatus !== undefined && privacyStatus !== '' ? privacyStatus : current.status.privacyStatus,
         selfDeclaredMadeForKids: current.status.selfDeclaredMadeForKids || false
       }
     };
@@ -375,6 +386,8 @@ class YouTubeService {
       updateRequest.snippet.tags = current.snippet.tags;
     }
     
+    console.log('[YouTubeService.updateBroadcast] Update request:', JSON.stringify(updateRequest, null, 2));
+    
     // Update the broadcast
     const response = await youtube.liveBroadcasts.update({
       part: 'snippet,status',
@@ -382,6 +395,8 @@ class YouTubeService {
     });
     
     const broadcast = response.data;
+    
+    console.log('[YouTubeService.updateBroadcast] Response categoryId:', broadcast.snippet.categoryId);
     
     return {
       id: broadcast.id,
@@ -462,21 +477,26 @@ class YouTubeService {
    * @param {string} accessToken - Access token
    * @param {string} broadcastId - Broadcast ID (video ID)
    * @param {Buffer} imageBuffer - Image buffer
+   * @param {string} mimeType - Image mime type (image/jpeg or image/png)
    * @returns {Promise<{thumbnailUrl: string}>}
    */
-  async uploadThumbnail(accessToken, broadcastId, imageBuffer) {
+  async uploadThumbnail(accessToken, broadcastId, imageBuffer, mimeType = 'image/jpeg') {
     const oauth2Client = new google.auth.OAuth2();
     oauth2Client.setCredentials({ access_token: accessToken });
     
     const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
     
+    console.log(`[YouTubeService.uploadThumbnail] Uploading thumbnail for broadcast ${broadcastId}, size: ${imageBuffer.length} bytes, type: ${mimeType}`);
+    
     const response = await youtube.thumbnails.set({
       videoId: broadcastId,
       media: {
-        mimeType: 'image/jpeg',
+        mimeType: mimeType,
         body: require('stream').Readable.from(imageBuffer)
       }
     });
+    
+    console.log('[YouTubeService.uploadThumbnail] Response:', JSON.stringify(response.data, null, 2));
     
     return {
       thumbnailUrl: response.data.items?.[0]?.default?.url || ''

@@ -836,7 +836,7 @@ function closeEditBroadcastModal() {
   document.getElementById('editBroadcastForm').reset();
 }
 
-// Edit Broadcast Form Handler
+// Edit Broadcast Form Handler - includes thumbnail upload and category
 const editBroadcastForm = document.getElementById('editBroadcastForm');
 if (editBroadcastForm) {
   editBroadcastForm.addEventListener('submit', async (e) => {
@@ -851,12 +851,34 @@ if (editBroadcastForm) {
       const broadcastId = document.getElementById('editBroadcastId').value;
       const accountId = document.getElementById('editAccountId').value;
       
+      console.log('[EditBroadcast] Starting update for broadcast:', broadcastId, 'account:', accountId);
+      
+      // Upload thumbnail first if selected
+      if (typeof editThumbnailFile !== 'undefined' && editThumbnailFile) {
+        console.log('[EditBroadcast] Uploading thumbnail:', editThumbnailFile.name);
+        const thumbnailSuccess = await uploadEditThumbnail(broadcastId, accountId);
+        if (!thumbnailSuccess) {
+          showToast('Thumbnail upload failed', 'error');
+        } else {
+          showToast('Thumbnail uploaded!', 'success');
+        }
+      }
+      
+      // Get category value
+      const categorySelect = document.getElementById('editCategoryId');
+      const categoryId = categorySelect ? categorySelect.value : '22';
+      
+      console.log('[EditBroadcast] Category:', categoryId);
+      
       const updateData = {
         title: document.getElementById('editBroadcastTitle').value,
         description: document.getElementById('editBroadcastDescription').value,
         scheduledStartTime: document.getElementById('editScheduledStartTime').value,
-        privacyStatus: document.getElementById('editPrivacyStatus').value
+        privacyStatus: document.getElementById('editPrivacyStatus').value,
+        categoryId: categoryId
       };
+      
+      console.log('[EditBroadcast] Update data:', JSON.stringify(updateData));
       
       let url = `/api/youtube/broadcasts/${broadcastId}`;
       if (accountId) {
@@ -873,20 +895,24 @@ if (editBroadcastForm) {
       });
       
       const data = await response.json();
+      console.log('[EditBroadcast] Response:', data);
       
       if (data.success) {
         showToast('Broadcast updated successfully!');
         closeEditBroadcastModal();
-        setTimeout(() => window.location.reload(), 1000);
+        setTimeout(() => window.location.reload(), 1500);
       } else {
         showToast(data.error || 'Failed to update broadcast', 'error');
       }
     } catch (error) {
-      console.error('Error:', error);
-      showToast('An error occurred', 'error');
+      console.error('[EditBroadcast] Error:', error);
+      showToast('An error occurred: ' + error.message, 'error');
     } finally {
       updateBtn.innerHTML = originalText;
       updateBtn.disabled = false;
+      if (typeof editThumbnailFile !== 'undefined') {
+        editThumbnailFile = null;
+      }
     }
   });
 }
@@ -3070,17 +3096,19 @@ document.addEventListener('click', function(e) {
   }
 });
 
-// Update Edit Broadcast Form Handler to include thumbnail upload
+// Update Edit Broadcast Form Handler to include thumbnail upload and category
 const originalEditBroadcastForm = document.getElementById('editBroadcastForm');
 if (originalEditBroadcastForm) {
-  // Remove existing listener and add new one
+  // Remove existing listeners by replacing with clone, then add new listener
   const newForm = originalEditBroadcastForm.cloneNode(true);
   originalEditBroadcastForm.parentNode.replaceChild(newForm, originalEditBroadcastForm);
   
-  newForm.addEventListener('submit', async (e) => {
+  newForm.addEventListener('submit', async function(e) {
     e.preventDefault();
     
     const updateBtn = document.getElementById('updateBroadcastBtn');
+    if (!updateBtn) return;
+    
     const originalText = updateBtn.innerHTML;
     updateBtn.innerHTML = '<i class="ti ti-loader animate-spin"></i> Updating...';
     updateBtn.disabled = true;
@@ -3089,19 +3117,25 @@ if (originalEditBroadcastForm) {
       const broadcastId = document.getElementById('editBroadcastId').value;
       const accountId = document.getElementById('editAccountId').value;
       
+      console.log('[EditBroadcast] Starting update for broadcast:', broadcastId, 'account:', accountId);
+      console.log('[EditBroadcast] Thumbnail file:', editThumbnailFile ? editThumbnailFile.name : 'none');
+      
       // Upload thumbnail first if selected
       if (editThumbnailFile) {
+        console.log('[EditBroadcast] Uploading thumbnail...');
         const thumbnailSuccess = await uploadEditThumbnail(broadcastId, accountId);
         if (!thumbnailSuccess) {
-          showToast('Thumbnail upload failed, but continuing with update...', 'warning');
+          showToast('Thumbnail upload failed', 'error');
         } else {
-          showToast('Thumbnail uploaded successfully!');
+          showToast('Thumbnail uploaded!', 'success');
         }
       }
       
       // Get category value
       const categorySelect = document.getElementById('editCategoryId');
       const categoryId = categorySelect ? categorySelect.value : '22';
+      
+      console.log('[EditBroadcast] Category:', categoryId);
       
       const updateData = {
         title: document.getElementById('editBroadcastTitle').value,
@@ -3110,6 +3144,8 @@ if (originalEditBroadcastForm) {
         privacyStatus: document.getElementById('editPrivacyStatus').value,
         categoryId: categoryId
       };
+      
+      console.log('[EditBroadcast] Update data:', updateData);
       
       let url = `/api/youtube/broadcasts/${broadcastId}`;
       if (accountId) {
@@ -3126,17 +3162,18 @@ if (originalEditBroadcastForm) {
       });
       
       const data = await response.json();
+      console.log('[EditBroadcast] Response:', data);
       
       if (data.success) {
         showToast('Broadcast updated successfully!');
         closeEditBroadcastModal();
-        setTimeout(() => window.location.reload(), 1000);
+        setTimeout(() => window.location.reload(), 1500);
       } else {
         showToast(data.error || 'Failed to update broadcast', 'error');
       }
     } catch (error) {
-      console.error('Error:', error);
-      showToast('An error occurred', 'error');
+      console.error('[EditBroadcast] Error:', error);
+      showToast('An error occurred: ' + error.message, 'error');
     } finally {
       updateBtn.innerHTML = originalText;
       updateBtn.disabled = false;
