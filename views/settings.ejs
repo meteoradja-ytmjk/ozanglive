@@ -1046,6 +1046,7 @@
 
       // Update System functionality (Admin only)
       <% if (req.session.user_role === 'admin') { %>
+      // Initialize update elements
       const checkUpdateBtn = document.getElementById('check-update-btn');
       const performUpdateBtn = document.getElementById('perform-update-btn');
       const reloadPageBtn = document.getElementById('reload-page-btn');
@@ -1065,148 +1066,182 @@
       const changelogContent = document.getElementById('changelog-content');
 
       // Load current version on page load
-      loadVersionInfo();
+      if (currentVersionEl) {
+        loadVersionInfo();
+      }
 
       async function loadVersionInfo() {
         try {
+          currentVersionEl.textContent = 'Loading...';
+          latestVersionEl.textContent = 'Click "Check for Updates"';
+          latestVersionEl.className = 'text-lg font-semibold text-gray-400';
+          
           const res = await fetch('/api/system/version');
+          if (!res.ok) {
+            throw new Error(`HTTP ${res.status}`);
+          }
           const data = await res.json();
           if (data.success) {
             currentVersionEl.textContent = data.currentVersion || 'Unknown';
-            latestVersionEl.textContent = 'Click "Check for Updates"';
-            latestVersionEl.className = 'text-lg font-semibold text-gray-400';
+          } else {
+            currentVersionEl.textContent = 'Error: ' + (data.error || 'Unknown error');
           }
         } catch (err) {
           console.error('Error loading version:', err);
-          currentVersionEl.textContent = 'Error loading';
+          currentVersionEl.textContent = 'Failed to load';
         }
       }
 
       // Check for updates
-      checkUpdateBtn.addEventListener('click', async () => {
-        checkUpdateBtn.disabled = true;
-        checkUpdateBtn.innerHTML = '<i class="ti ti-loader animate-spin mr-2"></i>Checking...';
-        
-        // Reset UI
-        updateStatusContainer.classList.add('hidden');
-        updateAvailable.classList.add('hidden');
-        updateUptodate.classList.add('hidden');
-        updateError.classList.add('hidden');
-        changelogContainer.classList.add('hidden');
+      if (checkUpdateBtn) {
+        checkUpdateBtn.addEventListener('click', async () => {
+          checkUpdateBtn.disabled = true;
+          checkUpdateBtn.innerHTML = '<i class="ti ti-loader animate-spin mr-2"></i>Checking...';
+          
+          // Reset UI
+          updateStatusContainer.classList.add('hidden');
+          updateAvailable.classList.add('hidden');
+          updateUptodate.classList.add('hidden');
+          updateError.classList.add('hidden');
+          changelogContainer.classList.add('hidden');
 
-        try {
-          const res = await fetch('/api/system/check-update', {
-            headers: {
-              'X-CSRF-Token': '<%= csrfToken %>'
+          try {
+            const res = await fetch('/api/system/check-update', {
+              headers: {
+                'X-CSRF-Token': '<%= csrfToken %>'
+              }
+            });
+            
+            if (!res.ok) {
+              throw new Error(`HTTP ${res.status}`);
             }
-          });
-          const data = await res.json();
+            
+            const data = await res.json();
 
-          updateStatusContainer.classList.remove('hidden');
+            updateStatusContainer.classList.remove('hidden');
 
-          if (data.success) {
-            currentVersionEl.textContent = data.currentVersion || 'Unknown';
-            latestVersionEl.textContent = data.latestVersion || 'Unknown';
+            if (data.success) {
+              currentVersionEl.textContent = data.currentVersion || 'Unknown';
+              latestVersionEl.textContent = data.latestVersion || 'Unknown';
 
-            if (data.updateAvailable) {
-              latestVersionEl.className = 'text-lg font-semibold text-green-400';
-              updateAvailable.classList.remove('hidden');
-              
-              // Show changelog if available
-              if (data.changelog && data.changelog.length > 0) {
-                changelogContainer.classList.remove('hidden');
-                changelogContent.innerHTML = data.changelog.map(c => `<div class="mb-2">• ${c}</div>`).join('');
+              if (data.updateAvailable) {
+                latestVersionEl.className = 'text-lg font-semibold text-green-400';
+                updateAvailable.classList.remove('hidden');
+                
+                // Show changelog if available
+                if (data.changelog && data.changelog.length > 0) {
+                  changelogContainer.classList.remove('hidden');
+                  changelogContent.innerHTML = data.changelog.map(c => `<div class="mb-2">• ${escapeHtml(c)}</div>`).join('');
+                }
+              } else {
+                latestVersionEl.className = 'text-lg font-semibold text-green-400';
+                updateUptodate.classList.remove('hidden');
               }
             } else {
-              latestVersionEl.className = 'text-lg font-semibold text-green-400';
-              updateUptodate.classList.remove('hidden');
+              updateError.classList.remove('hidden');
+              updateErrorMessage.textContent = data.error || 'Unable to check for updates.';
             }
-          } else {
+          } catch (err) {
+            console.error('Error checking update:', err);
+            updateStatusContainer.classList.remove('hidden');
             updateError.classList.remove('hidden');
-            updateErrorMessage.textContent = data.error || 'Unable to check for updates.';
+            updateErrorMessage.textContent = 'Network error: ' + err.message;
+          } finally {
+            checkUpdateBtn.disabled = false;
+            checkUpdateBtn.innerHTML = '<i class="ti ti-refresh mr-2"></i>Check for Updates';
           }
-        } catch (err) {
-          console.error('Error checking update:', err);
-          updateStatusContainer.classList.remove('hidden');
-          updateError.classList.remove('hidden');
-          updateErrorMessage.textContent = 'Network error. Please try again.';
-        } finally {
-          checkUpdateBtn.disabled = false;
-          checkUpdateBtn.innerHTML = '<i class="ti ti-refresh mr-2"></i>Check for Updates';
-        }
-      });
+        });
+      }
 
       // Perform update
-      performUpdateBtn.addEventListener('click', async () => {
-        if (!confirm('Are you sure you want to update? The application will restart after the update.')) {
-          return;
-        }
+      if (performUpdateBtn) {
+        performUpdateBtn.addEventListener('click', async () => {
+          if (!confirm('Are you sure you want to update? The application will restart after the update.')) {
+            return;
+          }
 
-        performUpdateBtn.disabled = true;
-        performUpdateBtn.innerHTML = '<i class="ti ti-loader animate-spin mr-2"></i>Updating...';
-        
-        // Show progress
-        updateStatusContainer.classList.add('hidden');
-        updateProgressContainer.classList.remove('hidden');
-        updateLog.innerHTML = '';
-        updateProgressBar.style.width = '0%';
+          performUpdateBtn.disabled = true;
+          performUpdateBtn.innerHTML = '<i class="ti ti-loader animate-spin mr-2"></i>Updating...';
+          
+          // Show progress
+          updateStatusContainer.classList.add('hidden');
+          updateProgressContainer.classList.remove('hidden');
+          updateLog.innerHTML = '';
+          updateProgressBar.style.width = '10%';
+          updateProgressText.textContent = 'Starting update...';
 
-        try {
-          const res = await fetch('/api/system/perform-update', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-CSRF-Token': '<%= csrfToken %>'
-            }
-          });
-
-          const data = await res.json();
-
-          if (data.success) {
-            updateProgressBar.style.width = '100%';
-            updateProgressText.textContent = 'Update complete!';
+          try {
+            updateProgressBar.style.width = '30%';
+            updateProgressText.textContent = 'Pulling latest changes...';
             
-            // Show log
-            if (data.log && data.log.length > 0) {
-              updateLog.innerHTML = data.log.map(l => `<div>${l}</div>`).join('');
+            const res = await fetch('/api/system/perform-update', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': '<%= csrfToken %>'
+              }
+            });
+
+            const data = await res.json();
+
+            if (data.success) {
+              updateProgressBar.style.width = '100%';
+              updateProgressText.textContent = 'Update complete!';
+              
+              // Show log
+              if (data.log && data.log.length > 0) {
+                updateLog.innerHTML = data.log.map(l => `<div class="py-1">${escapeHtml(l)}</div>`).join('');
+              }
+
+              // Show complete message
+              setTimeout(() => {
+                updateProgressContainer.classList.add('hidden');
+                updateCompleteContainer.classList.remove('hidden');
+              }, 1500);
+
+              // Auto reload after 8 seconds
+              setTimeout(() => {
+                window.location.reload();
+              }, 8000);
+            } else {
+              updateProgressText.textContent = 'Update failed!';
+              updateProgressBar.classList.remove('bg-primary');
+              updateProgressBar.classList.add('bg-red-500');
+              updateProgressBar.style.width = '100%';
+              
+              if (data.log && data.log.length > 0) {
+                updateLog.innerHTML = data.log.map(l => `<div class="py-1 text-red-400">${escapeHtml(l)}</div>`).join('');
+              }
+              
+              showToast('error', data.error || 'Update failed');
             }
-
-            // Show complete message
-            setTimeout(() => {
-              updateProgressContainer.classList.add('hidden');
-              updateCompleteContainer.classList.remove('hidden');
-            }, 1000);
-
-            // Auto reload after 5 seconds
-            setTimeout(() => {
-              window.location.reload();
-            }, 5000);
-          } else {
+          } catch (err) {
+            console.error('Error performing update:', err);
             updateProgressText.textContent = 'Update failed!';
             updateProgressBar.classList.remove('bg-primary');
             updateProgressBar.classList.add('bg-red-500');
-            
-            if (data.log && data.log.length > 0) {
-              updateLog.innerHTML = data.log.map(l => `<div class="text-red-400">${l}</div>`).join('');
-            }
-            
-            showToast('error', data.error || 'Update failed');
+            updateLog.innerHTML = `<div class="text-red-400">Network error: ${escapeHtml(err.message)}</div>`;
+            showToast('error', 'Network error during update');
+          } finally {
+            performUpdateBtn.disabled = false;
+            performUpdateBtn.innerHTML = '<i class="ti ti-download mr-2"></i>Update Now';
           }
-        } catch (err) {
-          console.error('Error performing update:', err);
-          updateProgressText.textContent = 'Update failed!';
-          updateLog.innerHTML = `<div class="text-red-400">Network error: ${err.message}</div>`;
-          showToast('error', 'Network error during update');
-        } finally {
-          performUpdateBtn.disabled = false;
-          performUpdateBtn.innerHTML = '<i class="ti ti-download mr-2"></i>Update Now';
-        }
-      });
+        });
+      }
 
       // Reload page button
-      reloadPageBtn.addEventListener('click', () => {
-        window.location.reload();
-      });
+      if (reloadPageBtn) {
+        reloadPageBtn.addEventListener('click', () => {
+          window.location.reload();
+        });
+      }
+      
+      // Helper function to escape HTML
+      function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+      }
       <% } %>
   });
   </script>

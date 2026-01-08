@@ -6148,14 +6148,16 @@ app.delete('/api/title-suggestions/:id', isAuthenticated, async (req, res) => {
 // Get current version
 app.get('/api/system/version', isAuthenticated, async (req, res) => {
   try {
-    const packageJson = require('./package.json');
+    // Read package.json fresh (don't use require cache)
+    const packagePath = path.join(__dirname, 'package.json');
+    const packageData = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
     res.json({
       success: true,
-      currentVersion: packageJson.version || 'Unknown'
+      currentVersion: packageData.version || 'Unknown'
     });
   } catch (error) {
     console.error('Error getting version:', error);
-    res.status(500).json({ success: false, error: 'Failed to get version' });
+    res.status(500).json({ success: false, error: 'Failed to get version', details: error.message });
   }
 });
 
@@ -6163,54 +6165,83 @@ app.get('/api/system/version', isAuthenticated, async (req, res) => {
 app.get('/api/system/check-update', isAuthenticated, isAdmin, async (req, res) => {
   try {
     const { execSync } = require('child_process');
-    const packageJson = require('./package.json');
-    const currentVersion = packageJson.version || '0.0.0';
+    
+    // Read package.json fresh
+    const packagePath = path.join(__dirname, 'package.json');
+    const packageData = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
+    const currentVersion = packageData.version || '0.0.0';
     
     // Get the app directory
     const appDir = __dirname;
     
+    // Check if git is available
+    try {
+      execSync('git --version', { cwd: appDir, encoding: 'utf8', timeout: 5000 });
+    } catch (gitCheckErr) {
+      return res.json({
+        success: false,
+        error: 'Git is not installed or not available in PATH.'
+      });
+    }
+    
+    // Check if this is a git repository
+    try {
+      execSync('git rev-parse --git-dir', { cwd: appDir, encoding: 'utf8', timeout: 5000 });
+    } catch (repoErr) {
+      return res.json({
+        success: false,
+        error: 'This directory is not a git repository.'
+      });
+    }
+    
     // Fetch latest from remote
     try {
-      execSync('git fetch origin', { cwd: appDir, encoding: 'utf8', timeout: 30000 });
+      execSync('git fetch origin', { cwd: appDir, encoding: 'utf8', timeout: 60000, stdio: 'pipe' });
     } catch (fetchErr) {
       console.error('Git fetch error:', fetchErr.message);
       return res.json({
         success: false,
-        error: 'Failed to fetch updates from repository. Make sure git is installed and configured.'
+        error: 'Failed to fetch updates. Check your internet connection and git remote configuration.'
       });
     }
     
     // Check if there are updates available
     let behindCount = 0;
     let changelog = [];
+    let currentBranch = 'main';
     
     try {
       // Get current branch
-      const currentBranch = execSync('git rev-parse --abbrev-ref HEAD', { cwd: appDir, encoding: 'utf8' }).trim();
+      currentBranch = execSync('git rev-parse --abbrev-ref HEAD', { cwd: appDir, encoding: 'utf8', stdio: 'pipe' }).trim();
       
       // Count commits behind
-      const behindOutput = execSync(`git rev-list HEAD..origin/${currentBranch} --count`, { cwd: appDir, encoding: 'utf8' }).trim();
+      const behindOutput = execSync(`git rev-list HEAD..origin/${currentBranch} --count`, { cwd: appDir, encoding: 'utf8', stdio: 'pipe' }).trim();
       behindCount = parseInt(behindOutput, 10) || 0;
       
       // Get changelog (commit messages)
       if (behindCount > 0) {
-        const logOutput = execSync(`git log HEAD..origin/${currentBranch} --oneline --no-merges -n 10`, { cwd: appDir, encoding: 'utf8' });
-        changelog = logOutput.trim().split('\n').filter(l => l.trim()).map(l => {
-          // Remove commit hash prefix
-          return l.replace(/^[a-f0-9]+\s+/, '');
-        });
+        try {
+          const logOutput = execSync(`git log HEAD..origin/${currentBranch} --oneline --no-merges -n 10`, { cwd: appDir, encoding: 'utf8', stdio: 'pipe' });
+          changelog = logOutput.trim().split('\n').filter(l => l.trim()).map(l => {
+            // Remove commit hash prefix
+            return l.replace(/^[a-f0-9]+\s+/, '');
+          });
+        } catch (logErr) {
+          // Changelog is optional, continue without it
+          console.log('Could not get changelog:', logErr.message);
+        }
       }
       
       // Try to get remote package.json version
       let latestVersion = currentVersion;
       try {
-        const remotePackage = execSync(`git show origin/${currentBranch}:package.json`, { cwd: appDir, encoding: 'utf8' });
+        const remotePackage = execSync(`git show origin/${currentBranch}:package.json`, { cwd: appDir, encoding: 'utf8', stdio: 'pipe' });
         const remotePkg = JSON.parse(remotePackage);
         latestVersion = remotePkg.version || currentVersion;
       } catch (e) {
         // If can't get remote version, use current + indicator
         if (behindCount > 0) {
-          latestVersion = `${currentVersion}+${behindCount}`;
+          latestVersion = `${currentVersion} (+${behindCount} commits)`;
         }
       }
       
@@ -6221,18 +6252,19 @@ app.get('/api/system/check-update', isAuthenticated, isAdmin, async (req, res) =
         updateAvailable: behindCount > 0,
         commitsAhead: 0,
         commitsBehind: behindCount,
+        branch: currentBranch,
         changelog
       });
     } catch (gitErr) {
       console.error('Git check error:', gitErr.message);
       res.json({
         success: false,
-        error: 'Failed to check for updates. Repository may not be properly configured.'
+        error: 'Failed to check for updates: ' + gitErr.message
       });
     }
   } catch (error) {
     console.error('Error checking for updates:', error);
-    res.status(500).json({ success: false, error: 'Failed to check for updates' });
+    res.status(500).json({ success: false, error: 'Failed to check for updates: ' + error.message });
   }
 });
 
@@ -6255,8 +6287,8 @@ app.post('/api/system/perform-update', isAuthenticated, isAdmin, async (req, res
     // Step 1: Git pull
     addLog('Pulling latest changes from repository...');
     try {
-      const { stdout: pullOutput } = await execAsync('git pull', { cwd: appDir, timeout: 60000 });
-      addLog(pullOutput.trim() || 'Git pull completed');
+      const { stdout: pullOutput, stderr: pullStderr } = await execAsync('git pull', { cwd: appDir, timeout: 120000 });
+      addLog(pullOutput.trim() || pullStderr.trim() || 'Git pull completed');
     } catch (pullErr) {
       addLog(`Git pull error: ${pullErr.message}`);
       return res.json({
@@ -6269,8 +6301,9 @@ app.post('/api/system/perform-update', isAuthenticated, isAdmin, async (req, res
     // Step 2: npm install
     addLog('Installing dependencies...');
     try {
-      const { stdout: npmOutput } = await execAsync('npm install --production', { cwd: appDir, timeout: 300000 });
-      const npmLines = npmOutput.trim().split('\n').slice(-3).join('\n');
+      const { stdout: npmOutput, stderr: npmStderr } = await execAsync('npm install', { cwd: appDir, timeout: 300000 });
+      const output = npmOutput.trim() || npmStderr.trim();
+      const npmLines = output.split('\n').slice(-5).join('\n');
       addLog(npmLines || 'npm install completed');
     } catch (npmErr) {
       addLog(`npm install warning: ${npmErr.message}`);
@@ -6292,11 +6325,13 @@ app.post('/api/system/perform-update', isAuthenticated, isAdmin, async (req, res
       try {
         // Try PM2 restart first
         await execAsync('pm2 restart ozanglive', { cwd: appDir, timeout: 30000 });
+        console.log('[Update] PM2 restart successful');
       } catch (pm2Err) {
-        console.log('[Update] PM2 restart failed, trying alternative methods...');
+        console.log('[Update] PM2 restart failed, trying alternative methods...', pm2Err.message);
         try {
           // Try PM2 with ecosystem file
           await execAsync('pm2 restart ecosystem.config.js', { cwd: appDir, timeout: 30000 });
+          console.log('[Update] Ecosystem restart successful');
         } catch (e) {
           console.log('[Update] Ecosystem restart failed, process will exit for manual restart');
           // Exit process - systemd or PM2 should restart it
@@ -6309,7 +6344,7 @@ app.post('/api/system/perform-update', isAuthenticated, isAdmin, async (req, res
     console.error('Error performing update:', error);
     res.status(500).json({ 
       success: false, 
-      error: 'Failed to perform update',
+      error: 'Failed to perform update: ' + error.message,
       log: [`Error: ${error.message}`]
     });
   }
