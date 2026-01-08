@@ -375,24 +375,7 @@ app.use((err, req, res, next) => {
   next(err);
 });
 app.use(async (req, res, next) => {
-  // Skip user loading for upload endpoints to improve performance
-  const isUploadEndpoint = req.path.includes('/api/videos/upload') || 
-                           req.path.includes('/api/audios/upload') ||
-                           req.path.includes('/upload/video') ||
-                           req.path.includes('/upload/audio');
-  
   if (req.session && req.session.userId) {
-    // For upload endpoints, only set minimal session data
-    if (isUploadEndpoint) {
-      res.locals.user = {
-        id: req.session.userId,
-        username: req.session.username,
-        avatar_path: req.session.avatar_path
-      };
-      res.locals.req = req;
-      return next();
-    }
-    
     try {
       const user = await User.findById(req.session.userId);
       if (user) {
@@ -437,41 +420,8 @@ app.use('/uploads', function (req, res, next) {
   res.header('Expires', '0');
   next();
 });
-
-// Skip body parsing for upload endpoints - multer handles multipart/form-data
-const skipBodyParserPaths = [
-  '/api/videos/upload',
-  '/api/audios/upload',
-  '/upload/video',
-  '/upload/audio',
-  '/settings/avatar'
-];
-
-app.use((req, res, next) => {
-  // Skip body parsing for upload endpoints
-  if (skipBodyParserPaths.some(p => req.path.startsWith(p))) {
-    return next();
-  }
-  // Skip if content-type is multipart (file upload)
-  const contentType = req.headers['content-type'] || '';
-  if (contentType.includes('multipart/form-data')) {
-    return next();
-  }
-  express.urlencoded({ extended: true, limit: '50mb' })(req, res, next);
-});
-
-app.use((req, res, next) => {
-  // Skip body parsing for upload endpoints
-  if (skipBodyParserPaths.some(p => req.path.startsWith(p))) {
-    return next();
-  }
-  // Skip if content-type is multipart (file upload)
-  const contentType = req.headers['content-type'] || '';
-  if (contentType.includes('multipart/form-data')) {
-    return next();
-  }
-  express.json({ limit: '50mb' })(req, res, next);
-});
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.json({ limit: '50mb' }));
 
 // Request timeout middleware - prevent hanging requests
 app.use((req, res, next) => {
@@ -1990,34 +1940,36 @@ app.post('/settings/integrations/gdrive', isAuthenticated, [
     });
   }
 });
-app.post('/upload/video', isAuthenticated, checkStorageLimit, uploadVideo.single('video'), async (req, res) => {
+app.post('/upload/video', isAuthenticated, uploadVideo.single('video'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No video file provided' });
     }
     
     const { filename, originalname, path: videoPath, mimetype, size } = req.file;
+    const thumbnailName = path.basename(filename, path.extname(filename)) + '.jpg';
+    const videoInfo = await getVideoInfo(videoPath);
+    const thumbnailRelativePath = await generateThumbnail(videoPath, thumbnailName)
+      .then(() => `/uploads/thumbnails/${thumbnailName}`)
+      .catch(() => null);
     
     let format = 'unknown';
     if (mimetype === 'video/mp4') format = 'mp4';
     else if (mimetype === 'video/avi') format = 'avi';
     else if (mimetype === 'video/quicktime') format = 'mov';
     
-    // Create video record immediately
     const videoData = {
       title: path.basename(originalname, path.extname(originalname)),
       original_filename: originalname,
       filepath: `/uploads/videos/${filename}`,
-      thumbnail_path: null,
+      thumbnail_path: thumbnailRelativePath,
       file_size: size,
-      duration: 0,
+      duration: videoInfo.duration,
       format: format,
       user_id: req.session.userId
     };
     
     const video = await Video.create(videoData);
-    
-    // Send response immediately
     res.json({
       success: true,
       video: {
@@ -2030,25 +1982,6 @@ app.post('/upload/video', isAuthenticated, checkStorageLimit, uploadVideo.single
         format: video.format
       }
     });
-    
-    // Process metadata and thumbnail in background
-    setImmediate(async () => {
-      try {
-        const videoInfo = await getVideoInfo(videoPath);
-        const thumbnailName = path.basename(filename, path.extname(filename)) + '.jpg';
-        const thumbnailRelativePath = await generateThumbnail(videoPath, thumbnailName)
-          .then(() => `/uploads/thumbnails/${thumbnailName}`)
-          .catch(() => null);
-        
-        await Video.update(video.id, {
-          duration: videoInfo.duration,
-          thumbnail_path: thumbnailRelativePath
-        });
-      } catch (bgError) {
-        console.error('Background processing error for video', video.id, ':', bgError.message);
-      }
-    });
-    
   } catch (error) {
     console.error('Upload error details:', error);
     res.status(500).json({ 
@@ -2057,7 +1990,8 @@ app.post('/upload/video', isAuthenticated, checkStorageLimit, uploadVideo.single
     });
   }
 });
-app.post('/api/videos/upload', isAuthenticated, checkStorageLimit, (req, res, next) => {
+
+app.post('/api/videos/upload', isAuthenticated, (req, res, next) => {
   uploadVideo.single('video')(req, res, (err) => {
     if (err) {
       if (err.code === 'LIMIT_FILE_SIZE') {
@@ -2093,84 +2027,65 @@ app.post('/api/videos/upload', isAuthenticated, checkStorageLimit, (req, res, ne
     const fullFilePath = path.join(__dirname, 'public', filePath);
     const fileSize = req.file.size;
     
-    // Create video record immediately with basic info
+    // Get video metadata
+    const metadata = await new Promise((resolve, reject) => {
+      ffmpeg.ffprobe(fullFilePath, (err, metadata) => {
+        if (err) return reject(err);
+        resolve(metadata);
+      });
+    });
+    
+    const videoStream = metadata.streams.find(stream => stream.codec_type === 'video');
+    const duration = metadata.format.duration || 0;
+    const format = metadata.format.format_name || path.extname(req.file.filename).replace('.', '');
+    const resolution = videoStream ? `${videoStream.width}x${videoStream.height}` : '';
+    const bitrate = metadata.format.bit_rate ? Math.round(parseInt(metadata.format.bit_rate) / 1000) : null;
+    
+    let fps = null;
+    if (videoStream && videoStream.avg_frame_rate) {
+      const fpsRatio = videoStream.avg_frame_rate.split('/');
+      if (fpsRatio.length === 2 && parseInt(fpsRatio[1]) !== 0) {
+        fps = Math.round((parseInt(fpsRatio[0]) / parseInt(fpsRatio[1]) * 100)) / 100;
+      } else {
+        fps = parseInt(fpsRatio[0]) || null;
+      }
+    }
+    
+    // Generate thumbnail
+    const thumbnailFilename = `thumb-${path.parse(req.file.filename).name}.jpg`;
+    const thumbnailPath = `/uploads/thumbnails/${thumbnailFilename}`;
+    
+    await new Promise((resolve, reject) => {
+      ffmpeg(fullFilePath)
+        .screenshots({
+          timestamps: ['10%'],
+          filename: thumbnailFilename,
+          folder: path.join(__dirname, 'public', 'uploads', 'thumbnails'),
+          size: '854x480'
+        })
+        .on('end', resolve)
+        .on('error', reject);
+    });
+    
     const videoData = {
       title,
       filepath: filePath,
-      thumbnail_path: null,
+      thumbnail_path: thumbnailPath,
       file_size: fileSize,
-      duration: 0,
-      format: path.extname(req.file.filename).replace('.', ''),
-      resolution: null,
-      bitrate: null,
-      fps: null,
+      duration,
+      format,
+      resolution,
+      bitrate,
+      fps,
       user_id: req.session.userId
     };
     
     const video = await Video.create(videoData);
     
-    // Send response immediately - don't wait for metadata/thumbnail
     res.json({
       success: true,
       message: 'Video uploaded successfully',
       video
-    });
-    
-    // Process metadata and thumbnail in background (non-blocking)
-    setImmediate(async () => {
-      try {
-        const metadata = await new Promise((resolve, reject) => {
-          ffmpeg.ffprobe(fullFilePath, (err, metadata) => {
-            if (err) return reject(err);
-            resolve(metadata);
-          });
-        });
-        
-        const videoStream = metadata.streams.find(stream => stream.codec_type === 'video');
-        const duration = metadata.format.duration || 0;
-        const format = metadata.format.format_name || videoData.format;
-        const resolution = videoStream ? `${videoStream.width}x${videoStream.height}` : null;
-        const bitrate = metadata.format.bit_rate ? Math.round(parseInt(metadata.format.bit_rate) / 1000) : null;
-        
-        let fps = null;
-        if (videoStream && videoStream.avg_frame_rate) {
-          const fpsRatio = videoStream.avg_frame_rate.split('/');
-          if (fpsRatio.length === 2 && parseInt(fpsRatio[1]) !== 0) {
-            fps = Math.round((parseInt(fpsRatio[0]) / parseInt(fpsRatio[1]) * 100)) / 100;
-          } else {
-            fps = parseInt(fpsRatio[0]) || null;
-          }
-        }
-        
-        // Generate thumbnail
-        const thumbnailFilename = `thumb-${path.parse(req.file.filename).name}.jpg`;
-        const thumbnailPath = `/uploads/thumbnails/${thumbnailFilename}`;
-        
-        await new Promise((resolve, reject) => {
-          ffmpeg(fullFilePath)
-            .screenshots({
-              timestamps: ['10%'],
-              filename: thumbnailFilename,
-              folder: path.join(__dirname, 'public', 'uploads', 'thumbnails'),
-              size: '854x480'
-            })
-            .on('end', resolve)
-            .on('error', reject);
-        });
-        
-        // Update video with metadata
-        await Video.update(video.id, {
-          duration,
-          format,
-          resolution,
-          bitrate,
-          fps,
-          thumbnail_path: thumbnailPath
-        });
-        
-      } catch (bgError) {
-        console.error('Background processing error for video', video.id, ':', bgError.message);
-      }
     });
     
   } catch (error) {
@@ -3921,7 +3836,7 @@ app.get('/api/server-time', (req, res) => {
 });
 
 // Audio API Routes
-app.post('/api/audios/upload', isAuthenticated, checkStorageLimit, (req, res, next) => {
+app.post('/api/audios/upload', isAuthenticated, (req, res, next) => {
   uploadAudio.single('audio')(req, res, (err) => {
     if (err) {
       if (err.code === 'LIMIT_FILE_SIZE') {
@@ -3952,42 +3867,31 @@ app.post('/api/audios/upload', isAuthenticated, checkStorageLimit, (req, res, ne
     const fileSize = req.file.size;
     const format = path.extname(req.file.originalname).replace('.', '').toUpperCase();
     
-    // Create audio record immediately with basic info
+    // Get audio duration
+    const metadata = await new Promise((resolve, reject) => {
+      ffmpeg.ffprobe(fullFilePath, (err, metadata) => {
+        if (err) return reject(err);
+        resolve(metadata);
+      });
+    });
+    
+    const duration = metadata.format.duration || 0;
+    
     const audioData = {
       title,
       filepath: filePath,
       file_size: fileSize,
-      duration: 0,
+      duration,
       format,
       user_id: req.session.userId
     };
     
     const audio = await Audio.create(audioData);
     
-    // Send response immediately
     res.json({
       success: true,
       message: 'Audio uploaded successfully',
       audio
-    });
-    
-    // Process metadata in background (non-blocking)
-    setImmediate(async () => {
-      try {
-        const metadata = await new Promise((resolve, reject) => {
-          ffmpeg.ffprobe(fullFilePath, (err, metadata) => {
-            if (err) return reject(err);
-            resolve(metadata);
-          });
-        });
-        
-        const duration = metadata.format.duration || 0;
-        
-        // Update audio with duration
-        await Audio.update(audio.id, { duration });
-      } catch (bgError) {
-        console.error('Background processing error for audio', audio.id, ':', bgError.message);
-      }
     });
     
   } catch (error) {
