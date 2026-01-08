@@ -643,20 +643,32 @@
         <input type="hidden" id="editBroadcastId" name="broadcastId">
         <input type="hidden" id="editAccountId" name="accountId">
         
-        <!-- Thumbnail Section -->
+        <!-- Thumbnail Section - 2 Columns -->
         <div>
           <label class="text-sm font-medium text-white block mb-2">Thumbnail</label>
-          <div class="flex items-start gap-4">
-            <div id="editThumbnailPreview" class="w-32 h-18 bg-dark-700 rounded-lg overflow-hidden flex items-center justify-center border border-gray-600">
-              <i class="ti ti-photo text-gray-500 text-2xl"></i>
-            </div>
-            <div class="flex-1">
+          <div class="grid grid-cols-2 gap-3">
+            <!-- Left Column: Preview + Upload Button -->
+            <div class="space-y-2">
+              <div id="editThumbnailPreview" class="w-full aspect-video bg-dark-700 rounded-lg overflow-hidden flex items-center justify-center border border-gray-600">
+                <i class="ti ti-photo text-gray-500 text-2xl"></i>
+              </div>
               <button type="button" onclick="document.getElementById('editThumbnailFile').click()"
                 class="w-full bg-dark-700 hover:bg-dark-600 text-white px-3 py-2 rounded-lg transition-colors text-sm flex items-center justify-center gap-2 border border-gray-600">
                 <i class="ti ti-upload"></i>
-                <span>Upload Thumbnail</span>
+                <span>Upload</span>
               </button>
-              <p class="text-xs text-gray-500 mt-1">JPG/PNG, max 2MB, 1280x720 recommended</p>
+              <p class="text-xs text-gray-500 text-center">JPG/PNG, max 2MB</p>
+            </div>
+            
+            <!-- Right Column: Thumbnail History (max 10) -->
+            <div>
+              <p class="text-xs text-gray-400 mb-1">History <span id="editThumbnailCount">(0/10)</span></p>
+              <div id="editThumbnailHistory" class="grid grid-cols-2 gap-1 max-h-40 overflow-y-auto">
+                <!-- Thumbnails will be loaded here -->
+              </div>
+              <div id="editThumbnailHistoryEmpty" class="hidden text-center py-4 text-gray-500 text-xs">
+                No history
+              </div>
             </div>
           </div>
         </div>

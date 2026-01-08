@@ -2771,7 +2771,7 @@ function previewEditThumbnail(input) {
 }
 
 /**
- * Upload thumbnail for broadcast to YouTube
+ * Upload thumbnail for broadcast to YouTube AND save to local gallery
  * @param {string} broadcastId - The broadcast/video ID
  * @param {string} accountId - The YouTube account ID
  * @returns {Promise<boolean>} - True if successful, false otherwise
@@ -2811,12 +2811,132 @@ async function uploadEditThumbnail(broadcastId, accountId) {
       return false;
     }
     
+    // Save to local gallery for history (only if not already from history)
+    if (!window.editThumbnailFromHistory) {
+      console.log('[uploadEditThumbnail] Saving to local gallery...');
+      await saveToThumbnailHistory(window.editThumbnailFile);
+    } else {
+      console.log('[uploadEditThumbnail] Thumbnail from history, skipping gallery save');
+    }
+    
     console.log('[uploadEditThumbnail] Upload successful!');
     return true;
   } catch (error) {
     console.error('[uploadEditThumbnail] Error:', error);
     return false;
   }
+}
+
+/**
+ * Save thumbnail to local gallery for history
+ */
+async function saveToThumbnailHistory(file) {
+  try {
+    const formData = new FormData();
+    formData.append('thumbnail', file);
+    
+    const response = await fetch('/api/thumbnails', {
+      method: 'POST',
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      },
+      body: formData
+    });
+    
+    const data = await response.json();
+    if (data.success) {
+      console.log('[saveToThumbnailHistory] Saved to gallery');
+      // Refresh history
+      loadEditThumbnailHistory();
+    }
+  } catch (error) {
+    console.error('[saveToThumbnailHistory] Error:', error);
+  }
+}
+
+/**
+ * Load thumbnail history for edit modal (max 10)
+ */
+async function loadEditThumbnailHistory() {
+  const historyContainer = document.getElementById('editThumbnailHistory');
+  const emptyState = document.getElementById('editThumbnailHistoryEmpty');
+  const countEl = document.getElementById('editThumbnailCount');
+  
+  if (!historyContainer) return;
+  
+  historyContainer.innerHTML = '<div class="col-span-2 text-center py-2"><i class="ti ti-loader animate-spin text-gray-400"></i></div>';
+  
+  try {
+    const response = await fetch('/api/thumbnails?limit=10', {
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+    
+    const data = await response.json();
+    
+    // Update count
+    const count = Math.min(data.count || 0, 10);
+    if (countEl) {
+      countEl.textContent = `(${count}/10)`;
+    }
+    
+    historyContainer.innerHTML = '';
+    
+    if (data.success && data.thumbnails && data.thumbnails.length > 0) {
+      // Show only last 10
+      const thumbnails = data.thumbnails.slice(0, 10);
+      
+      thumbnails.forEach(thumb => {
+        const div = document.createElement('div');
+        div.className = 'thumbnail-history-item aspect-video bg-dark-700 rounded cursor-pointer overflow-hidden border-2 border-transparent hover:border-primary transition-colors';
+        div.innerHTML = `<img src="${thumb.url}" class="w-full h-full object-cover" alt="Thumbnail">`;
+        div.onclick = () => selectHistoryThumbnail(thumb.url, thumb.path);
+        historyContainer.appendChild(div);
+      });
+      
+      if (emptyState) emptyState.classList.add('hidden');
+    } else {
+      if (emptyState) emptyState.classList.remove('hidden');
+    }
+  } catch (error) {
+    console.error('[loadEditThumbnailHistory] Error:', error);
+    historyContainer.innerHTML = '';
+    if (emptyState) emptyState.classList.remove('hidden');
+  }
+}
+
+/**
+ * Select thumbnail from history
+ */
+function selectHistoryThumbnail(url, path) {
+  // Update preview
+  const preview = document.getElementById('editThumbnailPreview');
+  if (preview) {
+    preview.innerHTML = `<img src="${url}" class="w-full h-full object-cover">`;
+  }
+  
+  // Highlight selected
+  document.querySelectorAll('.thumbnail-history-item').forEach(item => {
+    item.classList.remove('border-primary');
+    item.classList.add('border-transparent');
+  });
+  event.currentTarget.classList.remove('border-transparent');
+  event.currentTarget.classList.add('border-primary');
+  
+  // Load the image as file for upload
+  fetch(url)
+    .then(res => res.blob())
+    .then(blob => {
+      const file = new File([blob], 'thumbnail.jpg', { type: blob.type });
+      window.editThumbnailFile = file;
+      window.editThumbnailFromHistory = true; // Mark as from history, no need to save again
+      showToast('Thumbnail selected from history', 'info');
+    })
+    .catch(err => {
+      console.error('Error loading thumbnail:', err);
+      showToast('Failed to load thumbnail', 'error');
+    });
 }
 
 // ============================================
@@ -3280,6 +3400,9 @@ window.openEditBroadcastModal = function(broadcast) {
   window.editThumbnailFile = null;
   const fileInput = document.getElementById('editThumbnailFile');
   if (fileInput) fileInput.value = '';
+  
+  // Load thumbnail history
+  loadEditThumbnailHistory();
   
   document.getElementById('editBroadcastModal').classList.remove('hidden');
   console.log('[openEditBroadcastModal] Modal opened');

@@ -4598,6 +4598,7 @@ app.put('/api/youtube/credentials/:id/primary', isAuthenticated, async (req, res
 app.get('/api/thumbnails', isAuthenticated, async (req, res) => {
   try {
     const userId = req.session.userId;
+    const limit = req.query.limit ? parseInt(req.query.limit) : null;
     const thumbnailsDir = path.join(__dirname, 'public', 'uploads', 'thumbnails', String(userId));
     
     // Check if directory exists
@@ -4606,21 +4607,27 @@ app.get('/api/thumbnails', isAuthenticated, async (req, res) => {
     }
     
     const files = fs.readdirSync(thumbnailsDir);
-    const thumbnails = files
+    let thumbnails = files
       .filter(file => /\.(jpg|jpeg|png)$/i.test(file))
-      .map(file => ({
-        filename: file,
-        path: `/uploads/thumbnails/${userId}/${file}`,
-        url: `/uploads/thumbnails/${userId}/${file}`
-      }))
-      .sort((a, b) => {
-        // Sort by modification time (newest first)
-        const statA = fs.statSync(path.join(thumbnailsDir, a.filename));
-        const statB = fs.statSync(path.join(thumbnailsDir, b.filename));
-        return statB.mtime - statA.mtime;
-      });
+      .map(file => {
+        const stat = fs.statSync(path.join(thumbnailsDir, file));
+        return {
+          filename: file,
+          path: `/uploads/thumbnails/${userId}/${file}`,
+          url: `/uploads/thumbnails/${userId}/${file}`,
+          mtime: stat.mtime
+        };
+      })
+      .sort((a, b) => b.mtime - a.mtime); // Sort by modification time (newest first)
     
-    res.json({ success: true, thumbnails, count: thumbnails.length, maxAllowed: 20 });
+    const totalCount = thumbnails.length;
+    
+    // Apply limit if specified
+    if (limit && limit > 0) {
+      thumbnails = thumbnails.slice(0, limit);
+    }
+    
+    res.json({ success: true, thumbnails, count: totalCount, maxAllowed: 20 });
   } catch (error) {
     console.error('Error listing thumbnails:', error);
     res.status(500).json({ success: false, error: 'Failed to list thumbnails' });
