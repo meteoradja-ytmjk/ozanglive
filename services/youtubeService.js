@@ -481,26 +481,39 @@ class YouTubeService {
    * @returns {Promise<{thumbnailUrl: string}>}
    */
   async uploadThumbnail(accessToken, broadcastId, imageBuffer, mimeType = 'image/jpeg') {
-    const oauth2Client = new google.auth.OAuth2();
-    oauth2Client.setCredentials({ access_token: accessToken });
-    
-    const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
-    
-    console.log(`[YouTubeService.uploadThumbnail] Uploading thumbnail for broadcast ${broadcastId}, size: ${imageBuffer.length} bytes, type: ${mimeType}`);
-    
-    const response = await youtube.thumbnails.set({
-      videoId: broadcastId,
-      media: {
-        mimeType: mimeType,
-        body: require('stream').Readable.from(imageBuffer)
+    try {
+      const oauth2Client = new google.auth.OAuth2();
+      oauth2Client.setCredentials({ access_token: accessToken });
+      
+      const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+      
+      console.log(`[YouTubeService.uploadThumbnail] Uploading thumbnail for broadcast ${broadcastId}, size: ${imageBuffer.length} bytes, type: ${mimeType}`);
+      
+      // Validate buffer
+      if (!imageBuffer || imageBuffer.length === 0) {
+        throw new Error('Image buffer is empty');
       }
-    });
-    
-    console.log('[YouTubeService.uploadThumbnail] Response:', JSON.stringify(response.data, null, 2));
-    
-    return {
-      thumbnailUrl: response.data.items?.[0]?.default?.url || ''
-    };
+      
+      const response = await youtube.thumbnails.set({
+        videoId: broadcastId,
+        media: {
+          mimeType: mimeType,
+          body: require('stream').Readable.from(imageBuffer)
+        }
+      });
+      
+      console.log('[YouTubeService.uploadThumbnail] Response:', JSON.stringify(response.data, null, 2));
+      
+      return {
+        thumbnailUrl: response.data.items?.[0]?.default?.url || response.data.items?.[0]?.medium?.url || ''
+      };
+    } catch (error) {
+      console.error('[YouTubeService.uploadThumbnail] Error:', error.message);
+      if (error.response) {
+        console.error('[YouTubeService.uploadThumbnail] Response error:', JSON.stringify(error.response.data, null, 2));
+      }
+      throw error;
+    }
   }
 
   /**

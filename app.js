@@ -5103,7 +5103,7 @@ app.delete('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
 });
 
 // Upload/change thumbnail for broadcast - supports accountId parameter
-app.post('/api/youtube/broadcasts/:id/thumbnail', isAuthenticated, upload.single('thumbnail'), async (req, res) => {
+app.post('/api/youtube/broadcasts/:id/thumbnail', isAuthenticated, thumbnailUpload.single('thumbnail'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({
