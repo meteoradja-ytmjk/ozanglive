@@ -851,11 +851,11 @@ if (editBroadcastForm) {
       const broadcastId = document.getElementById('editBroadcastId').value;
       const accountId = document.getElementById('editAccountId').value;
       
-      console.log('[EditBroadcast] Starting update for broadcast:', broadcastId, 'account:', accountId);
+      console.log('[EditBroadcast-Original] Starting update for broadcast:', broadcastId, 'account:', accountId);
       
       // Upload thumbnail first if selected
-      if (typeof editThumbnailFile !== 'undefined' && editThumbnailFile) {
-        console.log('[EditBroadcast] Uploading thumbnail:', editThumbnailFile.name);
+      if (window.editThumbnailFile) {
+        console.log('[EditBroadcast-Original] Uploading thumbnail:', window.editThumbnailFile.name);
         const thumbnailSuccess = await uploadEditThumbnail(broadcastId, accountId);
         if (!thumbnailSuccess) {
           showToast('Thumbnail upload failed', 'error');
@@ -868,7 +868,7 @@ if (editBroadcastForm) {
       const categorySelect = document.getElementById('editCategoryId');
       const categoryId = categorySelect ? categorySelect.value : '22';
       
-      console.log('[EditBroadcast] Category:', categoryId);
+      console.log('[EditBroadcast-Original] Category:', categoryId);
       
       const updateData = {
         title: document.getElementById('editBroadcastTitle').value,
@@ -878,7 +878,7 @@ if (editBroadcastForm) {
         categoryId: categoryId
       };
       
-      console.log('[EditBroadcast] Update data:', JSON.stringify(updateData));
+      console.log('[EditBroadcast-Original] Update data:', JSON.stringify(updateData));
       
       let url = `/api/youtube/broadcasts/${broadcastId}`;
       if (accountId) {
@@ -895,7 +895,7 @@ if (editBroadcastForm) {
       });
       
       const data = await response.json();
-      console.log('[EditBroadcast] Response:', data);
+      console.log('[EditBroadcast-Original] Response:', data);
       
       if (data.success) {
         showToast('Broadcast updated successfully!');
@@ -905,14 +905,12 @@ if (editBroadcastForm) {
         showToast(data.error || 'Failed to update broadcast', 'error');
       }
     } catch (error) {
-      console.error('[EditBroadcast] Error:', error);
+      console.error('[EditBroadcast-Original] Error:', error);
       showToast('An error occurred: ' + error.message, 'error');
     } finally {
       updateBtn.innerHTML = originalText;
       updateBtn.disabled = false;
-      if (typeof editThumbnailFile !== 'undefined') {
-        editThumbnailFile = null;
-      }
+      window.editThumbnailFile = null;
     }
   });
 }
@@ -2719,14 +2717,25 @@ function escapeHtml(text) {
 // Thumbnail Upload for Edit Broadcast
 // ============================================
 
-let editThumbnailFile = null;
+// Global variable to store selected thumbnail file for edit modal
+// This MUST be declared at global scope so it persists across function calls
+window.editThumbnailFile = null;
 
 /**
  * Preview thumbnail before upload in edit modal
+ * Called when user selects a file via the file input
  */
 function previewEditThumbnail(input) {
+  console.log('[previewEditThumbnail] Called, input:', input);
+  console.log('[previewEditThumbnail] Files:', input.files);
+  
   const file = input.files[0];
-  if (!file) return;
+  if (!file) {
+    console.log('[previewEditThumbnail] No file selected');
+    return;
+  }
+  
+  console.log('[previewEditThumbnail] File selected:', file.name, file.type, file.size);
   
   // Validate file type
   const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg'];
@@ -2743,26 +2752,46 @@ function previewEditThumbnail(input) {
     return;
   }
   
-  editThumbnailFile = file;
+  // Store file in global variable
+  window.editThumbnailFile = file;
+  console.log('[previewEditThumbnail] File stored in window.editThumbnailFile:', window.editThumbnailFile.name);
   
+  // Show preview
   const reader = new FileReader();
   reader.onload = function(e) {
     const preview = document.getElementById('editThumbnailPreview');
-    preview.innerHTML = `<img src="${e.target.result}" class="w-full h-full object-cover">`;
+    if (preview) {
+      preview.innerHTML = `<img src="${e.target.result}" class="w-full h-full object-cover">`;
+      console.log('[previewEditThumbnail] Preview updated');
+    }
   };
   reader.readAsDataURL(file);
+  
+  showToast('Thumbnail selected. Click "Update Broadcast" to save.', 'info');
 }
 
 /**
- * Upload thumbnail for broadcast
+ * Upload thumbnail for broadcast to YouTube
+ * @param {string} broadcastId - The broadcast/video ID
+ * @param {string} accountId - The YouTube account ID
+ * @returns {Promise<boolean>} - True if successful, false otherwise
  */
 async function uploadEditThumbnail(broadcastId, accountId) {
-  if (!editThumbnailFile) return true; // No file to upload
+  console.log('[uploadEditThumbnail] Called with broadcastId:', broadcastId, 'accountId:', accountId);
+  console.log('[uploadEditThumbnail] window.editThumbnailFile:', window.editThumbnailFile);
+  
+  if (!window.editThumbnailFile) {
+    console.log('[uploadEditThumbnail] No file to upload, returning true');
+    return true; // No file to upload
+  }
   
   try {
+    console.log('[uploadEditThumbnail] Creating FormData...');
     const formData = new FormData();
-    formData.append('thumbnail', editThumbnailFile);
+    formData.append('thumbnail', window.editThumbnailFile);
     formData.append('accountId', accountId);
+    
+    console.log('[uploadEditThumbnail] Sending request to /api/youtube/broadcasts/' + broadcastId + '/thumbnail');
     
     const response = await fetch(`/api/youtube/broadcasts/${broadcastId}/thumbnail`, {
       method: 'POST',
@@ -2772,16 +2801,20 @@ async function uploadEditThumbnail(broadcastId, accountId) {
       body: formData
     });
     
+    console.log('[uploadEditThumbnail] Response status:', response.status);
+    
     const data = await response.json();
+    console.log('[uploadEditThumbnail] Response data:', data);
     
     if (!data.success) {
-      console.error('Thumbnail upload failed:', data.error);
+      console.error('[uploadEditThumbnail] Upload failed:', data.error);
       return false;
     }
     
+    console.log('[uploadEditThumbnail] Upload successful!');
     return true;
   } catch (error) {
-    console.error('Error uploading thumbnail:', error);
+    console.error('[uploadEditThumbnail] Error:', error);
     return false;
   }
 }
@@ -3118,17 +3151,19 @@ if (originalEditBroadcastForm) {
       const accountId = document.getElementById('editAccountId').value;
       
       console.log('[EditBroadcast] Starting update for broadcast:', broadcastId, 'account:', accountId);
-      console.log('[EditBroadcast] Thumbnail file:', editThumbnailFile ? editThumbnailFile.name : 'none');
+      console.log('[EditBroadcast] Thumbnail file:', window.editThumbnailFile ? window.editThumbnailFile.name : 'none');
       
       // Upload thumbnail first if selected
-      if (editThumbnailFile) {
+      if (window.editThumbnailFile) {
         console.log('[EditBroadcast] Uploading thumbnail...');
         const thumbnailSuccess = await uploadEditThumbnail(broadcastId, accountId);
         if (!thumbnailSuccess) {
           showToast('Thumbnail upload failed', 'error');
         } else {
-          showToast('Thumbnail uploaded!', 'success');
+          showToast('Thumbnail uploaded successfully!', 'success');
         }
+      } else {
+        console.log('[EditBroadcast] No thumbnail to upload');
       }
       
       // Get category value
@@ -3177,7 +3212,7 @@ if (originalEditBroadcastForm) {
     } finally {
       updateBtn.innerHTML = originalText;
       updateBtn.disabled = false;
-      editThumbnailFile = null;
+      window.editThumbnailFile = null;
     }
   });
 }
@@ -3193,7 +3228,7 @@ window.closeEditBroadcastModal = function() {
   if (preview) {
     preview.innerHTML = '<i class="ti ti-photo text-gray-500 text-2xl"></i>';
   }
-  editThumbnailFile = null;
+  window.editThumbnailFile = null;
   
   // Reset file input
   const fileInput = document.getElementById('editThumbnailFile');
@@ -3202,11 +3237,15 @@ window.closeEditBroadcastModal = function() {
   // Reset category to default
   const categorySelect = document.getElementById('editCategoryId');
   if (categorySelect) categorySelect.value = '22';
+  
+  console.log('[closeEditBroadcastModal] Modal closed, thumbnail reset');
 };
 
 // Override openEditBroadcastModal to show existing thumbnail
 const originalOpenEditBroadcastModal = window.openEditBroadcastModal;
 window.openEditBroadcastModal = function(broadcast) {
+  console.log('[openEditBroadcastModal] Opening modal for broadcast:', broadcast.id);
+  
   document.getElementById('editBroadcastId').value = broadcast.id;
   document.getElementById('editAccountId').value = broadcast.accountId;
   document.getElementById('editBroadcastTitle').value = broadcast.title || '';
@@ -3217,6 +3256,7 @@ window.openEditBroadcastModal = function(broadcast) {
   const categorySelect = document.getElementById('editCategoryId');
   if (categorySelect) {
     categorySelect.value = broadcast.categoryId || '22';
+    console.log('[openEditBroadcastModal] Category set to:', categorySelect.value);
   }
   
   // Format datetime for input
@@ -3236,8 +3276,13 @@ window.openEditBroadcastModal = function(broadcast) {
     }
   }
   
-  editThumbnailFile = null;
+  // Reset file input and thumbnail file variable
+  window.editThumbnailFile = null;
+  const fileInput = document.getElementById('editThumbnailFile');
+  if (fileInput) fileInput.value = '';
+  
   document.getElementById('editBroadcastModal').classList.remove('hidden');
+  console.log('[openEditBroadcastModal] Modal opened');
 };
 
 

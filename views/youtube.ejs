@@ -636,6 +636,9 @@
         </button>
       </div>
       
+      <!-- Thumbnail file input OUTSIDE form to prevent clone issues -->
+      <input type="file" id="editThumbnailFile" accept="image/jpeg,image/png,image/jpg" class="hidden" onchange="previewEditThumbnail(this)">
+      
       <form id="editBroadcastForm" class="p-6 space-y-4 overflow-y-auto flex-grow">
         <input type="hidden" id="editBroadcastId" name="broadcastId">
         <input type="hidden" id="editAccountId" name="accountId">
@@ -648,7 +651,6 @@
               <i class="ti ti-photo text-gray-500 text-2xl"></i>
             </div>
             <div class="flex-1">
-              <input type="file" id="editThumbnailFile" accept="image/jpeg,image/png,image/jpg" class="hidden" onchange="previewEditThumbnail(this)">
               <button type="button" onclick="document.getElementById('editThumbnailFile').click()"
                 class="w-full bg-dark-700 hover:bg-dark-600 text-white px-3 py-2 rounded-lg transition-colors text-sm flex items-center justify-center gap-2 border border-gray-600">
                 <i class="ti ti-upload"></i>
