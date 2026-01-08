@@ -430,168 +430,113 @@
 
     <!-- Update Tab -->
     <div id="update-tab" class="settings-content hidden">
-      <div class="p-6">
-        <h3 class="text-lg font-semibold mb-6">System Update</h3>
+      <div class="p-4 sm:p-6">
         
-        <div class="space-y-6">
-          <!-- Current Version Info -->
-          <div class="bg-dark-700 rounded-lg p-4">
-            <h4 class="text-md font-medium mb-4 flex items-center">
-              <i class="ti ti-info-circle mr-2 text-blue-400"></i>
-              Version Information
-            </h4>
-            
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div class="bg-dark-900 rounded-lg p-4">
-                <p class="text-xs text-gray-500 mb-1">Current Version</p>
-                <p class="text-lg font-semibold text-white" id="current-version">Loading...</p>
+        <!-- Version Cards -->
+        <div class="grid grid-cols-2 gap-3 mb-4">
+          <div class="bg-dark-700 rounded-xl p-4 text-center">
+            <p class="text-[10px] uppercase tracking-wider text-gray-500 mb-1">Current</p>
+            <p class="text-xl font-bold text-white" id="current-version">--</p>
+          </div>
+          <div class="bg-dark-700 rounded-xl p-4 text-center">
+            <p class="text-[10px] uppercase tracking-wider text-gray-500 mb-1">Latest</p>
+            <p class="text-xl font-bold text-gray-400" id="latest-version">--</p>
+          </div>
+        </div>
+        
+        <!-- Check Update Button -->
+        <button type="button" id="check-update-btn"
+          class="w-full py-3 bg-dark-700 hover:bg-dark-600 text-white rounded-xl transition-all flex items-center justify-center gap-2 mb-4">
+          <i class="ti ti-refresh text-lg"></i>
+          <span>Check for Updates</span>
+        </button>
+        
+        <!-- Update Status -->
+        <div id="update-status-container" class="hidden">
+          
+          <!-- Update Available -->
+          <div id="update-available" class="hidden">
+            <div class="bg-gradient-to-br from-green-500/10 to-emerald-500/5 border border-green-500/20 rounded-xl p-4 mb-4">
+              <div class="flex items-center gap-3 mb-3">
+                <div class="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
+                  <i class="ti ti-sparkles text-green-400"></i>
+                </div>
+                <div>
+                  <p class="font-medium text-green-400">Update Available</p>
+                  <p class="text-xs text-gray-400">New version ready to install</p>
+                </div>
               </div>
-              <div class="bg-dark-900 rounded-lg p-4">
-                <p class="text-xs text-gray-500 mb-1">Latest Version</p>
-                <p class="text-lg font-semibold" id="latest-version">Loading...</p>
+              
+              <!-- Changelog -->
+              <div id="changelog-container" class="hidden mb-4">
+                <div id="changelog-content" class="bg-dark-900/50 rounded-lg p-3 text-xs text-gray-300 max-h-32 overflow-y-auto space-y-1"></div>
               </div>
-            </div>
-            
-            <div class="mt-4">
-              <button type="button" id="check-update-btn"
-                class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors flex items-center">
-                <i class="ti ti-refresh mr-2"></i>
-                Check for Updates
+              
+              <button type="button" id="perform-update-btn"
+                class="w-full py-2.5 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-all flex items-center justify-center gap-2 font-medium">
+                <i class="ti ti-download"></i>
+                <span>Update Now</span>
               </button>
             </div>
           </div>
           
-          <!-- Update Status -->
-          <div id="update-status-container" class="hidden">
-            <div class="bg-dark-700 rounded-lg p-4">
-              <div id="update-available" class="hidden">
-                <div class="flex items-start gap-4">
-                  <div class="flex-shrink-0">
-                    <div class="w-12 h-12 rounded-full bg-green-500/20 flex items-center justify-center">
-                      <i class="ti ti-download text-green-400 text-xl"></i>
-                    </div>
-                  </div>
-                  <div class="flex-1">
-                    <h4 class="text-md font-medium text-green-400 mb-2">Update Available!</h4>
-                    <p class="text-sm text-gray-400 mb-4">
-                      A new version is available. Click the button below to update your system.
-                    </p>
-                    
-                    <!-- Changelog -->
-                    <div id="changelog-container" class="mb-4 hidden">
-                      <p class="text-xs text-gray-500 mb-2">What's new:</p>
-                      <div id="changelog-content" class="bg-dark-900 rounded-lg p-3 text-sm text-gray-300 max-h-48 overflow-y-auto"></div>
-                    </div>
-                    
-                    <div class="flex gap-3">
-                      <button type="button" id="perform-update-btn"
-                        class="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-colors flex items-center">
-                        <i class="ti ti-download mr-2"></i>
-                        Update Now
-                      </button>
-                    </div>
-                  </div>
-                </div>
+          <!-- Up to Date -->
+          <div id="update-uptodate" class="hidden">
+            <div class="bg-gradient-to-br from-green-500/10 to-emerald-500/5 border border-green-500/20 rounded-xl p-4 text-center">
+              <div class="w-12 h-12 rounded-full bg-green-500/20 flex items-center justify-center mx-auto mb-3">
+                <i class="ti ti-check text-green-400 text-xl"></i>
               </div>
-              
-              <div id="update-uptodate" class="hidden">
-                <div class="flex items-center gap-4">
-                  <div class="flex-shrink-0">
-                    <div class="w-12 h-12 rounded-full bg-green-500/20 flex items-center justify-center">
-                      <i class="ti ti-check text-green-400 text-xl"></i>
-                    </div>
-                  </div>
-                  <div>
-                    <h4 class="text-md font-medium text-green-400">You're up to date!</h4>
-                    <p class="text-sm text-gray-400">Your system is running the latest version.</p>
-                  </div>
-                </div>
-              </div>
-              
-              <div id="update-error" class="hidden">
-                <div class="flex items-center gap-4">
-                  <div class="flex-shrink-0">
-                    <div class="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center">
-                      <i class="ti ti-alert-triangle text-red-400 text-xl"></i>
-                    </div>
-                  </div>
-                  <div>
-                    <h4 class="text-md font-medium text-red-400">Update Check Failed</h4>
-                    <p class="text-sm text-gray-400" id="update-error-message">Unable to check for updates.</p>
-                  </div>
-                </div>
-              </div>
+              <p class="font-medium text-green-400">You're up to date!</p>
+              <p class="text-xs text-gray-400 mt-1">Running the latest version</p>
             </div>
           </div>
           
-          <!-- Update Progress -->
-          <div id="update-progress-container" class="hidden">
-            <div class="bg-dark-700 rounded-lg p-4">
-              <h4 class="text-md font-medium mb-4 flex items-center">
-                <i class="ti ti-loader animate-spin mr-2 text-primary"></i>
-                Updating System...
-              </h4>
-              
-              <div class="space-y-3">
-                <div class="w-full bg-dark-900 rounded-full h-2">
-                  <div id="update-progress-bar" class="bg-primary h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
-                </div>
-                <p class="text-sm text-gray-400" id="update-progress-text">Preparing update...</p>
+          <!-- Error -->
+          <div id="update-error" class="hidden">
+            <div class="bg-gradient-to-br from-red-500/10 to-rose-500/5 border border-red-500/20 rounded-xl p-4 text-center">
+              <div class="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center mx-auto mb-3">
+                <i class="ti ti-alert-triangle text-red-400 text-xl"></i>
               </div>
-              
-              <!-- Update Log -->
-              <div class="mt-4">
-                <p class="text-xs text-gray-500 mb-2">Update Log:</p>
-                <div id="update-log" class="bg-dark-900 rounded-lg p-3 text-xs text-gray-400 font-mono max-h-48 overflow-y-auto"></div>
-              </div>
+              <p class="font-medium text-red-400">Check Failed</p>
+              <p class="text-xs text-gray-400 mt-1" id="update-error-message">Unable to check for updates</p>
             </div>
-          </div>
-          
-          <!-- Update Complete -->
-          <div id="update-complete-container" class="hidden">
-            <div class="bg-dark-700 rounded-lg p-4">
-              <div class="flex items-start gap-4">
-                <div class="flex-shrink-0">
-                  <div class="w-12 h-12 rounded-full bg-green-500/20 flex items-center justify-center">
-                    <i class="ti ti-check text-green-400 text-xl"></i>
-                  </div>
-                </div>
-                <div class="flex-1">
-                  <h4 class="text-md font-medium text-green-400 mb-2">Update Complete!</h4>
-                  <p class="text-sm text-gray-400 mb-4">
-                    The system has been updated successfully. The application will restart automatically.
-                  </p>
-                  <p class="text-sm text-yellow-400 mb-4">
-                    <i class="ti ti-alert-circle mr-1"></i>
-                    Please wait while the application restarts...
-                  </p>
-                  <button type="button" id="reload-page-btn"
-                    class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-lg transition-colors flex items-center">
-                    <i class="ti ti-refresh mr-2"></i>
-                    Reload Page
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <!-- Manual Update Instructions -->
-          <div class="bg-dark-700 rounded-lg p-4">
-            <h4 class="text-md font-medium mb-4 flex items-center">
-              <i class="ti ti-terminal mr-2 text-yellow-400"></i>
-              Manual Update (Terminal)
-            </h4>
-            <p class="text-sm text-gray-400 mb-4">
-              If automatic update fails, you can update manually using terminal:
-            </p>
-            <div class="bg-dark-900 rounded-lg p-3 font-mono text-sm text-gray-300">
-              <code>cd ~/ozanglive && git pull && npm install && pm2 restart ozanglive</code>
-            </div>
-            <p class="text-xs text-gray-500 mt-2">
-              Note: Make sure you have git installed and the repository is properly configured.
-            </p>
           </div>
         </div>
+        
+        <!-- Update Progress -->
+        <div id="update-progress-container" class="hidden">
+          <div class="bg-dark-700 rounded-xl p-4">
+            <div class="flex items-center gap-3 mb-4">
+              <div class="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
+                <i class="ti ti-loader animate-spin text-primary"></i>
+              </div>
+              <div>
+                <p class="font-medium text-white text-sm">Updating...</p>
+                <p class="text-xs text-gray-400" id="update-progress-text">Preparing</p>
+              </div>
+            </div>
+            <div class="w-full bg-dark-900 rounded-full h-1.5 mb-3">
+              <div id="update-progress-bar" class="bg-primary h-1.5 rounded-full transition-all duration-500" style="width: 0%"></div>
+            </div>
+            <div id="update-log" class="bg-dark-900 rounded-lg p-2 text-[10px] text-gray-500 font-mono max-h-24 overflow-y-auto"></div>
+          </div>
+        </div>
+        
+        <!-- Update Complete -->
+        <div id="update-complete-container" class="hidden">
+          <div class="bg-gradient-to-br from-green-500/10 to-emerald-500/5 border border-green-500/20 rounded-xl p-4 text-center">
+            <div class="w-12 h-12 rounded-full bg-green-500/20 flex items-center justify-center mx-auto mb-3">
+              <i class="ti ti-check text-green-400 text-xl"></i>
+            </div>
+            <p class="font-medium text-green-400">Update Complete!</p>
+            <p class="text-xs text-gray-400 mt-1 mb-4">Restarting application...</p>
+            <button type="button" id="reload-page-btn"
+              class="px-4 py-2 bg-dark-700 hover:bg-dark-600 text-white rounded-lg transition-all text-sm">
+              <i class="ti ti-refresh mr-1"></i>Reload
+            </button>
+          </div>
+        </div>
+        
       </div>
     </div>
     <% } %>
@@ -1046,7 +991,6 @@
 
       // Update System functionality (Admin only)
       <% if (req.session.user_role === 'admin') { %>
-      // Initialize update elements
       const checkUpdateBtn = document.getElementById('check-update-btn');
       const performUpdateBtn = document.getElementById('perform-update-btn');
       const reloadPageBtn = document.getElementById('reload-page-btn');
@@ -1065,40 +1009,25 @@
       const changelogContainer = document.getElementById('changelog-container');
       const changelogContent = document.getElementById('changelog-content');
 
-      // Load current version on page load
-      if (currentVersionEl) {
-        loadVersionInfo();
-      }
+      if (currentVersionEl) loadVersionInfo();
 
       async function loadVersionInfo() {
         try {
-          currentVersionEl.textContent = 'Loading...';
-          latestVersionEl.textContent = 'Click "Check for Updates"';
-          latestVersionEl.className = 'text-lg font-semibold text-gray-400';
-          
           const res = await fetch('/api/system/version');
-          if (!res.ok) {
-            throw new Error(`HTTP ${res.status}`);
-          }
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
           const data = await res.json();
-          if (data.success) {
-            currentVersionEl.textContent = data.currentVersion || 'Unknown';
-          } else {
-            currentVersionEl.textContent = 'Error: ' + (data.error || 'Unknown error');
-          }
+          currentVersionEl.textContent = data.success ? (data.currentVersion || '--') : '--';
+          latestVersionEl.textContent = '--';
         } catch (err) {
-          console.error('Error loading version:', err);
-          currentVersionEl.textContent = 'Failed to load';
+          currentVersionEl.textContent = '--';
         }
       }
 
-      // Check for updates
       if (checkUpdateBtn) {
         checkUpdateBtn.addEventListener('click', async () => {
           checkUpdateBtn.disabled = true;
-          checkUpdateBtn.innerHTML = '<i class="ti ti-loader animate-spin mr-2"></i>Checking...';
+          checkUpdateBtn.innerHTML = '<i class="ti ti-loader animate-spin text-lg"></i><span>Checking...</span>';
           
-          // Reset UI
           updateStatusContainer.classList.add('hidden');
           updateAvailable.classList.add('hidden');
           updateUptodate.classList.add('hidden');
@@ -1107,72 +1036,58 @@
 
           try {
             const res = await fetch('/api/system/check-update', {
-              headers: {
-                'X-CSRF-Token': '<%= csrfToken %>'
-              }
+              headers: { 'X-CSRF-Token': '<%= csrfToken %>' }
             });
-            
-            if (!res.ok) {
-              throw new Error(`HTTP ${res.status}`);
-            }
-            
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
 
             updateStatusContainer.classList.remove('hidden');
 
             if (data.success) {
-              currentVersionEl.textContent = data.currentVersion || 'Unknown';
-              latestVersionEl.textContent = data.latestVersion || 'Unknown';
+              currentVersionEl.textContent = data.currentVersion || '--';
+              latestVersionEl.textContent = data.latestVersion || '--';
+              latestVersionEl.className = data.updateAvailable ? 'text-xl font-bold text-green-400' : 'text-xl font-bold text-green-400';
 
               if (data.updateAvailable) {
-                latestVersionEl.className = 'text-lg font-semibold text-green-400';
                 updateAvailable.classList.remove('hidden');
-                
-                // Show changelog if available
                 if (data.changelog && data.changelog.length > 0) {
                   changelogContainer.classList.remove('hidden');
-                  changelogContent.innerHTML = data.changelog.map(c => `<div class="mb-2">• ${escapeHtml(c)}</div>`).join('');
+                  changelogContent.innerHTML = data.changelog.map(c => `<div class="text-gray-400">• ${escapeHtml(c)}</div>`).join('');
                 }
               } else {
-                latestVersionEl.className = 'text-lg font-semibold text-green-400';
                 updateUptodate.classList.remove('hidden');
               }
             } else {
               updateError.classList.remove('hidden');
-              updateErrorMessage.textContent = data.error || 'Unable to check for updates.';
+              updateErrorMessage.textContent = data.error || 'Unable to check';
             }
           } catch (err) {
-            console.error('Error checking update:', err);
             updateStatusContainer.classList.remove('hidden');
             updateError.classList.remove('hidden');
-            updateErrorMessage.textContent = 'Network error: ' + err.message;
+            updateErrorMessage.textContent = err.message;
           } finally {
             checkUpdateBtn.disabled = false;
-            checkUpdateBtn.innerHTML = '<i class="ti ti-refresh mr-2"></i>Check for Updates';
+            checkUpdateBtn.innerHTML = '<i class="ti ti-refresh text-lg"></i><span>Check for Updates</span>';
           }
         });
       }
 
-      // Perform update
       if (performUpdateBtn) {
         performUpdateBtn.addEventListener('click', async () => {
-          if (!confirm('Are you sure you want to update? The application will restart after the update.')) {
-            return;
-          }
+          if (!confirm('Update now? The app will restart.')) return;
 
           performUpdateBtn.disabled = true;
-          performUpdateBtn.innerHTML = '<i class="ti ti-loader animate-spin mr-2"></i>Updating...';
+          performUpdateBtn.innerHTML = '<i class="ti ti-loader animate-spin"></i><span>Updating...</span>';
           
-          // Show progress
           updateStatusContainer.classList.add('hidden');
           updateProgressContainer.classList.remove('hidden');
           updateLog.innerHTML = '';
           updateProgressBar.style.width = '10%';
-          updateProgressText.textContent = 'Starting update...';
+          updateProgressText.textContent = 'Starting...';
 
           try {
             updateProgressBar.style.width = '30%';
-            updateProgressText.textContent = 'Pulling latest changes...';
+            updateProgressText.textContent = 'Pulling changes...';
             
             const res = await fetch('/api/system/perform-update', {
               method: 'POST',
@@ -1181,62 +1096,42 @@
                 'X-CSRF-Token': '<%= csrfToken %>'
               }
             });
-
             const data = await res.json();
 
             if (data.success) {
               updateProgressBar.style.width = '100%';
-              updateProgressText.textContent = 'Update complete!';
-              
-              // Show log
-              if (data.log && data.log.length > 0) {
-                updateLog.innerHTML = data.log.map(l => `<div class="py-1">${escapeHtml(l)}</div>`).join('');
-              }
+              updateProgressText.textContent = 'Complete!';
+              if (data.log) updateLog.innerHTML = data.log.map(l => `<div>${escapeHtml(l)}</div>`).join('');
 
-              // Show complete message
               setTimeout(() => {
                 updateProgressContainer.classList.add('hidden');
                 updateCompleteContainer.classList.remove('hidden');
-              }, 1500);
+              }, 1000);
 
-              // Auto reload after 8 seconds
-              setTimeout(() => {
-                window.location.reload();
-              }, 8000);
+              setTimeout(() => window.location.reload(), 6000);
             } else {
-              updateProgressText.textContent = 'Update failed!';
-              updateProgressBar.classList.remove('bg-primary');
-              updateProgressBar.classList.add('bg-red-500');
+              updateProgressText.textContent = 'Failed';
+              updateProgressBar.className = 'bg-red-500 h-1.5 rounded-full transition-all duration-500';
               updateProgressBar.style.width = '100%';
-              
-              if (data.log && data.log.length > 0) {
-                updateLog.innerHTML = data.log.map(l => `<div class="py-1 text-red-400">${escapeHtml(l)}</div>`).join('');
-              }
-              
+              if (data.log) updateLog.innerHTML = data.log.map(l => `<div class="text-red-400">${escapeHtml(l)}</div>`).join('');
               showToast('error', data.error || 'Update failed');
             }
           } catch (err) {
-            console.error('Error performing update:', err);
-            updateProgressText.textContent = 'Update failed!';
-            updateProgressBar.classList.remove('bg-primary');
-            updateProgressBar.classList.add('bg-red-500');
-            updateLog.innerHTML = `<div class="text-red-400">Network error: ${escapeHtml(err.message)}</div>`;
-            showToast('error', 'Network error during update');
+            updateProgressText.textContent = 'Failed';
+            updateProgressBar.className = 'bg-red-500 h-1.5 rounded-full';
+            updateLog.innerHTML = `<div class="text-red-400">${escapeHtml(err.message)}</div>`;
+            showToast('error', 'Network error');
           } finally {
             performUpdateBtn.disabled = false;
-            performUpdateBtn.innerHTML = '<i class="ti ti-download mr-2"></i>Update Now';
+            performUpdateBtn.innerHTML = '<i class="ti ti-download"></i><span>Update Now</span>';
           }
         });
       }
 
-      // Reload page button
       if (reloadPageBtn) {
-        reloadPageBtn.addEventListener('click', () => {
-          window.location.reload();
-        });
+        reloadPageBtn.addEventListener('click', () => window.location.reload());
       }
       
-      // Helper function to escape HTML
       function escapeHtml(text) {
         const div = document.createElement('div');
         div.textContent = text;
