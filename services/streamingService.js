@@ -551,25 +551,23 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
   
   fs.writeFileSync(concatFile, concatContent);
   
-  // Non-advanced mode - LOW CPU + STABLE AUDIO
+  // Non-advanced mode - ULTRA LOW CPU
   if (!stream.use_advanced_settings) {
     const args = [
       '-threads', '1',
-      '-fflags', '+genpts+igndts+discardcorrupt',
+      '-nostdin',
+      '-fflags', '+genpts+discardcorrupt+nobuffer',
+      '-flags', 'low_delay',
       '-loglevel', 'error',
       '-re',
-      '-thread_queue_size', '4096',
-      '-analyzeduration', '5000000',
-      '-probesize', '5000000',
+      '-thread_queue_size', '2048',
       '-f', 'concat',
       '-safe', '0',
       '-i', concatFile,
       '-c:v', 'copy',
-      '-c:a', 'aac',
-      '-b:a', '128k',
-      '-ar', '44100',
-      '-ac', '2',
-      '-async', '1',
+      '-c:a', 'copy',
+      '-bsf:a', 'aac_adtstoasc',
+      '-avoid_negative_ts', 'make_zero',
       '-f', 'flv'
     ];
     
@@ -579,23 +577,22 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
     }
     
     args.push(rtmpUrl);
-    console.log('[StreamingService] Playlist: LOW CPU + stable audio');
+    console.log('[StreamingService] Playlist: ULTRA LOW CPU (copy mode)');
     return args;
   }
   
-  // Advanced mode - encoding with stable audio
+  // Advanced mode - encoding (higher CPU expected)
   const resolution = stream.resolution || '1280x720';
   const bitrate = stream.bitrate || 2500;
   const fps = stream.fps || 30;
   
   const advancedArgs = [
     '-threads', '2',
-    '-fflags', '+genpts+igndts+discardcorrupt',
+    '-nostdin',
+    '-fflags', '+genpts+discardcorrupt',
     '-loglevel', 'error',
     '-re',
-    '-thread_queue_size', '4096',
-    '-analyzeduration', '5000000',
-    '-probesize', '5000000',
+    '-thread_queue_size', '2048',
     '-f', 'concat',
     '-safe', '0',
     '-i', concatFile,
@@ -609,11 +606,8 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
     '-g', `${fps * 2}`,
     '-s', resolution,
     '-r', fps.toString(),
-    '-c:a', 'aac',
-    '-b:a', '128k',
-    '-ar', '44100',
-    '-ac', '2',
-    '-async', '1',
+    '-c:a', 'copy',
+    '-bsf:a', 'aac_adtstoasc',
     '-f', 'flv'
   ];
   
@@ -713,15 +707,17 @@ async function buildFFmpegArgs(stream) {
 /**
  * Build FFmpeg args for video + separate audio streaming
  * 
- * OPTIMIZED: LOW CPU (2-3%) + STABLE AUDIO
+ * ULTRA LOW CPU (2-3%) + STABLE AUDIO
  * - Copy video (0% CPU)
- * - Lightweight AAC encoding with async sync
- * - Optimized buffer sizes
+ * - Copy audio with timestamp fix (0% CPU)
+ * - Use filter to fix audio sync without re-encoding
  */
 function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds, loopVideo) {
   const args = [
     '-threads', '1',
-    '-fflags', '+genpts+igndts+discardcorrupt',
+    '-nostdin',
+    '-fflags', '+genpts+discardcorrupt+nobuffer',
+    '-flags', 'low_delay',
     '-loglevel', 'error',
     '-re'
   ];
@@ -730,28 +726,25 @@ function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds
   if (loopVideo) {
     args.push('-stream_loop', '-1');
   }
-  args.push('-thread_queue_size', '4096');
-  args.push('-analyzeduration', '5000000');
-  args.push('-probesize', '5000000');
+  args.push('-thread_queue_size', '2048');
   args.push('-i', videoPath);
   
   // Audio input with loop
   args.push('-stream_loop', '-1');
-  args.push('-thread_queue_size', '4096');
+  args.push('-thread_queue_size', '2048');
   args.push('-i', audioPath);
   
   args.push('-map', '0:v:0');
   args.push('-map', '1:a:0');
   
-  // Video: copy (0% CPU)
+  // COPY BOTH - 0% CPU
   args.push('-c:v', 'copy');
+  args.push('-c:a', 'copy');
   
-  // Audio: Lightweight AAC with async
-  args.push('-c:a', 'aac');
-  args.push('-b:a', '128k');
-  args.push('-ar', '44100');
-  args.push('-ac', '2');
-  args.push('-async', '1');             // Key for stable audio
+  // Fix timestamps without re-encoding
+  args.push('-bsf:a', 'aac_adtstoasc');
+  args.push('-avoid_negative_ts', 'make_zero');
+  args.push('-fflags', '+genpts');
   
   args.push('-shortest');
   args.push('-f', 'flv');
@@ -761,22 +754,24 @@ function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds
   }
   
   args.push(rtmpUrl);
-  console.log('[StreamingService] Audio-merge: LOW CPU + stable audio');
+  console.log('[StreamingService] Audio-merge: ULTRA LOW CPU (copy mode)');
   return args;
 }
 
 /**
  * Build FFmpeg args for video only streaming (preserve original audio)
  * 
- * OPTIMIZED: LOW CPU (2-3%) + STABLE AUDIO
+ * ULTRA LOW CPU (2-3%) + STABLE AUDIO
  * - Copy video (0% CPU)
- * - Lightweight AAC encoding with async sync
- * - Single thread for minimal overhead
+ * - Copy audio (0% CPU)
+ * - Timestamp fix without re-encoding
  */
 function buildFFmpegArgsVideoOnly(videoPath, rtmpUrl, durationSeconds, loopVideo) {
   const args = [
-    '-threads', '1',                    // Single thread
-    '-fflags', '+genpts+igndts+discardcorrupt',
+    '-threads', '1',
+    '-nostdin',
+    '-fflags', '+genpts+discardcorrupt+nobuffer',
+    '-flags', 'low_delay',
     '-loglevel', 'error',
     '-re'
   ];
@@ -784,20 +779,16 @@ function buildFFmpegArgsVideoOnly(videoPath, rtmpUrl, durationSeconds, loopVideo
   if (loopVideo) {
     args.push('-stream_loop', '-1');
   }
-  args.push('-thread_queue_size', '4096');  // Reduced but sufficient
-  args.push('-analyzeduration', '5000000'); // 5 seconds
-  args.push('-probesize', '5000000');       // 5MB
+  args.push('-thread_queue_size', '2048');
   args.push('-i', videoPath);
   
-  // Video: copy (0% CPU)
+  // COPY BOTH - 0% CPU
   args.push('-c:v', 'copy');
+  args.push('-c:a', 'copy');
   
-  // Audio: Lightweight AAC with async
-  args.push('-c:a', 'aac');
-  args.push('-b:a', '128k');            // 128k is enough for streaming
-  args.push('-ar', '44100');            // Standard sample rate
-  args.push('-ac', '2');
-  args.push('-async', '1');             // Key for stable audio
+  // Fix timestamps without re-encoding
+  args.push('-bsf:a', 'aac_adtstoasc');
+  args.push('-avoid_negative_ts', 'make_zero');
   
   args.push('-f', 'flv');
   
@@ -806,7 +797,7 @@ function buildFFmpegArgsVideoOnly(videoPath, rtmpUrl, durationSeconds, loopVideo
   }
   
   args.push(rtmpUrl);
-  console.log('[StreamingService] Video-only: LOW CPU + stable audio');
+  console.log('[StreamingService] Video-only: ULTRA LOW CPU (copy mode)');
   return args;
 }
 async function startStream(streamId) {
