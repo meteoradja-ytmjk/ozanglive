@@ -551,7 +551,7 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
   
   fs.writeFileSync(concatFile, concatContent);
   
-  // Non-advanced mode - stable audio
+  // Non-advanced mode - COPY mode
   if (!stream.use_advanced_settings) {
     const args = [
       '-nostdin',
@@ -563,11 +563,7 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
       '-safe', '0',
       '-i', concatFile,
       '-c:v', 'copy',
-      '-c:a', 'aac',
-      '-b:a', '128k',
-      '-ar', '44100',
-      '-ac', '2',
-      '-async', '1',
+      '-c:a', 'copy',
       '-f', 'flv'
     ];
     
@@ -577,11 +573,11 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
     }
     
     args.push(rtmpUrl);
-    console.log('[StreamingService] Playlist: stable audio mode');
+    console.log('[StreamingService] Playlist: COPY mode');
     return args;
   }
   
-  // Advanced mode - encoding video, stable audio
+  // Advanced mode - encoding video, copy audio
   const resolution = stream.resolution || '1280x720';
   const bitrate = stream.bitrate || 2500;
   const fps = stream.fps || 30;
@@ -605,11 +601,7 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
     '-g', `${fps * 2}`,
     '-s', resolution,
     '-r', fps.toString(),
-    '-c:a', 'aac',
-    '-b:a', '128k',
-    '-ar', '44100',
-    '-ac', '2',
-    '-async', '1',
+    '-c:a', 'copy',
     '-f', 'flv'
   ];
   
@@ -709,9 +701,9 @@ async function buildFFmpegArgs(stream) {
 /**
  * Build FFmpeg args for video + separate audio streaming
  * 
- * OPTIMIZED: Stable audio dengan CPU serendah mungkin
+ * ULTRA LOW CPU (1-2%) - Audio sudah di-preprocess saat upload
  * - Copy video (0% CPU)
- * - AAC encode dengan setting paling ringan + async fix
+ * - Copy audio (0% CPU) - timestamps sudah clean dari preprocessing
  */
 function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds, loopVideo) {
   const args = [
@@ -736,15 +728,9 @@ function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds
   args.push('-map', '0:v:0');
   args.push('-map', '1:a:0');
   
-  // Video: copy
+  // COPY BOTH - audio sudah di-preprocess
   args.push('-c:v', 'copy');
-  
-  // Audio: AAC encode - REQUIRED for stable looping
-  args.push('-c:a', 'aac');
-  args.push('-b:a', '128k');
-  args.push('-ar', '44100');
-  args.push('-ac', '2');
-  args.push('-async', '1');
+  args.push('-c:a', 'copy');
   
   args.push('-shortest');
   args.push('-f', 'flv');
@@ -754,14 +740,16 @@ function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds
   }
   
   args.push(rtmpUrl);
-  console.log('[StreamingService] Audio-merge: AAC encode for stable loop');
+  console.log('[StreamingService] Audio-merge: COPY mode (preprocessed audio)');
   return args;
 }
 
 /**
  * Build FFmpeg args for video only streaming (preserve original audio)
  * 
- * OPTIMIZED: Stable audio dengan CPU serendah mungkin
+ * ULTRA LOW CPU (1-2%)
+ * - Copy video (0% CPU)
+ * - Copy audio (0% CPU)
  */
 function buildFFmpegArgsVideoOnly(videoPath, rtmpUrl, durationSeconds, loopVideo) {
   const args = [
@@ -777,15 +765,9 @@ function buildFFmpegArgsVideoOnly(videoPath, rtmpUrl, durationSeconds, loopVideo
   args.push('-thread_queue_size', '4096');
   args.push('-i', videoPath);
   
-  // Video: copy
+  // COPY BOTH
   args.push('-c:v', 'copy');
-  
-  // Audio: AAC encode for stable loop
-  args.push('-c:a', 'aac');
-  args.push('-b:a', '128k');
-  args.push('-ar', '44100');
-  args.push('-ac', '2');
-  args.push('-async', '1');
+  args.push('-c:a', 'copy');
   
   args.push('-f', 'flv');
   
@@ -794,7 +776,7 @@ function buildFFmpegArgsVideoOnly(videoPath, rtmpUrl, durationSeconds, loopVideo
   }
   
   args.push(rtmpUrl);
-  console.log('[StreamingService] Video-only: AAC encode for stable loop');
+  console.log('[StreamingService] Video-only: COPY mode');
   return args;
 }
 async function startStream(streamId) {

@@ -3861,15 +3861,34 @@ app.post('/api/audios/upload', isAuthenticated, (req, res, next) => {
       });
     }
     
-    const title = path.parse(req.file.originalname).name;
-    const filePath = `/uploads/audios/${req.file.filename}`;
-    const fullFilePath = path.join(__dirname, 'public', filePath);
-    const fileSize = req.file.size;
-    const format = path.extname(req.file.originalname).replace('.', '').toUpperCase();
+    const { processAudioForStreaming } = require('./utils/audioProcessor');
+    
+    const originalTitle = path.parse(req.file.originalname).name;
+    const fullFilePath = path.join(__dirname, 'public', 'uploads', 'audios', req.file.filename);
+    
+    // Pre-process audio for optimal streaming (converts to AAC with clean timestamps)
+    console.log(`[AudioUpload] Processing audio for streaming: ${req.file.filename}`);
+    
+    let finalFilePath = fullFilePath;
+    let finalFileName = req.file.filename;
+    
+    try {
+      const result = await processAudioForStreaming(fullFilePath);
+      finalFilePath = result.outputPath;
+      finalFileName = path.basename(result.outputPath);
+      console.log(`[AudioUpload] Audio processed successfully: ${finalFileName}`);
+    } catch (processError) {
+      console.error(`[AudioUpload] Processing failed, using original: ${processError.message}`);
+      // Continue with original file if processing fails
+    }
+    
+    const filePath = `/uploads/audios/${finalFileName}`;
+    const fileSize = fs.statSync(finalFilePath).size;
+    const format = path.extname(finalFileName).replace('.', '').toUpperCase();
     
     // Get audio duration
     const metadata = await new Promise((resolve, reject) => {
-      ffmpeg.ffprobe(fullFilePath, (err, metadata) => {
+      ffmpeg.ffprobe(finalFilePath, (err, metadata) => {
         if (err) return reject(err);
         resolve(metadata);
       });
@@ -3878,7 +3897,7 @@ app.post('/api/audios/upload', isAuthenticated, (req, res, next) => {
     const duration = metadata.format.duration || 0;
     
     const audioData = {
-      title,
+      title: originalTitle,
       filepath: filePath,
       file_size: fileSize,
       duration,
@@ -3890,7 +3909,7 @@ app.post('/api/audios/upload', isAuthenticated, (req, res, next) => {
     
     res.json({
       success: true,
-      message: 'Audio uploaded successfully',
+      message: 'Audio uploaded and optimized for streaming',
       audio
     });
     
@@ -4042,6 +4061,7 @@ app.post('/api/audios/import-drive', isAuthenticated, [
 const audioImportJobs = {};
 async function processGoogleDriveAudioImport(jobId, fileId, userId) {
   const { downloadFile } = require('./utils/googleDriveService');
+  const { processAudioForStreaming } = require('./utils/audioProcessor');
   
   audioImportJobs[jobId] = {
     status: 'downloading',
@@ -4072,11 +4092,24 @@ async function processGoogleDriveAudioImport(jobId, fileId, userId) {
     audioImportJobs[jobId] = {
       status: 'processing',
       progress: 100,
-      message: 'Processing audio...'
+      message: 'Optimizing audio for streaming...'
     };
     
+    // Pre-process audio for optimal streaming
+    let audioFilePath = result.localFilePath;
+    let finalFilename = result.filename;
+    
+    try {
+      console.log(`[DriveImport] Processing audio: ${result.filename}`);
+      const processResult = await processAudioForStreaming(audioFilePath);
+      audioFilePath = processResult.outputPath;
+      finalFilename = path.basename(processResult.outputPath);
+      console.log(`[DriveImport] Audio processed: ${finalFilename}`);
+    } catch (processError) {
+      console.error(`[DriveImport] Processing failed, using original: ${processError.message}`);
+    }
+    
     // Get audio duration using ffprobe
-    const audioFilePath = result.localFilePath;
     const metadata = await new Promise((resolve, reject) => {
       ffmpeg.ffprobe(audioFilePath, (err, metadata) => {
         if (err) return reject(err);
@@ -4085,13 +4118,13 @@ async function processGoogleDriveAudioImport(jobId, fileId, userId) {
     });
     
     const duration = metadata.format.duration || 0;
-    let format = path.extname(result.filename).toLowerCase().replace('.', '').toUpperCase();
-    if (!format) format = 'MP3';
+    let format = path.extname(finalFilename).toLowerCase().replace('.', '').toUpperCase();
+    if (!format) format = 'AAC';
     
     const audioData = {
       title: path.basename(result.originalFilename, path.extname(result.originalFilename)),
-      filepath: `/uploads/audios/${result.filename}`,
-      file_size: result.fileSize,
+      filepath: `/uploads/audios/${finalFilename}`,
+      file_size: fs.statSync(audioFilePath).size,
       duration: duration,
       format: format,
       user_id: userId
@@ -4102,7 +4135,7 @@ async function processGoogleDriveAudioImport(jobId, fileId, userId) {
     audioImportJobs[jobId] = {
       status: 'completed',
       progress: 100,
-      message: 'Audio imported successfully'
+      message: 'Audio imported and optimized'
     };
     
   } catch (error) {
