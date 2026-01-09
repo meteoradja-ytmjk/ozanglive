@@ -553,29 +553,18 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
   
   // Non-advanced mode uses copy (minimal CPU)
   if (!stream.use_advanced_settings) {
-    console.log('[StreamingService] Playlist: copy mode, bufsize=4M');
     const args = [
-      '-threads', '2',
-      // AUDIO FIX: Queue besar
-      '-thread_queue_size', '8192',
-      '-hwaccel', 'auto',
-      // AUDIO FIX: Probesize cukup
-      '-probesize', '10000000',
-      '-analyzeduration', '10000000',
+      '-threads', '1',
+      '-thread_queue_size', '512',
+      '-probesize', '1000000',
+      '-analyzeduration', '1000000',
       '-loglevel', 'error',
       '-re',
-      '-fflags', '+genpts+igndts+discardcorrupt',
-      '-avoid_negative_ts', 'make_zero',
       '-f', 'concat',
       '-safe', '0',
       '-i', concatFile,
       '-c:v', 'copy',
       '-c:a', 'copy',
-      // AUDIO FIX: Buffer dan queue besar
-      '-bufsize', '4000k',
-      '-max_muxing_queue_size', '9999',
-      '-max_interleave_delta', '0',
-      '-flvflags', 'no_duration_filesize',
       '-f', 'flv'
     ];
     
@@ -586,6 +575,7 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
     }
     
     args.push(rtmpUrl);
+    console.log('[StreamingService] Playlist: minimal CPU');
     return args;
   }
   
@@ -594,28 +584,20 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
   const bitrate = stream.bitrate || 2500;
   const fps = stream.fps || 30;
   
-  console.log('[StreamingService] Playlist: ultrafast encoding, bufsize=4M');
   const advancedArgs = [
     '-threads', '2',
-    // AUDIO FIX: Queue besar
-    '-thread_queue_size', '8192',
-    '-hwaccel', 'auto',
-    // AUDIO FIX: Probesize cukup
-    '-probesize', '10000000',
-    '-analyzeduration', '10000000',
+    '-thread_queue_size', '512',
+    '-probesize', '1000000',
+    '-analyzeduration', '1000000',
     '-loglevel', 'error',
     '-re',
-    '-fflags', '+genpts+igndts+discardcorrupt',
-    '-avoid_negative_ts', 'make_zero',
     '-f', 'concat',
     '-safe', '0',
     '-i', concatFile,
     '-c:v', 'libx264',
     '-preset', 'ultrafast',
-    '-profile:v', 'baseline',
     '-tune', 'zerolatency',
     '-b:v', `${bitrate}k`,
-    '-maxrate', `${bitrate * 1.2}k`,
     '-bufsize', `${bitrate}k`,
     '-pix_fmt', 'yuv420p',
     '-g', `${fps * 2}`,
@@ -625,10 +607,6 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
     '-b:a', '128k',
     '-ar', '44100',
     '-ac', '2',
-    // AUDIO FIX: Queue besar untuk output
-    '-max_muxing_queue_size', '9999',
-    '-max_interleave_delta', '0',
-    '-flvflags', 'no_duration_filesize',
     '-f', 'flv'
   ];
   
@@ -639,6 +617,7 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
   }
   
   advancedArgs.push(rtmpUrl);
+  console.log('[StreamingService] Playlist: encoding mode');
   return advancedArgs;
 }
 
@@ -742,19 +721,12 @@ async function buildFFmpegArgs(stream) {
  */
 function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds, loopVideo) {
   const args = [
-    // CPU: 2 threads cukup untuk copy mode
-    '-threads', '2',
-    // AUDIO FIX: Queue besar untuk mencegah audio drop
-    '-thread_queue_size', '8192',
-    '-hwaccel', 'auto',
-    // AUDIO FIX: Probesize cukup untuk deteksi audio sync
-    '-probesize', '10000000',           // 10MB
-    '-analyzeduration', '10000000',     // 10 seconds
+    '-threads', '1',
+    '-thread_queue_size', '512',
+    '-probesize', '1000000',
+    '-analyzeduration', '1000000',
     '-loglevel', 'error',
-    '-re',
-    // AUDIO FIX: Flags untuk handle audio dengan benar
-    '-fflags', '+genpts+igndts+discardcorrupt',
-    '-avoid_negative_ts', 'make_zero'
+    '-re'
   ];
   
   // Video input with looping
@@ -763,38 +735,14 @@ function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds
   }
   args.push('-i', videoPath);
   
-  // Audio input with looping - AUDIO FIX: queue besar untuk audio input
+  // Audio input with looping
   args.push('-stream_loop', '-1');
-  args.push('-thread_queue_size', '8192');
   args.push('-i', audioPath);
   
-  // Map video from first input, audio from second input
   args.push('-map', '0:v:0');
   args.push('-map', '1:a:0');
-  
-  // Video codec - COPY (zero CPU)
   args.push('-c:v', 'copy');
-  
-  // Audio codec - COPY if AAC, otherwise lightweight encode
-  const audioExt = path.extname(audioPath).toLowerCase();
-  const canCopyAudio = ['.aac', '.m4a'].includes(audioExt);
-  
-  if (canCopyAudio) {
-    args.push('-c:a', 'copy');
-    console.log('[StreamingService] Audio: copy mode');
-  } else {
-    args.push('-c:a', 'aac');
-    args.push('-b:a', '128k');
-    args.push('-ar', '44100');
-    args.push('-ac', '2');
-    console.log('[StreamingService] Audio: AAC 128k');
-  }
-  
-  // AUDIO FIX: Buffer dan queue yang cukup besar untuk smooth audio
-  args.push('-bufsize', '4000k');
-  args.push('-max_muxing_queue_size', '9999');
-  args.push('-max_interleave_delta', '0');
-  args.push('-flvflags', 'no_duration_filesize');
+  args.push('-c:a', 'copy');
   args.push('-f', 'flv');
   
   if (durationSeconds && durationSeconds > 0) {
@@ -802,8 +750,7 @@ function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds
   }
   
   args.push(rtmpUrl);
-  
-  console.log('[StreamingService] Audio-merge: copy video, bufsize=4M, queue=9999');
+  console.log('[StreamingService] Audio-merge: minimal CPU');
   return args;
 }
 
@@ -822,37 +769,21 @@ function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds
  */
 function buildFFmpegArgsVideoOnly(videoPath, rtmpUrl, durationSeconds, loopVideo) {
   const args = [
-    '-threads', '2',
-    // AUDIO FIX: Queue besar untuk mencegah audio drop
-    '-thread_queue_size', '8192',
-    '-hwaccel', 'auto',
-    // AUDIO FIX: Probesize cukup untuk deteksi audio sync
-    '-probesize', '10000000',
-    '-analyzeduration', '10000000',
+    '-threads', '1',
+    '-thread_queue_size', '512',
+    '-probesize', '1000000',
+    '-analyzeduration', '1000000',
     '-loglevel', 'error',
-    '-re',
-    // AUDIO FIX: Flags untuk handle audio dengan benar
-    '-fflags', '+genpts+igndts+discardcorrupt',
-    '-avoid_negative_ts', 'make_zero'
+    '-re'
   ];
   
-  // Video input with looping
   if (loopVideo) {
     args.push('-stream_loop', '-1');
-  } else {
-    args.push('-stream_loop', '0');
   }
   args.push('-i', videoPath);
   
-  // COPY both video and audio (ZERO CPU)
   args.push('-c:v', 'copy');
   args.push('-c:a', 'copy');
-  
-  // AUDIO FIX: Buffer dan queue yang cukup besar
-  args.push('-bufsize', '4000k');
-  args.push('-max_muxing_queue_size', '9999');
-  args.push('-max_interleave_delta', '0');
-  args.push('-flvflags', 'no_duration_filesize');
   args.push('-f', 'flv');
   
   if (durationSeconds && durationSeconds > 0) {
@@ -860,8 +791,7 @@ function buildFFmpegArgsVideoOnly(videoPath, rtmpUrl, durationSeconds, loopVideo
   }
   
   args.push(rtmpUrl);
-  
-  console.log('[StreamingService] Video-only: full copy, bufsize=4M, queue=9999');
+  console.log('[StreamingService] Video-only: minimal CPU');
   return args;
 }
 async function startStream(streamId) {
