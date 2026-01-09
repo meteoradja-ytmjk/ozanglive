@@ -322,6 +322,9 @@ class Stream {
       
       // FIXED: Use simple string comparison for ISO 8601 format
       // ISO 8601 strings are lexicographically sortable
+      // FIXED: Include both 'scheduled' and 'offline' status for once schedules
+      // Streams may be in 'offline' status if they were stopped manually or due to error
+      // but should still be triggered if schedule_time is in range
       const query = `
         SELECT s.*, 
                v.title AS video_title, 
@@ -333,7 +336,7 @@ class Stream {
                v.fps AS video_fps  
         FROM streams s
         LEFT JOIN videos v ON s.video_id = v.id
-        WHERE s.status = 'scheduled'
+        WHERE s.status IN ('scheduled', 'offline')
         AND s.schedule_type = 'once'
         AND s.schedule_time IS NOT NULL
         AND s.schedule_time >= ?

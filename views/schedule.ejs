@@ -104,17 +104,41 @@
             </td>
             <td class="px-4 py-3 text-sm"><%= helpers.formatDateTime(stream.schedule_time) %></td>
             <td class="px-4 py-3 text-sm text-gray-400">
-              <% if (stream.stream_duration_hours) { %>
-                <%= stream.stream_duration_hours %>h
-              <% } else if (stream.duration) { %>
-                <%= Math.floor(stream.duration / 60) %>h <%= stream.duration % 60 %>m
+              <% if (stream.stream_duration_minutes && stream.stream_duration_minutes > 0) { %>
+                <% const hours = Math.floor(stream.stream_duration_minutes / 60); %>
+                <% const mins = stream.stream_duration_minutes % 60; %>
+                <%= hours > 0 ? hours + ' jam' : '' %><%= hours > 0 && mins > 0 ? ' ' : '' %><%= mins > 0 ? mins + ' menit' : '' %>
+              <% } else if (stream.stream_duration_hours) { %>
+                <%= stream.stream_duration_hours %> jam
               <% } else { %>
                 --
               <% } %>
             </td>
             <td class="px-4 py-3">
-              <span class="px-2 py-1 text-xs rounded-full <%= stream.status === 'live' ? 'bg-green-500/20 text-green-400' : stream.status === 'scheduled' ? 'bg-primary/20 text-primary' : 'bg-gray-500/20 text-gray-400' %>">
-                <%= stream.status === 'live' ? 'LIVE' : stream.status === 'scheduled' ? 'Scheduled' : 'Offline' %>
+              <% 
+                // Determine display status for once schedules
+                let displayStatus = stream.status;
+                let statusClass = 'bg-gray-500/20 text-gray-400';
+                let statusText = 'Offline';
+                
+                if (stream.status === 'live') {
+                  statusClass = 'bg-green-500/20 text-green-400';
+                  statusText = 'LIVE';
+                } else if (stream.status === 'scheduled') {
+                  statusClass = 'bg-primary/20 text-primary';
+                  statusText = 'Scheduled';
+                } else if (stream.status === 'offline' && stream.schedule_time) {
+                  // For offline streams with schedule_time, check if it's in the future
+                  const schedTime = new Date(stream.schedule_time);
+                  const now = new Date();
+                  if (schedTime > now) {
+                    statusClass = 'bg-primary/20 text-primary';
+                    statusText = 'Scheduled';
+                  }
+                }
+              %>
+              <span class="px-2 py-1 text-xs rounded-full <%= statusClass %>">
+                <%= statusText %>
               </span>
             </td>
             <td class="px-4 py-3 text-right">
@@ -145,8 +169,28 @@
             <i class="ti ti-brand-<%= helpers.getPlatformIcon(stream.platform) %> text-<%= helpers.getPlatformColor(stream.platform) %>"></i>
             <span class="font-medium text-sm"><%= stream.title %></span>
           </div>
-          <span class="px-2 py-0.5 text-xs rounded-full <%= stream.status === 'live' ? 'bg-green-500/20 text-green-400' : 'bg-primary/20 text-primary' %>">
-            <%= stream.status === 'live' ? 'LIVE' : 'Scheduled' %>
+          <% 
+            // Determine display status for once schedules (mobile)
+            let mobileStatusClass = 'bg-gray-500/20 text-gray-400';
+            let mobileStatusText = 'Offline';
+            
+            if (stream.status === 'live') {
+              mobileStatusClass = 'bg-green-500/20 text-green-400';
+              mobileStatusText = 'LIVE';
+            } else if (stream.status === 'scheduled') {
+              mobileStatusClass = 'bg-primary/20 text-primary';
+              mobileStatusText = 'Scheduled';
+            } else if (stream.status === 'offline' && stream.schedule_time) {
+              const schedTime = new Date(stream.schedule_time);
+              const now = new Date();
+              if (schedTime > now) {
+                mobileStatusClass = 'bg-primary/20 text-primary';
+                mobileStatusText = 'Scheduled';
+              }
+            }
+          %>
+          <span class="px-2 py-0.5 text-xs rounded-full <%= mobileStatusClass %>">
+            <%= mobileStatusText %>
           </span>
         </div>
         <div class="text-xs text-gray-400 mb-2">
