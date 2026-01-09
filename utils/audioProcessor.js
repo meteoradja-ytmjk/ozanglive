@@ -32,16 +32,21 @@ if (fs.existsSync('/usr/bin/ffmpeg')) {
  * @returns {Promise<{success: boolean, outputPath: string, message: string, skipped: boolean}>}
  */
 async function processAudioForStreaming(inputPath, outputPath = null) {
-  // Skip processing if already AAC file
   const ext = path.extname(inputPath).toLowerCase();
+  
+  // For AAC files, check if needs cleaning
   if (ext === '.aac') {
-    console.log(`[AudioProcessor] Skipping - already AAC: ${inputPath}`);
-    return {
-      success: true,
-      outputPath: inputPath,
-      message: 'Already AAC format, skipped processing',
-      skipped: true
-    };
+    const needsClean = await checkAACNeedsCleaning(inputPath);
+    if (!needsClean.needsCleaning) {
+      console.log(`[AudioProcessor] AAC already clean: ${inputPath}`);
+      return {
+        success: true,
+        outputPath: inputPath,
+        message: 'AAC already clean, skipped processing',
+        skipped: true
+      };
+    }
+    console.log(`[AudioProcessor] AAC needs cleaning: ${needsClean.reason}`);
   }
   
   return new Promise((resolve, reject) => {
@@ -186,7 +191,93 @@ async function checkAudioNeedsProcessing(filePath) {
   });
 }
 
+/**
+ * Check if AAC file needs cleaning (timestamps/metadata issues)
+ * 
+ * @param {string} filePath - Path to AAC file
+ * @returns {Promise<{needsCleaning: boolean, reason: string}>}
+ */
+async function checkAACNeedsCleaning(filePath) {
+  return new Promise((resolve) => {
+    const ffprobePath = ffmpegPath.replace('ffmpeg', 'ffprobe');
+    
+    const args = [
+      '-v', 'quiet',
+      '-print_format', 'json',
+      '-show_format',
+      '-show_streams',
+      '-select_streams', 'a:0',
+      filePath
+    ];
+    
+    const ffprobe = spawn(ffprobePath, args);
+    
+    let stdout = '';
+    
+    ffprobe.stdout.on('data', (data) => {
+      stdout += data.toString();
+    });
+    
+    ffprobe.on('close', (code) => {
+      if (code !== 0) {
+        resolve({ needsCleaning: true, reason: 'Cannot probe file' });
+        return;
+      }
+      
+      try {
+        const info = JSON.parse(stdout);
+        const stream = info.streams && info.streams[0];
+        const format = info.format || {};
+        
+        if (!stream) {
+          resolve({ needsCleaning: true, reason: 'No audio stream found' });
+          return;
+        }
+        
+        let reasons = [];
+        
+        // Check sample rate (should be 44100 for optimal streaming)
+        const sampleRate = parseInt(stream.sample_rate);
+        if (sampleRate !== 44100) {
+          reasons.push(`sample_rate: ${sampleRate}`);
+        }
+        
+        // Check channels (should be stereo)
+        if (stream.channels !== 2) {
+          reasons.push(`channels: ${stream.channels}`);
+        }
+        
+        // Check for metadata (can cause issues)
+        const tags = format.tags || {};
+        const hasMetadata = Object.keys(tags).length > 0;
+        if (hasMetadata) {
+          reasons.push('has metadata');
+        }
+        
+        // Check start_time (should be 0 or very close)
+        const startTime = parseFloat(stream.start_time || '0');
+        if (Math.abs(startTime) > 0.1) {
+          reasons.push(`start_time: ${startTime}`);
+        }
+        
+        if (reasons.length > 0) {
+          resolve({ needsCleaning: true, reason: reasons.join(', ') });
+        } else {
+          resolve({ needsCleaning: false, reason: 'Clean' });
+        }
+      } catch (err) {
+        resolve({ needsCleaning: true, reason: 'Parse error' });
+      }
+    });
+    
+    ffprobe.on('error', () => {
+      resolve({ needsCleaning: true, reason: 'Probe failed' });
+    });
+  });
+}
+
 module.exports = {
   processAudioForStreaming,
-  checkAudioNeedsProcessing
+  checkAudioNeedsProcessing,
+  checkAACNeedsCleaning
 };
