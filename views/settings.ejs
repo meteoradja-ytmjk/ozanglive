@@ -1115,59 +1115,110 @@
       }
 
       if (performUpdateBtn) {
-        performUpdateBtn.addEventListener('click', async () => {
-          if (!confirm('Update now? The app will restart.')) return;
-
-          performUpdateBtn.disabled = true;
-          performUpdateBtn.innerHTML = '<i class="ti ti-loader animate-spin"></i><span>Updating...</span>';
-          
-          updateStatusContainer.classList.add('hidden');
-          updateProgressContainer.classList.remove('hidden');
-          updateLog.innerHTML = '';
-          updateProgressBar.style.width = '10%';
-          updateProgressText.textContent = 'Starting...';
-
-          try {
-            updateProgressBar.style.width = '30%';
-            updateProgressText.textContent = 'Pulling changes...';
-            
-            const res = await fetch('/api/system/perform-update', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-Token': '<%= csrfToken %>'
-              }
-            });
-            const data = await res.json();
-
-            if (data.success) {
-              updateProgressBar.style.width = '100%';
-              updateProgressText.textContent = 'Complete!';
-              if (data.log) updateLog.innerHTML = data.log.map(l => `<div>${escapeHtml(l)}</div>`).join('');
-
-              setTimeout(() => {
-                updateProgressContainer.classList.add('hidden');
-                updateCompleteContainer.classList.remove('hidden');
-              }, 1000);
-
-              setTimeout(() => window.location.reload(), 6000);
-            } else {
-              updateProgressText.textContent = 'Failed';
-              updateProgressBar.className = 'bg-red-500 h-1.5 rounded-full transition-all duration-500';
-              updateProgressBar.style.width = '100%';
-              if (data.log) updateLog.innerHTML = data.log.map(l => `<div class="text-red-400">${escapeHtml(l)}</div>`).join('');
-              showToast('error', data.error || 'Update failed');
-            }
-          } catch (err) {
-            updateProgressText.textContent = 'Failed';
-            updateProgressBar.className = 'bg-red-500 h-1.5 rounded-full';
-            updateLog.innerHTML = `<div class="text-red-400">${escapeHtml(err.message)}</div>`;
-            showToast('error', 'Network error');
-          } finally {
-            performUpdateBtn.disabled = false;
-            performUpdateBtn.innerHTML = '<i class="ti ti-download"></i><span>Update Now</span>';
-          }
+        performUpdateBtn.addEventListener('click', () => performUpdate('normal'));
+      }
+      
+      // Conflict resolution buttons
+      const updateStashBtn = document.getElementById('update-stash-btn');
+      const updateForceBtn = document.getElementById('update-force-btn');
+      const updateCancelBtn = document.getElementById('update-cancel-btn');
+      const updateConflict = document.getElementById('update-conflict');
+      const conflictLog = document.getElementById('conflict-log');
+      const conflictMessage = document.getElementById('conflict-message');
+      
+      if (updateStashBtn) {
+        updateStashBtn.addEventListener('click', () => {
+          if (!confirm('This will temporarily save your local changes, update, then restore them. Continue?')) return;
+          performUpdate('stash');
         });
+      }
+      
+      if (updateForceBtn) {
+        updateForceBtn.addEventListener('click', () => {
+          if (!confirm('WARNING: This will permanently delete all your local changes! Are you sure?')) return;
+          if (!confirm('This action cannot be undone. Your local modifications will be lost. Continue?')) return;
+          performUpdate('force');
+        });
+      }
+      
+      if (updateCancelBtn) {
+        updateCancelBtn.addEventListener('click', () => {
+          updateConflict.classList.add('hidden');
+          updateAvailable.classList.remove('hidden');
+        });
+      }
+      
+      async function performUpdate(mode = 'normal') {
+        if (mode === 'normal' && !confirm('Update now? The app will restart.')) return;
+
+        performUpdateBtn.disabled = true;
+        performUpdateBtn.innerHTML = '<i class="ti ti-loader animate-spin"></i><span>Updating...</span>';
+        
+        updateStatusContainer.classList.add('hidden');
+        updateConflict.classList.add('hidden');
+        updateProgressContainer.classList.remove('hidden');
+        updateLog.innerHTML = '';
+        updateProgressBar.style.width = '10%';
+        updateProgressBar.className = 'bg-primary h-1.5 rounded-full transition-all duration-500';
+        updateProgressText.textContent = 'Starting...';
+
+        try {
+          updateProgressBar.style.width = '30%';
+          updateProgressText.textContent = mode === 'stash' ? 'Stashing changes...' : mode === 'force' ? 'Force resetting...' : 'Pulling changes...';
+          
+          const res = await fetch('/api/system/perform-update', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRF-Token': '<%= csrfToken %>'
+            },
+            body: JSON.stringify({ mode })
+          });
+          const data = await res.json();
+
+          if (data.success) {
+            updateProgressBar.style.width = '100%';
+            updateProgressText.textContent = 'Complete!';
+            if (data.log) updateLog.innerHTML = data.log.map(l => `<div>${escapeHtml(l)}</div>`).join('');
+
+            setTimeout(() => {
+              updateProgressContainer.classList.add('hidden');
+              updateCompleteContainer.classList.remove('hidden');
+            }, 1000);
+
+            setTimeout(() => window.location.reload(), 6000);
+          } else if (data.hasConflict) {
+            // Show conflict resolution UI
+            updateProgressContainer.classList.add('hidden');
+            updateStatusContainer.classList.remove('hidden');
+            updateAvailable.classList.add('hidden');
+            updateConflict.classList.remove('hidden');
+            
+            if (data.conflictMessage) {
+              conflictMessage.textContent = data.conflictMessage;
+            }
+            if (data.log && data.log.length > 0) {
+              conflictLog.innerHTML = data.log.map(l => `<div>${escapeHtml(l)}</div>`).join('');
+              conflictLog.classList.remove('hidden');
+            } else {
+              conflictLog.classList.add('hidden');
+            }
+          } else {
+            updateProgressText.textContent = 'Failed';
+            updateProgressBar.className = 'bg-red-500 h-1.5 rounded-full transition-all duration-500';
+            updateProgressBar.style.width = '100%';
+            if (data.log) updateLog.innerHTML = data.log.map(l => `<div class="text-red-400">${escapeHtml(l)}</div>`).join('');
+            showToast('error', data.error || 'Update failed');
+          }
+        } catch (err) {
+          updateProgressText.textContent = 'Failed';
+          updateProgressBar.className = 'bg-red-500 h-1.5 rounded-full';
+          updateLog.innerHTML = `<div class="text-red-400">${escapeHtml(err.message)}</div>`;
+          showToast('error', 'Network error');
+        } finally {
+          performUpdateBtn.disabled = false;
+          performUpdateBtn.innerHTML = '<i class="ti ti-download"></i><span>Update Now</span>';
+        }
       }
 
       if (reloadPageBtn) {
