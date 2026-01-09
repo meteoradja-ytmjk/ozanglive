@@ -6307,6 +6307,7 @@ app.post('/api/system/perform-update', isAuthenticated, isAdmin, async (req, res
     const execAsync = promisify(exec);
     const appDir = __dirname;
     const log = [];
+    const { mode } = req.body; // 'normal', 'stash', or 'force'
     
     const addLog = (message) => {
       console.log(`[Update] ${message}`);
@@ -6315,18 +6316,92 @@ app.post('/api/system/perform-update', isAuthenticated, isAdmin, async (req, res
     
     addLog('Starting update process...');
     
-    // Step 1: Git pull
-    addLog('Pulling latest changes from repository...');
+    // Get current branch
+    let currentBranch = 'main';
     try {
-      const { stdout: pullOutput, stderr: pullStderr } = await execAsync('git pull', { cwd: appDir, timeout: 120000 });
-      addLog(pullOutput.trim() || pullStderr.trim() || 'Git pull completed');
-    } catch (pullErr) {
-      addLog(`Git pull error: ${pullErr.message}`);
-      return res.json({
-        success: false,
-        error: 'Failed to pull updates from repository',
-        log
-      });
+      currentBranch = (await execAsync('git rev-parse --abbrev-ref HEAD', { cwd: appDir, timeout: 5000 })).stdout.trim();
+    } catch (e) {
+      currentBranch = 'main';
+    }
+    
+    // Check for local changes
+    let hasLocalChanges = false;
+    try {
+      const { stdout: statusOutput } = await execAsync('git status --porcelain', { cwd: appDir, timeout: 10000 });
+      hasLocalChanges = statusOutput.trim().length > 0;
+      if (hasLocalChanges) {
+        addLog('Detected local changes in repository');
+      }
+    } catch (e) {
+      // Continue anyway
+    }
+    
+    // Handle based on mode
+    if (mode === 'stash' && hasLocalChanges) {
+      // Stash local changes
+      addLog('Stashing local changes...');
+      try {
+        await execAsync('git stash push -m "Auto-stash before update"', { cwd: appDir, timeout: 30000 });
+        addLog('Local changes stashed successfully');
+      } catch (stashErr) {
+        addLog(`Stash warning: ${stashErr.message}`);
+      }
+    } else if (mode === 'force') {
+      // Force reset to remote
+      addLog('Force resetting to remote version...');
+      try {
+        await execAsync(`git fetch origin ${currentBranch}`, { cwd: appDir, timeout: 60000 });
+        await execAsync(`git reset --hard origin/${currentBranch}`, { cwd: appDir, timeout: 30000 });
+        addLog('Force reset completed');
+      } catch (resetErr) {
+        addLog(`Reset error: ${resetErr.message}`);
+        return res.json({
+          success: false,
+          error: 'Failed to reset repository',
+          log
+        });
+      }
+    }
+    
+    // Step 1: Git pull (skip if force mode already did reset)
+    if (mode !== 'force') {
+      addLog('Pulling latest changes from repository...');
+      try {
+        const { stdout: pullOutput, stderr: pullStderr } = await execAsync('git pull', { cwd: appDir, timeout: 120000 });
+        addLog(pullOutput.trim() || pullStderr.trim() || 'Git pull completed');
+      } catch (pullErr) {
+        const errorMsg = pullErr.message || '';
+        
+        // Check if error is due to local changes
+        if (errorMsg.includes('local changes') || errorMsg.includes('would be overwritten') || errorMsg.includes('Please commit') || errorMsg.includes('Please stash')) {
+          addLog(`Git pull error: ${errorMsg}`);
+          return res.json({
+            success: false,
+            error: 'Local changes conflict with update',
+            hasConflict: true,
+            conflictMessage: 'Your local changes would be overwritten by the update. Choose how to proceed:',
+            log
+          });
+        }
+        
+        addLog(`Git pull error: ${errorMsg}`);
+        return res.json({
+          success: false,
+          error: 'Failed to pull updates from repository',
+          log
+        });
+      }
+    }
+    
+    // Restore stashed changes if we stashed them
+    if (mode === 'stash' && hasLocalChanges) {
+      addLog('Restoring stashed changes...');
+      try {
+        await execAsync('git stash pop', { cwd: appDir, timeout: 30000 });
+        addLog('Stashed changes restored');
+      } catch (popErr) {
+        addLog(`Warning: Could not restore stashed changes automatically. Use 'git stash pop' manually if needed.`);
+      }
     }
     
     // Step 2: npm install
