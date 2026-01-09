@@ -551,43 +551,33 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
   
   fs.writeFileSync(concatFile, concatContent);
   
-  // Non-advanced mode - COPY mode
+  // Non-advanced mode - minimal copy
   if (!stream.use_advanced_settings) {
     const args = [
-      '-nostdin',
-      '-fflags', '+genpts+discardcorrupt',
-      '-loglevel', 'error',
       '-re',
-      '-thread_queue_size', '4096',
       '-f', 'concat',
       '-safe', '0',
       '-i', concatFile,
-      '-c:v', 'copy',
-      '-c:a', 'copy',
+      '-c', 'copy',
       '-f', 'flv'
     ];
     
     if (durationSeconds && durationSeconds > 0) {
-      console.log(`[StreamingService] Playlist FFmpeg -t parameter set: ${durationSeconds} seconds`);
       args.push('-t', durationSeconds.toString());
     }
     
     args.push(rtmpUrl);
-    console.log('[StreamingService] Playlist: COPY mode');
+    console.log('[StreamingService] Playlist: minimal copy');
     return args;
   }
   
-  // Advanced mode - encoding video, copy audio
+  // Advanced mode - encode video, copy audio
   const resolution = stream.resolution || '1280x720';
   const bitrate = stream.bitrate || 2500;
   const fps = stream.fps || 30;
   
   const advancedArgs = [
-    '-nostdin',
-    '-fflags', '+genpts+discardcorrupt',
-    '-loglevel', 'error',
     '-re',
-    '-thread_queue_size', '4096',
     '-f', 'concat',
     '-safe', '0',
     '-i', concatFile,
@@ -606,7 +596,6 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
   ];
   
   if (durationSeconds && durationSeconds > 0) {
-    console.log(`[StreamingService] Playlist (advanced) FFmpeg -t parameter set: ${durationSeconds} seconds`);
     advancedArgs.push('-t', durationSeconds.toString());
   }
   
@@ -701,37 +690,23 @@ async function buildFFmpegArgs(stream) {
 /**
  * Build FFmpeg args for video + separate audio streaming
  * 
- * ULTRA LOW CPU (1-2%) - Audio sudah di-preprocess saat upload
- * - Copy video (0% CPU)
- * - Copy audio (0% CPU) - timestamps sudah clean dari preprocessing
+ * MINIMAL CPU (~1%) - Full copy mode
  */
 function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds, loopVideo) {
-  const args = [
-    '-nostdin',
-    '-fflags', '+genpts+discardcorrupt',
-    '-loglevel', 'error',
-    '-re'
-  ];
+  const args = ['-re'];
   
   // Video input
   if (loopVideo) {
     args.push('-stream_loop', '-1');
   }
-  args.push('-thread_queue_size', '4096');
   args.push('-i', videoPath);
   
   // Audio input with loop
   args.push('-stream_loop', '-1');
-  args.push('-thread_queue_size', '4096');
   args.push('-i', audioPath);
   
-  args.push('-map', '0:v:0');
-  args.push('-map', '1:a:0');
-  
-  // COPY BOTH - audio sudah di-preprocess
-  args.push('-c:v', 'copy');
-  args.push('-c:a', 'copy');
-  
+  args.push('-map', '0:v:0', '-map', '1:a:0');
+  args.push('-c', 'copy');  // Copy both
   args.push('-shortest');
   args.push('-f', 'flv');
   
@@ -740,35 +715,23 @@ function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds
   }
   
   args.push(rtmpUrl);
-  console.log('[StreamingService] Audio-merge: COPY mode (preprocessed audio)');
+  console.log('[StreamingService] Audio-merge: minimal copy');
   return args;
 }
 
 /**
- * Build FFmpeg args for video only streaming (preserve original audio)
+ * Build FFmpeg args for video only streaming
  * 
- * ULTRA LOW CPU (1-2%)
- * - Copy video (0% CPU)
- * - Copy audio (0% CPU)
+ * MINIMAL CPU (~1%) - Full copy mode
  */
 function buildFFmpegArgsVideoOnly(videoPath, rtmpUrl, durationSeconds, loopVideo) {
-  const args = [
-    '-nostdin',
-    '-fflags', '+genpts+discardcorrupt',
-    '-loglevel', 'error',
-    '-re'
-  ];
+  const args = ['-re'];
   
   if (loopVideo) {
     args.push('-stream_loop', '-1');
   }
-  args.push('-thread_queue_size', '4096');
   args.push('-i', videoPath);
-  
-  // COPY BOTH
-  args.push('-c:v', 'copy');
-  args.push('-c:a', 'copy');
-  
+  args.push('-c', 'copy');
   args.push('-f', 'flv');
   
   if (durationSeconds && durationSeconds > 0) {
@@ -776,7 +739,7 @@ function buildFFmpegArgsVideoOnly(videoPath, rtmpUrl, durationSeconds, loopVideo
   }
   
   args.push(rtmpUrl);
-  console.log('[StreamingService] Video-only: COPY mode');
+  console.log('[StreamingService] Video-only: minimal copy');
   return args;
 }
 async function startStream(streamId) {
