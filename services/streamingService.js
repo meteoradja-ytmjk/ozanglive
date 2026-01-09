@@ -551,52 +551,51 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
   
   fs.writeFileSync(concatFile, concatContent);
   
-  // Non-advanced mode - LOW CPU with STABLE AUDIO
+  // Non-advanced mode - LOW CPU + STABLE AUDIO
   if (!stream.use_advanced_settings) {
     const args = [
       '-threads', '1',
-      '-thread_queue_size', '8192',      // Large input buffer
-      '-probesize', '10000000',          // 10MB
-      '-analyzeduration', '10000000',    // 10 seconds
-      '-fflags', '+genpts+igndts',       // Generate PTS, ignore DTS
-      '-avoid_negative_ts', 'make_zero', // Fix negative timestamps
+      '-fflags', '+genpts+igndts+discardcorrupt',
       '-loglevel', 'error',
       '-re',
+      '-thread_queue_size', '4096',
+      '-analyzeduration', '5000000',
+      '-probesize', '5000000',
       '-f', 'concat',
       '-safe', '0',
       '-i', concatFile,
       '-c:v', 'copy',
-      '-c:a', 'copy',
-      '-flush_packets', '0',
-      '-max_interleave_delta', '0',
+      '-c:a', 'aac',
+      '-b:a', '128k',
+      '-ar', '44100',
+      '-ac', '2',
+      '-async', '1',
       '-f', 'flv'
     ];
     
-    // CRITICAL: Add duration limit just before output URL
     if (durationSeconds && durationSeconds > 0) {
       console.log(`[StreamingService] Playlist FFmpeg -t parameter set: ${durationSeconds} seconds`);
       args.push('-t', durationSeconds.toString());
     }
     
     args.push(rtmpUrl);
-    console.log('[StreamingService] Playlist: LOW CPU mode (copy)');
+    console.log('[StreamingService] Playlist: LOW CPU + stable audio');
     return args;
   }
   
-  // Advanced mode - encoding with STABLE AUDIO
+  // Advanced mode - encoding with stable audio
   const resolution = stream.resolution || '1280x720';
   const bitrate = stream.bitrate || 2500;
   const fps = stream.fps || 30;
   
   const advancedArgs = [
     '-threads', '2',
-    '-thread_queue_size', '8192',        // Large input buffer
-    '-probesize', '10000000',            // 10MB
-    '-analyzeduration', '10000000',      // 10 seconds
-    '-fflags', '+genpts+igndts',         // Generate PTS, ignore DTS
-    '-avoid_negative_ts', 'make_zero',   // Fix negative timestamps
+    '-fflags', '+genpts+igndts+discardcorrupt',
     '-loglevel', 'error',
     '-re',
+    '-thread_queue_size', '4096',
+    '-analyzeduration', '5000000',
+    '-probesize', '5000000',
     '-f', 'concat',
     '-safe', '0',
     '-i', concatFile,
@@ -614,12 +613,10 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
     '-b:a', '128k',
     '-ar', '44100',
     '-ac', '2',
-    '-flush_packets', '0',
-    '-max_interleave_delta', '0',
+    '-async', '1',
     '-f', 'flv'
   ];
   
-  // CRITICAL: Add duration limit just before output URL
   if (durationSeconds && durationSeconds > 0) {
     console.log(`[StreamingService] Playlist (advanced) FFmpeg -t parameter set: ${durationSeconds} seconds`);
     advancedArgs.push('-t', durationSeconds.toString());
@@ -715,55 +712,48 @@ async function buildFFmpegArgs(stream) {
 
 /**
  * Build FFmpeg args for video + separate audio streaming
- * Both video and audio will loop independently until duration is reached
  * 
- * OPTIMIZED for LOW CPU (~3%) with STABLE AUDIO:
- * - Large per-input buffers to prevent audio underrun
- * - Proper timestamp handling for seamless looping
- * - Audio copy mode when possible (AAC input)
- * - Fallback to lightweight AAC encoding only if needed
- * 
- * KEY: The main cause of audio stuttering in merged streams is
- * insufficient input buffering. By using large thread_queue_size
- * per input, we ensure smooth audio even with looping.
+ * OPTIMIZED: LOW CPU (2-3%) + STABLE AUDIO
+ * - Copy video (0% CPU)
+ * - Lightweight AAC encoding with async sync
+ * - Optimized buffer sizes
  */
 function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds, loopVideo) {
   const args = [
     '-threads', '1',
-    '-fflags', '+genpts+igndts',       // Generate PTS, ignore DTS issues
-    '-avoid_negative_ts', 'make_zero', // Fix negative timestamps
+    '-fflags', '+genpts+igndts+discardcorrupt',
     '-loglevel', 'error',
-    '-re'                              // Real-time streaming
+    '-re'
   ];
   
-  // Video input with looping and large buffer
+  // Video input
   if (loopVideo) {
     args.push('-stream_loop', '-1');
   }
-  args.push('-thread_queue_size', '8192'); // Large buffer for video
+  args.push('-thread_queue_size', '4096');
+  args.push('-analyzeduration', '5000000');
+  args.push('-probesize', '5000000');
   args.push('-i', videoPath);
   
-  // Audio input with looping and large buffer
+  // Audio input with loop
   args.push('-stream_loop', '-1');
-  args.push('-thread_queue_size', '8192'); // Large buffer for audio - CRITICAL
+  args.push('-thread_queue_size', '4096');
   args.push('-i', audioPath);
   
   args.push('-map', '0:v:0');
   args.push('-map', '1:a:0');
   
-  // Video: copy (no re-encoding)
+  // Video: copy (0% CPU)
   args.push('-c:v', 'copy');
   
-  // Audio: Use lightweight encoding for stable sync
-  // AAC encoding at 128k uses minimal CPU but ensures proper timestamps
+  // Audio: Lightweight AAC with async
   args.push('-c:a', 'aac');
   args.push('-b:a', '128k');
   args.push('-ar', '44100');
   args.push('-ac', '2');
+  args.push('-async', '1');             // Key for stable audio
   
-  // Output settings
-  args.push('-flush_packets', '0');
-  args.push('-max_interleave_delta', '0');
+  args.push('-shortest');
   args.push('-f', 'flv');
   
   if (durationSeconds && durationSeconds > 0) {
@@ -771,47 +761,44 @@ function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds
   }
   
   args.push(rtmpUrl);
-  console.log('[StreamingService] Audio-merge: LOW CPU mode');
+  console.log('[StreamingService] Audio-merge: LOW CPU + stable audio');
   return args;
 }
 
 /**
  * Build FFmpeg args for video only streaming (preserve original audio)
  * 
- * OPTIMIZED for LOW CPU (~3%) with STABLE AUDIO:
- * - Uses copy mode for both video and audio (minimal CPU)
- * - Larger thread_queue_size to prevent buffer underrun
- * - Proper timestamp handling with fflags
- * - Optimized buffer sizes for RTMP stability
- * 
- * KEY: Audio stuttering is usually caused by buffer underrun, not encoding.
- * By increasing buffers and using proper timestamp flags, we can keep
- * copy mode while maintaining stable audio.
+ * OPTIMIZED: LOW CPU (2-3%) + STABLE AUDIO
+ * - Copy video (0% CPU)
+ * - Lightweight AAC encoding with async sync
+ * - Single thread for minimal overhead
  */
 function buildFFmpegArgsVideoOnly(videoPath, rtmpUrl, durationSeconds, loopVideo) {
   const args = [
-    '-threads', '1',
-    '-thread_queue_size', '8192',      // Large input buffer - prevents underrun
-    '-probesize', '10000000',          // 10MB - better stream analysis
-    '-analyzeduration', '10000000',    // 10 seconds - better stream analysis
-    '-fflags', '+genpts+igndts',       // Generate PTS, ignore DTS issues
-    '-avoid_negative_ts', 'make_zero', // Fix negative timestamps
+    '-threads', '1',                    // Single thread
+    '-fflags', '+genpts+igndts+discardcorrupt',
     '-loglevel', 'error',
-    '-re'                              // Real-time streaming
+    '-re'
   ];
   
   if (loopVideo) {
     args.push('-stream_loop', '-1');
   }
+  args.push('-thread_queue_size', '4096');  // Reduced but sufficient
+  args.push('-analyzeduration', '5000000'); // 5 seconds
+  args.push('-probesize', '5000000');       // 5MB
   args.push('-i', videoPath);
   
-  // COPY MODE - minimal CPU usage
+  // Video: copy (0% CPU)
   args.push('-c:v', 'copy');
-  args.push('-c:a', 'copy');
   
-  // Output buffer settings for stable RTMP
-  args.push('-flush_packets', '0');    // Buffer packets before writing
-  args.push('-max_interleave_delta', '0'); // Disable interleave limit
+  // Audio: Lightweight AAC with async
+  args.push('-c:a', 'aac');
+  args.push('-b:a', '128k');            // 128k is enough for streaming
+  args.push('-ar', '44100');            // Standard sample rate
+  args.push('-ac', '2');
+  args.push('-async', '1');             // Key for stable audio
+  
   args.push('-f', 'flv');
   
   if (durationSeconds && durationSeconds > 0) {
@@ -819,7 +806,7 @@ function buildFFmpegArgsVideoOnly(videoPath, rtmpUrl, durationSeconds, loopVideo
   }
   
   args.push(rtmpUrl);
-  console.log('[StreamingService] Video-only: LOW CPU mode (copy)');
+  console.log('[StreamingService] Video-only: LOW CPU + stable audio');
   return args;
 }
 async function startStream(streamId) {
