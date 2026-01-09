@@ -553,22 +553,23 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
   
   // Non-advanced mode uses copy (minimal CPU) with proper buffering for smooth audio
   if (!stream.use_advanced_settings) {
-    console.log('[StreamingService] Using playlist mode: copy, bufsize=3M');
+    console.log('[StreamingService] Using playlist mode: copy, bufsize=6M');
     const args = [
-      // CPU optimization: limit threads per stream
-      '-threads', '2',
-      '-thread_queue_size', '4096',     // IMPROVED: Larger queue prevents audio drops
+      // CPU optimization: more threads for smoother processing
+      '-threads', '4',
+      '-thread_queue_size', '8192',     // DOUBLED: Much larger queue prevents audio drops
       '-hwaccel', 'auto',
-      // IMPROVED: Larger probesize for better audio sync detection
-      '-probesize', '10000000',         // 10MB
-      '-analyzeduration', '10000000',   // 10 seconds
+      // CRITICAL: Much larger probesize for perfect audio sync detection
+      '-probesize', '50000000',         // 50MB
+      '-analyzeduration', '20000000',   // 20 seconds
       '-loglevel', 'error',
       '-re',
-      // Handle corrupt frames gracefully
-      '-fflags', '+genpts+igndts+discardcorrupt',
+      // Handle corrupt frames gracefully - IMPROVED flags
+      '-fflags', '+genpts+igndts+discardcorrupt+nobuffer',
+      '-flags', 'low_delay',
       '-avoid_negative_ts', 'make_zero',
-      // ADDED: Async audio handling for smoother playback
-      '-async', '1',
+      // CRITICAL: Use async 0 to prevent audio drops
+      '-async', '0',
       '-vsync', 'cfr',                  // Constant frame rate for stable output
       '-f', 'concat',
       '-safe', '0',
@@ -576,9 +577,12 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
       '-c:v', 'copy',
       '-c:a', 'copy',
       '-flags', '+global_header',
-      '-bufsize', '3000k',              // IMPROVED: Larger buffer for smooth playback
-      '-max_muxing_queue_size', '8192', // IMPROVED: Larger queue prevents audio drops
-      '-max_interleave_delta', '0',     // ADDED: Prevent audio/video desync
+      '-bufsize', '6000k',              // DOUBLED: Much larger buffer for smooth playback
+      '-max_muxing_queue_size', '16384', // DOUBLED: Much larger queue prevents audio drops
+      '-max_interleave_delta', '0',     // Prevent audio/video desync
+      '-muxdelay', '0',                 // ADDED: Minimize muxing delay
+      '-muxpreload', '0',               // ADDED: No preload delay
+      '-flush_packets', '1',            // ADDED: Flush packets immediately
       '-flvflags', 'no_duration_filesize',
       '-f', 'flv'
     ];
@@ -600,20 +604,21 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
   
   console.log('[StreamingService] Using playlist mode: ultrafast preset, encoding');
   const advancedArgs = [
-    // CPU optimization: limit threads per stream
-    '-threads', '2',
-    '-thread_queue_size', '4096',       // IMPROVED: Larger queue prevents audio drops
+    // CPU optimization: more threads for smoother processing
+    '-threads', '4',
+    '-thread_queue_size', '8192',       // DOUBLED: Much larger queue prevents audio drops
     '-hwaccel', 'auto',
-    // IMPROVED: Larger probesize for better audio sync detection
-    '-probesize', '10000000',           // 10MB
-    '-analyzeduration', '10000000',     // 10 seconds
+    // CRITICAL: Much larger probesize for perfect audio sync detection
+    '-probesize', '50000000',           // 50MB
+    '-analyzeduration', '20000000',     // 20 seconds
     '-loglevel', 'error',
     '-re',
-    // Handle corrupt frames gracefully
-    '-fflags', '+genpts+discardcorrupt',
+    // Handle corrupt frames gracefully - IMPROVED flags
+    '-fflags', '+genpts+discardcorrupt+nobuffer',
+    '-flags', 'low_delay',
     '-avoid_negative_ts', 'make_zero',
-    // ADDED: Async audio handling for smoother playback
-    '-async', '1',
+    // CRITICAL: Use async 0 to prevent audio drops
+    '-async', '0',
     '-vsync', 'cfr',                    // Constant frame rate for stable output
     '-f', 'concat',
     '-safe', '0',
@@ -624,18 +629,22 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
     '-tune', 'zerolatency',
     '-b:v', `${bitrate}k`,
     '-maxrate', `${bitrate * 1.5}k`,
-    '-bufsize', `${Math.max(bitrate * 2, 5000)}k`, // IMPROVED: Minimum 5M buffer
+    '-bufsize', `${Math.max(bitrate * 2, 6000)}k`, // IMPROVED: Minimum 6M buffer
     '-pix_fmt', 'yuv420p',
     '-g', `${fps * 2}`,
     '-s', resolution,
     '-r', fps.toString(),
     '-c:a', 'aac',
-    '-b:a', '160k',                     // IMPROVED: Higher bitrate for better quality
-    '-ar', '48000',                     // IMPROVED: 48kHz sample rate (broadcast standard)
-    '-ac', '2',                         // ADDED: Ensure stereo output
-    '-aac_coder', 'fast',               // ADDED: Fast coder for lower CPU
-    '-max_muxing_queue_size', '8192',   // IMPROVED: Larger queue prevents audio drops
-    '-max_interleave_delta', '0',       // ADDED: Prevent audio/video desync
+    '-b:a', '192k',                     // INCREASED: Higher bitrate for better quality
+    '-ar', '48000',                     // 48kHz sample rate (broadcast standard)
+    '-ac', '2',                         // Ensure stereo output
+    // CRITICAL: Audio filter for smooth resampling
+    '-af', 'aresample=async=1000:first_pts=0,asetpts=PTS-STARTPTS',
+    '-max_muxing_queue_size', '16384',  // DOUBLED: Much larger queue prevents audio drops
+    '-max_interleave_delta', '0',       // Prevent audio/video desync
+    '-muxdelay', '0',                   // ADDED: Minimize muxing delay
+    '-muxpreload', '0',                 // ADDED: No preload delay
+    '-flush_packets', '1',              // ADDED: Flush packets immediately
     '-flvflags', 'no_duration_filesize',
     '-f', 'flv'
   ];
@@ -755,19 +764,20 @@ function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds
   
   const args = [
     // CPU optimization: limit threads per stream (balanced for quality)
-    '-threads', '2',
-    '-thread_queue_size', '4096',       // IMPROVED: Larger queue prevents audio drops
+    '-threads', '4',                    // INCREASED: More threads for smoother processing
+    '-thread_queue_size', '8192',       // DOUBLED: Much larger queue prevents audio drops
     '-hwaccel', 'auto',
-    // IMPROVED: Larger probesize for better audio sync detection
-    '-probesize', '10000000',           // 10MB - better analysis for audio sync
-    '-analyzeduration', '10000000',     // 10 seconds - thorough audio/video sync analysis
+    // CRITICAL: Much larger probesize for perfect audio sync detection
+    '-probesize', '50000000',           // 50MB - extensive analysis for audio sync
+    '-analyzeduration', '20000000',     // 20 seconds - thorough audio/video sync analysis
     '-loglevel', 'error',
     '-re',
-    // Handle corrupt frames gracefully
-    '-fflags', '+genpts+igndts+discardcorrupt',
+    // Handle corrupt frames gracefully - IMPROVED flags
+    '-fflags', '+genpts+igndts+discardcorrupt+nobuffer',
+    '-flags', 'low_delay',
     '-avoid_negative_ts', 'make_zero',
-    // ADDED: Async audio handling for smoother playback
-    '-async', '1',
+    // CRITICAL: Use async 0 to prevent audio drops (fills gaps with silence instead of dropping)
+    '-async', '0',
     '-vsync', 'cfr'                     // Constant frame rate for stable output
   ];
   
@@ -779,8 +789,8 @@ function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds
   
   // Audio input with looping (always loop audio to match video duration)
   args.push('-stream_loop', '-1');
-  // ADDED: Separate thread queue for audio input
-  args.push('-thread_queue_size', '4096');
+  // CRITICAL: Separate thread queue for audio input - must be large
+  args.push('-thread_queue_size', '8192');
   args.push('-i', audioPath);
   
   // Map video from first input, audio from second input
@@ -790,27 +800,25 @@ function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds
   // Video codec - copy to avoid re-encoding (minimal CPU)
   args.push('-c:v', 'copy');
   
-  // Audio codec - try copy first for AAC files, otherwise encode with good quality
-  if (canCopyAudio) {
-    // AAC audio can be copied directly (ZERO CPU for audio)
-    args.push('-c:a', 'copy');
-    console.log('[StreamingService] Audio is AAC - using copy mode (zero CPU)');
-  } else {
-    // Need to encode to AAC - use good quality settings to prevent stuttering
-    args.push('-c:a', 'aac');
-    args.push('-b:a', '160k');          // IMPROVED: Higher bitrate for better quality
-    args.push('-ar', '48000');          // IMPROVED: 48kHz sample rate (broadcast standard)
-    args.push('-ac', '2');              // Stereo
-    args.push('-profile:a', 'aac_low'); // LC-AAC profile for compatibility
-    args.push('-aac_coder', 'fast');    // ADDED: Fast coder for lower CPU
-    console.log('[StreamingService] Audio needs encoding - using AAC encoder at 160k/48kHz');
-  }
+  // Audio codec - ALWAYS re-encode for consistent output and smooth playback
+  // Even AAC files benefit from re-encoding to ensure consistent frame sizes
+  args.push('-c:a', 'aac');
+  args.push('-b:a', '192k');            // INCREASED: Higher bitrate for better quality
+  args.push('-ar', '48000');            // 48kHz sample rate (broadcast standard)
+  args.push('-ac', '2');                // Stereo
+  args.push('-profile:a', 'aac_low');   // LC-AAC profile for compatibility
+  // CRITICAL: Audio filter for smooth resampling and consistent frame sizes
+  args.push('-af', 'aresample=async=1000:first_pts=0,asetpts=PTS-STARTPTS');
+  console.log('[StreamingService] Audio encoding: AAC 192k/48kHz with async resampling filter');
   
-  // Output settings - optimized for smooth audio
+  // Output settings - HEAVILY optimized for smooth audio
   args.push('-flags', '+global_header');
-  args.push('-bufsize', '3000k');           // IMPROVED: Larger buffer for smoother playback
-  args.push('-max_muxing_queue_size', '8192'); // IMPROVED: Larger queue prevents audio drops
-  args.push('-max_interleave_delta', '0');  // ADDED: Prevent audio/video desync
+  args.push('-bufsize', '6000k');           // DOUBLED: Much larger buffer for smoother playback
+  args.push('-max_muxing_queue_size', '16384'); // DOUBLED: Much larger queue prevents audio drops
+  args.push('-max_interleave_delta', '0');  // Prevent audio/video desync
+  args.push('-muxdelay', '0');              // ADDED: Minimize muxing delay
+  args.push('-muxpreload', '0');            // ADDED: No preload delay
+  args.push('-flush_packets', '1');         // ADDED: Flush packets immediately
   args.push('-flvflags', 'no_duration_filesize');
   args.push('-f', 'flv');
   
@@ -822,7 +830,7 @@ function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds
   
   args.push(rtmpUrl);
   
-  console.log(`[StreamingService] Using audio-merge mode: video copy, audio ${canCopyAudio ? 'copy' : 'aac-160k/48kHz'}, bufsize=3M`);
+  console.log(`[StreamingService] Using audio-merge mode: video copy, audio aac-192k/48kHz, bufsize=6M, queue=16384`);
   
   return args;
 }
@@ -843,19 +851,20 @@ function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds
 function buildFFmpegArgsVideoOnly(videoPath, rtmpUrl, durationSeconds, loopVideo) {
   const args = [
     // CPU optimization: limit threads per stream (allows more concurrent streams)
-    '-threads', '2',
-    '-thread_queue_size', '4096',       // IMPROVED: Larger queue prevents audio drops
+    '-threads', '4',                    // INCREASED: More threads for smoother processing
+    '-thread_queue_size', '8192',       // DOUBLED: Much larger queue prevents audio drops
     '-hwaccel', 'auto',
-    // IMPROVED: Larger probesize for better audio sync detection
-    '-probesize', '10000000',           // 10MB - better analysis for audio sync
-    '-analyzeduration', '10000000',     // 10 seconds - thorough audio/video sync analysis
+    // CRITICAL: Much larger probesize for perfect audio sync detection
+    '-probesize', '50000000',           // 50MB - extensive analysis for audio sync
+    '-analyzeduration', '20000000',     // 20 seconds - thorough audio/video sync analysis
     '-loglevel', 'error',
     '-re',
-    // Handle corrupt frames gracefully
-    '-fflags', '+genpts+igndts+discardcorrupt',
+    // Handle corrupt frames gracefully - IMPROVED flags
+    '-fflags', '+genpts+igndts+discardcorrupt+nobuffer',
+    '-flags', 'low_delay',
     '-avoid_negative_ts', 'make_zero',
-    // ADDED: Async audio handling for smoother playback
-    '-async', '1',
+    // CRITICAL: Use async 0 to prevent audio drops
+    '-async', '0',
     '-vsync', 'cfr'                     // Constant frame rate for stable output
   ];
   
@@ -871,11 +880,14 @@ function buildFFmpegArgsVideoOnly(videoPath, rtmpUrl, durationSeconds, loopVideo
   args.push('-c:v', 'copy');
   args.push('-c:a', 'copy');
   
-  // Output settings - optimized for smooth audio
+  // Output settings - HEAVILY optimized for smooth audio
   args.push('-flags', '+global_header');
-  args.push('-bufsize', '3000k');           // IMPROVED: Larger buffer for smoother playback
-  args.push('-max_muxing_queue_size', '8192'); // IMPROVED: Larger queue prevents audio drops
-  args.push('-max_interleave_delta', '0');  // ADDED: Prevent audio/video desync
+  args.push('-bufsize', '6000k');           // DOUBLED: Much larger buffer for smoother playback
+  args.push('-max_muxing_queue_size', '16384'); // DOUBLED: Much larger queue prevents audio drops
+  args.push('-max_interleave_delta', '0');  // Prevent audio/video desync
+  args.push('-muxdelay', '0');              // ADDED: Minimize muxing delay
+  args.push('-muxpreload', '0');            // ADDED: No preload delay
+  args.push('-flush_packets', '1');         // ADDED: Flush packets immediately
   args.push('-flvflags', 'no_duration_filesize');
   args.push('-f', 'flv');
   
@@ -887,7 +899,7 @@ function buildFFmpegArgsVideoOnly(videoPath, rtmpUrl, durationSeconds, loopVideo
   
   args.push(rtmpUrl);
   
-  console.log('[StreamingService] Using video-only mode: copy mode, bufsize=3M');
+  console.log('[StreamingService] Using video-only mode: copy mode, bufsize=6M, queue=16384');
   
   return args;
 }
