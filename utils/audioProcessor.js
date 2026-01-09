@@ -29,9 +29,21 @@ if (fs.existsSync('/usr/bin/ffmpeg')) {
  * 
  * @param {string} inputPath - Path to input audio file
  * @param {string} outputPath - Path for processed output (optional, will overwrite input if not provided)
- * @returns {Promise<{success: boolean, outputPath: string, message: string}>}
+ * @returns {Promise<{success: boolean, outputPath: string, message: string, skipped: boolean}>}
  */
 async function processAudioForStreaming(inputPath, outputPath = null) {
+  // Skip processing if already AAC file
+  const ext = path.extname(inputPath).toLowerCase();
+  if (ext === '.aac') {
+    console.log(`[AudioProcessor] Skipping - already AAC: ${inputPath}`);
+    return {
+      success: true,
+      outputPath: inputPath,
+      message: 'Already AAC format, skipped processing',
+      skipped: true
+    };
+  }
+  
   return new Promise((resolve, reject) => {
     // If no output path, create temp file then replace original
     const tempOutput = outputPath || inputPath.replace(/\.[^.]+$/, '_processed.aac');
