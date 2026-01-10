@@ -3011,14 +3011,15 @@ function renderTitleManagerList() {
   }
   
   listEl.innerHTML = titleSuggestions.map(title => `
-    <div class="flex items-center gap-2 p-2 bg-dark-600 rounded-lg hover:bg-dark-500 transition-colors group">
+    <div class="flex items-center gap-2 p-2 bg-dark-600 rounded-lg hover:bg-dark-500 transition-colors">
       <button type="button" onclick="selectTitle('${escapeHtml(title.id)}', '${escapeHtml(title.title.replace(/'/g, "\\'"))}')"
         class="flex-1 text-left text-sm text-white truncate hover:text-primary">
         ${escapeHtml(title.title)}
       </button>
       <span class="text-xs text-gray-500 px-2">${title.use_count || 0}x</span>
       <button type="button" onclick="deleteTitleSuggestion('${escapeHtml(title.id)}')"
-        class="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 p-1 transition-opacity">
+        class="text-red-400 hover:text-red-300 hover:bg-red-500/20 p-1.5 rounded-lg transition-colors"
+        title="Delete title">
         <i class="ti ti-trash text-sm"></i>
       </button>
     </div>
