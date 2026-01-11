@@ -6294,17 +6294,91 @@ app.get('/api/system/check-update', isAuthenticated, isAdmin, async (req, res) =
       const behindOutput = execSync(`git rev-list HEAD..origin/${currentBranch} --count`, { cwd: appDir, encoding: 'utf8', stdio: 'pipe' }).trim();
       behindCount = parseInt(behindOutput, 10) || 0;
       
-      // Get changelog (commit messages)
+      // Get changelog from CHANGELOG.md file (remote version)
       if (behindCount > 0) {
         try {
-          const logOutput = execSync(`git log HEAD..origin/${currentBranch} --oneline --no-merges -n 10`, { cwd: appDir, encoding: 'utf8', stdio: 'pipe' });
-          changelog = logOutput.trim().split('\n').filter(l => l.trim()).map(l => {
-            // Remove commit hash prefix
-            return l.replace(/^[a-f0-9]+\s+/, '');
-          });
-        } catch (logErr) {
-          // Changelog is optional, continue without it
-          console.log('Could not get changelog:', logErr.message);
+          // Try to get remote CHANGELOG.md
+          const remoteChangelog = execSync(`git show origin/${currentBranch}:CHANGELOG.md`, { cwd: appDir, encoding: 'utf8', stdio: 'pipe' });
+          
+          // Parse changelog to get entries for versions newer than current
+          const parseChangelog = (content, currentVer, latestVer) => {
+            const lines = content.split('\n');
+            const entries = [];
+            let inTargetVersion = false;
+            let currentSection = '';
+            
+            for (const line of lines) {
+              // Match version header like ## [2.2.0] - 2026-01-12
+              const versionMatch = line.match(/^## \[(\d+\.\d+\.\d+)\]/);
+              if (versionMatch) {
+                const version = versionMatch[1];
+                // Check if this version is newer than current
+                if (compareVersions(version, currentVer) > 0) {
+                  inTargetVersion = true;
+                  entries.push(`📦 Version ${version}`);
+                } else {
+                  inTargetVersion = false;
+                }
+                continue;
+              }
+              
+              if (inTargetVersion) {
+                // Match section headers like ### Added, ### Changed, ### Fixed
+                const sectionMatch = line.match(/^### (Added|Changed|Fixed|Removed|Security|Deprecated)/);
+                if (sectionMatch) {
+                  currentSection = sectionMatch[1];
+                  continue;
+                }
+                
+                // Match list items
+                const itemMatch = line.match(/^- (.+)/);
+                if (itemMatch && currentSection) {
+                  const icon = currentSection === 'Added' ? '✨' : 
+                               currentSection === 'Changed' ? '🔄' : 
+                               currentSection === 'Fixed' ? '🐛' : 
+                               currentSection === 'Removed' ? '🗑️' :
+                               currentSection === 'Security' ? '🔒' : '📝';
+                  entries.push(`${icon} ${itemMatch[1]}`);
+                }
+              }
+            }
+            
+            return entries.slice(0, 15); // Limit to 15 entries
+          };
+          
+          // Simple version comparison function
+          const compareVersions = (v1, v2) => {
+            const parts1 = v1.split('.').map(Number);
+            const parts2 = v2.split('.').map(Number);
+            for (let i = 0; i < 3; i++) {
+              if (parts1[i] > parts2[i]) return 1;
+              if (parts1[i] < parts2[i]) return -1;
+            }
+            return 0;
+          };
+          
+          // Get remote version first
+          let remoteVersion = currentVersion;
+          try {
+            const remotePackage = execSync(`git show origin/${currentBranch}:package.json`, { cwd: appDir, encoding: 'utf8', stdio: 'pipe' });
+            const remotePkg = JSON.parse(remotePackage);
+            remoteVersion = remotePkg.version || currentVersion;
+          } catch (e) {}
+          
+          changelog = parseChangelog(remoteChangelog, currentVersion, remoteVersion);
+          
+        } catch (changelogErr) {
+          // Fallback to git commit messages if CHANGELOG.md not found
+          console.log('Could not get CHANGELOG.md, falling back to git log:', changelogErr.message);
+          try {
+            const logOutput = execSync(`git log HEAD..origin/${currentBranch} --oneline --no-merges -n 10`, { cwd: appDir, encoding: 'utf8', stdio: 'pipe' });
+            changelog = logOutput.trim().split('\n').filter(l => l.trim()).map(l => {
+              // Remove commit hash prefix
+              return l.replace(/^[a-f0-9]+\s+/, '');
+            });
+          } catch (logErr) {
+            console.log('Could not get changelog:', logErr.message);
+          }
         }
       }
       
