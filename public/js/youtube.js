@@ -711,11 +711,13 @@ if (createBroadcastForm) {
       const categoryId = document.getElementById('categoryId').value;
       formData.append('categoryId', categoryId || '22');
       
-      // Add Additional Settings (auto-start and auto-stop)
+      // Add Additional Settings (auto-start, auto-stop, and unlist replay)
       const enableAutoStart = document.getElementById('enableAutoStart').checked;
       const enableAutoStop = document.getElementById('enableAutoStop').checked;
+      const unlistReplayOnEnd = document.getElementById('unlistReplayOnEnd').checked;
       formData.append('enableAutoStart', enableAutoStart);
       formData.append('enableAutoStop', enableAutoStop);
+      formData.append('unlistReplayOnEnd', unlistReplayOnEnd);
       
       // Add thumbnail from gallery selection
       const thumbnailPath = document.getElementById('selectedThumbnailPath').value;

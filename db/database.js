@@ -291,6 +291,11 @@ async function createCoreTablesAsync() {
   // YouTube status sync columns
   await runTableQuery(`ALTER TABLE streams ADD COLUMN youtube_broadcast_id TEXT`, 'streams.youtube_broadcast_id');
   await runTableQuery(`ALTER TABLE streams ADD COLUMN youtube_lifecycle_status TEXT`, 'streams.youtube_lifecycle_status');
+  
+  // YouTube broadcast settings columns
+  await runTableQuery(`ALTER TABLE streams ADD COLUMN youtube_enable_auto_start INTEGER DEFAULT 1`, 'streams.youtube_enable_auto_start');
+  await runTableQuery(`ALTER TABLE streams ADD COLUMN youtube_enable_auto_stop INTEGER DEFAULT 1`, 'streams.youtube_enable_auto_stop');
+  await runTableQuery(`ALTER TABLE streams ADD COLUMN youtube_unlist_replay_on_end INTEGER DEFAULT 1`, 'streams.youtube_unlist_replay_on_end');
 
   // Migrate stream_duration_hours to stream_duration_minutes
   await runTableQuery(`UPDATE streams SET stream_duration_minutes = stream_duration_hours * 60 
@@ -435,6 +440,27 @@ async function createCoreTablesAsync() {
 
   await runTableQuery(`CREATE INDEX IF NOT EXISTS idx_title_suggestions_category 
           ON title_suggestions(user_id, category)`, 'title_suggestions.category_index');
+
+  // Create youtube_broadcast_settings table for storing broadcast-specific settings
+  await runTableQuery(`CREATE TABLE IF NOT EXISTS youtube_broadcast_settings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    broadcast_id TEXT NOT NULL UNIQUE,
+    user_id TEXT NOT NULL,
+    account_id INTEGER,
+    enable_auto_start INTEGER DEFAULT 1,
+    enable_auto_stop INTEGER DEFAULT 1,
+    unlist_replay_on_end INTEGER DEFAULT 1,
+    original_privacy_status TEXT DEFAULT 'public',
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (account_id) REFERENCES youtube_credentials(id) ON DELETE SET NULL
+  )`, 'youtube_broadcast_settings');
+
+  await runTableQuery(`CREATE INDEX IF NOT EXISTS idx_youtube_broadcast_settings_user 
+          ON youtube_broadcast_settings(user_id)`, 'youtube_broadcast_settings.user_index');
+
+  await runTableQuery(`CREATE INDEX IF NOT EXISTS idx_youtube_broadcast_settings_broadcast 
+          ON youtube_broadcast_settings(broadcast_id)`, 'youtube_broadcast_settings.broadcast_index');
 }
 
 // Old createCoreTables function removed - replaced with createCoreTablesAsync above

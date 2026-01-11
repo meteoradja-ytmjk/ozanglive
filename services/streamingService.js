@@ -6,6 +6,9 @@ const schedulerService = require('./schedulerService');
 const LiveLimitService = require('./liveLimitService');
 const youtubeStatusSync = require('./youtubeStatusSync');
 const rtmpHealthMonitor = require('./rtmpHealthMonitor');
+const youtubeService = require('./youtubeService');
+const YouTubeCredentials = require('../models/YouTubeCredentials');
+const YouTubeBroadcastSettings = require('../models/YouTubeBroadcastSettings');
 const { v4: uuidv4 } = require('uuid');
 const { db } = require('../db/database');
 const Stream = require('../models/Stream');
@@ -43,6 +46,48 @@ const CLEANUP_INTERVAL = 30 * 60 * 1000; // Every 30 minutes
 // PROCESS HEALTH CHECK: Verify FFmpeg processes are still running
 // This catches cases where FFmpeg dies without triggering exit event
 const PROCESS_CHECK_INTERVAL = 30 * 1000; // Every 30 seconds
+
+/**
+ * Handle unlist replay on stream end
+ * Checks if the stream has YouTube broadcast settings with unlistReplayOnEnd enabled
+ * @param {Object} stream - Stream object from database
+ */
+async function handleUnlistReplayOnEnd(stream) {
+  if (!stream || !stream.youtube_broadcast_id) return;
+  
+  try {
+    const settings = await YouTubeBroadcastSettings.findByBroadcastId(stream.youtube_broadcast_id);
+    
+    if (!settings || !settings.unlistReplayOnEnd) {
+      console.log(`[StreamingService] Unlist replay not enabled for broadcast ${stream.youtube_broadcast_id}`);
+      return;
+    }
+    
+    console.log(`[StreamingService] Unlisting replay for broadcast ${stream.youtube_broadcast_id}`);
+    
+    // Get credentials to make API call
+    const credentials = await YouTubeCredentials.findByUserId(stream.user_id);
+    if (!credentials) {
+      console.error(`[StreamingService] No YouTube credentials found for user ${stream.user_id}`);
+      return;
+    }
+    
+    const accessToken = await youtubeService.getAccessToken(
+      credentials.clientId,
+      credentials.clientSecret,
+      credentials.refreshToken
+    );
+    
+    const unlistResult = await youtubeService.unlistBroadcast(accessToken, stream.youtube_broadcast_id);
+    if (unlistResult.success) {
+      console.log(`[StreamingService] Successfully unlisted replay for broadcast ${stream.youtube_broadcast_id}`);
+    } else {
+      console.error(`[StreamingService] Failed to unlist replay: ${unlistResult.error}`);
+    }
+  } catch (err) {
+    console.error(`[StreamingService] Error handling unlist replay:`, err.message);
+  }
+}
 
 /**
  * Clean up stale entries from Maps to prevent memory leaks
@@ -1248,6 +1293,9 @@ async function stopStream(streamId) {
         const updatedStream = await Stream.findById(streamId);
         await saveStreamHistory(updatedStream);
         
+        // Handle unlist replay on end for YouTube streams
+        await handleUnlistReplayOnEnd(stream);
+        
         return { success: true, message: 'Stream stopped (was not in memory but FFmpeg killed if running)' };
       }
       return { success: false, error: 'Stream is not active' };
@@ -1295,6 +1343,9 @@ async function stopStream(streamId) {
       await Stream.updateStatus(streamId, newStatus, stream.user_id);
       const updatedStream = await Stream.findById(streamId);
       await saveStreamHistory(updatedStream);
+      
+      // Handle unlist replay on end for YouTube streams
+      await handleUnlistReplayOnEnd(stream);
     }
     if (typeof schedulerService !== 'undefined' && schedulerService.cancelStreamTermination) {
       schedulerService.handleStreamStopped(streamId);

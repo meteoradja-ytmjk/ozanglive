@@ -305,6 +305,40 @@ class YouTubeStatusSync {
     // Stop monitoring first
     this.stopMonitoring(streamId);
 
+    // Get the check info before cleanup
+    const check = this.activeChecks.get(streamId);
+    
+    // Handle unlist replay on end if configured
+    if (check && check.broadcastId && (reason === 'complete' || reason === 'broadcast_deleted')) {
+      try {
+        const YouTubeBroadcastSettings = require('../models/YouTubeBroadcastSettings');
+        const settings = await YouTubeBroadcastSettings.findByBroadcastId(check.broadcastId);
+        
+        if (settings && settings.unlistReplayOnEnd) {
+          console.log(`[YouTubeStatusSync] Unlisting replay for broadcast ${check.broadcastId}`);
+          
+          // Get credentials to make API call
+          const credentials = await YouTubeCredentials.findByUserId(check.userId);
+          if (credentials) {
+            const accessToken = await youtubeService.getAccessToken(
+              credentials.clientId,
+              credentials.clientSecret,
+              credentials.refreshToken
+            );
+            
+            const unlistResult = await youtubeService.unlistBroadcast(accessToken, check.broadcastId);
+            if (unlistResult.success) {
+              console.log(`[YouTubeStatusSync] Successfully unlisted replay for broadcast ${check.broadcastId}`);
+            } else {
+              console.error(`[YouTubeStatusSync] Failed to unlist replay: ${unlistResult.error}`);
+            }
+          }
+        }
+      } catch (err) {
+        console.error(`[YouTubeStatusSync] Error handling unlist replay:`, err.message);
+      }
+    }
+
     // Stop the stream via streaming service
     if (this.streamingService) {
       try {

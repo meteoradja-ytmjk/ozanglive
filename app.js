@@ -31,6 +31,7 @@ const youtubeService = require('./services/youtubeService');
 const BroadcastTemplate = require('./models/BroadcastTemplate');
 const TitleSuggestion = require('./models/TitleSuggestion');
 const SystemSettings = require('./models/SystemSettings');
+const YouTubeBroadcastSettings = require('./models/YouTubeBroadcastSettings');
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 // Track if we're shutting down to prevent multiple shutdown attempts
 let isShuttingDown = false;
@@ -4967,7 +4968,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       });
     }
     
-    const { title, description, scheduledStartTime, privacyStatus, streamId, tags, categoryId, enableAutoStart, enableAutoStop, monetizationEnabled, adFrequency, alteredContent } = req.body;
+    const { title, description, scheduledStartTime, privacyStatus, streamId, tags, categoryId, enableAutoStart, enableAutoStop, unlistReplayOnEnd, monetizationEnabled, adFrequency, alteredContent } = req.body;
     
     if (!title || !scheduledStartTime) {
       return res.status(400).json({
@@ -5017,6 +5018,23 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       adFrequency: adFrequency || 'medium',
       alteredContent: alteredContent === 'true' || alteredContent === true
     });
+    
+    // Save broadcast settings for later use (e.g., unlist replay on end)
+    try {
+      await YouTubeBroadcastSettings.upsert({
+        broadcastId: broadcast.broadcastId,
+        userId: req.session.userId,
+        accountId: accountId || null,
+        enableAutoStart: enableAutoStart === 'true' || enableAutoStart === true,
+        enableAutoStop: enableAutoStop !== 'false' && enableAutoStop !== false,
+        unlistReplayOnEnd: unlistReplayOnEnd === 'true' || unlistReplayOnEnd === true,
+        originalPrivacyStatus: privacyStatus || 'unlisted'
+      });
+      console.log('[API] Saved broadcast settings for:', broadcast.broadcastId);
+    } catch (settingsErr) {
+      console.error('[API] Error saving broadcast settings:', settingsErr.message);
+      // Don't fail the request, just log the error
+    }
     
     // Upload thumbnail if provided (either file upload or gallery selection)
     const thumbnailPath = req.body.thumbnailPath;

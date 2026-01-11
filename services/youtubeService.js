@@ -676,6 +676,67 @@ class YouTubeService {
       return [];
     }
   }
+
+  /**
+   * Update broadcast privacy status to unlisted
+   * Used to unlist live replay once stream ends
+   * @param {string} accessToken - Access token
+   * @param {string} broadcastId - Broadcast ID
+   * @returns {Promise<{success: boolean, error?: string}>}
+   */
+  async unlistBroadcast(accessToken, broadcastId) {
+    try {
+      const oauth2Client = new google.auth.OAuth2();
+      oauth2Client.setCredentials({ access_token: accessToken });
+      
+      const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+      
+      console.log(`[YouTubeService.unlistBroadcast] Unlisting broadcast ${broadcastId}`);
+      
+      // First get current broadcast info
+      const currentResponse = await youtube.liveBroadcasts.list({
+        part: 'snippet,status',
+        id: broadcastId
+      });
+      
+      if (!currentResponse.data.items || currentResponse.data.items.length === 0) {
+        console.log(`[YouTubeService.unlistBroadcast] Broadcast ${broadcastId} not found`);
+        return { success: false, error: 'Broadcast not found' };
+      }
+      
+      const current = currentResponse.data.items[0];
+      
+      // Check if already unlisted
+      if (current.status.privacyStatus === 'unlisted') {
+        console.log(`[YouTubeService.unlistBroadcast] Broadcast ${broadcastId} is already unlisted`);
+        return { success: true };
+      }
+      
+      // Update to unlisted
+      const updateRequest = {
+        id: broadcastId,
+        snippet: {
+          title: current.snippet.title,
+          scheduledStartTime: current.snippet.scheduledStartTime
+        },
+        status: {
+          privacyStatus: 'unlisted',
+          selfDeclaredMadeForKids: current.status.selfDeclaredMadeForKids || false
+        }
+      };
+      
+      await youtube.liveBroadcasts.update({
+        part: 'snippet,status',
+        requestBody: updateRequest
+      });
+      
+      console.log(`[YouTubeService.unlistBroadcast] Successfully unlisted broadcast ${broadcastId}`);
+      return { success: true };
+    } catch (error) {
+      console.error(`[YouTubeService.unlistBroadcast] Error unlisting broadcast ${broadcastId}:`, error.message);
+      return { success: false, error: error.message };
+    }
+  }
 }
 
 module.exports = new YouTubeService();
