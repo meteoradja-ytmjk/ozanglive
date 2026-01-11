@@ -320,6 +320,17 @@ function formatDuration(seconds) {
         </button>
       </div>
       <div class="p-6">
+        <!-- Info Banner -->
+        <div class="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+          <div class="flex items-start gap-2">
+            <i class="ti ti-info-circle text-blue-400 mt-0.5"></i>
+            <div class="text-sm">
+              <p class="text-blue-300 font-medium">Audio akan dioptimasi untuk streaming</p>
+              <p class="text-blue-400/70 text-xs mt-1">Tunggu hingga proses selesai. Audio akan di-convert ke format standar YouTube livestreaming (AAC 128k, 44.1kHz stereo).</p>
+            </div>
+          </div>
+        </div>
+        
         <form id="audioUploadForm" enctype="multipart/form-data">
           <input type="hidden" name="_csrf" value="<%= csrfToken %>">
           <!-- Dropzone - shown when no files selected -->
