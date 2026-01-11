@@ -691,6 +691,9 @@ async function buildFFmpegArgs(stream) {
  * Build FFmpeg args for video + separate audio streaming
  * 
  * MINIMAL CPU (~1%) - Full copy mode
+ * 
+ * IMPORTANT: -t parameter must be placed BEFORE the output URL to limit output duration
+ * When using -stream_loop -1, FFmpeg will loop input infinitely, but -t limits the OUTPUT duration
  */
 function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds, loopVideo) {
   const args = ['-re'];
@@ -710,8 +713,11 @@ function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds
   args.push('-shortest');
   args.push('-f', 'flv');
   
+  // CRITICAL: -t must be placed BEFORE the output URL
+  // This limits the OUTPUT duration, not input duration
   if (durationSeconds && durationSeconds > 0) {
     args.push('-t', durationSeconds.toString());
+    console.log(`[StreamingService] Audio-merge: duration limit set to ${durationSeconds} seconds (${durationSeconds / 60} minutes)`);
   }
   
   args.push(rtmpUrl);
@@ -723,6 +729,9 @@ function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds
  * Build FFmpeg args for video only streaming
  * 
  * MINIMAL CPU (~1%) - Full copy mode
+ * 
+ * IMPORTANT: -t parameter must be placed BEFORE the output URL to limit output duration
+ * When using -stream_loop -1, FFmpeg will loop input infinitely, but -t limits the OUTPUT duration
  */
 function buildFFmpegArgsVideoOnly(videoPath, rtmpUrl, durationSeconds, loopVideo) {
   const args = ['-re'];
@@ -734,8 +743,11 @@ function buildFFmpegArgsVideoOnly(videoPath, rtmpUrl, durationSeconds, loopVideo
   args.push('-c', 'copy');
   args.push('-f', 'flv');
   
+  // CRITICAL: -t must be placed BEFORE the output URL
+  // This limits the OUTPUT duration, not input duration
   if (durationSeconds && durationSeconds > 0) {
     args.push('-t', durationSeconds.toString());
+    console.log(`[StreamingService] Video-only: duration limit set to ${durationSeconds} seconds (${durationSeconds / 60} minutes)`);
   }
   
   args.push(rtmpUrl);
@@ -1204,10 +1216,25 @@ async function stopStream(streamId) {
     const ffmpegProcess = activeStreams.get(streamId);
     const isActive = ffmpegProcess !== undefined;
     console.log(`[StreamingService] Stop request for stream ${streamId}, isActive: ${isActive}`);
+    
+    // Get stream info first - we need it for both active and inactive cases
+    const stream = await Stream.findById(streamId);
+    
     if (!isActive) {
-      const stream = await Stream.findById(streamId);
       if (stream && stream.status === 'live') {
-        console.log(`[StreamingService] Stream ${streamId} not active in memory but status is 'live' in DB. Fixing status.`);
+        console.log(`[StreamingService] Stream ${streamId} not active in memory but status is 'live' in DB.`);
+        
+        // CRITICAL FIX: Try to kill any FFmpeg process streaming to this key
+        // This handles cases where app restarted but FFmpeg is still running
+        if (stream.stream_key) {
+          const killed = await killFFmpegByStreamKey(stream.stream_key);
+          if (killed) {
+            console.log(`[StreamingService] Successfully killed FFmpeg process for stream key: ${stream.stream_key.substring(0, 8)}...`);
+          } else {
+            console.log(`[StreamingService] No FFmpeg process found for stream key (may have already stopped)`);
+          }
+        }
+        
         // FIXED: Use correct status based on schedule type
         const newStatus = getStatusAfterStreamEnd(stream);
         await Stream.updateStatus(streamId, newStatus, stream.user_id);
@@ -1216,7 +1243,12 @@ async function stopStream(streamId) {
         if (typeof schedulerService !== 'undefined' && schedulerService.cancelStreamTermination) {
           schedulerService.handleStreamStopped(streamId);
         }
-        return { success: true, message: 'Stream status fixed (was not active but marked as live)' };
+        
+        // Save history
+        const updatedStream = await Stream.findById(streamId);
+        await saveStreamHistory(updatedStream);
+        
+        return { success: true, message: 'Stream stopped (was not in memory but FFmpeg killed if running)' };
       }
       return { success: false, error: 'Stream is not active' };
     }
@@ -1225,11 +1257,22 @@ async function stopStream(streamId) {
     manuallyStoppingStreams.add(streamId);
     try {
       ffmpegProcess.kill('SIGTERM');
+      
+      // Wait a bit and force kill if still running
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      if (!ffmpegProcess.killed) {
+        console.log(`[StreamingService] FFmpeg didn't respond to SIGTERM, sending SIGKILL`);
+        ffmpegProcess.kill('SIGKILL');
+      }
     } catch (killError) {
       console.error(`[StreamingService] Error killing FFmpeg process: ${killError.message}`);
       manuallyStoppingStreams.delete(streamId);
+      
+      // Fallback: try to kill by stream key
+      if (stream && stream.stream_key) {
+        await killFFmpegByStreamKey(stream.stream_key);
+      }
     }
-    const stream = await Stream.findById(streamId);
     activeStreams.delete(streamId);
     streamPids.delete(streamId); // Clean up PID tracking
     
@@ -1265,6 +1308,66 @@ async function stopStream(streamId) {
     return { success: false, error: error.message };
   }
 }
+
+/**
+ * Kill FFmpeg process by stream key
+ * This is used when the process is not tracked in memory (e.g., after app restart)
+ * @param {string} streamKey - The stream key to search for
+ * @returns {Promise<boolean>} True if a process was killed
+ */
+async function killFFmpegByStreamKey(streamKey) {
+  if (!streamKey) return false;
+  
+  return new Promise((resolve) => {
+    const isWindows = process.platform === 'win32';
+    
+    if (isWindows) {
+      // On Windows, use wmic to find and kill FFmpeg processes with this stream key
+      exec(`wmic process where "name='ffmpeg.exe'" get processid,commandline /format:csv`, { timeout: 10000 }, (err, stdout) => {
+        if (err || !stdout) {
+          resolve(false);
+          return;
+        }
+        
+        // Parse CSV output to find PIDs with matching stream key
+        const lines = stdout.split('\n').filter(line => line.includes(streamKey));
+        if (lines.length === 0) {
+          resolve(false);
+          return;
+        }
+        
+        // Extract PIDs and kill them
+        let killed = false;
+        for (const line of lines) {
+          const parts = line.split(',');
+          const pid = parts[parts.length - 1]?.trim();
+          if (pid && /^\d+$/.test(pid)) {
+            try {
+              exec(`taskkill /F /PID ${pid}`, (killErr) => {
+                if (!killErr) {
+                  console.log(`[StreamingService] Killed FFmpeg process PID ${pid}`);
+                  killed = true;
+                }
+              });
+            } catch (e) {
+              // Ignore kill errors
+            }
+          }
+        }
+        
+        // Wait a bit for kills to complete
+        setTimeout(() => resolve(killed), 1000);
+      });
+    } else {
+      // On Linux/Mac, use pkill with pattern matching
+      exec(`pkill -f "ffmpeg.*${streamKey}"`, { timeout: 5000 }, (err) => {
+        // pkill returns 0 if processes were killed, 1 if no processes matched
+        resolve(!err);
+      });
+    }
+  });
+}
+
 async function syncStreamStatuses() {
   try {
     console.log('[StreamingService] Syncing stream statuses...');

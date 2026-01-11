@@ -236,12 +236,13 @@ async function checkStreamDurations() {
           // Log duration fields for debugging
           console.log(`[Scheduler] Stream ${stream.id} duration fields: stream_duration_minutes=${stream.stream_duration_minutes}, schedule_time=${stream.schedule_time}, end_time=${stream.end_time}`);
           
-          // FORCE STOP: If stream exceeds duration by more than 2 minutes, force stop immediately
+          // FORCE STOP: If stream exceeds duration by more than 30 seconds, force stop immediately
           // This is a safety net in case FFmpeg -t and scheduled timer both failed
           if (timeOverdue > FORCE_STOP_BUFFER_MS) {
             console.log(`[Scheduler] FORCE STOP: Stream ${stream.id} exceeded end time by ${timeOverdueMinutes.toFixed(1)} minutes, forcing stop now`);
             try {
-              await streamingService.stopStream(stream.id);
+              const stopResult = await streamingService.stopStream(stream.id);
+              console.log(`[Scheduler] FORCE STOP result for stream ${stream.id}: ${JSON.stringify(stopResult)}`);
               // Cancel any existing scheduled termination
               cancelStreamTermination(stream.id);
             } catch (stopError) {
@@ -255,7 +256,8 @@ async function checkStreamDurations() {
           if (shouldEndAt <= now) {
             console.log(`[Scheduler] Stream ${stream.id} exceeded end time by ${timeOverdueMinutes.toFixed(2)} minutes, stopping now`);
             try {
-              await streamingService.stopStream(stream.id);
+              const stopResult = await streamingService.stopStream(stream.id);
+              console.log(`[Scheduler] Stop result for stream ${stream.id}: ${JSON.stringify(stopResult)}`);
               cancelStreamTermination(stream.id);
             } catch (stopError) {
               console.error(`[Scheduler] Error stopping overdue stream ${stream.id}:`, stopError.message);
