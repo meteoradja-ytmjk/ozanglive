@@ -21,11 +21,13 @@ class FileQueueManager {
     this.allowedExtensions = options.allowedExtensions || ['.mp4', '.avi', '.mov'];
     this.allowedMimeTypes = options.allowedMimeTypes || ['video/mp4', 'video/avi', 'video/quicktime'];
     this.csrfToken = options.csrfToken || '';
+    this.extraDataCallback = options.extraDataCallback || null; // Function to get extra form data
     
     // Callbacks
     this.onProgress = options.onProgress || (() => {});
     this.onFileComplete = options.onFileComplete || (() => {});
     this.onAllComplete = options.onAllComplete || (() => {});
+    this.onQueueUpdate = options.onQueueUpdate || (() => {});
     this.onQueueUpdate = options.onQueueUpdate || (() => {});
     
     // State
@@ -414,6 +416,16 @@ class FileQueueManager {
       formData.append(this.fileFieldName, item.file);
       if (this.csrfToken) {
         formData.append('_csrf', this.csrfToken);
+      }
+      
+      // Add extra data if callback provided
+      if (this.extraDataCallback && typeof this.extraDataCallback === 'function') {
+        const extraData = this.extraDataCallback();
+        if (extraData && typeof extraData === 'object') {
+          for (const [key, value] of Object.entries(extraData)) {
+            formData.append(key, value);
+          }
+        }
       }
       
       // Send request

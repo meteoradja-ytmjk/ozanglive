@@ -3866,20 +3866,32 @@ app.post('/api/audios/upload', isAuthenticated, (req, res, next) => {
     const originalTitle = path.parse(req.file.originalname).name;
     const fullFilePath = path.join(__dirname, 'public', 'uploads', 'audios', req.file.filename);
     
-    // Pre-process audio for optimal streaming (converts to AAC with clean timestamps)
-    console.log(`[AudioUpload] Processing audio for streaming: ${req.file.filename}`);
+    // Check if user wants to skip conversion (for faster upload but higher CPU during streaming)
+    const skipConversion = req.body.skipConversion === 'true';
     
     let finalFilePath = fullFilePath;
     let finalFileName = req.file.filename;
+    let processingMessage = 'Audio uploaded';
     
-    try {
-      const result = await processAudioForStreaming(fullFilePath);
-      finalFilePath = result.outputPath;
-      finalFileName = path.basename(result.outputPath);
-      console.log(`[AudioUpload] Audio processed successfully: ${finalFileName}`);
-    } catch (processError) {
-      console.error(`[AudioUpload] Processing failed, using original: ${processError.message}`);
-      // Continue with original file if processing fails
+    if (skipConversion) {
+      // Skip conversion - faster upload, but may use more CPU during streaming
+      console.log(`[AudioUpload] Skipping conversion (user preference): ${req.file.filename}`);
+      processingMessage = 'Audio uploaded (tanpa konversi)';
+    } else {
+      // Pre-process audio for optimal streaming (converts to AAC with clean timestamps)
+      console.log(`[AudioUpload] Processing audio for streaming: ${req.file.filename}`);
+      
+      try {
+        const result = await processAudioForStreaming(fullFilePath);
+        finalFilePath = result.outputPath;
+        finalFileName = path.basename(result.outputPath);
+        console.log(`[AudioUpload] Audio processed successfully: ${finalFileName}`);
+        processingMessage = result.skipped ? 'Audio uploaded (sudah optimal)' : 'Audio uploaded dan dioptimasi untuk streaming';
+      } catch (processError) {
+        console.error(`[AudioUpload] Processing failed, using original: ${processError.message}`);
+        processingMessage = 'Audio uploaded (konversi gagal, menggunakan file asli)';
+        // Continue with original file if processing fails
+      }
     }
     
     const filePath = `/uploads/audios/${finalFileName}`;
@@ -3909,7 +3921,7 @@ app.post('/api/audios/upload', isAuthenticated, (req, res, next) => {
     
     res.json({
       success: true,
-      message: 'Audio uploaded and optimized for streaming',
+      message: processingMessage,
       audio
     });
     

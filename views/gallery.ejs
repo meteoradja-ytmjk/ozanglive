@@ -320,19 +320,46 @@ function formatDuration(seconds) {
         </button>
       </div>
       <div class="p-6">
-        <!-- Info Banner -->
-        <div class="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-          <div class="flex items-start gap-2">
-            <i class="ti ti-info-circle text-blue-400 mt-0.5"></i>
-            <div class="text-sm">
-              <p class="text-blue-300 font-medium">Audio akan dioptimasi untuk streaming</p>
-              <p class="text-blue-400/70 text-xs mt-1">Tunggu hingga proses selesai. Audio akan di-convert ke format standar YouTube livestreaming (AAC 128k, 44.1kHz stereo).</p>
+        <!-- Audio Conversion Toggle -->
+        <div class="mb-4 p-3 bg-dark-700/50 border border-gray-600/50 rounded-lg">
+          <div class="flex items-center justify-between">
+            <div class="flex items-start gap-2">
+              <i class="ti ti-cpu text-gray-400 mt-0.5"></i>
+              <div>
+                <p class="text-sm font-medium text-gray-200">Konversi Audio</p>
+                <p class="text-xs text-gray-500 mt-0.5">Optimasi untuk streaming</p>
+              </div>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="audioConvertToggle" class="sr-only peer" checked>
+              <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+            </label>
+          </div>
+          
+          <!-- Info based on toggle state -->
+          <div id="audioConvertInfo" class="mt-3 p-2 rounded-lg bg-green-500/10 border border-green-500/30">
+            <div class="flex items-start gap-2">
+              <i class="ti ti-check-circle text-green-400 text-sm mt-0.5"></i>
+              <div class="text-xs">
+                <p class="text-green-300 font-medium">CPU Ringan saat Live</p>
+                <p class="text-green-400/70 mt-0.5">Audio di-convert ke AAC 128k, 44.1kHz stereo. Upload lebih lama tapi streaming lebih ringan.</p>
+              </div>
+            </div>
+          </div>
+          <div id="audioSkipConvertInfo" class="mt-3 p-2 rounded-lg bg-yellow-500/10 border border-yellow-500/30 hidden">
+            <div class="flex items-start gap-2">
+              <i class="ti ti-bolt text-yellow-400 text-sm mt-0.5"></i>
+              <div class="text-xs">
+                <p class="text-yellow-300 font-medium">Upload Cepat</p>
+                <p class="text-yellow-400/70 mt-0.5">Audio tidak di-convert, upload lebih cepat. CPU sedikit lebih tinggi saat live streaming.</p>
+              </div>
             </div>
           </div>
         </div>
         
         <form id="audioUploadForm" enctype="multipart/form-data">
           <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <input type="hidden" name="skipConversion" id="skipConversionInput" value="false">
           <!-- Dropzone - shown when no files selected -->
           <div id="audioDropzone" class="border-2 border-dashed border-gray-600 hover:border-green-500/70 rounded-lg py-8 px-6 text-center transition-all cursor-pointer min-h-[200px]">
             <div class="flex flex-col items-center justify-center h-full space-y-3">
@@ -693,6 +720,13 @@ function formatDuration(seconds) {
     const content = document.getElementById('audioUploadModalContent');
     modal.classList.remove('hidden');
     setTimeout(() => { content.classList.remove('opacity-0', 'scale-95'); content.classList.add('opacity-100', 'scale-100'); }, 10);
+    
+    // Reset toggle to default (convert enabled)
+    const toggle = document.getElementById('audioConvertToggle');
+    if (toggle) {
+      toggle.checked = true;
+      updateAudioConvertInfo();
+    }
   }
   
   function closeAudioUploadModal() {
@@ -715,6 +749,33 @@ function formatDuration(seconds) {
     document.getElementById('audioCancelAllBtn').classList.add('hidden');
     document.getElementById('audioRetryBtn').classList.add('hidden');
     document.getElementById('audioUploadButton').disabled = true;
+    
+    // Reset toggle
+    const toggle = document.getElementById('audioConvertToggle');
+    if (toggle) {
+      toggle.checked = true;
+      updateAudioConvertInfo();
+    }
+  }
+  
+  // Update audio convert info based on toggle state
+  function updateAudioConvertInfo() {
+    const toggle = document.getElementById('audioConvertToggle');
+    const convertInfo = document.getElementById('audioConvertInfo');
+    const skipInfo = document.getElementById('audioSkipConvertInfo');
+    const skipInput = document.getElementById('skipConversionInput');
+    
+    if (toggle && toggle.checked) {
+      // Convert enabled - CPU ringan saat live
+      convertInfo.classList.remove('hidden');
+      skipInfo.classList.add('hidden');
+      if (skipInput) skipInput.value = 'false';
+    } else {
+      // Skip convert - Upload cepat
+      convertInfo.classList.add('hidden');
+      skipInfo.classList.remove('hidden');
+      if (skipInput) skipInput.value = 'true';
+    }
   }
   
   // Google Drive Modal (Video)
@@ -933,6 +994,12 @@ function formatDuration(seconds) {
       if (gdriveAudioBtnDesktop) gdriveAudioBtnDesktop.style.display = 'none';
     }
     
+    // Audio conversion toggle event listener
+    const audioConvertToggle = document.getElementById('audioConvertToggle');
+    if (audioConvertToggle) {
+      audioConvertToggle.addEventListener('change', updateAudioConvertInfo);
+    }
+    
     // Video file input
     const videoInput = document.getElementById('videoFileInput');
     const videoBtn = document.getElementById('videoUploadButton');
@@ -1032,6 +1099,10 @@ function formatDuration(seconds) {
       allowedExtensions: ['.mp3', '.wav', '.aac', '.m4a'],
       allowedMimeTypes: ['audio/mpeg', 'audio/wav', 'audio/aac', 'audio/x-m4a', 'audio/mp4'],
       csrfToken: '<%= csrfToken %>',
+      extraDataCallback: () => {
+        const skipConversion = document.getElementById('skipConversionInput')?.value === 'true';
+        return { skipConversion: skipConversion ? 'true' : 'false' };
+      },
       onProgress: (item, fileProgress, overallProgress) => {
         document.getElementById('audioUploadBar').style.width = overallProgress + '%';
         document.getElementById('audioUploadPercent').textContent = overallProgress + '%';
