@@ -4989,6 +4989,8 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
     
     const { title, description, scheduledStartTime, privacyStatus, streamId, tags, categoryId, enableAutoStart, enableAutoStop, unlistReplayOnEnd, monetizationEnabled, adFrequency, alteredContent } = req.body;
     
+    console.log('[API] Create broadcast - categoryId received:', categoryId);
+    
     if (!title || !scheduledStartTime) {
       return res.status(400).json({
         success: false,
@@ -5023,6 +5025,9 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       credentials.refreshToken
     );
     
+    const finalCategoryId = categoryId || '22';
+    console.log('[API] Create broadcast - using categoryId:', finalCategoryId);
+    
     const broadcast = await youtubeService.createBroadcast(accessToken, {
       title,
       description: description || '',
@@ -5030,7 +5035,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       privacyStatus: privacyStatus || 'unlisted',
       streamId: streamId || null,
       tags: parsedTags,
-      categoryId: categoryId || '22',
+      categoryId: finalCategoryId,
       enableAutoStart: enableAutoStart === 'true' || enableAutoStart === true,
       enableAutoStop: enableAutoStop !== 'false' && enableAutoStop !== false, // Default true
       monetizationEnabled: monetizationEnabled === 'true' || monetizationEnabled === true,

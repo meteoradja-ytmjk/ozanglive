@@ -91,13 +91,18 @@ class YouTubeService {
     
     console.log('[YouTubeService.createBroadcast] Received streamId:', streamId);
     console.log('[YouTubeService.createBroadcast] Settings: autoStart=%s, autoStop=%s', enableAutoStart, enableAutoStop);
+    console.log('[YouTubeService.createBroadcast] Received categoryId:', categoryId);
     
     // Build snippet with optional tags and category
+    // YouTube category IDs: 22 = People & Blogs, 20 = Gaming, 10 = Music, etc.
+    const finalCategoryId = categoryId || '22';
+    console.log('[YouTubeService.createBroadcast] Using categoryId:', finalCategoryId);
+    
     const snippet = {
       title: title,
       description: description || '',
       scheduledStartTime: new Date(scheduledStartTime).toISOString(),
-      categoryId: categoryId || '22' // Default to People & Blogs
+      categoryId: finalCategoryId
     };
     
     // Add tags if provided (YouTube API accepts tags in snippet)
@@ -194,6 +199,7 @@ class YouTubeService {
     });
     
     console.log('[YouTubeService.createBroadcast] Bound stream:', stream.id, 'with key:', stream.cdn.ingestionInfo.streamName);
+    console.log('[YouTubeService.createBroadcast] Broadcast created with categoryId:', broadcast.snippet.categoryId);
     
     return {
       broadcastId: broadcast.id,
@@ -204,6 +210,7 @@ class YouTubeService {
       description: broadcast.snippet.description,
       scheduledStartTime: broadcast.snippet.scheduledStartTime,
       privacyStatus: broadcast.status.privacyStatus,
+      categoryId: broadcast.snippet.categoryId || finalCategoryId,
       thumbnailUrl: broadcast.snippet.thumbnails?.default?.url || ''
     };
   }
