@@ -443,8 +443,9 @@ class YouTubeService {
   }
 
   /**
-   * Update video category using Videos API
+   * Update video category and settings using Videos API
    * This is needed because liveBroadcasts API doesn't support categoryId directly
+   * Also attempts to set altered content declaration (synthetic media)
    * @param {string} accessToken - Access token
    * @param {string} videoId - Video/Broadcast ID
    * @param {string} categoryId - Category ID (e.g., '22' for People & Blogs)
@@ -460,7 +461,7 @@ class YouTubeService {
     
     // First, get the current video to preserve existing values
     const currentResponse = await youtube.videos.list({
-      part: 'snippet',
+      part: 'snippet,status',
       id: videoId
     });
     
@@ -470,28 +471,89 @@ class YouTubeService {
     
     const current = currentResponse.data.items[0];
     console.log('[YouTubeService.updateVideoCategory] Current categoryId:', current.snippet.categoryId);
+    console.log('[YouTubeService.updateVideoCategory] Current status:', JSON.stringify(current.status));
     
-    // Update the video with new category
-    const response = await youtube.videos.update({
-      part: 'snippet',
-      requestBody: {
-        id: videoId,
-        snippet: {
-          title: current.snippet.title,
-          description: current.snippet.description || '',
-          categoryId: categoryId,
-          tags: current.snippet.tags || []
+    // Build status object with altered content declaration
+    // YouTube uses "containsSyntheticMedia" for the "Altered content" setting
+    // We try multiple possible field names as YouTube API may vary
+    const statusUpdate = {
+      privacyStatus: current.status?.privacyStatus || 'unlisted',
+      selfDeclaredMadeForKids: false,
+      // Primary field for altered content (synthetic media / AI generated)
+      containsSyntheticMedia: true
+    };
+    
+    // Try to update with altered content setting
+    let response;
+    let alteredContentSet = false;
+    
+    try {
+      response = await youtube.videos.update({
+        part: 'snippet,status',
+        requestBody: {
+          id: videoId,
+          snippet: {
+            title: current.snippet.title,
+            description: current.snippet.description || '',
+            categoryId: categoryId,
+            tags: current.snippet.tags || []
+          },
+          status: statusUpdate
         }
+      });
+      alteredContentSet = true;
+      console.log('[YouTubeService.updateVideoCategory] Updated with containsSyntheticMedia: true');
+    } catch (err) {
+      console.log('[YouTubeService.updateVideoCategory] First attempt failed:', err.message);
+      
+      // Try without containsSyntheticMedia if not supported
+      try {
+        response = await youtube.videos.update({
+          part: 'snippet,status',
+          requestBody: {
+            id: videoId,
+            snippet: {
+              title: current.snippet.title,
+              description: current.snippet.description || '',
+              categoryId: categoryId,
+              tags: current.snippet.tags || []
+            },
+            status: {
+              privacyStatus: current.status?.privacyStatus || 'unlisted',
+              selfDeclaredMadeForKids: false
+            }
+          }
+        });
+        console.log('[YouTubeService.updateVideoCategory] Updated without altered content field');
+      } catch (err2) {
+        // Final fallback - just update snippet
+        console.log('[YouTubeService.updateVideoCategory] Status update failed, trying snippet only:', err2.message);
+        response = await youtube.videos.update({
+          part: 'snippet',
+          requestBody: {
+            id: videoId,
+            snippet: {
+              title: current.snippet.title,
+              description: current.snippet.description || '',
+              categoryId: categoryId,
+              tags: current.snippet.tags || []
+            }
+          }
+        });
       }
-    });
+    }
     
     const video = response.data;
     console.log('[YouTubeService.updateVideoCategory] Updated categoryId:', video.snippet.categoryId);
+    if (video.status) {
+      console.log('[YouTubeService.updateVideoCategory] Updated status:', JSON.stringify(video.status));
+    }
     
     return {
       id: video.id,
       title: video.snippet.title,
-      categoryId: video.snippet.categoryId
+      categoryId: video.snippet.categoryId,
+      containsSyntheticMedia: video.status?.containsSyntheticMedia || alteredContentSet
     };
   }
 
