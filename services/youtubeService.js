@@ -93,16 +93,16 @@ class YouTubeService {
     console.log('[YouTubeService.createBroadcast] Settings: autoStart=%s, autoStop=%s', enableAutoStart, enableAutoStop);
     console.log('[YouTubeService.createBroadcast] Received categoryId:', categoryId);
     
-    // Build snippet with optional tags and category
-    // YouTube category IDs: 22 = People & Blogs, 20 = Gaming, 10 = Music, etc.
+    // Build snippet - Note: categoryId is NOT supported by liveBroadcasts API
+    // Category will be set separately using Videos API after broadcast is created
+    // YouTube category IDs: 22 = People & Blogs, 20 = Gaming, 10 = Music, 24 = Entertainment, etc.
     const finalCategoryId = categoryId || '22';
-    console.log('[YouTubeService.createBroadcast] Using categoryId:', finalCategoryId);
+    console.log('[YouTubeService.createBroadcast] Will set categoryId:', finalCategoryId);
     
     const snippet = {
       title: title,
       description: description || '',
-      scheduledStartTime: new Date(scheduledStartTime).toISOString(),
-      categoryId: finalCategoryId
+      scheduledStartTime: new Date(scheduledStartTime).toISOString()
     };
     
     // Add tags if provided (YouTube API accepts tags in snippet)
@@ -199,7 +199,18 @@ class YouTubeService {
     });
     
     console.log('[YouTubeService.createBroadcast] Bound stream:', stream.id, 'with key:', stream.cdn.ingestionInfo.streamName);
-    console.log('[YouTubeService.createBroadcast] Broadcast created with categoryId:', broadcast.snippet.categoryId);
+    
+    // Update video category using Videos API (liveBroadcasts API doesn't support categoryId)
+    let actualCategoryId = broadcast.snippet.categoryId || finalCategoryId;
+    try {
+      console.log('[YouTubeService.createBroadcast] Updating video category to:', finalCategoryId);
+      const categoryResult = await this.updateVideoCategory(accessToken, broadcast.id, finalCategoryId);
+      actualCategoryId = categoryResult.categoryId;
+      console.log('[YouTubeService.createBroadcast] Video category updated successfully to:', actualCategoryId);
+    } catch (categoryError) {
+      console.error('[YouTubeService.createBroadcast] Failed to update category:', categoryError.message);
+      // Continue anyway, category update is not critical
+    }
     
     return {
       broadcastId: broadcast.id,
@@ -210,7 +221,7 @@ class YouTubeService {
       description: broadcast.snippet.description,
       scheduledStartTime: broadcast.snippet.scheduledStartTime,
       privacyStatus: broadcast.status.privacyStatus,
-      categoryId: broadcast.snippet.categoryId || finalCategoryId,
+      categoryId: actualCategoryId,
       thumbnailUrl: broadcast.snippet.thumbnails?.default?.url || ''
     };
   }
@@ -374,13 +385,14 @@ class YouTubeService {
     console.log('[YouTubeService.updateBroadcast] Final categoryId:', finalCategoryId);
     
     // Build update request - preserve all existing values if not provided
+    // Note: categoryId is NOT included here because liveBroadcasts API doesn't support it
+    // Category will be updated separately using Videos API
     const updateRequest = {
       id: broadcastId,
       snippet: {
         title: title !== undefined && title !== '' ? title : current.snippet.title,
         description: description !== undefined ? description : current.snippet.description,
-        scheduledStartTime: scheduledStartTime ? new Date(scheduledStartTime).toISOString() : current.snippet.scheduledStartTime,
-        categoryId: finalCategoryId
+        scheduledStartTime: scheduledStartTime ? new Date(scheduledStartTime).toISOString() : current.snippet.scheduledStartTime
       },
       status: {
         privacyStatus: privacyStatus !== undefined && privacyStatus !== '' ? privacyStatus : current.status.privacyStatus,
@@ -395,7 +407,7 @@ class YouTubeService {
     
     console.log('[YouTubeService.updateBroadcast] Update request:', JSON.stringify(updateRequest, null, 2));
     
-    // Update the broadcast
+    // Update the broadcast (for title, description, scheduledStartTime, privacyStatus)
     const response = await youtube.liveBroadcasts.update({
       part: 'snippet,status',
       requestBody: updateRequest
@@ -403,7 +415,21 @@ class YouTubeService {
     
     const broadcast = response.data;
     
-    console.log('[YouTubeService.updateBroadcast] Response categoryId:', broadcast.snippet.categoryId);
+    // Update category using Videos API (liveBroadcasts API doesn't support categoryId properly)
+    let actualCategoryId = broadcast.snippet.categoryId || '22';
+    if (categoryId !== undefined && categoryId !== null && categoryId !== '') {
+      try {
+        console.log('[YouTubeService.updateBroadcast] Updating video category to:', finalCategoryId);
+        const categoryResult = await this.updateVideoCategory(accessToken, broadcastId, finalCategoryId);
+        actualCategoryId = categoryResult.categoryId;
+        console.log('[YouTubeService.updateBroadcast] Video category updated successfully to:', actualCategoryId);
+      } catch (categoryError) {
+        console.error('[YouTubeService.updateBroadcast] Failed to update category:', categoryError.message);
+        // Continue anyway, category update is not critical
+      }
+    }
+    
+    console.log('[YouTubeService.updateBroadcast] Final categoryId:', actualCategoryId);
     
     return {
       id: broadcast.id,
@@ -411,8 +437,61 @@ class YouTubeService {
       description: broadcast.snippet.description,
       scheduledStartTime: broadcast.snippet.scheduledStartTime,
       privacyStatus: broadcast.status.privacyStatus,
-      categoryId: broadcast.snippet.categoryId || '22',
+      categoryId: actualCategoryId,
       thumbnailUrl: broadcast.snippet.thumbnails?.default?.url || ''
+    };
+  }
+
+  /**
+   * Update video category using Videos API
+   * This is needed because liveBroadcasts API doesn't support categoryId directly
+   * @param {string} accessToken - Access token
+   * @param {string} videoId - Video/Broadcast ID
+   * @param {string} categoryId - Category ID (e.g., '22' for People & Blogs)
+   * @returns {Promise<Object>} Updated video info
+   */
+  async updateVideoCategory(accessToken, videoId, categoryId) {
+    const oauth2Client = new google.auth.OAuth2();
+    oauth2Client.setCredentials({ access_token: accessToken });
+    
+    const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+    
+    console.log('[YouTubeService.updateVideoCategory] Updating video:', videoId, 'to category:', categoryId);
+    
+    // First, get the current video to preserve existing values
+    const currentResponse = await youtube.videos.list({
+      part: 'snippet',
+      id: videoId
+    });
+    
+    if (!currentResponse.data.items || currentResponse.data.items.length === 0) {
+      throw new Error('Video not found');
+    }
+    
+    const current = currentResponse.data.items[0];
+    console.log('[YouTubeService.updateVideoCategory] Current categoryId:', current.snippet.categoryId);
+    
+    // Update the video with new category
+    const response = await youtube.videos.update({
+      part: 'snippet',
+      requestBody: {
+        id: videoId,
+        snippet: {
+          title: current.snippet.title,
+          description: current.snippet.description || '',
+          categoryId: categoryId,
+          tags: current.snippet.tags || []
+        }
+      }
+    });
+    
+    const video = response.data;
+    console.log('[YouTubeService.updateVideoCategory] Updated categoryId:', video.snippet.categoryId);
+    
+    return {
+      id: video.id,
+      title: video.snippet.title,
+      categoryId: video.snippet.categoryId
     };
   }
 
