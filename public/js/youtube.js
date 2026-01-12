@@ -389,6 +389,81 @@ async function uploadThumbnailToGallery(file) {
   }
 }
 
+// Upload multiple thumbnails to user's gallery
+async function uploadMultipleThumbnailsToGallery(files) {
+  if (!files || files.length === 0) return false;
+  
+  try {
+    const formData = new FormData();
+    
+    // Validate and add files
+    const validFiles = [];
+    for (const file of files) {
+      // Validate file type
+      if (!['image/jpeg', 'image/png', 'image/jpg'].includes(file.type)) {
+        showToast(`${file.name}: Only JPG and PNG files are allowed`, 'error');
+        continue;
+      }
+      
+      // Validate file size (2MB)
+      if (file.size > 2 * 1024 * 1024) {
+        showToast(`${file.name}: File size must be less than 2MB`, 'error');
+        continue;
+      }
+      
+      validFiles.push(file);
+    }
+    
+    if (validFiles.length === 0) {
+      return false;
+    }
+    
+    // Add all valid files to formData
+    for (const file of validFiles) {
+      formData.append('thumbnail', file);
+    }
+    
+    // Show uploading toast
+    showToast(`Uploading ${validFiles.length} thumbnail(s)...`, 'info');
+    
+    const response = await fetch('/api/thumbnails', {
+      method: 'POST',
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      },
+      body: formData
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      let message = `${data.uploadedCount} thumbnail(s) uploaded`;
+      if (data.skippedCount > 0) {
+        message += ` (${data.skippedCount} skipped - max 20 limit)`;
+      }
+      showToast(message);
+      
+      // Refresh gallery
+      fetchThumbnails();
+      
+      // Auto-select the first uploaded thumbnail
+      if (data.thumbnail) {
+        document.getElementById('selectedThumbnailPath').value = data.thumbnail.path;
+        document.getElementById('thumbnailPreview').innerHTML = 
+          `<img src="${data.thumbnail.url}" class="w-full h-full object-cover">`;
+      }
+      return true;
+    } else {
+      showToast(data.error || 'Failed to upload thumbnails', 'error');
+      return false;
+    }
+  } catch (error) {
+    console.error('Error uploading thumbnails:', error);
+    showToast('Failed to upload thumbnails', 'error');
+    return false;
+  }
+}
+
 // Delete thumbnail from user's gallery
 async function deleteThumbnail(filename) {
   if (!confirm('Are you sure you want to delete this thumbnail?')) {
@@ -424,27 +499,33 @@ async function deleteThumbnail(filename) {
   }
 }
 
-// Preview and upload thumbnail to gallery
+// Preview and upload thumbnail to gallery (supports multiple files)
 function previewAndUploadThumbnail(input) {
-  if (input.files && input.files[0]) {
-    const file = input.files[0];
-    
-    // Validate file type
-    if (!['image/jpeg', 'image/png', 'image/jpg'].includes(file.type)) {
-      showToast('Only JPG and PNG files are allowed', 'error');
-      input.value = '';
-      return;
+  if (input.files && input.files.length > 0) {
+    // Multiple files selected
+    if (input.files.length > 1) {
+      uploadMultipleThumbnailsToGallery(Array.from(input.files));
+    } else {
+      // Single file - use original logic for backward compatibility
+      const file = input.files[0];
+      
+      // Validate file type
+      if (!['image/jpeg', 'image/png', 'image/jpg'].includes(file.type)) {
+        showToast('Only JPG and PNG files are allowed', 'error');
+        input.value = '';
+        return;
+      }
+      
+      // Validate file size (2MB)
+      if (file.size > 2 * 1024 * 1024) {
+        showToast('File size must be less than 2MB', 'error');
+        input.value = '';
+        return;
+      }
+      
+      // Upload to gallery
+      uploadThumbnailToGallery(file);
     }
-    
-    // Validate file size (2MB)
-    if (file.size > 2 * 1024 * 1024) {
-      showToast('File size must be less than 2MB', 'error');
-      input.value = '';
-      return;
-    }
-    
-    // Upload to gallery
-    uploadThumbnailToGallery(file);
     
     // Clear input for next upload
     input.value = '';

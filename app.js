@@ -4727,8 +4727,8 @@ const thumbnailUpload = multer({
   }
 });
 
-// Upload thumbnail to user's gallery (max 20)
-app.post('/api/thumbnails', isAuthenticated, thumbnailUpload.single('thumbnail'), async (req, res) => {
+// Upload thumbnail to user's gallery (max 20) - supports multiple files
+app.post('/api/thumbnails', isAuthenticated, thumbnailUpload.array('thumbnail', 20), async (req, res) => {
   try {
     const userId = req.session.userId;
     const thumbnailsDir = path.join(__dirname, 'public', 'uploads', 'thumbnails', String(userId));
@@ -4740,38 +4740,57 @@ app.post('/api/thumbnails', isAuthenticated, thumbnailUpload.single('thumbnail')
     
     // Check current count
     const existingFiles = fs.readdirSync(thumbnailsDir).filter(file => /\.(jpg|jpeg|png)$/i.test(file));
-    if (existingFiles.length >= 20) {
+    const currentCount = existingFiles.length;
+    
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ success: false, error: 'No files uploaded' });
+    }
+    
+    const filesToUpload = req.files;
+    const availableSlots = 20 - currentCount;
+    
+    if (availableSlots <= 0) {
       return res.status(400).json({ 
         success: false, 
         error: 'Maximum 20 thumbnails allowed. Please delete some before uploading new ones.' 
       });
     }
     
-    if (!req.file) {
-      return res.status(400).json({ success: false, error: 'No file uploaded' });
-    }
+    // Limit files to available slots
+    const filesToProcess = filesToUpload.slice(0, availableSlots);
+    const skippedCount = filesToUpload.length - filesToProcess.length;
     
-    // Save file to user's thumbnail directory
-    const ext = path.extname(req.file.originalname).toLowerCase() || '.jpg';
-    const newFilename = `thumb_${Date.now()}${ext}`;
-    const newPath = path.join(thumbnailsDir, newFilename);
+    const uploadedThumbnails = [];
     
-    // Write buffer to file
-    fs.writeFileSync(newPath, req.file.buffer);
-    
-    res.json({ 
-      success: true, 
-      thumbnail: {
+    for (let i = 0; i < filesToProcess.length; i++) {
+      const file = filesToProcess[i];
+      const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
+      const newFilename = `thumb_${Date.now()}_${i}${ext}`;
+      const newPath = path.join(thumbnailsDir, newFilename);
+      
+      // Write buffer to file
+      fs.writeFileSync(newPath, file.buffer);
+      
+      uploadedThumbnails.push({
         filename: newFilename,
         path: `/uploads/thumbnails/${userId}/${newFilename}`,
         url: `/uploads/thumbnails/${userId}/${newFilename}`
-      },
-      count: existingFiles.length + 1,
+      });
+    }
+    
+    res.json({ 
+      success: true, 
+      thumbnails: uploadedThumbnails,
+      // For backward compatibility with single upload
+      thumbnail: uploadedThumbnails[0] || null,
+      uploadedCount: uploadedThumbnails.length,
+      skippedCount: skippedCount,
+      count: currentCount + uploadedThumbnails.length,
       maxAllowed: 20
     });
   } catch (error) {
-    console.error('Error uploading thumbnail:', error);
-    res.status(500).json({ success: false, error: 'Failed to upload thumbnail' });
+    console.error('Error uploading thumbnails:', error);
+    res.status(500).json({ success: false, error: 'Failed to upload thumbnails' });
   }
 });
 

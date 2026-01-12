@@ -6,9 +6,6 @@ const schedulerService = require('./schedulerService');
 const LiveLimitService = require('./liveLimitService');
 const youtubeStatusSync = require('./youtubeStatusSync');
 const rtmpHealthMonitor = require('./rtmpHealthMonitor');
-const youtubeService = require('./youtubeService');
-const YouTubeCredentials = require('../models/YouTubeCredentials');
-const YouTubeBroadcastSettings = require('../models/YouTubeBroadcastSettings');
 const { v4: uuidv4 } = require('uuid');
 const { db } = require('../db/database');
 const Stream = require('../models/Stream');
@@ -56,6 +53,11 @@ async function handleUnlistReplayOnEnd(stream) {
   if (!stream || !stream.youtube_broadcast_id) return;
   
   try {
+    // Lazy require to avoid circular dependency
+    const youtubeService = require('./youtubeService');
+    const YouTubeCredentials = require('../models/YouTubeCredentials');
+    const YouTubeBroadcastSettings = require('../models/YouTubeBroadcastSettings');
+    
     const settings = await YouTubeBroadcastSettings.findByBroadcastId(stream.youtube_broadcast_id);
     
     if (!settings || !settings.unlistReplayOnEnd) {

@@ -463,14 +463,14 @@
               <i class="ti ti-photo text-gray-500 text-2xl"></i>
             </div>
             <div class="flex-1">
-              <input type="file" id="thumbnailFile" name="thumbnail" accept="image/jpeg,image/png"
+              <input type="file" id="thumbnailFile" name="thumbnail" accept="image/jpeg,image/png" multiple
                 class="hidden" onchange="previewAndUploadThumbnail(this)">
               <input type="hidden" id="selectedThumbnailPath" name="thumbnailPath" value="">
               <button type="button" id="uploadThumbnailGalleryBtn" onclick="document.getElementById('thumbnailFile').click()"
                 class="bg-dark-700 hover:bg-dark-600 text-white px-4 py-2 rounded-lg transition-colors text-sm">
                 <i class="ti ti-upload mr-1"></i> Upload to Gallery
               </button>
-              <p class="text-xs text-gray-500 mt-1">JPG or PNG, max 2MB. Max 20 thumbnails per user.</p>
+              <p class="text-xs text-gray-500 mt-1">JPG or PNG, max 2MB each. Max 20 thumbnails per user. Multiple files supported.</p>
             </div>
           </div>
         </div>
