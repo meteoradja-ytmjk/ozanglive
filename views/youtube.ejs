@@ -433,35 +433,10 @@
           <input type="hidden" id="tagsHidden" name="tags" value="">
         </div>
 
-        <!-- Stream Settings Toggles -->
-        <div class="space-y-3">
-          <!-- Enable Auto-Start -->
-          <div class="flex items-center justify-between">
-            <p class="text-sm text-white">Enable auto-start</p>
-            <label class="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" id="enableAutoStart" name="enableAutoStart" class="sr-only peer" checked>
-              <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-            </label>
-          </div>
-          
-          <!-- Enable Auto-Stop -->
-          <div class="flex items-center justify-between">
-            <p class="text-sm text-white">Enable auto-stop</p>
-            <label class="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" id="enableAutoStop" name="enableAutoStop" class="sr-only peer" checked>
-              <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-            </label>
-          </div>
-          
-          <!-- Unlist Live Replay Once Stream Ends -->
-          <div class="flex items-center justify-between">
-            <p class="text-sm text-white">Unlist live replay once stream ends</p>
-            <label class="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" id="unlistReplayOnEnd" name="unlistReplayOnEnd" class="sr-only peer" checked>
-              <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-            </label>
-          </div>
-        </div>
+        <!-- Hidden default settings (always ON) -->
+        <input type="hidden" id="enableAutoStart" name="enableAutoStart" value="true">
+        <input type="hidden" id="enableAutoStop" name="enableAutoStop" value="true">
+        <input type="hidden" id="unlistReplayOnEnd" name="unlistReplayOnEnd" value="true">
 
         <div>
           <label class="text-sm font-medium text-white block mb-2">
