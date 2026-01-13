@@ -264,8 +264,254 @@ function onAccountChange(accountId) {
   }
 }
 
-// Fetch available thumbnails from gallery (per user)
-async function fetchThumbnails() {
+// Current thumbnail folder state
+let currentThumbnailFolder = null;
+
+// Fetch thumbnail folders
+async function fetchThumbnailFolders() {
+  const folderList = document.getElementById('thumbnailFolderList');
+  if (!folderList) return;
+  
+  try {
+    const response = await fetch('/api/thumbnail-folders', {
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (data.success && data.folders) {
+      folderList.innerHTML = '';
+      
+      data.folders.forEach(folder => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `folder-btn px-3 py-1.5 text-xs rounded-lg transition-colors flex items-center gap-1 group ${
+          currentThumbnailFolder === folder.name 
+            ? 'bg-primary/20 text-primary border border-primary/50' 
+            : 'bg-dark-700 hover:bg-dark-600 text-gray-300 border border-gray-600'
+        }`;
+        btn.innerHTML = `
+          <i class="ti ti-folder"></i>
+          <span>${escapeHtml(folder.name)}</span>
+          <span class="text-gray-500">(${folder.count}/20)</span>
+          <span class="hidden group-hover:flex items-center gap-1 ml-1">
+            <i class="ti ti-pencil text-blue-400 hover:text-blue-300" onclick="event.stopPropagation(); openRenameFolderModal('${escapeHtml(folder.name)}')" title="Rename"></i>
+            <i class="ti ti-trash text-red-400 hover:text-red-300" onclick="event.stopPropagation(); deleteFolder('${escapeHtml(folder.name)}')" title="Delete"></i>
+          </span>
+        `;
+        btn.onclick = () => openThumbnailFolder(folder.name);
+        folderList.appendChild(btn);
+      });
+    }
+  } catch (error) {
+    console.error('Error fetching thumbnail folders:', error);
+  }
+}
+
+// Open thumbnail folder
+function openThumbnailFolder(folderName) {
+  currentThumbnailFolder = folderName;
+  
+  // Update hidden input
+  const folderInput = document.getElementById('currentThumbnailFolder');
+  if (folderInput) {
+    folderInput.value = folderName || '';
+  }
+  
+  // Update folder indicator
+  const indicator = document.getElementById('currentFolderIndicator');
+  const folderNameEl = document.getElementById('currentFolderName');
+  const rootBtn = document.getElementById('thumbnailRootBtn');
+  
+  if (folderName) {
+    if (indicator) indicator.classList.remove('hidden');
+    if (folderNameEl) folderNameEl.textContent = folderName;
+    if (rootBtn) {
+      rootBtn.classList.remove('bg-primary/20', 'text-primary', 'border-primary/50');
+      rootBtn.classList.add('bg-dark-700', 'text-gray-300', 'border-gray-600');
+    }
+  } else {
+    if (indicator) indicator.classList.add('hidden');
+    if (rootBtn) {
+      rootBtn.classList.add('bg-primary/20', 'text-primary', 'border-primary/50');
+      rootBtn.classList.remove('bg-dark-700', 'text-gray-300', 'border-gray-600');
+    }
+  }
+  
+  // Update folder buttons
+  document.querySelectorAll('.folder-btn').forEach(btn => {
+    const btnFolder = btn.querySelector('span')?.textContent;
+    if (btnFolder === folderName) {
+      btn.classList.add('bg-primary/20', 'text-primary', 'border-primary/50');
+      btn.classList.remove('bg-dark-700', 'text-gray-300', 'border-gray-600');
+    } else {
+      btn.classList.remove('bg-primary/20', 'text-primary', 'border-primary/50');
+      btn.classList.add('bg-dark-700', 'text-gray-300', 'border-gray-600');
+    }
+  });
+  
+  // Fetch thumbnails for this folder
+  fetchThumbnails(folderName);
+}
+
+// Create folder modal functions
+function openCreateFolderModal() {
+  document.getElementById('createFolderModal').classList.remove('hidden');
+  document.getElementById('newFolderName').value = '';
+  document.getElementById('newFolderName').focus();
+}
+
+function closeCreateFolderModal() {
+  document.getElementById('createFolderModal').classList.add('hidden');
+}
+
+async function submitCreateFolder(event) {
+  event.preventDefault();
+  
+  const folderName = document.getElementById('newFolderName').value.trim();
+  if (!folderName) return;
+  
+  const btn = document.getElementById('createFolderBtn');
+  const originalText = btn.innerHTML;
+  btn.innerHTML = '<i class="ti ti-loader animate-spin"></i> Creating...';
+  btn.disabled = true;
+  
+  try {
+    const response = await fetch('/api/thumbnail-folders', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getCsrfToken()
+      },
+      body: JSON.stringify({ name: folderName })
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      showToast('Folder created successfully');
+      closeCreateFolderModal();
+      fetchThumbnailFolders();
+      openThumbnailFolder(data.folder.name);
+    } else {
+      showToast(data.error || 'Failed to create folder', 'error');
+    }
+  } catch (error) {
+    console.error('Error creating folder:', error);
+    showToast('Failed to create folder', 'error');
+  } finally {
+    btn.innerHTML = originalText;
+    btn.disabled = false;
+  }
+}
+
+// Rename folder modal functions
+function openRenameFolderModal(folderName) {
+  document.getElementById('renameFolderModal').classList.remove('hidden');
+  document.getElementById('renameFolderOldName').value = folderName;
+  document.getElementById('renameFolderNewName').value = folderName;
+  document.getElementById('renameFolderNewName').focus();
+  document.getElementById('renameFolderNewName').select();
+}
+
+function closeRenameFolderModal() {
+  document.getElementById('renameFolderModal').classList.add('hidden');
+}
+
+async function submitRenameFolder(event) {
+  event.preventDefault();
+  
+  const oldName = document.getElementById('renameFolderOldName').value;
+  const newName = document.getElementById('renameFolderNewName').value.trim();
+  
+  if (!newName || newName === oldName) {
+    closeRenameFolderModal();
+    return;
+  }
+  
+  const btn = document.getElementById('renameFolderBtn');
+  const originalText = btn.innerHTML;
+  btn.innerHTML = '<i class="ti ti-loader animate-spin"></i> Renaming...';
+  btn.disabled = true;
+  
+  try {
+    const response = await fetch(`/api/thumbnail-folders/${encodeURIComponent(oldName)}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getCsrfToken()
+      },
+      body: JSON.stringify({ newName })
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      showToast('Folder renamed successfully');
+      closeRenameFolderModal();
+      
+      // Update current folder if it was renamed
+      if (currentThumbnailFolder === oldName) {
+        currentThumbnailFolder = data.folder.name;
+      }
+      
+      fetchThumbnailFolders();
+      if (currentThumbnailFolder === data.folder.name) {
+        openThumbnailFolder(data.folder.name);
+      }
+    } else {
+      showToast(data.error || 'Failed to rename folder', 'error');
+    }
+  } catch (error) {
+    console.error('Error renaming folder:', error);
+    showToast('Failed to rename folder', 'error');
+  } finally {
+    btn.innerHTML = originalText;
+    btn.disabled = false;
+  }
+}
+
+// Delete folder
+async function deleteFolder(folderName) {
+  if (!confirm(`Are you sure you want to delete folder "${folderName}" and all its thumbnails?`)) {
+    return;
+  }
+  
+  try {
+    const response = await fetch(`/api/thumbnail-folders/${encodeURIComponent(folderName)}`, {
+      method: 'DELETE',
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      showToast('Folder deleted successfully');
+      
+      // Go back to root if current folder was deleted
+      if (currentThumbnailFolder === folderName) {
+        openThumbnailFolder(null);
+      }
+      
+      fetchThumbnailFolders();
+    } else {
+      showToast(data.error || 'Failed to delete folder', 'error');
+    }
+  } catch (error) {
+    console.error('Error deleting folder:', error);
+    showToast('Failed to delete folder', 'error');
+  }
+}
+
+// Fetch available thumbnails from gallery (per user, supports folder)
+async function fetchThumbnails(folder = null) {
+  // Use provided folder or current folder
+  const targetFolder = folder !== undefined ? folder : currentThumbnailFolder;
+  
   const grid = document.getElementById('thumbnailGalleryGrid');
   const loading = document.getElementById('thumbnailGalleryLoading');
   const empty = document.getElementById('thumbnailGalleryEmpty');
@@ -279,7 +525,12 @@ async function fetchThumbnails() {
   empty.classList.add('hidden');
   
   try {
-    const response = await fetch('/api/thumbnails', {
+    let url = '/api/thumbnails';
+    if (targetFolder) {
+      url += `?folder=${encodeURIComponent(targetFolder)}`;
+    }
+    
+    const response = await fetch(url, {
       headers: {
         'X-CSRF-Token': getCsrfToken()
       }
@@ -296,7 +547,7 @@ async function fetchThumbnails() {
     if (uploadBtn && data.count >= data.maxAllowed) {
       uploadBtn.disabled = true;
       uploadBtn.classList.add('opacity-50', 'cursor-not-allowed');
-      uploadBtn.title = 'Maximum 20 thumbnails reached. Delete some to upload new ones.';
+      uploadBtn.title = 'Maximum 20 thumbnails reached in this folder. Delete some to upload new ones.';
     } else if (uploadBtn) {
       uploadBtn.disabled = false;
       uploadBtn.classList.remove('opacity-50', 'cursor-not-allowed');
@@ -309,7 +560,7 @@ async function fetchThumbnails() {
         div.className = 'thumbnail-item w-full aspect-video bg-dark-700 rounded cursor-pointer overflow-hidden border-2 border-transparent hover:border-primary transition-colors relative group';
         div.innerHTML = `
           <img src="${thumb.url}" class="w-full h-full object-cover" alt="Thumbnail">
-          <button type="button" onclick="event.stopPropagation(); deleteThumbnail('${thumb.filename}')" 
+          <button type="button" onclick="event.stopPropagation(); deleteThumbnail('${thumb.filename}', '${thumb.folder || ''}')" 
             class="absolute top-1 right-1 w-6 h-6 bg-red-500/80 hover:bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
             title="Delete thumbnail">
             <i class="ti ti-x text-white text-xs"></i>
@@ -317,6 +568,7 @@ async function fetchThumbnails() {
         `;
         div.dataset.path = thumb.path;
         div.dataset.filename = thumb.filename;
+        div.dataset.folder = thumb.folder || '';
         div.onclick = () => selectGalleryThumbnail(div, thumb.url, thumb.path);
         grid.appendChild(div);
       });
@@ -351,11 +603,16 @@ function selectGalleryThumbnail(element, url, path) {
   document.getElementById('selectedThumbnailPath').value = path;
 }
 
-// Upload thumbnail to user's gallery
+// Upload thumbnail to user's gallery (supports folder)
 async function uploadThumbnailToGallery(file) {
   try {
     const formData = new FormData();
     formData.append('thumbnail', file);
+    
+    // Add current folder if set
+    if (currentThumbnailFolder) {
+      formData.append('folder', currentThumbnailFolder);
+    }
     
     const response = await fetch('/api/thumbnails', {
       method: 'POST',
@@ -369,8 +626,9 @@ async function uploadThumbnailToGallery(file) {
     
     if (data.success) {
       showToast('Thumbnail uploaded to gallery');
-      // Refresh gallery
-      fetchThumbnails();
+      // Refresh gallery and folders
+      fetchThumbnails(currentThumbnailFolder);
+      fetchThumbnailFolders();
       // Auto-select the newly uploaded thumbnail
       if (data.thumbnail) {
         document.getElementById('selectedThumbnailPath').value = data.thumbnail.path;
@@ -389,7 +647,7 @@ async function uploadThumbnailToGallery(file) {
   }
 }
 
-// Upload multiple thumbnails to user's gallery
+// Upload multiple thumbnails to user's gallery (supports folder)
 async function uploadMultipleThumbnailsToGallery(files) {
   if (!files || files.length === 0) return false;
   
@@ -423,6 +681,11 @@ async function uploadMultipleThumbnailsToGallery(files) {
       formData.append('thumbnail', file);
     }
     
+    // Add current folder if set
+    if (currentThumbnailFolder) {
+      formData.append('folder', currentThumbnailFolder);
+    }
+    
     // Show uploading toast
     showToast(`Uploading ${validFiles.length} thumbnail(s)...`, 'info');
     
@@ -443,8 +706,9 @@ async function uploadMultipleThumbnailsToGallery(files) {
       }
       showToast(message);
       
-      // Refresh gallery
-      fetchThumbnails();
+      // Refresh gallery and folders
+      fetchThumbnails(currentThumbnailFolder);
+      fetchThumbnailFolders();
       
       // Auto-select the first uploaded thumbnail
       if (data.thumbnail) {
@@ -464,14 +728,19 @@ async function uploadMultipleThumbnailsToGallery(files) {
   }
 }
 
-// Delete thumbnail from user's gallery
-async function deleteThumbnail(filename) {
+// Delete thumbnail from user's gallery (supports folder)
+async function deleteThumbnail(filename, folder = '') {
   if (!confirm('Are you sure you want to delete this thumbnail?')) {
     return;
   }
   
   try {
-    const response = await fetch(`/api/thumbnails/${encodeURIComponent(filename)}`, {
+    let url = `/api/thumbnails/${encodeURIComponent(filename)}`;
+    if (folder) {
+      url += `?folder=${encodeURIComponent(folder)}`;
+    }
+    
+    const response = await fetch(url, {
       method: 'DELETE',
       headers: {
         'X-CSRF-Token': getCsrfToken()
@@ -488,8 +757,9 @@ async function deleteThumbnail(filename) {
         document.getElementById('selectedThumbnailPath').value = '';
         document.getElementById('thumbnailPreview').innerHTML = '<i class="ti ti-photo text-gray-500 text-2xl"></i>';
       }
-      // Refresh gallery
-      fetchThumbnails();
+      // Refresh gallery and folders
+      fetchThumbnails(currentThumbnailFolder);
+      fetchThumbnailFolders();
     } else {
       showToast(data.error || 'Failed to delete thumbnail', 'error');
     }
@@ -725,9 +995,17 @@ function openCreateBroadcastModal() {
   const accountSelect = document.getElementById('accountSelect');
   const accountId = accountSelect ? accountSelect.value : null;
   
-  // Fetch streams, thumbnails, and channel defaults for selected account
+  // Reset thumbnail folder to root
+  currentThumbnailFolder = null;
+  const folderInput = document.getElementById('currentThumbnailFolder');
+  if (folderInput) folderInput.value = '';
+  const indicator = document.getElementById('currentFolderIndicator');
+  if (indicator) indicator.classList.add('hidden');
+  
+  // Fetch streams, thumbnails, folders, and channel defaults for selected account
   fetchStreams(accountId);
-  fetchThumbnails();
+  fetchThumbnailFolders();
+  fetchThumbnails(null);
   fetchChannelDefaults(accountId);
 }
 
@@ -736,6 +1014,11 @@ function closeCreateBroadcastModal() {
   document.getElementById('createBroadcastForm').reset();
   document.getElementById('thumbnailPreview').innerHTML = '<i class="ti ti-photo text-gray-500 text-2xl"></i>';
   document.getElementById('selectedThumbnailPath').value = '';
+  
+  // Reset thumbnail folder
+  currentThumbnailFolder = null;
+  const folderInput = document.getElementById('currentThumbnailFolder');
+  if (folderInput) folderInput.value = '';
   
   // Clear thumbnail selection
   document.querySelectorAll('.thumbnail-item').forEach(item => {

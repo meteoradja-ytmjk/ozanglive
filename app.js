@@ -4671,40 +4671,198 @@ app.put('/api/youtube/credentials/:id/primary', isAuthenticated, async (req, res
   }
 });
 
-// List uploaded thumbnails (per user, max 20)
+// List thumbnail folders (per user)
+app.get('/api/thumbnail-folders', isAuthenticated, async (req, res) => {
+  try {
+    const userId = req.session.userId;
+    const thumbnailsDir = path.join(__dirname, 'public', 'uploads', 'thumbnails', String(userId));
+    
+    if (!fs.existsSync(thumbnailsDir)) {
+      fs.mkdirSync(thumbnailsDir, { recursive: true });
+    }
+    
+    const items = fs.readdirSync(thumbnailsDir, { withFileTypes: true });
+    const folders = items
+      .filter(item => item.isDirectory())
+      .map(folder => {
+        const folderPath = path.join(thumbnailsDir, folder.name);
+        const files = fs.readdirSync(folderPath).filter(f => /\.(jpg|jpeg|png)$/i.test(f));
+        const stat = fs.statSync(folderPath);
+        return {
+          name: folder.name,
+          count: files.length,
+          maxAllowed: 20,
+          mtime: stat.mtime
+        };
+      })
+      .sort((a, b) => b.mtime - a.mtime);
+    
+    // Count root thumbnails (not in folders)
+    const rootThumbnails = items
+      .filter(item => item.isFile() && /\.(jpg|jpeg|png)$/i.test(item.name))
+      .length;
+    
+    res.json({ 
+      success: true, 
+      folders,
+      rootCount: rootThumbnails,
+      totalFolders: folders.length
+    });
+  } catch (error) {
+    console.error('Error listing thumbnail folders:', error);
+    res.status(500).json({ success: false, error: 'Failed to list folders' });
+  }
+});
+
+// Create thumbnail folder
+app.post('/api/thumbnail-folders', isAuthenticated, async (req, res) => {
+  try {
+    const userId = req.session.userId;
+    const { name } = req.body;
+    
+    if (!name || !name.trim()) {
+      return res.status(400).json({ success: false, error: 'Folder name is required' });
+    }
+    
+    // Sanitize folder name
+    const sanitizedName = name.trim().replace(/[^a-zA-Z0-9_\-\s]/g, '').substring(0, 50);
+    if (!sanitizedName) {
+      return res.status(400).json({ success: false, error: 'Invalid folder name' });
+    }
+    
+    const thumbnailsDir = path.join(__dirname, 'public', 'uploads', 'thumbnails', String(userId));
+    const folderPath = path.join(thumbnailsDir, sanitizedName);
+    
+    if (fs.existsSync(folderPath)) {
+      return res.status(400).json({ success: false, error: 'Folder already exists' });
+    }
+    
+    fs.mkdirSync(folderPath, { recursive: true });
+    
+    res.json({ success: true, folder: { name: sanitizedName, count: 0, maxAllowed: 20 } });
+  } catch (error) {
+    console.error('Error creating thumbnail folder:', error);
+    res.status(500).json({ success: false, error: 'Failed to create folder' });
+  }
+});
+
+// Rename thumbnail folder
+app.put('/api/thumbnail-folders/:name', isAuthenticated, async (req, res) => {
+  try {
+    const userId = req.session.userId;
+    const oldName = req.params.name;
+    const { newName } = req.body;
+    
+    if (!newName || !newName.trim()) {
+      return res.status(400).json({ success: false, error: 'New folder name is required' });
+    }
+    
+    // Validate folder name
+    if (oldName.includes('..') || oldName.includes('/') || oldName.includes('\\')) {
+      return res.status(400).json({ success: false, error: 'Invalid folder name' });
+    }
+    
+    const sanitizedNewName = newName.trim().replace(/[^a-zA-Z0-9_\-\s]/g, '').substring(0, 50);
+    if (!sanitizedNewName) {
+      return res.status(400).json({ success: false, error: 'Invalid new folder name' });
+    }
+    
+    const thumbnailsDir = path.join(__dirname, 'public', 'uploads', 'thumbnails', String(userId));
+    const oldPath = path.join(thumbnailsDir, oldName);
+    const newPath = path.join(thumbnailsDir, sanitizedNewName);
+    
+    if (!fs.existsSync(oldPath)) {
+      return res.status(404).json({ success: false, error: 'Folder not found' });
+    }
+    
+    if (fs.existsSync(newPath)) {
+      return res.status(400).json({ success: false, error: 'A folder with that name already exists' });
+    }
+    
+    fs.renameSync(oldPath, newPath);
+    
+    res.json({ success: true, folder: { name: sanitizedNewName } });
+  } catch (error) {
+    console.error('Error renaming thumbnail folder:', error);
+    res.status(500).json({ success: false, error: 'Failed to rename folder' });
+  }
+});
+
+// Delete thumbnail folder
+app.delete('/api/thumbnail-folders/:name', isAuthenticated, async (req, res) => {
+  try {
+    const userId = req.session.userId;
+    const folderName = req.params.name;
+    
+    // Validate folder name
+    if (folderName.includes('..') || folderName.includes('/') || folderName.includes('\\')) {
+      return res.status(400).json({ success: false, error: 'Invalid folder name' });
+    }
+    
+    const thumbnailsDir = path.join(__dirname, 'public', 'uploads', 'thumbnails', String(userId));
+    const folderPath = path.join(thumbnailsDir, folderName);
+    
+    if (!fs.existsSync(folderPath)) {
+      return res.status(404).json({ success: false, error: 'Folder not found' });
+    }
+    
+    // Delete folder and all contents
+    fs.rmSync(folderPath, { recursive: true, force: true });
+    
+    res.json({ success: true, message: 'Folder deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting thumbnail folder:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete folder' });
+  }
+});
+
+// List uploaded thumbnails (per user, supports folder parameter)
 app.get('/api/thumbnails', isAuthenticated, async (req, res) => {
   try {
     const userId = req.session.userId;
     const limit = req.query.limit ? parseInt(req.query.limit) : null;
-    const thumbnailsDir = path.join(__dirname, 'public', 'uploads', 'thumbnails', String(userId));
+    const folder = req.query.folder || null;
+    
+    let thumbnailsDir = path.join(__dirname, 'public', 'uploads', 'thumbnails', String(userId));
+    let urlPrefix = `/uploads/thumbnails/${userId}`;
+    
+    // If folder specified, use that folder
+    if (folder) {
+      // Validate folder name
+      if (folder.includes('..') || folder.includes('/') || folder.includes('\\')) {
+        return res.status(400).json({ success: false, error: 'Invalid folder name' });
+      }
+      thumbnailsDir = path.join(thumbnailsDir, folder);
+      urlPrefix = `${urlPrefix}/${folder}`;
+    }
     
     // Check if directory exists
     if (!fs.existsSync(thumbnailsDir)) {
-      return res.json({ success: true, thumbnails: [], count: 0, maxAllowed: 20 });
+      return res.json({ success: true, thumbnails: [], count: 0, maxAllowed: 20, folder: folder });
     }
     
-    const files = fs.readdirSync(thumbnailsDir);
-    let thumbnails = files
-      .filter(file => /\.(jpg|jpeg|png)$/i.test(file))
+    const items = fs.readdirSync(thumbnailsDir, { withFileTypes: true });
+    let thumbnails = items
+      .filter(item => item.isFile() && /\.(jpg|jpeg|png)$/i.test(item.name))
       .map(file => {
-        const stat = fs.statSync(path.join(thumbnailsDir, file));
+        const stat = fs.statSync(path.join(thumbnailsDir, file.name));
         return {
-          filename: file,
-          path: `/uploads/thumbnails/${userId}/${file}`,
-          url: `/uploads/thumbnails/${userId}/${file}`,
+          filename: file.name,
+          path: `${urlPrefix}/${file.name}`,
+          url: `${urlPrefix}/${file.name}`,
+          folder: folder,
           mtime: stat.mtime
         };
       })
-      .sort((a, b) => b.mtime - a.mtime); // Sort by modification time (newest first)
+      .sort((a, b) => b.mtime - a.mtime);
     
     const totalCount = thumbnails.length;
     
-    // Apply limit if specified
     if (limit && limit > 0) {
       thumbnails = thumbnails.slice(0, limit);
     }
     
-    res.json({ success: true, thumbnails, count: totalCount, maxAllowed: 20 });
+    res.json({ success: true, thumbnails, count: totalCount, maxAllowed: 20, folder: folder });
   } catch (error) {
     console.error('Error listing thumbnails:', error);
     res.status(500).json({ success: false, error: 'Failed to list thumbnails' });
@@ -4727,19 +4885,33 @@ const thumbnailUpload = multer({
   }
 });
 
-// Upload thumbnail to user's gallery (max 20) - supports multiple files
+// Upload thumbnail to user's gallery (max 20 per folder) - supports multiple files
 app.post('/api/thumbnails', isAuthenticated, thumbnailUpload.array('thumbnail', 20), async (req, res) => {
   try {
     const userId = req.session.userId;
-    const thumbnailsDir = path.join(__dirname, 'public', 'uploads', 'thumbnails', String(userId));
+    const folder = req.body.folder || null;
     
-    // Create user's thumbnail directory if not exists
+    let thumbnailsDir = path.join(__dirname, 'public', 'uploads', 'thumbnails', String(userId));
+    let urlPrefix = `/uploads/thumbnails/${userId}`;
+    
+    // If folder specified, use that folder
+    if (folder) {
+      // Validate folder name
+      if (folder.includes('..') || folder.includes('/') || folder.includes('\\')) {
+        return res.status(400).json({ success: false, error: 'Invalid folder name' });
+      }
+      thumbnailsDir = path.join(thumbnailsDir, folder);
+      urlPrefix = `${urlPrefix}/${folder}`;
+    }
+    
+    // Create directory if not exists
     if (!fs.existsSync(thumbnailsDir)) {
       fs.mkdirSync(thumbnailsDir, { recursive: true });
     }
     
-    // Check current count
-    const existingFiles = fs.readdirSync(thumbnailsDir).filter(file => /\.(jpg|jpeg|png)$/i.test(file));
+    // Check current count (only files, not subdirectories)
+    const items = fs.readdirSync(thumbnailsDir, { withFileTypes: true });
+    const existingFiles = items.filter(item => item.isFile() && /\.(jpg|jpeg|png)$/i.test(item.name));
     const currentCount = existingFiles.length;
     
     if (!req.files || req.files.length === 0) {
@@ -4752,7 +4924,7 @@ app.post('/api/thumbnails', isAuthenticated, thumbnailUpload.array('thumbnail', 
     if (availableSlots <= 0) {
       return res.status(400).json({ 
         success: false, 
-        error: 'Maximum 20 thumbnails allowed. Please delete some before uploading new ones.' 
+        error: 'Maximum 20 thumbnails allowed per folder. Please delete some before uploading new ones.' 
       });
     }
     
@@ -4773,8 +4945,9 @@ app.post('/api/thumbnails', isAuthenticated, thumbnailUpload.array('thumbnail', 
       
       uploadedThumbnails.push({
         filename: newFilename,
-        path: `/uploads/thumbnails/${userId}/${newFilename}`,
-        url: `/uploads/thumbnails/${userId}/${newFilename}`
+        path: `${urlPrefix}/${newFilename}`,
+        url: `${urlPrefix}/${newFilename}`,
+        folder: folder
       });
     }
     
@@ -4786,7 +4959,8 @@ app.post('/api/thumbnails', isAuthenticated, thumbnailUpload.array('thumbnail', 
       uploadedCount: uploadedThumbnails.length,
       skippedCount: skippedCount,
       count: currentCount + uploadedThumbnails.length,
-      maxAllowed: 20
+      maxAllowed: 20,
+      folder: folder
     });
   } catch (error) {
     console.error('Error uploading thumbnails:', error);
@@ -4794,18 +4968,30 @@ app.post('/api/thumbnails', isAuthenticated, thumbnailUpload.array('thumbnail', 
   }
 });
 
-// Delete thumbnail from user's gallery
+// Delete thumbnail from user's gallery (supports folder parameter)
 app.delete('/api/thumbnails/:filename', isAuthenticated, async (req, res) => {
   try {
     const userId = req.session.userId;
     const filename = req.params.filename;
+    const folder = req.query.folder || null;
     
     // Validate filename to prevent directory traversal
     if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
       return res.status(400).json({ success: false, error: 'Invalid filename' });
     }
     
-    const thumbnailPath = path.join(__dirname, 'public', 'uploads', 'thumbnails', String(userId), filename);
+    let thumbnailPath = path.join(__dirname, 'public', 'uploads', 'thumbnails', String(userId));
+    
+    // If folder specified, use that folder
+    if (folder) {
+      // Validate folder name
+      if (folder.includes('..') || folder.includes('/') || folder.includes('\\')) {
+        return res.status(400).json({ success: false, error: 'Invalid folder name' });
+      }
+      thumbnailPath = path.join(thumbnailPath, folder);
+    }
+    
+    thumbnailPath = path.join(thumbnailPath, filename);
     
     // Check if file exists and belongs to user
     if (!fs.existsSync(thumbnailPath)) {
