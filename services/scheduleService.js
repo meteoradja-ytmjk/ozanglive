@@ -277,7 +277,11 @@ class ScheduleService {
             privacyStatus: b.privacyStatus || 'unlisted',
             tags: b.tags || [],
             categoryId: b.categoryId || '20',
-            streamId: b.streamId || null  // Use saved stream ID
+            streamId: b.streamId || null,  // Use saved stream ID
+            // IMPORTANT: Always enable auto-start when creating from recurring template
+            // This ensures YouTube broadcast starts automatically when stream begins
+            enableAutoStart: true,
+            enableAutoStop: true
           };
           
           console.log(`[ScheduleService] Creating broadcast ${i + 1}/${broadcasts.length}: ${title}`);
@@ -320,7 +324,11 @@ class ScheduleService {
           privacyStatus: template.privacy_status || 'unlisted',
           tags: template.tags || [],
           categoryId: template.category_id || '20',
-          streamId: template.stream_id || null
+          streamId: template.stream_id || null,
+          // IMPORTANT: Always enable auto-start when creating from recurring template
+          // This ensures YouTube broadcast starts automatically when stream begins
+          enableAutoStart: true,
+          enableAutoStop: true
         };
         
         console.log(`[ScheduleService] Creating single broadcast: ${title}`);

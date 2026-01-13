@@ -283,9 +283,11 @@ class Stream {
                 v.filepath AS video_filepath, 
                 v.thumbnail_path AS video_thumbnail, 
                 v.duration AS video_duration,
+                a.title AS audio_title,
                 'video' AS video_type
          FROM streams s
          LEFT JOIN videos v ON s.video_id = v.id
+         LEFT JOIN audios a ON s.audio_id = a.id
          WHERE s.id = ?`,
         [id],
         (err, row) => {

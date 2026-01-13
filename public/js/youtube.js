@@ -2297,6 +2297,12 @@ if (recreateFromTemplateForm) {
           formData.append('privacyStatus', broadcast.privacyStatus || 'unlisted');
           // Note: Category field removed, backend uses default value
           
+          // IMPORTANT: Always enable auto-start when re-creating from template
+          // This ensures YouTube broadcast starts automatically when stream begins
+          formData.append('enableAutoStart', 'true');
+          formData.append('enableAutoStop', 'true');
+          formData.append('unlistReplayOnEnd', 'true');
+          
           if (broadcast.tags && broadcast.tags.length > 0) {
             formData.append('tags', JSON.stringify(broadcast.tags));
           }

@@ -5830,8 +5830,27 @@ app.post('/api/youtube/templates/:id/create-broadcast', isAuthenticated, async (
       privacyStatus: template.privacy_status || 'unlisted',
       tags: template.tags || [],
       categoryId: template.category_id || '22',
-      streamId: template.stream_id || null
+      streamId: template.stream_id || null,
+      // IMPORTANT: Always enable auto-start when creating from template
+      // This ensures YouTube broadcast starts automatically when stream begins
+      enableAutoStart: true,
+      enableAutoStop: true
     });
+
+    // Save broadcast settings for auto-start sync
+    try {
+      await YouTubeBroadcastSettings.upsert({
+        broadcastId: broadcast.broadcastId || broadcast.id,
+        userId: req.session.userId,
+        accountId: template.account_id || null,
+        enableAutoStart: true,
+        enableAutoStop: true,
+        unlistReplayOnEnd: true,
+        originalPrivacyStatus: template.privacy_status || 'unlisted'
+      });
+    } catch (settingsErr) {
+      console.error('[create-broadcast-from-template] Error saving broadcast settings:', settingsErr.message);
+    }
 
     console.log('[create-broadcast-from-template] Created broadcast with streamKey:', broadcast.streamKey);
 
@@ -5919,14 +5938,33 @@ app.post('/api/youtube/templates/:id/bulk-create', isAuthenticated, async (req, 
           privacyStatus: template.privacy_status || 'unlisted',
           tags: template.tags || [],
           categoryId: template.category_id || '22',
-          streamId: template.stream_id || null
+          streamId: template.stream_id || null,
+          // IMPORTANT: Always enable auto-start when creating from template
+          // This ensures YouTube broadcast starts automatically when stream begins
+          enableAutoStart: true,
+          enableAutoStop: true
         });
+
+        // Save broadcast settings for auto-start sync
+        try {
+          await YouTubeBroadcastSettings.upsert({
+            broadcastId: broadcast.broadcastId,
+            userId: req.session.userId,
+            accountId: template.account_id || null,
+            enableAutoStart: true,
+            enableAutoStop: true,
+            unlistReplayOnEnd: true,
+            originalPrivacyStatus: template.privacy_status || 'unlisted'
+          });
+        } catch (settingsErr) {
+          console.error('[bulk-create] Error saving broadcast settings:', settingsErr.message);
+        }
 
         // Upload thumbnail if template has one
         if (template.thumbnail_path) {
           try {
             const thumbnailBuffer = fs.readFileSync(path.join(__dirname, 'public', template.thumbnail_path));
-            await youtubeService.uploadThumbnail(accessToken, broadcast.id, thumbnailBuffer);
+            await youtubeService.uploadThumbnail(accessToken, broadcast.broadcastId, thumbnailBuffer);
           } catch (thumbError) {
             console.error('Error uploading thumbnail for bulk create:', thumbError);
           }
@@ -5934,7 +5972,7 @@ app.post('/api/youtube/templates/:id/bulk-create', isAuthenticated, async (req, 
 
         results.success++;
         results.broadcasts.push({
-          id: broadcast.id,
+          id: broadcast.broadcastId,
           title: broadcast.title,
           scheduledStartTime: broadcast.scheduledStartTime,
           streamKey: broadcast.streamKey
