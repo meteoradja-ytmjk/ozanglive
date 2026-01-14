@@ -297,8 +297,12 @@ async function fetchThumbnailFolders() {
           <span>${escapeHtml(folder.name)}</span>
           <span class="text-gray-500">(${folder.count}/20)</span>
           <span class="hidden group-hover:flex items-center gap-1 ml-1">
-            <i class="ti ti-pencil text-blue-400 hover:text-blue-300" onclick="event.stopPropagation(); openRenameFolderModal('${escapeHtml(folder.name)}')" title="Rename"></i>
-            <i class="ti ti-trash text-red-400 hover:text-red-300" onclick="event.stopPropagation(); deleteFolder('${escapeHtml(folder.name)}')" title="Delete"></i>
+            <button type="button" class="p-1 rounded hover:bg-blue-500/20 cursor-pointer" onclick="event.stopPropagation(); event.preventDefault(); openRenameFolderModal('${escapeJsString(folder.name)}')" title="Rename">
+              <i class="ti ti-pencil text-blue-400 hover:text-blue-300 pointer-events-none"></i>
+            </button>
+            <button type="button" class="p-1 rounded hover:bg-red-500/20 cursor-pointer" onclick="event.stopPropagation(); event.preventDefault(); deleteFolder('${escapeJsString(folder.name)}')" title="Delete">
+              <i class="ti ti-trash text-red-400 hover:text-red-300 pointer-events-none"></i>
+            </button>
           </span>
         `;
         btn.onclick = () => openThumbnailFolder(folder.name);
@@ -905,7 +909,7 @@ function renderTags() {
     chip.className = 'tag-chip inline-flex items-center gap-1 px-2 py-1 bg-red-500/20 text-red-400 rounded text-sm';
     chip.innerHTML = `
       ${escapeHtml(tag)}
-      <button type="button" class="hover:text-red-300" onclick="removeTag('${escapeHtml(tag)}')">
+      <button type="button" class="hover:text-red-300" onclick="removeTag('${escapeJsString(tag)}')">
         <i class="ti ti-x text-xs"></i>
       </button>
     `;
@@ -951,6 +955,17 @@ function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
+}
+
+// Escape string for use in JavaScript string literals (single quotes)
+function escapeJsString(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r');
 }
 
 // Initialize tag input handler
@@ -1554,7 +1569,7 @@ function renderTemplateList(templates) {
             <span>Re-create</span>
           </button>
           ${!isMulti ? `
-          <button onclick="openBulkCreateModal('${template.id}', '${escapeHtml(template.name)}')"
+          <button onclick="openBulkCreateModal('${template.id}', '${escapeJsString(template.name)}')"
             class="px-3 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg transition-colors text-sm flex items-center gap-1" title="Bulk Create">
             <i class="ti ti-stack-2"></i>
             <span>Bulk</span>
@@ -1564,7 +1579,7 @@ function renderTemplateList(templates) {
             class="px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-lg transition-colors text-sm flex items-center gap-1" title="Edit">
             <i class="ti ti-edit"></i>
           </button>
-          <button onclick="deleteTemplate('${template.id}', '${escapeHtml(template.name)}')"
+          <button onclick="deleteTemplate('${template.id}', '${escapeJsString(template.name)}')"
             class="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors text-sm flex items-center gap-1" title="Delete">
             <i class="ti ti-trash"></i>
           </button>
@@ -1586,7 +1601,7 @@ function renderTemplateList(templates) {
             <i class="ti ti-refresh text-sm"></i>
           </button>
           ${!isMulti ? `
-          <button onclick="openBulkCreateModal('${template.id}', '${escapeHtml(template.name)}')"
+          <button onclick="openBulkCreateModal('${template.id}', '${escapeJsString(template.name)}')"
             class="w-8 h-8 flex items-center justify-center text-primary hover:bg-primary/20 rounded transition-colors" title="Bulk Create">
             <i class="ti ti-stack-2 text-sm"></i>
           </button>
@@ -1601,7 +1616,7 @@ function renderTemplateList(templates) {
             <i class="ti ti-repeat text-sm"></i>
           </button>
           ` : ''}
-          <button onclick="deleteTemplate('${template.id}', '${escapeHtml(template.name)}')"
+          <button onclick="deleteTemplate('${template.id}', '${escapeJsString(template.name)}')"
             class="w-8 h-8 flex items-center justify-center text-red-400 hover:bg-red-500/20 rounded transition-colors" title="Delete">
             <i class="ti ti-trash text-sm"></i>
           </button>
@@ -3384,12 +3399,12 @@ function renderTitleManagerList() {
   
   listEl.innerHTML = titleSuggestions.map(title => `
     <div class="flex items-center gap-2 p-2 bg-dark-600 rounded-lg hover:bg-dark-500 transition-colors">
-      <button type="button" onclick="selectTitle('${escapeHtml(title.id)}', '${escapeHtml(title.title.replace(/'/g, "\\'"))}')"
+      <button type="button" onclick="selectTitle('${escapeJsString(title.id)}', '${escapeJsString(title.title)}')"
         class="flex-1 text-left text-sm text-white truncate hover:text-primary">
         ${escapeHtml(title.title)}
       </button>
       <span class="text-xs text-gray-500 px-2">${title.use_count || 0}x</span>
-      <button type="button" onclick="deleteTitleSuggestion('${escapeHtml(title.id)}')"
+      <button type="button" onclick="deleteTitleSuggestion('${escapeJsString(title.id)}')"
         class="text-red-400 hover:text-red-300 hover:bg-red-500/20 p-1.5 rounded-lg transition-colors"
         title="Delete title">
         <i class="ti ti-trash text-sm"></i>
