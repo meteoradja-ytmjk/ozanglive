@@ -5,10 +5,10 @@ const { calculateDurationSeconds, formatDuration } = require('../utils/durationC
 const scheduledTerminations = new Map();
 const recentlyTriggeredStreams = new Map(); // Track recently triggered recurring streams
 const SCHEDULE_LOOKAHEAD_SECONDS = 30; // FIXED: Reduced to 30 seconds to prevent early triggers
-const RECURRING_CHECK_INTERVAL = 60 * 1000; // Check recurring schedules every 1 minute (CRITICAL for accuracy)
-const ONCE_SCHEDULE_CHECK_INTERVAL = 30 * 1000; // FIXED: Check one-time schedules every 30 seconds for better precision
+const RECURRING_CHECK_INTERVAL = 60 * 1000; // Check recurring schedules every 1 minute for precision
+const ONCE_SCHEDULE_CHECK_INTERVAL = 60 * 1000; // Check one-time schedules every 1 minute for precision
 const TRIGGER_COOLDOWN_MS = 10 * 60 * 1000; // 10 minute cooldown to prevent double triggers (longer than any check interval)
-const DURATION_CHECK_INTERVAL = 30 * 1000; // FIXED: Check durations every 30 seconds for precise stopping
+const DURATION_CHECK_INTERVAL = 60 * 1000; // Check durations every 1 minute
 const FORCE_STOP_BUFFER_MS = 30 * 1000; // FIXED: Reduced to 30 seconds - force stop if exceeded by 30s
 const CLEANUP_INTERVAL = 60 * 60 * 1000; // Clean up stale entries every 1 hour
 
@@ -61,7 +61,7 @@ function init(streamingServiceInstance) {
   // MEMORY MANAGEMENT: Cleanup stale entries from Maps
   cleanupIntervalId = setInterval(cleanupStaleMaps, CLEANUP_INTERVAL);
   
-  console.log('[Scheduler] Intervals set: once-schedules=30s, recurring=1min, duration=30s, cleanup=1hr');
+  console.log('[Scheduler] Intervals set: once-schedules=1min, recurring=1min, duration=1min, cleanup=1hr');
   
   // Initial checks with error handling (run immediately on startup)
   safeCheckScheduledStreams();
@@ -102,10 +102,10 @@ async function checkScheduledStreams() {
     const now = new Date();
     const lookAheadTime = new Date(now.getTime() + SCHEDULE_LOOKAHEAD_SECONDS * 1000);
     
-    // Log every check to help debugging
-    const currentHours = now.getHours();
-    const currentMinutes = now.getMinutes();
-    console.log(`[Scheduler] Checking ONCE schedules at ${currentHours}:${String(currentMinutes).padStart(2, '0')} local (${now.toISOString()}), lookAhead=${SCHEDULE_LOOKAHEAD_SECONDS}s`);
+    // Log every check to help debugging - DISABLED to save CPU
+    // const currentHours = now.getHours();
+    // const currentMinutes = now.getMinutes();
+    // console.log(`[Scheduler] Checking ONCE schedules at ${currentHours}:${String(currentMinutes).padStart(2, '0')} local (${now.toISOString()}), lookAhead=${SCHEDULE_LOOKAHEAD_SECONDS}s`);
     
     let streams = [];
     try {
@@ -161,8 +161,7 @@ async function checkScheduledStreams() {
         }
       }
     } else {
-      // Log when no streams found to help debugging
-      console.log(`[Scheduler] No ONCE streams found in range`);
+      // No streams found - skip logging to save CPU
     }
   } catch (error) {
     console.error('[Scheduler] Error checking scheduled streams:', error.message);
@@ -186,10 +185,9 @@ async function checkStreamDurations() {
     
     const now = new Date();
     
-    // OPTIMIZED: Log more frequently when streams are close to ending
-    // Always log if there are live streams to help debugging duration issues
-    if (liveStreams.length > 0) {
-      console.log(`[Scheduler] Checking durations for ${liveStreams.length} live streams at ${now.toISOString()}`);
+    // OPTIMIZED: Only log when there are streams to check
+    if (liveStreams.length === 0) {
+      return; // No live streams, skip entirely
     }
     
     for (const stream of liveStreams) {
@@ -198,21 +196,17 @@ async function checkStreamDurations() {
 
         // CRITICAL: Use actual start_time, not schedule_time for end time calculation
         if (!stream.start_time) {
-          console.log(`[Scheduler] Stream ${stream.id} has no start_time set, skipping duration check`);
-          continue;
+          continue; // Skip silently - no start_time
         }
 
         const actualStartTime = new Date(stream.start_time);
         
         // Use centralized duration calculator for consistent priority
-        // IMPORTANT: For recurring streams, we must use stream_duration_minutes directly
-        // because schedule_time/end_time may contain old values from previous runs
         let durationSeconds = null;
         
         // Priority 1: stream_duration_minutes (most reliable for recurring streams)
         if (stream.stream_duration_minutes && stream.stream_duration_minutes > 0) {
           durationSeconds = stream.stream_duration_minutes * 60;
-          console.log(`[Scheduler] Stream ${stream.id}: Using stream_duration_minutes: ${stream.stream_duration_minutes} minutes (${durationSeconds} seconds)`);
         } else {
           // Fallback to centralized calculator for other cases
           durationSeconds = calculateDurationSeconds(stream);
@@ -221,11 +215,6 @@ async function checkStreamDurations() {
         if (durationSeconds && durationSeconds > 0) {
           const durationMs = durationSeconds * 1000;
           shouldEndAt = new Date(actualStartTime.getTime() + durationMs);
-          const remainingMs = shouldEndAt.getTime() - now.getTime();
-          const remainingMinutes = remainingMs / 60000;
-          console.log(`[Scheduler] Stream ${stream.id}: start=${actualStartTime.toISOString()}, duration=${formatDuration(durationSeconds)}, end=${shouldEndAt.toISOString()}, remaining=${remainingMinutes.toFixed(1)} minutes`);
-        } else {
-          console.log(`[Scheduler] Stream ${stream.id} has no duration set - will run indefinitely`);
         }
 
         // If we have an end time, check if we need to take action
@@ -233,17 +222,11 @@ async function checkStreamDurations() {
           const timeOverdue = now.getTime() - shouldEndAt.getTime();
           const timeOverdueMinutes = timeOverdue / 60000;
           
-          // Log duration fields for debugging
-          console.log(`[Scheduler] Stream ${stream.id} duration fields: stream_duration_minutes=${stream.stream_duration_minutes}, schedule_time=${stream.schedule_time}, end_time=${stream.end_time}`);
-          
           // FORCE STOP: If stream exceeds duration by more than 30 seconds, force stop immediately
-          // This is a safety net in case FFmpeg -t and scheduled timer both failed
           if (timeOverdue > FORCE_STOP_BUFFER_MS) {
-            console.log(`[Scheduler] FORCE STOP: Stream ${stream.id} exceeded end time by ${timeOverdueMinutes.toFixed(1)} minutes, forcing stop now`);
+            console.log(`[Scheduler] FORCE STOP: Stream ${stream.id} exceeded by ${timeOverdueMinutes.toFixed(1)} min`);
             try {
-              const stopResult = await streamingService.stopStream(stream.id);
-              console.log(`[Scheduler] FORCE STOP result for stream ${stream.id}: ${JSON.stringify(stopResult)}`);
-              // Cancel any existing scheduled termination
+              await streamingService.stopStream(stream.id);
               cancelStreamTermination(stream.id);
             } catch (stopError) {
               console.error(`[Scheduler] Error force stopping stream ${stream.id}:`, stopError.message);
@@ -251,31 +234,27 @@ async function checkStreamDurations() {
             continue;
           }
           
-          // FIXED: If stream has exceeded end time, stop it immediately
-          // No buffer - stop as soon as duration is reached
+          // If stream has exceeded end time, stop it immediately
           if (shouldEndAt <= now) {
-            console.log(`[Scheduler] Stream ${stream.id} exceeded end time by ${timeOverdueMinutes.toFixed(2)} minutes, stopping now`);
+            console.log(`[Scheduler] Stopping stream ${stream.id} - duration reached`);
             try {
-              const stopResult = await streamingService.stopStream(stream.id);
-              console.log(`[Scheduler] Stop result for stream ${stream.id}: ${JSON.stringify(stopResult)}`);
+              await streamingService.stopStream(stream.id);
               cancelStreamTermination(stream.id);
             } catch (stopError) {
-              console.error(`[Scheduler] Error stopping overdue stream ${stream.id}:`, stopError.message);
+              console.error(`[Scheduler] Error stopping stream ${stream.id}:`, stopError.message);
             }
             continue;
           }
           
-          // If no scheduled termination exists, create one
+          // If no scheduled termination exists, create one (silently)
           if (!scheduledTerminations.has(stream.id)) {
             const timeUntilEnd = shouldEndAt.getTime() - now.getTime();
             const minutesUntilEnd = timeUntilEnd / 60000;
-            console.log(`[Scheduler] Stream ${stream.id} will end at ${shouldEndAt.toISOString()} (${minutesUntilEnd.toFixed(2)} minutes)`);
             scheduleStreamTermination(stream.id, minutesUntilEnd);
           }
         }
       } catch (streamError) {
         console.error(`[Scheduler] Error checking duration for stream ${stream.id}:`, streamError.message);
-        // Continue with next stream, don't crash
       }
     }
   } catch (error) {
@@ -396,17 +375,13 @@ function shouldTriggerDaily(stream, currentTime = new Date()) {
   // Calculate time difference (positive = current time is after scheduled time)
   const timeDiff = currentTotalMinutes - scheduleMinutes;
   
-  // FIXED: Trigger only at exact minute or up to 1 minute late
-  // - timeDiff >= 0: Only trigger at or after scheduled time (NEVER before)
-  // - timeDiff <= 1: Allow up to 1 minute late (scheduler checks every 1 minute)
-  // The cooldown mechanism prevents double triggers
+  // Trigger if within 0-1 minute of scheduled time (1-min interval)
   const shouldTrigger = timeDiff >= 0 && timeDiff <= 1;
   
-  // Log trigger decision
-  const triggerStatus = timeDiff < 0 ? `WAITING (${Math.abs(timeDiff)} min before schedule)` : 
-                        timeDiff <= 1 ? 'TRIGGER_WINDOW' : 
-                        `MISSED (${timeDiff} min late)`;
-  console.log(`[Scheduler] Daily time check: scheduled=${schedHours}:${String(schedMinutes).padStart(2,'0')} WIB, current=${wibTime.hours}:${String(wibTime.minutes).padStart(2,'0')} WIB, diff=${timeDiff}min, status=${triggerStatus}, shouldTrigger=${shouldTrigger}`);
+  // Only log when triggering to save CPU
+  if (shouldTrigger) {
+    console.log(`[Scheduler] Daily trigger: ${schedHours}:${String(schedMinutes).padStart(2,'0')} WIB`);
+  }
   
   return shouldTrigger;
 }
@@ -452,21 +427,16 @@ function shouldTriggerWeekly(stream, currentTime = new Date()) {
   const isDayMatch = scheduleDays.includes(wibTime.day);
   
   if (!isDayMatch) {
-    console.log(`[Scheduler] Weekly time check: scheduled=${schedHours}:${String(schedMinutes).padStart(2,'0')} WIB on days=[${scheduleDays.map(d => dayNames[d]).join(',')}], current=${wibTime.hours}:${String(wibTime.minutes).padStart(2,'0')} WIB (${dayNames[wibTime.day]}), diff=${timeDiff}min, status=WRONG DAY, shouldTrigger=false`);
     return false;
   }
 
-  // FIXED: Trigger only at exact minute or up to 1 minute late
-  // - timeDiff >= 0: Only trigger at or after scheduled time (NEVER before)
-  // - timeDiff <= 1: Allow up to 1 minute late (scheduler checks every 1 minute)
-  // The cooldown mechanism prevents double triggers
+  // Trigger if within 0-1 minute of scheduled time (1-min interval)
   const shouldTrigger = timeDiff >= 0 && timeDiff <= 1;
   
-  const triggerStatus = timeDiff < 0 ? `WAITING (${Math.abs(timeDiff)} min before schedule)` : 
-                        timeDiff <= 1 ? 'TRIGGER_WINDOW' : 
-                        `MISSED (${timeDiff} min late)`;
-  
-  console.log(`[Scheduler] Weekly time check: scheduled=${schedHours}:${String(schedMinutes).padStart(2,'0')} WIB on days=[${scheduleDays.map(d => dayNames[d]).join(',')}], current=${wibTime.hours}:${String(wibTime.minutes).padStart(2,'0')} WIB (${dayNames[wibTime.day]}), diff=${timeDiff}min, status=${triggerStatus}, shouldTrigger=${shouldTrigger}`);
+  // Only log when triggering to save CPU
+  if (shouldTrigger) {
+    console.log(`[Scheduler] Weekly trigger: ${schedHours}:${String(schedMinutes).padStart(2,'0')} WIB (${dayNames[wibTime.day]})`);
+  }
   
   return shouldTrigger;
 }
@@ -524,35 +494,29 @@ async function checkRecurringSchedules() {
     }
     
     if (recurringStreams.length === 0) {
-      // Log every time to help debugging
-      console.log(`[Scheduler] No recurring schedules found at ${currentHours}:${String(currentMinutes).padStart(2, '0')} WIB (${dayNames[currentDay]})`);
+      // No recurring schedules - skip logging to save CPU
       return;
     }
 
-    console.log(`[Scheduler] ========== RECURRING CHECK ==========`);
-    console.log(`[Scheduler] Current time: ${currentHours}:${String(currentMinutes).padStart(2, '0')} WIB (${dayNames[currentDay]}) [UTC: ${now.toISOString()}]`);
-    console.log(`[Scheduler] Found ${recurringStreams.length} recurring schedules to check`);
+    // Only log header when actually checking streams
+    console.log(`[Scheduler] Checking ${recurringStreams.length} recurring schedules`);
 
     for (const stream of recurringStreams) {
       try {
-        // Always log stream details for debugging
-        console.log(`[Scheduler] Checking stream: id=${stream.id}, title="${stream.title}", type=${stream.schedule_type}, recurring_time=${stream.recurring_time}, enabled=${stream.recurring_enabled}, status=${stream.status}, days=${JSON.stringify(stream.schedule_days)}`);
+        // Skip logging individual stream checks to save CPU
         
         // Skip if not enabled
         if (!stream.recurring_enabled) {
-          console.log(`[Scheduler] SKIP: stream ${stream.id} - recurring_enabled is false`);
           continue;
         }
 
         // Skip if recently triggered
         if (wasRecentlyTriggered(stream.id)) {
-          console.log(`[Scheduler] SKIP: stream ${stream.id} - recently triggered (cooldown active)`);
           continue;
         }
 
         // Check if stream is already live
         if (stream.status === 'live') {
-          console.log(`[Scheduler] SKIP: stream ${stream.id} - already live`);
           continue;
         }
 

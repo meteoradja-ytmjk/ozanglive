@@ -42,7 +42,7 @@ const CLEANUP_INTERVAL = 30 * 60 * 1000; // Every 30 minutes
 
 // PROCESS HEALTH CHECK: Verify FFmpeg processes are still running
 // This catches cases where FFmpeg dies without triggering exit event
-const PROCESS_CHECK_INTERVAL = 30 * 1000; // Every 30 seconds
+const PROCESS_CHECK_INTERVAL = 5 * 60 * 1000; // Every 5 minutes (FFmpeg exit event handles normal cases)
 
 /**
  * Handle unlist replay on stream end
@@ -180,6 +180,7 @@ async function isProcessRunning(pid) {
 /**
  * Periodic health check for all active streams
  * Verifies FFmpeg processes are still running and updates status if not
+ * OPTIMIZED: Uses lightweight process.kill(pid, 0) first, only spawns external commands if needed
  */
 async function checkStreamProcessHealth() {
   try {
@@ -194,32 +195,19 @@ async function checkStreamProcessHealth() {
     for (const streamId of activeStreamIds) {
       try {
         const ffmpegProcess = activeStreams.get(streamId);
-        const pid = streamPids.get(streamId);
         
-        // Method 1: Check if process object is still valid
+        // OPTIMIZED: Method 1 only - use process.kill(pid, 0) which is very lightweight
+        // This is sufficient for processes we spawned ourselves
         let processAlive = false;
-        if (ffmpegProcess && !ffmpegProcess.killed) {
-          // Try to check if process is still running
+        if (ffmpegProcess && !ffmpegProcess.killed && ffmpegProcess.pid) {
           try {
             // Sending signal 0 checks if process exists without killing it
+            // This is a synchronous, lightweight operation
             process.kill(ffmpegProcess.pid, 0);
             processAlive = true;
           } catch (e) {
-            // Process doesn't exist
+            // Process doesn't exist (ESRCH) or no permission (EPERM)
             processAlive = false;
-          }
-        }
-        
-        // Method 2: Double-check with PID if available
-        if (!processAlive && pid) {
-          processAlive = await isProcessRunning(pid);
-        }
-        
-        // Method 3: Check if FFmpeg is streaming to this stream's key
-        if (!processAlive) {
-          const stream = await Stream.findById(streamId);
-          if (stream && stream.stream_key) {
-            processAlive = await isFFmpegStreamingToKey(stream.stream_key);
           }
         }
         
@@ -262,47 +250,9 @@ async function checkStreamProcessHealth() {
       }
     }
     
-    // Also check database for "live" streams not in memory
-    // This catches cases where app restarted or FFmpeg died without cleanup
-    try {
-      const liveStreams = await Stream.findAll(null, 'live');
-      for (const stream of liveStreams) {
-        // Skip if already in activeStreams (already checked above)
-        if (activeStreams.has(stream.id)) continue;
-        
-        // Stream is "live" in DB but not in memory - verify FFmpeg is actually running
-        let isActuallyRunning = false;
-        
-        if (stream.stream_key) {
-          isActuallyRunning = await isFFmpegStreamingToKey(stream.stream_key);
-        }
-        
-        if (!isActuallyRunning) {
-          // Check how long it's been "live" - only update if > 2 minutes
-          // This prevents false positives during app startup
-          const startTime = stream.start_time ? new Date(stream.start_time) : null;
-          const now = new Date();
-          const runningMinutes = startTime ? (now - startTime) / 60000 : 999;
-          
-          if (runningMinutes > 2) {
-            console.log(`[ProcessHealthCheck] DB stream ${stream.id}: marked 'live' but no FFmpeg process found (running ${runningMinutes.toFixed(1)} min)`);
-            const newStatus = getStatusAfterStreamEnd(stream);
-            await Stream.updateStatus(stream.id, newStatus, stream.user_id);
-            console.log(`[ProcessHealthCheck] Updated DB stream ${stream.id} status to '${newStatus}'`);
-            
-            // Save history
-            const updatedStream = await Stream.findById(stream.id);
-            await saveStreamHistory(updatedStream);
-          } else {
-            console.log(`[ProcessHealthCheck] DB stream ${stream.id}: recently started (${runningMinutes.toFixed(1)} min), keeping 'live'`);
-          }
-        } else {
-          console.log(`[ProcessHealthCheck] DB stream ${stream.id}: FFmpeg running (external process)`);
-        }
-      }
-    } catch (dbError) {
-      console.error(`[ProcessHealthCheck] Error checking database streams:`, dbError.message);
-    }
+    // OPTIMIZED: Removed heavy database check for "live" streams not in memory
+    // This was spawning external processes for each orphaned stream
+    // The cleanup is now handled by cleanupStaleMaps() which runs less frequently
   } catch (error) {
     console.error('[ProcessHealthCheck] Error during health check:', error.message);
   }
