@@ -287,21 +287,21 @@ async function fetchThumbnailFolders() {
       data.folders.forEach(folder => {
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = `folder-btn px-3 py-1.5 text-xs rounded-lg transition-colors flex items-center gap-1 group ${
+        btn.className = `folder-btn px-3 py-1.5 text-xs rounded-lg transition-colors flex items-center gap-1.5 group shrink-0 whitespace-nowrap ${
           currentThumbnailFolder === folder.name 
             ? 'bg-primary/20 text-primary border border-primary/50' 
-            : 'bg-dark-700 hover:bg-dark-600 text-gray-300 border border-gray-600'
+            : 'bg-dark-600 hover:bg-dark-500 text-gray-300 border border-gray-600'
         }`;
         btn.innerHTML = `
-          <i class="ti ti-folder"></i>
-          <span>${escapeHtml(folder.name)}</span>
-          <span class="text-gray-500">(${folder.count}/20)</span>
-          <span class="hidden group-hover:flex items-center gap-1 ml-1">
-            <button type="button" class="p-1 rounded hover:bg-blue-500/20 cursor-pointer" onclick="event.stopPropagation(); event.preventDefault(); openRenameFolderModal('${escapeJsString(folder.name)}')" title="Rename">
-              <i class="ti ti-pencil text-blue-400 hover:text-blue-300 pointer-events-none"></i>
+          <i class="ti ti-folder text-sm"></i>
+          <span class="max-w-[80px] sm:max-w-[120px] truncate">${escapeHtml(folder.name)}</span>
+          <span class="text-gray-500 text-[10px]">(${folder.count}/20)</span>
+          <span class="hidden group-hover:flex items-center gap-0.5 ml-0.5">
+            <button type="button" class="p-0.5 rounded hover:bg-blue-500/20 cursor-pointer" onclick="event.stopPropagation(); event.preventDefault(); openRenameFolderModal('${escapeJsString(folder.name)}')" title="Rename">
+              <i class="ti ti-pencil text-blue-400 hover:text-blue-300 pointer-events-none text-xs"></i>
             </button>
-            <button type="button" class="p-1 rounded hover:bg-red-500/20 cursor-pointer" onclick="event.stopPropagation(); event.preventDefault(); deleteFolder('${escapeJsString(folder.name)}')" title="Delete">
-              <i class="ti ti-trash text-red-400 hover:text-red-300 pointer-events-none"></i>
+            <button type="button" class="p-0.5 rounded hover:bg-red-500/20 cursor-pointer" onclick="event.stopPropagation(); event.preventDefault(); deleteFolder('${escapeJsString(folder.name)}')" title="Delete">
+              <i class="ti ti-trash text-red-400 hover:text-red-300 pointer-events-none text-xs"></i>
             </button>
           </span>
         `;
@@ -334,13 +334,13 @@ function openThumbnailFolder(folderName) {
     if (folderNameEl) folderNameEl.textContent = folderName;
     if (rootBtn) {
       rootBtn.classList.remove('bg-primary/20', 'text-primary', 'border-primary/50');
-      rootBtn.classList.add('bg-dark-700', 'text-gray-300', 'border-gray-600');
+      rootBtn.classList.add('bg-dark-600', 'text-gray-300', 'border-gray-600');
     }
   } else {
     if (indicator) indicator.classList.add('hidden');
     if (rootBtn) {
       rootBtn.classList.add('bg-primary/20', 'text-primary', 'border-primary/50');
-      rootBtn.classList.remove('bg-dark-700', 'text-gray-300', 'border-gray-600');
+      rootBtn.classList.remove('bg-dark-600', 'text-gray-300', 'border-gray-600');
     }
   }
   
@@ -349,10 +349,10 @@ function openThumbnailFolder(folderName) {
     const btnFolder = btn.querySelector('span')?.textContent;
     if (btnFolder === folderName) {
       btn.classList.add('bg-primary/20', 'text-primary', 'border-primary/50');
-      btn.classList.remove('bg-dark-700', 'text-gray-300', 'border-gray-600');
+      btn.classList.remove('bg-dark-600', 'text-gray-300', 'border-gray-600');
     } else {
       btn.classList.remove('bg-primary/20', 'text-primary', 'border-primary/50');
-      btn.classList.add('bg-dark-700', 'text-gray-300', 'border-gray-600');
+      btn.classList.add('bg-dark-600', 'text-gray-300', 'border-gray-600');
     }
   });
   
