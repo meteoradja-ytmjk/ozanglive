@@ -2028,13 +2028,35 @@ app.post('/api/videos/upload', isAuthenticated, (req, res, next) => {
     const fullFilePath = path.join(__dirname, 'public', filePath);
     const fileSize = req.file.size;
     
-    // Get video metadata
-    const metadata = await new Promise((resolve, reject) => {
-      ffmpeg.ffprobe(fullFilePath, (err, metadata) => {
-        if (err) return reject(err);
-        resolve(metadata);
-      });
-    });
+    // Generate thumbnail filename early
+    const thumbnailFilename = `thumb-${path.parse(req.file.filename).name}.jpg`;
+    const thumbnailPath = `/uploads/thumbnails/${thumbnailFilename}`;
+    
+    // Run ffprobe and thumbnail generation in parallel for faster processing
+    const [metadata] = await Promise.all([
+      // Get video metadata
+      new Promise((resolve, reject) => {
+        ffmpeg.ffprobe(fullFilePath, (err, metadata) => {
+          if (err) return reject(err);
+          resolve(metadata);
+        });
+      }),
+      // Generate thumbnail in parallel (don't wait for it to complete response)
+      new Promise((resolve) => {
+        ffmpeg(fullFilePath)
+          .screenshots({
+            timestamps: ['10%'],
+            filename: thumbnailFilename,
+            folder: path.join(__dirname, 'public', 'uploads', 'thumbnails'),
+            size: '854x480'
+          })
+          .on('end', resolve)
+          .on('error', (err) => {
+            console.error('Thumbnail generation error:', err.message);
+            resolve(); // Don't fail upload if thumbnail fails
+          });
+      })
+    ]);
     
     const videoStream = metadata.streams.find(stream => stream.codec_type === 'video');
     const duration = metadata.format.duration || 0;
@@ -2051,22 +2073,6 @@ app.post('/api/videos/upload', isAuthenticated, (req, res, next) => {
         fps = parseInt(fpsRatio[0]) || null;
       }
     }
-    
-    // Generate thumbnail
-    const thumbnailFilename = `thumb-${path.parse(req.file.filename).name}.jpg`;
-    const thumbnailPath = `/uploads/thumbnails/${thumbnailFilename}`;
-    
-    await new Promise((resolve, reject) => {
-      ffmpeg(fullFilePath)
-        .screenshots({
-          timestamps: ['10%'],
-          filename: thumbnailFilename,
-          folder: path.join(__dirname, 'public', 'uploads', 'thumbnails'),
-          size: '854x480'
-        })
-        .on('end', resolve)
-        .on('error', reject);
-    });
     
     const videoData = {
       title,

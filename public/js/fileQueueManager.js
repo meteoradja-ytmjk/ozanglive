@@ -1,5 +1,5 @@
 /**
- * FileQueueManager - Manages file upload queue with sequential processing
+ * FileQueueManager - Manages file upload queue with concurrent processing
  * Supports multiple file selection, progress tracking, cancel, and retry
  */
 class FileQueueManager {
@@ -10,6 +10,7 @@ class FileQueueManager {
    * @param {string[]} options.allowedExtensions - Allowed file extensions
    * @param {string[]} options.allowedMimeTypes - Allowed MIME types
    * @param {string} options.csrfToken - CSRF token for requests
+   * @param {number} options.concurrentUploads - Number of concurrent uploads (default: 3)
    * @param {Function} options.onProgress - Callback for progress updates
    * @param {Function} options.onFileComplete - Callback when a file completes
    * @param {Function} options.onAllComplete - Callback when all files complete
@@ -22,12 +23,12 @@ class FileQueueManager {
     this.allowedMimeTypes = options.allowedMimeTypes || ['video/mp4', 'video/avi', 'video/quicktime'];
     this.csrfToken = options.csrfToken || '';
     this.extraDataCallback = options.extraDataCallback || null; // Function to get extra form data
+    this.concurrentUploads = options.concurrentUploads || 3; // Default 3 concurrent uploads
     
     // Callbacks
     this.onProgress = options.onProgress || (() => {});
     this.onFileComplete = options.onFileComplete || (() => {});
     this.onAllComplete = options.onAllComplete || (() => {});
-    this.onQueueUpdate = options.onQueueUpdate || (() => {});
     this.onQueueUpdate = options.onQueueUpdate || (() => {});
     
     // State
@@ -35,6 +36,7 @@ class FileQueueManager {
     this.currentIndex = -1;
     this.isUploading = false;
     this.isCancelled = false;
+    this.activeUploads = 0; // Track number of active uploads
   }
 
   /**
@@ -255,7 +257,7 @@ class FileQueueManager {
   }
 
   /**
-   * Start uploading files sequentially
+   * Start uploading files with concurrent processing
    * @returns {Promise<{success: number, failed: number, results: Object[]}>}
    */
   async startUpload() {
@@ -271,51 +273,81 @@ class FileQueueManager {
     
     this.isUploading = true;
     this.isCancelled = false;
+    this.activeUploads = 0;
     
     const results = [];
     let successCount = 0;
     let failedCount = 0;
     
-    // Process files sequentially
-    for (let i = 0; i < this.files.length; i++) {
-      if (this.isCancelled) {
-        break;
-      }
-      
-      const item = this.files[i];
-      
-      // Skip non-pending files
-      if (item.status !== 'pending') {
-        if (item.status === 'success') successCount++;
-        if (item.status === 'error') failedCount++;
-        continue;
-      }
-      
-      this.currentIndex = i;
-      
-      try {
-        const result = await this.uploadFile(item);
-        item.status = 'success';
-        item.result = result;
-        item.progress = 100;
-        successCount++;
-        
-        this.onFileComplete(item, true, result);
-      } catch (error) {
-        item.status = 'error';
-        item.error = error.message || 'Upload failed';
-        item.progress = 0;
-        failedCount++;
-        
-        this.onFileComplete(item, false, error);
-      }
-      
-      this.onQueueUpdate(this.files);
-      results.push({ file: item.name, status: item.status, error: item.error });
+    // Get all pending files
+    const pendingFiles = this.files.filter(f => f.status === 'pending');
+    
+    // Count already completed files
+    for (const file of this.files) {
+      if (file.status === 'success') successCount++;
+      if (file.status === 'error') failedCount++;
     }
+    
+    // Process files concurrently with limit
+    const uploadPromises = [];
+    let fileIndex = 0;
+    
+    const processNext = async () => {
+      while (fileIndex < pendingFiles.length && !this.isCancelled) {
+        // Wait if we've reached concurrent limit
+        if (this.activeUploads >= this.concurrentUploads) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          continue;
+        }
+        
+        const item = pendingFiles[fileIndex];
+        fileIndex++;
+        
+        if (item.status !== 'pending') continue;
+        
+        this.activeUploads++;
+        
+        const uploadPromise = (async () => {
+          try {
+            const result = await this.uploadFile(item);
+            item.status = 'success';
+            item.result = result;
+            item.progress = 100;
+            successCount++;
+            
+            this.onFileComplete(item, true, result);
+          } catch (error) {
+            item.status = 'error';
+            item.error = error.message || 'Upload failed';
+            item.progress = 0;
+            failedCount++;
+            
+            this.onFileComplete(item, false, error);
+          } finally {
+            this.activeUploads--;
+          }
+          
+          this.onQueueUpdate(this.files);
+          results.push({ file: item.name, status: item.status, error: item.error });
+        })();
+        
+        uploadPromises.push(uploadPromise);
+      }
+    };
+    
+    // Start concurrent uploads
+    const workers = [];
+    for (let i = 0; i < this.concurrentUploads; i++) {
+      workers.push(processNext());
+    }
+    
+    // Wait for all uploads to complete
+    await Promise.all(workers);
+    await Promise.all(uploadPromises);
     
     this.isUploading = false;
     this.currentIndex = -1;
+    this.activeUploads = 0;
     
     const summary = {
       success: successCount,
@@ -458,29 +490,20 @@ class FileQueueManager {
   cancelAll() {
     this.isCancelled = true;
     
-    // Abort current upload
-    if (this.currentIndex >= 0 && this.currentIndex < this.files.length) {
-      const item = this.files[this.currentIndex];
-      if (item.xhr) {
-        item.xhr.abort();
-      }
-    }
-    
-    // Reset all uploading files to pending
+    // Abort all active uploads
     for (const file of this.files) {
-      if (file.status === 'uploading') {
+      if (file.status === 'uploading' && file.xhr) {
+        file.xhr.abort();
         file.status = 'pending';
         file.progress = 0;
         file.error = null;
-        if (file.xhr) {
-          file.xhr.abort();
-          file.xhr = null;
-        }
+        file.xhr = null;
       }
     }
     
     this.isUploading = false;
     this.currentIndex = -1;
+    this.activeUploads = 0;
     this.onQueueUpdate(this.files);
   }
 
@@ -505,11 +528,19 @@ class FileQueueManager {
   }
 
   /**
-   * Get count of files currently uploading (should be 0 or 1 for sequential)
+   * Get count of files currently uploading
    * @returns {number}
    */
   getUploadingCount() {
     return this.files.filter(f => f.status === 'uploading').length;
+  }
+  
+  /**
+   * Set number of concurrent uploads
+   * @param {number} count
+   */
+  setConcurrentUploads(count) {
+    this.concurrentUploads = Math.max(1, Math.min(count, 5)); // Limit between 1-5
   }
 }
 

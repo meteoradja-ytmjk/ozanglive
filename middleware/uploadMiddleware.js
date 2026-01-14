@@ -1,7 +1,20 @@
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
 const { getUniqueFilename, paths } = require('../utils/storage');
 const StorageService = require('../services/storageService');
+
+// Optimized stream options for faster uploads
+const STREAM_OPTIONS = {
+  highWaterMark: 1024 * 1024 * 2 // 2MB buffer for faster disk writes
+};
+
+/**
+ * Create optimized write stream for faster file uploads
+ */
+const createOptimizedWriteStream = (filepath) => {
+  return fs.createWriteStream(filepath, STREAM_OPTIONS);
+};
 
 /**
  * Middleware to check storage limit before upload
