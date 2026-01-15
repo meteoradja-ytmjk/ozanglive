@@ -1,4 +1,5 @@
 const si = require('systeminformation');
+const { exec } = require('child_process');
 
 let previousNetworkData = null;
 let previousTimestamp = null;
@@ -7,6 +8,11 @@ let previousTimestamp = null;
 let cachedStats = null;
 let lastCacheTime = 0;
 const CACHE_TTL = 120000; // ULTRA: Cache for 2 minutes - minimal CPU polling
+
+// Cache for process CPU to avoid frequent process enumeration
+let cachedProcessCpu = 0;
+let lastProcessCpuTime = 0;
+const PROCESS_CPU_CACHE_TTL = 30000; // Cache process CPU for 30 seconds
 
 /**
  * Wrap a promise with timeout to prevent hanging
@@ -18,6 +24,70 @@ function withTimeout(promise, ms, fallback) {
   ]);
 }
 
+/**
+ * Get CPU usage for streaming-related processes only (node + ffmpeg)
+ * This gives more accurate CPU usage for the streaming application
+ */
+async function getStreamingProcessCpu() {
+  const now = Date.now();
+  
+  // Return cached value if fresh
+  if (cachedProcessCpu !== null && (now - lastProcessCpuTime) < PROCESS_CPU_CACHE_TTL) {
+    return cachedProcessCpu;
+  }
+  
+  return new Promise((resolve) => {
+    const isWindows = process.platform === 'win32';
+    
+    if (isWindows) {
+      // Windows: Use WMIC to get CPU for node and ffmpeg processes
+      exec('wmic path win32_perfformatteddata_perfproc_process where "name like \'node%\' or name like \'ffmpeg%\'" get PercentProcessorTime 2>nul', 
+        { timeout: 3000 }, 
+        (error, stdout) => {
+          if (error || !stdout) {
+            resolve(cachedProcessCpu || 0);
+            return;
+          }
+          
+          // Parse CPU percentages and sum them
+          const lines = stdout.trim().split('\n').slice(1); // Skip header
+          let totalCpu = 0;
+          for (const line of lines) {
+            const cpu = parseInt(line.trim());
+            if (!isNaN(cpu)) {
+              totalCpu += cpu;
+            }
+          }
+          
+          // Normalize by number of CPU cores
+          const cpuCount = require('os').cpus().length;
+          const normalizedCpu = Math.round(totalCpu / cpuCount);
+          
+          cachedProcessCpu = normalizedCpu;
+          lastProcessCpuTime = now;
+          resolve(normalizedCpu);
+        }
+      );
+    } else {
+      // Linux: Use ps to get CPU for node and ffmpeg
+      exec("ps -eo pcpu,comm | grep -E 'node|ffmpeg' | awk '{sum += $1} END {print sum}'",
+        { timeout: 3000 },
+        (error, stdout) => {
+          if (error || !stdout) {
+            resolve(cachedProcessCpu || 0);
+            return;
+          }
+          
+          const cpu = parseFloat(stdout.trim()) || 0;
+          cachedProcessCpu = Math.round(cpu);
+          lastProcessCpuTime = now;
+          resolve(Math.round(cpu));
+        }
+      );
+    }
+  });
+}
+
 async function getSystemStats() {
   // Return cached stats if fresh
   const now = Date.now();
@@ -27,14 +97,17 @@ async function getSystemStats() {
   
   try {
     // Use timeout to prevent hanging - 10 second max
-    const [cpuData, memData, networkData, diskData] = await Promise.all([
+    const [cpuData, memData, networkData, diskData, streamingCpu] = await Promise.all([
       withTimeout(si.currentLoad(), 3000, { currentLoad: 0, cpus: [] }),
       withTimeout(si.mem(), 3000, { total: 0, active: 0, available: 0 }),
       withTimeout(si.networkStats(), 3000, []),
-      withTimeout(getDiskUsage(), 3000, { total: "0 GB", used: "0 GB", free: "0 GB", usagePercent: 0, drive: "N/A" })
+      withTimeout(getDiskUsage(), 3000, { total: "0 GB", used: "0 GB", free: "0 GB", usagePercent: 0, drive: "N/A" }),
+      withTimeout(getStreamingProcessCpu(), 3000, 0)
     ]);
     
-    const cpuUsage = cpuData.currentLoad || cpuData.avg || 0;
+    // Use streaming process CPU instead of total system CPU for more accurate display
+    // This shows only node + ffmpeg CPU usage, not browser/IDE/other apps
+    const cpuUsage = streamingCpu > 0 ? streamingCpu : (cpuData.currentLoad || cpuData.avg || 0);
     
     const networkSpeed = calculateNetworkSpeed(networkData);
     
