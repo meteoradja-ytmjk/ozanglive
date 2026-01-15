@@ -286,25 +286,22 @@ async function fetchThumbnailFolders() {
       
       data.folders.forEach(folder => {
         const div = document.createElement('div');
-        div.className = `folder-item flex items-center justify-between p-2 rounded-lg text-xs cursor-pointer transition-colors border ${
+        div.className = `folder-item flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs cursor-pointer transition-colors border ${
           currentThumbnailFolder === folder.name 
             ? 'bg-primary/20 text-primary border-primary/50' 
-            : 'bg-dark-700 hover:bg-dark-600 text-gray-300 border-gray-600'
+            : 'bg-dark-700/50 hover:bg-dark-600 text-gray-200 border-gray-700'
         }`;
+        div.onclick = () => openThumbnailFolder(folder.name);
         div.innerHTML = `
-          <div class="flex items-center gap-1.5 min-w-0 flex-1" onclick="openThumbnailFolder('${escapeJsString(folder.name)}')">
-            <i class="ti ti-folder text-sm shrink-0"></i>
-            <span class="truncate">${escapeHtml(folder.name)}</span>
-            <span class="text-gray-500 text-[10px] shrink-0">${folder.count}/20</span>
-          </div>
-          <div class="flex items-center gap-1 shrink-0">
-            <button type="button" class="w-6 h-6 rounded flex items-center justify-center text-blue-400 hover:bg-blue-500/30 transition-colors" onclick="event.stopPropagation(); openRenameFolderModal('${escapeJsString(folder.name)}')" title="Rename">
-              <i class="ti ti-pencil text-xs"></i>
-            </button>
-            <button type="button" class="w-6 h-6 rounded flex items-center justify-center text-red-400 hover:bg-red-500/30 font-bold transition-colors" onclick="event.stopPropagation(); deleteFolder('${escapeJsString(folder.name)}')" title="Delete">
-              ✕
-            </button>
-          </div>
+          <i class="ti ti-folder shrink-0"></i>
+          <span class="flex-1 truncate font-medium">${escapeHtml(folder.name)}</span>
+          <span class="text-gray-500 text-[10px]">${folder.count}/20</span>
+          <button type="button" class="w-5 h-5 flex items-center justify-center text-gray-400 hover:text-blue-400 transition-colors" onclick="event.stopPropagation(); openRenameFolderModal('${escapeJsString(folder.name)}')" title="Rename">
+            <i class="ti ti-pencil text-xs"></i>
+          </button>
+          <button type="button" class="w-5 h-5 flex items-center justify-center text-gray-400 hover:text-red-400 text-sm font-bold transition-colors" onclick="event.stopPropagation(); deleteFolder('${escapeJsString(folder.name)}')" title="Delete">
+            ×
+          </button>
         `;
         folderList.appendChild(div);
       });
