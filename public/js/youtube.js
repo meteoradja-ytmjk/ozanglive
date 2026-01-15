@@ -287,16 +287,24 @@ async function fetchThumbnailFolders() {
       data.folders.forEach(folder => {
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = `folder-btn px-3 py-1.5 text-xs rounded-lg transition-colors flex items-center gap-1.5 group shrink-0 whitespace-nowrap ${
+        btn.className = `folder-btn px-2 sm:px-3 py-1.5 text-xs rounded-lg transition-colors flex items-center gap-1 sm:gap-1.5 group shrink-0 whitespace-nowrap ${
           currentThumbnailFolder === folder.name 
             ? 'bg-primary/20 text-primary border border-primary/50' 
             : 'bg-dark-600 hover:bg-dark-500 text-gray-300 border border-gray-600'
         }`;
         btn.innerHTML = `
           <i class="ti ti-folder text-sm"></i>
-          <span class="max-w-[80px] sm:max-w-[120px] truncate">${escapeHtml(folder.name)}</span>
+          <span class="max-w-[60px] sm:max-w-[100px] truncate">${escapeHtml(folder.name)}</span>
           <span class="text-gray-500 text-[10px]">(${folder.count}/20)</span>
-          <span class="hidden group-hover:flex items-center gap-0.5 ml-0.5">
+          <span class="flex sm:hidden items-center gap-0.5 ml-0.5">
+            <button type="button" class="p-1 rounded bg-blue-500/20 cursor-pointer" onclick="event.stopPropagation(); event.preventDefault(); openRenameFolderModal('${escapeJsString(folder.name)}')" title="Rename">
+              <i class="ti ti-pencil text-blue-400 pointer-events-none text-xs"></i>
+            </button>
+            <button type="button" class="p-1 rounded bg-red-500/20 cursor-pointer" onclick="event.stopPropagation(); event.preventDefault(); deleteFolder('${escapeJsString(folder.name)}')" title="Delete">
+              <i class="ti ti-trash text-red-400 pointer-events-none text-xs"></i>
+            </button>
+          </span>
+          <span class="hidden sm:hidden sm:group-hover:flex items-center gap-0.5 ml-0.5">
             <button type="button" class="p-0.5 rounded hover:bg-blue-500/20 cursor-pointer" onclick="event.stopPropagation(); event.preventDefault(); openRenameFolderModal('${escapeJsString(folder.name)}')" title="Rename">
               <i class="ti ti-pencil text-blue-400 hover:text-blue-300 pointer-events-none text-xs"></i>
             </button>
@@ -561,14 +569,16 @@ async function fetchThumbnails(folder = null) {
     if (data.success && data.thumbnails && data.thumbnails.length > 0) {
       data.thumbnails.forEach(thumb => {
         const div = document.createElement('div');
-        div.className = 'thumbnail-item w-full aspect-video bg-dark-700 rounded cursor-pointer overflow-hidden border-2 border-transparent hover:border-primary transition-colors relative group';
+        div.className = 'thumbnail-item w-full aspect-video bg-dark-600 rounded-lg cursor-pointer overflow-hidden border-2 border-transparent hover:border-primary/70 transition-all relative group shadow-sm hover:shadow-md';
         div.innerHTML = `
-          <img src="${thumb.url}" class="w-full h-full object-cover" alt="Thumbnail">
+          <img src="${thumb.url}" class="w-full h-full object-cover" alt="Thumbnail" loading="lazy">
+          <div class="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors"></div>
           <button type="button" onclick="event.stopPropagation(); deleteThumbnail('${thumb.filename}', '${thumb.folder || ''}')" 
-            class="absolute top-1 right-1 w-6 h-6 bg-red-500/80 hover:bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+            class="absolute top-1 right-1 w-5 h-5 sm:w-6 sm:h-6 bg-red-500/90 hover:bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all scale-90 group-hover:scale-100"
             title="Delete thumbnail">
-            <i class="ti ti-x text-white text-xs"></i>
+            <i class="ti ti-x text-white text-[10px] sm:text-xs"></i>
           </button>
+          <div class="absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
         `;
         div.dataset.path = thumb.path;
         div.dataset.filename = thumb.filename;
@@ -591,17 +601,19 @@ async function fetchThumbnails(folder = null) {
 function selectGalleryThumbnail(element, url, path) {
   // Remove selection from all thumbnails
   document.querySelectorAll('.thumbnail-item').forEach(item => {
-    item.classList.remove('border-primary', 'border-red-500');
+    item.classList.remove('border-primary', 'border-primary/70', 'border-red-500', 'ring-2', 'ring-primary/50');
     item.classList.add('border-transparent');
   });
   
   // Add selection to clicked thumbnail
   element.classList.remove('border-transparent');
-  element.classList.add('border-red-500');
+  element.classList.add('border-primary', 'ring-2', 'ring-primary/50');
   
   // Update preview
-  document.getElementById('thumbnailPreview').innerHTML = 
-    `<img src="${url}" class="w-full h-full object-cover">`;
+  const preview = document.getElementById('thumbnailPreview');
+  preview.innerHTML = `<img src="${url}" class="w-full h-full object-cover">`;
+  preview.classList.add('border-primary');
+  preview.classList.remove('border-gray-600');
   
   // Set hidden input for path
   document.getElementById('selectedThumbnailPath').value = path;

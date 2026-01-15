@@ -504,30 +504,33 @@
           
           <!-- Thumbnail Gallery -->
           <div id="thumbnailGallery" class="mb-3">
-            <div id="thumbnailGalleryGrid" class="grid grid-cols-4 gap-2 mb-2">
+            <div id="thumbnailGalleryGrid" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 mb-2">
               <!-- Thumbnails will be loaded here -->
             </div>
-            <div id="thumbnailGalleryLoading" class="hidden text-center py-4">
-              <i class="ti ti-loader animate-spin text-gray-400"></i>
-              <span class="text-gray-500 text-sm ml-2">Loading thumbnails...</span>
+            <div id="thumbnailGalleryLoading" class="hidden text-center py-6 bg-dark-700/30 rounded-lg">
+              <i class="ti ti-loader animate-spin text-primary text-xl"></i>
+              <p class="text-gray-400 text-sm mt-2">Loading thumbnails...</p>
             </div>
-            <div id="thumbnailGalleryEmpty" class="hidden text-center py-2">
-              <span class="text-gray-500 text-xs">No uploaded thumbnails. Upload your first thumbnail below.</span>
+            <div id="thumbnailGalleryEmpty" class="hidden text-center py-6 bg-dark-700/30 rounded-lg border border-dashed border-gray-600">
+              <i class="ti ti-photo-off text-gray-500 text-2xl"></i>
+              <p class="text-gray-500 text-xs mt-2">No thumbnails in this folder</p>
             </div>
           </div>
           
-          <div class="flex items-center gap-4">
-            <div id="thumbnailPreview" class="w-32 h-20 bg-dark-700 rounded-lg overflow-hidden flex items-center justify-center">
-              <i class="ti ti-photo text-gray-500 text-2xl"></i>
+          <!-- Upload Section -->
+          <div class="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-3 bg-dark-700/30 rounded-lg border border-gray-700">
+            <div id="thumbnailPreview" class="w-24 h-14 sm:w-28 sm:h-16 bg-dark-600 rounded-lg overflow-hidden flex items-center justify-center border border-gray-600 shrink-0">
+              <i class="ti ti-photo text-gray-500 text-xl"></i>
             </div>
-            <div class="flex-1">
+            <div class="flex-1 w-full sm:w-auto">
               <input type="file" id="thumbnailFile" name="thumbnail" accept="image/jpeg,image/png" multiple
                 class="hidden" onchange="previewAndUploadThumbnail(this)">
               <input type="hidden" id="selectedThumbnailPath" name="thumbnailPath" value="">
               <input type="hidden" id="currentThumbnailFolder" value="">
               <button type="button" id="uploadThumbnailGalleryBtn" onclick="document.getElementById('thumbnailFile').click()"
-                class="bg-dark-700 hover:bg-dark-600 text-white px-4 py-2 rounded-lg transition-colors text-sm">
-                <i class="ti ti-upload mr-1"></i> Upload to Gallery
+                class="w-full sm:w-auto bg-primary/20 hover:bg-primary/30 text-primary border border-primary/50 px-4 py-2 rounded-lg transition-colors text-sm flex items-center justify-center gap-2">
+                <i class="ti ti-upload"></i>
+                <span>Upload to Gallery</span>
               </button>
               <p class="text-xs text-gray-500 mt-1">JPG or PNG, max 2MB each. Max 20 thumbnails per folder. Multiple files supported.</p>
             </div>
@@ -1667,13 +1670,18 @@ document.addEventListener('keydown', function(e) {
 </script>
 
 <!-- Create Thumbnail Folder Modal -->
-<div id="createFolderModal" class="fixed inset-0 bg-black/50 z-[60] hidden modal-overlay">
+<div id="createFolderModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] hidden modal-overlay">
   <div class="flex min-h-screen items-center justify-center p-4">
-    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-sm">
+    <div class="bg-dark-800 rounded-xl shadow-2xl w-full max-w-sm border border-gray-700">
       <div class="flex items-center justify-between p-4 border-b border-gray-700">
-        <h3 class="text-lg font-semibold">Create Thumbnail Folder</h3>
-        <button onclick="closeCreateFolderModal()" class="text-gray-400 hover:text-white">
-          <i class="ti ti-x text-xl"></i>
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 bg-primary/20 rounded-lg flex items-center justify-center">
+            <i class="ti ti-folder-plus text-primary"></i>
+          </div>
+          <h3 class="text-lg font-semibold">Create Folder</h3>
+        </div>
+        <button onclick="closeCreateFolderModal()" class="w-8 h-8 rounded-lg hover:bg-dark-600 flex items-center justify-center text-gray-400 hover:text-white transition-colors">
+          <i class="ti ti-x text-lg"></i>
         </button>
       </div>
       <div class="p-4">
@@ -1681,9 +1689,9 @@ document.addEventListener('keydown', function(e) {
           <div class="mb-4">
             <label class="text-sm font-medium text-white block mb-2">Folder Name</label>
             <input type="text" id="newFolderName" required maxlength="50"
-              class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none"
-              placeholder="e.g., Italian Music, Jazz, etc.">
-            <p class="text-xs text-gray-500 mt-1">Max 50 characters. Letters, numbers, spaces, - and _ only.</p>
+              class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:ring-1 focus:ring-primary/50 focus:outline-none transition-colors"
+              placeholder="e.g., Italian Music, Jazz">
+            <p class="text-xs text-gray-500 mt-1.5">Max 50 characters. Letters, numbers, spaces, - and _ only.</p>
           </div>
           <div class="flex gap-3">
             <button type="button" onclick="closeCreateFolderModal()"
@@ -1691,8 +1699,9 @@ document.addEventListener('keydown', function(e) {
               Cancel
             </button>
             <button type="submit" id="createFolderBtn"
-              class="flex-1 bg-primary hover:bg-secondary text-white px-4 py-2.5 rounded-lg transition-colors">
-              <i class="ti ti-folder-plus mr-1"></i> Create
+              class="flex-1 bg-primary hover:bg-secondary text-white px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-1.5">
+              <i class="ti ti-folder-plus"></i>
+              <span>Create</span>
             </button>
           </div>
         </form>
@@ -1702,13 +1711,18 @@ document.addEventListener('keydown', function(e) {
 </div>
 
 <!-- Rename Thumbnail Folder Modal -->
-<div id="renameFolderModal" class="fixed inset-0 bg-black/50 z-[60] hidden modal-overlay">
+<div id="renameFolderModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] hidden modal-overlay">
   <div class="flex min-h-screen items-center justify-center p-4">
-    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-sm">
+    <div class="bg-dark-800 rounded-xl shadow-2xl w-full max-w-sm border border-gray-700">
       <div class="flex items-center justify-between p-4 border-b border-gray-700">
-        <h3 class="text-lg font-semibold">Rename Folder</h3>
-        <button onclick="closeRenameFolderModal()" class="text-gray-400 hover:text-white">
-          <i class="ti ti-x text-xl"></i>
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center">
+            <i class="ti ti-pencil text-blue-400"></i>
+          </div>
+          <h3 class="text-lg font-semibold">Rename Folder</h3>
+        </div>
+        <button onclick="closeRenameFolderModal()" class="w-8 h-8 rounded-lg hover:bg-dark-600 flex items-center justify-center text-gray-400 hover:text-white transition-colors">
+          <i class="ti ti-x text-lg"></i>
         </button>
       </div>
       <div class="p-4">
@@ -1717,7 +1731,7 @@ document.addEventListener('keydown', function(e) {
           <div class="mb-4">
             <label class="text-sm font-medium text-white block mb-2">New Folder Name</label>
             <input type="text" id="renameFolderNewName" required maxlength="50"
-              class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none"
+              class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 focus:outline-none transition-colors"
               placeholder="Enter new folder name">
           </div>
           <div class="flex gap-3">
@@ -1726,8 +1740,9 @@ document.addEventListener('keydown', function(e) {
               Cancel
             </button>
             <button type="submit" id="renameFolderBtn"
-              class="flex-1 bg-primary hover:bg-secondary text-white px-4 py-2.5 rounded-lg transition-colors">
-              <i class="ti ti-pencil mr-1"></i> Rename
+              class="flex-1 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-1.5">
+              <i class="ti ti-pencil"></i>
+              <span>Rename</span>
             </button>
           </div>
         </form>
