@@ -2,21 +2,26 @@
 
 <style>
   /* Custom scrollbar for thumbnail folder list */
-  #thumbnailFolderList::-webkit-scrollbar {
+  #thumbnailFolderList::-webkit-scrollbar,
+  #tagsContainer::-webkit-scrollbar {
     width: 4px;
   }
-  #thumbnailFolderList::-webkit-scrollbar-track {
+  #thumbnailFolderList::-webkit-scrollbar-track,
+  #tagsContainer::-webkit-scrollbar-track {
     background: transparent;
   }
-  #thumbnailFolderList::-webkit-scrollbar-thumb {
+  #thumbnailFolderList::-webkit-scrollbar-thumb,
+  #tagsContainer::-webkit-scrollbar-thumb {
     background: rgba(107, 114, 128, 0.4);
     border-radius: 2px;
   }
-  #thumbnailFolderList::-webkit-scrollbar-thumb:hover {
+  #thumbnailFolderList::-webkit-scrollbar-thumb:hover,
+  #tagsContainer::-webkit-scrollbar-thumb:hover {
     background: rgba(107, 114, 128, 0.6);
   }
   /* Firefox */
-  #thumbnailFolderList {
+  #thumbnailFolderList,
+  #tagsContainer {
     scrollbar-width: thin;
     scrollbar-color: rgba(107, 114, 128, 0.4) transparent;
   }
@@ -432,26 +437,42 @@
           <p class="text-xs text-gray-500 mt-1">Select existing stream key or create new one</p>
         </div>
         
-        <!-- Tags Field -->
+        <!-- Tags Field - Collapsible -->
         <div>
-          <label class="text-sm font-medium text-white block mb-2">
-            Tags
-            <span id="tagsAutoFillIndicator" class="hidden ml-2 text-xs text-green-400" title="Auto-filled from YouTube defaults">
-              <i class="ti ti-sparkles"></i> Auto-filled
-            </span>
-          </label>
-          <div class="relative">
-            <div id="tagsContainer" class="min-h-[42px] px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg focus-within:border-primary flex flex-wrap gap-2 items-center">
-              <!-- Tag chips will be rendered here -->
-              <input type="text" id="tagInput" 
-                class="flex-1 min-w-[100px] bg-transparent border-none outline-none text-white text-sm"
-                placeholder="Add tag and press Enter">
-            </div>
-            <div id="tagsLoading" class="hidden absolute right-3 top-1/2 -translate-y-1/2">
-              <i class="ti ti-loader animate-spin text-gray-400"></i>
-            </div>
+          <div class="flex items-center justify-between mb-2">
+            <label class="text-sm font-medium text-white flex items-center gap-2">
+              Tags
+              <span id="tagsCount" class="text-xs text-gray-400">(0)</span>
+              <span id="tagsAutoFillIndicator" class="hidden text-xs text-green-400" title="Auto-filled from YouTube defaults">
+                <i class="ti ti-sparkles"></i> Auto-filled
+              </span>
+            </label>
+            <button type="button" id="toggleTagsBtn" onclick="toggleTagsVisibility()" class="text-xs text-primary hover:text-primary/80 flex items-center gap-1">
+              <span id="toggleTagsText">Show</span>
+              <i id="toggleTagsIcon" class="ti ti-chevron-down text-sm transition-transform"></i>
+            </button>
           </div>
-          <p class="text-xs text-gray-500 mt-1">Press Enter to add tags. Max 500 characters total.</p>
+          
+          <!-- Collapsed Preview -->
+          <div id="tagsPreview" class="px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg text-xs text-gray-400 truncate">
+            <span id="tagsPreviewText">No tags added</span>
+          </div>
+          
+          <!-- Expanded Tags Container -->
+          <div id="tagsExpandedContainer" class="hidden">
+            <div class="relative">
+              <div id="tagsContainer" class="max-h-32 overflow-y-auto px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg focus-within:border-primary flex flex-wrap gap-1.5 items-start content-start">
+                <!-- Tag chips will be rendered here -->
+                <input type="text" id="tagInput" 
+                  class="flex-1 min-w-[100px] bg-transparent border-none outline-none text-white text-sm py-1"
+                  placeholder="Add tag and press Enter">
+              </div>
+              <div id="tagsLoading" class="hidden absolute right-3 top-3">
+                <i class="ti ti-loader animate-spin text-gray-400"></i>
+              </div>
+            </div>
+            <p class="text-xs text-gray-500 mt-1">Press Enter to add tags. Max 500 characters total.</p>
+          </div>
           <input type="hidden" id="tagsHidden" name="tags" value="">
         </div>
 

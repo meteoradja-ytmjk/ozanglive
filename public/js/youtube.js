@@ -286,23 +286,23 @@ async function fetchThumbnailFolders() {
       
       data.folders.forEach(folder => {
         const div = document.createElement('div');
-        div.className = `folder-item flex items-center justify-between py-1.5 px-2 rounded text-xs cursor-pointer transition-colors ${
+        div.className = `folder-item flex items-center justify-between py-2 px-2.5 rounded-lg text-xs cursor-pointer transition-colors ${
           currentThumbnailFolder === folder.name 
             ? 'bg-primary/20 text-primary' 
             : 'hover:bg-dark-600 text-gray-300'
         }`;
         div.innerHTML = `
           <div class="flex items-center gap-2 min-w-0 flex-1" onclick="openThumbnailFolder('${escapeJsString(folder.name)}')">
-            <i class="ti ti-folder text-sm shrink-0"></i>
-            <span class="truncate">${escapeHtml(folder.name)}</span>
+            <i class="ti ti-folder text-base shrink-0"></i>
+            <span class="truncate font-medium">${escapeHtml(folder.name)}</span>
             <span class="text-gray-500 text-[10px] shrink-0">${folder.count}/20</span>
           </div>
-          <div class="flex items-center gap-1 shrink-0 ml-2">
-            <button type="button" class="w-6 h-6 rounded flex items-center justify-center text-blue-400 hover:bg-blue-500/20 transition-colors" onclick="event.stopPropagation(); openRenameFolderModal('${escapeJsString(folder.name)}')" title="Rename">
-              <i class="ti ti-pencil text-xs"></i>
+          <div class="flex items-center gap-1.5 shrink-0 ml-2">
+            <button type="button" class="w-7 h-7 rounded-md flex items-center justify-center bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-colors" onclick="event.stopPropagation(); openRenameFolderModal('${escapeJsString(folder.name)}')" title="Rename">
+              <i class="ti ti-pencil text-sm"></i>
             </button>
-            <button type="button" class="w-6 h-6 rounded flex items-center justify-center text-red-400 hover:bg-red-500/20 transition-colors" onclick="event.stopPropagation(); deleteFolder('${escapeJsString(folder.name)}')" title="Delete">
-              <i class="ti ti-trash text-xs"></i>
+            <button type="button" class="w-7 h-7 rounded-md flex items-center justify-center bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors" onclick="event.stopPropagation(); deleteFolder('${escapeJsString(folder.name)}')" title="Delete">
+              <i class="ti ti-trash text-sm"></i>
             </button>
           </div>
         `;
@@ -896,6 +896,46 @@ function populateFormWithDefaults(defaults) {
   // are not supported by YouTube API and must be set in YouTube Studio
 }
 
+// Toggle tags visibility
+function toggleTagsVisibility() {
+  const preview = document.getElementById('tagsPreview');
+  const expanded = document.getElementById('tagsExpandedContainer');
+  const toggleText = document.getElementById('toggleTagsText');
+  const toggleIcon = document.getElementById('toggleTagsIcon');
+  
+  if (expanded.classList.contains('hidden')) {
+    expanded.classList.remove('hidden');
+    preview.classList.add('hidden');
+    toggleText.textContent = 'Hide';
+    toggleIcon.classList.add('rotate-180');
+  } else {
+    expanded.classList.add('hidden');
+    preview.classList.remove('hidden');
+    toggleText.textContent = 'Show';
+    toggleIcon.classList.remove('rotate-180');
+  }
+}
+
+// Update tags preview text
+function updateTagsPreview() {
+  const previewText = document.getElementById('tagsPreviewText');
+  const tagsCount = document.getElementById('tagsCount');
+  
+  if (previewText) {
+    if (currentTags.length === 0) {
+      previewText.textContent = 'No tags added';
+      previewText.className = 'text-gray-500';
+    } else {
+      previewText.textContent = currentTags.join(', ');
+      previewText.className = 'text-gray-300';
+    }
+  }
+  
+  if (tagsCount) {
+    tagsCount.textContent = `(${currentTags.length})`;
+  }
+}
+
 // Render tags as chips
 function renderTags() {
   const container = document.getElementById('tagsContainer');
@@ -910,11 +950,11 @@ function renderTags() {
   // Add tag chips before the input
   currentTags.forEach(tag => {
     const chip = document.createElement('span');
-    chip.className = 'tag-chip inline-flex items-center gap-1 px-2 py-1 bg-red-500/20 text-red-400 rounded text-sm';
+    chip.className = 'tag-chip inline-flex items-center gap-1 px-2 py-0.5 bg-red-500/20 text-red-400 rounded text-xs';
     chip.innerHTML = `
       ${escapeHtml(tag)}
       <button type="button" class="hover:text-red-300" onclick="removeTag('${escapeJsString(tag)}')">
-        <i class="ti ti-x text-xs"></i>
+        <i class="ti ti-x text-[10px]"></i>
       </button>
     `;
     container.insertBefore(chip, input);
@@ -924,6 +964,9 @@ function renderTags() {
   if (hiddenInput) {
     hiddenInput.value = JSON.stringify(currentTags);
   }
+  
+  // Update preview
+  updateTagsPreview();
 }
 
 // Add a new tag
