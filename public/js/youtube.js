@@ -1555,6 +1555,7 @@ function renderTemplateList(templates) {
     const isMulti = template.isMultiBroadcast && template.broadcasts && template.broadcasts.length > 1;
     const broadcastCount = isMulti ? template.broadcasts.length : 1;
     const hasRecurring = template.recurring_enabled;
+    const hasThumbnailFolder = template.thumbnail_folder !== null && template.thumbnail_folder !== undefined;
     
     // Build recurring info HTML for desktop
     let recurringHtmlDesktop = '';
@@ -1572,16 +1573,21 @@ function renderTemplateList(templates) {
       `;
     }
     
+    // Thumbnail folder badge
+    const thumbnailFolderBadge = hasThumbnailFolder ? 
+      `<span class="px-1.5 py-0.5 bg-yellow-500/20 text-yellow-400 text-xs rounded flex items-center gap-0.5" title="Random thumbnail from: ${escapeHtml(template.thumbnail_folder || 'Root')}"><i class="ti ti-dice-3 text-[10px]"></i> ${escapeHtml(template.thumbnail_folder || 'Root')}</span>` : '';
+    
     const div = document.createElement('div');
     div.className = 'template-list-item';
     div.innerHTML = `
       <!-- Desktop Layout -->
       <div class="hidden md:flex items-start justify-between gap-4 bg-dark-700 rounded-lg p-4">
         <div class="flex-1 min-w-0">
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-2 flex-wrap">
             <h4 class="font-medium text-white truncate">${escapeHtml(template.name)}</h4>
             ${isMulti ? `<span class="px-1.5 py-0.5 bg-primary/20 text-primary text-xs rounded">${broadcastCount} broadcasts</span>` : ''}
             ${hasRecurring ? `<span class="recurring-badge px-1.5 py-0.5 bg-green-500/20 text-green-400 text-xs rounded flex items-center gap-0.5"><i class="ti ti-repeat text-[10px]"></i> Auto</span>` : ''}
+            ${thumbnailFolderBadge}
           </div>
           <p class="text-sm text-gray-400 truncate">${escapeHtml(template.title)}</p>
           <div class="flex items-center gap-2 mt-1">
@@ -1633,6 +1639,7 @@ function renderTemplateList(templates) {
           <p class="text-sm text-white truncate">${escapeHtml(template.name)}</p>
           <p class="text-[10px] text-gray-500 truncate">${escapeHtml(template.title)}</p>
         </div>
+        ${hasThumbnailFolder ? `<span class="px-1 py-0.5 bg-yellow-500/20 text-yellow-400 text-[10px] rounded flex-shrink-0" title="Random thumbnail"><i class="ti ti-dice-3 text-[8px]"></i></span>` : ''}
         ${hasRecurring ? `<span class="px-1.5 py-0.5 bg-green-500/20 text-green-400 text-[10px] rounded flex-shrink-0"><i class="ti ti-repeat text-[8px]"></i></span>` : ''}
         ${isMulti ? `<span class="px-1.5 py-0.5 bg-primary/20 text-primary text-[10px] rounded flex-shrink-0">${broadcastCount}</span>` : ''}
         <div class="flex items-center gap-0.5 flex-shrink-0">
@@ -2455,7 +2462,45 @@ function openMultiSaveTemplateModal(broadcasts) {
     `).join('');
   }
   
+  // Load thumbnail folders for dropdown
+  loadMultiTemplateThumbnailFolders();
+  
   document.getElementById('multiSaveTemplateModal').classList.remove('hidden');
+}
+
+/**
+ * Load thumbnail folders for multi-save template modal
+ */
+async function loadMultiTemplateThumbnailFolders() {
+  const select = document.getElementById('multiTemplateThumbnailFolder');
+  if (!select) return;
+  
+  try {
+    const response = await fetch('/api/thumbnail-folders', {
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+    
+    const data = await response.json();
+    
+    // Keep first option, clear others
+    select.innerHTML = '<option value="">-- No random thumbnail --</option>';
+    
+    // Add root folder option
+    select.innerHTML += '<option value="__root__">📁 Root (semua thumbnail)</option>';
+    
+    if (data.success && data.folders) {
+      data.folders.forEach(folder => {
+        const option = document.createElement('option');
+        option.value = folder.name;
+        option.textContent = `📁 ${folder.name}`;
+        select.appendChild(option);
+      });
+    }
+  } catch (error) {
+    console.error('[loadMultiTemplateThumbnailFolders] Error:', error);
+  }
 }
 
 function closeMultiSaveTemplateModal() {
@@ -2478,15 +2523,23 @@ if (multiSaveTemplateForm) {
     try {
       const broadcasts = window.selectedBroadcastsForTemplate;
       const templateName = document.getElementById('multiTemplateName').value;
+      const thumbnailFolderSelect = document.getElementById('multiTemplateThumbnailFolder');
+      let thumbnailFolder = thumbnailFolderSelect ? thumbnailFolderSelect.value : null;
+      
+      // Convert __root__ to empty string for root folder
+      if (thumbnailFolder === '__root__') {
+        thumbnailFolder = '';
+      }
       
       if (!broadcasts || broadcasts.length === 0) {
         throw new Error('No broadcasts selected');
       }
       
-      // Create template with all broadcast data - include streamId for reuse
+      // Create template with all broadcast data - include streamId and thumbnailFolder for reuse
       const templateData = {
         name: templateName,
         accountId: broadcasts[0].accountId,
+        thumbnailFolder: thumbnailFolder || null,  // Add thumbnail folder for random selection
         broadcasts: broadcasts.map(b => ({
           title: b.title,
           description: b.description || '',
@@ -2499,6 +2552,7 @@ if (multiSaveTemplateForm) {
       };
       
       console.log('[multiSaveTemplate] Saving template with broadcasts:', templateData.broadcasts.map(b => ({ title: b.title, streamId: b.streamId })));
+      console.log('[multiSaveTemplate] Thumbnail folder:', templateData.thumbnailFolder);
       
       const response = await fetch('/api/youtube/templates/multi', {
         method: 'POST',
@@ -2653,6 +2707,15 @@ if (recreateFromTemplateForm) {
             // Fallback to template's stream_id for single broadcast templates
             formData.append('streamId', template.stream_id);
             console.log('[recreate] Using template stream_id:', template.stream_id);
+          }
+          
+          // Use thumbnail folder for random selection if available
+          if (template.thumbnail_folder !== null && template.thumbnail_folder !== undefined) {
+            formData.append('thumbnailFolder', template.thumbnail_folder);
+            console.log('[recreate] Using thumbnail folder for random selection:', template.thumbnail_folder || 'root');
+          } else if (broadcast.thumbnailFolder !== null && broadcast.thumbnailFolder !== undefined) {
+            formData.append('thumbnailFolder', broadcast.thumbnailFolder);
+            console.log('[recreate] Using broadcast thumbnail folder:', broadcast.thumbnailFolder || 'root');
           }
           
           const response = await fetch('/api/youtube/broadcasts', {
@@ -3281,20 +3344,65 @@ async function saveToThumbnailHistory(file) {
   }
 }
 
+// Current edit thumbnail folder state
+let currentEditThumbnailFolder = null;
+
 /**
- * Load thumbnail history for edit modal (max 10)
+ * Load thumbnail folders for edit modal dropdown
  */
-async function loadEditThumbnailHistory() {
-  const historyContainer = document.getElementById('editThumbnailHistory');
-  const emptyState = document.getElementById('editThumbnailHistoryEmpty');
-  const countEl = document.getElementById('editThumbnailCount');
-  
-  if (!historyContainer) return;
-  
-  historyContainer.innerHTML = '<div class="col-span-2 text-center py-2"><i class="ti ti-loader animate-spin text-gray-400"></i></div>';
+async function loadEditThumbnailFolders() {
+  const select = document.getElementById('editThumbnailFolderSelect');
+  if (!select) return;
   
   try {
-    const response = await fetch('/api/thumbnails?limit=10', {
+    const response = await fetch('/api/thumbnail-folders', {
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+    
+    const data = await response.json();
+    
+    // Keep root option, clear others
+    select.innerHTML = '<option value="">Root</option>';
+    
+    if (data.success && data.folders) {
+      data.folders.forEach(folder => {
+        const option = document.createElement('option');
+        option.value = folder.name;
+        option.textContent = folder.name;
+        select.appendChild(option);
+      });
+    }
+  } catch (error) {
+    console.error('[loadEditThumbnailFolders] Error:', error);
+  }
+}
+
+/**
+ * Load thumbnails for edit modal from selected folder
+ */
+async function loadEditThumbnailFolder(folderName = null) {
+  currentEditThumbnailFolder = folderName || null;
+  
+  const gallery = document.getElementById('editThumbnailGallery');
+  const loading = document.getElementById('editThumbnailGalleryLoading');
+  const empty = document.getElementById('editThumbnailGalleryEmpty');
+  const countEl = document.getElementById('editThumbnailCount');
+  
+  if (!gallery) return;
+  
+  gallery.innerHTML = '';
+  if (loading) loading.classList.remove('hidden');
+  if (empty) empty.classList.add('hidden');
+  
+  try {
+    let url = '/api/thumbnails';
+    if (folderName) {
+      url += `?folder=${encodeURIComponent(folderName)}`;
+    }
+    
+    const response = await fetch(url, {
       headers: {
         'X-CSRF-Token': getCsrfToken()
       }
@@ -3303,42 +3411,37 @@ async function loadEditThumbnailHistory() {
     const data = await response.json();
     
     // Update count
-    const count = Math.min(data.count || 0, 10);
     if (countEl) {
-      countEl.textContent = `(${count}/10)`;
+      countEl.textContent = `(${data.count || 0})`;
     }
-    
-    historyContainer.innerHTML = '';
     
     if (data.success && data.thumbnails && data.thumbnails.length > 0) {
-      // Show only last 10
-      const thumbnails = data.thumbnails.slice(0, 10);
-      
-      thumbnails.forEach(thumb => {
+      data.thumbnails.forEach(thumb => {
         const div = document.createElement('div');
-        div.className = 'thumbnail-history-item aspect-video bg-dark-700 rounded cursor-pointer overflow-hidden border-2 border-transparent hover:border-primary transition-colors';
-        div.dataset.path = thumb.path; // Add data-path for auto-rotate selection
+        div.className = 'edit-thumbnail-item aspect-video bg-dark-700 rounded cursor-pointer overflow-hidden border-2 border-transparent hover:border-primary transition-colors';
+        div.dataset.path = thumb.path;
         div.dataset.url = thumb.url;
         div.innerHTML = `<img src="${thumb.url}" class="w-full h-full object-cover" alt="Thumbnail">`;
-        div.onclick = () => selectHistoryThumbnail(thumb.url, thumb.path);
-        historyContainer.appendChild(div);
+        div.onclick = () => selectEditThumbnailFromGallery(thumb.url, thumb.path, div);
+        gallery.appendChild(div);
       });
       
-      if (emptyState) emptyState.classList.add('hidden');
+      if (empty) empty.classList.add('hidden');
     } else {
-      if (emptyState) emptyState.classList.remove('hidden');
+      if (empty) empty.classList.remove('hidden');
     }
   } catch (error) {
-    console.error('[loadEditThumbnailHistory] Error:', error);
-    historyContainer.innerHTML = '';
-    if (emptyState) emptyState.classList.remove('hidden');
+    console.error('[loadEditThumbnailFolder] Error:', error);
+    if (empty) empty.classList.remove('hidden');
+  } finally {
+    if (loading) loading.classList.add('hidden');
   }
 }
 
 /**
- * Select thumbnail from history
+ * Select thumbnail from gallery in edit modal
  */
-function selectHistoryThumbnail(url, path) {
+function selectEditThumbnailFromGallery(url, path, element) {
   // Update preview
   const preview = document.getElementById('editThumbnailPreview');
   if (preview) {
@@ -3346,12 +3449,14 @@ function selectHistoryThumbnail(url, path) {
   }
   
   // Highlight selected
-  document.querySelectorAll('.thumbnail-history-item').forEach(item => {
+  document.querySelectorAll('.edit-thumbnail-item').forEach(item => {
     item.classList.remove('border-primary');
     item.classList.add('border-transparent');
   });
-  event.currentTarget.classList.remove('border-transparent');
-  event.currentTarget.classList.add('border-primary');
+  if (element) {
+    element.classList.remove('border-transparent');
+    element.classList.add('border-primary');
+  }
   
   // Load the image as file for upload
   fetch(url)
@@ -3359,13 +3464,48 @@ function selectHistoryThumbnail(url, path) {
     .then(blob => {
       const file = new File([blob], 'thumbnail.jpg', { type: blob.type });
       window.editThumbnailFile = file;
-      window.editThumbnailFromHistory = true; // Mark as from history, no need to save again
-      showToast('Thumbnail selected from history', 'info');
+      window.editThumbnailFromHistory = true; // Mark as from gallery, no need to save again
+      showToast('Thumbnail selected', 'info');
     })
     .catch(err => {
       console.error('Error loading thumbnail:', err);
       showToast('Failed to load thumbnail', 'error');
     });
+}
+
+/**
+ * Select random thumbnail from current folder in edit modal
+ */
+function selectRandomEditThumbnail() {
+  const items = document.querySelectorAll('.edit-thumbnail-item');
+  
+  if (items.length === 0) {
+    showToast('No thumbnails available in this folder', 'error');
+    return;
+  }
+  
+  // Select random item
+  const randomIndex = Math.floor(Math.random() * items.length);
+  const randomItem = items[randomIndex];
+  
+  const url = randomItem.dataset.url;
+  const path = randomItem.dataset.path;
+  
+  selectEditThumbnailFromGallery(url, path, randomItem);
+  
+  // Scroll to selected item
+  randomItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  
+  showToast('Random thumbnail selected!', 'success');
+}
+
+/**
+ * Load thumbnail history for edit modal (max 10) - DEPRECATED, kept for backward compatibility
+ */
+async function loadEditThumbnailHistory() {
+  // Now redirects to folder-based loading
+  await loadEditThumbnailFolders();
+  await loadEditThumbnailFolder(null); // Load root folder
 }
 
 // ============================================

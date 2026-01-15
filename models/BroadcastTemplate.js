@@ -51,6 +51,7 @@ class BroadcastTemplate {
       tags = null,
       category_id = '20',
       thumbnail_path = null,
+      thumbnail_folder = null,
       stream_id = null,
       // Recurring fields
       recurring_enabled = false,
@@ -93,12 +94,12 @@ class BroadcastTemplate {
       db.run(
         `INSERT INTO broadcast_templates (
           id, user_id, account_id, name, title, description,
-          privacy_status, tags, category_id, thumbnail_path, stream_id,
+          privacy_status, tags, category_id, thumbnail_path, thumbnail_folder, stream_id,
           recurring_enabled, recurring_pattern, recurring_time, recurring_days, next_run_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id, user_id, account_id, name.trim(), title, description,
-          privacy_status, tagsJson, category_id, thumbnail_path, stream_id,
+          privacy_status, tagsJson, category_id, thumbnail_path, thumbnail_folder, stream_id,
           recurring_enabled ? 1 : 0, recurring_pattern, recurring_time, daysJson, next_run_at
         ],
         function (err) {
@@ -120,6 +121,7 @@ class BroadcastTemplate {
             tags: Array.isArray(tags) ? tags : (tags ? JSON.parse(tags) : null),
             category_id,
             thumbnail_path,
+            thumbnail_folder,
             stream_id,
             recurring_enabled: !!recurring_enabled,
             recurring_pattern,

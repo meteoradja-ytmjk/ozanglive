@@ -388,6 +388,9 @@ async function createCoreTablesAsync() {
   await runTableQuery(`CREATE INDEX IF NOT EXISTS idx_broadcast_templates_recurring 
           ON broadcast_templates(recurring_enabled)`, 'broadcast_templates.recurring_index');
 
+  // Add thumbnail_folder column for random thumbnail selection
+  await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN thumbnail_folder TEXT`, 'broadcast_templates.thumbnail_folder');
+
   // Create recurring_schedules table for scheduled recurring broadcasts
   await runTableQuery(`CREATE TABLE IF NOT EXISTS recurring_schedules (
     id TEXT PRIMARY KEY,

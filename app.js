@@ -236,6 +236,53 @@ const port = process.env.PORT || 7575;
 const tokens = new csrf();
 ensureDirectories();
 ensureDirectories();
+
+/**
+ * Get random thumbnail from a user's folder
+ * @param {string} userId - User ID
+ * @param {string} folderName - Folder name (empty string for root)
+ * @returns {string|null} Thumbnail path relative to /public or null
+ */
+function getRandomThumbnailFromFolder(userId, folderName) {
+  try {
+    const basePath = path.join(__dirname, 'public', 'uploads', 'thumbnails', userId);
+    let targetPath = basePath;
+    
+    if (folderName && folderName.trim() && folderName !== '__root__') {
+      targetPath = path.join(basePath, folderName);
+    }
+    
+    if (!fs.existsSync(targetPath)) {
+      console.warn(`[getRandomThumbnailFromFolder] Folder not found: ${targetPath}`);
+      return null;
+    }
+    
+    // Get all image files in the folder
+    const files = fs.readdirSync(targetPath).filter(file => {
+      const ext = path.extname(file).toLowerCase();
+      return ['.jpg', '.jpeg', '.png'].includes(ext);
+    });
+    
+    if (files.length === 0) {
+      console.warn(`[getRandomThumbnailFromFolder] No thumbnails found in: ${targetPath}`);
+      return null;
+    }
+    
+    // Select random file
+    const randomIndex = Math.floor(Math.random() * files.length);
+    const randomFile = files[randomIndex];
+    
+    // Return relative path from /public
+    if (folderName && folderName.trim() && folderName !== '__root__') {
+      return `/uploads/thumbnails/${userId}/${folderName}/${randomFile}`;
+    }
+    return `/uploads/thumbnails/${userId}/${randomFile}`;
+  } catch (error) {
+    console.error(`[getRandomThumbnailFromFolder] Error:`, error.message);
+    return null;
+  }
+}
+
 app.locals.helpers = {
   getUsername: function (req) {
     if (req.session && req.session.username) {
@@ -5252,8 +5299,9 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       // Don't fail the request, just log the error
     }
     
-    // Upload thumbnail if provided (either file upload or gallery selection)
+    // Upload thumbnail if provided (either file upload, gallery selection, or random from folder)
     const thumbnailPath = req.body.thumbnailPath;
+    const thumbnailFolder = req.body.thumbnailFolder;
     
     if (req.file) {
       // Handle file upload
@@ -5266,6 +5314,26 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         broadcast.thumbnailUrl = thumbnailResult.thumbnailUrl;
       } catch (thumbErr) {
         console.error('Error uploading thumbnail:', thumbErr.message);
+      }
+    } else if (thumbnailFolder !== undefined && thumbnailFolder !== null) {
+      // Handle random thumbnail from folder
+      try {
+        const randomThumbnailPath = getRandomThumbnailFromFolder(req.session.userId, thumbnailFolder);
+        if (randomThumbnailPath) {
+          const fullPath = path.join(__dirname, 'public', randomThumbnailPath);
+          if (fs.existsSync(fullPath)) {
+            const imageBuffer = fs.readFileSync(fullPath);
+            const thumbnailResult = await youtubeService.uploadThumbnail(
+              accessToken,
+              broadcast.broadcastId,
+              imageBuffer
+            );
+            broadcast.thumbnailUrl = thumbnailResult.thumbnailUrl;
+            console.log('[API] Random thumbnail uploaded from folder:', thumbnailFolder || 'root');
+          }
+        }
+      } catch (thumbErr) {
+        console.error('Error uploading random thumbnail:', thumbErr.message);
       }
     } else if (thumbnailPath) {
       // Handle gallery selection
@@ -5507,9 +5575,10 @@ app.post('/api/youtube/broadcasts/:id/thumbnail', isAuthenticated, thumbnailUplo
 // Create new broadcast template
 app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
   try {
-    const { name, title, description, privacyStatus, tags, categoryId, thumbnailPath, streamId, accountId } = req.body;
+    const { name, title, description, privacyStatus, tags, categoryId, thumbnailPath, thumbnailFolder, streamId, accountId } = req.body;
     
     console.log('[create-template] Received streamId:', streamId);
+    console.log('[create-template] Received thumbnailFolder:', thumbnailFolder);
     
     if (!name || !title || !accountId) {
       return res.status(400).json({
@@ -5534,10 +5603,11 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
       tags: tags || null,
       category_id: categoryId || '22',
       thumbnail_path: thumbnailPath || null,
+      thumbnail_folder: thumbnailFolder || null,
       stream_id: streamId || null
     });
 
-    console.log('[create-template] Created template with stream_id:', template.stream_id);
+    console.log('[create-template] Created template with stream_id:', template.stream_id, 'thumbnail_folder:', template.thumbnail_folder);
 
     res.json({ success: true, template });
   } catch (error) {
@@ -5552,7 +5622,7 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
 // Create multi-broadcast template (save multiple broadcasts as one template)
 app.post('/api/youtube/templates/multi', isAuthenticated, async (req, res) => {
   try {
-    const { name, accountId, broadcasts } = req.body;
+    const { name, accountId, broadcasts, thumbnailFolder } = req.body;
     
     if (!name || !accountId || !broadcasts || broadcasts.length === 0) {
       return res.status(400).json({
@@ -5567,7 +5637,7 @@ app.post('/api/youtube/templates/multi', isAuthenticated, async (req, res) => {
       return res.status(404).json({ success: false, error: 'Account not found' });
     }
 
-    // Ensure each broadcast has streamId and thumbnailPath preserved
+    // Ensure each broadcast has streamId, thumbnailPath, and thumbnailFolder preserved
     const broadcastsWithStreamId = broadcasts.map(b => ({
       title: b.title,
       description: b.description || '',
@@ -5576,13 +5646,15 @@ app.post('/api/youtube/templates/multi', isAuthenticated, async (req, res) => {
       streamKey: b.streamKey || '',
       categoryId: b.categoryId || '22',
       tags: b.tags || [],
-      thumbnailPath: b.thumbnailPath || b.thumbnail_path || null  // Preserve thumbnail path
+      thumbnailPath: b.thumbnailPath || b.thumbnail_path || null,  // Preserve thumbnail path
+      thumbnailFolder: thumbnailFolder || b.thumbnailFolder || null  // Preserve thumbnail folder for random selection
     }));
 
     console.log('[templates/multi] Saving broadcasts with data:', broadcastsWithStreamId.map(b => ({ 
       title: b.title, 
       streamId: b.streamId, 
       thumbnailPath: b.thumbnailPath,
+      thumbnailFolder: b.thumbnailFolder,
       privacyStatus: b.privacyStatus 
     })));
 
@@ -5597,6 +5669,7 @@ app.post('/api/youtube/templates/multi', isAuthenticated, async (req, res) => {
       tags: broadcasts[0].tags || null,
       category_id: broadcasts[0].categoryId || '22',
       thumbnail_path: null,
+      thumbnail_folder: thumbnailFolder || null,  // Save thumbnail folder for random selection
       stream_id: broadcasts[0].streamId || null  // Save first broadcast's stream_id
     });
 

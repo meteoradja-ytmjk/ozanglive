@@ -293,9 +293,15 @@ class ScheduleService {
             results.push(result);
             console.log(`[ScheduleService] Broadcast ${i + 1} created: ${result.broadcastId || result.id}`);
             
-            // Upload thumbnail if broadcast has one (from multi-broadcast template)
-            if (b.thumbnailPath) {
-              await this.uploadThumbnailForBroadcast(accessToken, result.broadcastId || result.id, b.thumbnailPath);
+            // Upload thumbnail - use folder for random selection if available
+            if (b.thumbnailFolder || b.thumbnailPath) {
+              await this.uploadThumbnailForBroadcast(
+                accessToken, 
+                result.broadcastId || result.id, 
+                b.thumbnailPath,
+                b.thumbnailFolder,
+                template.user_id
+              );
             }
           } catch (err) {
             console.error(`[ScheduleService] Failed to create broadcast ${i + 1}:`, err.message);
@@ -339,9 +345,15 @@ class ScheduleService {
         results.push(result);
         console.log(`[ScheduleService] Broadcast created: ${result.broadcastId || result.id}`);
         
-        // Upload thumbnail if template has one
-        if (template.thumbnail_path) {
-          await this.uploadThumbnailForBroadcast(accessToken, result.broadcastId || result.id, template.thumbnail_path);
+        // Upload thumbnail - use folder for random selection if available
+        if (template.thumbnail_folder || template.thumbnail_path) {
+          await this.uploadThumbnailForBroadcast(
+            accessToken, 
+            result.broadcastId || result.id, 
+            template.thumbnail_path,
+            template.thumbnail_folder,
+            template.user_id
+          );
         }
       }
       
@@ -381,19 +393,35 @@ class ScheduleService {
    * @param {string} accessToken - YouTube access token
    * @param {string} broadcastId - Broadcast ID to upload thumbnail for
    * @param {string} thumbnailPath - Path to thumbnail file relative to /public
+   * @param {string} thumbnailFolder - Folder name for random thumbnail selection
+   * @param {string} userId - User ID for folder-based thumbnail lookup
    * @returns {Promise<boolean>} True if upload successful, false otherwise
    */
-  async uploadThumbnailForBroadcast(accessToken, broadcastId, thumbnailPath) {
-    if (!thumbnailPath) {
-      return false;
-    }
-
+  async uploadThumbnailForBroadcast(accessToken, broadcastId, thumbnailPath, thumbnailFolder = null, userId = null) {
     try {
-      const fullPath = path.join(__dirname, '..', 'public', thumbnailPath);
+      let fullPath = null;
       
+      // If thumbnail_folder is specified, select random thumbnail from that folder
+      if (thumbnailFolder && userId) {
+        const randomThumbnail = await this.getRandomThumbnailFromFolder(userId, thumbnailFolder);
+        if (randomThumbnail) {
+          fullPath = path.join(__dirname, '..', 'public', randomThumbnail);
+          console.log(`[ScheduleService] Selected random thumbnail from folder "${thumbnailFolder}": ${randomThumbnail}`);
+        }
+      }
+      
+      // Fallback to specific thumbnail_path if no folder or random selection failed
+      if (!fullPath && thumbnailPath) {
+        fullPath = path.join(__dirname, '..', 'public', thumbnailPath);
+      }
+      
+      if (!fullPath) {
+        return false;
+      }
+
       // Check if file exists before reading
       if (!fs.existsSync(fullPath)) {
-        console.warn(`[ScheduleService] Thumbnail not found: ${thumbnailPath}`);
+        console.warn(`[ScheduleService] Thumbnail not found: ${fullPath}`);
         return false;
       }
 
@@ -405,6 +433,52 @@ class ScheduleService {
       console.error(`[ScheduleService] Thumbnail upload failed for ${broadcastId}:`, error.message);
       // Continue without failing - thumbnail is optional
       return false;
+    }
+  }
+
+  /**
+   * Get random thumbnail from a user's folder
+   * @param {string} userId - User ID
+   * @param {string} folderName - Folder name (empty string for root)
+   * @returns {Promise<string|null>} Thumbnail path or null
+   */
+  async getRandomThumbnailFromFolder(userId, folderName) {
+    try {
+      const basePath = path.join(__dirname, '..', 'public', 'uploads', 'thumbnails', userId);
+      let targetPath = basePath;
+      
+      if (folderName && folderName.trim()) {
+        targetPath = path.join(basePath, folderName);
+      }
+      
+      if (!fs.existsSync(targetPath)) {
+        console.warn(`[ScheduleService] Thumbnail folder not found: ${targetPath}`);
+        return null;
+      }
+      
+      // Get all image files in the folder
+      const files = fs.readdirSync(targetPath).filter(file => {
+        const ext = path.extname(file).toLowerCase();
+        return ['.jpg', '.jpeg', '.png'].includes(ext);
+      });
+      
+      if (files.length === 0) {
+        console.warn(`[ScheduleService] No thumbnails found in folder: ${targetPath}`);
+        return null;
+      }
+      
+      // Select random file
+      const randomIndex = Math.floor(Math.random() * files.length);
+      const randomFile = files[randomIndex];
+      
+      // Return relative path from /public
+      if (folderName && folderName.trim()) {
+        return `/uploads/thumbnails/${userId}/${folderName}/${randomFile}`;
+      }
+      return `/uploads/thumbnails/${userId}/${randomFile}`;
+    } catch (error) {
+      console.error(`[ScheduleService] Error getting random thumbnail:`, error.message);
+      return null;
     }
   }
 
