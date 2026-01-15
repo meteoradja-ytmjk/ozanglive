@@ -10,8 +10,8 @@
 const Stream = require('../models/Stream');
 const { calculateDurationSeconds } = require('../utils/durationCalculator');
 
-// Check interval: 30 minutes (FFmpeg exit event handles normal cases)
-const HEALTH_CHECK_INTERVAL_MS = 30 * 60 * 1000;
+// Check interval: 60 minutes (was 30 min) - FFmpeg exit event handles normal cases
+const HEALTH_CHECK_INTERVAL_MS = 60 * 60 * 1000;
 
 // Maximum consecutive failures before giving up
 const MAX_CONSECUTIVE_FAILURES = 3;

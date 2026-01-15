@@ -38,11 +38,11 @@ const streamPids = new Map();
 
 // MEMORY MANAGEMENT: Periodic cleanup of stale entries
 // This prevents memory leaks from orphaned entries
-const CLEANUP_INTERVAL = 2 * 60 * 60 * 1000; // Every 2 hours
+const CLEANUP_INTERVAL = 4 * 60 * 60 * 1000; // Every 4 hours (was 2 hours)
 
 // PROCESS HEALTH CHECK: Verify FFmpeg processes are still running
 // This catches cases where FFmpeg dies without triggering exit event
-const PROCESS_CHECK_INTERVAL = 30 * 60 * 1000; // Every 30 minutes - FFmpeg exit event handles normal cases
+const PROCESS_CHECK_INTERVAL = 60 * 60 * 1000; // Every 60 minutes (was 30 minutes) - FFmpeg exit event handles normal cases
 
 /**
  * Handle unlist replay on stream end

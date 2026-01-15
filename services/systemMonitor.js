@@ -5,19 +5,24 @@ const { exec } = require('child_process');
 let previousNetworkData = null;
 let previousTimestamp = null;
 
-// Cache for system stats - ULTRA OPTIMIZED
+// Cache for system stats - ULTRA OPTIMIZED for minimal CPU
 let cachedStats = null;
 let lastCacheTime = 0;
-const CACHE_TTL = 60000; // Cache for 1 minute
+const CACHE_TTL = 120000; // Cache for 2 minutes (was 1 minute)
 
 // CPU tracking for Node.js process
 let lastNodeCpuUsage = null;
 let lastNodeCpuTime = 0;
 
-// Cache for FFmpeg CPU
+// Cache for FFmpeg CPU - ULTRA OPTIMIZED
 let cachedFFmpegCpu = 0;
 let lastFFmpegCheck = 0;
-const FFMPEG_CHECK_INTERVAL = 30000; // Check FFmpeg CPU every 30 seconds
+const FFMPEG_CHECK_INTERVAL = 120000; // Check FFmpeg CPU every 2 minutes (was 30 seconds)
+
+// Cache for active stream count (lightweight alternative to FFmpeg CPU check)
+let cachedActiveStreams = 0;
+let lastActiveStreamCheck = 0;
+const ACTIVE_STREAM_CHECK_INTERVAL = 30000; // Check active streams every 30 seconds
 
 /**
  * Wrap a promise with timeout to prevent hanging
@@ -63,7 +68,36 @@ function getNodeCpuUsage() {
 }
 
 /**
- * Get FFmpeg processes CPU usage
+ * Get active stream count (lightweight - no external process spawn)
+ * This is used to estimate FFmpeg CPU without expensive process queries
+ */
+function getActiveStreamCount() {
+  const now = Date.now();
+  
+  // Return cached value if fresh
+  if ((now - lastActiveStreamCheck) < ACTIVE_STREAM_CHECK_INTERVAL) {
+    return cachedActiveStreams;
+  }
+  
+  try {
+    // Try to get from streamingService if available
+    const streamingService = require('./streamingService');
+    if (streamingService && typeof streamingService.getActiveStreams === 'function') {
+      const activeStreams = streamingService.getActiveStreams();
+      cachedActiveStreams = Array.isArray(activeStreams) ? activeStreams.length : 0;
+    }
+  } catch (e) {
+    // Ignore - streamingService may not be loaded yet
+  }
+  
+  lastActiveStreamCheck = now;
+  return cachedActiveStreams;
+}
+
+/**
+ * Get FFmpeg processes CPU usage - ULTRA OPTIMIZED
+ * Uses estimation based on active stream count instead of expensive process queries
+ * Each stream in copy mode uses ~1-2% CPU, encoding mode uses ~5-10% CPU
  */
 async function getFFmpegCpuUsage() {
   const now = Date.now();
@@ -73,52 +107,18 @@ async function getFFmpegCpuUsage() {
     return cachedFFmpegCpu;
   }
   
-  return new Promise((resolve) => {
-    const isWindows = process.platform === 'win32';
-    
-    if (isWindows) {
-      // Windows: Use PowerShell to get FFmpeg CPU
-      exec('powershell -Command "Get-Process ffmpeg -ErrorAction SilentlyContinue | Measure-Object -Property CPU -Sum | Select-Object -ExpandProperty Sum"',
-        { timeout: 3000 },
-        (error, stdout) => {
-          if (error || !stdout.trim()) {
-            cachedFFmpegCpu = 0;
-            lastFFmpegCheck = now;
-            resolve(0);
-            return;
-          }
-          
-          // PowerShell returns cumulative CPU time, we need to calculate delta
-          const cpuTime = parseFloat(stdout.trim()) || 0;
-          // Rough estimate: assume 1% CPU = 0.6 seconds per minute
-          // This is approximate but gives reasonable values
-          cachedFFmpegCpu = Math.min(100, Math.round(cpuTime / 10));
-          lastFFmpegCheck = now;
-          resolve(cachedFFmpegCpu);
-        }
-      );
-    } else {
-      // Linux: Use ps to get FFmpeg CPU percentage directly
-      exec("ps -C ffmpeg -o %cpu= 2>/dev/null | awk '{sum += $1} END {print sum}'",
-        { timeout: 3000 },
-        (error, stdout) => {
-          if (error || !stdout.trim()) {
-            cachedFFmpegCpu = 0;
-            lastFFmpegCheck = now;
-            resolve(0);
-            return;
-          }
-          
-          const cpu = parseFloat(stdout.trim()) || 0;
-          const cpuCount = os.cpus().length;
-          // Normalize to percentage of total CPU
-          cachedFFmpegCpu = Math.round(cpu / cpuCount);
-          lastFFmpegCheck = now;
-          resolve(cachedFFmpegCpu);
-        }
-      );
-    }
-  });
+  // OPTIMIZED: Use lightweight estimation instead of spawning external processes
+  // This saves significant CPU by avoiding exec() calls
+  const activeStreams = getActiveStreamCount();
+  
+  // Estimate: ~2% CPU per stream in copy mode (which is the default)
+  // This is a reasonable estimate for FFmpeg with -c copy
+  const estimatedCpu = activeStreams * 2;
+  
+  cachedFFmpegCpu = Math.min(100, estimatedCpu);
+  lastFFmpegCheck = now;
+  
+  return cachedFFmpegCpu;
 }
 
 /**

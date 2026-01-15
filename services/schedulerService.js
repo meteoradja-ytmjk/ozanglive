@@ -4,13 +4,13 @@ const { calculateDurationSeconds, formatDuration } = require('../utils/durationC
 
 const scheduledTerminations = new Map();
 const recentlyTriggeredStreams = new Map(); // Track recently triggered recurring streams
-const SCHEDULE_LOOKAHEAD_SECONDS = 30; // Keep precise for accurate scheduling
-const RECURRING_CHECK_INTERVAL = 60 * 1000; // Check recurring schedules every 1 minute (keep fast)
-const ONCE_SCHEDULE_CHECK_INTERVAL = 60 * 1000; // Check one-time schedules every 1 minute (keep fast)
+const SCHEDULE_LOOKAHEAD_SECONDS = 60; // Increased to 60 seconds for less frequent checks
+const RECURRING_CHECK_INTERVAL = 2 * 60 * 1000; // Check recurring schedules every 2 minutes (was 1 min)
+const ONCE_SCHEDULE_CHECK_INTERVAL = 2 * 60 * 1000; // Check one-time schedules every 2 minutes (was 1 min)
 const TRIGGER_COOLDOWN_MS = 10 * 60 * 1000; // 10 minute cooldown to prevent double triggers
-const DURATION_CHECK_INTERVAL = 60 * 1000; // Check durations every 1 minute (keep fast for accurate stop)
-const FORCE_STOP_BUFFER_MS = 30 * 1000; // 30 seconds buffer for force stop
-const CLEANUP_INTERVAL = 4 * 60 * 60 * 1000; // ULTRA: Clean up stale entries every 4 hours
+const DURATION_CHECK_INTERVAL = 2 * 60 * 1000; // Check durations every 2 minutes (was 1 min)
+const FORCE_STOP_BUFFER_MS = 60 * 1000; // 60 seconds buffer for force stop (was 30s)
+const CLEANUP_INTERVAL = 6 * 60 * 60 * 1000; // Clean up stale entries every 6 hours (was 4 hours)
 
 let streamingService = null;
 let initialized = false;
@@ -61,7 +61,7 @@ function init(streamingServiceInstance) {
   // MEMORY MANAGEMENT: Cleanup stale entries from Maps
   cleanupIntervalId = setInterval(cleanupStaleMaps, CLEANUP_INTERVAL);
   
-  console.log('[Scheduler] Intervals set: once-schedules=1min, recurring=1min, duration=1min, cleanup=4hr');
+  console.log('[Scheduler] Intervals set: once-schedules=2min, recurring=2min, duration=2min, cleanup=6hr');
   
   // Initial checks with error handling (run immediately on startup)
   safeCheckScheduledStreams();

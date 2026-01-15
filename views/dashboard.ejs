@@ -2707,12 +2707,12 @@ document.addEventListener('DOMContentLoaded', function() {
   loadLiveLimitInfo();
   updateRealtimeClock();
   
-  // ULTRA OPTIMIZED: Refresh stats every 60 seconds (was 30s)
-  setInterval(loadSystemStats, 60000);
-  // ULTRA OPTIMIZED: Refresh streams every 60 seconds (was 30s)
-  setInterval(loadStreams, 60000);
-  // ULTRA OPTIMIZED: Refresh live limit info every 2 minutes (was 60s)
-  setInterval(loadLiveLimitInfo, 120000);
+  // ULTRA OPTIMIZED: Refresh stats every 2 minutes (was 60s) - CPU usage is cached
+  setInterval(loadSystemStats, 120000);
+  // ULTRA OPTIMIZED: Refresh streams every 90 seconds (was 60s)
+  setInterval(loadStreams, 90000);
+  // ULTRA OPTIMIZED: Refresh live limit info every 3 minutes (was 2 min)
+  setInterval(loadLiveLimitInfo, 180000);
   // Update clock every second (minimal CPU impact)
   setInterval(updateRealtimeClock, 1000);
 });
