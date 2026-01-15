@@ -1,12 +1,23 @@
 const si = require('systeminformation');
+const os = require('os');
+const { exec } = require('child_process');
 
 let previousNetworkData = null;
 let previousTimestamp = null;
 
-// Cache for system stats to prevent blocking - ULTRA OPTIMIZED
+// Cache for system stats - ULTRA OPTIMIZED
 let cachedStats = null;
 let lastCacheTime = 0;
-const CACHE_TTL = 120000; // ULTRA: Cache for 2 minutes - minimal CPU polling
+const CACHE_TTL = 60000; // Cache for 1 minute
+
+// CPU tracking for Node.js process
+let lastNodeCpuUsage = null;
+let lastNodeCpuTime = 0;
+
+// Cache for FFmpeg CPU
+let cachedFFmpegCpu = 0;
+let lastFFmpegCheck = 0;
+const FFMPEG_CHECK_INTERVAL = 30000; // Check FFmpeg CPU every 30 seconds
 
 /**
  * Wrap a promise with timeout to prevent hanging
@@ -18,43 +29,107 @@ function withTimeout(promise, ms, fallback) {
   ]);
 }
 
-// Track CPU usage over time for accurate measurement
-let lastCpuUsage = null;
-let lastCpuTime = 0;
-
 /**
- * Get CPU usage from Node.js process only (very lightweight)
- * Uses delta calculation for accurate percentage
+ * Get Node.js process CPU usage (lightweight)
  */
-function getNodeProcessCpu() {
+function getNodeCpuUsage() {
   try {
     const now = Date.now();
     const currentUsage = process.cpuUsage();
     
-    if (!lastCpuUsage || !lastCpuTime) {
-      lastCpuUsage = currentUsage;
-      lastCpuTime = now;
+    if (!lastNodeCpuUsage || !lastNodeCpuTime) {
+      lastNodeCpuUsage = currentUsage;
+      lastNodeCpuTime = now;
       return 0;
     }
     
-    const timeDelta = (now - lastCpuTime) * 1000; // Convert to microseconds
+    const timeDelta = (now - lastNodeCpuTime) * 1000; // microseconds
     if (timeDelta <= 0) return 0;
     
-    const userDelta = currentUsage.user - lastCpuUsage.user;
-    const systemDelta = currentUsage.system - lastCpuUsage.system;
+    const userDelta = currentUsage.user - lastNodeCpuUsage.user;
+    const systemDelta = currentUsage.system - lastNodeCpuUsage.system;
     const totalDelta = userDelta + systemDelta;
     
-    // Calculate percentage (considering all CPU cores)
-    const cpuCount = require('os').cpus().length;
+    const cpuCount = os.cpus().length;
     const cpuPercent = (totalDelta / timeDelta) * 100 / cpuCount;
     
-    lastCpuUsage = currentUsage;
-    lastCpuTime = now;
+    lastNodeCpuUsage = currentUsage;
+    lastNodeCpuTime = now;
     
-    return Math.min(100, Math.max(0, Math.round(cpuPercent)));
+    return Math.max(0, Math.min(100, cpuPercent));
   } catch (e) {
     return 0;
   }
+}
+
+/**
+ * Get FFmpeg processes CPU usage
+ */
+async function getFFmpegCpuUsage() {
+  const now = Date.now();
+  
+  // Return cached value if fresh
+  if ((now - lastFFmpegCheck) < FFMPEG_CHECK_INTERVAL) {
+    return cachedFFmpegCpu;
+  }
+  
+  return new Promise((resolve) => {
+    const isWindows = process.platform === 'win32';
+    
+    if (isWindows) {
+      // Windows: Use PowerShell to get FFmpeg CPU
+      exec('powershell -Command "Get-Process ffmpeg -ErrorAction SilentlyContinue | Measure-Object -Property CPU -Sum | Select-Object -ExpandProperty Sum"',
+        { timeout: 3000 },
+        (error, stdout) => {
+          if (error || !stdout.trim()) {
+            cachedFFmpegCpu = 0;
+            lastFFmpegCheck = now;
+            resolve(0);
+            return;
+          }
+          
+          // PowerShell returns cumulative CPU time, we need to calculate delta
+          const cpuTime = parseFloat(stdout.trim()) || 0;
+          // Rough estimate: assume 1% CPU = 0.6 seconds per minute
+          // This is approximate but gives reasonable values
+          cachedFFmpegCpu = Math.min(100, Math.round(cpuTime / 10));
+          lastFFmpegCheck = now;
+          resolve(cachedFFmpegCpu);
+        }
+      );
+    } else {
+      // Linux: Use ps to get FFmpeg CPU percentage directly
+      exec("ps -C ffmpeg -o %cpu= 2>/dev/null | awk '{sum += $1} END {print sum}'",
+        { timeout: 3000 },
+        (error, stdout) => {
+          if (error || !stdout.trim()) {
+            cachedFFmpegCpu = 0;
+            lastFFmpegCheck = now;
+            resolve(0);
+            return;
+          }
+          
+          const cpu = parseFloat(stdout.trim()) || 0;
+          const cpuCount = os.cpus().length;
+          // Normalize to percentage of total CPU
+          cachedFFmpegCpu = Math.round(cpu / cpuCount);
+          lastFFmpegCheck = now;
+          resolve(cachedFFmpegCpu);
+        }
+      );
+    }
+  });
+}
+
+/**
+ * Get combined CPU usage (Node.js + FFmpeg only)
+ * This excludes browser, IDE, and other system processes
+ */
+async function getStreamingCpuUsage() {
+  const nodeCpu = getNodeCpuUsage();
+  const ffmpegCpu = await getFFmpegCpuUsage();
+  
+  return Math.round(nodeCpu + ffmpegCpu);
 }
 
 async function getSystemStats() {
@@ -65,16 +140,15 @@ async function getSystemStats() {
   }
   
   try {
-    // ULTRA OPTIMIZED: Only get essential stats
+    // Get streaming CPU (Node.js + FFmpeg only)
+    const cpuUsage = await getStreamingCpuUsage();
+    
+    // Get memory and network with timeout
     const [memData, networkData, diskData] = await Promise.all([
       withTimeout(si.mem(), 2000, { total: 0, active: 0, available: 0 }),
       withTimeout(si.networkStats(), 2000, []),
       withTimeout(getDiskUsage(), 2000, { total: "0 GB", used: "0 GB", free: "0 GB", usagePercent: 0, drive: "N/A" })
     ]);
-    
-    // ULTRA LIGHTWEIGHT: Use process.cpuUsage() for Node.js process only
-    // This is much faster than si.currentLoad() and more relevant for streaming app
-    const cpuUsage = getNodeProcessCpu();
     
     const networkSpeed = calculateNetworkSpeed(networkData);
     
@@ -88,8 +162,8 @@ async function getSystemStats() {
     
     const stats = {
       cpu: {
-        usage: Math.round(cpuUsage),
-        cores: require('os').cpus().length
+        usage: cpuUsage,
+        cores: os.cpus().length
       },
       memory: {
         total: formatMemory(memData.total),
@@ -111,13 +185,12 @@ async function getSystemStats() {
   } catch (error) {
     console.error('Error getting system stats:', error.message);
     
-    // Return cached stats if available, otherwise return defaults
     if (cachedStats) {
       return { ...cachedStats, timestamp: Date.now() };
     }
     
     return {
-      cpu: { usage: 0, cores: 0 },
+      cpu: { usage: 0, cores: os.cpus().length },
       memory: { total: "0 GB", used: "0 GB", free: "0 GB", usagePercent: 0 },
       network: { download: 0, upload: 0, downloadFormatted: '0 Mbps', uploadFormatted: '0 Mbps' },
       disk: { total: "0 GB", used: "0 GB", free: "0 GB", usagePercent: 0, drive: "N/A" },
