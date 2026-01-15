@@ -6,7 +6,7 @@ let previousTimestamp = null;
 // Cache for system stats to prevent blocking - ULTRA OPTIMIZED
 let cachedStats = null;
 let lastCacheTime = 0;
-const CACHE_TTL = 60000; // ULTRA: Cache for 60 seconds - minimal CPU polling
+const CACHE_TTL = 120000; // ULTRA: Cache for 2 minutes - minimal CPU polling
 
 /**
  * Wrap a promise with timeout to prevent hanging

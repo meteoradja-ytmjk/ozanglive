@@ -498,8 +498,8 @@ async function checkRecurringSchedules() {
       return;
     }
 
-    // Only log header when actually checking streams
-    console.log(`[Scheduler] Checking ${recurringStreams.length} recurring schedules`);
+    // Only log when there are streams to trigger (save CPU)
+    // console.log(`[Scheduler] Checking ${recurringStreams.length} recurring schedules`);
 
     for (const stream of recurringStreams) {
       try {

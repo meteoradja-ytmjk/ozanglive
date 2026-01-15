@@ -64,17 +64,17 @@ class ScheduleService {
   }
 
   /**
-   * Start the schedule checker that runs every minute
+   * Start the schedule checker that runs every 2 minutes
    */
   startChecker() {
     if (this.checkInterval) return;
     
-    // Check every minute
+    // Check every 2 minutes (broadcast creation is less time-critical)
     this.checkInterval = setInterval(async () => {
       await this.checkSchedules();
-    }, 60000);
+    }, 120000);
     
-    console.log('[ScheduleService] Schedule checker started');
+    console.log('[ScheduleService] Schedule checker started (2 min interval)');
   }
 
   /**
