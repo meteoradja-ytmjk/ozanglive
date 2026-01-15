@@ -17,11 +17,11 @@ const originalConsoleWarn = console.warn;
 const originalConsoleInfo = console.info;
 const originalConsoleDebug = console.debug;
 
-// Log buffer for async writing - OPTIMIZED for low memory
+// Log buffer for async writing - ULTRA OPTIMIZED for minimal CPU
 let logBuffer = [];
 let isWriting = false;
-const MAX_BUFFER_SIZE = 50; // OPTIMIZED: Flush after 50 entries (was 100)
-const FLUSH_INTERVAL = 3000; // OPTIMIZED: Flush every 3 seconds (was 5)
+const MAX_BUFFER_SIZE = 200; // ULTRA: Flush after 200 entries
+const FLUSH_INTERVAL = 30000; // ULTRA: Flush every 30 seconds - minimal disk I/O
 
 /**
  * Write buffered logs to file asynchronously

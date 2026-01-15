@@ -159,7 +159,7 @@ process.on('unhandledRejection', (reason, promise) => {
 // These were causing more problems than they solved
 // PM2 will handle restarts if needed via max_memory_restart
 
-// Simple memory logging every 30 minutes (just for info, no action)
+// Simple memory logging every 2 hours (just for info, no action)
 setInterval(() => {
   try {
     const memUsage = process.memoryUsage();
@@ -169,7 +169,7 @@ setInterval(() => {
   } catch (e) {
     // Ignore errors
   }
-}, 30 * 60 * 1000); // Every 30 minutes
+}, 2 * 60 * 60 * 1000); // Every 2 hours (was 30 minutes)
 
 process.on('uncaughtException', (error) => {
   console.error('-----------------------------------');

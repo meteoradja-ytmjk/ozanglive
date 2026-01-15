@@ -4,13 +4,13 @@ const { calculateDurationSeconds, formatDuration } = require('../utils/durationC
 
 const scheduledTerminations = new Map();
 const recentlyTriggeredStreams = new Map(); // Track recently triggered recurring streams
-const SCHEDULE_LOOKAHEAD_SECONDS = 30; // FIXED: Reduced to 30 seconds to prevent early triggers
-const RECURRING_CHECK_INTERVAL = 60 * 1000; // Check recurring schedules every 1 minute for precision
-const ONCE_SCHEDULE_CHECK_INTERVAL = 60 * 1000; // Check one-time schedules every 1 minute for precision
-const TRIGGER_COOLDOWN_MS = 10 * 60 * 1000; // 10 minute cooldown to prevent double triggers (longer than any check interval)
-const DURATION_CHECK_INTERVAL = 60 * 1000; // Check durations every 1 minute
-const FORCE_STOP_BUFFER_MS = 30 * 1000; // FIXED: Reduced to 30 seconds - force stop if exceeded by 30s
-const CLEANUP_INTERVAL = 60 * 60 * 1000; // Clean up stale entries every 1 hour
+const SCHEDULE_LOOKAHEAD_SECONDS = 30; // Keep precise for accurate scheduling
+const RECURRING_CHECK_INTERVAL = 60 * 1000; // Check recurring schedules every 1 minute (keep fast)
+const ONCE_SCHEDULE_CHECK_INTERVAL = 60 * 1000; // Check one-time schedules every 1 minute (keep fast)
+const TRIGGER_COOLDOWN_MS = 10 * 60 * 1000; // 10 minute cooldown to prevent double triggers
+const DURATION_CHECK_INTERVAL = 60 * 1000; // Check durations every 1 minute (keep fast for accurate stop)
+const FORCE_STOP_BUFFER_MS = 30 * 1000; // 30 seconds buffer for force stop
+const CLEANUP_INTERVAL = 4 * 60 * 60 * 1000; // ULTRA: Clean up stale entries every 4 hours
 
 let streamingService = null;
 let initialized = false;
@@ -61,7 +61,7 @@ function init(streamingServiceInstance) {
   // MEMORY MANAGEMENT: Cleanup stale entries from Maps
   cleanupIntervalId = setInterval(cleanupStaleMaps, CLEANUP_INTERVAL);
   
-  console.log('[Scheduler] Intervals set: once-schedules=1min, recurring=1min, duration=1min, cleanup=1hr');
+  console.log('[Scheduler] Intervals set: once-schedules=1min, recurring=1min, duration=1min, cleanup=4hr');
   
   // Initial checks with error handling (run immediately on startup)
   safeCheckScheduledStreams();

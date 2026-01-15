@@ -23,8 +23,8 @@ const STATUS_DISPLAY = {
   'revoked': 'Dibatalkan'
 };
 
-// Polling interval: 5 minutes (saves CPU and API quota, stream end handled by FFmpeg)
-const POLLING_INTERVAL_MS = 5 * 60 * 1000;
+// Polling interval: 15 minutes (saves CPU and API quota, stream end handled by FFmpeg)
+const POLLING_INTERVAL_MS = 15 * 60 * 1000;
 
 // Quota cooldown: 1 hour
 const QUOTA_COOLDOWN_MS = 60 * 60 * 1000;
