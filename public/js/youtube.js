@@ -286,7 +286,7 @@ async function fetchThumbnailFolders() {
       
       data.folders.forEach(folder => {
         const div = document.createElement('div');
-        div.className = `folder-item flex items-center gap-2 py-2 px-2 text-sm cursor-pointer transition-colors border-b border-gray-700/50 hover:bg-dark-600/50 ${
+        div.className = `folder-item flex items-center gap-2 py-1.5 text-sm cursor-pointer transition-colors hover:bg-dark-600/50 rounded ${
           currentThumbnailFolder === folder.name 
             ? 'text-primary' 
             : 'text-white'
@@ -294,8 +294,8 @@ async function fetchThumbnailFolders() {
         div.onclick = () => openThumbnailFolder(folder.name);
         div.innerHTML = `
           <i class="ti ti-folder text-gray-400 shrink-0"></i>
-          <span class="flex-1">${escapeHtml(folder.name)}</span>
-          <button type="button" class="shrink-0 text-red-500 hover:text-red-400 font-bold text-base" onclick="event.stopPropagation(); deleteFolder('${escapeJsString(folder.name)}')" title="Delete">
+          <span class="flex-1 truncate">${escapeHtml(folder.name)}</span>
+          <button type="button" class="shrink-0 text-red-500 hover:text-red-400 font-bold" onclick="event.stopPropagation(); deleteFolder('${escapeJsString(folder.name)}')" title="Delete">
             ✕
           </button>
         `;
