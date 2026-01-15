@@ -3,22 +3,22 @@
 <style>
   /* Custom scrollbar for thumbnail folder list */
   #thumbnailFolderList::-webkit-scrollbar {
-    height: 4px;
+    width: 4px;
   }
   #thumbnailFolderList::-webkit-scrollbar-track {
     background: transparent;
   }
   #thumbnailFolderList::-webkit-scrollbar-thumb {
-    background: rgba(107, 114, 128, 0.5);
+    background: rgba(107, 114, 128, 0.4);
     border-radius: 2px;
   }
   #thumbnailFolderList::-webkit-scrollbar-thumb:hover {
-    background: rgba(107, 114, 128, 0.7);
+    background: rgba(107, 114, 128, 0.6);
   }
   /* Firefox */
   #thumbnailFolderList {
     scrollbar-width: thin;
-    scrollbar-color: rgba(107, 114, 128, 0.5) transparent;
+    scrollbar-color: rgba(107, 114, 128, 0.4) transparent;
   }
 </style>
 
@@ -466,38 +466,35 @@
             <span id="thumbnailCount" class="ml-2 text-xs text-gray-400">(0/20)</span>
           </label>
           
-          <!-- Thumbnail Folder Navigation -->
-          <div id="thumbnailFolderNav" class="mb-3 p-3 bg-dark-700/50 rounded-lg border border-gray-700">
-            <!-- Header with Root and New Folder -->
+          <!-- Thumbnail Folder Navigation - Minimalist List -->
+          <div id="thumbnailFolderNav" class="mb-3">
+            <!-- Header Row -->
             <div class="flex items-center justify-between gap-2 mb-2">
               <button type="button" onclick="openThumbnailFolder(null)" id="thumbnailRootBtn" 
-                class="px-3 py-1.5 text-xs rounded-lg bg-primary/20 text-primary border border-primary/50 hover:bg-primary/30 transition-colors flex items-center gap-1 shrink-0">
-                <i class="ti ti-home"></i>
+                class="px-2.5 py-1 text-xs rounded bg-primary/20 text-primary hover:bg-primary/30 transition-colors flex items-center gap-1">
+                <i class="ti ti-home text-sm"></i>
                 <span>Root</span>
               </button>
               <button type="button" onclick="openCreateFolderModal()" 
-                class="px-3 py-1.5 text-xs rounded-lg bg-dark-600 hover:bg-dark-500 text-gray-300 border border-gray-600 transition-colors flex items-center gap-1 shrink-0">
-                <i class="ti ti-folder-plus"></i>
-                <span class="hidden sm:inline">New Folder</span>
-                <span class="sm:hidden">New</span>
+                class="px-2.5 py-1 text-xs rounded bg-dark-600 hover:bg-dark-500 text-gray-300 transition-colors flex items-center gap-1">
+                <i class="ti ti-plus text-sm"></i>
+                <span>New</span>
               </button>
             </div>
             
-            <!-- Folder List - Scrollable on mobile -->
-            <div id="thumbnailFolderList" class="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
+            <!-- Folder List - Vertical minimalist -->
+            <div id="thumbnailFolderList" class="space-y-1 max-h-32 overflow-y-auto">
               <!-- Folders will be loaded here -->
             </div>
             
             <!-- Current Folder Indicator -->
-            <div id="currentFolderIndicator" class="hidden mt-2 pt-2 border-t border-gray-700 flex items-center justify-between text-xs">
+            <div id="currentFolderIndicator" class="hidden mt-2 pt-2 border-t border-gray-700/50 flex items-center justify-between text-xs">
               <span class="text-gray-400 flex items-center gap-1">
-                <i class="ti ti-folder-open text-primary"></i>
-                <span>Current:</span>
-                <span id="currentFolderName" class="text-white font-medium">Root</span>
+                <i class="ti ti-folder-open text-primary text-sm"></i>
+                <span id="currentFolderName" class="text-white">Root</span>
               </span>
-              <button type="button" onclick="openThumbnailFolder(null)" class="text-primary hover:text-primary/80 flex items-center gap-1 transition-colors">
-                <i class="ti ti-arrow-back-up"></i>
-                <span>Back to Root</span>
+              <button type="button" onclick="openThumbnailFolder(null)" class="text-primary hover:text-primary/80 text-xs">
+                ← Back
               </button>
             </div>
           </div>

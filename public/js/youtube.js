@@ -285,36 +285,28 @@ async function fetchThumbnailFolders() {
       folderList.innerHTML = '';
       
       data.folders.forEach(folder => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = `folder-btn px-2 sm:px-3 py-1.5 text-xs rounded-lg transition-colors flex items-center gap-1 sm:gap-1.5 group shrink-0 whitespace-nowrap ${
+        const div = document.createElement('div');
+        div.className = `folder-item flex items-center justify-between py-1.5 px-2 rounded text-xs cursor-pointer transition-colors ${
           currentThumbnailFolder === folder.name 
-            ? 'bg-primary/20 text-primary border border-primary/50' 
-            : 'bg-dark-600 hover:bg-dark-500 text-gray-300 border border-gray-600'
+            ? 'bg-primary/20 text-primary' 
+            : 'hover:bg-dark-600 text-gray-300'
         }`;
-        btn.innerHTML = `
-          <i class="ti ti-folder text-sm"></i>
-          <span class="max-w-[60px] sm:max-w-[100px] truncate">${escapeHtml(folder.name)}</span>
-          <span class="text-gray-500 text-[10px]">(${folder.count}/20)</span>
-          <span class="flex sm:hidden items-center gap-0.5 ml-0.5">
-            <button type="button" class="p-1 rounded bg-blue-500/20 cursor-pointer" onclick="event.stopPropagation(); event.preventDefault(); openRenameFolderModal('${escapeJsString(folder.name)}')" title="Rename">
-              <i class="ti ti-pencil text-blue-400 pointer-events-none text-xs"></i>
+        div.innerHTML = `
+          <div class="flex items-center gap-2 min-w-0 flex-1" onclick="openThumbnailFolder('${escapeJsString(folder.name)}')">
+            <i class="ti ti-folder text-sm shrink-0"></i>
+            <span class="truncate">${escapeHtml(folder.name)}</span>
+            <span class="text-gray-500 text-[10px] shrink-0">${folder.count}/20</span>
+          </div>
+          <div class="flex items-center gap-1 shrink-0 ml-2">
+            <button type="button" class="w-6 h-6 rounded flex items-center justify-center text-blue-400 hover:bg-blue-500/20 transition-colors" onclick="event.stopPropagation(); openRenameFolderModal('${escapeJsString(folder.name)}')" title="Rename">
+              <i class="ti ti-pencil text-xs"></i>
             </button>
-            <button type="button" class="p-1 rounded bg-red-500/20 cursor-pointer" onclick="event.stopPropagation(); event.preventDefault(); deleteFolder('${escapeJsString(folder.name)}')" title="Delete">
-              <i class="ti ti-trash text-red-400 pointer-events-none text-xs"></i>
+            <button type="button" class="w-6 h-6 rounded flex items-center justify-center text-red-400 hover:bg-red-500/20 transition-colors" onclick="event.stopPropagation(); deleteFolder('${escapeJsString(folder.name)}')" title="Delete">
+              <i class="ti ti-trash text-xs"></i>
             </button>
-          </span>
-          <span class="hidden sm:hidden sm:group-hover:flex items-center gap-0.5 ml-0.5">
-            <button type="button" class="p-0.5 rounded hover:bg-blue-500/20 cursor-pointer" onclick="event.stopPropagation(); event.preventDefault(); openRenameFolderModal('${escapeJsString(folder.name)}')" title="Rename">
-              <i class="ti ti-pencil text-blue-400 hover:text-blue-300 pointer-events-none text-xs"></i>
-            </button>
-            <button type="button" class="p-0.5 rounded hover:bg-red-500/20 cursor-pointer" onclick="event.stopPropagation(); event.preventDefault(); deleteFolder('${escapeJsString(folder.name)}')" title="Delete">
-              <i class="ti ti-trash text-red-400 hover:text-red-300 pointer-events-none text-xs"></i>
-            </button>
-          </span>
+          </div>
         `;
-        btn.onclick = () => openThumbnailFolder(folder.name);
-        folderList.appendChild(btn);
+        folderList.appendChild(div);
       });
     }
   } catch (error) {
@@ -341,26 +333,26 @@ function openThumbnailFolder(folderName) {
     if (indicator) indicator.classList.remove('hidden');
     if (folderNameEl) folderNameEl.textContent = folderName;
     if (rootBtn) {
-      rootBtn.classList.remove('bg-primary/20', 'text-primary', 'border-primary/50');
-      rootBtn.classList.add('bg-dark-600', 'text-gray-300', 'border-gray-600');
+      rootBtn.classList.remove('bg-primary/20', 'text-primary');
+      rootBtn.classList.add('bg-dark-600', 'text-gray-300');
     }
   } else {
     if (indicator) indicator.classList.add('hidden');
     if (rootBtn) {
-      rootBtn.classList.add('bg-primary/20', 'text-primary', 'border-primary/50');
-      rootBtn.classList.remove('bg-dark-600', 'text-gray-300', 'border-gray-600');
+      rootBtn.classList.add('bg-primary/20', 'text-primary');
+      rootBtn.classList.remove('bg-dark-600', 'text-gray-300');
     }
   }
   
-  // Update folder buttons
-  document.querySelectorAll('.folder-btn').forEach(btn => {
-    const btnFolder = btn.querySelector('span')?.textContent;
-    if (btnFolder === folderName) {
-      btn.classList.add('bg-primary/20', 'text-primary', 'border-primary/50');
-      btn.classList.remove('bg-dark-600', 'text-gray-300', 'border-gray-600');
+  // Update folder items
+  document.querySelectorAll('.folder-item').forEach(item => {
+    const itemFolder = item.querySelector('span.truncate')?.textContent;
+    if (itemFolder === folderName) {
+      item.classList.add('bg-primary/20', 'text-primary');
+      item.classList.remove('text-gray-300');
     } else {
-      btn.classList.remove('bg-primary/20', 'text-primary', 'border-primary/50');
-      btn.classList.add('bg-dark-600', 'text-gray-300', 'border-gray-600');
+      item.classList.remove('bg-primary/20', 'text-primary');
+      item.classList.add('text-gray-300');
     }
   });
   
