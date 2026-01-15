@@ -286,7 +286,7 @@ async function fetchThumbnailFolders() {
       
       data.folders.forEach(folder => {
         const div = document.createElement('div');
-        div.className = `folder-item flex items-center gap-2 py-1.5 text-sm cursor-pointer transition-colors hover:bg-dark-600/50 rounded ${
+        div.className = `folder-item flex items-center gap-2 py-1.5 text-sm cursor-pointer transition-colors hover:bg-dark-600/50 rounded border-b border-gray-700/50 ${
           currentThumbnailFolder === folder.name 
             ? 'text-primary' 
             : 'text-white'
