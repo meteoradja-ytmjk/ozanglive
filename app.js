@@ -5777,7 +5777,12 @@ app.get('/api/youtube/templates', isAuthenticated, async (req, res) => {
   try {
     const templates = await BroadcastTemplate.findByUserId(req.session.userId);
     
+    // Get all user's YouTube accounts for validation
+    const userAccounts = await YouTubeCredentials.findAllByUserId(req.session.userId);
+    const accountMap = new Map(userAccounts.map(a => [a.id, a]));
+    
     // Parse broadcasts from description if it's a multi-broadcast template
+    // Also validate account and add account_valid flag
     templates.forEach(template => {
       try {
         if (template.description && template.description.startsWith('[')) {
@@ -5786,6 +5791,15 @@ app.get('/api/youtube/templates', isAuthenticated, async (req, res) => {
         }
       } catch (e) {
         // Not a multi-broadcast template, keep description as is
+      }
+      
+      // Check if the account_id is still valid
+      const account = accountMap.get(template.account_id);
+      template.account_valid = !!account;
+      
+      // If channel_name is missing but account exists, use account's channel name
+      if (!template.channel_name && account) {
+        template.channel_name = account.channelName;
       }
     });
     
@@ -5852,6 +5866,25 @@ app.get('/api/youtube/templates/:id', isAuthenticated, async (req, res) => {
       }
     } catch (e) {
       // Not a multi-broadcast template, keep description as is
+    }
+    
+    // Validate account and get user's accounts for fallback selection
+    const userAccounts = await YouTubeCredentials.findAllByUserId(req.session.userId);
+    const account = userAccounts.find(a => a.id === template.account_id);
+    template.account_valid = !!account;
+    
+    // If channel_name is missing but account exists, use account's channel name
+    if (!template.channel_name && account) {
+      template.channel_name = account.channelName;
+    }
+    
+    // Include available accounts for re-create modal if account is invalid
+    if (!template.account_valid && userAccounts.length > 0) {
+      template.available_accounts = userAccounts.map(a => ({
+        id: a.id,
+        channelName: a.channelName,
+        isPrimary: a.isPrimary
+      }));
     }
 
     res.json({ success: true, template });

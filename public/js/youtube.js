@@ -1556,6 +1556,7 @@ function renderTemplateList(templates) {
     const broadcastCount = isMulti ? template.broadcasts.length : 1;
     const hasRecurring = template.recurring_enabled;
     const hasThumbnailFolder = template.thumbnail_folder !== null && template.thumbnail_folder !== undefined;
+    const accountInvalid = template.account_valid === false;
     
     // Build recurring info HTML for desktop
     let recurringHtmlDesktop = '';
@@ -1577,11 +1578,22 @@ function renderTemplateList(templates) {
     const thumbnailFolderBadge = hasThumbnailFolder ? 
       `<span class="px-1.5 py-0.5 bg-yellow-500/20 text-yellow-400 text-xs rounded flex items-center gap-0.5" title="Random thumbnail from: ${escapeHtml(template.thumbnail_folder || 'Root')}"><i class="ti ti-dice-3 text-[10px]"></i> ${escapeHtml(template.thumbnail_folder || 'Root')}</span>` : '';
     
+    // Channel display with warning if account is invalid
+    const channelDisplay = accountInvalid 
+      ? `<span class="text-xs text-orange-400 flex items-center gap-1" title="YouTube account disconnected. Select a new account when re-creating.">
+          <i class="ti ti-alert-triangle"></i>
+          ${escapeHtml(template.channel_name || 'Unknown Channel')}
+        </span>`
+      : `<span class="text-xs text-red-400 flex items-center gap-1">
+          <i class="ti ti-brand-youtube"></i>
+          ${escapeHtml(template.channel_name || 'Unknown Channel')}
+        </span>`;
+    
     const div = document.createElement('div');
     div.className = 'template-list-item';
     div.innerHTML = `
       <!-- Desktop Layout -->
-      <div class="hidden md:flex items-start justify-between gap-4 bg-dark-700 rounded-lg p-4">
+      <div class="hidden md:flex items-start justify-between gap-4 bg-dark-700 rounded-lg p-4 ${accountInvalid ? 'border border-orange-500/30' : ''}">
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-2 flex-wrap">
             <h4 class="font-medium text-white truncate">${escapeHtml(template.name)}</h4>
@@ -1591,10 +1603,7 @@ function renderTemplateList(templates) {
           </div>
           <p class="text-sm text-gray-400 truncate">${escapeHtml(template.title)}</p>
           <div class="flex items-center gap-2 mt-1">
-            <span class="text-xs text-red-400 flex items-center gap-1">
-              <i class="ti ti-brand-youtube"></i>
-              ${escapeHtml(template.channel_name || 'Unknown Channel')}
-            </span>
+            ${channelDisplay}
             <span class="text-xs text-gray-500">
               ${new Date(template.created_at).toLocaleDateString()}
             </span>
@@ -1633,12 +1642,13 @@ function renderTemplateList(templates) {
       </div>
       
       <!-- Mobile Layout - Simple List -->
-      <div class="md:hidden flex items-center gap-2 px-3 py-2.5 bg-dark-700/50 hover:bg-dark-700 rounded-lg transition-colors">
+      <div class="md:hidden flex items-center gap-2 px-3 py-2.5 bg-dark-700/50 hover:bg-dark-700 rounded-lg transition-colors ${accountInvalid ? 'border border-orange-500/30' : ''}">
         <span class="text-primary font-semibold text-xs w-5 flex-shrink-0">${index + 1}</span>
         <div class="flex-1 min-w-0">
           <p class="text-sm text-white truncate">${escapeHtml(template.name)}</p>
           <p class="text-[10px] text-gray-500 truncate">${escapeHtml(template.title)}</p>
         </div>
+        ${accountInvalid ? `<span class="px-1 py-0.5 bg-orange-500/20 text-orange-400 text-[10px] rounded flex-shrink-0" title="Account disconnected"><i class="ti ti-alert-triangle text-[8px]"></i></span>` : ''}
         ${hasThumbnailFolder ? `<span class="px-1 py-0.5 bg-yellow-500/20 text-yellow-400 text-[10px] rounded flex-shrink-0" title="Random thumbnail"><i class="ti ti-dice-3 text-[8px]"></i></span>` : ''}
         ${hasRecurring ? `<span class="px-1.5 py-0.5 bg-green-500/20 text-green-400 text-[10px] rounded flex-shrink-0"><i class="ti ti-repeat text-[8px]"></i></span>` : ''}
         ${isMulti ? `<span class="px-1.5 py-0.5 bg-primary/20 text-primary text-[10px] rounded flex-shrink-0">${broadcastCount}</span>` : ''}
@@ -2618,6 +2628,61 @@ function openRecreateFromTemplateModal(template) {
   
   document.getElementById('recreateTemplateName').textContent = template.name;
   
+  // Check if account is invalid and show account selector
+  const accountSelectorContainer = document.getElementById('recreateAccountSelector');
+  if (accountSelectorContainer) {
+    if (template.account_valid === false && template.available_accounts && template.available_accounts.length > 0) {
+      // Show account selector with warning
+      accountSelectorContainer.innerHTML = `
+        <div class="bg-orange-500/10 border border-orange-500/30 rounded-lg p-3 mb-4">
+          <div class="flex items-start gap-2">
+            <i class="ti ti-alert-triangle text-orange-400 mt-0.5"></i>
+            <div class="flex-1">
+              <p class="text-sm text-orange-400 font-medium">YouTube account disconnected</p>
+              <p class="text-xs text-gray-400 mt-1">The original account for this template is no longer connected. Please select a new account:</p>
+            </div>
+          </div>
+          <select id="recreateAccountSelect" class="w-full mt-3 px-3 py-2 bg-dark-600 border border-gray-600 rounded-lg focus:border-primary focus:outline-none text-sm">
+            ${template.available_accounts.map(acc => 
+              `<option value="${acc.id}" ${acc.isPrimary ? 'selected' : ''}>${escapeHtml(acc.channelName || 'YouTube Channel')}${acc.isPrimary ? ' (Primary)' : ''}</option>`
+            ).join('')}
+          </select>
+        </div>
+      `;
+      accountSelectorContainer.classList.remove('hidden');
+    } else if (template.account_valid === false) {
+      // No accounts available
+      accountSelectorContainer.innerHTML = `
+        <div class="bg-red-500/10 border border-red-500/30 rounded-lg p-3 mb-4">
+          <div class="flex items-start gap-2">
+            <i class="ti ti-alert-circle text-red-400 mt-0.5"></i>
+            <div class="flex-1">
+              <p class="text-sm text-red-400 font-medium">No YouTube account connected</p>
+              <p class="text-xs text-gray-400 mt-1">Please connect a YouTube account first before re-creating broadcasts.</p>
+            </div>
+          </div>
+        </div>
+      `;
+      accountSelectorContainer.classList.remove('hidden');
+      // Disable the create button
+      const createBtn = document.getElementById('recreateBtn');
+      if (createBtn) {
+        createBtn.disabled = true;
+        createBtn.classList.add('opacity-50', 'cursor-not-allowed');
+      }
+    } else {
+      // Account is valid, hide selector
+      accountSelectorContainer.innerHTML = '';
+      accountSelectorContainer.classList.add('hidden');
+      // Enable the create button
+      const createBtn = document.getElementById('recreateBtn');
+      if (createBtn) {
+        createBtn.disabled = false;
+        createBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+      }
+    }
+  }
+  
   // Render broadcast list with schedule inputs
   const listEl = document.getElementById('recreateBroadcastList');
   const broadcasts = template.broadcasts || [template];
@@ -2673,6 +2738,14 @@ if (recreateFromTemplateForm) {
         return;
       }
       
+      // Get account ID - use selected account if original is invalid
+      let accountId = template.account_id;
+      const accountSelect = document.getElementById('recreateAccountSelect');
+      if (accountSelect && template.account_valid === false) {
+        accountId = parseInt(accountSelect.value);
+        console.log('[recreate] Using new account ID:', accountId, '(original was invalid)');
+      }
+      
       // Create broadcasts one by one
       const results = { total: broadcasts.length, success: 0, failed: 0, errors: [] };
       
@@ -2682,7 +2755,7 @@ if (recreateFromTemplateForm) {
         
         try {
           const formData = new FormData();
-          formData.append('accountId', template.account_id);
+          formData.append('accountId', accountId);
           formData.append('title', broadcast.title);
           formData.append('description', broadcast.description || '');
           formData.append('scheduledStartTime', schedule);
@@ -2699,14 +2772,19 @@ if (recreateFromTemplateForm) {
             formData.append('tags', JSON.stringify(broadcast.tags));
           }
           
-          // Use streamId to reuse the same stream key
-          if (broadcast.streamId) {
-            formData.append('streamId', broadcast.streamId);
-            console.log('[recreate] Using streamId:', broadcast.streamId);
-          } else if (template.stream_id) {
-            // Fallback to template's stream_id for single broadcast templates
-            formData.append('streamId', template.stream_id);
-            console.log('[recreate] Using template stream_id:', template.stream_id);
+          // Use streamId to reuse the same stream key (only if account is still valid)
+          // If account changed, don't use old streamId as it belongs to different account
+          if (template.account_valid !== false) {
+            if (broadcast.streamId) {
+              formData.append('streamId', broadcast.streamId);
+              console.log('[recreate] Using streamId:', broadcast.streamId);
+            } else if (template.stream_id) {
+              // Fallback to template's stream_id for single broadcast templates
+              formData.append('streamId', template.stream_id);
+              console.log('[recreate] Using template stream_id:', template.stream_id);
+            }
+          } else {
+            console.log('[recreate] Skipping streamId - account changed, will create new stream key');
           }
           
           // Use thumbnail folder for random selection if available
@@ -2737,6 +2815,23 @@ if (recreateFromTemplateForm) {
         } catch (err) {
           results.failed++;
           results.errors.push({ title: broadcast.title, error: err.message });
+        }
+      }
+      
+      // If account was changed and broadcasts were created successfully, update template
+      if (template.account_valid === false && results.success > 0 && accountId !== template.account_id) {
+        try {
+          await fetch(`/api/youtube/templates/${template.id}`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRF-Token': getCsrfToken()
+            },
+            body: JSON.stringify({ accountId: accountId })
+          });
+          console.log('[recreate] Updated template with new account ID:', accountId);
+        } catch (err) {
+          console.error('[recreate] Failed to update template account:', err);
         }
       }
       
