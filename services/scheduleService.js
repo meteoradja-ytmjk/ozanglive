@@ -118,17 +118,20 @@ class ScheduleService {
   }
 
   /**
-   * Start the schedule checker that runs every 2 minutes
+   * Start the schedule checker that runs every 1 minute
    */
   startChecker() {
     if (this.checkInterval) return;
     
-    // Check every 2 minutes (broadcast creation is less time-critical)
+    // Check every 1 minute for more accurate scheduling
     this.checkInterval = setInterval(async () => {
       await this.checkSchedules();
-    }, 120000);
+    }, 60000);
     
-    console.log('[ScheduleService] Schedule checker started (2 min interval)');
+    console.log('[ScheduleService] Schedule checker started (1 min interval)');
+    
+    // Also run immediately on start
+    setTimeout(() => this.checkSchedules(), 5000);
   }
 
   /**
@@ -151,12 +154,17 @@ class ScheduleService {
       const now = new Date();
       const wibTime = getWIBTime(now);
       
-      // Log current WIB time for debugging (only every 10 minutes to reduce noise)
-      if (wibTime.minutes % 10 === 0) {
-        console.log(`[ScheduleService] Checking ${templates.length} templates at ${wibTime.hours}:${String(wibTime.minutes).padStart(2,'0')} WIB`);
+      // Log current WIB time for debugging
+      console.log(`[ScheduleService] Checking ${templates.length} templates at ${wibTime.hours}:${String(wibTime.minutes).padStart(2,'0')} WIB`);
+      
+      if (templates.length === 0) {
+        return;
       }
       
       for (const template of templates) {
+        // Log template info for debugging
+        console.log(`[ScheduleService] Template "${template.name}": pattern=${template.recurring_pattern}, time=${template.recurring_time}, days=${JSON.stringify(template.recurring_days)}`);
+        
         // Check for missed schedules first
         if (this.shouldExecuteMissed(template, now)) {
           console.log(`[ScheduleService] Executing missed schedule for template: ${template.name}`);
@@ -166,7 +174,7 @@ class ScheduleService {
         
         // Check if it's time to execute
         if (this.shouldExecute(template, now)) {
-          console.log(`[ScheduleService] Executing template: ${template.name}`);
+          console.log(`[ScheduleService] >>> EXECUTING template: ${template.name}`);
           await this.executeTemplate(template);
         }
       }
@@ -182,30 +190,59 @@ class ScheduleService {
    * @returns {boolean}
    */
   shouldExecuteMissed(template, now) {
-    // Check if next_run_at is in the past (missed schedule)
-    if (!template.next_run_at) return false;
-    
-    const nextRunAt = new Date(template.next_run_at);
-    
-    // Compare dates in WIB timezone
-    const nowDateStr = this.getWIBDateString(now);
-    const nextRunDateStr = this.getWIBDateString(nextRunAt);
-    
-    // Only execute missed schedules from today (in WIB)
-    if (nextRunDateStr !== nowDateStr) {
-      // If missed schedule is from a previous day, just recalculate next_run_at
-      if (nextRunAt.getTime() < now.getTime()) {
-        return false; // Will be handled by recalculating next_run_at
-      }
+    // If already run today, skip
+    if (this.hasRunToday(template, now)) {
       return false;
     }
     
-    // Check if it's missed (past time) and hasn't run today
-    const isMissed = isScheduleMissed(template.next_run_at, now) && !this.hasRunToday(template, now);
-    if (isMissed) {
-      console.log(`[ScheduleService] Detected missed schedule for template: ${template.name}, next_run_at: ${template.next_run_at}`);
+    // Check if next_run_at is set and in the past
+    if (template.next_run_at) {
+      const nextRunAt = new Date(template.next_run_at);
+      
+      // Compare dates in WIB timezone
+      const nowDateStr = this.getWIBDateString(now);
+      const nextRunDateStr = this.getWIBDateString(nextRunAt);
+      
+      // If next_run_at is today and in the past, it's a missed schedule
+      if (nextRunDateStr === nowDateStr && nextRunAt.getTime() < now.getTime()) {
+        console.log(`[ScheduleService] Detected missed schedule for template: ${template.name}, next_run_at: ${template.next_run_at}`);
+        return true;
+      }
     }
-    return isMissed;
+    
+    // Also check if the scheduled time has passed today but hasn't run
+    // This handles the case where next_run_at is set for tomorrow but today's schedule was missed
+    if (template.recurring_time) {
+      const [schedHour, schedMin] = template.recurring_time.split(':').map(Number);
+      const wibTime = getWIBTime(now);
+      const scheduleMinutes = schedHour * 60 + schedMin;
+      const currentMinutes = wibTime.hours * 60 + wibTime.minutes;
+      
+      // If scheduled time has passed today (within 30 minutes window)
+      const timeDiff = currentMinutes - scheduleMinutes;
+      if (timeDiff > 1 && timeDiff <= 30) {
+        // For daily, always check
+        if (template.recurring_pattern === 'daily') {
+          console.log(`[ScheduleService] Detected recently missed daily schedule for template: ${template.name}, scheduled: ${template.recurring_time}, current: ${wibTime.hours}:${String(wibTime.minutes).padStart(2,'0')} WIB`);
+          return true;
+        }
+        
+        // For weekly, check if today is a scheduled day
+        if (template.recurring_pattern === 'weekly') {
+          const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+          const today = dayNames[wibTime.day];
+          const scheduledDays = template.recurring_days || [];
+          const normalizedDays = scheduledDays.map(d => d.toLowerCase());
+          
+          if (normalizedDays.includes(today)) {
+            console.log(`[ScheduleService] Detected recently missed weekly schedule for template: ${template.name}, scheduled: ${template.recurring_time} (${today}), current: ${wibTime.hours}:${String(wibTime.minutes).padStart(2,'0')} WIB`);
+            return true;
+          }
+        }
+      }
+    }
+    
+    return false;
   }
 
   /**
@@ -225,13 +262,14 @@ class ScheduleService {
     const currentMin = wibTime.minutes;
     const currentDay = wibTime.day;
     
-    // Check if time matches (within 2 minutes window for 2-min check interval)
+    // Check if time matches (within 1 minute window for 1-min check interval)
     const scheduleMinutes = schedHour * 60 + schedMin;
     const currentMinutes = currentHour * 60 + currentMin;
     const timeDiff = currentMinutes - scheduleMinutes;
     
-    // Trigger if within 0-2 minutes of scheduled time (2-min interval)
-    if (timeDiff < 0 || timeDiff > 2) {
+    // Trigger if within 0-1 minutes of scheduled time (1-min interval)
+    // This means: current time is AT or UP TO 1 minute AFTER scheduled time
+    if (timeDiff < 0 || timeDiff > 1) {
       return false;
     }
     
