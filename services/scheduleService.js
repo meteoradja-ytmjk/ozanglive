@@ -195,35 +195,43 @@ class ScheduleService {
       return false;
     }
     
-    // Check if next_run_at is set and in the past
+    // Check if next_run_at is set and in the past (OVERDUE)
     if (template.next_run_at) {
       const nextRunAt = new Date(template.next_run_at);
       
-      // Compare dates in WIB timezone
-      const nowDateStr = this.getWIBDateString(now);
-      const nextRunDateStr = this.getWIBDateString(nextRunAt);
-      
-      // If next_run_at is today and in the past, it's a missed schedule
-      if (nextRunDateStr === nowDateStr && nextRunAt.getTime() < now.getTime()) {
-        console.log(`[ScheduleService] Detected missed schedule for template: ${template.name}, next_run_at: ${template.next_run_at}`);
-        return true;
+      // If next_run_at is in the past, it's overdue - execute it!
+      if (nextRunAt.getTime() < now.getTime()) {
+        // Calculate how long overdue
+        const overdueMinutes = Math.floor((now.getTime() - nextRunAt.getTime()) / (1000 * 60));
+        
+        // Execute if overdue by less than 24 hours (1440 minutes)
+        // This prevents executing very old schedules
+        if (overdueMinutes <= 1440) {
+          console.log(`[ScheduleService] Detected OVERDUE schedule for template: ${template.name}, next_run_at: ${template.next_run_at}, overdue by ${overdueMinutes} minutes`);
+          return true;
+        } else {
+          console.log(`[ScheduleService] Skipping very old overdue schedule for template: ${template.name}, overdue by ${overdueMinutes} minutes (>24h)`);
+          // Update next_run_at to future date
+          this.updateNextRunToFuture(template);
+          return false;
+        }
       }
     }
     
     // Also check if the scheduled time has passed today but hasn't run
-    // This handles the case where next_run_at is set for tomorrow but today's schedule was missed
+    // This handles the case where next_run_at is not set or incorrect
     if (template.recurring_time) {
       const [schedHour, schedMin] = template.recurring_time.split(':').map(Number);
       const wibTime = getWIBTime(now);
       const scheduleMinutes = schedHour * 60 + schedMin;
       const currentMinutes = wibTime.hours * 60 + wibTime.minutes;
       
-      // If scheduled time has passed today (within 30 minutes window)
+      // If scheduled time has passed today
       const timeDiff = currentMinutes - scheduleMinutes;
-      if (timeDiff > 1 && timeDiff <= 30) {
+      if (timeDiff > 1) {
         // For daily, always check
         if (template.recurring_pattern === 'daily') {
-          console.log(`[ScheduleService] Detected recently missed daily schedule for template: ${template.name}, scheduled: ${template.recurring_time}, current: ${wibTime.hours}:${String(wibTime.minutes).padStart(2,'0')} WIB`);
+          console.log(`[ScheduleService] Detected missed daily schedule for template: ${template.name}, scheduled: ${template.recurring_time}, current: ${wibTime.hours}:${String(wibTime.minutes).padStart(2,'0')} WIB, diff: ${timeDiff} min`);
           return true;
         }
         
@@ -235,7 +243,7 @@ class ScheduleService {
           const normalizedDays = scheduledDays.map(d => d.toLowerCase());
           
           if (normalizedDays.includes(today)) {
-            console.log(`[ScheduleService] Detected recently missed weekly schedule for template: ${template.name}, scheduled: ${template.recurring_time} (${today}), current: ${wibTime.hours}:${String(wibTime.minutes).padStart(2,'0')} WIB`);
+            console.log(`[ScheduleService] Detected missed weekly schedule for template: ${template.name}, scheduled: ${template.recurring_time} (${today}), current: ${wibTime.hours}:${String(wibTime.minutes).padStart(2,'0')} WIB, diff: ${timeDiff} min`);
             return true;
           }
         }
@@ -243,6 +251,28 @@ class ScheduleService {
     }
     
     return false;
+  }
+
+  /**
+   * Update next_run_at to future date when schedule is too old
+   * @param {Object} template - Template object
+   */
+  async updateNextRunToFuture(template) {
+    try {
+      const { calculateNextRun, formatNextRunAt } = require('../utils/recurringUtils');
+      const nextRun = calculateNextRun({
+        recurring_pattern: template.recurring_pattern,
+        recurring_time: template.recurring_time,
+        recurring_days: template.recurring_days
+      });
+      
+      if (nextRun) {
+        await BroadcastTemplate.update(template.id, { next_run_at: formatNextRunAt(nextRun) });
+        console.log(`[ScheduleService] Updated next_run_at for template ${template.name} to ${formatNextRunAt(nextRun)}`);
+      }
+    } catch (error) {
+      console.error(`[ScheduleService] Failed to update next_run_at for template ${template.name}:`, error.message);
+    }
   }
 
   /**
@@ -389,6 +419,30 @@ class ScheduleService {
     
     try {
       const now = new Date();
+      
+      // Check if credentials are available
+      if (!template.client_id || !template.client_secret || !template.refresh_token) {
+        console.error(`[ScheduleService] Cannot execute template "${template.name}": YouTube credentials not found or invalid (account_id: ${template.account_id})`);
+        
+        // Update next_run_at to prevent repeated failures
+        const { calculateNextRun, formatNextRunAt } = require('../utils/recurringUtils');
+        const nextRun = calculateNextRun({
+          recurring_pattern: template.recurring_pattern,
+          recurring_time: template.recurring_time,
+          recurring_days: template.recurring_days
+        });
+        
+        if (nextRun) {
+          await BroadcastTemplate.updateLastRun(
+            template.id,
+            now.toISOString(),
+            formatNextRunAt(nextRun)
+          );
+          console.log(`[ScheduleService] Updated next_run_at for template ${template.name} to ${formatNextRunAt(nextRun)} (credentials missing)`);
+        }
+        
+        return { error: 'YouTube credentials not found', template: template.name };
+      }
       
       // Get access token from credentials (joined from youtube_credentials)
       const accessToken = await youtubeService.getAccessToken(
