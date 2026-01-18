@@ -1365,9 +1365,9 @@ if (createBroadcastForm) {
       }
       
       // Add current thumbnail folder for sequential selection
-      if (currentThumbnailFolder !== null) {
-        formData.append('thumbnailFolder', currentThumbnailFolder);
-      }
+      // Always send thumbnailFolder - empty string for root, folder name for specific folder
+      // This ensures the folder selection is saved and can be restored when editing
+      formData.append('thumbnailFolder', currentThumbnailFolder || '');
       
       // Add pinned thumbnail if set
       const pinnedThumbnail = document.getElementById('pinnedThumbnail')?.value;
@@ -1529,26 +1529,25 @@ async function openEditBroadcastModal(broadcast) {
   
   if (broadcastId) {
     const settings = await getBroadcastSettingsFromServer(broadcastId);
-    if (settings && settings.thumbnailFolder !== null && settings.thumbnailFolder !== undefined) {
+    // Check if settings exist and thumbnailFolder is explicitly set (including empty string for root)
+    if (settings && (settings.thumbnailFolder !== null && settings.thumbnailFolder !== undefined)) {
       boundFolder = settings.thumbnailFolder;
-      console.log(`[openEditBroadcastModal] Broadcast ${broadcastId} has folder: ${boundFolder || 'root'}`);
+      console.log(`[openEditBroadcastModal] Broadcast ${broadcastId} has folder: "${boundFolder}" (${boundFolder === '' ? 'root' : 'folder'})`);
     } else {
-      console.log(`[openEditBroadcastModal] Broadcast ${broadcastId} has no saved folder settings`);
+      console.log(`[openEditBroadcastModal] Broadcast ${broadcastId} has no saved folder settings, will use root`);
+      // Default to root for broadcasts without saved folder settings
+      boundFolder = '';
     }
   }
   
-  // Load the bound folder or root
-  // boundFolder can be: undefined (not found), '' (root), or 'folderName'
-  if (boundFolder !== undefined) {
-    const folderSelect = document.getElementById('editThumbnailFolderSelect');
-    if (folderSelect) {
-      folderSelect.value = boundFolder; // '' for root, 'folderName' for folder
-    }
-    // Convert '' to null for loadEditThumbnailFolder (null = root)
-    loadEditThumbnailFolder(boundFolder === '' ? null : boundFolder);
-  } else {
-    loadEditThumbnailFolder(null); // Load root folder if no mapping found
+  // Load the bound folder
+  // boundFolder: '' (root) or 'folderName' (specific folder)
+  const folderSelect = document.getElementById('editThumbnailFolderSelect');
+  if (folderSelect) {
+    folderSelect.value = boundFolder || ''; // '' for root, 'folderName' for folder
   }
+  // Convert '' to null for loadEditThumbnailFolder (null = root)
+  loadEditThumbnailFolder(boundFolder === '' ? null : boundFolder);
   
   document.getElementById('editBroadcastModal').classList.remove('hidden');
 }
@@ -1597,7 +1596,9 @@ if (editBroadcastForm) {
         description: document.getElementById('editBroadcastDescription').value,
         scheduledStartTime: document.getElementById('editScheduledStartTime').value,
         privacyStatus: document.getElementById('editPrivacyStatus').value,
-        categoryId: categoryId
+        categoryId: categoryId,
+        // Include thumbnail folder so it's saved when editing
+        thumbnailFolder: currentEditThumbnailFolder !== null ? currentEditThumbnailFolder : ''
       };
       
       console.log('[EditBroadcast-Original] Update data:', JSON.stringify(updateData));

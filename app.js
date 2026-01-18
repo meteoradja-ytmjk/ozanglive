@@ -5472,7 +5472,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
 app.put('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
   try {
     const accountId = req.query.accountId ? parseInt(req.query.accountId) : null;
-    const { title, description, scheduledStartTime, privacyStatus, categoryId } = req.body;
+    const { title, description, scheduledStartTime, privacyStatus, categoryId, thumbnailFolder } = req.body;
     
     console.log('[API] Update broadcast request:', {
       broadcastId: req.params.id,
@@ -5481,7 +5481,8 @@ app.put('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
       description: description ? description.substring(0, 50) + '...' : null,
       scheduledStartTime,
       privacyStatus,
-      categoryId
+      categoryId,
+      thumbnailFolder
     });
     
     let credentials;
@@ -5533,6 +5534,29 @@ app.put('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
     });
     
     console.log('[API] Update broadcast success:', result);
+    
+    // Update thumbnail folder in broadcast settings if provided
+    if (thumbnailFolder !== undefined) {
+      try {
+        // First try to update existing record
+        const updated = await YouTubeBroadcastSettings.updateThumbnailFolder(req.params.id, thumbnailFolder);
+        if (!updated) {
+          // If no record exists, create one with upsert
+          await YouTubeBroadcastSettings.upsert({
+            broadcastId: req.params.id,
+            userId: req.session.userId,
+            accountId: accountId || null,
+            thumbnailFolder: thumbnailFolder
+          });
+          console.log('[API] Created new broadcast settings with thumbnail folder for:', req.params.id);
+        } else {
+          console.log('[API] Updated thumbnail folder for broadcast:', req.params.id, 'to:', thumbnailFolder || 'root');
+        }
+      } catch (settingsErr) {
+        console.error('[API] Error updating thumbnail folder:', settingsErr.message);
+        // Don't fail the request, just log the error
+      }
+    }
     
     res.json({ success: true, broadcast: result });
   } catch (error) {
