@@ -267,7 +267,6 @@ function onAccountChange(accountId) {
 // Handle stream key change - auto-select bound folder if exists
 function onStreamKeyChange(streamKeyId) {
   const mappingInput = document.getElementById('streamKeyFolderMapping');
-  const bindCheckbox = document.getElementById('bindFolderToStreamKey');
   
   if (!mappingInput || !streamKeyId) return;
   
@@ -282,17 +281,7 @@ function onStreamKeyChange(streamKeyId) {
       // Auto-select the bound folder
       openThumbnailFolder(boundFolder || null);
       
-      // Check the bind checkbox
-      if (bindCheckbox) {
-        bindCheckbox.checked = true;
-      }
-      
       showToast(`Folder "${boundFolder || 'Root'}" otomatis dipilih (terikat ke stream key)`);
-    } else {
-      // Uncheck bind checkbox if no mapping exists
-      if (bindCheckbox) {
-        bindCheckbox.checked = false;
-      }
     }
   } catch (e) {
     console.warn('[onStreamKeyChange] Failed to parse mapping:', e.message);
@@ -384,8 +373,31 @@ function openThumbnailFolder(folderName) {
     }
   });
   
+  // Auto-bind folder to stream key (automatic binding)
+  autoBindFolderToStreamKey(folderName);
+  
   // Fetch thumbnails for this folder
   fetchThumbnails(folderName);
+}
+
+// Auto-bind folder to stream key when folder is selected
+function autoBindFolderToStreamKey(folderName) {
+  const streamKeySelect = document.getElementById('streamKeySelect');
+  const mappingInput = document.getElementById('streamKeyFolderMapping');
+  
+  if (!streamKeySelect || !mappingInput || !streamKeySelect.value) return;
+  
+  // Create or update mapping
+  let mapping = {};
+  try {
+    mapping = JSON.parse(mappingInput.value || '{}');
+  } catch (e) {
+    mapping = {};
+  }
+  
+  // Map current stream key to current folder (empty string for root)
+  mapping[streamKeySelect.value] = folderName || '';
+  mappingInput.value = JSON.stringify(mapping);
 }
 
 // Create folder modal functions
@@ -696,45 +708,6 @@ function updateThumbnailMode(mode) {
       indicator.classList.add('hidden');
     }
     fetchThumbnails(currentThumbnailFolder);
-  }
-}
-
-// Toggle bind folder to stream key
-function toggleBindFolderToStreamKey(checked) {
-  const streamKeySelect = document.getElementById('streamKeySelect');
-  const mappingInput = document.getElementById('streamKeyFolderMapping');
-  
-  if (!streamKeySelect || !mappingInput) return;
-  
-  if (checked && streamKeySelect.value) {
-    // Create or update mapping
-    let mapping = {};
-    try {
-      mapping = JSON.parse(mappingInput.value || '{}');
-    } catch (e) {
-      mapping = {};
-    }
-    
-    // Map current stream key to current folder (empty string for root)
-    mapping[streamKeySelect.value] = currentThumbnailFolder || '';
-    mappingInput.value = JSON.stringify(mapping);
-    
-    const folderName = currentThumbnailFolder || 'Root';
-    const streamKeyName = streamKeySelect.options[streamKeySelect.selectedIndex]?.text || streamKeySelect.value;
-    showToast(`Folder "${folderName}" diikat ke "${streamKeyName}"`);
-  } else if (!checked) {
-    // Remove mapping for current stream key
-    let mapping = {};
-    try {
-      mapping = JSON.parse(mappingInput.value || '{}');
-    } catch (e) {
-      mapping = {};
-    }
-    
-    if (streamKeySelect.value && mapping[streamKeySelect.value] !== undefined) {
-      delete mapping[streamKeySelect.value];
-      mappingInput.value = Object.keys(mapping).length > 0 ? JSON.stringify(mapping) : '';
-    }
   }
 }
 
@@ -1244,10 +1217,6 @@ function closeCreateBroadcastModal() {
   const mappingInput = document.getElementById('streamKeyFolderMapping');
   if (mappingInput) mappingInput.value = '';
   
-  // Reset bind folder checkbox
-  const bindCheckbox = document.getElementById('bindFolderToStreamKey');
-  if (bindCheckbox) bindCheckbox.checked = false;
-  
   // Reset thumbnail mode to sequential
   const sequentialRadio = document.querySelector('input[name="thumbnailMode"][value="sequential"]');
   if (sequentialRadio) sequentialRadio.checked = true;
@@ -1453,10 +1422,6 @@ function openEditBroadcastModal(broadcast) {
   
   const pinnedIndicator = document.getElementById('editPinnedThumbnailIndicator');
   if (pinnedIndicator) pinnedIndicator.classList.add('hidden');
-  
-  // Reset bind folder checkbox
-  const bindCheckbox = document.getElementById('editBindFolderToStreamKey');
-  if (bindCheckbox) bindCheckbox.checked = false;
   
   // Reset stream key folder mapping
   const mappingInput = document.getElementById('editStreamKeyFolderMapping');
@@ -3734,6 +3699,9 @@ async function loadEditThumbnailFolders() {
 async function loadEditThumbnailFolder(folderName = null) {
   currentEditThumbnailFolder = folderName || null;
   
+  // Auto-bind folder to stream key (automatic binding)
+  autoBindEditFolderToStreamKey(folderName);
+  
   const gallery = document.getElementById('editThumbnailGallery');
   const loading = document.getElementById('editThumbnailGalleryLoading');
   const empty = document.getElementById('editThumbnailGalleryEmpty');
@@ -3788,6 +3756,28 @@ async function loadEditThumbnailFolder(folderName = null) {
   } finally {
     if (loading) loading.classList.add('hidden');
   }
+}
+
+/**
+ * Auto-bind folder to stream key for edit modal when folder is selected
+ */
+function autoBindEditFolderToStreamKey(folderName) {
+  const streamKeySelect = document.getElementById('editStreamKeySelect');
+  const mappingInput = document.getElementById('editStreamKeyFolderMapping');
+  
+  if (!streamKeySelect || !mappingInput || !streamKeySelect.value) return;
+  
+  // Create or update mapping
+  let mapping = {};
+  try {
+    mapping = JSON.parse(mappingInput.value || '{}');
+  } catch (e) {
+    mapping = {};
+  }
+  
+  // Map current stream key to current folder (empty string for root)
+  mapping[streamKeySelect.value] = folderName || '';
+  mappingInput.value = JSON.stringify(mapping);
 }
 
 /**
@@ -3886,52 +3876,10 @@ function updateEditThumbnailMode(mode) {
 }
 
 /**
- * Toggle bind folder to stream key for edit modal
- */
-function toggleEditBindFolderToStreamKey(checked) {
-  const streamKeySelect = document.getElementById('editStreamKeySelect');
-  const mappingInput = document.getElementById('editStreamKeyFolderMapping');
-  
-  if (!streamKeySelect || !mappingInput) return;
-  
-  if (checked && streamKeySelect.value) {
-    // Create or update mapping
-    let mapping = {};
-    try {
-      mapping = JSON.parse(mappingInput.value || '{}');
-    } catch (e) {
-      mapping = {};
-    }
-    
-    // Map current stream key to current folder (empty string for root)
-    mapping[streamKeySelect.value] = currentEditThumbnailFolder || '';
-    mappingInput.value = JSON.stringify(mapping);
-    
-    const folderName = currentEditThumbnailFolder || 'Root';
-    const streamKeyName = streamKeySelect.options[streamKeySelect.selectedIndex]?.text || streamKeySelect.value;
-    showToast(`Folder "${folderName}" diikat ke "${streamKeyName}"`);
-  } else if (!checked) {
-    // Remove mapping for current stream key
-    let mapping = {};
-    try {
-      mapping = JSON.parse(mappingInput.value || '{}');
-    } catch (e) {
-      mapping = {};
-    }
-    
-    if (streamKeySelect.value && mapping[streamKeySelect.value] !== undefined) {
-      delete mapping[streamKeySelect.value];
-      mappingInput.value = Object.keys(mapping).length > 0 ? JSON.stringify(mapping) : '';
-    }
-  }
-}
-
-/**
  * Handle edit stream key change - auto-select bound folder if exists
  */
 function onEditStreamKeyChange(streamKeyId) {
   const mappingInput = document.getElementById('editStreamKeyFolderMapping');
-  const bindCheckbox = document.getElementById('editBindFolderToStreamKey');
   const folderSelect = document.getElementById('editThumbnailFolderSelect');
   
   if (!mappingInput || !folderSelect) return;
@@ -3947,17 +3895,7 @@ function onEditStreamKeyChange(streamKeyId) {
       folderSelect.value = boundFolder;
       loadEditThumbnailFolder(boundFolder || null);
       
-      // Check the bind checkbox
-      if (bindCheckbox) {
-        bindCheckbox.checked = true;
-      }
-      
       showToast(`Folder "${boundFolder || 'Root'}" otomatis dipilih`);
-    } else {
-      // No binding for this stream key
-      if (bindCheckbox) {
-        bindCheckbox.checked = false;
-      }
     }
   } catch (e) {
     console.warn('[onEditStreamKeyChange] Failed to parse mapping:', e.message);
