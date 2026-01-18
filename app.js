@@ -5118,6 +5118,69 @@ app.get('/api/youtube/streams', isAuthenticated, async (req, res) => {
   }
 });
 
+// Save stream key folder mapping
+app.post('/api/stream-key-folder-mapping', isAuthenticated, async (req, res) => {
+  try {
+    const { streamKeyId, folderName } = req.body;
+    const userId = req.session.userId;
+    
+    if (!streamKeyId) {
+      return res.status(400).json({ success: false, error: 'Stream key ID is required' });
+    }
+    
+    const db = require('./db/database').getDb();
+    
+    // Upsert the mapping
+    db.run(`
+      INSERT INTO stream_key_folder_mapping (user_id, stream_key_id, folder_name, updated_at)
+      VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(user_id, stream_key_id) DO UPDATE SET
+        folder_name = excluded.folder_name,
+        updated_at = CURRENT_TIMESTAMP
+    `, [userId, streamKeyId, folderName || ''], function(err) {
+      if (err) {
+        console.error('[stream-key-folder-mapping] Error saving:', err.message);
+        return res.status(500).json({ success: false, error: 'Failed to save mapping' });
+      }
+      
+      console.log(`[stream-key-folder-mapping] Saved: ${streamKeyId} -> ${folderName || 'root'}`);
+      res.json({ success: true, streamKeyId, folderName: folderName || '' });
+    });
+  } catch (error) {
+    console.error('[stream-key-folder-mapping] Error:', error.message);
+    res.status(500).json({ success: false, error: 'Failed to save mapping' });
+  }
+});
+
+// Get stream key folder mapping
+app.get('/api/stream-key-folder-mapping/:streamKeyId', isAuthenticated, async (req, res) => {
+  try {
+    const { streamKeyId } = req.params;
+    const userId = req.session.userId;
+    
+    const db = require('./db/database').getDb();
+    
+    db.get(`
+      SELECT folder_name FROM stream_key_folder_mapping
+      WHERE user_id = ? AND stream_key_id = ?
+    `, [userId, streamKeyId], (err, row) => {
+      if (err) {
+        console.error('[stream-key-folder-mapping] Error getting:', err.message);
+        return res.status(500).json({ success: false, error: 'Failed to get mapping' });
+      }
+      
+      if (row) {
+        res.json({ success: true, streamKeyId, folderName: row.folder_name, found: true });
+      } else {
+        res.json({ success: true, streamKeyId, folderName: null, found: false });
+      }
+    });
+  } catch (error) {
+    console.error('[stream-key-folder-mapping] Error:', error.message);
+    res.status(500).json({ success: false, error: 'Failed to get mapping' });
+  }
+});
+
 // Get YouTube channel defaults for auto-fill - supports accountId parameter
 app.get('/api/youtube/channel-defaults', isAuthenticated, async (req, res) => {
   try {

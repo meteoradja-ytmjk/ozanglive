@@ -489,6 +489,21 @@ async function createCoreTablesAsync() {
 
   await runTableQuery(`CREATE INDEX IF NOT EXISTS idx_youtube_broadcast_settings_broadcast 
           ON youtube_broadcast_settings(broadcast_id)`, 'youtube_broadcast_settings.broadcast_index');
+
+  // Create stream_key_folder_mapping table for storing stream key to thumbnail folder binding
+  await runTableQuery(`CREATE TABLE IF NOT EXISTS stream_key_folder_mapping (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
+    stream_key_id TEXT NOT NULL,
+    folder_name TEXT DEFAULT '',
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE(user_id, stream_key_id)
+  )`, 'stream_key_folder_mapping');
+
+  await runTableQuery(`CREATE INDEX IF NOT EXISTS idx_stream_key_folder_mapping_user 
+          ON stream_key_folder_mapping(user_id)`, 'stream_key_folder_mapping.user_index');
 }
 
 // Old createCoreTables function removed - replaced with createCoreTablesAsync above

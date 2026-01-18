@@ -265,26 +265,34 @@ function onAccountChange(accountId) {
 }
 
 // Handle stream key change - auto-select bound folder if exists
-function onStreamKeyChange(streamKeyId) {
+async function onStreamKeyChange(streamKeyId) {
   const mappingInput = document.getElementById('streamKeyFolderMapping');
   
-  if (!mappingInput || !streamKeyId) return;
+  if (!streamKeyId) return;
   
-  try {
-    const mapping = JSON.parse(mappingInput.value || '{}');
-    
-    // Check if this stream key has a bound folder
-    if (mapping[streamKeyId] !== undefined) {
-      const boundFolder = mapping[streamKeyId];
-      console.log(`[onStreamKeyChange] Stream key ${streamKeyId} bound to folder: ${boundFolder || 'root'}`);
-      
-      // Auto-select the bound folder
-      openThumbnailFolder(boundFolder || null);
-      
-      showToast(`Folder "${boundFolder || 'Root'}" otomatis dipilih (terikat ke stream key)`);
+  // First check form mapping
+  let boundFolder = undefined;
+  if (mappingInput) {
+    try {
+      const mapping = JSON.parse(mappingInput.value || '{}');
+      if (mapping[streamKeyId] !== undefined) {
+        boundFolder = mapping[streamKeyId];
+      }
+    } catch (e) {
+      // Ignore parse error
     }
-  } catch (e) {
-    console.warn('[onStreamKeyChange] Failed to parse mapping:', e.message);
+  }
+  
+  // If not found in form, check server database
+  if (boundFolder === undefined) {
+    boundFolder = await getStreamKeyFolderMappingFromServer(streamKeyId);
+  }
+  
+  // If found, auto-select the bound folder
+  if (boundFolder !== undefined) {
+    console.log(`[onStreamKeyChange] Stream key ${streamKeyId} bound to folder: ${boundFolder || 'root'}`);
+    openThumbnailFolder(boundFolder || null);
+    showToast(`Folder "${boundFolder || 'Root'}" otomatis dipilih (terikat ke stream key)`);
   }
 }
 
@@ -398,6 +406,52 @@ function autoBindFolderToStreamKey(folderName) {
   // Map current stream key to current folder (empty string for root)
   mapping[streamKeySelect.value] = folderName || '';
   mappingInput.value = JSON.stringify(mapping);
+  
+  // Save to database for persistence across sessions
+  saveStreamKeyFolderMappingToServer(streamKeySelect.value, folderName || '');
+}
+
+// Save stream key folder mapping to server database
+async function saveStreamKeyFolderMappingToServer(streamKeyId, folderName) {
+  try {
+    const response = await fetch('/api/stream-key-folder-mapping', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getCsrfToken()
+      },
+      body: JSON.stringify({ streamKeyId, folderName })
+    });
+    
+    const data = await response.json();
+    if (data.success) {
+      console.log(`[Server] Saved mapping: ${streamKeyId} -> ${folderName || 'root'}`);
+    } else {
+      console.warn('[Server] Failed to save mapping:', data.error);
+    }
+  } catch (e) {
+    console.warn('[Server] Failed to save stream key folder mapping:', e.message);
+  }
+}
+
+// Get stream key folder mapping from server database
+async function getStreamKeyFolderMappingFromServer(streamKeyId) {
+  try {
+    const response = await fetch(`/api/stream-key-folder-mapping/${encodeURIComponent(streamKeyId)}`, {
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+    
+    const data = await response.json();
+    if (data.success && data.found) {
+      return data.folderName;
+    }
+    return undefined;
+  } catch (e) {
+    console.warn('[Server] Failed to get stream key folder mapping:', e.message);
+    return undefined;
+  }
 }
 
 // Create folder modal functions
@@ -1318,6 +1372,12 @@ if (createBroadcastForm) {
       const data = await response.json();
       
       if (data.success) {
+        // Save stream key folder mapping to server for edit persistence
+        const streamId = document.getElementById('streamKeySelect').value;
+        if (streamId && currentThumbnailFolder !== null) {
+          saveStreamKeyFolderMappingToServer(streamId, currentThumbnailFolder || '');
+        }
+        
         showToast('Broadcast created successfully!');
         closeCreateBroadcastModal();
         setTimeout(() => window.location.reload(), 1000);
@@ -1398,7 +1458,7 @@ async function editBroadcast(broadcastId, accountId) {
 }
 
 // Open Edit Broadcast Modal
-function openEditBroadcastModal(broadcast) {
+async function openEditBroadcastModal(broadcast) {
   document.getElementById('editBroadcastId').value = broadcast.id;
   document.getElementById('editAccountId').value = broadcast.accountId;
   document.getElementById('editBroadcastTitle').value = broadcast.title || '';
@@ -1446,9 +1506,28 @@ function openEditBroadcastModal(broadcast) {
   window.editThumbnailFile = null;
   window.editThumbnailFromHistory = false;
   
-  // Load thumbnail folders and thumbnails
-  loadEditThumbnailFolders();
-  loadEditThumbnailFolder(null); // Load root folder
+  // Load thumbnail folders first
+  await loadEditThumbnailFolders();
+  
+  // Check if broadcast has a stream key and load bound folder from server database
+  const streamId = broadcast.streamId;
+  let boundFolder = null;
+  
+  if (streamId) {
+    boundFolder = await getStreamKeyFolderMappingFromServer(streamId);
+    console.log(`[openEditBroadcastModal] Stream key ${streamId} bound to folder: ${boundFolder !== undefined ? (boundFolder || 'root') : 'not found'}`);
+  }
+  
+  // Load the bound folder or root
+  if (boundFolder !== undefined && boundFolder !== null) {
+    const folderSelect = document.getElementById('editThumbnailFolderSelect');
+    if (folderSelect) {
+      folderSelect.value = boundFolder || '';
+    }
+    loadEditThumbnailFolder(boundFolder || null);
+  } else {
+    loadEditThumbnailFolder(null); // Load root folder
+  }
   
   document.getElementById('editBroadcastModal').classList.remove('hidden');
 }
@@ -3778,6 +3857,9 @@ function autoBindEditFolderToStreamKey(folderName) {
   // Map current stream key to current folder (empty string for root)
   mapping[streamKeySelect.value] = folderName || '';
   mappingInput.value = JSON.stringify(mapping);
+  
+  // Save to server database for persistence across sessions
+  saveStreamKeyFolderMappingToServer(streamKeySelect.value, folderName || '');
 }
 
 /**
@@ -3878,27 +3960,36 @@ function updateEditThumbnailMode(mode) {
 /**
  * Handle edit stream key change - auto-select bound folder if exists
  */
-function onEditStreamKeyChange(streamKeyId) {
+async function onEditStreamKeyChange(streamKeyId) {
   const mappingInput = document.getElementById('editStreamKeyFolderMapping');
   const folderSelect = document.getElementById('editThumbnailFolderSelect');
   
-  if (!mappingInput || !folderSelect) return;
+  if (!folderSelect) return;
   
-  try {
-    const mapping = JSON.parse(mappingInput.value || '{}');
-    
-    if (mapping[streamKeyId] !== undefined) {
-      const boundFolder = mapping[streamKeyId];
-      console.log(`[onEditStreamKeyChange] Stream key ${streamKeyId} bound to folder: ${boundFolder || 'root'}`);
-      
-      // Auto-select the bound folder
-      folderSelect.value = boundFolder;
-      loadEditThumbnailFolder(boundFolder || null);
-      
-      showToast(`Folder "${boundFolder || 'Root'}" otomatis dipilih`);
+  // First check form mapping
+  let boundFolder = undefined;
+  if (mappingInput) {
+    try {
+      const mapping = JSON.parse(mappingInput.value || '{}');
+      if (mapping[streamKeyId] !== undefined) {
+        boundFolder = mapping[streamKeyId];
+      }
+    } catch (e) {
+      // Ignore parse error
     }
-  } catch (e) {
-    console.warn('[onEditStreamKeyChange] Failed to parse mapping:', e.message);
+  }
+  
+  // If not found in form, check server database
+  if (boundFolder === undefined) {
+    boundFolder = await getStreamKeyFolderMappingFromServer(streamKeyId);
+  }
+  
+  // If found, auto-select the bound folder
+  if (boundFolder !== undefined) {
+    console.log(`[onEditStreamKeyChange] Stream key ${streamKeyId} bound to folder: ${boundFolder || 'root'}`);
+    folderSelect.value = boundFolder || '';
+    loadEditThumbnailFolder(boundFolder || null);
+    showToast(`Folder "${boundFolder || 'Root'}" otomatis dipilih`);
   }
 }
 
