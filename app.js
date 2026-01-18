@@ -5707,7 +5707,9 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
     const { 
       name, title, description, privacyStatus, tags, categoryId, 
       thumbnailPath, thumbnailFolder, pinnedThumbnail, streamKeyFolderMapping,
-      streamId, accountId, titleIndex, pinnedTitleId 
+      streamId, accountId, titleIndex, pinnedTitleId,
+      // Recurring schedule fields
+      recurringEnabled, recurringPattern, recurringTime, recurringDays
     } = req.body;
     
     console.log('[create-template] Received streamId:', streamId);
@@ -5716,6 +5718,7 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
     console.log('[create-template] Received streamKeyFolderMapping:', streamKeyFolderMapping);
     console.log('[create-template] Received titleIndex:', titleIndex);
     console.log('[create-template] Received pinnedTitleId:', pinnedTitleId);
+    console.log('[create-template] Received recurring config:', { recurringEnabled, recurringPattern, recurringTime, recurringDays });
     
     if (!name || !title || !accountId) {
       return res.status(400).json({
@@ -5742,6 +5745,39 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
       }
     }
 
+    // Validate and calculate next_run_at if recurring is enabled
+    let next_run_at = null;
+    if (recurringEnabled) {
+      const { validateRecurringConfig, calculateNextRun, formatNextRunAt } = require('./utils/recurringUtils');
+      
+      // Normalize recurring_days
+      const normalizedDays = Array.isArray(recurringDays) ? recurringDays : null;
+      
+      const validation = validateRecurringConfig({
+        recurring_enabled: recurringEnabled,
+        recurring_pattern: recurringPattern,
+        recurring_time: recurringTime,
+        recurring_days: normalizedDays
+      });
+
+      if (!validation.valid) {
+        return res.status(400).json({
+          success: false,
+          error: validation.errors.join(', ')
+        });
+      }
+
+      // Calculate next run time
+      const nextRun = calculateNextRun({
+        recurring_pattern: recurringPattern,
+        recurring_time: recurringTime,
+        recurring_days: normalizedDays
+      });
+      if (nextRun) {
+        next_run_at = formatNextRunAt(nextRun);
+      }
+    }
+
     const template = await BroadcastTemplate.create({
       user_id: req.session.userId,
       account_id: parseInt(accountId),
@@ -5758,10 +5794,17 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
       stream_key_folder_mapping: parsedMapping,
       stream_id: streamId || null,
       title_index: titleIndex || 0,
-      pinned_title_id: pinnedTitleId || null
+      pinned_title_id: pinnedTitleId || null,
+      // Recurring schedule fields
+      recurring_enabled: !!recurringEnabled,
+      recurring_pattern: recurringPattern || null,
+      recurring_time: recurringTime || null,
+      recurring_days: Array.isArray(recurringDays) ? recurringDays : null,
+      next_run_at: next_run_at
     });
 
     console.log('[create-template] Created template with stream_id:', template.stream_id, 'thumbnail_folder:', template.thumbnail_folder, 'pinned_thumbnail:', template.pinned_thumbnail, 'title_index:', template.title_index, 'pinned_title_id:', template.pinned_title_id);
+    console.log('[create-template] Recurring config saved:', { recurring_enabled: template.recurring_enabled, recurring_pattern: template.recurring_pattern, recurring_time: template.recurring_time, next_run_at: template.next_run_at });
 
     res.json({ success: true, template });
   } catch (error) {
@@ -6081,7 +6124,12 @@ app.put('/api/youtube/templates/:id', isAuthenticated, async (req, res) => {
       return res.status(403).json({ success: false, error: 'Access denied' });
     }
 
-    const { name, title, description, privacyStatus, tags, categoryId, thumbnailPath, streamId, accountId, titleIndex, pinnedTitleId } = req.body;
+    const { 
+      name, title, description, privacyStatus, tags, categoryId, 
+      thumbnailPath, streamId, accountId, titleIndex, pinnedTitleId,
+      // Recurring schedule fields
+      recurringEnabled, recurringPattern, recurringTime, recurringDays
+    } = req.body;
     
     const updateData = {};
     if (name !== undefined) updateData.name = name;
@@ -6096,7 +6144,56 @@ app.put('/api/youtube/templates/:id', isAuthenticated, async (req, res) => {
     if (titleIndex !== undefined) updateData.title_index = titleIndex;
     if (pinnedTitleId !== undefined) updateData.pinned_title_id = pinnedTitleId;
 
+    // Handle recurring schedule fields
+    if (recurringEnabled !== undefined) {
+      updateData.recurring_enabled = !!recurringEnabled;
+      
+      if (recurringEnabled) {
+        const { validateRecurringConfig, calculateNextRun, formatNextRunAt } = require('./utils/recurringUtils');
+        
+        // Normalize recurring_days
+        const normalizedDays = Array.isArray(recurringDays) ? recurringDays : null;
+        
+        const validation = validateRecurringConfig({
+          recurring_enabled: recurringEnabled,
+          recurring_pattern: recurringPattern,
+          recurring_time: recurringTime,
+          recurring_days: normalizedDays
+        });
+
+        if (!validation.valid) {
+          return res.status(400).json({
+            success: false,
+            error: validation.errors.join(', ')
+          });
+        }
+
+        updateData.recurring_pattern = recurringPattern;
+        updateData.recurring_time = recurringTime;
+        updateData.recurring_days = normalizedDays;
+
+        // Calculate next run time
+        const nextRun = calculateNextRun({
+          recurring_pattern: recurringPattern,
+          recurring_time: recurringTime,
+          recurring_days: normalizedDays
+        });
+        if (nextRun) {
+          updateData.next_run_at = formatNextRunAt(nextRun);
+        }
+      } else {
+        // Disable recurring - clear related fields
+        updateData.recurring_pattern = null;
+        updateData.recurring_time = null;
+        updateData.recurring_days = null;
+        updateData.next_run_at = null;
+      }
+    }
+
     const result = await BroadcastTemplate.update(req.params.id, updateData);
+    
+    console.log('[update-template] Updated template:', req.params.id, 'recurring_enabled:', updateData.recurring_enabled, 'next_run_at:', updateData.next_run_at);
+    
     res.json({ success: true, template: result });
   } catch (error) {
     console.error('Error updating broadcast template:', error);

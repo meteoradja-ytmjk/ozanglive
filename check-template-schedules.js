@@ -59,9 +59,26 @@ async function checkTemplateSchedules() {
   console.log(`Day:     ${wibTime.dayName} (index: ${wibTime.day})`);
   console.log('');
   
+  // Check YouTube credentials first
+  const credentials = await new Promise((resolve, reject) => {
+    db.all('SELECT id, user_id, channel_name FROM youtube_credentials', [], (err, rows) => {
+      if (err) reject(err);
+      else resolve(rows || []);
+    });
+  });
+  
+  console.log(`=== YOUTUBE CREDENTIALS (${credentials.length}) ===`);
+  if (credentials.length === 0) {
+    console.log('No YouTube accounts connected.');
+    console.log('Please connect a YouTube account first before creating templates.');
+  } else {
+    credentials.forEach(c => console.log(`  - ${c.channel_name || 'Unknown'} (id: ${c.id}, user: ${c.user_id})`));
+  }
+  console.log('');
+  
   // First check ALL templates
   const allQuery = `
-    SELECT bt.id, bt.name, bt.recurring_enabled, bt.recurring_pattern, 
+    SELECT bt.id, bt.name, bt.user_id, bt.account_id, bt.recurring_enabled, bt.recurring_pattern, 
            bt.recurring_time, bt.recurring_days, bt.next_run_at, bt.last_run_at,
            yc.channel_name
     FROM broadcast_templates bt
@@ -79,14 +96,25 @@ async function checkTemplateSchedules() {
     
     if (!allRows || allRows.length === 0) {
       console.log('No templates found in database.');
+      console.log('\nTo create a template with recurring schedule:');
+      console.log('1. Go to YouTube page');
+      console.log('2. Click "Templates" button');
+      console.log('3. Click "Create Template"');
+      console.log('4. Fill in the form and enable "Recurring Schedule"');
+      console.log('5. Set the pattern (daily/weekly) and time');
+      console.log('6. Click "Create Template"');
     } else {
       allRows.forEach((t, i) => {
         console.log(`${i + 1}. ${t.name}`);
+        console.log(`   user_id: ${t.user_id}`);
+        console.log(`   account_id: ${t.account_id}`);
+        console.log(`   channel: ${t.channel_name || 'N/A'}`);
         console.log(`   recurring_enabled: ${t.recurring_enabled}`);
         console.log(`   recurring_pattern: ${t.recurring_pattern}`);
         console.log(`   recurring_time: ${t.recurring_time}`);
         console.log(`   recurring_days: ${t.recurring_days}`);
         console.log(`   next_run_at: ${t.next_run_at}`);
+        console.log(`   last_run_at: ${t.last_run_at}`);
         console.log('');
       });
     }
@@ -95,11 +123,11 @@ async function checkTemplateSchedules() {
     const enabledRows = (allRows || []).filter(r => r.recurring_enabled === 1);
     
     if (enabledRows.length === 0) {
-      console.log('No templates with recurring enabled found.');
+      console.log('\nNo templates with recurring enabled found.');
       process.exit(0);
     }
     
-    console.log(`=== TEMPLATES WITH RECURRING ENABLED (${enabledRows.length}) ===\n`);
+    console.log(`\n=== TEMPLATES WITH RECURRING ENABLED (${enabledRows.length}) ===\n`);
     
     const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
     const todayName = dayNames[wibTime.day];

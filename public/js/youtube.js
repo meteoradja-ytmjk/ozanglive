@@ -2094,6 +2094,8 @@ if (createTemplateForm) {
         recurringDays: recurringData.recurring_days
       };
       
+      console.log('[createTemplate] Sending template data:', templateData);
+      
       // Check if editing
       const editId = createTemplateForm.dataset.editId;
       const url = editId ? `/api/youtube/templates/${editId}` : '/api/youtube/templates';
@@ -2110,6 +2112,8 @@ if (createTemplateForm) {
       
       const data = await response.json();
       
+      console.log('[createTemplate] Response:', data);
+      
       if (data.success) {
         showToast(editId ? 'Template updated successfully!' : 'Template created successfully!');
         closeCreateTemplateModal();
@@ -2118,7 +2122,7 @@ if (createTemplateForm) {
         showToast(data.error || 'Failed to create template', 'error');
       }
     } catch (error) {
-      console.error('Error:', error);
+      console.error('[createTemplate] Error:', error);
       showToast('An error occurred', 'error');
     } finally {
       createBtn.innerHTML = originalText;
