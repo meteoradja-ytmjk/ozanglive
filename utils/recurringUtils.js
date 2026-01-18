@@ -15,6 +15,99 @@ const DAY_INDEX_MAP = {
 };
 
 /**
+ * Get current time in Asia/Jakarta timezone (WIB)
+ * Uses Intl.DateTimeFormat for accurate timezone conversion
+ * @param {Date} date - Date object to convert
+ * @returns {Object} Object with hours, minutes, day, year, month, date
+ */
+function getWIBTime(date = new Date()) {
+  try {
+    // Use Intl.DateTimeFormat for accurate timezone conversion
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Jakarta',
+      hour: 'numeric',
+      minute: 'numeric',
+      weekday: 'short',
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour12: false
+    });
+    
+    const parts = formatter.formatToParts(date);
+    let hours = 0, minutes = 0, dayName = '', year = 0, month = 0, dayOfMonth = 0;
+    
+    for (const part of parts) {
+      if (part.type === 'hour') hours = parseInt(part.value, 10);
+      if (part.type === 'minute') minutes = parseInt(part.value, 10);
+      if (part.type === 'weekday') dayName = part.value;
+      if (part.type === 'year') year = parseInt(part.value, 10);
+      if (part.type === 'month') month = parseInt(part.value, 10) - 1; // 0-indexed
+      if (part.type === 'day') dayOfMonth = parseInt(part.value, 10);
+    }
+    
+    // Convert day name to number (0=Sun, 1=Mon, etc.)
+    const dayMap = { 'Sun': 0, 'Mon': 1, 'Tue': 2, 'Wed': 3, 'Thu': 4, 'Fri': 5, 'Sat': 6 };
+    const day = dayMap[dayName] ?? date.getDay();
+    
+    return { hours, minutes, day, year, month, dayOfMonth };
+  } catch (e) {
+    // Fallback to manual calculation if Intl fails
+    console.warn('[recurringUtils] Intl.DateTimeFormat failed, using manual WIB calculation');
+    const wibOffset = 7 * 60 * 60 * 1000; // 7 hours in ms
+    const wibDate = new Date(date.getTime() + wibOffset);
+    
+    return {
+      hours: wibDate.getUTCHours(),
+      minutes: wibDate.getUTCMinutes(),
+      day: wibDate.getUTCDay(),
+      year: wibDate.getUTCFullYear(),
+      month: wibDate.getUTCMonth(),
+      dayOfMonth: wibDate.getUTCDate()
+    };
+  }
+}
+
+/**
+ * Create a Date object for a specific WIB time
+ * @param {number} year - Year
+ * @param {number} month - Month (0-indexed)
+ * @param {number} day - Day of month
+ * @param {number} hours - Hours (0-23)
+ * @param {number} minutes - Minutes (0-59)
+ * @returns {Date} Date object in UTC that represents the given WIB time
+ */
+function createWIBDate(year, month, day, hours, minutes) {
+  // Create date in WIB, then convert to UTC
+  // WIB is UTC+7, so subtract 7 hours to get UTC
+  const utcHours = hours - 7;
+  
+  // Handle day rollover
+  let adjustedDay = day;
+  let adjustedMonth = month;
+  let adjustedYear = year;
+  let adjustedHours = utcHours;
+  
+  if (utcHours < 0) {
+    adjustedHours = utcHours + 24;
+    adjustedDay = day - 1;
+    
+    // Handle month rollover
+    if (adjustedDay < 1) {
+      adjustedMonth = month - 1;
+      if (adjustedMonth < 0) {
+        adjustedMonth = 11;
+        adjustedYear = year - 1;
+      }
+      // Get last day of previous month
+      adjustedDay = new Date(adjustedYear, adjustedMonth + 1, 0).getDate();
+    }
+  }
+  
+  return new Date(Date.UTC(adjustedYear, adjustedMonth, adjustedDay, adjustedHours, minutes, 0, 0));
+}
+
+/**
  * Validate recurring configuration
  * @param {Object} config - Recurring configuration
  * @param {boolean} config.recurring_enabled - Whether recurring is enabled
@@ -89,22 +182,38 @@ function parseTime(time) {
 /**
  * Calculate next run time for daily pattern
  * Ensures next_run_at is always in the future
- * @param {string} time - Time in HH:MM format
+ * Uses WIB timezone for calculation
+ * @param {string} time - Time in HH:MM format (WIB)
  * @param {Date} fromDate - Starting date (default: now)
  * @returns {Date} Next run date (always in the future)
  */
 function calculateNextDailyRun(time, fromDate = new Date()) {
   const { hours, minutes } = parseTime(time);
   
-  // Create a fresh date object to avoid mutation issues
-  const now = new Date(fromDate.getTime());
-  const next = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes, 0, 0);
+  // Get current time in WIB
+  const wibNow = getWIBTime(fromDate);
+  const now = fromDate;
+  
+  // Calculate scheduled time in minutes from midnight (WIB)
+  const scheduleMinutes = hours * 60 + minutes;
+  const currentMinutes = wibNow.hours * 60 + wibNow.minutes;
+  
+  // Determine if we should schedule for today or tomorrow (in WIB)
+  let targetDay = wibNow.dayOfMonth;
+  let targetMonth = wibNow.month;
+  let targetYear = wibNow.year;
   
   // If the time has already passed today (or equals current time), schedule for tomorrow
-  // Using >= ensures that if current time equals recurring_time, we schedule for tomorrow
-  if (next.getTime() <= now.getTime()) {
-    next.setDate(next.getDate() + 1);
+  if (currentMinutes >= scheduleMinutes) {
+    // Add one day
+    const tempDate = new Date(Date.UTC(targetYear, targetMonth, targetDay + 1));
+    targetYear = tempDate.getUTCFullYear();
+    targetMonth = tempDate.getUTCMonth();
+    targetDay = tempDate.getUTCDate();
   }
+  
+  // Create the next run date in WIB
+  const next = createWIBDate(targetYear, targetMonth, targetDay, hours, minutes);
   
   return next;
 }
@@ -112,7 +221,8 @@ function calculateNextDailyRun(time, fromDate = new Date()) {
 /**
  * Calculate next run time for weekly pattern
  * Ensures next_run_at is always in the future
- * @param {string} time - Time in HH:MM format
+ * Uses WIB timezone for calculation
+ * @param {string} time - Time in HH:MM format (WIB)
  * @param {string[]} days - Array of day names
  * @param {Date} fromDate - Starting date (default: now)
  * @returns {Date} Next run date (always in the future)
@@ -120,9 +230,9 @@ function calculateNextDailyRun(time, fromDate = new Date()) {
 function calculateNextWeeklyRun(time, days, fromDate = new Date()) {
   const { hours, minutes } = parseTime(time);
   
-  // Create a fresh date object to avoid mutation issues
-  const now = new Date(fromDate.getTime());
-  const currentDay = now.getDay();
+  // Get current time in WIB
+  const wibNow = getWIBTime(fromDate);
+  const currentDay = wibNow.day; // 0=Sun, 1=Mon, etc.
   
   // Convert day names to day indices and sort
   const dayIndices = days
@@ -134,14 +244,15 @@ function calculateNextWeeklyRun(time, days, fromDate = new Date()) {
     throw new Error('No valid days provided');
   }
   
+  // Calculate scheduled time in minutes from midnight (WIB)
+  const scheduleMinutes = hours * 60 + minutes;
+  const currentMinutes = wibNow.hours * 60 + wibNow.minutes;
+  
   // Check if we can run today (time hasn't passed yet)
   const todayScheduled = dayIndices.includes(currentDay);
-  if (todayScheduled) {
-    const todayRun = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes, 0, 0);
-    // Only return today if time is strictly in the future
-    if (todayRun.getTime() > now.getTime()) {
-      return todayRun;
-    }
+  if (todayScheduled && currentMinutes < scheduleMinutes) {
+    // Schedule for today
+    return createWIBDate(wibNow.year, wibNow.month, wibNow.dayOfMonth, hours, minutes);
   }
   
   // Find next day in the week (after today)
@@ -159,7 +270,13 @@ function calculateNextWeeklyRun(time, days, fromDate = new Date()) {
     daysToAdd = 7 - currentDay + dayIndices[0];
   }
   
-  const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysToAdd, hours, minutes, 0, 0);
+  // Calculate target date
+  const tempDate = new Date(Date.UTC(wibNow.year, wibNow.month, wibNow.dayOfMonth + daysToAdd));
+  const targetYear = tempDate.getUTCFullYear();
+  const targetMonth = tempDate.getUTCMonth();
+  const targetDay = tempDate.getUTCDate();
+  
+  const next = createWIBDate(targetYear, targetMonth, targetDay, hours, minutes);
   
   return next;
 }
@@ -276,6 +393,8 @@ module.exports = {
   formatNextRunAt,
   replaceTitlePlaceholders,
   isScheduleMissed,
+  getWIBTime,
+  createWIBDate,
   VALID_PATTERNS,
   VALID_DAYS,
   DAY_INDEX_MAP
