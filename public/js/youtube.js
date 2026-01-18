@@ -4541,9 +4541,9 @@ window.closeEditBroadcastModal = function() {
   console.log('[closeEditBroadcastModal] Modal closed, thumbnail reset');
 };
 
-// Override openEditBroadcastModal to show existing thumbnail
+// Override openEditBroadcastModal to show existing thumbnail AND load correct folder
 const originalOpenEditBroadcastModal = window.openEditBroadcastModal;
-window.openEditBroadcastModal = function(broadcast) {
+window.openEditBroadcastModal = async function(broadcast) {
   console.log('[openEditBroadcastModal] Opening modal for broadcast:', broadcast.id);
   
   document.getElementById('editBroadcastId').value = broadcast.id;
@@ -4581,11 +4581,37 @@ window.openEditBroadcastModal = function(broadcast) {
   const fileInput = document.getElementById('editThumbnailFile');
   if (fileInput) fileInput.value = '';
   
-  // Load thumbnail history
-  loadEditThumbnailHistory();
+  // Load thumbnail folders first
+  await loadEditThumbnailFolders();
+  
+  // Get thumbnail folder from broadcast settings (saved when broadcast was created)
+  const broadcastId = broadcast.id;
+  let boundFolder = '';
+  
+  if (broadcastId) {
+    const settings = await getBroadcastSettingsFromServer(broadcastId);
+    // Check if settings exist and thumbnailFolder is explicitly set (including empty string for root)
+    if (settings && (settings.thumbnailFolder !== null && settings.thumbnailFolder !== undefined)) {
+      boundFolder = settings.thumbnailFolder;
+      console.log(`[openEditBroadcastModal] Broadcast ${broadcastId} has folder: "${boundFolder}" (${boundFolder === '' ? 'root' : 'folder'})`);
+    } else {
+      console.log(`[openEditBroadcastModal] Broadcast ${broadcastId} has no saved folder settings, will use root`);
+      boundFolder = '';
+    }
+  }
+  
+  // Set the folder dropdown value
+  const folderSelect = document.getElementById('editThumbnailFolderSelect');
+  if (folderSelect) {
+    folderSelect.value = boundFolder || ''; // '' for root, 'folderName' for folder
+    console.log('[openEditBroadcastModal] Folder dropdown set to:', folderSelect.value || 'Root');
+  }
+  
+  // Load thumbnails from the bound folder (convert '' to null for loadEditThumbnailFolder)
+  loadEditThumbnailFolder(boundFolder === '' ? null : boundFolder);
   
   document.getElementById('editBroadcastModal').classList.remove('hidden');
-  console.log('[openEditBroadcastModal] Modal opened');
+  console.log('[openEditBroadcastModal] Modal opened with folder:', boundFolder || 'Root');
 };
 
 
