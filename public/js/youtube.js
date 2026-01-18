@@ -1986,18 +1986,18 @@ function openEditTemplateModal(template) {
     container.classList.add('hidden');
   }
   
-  // Set pattern
-  if (template.recurring_pattern) {
-    const patternRadio = document.querySelector(`input[name="editRecurringPattern"][value="${template.recurring_pattern}"]`);
-    if (patternRadio) patternRadio.checked = true;
-  }
+  // Reset pattern radios first
+  document.querySelectorAll('input[name="editRecurringPattern"]').forEach(radio => radio.checked = false);
   
-  // Set time
-  if (template.recurring_time) {
-    document.getElementById('editRecurringTime').value = template.recurring_time;
-  }
+  // Set pattern (default to 'daily' if not set but recurring is enabled)
+  const pattern = template.recurring_pattern || 'daily';
+  const patternRadio = document.querySelector(`input[name="editRecurringPattern"][value="${pattern}"]`);
+  if (patternRadio) patternRadio.checked = true;
   
-  // Set days
+  // Set time (reset if not set)
+  document.getElementById('editRecurringTime').value = template.recurring_time || '';
+  
+  // Reset and set days
   document.querySelectorAll('input[name="editRecurringDays"]').forEach(cb => cb.checked = false);
   if (template.recurring_days && Array.isArray(template.recurring_days)) {
     template.recurring_days.forEach(day => {
@@ -2006,13 +2006,16 @@ function openEditTemplateModal(template) {
     });
   }
   
-  // Show/hide days container
+  // Show/hide days container based on pattern
   const daysContainer = document.getElementById('editRecurringDaysContainer');
-  if (template.recurring_pattern === 'weekly') {
+  if (pattern === 'weekly') {
     daysContainer.classList.remove('hidden');
   } else {
     daysContainer.classList.add('hidden');
   }
+  
+  // Hide error message
+  document.getElementById('editRecurringDaysError').classList.add('hidden');
   
   document.getElementById('editTemplateModal').classList.remove('hidden');
 }
@@ -2092,7 +2095,15 @@ if (editTemplateForm) {
           }
           
           updateData.recurring_days = days;
+        } else {
+          // For daily pattern, explicitly clear recurring_days
+          updateData.recurring_days = null;
         }
+      } else {
+        // When disabling recurring, clear all recurring fields
+        updateData.recurring_pattern = null;
+        updateData.recurring_time = null;
+        updateData.recurring_days = null;
       }
       
       const response = await fetch(`/api/youtube/templates/${templateId}/recurring`, {

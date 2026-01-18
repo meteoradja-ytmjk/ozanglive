@@ -651,6 +651,11 @@ const loginDelayMiddleware = async (req, res, next) => {
   next();
 };
 app.get('/login', async (req, res) => {
+  // Prevent caching of login page
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  
   if (req.session.userId) {
     return res.redirect('/dashboard');
   }
@@ -672,16 +677,20 @@ app.get('/login', async (req, res) => {
 });
 app.post('/login', loginDelayMiddleware, loginLimiter, async (req, res) => {
   const { username, password } = req.body;
+  console.log('[Login] Attempt for username:', username);
   try {
     const user = await User.findByUsername(username);
     if (!user) {
+      console.log('[Login] User not found:', username);
       return res.render('login', {
         title: 'Login',
         error: 'Invalid username or password'
       });
     }
+    console.log('[Login] User found:', user.username, 'role:', user.user_role, 'status:', user.status);
     const passwordMatch = await User.verifyPassword(password, user.password);
     if (!passwordMatch) {
+      console.log('[Login] Password mismatch for:', username);
       return res.render('login', {
         title: 'Login',
         error: 'Invalid username or password'
@@ -689,19 +698,21 @@ app.post('/login', loginDelayMiddleware, loginLimiter, async (req, res) => {
     }
     
     if (user.status !== 'active') {
+      console.log('[Login] User not active:', username);
       return res.render('login', {
         title: 'Login',
         error: 'Your account is not active. Please contact administrator for activation.'
       });
     }
     
+    console.log('[Login] Success for:', username, '- redirecting to dashboard');
     req.session.userId = user.id;
     req.session.username = user.username;
     req.session.avatar_path = user.avatar_path;
     req.session.user_role = user.user_role;
     res.redirect('/dashboard');
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('[Login] Error:', error);
     res.render('login', {
       title: 'Login',
       error: 'An error occurred during login. Please try again.'
@@ -5967,13 +5978,16 @@ app.put('/api/youtube/templates/:id/recurring', isAuthenticated, async (req, res
       return res.status(403).json({ success: false, error: 'Access denied' });
     }
 
+    // Normalize recurring_days: ensure it's an array or null
+    const normalizedDays = Array.isArray(recurring_days) ? recurring_days : null;
+
     // Validate recurring configuration
     const { validateRecurringConfig, calculateNextRun, formatNextRunAt } = require('./utils/recurringUtils');
     const validation = validateRecurringConfig({
       recurring_enabled,
       recurring_pattern,
       recurring_time,
-      recurring_days
+      recurring_days: normalizedDays
     });
 
     if (!validation.valid) {
@@ -5989,9 +6003,11 @@ app.put('/api/youtube/templates/:id/recurring', isAuthenticated, async (req, res
       const nextRun = calculateNextRun({
         recurring_pattern,
         recurring_time,
-        recurring_days
+        recurring_days: normalizedDays
       });
-      next_run_at = formatNextRunAt(nextRun);
+      if (nextRun) {
+        next_run_at = formatNextRunAt(nextRun);
+      }
     }
 
     // Update template
@@ -5999,7 +6015,7 @@ app.put('/api/youtube/templates/:id/recurring', isAuthenticated, async (req, res
       recurring_enabled,
       recurring_pattern,
       recurring_time,
-      recurring_days,
+      recurring_days: normalizedDays,
       next_run_at
     });
 

@@ -386,7 +386,11 @@ class BroadcastTemplate {
       }
     }
 
-    const daysJson = Array.isArray(recurring_days) ? JSON.stringify(recurring_days) : recurring_days;
+    // Handle recurring_days: convert array to JSON string, or set to null
+    let daysJson = null;
+    if (Array.isArray(recurring_days) && recurring_days.length > 0) {
+      daysJson = JSON.stringify(recurring_days);
+    }
 
     return new Promise((resolve, reject) => {
       db.run(
