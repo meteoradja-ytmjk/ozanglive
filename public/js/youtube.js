@@ -1373,9 +1373,16 @@ if (createBroadcastForm) {
       
       if (data.success) {
         // Save stream key folder mapping to server for edit persistence
-        const streamId = document.getElementById('streamKeySelect').value;
-        if (streamId && currentThumbnailFolder !== null) {
-          saveStreamKeyFolderMappingToServer(streamId, currentThumbnailFolder || '');
+        // Use streamId from response (broadcast object contains streamId)
+        const streamIdFromResponse = data.broadcast?.streamId;
+        const streamIdFromForm = document.getElementById('streamKeySelect').value;
+        const streamIdToSave = streamIdFromResponse || streamIdFromForm;
+        
+        if (streamIdToSave) {
+          // Save current folder (even if root/empty string)
+          const folderToSave = currentThumbnailFolder || '';
+          await saveStreamKeyFolderMappingToServer(streamIdToSave, folderToSave);
+          console.log(`[CreateBroadcast] Saved mapping: ${streamIdToSave} -> ${folderToSave || 'root'}`);
         }
         
         showToast('Broadcast created successfully!');
@@ -1511,7 +1518,7 @@ async function openEditBroadcastModal(broadcast) {
   
   // Check if broadcast has a stream key and load bound folder from server database
   const streamId = broadcast.streamId;
-  let boundFolder = null;
+  let boundFolder = undefined;
   
   if (streamId) {
     boundFolder = await getStreamKeyFolderMappingFromServer(streamId);
@@ -1519,14 +1526,16 @@ async function openEditBroadcastModal(broadcast) {
   }
   
   // Load the bound folder or root
-  if (boundFolder !== undefined && boundFolder !== null) {
+  // boundFolder can be: undefined (not found), '' (root), or 'folderName'
+  if (boundFolder !== undefined) {
     const folderSelect = document.getElementById('editThumbnailFolderSelect');
     if (folderSelect) {
-      folderSelect.value = boundFolder || '';
+      folderSelect.value = boundFolder; // '' for root, 'folderName' for folder
     }
-    loadEditThumbnailFolder(boundFolder || null);
+    // Convert '' to null for loadEditThumbnailFolder (null = root)
+    loadEditThumbnailFolder(boundFolder === '' ? null : boundFolder);
   } else {
-    loadEditThumbnailFolder(null); // Load root folder
+    loadEditThumbnailFolder(null); // Load root folder if no mapping found
   }
   
   document.getElementById('editBroadcastModal').classList.remove('hidden');
