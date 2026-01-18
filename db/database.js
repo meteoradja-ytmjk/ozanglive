@@ -490,6 +490,9 @@ async function createCoreTablesAsync() {
   await runTableQuery(`CREATE INDEX IF NOT EXISTS idx_youtube_broadcast_settings_broadcast 
           ON youtube_broadcast_settings(broadcast_id)`, 'youtube_broadcast_settings.broadcast_index');
 
+  // Add thumbnail_folder column to youtube_broadcast_settings
+  await runTableQuery(`ALTER TABLE youtube_broadcast_settings ADD COLUMN thumbnail_folder TEXT`, 'youtube_broadcast_settings.thumbnail_folder');
+
   // Create stream_key_folder_mapping table for storing stream key to thumbnail folder binding
   await runTableQuery(`CREATE TABLE IF NOT EXISTS stream_key_folder_mapping (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

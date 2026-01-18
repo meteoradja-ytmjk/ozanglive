@@ -5181,6 +5181,34 @@ app.get('/api/stream-key-folder-mapping/:streamKeyId', isAuthenticated, async (r
   }
 });
 
+// Get broadcast settings (including thumbnail folder)
+app.get('/api/youtube/broadcast-settings/:broadcastId', isAuthenticated, async (req, res) => {
+  try {
+    const { broadcastId } = req.params;
+    
+    const settings = await YouTubeBroadcastSettings.findByBroadcastId(broadcastId);
+    
+    if (settings) {
+      res.json({ 
+        success: true, 
+        settings: {
+          broadcastId: settings.broadcast_id,
+          thumbnailFolder: settings.thumbnailFolder,
+          enableAutoStart: settings.enableAutoStart,
+          enableAutoStop: settings.enableAutoStop,
+          unlistReplayOnEnd: settings.unlistReplayOnEnd
+        },
+        found: true 
+      });
+    } else {
+      res.json({ success: true, settings: null, found: false });
+    }
+  } catch (error) {
+    console.error('[broadcast-settings] Error:', error.message);
+    res.status(500).json({ success: false, error: 'Failed to get broadcast settings' });
+  }
+});
+
 // Get YouTube channel defaults for auto-fill - supports accountId parameter
 app.get('/api/youtube/channel-defaults', isAuthenticated, async (req, res) => {
   try {
@@ -5356,7 +5384,10 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       alteredContent: alteredContent === 'true' || alteredContent === true
     });
     
-    // Save broadcast settings for later use (e.g., unlist replay on end)
+    // Get thumbnail folder from request
+    const thumbnailFolder = req.body.thumbnailFolder;
+    
+    // Save broadcast settings for later use (e.g., unlist replay on end, thumbnail folder)
     try {
       await YouTubeBroadcastSettings.upsert({
         broadcastId: broadcast.broadcastId,
@@ -5365,9 +5396,10 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         enableAutoStart: enableAutoStart === 'true' || enableAutoStart === true,
         enableAutoStop: enableAutoStop !== 'false' && enableAutoStop !== false,
         unlistReplayOnEnd: unlistReplayOnEnd === 'true' || unlistReplayOnEnd === true,
-        originalPrivacyStatus: privacyStatus || 'unlisted'
+        originalPrivacyStatus: privacyStatus || 'unlisted',
+        thumbnailFolder: thumbnailFolder !== undefined ? thumbnailFolder : null
       });
-      console.log('[API] Saved broadcast settings for:', broadcast.broadcastId);
+      console.log('[API] Saved broadcast settings for:', broadcast.broadcastId, 'thumbnailFolder:', thumbnailFolder);
     } catch (settingsErr) {
       console.error('[API] Error saving broadcast settings:', settingsErr.message);
       // Don't fail the request, just log the error
@@ -5375,7 +5407,6 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
     
     // Upload thumbnail if provided (either file upload, gallery selection, or random from folder)
     const thumbnailPath = req.body.thumbnailPath;
-    const thumbnailFolder = req.body.thumbnailFolder;
     
     if (req.file) {
       // Handle file upload

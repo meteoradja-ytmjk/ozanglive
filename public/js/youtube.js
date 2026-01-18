@@ -454,6 +454,26 @@ async function getStreamKeyFolderMappingFromServer(streamKeyId) {
   }
 }
 
+// Get broadcast settings (including thumbnail folder) from server
+async function getBroadcastSettingsFromServer(broadcastId) {
+  try {
+    const response = await fetch(`/api/youtube/broadcast-settings/${encodeURIComponent(broadcastId)}`, {
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+    
+    const data = await response.json();
+    if (data.success && data.found) {
+      return data.settings;
+    }
+    return null;
+  } catch (e) {
+    console.warn('[Server] Failed to get broadcast settings:', e.message);
+    return null;
+  }
+}
+
 // Create folder modal functions
 function openCreateFolderModal() {
   document.getElementById('createFolderModal').classList.remove('hidden');
@@ -1372,19 +1392,6 @@ if (createBroadcastForm) {
       const data = await response.json();
       
       if (data.success) {
-        // Save stream key folder mapping to server for edit persistence
-        // Use streamId from response (broadcast object contains streamId)
-        const streamIdFromResponse = data.broadcast?.streamId;
-        const streamIdFromForm = document.getElementById('streamKeySelect').value;
-        const streamIdToSave = streamIdFromResponse || streamIdFromForm;
-        
-        if (streamIdToSave) {
-          // Save current folder (even if root/empty string)
-          const folderToSave = currentThumbnailFolder || '';
-          await saveStreamKeyFolderMappingToServer(streamIdToSave, folderToSave);
-          console.log(`[CreateBroadcast] Saved mapping: ${streamIdToSave} -> ${folderToSave || 'root'}`);
-        }
-        
         showToast('Broadcast created successfully!');
         closeCreateBroadcastModal();
         setTimeout(() => window.location.reload(), 1000);
@@ -1516,13 +1523,18 @@ async function openEditBroadcastModal(broadcast) {
   // Load thumbnail folders first
   await loadEditThumbnailFolders();
   
-  // Check if broadcast has a stream key and load bound folder from server database
-  const streamId = broadcast.streamId;
+  // Get thumbnail folder from broadcast settings (saved when broadcast was created)
+  const broadcastId = broadcast.id;
   let boundFolder = undefined;
   
-  if (streamId) {
-    boundFolder = await getStreamKeyFolderMappingFromServer(streamId);
-    console.log(`[openEditBroadcastModal] Stream key ${streamId} bound to folder: ${boundFolder !== undefined ? (boundFolder || 'root') : 'not found'}`);
+  if (broadcastId) {
+    const settings = await getBroadcastSettingsFromServer(broadcastId);
+    if (settings && settings.thumbnailFolder !== null && settings.thumbnailFolder !== undefined) {
+      boundFolder = settings.thumbnailFolder;
+      console.log(`[openEditBroadcastModal] Broadcast ${broadcastId} has folder: ${boundFolder || 'root'}`);
+    } else {
+      console.log(`[openEditBroadcastModal] Broadcast ${broadcastId} has no saved folder settings`);
+    }
   }
   
   // Load the bound folder or root

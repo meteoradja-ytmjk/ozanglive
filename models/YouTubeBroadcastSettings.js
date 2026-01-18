@@ -14,19 +14,21 @@ class YouTubeBroadcastSettings {
       enableAutoStart = true,
       enableAutoStop = true,
       unlistReplayOnEnd = true,
-      originalPrivacyStatus = 'public'
+      originalPrivacyStatus = 'public',
+      thumbnailFolder = null
     } = data;
 
     return new Promise((resolve, reject) => {
       db.run(
         `INSERT INTO youtube_broadcast_settings 
-         (broadcast_id, user_id, account_id, enable_auto_start, enable_auto_stop, unlist_replay_on_end, original_privacy_status)
-         VALUES (?, ?, ?, ?, ?, ?, ?)
+         (broadcast_id, user_id, account_id, enable_auto_start, enable_auto_stop, unlist_replay_on_end, original_privacy_status, thumbnail_folder)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(broadcast_id) DO UPDATE SET
            enable_auto_start = excluded.enable_auto_start,
            enable_auto_stop = excluded.enable_auto_stop,
            unlist_replay_on_end = excluded.unlist_replay_on_end,
-           original_privacy_status = excluded.original_privacy_status`,
+           original_privacy_status = excluded.original_privacy_status,
+           thumbnail_folder = excluded.thumbnail_folder`,
         [
           broadcastId,
           userId,
@@ -34,7 +36,8 @@ class YouTubeBroadcastSettings {
           enableAutoStart ? 1 : 0,
           enableAutoStop ? 1 : 0,
           unlistReplayOnEnd ? 1 : 0,
-          originalPrivacyStatus
+          originalPrivacyStatus,
+          thumbnailFolder
         ],
         function(err) {
           if (err) {
@@ -49,8 +52,31 @@ class YouTubeBroadcastSettings {
             enableAutoStart,
             enableAutoStop,
             unlistReplayOnEnd,
-            originalPrivacyStatus
+            originalPrivacyStatus,
+            thumbnailFolder
           });
+        }
+      );
+    });
+  }
+
+  /**
+   * Update only thumbnail folder for a broadcast
+   * @param {string} broadcastId - YouTube broadcast ID
+   * @param {string} thumbnailFolder - Folder name (empty string for root)
+   * @returns {Promise<boolean>}
+   */
+  static async updateThumbnailFolder(broadcastId, thumbnailFolder) {
+    return new Promise((resolve, reject) => {
+      db.run(
+        `UPDATE youtube_broadcast_settings SET thumbnail_folder = ? WHERE broadcast_id = ?`,
+        [thumbnailFolder, broadcastId],
+        function(err) {
+          if (err) {
+            console.error('[YouTubeBroadcastSettings.updateThumbnailFolder] Error:', err.message);
+            return reject(err);
+          }
+          resolve(this.changes > 0);
         }
       );
     });
@@ -76,6 +102,7 @@ class YouTubeBroadcastSettings {
             row.enableAutoStop = row.enable_auto_stop === 1;
             row.unlistReplayOnEnd = row.unlist_replay_on_end === 1;
             row.originalPrivacyStatus = row.original_privacy_status;
+            row.thumbnailFolder = row.thumbnail_folder;
           }
           resolve(row);
         }
