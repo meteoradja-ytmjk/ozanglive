@@ -264,6 +264,41 @@ function onAccountChange(accountId) {
   }
 }
 
+// Handle stream key change - auto-select bound folder if exists
+function onStreamKeyChange(streamKeyId) {
+  const mappingInput = document.getElementById('streamKeyFolderMapping');
+  const bindCheckbox = document.getElementById('bindFolderToStreamKey');
+  
+  if (!mappingInput || !streamKeyId) return;
+  
+  try {
+    const mapping = JSON.parse(mappingInput.value || '{}');
+    
+    // Check if this stream key has a bound folder
+    if (mapping[streamKeyId] !== undefined) {
+      const boundFolder = mapping[streamKeyId];
+      console.log(`[onStreamKeyChange] Stream key ${streamKeyId} bound to folder: ${boundFolder || 'root'}`);
+      
+      // Auto-select the bound folder
+      openThumbnailFolder(boundFolder || null);
+      
+      // Check the bind checkbox
+      if (bindCheckbox) {
+        bindCheckbox.checked = true;
+      }
+      
+      showToast(`Folder "${boundFolder || 'Root'}" otomatis dipilih (terikat ke stream key)`);
+    } else {
+      // Uncheck bind checkbox if no mapping exists
+      if (bindCheckbox) {
+        bindCheckbox.checked = false;
+      }
+    }
+  } catch (e) {
+    console.warn('[onStreamKeyChange] Failed to parse mapping:', e.message);
+  }
+}
+
 // Current thumbnail folder state
 let currentThumbnailFolder = null;
 
@@ -551,13 +586,25 @@ async function fetchThumbnails(folder = null) {
       uploadBtn.title = '';
     }
     
+    // Get current thumbnail mode
+    const thumbnailMode = document.querySelector('input[name="thumbnailMode"]:checked')?.value || 'sequential';
+    const pinnedThumbnailPath = document.getElementById('pinnedThumbnail')?.value || '';
+    
     if (data.success && data.thumbnails && data.thumbnails.length > 0) {
-      data.thumbnails.forEach(thumb => {
+      data.thumbnails.forEach((thumb, index) => {
         const div = document.createElement('div');
-        div.className = 'thumbnail-item w-full aspect-video bg-dark-600 rounded-lg cursor-pointer overflow-hidden border-2 border-transparent hover:border-primary/70 transition-all relative group shadow-sm hover:shadow-md';
+        const isPinned = pinnedThumbnailPath === thumb.path;
+        div.className = `thumbnail-item w-full aspect-video bg-dark-600 rounded-lg cursor-pointer overflow-hidden border-2 ${isPinned ? 'border-green-500 ring-2 ring-green-500/50' : 'border-transparent'} hover:border-primary/70 transition-all relative group shadow-sm hover:shadow-md`;
         div.innerHTML = `
           <img src="${thumb.url}" class="w-full h-full object-cover" alt="Thumbnail" loading="lazy">
           <div class="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors"></div>
+          <div class="absolute top-1 left-1 w-5 h-5 bg-dark-800/80 rounded-full flex items-center justify-center text-[10px] text-gray-300 font-medium">${index + 1}</div>
+          ${isPinned ? '<div class="absolute top-1 left-7 px-1.5 py-0.5 bg-green-500/90 rounded text-[9px] text-white font-medium flex items-center gap-0.5"><i class="ti ti-pin-filled text-[8px]"></i>PIN</div>' : ''}
+          <button type="button" onclick="event.stopPropagation(); pinThumbnail('${escapeJsString(thumb.path)}', '${escapeJsString(thumb.filename)}')" 
+            class="absolute top-1 right-7 w-5 h-5 sm:w-6 sm:h-6 ${isPinned ? 'bg-green-500' : 'bg-yellow-500/90 hover:bg-yellow-500'} rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all scale-90 group-hover:scale-100"
+            title="${isPinned ? 'Thumbnail di-pin' : 'Pin thumbnail ini'}">
+            <i class="ti ti-pin${isPinned ? '-filled' : ''} text-white text-[10px] sm:text-xs"></i>
+          </button>
           <button type="button" onclick="event.stopPropagation(); deleteThumbnail('${thumb.filename}', '${thumb.folder || ''}')" 
             class="absolute top-1 right-1 w-5 h-5 sm:w-6 sm:h-6 bg-red-500/90 hover:bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all scale-90 group-hover:scale-100"
             title="Delete thumbnail">
@@ -568,6 +615,7 @@ async function fetchThumbnails(folder = null) {
         div.dataset.path = thumb.path;
         div.dataset.filename = thumb.filename;
         div.dataset.folder = thumb.folder || '';
+        div.dataset.index = index;
         div.onclick = () => selectGalleryThumbnail(div, thumb.url, thumb.path);
         grid.appendChild(div);
       });
@@ -582,12 +630,123 @@ async function fetchThumbnails(folder = null) {
   }
 }
 
+// Pin thumbnail
+function pinThumbnail(path, filename) {
+  const pinnedInput = document.getElementById('pinnedThumbnail');
+  const indicator = document.getElementById('pinnedThumbnailIndicator');
+  const nameEl = document.getElementById('pinnedThumbnailName');
+  
+  if (pinnedInput) {
+    pinnedInput.value = path;
+  }
+  
+  if (indicator && nameEl) {
+    indicator.classList.remove('hidden');
+    nameEl.textContent = filename;
+  }
+  
+  // Set thumbnail mode to pinned
+  const pinnedRadio = document.querySelector('input[name="thumbnailMode"][value="pinned"]');
+  if (pinnedRadio) {
+    pinnedRadio.checked = true;
+  }
+  
+  // Refresh gallery to show pin indicator
+  fetchThumbnails(currentThumbnailFolder);
+  
+  showToast(`Thumbnail "${filename}" di-pin`);
+}
+
+// Unpin thumbnail
+function unpinThumbnail() {
+  const pinnedInput = document.getElementById('pinnedThumbnail');
+  const indicator = document.getElementById('pinnedThumbnailIndicator');
+  
+  if (pinnedInput) {
+    pinnedInput.value = '';
+  }
+  
+  if (indicator) {
+    indicator.classList.add('hidden');
+  }
+  
+  // Set thumbnail mode back to sequential
+  const sequentialRadio = document.querySelector('input[name="thumbnailMode"][value="sequential"]');
+  if (sequentialRadio) {
+    sequentialRadio.checked = true;
+  }
+  
+  // Refresh gallery to remove pin indicator
+  fetchThumbnails(currentThumbnailFolder);
+  
+  showToast('Pin thumbnail dihapus');
+}
+
+// Update thumbnail mode
+function updateThumbnailMode(mode) {
+  const pinnedInput = document.getElementById('pinnedThumbnail');
+  const indicator = document.getElementById('pinnedThumbnailIndicator');
+  
+  if (mode === 'sequential') {
+    // Clear pinned thumbnail when switching to sequential
+    if (pinnedInput && pinnedInput.value) {
+      pinnedInput.value = '';
+    }
+    if (indicator) {
+      indicator.classList.add('hidden');
+    }
+    fetchThumbnails(currentThumbnailFolder);
+  }
+}
+
+// Toggle bind folder to stream key
+function toggleBindFolderToStreamKey(checked) {
+  const streamKeySelect = document.getElementById('streamKeySelect');
+  const mappingInput = document.getElementById('streamKeyFolderMapping');
+  
+  if (!streamKeySelect || !mappingInput) return;
+  
+  if (checked && streamKeySelect.value) {
+    // Create or update mapping
+    let mapping = {};
+    try {
+      mapping = JSON.parse(mappingInput.value || '{}');
+    } catch (e) {
+      mapping = {};
+    }
+    
+    // Map current stream key to current folder (empty string for root)
+    mapping[streamKeySelect.value] = currentThumbnailFolder || '';
+    mappingInput.value = JSON.stringify(mapping);
+    
+    const folderName = currentThumbnailFolder || 'Root';
+    const streamKeyName = streamKeySelect.options[streamKeySelect.selectedIndex]?.text || streamKeySelect.value;
+    showToast(`Folder "${folderName}" diikat ke "${streamKeyName}"`);
+  } else if (!checked) {
+    // Remove mapping for current stream key
+    let mapping = {};
+    try {
+      mapping = JSON.parse(mappingInput.value || '{}');
+    } catch (e) {
+      mapping = {};
+    }
+    
+    if (streamKeySelect.value && mapping[streamKeySelect.value] !== undefined) {
+      delete mapping[streamKeySelect.value];
+      mappingInput.value = Object.keys(mapping).length > 0 ? JSON.stringify(mapping) : '';
+    }
+  }
+}
+
 // Select thumbnail from gallery
 function selectGalleryThumbnail(element, url, path) {
   // Remove selection from all thumbnails
   document.querySelectorAll('.thumbnail-item').forEach(item => {
     item.classList.remove('border-primary', 'border-primary/70', 'border-red-500', 'ring-2', 'ring-primary/50');
-    item.classList.add('border-transparent');
+    // Keep green border for pinned thumbnail
+    if (!item.classList.contains('border-green-500')) {
+      item.classList.add('border-transparent');
+    }
   });
   
   // Add selection to clicked thumbnail
@@ -1075,9 +1234,27 @@ function closeCreateBroadcastModal() {
   const folderInput = document.getElementById('currentThumbnailFolder');
   if (folderInput) folderInput.value = '';
   
+  // Reset pinned thumbnail
+  const pinnedInput = document.getElementById('pinnedThumbnail');
+  if (pinnedInput) pinnedInput.value = '';
+  const pinnedIndicator = document.getElementById('pinnedThumbnailIndicator');
+  if (pinnedIndicator) pinnedIndicator.classList.add('hidden');
+  
+  // Reset stream key folder mapping
+  const mappingInput = document.getElementById('streamKeyFolderMapping');
+  if (mappingInput) mappingInput.value = '';
+  
+  // Reset bind folder checkbox
+  const bindCheckbox = document.getElementById('bindFolderToStreamKey');
+  if (bindCheckbox) bindCheckbox.checked = false;
+  
+  // Reset thumbnail mode to sequential
+  const sequentialRadio = document.querySelector('input[name="thumbnailMode"][value="sequential"]');
+  if (sequentialRadio) sequentialRadio.checked = true;
+  
   // Clear thumbnail selection
   document.querySelectorAll('.thumbnail-item').forEach(item => {
-    item.classList.remove('border-primary', 'border-red-500');
+    item.classList.remove('border-primary', 'border-red-500', 'border-green-500', 'ring-2', 'ring-primary/50', 'ring-green-500/50');
     item.classList.add('border-transparent');
   });
   
@@ -1142,6 +1319,23 @@ if (createBroadcastForm) {
       const thumbnailPath = document.getElementById('selectedThumbnailPath').value;
       if (thumbnailPath) {
         formData.append('thumbnailPath', thumbnailPath);
+      }
+      
+      // Add current thumbnail folder for sequential selection
+      if (currentThumbnailFolder !== null) {
+        formData.append('thumbnailFolder', currentThumbnailFolder);
+      }
+      
+      // Add pinned thumbnail if set
+      const pinnedThumbnail = document.getElementById('pinnedThumbnail')?.value;
+      if (pinnedThumbnail) {
+        formData.append('pinnedThumbnail', pinnedThumbnail);
+      }
+      
+      // Add stream key folder mapping if set
+      const streamKeyFolderMapping = document.getElementById('streamKeyFolderMapping')?.value;
+      if (streamKeyFolderMapping) {
+        formData.append('streamKeyFolderMapping', streamKeyFolderMapping);
       }
       
       const response = await fetch('/api/youtube/broadcasts', {
@@ -1556,6 +1750,7 @@ function renderTemplateList(templates) {
     const broadcastCount = isMulti ? template.broadcasts.length : 1;
     const hasRecurring = template.recurring_enabled;
     const hasThumbnailFolder = template.thumbnail_folder !== null && template.thumbnail_folder !== undefined;
+    const hasPinnedThumbnail = template.pinned_thumbnail !== null && template.pinned_thumbnail !== undefined && template.pinned_thumbnail !== '';
     const accountInvalid = template.account_valid === false;
     
     // Build recurring info HTML for desktop
@@ -1574,9 +1769,15 @@ function renderTemplateList(templates) {
       `;
     }
     
-    // Thumbnail folder badge
-    const thumbnailFolderBadge = hasThumbnailFolder ? 
-      `<span class="px-1.5 py-0.5 bg-yellow-500/20 text-yellow-400 text-xs rounded flex items-center gap-0.5" title="Random thumbnail from: ${escapeHtml(template.thumbnail_folder || 'Root')}"><i class="ti ti-dice-3 text-[10px]"></i> ${escapeHtml(template.thumbnail_folder || 'Root')}</span>` : '';
+    // Thumbnail folder badge - show sequential mode info
+    let thumbnailBadge = '';
+    if (hasPinnedThumbnail) {
+      thumbnailBadge = `<span class="px-1.5 py-0.5 bg-green-500/20 text-green-400 text-xs rounded flex items-center gap-0.5" title="Pinned thumbnail"><i class="ti ti-pin-filled text-[10px]"></i> Pin</span>`;
+    } else if (hasThumbnailFolder) {
+      const folderName = template.thumbnail_folder || 'Root';
+      const currentIndex = template.thumbnail_index || 0;
+      thumbnailBadge = `<span class="px-1.5 py-0.5 bg-yellow-500/20 text-yellow-400 text-xs rounded flex items-center gap-0.5" title="Sequential thumbnail from: ${escapeHtml(folderName)} (index: ${currentIndex})"><i class="ti ti-list-numbers text-[10px]"></i> ${escapeHtml(folderName)} #${currentIndex + 1}</span>`;
+    }
     
     // Channel display with warning if account is invalid
     const channelDisplay = accountInvalid 
@@ -1599,7 +1800,7 @@ function renderTemplateList(templates) {
             <h4 class="font-medium text-white truncate">${escapeHtml(template.name)}</h4>
             ${isMulti ? `<span class="px-1.5 py-0.5 bg-primary/20 text-primary text-xs rounded">${broadcastCount} broadcasts</span>` : ''}
             ${hasRecurring ? `<span class="recurring-badge px-1.5 py-0.5 bg-green-500/20 text-green-400 text-xs rounded flex items-center gap-0.5"><i class="ti ti-repeat text-[10px]"></i> Auto</span>` : ''}
-            ${thumbnailFolderBadge}
+            ${thumbnailBadge}
           </div>
           <p class="text-sm text-gray-400 truncate">${escapeHtml(template.title)}</p>
           <div class="flex items-center gap-2 mt-1">
@@ -2506,16 +2707,16 @@ async function loadMultiTemplateThumbnailFolders() {
     const data = await response.json();
     
     // Keep first option, clear others
-    select.innerHTML = '<option value="">-- No random thumbnail --</option>';
+    select.innerHTML = '<option value="">-- No thumbnail folder --</option>';
     
     // Add root folder option
-    select.innerHTML += '<option value="__root__">📁 Root (semua thumbnail)</option>';
+    select.innerHTML += '<option value="__root__">📁 Root (thumbnail berurutan)</option>';
     
     if (data.success && data.folders) {
       data.folders.forEach(folder => {
         const option = document.createElement('option');
         option.value = folder.name;
-        option.textContent = `📁 ${folder.name}`;
+        option.textContent = `📁 ${folder.name} (${folder.count} thumbnail)`;
         select.appendChild(option);
       });
     }

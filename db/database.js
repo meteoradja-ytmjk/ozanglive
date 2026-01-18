@@ -391,6 +391,16 @@ async function createCoreTablesAsync() {
   // Add thumbnail_folder column for random thumbnail selection
   await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN thumbnail_folder TEXT`, 'broadcast_templates.thumbnail_folder');
 
+  // Add thumbnail_index column for sequential thumbnail selection (not random)
+  await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN thumbnail_index INTEGER DEFAULT 0`, 'broadcast_templates.thumbnail_index');
+
+  // Add pinned_thumbnail column for pinning specific thumbnail
+  await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN pinned_thumbnail TEXT`, 'broadcast_templates.pinned_thumbnail');
+
+  // Add stream_key_folder_mapping column to store stream key to folder binding as JSON
+  // Format: {"streamKeyId": "folderName", ...}
+  await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN stream_key_folder_mapping TEXT`, 'broadcast_templates.stream_key_folder_mapping');
+
   // Create recurring_schedules table for scheduled recurring broadcasts
   await runTableQuery(`CREATE TABLE IF NOT EXISTS recurring_schedules (
     id TEXT PRIMARY KEY,

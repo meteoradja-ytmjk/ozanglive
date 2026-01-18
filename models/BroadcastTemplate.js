@@ -28,6 +28,17 @@ class BroadcastTemplate {
       }
     }
     
+    // Parse stream_key_folder_mapping JSON
+    if (row.stream_key_folder_mapping) {
+      try {
+        row.stream_key_folder_mapping = JSON.parse(row.stream_key_folder_mapping);
+      } catch (e) {
+        row.stream_key_folder_mapping = {};
+      }
+    } else {
+      row.stream_key_folder_mapping = {};
+    }
+    
     // Convert recurring_enabled to boolean
     row.recurring_enabled = !!row.recurring_enabled;
     
@@ -52,6 +63,9 @@ class BroadcastTemplate {
       category_id = '20',
       thumbnail_path = null,
       thumbnail_folder = null,
+      thumbnail_index = 0,
+      pinned_thumbnail = null,
+      stream_key_folder_mapping = null,
       stream_id = null,
       // Recurring fields
       recurring_enabled = false,
@@ -89,17 +103,21 @@ class BroadcastTemplate {
 
     const tagsJson = Array.isArray(tags) ? JSON.stringify(tags) : tags;
     const daysJson = Array.isArray(recurring_days) ? JSON.stringify(recurring_days) : recurring_days;
+    const streamKeyFolderMappingJson = stream_key_folder_mapping ? 
+      (typeof stream_key_folder_mapping === 'string' ? stream_key_folder_mapping : JSON.stringify(stream_key_folder_mapping)) : null;
 
     return new Promise((resolve, reject) => {
       db.run(
         `INSERT INTO broadcast_templates (
           id, user_id, account_id, name, title, description,
-          privacy_status, tags, category_id, thumbnail_path, thumbnail_folder, stream_id,
+          privacy_status, tags, category_id, thumbnail_path, thumbnail_folder, 
+          thumbnail_index, pinned_thumbnail, stream_key_folder_mapping, stream_id,
           recurring_enabled, recurring_pattern, recurring_time, recurring_days, next_run_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id, user_id, account_id, name.trim(), title, description,
-          privacy_status, tagsJson, category_id, thumbnail_path, thumbnail_folder, stream_id,
+          privacy_status, tagsJson, category_id, thumbnail_path, thumbnail_folder,
+          thumbnail_index || 0, pinned_thumbnail, streamKeyFolderMappingJson, stream_id,
           recurring_enabled ? 1 : 0, recurring_pattern, recurring_time, daysJson, next_run_at
         ],
         function (err) {
@@ -122,6 +140,9 @@ class BroadcastTemplate {
             category_id,
             thumbnail_path,
             thumbnail_folder,
+            thumbnail_index: thumbnail_index || 0,
+            pinned_thumbnail,
+            stream_key_folder_mapping: stream_key_folder_mapping || {},
             stream_id,
             recurring_enabled: !!recurring_enabled,
             recurring_pattern,
@@ -472,6 +493,79 @@ class BroadcastTemplate {
             return reject(err);
           }
           resolve({ success: true, updated: this.changes > 0 });
+        }
+      );
+    });
+  }
+
+  /**
+   * Update thumbnail index for sequential selection
+   * @param {string} id - Template ID
+   * @param {number} newIndex - New thumbnail index
+   * @returns {Promise<Object>} Update result
+   */
+  static updateThumbnailIndex(id, newIndex) {
+    return new Promise((resolve, reject) => {
+      db.run(
+        `UPDATE broadcast_templates 
+         SET thumbnail_index = ?, updated_at = CURRENT_TIMESTAMP 
+         WHERE id = ?`,
+        [newIndex, id],
+        function (err) {
+          if (err) {
+            console.error('Error updating thumbnail index:', err.message);
+            return reject(err);
+          }
+          resolve({ success: true, updated: this.changes > 0, thumbnail_index: newIndex });
+        }
+      );
+    });
+  }
+
+  /**
+   * Update pinned thumbnail
+   * @param {string} id - Template ID
+   * @param {string|null} pinnedThumbnail - Pinned thumbnail path or null to unpin
+   * @returns {Promise<Object>} Update result
+   */
+  static updatePinnedThumbnail(id, pinnedThumbnail) {
+    return new Promise((resolve, reject) => {
+      db.run(
+        `UPDATE broadcast_templates 
+         SET pinned_thumbnail = ?, updated_at = CURRENT_TIMESTAMP 
+         WHERE id = ?`,
+        [pinnedThumbnail, id],
+        function (err) {
+          if (err) {
+            console.error('Error updating pinned thumbnail:', err.message);
+            return reject(err);
+          }
+          resolve({ success: true, updated: this.changes > 0, pinned_thumbnail: pinnedThumbnail });
+        }
+      );
+    });
+  }
+
+  /**
+   * Update stream key to folder mapping
+   * @param {string} id - Template ID
+   * @param {Object} mapping - Stream key to folder mapping object
+   * @returns {Promise<Object>} Update result
+   */
+  static updateStreamKeyFolderMapping(id, mapping) {
+    const mappingJson = mapping ? JSON.stringify(mapping) : null;
+    return new Promise((resolve, reject) => {
+      db.run(
+        `UPDATE broadcast_templates 
+         SET stream_key_folder_mapping = ?, updated_at = CURRENT_TIMESTAMP 
+         WHERE id = ?`,
+        [mappingJson, id],
+        function (err) {
+          if (err) {
+            console.error('Error updating stream key folder mapping:', err.message);
+            return reject(err);
+          }
+          resolve({ success: true, updated: this.changes > 0, stream_key_folder_mapping: mapping });
         }
       );
     });

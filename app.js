@@ -5586,10 +5586,16 @@ app.post('/api/youtube/broadcasts/:id/thumbnail', isAuthenticated, thumbnailUplo
 // Create new broadcast template
 app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
   try {
-    const { name, title, description, privacyStatus, tags, categoryId, thumbnailPath, thumbnailFolder, streamId, accountId } = req.body;
+    const { 
+      name, title, description, privacyStatus, tags, categoryId, 
+      thumbnailPath, thumbnailFolder, pinnedThumbnail, streamKeyFolderMapping,
+      streamId, accountId 
+    } = req.body;
     
     console.log('[create-template] Received streamId:', streamId);
     console.log('[create-template] Received thumbnailFolder:', thumbnailFolder);
+    console.log('[create-template] Received pinnedThumbnail:', pinnedThumbnail);
+    console.log('[create-template] Received streamKeyFolderMapping:', streamKeyFolderMapping);
     
     if (!name || !title || !accountId) {
       return res.status(400).json({
@@ -5604,6 +5610,18 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
       return res.status(404).json({ success: false, error: 'Account not found' });
     }
 
+    // Parse stream key folder mapping if provided
+    let parsedMapping = null;
+    if (streamKeyFolderMapping) {
+      try {
+        parsedMapping = typeof streamKeyFolderMapping === 'string' 
+          ? JSON.parse(streamKeyFolderMapping) 
+          : streamKeyFolderMapping;
+      } catch (e) {
+        console.warn('[create-template] Failed to parse streamKeyFolderMapping:', e.message);
+      }
+    }
+
     const template = await BroadcastTemplate.create({
       user_id: req.session.userId,
       account_id: parseInt(accountId),
@@ -5614,11 +5632,14 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
       tags: tags || null,
       category_id: categoryId || '22',
       thumbnail_path: thumbnailPath || null,
-      thumbnail_folder: thumbnailFolder || null,
+      thumbnail_folder: thumbnailFolder !== undefined ? thumbnailFolder : null,
+      thumbnail_index: 0,
+      pinned_thumbnail: pinnedThumbnail || null,
+      stream_key_folder_mapping: parsedMapping,
       stream_id: streamId || null
     });
 
-    console.log('[create-template] Created template with stream_id:', template.stream_id, 'thumbnail_folder:', template.thumbnail_folder);
+    console.log('[create-template] Created template with stream_id:', template.stream_id, 'thumbnail_folder:', template.thumbnail_folder, 'pinned_thumbnail:', template.pinned_thumbnail);
 
     res.json({ success: true, template });
   } catch (error) {
@@ -5633,7 +5654,7 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
 // Create multi-broadcast template (save multiple broadcasts as one template)
 app.post('/api/youtube/templates/multi', isAuthenticated, async (req, res) => {
   try {
-    const { name, accountId, broadcasts, thumbnailFolder } = req.body;
+    const { name, accountId, broadcasts, thumbnailFolder, streamKeyFolderMapping } = req.body;
     
     if (!name || !accountId || !broadcasts || broadcasts.length === 0) {
       return res.status(400).json({
@@ -5648,6 +5669,18 @@ app.post('/api/youtube/templates/multi', isAuthenticated, async (req, res) => {
       return res.status(404).json({ success: false, error: 'Account not found' });
     }
 
+    // Parse stream key folder mapping if provided
+    let parsedMapping = null;
+    if (streamKeyFolderMapping) {
+      try {
+        parsedMapping = typeof streamKeyFolderMapping === 'string' 
+          ? JSON.parse(streamKeyFolderMapping) 
+          : streamKeyFolderMapping;
+      } catch (e) {
+        console.warn('[templates/multi] Failed to parse streamKeyFolderMapping:', e.message);
+      }
+    }
+
     // Ensure each broadcast has streamId, thumbnailPath, and thumbnailFolder preserved
     const broadcastsWithStreamId = broadcasts.map(b => ({
       title: b.title,
@@ -5658,7 +5691,8 @@ app.post('/api/youtube/templates/multi', isAuthenticated, async (req, res) => {
       categoryId: b.categoryId || '22',
       tags: b.tags || [],
       thumbnailPath: b.thumbnailPath || b.thumbnail_path || null,  // Preserve thumbnail path
-      thumbnailFolder: thumbnailFolder || b.thumbnailFolder || null  // Preserve thumbnail folder for random selection
+      thumbnailFolder: thumbnailFolder || b.thumbnailFolder || null,  // Preserve thumbnail folder for sequential selection
+      pinnedThumbnail: b.pinnedThumbnail || null  // Preserve pinned thumbnail
     }));
 
     console.log('[templates/multi] Saving broadcasts with data:', broadcastsWithStreamId.map(b => ({ 
@@ -5666,6 +5700,7 @@ app.post('/api/youtube/templates/multi', isAuthenticated, async (req, res) => {
       streamId: b.streamId, 
       thumbnailPath: b.thumbnailPath,
       thumbnailFolder: b.thumbnailFolder,
+      pinnedThumbnail: b.pinnedThumbnail,
       privacyStatus: b.privacyStatus 
     })));
 
@@ -5680,7 +5715,10 @@ app.post('/api/youtube/templates/multi', isAuthenticated, async (req, res) => {
       tags: broadcasts[0].tags || null,
       category_id: broadcasts[0].categoryId || '22',
       thumbnail_path: null,
-      thumbnail_folder: thumbnailFolder || null,  // Save thumbnail folder for random selection
+      thumbnail_folder: thumbnailFolder !== undefined ? thumbnailFolder : null,  // Save thumbnail folder for sequential selection
+      thumbnail_index: 0,
+      pinned_thumbnail: null,
+      stream_key_folder_mapping: parsedMapping,
       stream_id: broadcasts[0].streamId || null  // Save first broadcast's stream_id
     });
 
