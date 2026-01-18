@@ -110,20 +110,19 @@ class TitleSuggestion {
   }
 
   /**
-   * Get next title in rotation for a stream key
+   * Get next title in rotation for a user
    * @param {string} userId - User ID
-   * @param {string} streamKeyId - Stream key ID
    * @param {number} currentIndex - Current title index
    * @returns {Promise<{title: Object|null, nextIndex: number}>} Next title and index
    */
-  static async getNextTitle(userId, streamKeyId, currentIndex = 0) {
+  static async getNextTitle(userId, currentIndex = 0) {
     return new Promise((resolve, reject) => {
       // First check for pinned title
       db.get(
         `SELECT * FROM title_suggestions 
-         WHERE user_id = ? AND stream_key_id = ? AND is_pinned = 1
+         WHERE user_id = ? AND is_pinned = 1
          LIMIT 1`,
-        [userId, streamKeyId],
+        [userId],
         (err, pinnedTitle) => {
           if (err) {
             console.error('Error finding pinned title:', err.message);
@@ -135,12 +134,12 @@ class TitleSuggestion {
             return resolve({ title: pinnedTitle, nextIndex: currentIndex, isPinned: true });
           }
           
-          // Get all titles for this stream key, ordered by sort_order
+          // Get all titles for this user, ordered by sort_order
           db.all(
             `SELECT * FROM title_suggestions 
-             WHERE user_id = ? AND stream_key_id = ?
+             WHERE user_id = ?
              ORDER BY sort_order ASC`,
-            [userId, streamKeyId],
+            [userId],
             (err, titles) => {
               if (err) {
                 console.error('Error finding titles:', err.message);
@@ -228,43 +227,28 @@ class TitleSuggestion {
    */
   static togglePin(id, userId, isPinned) {
     return new Promise((resolve, reject) => {
-      // If pinning, first unpin all other titles for the same stream key
+      // If pinning, first unpin all other titles for this user
       if (isPinned) {
-        db.get(
-          `SELECT stream_key_id FROM title_suggestions WHERE id = ? AND user_id = ?`,
-          [id, userId],
-          (err, row) => {
+        // Unpin all titles for this user first
+        db.run(
+          `UPDATE title_suggestions SET is_pinned = 0 WHERE user_id = ?`,
+          [userId],
+          (err) => {
             if (err) {
-              console.error('Error getting title:', err.message);
+              console.error('Error unpinning titles:', err.message);
               return reject(err);
             }
             
-            if (!row) {
-              return resolve({ success: false, error: 'Title not found' });
-            }
-            
-            // Unpin all titles for this stream key first
+            // Now pin the selected title
             db.run(
-              `UPDATE title_suggestions SET is_pinned = 0 WHERE user_id = ? AND stream_key_id = ?`,
-              [userId, row.stream_key_id],
-              (err) => {
+              `UPDATE title_suggestions SET is_pinned = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?`,
+              [id, userId],
+              function (err) {
                 if (err) {
-                  console.error('Error unpinning titles:', err.message);
+                  console.error('Error pinning title:', err.message);
                   return reject(err);
                 }
-                
-                // Now pin the selected title
-                db.run(
-                  `UPDATE title_suggestions SET is_pinned = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?`,
-                  [id, userId],
-                  function (err) {
-                    if (err) {
-                      console.error('Error pinning title:', err.message);
-                      return reject(err);
-                    }
-                    resolve({ success: true, updated: this.changes > 0, is_pinned: true });
-                  }
-                );
+                resolve({ success: true, updated: this.changes > 0, is_pinned: true });
               }
             );
           }

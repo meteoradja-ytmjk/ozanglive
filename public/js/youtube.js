@@ -3821,7 +3821,6 @@ async function loadEditThumbnailHistory() {
 
 let titleSuggestions = [];
 let titleManagerContext = 'edit'; // 'edit' or 'create'
-let currentTitleStreamKeyFilter = ''; // Current stream key filter for titles
 
 /**
  * Open Title Manager Modal
@@ -3829,24 +3828,7 @@ let currentTitleStreamKeyFilter = ''; // Current stream key filter for titles
 function openTitleManagerModal(context = 'edit') {
   titleManagerContext = context;
   document.getElementById('titleManagerModal').classList.remove('hidden');
-  
-  // Load stream keys for filter dropdown
-  loadTitleStreamKeyOptions();
-  
-  // Get current stream key from the form
-  const streamKeySelect = context === 'edit' 
-    ? document.getElementById('editStreamKeySelect') 
-    : document.getElementById('streamKeySelect');
-  
-  if (streamKeySelect && streamKeySelect.value) {
-    currentTitleStreamKeyFilter = streamKeySelect.value;
-    const filterSelect = document.getElementById('titleStreamKeyFilter');
-    if (filterSelect) {
-      filterSelect.value = streamKeySelect.value;
-    }
-  }
-  
-  loadTitleSuggestions(currentTitleStreamKeyFilter || null);
+  loadTitleSuggestions();
 }
 
 /**
@@ -3857,62 +3839,14 @@ function closeTitleManagerModal() {
 }
 
 /**
- * Load stream key options for title filter
- */
-async function loadTitleStreamKeyOptions() {
-  const filterSelect = document.getElementById('titleStreamKeyFilter');
-  if (!filterSelect) return;
-  
-  // Get account ID from the form
-  const accountSelect = titleManagerContext === 'edit'
-    ? document.getElementById('editAccountId')
-    : document.getElementById('accountSelect');
-  
-  const accountId = accountSelect ? accountSelect.value : null;
-  
-  try {
-    let url = '/api/youtube/streams';
-    if (accountId) url += `?accountId=${accountId}`;
-    
-    const response = await fetch(url, {
-      headers: { 'X-CSRF-Token': getCsrfToken() }
-    });
-    
-    const data = await response.json();
-    
-    // Keep first option
-    filterSelect.innerHTML = '<option value="">All Titles</option>';
-    
-    if (data.success && data.streams) {
-      data.streams.forEach(stream => {
-        const option = document.createElement('option');
-        option.value = stream.id;
-        option.textContent = `${stream.title} (${stream.resolution})`;
-        filterSelect.appendChild(option);
-      });
-    }
-    
-    // Set current filter if exists
-    if (currentTitleStreamKeyFilter) {
-      filterSelect.value = currentTitleStreamKeyFilter;
-    }
-  } catch (error) {
-    console.error('Error loading stream keys for title filter:', error);
-  }
-}
-
-/**
  * Load title suggestions from API
  */
-async function loadTitleSuggestions(streamKeyId = null) {
+async function loadTitleSuggestions() {
   const listEl = document.getElementById('titleManagerList');
   listEl.innerHTML = '<div class="text-center py-4 text-gray-500 text-sm"><i class="ti ti-loader animate-spin"></i> Loading...</div>';
   
   try {
-    let url = '/api/title-suggestions';
-    if (streamKeyId) url += `?streamKeyId=${encodeURIComponent(streamKeyId)}`;
-    
-    const response = await fetch(url, {
+    const response = await fetch('/api/title-suggestions', {
       headers: { 'X-CSRF-Token': getCsrfToken() }
     });
     
@@ -3922,23 +3856,18 @@ async function loadTitleSuggestions(streamKeyId = null) {
       titleSuggestions = data.titles || [];
       renderTitleManagerList();
       
-      // Show rotation info if stream key is selected
+      // Update rotation info
       const rotationInfo = document.getElementById('titleRotationInfo');
-      if (rotationInfo) {
-        if (streamKeyId && titleSuggestions.length > 0) {
-          rotationInfo.classList.remove('hidden');
-          const hasPinned = titleSuggestions.some(t => t.is_pinned);
-          document.getElementById('titleRotationStatus').textContent = hasPinned ? 'Nonaktif (ada judul di-pin)' : 'Aktif';
-        } else {
-          rotationInfo.classList.add('hidden');
-        }
+      if (rotationInfo && titleSuggestions.length > 0) {
+        const hasPinned = titleSuggestions.some(t => t.is_pinned === 1);
+        document.getElementById('titleRotationStatus').textContent = hasPinned ? 'Nonaktif (ada judul di-pin)' : 'Aktif';
       }
     } else {
-      listEl.innerHTML = '<div class="text-center py-4 text-red-400 text-sm">Failed to load titles</div>';
+      listEl.innerHTML = '<div class="text-center py-4 text-red-400 text-sm">Gagal memuat judul</div>';
     }
   } catch (error) {
     console.error('Error loading titles:', error);
-    listEl.innerHTML = '<div class="text-center py-4 text-red-400 text-sm">Failed to load titles</div>';
+    listEl.innerHTML = '<div class="text-center py-4 text-red-400 text-sm">Gagal memuat judul</div>';
   }
 }
 
@@ -3952,8 +3881,8 @@ function renderTitleManagerList() {
     listEl.innerHTML = `
       <div class="text-center py-6 text-gray-500">
         <i class="ti ti-list text-2xl mb-2"></i>
-        <p class="text-sm">No titles saved yet</p>
-        <p class="text-xs">Add your first title above</p>
+        <p class="text-sm">Belum ada judul tersimpan</p>
+        <p class="text-xs">Tambahkan judul pertama di atas</p>
       </div>
     `;
     return;
@@ -3963,21 +3892,20 @@ function renderTitleManagerList() {
     const isPinned = title.is_pinned === 1;
     return `
     <div class="flex items-center gap-2 p-2 ${isPinned ? 'bg-green-500/10 border border-green-500/30' : 'bg-dark-600'} rounded-lg hover:bg-dark-500 transition-colors">
-      <span class="text-xs text-gray-500 w-5 text-center">${index + 1}</span>
+      <span class="text-xs ${isPinned ? 'text-green-400 font-bold' : 'text-gray-500'} w-6 text-center">${isPinned ? '<i class="ti ti-pin-filled"></i>' : index + 1}</span>
       <button type="button" onclick="selectTitle('${escapeJsString(title.id)}', '${escapeJsString(title.title)}')"
         class="flex-1 text-left text-sm text-white truncate hover:text-primary">
-        ${isPinned ? '<i class="ti ti-pin-filled text-green-400 text-xs mr-1"></i>' : ''}
         ${escapeHtml(title.title)}
       </button>
       <span class="text-xs text-gray-500 px-1">${title.use_count || 0}x</span>
       <button type="button" onclick="toggleTitlePin('${escapeJsString(title.id)}', ${isPinned ? 'false' : 'true'})"
-        class="${isPinned ? 'text-green-400 bg-green-500/20' : 'text-gray-400 hover:text-yellow-400 hover:bg-yellow-500/20'} p-1.5 rounded-lg transition-colors"
-        title="${isPinned ? 'Unpin title' : 'Pin title'}">
+        class="${isPinned ? 'text-green-400 bg-green-500/20' : 'text-gray-400 hover:text-green-400 hover:bg-green-500/20'} p-1.5 rounded-lg transition-colors"
+        title="${isPinned ? 'Lepas pin' : 'Pin judul ini'}">
         <i class="ti ti-pin${isPinned ? '-filled' : ''} text-sm"></i>
       </button>
       <button type="button" onclick="deleteTitleSuggestion('${escapeJsString(title.id)}')"
         class="text-red-400 hover:text-red-300 hover:bg-red-500/20 p-1.5 rounded-lg transition-colors"
-        title="Delete title">
+        title="Hapus judul">
         <i class="ti ti-trash text-sm"></i>
       </button>
     </div>
@@ -3993,12 +3921,9 @@ async function addNewTitle() {
   const title = input.value.trim();
   
   if (!title) {
-    showToast('Please enter a title', 'error');
+    showToast('Masukkan judul', 'error');
     return;
   }
-  
-  // Get current stream key filter
-  const streamKeyId = document.getElementById('titleStreamKeyFilter')?.value || null;
   
   try {
     const response = await fetch('/api/title-suggestions', {
@@ -4007,21 +3932,21 @@ async function addNewTitle() {
         'Content-Type': 'application/json',
         'X-CSRF-Token': getCsrfToken()
       },
-      body: JSON.stringify({ title, streamKeyId })
+      body: JSON.stringify({ title })
     });
     
     const data = await response.json();
     
     if (data.success) {
       input.value = '';
-      showToast('Title added');
-      loadTitleSuggestions(streamKeyId);
+      showToast('Judul ditambahkan');
+      loadTitleSuggestions();
     } else {
-      showToast(data.error || 'Failed to add title', 'error');
+      showToast(data.error || 'Gagal menambahkan judul', 'error');
     }
   } catch (error) {
     console.error('Error adding title:', error);
-    showToast('Failed to add title', 'error');
+    showToast('Gagal menambahkan judul', 'error');
   }
 }
 
@@ -4042,15 +3967,14 @@ async function toggleTitlePin(id, shouldPin) {
     const data = await response.json();
     
     if (data.success) {
-      showToast(shouldPin ? 'Title pinned' : 'Title unpinned');
-      const streamKeyId = document.getElementById('titleStreamKeyFilter')?.value || null;
-      loadTitleSuggestions(streamKeyId);
+      showToast(shouldPin ? 'Judul di-pin' : 'Pin dilepas');
+      loadTitleSuggestions();
     } else {
-      showToast(data.error || 'Failed to update pin status', 'error');
+      showToast(data.error || 'Gagal mengubah status pin', 'error');
     }
   } catch (error) {
     console.error('Error toggling pin:', error);
-    showToast('Failed to update pin status', 'error');
+    showToast('Gagal mengubah status pin', 'error');
   }
 }
 
@@ -4076,14 +4000,14 @@ async function selectTitle(id, title) {
   }
   
   closeTitleManagerModal();
-  showToast('Title selected');
+  showToast('Judul dipilih');
 }
 
 /**
  * Delete title suggestion
  */
 async function deleteTitleSuggestion(id) {
-  if (!confirm('Delete this title?')) return;
+  if (!confirm('Hapus judul ini?')) return;
   
   try {
     const response = await fetch(`/api/title-suggestions/${id}`, {
@@ -4094,24 +4018,15 @@ async function deleteTitleSuggestion(id) {
     const data = await response.json();
     
     if (data.success) {
-      showToast('Title deleted');
-      const streamKeyId = document.getElementById('titleStreamKeyFilter')?.value || null;
-      loadTitleSuggestions(streamKeyId);
+      showToast('Judul dihapus');
+      loadTitleSuggestions();
     } else {
-      showToast(data.error || 'Failed to delete title', 'error');
+      showToast(data.error || 'Gagal menghapus judul', 'error');
     }
   } catch (error) {
     console.error('Error deleting title:', error);
-    showToast('Failed to delete title', 'error');
+    showToast('Gagal menghapus judul', 'error');
   }
-}
-
-/**
- * Filter titles by stream key
- */
-function filterTitlesByStreamKey(streamKeyId) {
-  currentTitleStreamKeyFilter = streamKeyId;
-  loadTitleSuggestions(streamKeyId || null);
 }
 
 /**

@@ -266,31 +266,27 @@ class ScheduleService {
         for (let i = 0; i < broadcasts.length; i++) {
           const b = broadcasts[i];
           
-          // Get title from rotation if streamId is set
+          // Get title from rotation
           let finalTitle = b.title;
-          if (b.streamId) {
-            const titleResult = await this.getNextTitleForBroadcast(
-              template.user_id,
-              b.streamId,
-              null, // No pinned title for individual broadcasts in multi-template
-              currentTitleIndex
-            );
+          const titleResult = await this.getNextTitleForBroadcast(
+            template.user_id,
+            currentTitleIndex
+          );
+          
+          if (titleResult.title) {
+            finalTitle = titleResult.title.title;
+            console.log(`[ScheduleService] Broadcast ${i + 1} using rotated title: "${finalTitle}" (index: ${titleResult.currentPosition}/${titleResult.totalCount})`);
             
-            if (titleResult.title) {
-              finalTitle = titleResult.title.title;
-              console.log(`[ScheduleService] Broadcast ${i + 1} using rotated title: "${finalTitle}" (index: ${titleResult.currentPosition}/${titleResult.totalCount})`);
-              
-              // Update index for next broadcast (only if not pinned)
-              if (!titleResult.isPinned) {
-                currentTitleIndex = titleResult.nextIndex;
-              }
-              
-              // Increment use count
-              try {
-                await TitleSuggestion.incrementUseCount(titleResult.title.id, template.user_id);
-              } catch (err) {
-                console.error(`[ScheduleService] Failed to increment title use count:`, err.message);
-              }
+            // Update index for next broadcast (only if not pinned)
+            if (!titleResult.isPinned) {
+              currentTitleIndex = titleResult.nextIndex;
+            }
+            
+            // Increment use count
+            try {
+              await TitleSuggestion.incrementUseCount(titleResult.title.id, template.user_id);
+            } catch (err) {
+              console.error(`[ScheduleService] Failed to increment title use count:`, err.message);
             }
           }
           
@@ -383,36 +379,32 @@ class ScheduleService {
       } else {
         // Single broadcast template
         
-        // Get title from rotation if stream_id is set
+        // Get title from rotation
         let finalTitle = template.title;
-        if (template.stream_id) {
-          const titleResult = await this.getNextTitleForBroadcast(
-            template.user_id,
-            template.stream_id,
-            template.pinned_title_id,
-            template.title_index || 0
-          );
+        const titleResult = await this.getNextTitleForBroadcast(
+          template.user_id,
+          template.title_index || 0
+        );
+        
+        if (titleResult.title) {
+          finalTitle = titleResult.title.title;
+          console.log(`[ScheduleService] Using rotated title: "${finalTitle}" (index: ${titleResult.currentPosition}/${titleResult.totalCount}, pinned: ${titleResult.isPinned})`);
           
-          if (titleResult.title) {
-            finalTitle = titleResult.title.title;
-            console.log(`[ScheduleService] Using rotated title: "${finalTitle}" (index: ${titleResult.currentPosition}/${titleResult.totalCount}, pinned: ${titleResult.isPinned})`);
-            
-            // Update title index for next run (only if not pinned)
-            if (!titleResult.isPinned && template.id) {
-              try {
-                await BroadcastTemplate.updateTitleIndex(template.id, titleResult.nextIndex);
-                console.log(`[ScheduleService] Updated template ${template.id} title_index to ${titleResult.nextIndex}`);
-              } catch (err) {
-                console.error(`[ScheduleService] Failed to update title index:`, err.message);
-              }
-            }
-            
-            // Increment use count for the title
+          // Update title index for next run (only if not pinned)
+          if (!titleResult.isPinned && template.id) {
             try {
-              await TitleSuggestion.incrementUseCount(titleResult.title.id, template.user_id);
+              await BroadcastTemplate.updateTitleIndex(template.id, titleResult.nextIndex);
+              console.log(`[ScheduleService] Updated template ${template.id} title_index to ${titleResult.nextIndex}`);
             } catch (err) {
-              console.error(`[ScheduleService] Failed to increment title use count:`, err.message);
+              console.error(`[ScheduleService] Failed to update title index:`, err.message);
             }
+          }
+          
+          // Increment use count for the title
+          try {
+            await TitleSuggestion.incrementUseCount(titleResult.title.id, template.user_id);
+          } catch (err) {
+            console.error(`[ScheduleService] Failed to increment title use count:`, err.message);
           }
         }
         
@@ -681,41 +673,13 @@ class ScheduleService {
   /**
    * Get next title for broadcast using sequential rotation
    * @param {string} userId - User ID
-   * @param {string} streamKeyId - Stream key ID
-   * @param {string} pinnedTitleId - Pinned title ID (if any)
    * @param {number} currentIndex - Current title index
    * @returns {Promise<{title: Object|null, nextIndex: number, isPinned: boolean, totalCount: number, currentPosition: number}>}
    */
-  async getNextTitleForBroadcast(userId, streamKeyId, pinnedTitleId = null, currentIndex = 0) {
+  async getNextTitleForBroadcast(userId, currentIndex = 0) {
     try {
-      // Priority 1: Check for pinned title in template
-      if (pinnedTitleId) {
-        const pinnedTitle = await new Promise((resolve, reject) => {
-          const { db } = require('../db/database');
-          db.get(
-            `SELECT * FROM title_suggestions WHERE id = ? AND user_id = ?`,
-            [pinnedTitleId, userId],
-            (err, row) => {
-              if (err) return reject(err);
-              resolve(row);
-            }
-          );
-        });
-        
-        if (pinnedTitle) {
-          console.log(`[ScheduleService] Using pinned title from template: "${pinnedTitle.title}"`);
-          return {
-            title: pinnedTitle,
-            nextIndex: currentIndex,
-            isPinned: true,
-            totalCount: 1,
-            currentPosition: 1
-          };
-        }
-      }
-      
-      // Priority 2: Use TitleSuggestion.getNextTitle for sequential rotation
-      const result = await TitleSuggestion.getNextTitle(userId, streamKeyId, currentIndex);
+      // Use TitleSuggestion.getNextTitle for sequential rotation
+      const result = await TitleSuggestion.getNextTitle(userId, currentIndex);
       
       if (result.title) {
         return {
