@@ -2792,45 +2792,16 @@ function openMultiSaveTemplateModal(broadcasts) {
     `).join('');
   }
   
-  // Load thumbnail folders for dropdown
-  loadMultiTemplateThumbnailFolders();
+  // Auto-fill thumbnail folder from current selection (currentThumbnailFolder)
+  // This uses the folder that user has already selected in the Create Broadcast modal
+  const thumbnailFolderInput = document.getElementById('multiTemplateThumbnailFolder');
+  if (thumbnailFolderInput) {
+    // Use currentThumbnailFolder if set, otherwise empty string for root
+    thumbnailFolderInput.value = currentThumbnailFolder || '';
+    console.log('[openMultiSaveTemplateModal] Auto-filled thumbnail folder:', currentThumbnailFolder || 'root');
+  }
   
   document.getElementById('multiSaveTemplateModal').classList.remove('hidden');
-}
-
-/**
- * Load thumbnail folders for multi-save template modal
- */
-async function loadMultiTemplateThumbnailFolders() {
-  const select = document.getElementById('multiTemplateThumbnailFolder');
-  if (!select) return;
-  
-  try {
-    const response = await fetch('/api/thumbnail-folders', {
-      headers: {
-        'X-CSRF-Token': getCsrfToken()
-      }
-    });
-    
-    const data = await response.json();
-    
-    // Keep first option, clear others
-    select.innerHTML = '<option value="">-- No thumbnail folder --</option>';
-    
-    // Add root folder option
-    select.innerHTML += '<option value="__root__">📁 Root (thumbnail berurutan)</option>';
-    
-    if (data.success && data.folders) {
-      data.folders.forEach(folder => {
-        const option = document.createElement('option');
-        option.value = folder.name;
-        option.textContent = `📁 ${folder.name} (${folder.count} thumbnail)`;
-        select.appendChild(option);
-      });
-    }
-  } catch (error) {
-    console.error('[loadMultiTemplateThumbnailFolders] Error:', error);
-  }
 }
 
 function closeMultiSaveTemplateModal() {
@@ -2853,13 +2824,10 @@ if (multiSaveTemplateForm) {
     try {
       const broadcasts = window.selectedBroadcastsForTemplate;
       const templateName = document.getElementById('multiTemplateName').value;
-      const thumbnailFolderSelect = document.getElementById('multiTemplateThumbnailFolder');
-      let thumbnailFolder = thumbnailFolderSelect ? thumbnailFolderSelect.value : null;
       
-      // Convert __root__ to empty string for root folder
-      if (thumbnailFolder === '__root__') {
-        thumbnailFolder = '';
-      }
+      // Get thumbnail folder from hidden input (auto-filled from currentThumbnailFolder)
+      const thumbnailFolderInput = document.getElementById('multiTemplateThumbnailFolder');
+      const thumbnailFolder = thumbnailFolderInput ? thumbnailFolderInput.value : null;
       
       if (!broadcasts || broadcasts.length === 0) {
         throw new Error('No broadcasts selected');
@@ -2869,7 +2837,7 @@ if (multiSaveTemplateForm) {
       const templateData = {
         name: templateName,
         accountId: broadcasts[0].accountId,
-        thumbnailFolder: thumbnailFolder || null,  // Add thumbnail folder for random selection
+        thumbnailFolder: thumbnailFolder !== null && thumbnailFolder !== '' ? thumbnailFolder : null,  // Use current folder selection
         broadcasts: broadcasts.map(b => ({
           title: b.title,
           description: b.description || '',
@@ -2882,7 +2850,7 @@ if (multiSaveTemplateForm) {
       };
       
       console.log('[multiSaveTemplate] Saving template with broadcasts:', templateData.broadcasts.map(b => ({ title: b.title, streamId: b.streamId })));
-      console.log('[multiSaveTemplate] Thumbnail folder:', templateData.thumbnailFolder);
+      console.log('[multiSaveTemplate] Thumbnail folder (auto from current selection):', thumbnailFolder || 'root');
       
       const response = await fetch('/api/youtube/templates/multi', {
         method: 'POST',
