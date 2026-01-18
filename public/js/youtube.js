@@ -1443,6 +1443,48 @@ function openEditBroadcastModal(broadcast) {
     document.getElementById('editScheduledStartTime').value = localDate.toISOString().slice(0, 16);
   }
   
+  // Reset thumbnail mode to sequential
+  const sequentialRadio = document.querySelector('input[name="editThumbnailMode"][value="sequential"]');
+  if (sequentialRadio) sequentialRadio.checked = true;
+  
+  // Reset pinned thumbnail
+  const pinnedInput = document.getElementById('editPinnedThumbnail');
+  if (pinnedInput) pinnedInput.value = '';
+  
+  const pinnedIndicator = document.getElementById('editPinnedThumbnailIndicator');
+  if (pinnedIndicator) pinnedIndicator.classList.add('hidden');
+  
+  // Reset bind folder checkbox
+  const bindCheckbox = document.getElementById('editBindFolderToStreamKey');
+  if (bindCheckbox) bindCheckbox.checked = false;
+  
+  // Reset stream key folder mapping
+  const mappingInput = document.getElementById('editStreamKeyFolderMapping');
+  if (mappingInput) mappingInput.value = '';
+  
+  // Set thumbnail preview if broadcast has thumbnail
+  const preview = document.getElementById('editThumbnailPreview');
+  if (preview) {
+    const indicator = document.getElementById('editPinnedThumbnailIndicator');
+    if (broadcast.thumbnailUrl) {
+      preview.innerHTML = `<img src="${broadcast.thumbnailUrl}" class="w-full h-full object-cover">`;
+    } else {
+      preview.innerHTML = '<i class="ti ti-photo text-gray-500 text-2xl"></i>';
+    }
+    if (indicator) {
+      indicator.classList.add('hidden');
+      preview.appendChild(indicator);
+    }
+  }
+  
+  // Clear any previously selected thumbnail file
+  window.editThumbnailFile = null;
+  window.editThumbnailFromHistory = false;
+  
+  // Load thumbnail folders and thumbnails
+  loadEditThumbnailFolders();
+  loadEditThumbnailFolder(null); // Load root folder
+  
   document.getElementById('editBroadcastModal').classList.remove('hidden');
 }
 
@@ -3723,9 +3765,12 @@ async function loadEditThumbnailFolder(folderName = null) {
     }
     
     if (data.success && data.thumbnails && data.thumbnails.length > 0) {
+      const pinnedPath = document.getElementById('editPinnedThumbnail')?.value || '';
+      
       data.thumbnails.forEach(thumb => {
+        const isPinned = pinnedPath && thumb.path === pinnedPath;
         const div = document.createElement('div');
-        div.className = 'edit-thumbnail-item aspect-video bg-dark-700 rounded cursor-pointer overflow-hidden border-2 border-transparent hover:border-primary transition-colors';
+        div.className = `edit-thumbnail-item aspect-video bg-dark-700 rounded cursor-pointer overflow-hidden border-2 ${isPinned ? 'border-green-500' : 'border-transparent'} hover:border-primary transition-colors`;
         div.dataset.path = thumb.path;
         div.dataset.url = thumb.url;
         div.innerHTML = `<img src="${thumb.url}" class="w-full h-full object-cover" alt="Thumbnail">`;
@@ -3749,20 +3794,35 @@ async function loadEditThumbnailFolder(folderName = null) {
  * Select thumbnail from gallery in edit modal
  */
 function selectEditThumbnailFromGallery(url, path, element) {
+  // Check if pinned mode is active
+  const pinnedMode = document.querySelector('input[name="editThumbnailMode"][value="pinned"]');
+  const isPinnedMode = pinnedMode && pinnedMode.checked;
+  
   // Update preview
   const preview = document.getElementById('editThumbnailPreview');
   if (preview) {
+    const indicator = document.getElementById('editPinnedThumbnailIndicator');
     preview.innerHTML = `<img src="${url}" class="w-full h-full object-cover">`;
+    // Re-add indicator if it exists
+    if (indicator) {
+      preview.appendChild(indicator);
+    }
   }
   
   // Highlight selected
   document.querySelectorAll('.edit-thumbnail-item').forEach(item => {
-    item.classList.remove('border-primary');
+    item.classList.remove('border-primary', 'border-green-500');
     item.classList.add('border-transparent');
   });
   if (element) {
     element.classList.remove('border-transparent');
-    element.classList.add('border-primary');
+    if (isPinnedMode) {
+      element.classList.add('border-green-500');
+      // Pin the thumbnail
+      pinEditThumbnail(path);
+    } else {
+      element.classList.add('border-primary');
+    }
   }
   
   // Load the image as file for upload
@@ -3772,11 +3832,11 @@ function selectEditThumbnailFromGallery(url, path, element) {
       const file = new File([blob], 'thumbnail.jpg', { type: blob.type });
       window.editThumbnailFile = file;
       window.editThumbnailFromHistory = true; // Mark as from gallery, no need to save again
-      showToast('Thumbnail selected', 'info');
+      showToast('Thumbnail dipilih', 'info');
     })
     .catch(err => {
       console.error('Error loading thumbnail:', err);
-      showToast('Failed to load thumbnail', 'error');
+      showToast('Gagal memuat thumbnail', 'error');
     });
 }
 
@@ -3804,6 +3864,167 @@ function selectRandomEditThumbnail() {
   randomItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   
   showToast('Random thumbnail selected!', 'success');
+}
+
+/**
+ * Update edit thumbnail mode (sequential/pinned)
+ */
+function updateEditThumbnailMode(mode) {
+  const pinnedInput = document.getElementById('editPinnedThumbnail');
+  const indicator = document.getElementById('editPinnedThumbnailIndicator');
+  
+  if (mode === 'sequential') {
+    // Clear pinned thumbnail when switching to sequential
+    if (pinnedInput && pinnedInput.value) {
+      pinnedInput.value = '';
+    }
+    if (indicator) {
+      indicator.classList.add('hidden');
+    }
+    loadEditThumbnailFolder(currentEditThumbnailFolder);
+  }
+}
+
+/**
+ * Toggle bind folder to stream key for edit modal
+ */
+function toggleEditBindFolderToStreamKey(checked) {
+  const streamKeySelect = document.getElementById('editStreamKeySelect');
+  const mappingInput = document.getElementById('editStreamKeyFolderMapping');
+  
+  if (!streamKeySelect || !mappingInput) return;
+  
+  if (checked && streamKeySelect.value) {
+    // Create or update mapping
+    let mapping = {};
+    try {
+      mapping = JSON.parse(mappingInput.value || '{}');
+    } catch (e) {
+      mapping = {};
+    }
+    
+    // Map current stream key to current folder (empty string for root)
+    mapping[streamKeySelect.value] = currentEditThumbnailFolder || '';
+    mappingInput.value = JSON.stringify(mapping);
+    
+    const folderName = currentEditThumbnailFolder || 'Root';
+    const streamKeyName = streamKeySelect.options[streamKeySelect.selectedIndex]?.text || streamKeySelect.value;
+    showToast(`Folder "${folderName}" diikat ke "${streamKeyName}"`);
+  } else if (!checked) {
+    // Remove mapping for current stream key
+    let mapping = {};
+    try {
+      mapping = JSON.parse(mappingInput.value || '{}');
+    } catch (e) {
+      mapping = {};
+    }
+    
+    if (streamKeySelect.value && mapping[streamKeySelect.value] !== undefined) {
+      delete mapping[streamKeySelect.value];
+      mappingInput.value = Object.keys(mapping).length > 0 ? JSON.stringify(mapping) : '';
+    }
+  }
+}
+
+/**
+ * Handle edit stream key change - auto-select bound folder if exists
+ */
+function onEditStreamKeyChange(streamKeyId) {
+  const mappingInput = document.getElementById('editStreamKeyFolderMapping');
+  const bindCheckbox = document.getElementById('editBindFolderToStreamKey');
+  const folderSelect = document.getElementById('editThumbnailFolderSelect');
+  
+  if (!mappingInput || !folderSelect) return;
+  
+  try {
+    const mapping = JSON.parse(mappingInput.value || '{}');
+    
+    if (mapping[streamKeyId] !== undefined) {
+      const boundFolder = mapping[streamKeyId];
+      console.log(`[onEditStreamKeyChange] Stream key ${streamKeyId} bound to folder: ${boundFolder || 'root'}`);
+      
+      // Auto-select the bound folder
+      folderSelect.value = boundFolder;
+      loadEditThumbnailFolder(boundFolder || null);
+      
+      // Check the bind checkbox
+      if (bindCheckbox) {
+        bindCheckbox.checked = true;
+      }
+      
+      showToast(`Folder "${boundFolder || 'Root'}" otomatis dipilih`);
+    } else {
+      // No binding for this stream key
+      if (bindCheckbox) {
+        bindCheckbox.checked = false;
+      }
+    }
+  } catch (e) {
+    console.warn('[onEditStreamKeyChange] Failed to parse mapping:', e.message);
+  }
+}
+
+/**
+ * Pin thumbnail in edit modal
+ */
+function pinEditThumbnail(path) {
+  const pinnedInput = document.getElementById('editPinnedThumbnail');
+  const indicator = document.getElementById('editPinnedThumbnailIndicator');
+  const modeRadio = document.querySelector('input[name="editThumbnailMode"][value="pinned"]');
+  
+  if (pinnedInput) {
+    pinnedInput.value = path;
+  }
+  
+  if (indicator) {
+    indicator.classList.remove('hidden');
+  }
+  
+  if (modeRadio) {
+    modeRadio.checked = true;
+  }
+  
+  // Update gallery to show pinned state
+  document.querySelectorAll('.edit-thumbnail-item').forEach(item => {
+    item.classList.remove('border-green-500', 'border-primary');
+    if (item.dataset.path === path) {
+      item.classList.add('border-green-500');
+    } else {
+      item.classList.add('border-transparent');
+    }
+  });
+  
+  showToast('Thumbnail di-pin');
+}
+
+/**
+ * Unpin thumbnail in edit modal
+ */
+function unpinEditThumbnail() {
+  const pinnedInput = document.getElementById('editPinnedThumbnail');
+  const indicator = document.getElementById('editPinnedThumbnailIndicator');
+  const modeRadio = document.querySelector('input[name="editThumbnailMode"][value="sequential"]');
+  
+  if (pinnedInput) {
+    pinnedInput.value = '';
+  }
+  
+  if (indicator) {
+    indicator.classList.add('hidden');
+  }
+  
+  if (modeRadio) {
+    modeRadio.checked = true;
+  }
+  
+  // Update gallery to remove pinned state
+  document.querySelectorAll('.edit-thumbnail-item').forEach(item => {
+    item.classList.remove('border-green-500');
+  });
+  
+  loadEditThumbnailFolder(currentEditThumbnailFolder);
+  
+  showToast('Pin thumbnail dihapus');
 }
 
 /**

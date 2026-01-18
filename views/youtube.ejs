@@ -728,15 +728,50 @@
       <form id="editBroadcastForm" class="p-6 space-y-4 overflow-y-auto flex-grow">
         <input type="hidden" id="editBroadcastId" name="broadcastId">
         <input type="hidden" id="editAccountId" name="accountId">
+        <input type="hidden" id="editPinnedThumbnail" name="pinnedThumbnail" value="">
+        <input type="hidden" id="editStreamKeyFolderMapping" name="streamKeyFolderMapping" value="">
         
         <!-- Thumbnail Section - 2 Columns -->
         <div>
           <label class="text-sm font-medium text-white block mb-2">Thumbnail</label>
+          
+          <!-- Thumbnail Mode Selection -->
+          <div class="flex items-center gap-4 mb-3 p-2 bg-dark-700/50 rounded-lg">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="radio" name="editThumbnailMode" value="sequential" checked 
+                class="w-4 h-4 text-primary bg-dark-700 border-gray-600 focus:ring-primary"
+                onchange="updateEditThumbnailMode(this.value)">
+              <span class="text-sm text-gray-300">Berurutan</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="radio" name="editThumbnailMode" value="pinned"
+                class="w-4 h-4 text-primary bg-dark-700 border-gray-600 focus:ring-primary"
+                onchange="updateEditThumbnailMode(this.value)">
+              <span class="text-sm text-gray-300">Pin Thumbnail</span>
+            </label>
+          </div>
+          
+          <!-- Bind Folder to Stream Key Option -->
+          <div id="editBindFolderOption" class="flex items-center gap-2 mb-3 p-2 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+            <input type="checkbox" id="editBindFolderToStreamKey" 
+              class="w-4 h-4 text-yellow-500 bg-dark-700 border-gray-600 rounded focus:ring-yellow-500"
+              onchange="toggleEditBindFolderToStreamKey(this.checked)">
+            <label for="editBindFolderToStreamKey" class="text-sm text-yellow-400 cursor-pointer flex items-center gap-1">
+              <i class="ti ti-link text-sm"></i>
+              Ikat folder ini ke Stream Key yang dipilih
+            </label>
+          </div>
+          
           <div class="grid grid-cols-2 gap-3">
             <!-- Left Column: Preview + Upload Button -->
             <div class="space-y-2">
-              <div id="editThumbnailPreview" class="w-full aspect-video bg-dark-700 rounded-lg overflow-hidden flex items-center justify-center border border-gray-600">
+              <div id="editThumbnailPreview" class="w-full aspect-video bg-dark-700 rounded-lg overflow-hidden flex items-center justify-center border border-gray-600 relative">
                 <i class="ti ti-photo text-gray-500 text-2xl"></i>
+                <!-- Pin indicator -->
+                <div id="editPinnedThumbnailIndicator" class="hidden absolute top-1 right-1 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded flex items-center gap-1">
+                  <i class="ti ti-pin-filled text-xs"></i>
+                  <span>Pinned</span>
+                </div>
               </div>
               <button type="button" onclick="document.getElementById('editThumbnailFile').click()"
                 class="w-full bg-dark-700 hover:bg-dark-600 text-white px-3 py-2 rounded-lg transition-colors text-sm flex items-center justify-center gap-2 border border-gray-600">
@@ -755,11 +790,6 @@
                   <option value="">Root</option>
                   <!-- Folders will be loaded here -->
                 </select>
-                <button type="button" onclick="selectRandomEditThumbnail()" 
-                  class="px-2 py-1.5 bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 rounded-lg text-xs transition-colors flex items-center gap-1" title="Random thumbnail">
-                  <i class="ti ti-dice-3"></i>
-                  <span>Random</span>
-                </button>
               </div>
               
               <!-- Thumbnail Count -->
