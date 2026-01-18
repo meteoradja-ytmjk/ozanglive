@@ -401,6 +401,12 @@ async function createCoreTablesAsync() {
   // Format: {"streamKeyId": "folderName", ...}
   await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN stream_key_folder_mapping TEXT`, 'broadcast_templates.stream_key_folder_mapping');
 
+  // Add title_index column for sequential title rotation
+  await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN title_index INTEGER DEFAULT 0`, 'broadcast_templates.title_index');
+
+  // Add pinned_title_id column for pinning specific title
+  await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN pinned_title_id TEXT`, 'broadcast_templates.pinned_title_id');
+
   // Create recurring_schedules table for scheduled recurring broadcasts
   await runTableQuery(`CREATE TABLE IF NOT EXISTS recurring_schedules (
     id TEXT PRIMARY KEY,
@@ -453,6 +459,15 @@ async function createCoreTablesAsync() {
 
   await runTableQuery(`CREATE INDEX IF NOT EXISTS idx_title_suggestions_category 
           ON title_suggestions(user_id, category)`, 'title_suggestions.category_index');
+
+  // Add is_pinned column for pinning specific title
+  await runTableQuery(`ALTER TABLE title_suggestions ADD COLUMN is_pinned INTEGER DEFAULT 0`, 'title_suggestions.is_pinned');
+
+  // Add stream_key_id column for binding title to stream key
+  await runTableQuery(`ALTER TABLE title_suggestions ADD COLUMN stream_key_id TEXT`, 'title_suggestions.stream_key_id');
+
+  // Add sort_order column for manual ordering
+  await runTableQuery(`ALTER TABLE title_suggestions ADD COLUMN sort_order INTEGER DEFAULT 0`, 'title_suggestions.sort_order');
 
   // Create youtube_broadcast_settings table for storing broadcast-specific settings
   await runTableQuery(`CREATE TABLE IF NOT EXISTS youtube_broadcast_settings (

@@ -3821,6 +3821,7 @@ async function loadEditThumbnailHistory() {
 
 let titleSuggestions = [];
 let titleManagerContext = 'edit'; // 'edit' or 'create'
+let currentTitleStreamKeyFilter = ''; // Current stream key filter for titles
 
 /**
  * Open Title Manager Modal
@@ -3828,7 +3829,24 @@ let titleManagerContext = 'edit'; // 'edit' or 'create'
 function openTitleManagerModal(context = 'edit') {
   titleManagerContext = context;
   document.getElementById('titleManagerModal').classList.remove('hidden');
-  loadTitleSuggestions();
+  
+  // Load stream keys for filter dropdown
+  loadTitleStreamKeyOptions();
+  
+  // Get current stream key from the form
+  const streamKeySelect = context === 'edit' 
+    ? document.getElementById('editStreamKeySelect') 
+    : document.getElementById('streamKeySelect');
+  
+  if (streamKeySelect && streamKeySelect.value) {
+    currentTitleStreamKeyFilter = streamKeySelect.value;
+    const filterSelect = document.getElementById('titleStreamKeyFilter');
+    if (filterSelect) {
+      filterSelect.value = streamKeySelect.value;
+    }
+  }
+  
+  loadTitleSuggestions(currentTitleStreamKeyFilter || null);
 }
 
 /**
@@ -3839,15 +3857,60 @@ function closeTitleManagerModal() {
 }
 
 /**
+ * Load stream key options for title filter
+ */
+async function loadTitleStreamKeyOptions() {
+  const filterSelect = document.getElementById('titleStreamKeyFilter');
+  if (!filterSelect) return;
+  
+  // Get account ID from the form
+  const accountSelect = titleManagerContext === 'edit'
+    ? document.getElementById('editAccountId')
+    : document.getElementById('accountSelect');
+  
+  const accountId = accountSelect ? accountSelect.value : null;
+  
+  try {
+    let url = '/api/youtube/streams';
+    if (accountId) url += `?accountId=${accountId}`;
+    
+    const response = await fetch(url, {
+      headers: { 'X-CSRF-Token': getCsrfToken() }
+    });
+    
+    const data = await response.json();
+    
+    // Keep first option
+    filterSelect.innerHTML = '<option value="">All Titles</option>';
+    
+    if (data.success && data.streams) {
+      data.streams.forEach(stream => {
+        const option = document.createElement('option');
+        option.value = stream.id;
+        option.textContent = `${stream.title} (${stream.resolution})`;
+        filterSelect.appendChild(option);
+      });
+    }
+    
+    // Set current filter if exists
+    if (currentTitleStreamKeyFilter) {
+      filterSelect.value = currentTitleStreamKeyFilter;
+    }
+  } catch (error) {
+    console.error('Error loading stream keys for title filter:', error);
+  }
+}
+
+/**
  * Load title suggestions from API
  */
-async function loadTitleSuggestions(category = null) {
+async function loadTitleSuggestions(streamKeyId = null) {
   const listEl = document.getElementById('titleManagerList');
   listEl.innerHTML = '<div class="text-center py-4 text-gray-500 text-sm"><i class="ti ti-loader animate-spin"></i> Loading...</div>';
   
   try {
     let url = '/api/title-suggestions';
-    if (category) url += `?category=${encodeURIComponent(category)}`;
+    if (streamKeyId) url += `?streamKeyId=${encodeURIComponent(streamKeyId)}`;
     
     const response = await fetch(url, {
       headers: { 'X-CSRF-Token': getCsrfToken() }
@@ -3858,6 +3921,18 @@ async function loadTitleSuggestions(category = null) {
     if (data.success) {
       titleSuggestions = data.titles || [];
       renderTitleManagerList();
+      
+      // Show rotation info if stream key is selected
+      const rotationInfo = document.getElementById('titleRotationInfo');
+      if (rotationInfo) {
+        if (streamKeyId && titleSuggestions.length > 0) {
+          rotationInfo.classList.remove('hidden');
+          const hasPinned = titleSuggestions.some(t => t.is_pinned);
+          document.getElementById('titleRotationStatus').textContent = hasPinned ? 'Nonaktif (ada judul di-pin)' : 'Aktif';
+        } else {
+          rotationInfo.classList.add('hidden');
+        }
+      }
     } else {
       listEl.innerHTML = '<div class="text-center py-4 text-red-400 text-sm">Failed to load titles</div>';
     }
@@ -3884,20 +3959,30 @@ function renderTitleManagerList() {
     return;
   }
   
-  listEl.innerHTML = titleSuggestions.map(title => `
-    <div class="flex items-center gap-2 p-2 bg-dark-600 rounded-lg hover:bg-dark-500 transition-colors">
+  listEl.innerHTML = titleSuggestions.map((title, index) => {
+    const isPinned = title.is_pinned === 1;
+    return `
+    <div class="flex items-center gap-2 p-2 ${isPinned ? 'bg-green-500/10 border border-green-500/30' : 'bg-dark-600'} rounded-lg hover:bg-dark-500 transition-colors">
+      <span class="text-xs text-gray-500 w-5 text-center">${index + 1}</span>
       <button type="button" onclick="selectTitle('${escapeJsString(title.id)}', '${escapeJsString(title.title)}')"
         class="flex-1 text-left text-sm text-white truncate hover:text-primary">
+        ${isPinned ? '<i class="ti ti-pin-filled text-green-400 text-xs mr-1"></i>' : ''}
         ${escapeHtml(title.title)}
       </button>
-      <span class="text-xs text-gray-500 px-2">${title.use_count || 0}x</span>
+      <span class="text-xs text-gray-500 px-1">${title.use_count || 0}x</span>
+      <button type="button" onclick="toggleTitlePin('${escapeJsString(title.id)}', ${isPinned ? 'false' : 'true'})"
+        class="${isPinned ? 'text-green-400 bg-green-500/20' : 'text-gray-400 hover:text-yellow-400 hover:bg-yellow-500/20'} p-1.5 rounded-lg transition-colors"
+        title="${isPinned ? 'Unpin title' : 'Pin title'}">
+        <i class="ti ti-pin${isPinned ? '-filled' : ''} text-sm"></i>
+      </button>
       <button type="button" onclick="deleteTitleSuggestion('${escapeJsString(title.id)}')"
         class="text-red-400 hover:text-red-300 hover:bg-red-500/20 p-1.5 rounded-lg transition-colors"
         title="Delete title">
         <i class="ti ti-trash text-sm"></i>
       </button>
     </div>
-  `).join('');
+  `;
+  }).join('');
 }
 
 /**
@@ -3912,7 +3997,8 @@ async function addNewTitle() {
     return;
   }
   
-  const category = document.getElementById('titleCategoryFilter').value || 'general';
+  // Get current stream key filter
+  const streamKeyId = document.getElementById('titleStreamKeyFilter')?.value || null;
   
   try {
     const response = await fetch('/api/title-suggestions', {
@@ -3921,7 +4007,7 @@ async function addNewTitle() {
         'Content-Type': 'application/json',
         'X-CSRF-Token': getCsrfToken()
       },
-      body: JSON.stringify({ title, category })
+      body: JSON.stringify({ title, streamKeyId })
     });
     
     const data = await response.json();
@@ -3929,13 +4015,42 @@ async function addNewTitle() {
     if (data.success) {
       input.value = '';
       showToast('Title added');
-      loadTitleSuggestions(category === '' ? null : category);
+      loadTitleSuggestions(streamKeyId);
     } else {
       showToast(data.error || 'Failed to add title', 'error');
     }
   } catch (error) {
     console.error('Error adding title:', error);
     showToast('Failed to add title', 'error');
+  }
+}
+
+/**
+ * Toggle pin status for a title
+ */
+async function toggleTitlePin(id, shouldPin) {
+  try {
+    const response = await fetch(`/api/title-suggestions/${id}/pin`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getCsrfToken()
+      },
+      body: JSON.stringify({ isPinned: shouldPin })
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      showToast(shouldPin ? 'Title pinned' : 'Title unpinned');
+      const streamKeyId = document.getElementById('titleStreamKeyFilter')?.value || null;
+      loadTitleSuggestions(streamKeyId);
+    } else {
+      showToast(data.error || 'Failed to update pin status', 'error');
+    }
+  } catch (error) {
+    console.error('Error toggling pin:', error);
+    showToast('Failed to update pin status', 'error');
   }
 }
 
@@ -3980,8 +4095,8 @@ async function deleteTitleSuggestion(id) {
     
     if (data.success) {
       showToast('Title deleted');
-      const category = document.getElementById('titleCategoryFilter').value;
-      loadTitleSuggestions(category === '' ? null : category);
+      const streamKeyId = document.getElementById('titleStreamKeyFilter')?.value || null;
+      loadTitleSuggestions(streamKeyId);
     } else {
       showToast(data.error || 'Failed to delete title', 'error');
     }
@@ -3992,10 +4107,11 @@ async function deleteTitleSuggestion(id) {
 }
 
 /**
- * Filter titles by category
+ * Filter titles by stream key
  */
-function filterTitlesByCategory(category) {
-  loadTitleSuggestions(category === '' ? null : category);
+function filterTitlesByStreamKey(streamKeyId) {
+  currentTitleStreamKeyFilter = streamKeyId;
+  loadTitleSuggestions(streamKeyId || null);
 }
 
 /**

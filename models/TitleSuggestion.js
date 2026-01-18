@@ -9,26 +9,48 @@ class TitleSuggestion {
    */
   static create(data) {
     const id = uuidv4();
-    const { user_id, title, category = 'general' } = data;
+    const { user_id, title, stream_key_id = null } = data;
 
     if (!user_id || !title) {
       return Promise.reject(new Error('user_id and title are required'));
     }
 
     return new Promise((resolve, reject) => {
-      db.run(
-        `INSERT INTO title_suggestions (id, user_id, title, category, use_count)
-         VALUES (?, ?, ?, ?, 0)`,
-        [id, user_id, title.trim(), category],
-        function (err) {
+      // Get max sort_order for this user
+      db.get(
+        `SELECT MAX(sort_order) as max_order FROM title_suggestions WHERE user_id = ?`,
+        [user_id],
+        (err, row) => {
           if (err) {
-            if (err.message.includes('UNIQUE constraint failed')) {
-              return reject(new Error('Title already exists'));
-            }
-            console.error('Error creating title suggestion:', err.message);
+            console.error('Error getting max sort_order:', err.message);
             return reject(err);
           }
-          resolve({ id, user_id, title: title.trim(), category, use_count: 0 });
+          
+          const sortOrder = (row?.max_order || 0) + 1;
+          
+          db.run(
+            `INSERT INTO title_suggestions (id, user_id, title, stream_key_id, use_count, sort_order, is_pinned)
+             VALUES (?, ?, ?, ?, 0, ?, 0)`,
+            [id, user_id, title.trim(), stream_key_id, sortOrder],
+            function (err) {
+              if (err) {
+                if (err.message.includes('UNIQUE constraint failed')) {
+                  return reject(new Error('Title already exists'));
+                }
+                console.error('Error creating title suggestion:', err.message);
+                return reject(err);
+              }
+              resolve({ 
+                id, 
+                user_id, 
+                title: title.trim(), 
+                stream_key_id,
+                use_count: 0, 
+                sort_order: sortOrder,
+                is_pinned: 0
+              });
+            }
+          );
         }
       );
     });
@@ -37,20 +59,21 @@ class TitleSuggestion {
   /**
    * Find all titles for a user
    * @param {string} userId - User ID
-   * @param {string} category - Optional category filter
+   * @param {string} streamKeyId - Optional stream key filter
    * @returns {Promise<Array>} Array of titles
    */
-  static findByUserId(userId, category = null) {
+  static findByUserId(userId, streamKeyId = null) {
     return new Promise((resolve, reject) => {
       let query = `SELECT * FROM title_suggestions WHERE user_id = ?`;
       const params = [userId];
 
-      if (category) {
-        query += ` AND category = ?`;
-        params.push(category);
+      if (streamKeyId) {
+        query += ` AND (stream_key_id = ? OR stream_key_id IS NULL)`;
+        params.push(streamKeyId);
       }
 
-      query += ` ORDER BY use_count DESC, created_at DESC`;
+      // Order: pinned first, then by sort_order
+      query += ` ORDER BY is_pinned DESC, sort_order ASC, created_at DESC`;
 
       db.all(query, params, (err, rows) => {
         if (err) {
@@ -59,6 +82,91 @@ class TitleSuggestion {
         }
         resolve(rows || []);
       });
+    });
+  }
+
+  /**
+   * Find titles by stream key
+   * @param {string} userId - User ID
+   * @param {string} streamKeyId - Stream key ID
+   * @returns {Promise<Array>} Array of titles for this stream key
+   */
+  static findByStreamKey(userId, streamKeyId) {
+    return new Promise((resolve, reject) => {
+      db.all(
+        `SELECT * FROM title_suggestions 
+         WHERE user_id = ? AND stream_key_id = ?
+         ORDER BY is_pinned DESC, sort_order ASC`,
+        [userId, streamKeyId],
+        (err, rows) => {
+          if (err) {
+            console.error('Error finding titles by stream key:', err.message);
+            return reject(err);
+          }
+          resolve(rows || []);
+        }
+      );
+    });
+  }
+
+  /**
+   * Get next title in rotation for a stream key
+   * @param {string} userId - User ID
+   * @param {string} streamKeyId - Stream key ID
+   * @param {number} currentIndex - Current title index
+   * @returns {Promise<{title: Object|null, nextIndex: number}>} Next title and index
+   */
+  static async getNextTitle(userId, streamKeyId, currentIndex = 0) {
+    return new Promise((resolve, reject) => {
+      // First check for pinned title
+      db.get(
+        `SELECT * FROM title_suggestions 
+         WHERE user_id = ? AND stream_key_id = ? AND is_pinned = 1
+         LIMIT 1`,
+        [userId, streamKeyId],
+        (err, pinnedTitle) => {
+          if (err) {
+            console.error('Error finding pinned title:', err.message);
+            return reject(err);
+          }
+          
+          // If pinned title exists, always use it
+          if (pinnedTitle) {
+            return resolve({ title: pinnedTitle, nextIndex: currentIndex, isPinned: true });
+          }
+          
+          // Get all titles for this stream key, ordered by sort_order
+          db.all(
+            `SELECT * FROM title_suggestions 
+             WHERE user_id = ? AND stream_key_id = ?
+             ORDER BY sort_order ASC`,
+            [userId, streamKeyId],
+            (err, titles) => {
+              if (err) {
+                console.error('Error finding titles:', err.message);
+                return reject(err);
+              }
+              
+              if (!titles || titles.length === 0) {
+                return resolve({ title: null, nextIndex: 0, isPinned: false });
+              }
+              
+              // Calculate actual index (wrap around)
+              const actualIndex = currentIndex % titles.length;
+              const selectedTitle = titles[actualIndex];
+              const nextIndex = (actualIndex + 1) % titles.length;
+              
+              resolve({ 
+                title: selectedTitle, 
+                nextIndex, 
+                isPinned: false,
+                totalCount: titles.length,
+                currentPosition: actualIndex + 1
+              });
+            }
+          );
+        }
+      );
     });
   }
 
@@ -73,7 +181,7 @@ class TitleSuggestion {
       db.all(
         `SELECT * FROM title_suggestions 
          WHERE user_id = ? AND title LIKE ?
-         ORDER BY use_count DESC, created_at DESC
+         ORDER BY is_pinned DESC, use_count DESC, created_at DESC
          LIMIT 20`,
         [userId, `%${keyword}%`],
         (err, rows) => {
@@ -112,6 +220,96 @@ class TitleSuggestion {
   }
 
   /**
+   * Toggle pin status for a title
+   * @param {string} id - Title ID
+   * @param {string} userId - User ID
+   * @param {boolean} isPinned - New pin status
+   * @returns {Promise<Object>} Update result
+   */
+  static togglePin(id, userId, isPinned) {
+    return new Promise((resolve, reject) => {
+      // If pinning, first unpin all other titles for the same stream key
+      if (isPinned) {
+        db.get(
+          `SELECT stream_key_id FROM title_suggestions WHERE id = ? AND user_id = ?`,
+          [id, userId],
+          (err, row) => {
+            if (err) {
+              console.error('Error getting title:', err.message);
+              return reject(err);
+            }
+            
+            if (!row) {
+              return resolve({ success: false, error: 'Title not found' });
+            }
+            
+            // Unpin all titles for this stream key first
+            db.run(
+              `UPDATE title_suggestions SET is_pinned = 0 WHERE user_id = ? AND stream_key_id = ?`,
+              [userId, row.stream_key_id],
+              (err) => {
+                if (err) {
+                  console.error('Error unpinning titles:', err.message);
+                  return reject(err);
+                }
+                
+                // Now pin the selected title
+                db.run(
+                  `UPDATE title_suggestions SET is_pinned = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?`,
+                  [id, userId],
+                  function (err) {
+                    if (err) {
+                      console.error('Error pinning title:', err.message);
+                      return reject(err);
+                    }
+                    resolve({ success: true, updated: this.changes > 0, is_pinned: true });
+                  }
+                );
+              }
+            );
+          }
+        );
+      } else {
+        // Just unpin
+        db.run(
+          `UPDATE title_suggestions SET is_pinned = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?`,
+          [id, userId],
+          function (err) {
+            if (err) {
+              console.error('Error unpinning title:', err.message);
+              return reject(err);
+            }
+            resolve({ success: true, updated: this.changes > 0, is_pinned: false });
+          }
+        );
+      }
+    });
+  }
+
+  /**
+   * Update stream key binding for a title
+   * @param {string} id - Title ID
+   * @param {string} userId - User ID
+   * @param {string} streamKeyId - Stream key ID to bind
+   * @returns {Promise<Object>} Update result
+   */
+  static updateStreamKey(id, userId, streamKeyId) {
+    return new Promise((resolve, reject) => {
+      db.run(
+        `UPDATE title_suggestions SET stream_key_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?`,
+        [streamKeyId, id, userId],
+        function (err) {
+          if (err) {
+            console.error('Error updating stream key:', err.message);
+            return reject(err);
+          }
+          resolve({ success: true, updated: this.changes > 0 });
+        }
+      );
+    });
+  }
+
+  /**
    * Update a title
    * @param {string} id - Title ID
    * @param {string} userId - User ID
@@ -126,9 +324,13 @@ class TitleSuggestion {
       fields.push('title = ?');
       values.push(data.title.trim());
     }
-    if (data.category) {
-      fields.push('category = ?');
-      values.push(data.category);
+    if (data.stream_key_id !== undefined) {
+      fields.push('stream_key_id = ?');
+      values.push(data.stream_key_id);
+    }
+    if (data.sort_order !== undefined) {
+      fields.push('sort_order = ?');
+      values.push(data.sort_order);
     }
 
     if (fields.length === 0) {

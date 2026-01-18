@@ -5589,13 +5589,15 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
     const { 
       name, title, description, privacyStatus, tags, categoryId, 
       thumbnailPath, thumbnailFolder, pinnedThumbnail, streamKeyFolderMapping,
-      streamId, accountId 
+      streamId, accountId, titleIndex, pinnedTitleId 
     } = req.body;
     
     console.log('[create-template] Received streamId:', streamId);
     console.log('[create-template] Received thumbnailFolder:', thumbnailFolder);
     console.log('[create-template] Received pinnedThumbnail:', pinnedThumbnail);
     console.log('[create-template] Received streamKeyFolderMapping:', streamKeyFolderMapping);
+    console.log('[create-template] Received titleIndex:', titleIndex);
+    console.log('[create-template] Received pinnedTitleId:', pinnedTitleId);
     
     if (!name || !title || !accountId) {
       return res.status(400).json({
@@ -5636,10 +5638,12 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
       thumbnail_index: 0,
       pinned_thumbnail: pinnedThumbnail || null,
       stream_key_folder_mapping: parsedMapping,
-      stream_id: streamId || null
+      stream_id: streamId || null,
+      title_index: titleIndex || 0,
+      pinned_title_id: pinnedTitleId || null
     });
 
-    console.log('[create-template] Created template with stream_id:', template.stream_id, 'thumbnail_folder:', template.thumbnail_folder, 'pinned_thumbnail:', template.pinned_thumbnail);
+    console.log('[create-template] Created template with stream_id:', template.stream_id, 'thumbnail_folder:', template.thumbnail_folder, 'pinned_thumbnail:', template.pinned_thumbnail, 'title_index:', template.title_index, 'pinned_title_id:', template.pinned_title_id);
 
     res.json({ success: true, template });
   } catch (error) {
@@ -5959,7 +5963,7 @@ app.put('/api/youtube/templates/:id', isAuthenticated, async (req, res) => {
       return res.status(403).json({ success: false, error: 'Access denied' });
     }
 
-    const { name, title, description, privacyStatus, tags, categoryId, thumbnailPath, streamId, accountId } = req.body;
+    const { name, title, description, privacyStatus, tags, categoryId, thumbnailPath, streamId, accountId, titleIndex, pinnedTitleId } = req.body;
     
     const updateData = {};
     if (name !== undefined) updateData.name = name;
@@ -5971,6 +5975,8 @@ app.put('/api/youtube/templates/:id', isAuthenticated, async (req, res) => {
     if (thumbnailPath !== undefined) updateData.thumbnail_path = thumbnailPath;
     if (streamId !== undefined) updateData.stream_id = streamId;
     if (accountId !== undefined) updateData.account_id = parseInt(accountId);
+    if (titleIndex !== undefined) updateData.title_index = titleIndex;
+    if (pinnedTitleId !== undefined) updateData.pinned_title_id = pinnedTitleId;
 
     const result = await BroadcastTemplate.update(req.params.id, updateData);
     res.json({ success: true, template: result });
@@ -6548,8 +6554,8 @@ app.post('/api/recurring-schedules/:id/run-now', isAuthenticated, async (req, re
 // Get all title suggestions for user
 app.get('/api/title-suggestions', isAuthenticated, async (req, res) => {
   try {
-    const category = req.query.category || null;
-    const titles = await TitleSuggestion.findByUserId(req.session.userId, category);
+    const streamKeyId = req.query.streamKeyId || null;
+    const titles = await TitleSuggestion.findByUserId(req.session.userId, streamKeyId);
     res.json({ success: true, titles });
   } catch (error) {
     console.error('Error fetching title suggestions:', error);
@@ -6584,17 +6590,36 @@ app.get('/api/title-suggestions/popular', isAuthenticated, async (req, res) => {
   }
 });
 
+// Get next title in rotation for a stream key
+app.get('/api/title-suggestions/next', isAuthenticated, async (req, res) => {
+  try {
+    const { streamKeyId, currentIndex } = req.query;
+    if (!streamKeyId) {
+      return res.status(400).json({ success: false, error: 'streamKeyId is required' });
+    }
+    const result = await TitleSuggestion.getNextTitle(
+      req.session.userId, 
+      streamKeyId, 
+      parseInt(currentIndex) || 0
+    );
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('Error getting next title:', error);
+    res.status(500).json({ success: false, error: 'Failed to get next title' });
+  }
+});
+
 // Create new title suggestion
 app.post('/api/title-suggestions', isAuthenticated, async (req, res) => {
   try {
-    const { title, category } = req.body;
+    const { title, streamKeyId } = req.body;
     if (!title || !title.trim()) {
       return res.status(400).json({ success: false, error: 'Title is required' });
     }
     const newTitle = await TitleSuggestion.create({
       user_id: req.session.userId,
       title: title.trim(),
-      category: category || 'general'
+      stream_key_id: streamKeyId || null
     });
     res.json({ success: true, title: newTitle });
   } catch (error) {
@@ -6609,8 +6634,11 @@ app.post('/api/title-suggestions', isAuthenticated, async (req, res) => {
 // Update title suggestion
 app.put('/api/title-suggestions/:id', isAuthenticated, async (req, res) => {
   try {
-    const { title, category } = req.body;
-    const result = await TitleSuggestion.update(req.params.id, req.session.userId, { title, category });
+    const { title, streamKeyId } = req.body;
+    const result = await TitleSuggestion.update(req.params.id, req.session.userId, { 
+      title, 
+      stream_key_id: streamKeyId 
+    });
     if (!result.updated) {
       return res.status(404).json({ success: false, error: 'Title not found' });
     }
@@ -6621,6 +6649,21 @@ app.put('/api/title-suggestions/:id', isAuthenticated, async (req, res) => {
       return res.status(400).json({ success: false, error: 'Title already exists' });
     }
     res.status(500).json({ success: false, error: 'Failed to update title' });
+  }
+});
+
+// Toggle pin status for a title
+app.post('/api/title-suggestions/:id/pin', isAuthenticated, async (req, res) => {
+  try {
+    const { isPinned } = req.body;
+    const result = await TitleSuggestion.togglePin(req.params.id, req.session.userId, isPinned);
+    if (!result.success) {
+      return res.status(404).json({ success: false, error: result.error || 'Title not found' });
+    }
+    res.json({ success: true, is_pinned: result.is_pinned });
+  } catch (error) {
+    console.error('Error toggling title pin:', error);
+    res.status(500).json({ success: false, error: 'Failed to update pin status' });
   }
 });
 

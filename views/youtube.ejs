@@ -898,17 +898,23 @@
           </div>
         </div>
         
-        <!-- Category Filter -->
+        <!-- Stream Key Filter -->
         <div class="mb-3">
-          <select id="titleCategoryFilter" onchange="filterTitlesByCategory(this.value)"
+          <label class="text-xs text-gray-400 mb-1 block">Filter by Stream Key</label>
+          <select id="titleStreamKeyFilter" onchange="filterTitlesByStreamKey(this.value)"
             class="w-full px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg text-sm focus:border-primary focus:outline-none">
-            <option value="">All Categories</option>
-            <option value="general">General</option>
-            <option value="music">Music</option>
-            <option value="gaming">Gaming</option>
-            <option value="education">Education</option>
-            <option value="entertainment">Entertainment</option>
+            <option value="">All Titles</option>
+            <!-- Stream keys will be loaded dynamically -->
           </select>
+        </div>
+        
+        <!-- Auto Rotation Info -->
+        <div id="titleRotationInfo" class="hidden mb-3 p-2 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+          <div class="flex items-center gap-2 text-xs text-yellow-400">
+            <i class="ti ti-refresh"></i>
+            <span>Auto Rotasi: <span id="titleRotationStatus">Aktif</span></span>
+          </div>
+          <p class="text-xs text-gray-400 mt-1">Judul akan berputar otomatis saat reschedule</p>
         </div>
         
         <!-- Title List -->

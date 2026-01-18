@@ -42,6 +42,16 @@ class BroadcastTemplate {
     // Convert recurring_enabled to boolean
     row.recurring_enabled = !!row.recurring_enabled;
     
+    // Ensure title_index has default value
+    if (row.title_index === undefined || row.title_index === null) {
+      row.title_index = 0;
+    }
+    
+    // Ensure pinned_title_id is properly set
+    if (row.pinned_title_id === undefined) {
+      row.pinned_title_id = null;
+    }
+    
     return row;
   }
 
@@ -67,6 +77,9 @@ class BroadcastTemplate {
       pinned_thumbnail = null,
       stream_key_folder_mapping = null,
       stream_id = null,
+      // Title rotation fields
+      title_index = 0,
+      pinned_title_id = null,
       // Recurring fields
       recurring_enabled = false,
       recurring_pattern = null,
@@ -112,12 +125,14 @@ class BroadcastTemplate {
           id, user_id, account_id, name, title, description,
           privacy_status, tags, category_id, thumbnail_path, thumbnail_folder, 
           thumbnail_index, pinned_thumbnail, stream_key_folder_mapping, stream_id,
+          title_index, pinned_title_id,
           recurring_enabled, recurring_pattern, recurring_time, recurring_days, next_run_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id, user_id, account_id, name.trim(), title, description,
           privacy_status, tagsJson, category_id, thumbnail_path, thumbnail_folder,
           thumbnail_index || 0, pinned_thumbnail, streamKeyFolderMappingJson, stream_id,
+          title_index || 0, pinned_title_id,
           recurring_enabled ? 1 : 0, recurring_pattern, recurring_time, daysJson, next_run_at
         ],
         function (err) {
@@ -144,6 +159,8 @@ class BroadcastTemplate {
             pinned_thumbnail,
             stream_key_folder_mapping: stream_key_folder_mapping || {},
             stream_id,
+            title_index: title_index || 0,
+            pinned_title_id,
             recurring_enabled: !!recurring_enabled,
             recurring_pattern,
             recurring_time,
@@ -566,6 +583,54 @@ class BroadcastTemplate {
             return reject(err);
           }
           resolve({ success: true, updated: this.changes > 0, stream_key_folder_mapping: mapping });
+        }
+      );
+    });
+  }
+
+  /**
+   * Update title index for sequential title rotation
+   * @param {string} id - Template ID
+   * @param {number} newIndex - New title index
+   * @returns {Promise<Object>} Update result
+   */
+  static updateTitleIndex(id, newIndex) {
+    return new Promise((resolve, reject) => {
+      db.run(
+        `UPDATE broadcast_templates 
+         SET title_index = ?, updated_at = CURRENT_TIMESTAMP 
+         WHERE id = ?`,
+        [newIndex, id],
+        function (err) {
+          if (err) {
+            console.error('Error updating title index:', err.message);
+            return reject(err);
+          }
+          resolve({ success: true, updated: this.changes > 0, title_index: newIndex });
+        }
+      );
+    });
+  }
+
+  /**
+   * Update pinned title ID
+   * @param {string} id - Template ID
+   * @param {string|null} pinnedTitleId - Pinned title ID or null to unpin
+   * @returns {Promise<Object>} Update result
+   */
+  static updatePinnedTitleId(id, pinnedTitleId) {
+    return new Promise((resolve, reject) => {
+      db.run(
+        `UPDATE broadcast_templates 
+         SET pinned_title_id = ?, updated_at = CURRENT_TIMESTAMP 
+         WHERE id = ?`,
+        [pinnedTitleId, id],
+        function (err) {
+          if (err) {
+            console.error('Error updating pinned title ID:', err.message);
+            return reject(err);
+          }
+          resolve({ success: true, updated: this.changes > 0, pinned_title_id: pinnedTitleId });
         }
       );
     });
