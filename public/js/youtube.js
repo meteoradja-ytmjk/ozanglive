@@ -455,9 +455,14 @@ async function getStreamKeyFolderMappingFromServer(streamKeyId) {
 }
 
 // Get broadcast settings (including thumbnail folder) from server
-async function getBroadcastSettingsFromServer(broadcastId) {
+async function getBroadcastSettingsFromServer(broadcastId, accountId = null) {
   try {
-    const response = await fetch(`/api/youtube/broadcast-settings/${encodeURIComponent(broadcastId)}`, {
+    let url = `/api/youtube/broadcast-settings/${encodeURIComponent(broadcastId)}`;
+    if (accountId) {
+      url += `?accountId=${accountId}`;
+    }
+    
+    const response = await fetch(url, {
       headers: {
         'X-CSRF-Token': getCsrfToken()
       }
@@ -1524,21 +1529,23 @@ async function openEditBroadcastModal(broadcast) {
   await loadEditThumbnailFolders();
   
   // Get thumbnail folder from broadcast settings (saved when broadcast was created)
+  // Pass accountId to help find the correct template if no settings exist
   const broadcastId = broadcast.id;
+  const accountId = broadcast.accountId;
   let boundFolder = undefined;
   
   if (broadcastId) {
-    const settings = await getBroadcastSettingsFromServer(broadcastId);
+    const settings = await getBroadcastSettingsFromServer(broadcastId, accountId);
     // Check if settings exist and thumbnailFolder is explicitly set (including empty string for root)
     if (settings && (settings.thumbnailFolder !== null && settings.thumbnailFolder !== undefined)) {
       boundFolder = settings.thumbnailFolder;
       if (settings.isFallback) {
-        console.log(`[openEditBroadcastModal] Broadcast ${broadcastId} using fallback folder from recent template: "${boundFolder}" (${boundFolder === '' ? 'root' : 'folder'})`);
+        console.log(`[openEditBroadcastModal] Broadcast ${broadcastId} using fallback folder from template "${settings.fallbackTemplateName}": "${boundFolder}" (${boundFolder === '' ? 'root' : 'folder'})`);
       } else {
         console.log(`[openEditBroadcastModal] Broadcast ${broadcastId} has folder: "${boundFolder}" (${boundFolder === '' ? 'root' : 'folder'})`);
       }
     } else {
-      console.log(`[openEditBroadcastModal] Broadcast ${broadcastId} has no saved folder settings, will use root`);
+      console.log(`[openEditBroadcastModal] Broadcast ${broadcastId} has no saved folder settings and no template fallback, will use root`);
       // Default to root for broadcasts without saved folder settings
       boundFolder = '';
     }

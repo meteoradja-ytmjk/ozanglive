@@ -1,60 +1,59 @@
 # Fix Thumbnail Folder - Deployment Guide
 
 ## Masalah
-Ketika broadcast dijadwalkan ulang, folder thumbnail berubah ke "Root" padahal template menggunakan folder lain.
+Ketika broadcast dijadwalkan ulang (edit), folder thumbnail menampilkan "Root" padahal template menggunakan folder lain.
 
-## Penyebab
-1. `thumbnailFolder` tidak disimpan ke `youtube_broadcast_settings` saat broadcast dibuat dari template recurring
-2. Tidak ada fallback ke template jika settings tidak ada
+## Solusi
+API sekarang akan:
+1. Cek `youtube_broadcast_settings` untuk `thumbnailFolder`
+2. Jika tidak ada, cek template berdasarkan `template_id`
+3. Jika masih tidak ada, cek template berdasarkan `account_id` broadcast
+4. Jika masih tidak ada, gunakan template yang paling baru digunakan
 
-## File yang Diubah
-1. `db/database.js` - Menambahkan kolom `template_id`
-2. `models/YouTubeBroadcastSettings.js` - Support `templateId`
-3. `services/scheduleService.js` - Menyimpan `thumbnailFolder` dan `templateId` saat broadcast dibuat
-4. `app.js` - Multiple fixes:
-   - API broadcast-settings dengan fallback ke template
-   - Endpoint create-broadcast-from-template menyimpan `templateId`
-   - Endpoint bulk-create menyimpan `templateId`
-   - Endpoint PUT templates menyimpan `thumbnailFolder`, `pinnedThumbnail`, `streamKeyFolderMapping`
-5. `public/js/youtube.js` - Handle fallback response
-6. `scripts/migrate-thumbnail-folder.js` - Script migrasi untuk fix data lama
+## File yang Perlu Di-deploy ke VPS
 
-## Langkah Deploy ke VPS
-
-### 1. Upload semua file yang diubah ke VPS
-```bash
-# Dari local, upload ke VPS
-scp db/database.js user@vps:/path/to/app/db/
-scp models/YouTubeBroadcastSettings.js user@vps:/path/to/app/models/
-scp services/scheduleService.js user@vps:/path/to/app/services/
-scp app.js user@vps:/path/to/app/
-scp public/js/youtube.js user@vps:/path/to/app/public/js/
-scp scripts/migrate-thumbnail-folder.js user@vps:/path/to/app/scripts/
+```
+app.js
+public/js/youtube.js
+services/scheduleService.js
+models/YouTubeBroadcastSettings.js
+db/database.js
+scripts/migrate-thumbnail-folder.js
 ```
 
-### 2. SSH ke VPS dan jalankan migrasi
-```bash
-ssh user@vps
-cd /path/to/app
+## Langkah Deploy
 
-# Jalankan script migrasi untuk melihat status dan fix data
+### 1. Upload file ke VPS
+```bash
+scp app.js user@vps:/path/to/streamflow/
+scp public/js/youtube.js user@vps:/path/to/streamflow/public/js/
+scp services/scheduleService.js user@vps:/path/to/streamflow/services/
+scp models/YouTubeBroadcastSettings.js user@vps:/path/to/streamflow/models/
+scp db/database.js user@vps:/path/to/streamflow/db/
+scp scripts/migrate-thumbnail-folder.js user@vps:/path/to/streamflow/scripts/
+```
+
+### 2. Di VPS, jalankan migrasi (opsional, untuk debug)
+```bash
+cd /path/to/streamflow
 node scripts/migrate-thumbnail-folder.js
 ```
 
 ### 3. Restart aplikasi
 ```bash
 pm2 restart streamflow
-# atau
-pm2 restart all
 ```
 
-### 4. Verifikasi
-1. Buka aplikasi di browser
-2. Edit broadcast yang sudah ada
-3. Cek apakah folder thumbnail sudah benar (bukan Root)
+### 4. Clear browser cache dan test
+- Buka browser, clear cache (Ctrl+Shift+R)
+- Edit broadcast yang sudah ada
+- Folder thumbnail seharusnya sesuai dengan template
 
-## Catatan Penting
-- Script migrasi akan menambahkan kolom `template_id` jika belum ada
-- Script akan mencoba mencocokkan broadcast dengan template berdasarkan `user_id` dan `account_id`
-- Untuk broadcast yang tidak bisa dicocokkan, API akan menggunakan template yang paling baru digunakan sebagai fallback
-- Setelah user mengedit dan menyimpan broadcast, folder akan tersimpan permanen
+## Cara Kerja
+- Ketika edit broadcast, frontend mengirim `accountId` ke API
+- API mencari `thumbnailFolder` dari:
+  1. `youtube_broadcast_settings` (jika ada)
+  2. Template berdasarkan `template_id` (jika ada)
+  3. Template berdasarkan `account_id` (untuk broadcast lama)
+  4. Template yang paling baru digunakan (fallback terakhir)
+- Folder yang ditemukan akan ditampilkan di dropdown

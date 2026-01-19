@@ -5185,6 +5185,9 @@ app.get('/api/stream-key-folder-mapping/:streamKeyId', isAuthenticated, async (r
 app.get('/api/youtube/broadcast-settings/:broadcastId', isAuthenticated, async (req, res) => {
   try {
     const { broadcastId } = req.params;
+    const accountId = req.query.accountId ? parseInt(req.query.accountId) : null;
+    
+    console.log(`[broadcast-settings] Getting settings for broadcast ${broadcastId}, accountId: ${accountId}`);
     
     const settings = await YouTubeBroadcastSettings.findByBroadcastId(broadcastId);
     
@@ -5203,6 +5206,20 @@ app.get('/api/youtube/broadcast-settings/:broadcastId', isAuthenticated, async (
         }
       }
       
+      // If still no thumbnailFolder, try to get from account's template
+      if ((thumbnailFolder === null || thumbnailFolder === undefined) && accountId) {
+        try {
+          const templates = await BroadcastTemplate.findByUserId(req.session.userId);
+          const accountTemplate = templates.find(t => t.account_id === accountId && t.thumbnail_folder !== null && t.thumbnail_folder !== undefined);
+          if (accountTemplate) {
+            thumbnailFolder = accountTemplate.thumbnail_folder;
+            console.log(`[broadcast-settings] Using thumbnail_folder from account template "${accountTemplate.name}": ${thumbnailFolder || 'root'}`);
+          }
+        } catch (templateErr) {
+          console.error('[broadcast-settings] Error getting account template:', templateErr.message);
+        }
+      }
+      
       res.json({ 
         success: true, 
         settings: {
@@ -5216,24 +5233,40 @@ app.get('/api/youtube/broadcast-settings/:broadcastId', isAuthenticated, async (
         found: true 
       });
     } else {
-      // No settings found - try to get thumbnail_folder from most recently used template
-      // This helps for broadcasts created before the fix
+      // No settings found - try to get thumbnail_folder from template for this account
       let fallbackFolder = null;
+      let fallbackTemplateName = null;
+      
       try {
         const templates = await BroadcastTemplate.findByUserId(req.session.userId);
         if (templates && templates.length > 0) {
-          // Sort by last_run_at descending to get most recently used
-          const sortedTemplates = templates.sort((a, b) => {
-            const aTime = a.last_run_at ? new Date(a.last_run_at).getTime() : 0;
-            const bTime = b.last_run_at ? new Date(b.last_run_at).getTime() : 0;
-            return bTime - aTime;
-          });
+          // First try to find template for this specific account
+          let matchingTemplate = null;
           
-          // Use the most recently used template's thumbnail_folder
-          const recentTemplate = sortedTemplates[0];
-          if (recentTemplate && recentTemplate.thumbnail_folder !== undefined) {
-            fallbackFolder = recentTemplate.thumbnail_folder;
-            console.log(`[broadcast-settings] No settings for ${broadcastId}, using fallback from recent template "${recentTemplate.name}": ${fallbackFolder || 'root'}`);
+          if (accountId) {
+            // Find template for this account, prefer recurring enabled
+            matchingTemplate = templates.find(t => t.account_id === accountId && t.recurring_enabled && t.thumbnail_folder !== null && t.thumbnail_folder !== undefined);
+            if (!matchingTemplate) {
+              matchingTemplate = templates.find(t => t.account_id === accountId && t.thumbnail_folder !== null && t.thumbnail_folder !== undefined);
+            }
+          }
+          
+          // If no account-specific template, use most recently used
+          if (!matchingTemplate) {
+            const sortedTemplates = templates
+              .filter(t => t.thumbnail_folder !== null && t.thumbnail_folder !== undefined)
+              .sort((a, b) => {
+                const aTime = a.last_run_at ? new Date(a.last_run_at).getTime() : 0;
+                const bTime = b.last_run_at ? new Date(b.last_run_at).getTime() : 0;
+                return bTime - aTime;
+              });
+            matchingTemplate = sortedTemplates[0];
+          }
+          
+          if (matchingTemplate) {
+            fallbackFolder = matchingTemplate.thumbnail_folder;
+            fallbackTemplateName = matchingTemplate.name;
+            console.log(`[broadcast-settings] No settings for ${broadcastId}, using fallback from template "${fallbackTemplateName}": ${fallbackFolder || 'root'}`);
           }
         }
       } catch (templateErr) {
@@ -5242,7 +5275,11 @@ app.get('/api/youtube/broadcast-settings/:broadcastId', isAuthenticated, async (
       
       res.json({ 
         success: true, 
-        settings: fallbackFolder !== null ? { thumbnailFolder: fallbackFolder, isFallback: true } : null, 
+        settings: fallbackFolder !== null ? { 
+          thumbnailFolder: fallbackFolder, 
+          isFallback: true,
+          fallbackTemplateName: fallbackTemplateName
+        } : null, 
         found: fallbackFolder !== null 
       });
     }
