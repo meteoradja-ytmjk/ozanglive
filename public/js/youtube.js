@@ -2439,29 +2439,8 @@ function openEditTemplateModal(template) {
   // Store template data for later use
   window.currentEditTemplate = template;
   
-  // Check if this is a multi-broadcast template (description contains JSON array)
-  let isMultiBroadcast = false;
-  let broadcasts = [];
-  try {
-    if (template.description && template.description.startsWith('[')) {
-      broadcasts = JSON.parse(template.description);
-      isMultiBroadcast = Array.isArray(broadcasts) && broadcasts.length > 0;
-    }
-  } catch (e) {
-    // Not a multi-broadcast template
-  }
-  
-  // Load and set thumbnail folder(s)
-  if (isMultiBroadcast && template.stream_key_folder_mapping && Object.keys(template.stream_key_folder_mapping).length > 0) {
-    // Multi-broadcast with stream key mapping - show per-stream-key folders
-    loadEditTemplateStreamKeyFolders(template, broadcasts);
-  } else {
-    // Single broadcast or no mapping - show single folder selector
-    loadEditTemplateThumbnailFolders(template.thumbnail_folder);
-    // Hide stream key mapping section if exists
-    const mappingSection = document.getElementById('editStreamKeyMappingSection');
-    if (mappingSection) mappingSection.classList.add('hidden');
-  }
+  // Load and set thumbnail folder (simple approach - just show main folder)
+  loadEditTemplateThumbnailFolders(template.thumbnail_folder);
   
   // Set recurring enabled
   const recurringEnabled = document.getElementById('editRecurringEnabled');
@@ -2509,104 +2488,12 @@ function openEditTemplateModal(template) {
   document.getElementById('editTemplateModal').classList.remove('hidden');
 }
 
-// Load stream key folder mapping for multi-broadcast template edit
-async function loadEditTemplateStreamKeyFolders(template, broadcasts) {
-  const select = document.getElementById('editTemplateThumbnailFolder');
-  const mappingSection = document.getElementById('editStreamKeyMappingSection');
-  
-  // Load folder options first
-  let folderOptions = '<option value="">-- Tidak ada folder --</option>';
-  folderOptions += '<option value="__ROOT__">📁 Root (Folder Utama)</option>';
-  
-  try {
-    const response = await fetch('/api/thumbnail-folders', {
-      headers: { 'X-CSRF-Token': getCsrfToken() }
-    });
-    const data = await response.json();
-    
-    if (data.success && data.folders && data.folders.length > 0) {
-      data.folders.forEach(folder => {
-        folderOptions += `<option value="${escapeHtml(folder.name)}">📂 ${escapeHtml(folder.name)} (${folder.count || 0} files)</option>`;
-      });
-    }
-  } catch (err) {
-    console.error('Error loading folders:', err);
-  }
-  
-  // Store for reuse
-  window.editTemplateFolderOptions = folderOptions;
-  
-  // Update main folder selector
-  if (select) {
-    select.innerHTML = folderOptions;
-    if (template.thumbnail_folder !== null && template.thumbnail_folder !== undefined) {
-      select.value = template.thumbnail_folder === '' ? '__ROOT__' : template.thumbnail_folder;
-    }
-  }
-  
-  // Create or update stream key mapping section
-  if (!mappingSection) {
-    // Create the section dynamically
-    const folderSection = select.closest('.border-t');
-    const newSection = document.createElement('div');
-    newSection.id = 'editStreamKeyMappingSection';
-    newSection.className = 'border-t border-gray-700 pt-4 mt-4';
-    newSection.innerHTML = `
-      <label class="text-sm font-medium text-white block mb-2 flex items-center gap-2">
-        <i class="ti ti-broadcast text-yellow-400"></i>
-        Stream Key → Folder Mapping
-      </label>
-      <div id="editStreamKeyMappingList" class="space-y-2 max-h-48 overflow-y-auto"></div>
-      <p class="text-xs text-gray-500 mt-2">
-        <i class="ti ti-info-circle mr-1"></i>
-        Setiap stream key bisa punya folder thumbnail berbeda.
-      </p>
-    `;
-    folderSection.after(newSection);
-  }
-  
-  // Populate stream key mapping
-  const mappingList = document.getElementById('editStreamKeyMappingList');
-  if (mappingList) {
-    // Get unique stream keys from broadcasts
-    const streamKeys = {};
-    broadcasts.forEach(b => {
-      if (b.streamId) {
-        streamKeys[b.streamId] = b.streamKey || b.streamId;
-      }
-    });
-    
-    let html = '';
-    Object.entries(streamKeys).forEach(([streamId, streamKey]) => {
-      const currentFolder = template.stream_key_folder_mapping?.[streamId];
-      const selectedValue = currentFolder === '' ? '__ROOT__' : (currentFolder || '');
-      
-      html += `
-        <div class="flex items-center gap-2 bg-dark-600 rounded-lg p-2">
-          <div class="flex-1 min-w-0">
-            <p class="text-xs text-gray-400 truncate">${escapeHtml(streamKey)}</p>
-          </div>
-          <select data-stream-id="${streamId}" class="edit-stream-key-folder-select flex-1 px-2 py-1 bg-dark-700 border border-gray-500 rounded text-xs focus:border-primary focus:outline-none">
-            ${folderOptions.replace(`value="${selectedValue}"`, `value="${selectedValue}" selected`)}
-          </select>
-        </div>
-      `;
-    });
-    
-    mappingList.innerHTML = html || '<p class="text-xs text-gray-500">Tidak ada stream key mapping</p>';
-    document.getElementById('editStreamKeyMappingSection').classList.remove('hidden');
-  }
-}
-
 function closeEditTemplateModal() {
   document.getElementById('editTemplateModal').classList.add('hidden');
   document.getElementById('editTemplateForm').reset();
   // Hide folder preview
   const previewContainer = document.getElementById('editTemplateThumbnailFolderPreview');
   if (previewContainer) previewContainer.classList.add('hidden');
-  // Hide stream key mapping section
-  const mappingSection = document.getElementById('editStreamKeyMappingSection');
-  if (mappingSection) mappingSection.classList.add('hidden');
   // Clear stored template data
   window.currentEditTemplate = null;
 }
@@ -2759,30 +2646,6 @@ if (editTemplateForm) {
         // IMPORTANT: Always include thumbnailFolder to ensure it's saved
         thumbnailFolder: thumbnailFolder
       };
-      
-      // Collect stream key folder mapping if present
-      const streamKeyFolderSelects = document.querySelectorAll('.edit-stream-key-folder-select');
-      if (streamKeyFolderSelects.length > 0) {
-        const streamKeyFolderMapping = {};
-        streamKeyFolderSelects.forEach(select => {
-          const streamId = select.dataset.streamId;
-          let folderValue = select.value;
-          
-          // Convert __ROOT__ to empty string (root folder)
-          if (folderValue === '__ROOT__') {
-            folderValue = '';
-          }
-          
-          if (streamId) {
-            streamKeyFolderMapping[streamId] = folderValue;
-          }
-        });
-        
-        if (Object.keys(streamKeyFolderMapping).length > 0) {
-          updateData.streamKeyFolderMapping = streamKeyFolderMapping;
-          console.log('[editTemplate] Stream key folder mapping:', streamKeyFolderMapping);
-        }
-      }
       
       console.log('[editTemplate] Sending thumbnailFolder:', thumbnailFolder, '(from select:', thumbnailFolderValue, ')');
       
@@ -3190,111 +3053,57 @@ async function openMultiSaveTemplateModal(broadcasts) {
   // Store broadcasts data
   window.selectedBroadcastsForTemplate = broadcasts;
   
-  // Load thumbnail folders first
-  let folderOptions = '<option value="">-- Pilih Folder --</option>';
-  folderOptions += '<option value="__ROOT__">📁 Root (Semua Thumbnail)</option>';
+  // Collect unique stream keys and fetch their folder bindings from server
+  const streamKeyFolderMapping = {};
+  const streamKeysWithoutFolder = [];
   
-  try {
-    const response = await fetch('/api/thumbnail-folders', {
-      headers: { 'X-CSRF-Token': getCsrfToken() }
-    });
-    const data = await response.json();
-    
-    if (data.success && data.folders && data.folders.length > 0) {
-      data.folders.forEach(folder => {
-        folderOptions += `<option value="${escapeHtml(folder.name)}">📂 ${escapeHtml(folder.name)} (${folder.count} files)</option>`;
-      });
+  for (const b of broadcasts) {
+    if (b.streamId && !streamKeyFolderMapping.hasOwnProperty(b.streamId)) {
+      // Fetch folder binding from server
+      const folder = await getStreamKeyFolderMappingFromServer(b.streamId);
+      if (folder !== null && folder !== undefined) {
+        streamKeyFolderMapping[b.streamId] = folder;
+      } else {
+        streamKeysWithoutFolder.push(b.streamKey || b.streamId);
+      }
     }
-    
-    // Store folder options for reuse
-    window.multiTemplateFolderOptions = folderOptions;
-    
-    console.log('[openMultiSaveTemplateModal] Loaded', data.folders?.length || 0, 'folders');
-  } catch (err) {
-    console.error('[openMultiSaveTemplateModal] Error loading folders:', err);
   }
   
-  // Update preview with individual folder selectors per broadcast
+  // Store mapping for form submission
+  window.multiTemplateStreamKeyFolderMapping = streamKeyFolderMapping;
+  
+  console.log('[openMultiSaveTemplateModal] Auto-loaded folder mapping:', streamKeyFolderMapping);
+  
+  // Update preview - show broadcasts with their auto-loaded folders
   const previewEl = document.getElementById('multiTemplatePreview');
   if (previewEl) {
-    // Group broadcasts by stream key to show which ones share the same key
-    const streamKeyGroups = {};
-    broadcasts.forEach((b, i) => {
-      const key = b.streamId || 'no-stream-key';
-      if (!streamKeyGroups[key]) {
-        streamKeyGroups[key] = [];
-      }
-      streamKeyGroups[key].push({ ...b, index: i });
-    });
-    
-    // Check if there are multiple different stream keys
-    const uniqueStreamKeys = Object.keys(streamKeyGroups).filter(k => k !== 'no-stream-key');
-    const hasMultipleStreamKeys = uniqueStreamKeys.length > 1;
-    
-    let html = '';
-    
-    if (hasMultipleStreamKeys) {
-      // Show grouped by stream key with folder selector per group
-      html += '<p class="text-xs text-yellow-400 mb-2"><i class="ti ti-alert-circle mr-1"></i>Terdeteksi stream key berbeda - pilih folder untuk masing-masing:</p>';
+    let html = broadcasts.map((b, i) => {
+      const folder = b.streamId && streamKeyFolderMapping[b.streamId] !== undefined 
+        ? streamKeyFolderMapping[b.streamId] 
+        : null;
+      const folderDisplay = folder === '' ? '📁 Root' : (folder ? `📂 ${folder}` : '⚠️ Belum diset');
+      const folderClass = folder !== null ? 'text-green-400' : 'text-yellow-400';
       
-      Object.entries(streamKeyGroups).forEach(([streamKey, groupBroadcasts], groupIndex) => {
-        const streamKeyLabel = streamKey === 'no-stream-key' ? 'Tanpa Stream Key' : `Stream Key: ${groupBroadcasts[0].streamKey || streamKey}`;
-        
-        html += `
-          <div class="border border-gray-600 rounded-lg p-2 mb-2">
-            <div class="flex items-center gap-2 mb-2">
-              <i class="ti ti-broadcast text-primary text-sm"></i>
-              <span class="text-xs text-gray-400 truncate flex-1">${escapeHtml(streamKeyLabel)}</span>
-            </div>
-            <div class="space-y-1 mb-2">
-              ${groupBroadcasts.map((b, i) => `
-                <div class="flex items-center gap-2 text-xs pl-4">
-                  <span class="text-gray-500">${b.index + 1}.</span>
-                  <span class="text-white truncate">${escapeHtml(b.title)}</span>
-                </div>
-              `).join('')}
-            </div>
-            <select id="multiTemplateFolder_${streamKey}" data-stream-id="${streamKey}" 
-              class="multi-template-folder-select w-full px-2 py-1.5 bg-dark-600 border border-gray-500 rounded text-xs focus:border-primary focus:outline-none">
-              ${folderOptions}
-            </select>
-          </div>
-        `;
-      });
-    } else {
-      // Single stream key or no stream key - show simple list with one folder selector
-      html += broadcasts.map((b, i) => `
-        <div class="flex items-center gap-2 text-xs">
-          <span class="text-gray-500">${i + 1}.</span>
+      return `
+        <div class="flex items-center gap-2 text-xs py-1 border-b border-gray-600/50 last:border-0">
+          <span class="text-gray-500 w-4">${i + 1}.</span>
           <span class="text-white truncate flex-1">${escapeHtml(b.title)}</span>
-          <span class="text-gray-500">(${b.privacyStatus})</span>
-        </div>
-      `).join('');
-      
-      // Add single folder selector
-      const defaultStreamKey = broadcasts[0]?.streamId || 'default';
-      html += `
-        <div class="mt-3 pt-3 border-t border-gray-600">
-          <label class="text-xs text-gray-400 block mb-1">
-            <i class="ti ti-folder text-primary mr-1"></i>Folder Thumbnail:
-          </label>
-          <select id="multiTemplateFolder_${defaultStreamKey}" data-stream-id="${defaultStreamKey}" 
-            class="multi-template-folder-select w-full px-2 py-1.5 bg-dark-600 border border-gray-500 rounded text-xs focus:border-primary focus:outline-none">
-            ${folderOptions}
-          </select>
+          <span class="${folderClass} text-[10px] flex-shrink-0">${folderDisplay}</span>
         </div>
       `;
-    }
+    }).join('');
     
     previewEl.innerHTML = html;
-    
-    // Pre-select current folder if set
-    if (currentThumbnailFolder) {
-      document.querySelectorAll('.multi-template-folder-select').forEach(select => {
-        select.value = currentThumbnailFolder;
-      });
-      console.log('[openMultiSaveTemplateModal] Pre-selected folder:', currentThumbnailFolder);
-    }
+  }
+  
+  // Show warning if some stream keys don't have folder binding
+  const warningEl = document.getElementById('multiTemplateFolderWarning');
+  const warningTextEl = document.getElementById('multiTemplateFolderWarningText');
+  if (streamKeysWithoutFolder.length > 0 && warningEl && warningTextEl) {
+    warningTextEl.textContent = `${streamKeysWithoutFolder.length} stream key belum punya folder binding. Folder akan diset ke NULL.`;
+    warningEl.classList.remove('hidden');
+  } else if (warningEl) {
+    warningEl.classList.add('hidden');
   }
   
   document.getElementById('multiSaveTemplateModal').classList.remove('hidden');
@@ -3304,6 +3113,10 @@ function closeMultiSaveTemplateModal() {
   document.getElementById('multiSaveTemplateModal').classList.add('hidden');
   document.getElementById('multiSaveTemplateForm').reset();
   window.selectedBroadcastsForTemplate = null;
+  window.multiTemplateStreamKeyFolderMapping = null;
+  // Hide warning
+  const warningEl = document.getElementById('multiTemplateFolderWarning');
+  if (warningEl) warningEl.classList.add('hidden');
 }
 
 // Multi-Save Template Form Handler
@@ -3320,61 +3133,26 @@ if (multiSaveTemplateForm) {
     try {
       const broadcasts = window.selectedBroadcastsForTemplate;
       const templateName = document.getElementById('multiTemplateName').value;
+      const streamKeyFolderMapping = window.multiTemplateStreamKeyFolderMapping || {};
       
       if (!broadcasts || broadcasts.length === 0) {
         throw new Error('No broadcasts selected');
       }
       
-      // Collect stream key to folder mapping from all folder selects
-      const streamKeyFolderMapping = {};
+      // Determine default folder (use first broadcast's folder or null)
       let defaultFolder = null;
-      
-      document.querySelectorAll('.multi-template-folder-select').forEach(select => {
-        const streamId = select.dataset.streamId;
-        let folderValue = select.value;
-        
-        // Convert __ROOT__ to empty string (root folder)
-        if (folderValue === '__ROOT__') {
-          folderValue = '';
-        }
-        
-        if (streamId && folderValue !== '') {
-          // Only add to mapping if folder is selected (not empty placeholder)
-          if (streamId !== 'default' && streamId !== 'no-stream-key') {
-            streamKeyFolderMapping[streamId] = folderValue;
-          }
-          // Use first selected folder as default
-          if (defaultFolder === null) {
-            defaultFolder = folderValue;
-          }
-        } else if (folderValue === '') {
-          // Empty string means root folder was selected
-          if (streamId !== 'default' && streamId !== 'no-stream-key') {
-            streamKeyFolderMapping[streamId] = '';
-          }
-          if (defaultFolder === null) {
-            defaultFolder = '';
-          }
-        }
-      });
-      
-      // Validate at least one folder is selected
-      const hasAnyFolderSelected = document.querySelectorAll('.multi-template-folder-select').length === 0 || 
-        Array.from(document.querySelectorAll('.multi-template-folder-select')).some(s => s.value !== '');
-      
-      if (!hasAnyFolderSelected) {
-        showToast('Pilih folder thumbnail minimal untuk satu broadcast!', 'error');
-        return;
+      if (broadcasts[0]?.streamId && streamKeyFolderMapping[broadcasts[0].streamId] !== undefined) {
+        defaultFolder = streamKeyFolderMapping[broadcasts[0].streamId];
       }
       
-      console.log('[multiSaveTemplate] Stream key folder mapping:', streamKeyFolderMapping);
+      console.log('[multiSaveTemplate] Using auto-loaded folder mapping:', streamKeyFolderMapping);
       console.log('[multiSaveTemplate] Default folder:', defaultFolder);
       
       // Create template with all broadcast data
       const templateData = {
         name: templateName,
         accountId: broadcasts[0].accountId,
-        thumbnailFolder: defaultFolder,  // Default folder for template
+        thumbnailFolder: defaultFolder,
         streamKeyFolderMapping: Object.keys(streamKeyFolderMapping).length > 0 ? streamKeyFolderMapping : null,
         broadcasts: broadcasts.map(b => ({
           title: b.title,
@@ -3386,7 +3164,7 @@ if (multiSaveTemplateForm) {
           tags: b.tags || [],
           thumbnailPath: b.thumbnailPath || null,
           pinnedThumbnail: b.pinnedThumbnail || null,
-          // Include folder for this specific broadcast based on its stream key
+          // Use folder from stream key mapping
           thumbnailFolder: b.streamId && streamKeyFolderMapping[b.streamId] !== undefined 
             ? streamKeyFolderMapping[b.streamId] 
             : defaultFolder
@@ -3396,8 +3174,7 @@ if (multiSaveTemplateForm) {
       console.log('[multiSaveTemplate] Saving template:', {
         name: templateData.name,
         broadcastCount: templateData.broadcasts.length,
-        streamKeyFolderMapping: templateData.streamKeyFolderMapping,
-        defaultFolder: templateData.thumbnailFolder
+        streamKeyFolderMapping: templateData.streamKeyFolderMapping
       });
       
       const response = await fetch('/api/youtube/templates/multi', {
