@@ -5220,7 +5220,7 @@ app.get('/api/youtube/broadcast-settings/:broadcastId', isAuthenticated, async (
       // This helps for broadcasts created before the fix
       let fallbackFolder = null;
       try {
-        const templates = await BroadcastTemplate.findAllByUserId(req.session.userId);
+        const templates = await BroadcastTemplate.findByUserId(req.session.userId);
         if (templates && templates.length > 0) {
           // Sort by last_run_at descending to get most recently used
           const sortedTemplates = templates.sort((a, b) => {
@@ -6169,10 +6169,15 @@ app.put('/api/youtube/templates/:id', isAuthenticated, async (req, res) => {
 
     const { 
       name, title, description, privacyStatus, tags, categoryId, 
-      thumbnailPath, streamId, accountId, titleIndex, pinnedTitleId,
+      thumbnailPath, thumbnailFolder, pinnedThumbnail, streamKeyFolderMapping,
+      streamId, accountId, titleIndex, pinnedTitleId,
       // Recurring schedule fields
       recurringEnabled, recurringPattern, recurringTime, recurringDays
     } = req.body;
+    
+    console.log('[update-template] Received thumbnailFolder:', thumbnailFolder);
+    console.log('[update-template] Received pinnedThumbnail:', pinnedThumbnail);
+    console.log('[update-template] Received streamKeyFolderMapping:', streamKeyFolderMapping);
     
     const updateData = {};
     if (name !== undefined) updateData.name = name;
@@ -6182,6 +6187,20 @@ app.put('/api/youtube/templates/:id', isAuthenticated, async (req, res) => {
     if (tags !== undefined) updateData.tags = tags;
     if (categoryId !== undefined) updateData.category_id = categoryId;
     if (thumbnailPath !== undefined) updateData.thumbnail_path = thumbnailPath;
+    if (thumbnailFolder !== undefined) updateData.thumbnail_folder = thumbnailFolder;
+    if (pinnedThumbnail !== undefined) updateData.pinned_thumbnail = pinnedThumbnail;
+    if (streamKeyFolderMapping !== undefined) {
+      // Parse if string, otherwise use as-is
+      if (typeof streamKeyFolderMapping === 'string') {
+        try {
+          updateData.stream_key_folder_mapping = JSON.parse(streamKeyFolderMapping);
+        } catch (e) {
+          updateData.stream_key_folder_mapping = streamKeyFolderMapping;
+        }
+      } else {
+        updateData.stream_key_folder_mapping = streamKeyFolderMapping;
+      }
+    }
     if (streamId !== undefined) updateData.stream_id = streamId;
     if (accountId !== undefined) updateData.account_id = parseInt(accountId);
     if (titleIndex !== undefined) updateData.title_index = titleIndex;
