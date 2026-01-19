@@ -5891,7 +5891,7 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
       tags: tags || null,
       category_id: categoryId || '22',
       thumbnail_path: thumbnailPath || null,
-      thumbnail_folder: thumbnailFolder !== undefined ? thumbnailFolder : null,
+      thumbnail_folder: thumbnailFolder || null,  // Will be set below if null
       thumbnail_index: 0,
       pinned_thumbnail: pinnedThumbnail || null,
       stream_key_folder_mapping: parsedMapping,
@@ -5905,6 +5905,24 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
       recurring_days: Array.isArray(recurringDays) ? recurringDays : null,
       next_run_at: next_run_at
     });
+    
+    // If thumbnail_folder is null, try to set it to first available folder
+    if (!template.thumbnail_folder) {
+      try {
+        const thumbnailDir = path.join(__dirname, 'public', 'thumbnails');
+        if (fs.existsSync(thumbnailDir)) {
+          const folders = fs.readdirSync(thumbnailDir)
+            .filter(f => fs.statSync(path.join(thumbnailDir, f)).isDirectory());
+          if (folders.length > 0) {
+            await BroadcastTemplate.update(template.id, { thumbnail_folder: folders[0] });
+            template.thumbnail_folder = folders[0];
+            console.log('[create-template] Auto-set thumbnail_folder to first folder:', folders[0]);
+          }
+        }
+      } catch (folderErr) {
+        console.warn('[create-template] Could not auto-set thumbnail_folder:', folderErr.message);
+      }
+    }
 
     console.log('[create-template] Created template with stream_id:', template.stream_id, 'thumbnail_folder:', template.thumbnail_folder, 'pinned_thumbnail:', template.pinned_thumbnail, 'title_index:', template.title_index, 'pinned_title_id:', template.pinned_title_id);
     console.log('[create-template] Recurring config saved:', { recurring_enabled: template.recurring_enabled, recurring_pattern: template.recurring_pattern, recurring_time: template.recurring_time, next_run_at: template.next_run_at });
@@ -6086,6 +6104,72 @@ app.post('/api/youtube/templates/import', isAuthenticated, uploadBackup.single('
       success: false,
       error: error.message || 'Failed to import templates'
     });
+  }
+});
+
+// Get thumbnail folder from template by accountId
+app.get('/api/youtube/template-folder/:accountId', isAuthenticated, async (req, res) => {
+  try {
+    const accountId = parseInt(req.params.accountId);
+    
+    // Get all templates for user
+    const templates = await BroadcastTemplate.findByUserId(req.session.userId);
+    
+    // Find template for this account (prefer recurring enabled)
+    let matchingTemplate = templates.find(t => t.account_id === accountId && t.recurring_enabled);
+    if (!matchingTemplate) {
+      matchingTemplate = templates.find(t => t.account_id === accountId);
+    }
+    
+    if (matchingTemplate) {
+      let folder = matchingTemplate.thumbnail_folder;
+      
+      // If template has no folder, get first available folder
+      if (!folder) {
+        try {
+          const thumbnailDir = path.join(__dirname, 'public', 'thumbnails');
+          if (fs.existsSync(thumbnailDir)) {
+            const folders = fs.readdirSync(thumbnailDir)
+              .filter(f => fs.statSync(path.join(thumbnailDir, f)).isDirectory());
+            if (folders.length > 0) {
+              folder = folders[0];
+              console.log(`[template-folder] Template has no folder, using first available: ${folder}`);
+            }
+          }
+        } catch (e) {
+          console.warn('[template-folder] Error getting folders:', e.message);
+        }
+      }
+      
+      console.log(`[template-folder] Found template "${matchingTemplate.name}" for account ${accountId}, folder: ${folder}`);
+      res.json({ 
+        success: true, 
+        folder: folder,
+        templateName: matchingTemplate.name,
+        templateId: matchingTemplate.id
+      });
+    } else {
+      // No template, get first available folder
+      let firstFolder = null;
+      try {
+        const thumbnailDir = path.join(__dirname, 'public', 'thumbnails');
+        if (fs.existsSync(thumbnailDir)) {
+          const folders = fs.readdirSync(thumbnailDir)
+            .filter(f => fs.statSync(path.join(thumbnailDir, f)).isDirectory());
+          if (folders.length > 0) {
+            firstFolder = folders[0];
+          }
+        }
+      } catch (e) {
+        console.warn('[template-folder] Error getting folders:', e.message);
+      }
+      
+      console.log(`[template-folder] No template found for account ${accountId}, using first folder: ${firstFolder}`);
+      res.json({ success: true, folder: firstFolder });
+    }
+  } catch (error) {
+    console.error('[template-folder] Error:', error.message);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 

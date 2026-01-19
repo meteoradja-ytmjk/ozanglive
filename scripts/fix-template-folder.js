@@ -1,14 +1,19 @@
 /**
  * Script untuk meng-update thumbnail_folder di template
  * 
- * Jalankan di VPS:
- * node scripts/fix-template-folder.js
+ * PENTING: Jalankan script ini di VPS untuk memperbaiki template!
  * 
- * Atau dengan parameter untuk set folder:
- * node scripts/fix-template-folder.js "TEMPLATE_NAME" "FOLDER_NAME"
+ * Cara pakai:
+ * 1. Lihat semua template: node scripts/fix-template-folder.js
+ * 2. Update template: node scripts/fix-template-folder.js "NAMA_TEMPLATE" "NAMA_FOLDER"
+ * 
+ * Contoh:
+ * node scripts/fix-template-folder.js "La Davina Melodia" "DAVINA"
  */
 
 const { db } = require('../db/database');
+const fs = require('fs');
+const path = require('path');
 
 async function runQuery(sql, params = []) {
   return new Promise((resolve, reject) => {
@@ -31,7 +36,11 @@ async function getAll(sql, params = []) {
 async function main() {
   const args = process.argv.slice(2);
   
-  console.log('=== Fix Template Thumbnail Folder ===\n');
+  console.log('');
+  console.log('╔════════════════════════════════════════════════════════════╗');
+  console.log('║         FIX TEMPLATE THUMBNAIL FOLDER                      ║');
+  console.log('╚════════════════════════════════════════════════════════════╝');
+  console.log('');
   
   try {
     // Show all templates
@@ -40,22 +49,39 @@ async function main() {
       FROM broadcast_templates
     `);
     
-    console.log('Templates saat ini:');
-    console.log('-'.repeat(60));
+    // Show all thumbnail folders
+    const thumbnailDir = path.join(__dirname, '..', 'public', 'thumbnails');
+    let folders = [];
+    
+    if (fs.existsSync(thumbnailDir)) {
+      folders = fs.readdirSync(thumbnailDir)
+        .filter(f => fs.statSync(path.join(thumbnailDir, f)).isDirectory());
+    }
+    
+    console.log('FOLDER THUMBNAIL YANG TERSEDIA:');
+    console.log('─'.repeat(40));
+    if (folders.length === 0) {
+      console.log('  (tidak ada folder)');
+    } else {
+      folders.forEach((f, i) => console.log(`  ${i + 1}. ${f}`));
+    }
+    console.log('');
+    
+    console.log('TEMPLATE SAAT INI:');
+    console.log('─'.repeat(60));
     
     if (templates.length === 0) {
-      console.log('Tidak ada template!');
+      console.log('  (tidak ada template)');
       process.exit(0);
     }
     
     templates.forEach((t, i) => {
-      const folder = t.thumbnail_folder === null ? 'NULL (tidak di-set)' : 
-                     t.thumbnail_folder === '' ? '""(root)' : 
-                     `"${t.thumbnail_folder}"`;
-      console.log(`${i + 1}. ${t.name}`);
-      console.log(`   ID: ${t.id}`);
-      console.log(`   thumbnail_folder: ${folder}`);
-      console.log(`   recurring: ${t.recurring_enabled ? 'YES' : 'NO'}`);
+      const folder = t.thumbnail_folder === null ? '❌ NULL (PERLU DISET!)' : 
+                     t.thumbnail_folder === '' ? '⚠️  "" (kosong/root)' : 
+                     `✅ "${t.thumbnail_folder}"`;
+      console.log(`  ${i + 1}. ${t.name}`);
+      console.log(`     thumbnail_folder: ${folder}`);
+      console.log(`     recurring: ${t.recurring_enabled ? '🔄 YES' : '⏸️  NO'}`);
       console.log('');
     });
     
@@ -64,8 +90,8 @@ async function main() {
       const templateName = args[0];
       const folderName = args[1];
       
-      console.log('-'.repeat(60));
-      console.log(`Updating template "${templateName}" dengan folder "${folderName}"...`);
+      console.log('─'.repeat(60));
+      console.log(`UPDATING: "${templateName}" → folder "${folderName}"`);
       
       const result = await runQuery(
         'UPDATE broadcast_templates SET thumbnail_folder = ? WHERE name = ?',
@@ -73,21 +99,35 @@ async function main() {
       );
       
       if (result.changes > 0) {
-        console.log(`✓ Berhasil update ${result.changes} template`);
+        console.log(`✅ BERHASIL! Template "${templateName}" sekarang menggunakan folder "${folderName}"`);
+        console.log('');
+        console.log('LANGKAH SELANJUTNYA:');
+        console.log('1. Restart aplikasi: pm2 restart streamflow');
+        console.log('2. Clear browser cache: Ctrl+Shift+R');
+        console.log('3. Test edit broadcast');
       } else {
-        console.log(`✗ Template "${templateName}" tidak ditemukan`);
+        console.log(`❌ GAGAL! Template "${templateName}" tidak ditemukan`);
       }
+    } else if (args.length === 1) {
+      console.log('❌ ERROR: Butuh 2 parameter');
+      console.log('   Contoh: node scripts/fix-template-folder.js "La Davina Melodia" "DAVINA"');
     } else {
-      console.log('-'.repeat(60));
-      console.log('Untuk update folder, jalankan:');
-      console.log('node scripts/fix-template-folder.js "NAMA_TEMPLATE" "NAMA_FOLDER"');
+      console.log('─'.repeat(60));
+      console.log('CARA UPDATE TEMPLATE:');
+      console.log('  node scripts/fix-template-folder.js "NAMA_TEMPLATE" "NAMA_FOLDER"');
       console.log('');
-      console.log('Contoh:');
-      console.log('node scripts/fix-template-folder.js "La Davina Melodia" "DAVINA"');
+      console.log('CONTOH:');
+      if (templates.length > 0 && folders.length > 0) {
+        console.log(`  node scripts/fix-template-folder.js "${templates[0].name}" "${folders[0]}"`);
+      } else {
+        console.log('  node scripts/fix-template-folder.js "La Davina Melodia" "DAVINA"');
+      }
     }
     
+    console.log('');
+    
   } catch (error) {
-    console.error('Error:', error.message);
+    console.error('❌ ERROR:', error.message);
   }
   
   process.exit(0);

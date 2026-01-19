@@ -1528,26 +1528,37 @@ async function openEditBroadcastModal(broadcast) {
   // Load thumbnail folders first and get first folder as default
   const firstFolder = await loadEditThumbnailFolders();
   
-  // Get thumbnail folder from broadcast settings (saved when broadcast was created)
-  // Pass accountId to help find the correct template if no settings exist
+  // Get thumbnail folder from template for this account
   const broadcastId = broadcast.id;
   const accountId = broadcast.accountId;
   let boundFolder = null;
   
-  if (broadcastId) {
-    const settings = await getBroadcastSettingsFromServer(broadcastId, accountId);
-    // Check if settings exist and thumbnailFolder is explicitly set
-    if (settings && settings.thumbnailFolder !== null && settings.thumbnailFolder !== undefined && settings.thumbnailFolder !== '') {
-      boundFolder = settings.thumbnailFolder;
-      if (settings.isFallback) {
-        console.log(`[openEditBroadcastModal] Broadcast ${broadcastId} using fallback folder from template "${settings.fallbackTemplateName}": "${boundFolder}"`);
-      } else {
-        console.log(`[openEditBroadcastModal] Broadcast ${broadcastId} has folder: "${boundFolder}"`);
+  // First try to get folder from template for this account
+  if (accountId) {
+    try {
+      const templateResponse = await fetch(`/api/youtube/template-folder/${accountId}`, {
+        headers: { 'X-CSRF-Token': getCsrfToken() }
+      });
+      const templateData = await templateResponse.json();
+      if (templateData.success && templateData.folder) {
+        boundFolder = templateData.folder;
+        console.log(`[openEditBroadcastModal] Using folder from template "${templateData.templateName}": "${boundFolder}"`);
       }
+    } catch (e) {
+      console.warn('[openEditBroadcastModal] Error getting template folder:', e.message);
     }
   }
   
-  // If no folder found from settings, use first available folder
+  // If no folder from template, try broadcast settings
+  if (!boundFolder && broadcastId) {
+    const settings = await getBroadcastSettingsFromServer(broadcastId, accountId);
+    if (settings && settings.thumbnailFolder) {
+      boundFolder = settings.thumbnailFolder;
+      console.log(`[openEditBroadcastModal] Using folder from broadcast settings: "${boundFolder}"`);
+    }
+  }
+  
+  // If still no folder, use first available folder
   if (!boundFolder && firstFolder) {
     boundFolder = firstFolder;
     console.log(`[openEditBroadcastModal] Using first available folder: "${boundFolder}"`);
