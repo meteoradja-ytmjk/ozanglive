@@ -5881,6 +5881,18 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
       }
     }
 
+    // IMPORTANT: Handle thumbnailFolder correctly
+    // - undefined or null means not provided -> will be auto-set below
+    // - empty string "" means root folder (intentionally selected)
+    // - non-empty string means specific folder name
+    const finalThumbnailFolder = thumbnailFolder !== undefined ? thumbnailFolder : null;
+    
+    console.log('[create-template] thumbnailFolder processing:', {
+      received: thumbnailFolder,
+      type: typeof thumbnailFolder,
+      final: finalThumbnailFolder
+    });
+
     const template = await BroadcastTemplate.create({
       user_id: req.session.userId,
       account_id: parseInt(accountId),
@@ -5891,7 +5903,7 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
       tags: tags || null,
       category_id: categoryId || '22',
       thumbnail_path: thumbnailPath || null,
-      thumbnail_folder: thumbnailFolder || null,  // Will be set below if null
+      thumbnail_folder: finalThumbnailFolder,  // Use processed value - empty string is valid!
       thumbnail_index: 0,
       pinned_thumbnail: pinnedThumbnail || null,
       stream_key_folder_mapping: parsedMapping,
@@ -5906,8 +5918,9 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
       next_run_at: next_run_at
     });
     
-    // If thumbnail_folder is null, try to set it to first available folder
-    if (!template.thumbnail_folder) {
+    // Only auto-set thumbnail_folder if it was not provided at all (null)
+    // Do NOT auto-set if it's empty string (root folder was intentionally selected)
+    if (template.thumbnail_folder === null) {
       try {
         const thumbnailDir = path.join(__dirname, 'public', 'thumbnails');
         if (fs.existsSync(thumbnailDir)) {
@@ -5967,6 +5980,18 @@ app.post('/api/youtube/templates/multi', isAuthenticated, async (req, res) => {
       }
     }
 
+    // IMPORTANT: Handle thumbnailFolder correctly
+    // - undefined means not provided
+    // - empty string "" means root folder (intentionally selected)
+    // - non-empty string means specific folder name
+    const finalThumbnailFolder = thumbnailFolder !== undefined ? thumbnailFolder : null;
+    
+    console.log('[templates/multi] thumbnailFolder processing:', {
+      received: thumbnailFolder,
+      type: typeof thumbnailFolder,
+      final: finalThumbnailFolder
+    });
+
     // Ensure each broadcast has streamId, thumbnailPath, and thumbnailFolder preserved
     const broadcastsWithStreamId = broadcasts.map(b => ({
       title: b.title,
@@ -5977,7 +6002,8 @@ app.post('/api/youtube/templates/multi', isAuthenticated, async (req, res) => {
       categoryId: b.categoryId || '22',
       tags: b.tags || [],
       thumbnailPath: b.thumbnailPath || b.thumbnail_path || null,  // Preserve thumbnail path
-      thumbnailFolder: thumbnailFolder || b.thumbnailFolder || null,  // Preserve thumbnail folder for sequential selection
+      // IMPORTANT: Use finalThumbnailFolder first, then fallback to broadcast's folder
+      thumbnailFolder: finalThumbnailFolder !== null ? finalThumbnailFolder : (b.thumbnailFolder !== undefined ? b.thumbnailFolder : null),
       pinnedThumbnail: b.pinnedThumbnail || null  // Preserve pinned thumbnail
     }));
 

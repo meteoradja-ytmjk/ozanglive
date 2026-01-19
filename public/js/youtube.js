@@ -2027,6 +2027,106 @@ function openCreateTemplateModal() {
   if (accountId) {
     fetchTemplateStreamKeys(accountId);
   }
+  
+  // Load thumbnail folders for template modal
+  loadTemplateThumbnailFolders();
+}
+
+// Load thumbnail folders for template modal
+async function loadTemplateThumbnailFolders(selectedFolder = null) {
+  const select = document.getElementById('templateThumbnailFolder');
+  if (!select) return;
+  
+  try {
+    const response = await fetch('/api/thumbnail-folders', {
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+    
+    const data = await response.json();
+    
+    // Clear and rebuild options
+    select.innerHTML = '<option value="">-- Pilih Folder Thumbnail --</option>';
+    
+    // Add root folder option
+    const rootOption = document.createElement('option');
+    rootOption.value = '__ROOT__';
+    rootOption.textContent = '📁 Root (Folder Utama)';
+    select.appendChild(rootOption);
+    
+    if (data.success && data.folders && data.folders.length > 0) {
+      data.folders.forEach(folder => {
+        const option = document.createElement('option');
+        option.value = folder.name;
+        option.textContent = `📂 ${folder.name} (${folder.count || 0} thumbnails)`;
+        select.appendChild(option);
+      });
+    }
+    
+    // Pre-select folder if provided
+    if (selectedFolder !== null) {
+      if (selectedFolder === '' || selectedFolder === '__ROOT__') {
+        select.value = '__ROOT__';
+      } else {
+        select.value = selectedFolder;
+      }
+      // Show preview
+      onTemplateThumbnailFolderChange(select.value);
+    }
+    
+    console.log('[loadTemplateThumbnailFolders] Loaded', data.folders?.length || 0, 'folders, selected:', selectedFolder);
+  } catch (error) {
+    console.error('Error loading thumbnail folders:', error);
+    select.innerHTML = '<option value="">Error loading folders</option>';
+  }
+}
+
+// Handle thumbnail folder change in template modal
+async function onTemplateThumbnailFolderChange(folderValue) {
+  const previewContainer = document.getElementById('templateThumbnailFolderPreview');
+  const imagesContainer = document.getElementById('templateThumbnailFolderImages');
+  
+  if (!previewContainer || !imagesContainer) return;
+  
+  if (!folderValue) {
+    previewContainer.classList.add('hidden');
+    return;
+  }
+  
+  // Convert __ROOT__ to empty string for API
+  const folder = folderValue === '__ROOT__' ? '' : folderValue;
+  
+  try {
+    let url = '/api/thumbnails';
+    if (folder) {
+      url += `?folder=${encodeURIComponent(folder)}`;
+    }
+    
+    const response = await fetch(url, {
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (data.success && data.thumbnails && data.thumbnails.length > 0) {
+      previewContainer.classList.remove('hidden');
+      imagesContainer.innerHTML = data.thumbnails.slice(0, 5).map((thumb, i) => `
+        <div class="w-12 h-8 flex-shrink-0 rounded overflow-hidden border border-gray-600 relative">
+          <img src="${thumb.url}" class="w-full h-full object-cover" alt="Thumb ${i + 1}">
+          <span class="absolute bottom-0 right-0 bg-black/70 text-[8px] text-white px-0.5">${i + 1}</span>
+        </div>
+      `).join('') + (data.thumbnails.length > 5 ? `<span class="text-xs text-gray-500 self-center">+${data.thumbnails.length - 5} more</span>` : '');
+    } else {
+      previewContainer.classList.remove('hidden');
+      imagesContainer.innerHTML = '<span class="text-xs text-yellow-400">⚠️ Folder kosong - tidak ada thumbnail</span>';
+    }
+  } catch (error) {
+    console.error('Error loading folder preview:', error);
+    previewContainer.classList.add('hidden');
+  }
 }
 
 // Fetch stream keys for template modal
@@ -2094,6 +2194,16 @@ if (createTemplateForm) {
       return;
     }
     
+    // Validate thumbnail folder is selected
+    const thumbnailFolderSelect = document.getElementById('templateThumbnailFolder');
+    const thumbnailFolderValue = thumbnailFolderSelect ? thumbnailFolderSelect.value : null;
+    
+    if (!thumbnailFolderValue) {
+      showToast('Pilih folder thumbnail terlebih dahulu!', 'error');
+      if (thumbnailFolderSelect) thumbnailFolderSelect.focus();
+      return;
+    }
+    
     const createBtn = document.getElementById('createTemplateBtn');
     const originalText = createBtn.innerHTML;
     createBtn.innerHTML = '<i class="ti ti-loader animate-spin"></i> Creating...';
@@ -2103,6 +2213,10 @@ if (createTemplateForm) {
       // Get recurring data
       const recurringData = getRecurringDataFromForm();
       
+      // Convert __ROOT__ to empty string for backend
+      // Empty string means root folder (thumbnails without subfolder)
+      const thumbnailFolder = thumbnailFolderValue === '__ROOT__' ? '' : thumbnailFolderValue;
+      
       const templateData = {
         name: document.getElementById('templateName').value,
         accountId: document.getElementById('templateAccountSelect').value,
@@ -2111,8 +2225,8 @@ if (createTemplateForm) {
         privacyStatus: document.getElementById('templatePrivacyStatus').value,
         categoryId: document.getElementById('templateCategoryId').value || '22',
         streamId: document.getElementById('templateStreamKeySelect').value || null,
-        // Save current thumbnail folder selection for sequential thumbnail
-        thumbnailFolder: currentThumbnailFolder || null,
+        // IMPORTANT: Use the selected folder from the dropdown, NOT currentThumbnailFolder
+        thumbnailFolder: thumbnailFolder,
         // Include recurring data
         recurringEnabled: recurringData.recurring_enabled,
         recurringPattern: recurringData.recurring_pattern,
@@ -2121,6 +2235,7 @@ if (createTemplateForm) {
       };
       
       console.log('[createTemplate] Sending template data:', templateData);
+      console.log('[createTemplate] thumbnailFolder value:', thumbnailFolder, '(from select:', thumbnailFolderValue, ')');
       
       // Check if editing
       const editId = createTemplateForm.dataset.editId;
@@ -2321,6 +2436,9 @@ function openEditTemplateModal(template) {
   document.getElementById('editTemplateId').value = template.id;
   document.getElementById('editTemplateName').textContent = template.name;
   
+  // Load and set thumbnail folder
+  loadEditTemplateThumbnailFolders(template.thumbnail_folder);
+  
   // Set recurring enabled
   const recurringEnabled = document.getElementById('editRecurringEnabled');
   recurringEnabled.checked = template.recurring_enabled || false;
@@ -2370,6 +2488,106 @@ function openEditTemplateModal(template) {
 function closeEditTemplateModal() {
   document.getElementById('editTemplateModal').classList.add('hidden');
   document.getElementById('editTemplateForm').reset();
+  // Hide folder preview
+  const previewContainer = document.getElementById('editTemplateThumbnailFolderPreview');
+  if (previewContainer) previewContainer.classList.add('hidden');
+}
+
+// Load thumbnail folders for edit template modal
+async function loadEditTemplateThumbnailFolders(selectedFolder = null) {
+  const select = document.getElementById('editTemplateThumbnailFolder');
+  if (!select) return;
+  
+  try {
+    const response = await fetch('/api/thumbnail-folders', {
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+    
+    const data = await response.json();
+    
+    // Clear and rebuild options
+    select.innerHTML = '<option value="">-- Tidak ada folder (NULL) --</option>';
+    
+    // Add root folder option
+    const rootOption = document.createElement('option');
+    rootOption.value = '__ROOT__';
+    rootOption.textContent = '📁 Root (Folder Utama)';
+    select.appendChild(rootOption);
+    
+    if (data.success && data.folders && data.folders.length > 0) {
+      data.folders.forEach(folder => {
+        const option = document.createElement('option');
+        option.value = folder.name;
+        option.textContent = `📂 ${folder.name} (${folder.count || 0} thumbnails)`;
+        select.appendChild(option);
+      });
+    }
+    
+    // Pre-select folder if provided
+    if (selectedFolder !== null && selectedFolder !== undefined) {
+      if (selectedFolder === '') {
+        select.value = '__ROOT__';
+      } else {
+        select.value = selectedFolder;
+      }
+      // Show preview
+      onEditTemplateThumbnailFolderChange(select.value);
+    }
+    
+    console.log('[loadEditTemplateThumbnailFolders] Loaded folders, selected:', selectedFolder);
+  } catch (error) {
+    console.error('Error loading thumbnail folders:', error);
+    select.innerHTML = '<option value="">Error loading folders</option>';
+  }
+}
+
+// Handle thumbnail folder change in edit template modal
+async function onEditTemplateThumbnailFolderChange(folderValue) {
+  const previewContainer = document.getElementById('editTemplateThumbnailFolderPreview');
+  const imagesContainer = document.getElementById('editTemplateThumbnailFolderImages');
+  
+  if (!previewContainer || !imagesContainer) return;
+  
+  if (!folderValue) {
+    previewContainer.classList.add('hidden');
+    return;
+  }
+  
+  // Convert __ROOT__ to empty string for API
+  const folder = folderValue === '__ROOT__' ? '' : folderValue;
+  
+  try {
+    let url = '/api/thumbnails';
+    if (folder) {
+      url += `?folder=${encodeURIComponent(folder)}`;
+    }
+    
+    const response = await fetch(url, {
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (data.success && data.thumbnails && data.thumbnails.length > 0) {
+      previewContainer.classList.remove('hidden');
+      imagesContainer.innerHTML = data.thumbnails.slice(0, 5).map((thumb, i) => `
+        <div class="w-12 h-8 flex-shrink-0 rounded overflow-hidden border border-gray-600 relative">
+          <img src="${thumb.url}" class="w-full h-full object-cover" alt="Thumb ${i + 1}">
+          <span class="absolute bottom-0 right-0 bg-black/70 text-[8px] text-white px-0.5">${i + 1}</span>
+        </div>
+      `).join('') + (data.thumbnails.length > 5 ? `<span class="text-xs text-gray-500 self-center">+${data.thumbnails.length - 5} more</span>` : '');
+    } else {
+      previewContainer.classList.remove('hidden');
+      imagesContainer.innerHTML = '<span class="text-xs text-yellow-400">⚠️ Folder kosong - tidak ada thumbnail</span>';
+    }
+  } catch (error) {
+    console.error('Error loading folder preview:', error);
+    previewContainer.classList.add('hidden');
+  }
 }
 
 // Toggle recurring fields in edit modal
@@ -2411,9 +2629,20 @@ if (editTemplateForm) {
       const templateId = document.getElementById('editTemplateId').value;
       const recurringEnabled = document.getElementById('editRecurringEnabled').checked;
       
+      // Get thumbnail folder value
+      const thumbnailFolderSelect = document.getElementById('editTemplateThumbnailFolder');
+      const thumbnailFolderValue = thumbnailFolderSelect ? thumbnailFolderSelect.value : null;
+      
+      // Convert __ROOT__ to empty string for backend (empty string = root folder)
+      const thumbnailFolder = thumbnailFolderValue === '__ROOT__' ? '' : thumbnailFolderValue;
+      
       const updateData = {
-        recurring_enabled: recurringEnabled
+        recurringEnabled: recurringEnabled,
+        // IMPORTANT: Always include thumbnailFolder to ensure it's saved
+        thumbnailFolder: thumbnailFolder
       };
+      
+      console.log('[editTemplate] Sending thumbnailFolder:', thumbnailFolder, '(from select:', thumbnailFolderValue, ')');
       
       if (recurringEnabled) {
         const pattern = document.querySelector('input[name="editRecurringPattern"]:checked')?.value;
@@ -2428,8 +2657,8 @@ if (editTemplateForm) {
           return;
         }
         
-        updateData.recurring_pattern = pattern;
-        updateData.recurring_time = time;
+        updateData.recurringPattern = pattern;
+        updateData.recurringTime = time;
         
         if (pattern === 'weekly') {
           const days = Array.from(document.querySelectorAll('input[name="editRecurringDays"]:checked'))
@@ -2441,19 +2670,20 @@ if (editTemplateForm) {
             return;
           }
           
-          updateData.recurring_days = days;
+          updateData.recurringDays = days;
         } else {
           // For daily pattern, explicitly clear recurring_days
-          updateData.recurring_days = null;
+          updateData.recurringDays = null;
         }
       } else {
         // When disabling recurring, clear all recurring fields
-        updateData.recurring_pattern = null;
-        updateData.recurring_time = null;
-        updateData.recurring_days = null;
+        updateData.recurringPattern = null;
+        updateData.recurringTime = null;
+        updateData.recurringDays = null;
       }
       
-      const response = await fetch(`/api/youtube/templates/${templateId}/recurring`, {
+      // Use main template update endpoint to save both thumbnailFolder and recurring config
+      const response = await fetch(`/api/youtube/templates/${templateId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -2814,7 +3044,7 @@ async function deleteSelectedBroadcasts() {
 }
 
 // Multi-Save Template Modal
-function openMultiSaveTemplateModal(broadcasts) {
+async function openMultiSaveTemplateModal(broadcasts) {
   // Store broadcasts data
   window.selectedBroadcastsForTemplate = broadcasts;
   
@@ -2830,13 +3060,41 @@ function openMultiSaveTemplateModal(broadcasts) {
     `).join('');
   }
   
-  // Auto-fill thumbnail folder from current selection (currentThumbnailFolder)
-  // This uses the folder that user has already selected in the Create Broadcast modal
-  const thumbnailFolderInput = document.getElementById('multiTemplateThumbnailFolder');
-  if (thumbnailFolderInput) {
-    // Use currentThumbnailFolder if set, otherwise empty string for root
-    thumbnailFolderInput.value = currentThumbnailFolder || '';
-    console.log('[openMultiSaveTemplateModal] Auto-filled thumbnail folder:', currentThumbnailFolder || 'root');
+  // Load thumbnail folders into dropdown
+  const folderSelect = document.getElementById('multiTemplateThumbnailFolder');
+  if (folderSelect) {
+    try {
+      const response = await fetch('/api/thumbnail-folders', {
+        headers: { 'X-CSRF-Token': getCsrfToken() }
+      });
+      const data = await response.json();
+      
+      // Build options - start with placeholder
+      let options = '<option value="">-- Pilih Folder --</option>';
+      
+      // Add root folder option
+      options += '<option value="__ROOT__">📁 Root (Semua Thumbnail)</option>';
+      
+      // Add each folder
+      if (data.success && data.folders && data.folders.length > 0) {
+        data.folders.forEach(folder => {
+          options += `<option value="${escapeHtml(folder.name)}">📂 ${escapeHtml(folder.name)} (${folder.count} files)</option>`;
+        });
+      }
+      
+      folderSelect.innerHTML = options;
+      
+      // Pre-select current folder if set
+      if (currentThumbnailFolder) {
+        folderSelect.value = currentThumbnailFolder;
+        console.log('[openMultiSaveTemplateModal] Pre-selected folder:', currentThumbnailFolder);
+      }
+      
+      console.log('[openMultiSaveTemplateModal] Loaded', data.folders?.length || 0, 'folders');
+    } catch (err) {
+      console.error('[openMultiSaveTemplateModal] Error loading folders:', err);
+      folderSelect.innerHTML = '<option value="">Error loading folders</option>';
+    }
   }
   
   document.getElementById('multiSaveTemplateModal').classList.remove('hidden');
