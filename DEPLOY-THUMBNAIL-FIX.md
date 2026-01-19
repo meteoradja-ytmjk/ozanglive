@@ -1,58 +1,42 @@
 # Fix Thumbnail Folder - Deployment Guide
 
-## Masalah
-Ketika broadcast dijadwalkan ulang (edit), folder thumbnail menampilkan "Root" padahal template menggunakan folder lain seperti "DAVINA" atau "tez".
+## Perubahan
+- **HAPUS opsi "Root"** dari dropdown folder saat edit broadcast
+- Otomatis pilih folder pertama jika tidak ada folder tersimpan
+- Folder yang dipilih user akan ditampilkan saat penjadwalan ulang
 
-## Penyebab
-Template di database mungkin memiliki `thumbnail_folder = NULL` karena tidak pernah di-set saat template dibuat.
+## File yang Perlu Di-deploy ke VPS
 
-## Langkah Fix di VPS
-
-### 1. Upload semua file yang diubah
 ```bash
 scp app.js user@vps:/path/to/streamflow/
 scp public/js/youtube.js user@vps:/path/to/streamflow/public/js/
+scp views/youtube.ejs user@vps:/path/to/streamflow/views/
 scp services/scheduleService.js user@vps:/path/to/streamflow/services/
 scp models/YouTubeBroadcastSettings.js user@vps:/path/to/streamflow/models/
 scp db/database.js user@vps:/path/to/streamflow/db/
 scp scripts/fix-template-folder.js user@vps:/path/to/streamflow/scripts/
-scp scripts/check-template-folder.js user@vps:/path/to/streamflow/scripts/
 ```
 
-### 2. SSH ke VPS dan cek status template
+## Langkah Deploy
+
+### 1. Upload file ke VPS
+```bash
+scp app.js public/js/youtube.js views/youtube.ejs services/scheduleService.js models/YouTubeBroadcastSettings.js db/database.js scripts/fix-template-folder.js user@vps:/path/to/streamflow/
+```
+
+### 2. Update template dengan folder yang benar (jika perlu)
 ```bash
 cd /path/to/streamflow
-node scripts/check-template-folder.js
+node scripts/fix-template-folder.js "NAMA_TEMPLATE" "NAMA_FOLDER"
 ```
 
-Ini akan menampilkan semua template dan `thumbnail_folder` mereka.
-
-### 3. Update template dengan folder yang benar
-Jika template memiliki `thumbnail_folder = NULL`, update dengan:
-
-```bash
-# Contoh: Update template "La Davina Melodia" dengan folder "DAVINA"
-node scripts/fix-template-folder.js "La Davina Melodia" "DAVINA"
-
-# Atau untuk folder lain
-node scripts/fix-template-folder.js "NAMA_TEMPLATE" "tez"
-```
-
-### 4. Restart aplikasi
+### 3. Restart aplikasi
 ```bash
 pm2 restart streamflow
 ```
 
-### 5. Clear browser cache dan test
-- Buka browser, clear cache (Ctrl+Shift+R)
-- Edit broadcast yang sudah ada
-- Folder thumbnail seharusnya sesuai dengan template
-
-## File yang Diubah
-- `app.js` - API broadcast-settings dengan logging dan fallback ke template
-- `public/js/youtube.js` - Frontend mengirim accountId
-- `services/scheduleService.js` - Menyimpan thumbnailFolder saat broadcast dibuat
-- `models/YouTubeBroadcastSettings.js` - Support templateId
-- `db/database.js` - Kolom template_id
-- `scripts/fix-template-folder.js` - Script untuk update template
-- `scripts/check-template-folder.js` - Script untuk cek status
+### 4. Clear browser cache dan test
+- Ctrl+Shift+R untuk clear cache
+- Edit broadcast
+- Dropdown folder tidak ada "Root" lagi
+- Folder otomatis sesuai pilihan user atau folder pertama

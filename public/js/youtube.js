@@ -1525,40 +1525,42 @@ async function openEditBroadcastModal(broadcast) {
   window.editThumbnailFile = null;
   window.editThumbnailFromHistory = false;
   
-  // Load thumbnail folders first
-  await loadEditThumbnailFolders();
+  // Load thumbnail folders first and get first folder as default
+  const firstFolder = await loadEditThumbnailFolders();
   
   // Get thumbnail folder from broadcast settings (saved when broadcast was created)
   // Pass accountId to help find the correct template if no settings exist
   const broadcastId = broadcast.id;
   const accountId = broadcast.accountId;
-  let boundFolder = undefined;
+  let boundFolder = null;
   
   if (broadcastId) {
     const settings = await getBroadcastSettingsFromServer(broadcastId, accountId);
-    // Check if settings exist and thumbnailFolder is explicitly set (including empty string for root)
-    if (settings && (settings.thumbnailFolder !== null && settings.thumbnailFolder !== undefined)) {
+    // Check if settings exist and thumbnailFolder is explicitly set
+    if (settings && settings.thumbnailFolder !== null && settings.thumbnailFolder !== undefined && settings.thumbnailFolder !== '') {
       boundFolder = settings.thumbnailFolder;
       if (settings.isFallback) {
-        console.log(`[openEditBroadcastModal] Broadcast ${broadcastId} using fallback folder from template "${settings.fallbackTemplateName}": "${boundFolder}" (${boundFolder === '' ? 'root' : 'folder'})`);
+        console.log(`[openEditBroadcastModal] Broadcast ${broadcastId} using fallback folder from template "${settings.fallbackTemplateName}": "${boundFolder}"`);
       } else {
-        console.log(`[openEditBroadcastModal] Broadcast ${broadcastId} has folder: "${boundFolder}" (${boundFolder === '' ? 'root' : 'folder'})`);
+        console.log(`[openEditBroadcastModal] Broadcast ${broadcastId} has folder: "${boundFolder}"`);
       }
-    } else {
-      console.log(`[openEditBroadcastModal] Broadcast ${broadcastId} has no saved folder settings and no template fallback, will use root`);
-      // Default to root for broadcasts without saved folder settings
-      boundFolder = '';
     }
   }
   
-  // Load the bound folder
-  // boundFolder: '' (root) or 'folderName' (specific folder)
-  const folderSelect = document.getElementById('editThumbnailFolderSelect');
-  if (folderSelect) {
-    folderSelect.value = boundFolder || ''; // '' for root, 'folderName' for folder
+  // If no folder found from settings, use first available folder
+  if (!boundFolder && firstFolder) {
+    boundFolder = firstFolder;
+    console.log(`[openEditBroadcastModal] Using first available folder: "${boundFolder}"`);
   }
-  // Convert '' to null for loadEditThumbnailFolder (null = root)
-  loadEditThumbnailFolder(boundFolder === '' ? null : boundFolder);
+  
+  // Set the folder dropdown and load thumbnails
+  const folderSelect = document.getElementById('editThumbnailFolderSelect');
+  if (folderSelect && boundFolder) {
+    folderSelect.value = boundFolder;
+  }
+  
+  // Load thumbnails from selected folder
+  loadEditThumbnailFolder(boundFolder);
   
   document.getElementById('editBroadcastModal').classList.remove('hidden');
 }
@@ -3764,10 +3766,11 @@ let currentEditThumbnailFolder = null;
 
 /**
  * Load thumbnail folders for edit modal dropdown
+ * Returns the first folder name if available
  */
 async function loadEditThumbnailFolders() {
   const select = document.getElementById('editThumbnailFolderSelect');
-  if (!select) return;
+  if (!select) return null;
   
   try {
     const response = await fetch('/api/thumbnail-folders', {
@@ -3778,19 +3781,26 @@ async function loadEditThumbnailFolders() {
     
     const data = await response.json();
     
-    // Keep root option, clear others
-    select.innerHTML = '<option value="">Root</option>';
+    // Clear dropdown - NO ROOT option
+    select.innerHTML = '';
     
-    if (data.success && data.folders) {
+    if (data.success && data.folders && data.folders.length > 0) {
+      // Add all folders
       data.folders.forEach(folder => {
         const option = document.createElement('option');
         option.value = folder.name;
         option.textContent = folder.name;
         select.appendChild(option);
       });
+      
+      // Return first folder name as default
+      return data.folders[0].name;
     }
+    
+    return null;
   } catch (error) {
     console.error('[loadEditThumbnailFolders] Error:', error);
+    return null;
   }
 }
 
