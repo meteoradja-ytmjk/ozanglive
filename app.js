@@ -5239,20 +5239,37 @@ app.get('/api/youtube/broadcast-settings/:broadcastId', isAuthenticated, async (
       
       try {
         const templates = await BroadcastTemplate.findByUserId(req.session.userId);
+        console.log(`[broadcast-settings] Found ${templates?.length || 0} templates for user`);
+        
         if (templates && templates.length > 0) {
+          // Log all templates for debugging
+          templates.forEach(t => {
+            console.log(`[broadcast-settings] Template: "${t.name}", account_id: ${t.account_id}, thumbnail_folder: ${t.thumbnail_folder === null ? 'NULL' : `"${t.thumbnail_folder}"`}, recurring: ${t.recurring_enabled}`);
+          });
+          
           // First try to find template for this specific account
           let matchingTemplate = null;
           
           if (accountId) {
-            // Find template for this account, prefer recurring enabled
+            // Find template for this account, prefer recurring enabled, with thumbnail_folder set
             matchingTemplate = templates.find(t => t.account_id === accountId && t.recurring_enabled && t.thumbnail_folder !== null && t.thumbnail_folder !== undefined);
+            console.log(`[broadcast-settings] Looking for recurring template with account_id ${accountId} and thumbnail_folder set: ${matchingTemplate ? 'found' : 'not found'}`);
+            
             if (!matchingTemplate) {
+              // Try any template for this account with thumbnail_folder set
               matchingTemplate = templates.find(t => t.account_id === accountId && t.thumbnail_folder !== null && t.thumbnail_folder !== undefined);
+              console.log(`[broadcast-settings] Looking for any template with account_id ${accountId} and thumbnail_folder set: ${matchingTemplate ? 'found' : 'not found'}`);
+            }
+            
+            if (!matchingTemplate) {
+              // Try any template for this account (even without thumbnail_folder)
+              matchingTemplate = templates.find(t => t.account_id === accountId);
+              console.log(`[broadcast-settings] Looking for any template with account_id ${accountId}: ${matchingTemplate ? `found "${matchingTemplate.name}"` : 'not found'}`);
             }
           }
           
-          // If no account-specific template, use most recently used
-          if (!matchingTemplate) {
+          // If no account-specific template with folder, use most recently used with folder
+          if (!matchingTemplate || matchingTemplate.thumbnail_folder === null || matchingTemplate.thumbnail_folder === undefined) {
             const sortedTemplates = templates
               .filter(t => t.thumbnail_folder !== null && t.thumbnail_folder !== undefined)
               .sort((a, b) => {
@@ -5260,13 +5277,19 @@ app.get('/api/youtube/broadcast-settings/:broadcastId', isAuthenticated, async (
                 const bTime = b.last_run_at ? new Date(b.last_run_at).getTime() : 0;
                 return bTime - aTime;
               });
-            matchingTemplate = sortedTemplates[0];
+            
+            if (sortedTemplates.length > 0) {
+              matchingTemplate = sortedTemplates[0];
+              console.log(`[broadcast-settings] Using most recent template with folder: "${matchingTemplate.name}"`);
+            }
           }
           
-          if (matchingTemplate) {
+          if (matchingTemplate && matchingTemplate.thumbnail_folder !== null && matchingTemplate.thumbnail_folder !== undefined) {
             fallbackFolder = matchingTemplate.thumbnail_folder;
             fallbackTemplateName = matchingTemplate.name;
-            console.log(`[broadcast-settings] No settings for ${broadcastId}, using fallback from template "${fallbackTemplateName}": ${fallbackFolder || 'root'}`);
+            console.log(`[broadcast-settings] Final fallback: template "${fallbackTemplateName}", folder: "${fallbackFolder}"`);
+          } else {
+            console.log(`[broadcast-settings] No template with thumbnail_folder found`);
           }
         }
       } catch (templateErr) {
