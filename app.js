@@ -5189,11 +5189,26 @@ app.get('/api/youtube/broadcast-settings/:broadcastId', isAuthenticated, async (
     const settings = await YouTubeBroadcastSettings.findByBroadcastId(broadcastId);
     
     if (settings) {
+      // If settings exist but thumbnailFolder is null, try to get from template
+      let thumbnailFolder = settings.thumbnailFolder;
+      if ((thumbnailFolder === null || thumbnailFolder === undefined) && settings.templateId) {
+        try {
+          const template = await BroadcastTemplate.findById(settings.templateId);
+          if (template && template.thumbnail_folder !== undefined) {
+            thumbnailFolder = template.thumbnail_folder;
+            console.log(`[broadcast-settings] Using thumbnail_folder from template ${settings.templateId}: ${thumbnailFolder || 'root'}`);
+          }
+        } catch (templateErr) {
+          console.error('[broadcast-settings] Error getting template:', templateErr.message);
+        }
+      }
+      
       res.json({ 
         success: true, 
         settings: {
           broadcastId: settings.broadcast_id,
-          thumbnailFolder: settings.thumbnailFolder,
+          thumbnailFolder: thumbnailFolder,
+          templateId: settings.templateId,
           enableAutoStart: settings.enableAutoStart,
           enableAutoStop: settings.enableAutoStop,
           unlistReplayOnEnd: settings.unlistReplayOnEnd
@@ -5201,7 +5216,35 @@ app.get('/api/youtube/broadcast-settings/:broadcastId', isAuthenticated, async (
         found: true 
       });
     } else {
-      res.json({ success: true, settings: null, found: false });
+      // No settings found - try to get thumbnail_folder from most recently used template
+      // This helps for broadcasts created before the fix
+      let fallbackFolder = null;
+      try {
+        const templates = await BroadcastTemplate.findAllByUserId(req.session.userId);
+        if (templates && templates.length > 0) {
+          // Sort by last_run_at descending to get most recently used
+          const sortedTemplates = templates.sort((a, b) => {
+            const aTime = a.last_run_at ? new Date(a.last_run_at).getTime() : 0;
+            const bTime = b.last_run_at ? new Date(b.last_run_at).getTime() : 0;
+            return bTime - aTime;
+          });
+          
+          // Use the most recently used template's thumbnail_folder
+          const recentTemplate = sortedTemplates[0];
+          if (recentTemplate && recentTemplate.thumbnail_folder !== undefined) {
+            fallbackFolder = recentTemplate.thumbnail_folder;
+            console.log(`[broadcast-settings] No settings for ${broadcastId}, using fallback from recent template "${recentTemplate.name}": ${fallbackFolder || 'root'}`);
+          }
+        }
+      } catch (templateErr) {
+        console.error('[broadcast-settings] Error getting fallback template:', templateErr.message);
+      }
+      
+      res.json({ 
+        success: true, 
+        settings: fallbackFolder !== null ? { thumbnailFolder: fallbackFolder, isFallback: true } : null, 
+        found: fallbackFolder !== null 
+      });
     }
   } catch (error) {
     console.error('[broadcast-settings] Error:', error.message);
@@ -6420,7 +6463,8 @@ app.post('/api/youtube/templates/:id/create-broadcast', isAuthenticated, async (
         enableAutoStop: true,
         unlistReplayOnEnd: true,
         originalPrivacyStatus: template.privacy_status || 'unlisted',
-        thumbnailFolder: template.thumbnail_folder !== undefined ? template.thumbnail_folder : null
+        thumbnailFolder: template.thumbnail_folder !== undefined ? template.thumbnail_folder : null,
+        templateId: template.id
       });
     } catch (settingsErr) {
       console.error('[create-broadcast-from-template] Error saving broadcast settings:', settingsErr.message);
@@ -6529,7 +6573,8 @@ app.post('/api/youtube/templates/:id/bulk-create', isAuthenticated, async (req, 
             enableAutoStop: true,
             unlistReplayOnEnd: true,
             originalPrivacyStatus: template.privacy_status || 'unlisted',
-            thumbnailFolder: template.thumbnail_folder !== undefined ? template.thumbnail_folder : null
+            thumbnailFolder: template.thumbnail_folder !== undefined ? template.thumbnail_folder : null,
+            templateId: template.id
           });
         } catch (settingsErr) {
           console.error('[bulk-create] Error saving broadcast settings:', settingsErr.message);

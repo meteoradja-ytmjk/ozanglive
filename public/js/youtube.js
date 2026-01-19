@@ -1532,7 +1532,11 @@ async function openEditBroadcastModal(broadcast) {
     // Check if settings exist and thumbnailFolder is explicitly set (including empty string for root)
     if (settings && (settings.thumbnailFolder !== null && settings.thumbnailFolder !== undefined)) {
       boundFolder = settings.thumbnailFolder;
-      console.log(`[openEditBroadcastModal] Broadcast ${broadcastId} has folder: "${boundFolder}" (${boundFolder === '' ? 'root' : 'folder'})`);
+      if (settings.isFallback) {
+        console.log(`[openEditBroadcastModal] Broadcast ${broadcastId} using fallback folder from recent template: "${boundFolder}" (${boundFolder === '' ? 'root' : 'folder'})`);
+      } else {
+        console.log(`[openEditBroadcastModal] Broadcast ${broadcastId} has folder: "${boundFolder}" (${boundFolder === '' ? 'root' : 'folder'})`);
+      }
     } else {
       console.log(`[openEditBroadcastModal] Broadcast ${broadcastId} has no saved folder settings, will use root`);
       // Default to root for broadcasts without saved folder settings

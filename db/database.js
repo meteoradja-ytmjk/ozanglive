@@ -493,6 +493,9 @@ async function createCoreTablesAsync() {
   // Add thumbnail_folder column to youtube_broadcast_settings
   await runTableQuery(`ALTER TABLE youtube_broadcast_settings ADD COLUMN thumbnail_folder TEXT`, 'youtube_broadcast_settings.thumbnail_folder');
 
+  // Add template_id column to youtube_broadcast_settings for tracking source template
+  await runTableQuery(`ALTER TABLE youtube_broadcast_settings ADD COLUMN template_id TEXT`, 'youtube_broadcast_settings.template_id');
+
   // Create stream_key_folder_mapping table for storing stream key to thumbnail folder binding
   await runTableQuery(`CREATE TABLE IF NOT EXISTS stream_key_folder_mapping (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

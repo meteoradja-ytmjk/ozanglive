@@ -15,20 +15,22 @@ class YouTubeBroadcastSettings {
       enableAutoStop = true,
       unlistReplayOnEnd = true,
       originalPrivacyStatus = 'public',
-      thumbnailFolder = null
+      thumbnailFolder = null,
+      templateId = null
     } = data;
 
     return new Promise((resolve, reject) => {
       db.run(
         `INSERT INTO youtube_broadcast_settings 
-         (broadcast_id, user_id, account_id, enable_auto_start, enable_auto_stop, unlist_replay_on_end, original_privacy_status, thumbnail_folder)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         (broadcast_id, user_id, account_id, enable_auto_start, enable_auto_stop, unlist_replay_on_end, original_privacy_status, thumbnail_folder, template_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(broadcast_id) DO UPDATE SET
            enable_auto_start = excluded.enable_auto_start,
            enable_auto_stop = excluded.enable_auto_stop,
            unlist_replay_on_end = excluded.unlist_replay_on_end,
            original_privacy_status = excluded.original_privacy_status,
-           thumbnail_folder = excluded.thumbnail_folder`,
+           thumbnail_folder = excluded.thumbnail_folder,
+           template_id = excluded.template_id`,
         [
           broadcastId,
           userId,
@@ -37,7 +39,8 @@ class YouTubeBroadcastSettings {
           enableAutoStop ? 1 : 0,
           unlistReplayOnEnd ? 1 : 0,
           originalPrivacyStatus,
-          thumbnailFolder
+          thumbnailFolder,
+          templateId
         ],
         function(err) {
           if (err) {
@@ -53,7 +56,8 @@ class YouTubeBroadcastSettings {
             enableAutoStop,
             unlistReplayOnEnd,
             originalPrivacyStatus,
-            thumbnailFolder
+            thumbnailFolder,
+            templateId
           });
         }
       );
@@ -103,6 +107,7 @@ class YouTubeBroadcastSettings {
             row.unlistReplayOnEnd = row.unlist_replay_on_end === 1;
             row.originalPrivacyStatus = row.original_privacy_status;
             row.thumbnailFolder = row.thumbnail_folder;
+            row.templateId = row.template_id;
           }
           resolve(row);
         }

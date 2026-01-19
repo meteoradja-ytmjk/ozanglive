@@ -548,9 +548,10 @@ class ScheduleService {
                 enableAutoStop: true,
                 unlistReplayOnEnd: false,
                 originalPrivacyStatus: b.privacyStatus || 'unlisted',
-                thumbnailFolder: thumbnailFolder !== undefined ? thumbnailFolder : null
+                thumbnailFolder: thumbnailFolder !== undefined ? thumbnailFolder : null,
+                templateId: template.id
               });
-              console.log(`[ScheduleService] Saved broadcast settings for ${result.broadcastId || result.id}, thumbnailFolder: ${thumbnailFolder !== undefined ? (thumbnailFolder || 'root') : 'null'}`);
+              console.log(`[ScheduleService] Saved broadcast settings for ${result.broadcastId || result.id}, thumbnailFolder: ${thumbnailFolder !== undefined ? (thumbnailFolder || 'root') : 'null'}, templateId: ${template.id}`);
             } catch (settingsErr) {
               console.error(`[ScheduleService] Failed to save broadcast settings:`, settingsErr.message);
             }
@@ -683,9 +684,10 @@ class ScheduleService {
             enableAutoStop: true,
             unlistReplayOnEnd: false,
             originalPrivacyStatus: template.privacy_status || 'unlisted',
-            thumbnailFolder: thumbnailFolder !== undefined ? thumbnailFolder : null
+            thumbnailFolder: thumbnailFolder !== undefined ? thumbnailFolder : null,
+            templateId: template.id
           });
-          console.log(`[ScheduleService] Saved broadcast settings for ${result.broadcastId || result.id}, thumbnailFolder: ${thumbnailFolder !== undefined ? (thumbnailFolder || 'root') : 'null'}`);
+          console.log(`[ScheduleService] Saved broadcast settings for ${result.broadcastId || result.id}, thumbnailFolder: ${thumbnailFolder !== undefined ? (thumbnailFolder || 'root') : 'null'}, templateId: ${template.id}`);
         } catch (settingsErr) {
           console.error(`[ScheduleService] Failed to save broadcast settings:`, settingsErr.message);
         }
