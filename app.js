@@ -6419,7 +6419,8 @@ app.post('/api/youtube/templates/:id/create-broadcast', isAuthenticated, async (
         enableAutoStart: true,
         enableAutoStop: true,
         unlistReplayOnEnd: true,
-        originalPrivacyStatus: template.privacy_status || 'unlisted'
+        originalPrivacyStatus: template.privacy_status || 'unlisted',
+        thumbnailFolder: template.thumbnail_folder !== undefined ? template.thumbnail_folder : null
       });
     } catch (settingsErr) {
       console.error('[create-broadcast-from-template] Error saving broadcast settings:', settingsErr.message);
@@ -6527,7 +6528,8 @@ app.post('/api/youtube/templates/:id/bulk-create', isAuthenticated, async (req, 
             enableAutoStart: true,
             enableAutoStop: true,
             unlistReplayOnEnd: true,
-            originalPrivacyStatus: template.privacy_status || 'unlisted'
+            originalPrivacyStatus: template.privacy_status || 'unlisted',
+            thumbnailFolder: template.thumbnail_folder !== undefined ? template.thumbnail_folder : null
           });
         } catch (settingsErr) {
           console.error('[bulk-create] Error saving broadcast settings:', settingsErr.message);

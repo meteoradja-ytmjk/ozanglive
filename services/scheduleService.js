@@ -7,6 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const BroadcastTemplate = require('../models/BroadcastTemplate');
 const TitleSuggestion = require('../models/TitleSuggestion');
+const YouTubeBroadcastSettings = require('../models/YouTubeBroadcastSettings');
 const youtubeService = require('./youtubeService');
 const { calculateNextRun, formatNextRunAt, replaceTitlePlaceholders, isScheduleMissed } = require('../utils/recurringUtils');
 
@@ -537,6 +538,23 @@ class ScheduleService {
               }
             }
             
+            // Save broadcast settings including thumbnail folder
+            try {
+              await YouTubeBroadcastSettings.upsert({
+                broadcastId: result.broadcastId || result.id,
+                userId: template.user_id,
+                accountId: template.account_id || null,
+                enableAutoStart: true,
+                enableAutoStop: true,
+                unlistReplayOnEnd: false,
+                originalPrivacyStatus: b.privacyStatus || 'unlisted',
+                thumbnailFolder: thumbnailFolder !== undefined ? thumbnailFolder : null
+              });
+              console.log(`[ScheduleService] Saved broadcast settings for ${result.broadcastId || result.id}, thumbnailFolder: ${thumbnailFolder !== undefined ? (thumbnailFolder || 'root') : 'null'}`);
+            } catch (settingsErr) {
+              console.error(`[ScheduleService] Failed to save broadcast settings:`, settingsErr.message);
+            }
+            
             // Upload thumbnail - use sequential selection from folder
             if (thumbnailFolder !== null && thumbnailFolder !== undefined || b.thumbnailPath || b.pinnedThumbnail) {
               // Calculate broadcast-specific index for multi-broadcast templates
@@ -653,6 +671,23 @@ class ScheduleService {
             thumbnailFolder = mappedFolder;
             console.log(`[ScheduleService] Using mapped folder for stream key ${template.stream_id}: ${thumbnailFolder || 'root'}`);
           }
+        }
+        
+        // Save broadcast settings including thumbnail folder
+        try {
+          await YouTubeBroadcastSettings.upsert({
+            broadcastId: result.broadcastId || result.id,
+            userId: template.user_id,
+            accountId: template.account_id || null,
+            enableAutoStart: true,
+            enableAutoStop: true,
+            unlistReplayOnEnd: false,
+            originalPrivacyStatus: template.privacy_status || 'unlisted',
+            thumbnailFolder: thumbnailFolder !== undefined ? thumbnailFolder : null
+          });
+          console.log(`[ScheduleService] Saved broadcast settings for ${result.broadcastId || result.id}, thumbnailFolder: ${thumbnailFolder !== undefined ? (thumbnailFolder || 'root') : 'null'}`);
+        } catch (settingsErr) {
+          console.error(`[ScheduleService] Failed to save broadcast settings:`, settingsErr.message);
         }
         
         // Upload thumbnail - use sequential selection from folder
