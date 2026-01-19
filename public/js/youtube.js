@@ -2087,6 +2087,8 @@ if (createTemplateForm) {
         privacyStatus: document.getElementById('templatePrivacyStatus').value,
         categoryId: document.getElementById('templateCategoryId').value || '22',
         streamId: document.getElementById('templateStreamKeySelect').value || null,
+        // Save current thumbnail folder selection for sequential thumbnail
+        thumbnailFolder: currentThumbnailFolder || null,
         // Include recurring data
         recurringEnabled: recurringData.recurring_enabled,
         recurringPattern: recurringData.recurring_pattern,
@@ -2183,9 +2185,15 @@ if (saveAsTemplateForm) {
         throw new Error('Broadcast not found');
       }
       
-      console.log('[saveAsTemplate] Found broadcast:', { id: broadcast.id, title: broadcast.title, streamId: broadcast.streamId, streamKey: broadcast.streamKey });
+      console.log('[saveAsTemplate] Found broadcast:', { 
+        id: broadcast.id, 
+        title: broadcast.title, 
+        streamId: broadcast.streamId, 
+        streamKey: broadcast.streamKey,
+        thumbnailPath: broadcast.thumbnailPath
+      });
       
-      // Create template from broadcast - include streamId for reuse
+      // Create template from broadcast - include ALL data for reuse
       const templateData = {
         name: name,
         accountId: accountId,
@@ -2195,12 +2203,14 @@ if (saveAsTemplateForm) {
         tags: broadcast.tags || null,
         categoryId: broadcast.categoryId || '22',
         thumbnailPath: broadcast.thumbnailPath || null,
+        thumbnailFolder: currentThumbnailFolder || null,  // Save current thumbnail folder selection
         streamId: broadcast.streamId || null  // Save stream ID for reuse
       };
       
       console.log('[saveAsTemplate] Sending templateData:', {
         ...templateData,
-        privacyStatus: templateData.privacyStatus
+        privacyStatus: templateData.privacyStatus,
+        thumbnailFolder: templateData.thumbnailFolder
       });
       
       const response = await fetch('/api/youtube/templates', {
@@ -2215,7 +2225,7 @@ if (saveAsTemplateForm) {
       const data = await response.json();
       
       if (data.success) {
-        console.log('[saveAsTemplate] Template saved successfully with stream_id:', data.template?.stream_id);
+        console.log('[saveAsTemplate] Template saved successfully with stream_id:', data.template?.stream_id, 'thumbnail_folder:', data.template?.thumbnail_folder);
         showToast('Template saved successfully!');
         closeSaveAsTemplateModal();
       } else {
@@ -2837,11 +2847,11 @@ if (multiSaveTemplateForm) {
         throw new Error('No broadcasts selected');
       }
       
-      // Create template with all broadcast data - include streamId and thumbnailFolder for reuse
+      // Create template with all broadcast data - include ALL data for reuse
       const templateData = {
         name: templateName,
         accountId: broadcasts[0].accountId,
-        thumbnailFolder: thumbnailFolder !== null && thumbnailFolder !== '' ? thumbnailFolder : null,  // Use current folder selection
+        thumbnailFolder: thumbnailFolder !== null && thumbnailFolder !== '' ? thumbnailFolder : null,
         broadcasts: broadcasts.map(b => ({
           title: b.title,
           description: b.description || '',
@@ -2849,11 +2859,18 @@ if (multiSaveTemplateForm) {
           streamId: b.streamId || null,  // Save stream ID for reuse
           streamKey: b.streamKey || '',
           categoryId: b.categoryId || '22',
-          tags: b.tags || []
+          tags: b.tags || [],
+          thumbnailPath: b.thumbnailPath || null,  // Save thumbnail path
+          pinnedThumbnail: b.pinnedThumbnail || null  // Save pinned thumbnail
         }))
       };
       
-      console.log('[multiSaveTemplate] Saving template with broadcasts:', templateData.broadcasts.map(b => ({ title: b.title, streamId: b.streamId })));
+      console.log('[multiSaveTemplate] Saving template with broadcasts:', templateData.broadcasts.map(b => ({ 
+        title: b.title, 
+        streamId: b.streamId,
+        thumbnailPath: b.thumbnailPath,
+        pinnedThumbnail: b.pinnedThumbnail
+      })));
       console.log('[multiSaveTemplate] Thumbnail folder (auto from current selection):', thumbnailFolder || 'root');
       
       const response = await fetch('/api/youtube/templates/multi', {
