@@ -3053,36 +3053,71 @@ async function openMultiSaveTemplateModal(broadcasts) {
   // Store broadcasts data
   window.selectedBroadcastsForTemplate = broadcasts;
   
-  // Collect unique stream keys and fetch their folder bindings from server
+  // Collect folder for each broadcast from broadcast settings (already saved when broadcast was created)
+  const broadcastFolders = {};
   const streamKeyFolderMapping = {};
-  const streamKeysWithoutFolder = [];
+  const broadcastsWithoutFolder = [];
+  
+  console.log('[openMultiSaveTemplateModal] Processing', broadcasts.length, 'broadcasts');
+  console.log('[openMultiSaveTemplateModal] Current UI folder:', currentThumbnailFolder);
   
   for (const b of broadcasts) {
-    if (b.streamId && !streamKeyFolderMapping.hasOwnProperty(b.streamId)) {
-      // Fetch folder binding from server
-      const folder = await getStreamKeyFolderMappingFromServer(b.streamId);
-      if (folder !== null && folder !== undefined) {
-        streamKeyFolderMapping[b.streamId] = folder;
-      } else {
-        streamKeysWithoutFolder.push(b.streamKey || b.streamId);
+    console.log(`[openMultiSaveTemplateModal] Checking broadcast ${b.id} (${b.title}), streamId: ${b.streamId}`);
+    
+    // Try to get folder from broadcast settings first
+    const settings = await getBroadcastSettingsFromServer(b.id, b.accountId);
+    console.log(`[openMultiSaveTemplateModal] Broadcast ${b.id} settings:`, settings);
+    
+    if (settings && settings.thumbnailFolder !== null && settings.thumbnailFolder !== undefined) {
+      broadcastFolders[b.id] = settings.thumbnailFolder;
+      // Also build stream key mapping
+      if (b.streamId) {
+        streamKeyFolderMapping[b.streamId] = settings.thumbnailFolder;
+      }
+      console.log(`[openMultiSaveTemplateModal] Broadcast ${b.id} folder from settings: "${settings.thumbnailFolder || 'root'}"`);
+    } else {
+      // Fallback 1: try stream key folder mapping from database
+      let foundFolder = false;
+      if (b.streamId) {
+        const folder = await getStreamKeyFolderMappingFromServer(b.streamId);
+        console.log(`[openMultiSaveTemplateModal] Stream key ${b.streamId} folder from mapping:`, folder);
+        if (folder !== null && folder !== undefined) {
+          broadcastFolders[b.id] = folder;
+          streamKeyFolderMapping[b.streamId] = folder;
+          foundFolder = true;
+          console.log(`[openMultiSaveTemplateModal] Broadcast ${b.id} folder from stream key mapping: "${folder || 'root'}"`);
+        }
+      }
+      
+      // Fallback 2: use current UI folder selection
+      if (!foundFolder && currentThumbnailFolder !== null) {
+        broadcastFolders[b.id] = currentThumbnailFolder;
+        if (b.streamId) {
+          streamKeyFolderMapping[b.streamId] = currentThumbnailFolder;
+        }
+        console.log(`[openMultiSaveTemplateModal] Broadcast ${b.id} using current UI folder: "${currentThumbnailFolder || 'root'}"`);
+      } else if (!foundFolder) {
+        broadcastsWithoutFolder.push(b.title);
+        console.log(`[openMultiSaveTemplateModal] Broadcast ${b.id} has no folder`);
       }
     }
   }
   
   // Store mapping for form submission
+  window.multiTemplateBroadcastFolders = broadcastFolders;
   window.multiTemplateStreamKeyFolderMapping = streamKeyFolderMapping;
   
-  console.log('[openMultiSaveTemplateModal] Auto-loaded folder mapping:', streamKeyFolderMapping);
+  console.log('[openMultiSaveTemplateModal] Final broadcast folders:', broadcastFolders);
+  console.log('[openMultiSaveTemplateModal] Final stream key folder mapping:', streamKeyFolderMapping);
   
-  // Update preview - show broadcasts with their auto-loaded folders
+  // Update preview - show broadcasts with their folders
   const previewEl = document.getElementById('multiTemplatePreview');
   if (previewEl) {
     let html = broadcasts.map((b, i) => {
-      const folder = b.streamId && streamKeyFolderMapping[b.streamId] !== undefined 
-        ? streamKeyFolderMapping[b.streamId] 
-        : null;
-      const folderDisplay = folder === '' ? '📁 Root' : (folder ? `📂 ${folder}` : '⚠️ Belum diset');
-      const folderClass = folder !== null ? 'text-green-400' : 'text-yellow-400';
+      const folder = broadcastFolders[b.id];
+      const hasFolder = folder !== null && folder !== undefined;
+      const folderDisplay = hasFolder ? (folder === '' ? '📁 Root' : `📂 ${folder}`) : '⚠️ Belum diset';
+      const folderClass = hasFolder ? 'text-green-400' : 'text-yellow-400';
       
       return `
         <div class="flex items-center gap-2 text-xs py-1 border-b border-gray-600/50 last:border-0">
@@ -3096,11 +3131,11 @@ async function openMultiSaveTemplateModal(broadcasts) {
     previewEl.innerHTML = html;
   }
   
-  // Show warning if some stream keys don't have folder binding
+  // Show warning if some broadcasts don't have folder
   const warningEl = document.getElementById('multiTemplateFolderWarning');
   const warningTextEl = document.getElementById('multiTemplateFolderWarningText');
-  if (streamKeysWithoutFolder.length > 0 && warningEl && warningTextEl) {
-    warningTextEl.textContent = `${streamKeysWithoutFolder.length} stream key belum punya folder binding. Folder akan diset ke NULL.`;
+  if (broadcastsWithoutFolder.length > 0 && warningEl && warningTextEl) {
+    warningTextEl.textContent = `${broadcastsWithoutFolder.length} broadcast belum punya folder. Folder akan diset ke NULL.`;
     warningEl.classList.remove('hidden');
   } else if (warningEl) {
     warningEl.classList.add('hidden');
@@ -3113,6 +3148,7 @@ function closeMultiSaveTemplateModal() {
   document.getElementById('multiSaveTemplateModal').classList.add('hidden');
   document.getElementById('multiSaveTemplateForm').reset();
   window.selectedBroadcastsForTemplate = null;
+  window.multiTemplateBroadcastFolders = null;
   window.multiTemplateStreamKeyFolderMapping = null;
   // Hide warning
   const warningEl = document.getElementById('multiTemplateFolderWarning');
@@ -3133,6 +3169,7 @@ if (multiSaveTemplateForm) {
     try {
       const broadcasts = window.selectedBroadcastsForTemplate;
       const templateName = document.getElementById('multiTemplateName').value;
+      const broadcastFolders = window.multiTemplateBroadcastFolders || {};
       const streamKeyFolderMapping = window.multiTemplateStreamKeyFolderMapping || {};
       
       if (!broadcasts || broadcasts.length === 0) {
@@ -3141,11 +3178,12 @@ if (multiSaveTemplateForm) {
       
       // Determine default folder (use first broadcast's folder or null)
       let defaultFolder = null;
-      if (broadcasts[0]?.streamId && streamKeyFolderMapping[broadcasts[0].streamId] !== undefined) {
-        defaultFolder = streamKeyFolderMapping[broadcasts[0].streamId];
+      if (broadcasts[0] && broadcastFolders[broadcasts[0].id] !== undefined) {
+        defaultFolder = broadcastFolders[broadcasts[0].id];
       }
       
-      console.log('[multiSaveTemplate] Using auto-loaded folder mapping:', streamKeyFolderMapping);
+      console.log('[multiSaveTemplate] Broadcast folders:', broadcastFolders);
+      console.log('[multiSaveTemplate] Stream key folder mapping:', streamKeyFolderMapping);
       console.log('[multiSaveTemplate] Default folder:', defaultFolder);
       
       // Create template with all broadcast data
@@ -3164,17 +3202,15 @@ if (multiSaveTemplateForm) {
           tags: b.tags || [],
           thumbnailPath: b.thumbnailPath || null,
           pinnedThumbnail: b.pinnedThumbnail || null,
-          // Use folder from stream key mapping
-          thumbnailFolder: b.streamId && streamKeyFolderMapping[b.streamId] !== undefined 
-            ? streamKeyFolderMapping[b.streamId] 
-            : defaultFolder
+          // Use folder from broadcast settings
+          thumbnailFolder: broadcastFolders[b.id] !== undefined ? broadcastFolders[b.id] : defaultFolder
         }))
       };
       
       console.log('[multiSaveTemplate] Saving template:', {
         name: templateData.name,
         broadcastCount: templateData.broadcasts.length,
-        streamKeyFolderMapping: templateData.streamKeyFolderMapping
+        broadcasts: templateData.broadcasts.map(b => ({ title: b.title, thumbnailFolder: b.thumbnailFolder }))
       });
       
       const response = await fetch('/api/youtube/templates/multi', {
