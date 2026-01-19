@@ -48,15 +48,16 @@ function getWIBTime(date = new Date()) {
 async function checkTemplateSchedules() {
   await waitForDbInit();
   
-  console.log('\n=== CHECKING TEMPLATE RECURRING SCHEDULES ===\n');
+  console.log('\n========================================');
+  console.log('   TEMPLATE RECURRING SCHEDULE CHECK');
+  console.log('========================================\n');
   
   const now = new Date();
   const wibTime = getWIBTime(now);
   
-  console.log('=== CURRENT TIME ===');
-  console.log(`UTC:     ${now.toISOString()}`);
-  console.log(`WIB:     ${wibTime.hours}:${String(wibTime.minutes).padStart(2,'0')}:${String(wibTime.seconds).padStart(2,'0')} (${wibTime.dayName}, ${wibTime.dayOfMonth}/${wibTime.month}/${wibTime.year})`);
-  console.log(`Day:     ${wibTime.dayName} (index: ${wibTime.day})`);
+  console.log('CURRENT TIME:');
+  console.log(`  UTC: ${now.toISOString()}`);
+  console.log(`  WIB: ${wibTime.hours}:${String(wibTime.minutes).padStart(2,'0')}:${String(wibTime.seconds).padStart(2,'0')} (${wibTime.dayName}, ${wibTime.dayOfMonth}/${wibTime.month}/${wibTime.year})`);
   console.log('');
   
   // Check YouTube credentials first
@@ -67,136 +68,156 @@ async function checkTemplateSchedules() {
     });
   });
   
-  console.log(`=== YOUTUBE CREDENTIALS (${credentials.length}) ===`);
+  console.log(`YOUTUBE CREDENTIALS: ${credentials.length}`);
   if (credentials.length === 0) {
-    console.log('No YouTube accounts connected.');
-    console.log('Please connect a YouTube account first before creating templates.');
+    console.log('  ⚠️  No YouTube accounts connected!');
+    console.log('  → Please connect a YouTube account in Settings first.');
   } else {
-    credentials.forEach(c => console.log(`  - ${c.channel_name || 'Unknown'} (id: ${c.id}, user: ${c.user_id})`));
+    credentials.forEach(c => console.log(`  ✓ ${c.channel_name || 'Unknown'} (id: ${c.id})`));
   }
   console.log('');
   
-  // First check ALL templates
-  const allQuery = `
-    SELECT bt.id, bt.name, bt.user_id, bt.account_id, bt.recurring_enabled, bt.recurring_pattern, 
-           bt.recurring_time, bt.recurring_days, bt.next_run_at, bt.last_run_at,
-           yc.channel_name
-    FROM broadcast_templates bt
-    LEFT JOIN youtube_credentials yc ON bt.account_id = yc.id
-    ORDER BY bt.name ASC
-  `;
+  // Check ALL templates
+  const allTemplates = await new Promise((resolve, reject) => {
+    db.all(`
+      SELECT bt.*, yc.channel_name, yc.client_id
+      FROM broadcast_templates bt
+      LEFT JOIN youtube_credentials yc ON bt.account_id = yc.id
+      ORDER BY bt.name ASC
+    `, [], (err, rows) => {
+      if (err) reject(err);
+      else resolve(rows || []);
+    });
+  });
   
-  db.all(allQuery, [], (err, allRows) => {
-    if (err) {
-      console.error('Error:', err.message);
-      process.exit(1);
+  console.log(`ALL TEMPLATES: ${allTemplates.length}`);
+  if (allTemplates.length === 0) {
+    console.log('  ⚠️  No templates found in database!');
+    console.log('');
+    console.log('HOW TO CREATE A TEMPLATE:');
+    console.log('  1. Go to YouTube page');
+    console.log('  2. Click "Templates" button');
+    console.log('  3. Click "Create Template"');
+    console.log('  4. Fill in the form');
+    console.log('  5. Enable "Recurring Schedule"');
+    console.log('  6. Set pattern (daily/weekly) and time');
+    console.log('  7. Click "Create Template"');
+    process.exit(0);
+  }
+  
+  allTemplates.forEach((t, i) => {
+    const hasCredentials = !!t.client_id;
+    const status = t.recurring_enabled ? '🟢 ENABLED' : '⚪ disabled';
+    console.log(`  ${i + 1}. ${t.name} [${status}]`);
+    console.log(`     Channel: ${t.channel_name || '⚠️ Unknown'} ${!hasCredentials ? '(credentials missing!)' : ''}`);
+    console.log(`     Pattern: ${t.recurring_pattern || '-'}, Time: ${t.recurring_time || '-'} WIB`);
+    console.log(`     Next Run: ${t.next_run_at || 'Not set'}`);
+    console.log(`     Stream ID: ${t.stream_id || 'Not set'}`);
+    console.log(`     Thumbnail Folder: ${t.thumbnail_folder !== null ? (t.thumbnail_folder || 'root') : 'Not set'}`);
+  });
+  console.log('');
+  
+  // Check enabled templates
+  const enabledTemplates = allTemplates.filter(t => t.recurring_enabled === 1);
+  
+  if (enabledTemplates.length === 0) {
+    console.log('⚠️  No templates with recurring ENABLED!');
+    console.log('   → Edit a template and enable recurring schedule.');
+    process.exit(0);
+  }
+  
+  console.log(`TEMPLATES WITH RECURRING ENABLED: ${enabledTemplates.length}`);
+  console.log('');
+  
+  const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+  const todayName = dayNames[wibTime.day];
+  
+  enabledTemplates.forEach((template, index) => {
+    console.log(`━━━ ${template.name} ━━━`);
+    
+    // Check credentials
+    if (!template.client_id) {
+      console.log('  ❌ PROBLEM: YouTube credentials missing!');
+      console.log('     → Reconnect YouTube account or select valid account.');
+      return;
     }
     
-    console.log(`=== ALL TEMPLATES (${allRows ? allRows.length : 0}) ===\n`);
+    // Parse recurring_days
+    let recurringDays = [];
+    try {
+      recurringDays = JSON.parse(template.recurring_days || '[]');
+    } catch (e) {}
     
-    if (!allRows || allRows.length === 0) {
-      console.log('No templates found in database.');
-      console.log('\nTo create a template with recurring schedule:');
-      console.log('1. Go to YouTube page');
-      console.log('2. Click "Templates" button');
-      console.log('3. Click "Create Template"');
-      console.log('4. Fill in the form and enable "Recurring Schedule"');
-      console.log('5. Set the pattern (daily/weekly) and time');
-      console.log('6. Click "Create Template"');
-    } else {
-      allRows.forEach((t, i) => {
-        console.log(`${i + 1}. ${t.name}`);
-        console.log(`   user_id: ${t.user_id}`);
-        console.log(`   account_id: ${t.account_id}`);
-        console.log(`   channel: ${t.channel_name || 'N/A'}`);
-        console.log(`   recurring_enabled: ${t.recurring_enabled}`);
-        console.log(`   recurring_pattern: ${t.recurring_pattern}`);
-        console.log(`   recurring_time: ${t.recurring_time}`);
-        console.log(`   recurring_days: ${t.recurring_days}`);
-        console.log(`   next_run_at: ${t.next_run_at}`);
-        console.log(`   last_run_at: ${t.last_run_at}`);
-        console.log('');
-      });
+    console.log(`  Pattern: ${template.recurring_pattern}`);
+    console.log(`  Time: ${template.recurring_time} WIB`);
+    
+    if (template.recurring_pattern === 'weekly') {
+      console.log(`  Days: ${recurringDays.join(', ') || 'None'}`);
+      const isTodayScheduled = recurringDays.map(d => d.toLowerCase()).includes(todayName);
+      console.log(`  Today (${todayName}): ${isTodayScheduled ? '✓ SCHEDULED' : '✗ not scheduled'}`);
     }
     
-    // Now check only enabled templates
-    const enabledRows = (allRows || []).filter(r => r.recurring_enabled === 1);
+    console.log(`  Next Run: ${template.next_run_at || 'Not set'}`);
+    console.log(`  Last Run: ${template.last_run_at || 'Never'}`);
     
-    if (enabledRows.length === 0) {
-      console.log('\nNo templates with recurring enabled found.');
-      process.exit(0);
-    }
-    
-    console.log(`\n=== TEMPLATES WITH RECURRING ENABLED (${enabledRows.length}) ===\n`);
-    
-    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-    const todayName = dayNames[wibTime.day];
-    
-    enabledRows.forEach((template, index) => {
-      console.log(`--- Template ${index + 1}: ${template.name} ---`);
-      console.log(`  ID: ${template.id}`);
-      console.log(`  Channel: ${template.channel_name || 'N/A'}`);
-      console.log(`  Pattern: ${template.recurring_pattern}`);
-      console.log(`  Time: ${template.recurring_time} WIB`);
-      
-      // Parse recurring_days
-      let recurringDays = [];
-      try {
-        recurringDays = JSON.parse(template.recurring_days || '[]');
-      } catch (e) {}
-      
-      if (template.recurring_pattern === 'weekly') {
-        console.log(`  Days: ${recurringDays.join(', ') || 'None'}`);
-        const isTodayScheduled = recurringDays.map(d => d.toLowerCase()).includes(todayName);
-        console.log(`  Today (${todayName}): ${isTodayScheduled ? 'YES - SCHEDULED' : 'NO'}`);
-      }
-      
-      console.log(`  Next Run: ${template.next_run_at || 'Not set'}`);
-      console.log(`  Last Run: ${template.last_run_at || 'Never'}`);
-      
-      // Check trigger conditions
-      if (template.recurring_time) {
-        const [schedHour, schedMin] = template.recurring_time.split(':').map(Number);
-        const scheduleMinutes = schedHour * 60 + schedMin;
-        const currentMinutes = wibTime.hours * 60 + wibTime.minutes;
-        const timeDiff = currentMinutes - scheduleMinutes;
-        
-        console.log(`  Schedule: ${schedHour}:${String(schedMin).padStart(2,'0')} WIB`);
-        console.log(`  Current:  ${wibTime.hours}:${String(wibTime.minutes).padStart(2,'0')} WIB`);
-        console.log(`  Diff:     ${timeDiff} minutes`);
-        
-        // Check shouldExecute (0-1 min window)
-        let shouldExecute = false;
-        if (timeDiff >= 0 && timeDiff <= 1) {
-          if (template.recurring_pattern === 'daily') {
-            shouldExecute = true;
-          } else if (template.recurring_pattern === 'weekly') {
-            const isTodayScheduled = recurringDays.map(d => d.toLowerCase()).includes(todayName);
-            shouldExecute = isTodayScheduled;
-          }
-        }
-        
-        // Check shouldExecuteMissed (1-30 min window)
-        let shouldExecuteMissed = false;
-        if (timeDiff > 1 && timeDiff <= 30) {
-          if (template.recurring_pattern === 'daily') {
-            shouldExecuteMissed = true;
-          } else if (template.recurring_pattern === 'weekly') {
-            const isTodayScheduled = recurringDays.map(d => d.toLowerCase()).includes(todayName);
-            shouldExecuteMissed = isTodayScheduled;
-          }
-        }
-        
-        console.log(`  Should Execute Now: ${shouldExecute ? 'YES!' : 'NO'}`);
-        console.log(`  Should Execute Missed: ${shouldExecuteMissed ? 'YES!' : 'NO'}`);
-      }
+    // Check trigger conditions
+    if (template.recurring_time) {
+      const [schedHour, schedMin] = template.recurring_time.split(':').map(Number);
+      const scheduleMinutes = schedHour * 60 + schedMin;
+      const currentMinutes = wibTime.hours * 60 + wibTime.minutes;
+      const timeDiff = currentMinutes - scheduleMinutes;
       
       console.log('');
-    });
+      console.log(`  SCHEDULE CHECK:`);
+      console.log(`    Scheduled: ${schedHour}:${String(schedMin).padStart(2,'0')} WIB`);
+      console.log(`    Current:   ${wibTime.hours}:${String(wibTime.minutes).padStart(2,'0')} WIB`);
+      console.log(`    Diff:      ${timeDiff} minutes`);
+      
+      // Check shouldExecute (0-1 min window)
+      let shouldExecute = false;
+      if (timeDiff >= 0 && timeDiff <= 1) {
+        if (template.recurring_pattern === 'daily') {
+          shouldExecute = true;
+        } else if (template.recurring_pattern === 'weekly') {
+          const isTodayScheduled = recurringDays.map(d => d.toLowerCase()).includes(todayName);
+          shouldExecute = isTodayScheduled;
+        }
+      }
+      
+      // Check shouldExecuteMissed (overdue)
+      let shouldExecuteMissed = false;
+      if (timeDiff > 1) {
+        if (template.recurring_pattern === 'daily') {
+          shouldExecuteMissed = true;
+        } else if (template.recurring_pattern === 'weekly') {
+          const isTodayScheduled = recurringDays.map(d => d.toLowerCase()).includes(todayName);
+          shouldExecuteMissed = isTodayScheduled;
+        }
+      }
+      
+      if (shouldExecute) {
+        console.log(`    ✓ SHOULD EXECUTE NOW!`);
+      } else if (shouldExecuteMissed) {
+        console.log(`    ⚠️ OVERDUE - should execute missed schedule`);
+      } else if (timeDiff < 0) {
+        console.log(`    ⏳ Waiting... (${Math.abs(timeDiff)} minutes until scheduled time)`);
+      } else {
+        console.log(`    ✗ Not time yet`);
+      }
+    }
     
-    console.log('=== END ===');
-    process.exit(0);
+    console.log('');
   });
+  
+  console.log('========================================');
+  console.log('If schedules are not running:');
+  console.log('1. Make sure app is running (node app.js or pm2)');
+  console.log('2. Check logs for [ScheduleService] messages');
+  console.log('3. Verify YouTube credentials are valid');
+  console.log('4. Restart app after making changes');
+  console.log('========================================');
+  
+  process.exit(0);
 }
 
 checkTemplateSchedules().catch(err => {
