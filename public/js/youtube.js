@@ -1930,14 +1930,10 @@ function renderTemplateList(templates) {
       `;
     }
     
-    // Thumbnail folder badge - show sequential mode info
+    // Thumbnail folder badge - show mode info (only for pinned)
     let thumbnailBadge = '';
     if (hasPinnedThumbnail) {
       thumbnailBadge = `<span class="px-1.5 py-0.5 bg-green-500/20 text-green-400 text-xs rounded flex items-center gap-0.5" title="Pinned thumbnail"><i class="ti ti-pin-filled text-[10px]"></i> Pin</span>`;
-    } else if (hasThumbnailFolder) {
-      const folderName = template.thumbnail_folder || 'Root';
-      const currentIndex = template.thumbnail_index || 0;
-      thumbnailBadge = `<span class="px-1.5 py-0.5 bg-yellow-500/20 text-yellow-400 text-xs rounded flex items-center gap-0.5" title="Sequential thumbnail from: ${escapeHtml(folderName)} (index: ${currentIndex})"><i class="ti ti-list-numbers text-[10px]"></i> ${escapeHtml(folderName)} #${currentIndex + 1}</span>`;
     }
     
     // Channel display with warning if account is invalid
@@ -2011,7 +2007,6 @@ function renderTemplateList(templates) {
           <p class="text-[10px] text-gray-500 truncate">${escapeHtml(template.title)}</p>
         </div>
         ${accountInvalid ? `<span class="px-1 py-0.5 bg-orange-500/20 text-orange-400 text-[10px] rounded flex-shrink-0" title="Account disconnected"><i class="ti ti-alert-triangle text-[8px]"></i></span>` : ''}
-        ${hasThumbnailFolder ? `<span class="px-1 py-0.5 bg-yellow-500/20 text-yellow-400 text-[10px] rounded flex-shrink-0" title="Random thumbnail"><i class="ti ti-dice-3 text-[8px]"></i></span>` : ''}
         ${hasRecurring ? `<span class="px-1.5 py-0.5 bg-green-500/20 text-green-400 text-[10px] rounded flex-shrink-0"><i class="ti ti-repeat text-[8px]"></i></span>` : ''}
         ${isMulti ? `<span class="px-1.5 py-0.5 bg-primary/20 text-primary text-[10px] rounded flex-shrink-0">${broadcastCount}</span>` : ''}
         <div class="flex items-center gap-0.5 flex-shrink-0">
