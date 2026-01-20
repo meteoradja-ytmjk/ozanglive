@@ -3331,16 +3331,31 @@ function openRecreateFromTemplateModal(template) {
   // Render broadcast list with schedule inputs
   const listEl = document.getElementById('recreateBroadcastList');
   const broadcasts = template.broadcasts || [template];
+  const mapping = template.stream_key_folder_mapping || {};
   
   listEl.innerHTML = broadcasts.map((b, i) => {
     const minDate = new Date(Date.now() + 11 * 60 * 1000);
     const minDateStr = minDate.toISOString().slice(0, 16);
     
+    // Determine folder for this broadcast
+    const streamId = b.streamId || template.stream_id;
+    let folder = null;
+    if (streamId && mapping[streamId] !== undefined) {
+      folder = mapping[streamId];
+    } else if (b.thumbnailFolder !== null && b.thumbnailFolder !== undefined) {
+      folder = b.thumbnailFolder;
+    } else if (template.thumbnail_folder !== null && template.thumbnail_folder !== undefined) {
+      folder = template.thumbnail_folder;
+    }
+    
+    const folderDisplay = folder !== null ? (folder === '' ? '📁 Root' : `📂 ${folder}`) : '⚠️ No folder';
+    const folderClass = folder !== null ? 'text-green-400' : 'text-yellow-400';
+    
     return `
       <div class="bg-dark-700 rounded-lg p-3 space-y-2">
         <div class="flex items-center justify-between">
           <span class="font-medium text-sm text-white">${i + 1}. ${escapeHtml(b.title)}</span>
-          <span class="text-xs text-gray-500">${b.privacyStatus}</span>
+          <span class="text-xs ${folderClass}">${folderDisplay}</span>
         </div>
         ${b.streamKey ? `<div class="text-xs text-gray-400 font-mono truncate">Key: ${escapeHtml(b.streamKey)}</div>` : ''}
         <div>
@@ -3377,6 +3392,9 @@ if (recreateFromTemplateForm) {
       const schedules = Array.from(scheduleInputs).map(input => input.value).filter(v => v);
       
       const broadcasts = template.broadcasts || [template];
+      
+      console.log('[recreate] Template stream_key_folder_mapping:', template.stream_key_folder_mapping);
+      console.log('[recreate] Broadcasts:', broadcasts.map(b => ({ title: b.title, streamId: b.streamId, thumbnailFolder: b.thumbnailFolder })));
       
       if (schedules.length !== broadcasts.length) {
         showToast('Please set schedule time for all broadcasts', 'error');
@@ -3419,6 +3437,7 @@ if (recreateFromTemplateForm) {
           
           // Use streamId to reuse the same stream key (only if account is still valid)
           // If account changed, don't use old streamId as it belongs to different account
+          const streamId = broadcast.streamId || template.stream_id;
           if (template.account_valid !== false) {
             if (broadcast.streamId) {
               formData.append('streamId', broadcast.streamId);
@@ -3432,13 +3451,26 @@ if (recreateFromTemplateForm) {
             console.log('[recreate] Skipping streamId - account changed, will create new stream key');
           }
           
-          // Use thumbnail folder for random selection if available
-          if (template.thumbnail_folder !== null && template.thumbnail_folder !== undefined) {
-            formData.append('thumbnailFolder', template.thumbnail_folder);
-            console.log('[recreate] Using thumbnail folder for random selection:', template.thumbnail_folder || 'root');
+          // Determine thumbnail folder - priority:
+          // 1. Stream key folder mapping (binding stream key to folder)
+          // 2. Broadcast-specific thumbnailFolder
+          // 3. Template thumbnail_folder
+          let thumbnailFolder = null;
+          
+          // First check stream_key_folder_mapping for this stream key
+          if (streamId && template.stream_key_folder_mapping && template.stream_key_folder_mapping[streamId] !== undefined) {
+            thumbnailFolder = template.stream_key_folder_mapping[streamId];
+            console.log('[recreate] Using stream key folder mapping:', streamId, '->', thumbnailFolder || 'root');
           } else if (broadcast.thumbnailFolder !== null && broadcast.thumbnailFolder !== undefined) {
-            formData.append('thumbnailFolder', broadcast.thumbnailFolder);
-            console.log('[recreate] Using broadcast thumbnail folder:', broadcast.thumbnailFolder || 'root');
+            thumbnailFolder = broadcast.thumbnailFolder;
+            console.log('[recreate] Using broadcast thumbnail folder:', thumbnailFolder || 'root');
+          } else if (template.thumbnail_folder !== null && template.thumbnail_folder !== undefined) {
+            thumbnailFolder = template.thumbnail_folder;
+            console.log('[recreate] Using template thumbnail folder:', thumbnailFolder || 'root');
+          }
+          
+          if (thumbnailFolder !== null) {
+            formData.append('thumbnailFolder', thumbnailFolder);
           }
           
           const response = await fetch('/api/youtube/broadcasts', {
