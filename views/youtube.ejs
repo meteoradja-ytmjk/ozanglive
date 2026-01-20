@@ -482,6 +482,7 @@
         <input type="hidden" id="enableAutoStop" name="enableAutoStop" value="true">
         <input type="hidden" id="unlistReplayOnEnd" name="unlistReplayOnEnd" value="true">
         <input type="hidden" id="pinnedThumbnail" name="pinnedThumbnail" value="">
+        <input type="hidden" id="thumbnailModeRandom" name="thumbnailModeRandom" value="">
         <input type="hidden" id="streamKeyFolderMapping" name="streamKeyFolderMapping" value="">
 
         <div>
@@ -497,6 +498,12 @@
                 class="w-4 h-4 text-primary bg-dark-700 border-gray-600 focus:ring-primary"
                 onchange="updateThumbnailMode(this.value)">
               <span class="text-sm text-gray-300">Berurutan</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="radio" name="thumbnailMode" value="random"
+                class="w-4 h-4 text-primary bg-dark-700 border-gray-600 focus:ring-primary"
+                onchange="updateThumbnailMode(this.value)">
+              <span class="text-sm text-gray-300">Random</span>
             </label>
             <label class="flex items-center gap-2 cursor-pointer">
               <input type="radio" name="thumbnailMode" value="pinned"
@@ -731,6 +738,12 @@
                 class="w-4 h-4 text-primary bg-dark-700 border-gray-600 focus:ring-primary"
                 onchange="updateEditThumbnailMode(this.value)">
               <span class="text-sm text-gray-300">Berurutan</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="radio" name="editThumbnailMode" value="random"
+                class="w-4 h-4 text-primary bg-dark-700 border-gray-600 focus:ring-primary"
+                onchange="updateEditThumbnailMode(this.value)">
+              <span class="text-sm text-gray-300">Random</span>
             </label>
             <label class="flex items-center gap-2 cursor-pointer">
               <input type="radio" name="editThumbnailMode" value="pinned"

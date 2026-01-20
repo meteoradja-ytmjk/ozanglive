@@ -5489,6 +5489,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
     
     // Get thumbnail folder from request
     const thumbnailFolder = req.body.thumbnailFolder;
+    const thumbnailModeRandom = req.body.thumbnailModeRandom === 'true' || req.body.thumbnailModeRandom === true;
     
     // Save broadcast settings for later use (e.g., unlist replay on end, thumbnail folder)
     try {
@@ -5524,11 +5525,25 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         console.error('Error uploading thumbnail:', thumbErr.message);
       }
     } else if (thumbnailFolder !== undefined && thumbnailFolder !== null) {
-      // Handle random thumbnail from folder
+      // Handle thumbnail from folder (random or sequential based on mode)
       try {
-        const randomThumbnailPath = getRandomThumbnailFromFolder(req.session.userId, thumbnailFolder);
-        if (randomThumbnailPath) {
-          const fullPath = path.join(__dirname, 'public', randomThumbnailPath);
+        let selectedThumbnailPath = null;
+        
+        if (thumbnailModeRandom) {
+          // Random mode: select random thumbnail from folder
+          selectedThumbnailPath = getRandomThumbnailFromFolder(req.session.userId, thumbnailFolder);
+          console.log('[API] Random mode - selected thumbnail:', selectedThumbnailPath);
+        } else {
+          // Sequential mode: select next thumbnail in order
+          const result = await scheduleService.getSequentialThumbnailFromFolder(req.session.userId, thumbnailFolder, 0);
+          if (result && result.path) {
+            selectedThumbnailPath = result.path;
+            console.log('[API] Sequential mode - selected thumbnail:', selectedThumbnailPath);
+          }
+        }
+        
+        if (selectedThumbnailPath) {
+          const fullPath = path.join(__dirname, 'public', selectedThumbnailPath);
           if (fs.existsSync(fullPath)) {
             const imageBuffer = fs.readFileSync(fullPath);
             const thumbnailResult = await youtubeService.uploadThumbnail(
@@ -5537,11 +5552,11 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
               imageBuffer
             );
             broadcast.thumbnailUrl = thumbnailResult.thumbnailUrl;
-            console.log('[API] Random thumbnail uploaded from folder:', thumbnailFolder || 'root');
+            console.log('[API] Thumbnail uploaded from folder:', thumbnailFolder || 'root', '- Mode:', thumbnailModeRandom ? 'random' : 'sequential');
           }
         }
       } catch (thumbErr) {
-        console.error('Error uploading random thumbnail:', thumbErr.message);
+        console.error('Error uploading thumbnail from folder:', thumbErr.message);
       }
     } else if (thumbnailPath) {
       // Handle gallery selection

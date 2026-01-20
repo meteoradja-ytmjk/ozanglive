@@ -75,6 +75,7 @@ class BroadcastTemplate {
       thumbnail_folder = null,
       thumbnail_index = 0,
       pinned_thumbnail = null,
+      thumbnail_mode = 'sequential',
       stream_key_folder_mapping = null,
       stream_id = null,
       // Title rotation fields
@@ -124,14 +125,14 @@ class BroadcastTemplate {
         `INSERT INTO broadcast_templates (
           id, user_id, account_id, name, title, description,
           privacy_status, tags, category_id, thumbnail_path, thumbnail_folder, 
-          thumbnail_index, pinned_thumbnail, stream_key_folder_mapping, stream_id,
+          thumbnail_index, pinned_thumbnail, thumbnail_mode, stream_key_folder_mapping, stream_id,
           title_index, pinned_title_id,
           recurring_enabled, recurring_pattern, recurring_time, recurring_days, next_run_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id, user_id, account_id, name.trim(), title, description,
           privacy_status, tagsJson, category_id, thumbnail_path, thumbnail_folder,
-          thumbnail_index || 0, pinned_thumbnail, streamKeyFolderMappingJson, stream_id,
+          thumbnail_index || 0, pinned_thumbnail, thumbnail_mode || 'sequential', streamKeyFolderMappingJson, stream_id,
           title_index || 0, pinned_title_id,
           recurring_enabled ? 1 : 0, recurring_pattern, recurring_time, daysJson, next_run_at
         ],
@@ -157,6 +158,7 @@ class BroadcastTemplate {
             thumbnail_folder,
             thumbnail_index: thumbnail_index || 0,
             pinned_thumbnail,
+            thumbnail_mode: thumbnail_mode || 'sequential',
             stream_key_folder_mapping: stream_key_folder_mapping || {},
             stream_id,
             title_index: title_index || 0,

@@ -556,10 +556,11 @@ class ScheduleService {
               console.error(`[ScheduleService] Failed to save broadcast settings:`, settingsErr.message);
             }
             
-            // Upload thumbnail - use sequential selection from folder
+            // Upload thumbnail - use sequential or random selection from folder based on template mode
             if (thumbnailFolder !== null && thumbnailFolder !== undefined || b.thumbnailPath || b.pinnedThumbnail) {
               // Calculate broadcast-specific index for multi-broadcast templates
               const broadcastIndex = (template.thumbnail_index || 0) + i;
+              const isRandomMode = template.thumbnail_mode === 'random';
               await this.uploadThumbnailForBroadcast(
                 accessToken, 
                 result.broadcastId || result.id, 
@@ -568,7 +569,8 @@ class ScheduleService {
                 template.user_id,
                 b.pinnedThumbnail,
                 null, // Don't update index for individual broadcasts in multi-template
-                broadcastIndex
+                broadcastIndex,
+                isRandomMode
               );
             }
           } catch (err) {
@@ -692,8 +694,9 @@ class ScheduleService {
           console.error(`[ScheduleService] Failed to save broadcast settings:`, settingsErr.message);
         }
         
-        // Upload thumbnail - use sequential selection from folder
+        // Upload thumbnail - use sequential or random selection from folder based on template mode
         if (thumbnailFolder !== null && thumbnailFolder !== undefined || template.thumbnail_path || template.pinned_thumbnail) {
+          const isRandomMode = template.thumbnail_mode === 'random';
           await this.uploadThumbnailForBroadcast(
             accessToken, 
             result.broadcastId || result.id, 
@@ -702,7 +705,8 @@ class ScheduleService {
             template.user_id,
             template.pinned_thumbnail,
             template.id,
-            template.thumbnail_index || 0
+            template.thumbnail_index || 0,
+            isRandomMode
           );
         }
       }
@@ -743,11 +747,15 @@ class ScheduleService {
    * @param {string} accessToken - YouTube access token
    * @param {string} broadcastId - Broadcast ID to upload thumbnail for
    * @param {string} thumbnailPath - Path to thumbnail file relative to /public
-   * @param {string} thumbnailFolder - Folder name for random thumbnail selection
+   * @param {string} thumbnailFolder - Folder name for thumbnail selection
    * @param {string} userId - User ID for folder-based thumbnail lookup
+   * @param {string} pinnedThumbnail - Pinned thumbnail path (highest priority)
+   * @param {string} templateId - Template ID for updating thumbnail index
+   * @param {number} currentIndex - Current thumbnail index for sequential mode
+   * @param {boolean} randomMode - If true, select random thumbnail instead of sequential
    * @returns {Promise<boolean>} True if upload successful, false otherwise
    */
-  async uploadThumbnailForBroadcast(accessToken, broadcastId, thumbnailPath, thumbnailFolder = null, userId = null, pinnedThumbnail = null, templateId = null, currentIndex = 0) {
+  async uploadThumbnailForBroadcast(accessToken, broadcastId, thumbnailPath, thumbnailFolder = null, userId = null, pinnedThumbnail = null, templateId = null, currentIndex = 0, randomMode = false) {
     try {
       let fullPath = null;
       let newThumbnailIndex = currentIndex;
@@ -758,32 +766,42 @@ class ScheduleService {
         if (fs.existsSync(fullPath)) {
           console.log(`[ScheduleService] Using pinned thumbnail: ${pinnedThumbnail}`);
         } else {
-          console.warn(`[ScheduleService] Pinned thumbnail not found: ${fullPath}, falling back to sequential`);
+          console.warn(`[ScheduleService] Pinned thumbnail not found: ${fullPath}, falling back to sequential/random`);
           fullPath = null;
         }
       }
       
-      // Priority 2: If thumbnail_folder is specified, select sequential thumbnail from that folder
+      // Priority 2: If thumbnail_folder is specified, select thumbnail from that folder
       if (!fullPath && thumbnailFolder !== null && thumbnailFolder !== undefined && userId) {
-        const result = await this.getSequentialThumbnailFromFolder(userId, thumbnailFolder, currentIndex);
-        if (result.path) {
-          fullPath = path.join(__dirname, '..', 'public', result.path);
-          newThumbnailIndex = result.newIndex;
-          console.log(`[ScheduleService] Selected sequential thumbnail from folder "${thumbnailFolder}": ${result.path} (index: ${currentIndex} -> ${newThumbnailIndex})`);
-          
-          // Update thumbnail index in template for next run
-          if (templateId) {
-            try {
-              await BroadcastTemplate.updateThumbnailIndex(templateId, newThumbnailIndex);
-              console.log(`[ScheduleService] Updated template ${templateId} thumbnail_index to ${newThumbnailIndex}`);
-            } catch (err) {
-              console.error(`[ScheduleService] Failed to update thumbnail index:`, err.message);
+        if (randomMode) {
+          // Random mode: select random thumbnail from folder
+          const randomPath = await this.getRandomThumbnailFromFolder(userId, thumbnailFolder);
+          if (randomPath) {
+            fullPath = path.join(__dirname, '..', 'public', randomPath);
+            console.log(`[ScheduleService] Selected RANDOM thumbnail from folder "${thumbnailFolder}": ${randomPath}`);
+          }
+        } else {
+          // Sequential mode: select next thumbnail in order
+          const result = await this.getSequentialThumbnailFromFolder(userId, thumbnailFolder, currentIndex);
+          if (result.path) {
+            fullPath = path.join(__dirname, '..', 'public', result.path);
+            newThumbnailIndex = result.newIndex;
+            console.log(`[ScheduleService] Selected sequential thumbnail from folder "${thumbnailFolder}": ${result.path} (index: ${currentIndex} -> ${newThumbnailIndex})`);
+            
+            // Update thumbnail index in template for next run
+            if (templateId) {
+              try {
+                await BroadcastTemplate.updateThumbnailIndex(templateId, newThumbnailIndex);
+                console.log(`[ScheduleService] Updated template ${templateId} thumbnail_index to ${newThumbnailIndex}`);
+              } catch (err) {
+                console.error(`[ScheduleService] Failed to update thumbnail index:`, err.message);
+              }
             }
           }
         }
       }
       
-      // Priority 3: Fallback to specific thumbnail_path if no folder or sequential selection failed
+      // Priority 3: Fallback to specific thumbnail_path if no folder or selection failed
       if (!fullPath && thumbnailPath) {
         fullPath = path.join(__dirname, '..', 'public', thumbnailPath);
       }

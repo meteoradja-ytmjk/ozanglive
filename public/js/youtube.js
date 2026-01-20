@@ -786,6 +786,7 @@ function unpinThumbnail() {
 function updateThumbnailMode(mode) {
   const pinnedInput = document.getElementById('pinnedThumbnail');
   const indicator = document.getElementById('pinnedThumbnailIndicator');
+  const randomInput = document.getElementById('thumbnailModeRandom');
   
   if (mode === 'sequential') {
     // Clear pinned thumbnail when switching to sequential
@@ -795,7 +796,27 @@ function updateThumbnailMode(mode) {
     if (indicator) {
       indicator.classList.add('hidden');
     }
+    if (randomInput) {
+      randomInput.value = '';
+    }
     fetchThumbnails(currentThumbnailFolder);
+  } else if (mode === 'random') {
+    // Clear pinned thumbnail when switching to random
+    if (pinnedInput && pinnedInput.value) {
+      pinnedInput.value = '';
+    }
+    if (indicator) {
+      indicator.classList.add('hidden');
+    }
+    if (randomInput) {
+      randomInput.value = 'true';
+    }
+    fetchThumbnails(currentThumbnailFolder);
+    showToast('Mode Random: Thumbnail akan dipilih secara acak dari folder', 'info');
+  } else if (mode === 'pinned') {
+    if (randomInput) {
+      randomInput.value = '';
+    }
   }
 }
 
@@ -1387,6 +1408,12 @@ if (createBroadcastForm) {
       const pinnedThumbnail = document.getElementById('pinnedThumbnail')?.value;
       if (pinnedThumbnail) {
         formData.append('pinnedThumbnail', pinnedThumbnail);
+      }
+      
+      // Add thumbnail mode random flag
+      const thumbnailModeRandom = document.getElementById('thumbnailModeRandom')?.value;
+      if (thumbnailModeRandom === 'true') {
+        formData.append('thumbnailModeRandom', 'true');
       }
       
       // Add stream key folder mapping if set
@@ -4330,7 +4357,7 @@ function selectRandomEditThumbnail() {
 }
 
 /**
- * Update edit thumbnail mode (sequential/pinned)
+ * Update edit thumbnail mode (sequential/random/pinned)
  */
 function updateEditThumbnailMode(mode) {
   const pinnedInput = document.getElementById('editPinnedThumbnail');
@@ -4344,7 +4371,21 @@ function updateEditThumbnailMode(mode) {
     if (indicator) {
       indicator.classList.add('hidden');
     }
+    window.editThumbnailModeRandom = false;
     loadEditThumbnailFolder(currentEditThumbnailFolder);
+  } else if (mode === 'random') {
+    // Clear pinned thumbnail when switching to random
+    if (pinnedInput && pinnedInput.value) {
+      pinnedInput.value = '';
+    }
+    if (indicator) {
+      indicator.classList.add('hidden');
+    }
+    window.editThumbnailModeRandom = true;
+    loadEditThumbnailFolder(currentEditThumbnailFolder);
+    showToast('Mode Random: Thumbnail akan dipilih secara acak dari folder', 'info');
+  } else if (mode === 'pinned') {
+    window.editThumbnailModeRandom = false;
   }
 }
 

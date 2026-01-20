@@ -401,6 +401,9 @@ async function createCoreTablesAsync() {
   // Format: {"streamKeyId": "folderName", ...}
   await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN stream_key_folder_mapping TEXT`, 'broadcast_templates.stream_key_folder_mapping');
 
+  // Add thumbnail_mode column for thumbnail selection mode (sequential, random, pinned)
+  await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN thumbnail_mode TEXT DEFAULT 'sequential'`, 'broadcast_templates.thumbnail_mode');
+
   // Add title_index column for sequential title rotation
   await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN title_index INTEGER DEFAULT 0`, 'broadcast_templates.title_index');
 
