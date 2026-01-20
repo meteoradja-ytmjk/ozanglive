@@ -291,7 +291,8 @@ async function onStreamKeyChange(streamKeyId) {
   // If found, auto-select the bound folder
   if (boundFolder !== undefined) {
     console.log(`[onStreamKeyChange] Stream key ${streamKeyId} bound to folder: ${boundFolder || 'root'}`);
-    openThumbnailFolder(boundFolder || null);
+    // Pass the exact value - empty string for root, folder name for folder
+    openThumbnailFolder(boundFolder);
     showToast(`Folder "${boundFolder || 'Root'}" otomatis dipilih (terikat ke stream key)`);
   }
 }
@@ -1548,9 +1549,9 @@ async function openEditBroadcastModal(broadcast) {
         headers: { 'X-CSRF-Token': getCsrfToken() }
       });
       const templateData = await templateResponse.json();
-      if (templateData.success && templateData.folder) {
+      if (templateData.success && templateData.folder !== null && templateData.folder !== undefined) {
         boundFolder = templateData.folder;
-        console.log(`[openEditBroadcastModal] Using folder from template "${templateData.templateName}": "${boundFolder}"`);
+        console.log(`[openEditBroadcastModal] Using folder from template "${templateData.templateName}": "${boundFolder || '(root)'}"`);
       }
     } catch (e) {
       console.warn('[openEditBroadcastModal] Error getting template folder:', e.message);
@@ -1558,23 +1559,23 @@ async function openEditBroadcastModal(broadcast) {
   }
   
   // If no folder from template, try broadcast settings
-  if (!boundFolder && broadcastId) {
+  if (boundFolder === null && broadcastId) {
     const settings = await getBroadcastSettingsFromServer(broadcastId, accountId);
-    if (settings && settings.thumbnailFolder) {
+    if (settings && settings.thumbnailFolder !== null && settings.thumbnailFolder !== undefined) {
       boundFolder = settings.thumbnailFolder;
-      console.log(`[openEditBroadcastModal] Using folder from broadcast settings: "${boundFolder}"`);
+      console.log(`[openEditBroadcastModal] Using folder from broadcast settings: "${boundFolder || '(root)'}"`);
     }
   }
   
   // If still no folder, use first available folder
-  if (!boundFolder && firstFolder) {
+  if (boundFolder === null && firstFolder) {
     boundFolder = firstFolder;
     console.log(`[openEditBroadcastModal] Using first available folder: "${boundFolder}"`);
   }
   
   // Set the folder dropdown and load thumbnails
   const folderSelect = document.getElementById('editThumbnailFolderSelect');
-  if (folderSelect && boundFolder) {
+  if (folderSelect && boundFolder !== null) {
     folderSelect.value = boundFolder;
   }
   
@@ -1623,6 +1624,15 @@ if (editBroadcastForm) {
       
       console.log('[EditBroadcast-Original] Category:', categoryId);
       
+      // Get thumbnail folder - prefer currentEditThumbnailFolder, fallback to dropdown value
+      const folderSelect = document.getElementById('editThumbnailFolderSelect');
+      let thumbnailFolderValue = currentEditThumbnailFolder;
+      if (thumbnailFolderValue === null && folderSelect) {
+        thumbnailFolderValue = folderSelect.value;
+      }
+      
+      console.log('[EditBroadcast-Original] Thumbnail folder:', thumbnailFolderValue === '' ? '(root)' : thumbnailFolderValue);
+      
       const updateData = {
         title: document.getElementById('editBroadcastTitle').value,
         description: document.getElementById('editBroadcastDescription').value,
@@ -1630,7 +1640,7 @@ if (editBroadcastForm) {
         privacyStatus: document.getElementById('editPrivacyStatus').value,
         categoryId: categoryId,
         // Include thumbnail folder so it's saved when editing
-        thumbnailFolder: currentEditThumbnailFolder !== null ? currentEditThumbnailFolder : ''
+        thumbnailFolder: thumbnailFolderValue !== null ? thumbnailFolderValue : ''
       };
       
       console.log('[EditBroadcast-Original] Update data:', JSON.stringify(updateData));
@@ -4137,7 +4147,11 @@ async function loadEditThumbnailFolders() {
  * Load thumbnails for edit modal from selected folder
  */
 async function loadEditThumbnailFolder(folderName = null) {
-  currentEditThumbnailFolder = folderName || null;
+  // Use the exact value passed - don't convert empty string to null
+  // Empty string means root folder, null means no folder selected
+  currentEditThumbnailFolder = folderName !== null && folderName !== undefined ? folderName : null;
+  
+  console.log('[loadEditThumbnailFolder] Setting currentEditThumbnailFolder to:', currentEditThumbnailFolder === '' ? '(root)' : currentEditThumbnailFolder);
   
   // Auto-bind folder to stream key (automatic binding)
   autoBindEditFolderToStreamKey(folderName);
@@ -4348,8 +4362,9 @@ async function onEditStreamKeyChange(streamKeyId) {
   // If found, auto-select the bound folder
   if (boundFolder !== undefined) {
     console.log(`[onEditStreamKeyChange] Stream key ${streamKeyId} bound to folder: ${boundFolder || 'root'}`);
-    folderSelect.value = boundFolder || '';
-    loadEditThumbnailFolder(boundFolder || null);
+    folderSelect.value = boundFolder;
+    // Pass the exact value - empty string for root, folder name for folder
+    loadEditThumbnailFolder(boundFolder);
     showToast(`Folder "${boundFolder || 'Root'}" otomatis dipilih`);
   }
 }
@@ -4789,7 +4804,12 @@ if (originalEditBroadcastForm) {
       const broadcastId = document.getElementById('editBroadcastId').value;
       const accountId = document.getElementById('editAccountId').value;
       
+      // Get thumbnail folder from dropdown
+      const folderSelect = document.getElementById('editThumbnailFolderSelect');
+      const thumbnailFolder = folderSelect ? folderSelect.value : null;
+      
       console.log('[EditBroadcast] Starting update for broadcast:', broadcastId, 'account:', accountId);
+      console.log('[EditBroadcast] Thumbnail folder:', thumbnailFolder);
       console.log('[EditBroadcast] Thumbnail file:', window.editThumbnailFile ? window.editThumbnailFile.name : 'none');
       
       // Upload thumbnail first if selected
@@ -4809,14 +4829,20 @@ if (originalEditBroadcastForm) {
       const categorySelect = document.getElementById('editCategoryId');
       const categoryId = categorySelect ? categorySelect.value : '22';
       
+      // Get stream key value
+      const streamKeySelect = document.getElementById('editStreamKeySelect');
+      const streamId = streamKeySelect ? streamKeySelect.value : null;
+      
       console.log('[EditBroadcast] Category:', categoryId);
+      console.log('[EditBroadcast] Stream ID:', streamId);
       
       const updateData = {
         title: document.getElementById('editBroadcastTitle').value,
         description: document.getElementById('editBroadcastDescription').value,
         scheduledStartTime: document.getElementById('editScheduledStartTime').value,
         privacyStatus: document.getElementById('editPrivacyStatus').value,
-        categoryId: categoryId
+        categoryId: categoryId,
+        thumbnailFolder: thumbnailFolder  // Include thumbnail folder in update
       };
       
       console.log('[EditBroadcast] Update data:', updateData);
@@ -4837,6 +4863,12 @@ if (originalEditBroadcastForm) {
       
       const data = await response.json();
       console.log('[EditBroadcast] Response:', data);
+      
+      // Also save stream key folder mapping if stream key is selected
+      if (streamId && thumbnailFolder !== null) {
+        console.log('[EditBroadcast] Saving stream key folder mapping:', streamId, '->', thumbnailFolder);
+        await saveStreamKeyFolderMappingToServer(streamId, thumbnailFolder || '');
+      }
       
       if (data.success) {
         showToast('Broadcast updated successfully!');
