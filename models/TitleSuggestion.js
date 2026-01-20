@@ -9,7 +9,7 @@ class TitleSuggestion {
    */
   static create(data) {
     const id = uuidv4();
-    const { user_id, title, stream_key_id = null } = data;
+    const { user_id, title, stream_key_id = null, folder_id = null } = data;
 
     if (!user_id || !title) {
       return Promise.reject(new Error('user_id and title are required'));
@@ -29,9 +29,9 @@ class TitleSuggestion {
           const sortOrder = (row?.max_order || 0) + 1;
           
           db.run(
-            `INSERT INTO title_suggestions (id, user_id, title, stream_key_id, use_count, sort_order, is_pinned)
-             VALUES (?, ?, ?, ?, 0, ?, 0)`,
-            [id, user_id, title.trim(), stream_key_id, sortOrder],
+            `INSERT INTO title_suggestions (id, user_id, title, stream_key_id, folder_id, use_count, sort_order, is_pinned)
+             VALUES (?, ?, ?, ?, ?, 0, ?, 0)`,
+            [id, user_id, title.trim(), stream_key_id, folder_id, sortOrder],
             function (err) {
               if (err) {
                 if (err.message.includes('UNIQUE constraint failed')) {
@@ -45,6 +45,7 @@ class TitleSuggestion {
                 user_id, 
                 title: title.trim(), 
                 stream_key_id,
+                folder_id,
                 use_count: 0, 
                 sort_order: sortOrder,
                 is_pinned: 0
@@ -60,9 +61,10 @@ class TitleSuggestion {
    * Find all titles for a user
    * @param {string} userId - User ID
    * @param {string} streamKeyId - Optional stream key filter
+   * @param {string} folderId - Optional folder filter
    * @returns {Promise<Array>} Array of titles
    */
-  static findByUserId(userId, streamKeyId = null) {
+  static findByUserId(userId, streamKeyId = null, folderId = null) {
     return new Promise((resolve, reject) => {
       let query = `SELECT * FROM title_suggestions WHERE user_id = ?`;
       const params = [userId];
@@ -70,6 +72,11 @@ class TitleSuggestion {
       if (streamKeyId) {
         query += ` AND (stream_key_id = ? OR stream_key_id IS NULL)`;
         params.push(streamKeyId);
+      }
+
+      if (folderId) {
+        query += ` AND folder_id = ?`;
+        params.push(folderId);
       }
 
       // Order: pinned first, then by sort_order
@@ -82,6 +89,29 @@ class TitleSuggestion {
         }
         resolve(rows || []);
       });
+    });
+  }
+
+  /**
+   * Move title to folder
+   * @param {string} id - Title ID
+   * @param {string} userId - User ID
+   * @param {string} folderId - Folder ID (null to remove from folder)
+   * @returns {Promise<Object>} Update result
+   */
+  static moveToFolder(id, userId, folderId) {
+    return new Promise((resolve, reject) => {
+      db.run(
+        `UPDATE title_suggestions SET folder_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?`,
+        [folderId, id, userId],
+        function(err) {
+          if (err) {
+            console.error('Error moving title to folder:', err.message);
+            return reject(err);
+          }
+          resolve({ success: true, updated: this.changes > 0 });
+        }
+      );
     });
   }
 

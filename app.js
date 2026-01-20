@@ -30,6 +30,7 @@ const YouTubeCredentials = require('./models/YouTubeCredentials');
 const youtubeService = require('./services/youtubeService');
 const BroadcastTemplate = require('./models/BroadcastTemplate');
 const TitleSuggestion = require('./models/TitleSuggestion');
+const TitleFolder = require('./models/TitleFolder');
 const SystemSettings = require('./models/SystemSettings');
 const YouTubeBroadcastSettings = require('./models/YouTubeBroadcastSettings');
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
@@ -7021,7 +7022,8 @@ app.post('/api/recurring-schedules/:id/run-now', isAuthenticated, async (req, re
 app.get('/api/title-suggestions', isAuthenticated, async (req, res) => {
   try {
     const streamKeyId = req.query.streamKeyId || null;
-    const titles = await TitleSuggestion.findByUserId(req.session.userId, streamKeyId);
+    const folderId = req.query.folderId || null;
+    const titles = await TitleSuggestion.findByUserId(req.session.userId, streamKeyId, folderId);
     res.json({ success: true, titles });
   } catch (error) {
     console.error('Error fetching title suggestions:', error);
@@ -7078,14 +7080,15 @@ app.get('/api/title-suggestions/next', isAuthenticated, async (req, res) => {
 // Create new title suggestion
 app.post('/api/title-suggestions', isAuthenticated, async (req, res) => {
   try {
-    const { title, streamKeyId } = req.body;
+    const { title, streamKeyId, folderId } = req.body;
     if (!title || !title.trim()) {
       return res.status(400).json({ success: false, error: 'Title is required' });
     }
     const newTitle = await TitleSuggestion.create({
       user_id: req.session.userId,
       title: title.trim(),
-      stream_key_id: streamKeyId || null
+      stream_key_id: streamKeyId || null,
+      folder_id: folderId || null
     });
     res.json({ success: true, title: newTitle });
   } catch (error) {
@@ -7155,6 +7158,90 @@ app.delete('/api/title-suggestions/:id', isAuthenticated, async (req, res) => {
   } catch (error) {
     console.error('Error deleting title suggestion:', error);
     res.status(500).json({ success: false, error: 'Failed to delete title' });
+  }
+});
+
+// Move title to folder
+app.post('/api/title-suggestions/:id/move', isAuthenticated, async (req, res) => {
+  try {
+    const { folderId } = req.body;
+    const result = await TitleSuggestion.moveToFolder(req.params.id, req.session.userId, folderId || null);
+    if (!result.updated) {
+      return res.status(404).json({ success: false, error: 'Title not found' });
+    }
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error moving title to folder:', error);
+    res.status(500).json({ success: false, error: 'Failed to move title' });
+  }
+});
+
+// ============================================
+// Title Folder API Endpoints
+// ============================================
+
+// Get all folders for user
+app.get('/api/title-folders', isAuthenticated, async (req, res) => {
+  try {
+    const folders = await TitleFolder.findByUserId(req.session.userId);
+    res.json({ success: true, folders });
+  } catch (error) {
+    console.error('Error fetching title folders:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch folders' });
+  }
+});
+
+// Create new folder
+app.post('/api/title-folders', isAuthenticated, async (req, res) => {
+  try {
+    const { name, color } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ success: false, error: 'Folder name is required' });
+    }
+    const folder = await TitleFolder.create({
+      user_id: req.session.userId,
+      name: name.trim(),
+      color: color || '#8B5CF6'
+    });
+    res.json({ success: true, folder });
+  } catch (error) {
+    console.error('Error creating title folder:', error);
+    if (error.message.includes('already exists')) {
+      return res.status(400).json({ success: false, error: 'Folder name already exists' });
+    }
+    res.status(500).json({ success: false, error: 'Failed to create folder' });
+  }
+});
+
+// Update folder
+app.put('/api/title-folders/:id', isAuthenticated, async (req, res) => {
+  try {
+    const { name, color } = req.body;
+    const result = await TitleFolder.update(req.params.id, req.session.userId, { name, color });
+    if (!result.updated) {
+      return res.status(404).json({ success: false, error: 'Folder not found' });
+    }
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error updating title folder:', error);
+    if (error.message.includes('already exists')) {
+      return res.status(400).json({ success: false, error: 'Folder name already exists' });
+    }
+    res.status(500).json({ success: false, error: 'Failed to update folder' });
+  }
+});
+
+// Delete folder
+app.delete('/api/title-folders/:id', isAuthenticated, async (req, res) => {
+  try {
+    const result = await TitleFolder.delete(req.params.id, req.session.userId);
+    if (!result.deleted) {
+      return res.status(404).json({ success: false, error: 'Folder not found' });
+    }
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting title folder:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete folder' });
   }
 });
 
@@ -7593,6 +7680,14 @@ async function startServer() {
     }
     
     console.log('[Startup] Database ready, starting server...');
+    
+    // Initialize TitleFolder table
+    try {
+      await TitleFolder.initTable();
+      console.log('[Startup] TitleFolder table initialized');
+    } catch (err) {
+      console.log('[Startup] TitleFolder table may already exist');
+    }
   } catch (dbError) {
     console.error('[Startup] Database initialization error:', dbError.message);
     console.error('[Startup] Attempting to continue - tables might already exist');

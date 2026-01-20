@@ -4498,7 +4498,10 @@ async function loadEditThumbnailHistory() {
 // ============================================
 
 let titleSuggestions = [];
+let titleFolders = [];
 let titleManagerContext = 'edit'; // 'edit' or 'create'
+let selectedTitleFolderId = null;
+let selectedFolderColor = '#8B5CF6';
 
 /**
  * Open Title Manager Modal
@@ -4506,6 +4509,7 @@ let titleManagerContext = 'edit'; // 'edit' or 'create'
 function openTitleManagerModal(context = 'edit') {
   titleManagerContext = context;
   document.getElementById('titleManagerModal').classList.remove('hidden');
+  loadTitleFolders();
   loadTitleSuggestions();
 }
 
@@ -4516,6 +4520,202 @@ function closeTitleManagerModal() {
   document.getElementById('titleManagerModal').classList.add('hidden');
 }
 
+// ============================================
+// Title Folder Functions
+// ============================================
+
+/**
+ * Load title folders
+ */
+async function loadTitleFolders() {
+  try {
+    const response = await fetch('/api/title-folders', {
+      headers: { 'X-CSRF-Token': getCsrfToken() }
+    });
+    const data = await response.json();
+    if (data.success) {
+      titleFolders = data.folders || [];
+      renderTitleFolderList();
+    }
+  } catch (error) {
+    console.error('Error loading folders:', error);
+  }
+}
+
+/**
+ * Render folder list
+ */
+function renderTitleFolderList() {
+  const container = document.getElementById('titleFolderList');
+  const allBtn = `<button type="button" onclick="selectTitleFolder(null)" 
+    class="folder-btn ${!selectedTitleFolderId ? 'active ring-2 ring-primary' : ''} px-3 py-1.5 bg-dark-600 hover:bg-dark-500 text-white text-xs rounded-lg flex items-center gap-1.5 transition-colors" data-folder-id="">
+    <i class="ti ti-list"></i> Semua
+  </button>`;
+  
+  const folderBtns = titleFolders.map(f => `
+    <button type="button" onclick="selectTitleFolder('${escapeJsString(f.id)}')" 
+      class="folder-btn ${selectedTitleFolderId === f.id ? 'active ring-2 ring-primary' : ''} px-3 py-1.5 hover:opacity-80 text-white text-xs rounded-lg flex items-center gap-1.5 transition-colors group"
+      style="background-color: ${f.color}20; border: 1px solid ${f.color}50;"
+      data-folder-id="${f.id}">
+      <i class="ti ti-folder" style="color: ${f.color}"></i>
+      <span>${escapeHtml(f.name)}</span>
+      <span class="text-gray-400">(${f.title_count || 0})</span>
+      <span class="hidden group-hover:flex items-center gap-1 ml-1">
+        <i class="ti ti-pencil text-xs hover:text-yellow-400" onclick="event.stopPropagation();openEditFolderModal('${escapeJsString(f.id)}','${escapeJsString(f.name)}','${f.color}')"></i>
+        <i class="ti ti-trash text-xs hover:text-red-400" onclick="event.stopPropagation();deleteFolder('${escapeJsString(f.id)}')"></i>
+      </span>
+    </button>
+  `).join('');
+  
+  container.innerHTML = allBtn + folderBtns;
+}
+
+/**
+ * Select folder filter
+ */
+function selectTitleFolder(folderId) {
+  selectedTitleFolderId = folderId;
+  renderTitleFolderList();
+  loadTitleSuggestions();
+}
+
+/**
+ * Open create folder modal
+ */
+function openCreateFolderModal() {
+  document.getElementById('folderModalTitle').textContent = 'Buat Folder Baru';
+  document.getElementById('editFolderId').value = '';
+  document.getElementById('folderNameInput').value = '';
+  selectFolderColor('#8B5CF6');
+  document.getElementById('titleFolderModal').classList.remove('hidden');
+}
+
+/**
+ * Open edit folder modal
+ */
+function openEditFolderModal(id, name, color) {
+  document.getElementById('folderModalTitle').textContent = 'Edit Folder';
+  document.getElementById('editFolderId').value = id;
+  document.getElementById('folderNameInput').value = name;
+  selectFolderColor(color);
+  document.getElementById('titleFolderModal').classList.remove('hidden');
+}
+
+/**
+ * Close folder modal
+ */
+function closeFolderModal() {
+  document.getElementById('titleFolderModal').classList.add('hidden');
+}
+
+/**
+ * Select folder color
+ */
+function selectFolderColor(color) {
+  selectedFolderColor = color;
+  document.querySelectorAll('.folder-color-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.color === color);
+    btn.classList.toggle('ring-2', btn.dataset.color === color);
+    btn.classList.toggle('ring-white', btn.dataset.color === color);
+  });
+}
+
+/**
+ * Save folder (create or update)
+ */
+async function saveFolder() {
+  const id = document.getElementById('editFolderId').value;
+  const name = document.getElementById('folderNameInput').value.trim();
+  
+  if (!name) {
+    showToast('Masukkan nama folder', 'error');
+    return;
+  }
+  
+  try {
+    const url = id ? `/api/title-folders/${id}` : '/api/title-folders';
+    const method = id ? 'PUT' : 'POST';
+    
+    const response = await fetch(url, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getCsrfToken()
+      },
+      body: JSON.stringify({ name, color: selectedFolderColor })
+    });
+    
+    const data = await response.json();
+    if (data.success) {
+      showToast(id ? 'Folder diupdate' : 'Folder dibuat');
+      closeFolderModal();
+      loadTitleFolders();
+    } else {
+      showToast(data.error || 'Gagal menyimpan folder', 'error');
+    }
+  } catch (error) {
+    console.error('Error saving folder:', error);
+    showToast('Gagal menyimpan folder', 'error');
+  }
+}
+
+/**
+ * Delete folder
+ */
+async function deleteFolder(id) {
+  if (!confirm('Hapus folder ini? Judul di dalamnya tidak akan dihapus.')) return;
+  
+  try {
+    const response = await fetch(`/api/title-folders/${id}`, {
+      method: 'DELETE',
+      headers: { 'X-CSRF-Token': getCsrfToken() }
+    });
+    
+    const data = await response.json();
+    if (data.success) {
+      showToast('Folder dihapus');
+      if (selectedTitleFolderId === id) {
+        selectedTitleFolderId = null;
+      }
+      loadTitleFolders();
+      loadTitleSuggestions();
+    } else {
+      showToast(data.error || 'Gagal menghapus folder', 'error');
+    }
+  } catch (error) {
+    console.error('Error deleting folder:', error);
+    showToast('Gagal menghapus folder', 'error');
+  }
+}
+
+/**
+ * Move title to folder
+ */
+async function moveTitleToFolder(titleId, folderId) {
+  try {
+    const response = await fetch(`/api/title-suggestions/${titleId}/move`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getCsrfToken()
+      },
+      body: JSON.stringify({ folderId })
+    });
+    
+    const data = await response.json();
+    if (data.success) {
+      showToast('Judul dipindahkan');
+      loadTitleFolders();
+      loadTitleSuggestions();
+    } else {
+      showToast(data.error || 'Gagal memindahkan judul', 'error');
+    }
+  } catch (error) {
+    console.error('Error moving title:', error);
+    showToast('Gagal memindahkan judul', 'error');
+  }
+}
+
 /**
  * Load title suggestions from API
  */
@@ -4524,7 +4724,12 @@ async function loadTitleSuggestions() {
   listEl.innerHTML = '<div class="text-center py-4 text-gray-500 text-sm"><i class="ti ti-loader animate-spin"></i> Loading...</div>';
   
   try {
-    const response = await fetch('/api/title-suggestions', {
+    let url = '/api/title-suggestions';
+    if (selectedTitleFolderId) {
+      url += `?folderId=${encodeURIComponent(selectedTitleFolderId)}`;
+    }
+    
+    const response = await fetch(url, {
       headers: { 'X-CSRF-Token': getCsrfToken() }
     });
     
@@ -4556,39 +4761,91 @@ function renderTitleManagerList() {
   const listEl = document.getElementById('titleManagerList');
   
   if (titleSuggestions.length === 0) {
+    const folderName = selectedTitleFolderId ? 'folder ini' : '';
     listEl.innerHTML = `
       <div class="text-center py-6 text-gray-500">
         <i class="ti ti-list text-2xl mb-2"></i>
-        <p class="text-sm">Belum ada judul tersimpan</p>
+        <p class="text-sm">Belum ada judul ${folderName ? 'di ' + folderName : 'tersimpan'}</p>
         <p class="text-xs">Tambahkan judul pertama di atas</p>
       </div>
     `;
     return;
   }
   
+  // Build folder dropdown options
+  const folderOptions = titleFolders.map(f => 
+    `<option value="${f.id}" style="background-color: ${f.color}20">${escapeHtml(f.name)}</option>`
+  ).join('');
+  
   listEl.innerHTML = titleSuggestions.map((title, index) => {
     const isPinned = title.is_pinned === 1;
+    const folder = titleFolders.find(f => f.id === title.folder_id);
+    const folderBadge = folder ? `<span class="text-xs px-1.5 py-0.5 rounded" style="background-color: ${folder.color}30; color: ${folder.color}">${escapeHtml(folder.name)}</span>` : '';
+    
     return `
-    <div class="flex items-center gap-2 p-2 ${isPinned ? 'bg-green-500/10 border border-green-500/30' : 'bg-dark-600'} rounded-lg hover:bg-dark-500 transition-colors">
-      <span class="text-xs ${isPinned ? 'text-green-400 font-bold' : 'text-gray-500'} w-6 text-center">${isPinned ? '<i class="ti ti-pin-filled"></i>' : index + 1}</span>
-      <button type="button" onclick="selectTitle('${escapeJsString(title.id)}', '${escapeJsString(title.title)}')"
-        class="flex-1 text-left text-sm text-white truncate hover:text-primary">
-        ${escapeHtml(title.title)}
-      </button>
-      <span class="text-xs text-gray-500 px-1">${title.use_count || 0}x</span>
+    <div class="flex items-center gap-2 p-2 ${isPinned ? 'bg-green-500/10 border border-green-500/30' : 'bg-dark-600'} rounded-lg hover:bg-dark-500 transition-colors group">
+      <span class="text-xs ${isPinned ? 'text-green-400 font-bold' : 'text-gray-500'} w-6 text-center flex-shrink-0">${isPinned ? '<i class="ti ti-pin-filled"></i>' : index + 1}</span>
+      <div class="flex-1 min-w-0">
+        <button type="button" onclick="selectTitle('${escapeJsString(title.id)}', '${escapeJsString(title.title)}')"
+          class="text-left text-sm text-white truncate hover:text-primary block w-full">
+          ${escapeHtml(title.title)}
+        </button>
+        ${folderBadge ? `<div class="mt-1">${folderBadge}</div>` : ''}
+      </div>
+      <span class="text-xs text-gray-500 px-1 flex-shrink-0">${title.use_count || 0}x</span>
+      <div class="relative flex-shrink-0">
+        <button type="button" onclick="toggleTitleMoveMenu('${escapeJsString(title.id)}')"
+          class="text-gray-400 hover:text-blue-400 hover:bg-blue-500/20 p-1.5 rounded-lg transition-colors"
+          title="Pindah ke folder">
+          <i class="ti ti-folder-share text-sm"></i>
+        </button>
+        <div id="moveMenu_${title.id}" class="hidden absolute right-0 top-full mt-1 bg-dark-700 border border-gray-600 rounded-lg shadow-xl z-10 min-w-[140px]">
+          <button onclick="moveTitleToFolder('${escapeJsString(title.id)}', null);closeTitleMoveMenu('${escapeJsString(title.id)}')" 
+            class="w-full text-left px-3 py-2 text-xs hover:bg-dark-600 ${!title.folder_id ? 'text-primary' : 'text-gray-300'}">
+            <i class="ti ti-list mr-1"></i> Tanpa Folder
+          </button>
+          ${titleFolders.map(f => `
+            <button onclick="moveTitleToFolder('${escapeJsString(title.id)}', '${escapeJsString(f.id)}');closeTitleMoveMenu('${escapeJsString(title.id)}')" 
+              class="w-full text-left px-3 py-2 text-xs hover:bg-dark-600 ${title.folder_id === f.id ? 'text-primary' : 'text-gray-300'}">
+              <i class="ti ti-folder mr-1" style="color: ${f.color}"></i> ${escapeHtml(f.name)}
+            </button>
+          `).join('')}
+        </div>
+      </div>
       <button type="button" onclick="toggleTitlePin('${escapeJsString(title.id)}', ${isPinned ? 'false' : 'true'})"
-        class="${isPinned ? 'text-green-400 bg-green-500/20' : 'text-gray-400 hover:text-green-400 hover:bg-green-500/20'} p-1.5 rounded-lg transition-colors"
+        class="${isPinned ? 'text-green-400 bg-green-500/20' : 'text-gray-400 hover:text-green-400 hover:bg-green-500/20'} p-1.5 rounded-lg transition-colors flex-shrink-0"
         title="${isPinned ? 'Lepas pin' : 'Pin judul ini'}">
         <i class="ti ti-pin${isPinned ? '-filled' : ''} text-sm"></i>
       </button>
       <button type="button" onclick="deleteTitleSuggestion('${escapeJsString(title.id)}')"
-        class="text-red-400 hover:text-red-300 hover:bg-red-500/20 p-1.5 rounded-lg transition-colors"
+        class="text-red-400 hover:text-red-300 hover:bg-red-500/20 p-1.5 rounded-lg transition-colors flex-shrink-0"
         title="Hapus judul">
         <i class="ti ti-trash text-sm"></i>
       </button>
     </div>
   `;
   }).join('');
+}
+
+/**
+ * Toggle move menu visibility
+ */
+function toggleTitleMoveMenu(titleId) {
+  // Close all other menus first
+  document.querySelectorAll('[id^="moveMenu_"]').forEach(menu => {
+    if (menu.id !== `moveMenu_${titleId}`) {
+      menu.classList.add('hidden');
+    }
+  });
+  const menu = document.getElementById(`moveMenu_${titleId}`);
+  menu.classList.toggle('hidden');
+}
+
+/**
+ * Close move menu
+ */
+function closeTitleMoveMenu(titleId) {
+  document.getElementById(`moveMenu_${titleId}`).classList.add('hidden');
 }
 
 /**
@@ -4610,7 +4867,10 @@ async function addNewTitle() {
         'Content-Type': 'application/json',
         'X-CSRF-Token': getCsrfToken()
       },
-      body: JSON.stringify({ title })
+      body: JSON.stringify({ 
+        title,
+        folderId: selectedTitleFolderId || null
+      })
     });
     
     const data = await response.json();
@@ -4618,6 +4878,7 @@ async function addNewTitle() {
     if (data.success) {
       input.value = '';
       showToast('Judul ditambahkan');
+      loadTitleFolders();
       loadTitleSuggestions();
     } else {
       showToast(data.error || 'Gagal menambahkan judul', 'error');
