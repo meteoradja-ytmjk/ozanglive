@@ -4553,18 +4553,24 @@ function renderTitleFolderList() {
   </button>`;
   
   const folderBtns = titleFolders.map(f => `
-    <button type="button" onclick="selectTitleFolder('${escapeJsString(f.id)}')" 
-      class="folder-btn ${selectedTitleFolderId === f.id ? 'active ring-2 ring-primary' : ''} px-3 py-1.5 hover:opacity-80 text-white text-xs rounded-lg flex items-center gap-1.5 transition-colors group"
-      style="background-color: ${f.color}20; border: 1px solid ${f.color}50;"
-      data-folder-id="${f.id}">
-      <i class="ti ti-folder" style="color: ${f.color}"></i>
-      <span>${escapeHtml(f.name)}</span>
-      <span class="text-gray-400">(${f.title_count || 0})</span>
-      <span class="hidden group-hover:flex items-center gap-1 ml-1">
-        <i class="ti ti-pencil text-xs hover:text-yellow-400" onclick="event.stopPropagation();openEditFolderModal('${escapeJsString(f.id)}','${escapeJsString(f.name)}','${f.color}')"></i>
-        <i class="ti ti-trash text-xs hover:text-red-400" onclick="event.stopPropagation();deleteFolder('${escapeJsString(f.id)}')"></i>
-      </span>
-    </button>
+    <div class="flex items-center gap-1">
+      <button type="button" onclick="selectTitleFolder('${escapeJsString(f.id)}')" 
+        class="folder-btn ${selectedTitleFolderId === f.id ? 'active ring-2 ring-primary' : ''} px-3 py-1.5 hover:opacity-80 text-white text-xs rounded-lg flex items-center gap-1.5 transition-colors"
+        style="background-color: ${f.color}20; border: 1px solid ${f.color}50;"
+        data-folder-id="${f.id}">
+        <i class="ti ti-folder" style="color: ${f.color}"></i>
+        <span>${escapeHtml(f.name)}</span>
+        <span class="text-gray-400">(${f.title_count || 0})</span>
+      </button>
+      <button type="button" onclick="openEditFolderModal('${escapeJsString(f.id)}','${escapeJsString(f.name)}','${f.color}')"
+        class="p-1 text-gray-400 hover:text-yellow-400 hover:bg-yellow-500/20 rounded transition-colors" title="Edit folder">
+        <i class="ti ti-pencil text-xs"></i>
+      </button>
+      <button type="button" onclick="deleteFolder('${escapeJsString(f.id)}')"
+        class="p-1 text-gray-400 hover:text-red-400 hover:bg-red-500/20 rounded transition-colors" title="Hapus folder">
+        <i class="ti ti-trash text-xs"></i>
+      </button>
+    </div>
   `).join('');
   
   container.innerHTML = allBtn + folderBtns;
