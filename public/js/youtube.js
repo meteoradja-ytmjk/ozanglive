@@ -1537,29 +1537,13 @@ async function openEditBroadcastModal(broadcast) {
   // Load thumbnail folders first and get first folder as default
   const firstFolder = await loadEditThumbnailFolders();
   
-  // Get thumbnail folder from template for this account
+  // Get thumbnail folder from broadcast settings (not from template - user should choose)
   const broadcastId = broadcast.id;
   const accountId = broadcast.accountId;
   let boundFolder = null;
   
-  // First try to get folder from template for this account
-  if (accountId) {
-    try {
-      const templateResponse = await fetch(`/api/youtube/template-folder/${accountId}`, {
-        headers: { 'X-CSRF-Token': getCsrfToken() }
-      });
-      const templateData = await templateResponse.json();
-      if (templateData.success && templateData.folder !== null && templateData.folder !== undefined) {
-        boundFolder = templateData.folder;
-        console.log(`[openEditBroadcastModal] Using folder from template "${templateData.templateName}": "${boundFolder || '(root)'}"`);
-      }
-    } catch (e) {
-      console.warn('[openEditBroadcastModal] Error getting template folder:', e.message);
-    }
-  }
-  
-  // If no folder from template, try broadcast settings
-  if (boundFolder === null && broadcastId) {
+  // Get folder from broadcast settings only
+  if (broadcastId) {
     const settings = await getBroadcastSettingsFromServer(broadcastId, accountId);
     if (settings && settings.thumbnailFolder !== null && settings.thumbnailFolder !== undefined) {
       boundFolder = settings.thumbnailFolder;
@@ -1567,7 +1551,7 @@ async function openEditBroadcastModal(broadcast) {
     }
   }
   
-  // If still no folder, use first available folder
+  // If no folder from broadcast settings, use first available folder as default
   if (boundFolder === null && firstFolder) {
     boundFolder = firstFolder;
     console.log(`[openEditBroadcastModal] Using first available folder: "${boundFolder}"`);
