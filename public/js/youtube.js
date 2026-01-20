@@ -2439,9 +2439,6 @@ function openEditTemplateModal(template) {
   // Store template data for later use
   window.currentEditTemplate = template;
   
-  // Load and set thumbnail folder (simple approach - just show main folder)
-  loadEditTemplateThumbnailFolders(template.thumbnail_folder);
-  
   // Set recurring enabled
   const recurringEnabled = document.getElementById('editRecurringEnabled');
   recurringEnabled.checked = template.recurring_enabled || false;
@@ -2491,9 +2488,6 @@ function openEditTemplateModal(template) {
 function closeEditTemplateModal() {
   document.getElementById('editTemplateModal').classList.add('hidden');
   document.getElementById('editTemplateForm').reset();
-  // Hide folder preview
-  const previewContainer = document.getElementById('editTemplateThumbnailFolderPreview');
-  if (previewContainer) previewContainer.classList.add('hidden');
   // Clear stored template data
   window.currentEditTemplate = null;
 }
@@ -2634,20 +2628,11 @@ if (editTemplateForm) {
       const templateId = document.getElementById('editTemplateId').value;
       const recurringEnabled = document.getElementById('editRecurringEnabled').checked;
       
-      // Get thumbnail folder value
-      const thumbnailFolderSelect = document.getElementById('editTemplateThumbnailFolder');
-      const thumbnailFolderValue = thumbnailFolderSelect ? thumbnailFolderSelect.value : null;
-      
-      // Convert __ROOT__ to empty string for backend (empty string = root folder)
-      const thumbnailFolder = thumbnailFolderValue === '__ROOT__' ? '' : thumbnailFolderValue;
-      
       const updateData = {
-        recurringEnabled: recurringEnabled,
-        // IMPORTANT: Always include thumbnailFolder to ensure it's saved
-        thumbnailFolder: thumbnailFolder
+        recurringEnabled: recurringEnabled
       };
       
-      console.log('[editTemplate] Sending thumbnailFolder:', thumbnailFolder, '(from select:', thumbnailFolderValue, ')');
+      console.log('[editTemplate] Updating recurring config only');
       
       if (recurringEnabled) {
         const pattern = document.querySelector('input[name="editRecurringPattern"]:checked')?.value;
