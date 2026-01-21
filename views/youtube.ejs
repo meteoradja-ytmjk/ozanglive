@@ -896,35 +896,29 @@
 <!-- Title Manager Modal -->
 <div id="titleManagerModal" class="fixed inset-0 bg-black/50 z-[60] hidden modal-overlay overflow-y-auto">
   <div class="flex min-h-screen items-center justify-center p-2 sm:p-4">
-    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
-      <div class="flex items-center justify-between p-3 sm:p-4 border-b border-gray-700 flex-shrink-0">
-        <h3 class="text-base sm:text-lg font-semibold">Title Manager</h3>
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
+      <div class="flex items-center justify-between p-3 border-b border-gray-700 flex-shrink-0">
+        <h3 class="text-base font-semibold">Title Manager</h3>
         <button onclick="closeTitleManagerModal()" class="text-gray-400 hover:text-white">
           <i class="ti ti-x text-xl"></i>
         </button>
       </div>
       
-      <div class="p-3 sm:p-4 flex-grow overflow-y-auto">
+      <div class="p-3 flex-grow overflow-y-auto">
         <!-- Folder Section -->
-        <div class="mb-3 sm:mb-4">
-          <div class="flex items-center justify-between mb-2">
-            <span class="text-xs font-medium text-gray-400 uppercase">Folders</span>
-            <button type="button" onclick="openCreateFolderModal()" class="text-xs text-primary hover:text-primary/80 flex items-center gap-1">
-              <i class="ti ti-folder-plus"></i> <span class="hidden sm:inline">Buat</span> Folder
+        <div class="mb-3">
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-xs font-medium text-gray-500 uppercase">Folders</span>
+            <button type="button" onclick="openCreateFolderModal()" class="text-xs text-primary hover:text-primary/80">
+              <i class="ti ti-plus"></i> Folder
             </button>
           </div>
-          <div id="titleFolderList" class="space-y-1.5">
-            <div class="flex items-center justify-between p-2 bg-dark-600 rounded-lg cursor-pointer hover:bg-dark-500 transition-colors" onclick="selectTitleFolder(null)">
-              <div class="flex items-center gap-2">
-                <i class="ti ti-list text-gray-400"></i>
-                <span class="text-sm text-white">Semua Judul</span>
-              </div>
-            </div>
+          <div id="titleFolderList" class="border-b border-gray-700/50 pb-2 mb-3">
           </div>
         </div>
 
         <!-- Add New Title -->
-        <div class="mb-3 sm:mb-4">
+        <div class="mb-3">
           <div class="flex gap-2">
             <input type="text" id="newTitleInput" placeholder="Tambah judul baru..."
               class="flex-1 min-w-0 px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg text-sm focus:border-primary focus:outline-none"
@@ -936,26 +930,25 @@
           </div>
         </div>
         
-        <!-- Auto Rotation Info -->
-        <div id="titleRotationInfo" class="mb-3 p-2 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-          <div class="flex items-center gap-2 text-xs text-blue-400">
-            <i class="ti ti-refresh"></i>
-            <span>Auto Rotasi: <span id="titleRotationStatus">Aktif</span></span>
-          </div>
-          <p class="text-xs text-gray-400 mt-1 hidden sm:block">Judul akan berputar berurutan saat reschedule. Pin judul untuk mengunci.</p>
-        </div>
-        
-        <!-- Title List -->
-        <div id="titleManagerList" class="space-y-1.5 sm:space-y-2">
-          <div class="text-center py-4 text-gray-500 text-sm">
-            <i class="ti ti-loader animate-spin"></i> Loading...
+        <!-- Title Section with Toggle -->
+        <div>
+          <button type="button" onclick="toggleTitleList()" class="flex items-center justify-between w-full py-2 text-left">
+            <span class="text-xs font-medium text-gray-500 uppercase">Judul <span id="titleCount" class="text-gray-600">(0)</span></span>
+            <i id="titleToggleIcon" class="ti ti-chevron-down text-gray-500 text-sm transition-transform"></i>
+          </button>
+          
+          <!-- Title List -->
+          <div id="titleManagerList" class="space-y-1">
+            <div class="text-center py-4 text-gray-500 text-sm">
+              <i class="ti ti-loader animate-spin"></i>
+            </div>
           </div>
         </div>
       </div>
       
-      <div class="p-3 sm:p-4 border-t border-gray-700 flex-shrink-0">
+      <div class="p-3 border-t border-gray-700 flex-shrink-0">
         <button type="button" onclick="closeTitleManagerModal()"
-          class="w-full bg-dark-700 hover:bg-dark-600 text-white px-4 py-2 rounded-lg transition-colors text-sm sm:text-base">
+          class="w-full bg-dark-700 hover:bg-dark-600 text-white px-4 py-2 rounded-lg transition-colors text-sm">
           Tutup
         </button>
       </div>

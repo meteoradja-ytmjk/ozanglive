@@ -4548,29 +4548,27 @@ async function loadTitleFolders() {
 function renderTitleFolderList() {
   const container = document.getElementById('titleFolderList');
   const allBtn = `
-    <div class="flex items-center justify-between p-2 ${!selectedTitleFolderId ? 'bg-primary/20 border-primary' : 'bg-dark-600 border-transparent'} border rounded-lg cursor-pointer hover:bg-dark-500 transition-colors"
-      onclick="selectTitleFolder(null)">
-      <div class="flex items-center gap-2">
-        <i class="ti ti-list text-gray-400"></i>
-        <span class="text-sm text-white">Semua Judul</span>
+    <div class="flex items-center justify-between py-1.5 cursor-pointer group" onclick="selectTitleFolder(null)">
+      <div class="flex items-center gap-2 ${!selectedTitleFolderId ? 'text-primary' : 'text-gray-300'}">
+        <i class="ti ti-list text-base"></i>
+        <span class="text-sm">Semua</span>
       </div>
     </div>`;
   
   const folderItems = titleFolders.map(f => `
-    <div class="flex items-center justify-between p-2 ${selectedTitleFolderId === f.id ? 'ring-1 ring-primary' : ''} rounded-lg hover:bg-dark-500/50 transition-colors"
-      style="background-color: ${f.color}15; border: 1px solid ${f.color}30;">
-      <div class="flex items-center gap-2 flex-1 min-w-0 cursor-pointer" onclick="selectTitleFolder('${escapeJsString(f.id)}')">
-        <i class="ti ti-folder flex-shrink-0" style="color: ${f.color}"></i>
-        <span class="text-sm text-white truncate">${escapeHtml(f.name)}</span>
-        <span class="text-xs text-gray-400 flex-shrink-0">(${f.title_count || 0})</span>
+    <div class="flex items-center justify-between py-1.5 group">
+      <div class="flex items-center gap-2 flex-1 min-w-0 cursor-pointer ${selectedTitleFolderId === f.id ? 'text-primary' : 'text-gray-300'}" onclick="selectTitleFolder('${escapeJsString(f.id)}')">
+        <i class="ti ti-folder text-base" style="color: ${f.color}"></i>
+        <span class="text-sm truncate">${escapeHtml(f.name)}</span>
+        <span class="text-xs text-gray-500">${f.title_count || 0}</span>
       </div>
-      <div class="flex items-center gap-1 flex-shrink-0">
-        <button type="button" onclick="openEditFolderModal('${escapeJsString(f.id)}','${escapeJsString(f.name)}','${f.color}')"
-          class="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-yellow-400 rounded transition-colors">
+      <div class="flex items-center gap-0.5 opacity-50 group-hover:opacity-100">
+        <button type="button" onclick="event.stopPropagation();openEditFolderModal('${escapeJsString(f.id)}','${escapeJsString(f.name)}','${f.color}')"
+          class="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-yellow-400">
           <i class="ti ti-pencil text-sm"></i>
         </button>
-        <button type="button" onclick="deleteFolder('${escapeJsString(f.id)}')"
-          class="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-red-400 rounded transition-colors">
+        <button type="button" onclick="event.stopPropagation();deleteFolder('${escapeJsString(f.id)}')"
+          class="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-red-400">
           <i class="ti ti-x text-sm"></i>
         </button>
       </div>
@@ -4731,7 +4729,7 @@ async function moveTitleToFolder(titleId, folderId) {
  */
 async function loadTitleSuggestions() {
   const listEl = document.getElementById('titleManagerList');
-  listEl.innerHTML = '<div class="text-center py-4 text-gray-500 text-sm"><i class="ti ti-loader animate-spin"></i> Loading...</div>';
+  listEl.innerHTML = '<div class="text-center py-3 text-gray-500 text-sm"><i class="ti ti-loader animate-spin"></i></div>';
   
   try {
     let url = '/api/title-suggestions';
@@ -4747,20 +4745,33 @@ async function loadTitleSuggestions() {
     
     if (data.success) {
       titleSuggestions = data.titles || [];
+      document.getElementById('titleCount').textContent = `(${titleSuggestions.length})`;
       renderTitleManagerList();
-      
-      // Update rotation info
-      const rotationInfo = document.getElementById('titleRotationInfo');
-      if (rotationInfo && titleSuggestions.length > 0) {
-        const hasPinned = titleSuggestions.some(t => t.is_pinned === 1);
-        document.getElementById('titleRotationStatus').textContent = hasPinned ? 'Nonaktif (ada judul di-pin)' : 'Aktif';
-      }
     } else {
-      listEl.innerHTML = '<div class="text-center py-4 text-red-400 text-sm">Gagal memuat judul</div>';
+      listEl.innerHTML = '<div class="text-center py-3 text-red-400 text-sm">Gagal memuat</div>';
     }
   } catch (error) {
     console.error('Error loading titles:', error);
-    listEl.innerHTML = '<div class="text-center py-4 text-red-400 text-sm">Gagal memuat judul</div>';
+    listEl.innerHTML = '<div class="text-center py-3 text-red-400 text-sm">Gagal memuat</div>';
+  }
+}
+
+let titleListVisible = true;
+
+/**
+ * Toggle title list visibility
+ */
+function toggleTitleList() {
+  titleListVisible = !titleListVisible;
+  const listEl = document.getElementById('titleManagerList');
+  const icon = document.getElementById('titleToggleIcon');
+  
+  if (titleListVisible) {
+    listEl.classList.remove('hidden');
+    icon.classList.remove('rotate-180');
+  } else {
+    listEl.classList.add('hidden');
+    icon.classList.add('rotate-180');
   }
 }
 
@@ -4771,91 +4782,94 @@ function renderTitleManagerList() {
   const listEl = document.getElementById('titleManagerList');
   
   if (titleSuggestions.length === 0) {
-    const folderName = selectedTitleFolderId ? 'folder ini' : '';
     listEl.innerHTML = `
-      <div class="text-center py-6 text-gray-500">
-        <i class="ti ti-list text-2xl mb-2"></i>
-        <p class="text-sm">Belum ada judul ${folderName ? 'di ' + folderName : 'tersimpan'}</p>
-        <p class="text-xs">Tambahkan judul pertama di atas</p>
+      <div class="text-center py-4 text-gray-500">
+        <p class="text-sm">Belum ada judul</p>
       </div>
     `;
     return;
   }
   
-  // Build folder dropdown options
-  const folderOptions = titleFolders.map(f => 
-    `<option value="${f.id}" style="background-color: ${f.color}20">${escapeHtml(f.name)}</option>`
-  ).join('');
-  
   listEl.innerHTML = titleSuggestions.map((title, index) => {
     const isPinned = title.is_pinned === 1;
     const folder = titleFolders.find(f => f.id === title.folder_id);
-    const folderBadge = folder ? `<span class="text-xs px-1.5 py-0.5 rounded" style="background-color: ${folder.color}30; color: ${folder.color}">${escapeHtml(folder.name)}</span>` : '';
     
     return `
-    <div class="flex items-center gap-2 p-2 ${isPinned ? 'bg-green-500/10 border border-green-500/30' : 'bg-dark-600'} rounded-lg hover:bg-dark-500 transition-colors group">
-      <span class="text-xs ${isPinned ? 'text-green-400 font-bold' : 'text-gray-500'} w-6 text-center flex-shrink-0">${isPinned ? '<i class="ti ti-pin-filled"></i>' : index + 1}</span>
+    <div class="flex items-center gap-2 py-1.5 group border-b border-gray-700/30 last:border-0">
+      <span class="text-xs ${isPinned ? 'text-green-400' : 'text-gray-600'} w-5 text-center flex-shrink-0">${isPinned ? '<i class="ti ti-pin-filled"></i>' : index + 1}</span>
       <div class="flex-1 min-w-0">
         <button type="button" onclick="selectTitle('${escapeJsString(title.id)}', '${escapeJsString(title.title)}')"
-          class="text-left text-sm text-white truncate hover:text-primary block w-full">
+          class="text-left text-sm text-gray-200 hover:text-primary truncate block w-full">
           ${escapeHtml(title.title)}
         </button>
-        ${folderBadge ? `<div class="mt-1">${folderBadge}</div>` : ''}
+        ${folder ? `<span class="text-xs" style="color: ${folder.color}">${escapeHtml(folder.name)}</span>` : ''}
       </div>
-      <span class="text-xs text-gray-500 px-1 flex-shrink-0">${title.use_count || 0}x</span>
-      <div class="relative flex-shrink-0">
-        <button type="button" onclick="toggleTitleMoveMenu('${escapeJsString(title.id)}')"
-          class="text-gray-400 hover:text-blue-400 hover:bg-blue-500/20 p-1.5 rounded-lg transition-colors"
-          title="Pindah ke folder">
-          <i class="ti ti-folder-share text-sm"></i>
+      <span class="text-xs text-gray-600 flex-shrink-0">${title.use_count || 0}x</span>
+      <div class="flex items-center opacity-30 group-hover:opacity-100 flex-shrink-0">
+        <button type="button" onclick="showTitleMoveMenu(event, '${escapeJsString(title.id)}')"
+          class="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-blue-400">
+          <i class="ti ti-folder text-sm"></i>
         </button>
-        <div id="moveMenu_${title.id}" class="hidden absolute right-0 top-full mt-1 bg-dark-700 border border-gray-600 rounded-lg shadow-xl z-10 min-w-[140px]">
-          <button onclick="moveTitleToFolder('${escapeJsString(title.id)}', null);closeTitleMoveMenu('${escapeJsString(title.id)}')" 
-            class="w-full text-left px-3 py-2 text-xs hover:bg-dark-600 ${!title.folder_id ? 'text-primary' : 'text-gray-300'}">
-            <i class="ti ti-list mr-1"></i> Tanpa Folder
-          </button>
-          ${titleFolders.map(f => `
-            <button onclick="moveTitleToFolder('${escapeJsString(title.id)}', '${escapeJsString(f.id)}');closeTitleMoveMenu('${escapeJsString(title.id)}')" 
-              class="w-full text-left px-3 py-2 text-xs hover:bg-dark-600 ${title.folder_id === f.id ? 'text-primary' : 'text-gray-300'}">
-              <i class="ti ti-folder mr-1" style="color: ${f.color}"></i> ${escapeHtml(f.name)}
-            </button>
-          `).join('')}
-        </div>
+        <button type="button" onclick="toggleTitlePin('${escapeJsString(title.id)}', ${isPinned ? 'false' : 'true'})"
+          class="w-6 h-6 flex items-center justify-center ${isPinned ? 'text-green-400' : 'text-gray-400 hover:text-green-400'}">
+          <i class="ti ti-pin${isPinned ? '-filled' : ''} text-sm"></i>
+        </button>
+        <button type="button" onclick="deleteTitleSuggestion('${escapeJsString(title.id)}')"
+          class="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-red-400">
+          <i class="ti ti-x text-sm"></i>
+        </button>
       </div>
-      <button type="button" onclick="toggleTitlePin('${escapeJsString(title.id)}', ${isPinned ? 'false' : 'true'})"
-        class="${isPinned ? 'text-green-400 bg-green-500/20' : 'text-gray-400 hover:text-green-400 hover:bg-green-500/20'} p-1.5 rounded-lg transition-colors flex-shrink-0"
-        title="${isPinned ? 'Lepas pin' : 'Pin judul ini'}">
-        <i class="ti ti-pin${isPinned ? '-filled' : ''} text-sm"></i>
-      </button>
-      <button type="button" onclick="deleteTitleSuggestion('${escapeJsString(title.id)}')"
-        class="text-red-400 hover:text-red-300 hover:bg-red-500/20 p-1.5 rounded-lg transition-colors flex-shrink-0"
-        title="Hapus judul">
-        <i class="ti ti-trash text-sm"></i>
-      </button>
     </div>
   `;
   }).join('');
 }
 
 /**
- * Toggle move menu visibility
+ * Show move menu at cursor position
  */
-function toggleTitleMoveMenu(titleId) {
-  // Close all other menus first
-  document.querySelectorAll('[id^="moveMenu_"]').forEach(menu => {
-    if (menu.id !== `moveMenu_${titleId}`) {
-      menu.classList.add('hidden');
-    }
+function showTitleMoveMenu(event, titleId) {
+  event.stopPropagation();
+  
+  // Remove existing menu
+  const existingMenu = document.getElementById('titleMoveDropdown');
+  if (existingMenu) existingMenu.remove();
+  
+  const title = titleSuggestions.find(t => t.id === titleId);
+  
+  const menu = document.createElement('div');
+  menu.id = 'titleMoveDropdown';
+  menu.className = 'fixed bg-dark-700 border border-gray-600 rounded-lg shadow-xl z-[100] py-1 min-w-[120px]';
+  menu.style.left = `${event.clientX}px`;
+  menu.style.top = `${event.clientY}px`;
+  
+  let menuHtml = `
+    <button onclick="moveTitleToFolder('${titleId}', null);closeTitleDropdown()" 
+      class="w-full text-left px-3 py-1.5 text-xs hover:bg-dark-600 ${!title?.folder_id ? 'text-primary' : 'text-gray-300'}">
+      <i class="ti ti-list mr-1"></i> Tanpa Folder
+    </button>
+  `;
+  
+  titleFolders.forEach(f => {
+    menuHtml += `
+      <button onclick="moveTitleToFolder('${titleId}', '${f.id}');closeTitleDropdown()" 
+        class="w-full text-left px-3 py-1.5 text-xs hover:bg-dark-600 ${title?.folder_id === f.id ? 'text-primary' : 'text-gray-300'}">
+        <i class="ti ti-folder mr-1" style="color: ${f.color}"></i> ${escapeHtml(f.name)}
+      </button>
+    `;
   });
-  const menu = document.getElementById(`moveMenu_${titleId}`);
-  menu.classList.toggle('hidden');
+  
+  menu.innerHTML = menuHtml;
+  document.body.appendChild(menu);
+  
+  // Close on click outside
+  setTimeout(() => {
+    document.addEventListener('click', closeTitleDropdown, { once: true });
+  }, 10);
 }
 
-/**
- * Close move menu
- */
-function closeTitleMoveMenu(titleId) {
-  document.getElementById(`moveMenu_${titleId}`).classList.add('hidden');
+function closeTitleDropdown() {
+  const menu = document.getElementById('titleMoveDropdown');
+  if (menu) menu.remove();
 }
 
 /**
