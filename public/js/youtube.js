@@ -4547,33 +4547,37 @@ async function loadTitleFolders() {
  */
 function renderTitleFolderList() {
   const container = document.getElementById('titleFolderList');
-  const allBtn = `<button type="button" onclick="selectTitleFolder(null)" 
-    class="folder-btn ${!selectedTitleFolderId ? 'ring-2 ring-primary' : ''} px-3 py-1.5 bg-dark-600 hover:bg-dark-500 text-white text-xs rounded-lg flex items-center gap-1 transition-colors" data-folder-id="">
-    <i class="ti ti-list"></i> Semua
-  </button>`;
+  const allBtn = `
+    <div class="flex items-center justify-between p-2 ${!selectedTitleFolderId ? 'bg-primary/20 border-primary' : 'bg-dark-600 border-transparent'} border rounded-lg cursor-pointer hover:bg-dark-500 transition-colors"
+      onclick="selectTitleFolder(null)">
+      <div class="flex items-center gap-2">
+        <i class="ti ti-list text-gray-400"></i>
+        <span class="text-sm text-white">Semua Judul</span>
+      </div>
+    </div>`;
   
-  const folderBtns = titleFolders.map(f => `
-    <div class="folder-item flex items-center ${selectedTitleFolderId === f.id ? 'ring-2 ring-primary' : ''} rounded-lg transition-colors"
-      style="background-color: ${f.color}20; border: 1px solid ${f.color}40;">
-      <button type="button" onclick="selectTitleFolder('${escapeJsString(f.id)}')" 
-        class="px-2 py-1.5 text-white text-xs flex items-center gap-1 truncate max-w-[120px] sm:max-w-[150px]"
-        data-folder-id="${f.id}">
+  const folderItems = titleFolders.map(f => `
+    <div class="flex items-center justify-between p-2 ${selectedTitleFolderId === f.id ? 'ring-1 ring-primary' : ''} rounded-lg hover:bg-dark-500/50 transition-colors"
+      style="background-color: ${f.color}15; border: 1px solid ${f.color}30;">
+      <div class="flex items-center gap-2 flex-1 min-w-0 cursor-pointer" onclick="selectTitleFolder('${escapeJsString(f.id)}')">
         <i class="ti ti-folder flex-shrink-0" style="color: ${f.color}"></i>
-        <span class="truncate">${escapeHtml(f.name)}</span>
-        <span class="text-gray-400 flex-shrink-0">(${f.title_count || 0})</span>
-      </button>
-      <button type="button" onclick="openEditFolderModal('${escapeJsString(f.id)}','${escapeJsString(f.name)}','${f.color}')"
-        class="px-1 py-1.5 text-gray-400 hover:text-yellow-400 transition-colors" title="Edit">
-        <i class="ti ti-pencil text-xs"></i>
-      </button>
-      <button type="button" onclick="deleteFolder('${escapeJsString(f.id)}')"
-        class="px-1.5 py-1.5 text-gray-400 hover:text-red-400 transition-colors" title="Hapus">
-        <i class="ti ti-x text-xs"></i>
-      </button>
+        <span class="text-sm text-white truncate">${escapeHtml(f.name)}</span>
+        <span class="text-xs text-gray-400 flex-shrink-0">(${f.title_count || 0})</span>
+      </div>
+      <div class="flex items-center gap-1 flex-shrink-0">
+        <button type="button" onclick="openEditFolderModal('${escapeJsString(f.id)}','${escapeJsString(f.name)}','${f.color}')"
+          class="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-yellow-400 rounded transition-colors">
+          <i class="ti ti-pencil text-sm"></i>
+        </button>
+        <button type="button" onclick="deleteFolder('${escapeJsString(f.id)}')"
+          class="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-red-400 rounded transition-colors">
+          <i class="ti ti-x text-sm"></i>
+        </button>
+      </div>
     </div>
   `).join('');
   
-  container.innerHTML = allBtn + folderBtns;
+  container.innerHTML = allBtn + folderItems;
 }
 
 /**
