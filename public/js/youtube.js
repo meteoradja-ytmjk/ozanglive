@@ -4548,27 +4548,27 @@ async function loadTitleFolders() {
 function renderTitleFolderList() {
   const container = document.getElementById('titleFolderList');
   const allBtn = `<button type="button" onclick="selectTitleFolder(null)" 
-    class="folder-btn ${!selectedTitleFolderId ? 'active ring-2 ring-primary' : ''} px-3 py-1.5 bg-dark-600 hover:bg-dark-500 text-white text-xs rounded-lg flex items-center gap-1.5 transition-colors" data-folder-id="">
+    class="folder-btn ${!selectedTitleFolderId ? 'ring-2 ring-primary' : ''} px-3 py-1.5 bg-dark-600 hover:bg-dark-500 text-white text-xs rounded-lg flex items-center gap-1 transition-colors" data-folder-id="">
     <i class="ti ti-list"></i> Semua
   </button>`;
   
   const folderBtns = titleFolders.map(f => `
-    <div class="flex items-center gap-1">
+    <div class="folder-item flex items-center ${selectedTitleFolderId === f.id ? 'ring-2 ring-primary' : ''} rounded-lg transition-colors"
+      style="background-color: ${f.color}20; border: 1px solid ${f.color}40;">
       <button type="button" onclick="selectTitleFolder('${escapeJsString(f.id)}')" 
-        class="folder-btn ${selectedTitleFolderId === f.id ? 'active ring-2 ring-primary' : ''} px-3 py-1.5 hover:opacity-80 text-white text-xs rounded-lg flex items-center gap-1.5 transition-colors"
-        style="background-color: ${f.color}20; border: 1px solid ${f.color}50;"
+        class="px-2 py-1.5 text-white text-xs flex items-center gap-1 truncate max-w-[120px] sm:max-w-[150px]"
         data-folder-id="${f.id}">
-        <i class="ti ti-folder" style="color: ${f.color}"></i>
-        <span>${escapeHtml(f.name)}</span>
-        <span class="text-gray-400">(${f.title_count || 0})</span>
+        <i class="ti ti-folder flex-shrink-0" style="color: ${f.color}"></i>
+        <span class="truncate">${escapeHtml(f.name)}</span>
+        <span class="text-gray-400 flex-shrink-0">(${f.title_count || 0})</span>
       </button>
       <button type="button" onclick="openEditFolderModal('${escapeJsString(f.id)}','${escapeJsString(f.name)}','${f.color}')"
-        class="p-1 text-gray-400 hover:text-yellow-400 hover:bg-yellow-500/20 rounded transition-colors" title="Edit folder">
+        class="px-1 py-1.5 text-gray-400 hover:text-yellow-400 transition-colors" title="Edit">
         <i class="ti ti-pencil text-xs"></i>
       </button>
       <button type="button" onclick="deleteFolder('${escapeJsString(f.id)}')"
-        class="p-1 text-gray-400 hover:text-red-400 hover:bg-red-500/20 rounded transition-colors" title="Hapus folder">
-        <i class="ti ti-trash text-xs"></i>
+        class="px-1.5 py-1.5 text-gray-400 hover:text-red-400 transition-colors" title="Hapus">
+        <i class="ti ti-x text-xs"></i>
       </button>
     </div>
   `).join('');
