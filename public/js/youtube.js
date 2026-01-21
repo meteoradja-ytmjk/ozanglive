@@ -4550,7 +4550,7 @@ function renderTitleFolderList() {
   const allBtn = `
     <div class="flex items-center justify-between py-1 cursor-pointer" onclick="selectTitleFolder(null)">
       <div class="flex items-center gap-2 ${!selectedTitleFolderId ? 'text-primary' : 'text-gray-300'}">
-        <i class="ti ti-list"></i>
+        <span>📋</span>
         <span class="text-sm">Semua</span>
       </div>
     </div>`;
@@ -4558,19 +4558,15 @@ function renderTitleFolderList() {
   const folderItems = titleFolders.map(f => `
     <div class="flex items-center justify-between py-1">
       <div class="flex items-center gap-2 flex-1 min-w-0 cursor-pointer ${selectedTitleFolderId === f.id ? 'text-primary' : 'text-gray-300'}" onclick="selectTitleFolder('${escapeJsString(f.id)}')">
-        <i class="ti ti-folder" style="color: ${f.color}"></i>
+        <span style="color: ${f.color}">📁</span>
         <span class="text-sm truncate">${escapeHtml(f.name)}</span>
         <span class="text-xs text-gray-500">${f.title_count || 0}</span>
       </div>
       <div class="flex items-center">
         <button type="button" onclick="event.stopPropagation();openEditFolderModal('${escapeJsString(f.id)}','${escapeJsString(f.name)}','${f.color}')"
-          class="p-1 text-yellow-500 hover:text-yellow-400">
-          <i class="ti ti-pencil"></i>
-        </button>
+          class="px-1.5 py-0.5 text-xs text-yellow-400 hover:bg-yellow-500/20 rounded">✎</button>
         <button type="button" onclick="event.stopPropagation();deleteFolder('${escapeJsString(f.id)}')"
-          class="p-1 text-red-500 hover:text-red-400">
-          <i class="ti ti-x"></i>
-        </button>
+          class="px-1.5 py-0.5 text-xs text-red-400 hover:bg-red-500/20 rounded">✕</button>
       </div>
     </div>
   `).join('');
@@ -4756,7 +4752,7 @@ async function loadTitleSuggestions() {
   }
 }
 
-let titleListVisible = true;
+let titleListVisible = false;
 let folderSectionVisible = false;
 
 /**
@@ -4769,10 +4765,10 @@ function toggleFolderSection() {
   
   if (folderSectionVisible) {
     listEl.classList.remove('hidden');
-    icon.classList.add('rotate-90');
+    icon.textContent = '▼';
   } else {
     listEl.classList.add('hidden');
-    icon.classList.remove('rotate-90');
+    icon.textContent = '▶';
   }
 }
 
@@ -4786,10 +4782,10 @@ function toggleTitleList() {
   
   if (titleListVisible) {
     listEl.classList.remove('hidden');
-    icon.classList.remove('rotate-180');
+    icon.textContent = '▼';
   } else {
     listEl.classList.add('hidden');
-    icon.classList.add('rotate-180');
+    icon.textContent = '▶';
   }
 }
 
@@ -4810,7 +4806,7 @@ function renderTitleManagerList() {
     
     return `
     <div class="flex items-center gap-2 py-1.5 border-b border-gray-700/30 last:border-0">
-      <span class="text-xs ${isPinned ? 'text-green-400' : 'text-gray-600'} w-5 text-center">${isPinned ? '<i class="ti ti-pin-filled"></i>' : index + 1}</span>
+      <span class="text-xs ${isPinned ? 'text-green-400' : 'text-gray-600'} w-5 text-center">${isPinned ? '📌' : index + 1}</span>
       <div class="flex-1 min-w-0">
         <button type="button" onclick="selectTitle('${escapeJsString(title.id)}', '${escapeJsString(title.title)}')"
           class="text-left text-sm text-gray-200 hover:text-primary truncate block w-full">
@@ -4819,15 +4815,9 @@ function renderTitleManagerList() {
         ${folder ? `<span class="text-xs" style="color: ${folder.color}">${escapeHtml(folder.name)}</span>` : ''}
       </div>
       <span class="text-xs text-gray-600">${title.use_count || 0}x</span>
-      <button type="button" onclick="showTitleMoveMenu(event, '${escapeJsString(title.id)}')" class="p-1 text-blue-500">
-        <i class="ti ti-folder"></i>
-      </button>
-      <button type="button" onclick="toggleTitlePin('${escapeJsString(title.id)}', ${isPinned ? 'false' : 'true'})" class="p-1 ${isPinned ? 'text-green-400' : 'text-gray-500'}">
-        <i class="ti ti-pin${isPinned ? '-filled' : ''}"></i>
-      </button>
-      <button type="button" onclick="deleteTitleSuggestion('${escapeJsString(title.id)}')" class="p-1 text-red-500">
-        <i class="ti ti-x"></i>
-      </button>
+      <button type="button" onclick="showTitleMoveMenu(event, '${escapeJsString(title.id)}')" class="px-1.5 py-0.5 text-xs text-blue-400 hover:bg-blue-500/20 rounded">📁</button>
+      <button type="button" onclick="toggleTitlePin('${escapeJsString(title.id)}', ${isPinned ? 'false' : 'true'})" class="px-1.5 py-0.5 text-xs ${isPinned ? 'text-green-400' : 'text-gray-500'} hover:bg-green-500/20 rounded">${isPinned ? '📌' : '📍'}</button>
+      <button type="button" onclick="deleteTitleSuggestion('${escapeJsString(title.id)}')" class="px-1.5 py-0.5 text-xs text-red-400 hover:bg-red-500/20 rounded">✕</button>
     </div>
   `;
   }).join('');
