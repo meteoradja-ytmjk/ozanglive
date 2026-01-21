@@ -905,15 +905,16 @@
       </div>
       
       <div class="p-3 flex-grow overflow-y-auto">
-        <!-- Folder Section -->
+        <!-- Folder Section - Collapsible -->
         <div class="mb-3">
-          <div class="flex items-center justify-between mb-1">
+          <button type="button" onclick="toggleFolderSection()" class="flex items-center justify-between w-full py-1">
             <span class="text-xs font-medium text-gray-500 uppercase">Folders</span>
-            <button type="button" onclick="openCreateFolderModal()" class="text-xs text-primary hover:text-primary/80">
-              <i class="ti ti-plus"></i> Folder
-            </button>
-          </div>
-          <div id="titleFolderList" class="border-b border-gray-700/50 pb-2 mb-3">
+            <div class="flex items-center gap-2">
+              <span onclick="event.stopPropagation();openCreateFolderModal()" class="text-xs text-primary hover:text-primary/80">+ Folder</span>
+              <i id="folderToggleIcon" class="ti ti-chevron-right text-gray-500 text-sm transition-transform"></i>
+            </div>
+          </button>
+          <div id="titleFolderList" class="hidden mt-2 pl-2 border-l border-gray-700">
           </div>
         </div>
 
@@ -930,18 +931,13 @@
           </div>
         </div>
         
-        <!-- Title Section with Toggle -->
+        <!-- Title Section -->
         <div>
-          <button type="button" onclick="toggleTitleList()" class="flex items-center justify-between w-full py-2 text-left">
+          <div class="flex items-center justify-between py-1 mb-2">
             <span class="text-xs font-medium text-gray-500 uppercase">Judul <span id="titleCount" class="text-gray-600">(0)</span></span>
-            <i id="titleToggleIcon" class="ti ti-chevron-down text-gray-500 text-sm transition-transform"></i>
-          </button>
-          
-          <!-- Title List -->
-          <div id="titleManagerList" class="space-y-1">
-            <div class="text-center py-4 text-gray-500 text-sm">
-              <i class="ti ti-loader animate-spin"></i>
-            </div>
+          </div>
+          <div id="titleManagerList" class="space-y-0">
+            <div class="text-center py-3 text-gray-500 text-sm"><i class="ti ti-loader animate-spin"></i></div>
           </div>
         </div>
       </div>

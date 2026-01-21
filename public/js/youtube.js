@@ -4548,28 +4548,28 @@ async function loadTitleFolders() {
 function renderTitleFolderList() {
   const container = document.getElementById('titleFolderList');
   const allBtn = `
-    <div class="flex items-center justify-between py-1.5 cursor-pointer group" onclick="selectTitleFolder(null)">
+    <div class="flex items-center justify-between py-1 cursor-pointer" onclick="selectTitleFolder(null)">
       <div class="flex items-center gap-2 ${!selectedTitleFolderId ? 'text-primary' : 'text-gray-300'}">
-        <i class="ti ti-list text-base"></i>
+        <i class="ti ti-list"></i>
         <span class="text-sm">Semua</span>
       </div>
     </div>`;
   
   const folderItems = titleFolders.map(f => `
-    <div class="flex items-center justify-between py-1.5 group">
+    <div class="flex items-center justify-between py-1">
       <div class="flex items-center gap-2 flex-1 min-w-0 cursor-pointer ${selectedTitleFolderId === f.id ? 'text-primary' : 'text-gray-300'}" onclick="selectTitleFolder('${escapeJsString(f.id)}')">
-        <i class="ti ti-folder text-base" style="color: ${f.color}"></i>
+        <i class="ti ti-folder" style="color: ${f.color}"></i>
         <span class="text-sm truncate">${escapeHtml(f.name)}</span>
         <span class="text-xs text-gray-500">${f.title_count || 0}</span>
       </div>
-      <div class="flex items-center gap-0.5 opacity-50 group-hover:opacity-100">
+      <div class="flex items-center">
         <button type="button" onclick="event.stopPropagation();openEditFolderModal('${escapeJsString(f.id)}','${escapeJsString(f.name)}','${f.color}')"
-          class="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-yellow-400">
-          <i class="ti ti-pencil text-sm"></i>
+          class="p-1 text-yellow-500 hover:text-yellow-400">
+          <i class="ti ti-pencil"></i>
         </button>
         <button type="button" onclick="event.stopPropagation();deleteFolder('${escapeJsString(f.id)}')"
-          class="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-red-400">
-          <i class="ti ti-x text-sm"></i>
+          class="p-1 text-red-500 hover:text-red-400">
+          <i class="ti ti-x"></i>
         </button>
       </div>
     </div>
@@ -4757,6 +4757,24 @@ async function loadTitleSuggestions() {
 }
 
 let titleListVisible = true;
+let folderSectionVisible = false;
+
+/**
+ * Toggle folder section visibility
+ */
+function toggleFolderSection() {
+  folderSectionVisible = !folderSectionVisible;
+  const listEl = document.getElementById('titleFolderList');
+  const icon = document.getElementById('folderToggleIcon');
+  
+  if (folderSectionVisible) {
+    listEl.classList.remove('hidden');
+    icon.classList.add('rotate-90');
+  } else {
+    listEl.classList.add('hidden');
+    icon.classList.remove('rotate-90');
+  }
+}
 
 /**
  * Toggle title list visibility
@@ -4782,11 +4800,7 @@ function renderTitleManagerList() {
   const listEl = document.getElementById('titleManagerList');
   
   if (titleSuggestions.length === 0) {
-    listEl.innerHTML = `
-      <div class="text-center py-4 text-gray-500">
-        <p class="text-sm">Belum ada judul</p>
-      </div>
-    `;
+    listEl.innerHTML = `<div class="text-center py-3 text-gray-500 text-sm">Belum ada judul</div>`;
     return;
   }
   
@@ -4795,8 +4809,8 @@ function renderTitleManagerList() {
     const folder = titleFolders.find(f => f.id === title.folder_id);
     
     return `
-    <div class="flex items-center gap-2 py-1.5 group border-b border-gray-700/30 last:border-0">
-      <span class="text-xs ${isPinned ? 'text-green-400' : 'text-gray-600'} w-5 text-center flex-shrink-0">${isPinned ? '<i class="ti ti-pin-filled"></i>' : index + 1}</span>
+    <div class="flex items-center gap-2 py-1.5 border-b border-gray-700/30 last:border-0">
+      <span class="text-xs ${isPinned ? 'text-green-400' : 'text-gray-600'} w-5 text-center">${isPinned ? '<i class="ti ti-pin-filled"></i>' : index + 1}</span>
       <div class="flex-1 min-w-0">
         <button type="button" onclick="selectTitle('${escapeJsString(title.id)}', '${escapeJsString(title.title)}')"
           class="text-left text-sm text-gray-200 hover:text-primary truncate block w-full">
@@ -4804,21 +4818,16 @@ function renderTitleManagerList() {
         </button>
         ${folder ? `<span class="text-xs" style="color: ${folder.color}">${escapeHtml(folder.name)}</span>` : ''}
       </div>
-      <span class="text-xs text-gray-600 flex-shrink-0">${title.use_count || 0}x</span>
-      <div class="flex items-center opacity-30 group-hover:opacity-100 flex-shrink-0">
-        <button type="button" onclick="showTitleMoveMenu(event, '${escapeJsString(title.id)}')"
-          class="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-blue-400">
-          <i class="ti ti-folder text-sm"></i>
-        </button>
-        <button type="button" onclick="toggleTitlePin('${escapeJsString(title.id)}', ${isPinned ? 'false' : 'true'})"
-          class="w-6 h-6 flex items-center justify-center ${isPinned ? 'text-green-400' : 'text-gray-400 hover:text-green-400'}">
-          <i class="ti ti-pin${isPinned ? '-filled' : ''} text-sm"></i>
-        </button>
-        <button type="button" onclick="deleteTitleSuggestion('${escapeJsString(title.id)}')"
-          class="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-red-400">
-          <i class="ti ti-x text-sm"></i>
-        </button>
-      </div>
+      <span class="text-xs text-gray-600">${title.use_count || 0}x</span>
+      <button type="button" onclick="showTitleMoveMenu(event, '${escapeJsString(title.id)}')" class="p-1 text-blue-500">
+        <i class="ti ti-folder"></i>
+      </button>
+      <button type="button" onclick="toggleTitlePin('${escapeJsString(title.id)}', ${isPinned ? 'false' : 'true'})" class="p-1 ${isPinned ? 'text-green-400' : 'text-gray-500'}">
+        <i class="ti ti-pin${isPinned ? '-filled' : ''}"></i>
+      </button>
+      <button type="button" onclick="deleteTitleSuggestion('${escapeJsString(title.id)}')" class="p-1 text-red-500">
+        <i class="ti ti-x"></i>
+      </button>
     </div>
   `;
   }).join('');
