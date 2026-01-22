@@ -248,14 +248,15 @@ function calculateNextWeeklyRun(time, days, fromDate = new Date()) {
   const scheduleMinutes = hours * 60 + minutes;
   const currentMinutes = wibNow.hours * 60 + wibNow.minutes;
   
-  // Check if we can run today (time hasn't passed yet)
+  // Check if we can run today (today is scheduled AND time hasn't passed yet)
   const todayScheduled = dayIndices.includes(currentDay);
   if (todayScheduled && currentMinutes < scheduleMinutes) {
     // Schedule for today
     return createWIBDate(wibNow.year, wibNow.month, wibNow.dayOfMonth, hours, minutes);
   }
   
-  // Find next day in the week (after today)
+  // Find next scheduled day
+  // First, look for days later this week (after today)
   let daysToAdd = null;
   
   for (const dayIdx of dayIndices) {
@@ -265,12 +266,14 @@ function calculateNextWeeklyRun(time, days, fromDate = new Date()) {
     }
   }
   
-  // If no day found this week, use first day of next week
+  // If no day found later this week, wrap to next week
+  // Use the first scheduled day of next week
   if (daysToAdd === null) {
-    daysToAdd = 7 - currentDay + dayIndices[0];
+    // Days until end of week + days to first scheduled day
+    daysToAdd = (7 - currentDay) + dayIndices[0];
   }
   
-  // Calculate target date
+  // Calculate target date in WIB
   const tempDate = new Date(Date.UTC(wibNow.year, wibNow.month, wibNow.dayOfMonth + daysToAdd));
   const targetYear = tempDate.getUTCFullYear();
   const targetMonth = tempDate.getUTCMonth();

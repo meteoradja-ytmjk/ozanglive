@@ -199,10 +199,12 @@ class ScheduleService {
       const nowMs = now.getTime();
       
       // Log current WIB time for debugging (with seconds for precision)
-      const wibTimeStr = `${String(wibTime.hours).padStart(2,'0')}:${String(wibTime.minutes).padStart(2,'0')}:${String(wibTime.seconds).padStart(2,'0')}`;
+      const wibTimeStr = `${String(wibTime.hours).padStart(2,'0')}:${String(wibTime.minutes).padStart(2,'0')}:${String(wibTime.seconds || 0).padStart(2,'0')}`;
       const wibDateStr = `${wibTime.year}-${String(wibTime.month + 1).padStart(2,'0')}-${String(wibTime.dayOfMonth).padStart(2,'0')}`;
+      const dayNamesLong = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      
       console.log(`[ScheduleService] ========== SCHEDULE CHECK ==========`);
-      console.log(`[ScheduleService] Current WIB: ${wibDateStr} ${wibTimeStr}`);
+      console.log(`[ScheduleService] Current WIB: ${wibDateStr} ${wibTimeStr} (${dayNamesLong[wibTime.day]})`);
       console.log(`[ScheduleService] Current UTC: ${now.toISOString()}`);
       console.log(`[ScheduleService] Templates with recurring enabled: ${templates.length}`);
       
@@ -210,6 +212,10 @@ class ScheduleService {
         console.log(`[ScheduleService] No templates to check`);
         return;
       }
+      
+      // Day names for comparison (lowercase)
+      const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+      const todayWIB = dayNames[wibTime.day];
       
       for (const template of templates) {
         // Log template info for debugging
@@ -232,8 +238,6 @@ class ScheduleService {
         }
         
         // Check if today is a valid day for this schedule (in WIB)
-        const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-        const todayWIB = dayNames[wibTime.day];
         let isTodayValid = false;
         
         if (template.recurring_pattern === 'daily') {
@@ -241,7 +245,8 @@ class ScheduleService {
         } else if (template.recurring_pattern === 'weekly') {
           const scheduledDays = (template.recurring_days || []).map(d => d.toLowerCase());
           isTodayValid = scheduledDays.includes(todayWIB);
-          console.log(`[ScheduleService]   Today WIB (${todayWIB}) is scheduled: ${isTodayValid}`);
+          console.log(`[ScheduleService]   Today WIB: ${todayWIB}, Scheduled days: [${scheduledDays.join(', ')}]`);
+          console.log(`[ScheduleService]   Today is scheduled: ${isTodayValid}`);
         }
         
         if (!isTodayValid) {
@@ -262,31 +267,40 @@ class ScheduleService {
         const currentMinutesWIB = wibTime.hours * 60 + wibTime.minutes;
         const timeDiffMinutes = currentMinutesWIB - scheduleMinutesWIB;
         
-        console.log(`[ScheduleService]   Scheduled: ${String(schedHour).padStart(2,'0')}:${String(schedMin).padStart(2,'0')} WIB (${scheduleMinutesWIB} min from midnight)`);
-        console.log(`[ScheduleService]   Current: ${String(wibTime.hours).padStart(2,'0')}:${String(wibTime.minutes).padStart(2,'0')} WIB (${currentMinutesWIB} min from midnight)`);
+        console.log(`[ScheduleService]   Scheduled: ${String(schedHour).padStart(2,'0')}:${String(schedMin).padStart(2,'0')} WIB (${scheduleMinutesWIB} min)`);
+        console.log(`[ScheduleService]   Current: ${String(wibTime.hours).padStart(2,'0')}:${String(wibTime.minutes).padStart(2,'0')} WIB (${currentMinutesWIB} min)`);
         console.log(`[ScheduleService]   Time diff: ${timeDiffMinutes} minutes (positive = past scheduled time)`);
         
-        // Method 1: Direct WIB time comparison (PRIMARY - most reliable)
-        // Execute if current WIB time is within window: 0 to 5 minutes AFTER scheduled time
-        // This is the most accurate method as it compares WIB to WIB directly
+        // EXECUTE CONDITIONS:
+        // 1. Within 0-5 minutes after scheduled time (normal trigger)
+        // 2. Within 6-60 minutes after scheduled time (missed but recoverable)
+        // 3. next_run_at is overdue (service was down)
+        
+        // Condition 1: Normal trigger (0-5 minutes after scheduled time)
         if (timeDiffMinutes >= 0 && timeDiffMinutes <= 5) {
-          console.log(`[ScheduleService]   >>> EXECUTING (WIB time match: within ${timeDiffMinutes} min of scheduled time)`);
+          console.log(`[ScheduleService]   >>> EXECUTING (within ${timeDiffMinutes} min of scheduled time)`);
           await this.executeTemplate(template);
           continue;
         }
         
-        // Method 2: Check using next_run_at (BACKUP - for missed schedules)
-        // This handles cases where the service was down during scheduled time
+        // Condition 2: Missed but recoverable (6-60 minutes after scheduled time)
+        // This catches schedules that were missed due to brief service interruption
+        if (timeDiffMinutes > 5 && timeDiffMinutes <= 60) {
+          console.log(`[ScheduleService]   >>> EXECUTING (missed by ${timeDiffMinutes} min, recovering)`);
+          await this.executeTemplate(template);
+          continue;
+        }
+        
+        // Condition 3: Check next_run_at for older missed schedules
         if (template.next_run_at) {
           const nextRunAt = new Date(template.next_run_at);
           const timeDiffMs = nowMs - nextRunAt.getTime();
           const timeDiffFromNextRun = Math.floor(timeDiffMs / (1000 * 60));
           
-          console.log(`[ScheduleService]   next_run_at diff: ${timeDiffFromNextRun} minutes (positive = overdue)`);
+          console.log(`[ScheduleService]   next_run_at diff: ${timeDiffFromNextRun} minutes`);
           
-          // Execute if next_run_at is overdue (past) but within 60 minutes
-          // This catches schedules that were missed due to service downtime
-          if (timeDiffFromNextRun > 5 && timeDiffFromNextRun <= 60) {
+          // Execute if next_run_at is overdue but within 24 hours
+          if (timeDiffFromNextRun > 0 && timeDiffFromNextRun <= 1440) {
             console.log(`[ScheduleService]   >>> EXECUTING (next_run_at overdue by ${timeDiffFromNextRun} min)`);
             await this.executeTemplate(template);
             continue;
@@ -296,13 +310,9 @@ class ScheduleService {
         // Log waiting status
         if (timeDiffMinutes < 0) {
           console.log(`[ScheduleService]   WAITING: ${Math.abs(timeDiffMinutes)} minutes until scheduled time`);
-        } else if (timeDiffMinutes > 5) {
-          console.log(`[ScheduleService]   MISSED: ${timeDiffMinutes} minutes past scheduled time (>5 min window)`);
-          // Update next_run_at to tomorrow if significantly past
-          if (timeDiffMinutes > 60) {
-            console.log(`[ScheduleService]   Updating next_run_at to next occurrence...`);
-            await this.updateNextRunToFuture(template);
-          }
+        } else if (timeDiffMinutes > 60) {
+          console.log(`[ScheduleService]   MISSED: ${timeDiffMinutes} minutes past (>60 min, updating next_run_at)`);
+          await this.updateNextRunToFuture(template);
         }
       }
       
@@ -351,12 +361,13 @@ class ScheduleService {
       const currentMinutesWIB = wibTime.hours * 60 + wibTime.minutes;
       const timeDiffMinutes = currentMinutesWIB - scheduleMinutesWIB;
       
-      // If scheduled time has passed today (more than 5 minutes ago to avoid conflict with checkSchedules)
-      // but within 60 minutes, consider it missed
+      // If scheduled time has passed today (more than 5 minutes ago)
+      // but within 60 minutes, consider it missed and recoverable
       if (timeDiffMinutes > 5 && timeDiffMinutes <= 60) {
         console.log(`[ScheduleService] Detected missed schedule for template: ${template.name}`);
-        console.log(`[ScheduleService]   Scheduled: ${template.recurring_time} WIB, Current: ${String(wibTime.hours).padStart(2,'0')}:${String(wibTime.minutes).padStart(2,'0')} WIB`);
-        console.log(`[ScheduleService]   Time diff: ${timeDiffMinutes} minutes (missed by ${timeDiffMinutes - 5} min)`);
+        console.log(`[ScheduleService]   Scheduled: ${template.recurring_time} WIB`);
+        console.log(`[ScheduleService]   Current: ${String(wibTime.hours).padStart(2,'0')}:${String(wibTime.minutes).padStart(2,'0')} WIB`);
+        console.log(`[ScheduleService]   Missed by: ${timeDiffMinutes} minutes`);
         return true;
       }
     }
@@ -367,14 +378,14 @@ class ScheduleService {
       const overdueMs = now.getTime() - nextRunAt.getTime();
       const overdueMinutes = Math.floor(overdueMs / (1000 * 60));
       
-      // If next_run_at is overdue by more than 60 minutes but less than 24 hours
-      // This handles cases where service was down for extended period
-      if (overdueMinutes > 60 && overdueMinutes <= 1440) {
+      // If next_run_at is overdue but less than 24 hours
+      if (overdueMinutes > 0 && overdueMinutes <= 1440) {
         console.log(`[ScheduleService] Detected OVERDUE schedule for template: ${template.name}`);
-        console.log(`[ScheduleService]   next_run_at: ${template.next_run_at}, overdue by ${overdueMinutes} minutes`);
+        console.log(`[ScheduleService]   next_run_at: ${template.next_run_at}`);
+        console.log(`[ScheduleService]   Overdue by: ${overdueMinutes} minutes`);
         return true;
       } else if (overdueMinutes > 1440) {
-        console.log(`[ScheduleService] Skipping very old overdue schedule for template: ${template.name}, overdue by ${overdueMinutes} minutes (>24h)`);
+        console.log(`[ScheduleService] Skipping very old schedule for template: ${template.name} (overdue ${overdueMinutes} min > 24h)`);
         // Update next_run_at to future date
         this.updateNextRunToFuture(template);
         return false;
