@@ -2,18 +2,83 @@ const { google } = require('googleapis');
 
 class YouTubeService {
   /**
-   * Get access token from refresh token
+   * Get access token from refresh token with retry logic
    * @param {string} clientId - Google Client ID
    * @param {string} clientSecret - Google Client Secret
    * @param {string} refreshToken - Refresh Token
+   * @param {number} retryCount - Current retry count (internal use)
    * @returns {Promise<string>} Access token
    */
-  async getAccessToken(clientId, clientSecret, refreshToken) {
-    const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
-    oauth2Client.setCredentials({ refresh_token: refreshToken });
+  async getAccessToken(clientId, clientSecret, refreshToken, retryCount = 0) {
+    const maxRetries = 3;
+    const retryDelay = 2000; // 2 seconds
     
-    const { credentials } = await oauth2Client.refreshAccessToken();
-    return credentials.access_token;
+    try {
+      // Validate inputs
+      if (!clientId || !clientSecret || !refreshToken) {
+        throw new Error('Missing credentials: clientId, clientSecret, or refreshToken is empty');
+      }
+      
+      const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
+      oauth2Client.setCredentials({ refresh_token: refreshToken });
+      
+      const { credentials } = await oauth2Client.refreshAccessToken();
+      
+      if (!credentials || !credentials.access_token) {
+        throw new Error('Failed to obtain access token from refresh token');
+      }
+      
+      return credentials.access_token;
+    } catch (error) {
+      const errorMessage = error.message || 'Unknown error';
+      
+      // Check if error is retryable
+      const isRetryable = 
+        errorMessage.includes('ECONNRESET') ||
+        errorMessage.includes('ETIMEDOUT') ||
+        errorMessage.includes('ENOTFOUND') ||
+        errorMessage.includes('socket hang up') ||
+        errorMessage.includes('network') ||
+        errorMessage.includes('timeout') ||
+        (error.code && ['ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND', 'EAI_AGAIN'].includes(error.code));
+      
+      if (isRetryable && retryCount < maxRetries) {
+        console.warn(`[YouTubeService.getAccessToken] Retryable error (attempt ${retryCount + 1}/${maxRetries}): ${errorMessage}`);
+        await new Promise(resolve => setTimeout(resolve, retryDelay * (retryCount + 1)));
+        return this.getAccessToken(clientId, clientSecret, refreshToken, retryCount + 1);
+      }
+      
+      // Check for specific OAuth errors
+      if (errorMessage.includes('invalid_grant') || errorMessage.includes('Token has been expired or revoked')) {
+        console.error('[YouTubeService.getAccessToken] Token expired or revoked - user needs to re-authenticate');
+        throw new Error('TOKEN_EXPIRED: YouTube token has expired or been revoked. Please reconnect your YouTube account.');
+      }
+      
+      if (errorMessage.includes('invalid_client')) {
+        console.error('[YouTubeService.getAccessToken] Invalid client credentials');
+        throw new Error('INVALID_CLIENT: YouTube client credentials are invalid. Please check your API settings.');
+      }
+      
+      console.error(`[YouTubeService.getAccessToken] Failed to get access token: ${errorMessage}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Get access token with graceful fallback (returns null instead of throwing)
+   * Useful for non-critical operations like displaying channel name
+   * @param {string} clientId - Google Client ID
+   * @param {string} clientSecret - Google Client Secret
+   * @param {string} refreshToken - Refresh Token
+   * @returns {Promise<string|null>} Access token or null if failed
+   */
+  async getAccessTokenSafe(clientId, clientSecret, refreshToken) {
+    try {
+      return await this.getAccessToken(clientId, clientSecret, refreshToken);
+    } catch (error) {
+      console.warn(`[YouTubeService.getAccessTokenSafe] Failed to get token: ${error.message}`);
+      return null;
+    }
   }
 
   /**
@@ -35,9 +100,28 @@ class YouTubeService {
         channelThumbnail: channelInfo.thumbnail
       };
     } catch (error) {
+      const errorMessage = error.message || 'Invalid credentials';
+      
+      // Provide more specific error messages
+      if (errorMessage.includes('TOKEN_EXPIRED')) {
+        return {
+          valid: false,
+          error: 'Token expired - please reconnect your YouTube account',
+          errorCode: 'TOKEN_EXPIRED'
+        };
+      }
+      
+      if (errorMessage.includes('INVALID_CLIENT')) {
+        return {
+          valid: false,
+          error: 'Invalid client credentials',
+          errorCode: 'INVALID_CLIENT'
+        };
+      }
+      
       return {
         valid: false,
-        error: error.message || 'Invalid credentials'
+        error: errorMessage
       };
     }
   }

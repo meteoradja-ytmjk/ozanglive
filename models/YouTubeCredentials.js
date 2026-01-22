@@ -450,6 +450,64 @@ class YouTubeCredentials {
       );
     });
   }
+
+  /**
+   * Update channel name for a credential
+   * @param {number} id - Credential ID
+   * @param {string} channelName - New channel name
+   * @returns {Promise<boolean>} True if updated
+   */
+  static async updateChannelName(id, channelName) {
+    return new Promise((resolve, reject) => {
+      db.run(
+        'UPDATE youtube_credentials SET channel_name = ? WHERE id = ?',
+        [channelName, id],
+        function(err) {
+          if (err) {
+            reject(err);
+            return;
+          }
+          resolve(this.changes > 0);
+        }
+      );
+    });
+  }
+
+  /**
+   * Refresh channel info from YouTube API and update database
+   * @param {number} id - Credential ID
+   * @param {Object} youtubeService - YouTube service instance
+   * @returns {Promise<{success: boolean, channelName?: string, error?: string}>}
+   */
+  static async refreshChannelInfo(id, youtubeService) {
+    try {
+      const credentials = await this.findById(id);
+      if (!credentials) {
+        return { success: false, error: 'Credentials not found' };
+      }
+
+      // Try to get access token and channel info
+      const accessToken = await youtubeService.getAccessTokenSafe(
+        credentials.clientId,
+        credentials.clientSecret,
+        credentials.refreshToken
+      );
+
+      if (!accessToken) {
+        return { success: false, error: 'Failed to get access token' };
+      }
+
+      const channelInfo = await youtubeService.getChannelInfo(accessToken);
+      
+      // Update channel name in database
+      await this.updateChannelName(id, channelInfo.title);
+      
+      return { success: true, channelName: channelInfo.title };
+    } catch (error) {
+      console.error(`[YouTubeCredentials.refreshChannelInfo] Error for credential ${id}:`, error.message);
+      return { success: false, error: error.message };
+    }
+  }
 }
 
 module.exports = YouTubeCredentials;

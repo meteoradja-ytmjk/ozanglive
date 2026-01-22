@@ -543,20 +543,17 @@ class ScheduleService {
 
   /**
    * Execute a template - create broadcast(s)
+   * Handles token errors gracefully and updates next_run_at even on failure
    * @param {Object} template - Template object with recurring config
    * @param {number} retryCount - Current retry count
    */
   async executeTemplate(template, retryCount = 0) {
     const maxRetries = 3;
+    const now = new Date();
     
-    try {
-      const now = new Date();
-      
-      // Check if credentials are available
-      if (!template.client_id || !template.client_secret || !template.refresh_token) {
-        console.error(`[ScheduleService] Cannot execute template "${template.name}": YouTube credentials not found or invalid (account_id: ${template.account_id})`);
-        
-        // Update next_run_at to prevent repeated failures
+    // Helper function to update next_run_at on failure
+    const updateNextRunOnFailure = async (reason) => {
+      try {
         const { calculateNextRun, formatNextRunAt } = require('../utils/recurringUtils');
         const nextRun = calculateNextRun({
           recurring_pattern: template.recurring_pattern,
@@ -570,18 +567,50 @@ class ScheduleService {
             now.toISOString(),
             formatNextRunAt(nextRun)
           );
-          console.log(`[ScheduleService] Updated next_run_at for template ${template.name} to ${formatNextRunAt(nextRun)} (credentials missing)`);
+          console.log(`[ScheduleService] Updated next_run_at for template "${template.name}" to ${formatNextRunAt(nextRun)} (${reason})`);
         }
-        
+      } catch (err) {
+        console.error(`[ScheduleService] Failed to update next_run_at:`, err.message);
+      }
+    };
+    
+    try {
+      // Check if credentials are available
+      if (!template.client_id || !template.client_secret || !template.refresh_token) {
+        console.error(`[ScheduleService] Cannot execute template "${template.name}": YouTube credentials not found or invalid (account_id: ${template.account_id})`);
+        await updateNextRunOnFailure('credentials missing');
         return { error: 'YouTube credentials not found', template: template.name };
       }
       
-      // Get access token from credentials (joined from youtube_credentials)
-      const accessToken = await youtubeService.getAccessToken(
-        template.client_id,
-        template.client_secret,
-        template.refresh_token
-      );
+      // Get access token from credentials with error handling
+      let accessToken;
+      try {
+        accessToken = await youtubeService.getAccessToken(
+          template.client_id,
+          template.client_secret,
+          template.refresh_token
+        );
+      } catch (tokenError) {
+        const errorMsg = tokenError.message || 'Unknown token error';
+        console.error(`[ScheduleService] Token error for template "${template.name}": ${errorMsg}`);
+        
+        // Check if token is expired/revoked
+        if (errorMsg.includes('TOKEN_EXPIRED') || errorMsg.includes('invalid_grant') || errorMsg.includes('revoked')) {
+          console.error(`[ScheduleService] Token expired for template "${template.name}" - user needs to reconnect YouTube account`);
+          await updateNextRunOnFailure('token expired');
+          return { error: 'TOKEN_EXPIRED', template: template.name, message: 'YouTube token expired - please reconnect account' };
+        }
+        
+        // For network errors, retry
+        if (retryCount < maxRetries - 1) {
+          console.log(`[ScheduleService] Retrying token fetch in 30 seconds... (attempt ${retryCount + 1}/${maxRetries})`);
+          await new Promise(resolve => setTimeout(resolve, 30000));
+          return this.executeTemplate(template, retryCount + 1);
+        }
+        
+        await updateNextRunOnFailure('token fetch failed');
+        return { error: errorMsg, template: template.name };
+      }
       
       // Check if this is a multi-broadcast template
       let broadcasts = [];
@@ -879,16 +908,61 @@ class ScheduleService {
       
       return results;
     } catch (error) {
-      console.error(`[ScheduleService] Execute error (attempt ${retryCount + 1}):`, error.message);
+      const errorMsg = error.message || 'Unknown error';
+      console.error(`[ScheduleService] Execute error for "${template.name}" (attempt ${retryCount + 1}/${maxRetries}):`, errorMsg);
       
+      // Check for token-related errors - don't retry these
+      if (errorMsg.includes('TOKEN_EXPIRED') || errorMsg.includes('invalid_grant') || errorMsg.includes('revoked')) {
+        console.error(`[ScheduleService] Token error - not retrying. User needs to reconnect YouTube account.`);
+        // Still update next_run_at so schedule continues
+        try {
+          const nextRun = calculateNextRun({
+            recurring_pattern: template.recurring_pattern,
+            recurring_time: template.recurring_time,
+            recurring_days: template.recurring_days
+          });
+          if (nextRun) {
+            await BroadcastTemplate.updateLastRun(
+              template.id,
+              new Date().toISOString(),
+              formatNextRunAt(nextRun)
+            );
+            console.log(`[ScheduleService] Updated next_run_at despite token error: ${formatNextRunAt(nextRun)}`);
+          }
+        } catch (updateErr) {
+          console.error(`[ScheduleService] Failed to update next_run_at:`, updateErr.message);
+        }
+        return { error: 'TOKEN_EXPIRED', template: template.name };
+      }
+      
+      // For other errors, retry if attempts remaining
       if (retryCount < maxRetries - 1) {
         console.log(`[ScheduleService] Retrying in 30 seconds...`);
         await new Promise(resolve => setTimeout(resolve, 30000));
         return this.executeTemplate(template, retryCount + 1);
       }
       
+      // All retries failed - still update next_run_at so schedule continues
       console.error(`[ScheduleService] All retries failed for template: ${template.name}`);
-      throw error;
+      try {
+        const nextRun = calculateNextRun({
+          recurring_pattern: template.recurring_pattern,
+          recurring_time: template.recurring_time,
+          recurring_days: template.recurring_days
+        });
+        if (nextRun) {
+          await BroadcastTemplate.updateLastRun(
+            template.id,
+            new Date().toISOString(),
+            formatNextRunAt(nextRun)
+          );
+          console.log(`[ScheduleService] Updated next_run_at after all retries failed: ${formatNextRunAt(nextRun)}`);
+        }
+      } catch (updateErr) {
+        console.error(`[ScheduleService] Failed to update next_run_at:`, updateErr.message);
+      }
+      
+      return { error: errorMsg, template: template.name };
     }
   }
 

@@ -4736,6 +4736,67 @@ app.put('/api/youtube/credentials/:id/primary', isAuthenticated, async (req, res
   }
 });
 
+// Refresh channel info for a YouTube account
+app.post('/api/youtube/credentials/:id/refresh', isAuthenticated, async (req, res) => {
+  try {
+    const credentialId = parseInt(req.params.id);
+    
+    // Verify the credential belongs to this user
+    const credential = await YouTubeCredentials.findById(credentialId);
+    if (!credential || credential.userId !== req.session.userId) {
+      return res.status(404).json({ success: false, error: 'Account not found' });
+    }
+    
+    // Try to refresh channel info
+    const result = await YouTubeCredentials.refreshChannelInfo(credentialId, youtubeService);
+    
+    if (result.success) {
+      res.json({ 
+        success: true, 
+        channelName: result.channelName,
+        message: 'Channel info refreshed successfully'
+      });
+    } else {
+      res.status(400).json({ 
+        success: false, 
+        error: result.error || 'Failed to refresh channel info'
+      });
+    }
+  } catch (error) {
+    console.error('Error refreshing channel info:', error);
+    res.status(500).json({ success: false, error: 'Failed to refresh channel info' });
+  }
+});
+
+// Refresh all YouTube accounts channel info
+app.post('/api/youtube/credentials/refresh-all', isAuthenticated, async (req, res) => {
+  try {
+    const accounts = await YouTubeCredentials.findAllByUserId(req.session.userId);
+    const results = [];
+    
+    for (const account of accounts) {
+      const result = await YouTubeCredentials.refreshChannelInfo(account.id, youtubeService);
+      results.push({
+        id: account.id,
+        channelId: account.channelId,
+        success: result.success,
+        channelName: result.channelName || account.channelName,
+        error: result.error
+      });
+    }
+    
+    const successCount = results.filter(r => r.success).length;
+    res.json({ 
+      success: true, 
+      message: `Refreshed ${successCount}/${accounts.length} accounts`,
+      results
+    });
+  } catch (error) {
+    console.error('Error refreshing all accounts:', error);
+    res.status(500).json({ success: false, error: 'Failed to refresh accounts' });
+  }
+});
+
 // List thumbnail folders (per user)
 app.get('/api/thumbnail-folders', isAuthenticated, async (req, res) => {
   try {
@@ -6226,7 +6287,7 @@ app.get('/api/youtube/templates', isAuthenticated, async (req, res) => {
     
     // Parse broadcasts from description if it's a multi-broadcast template
     // Also validate account and add account_valid flag
-    templates.forEach(template => {
+    for (const template of templates) {
       try {
         if (template.description && template.description.startsWith('[')) {
           template.broadcasts = JSON.parse(template.description);
@@ -6240,11 +6301,25 @@ app.get('/api/youtube/templates', isAuthenticated, async (req, res) => {
       const account = accountMap.get(template.account_id);
       template.account_valid = !!account;
       
-      // If channel_name is missing but account exists, use account's channel name
+      // If channel_name is missing but account exists, try to get it
       if (!template.channel_name && account) {
         template.channel_name = account.channelName;
+        
+        // If still missing, try to refresh from YouTube API (async, don't wait)
+        if (!template.channel_name && account.clientId && account.refreshToken) {
+          // Fire and forget - refresh in background
+          YouTubeCredentials.refreshChannelInfo(account.id, youtubeService)
+            .then(result => {
+              if (result.success) {
+                console.log(`[API] Refreshed channel name for account ${account.id}: ${result.channelName}`);
+              }
+            })
+            .catch(err => {
+              console.warn(`[API] Failed to refresh channel name for account ${account.id}:`, err.message);
+            });
+        }
       }
-    });
+    }
     
     res.json({ success: true, templates });
   } catch (error) {
