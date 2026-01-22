@@ -1969,6 +1969,13 @@ function renderTemplateList(templates) {
           ${recurringHtmlDesktop}
         </div>
         <div class="flex items-center gap-2 flex-shrink-0">
+          ${hasRecurring ? `
+          <button onclick="runTemplateNow('${template.id}', '${escapeJsString(template.name)}')"
+            class="px-3 py-1.5 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 rounded-lg transition-colors text-sm flex items-center gap-1" title="Run Schedule Now">
+            <i class="ti ti-player-play"></i>
+            <span>Run</span>
+          </button>
+          ` : ''}
           ${!isMulti ? `
           <button onclick="toggleTemplateRecurring('${template.id}', ${hasRecurring})"
             class="recurring-toggle px-3 py-1.5 ${hasRecurring ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'} hover:opacity-80 rounded-lg transition-colors text-sm flex items-center gap-1" title="${hasRecurring ? 'Disable Recurring' : 'Enable Recurring'}" data-recurring="${hasRecurring}">
@@ -3693,6 +3700,37 @@ function resetRecurringFields() {
   document.querySelectorAll('input[name="recurringPattern"]').forEach(r => r.checked = false);
   document.querySelectorAll('input[name="recurringDays"]').forEach(cb => cb.checked = false);
   document.getElementById('recurringDaysError').classList.add('hidden');
+}
+
+// Run template schedule now (manual trigger)
+async function runTemplateNow(templateId, templateName) {
+  if (!confirm(`Run schedule for "${templateName}" now?\n\nThis will create broadcast(s) immediately.`)) {
+    return;
+  }
+  
+  try {
+    showToast('Running schedule...', 'info');
+    
+    const response = await fetch(`/api/youtube/templates/${templateId}/run-now`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      showToast('Broadcast(s) created successfully!');
+      setTimeout(() => window.location.reload(), 1500);
+    } else {
+      showToast(data.error || 'Failed to run schedule', 'error');
+    }
+  } catch (error) {
+    console.error('Error running template:', error);
+    showToast('Failed to run schedule: ' + error.message, 'error');
+  }
 }
 
 // Toggle recurring for a template (quick toggle from list)

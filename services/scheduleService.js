@@ -15,7 +15,7 @@ const { calculateNextRun, formatNextRunAt, replaceTitlePlaceholders, isScheduleM
  * Get current time in Asia/Jakarta timezone (WIB)
  * Uses Intl.DateTimeFormat for accurate timezone conversion
  * @param {Date} date - Date object to convert
- * @returns {Object} Object with hours, minutes, day
+ * @returns {Object} Object with hours, minutes, seconds, day, year, month, dayOfMonth
  */
 function getWIBTime(date = new Date()) {
   try {
@@ -24,44 +24,83 @@ function getWIBTime(date = new Date()) {
       timeZone: 'Asia/Jakarta',
       hour: 'numeric',
       minute: 'numeric',
+      second: 'numeric',
       weekday: 'short',
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
       hour12: false
     });
     
     const parts = formatter.formatToParts(date);
-    let hours = 0, minutes = 0, dayName = '';
+    let hours = 0, minutes = 0, seconds = 0, dayName = '', year = 0, month = 0, dayOfMonth = 0;
     
     for (const part of parts) {
       if (part.type === 'hour') hours = parseInt(part.value, 10);
       if (part.type === 'minute') minutes = parseInt(part.value, 10);
+      if (part.type === 'second') seconds = parseInt(part.value, 10);
       if (part.type === 'weekday') dayName = part.value;
+      if (part.type === 'year') year = parseInt(part.value, 10);
+      if (part.type === 'month') month = parseInt(part.value, 10) - 1; // 0-indexed
+      if (part.type === 'day') dayOfMonth = parseInt(part.value, 10);
     }
     
     // Convert day name to number (0=Sun, 1=Mon, etc.)
     const dayMap = { 'Sun': 0, 'Mon': 1, 'Tue': 2, 'Wed': 3, 'Thu': 4, 'Fri': 5, 'Sat': 6 };
     const day = dayMap[dayName] ?? date.getDay();
     
-    return { hours, minutes, day };
+    return { hours, minutes, seconds, day, year, month, dayOfMonth };
   } catch (e) {
     // Fallback to manual calculation if Intl fails
     console.warn('[ScheduleService] Intl.DateTimeFormat failed, using manual WIB calculation');
-    const wibOffset = 7 * 60; // 7 hours in minutes
-    const utcMinutes = date.getUTCHours() * 60 + date.getUTCMinutes();
-    const wibMinutes = (utcMinutes + wibOffset) % (24 * 60);
+    const wibOffset = 7 * 60 * 60 * 1000; // 7 hours in ms
+    const wibDate = new Date(date.getTime() + wibOffset);
     
-    const hours = Math.floor(wibMinutes / 60);
-    const minutes = wibMinutes % 60;
-    
-    // Calculate day in WIB
-    const utcDay = date.getUTCDay();
-    const utcHours = date.getUTCHours();
-    let day = utcDay;
-    if (utcHours + 7 >= 24) {
-      day = (utcDay + 1) % 7;
-    }
-    
-    return { hours, minutes, day };
+    return {
+      hours: wibDate.getUTCHours(),
+      minutes: wibDate.getUTCMinutes(),
+      seconds: wibDate.getUTCSeconds(),
+      day: wibDate.getUTCDay(),
+      year: wibDate.getUTCFullYear(),
+      month: wibDate.getUTCMonth(),
+      dayOfMonth: wibDate.getUTCDate()
+    };
   }
+}
+
+/**
+ * Convert a WIB time to UTC Date object
+ * @param {number} year - Year in WIB
+ * @param {number} month - Month in WIB (0-indexed)
+ * @param {number} dayOfMonth - Day of month in WIB
+ * @param {number} hours - Hours in WIB (0-23)
+ * @param {number} minutes - Minutes in WIB (0-59)
+ * @returns {Date} UTC Date object
+ */
+function wibToUTC(year, month, dayOfMonth, hours, minutes) {
+  // WIB is UTC+7, so subtract 7 hours to get UTC
+  const utcHours = hours - 7;
+  
+  let adjustedDay = dayOfMonth;
+  let adjustedMonth = month;
+  let adjustedYear = year;
+  let adjustedHours = utcHours;
+  
+  if (utcHours < 0) {
+    adjustedHours = utcHours + 24;
+    adjustedDay = dayOfMonth - 1;
+    
+    if (adjustedDay < 1) {
+      adjustedMonth = month - 1;
+      if (adjustedMonth < 0) {
+        adjustedMonth = 11;
+        adjustedYear = year - 1;
+      }
+      adjustedDay = new Date(adjustedYear, adjustedMonth + 1, 0).getDate();
+    }
+  }
+  
+  return new Date(Date.UTC(adjustedYear, adjustedMonth, adjustedDay, adjustedHours, minutes, 0, 0));
 }
 
 class ScheduleService {
@@ -119,17 +158,19 @@ class ScheduleService {
   }
 
   /**
-   * Start the schedule checker that runs every 1 minute
+   * Start the schedule checker that runs every 30 seconds
+   * More frequent checks ensure schedules are triggered within the 5-minute window
    */
   startChecker() {
     if (this.checkInterval) return;
     
-    // Check every 1 minute for more accurate scheduling
+    // Check every 30 seconds for more precise scheduling
+    // This ensures we catch the schedule within the 5-minute execution window
     this.checkInterval = setInterval(async () => {
       await this.checkSchedules();
-    }, 60000);
+    }, 30000); // 30 seconds
     
-    console.log('[ScheduleService] Schedule checker started (1 min interval)');
+    console.log('[ScheduleService] Schedule checker started (30 sec interval for WIB precision)');
     
     // Also run immediately on start
     setTimeout(() => this.checkSchedules(), 5000);
@@ -148,106 +189,195 @@ class ScheduleService {
 
   /**
    * Check all templates with recurring and execute if it's time
+   * Uses WIB timezone for all time comparisons
    */
   async checkSchedules() {
     try {
       const templates = await BroadcastTemplate.findWithRecurringEnabled();
       const now = new Date();
       const wibTime = getWIBTime(now);
+      const nowMs = now.getTime();
       
-      // Log current WIB time for debugging
-      console.log(`[ScheduleService] Checking ${templates.length} templates at ${wibTime.hours}:${String(wibTime.minutes).padStart(2,'0')} WIB`);
+      // Log current WIB time for debugging (with seconds for precision)
+      const wibTimeStr = `${String(wibTime.hours).padStart(2,'0')}:${String(wibTime.minutes).padStart(2,'0')}:${String(wibTime.seconds).padStart(2,'0')}`;
+      const wibDateStr = `${wibTime.year}-${String(wibTime.month + 1).padStart(2,'0')}-${String(wibTime.dayOfMonth).padStart(2,'0')}`;
+      console.log(`[ScheduleService] ========== SCHEDULE CHECK ==========`);
+      console.log(`[ScheduleService] Current WIB: ${wibDateStr} ${wibTimeStr}`);
+      console.log(`[ScheduleService] Current UTC: ${now.toISOString()}`);
+      console.log(`[ScheduleService] Templates with recurring enabled: ${templates.length}`);
       
       if (templates.length === 0) {
+        console.log(`[ScheduleService] No templates to check`);
         return;
       }
       
       for (const template of templates) {
         // Log template info for debugging
-        console.log(`[ScheduleService] Template "${template.name}": pattern=${template.recurring_pattern}, time=${template.recurring_time}, days=${JSON.stringify(template.recurring_days)}`);
+        const nextRunStr = template.next_run_at ? new Date(template.next_run_at).toISOString() : 'not set';
+        const lastRunStr = template.last_run_at ? new Date(template.last_run_at).toISOString() : 'never';
+        const hasRunToday = this.hasRunToday(template, now);
         
-        // Check for missed schedules first
-        if (this.shouldExecuteMissed(template, now)) {
-          console.log(`[ScheduleService] Executing missed schedule for template: ${template.name}`);
+        console.log(`[ScheduleService] --- Template: "${template.name}" ---`);
+        console.log(`[ScheduleService]   Pattern: ${template.recurring_pattern}, Time: ${template.recurring_time} WIB`);
+        console.log(`[ScheduleService]   Days: ${JSON.stringify(template.recurring_days)}`);
+        console.log(`[ScheduleService]   Next run (UTC): ${nextRunStr}`);
+        console.log(`[ScheduleService]   Last run (UTC): ${lastRunStr}`);
+        console.log(`[ScheduleService]   Has run today (WIB): ${hasRunToday}`);
+        console.log(`[ScheduleService]   Has credentials: ${!!(template.client_id && template.refresh_token)}`);
+        
+        // Skip if already run today (in WIB timezone)
+        if (hasRunToday) {
+          console.log(`[ScheduleService]   SKIP: Already run today (WIB)`);
+          continue;
+        }
+        
+        // Check if today is a valid day for this schedule (in WIB)
+        const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        const todayWIB = dayNames[wibTime.day];
+        let isTodayValid = false;
+        
+        if (template.recurring_pattern === 'daily') {
+          isTodayValid = true;
+        } else if (template.recurring_pattern === 'weekly') {
+          const scheduledDays = (template.recurring_days || []).map(d => d.toLowerCase());
+          isTodayValid = scheduledDays.includes(todayWIB);
+          console.log(`[ScheduleService]   Today WIB (${todayWIB}) is scheduled: ${isTodayValid}`);
+        }
+        
+        if (!isTodayValid) {
+          console.log(`[ScheduleService]   SKIP: Today (${todayWIB}) is not a scheduled day`);
+          continue;
+        }
+        
+        // Parse scheduled time (in WIB)
+        if (!template.recurring_time) {
+          console.log(`[ScheduleService]   SKIP: No recurring_time set`);
+          continue;
+        }
+        
+        const [schedHour, schedMin] = template.recurring_time.split(':').map(Number);
+        
+        // Calculate scheduled time in WIB minutes from midnight
+        const scheduleMinutesWIB = schedHour * 60 + schedMin;
+        const currentMinutesWIB = wibTime.hours * 60 + wibTime.minutes;
+        const timeDiffMinutes = currentMinutesWIB - scheduleMinutesWIB;
+        
+        console.log(`[ScheduleService]   Scheduled: ${String(schedHour).padStart(2,'0')}:${String(schedMin).padStart(2,'0')} WIB (${scheduleMinutesWIB} min from midnight)`);
+        console.log(`[ScheduleService]   Current: ${String(wibTime.hours).padStart(2,'0')}:${String(wibTime.minutes).padStart(2,'0')} WIB (${currentMinutesWIB} min from midnight)`);
+        console.log(`[ScheduleService]   Time diff: ${timeDiffMinutes} minutes (positive = past scheduled time)`);
+        
+        // Method 1: Direct WIB time comparison (PRIMARY - most reliable)
+        // Execute if current WIB time is within window: 0 to 5 minutes AFTER scheduled time
+        // This is the most accurate method as it compares WIB to WIB directly
+        if (timeDiffMinutes >= 0 && timeDiffMinutes <= 5) {
+          console.log(`[ScheduleService]   >>> EXECUTING (WIB time match: within ${timeDiffMinutes} min of scheduled time)`);
           await this.executeTemplate(template);
           continue;
         }
         
-        // Check if it's time to execute
-        if (this.shouldExecute(template, now)) {
-          console.log(`[ScheduleService] >>> EXECUTING template: ${template.name}`);
-          await this.executeTemplate(template);
+        // Method 2: Check using next_run_at (BACKUP - for missed schedules)
+        // This handles cases where the service was down during scheduled time
+        if (template.next_run_at) {
+          const nextRunAt = new Date(template.next_run_at);
+          const timeDiffMs = nowMs - nextRunAt.getTime();
+          const timeDiffFromNextRun = Math.floor(timeDiffMs / (1000 * 60));
+          
+          console.log(`[ScheduleService]   next_run_at diff: ${timeDiffFromNextRun} minutes (positive = overdue)`);
+          
+          // Execute if next_run_at is overdue (past) but within 60 minutes
+          // This catches schedules that were missed due to service downtime
+          if (timeDiffFromNextRun > 5 && timeDiffFromNextRun <= 60) {
+            console.log(`[ScheduleService]   >>> EXECUTING (next_run_at overdue by ${timeDiffFromNextRun} min)`);
+            await this.executeTemplate(template);
+            continue;
+          }
+        }
+        
+        // Log waiting status
+        if (timeDiffMinutes < 0) {
+          console.log(`[ScheduleService]   WAITING: ${Math.abs(timeDiffMinutes)} minutes until scheduled time`);
+        } else if (timeDiffMinutes > 5) {
+          console.log(`[ScheduleService]   MISSED: ${timeDiffMinutes} minutes past scheduled time (>5 min window)`);
+          // Update next_run_at to tomorrow if significantly past
+          if (timeDiffMinutes > 60) {
+            console.log(`[ScheduleService]   Updating next_run_at to next occurrence...`);
+            await this.updateNextRunToFuture(template);
+          }
         }
       }
+      
+      console.log(`[ScheduleService] ========== CHECK COMPLETE ==========`);
     } catch (error) {
       console.error('[ScheduleService] Check schedules error:', error.message);
+      console.error(error.stack);
     }
   }
 
   /**
    * Check if a missed schedule should be executed
+   * Uses WIB timezone for all comparisons
    * @param {Object} template - Template object with recurring config
    * @param {Date} now - Current time
    * @returns {boolean}
    */
   shouldExecuteMissed(template, now) {
-    // If already run today, skip
+    // If already run today (in WIB), skip
     if (this.hasRunToday(template, now)) {
       return false;
     }
     
-    // Check if next_run_at is set and in the past (OVERDUE)
-    if (template.next_run_at) {
-      const nextRunAt = new Date(template.next_run_at);
+    const wibTime = getWIBTime(now);
+    
+    // Check if today is a valid day for this schedule (in WIB)
+    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    const todayWIB = dayNames[wibTime.day];
+    let isTodayValid = false;
+    
+    if (template.recurring_pattern === 'daily') {
+      isTodayValid = true;
+    } else if (template.recurring_pattern === 'weekly') {
+      const scheduledDays = (template.recurring_days || []).map(d => d.toLowerCase());
+      isTodayValid = scheduledDays.includes(todayWIB);
+    }
+    
+    if (!isTodayValid) {
+      return false;
+    }
+    
+    // Check if scheduled time has passed today (in WIB)
+    if (template.recurring_time) {
+      const [schedHour, schedMin] = template.recurring_time.split(':').map(Number);
+      const scheduleMinutesWIB = schedHour * 60 + schedMin;
+      const currentMinutesWIB = wibTime.hours * 60 + wibTime.minutes;
+      const timeDiffMinutes = currentMinutesWIB - scheduleMinutesWIB;
       
-      // If next_run_at is in the past, it's overdue - execute it!
-      if (nextRunAt.getTime() < now.getTime()) {
-        // Calculate how long overdue
-        const overdueMinutes = Math.floor((now.getTime() - nextRunAt.getTime()) / (1000 * 60));
-        
-        // Execute if overdue by less than 24 hours (1440 minutes)
-        // This prevents executing very old schedules
-        if (overdueMinutes <= 1440) {
-          console.log(`[ScheduleService] Detected OVERDUE schedule for template: ${template.name}, next_run_at: ${template.next_run_at}, overdue by ${overdueMinutes} minutes`);
-          return true;
-        } else {
-          console.log(`[ScheduleService] Skipping very old overdue schedule for template: ${template.name}, overdue by ${overdueMinutes} minutes (>24h)`);
-          // Update next_run_at to future date
-          this.updateNextRunToFuture(template);
-          return false;
-        }
+      // If scheduled time has passed today (more than 5 minutes ago to avoid conflict with checkSchedules)
+      // but within 60 minutes, consider it missed
+      if (timeDiffMinutes > 5 && timeDiffMinutes <= 60) {
+        console.log(`[ScheduleService] Detected missed schedule for template: ${template.name}`);
+        console.log(`[ScheduleService]   Scheduled: ${template.recurring_time} WIB, Current: ${String(wibTime.hours).padStart(2,'0')}:${String(wibTime.minutes).padStart(2,'0')} WIB`);
+        console.log(`[ScheduleService]   Time diff: ${timeDiffMinutes} minutes (missed by ${timeDiffMinutes - 5} min)`);
+        return true;
       }
     }
     
-    // Also check if the scheduled time has passed today but hasn't run
-    // This handles the case where next_run_at is not set or incorrect
-    if (template.recurring_time) {
-      const [schedHour, schedMin] = template.recurring_time.split(':').map(Number);
-      const wibTime = getWIBTime(now);
-      const scheduleMinutes = schedHour * 60 + schedMin;
-      const currentMinutes = wibTime.hours * 60 + wibTime.minutes;
+    // Also check next_run_at for older missed schedules (service was down)
+    if (template.next_run_at) {
+      const nextRunAt = new Date(template.next_run_at);
+      const overdueMs = now.getTime() - nextRunAt.getTime();
+      const overdueMinutes = Math.floor(overdueMs / (1000 * 60));
       
-      // If scheduled time has passed today
-      const timeDiff = currentMinutes - scheduleMinutes;
-      if (timeDiff > 1) {
-        // For daily, always check
-        if (template.recurring_pattern === 'daily') {
-          console.log(`[ScheduleService] Detected missed daily schedule for template: ${template.name}, scheduled: ${template.recurring_time}, current: ${wibTime.hours}:${String(wibTime.minutes).padStart(2,'0')} WIB, diff: ${timeDiff} min`);
-          return true;
-        }
-        
-        // For weekly, check if today is a scheduled day
-        if (template.recurring_pattern === 'weekly') {
-          const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-          const today = dayNames[wibTime.day];
-          const scheduledDays = template.recurring_days || [];
-          const normalizedDays = scheduledDays.map(d => d.toLowerCase());
-          
-          if (normalizedDays.includes(today)) {
-            console.log(`[ScheduleService] Detected missed weekly schedule for template: ${template.name}, scheduled: ${template.recurring_time} (${today}), current: ${wibTime.hours}:${String(wibTime.minutes).padStart(2,'0')} WIB, diff: ${timeDiff} min`);
-            return true;
-          }
-        }
+      // If next_run_at is overdue by more than 60 minutes but less than 24 hours
+      // This handles cases where service was down for extended period
+      if (overdueMinutes > 60 && overdueMinutes <= 1440) {
+        console.log(`[ScheduleService] Detected OVERDUE schedule for template: ${template.name}`);
+        console.log(`[ScheduleService]   next_run_at: ${template.next_run_at}, overdue by ${overdueMinutes} minutes`);
+        return true;
+      } else if (overdueMinutes > 1440) {
+        console.log(`[ScheduleService] Skipping very old overdue schedule for template: ${template.name}, overdue by ${overdueMinutes} minutes (>24h)`);
+        // Update next_run_at to future date
+        this.updateNextRunToFuture(template);
+        return false;
       }
     }
     
@@ -278,6 +408,7 @@ class ScheduleService {
 
   /**
    * Check if a template should execute now
+   * Uses WIB timezone for all comparisons
    * @param {Object} template - Template object with recurring config
    * @param {Date} now - Current time
    * @returns {boolean}
@@ -287,20 +418,17 @@ class ScheduleService {
     
     const [schedHour, schedMin] = template.recurring_time.split(':').map(Number);
     
-    // CRITICAL: Use WIB time for comparison since user inputs time in WIB
+    // Get current time in WIB
     const wibTime = getWIBTime(now);
-    const currentHour = wibTime.hours;
-    const currentMin = wibTime.minutes;
-    const currentDay = wibTime.day;
     
-    // Check if time matches (within 1 minute window for 1-min check interval)
-    const scheduleMinutes = schedHour * 60 + schedMin;
-    const currentMinutes = currentHour * 60 + currentMin;
-    const timeDiff = currentMinutes - scheduleMinutes;
+    // Calculate time difference in minutes (WIB)
+    const scheduleMinutesWIB = schedHour * 60 + schedMin;
+    const currentMinutesWIB = wibTime.hours * 60 + wibTime.minutes;
+    const timeDiffMinutes = currentMinutesWIB - scheduleMinutesWIB;
     
-    // Trigger if within 0-1 minutes of scheduled time (1-min interval)
-    // This means: current time is AT or UP TO 1 minute AFTER scheduled time
-    if (timeDiff < 0 || timeDiff > 1) {
+    // Trigger if within 0-5 minutes of scheduled time
+    // This means: current time is AT or UP TO 5 minutes AFTER scheduled time
+    if (timeDiffMinutes < 0 || timeDiffMinutes > 5) {
       return false;
     }
     
@@ -308,27 +436,26 @@ class ScheduleService {
     if (template.recurring_pattern === 'daily') {
       const shouldRun = !this.hasRunToday(template, now);
       if (shouldRun) {
-        console.log(`[ScheduleService] Daily trigger: ${schedHour}:${String(schedMin).padStart(2,'0')} WIB, current: ${currentHour}:${String(currentMin).padStart(2,'0')} WIB`);
+        console.log(`[ScheduleService] Daily trigger: ${String(schedHour).padStart(2,'0')}:${String(schedMin).padStart(2,'0')} WIB`);
+        console.log(`[ScheduleService]   Current: ${String(wibTime.hours).padStart(2,'0')}:${String(wibTime.minutes).padStart(2,'0')} WIB, diff: ${timeDiffMinutes} min`);
       }
       return shouldRun;
     }
     
-    // For weekly, check if today is a scheduled day
+    // For weekly, check if today is a scheduled day (in WIB)
     if (template.recurring_pattern === 'weekly') {
       const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-      const today = dayNames[currentDay];
-      const scheduledDays = template.recurring_days || [];
+      const todayWIB = dayNames[wibTime.day];
+      const scheduledDays = (template.recurring_days || []).map(d => d.toLowerCase());
       
-      // Normalize day names to lowercase for comparison
-      const normalizedDays = scheduledDays.map(d => d.toLowerCase());
-      
-      if (!normalizedDays.includes(today)) {
+      if (!scheduledDays.includes(todayWIB)) {
         return false;
       }
       
       const shouldRun = !this.hasRunToday(template, now);
       if (shouldRun) {
-        console.log(`[ScheduleService] Weekly trigger: ${schedHour}:${String(schedMin).padStart(2,'0')} WIB (${today}), current: ${currentHour}:${String(currentMin).padStart(2,'0')} WIB`);
+        console.log(`[ScheduleService] Weekly trigger: ${String(schedHour).padStart(2,'0')}:${String(schedMin).padStart(2,'0')} WIB (${todayWIB})`);
+        console.log(`[ScheduleService]   Current: ${String(wibTime.hours).padStart(2,'0')}:${String(wibTime.minutes).padStart(2,'0')} WIB, diff: ${timeDiffMinutes} min`);
       }
       return shouldRun;
     }
@@ -347,24 +474,28 @@ class ScheduleService {
     
     const lastRun = new Date(template.last_run_at);
     
-    // Compare dates in WIB timezone
-    const wibNow = getWIBTime(now);
-    const wibLastRun = getWIBTime(lastRun);
-    
-    // Get date string in WIB for comparison
+    // Get date strings in WIB for comparison
     const nowDateStr = this.getWIBDateString(now);
     const lastRunDateStr = this.getWIBDateString(lastRun);
     
-    return nowDateStr === lastRunDateStr;
+    const result = nowDateStr === lastRunDateStr;
+    
+    if (result) {
+      console.log(`[ScheduleService]   hasRunToday: YES (last run: ${lastRunDateStr} WIB, today: ${nowDateStr} WIB)`);
+    }
+    
+    return result;
   }
 
   /**
    * Get date string in WIB timezone (YYYY-MM-DD format)
+   * Uses Intl.DateTimeFormat for accurate timezone conversion
    * @param {Date} date - Date object
-   * @returns {string} Date string in WIB
+   * @returns {string} Date string in WIB (YYYY-MM-DD)
    */
   getWIBDateString(date) {
     try {
+      // Use en-CA locale which outputs YYYY-MM-DD format
       const formatter = new Intl.DateTimeFormat('en-CA', {
         timeZone: 'Asia/Jakarta',
         year: 'numeric',
@@ -373,9 +504,9 @@ class ScheduleService {
       });
       return formatter.format(date);
     } catch (e) {
-      // Fallback: add 7 hours to UTC
-      const wibDate = new Date(date.getTime() + 7 * 60 * 60 * 1000);
-      return wibDate.toISOString().split('T')[0];
+      // Fallback: manually calculate WIB date
+      const wibTime = getWIBTime(date);
+      return `${wibTime.year}-${String(wibTime.month + 1).padStart(2,'0')}-${String(wibTime.dayOfMonth).padStart(2,'0')}`;
     }
   }
 

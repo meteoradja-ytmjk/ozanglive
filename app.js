@@ -7016,6 +7016,94 @@ app.post('/api/recurring-schedules/:id/run-now', isAuthenticated, async (req, re
   }
 });
 
+// Manual trigger for template recurring schedule
+app.post('/api/youtube/templates/:id/run-now', isAuthenticated, async (req, res) => {
+  try {
+    const template = await BroadcastTemplate.findById(req.params.id);
+    
+    if (!template) {
+      return res.status(404).json({ success: false, error: 'Template not found' });
+    }
+    
+    if (template.user_id !== req.session.userId) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+    
+    // Get credentials
+    const credentials = await YouTubeCredentials.findById(template.account_id);
+    if (!credentials) {
+      return res.status(400).json({ success: false, error: 'YouTube account not found' });
+    }
+    
+    // Merge credentials into template object
+    const templateWithCreds = {
+      ...template,
+      client_id: credentials.clientId,
+      client_secret: credentials.clientSecret,
+      refresh_token: credentials.refreshToken
+    };
+    
+    console.log(`[API] Manual trigger for template: ${template.name}`);
+    const result = await scheduleService.executeTemplate(templateWithCreds);
+    
+    res.json({ 
+      success: true, 
+      message: 'Broadcast(s) created successfully',
+      results: result
+    });
+  } catch (error) {
+    console.error('Error running template manually:', error);
+    res.status(500).json({ success: false, error: error.message || 'Failed to run template' });
+  }
+});
+
+// Debug: Force check all schedules now
+app.post('/api/youtube/schedules/check-now', isAuthenticated, async (req, res) => {
+  try {
+    console.log(`[API] Manual schedule check triggered by user`);
+    await scheduleService.checkSchedules();
+    res.json({ success: true, message: 'Schedule check completed' });
+  } catch (error) {
+    console.error('Error checking schedules:', error);
+    res.status(500).json({ success: false, error: error.message || 'Failed to check schedules' });
+  }
+});
+
+// Debug: Get schedule service status
+app.get('/api/youtube/schedules/status', isAuthenticated, async (req, res) => {
+  try {
+    const templates = await BroadcastTemplate.findWithRecurringEnabled();
+    const { getWIBTime } = require('./utils/recurringUtils');
+    const now = new Date();
+    const wibTime = getWIBTime(now);
+    
+    res.json({
+      success: true,
+      currentTime: {
+        utc: now.toISOString(),
+        wib: `${String(wibTime.hours).padStart(2,'0')}:${String(wibTime.minutes).padStart(2,'0')}`,
+        day: wibTime.day,
+        dayOfMonth: wibTime.dayOfMonth
+      },
+      serviceInitialized: scheduleService.initialized,
+      checkerRunning: !!scheduleService.checkInterval,
+      templatesWithRecurring: templates.map(t => ({
+        id: t.id,
+        name: t.name,
+        pattern: t.recurring_pattern,
+        time: t.recurring_time,
+        days: t.recurring_days,
+        nextRunAt: t.next_run_at,
+        lastRunAt: t.last_run_at,
+        hasCredentials: !!(t.client_id && t.refresh_token)
+      }))
+    });
+  } catch (error) {
+    console.error('Error getting schedule status:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ==================== TITLE SUGGESTIONS API ====================
 
 // Get all title suggestions for user
