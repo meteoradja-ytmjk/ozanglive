@@ -530,12 +530,22 @@ class ScheduleService {
             console.log(`[ScheduleService] Broadcast ${i + 1} created: ${result.broadcastId || result.id}`);
             
             // Determine thumbnail folder from stream key mapping if available
-            let thumbnailFolder = b.thumbnailFolder;
-            if (!thumbnailFolder && b.streamId && template.stream_key_folder_mapping) {
-              thumbnailFolder = template.stream_key_folder_mapping[b.streamId];
-              if (thumbnailFolder !== undefined) {
-                console.log(`[ScheduleService] Using mapped folder for stream key ${b.streamId}: ${thumbnailFolder || 'root'}`);
+            // Priority: stream_key_folder_mapping > b.thumbnailFolder
+            let thumbnailFolder = null;
+            
+            // First check stream_key_folder_mapping for this stream key
+            if (b.streamId && template.stream_key_folder_mapping) {
+              const mappedFolder = template.stream_key_folder_mapping[b.streamId];
+              if (mappedFolder !== undefined) {
+                thumbnailFolder = mappedFolder;
+                console.log(`[ScheduleService] Using mapped folder for stream key ${b.streamId}: ${thumbnailFolder === '' ? 'root' : thumbnailFolder}`);
               }
+            }
+            
+            // Fallback to b.thumbnailFolder if no mapping found
+            if (thumbnailFolder === null && b.thumbnailFolder !== null && b.thumbnailFolder !== undefined) {
+              thumbnailFolder = b.thumbnailFolder;
+              console.log(`[ScheduleService] Using broadcast thumbnailFolder: ${thumbnailFolder === '' ? 'root' : thumbnailFolder}`);
             }
             
             // Save broadcast settings including thumbnail folder
@@ -548,16 +558,16 @@ class ScheduleService {
                 enableAutoStop: true,
                 unlistReplayOnEnd: false,
                 originalPrivacyStatus: b.privacyStatus || 'unlisted',
-                thumbnailFolder: thumbnailFolder !== undefined ? thumbnailFolder : null,
+                thumbnailFolder: thumbnailFolder !== null ? thumbnailFolder : null,
                 templateId: template.id
               });
-              console.log(`[ScheduleService] Saved broadcast settings for ${result.broadcastId || result.id}, thumbnailFolder: ${thumbnailFolder !== undefined ? (thumbnailFolder || 'root') : 'null'}, templateId: ${template.id}`);
+              console.log(`[ScheduleService] Saved broadcast settings for ${result.broadcastId || result.id}, thumbnailFolder: ${thumbnailFolder !== null ? (thumbnailFolder === '' ? 'root' : thumbnailFolder) : 'null'}, templateId: ${template.id}`);
             } catch (settingsErr) {
               console.error(`[ScheduleService] Failed to save broadcast settings:`, settingsErr.message);
             }
             
             // Upload thumbnail - use sequential or random selection from folder based on template mode
-            if (thumbnailFolder !== null && thumbnailFolder !== undefined || b.thumbnailPath || b.pinnedThumbnail) {
+            if (thumbnailFolder !== null || b.thumbnailPath || b.pinnedThumbnail) {
               // Calculate broadcast-specific index for multi-broadcast templates
               const broadcastIndex = (template.thumbnail_index || 0) + i;
               const isRandomMode = template.thumbnail_mode === 'random';
@@ -667,13 +677,22 @@ class ScheduleService {
         console.log(`[ScheduleService] Broadcast created: ${result.broadcastId || result.id}`);
         
         // Determine thumbnail folder from stream key mapping if available
-        let thumbnailFolder = template.thumbnail_folder;
-        if (thumbnailFolder === null && template.stream_id && template.stream_key_folder_mapping) {
+        // Priority: stream_key_folder_mapping > template.thumbnail_folder
+        let thumbnailFolder = null;
+        
+        // First check stream_key_folder_mapping for this stream key
+        if (template.stream_id && template.stream_key_folder_mapping) {
           const mappedFolder = template.stream_key_folder_mapping[template.stream_id];
           if (mappedFolder !== undefined) {
             thumbnailFolder = mappedFolder;
-            console.log(`[ScheduleService] Using mapped folder for stream key ${template.stream_id}: ${thumbnailFolder || 'root'}`);
+            console.log(`[ScheduleService] Using mapped folder for stream key ${template.stream_id}: ${thumbnailFolder === '' ? 'root' : thumbnailFolder}`);
           }
+        }
+        
+        // Fallback to template.thumbnail_folder if no mapping found
+        if (thumbnailFolder === null && template.thumbnail_folder !== null && template.thumbnail_folder !== undefined) {
+          thumbnailFolder = template.thumbnail_folder;
+          console.log(`[ScheduleService] Using template thumbnail_folder: ${thumbnailFolder === '' ? 'root' : thumbnailFolder}`);
         }
         
         // Save broadcast settings including thumbnail folder
@@ -686,16 +705,16 @@ class ScheduleService {
             enableAutoStop: true,
             unlistReplayOnEnd: false,
             originalPrivacyStatus: template.privacy_status || 'unlisted',
-            thumbnailFolder: thumbnailFolder !== undefined ? thumbnailFolder : null,
+            thumbnailFolder: thumbnailFolder !== null ? thumbnailFolder : null,
             templateId: template.id
           });
-          console.log(`[ScheduleService] Saved broadcast settings for ${result.broadcastId || result.id}, thumbnailFolder: ${thumbnailFolder !== undefined ? (thumbnailFolder || 'root') : 'null'}, templateId: ${template.id}`);
+          console.log(`[ScheduleService] Saved broadcast settings for ${result.broadcastId || result.id}, thumbnailFolder: ${thumbnailFolder !== null ? (thumbnailFolder === '' ? 'root' : thumbnailFolder) : 'null'}, templateId: ${template.id}`);
         } catch (settingsErr) {
           console.error(`[ScheduleService] Failed to save broadcast settings:`, settingsErr.message);
         }
         
         // Upload thumbnail - use sequential or random selection from folder based on template mode
-        if (thumbnailFolder !== null && thumbnailFolder !== undefined || template.thumbnail_path || template.pinned_thumbnail) {
+        if (thumbnailFolder !== null || template.thumbnail_path || template.pinned_thumbnail) {
           const isRandomMode = template.thumbnail_mode === 'random';
           await this.uploadThumbnailForBroadcast(
             accessToken, 
