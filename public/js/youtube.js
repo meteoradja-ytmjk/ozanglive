@@ -4622,9 +4622,9 @@ function selectTitleFolder(folderId) {
 }
 
 /**
- * Open create folder modal
+ * Open create title folder modal
  */
-function openCreateFolderModal() {
+function openCreateTitleFolderModal() {
   document.getElementById('folderModalTitle').textContent = 'Buat Folder Baru';
   document.getElementById('editFolderId').value = '';
   document.getElementById('folderNameInput').value = '';
