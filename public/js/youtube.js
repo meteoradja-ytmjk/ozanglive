@@ -490,9 +490,17 @@ async function getBroadcastSettingsFromServer(broadcastId, accountId = null) {
 
 // Create folder modal functions
 function openCreateFolderModal() {
-  document.getElementById('createFolderModal').classList.remove('hidden');
-  document.getElementById('newFolderName').value = '';
-  document.getElementById('newFolderName').focus();
+  const modal = document.getElementById('createFolderModal');
+  if (!modal) {
+    console.error('createFolderModal not found');
+    return;
+  }
+  modal.classList.remove('hidden');
+  const input = document.getElementById('newFolderName');
+  if (input) {
+    input.value = '';
+    input.focus();
+  }
 }
 
 function closeCreateFolderModal() {
