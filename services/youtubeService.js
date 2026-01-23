@@ -82,6 +82,32 @@ class YouTubeService {
   }
 
   /**
+   * Strip HTML tags from error messages
+   * @param {string} message - Error message that may contain HTML
+   * @returns {string} Clean message without HTML
+   */
+  stripHtmlFromError(message) {
+    if (!message || typeof message !== 'string') return message || 'Unknown error';
+    
+    // Remove HTML tags
+    let clean = message.replace(/<[^>]*>/g, '');
+    
+    // Decode common HTML entities
+    clean = clean
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&amp;/g, '&')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&nbsp;/g, ' ');
+    
+    // Clean up extra whitespace
+    clean = clean.replace(/\s+/g, ' ').trim();
+    
+    return clean;
+  }
+
+  /**
    * Validate credentials by testing API connection
    * @param {string} clientId - Google Client ID
    * @param {string} clientSecret - Google Client Secret
@@ -100,7 +126,10 @@ class YouTubeService {
         channelThumbnail: channelInfo.thumbnail
       };
     } catch (error) {
-      const errorMessage = error.message || 'Invalid credentials';
+      let errorMessage = error.message || 'Invalid credentials';
+      
+      // Strip HTML from error message (Google API sometimes returns HTML)
+      errorMessage = this.stripHtmlFromError(errorMessage);
       
       // Provide more specific error messages
       if (errorMessage.includes('TOKEN_EXPIRED')) {
@@ -116,6 +145,38 @@ class YouTubeService {
           valid: false,
           error: 'Invalid client credentials',
           errorCode: 'INVALID_CLIENT'
+        };
+      }
+      
+      // Check for quota exceeded error
+      if (errorMessage.toLowerCase().includes('quota') || 
+          errorMessage.toLowerCase().includes('exceeded') ||
+          (error.code === 403 && errorMessage.toLowerCase().includes('limit'))) {
+        return {
+          valid: false,
+          error: 'YouTube API quota exceeded. Please try again tomorrow or use a different API key.',
+          errorCode: 'QUOTA_EXCEEDED'
+        };
+      }
+      
+      // Check for rate limit error
+      if (error.code === 429 || errorMessage.toLowerCase().includes('rate limit')) {
+        return {
+          valid: false,
+          error: 'Too many requests. Please wait a moment and try again.',
+          errorCode: 'RATE_LIMITED'
+        };
+      }
+      
+      // Check for network errors
+      if (errorMessage.includes('ECONNRESET') || 
+          errorMessage.includes('ETIMEDOUT') || 
+          errorMessage.includes('ENOTFOUND') ||
+          errorMessage.includes('network')) {
+        return {
+          valid: false,
+          error: 'Network error. Please check your internet connection and try again.',
+          errorCode: 'NETWORK_ERROR'
         };
       }
       
@@ -137,21 +198,36 @@ class YouTubeService {
     
     const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
     
-    const response = await youtube.channels.list({
-      part: 'snippet',
-      mine: true
-    });
-    
-    if (!response.data.items || response.data.items.length === 0) {
-      throw new Error('No channel found for this account');
+    try {
+      const response = await youtube.channels.list({
+        part: 'snippet',
+        mine: true
+      });
+      
+      if (!response.data.items || response.data.items.length === 0) {
+        throw new Error('No channel found for this account');
+      }
+      
+      const channel = response.data.items[0];
+      return {
+        id: channel.id,
+        title: channel.snippet.title,
+        thumbnail: channel.snippet.thumbnails?.default?.url || ''
+      };
+    } catch (error) {
+      // Clean up error message from HTML
+      let errorMessage = error.message || 'Failed to get channel info';
+      errorMessage = this.stripHtmlFromError(errorMessage);
+      
+      // Check for quota exceeded
+      if (errorMessage.toLowerCase().includes('quota') || 
+          errorMessage.toLowerCase().includes('exceeded') ||
+          error.code === 403) {
+        throw new Error('QUOTA_EXCEEDED: YouTube API quota exceeded. Please try again tomorrow.');
+      }
+      
+      throw new Error(errorMessage);
     }
-    
-    const channel = response.data.items[0];
-    return {
-      id: channel.id,
-      title: channel.snippet.title,
-      thumbnail: channel.snippet.thumbnails?.default?.url || ''
-    };
   }
 
 
