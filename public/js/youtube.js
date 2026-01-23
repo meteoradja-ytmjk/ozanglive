@@ -328,7 +328,7 @@ async function fetchThumbnailFolders() {
         div.innerHTML = `
           <i class="ti ti-folder text-gray-400 shrink-0"></i>
           <span class="flex-1 truncate">${escapeHtml(folder.name)}</span>
-          <button type="button" class="shrink-0 text-red-500 hover:text-red-400 font-bold" onclick="event.stopPropagation(); deleteFolder('${escapeJsString(folder.name)}')" title="Delete">
+          <button type="button" class="shrink-0 text-red-500 hover:text-red-400 font-bold" onclick="event.stopPropagation(); deleteThumbnailFolder('${escapeJsString(folder.name)}')" title="Delete">
             ✕
           </button>
         `;
@@ -684,8 +684,8 @@ async function submitRenameFolder(event) {
   }
 }
 
-// Delete folder
-async function deleteFolder(folderName) {
+// Delete thumbnail folder
+async function deleteThumbnailFolder(folderName) {
   if (!confirm(`Are you sure you want to delete folder "${folderName}" and all its thumbnails?`)) {
     return;
   }
@@ -4682,7 +4682,7 @@ function renderTitleFolderList() {
       <div class="flex items-center">
         <button type="button" onclick="event.stopPropagation();openEditFolderModal('${escapeJsString(f.id)}','${escapeJsString(f.name)}','${f.color}')"
           class="px-1.5 py-0.5 text-xs text-yellow-400 hover:bg-yellow-500/20 rounded">✎</button>
-        <button type="button" onclick="event.stopPropagation();deleteFolder('${escapeJsString(f.id)}')"
+        <button type="button" onclick="event.stopPropagation();deleteTitleFolder('${escapeJsString(f.id)}')"
           class="px-1.5 py-0.5 text-xs text-red-400 hover:bg-red-500/20 rounded">✕</button>
       </div>
     </div>
@@ -4781,9 +4781,9 @@ async function saveFolder() {
 }
 
 /**
- * Delete folder
+ * Delete title folder
  */
-async function deleteFolder(id) {
+async function deleteTitleFolder(id) {
   if (!confirm('Hapus folder ini? Judul di dalamnya tidak akan dihapus.')) return;
   
   try {
