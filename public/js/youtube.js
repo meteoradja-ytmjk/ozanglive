@@ -490,16 +490,87 @@ async function getBroadcastSettingsFromServer(broadcastId, accountId = null) {
 
 // Create folder modal functions
 function openCreateFolderModal() {
+  console.log('[DEBUG] openCreateFolderModal called - for THUMBNAIL folder');
   const modal = document.getElementById('createFolderModal');
   if (!modal) {
     console.error('createFolderModal not found');
     return;
   }
+  console.log('[DEBUG] Opening createFolderModal');
   modal.classList.remove('hidden');
   const input = document.getElementById('newFolderName');
   if (input) {
     input.value = '';
     input.focus();
+  }
+}
+
+// NEW: Add Thumbnail Folder Modal Functions (unique names to avoid conflict)
+function openAddThumbnailFolderModal() {
+  console.log('[THUMBNAIL] Opening Add Thumbnail Folder Modal');
+  const modal = document.getElementById('addThumbnailFolderModal');
+  if (!modal) {
+    console.error('[THUMBNAIL] addThumbnailFolderModal not found!');
+    showToast('Error: Modal not found', 'error');
+    return;
+  }
+  modal.classList.remove('hidden');
+  const input = document.getElementById('newThumbnailFolderName');
+  if (input) {
+    input.value = '';
+    input.focus();
+  }
+}
+
+function closeAddThumbnailFolderModal() {
+  const modal = document.getElementById('addThumbnailFolderModal');
+  if (modal) {
+    modal.classList.add('hidden');
+  }
+}
+
+async function submitAddThumbnailFolder(event) {
+  event.preventDefault();
+  
+  const folderName = document.getElementById('newThumbnailFolderName').value.trim();
+  if (!folderName) {
+    showToast('Please enter folder name', 'error');
+    return;
+  }
+  
+  const btn = document.getElementById('addThumbnailFolderBtn2');
+  const originalText = btn.innerHTML;
+  btn.innerHTML = '<i class="ti ti-loader animate-spin"></i> Creating...';
+  btn.disabled = true;
+  
+  try {
+    console.log('[THUMBNAIL] Creating folder:', folderName);
+    const response = await fetch('/api/thumbnail-folders', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getCsrfToken()
+      },
+      body: JSON.stringify({ name: folderName })
+    });
+    
+    const data = await response.json();
+    console.log('[THUMBNAIL] Response:', data);
+    
+    if (data.success) {
+      showToast('Thumbnail folder created: ' + data.folder.name);
+      closeAddThumbnailFolderModal();
+      fetchThumbnailFolders();
+      openThumbnailFolder(data.folder.name);
+    } else {
+      showToast(data.error || 'Failed to create folder', 'error');
+    }
+  } catch (error) {
+    console.error('[THUMBNAIL] Error creating folder:', error);
+    showToast('Failed to create folder', 'error');
+  } finally {
+    btn.innerHTML = originalText;
+    btn.disabled = false;
   }
 }
 
