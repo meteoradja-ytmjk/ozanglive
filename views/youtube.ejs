@@ -905,13 +905,13 @@
       <div class="p-3 flex-grow overflow-y-auto">
         <!-- Folder Section - Collapsible -->
         <div class="mb-3">
-          <button type="button" onclick="toggleFolderSection()" class="flex items-center justify-between w-full py-1">
-            <span class="text-xs font-medium text-gray-500 uppercase">Folders</span>
-            <div class="flex items-center gap-2">
-              <span onclick="event.stopPropagation();openCreateTitleFolderModal()" class="text-xs text-primary hover:text-primary/80">+ Folder</span>
+          <div class="flex items-center justify-between w-full py-1">
+            <button type="button" onclick="toggleFolderSection()" class="flex items-center gap-2">
+              <span class="text-xs font-medium text-gray-500 uppercase">Folders</span>
               <span id="folderToggleIcon" class="text-gray-500 text-xs">▶</span>
-            </div>
-          </button>
+            </button>
+            <button type="button" onclick="openCreateTitleFolderModal()" class="text-xs text-primary hover:text-primary/80">+ Folder</button>
+          </div>
           <div id="titleFolderList" class="hidden mt-2 pl-2 border-l border-gray-700">
           </div>
         </div>
