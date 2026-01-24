@@ -108,6 +108,7 @@ class ScheduleService {
     this.jobs = new Map(); // Map of templateId -> job info
     this.checkInterval = null;
     this.initialized = false;
+    this.executingTemplates = new Set(); // Track templates currently being executed to prevent duplicates
   }
 
   /**
@@ -219,6 +220,12 @@ class ScheduleService {
       
       for (const template of templates) {
         try {
+          // Skip if this template is currently being executed (prevent duplicate execution)
+          if (this.executingTemplates.has(template.id)) {
+            console.log(`[ScheduleService]   SKIP: Template "${template.name}" is currently being executed`);
+            continue;
+          }
+          
           // Log template info for debugging
           const nextRunStr = template.next_run_at ? new Date(template.next_run_at).toISOString() : 'not set';
           const lastRunStr = template.last_run_at ? new Date(template.last_run_at).toISOString() : 'never';
@@ -569,6 +576,22 @@ class ScheduleService {
     const maxRetries = 3;
     const now = new Date();
     
+    // CRITICAL: Check if this template is already being executed (prevent duplicate execution)
+    if (this.executingTemplates.has(template.id)) {
+      console.log(`[ScheduleService] BLOCKED: Template "${template.name}" (${template.id}) is already being executed`);
+      return { error: 'ALREADY_EXECUTING', template: template.name };
+    }
+    
+    // Mark template as executing BEFORE any async operations
+    this.executingTemplates.add(template.id);
+    console.log(`[ScheduleService] LOCKED: Template "${template.name}" (${template.id}) - starting execution`);
+    
+    // Helper function to release lock
+    const releaseLock = () => {
+      this.executingTemplates.delete(template.id);
+      console.log(`[ScheduleService] UNLOCKED: Template "${template.name}" (${template.id})`);
+    };
+    
     // Helper function to update next_run_at on failure
     const updateNextRunOnFailure = async (reason) => {
       try {
@@ -597,6 +620,7 @@ class ScheduleService {
       if (!template.client_id || !template.client_secret || !template.refresh_token) {
         console.error(`[ScheduleService] Cannot execute template "${template.name}": YouTube credentials not found or invalid (account_id: ${template.account_id})`);
         await updateNextRunOnFailure('credentials missing');
+        releaseLock();
         return { error: 'YouTube credentials not found', template: template.name };
       }
       
@@ -616,17 +640,20 @@ class ScheduleService {
         if (errorMsg.includes('TOKEN_EXPIRED') || errorMsg.includes('invalid_grant') || errorMsg.includes('revoked')) {
           console.error(`[ScheduleService] Token expired for template "${template.name}" - user needs to reconnect YouTube account`);
           await updateNextRunOnFailure('token expired');
+          releaseLock();
           return { error: 'TOKEN_EXPIRED', template: template.name, message: 'YouTube token expired - please reconnect account' };
         }
         
-        // For network errors, retry
+        // For network errors, retry (but release lock first so retry can re-acquire)
         if (retryCount < maxRetries - 1) {
           console.log(`[ScheduleService] Retrying token fetch in 30 seconds... (attempt ${retryCount + 1}/${maxRetries})`);
+          releaseLock();
           await new Promise(resolve => setTimeout(resolve, 30000));
           return this.executeTemplate(template, retryCount + 1);
         }
         
         await updateNextRunOnFailure('token fetch failed');
+        releaseLock();
         return { error: errorMsg, template: template.name };
       }
       
@@ -924,6 +951,7 @@ class ScheduleService {
       console.log(`[ScheduleService] Template ${template.name}: Created ${results.length} broadcast(s)`);
       console.log(`[ScheduleService] Next run: ${nextRun?.toISOString() || 'N/A'}`);
       
+      releaseLock();
       return results;
     } catch (error) {
       const errorMsg = error.message || 'Unknown error';
@@ -950,12 +978,14 @@ class ScheduleService {
         } catch (updateErr) {
           console.error(`[ScheduleService] Failed to update next_run_at:`, updateErr.message);
         }
+        releaseLock();
         return { error: 'TOKEN_EXPIRED', template: template.name };
       }
       
-      // For other errors, retry if attempts remaining
+      // For other errors, retry if attempts remaining (release lock first so retry can re-acquire)
       if (retryCount < maxRetries - 1) {
         console.log(`[ScheduleService] Retrying in 30 seconds...`);
+        releaseLock();
         await new Promise(resolve => setTimeout(resolve, 30000));
         return this.executeTemplate(template, retryCount + 1);
       }
@@ -980,6 +1010,7 @@ class ScheduleService {
         console.error(`[ScheduleService] Failed to update next_run_at:`, updateErr.message);
       }
       
+      releaseLock();
       return { error: errorMsg, template: template.name };
     }
   }
@@ -1233,6 +1264,7 @@ class ScheduleService {
   shutdown() {
     this.stopChecker();
     this.jobs.clear();
+    this.executingTemplates.clear(); // Clear execution locks
     this.initialized = false;
     console.log('[ScheduleService] Shutdown complete');
   }
