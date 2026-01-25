@@ -10,6 +10,9 @@ const BroadcastTemplate = require('../models/BroadcastTemplate');
 const RecurringSchedule = require('../models/RecurringSchedule');
 const StreamTemplate = require('../models/StreamTemplate');
 const Playlist = require('../models/Playlist');
+const Video = require('../models/Video');
+const Audio = require('../models/Audio');
+const path = require('path');
 
 // Fields to include in export (non-sensitive configuration fields)
 const EXPORT_FIELDS = [
@@ -29,7 +32,9 @@ const EXPORT_FIELDS = [
   'recurring_time',
   'recurring_enabled',
   'stream_duration_hours',
-  'stream_duration_minutes'  // Added: for duration in minutes
+  'stream_duration_minutes', // Added: for duration in minutes
+  'video_filename',          // Added: for matching video by filename on import
+  'audio_filename'           // Added: for matching audio by filename on import
 ];
 
 // Required fields for import validation
@@ -129,16 +134,41 @@ const ALL_CATEGORIES = [
 
 /**
  * Export streams to backup format
+ * Includes video_filename and audio_filename for matching on import
  * @param {string} userId - User ID
  * @returns {Promise<Object>} Backup data object
  */
 async function exportStreams(userId) {
   const streams = await Stream.findAll(userId);
   
+  // Get all videos and audios for this user to map IDs to filenames
+  const videos = await Video.findAll(userId);
+  const audios = await Audio.findAll(userId);
+  
+  // Create lookup maps for quick access
+  const videoMap = new Map(videos.map(v => [v.id, v]));
+  const audioMap = new Map(audios.map(a => [a.id, a]));
+  
   const exportedStreams = streams.map(stream => {
     const exportedStream = {};
     EXPORT_FIELDS.forEach(field => {
-      if (stream[field] !== undefined) {
+      if (field === 'video_filename') {
+        // Extract video filename from video_id
+        if (stream.video_id) {
+          const video = videoMap.get(stream.video_id);
+          if (video && video.filepath) {
+            exportedStream.video_filename = path.basename(video.filepath);
+          }
+        }
+      } else if (field === 'audio_filename') {
+        // Extract audio filename from audio_id
+        if (stream.audio_id) {
+          const audio = audioMap.get(stream.audio_id);
+          if (audio && audio.filepath) {
+            exportedStream.audio_filename = path.basename(audio.filepath);
+          }
+        }
+      } else if (stream[field] !== undefined) {
         // Parse schedule_days from JSON string to array if it's a string
         if (field === 'schedule_days' && typeof stream[field] === 'string') {
           try {
@@ -229,14 +259,16 @@ function validateStreamConfig(streamConfig) {
 
 /**
  * Import streams from backup data
+ * Supports matching video/audio by filename if video_filename/audio_filename is provided
  * @param {Object} backupData - Parsed backup JSON
  * @param {string} userId - User ID
- * @returns {Promise<{imported: number, skipped: number, errors: string[]}>}
+ * @returns {Promise<{imported: number, skipped: number, matched: {video: number, audio: number}, errors: string[]}>}
  */
 async function importStreams(backupData, userId) {
   const result = {
     imported: 0,
     skipped: 0,
+    matched: { video: 0, audio: 0 },
     errors: []
   };
 
@@ -246,6 +278,31 @@ async function importStreams(backupData, userId) {
     result.errors = formatValidation.errors;
     return result;
   }
+
+  // Get all videos and audios for this user to match by filename
+  const videos = await Video.findAll(userId);
+  const audios = await Audio.findAll(userId);
+  
+  // Create lookup maps by filename (basename of filepath)
+  const videoByFilename = new Map();
+  videos.forEach(v => {
+    if (v.filepath) {
+      const filename = path.basename(v.filepath);
+      videoByFilename.set(filename, v);
+      // Also map by title for fallback matching
+      videoByFilename.set(v.title, v);
+    }
+  });
+  
+  const audioByFilename = new Map();
+  audios.forEach(a => {
+    if (a.filepath) {
+      const filename = path.basename(a.filepath);
+      audioByFilename.set(filename, a);
+      // Also map by title for fallback matching
+      audioByFilename.set(a.title, a);
+    }
+  });
 
   // Process each stream
   for (let i = 0; i < backupData.streams.length; i++) {
@@ -273,6 +330,26 @@ async function importStreams(backupData, userId) {
         scheduleDays = null;
       }
 
+      // Match video by filename if provided
+      let video_id = null;
+      if (streamConfig.video_filename) {
+        const matchedVideo = videoByFilename.get(streamConfig.video_filename);
+        if (matchedVideo) {
+          video_id = matchedVideo.id;
+          result.matched.video++;
+        }
+      }
+      
+      // Match audio by filename if provided
+      let audio_id = null;
+      if (streamConfig.audio_filename) {
+        const matchedAudio = audioByFilename.get(streamConfig.audio_filename);
+        if (matchedAudio) {
+          audio_id = matchedAudio.id;
+          result.matched.audio++;
+        }
+      }
+
       // Capture original settings for reset functionality
       const originalSettings = {
         schedule_time: streamConfig.schedule_time || null,
@@ -290,6 +367,8 @@ async function importStreams(backupData, userId) {
       // Prepare stream data for creation
       const streamData = {
         title: streamConfig.title,
+        video_id: video_id,
+        audio_id: audio_id,
         rtmp_url: streamConfig.rtmp_url,
         stream_key: streamConfig.stream_key,
         platform: streamConfig.platform || 'YouTube',
@@ -389,16 +468,39 @@ async function exportRecurringSchedules(userId) {
 
 /**
  * Export stream templates for a user
+ * Includes video_filename and audio_filename for matching on import
  * @param {string} userId - User ID
  * @returns {Promise<Array>} Array of exported templates
  */
 async function exportStreamTemplates(userId) {
   const templates = await StreamTemplate.findByUserId(userId);
   
+  // Get all videos and audios for this user to map IDs to filenames
+  const videos = await Video.findAll(userId);
+  const audios = await Audio.findAll(userId);
+  
+  // Create lookup maps for quick access
+  const videoMap = new Map(videos.map(v => [v.id, v]));
+  const audioMap = new Map(audios.map(a => [a.id, a]));
+  
   return templates.map(template => {
     const exported = {};
     STREAM_TEMPLATE_FIELDS.forEach(field => {
-      if (template[field] !== undefined) {
+      if (field === 'video_id' && template.video_id) {
+        exported.video_id = template.video_id;
+        // Also add video_filename for matching
+        const video = videoMap.get(template.video_id);
+        if (video && video.filepath) {
+          exported.video_filename = path.basename(video.filepath);
+        }
+      } else if (field === 'audio_id' && template.audio_id) {
+        exported.audio_id = template.audio_id;
+        // Also add audio_filename for matching
+        const audio = audioMap.get(template.audio_id);
+        if (audio && audio.filepath) {
+          exported.audio_filename = path.basename(audio.filepath);
+        }
+      } else if (template[field] !== undefined) {
         exported[field] = template[field];
       }
     });
@@ -408,6 +510,7 @@ async function exportStreamTemplates(userId) {
 
 /**
  * Export playlists with video associations for a user
+ * Includes video_filename for matching on import
  * @param {string} userId - User ID
  * @returns {Promise<Array>} Array of exported playlists with videos
  */
@@ -428,6 +531,8 @@ async function exportPlaylists(userId) {
     if (playlistWithVideos && playlistWithVideos.videos) {
       exported.videos = playlistWithVideos.videos.map(v => ({
         video_id: v.id,
+        video_filename: v.filepath ? path.basename(v.filepath) : null,
+        video_title: v.title,
         position: v.position
       }));
     } else {
@@ -442,16 +547,41 @@ async function exportPlaylists(userId) {
 
 /**
  * Export streams only (for backward compatibility, returns just streams array)
+ * Includes video_filename and audio_filename for matching on import
  * @param {string} userId - User ID
  * @returns {Promise<Array>} Array of exported streams
  */
 async function exportStreamsOnly(userId) {
   const streams = await Stream.findAll(userId);
   
+  // Get all videos and audios for this user to map IDs to filenames
+  const videos = await Video.findAll(userId);
+  const audios = await Audio.findAll(userId);
+  
+  // Create lookup maps for quick access
+  const videoMap = new Map(videos.map(v => [v.id, v]));
+  const audioMap = new Map(audios.map(a => [a.id, a]));
+  
   return streams.map(stream => {
     const exportedStream = {};
     EXPORT_FIELDS.forEach(field => {
-      if (stream[field] !== undefined) {
+      if (field === 'video_filename') {
+        // Extract video filename from video_id
+        if (stream.video_id) {
+          const video = videoMap.get(stream.video_id);
+          if (video && video.filepath) {
+            exportedStream.video_filename = path.basename(video.filepath);
+          }
+        }
+      } else if (field === 'audio_filename') {
+        // Extract audio filename from audio_id
+        if (stream.audio_id) {
+          const audio = audioMap.get(stream.audio_id);
+          if (audio && audio.filepath) {
+            exportedStream.audio_filename = path.basename(audio.filepath);
+          }
+        }
+      } else if (stream[field] !== undefined) {
         if (field === 'schedule_days' && typeof stream[field] === 'string') {
           try {
             exportedStream[field] = JSON.parse(stream[field]);
@@ -768,15 +898,43 @@ async function importRecurringSchedulesData(schedules, userId, options = {}) {
 
 /**
  * Import stream templates from backup
+ * Supports matching video/audio by filename if video_filename/audio_filename is provided
  * @param {Array} templates - Array of templates to import
  * @param {string} userId - User ID
  * @param {Object} options - Import options
- * @returns {Promise<{imported: number, skipped: number, errors: string[]}>}
+ * @returns {Promise<{imported: number, skipped: number, matched: {video: number, audio: number}, errors: string[]}>}
  */
 async function importStreamTemplatesData(templates, userId, options = {}) {
-  const result = { imported: 0, skipped: 0, errors: [] };
+  const result = { imported: 0, skipped: 0, matched: { video: 0, audio: 0 }, errors: [] };
   
   if (!Array.isArray(templates)) return result;
+
+  // Get all videos and audios for this user to match by filename
+  const videos = await Video.findAll(userId);
+  const audios = await Audio.findAll(userId);
+  
+  // Create lookup maps by filename
+  const videoByFilename = new Map();
+  videos.forEach(v => {
+    if (v.filepath) {
+      const filename = path.basename(v.filepath);
+      videoByFilename.set(filename, v);
+    }
+    if (v.title) {
+      videoByFilename.set(v.title, v);
+    }
+  });
+  
+  const audioByFilename = new Map();
+  audios.forEach(a => {
+    if (a.filepath) {
+      const filename = path.basename(a.filepath);
+      audioByFilename.set(filename, a);
+    }
+    if (a.title) {
+      audioByFilename.set(a.title, a);
+    }
+  });
 
   for (let i = 0; i < templates.length; i++) {
     const template = templates[i];
@@ -791,11 +949,31 @@ async function importStreamTemplatesData(templates, userId, options = {}) {
         }
       }
 
+      // Match video by filename if provided
+      let video_id = template.video_id;
+      if (template.video_filename) {
+        const matchedVideo = videoByFilename.get(template.video_filename);
+        if (matchedVideo) {
+          video_id = matchedVideo.id;
+          result.matched.video++;
+        }
+      }
+      
+      // Match audio by filename if provided
+      let audio_id = template.audio_id;
+      if (template.audio_filename) {
+        const matchedAudio = audioByFilename.get(template.audio_filename);
+        if (matchedAudio) {
+          audio_id = matchedAudio.id;
+          result.matched.audio++;
+        }
+      }
+
       await StreamTemplate.create({
         user_id: userId,
         name: template.name,
-        video_id: template.video_id,
-        audio_id: template.audio_id,
+        video_id: video_id,
+        audio_id: audio_id,
         duration_hours: template.duration_hours || 0,
         duration_minutes: template.duration_minutes || 0,
         loop_video: template.loop_video !== false,
@@ -815,15 +993,32 @@ async function importStreamTemplatesData(templates, userId, options = {}) {
 
 /**
  * Import playlists from backup
+ * Supports matching videos by filename if video_filename is provided
  * @param {Array} playlists - Array of playlists to import
  * @param {string} userId - User ID
  * @param {Object} options - Import options
- * @returns {Promise<{imported: number, skipped: number, errors: string[]}>}
+ * @returns {Promise<{imported: number, skipped: number, matchedVideos: number, errors: string[]}>}
  */
 async function importPlaylistsData(playlists, userId, options = {}) {
-  const result = { imported: 0, skipped: 0, errors: [] };
+  const result = { imported: 0, skipped: 0, matchedVideos: 0, errors: [] };
   
   if (!Array.isArray(playlists)) return result;
+
+  // Get all videos for this user to match by filename
+  const videos = await Video.findAll(userId);
+  
+  // Create lookup maps by filename (basename of filepath) and title
+  const videoByFilename = new Map();
+  videos.forEach(v => {
+    if (v.filepath) {
+      const filename = path.basename(v.filepath);
+      videoByFilename.set(filename, v);
+    }
+    // Also map by title for fallback matching
+    if (v.title) {
+      videoByFilename.set(v.title, v);
+    }
+  });
 
   for (let i = 0; i < playlists.length; i++) {
     const playlist = playlists[i];
@@ -840,10 +1035,33 @@ async function importPlaylistsData(playlists, userId, options = {}) {
       if (playlist.videos && Array.isArray(playlist.videos)) {
         for (const video of playlist.videos) {
           try {
-            await Playlist.addVideo(created.id, video.video_id, video.position);
+            let videoId = video.video_id;
+            
+            // Try to match by filename first if provided
+            if (video.video_filename) {
+              const matchedVideo = videoByFilename.get(video.video_filename);
+              if (matchedVideo) {
+                videoId = matchedVideo.id;
+                result.matchedVideos++;
+              }
+            }
+            // Fallback to title matching if filename not found
+            else if (video.video_title) {
+              const matchedVideo = videoByFilename.get(video.video_title);
+              if (matchedVideo) {
+                videoId = matchedVideo.id;
+                result.matchedVideos++;
+              }
+            }
+            
+            if (videoId) {
+              await Playlist.addVideo(created.id, videoId, video.position);
+            } else {
+              result.errors.push(`playlists[${i}]: Warning - could not find video ${video.video_filename || video.video_title || video.video_id}`);
+            }
           } catch (videoErr) {
             // Log warning but continue
-            result.errors.push(`playlists[${i}]: Warning - could not add video ${video.video_id}`);
+            result.errors.push(`playlists[${i}]: Warning - could not add video ${video.video_filename || video.video_id}`);
           }
         }
       }

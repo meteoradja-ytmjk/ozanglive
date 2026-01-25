@@ -3035,8 +3035,12 @@ app.post('/api/streams/import', isAuthenticated, uploadBackup.single('backupFile
       success: true,
       imported: result.imported,
       skipped: result.skipped,
+      matched: result.matched || { video: 0, audio: 0 },
       errors: result.errors,
-      message: `Successfully imported ${result.imported} stream(s). ${result.skipped} skipped.`
+      message: `Successfully imported ${result.imported} stream(s). ${result.skipped} skipped.` +
+        (result.matched && (result.matched.video > 0 || result.matched.audio > 0) 
+          ? ` Matched: ${result.matched.video} video(s), ${result.matched.audio} audio(s).` 
+          : '')
     });
   } catch (error) {
     console.error('Error importing streams:', error);
