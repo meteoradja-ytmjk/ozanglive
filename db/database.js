@@ -516,6 +516,21 @@ async function createCoreTablesAsync() {
 
   await runTableQuery(`CREATE INDEX IF NOT EXISTS idx_stream_key_folder_mapping_user 
           ON stream_key_folder_mapping(user_id)`, 'stream_key_folder_mapping.user_index');
+
+  // Create user_title_rotation_settings table for storing title rotation settings per user
+  await runTableQuery(`CREATE TABLE IF NOT EXISTS user_title_rotation_settings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL UNIQUE,
+    enabled INTEGER DEFAULT 0,
+    folder_id TEXT,
+    current_index INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  )`, 'user_title_rotation_settings');
+
+  await runTableQuery(`CREATE INDEX IF NOT EXISTS idx_user_title_rotation_settings_user 
+          ON user_title_rotation_settings(user_id)`, 'user_title_rotation_settings.user_index');
 }
 
 // Old createCoreTables function removed - replaced with createCoreTablesAsync above

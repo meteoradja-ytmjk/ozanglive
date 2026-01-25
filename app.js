@@ -7417,6 +7417,140 @@ app.delete('/api/title-folders/:id', isAuthenticated, async (req, res) => {
 });
 
 // ============================================
+// Title Rotation Settings API Endpoints
+// ============================================
+
+// Get title rotation settings for user
+app.get('/api/title-rotation/settings', isAuthenticated, async (req, res) => {
+  try {
+    const settings = await getUserTitleRotationSettings(req.session.userId);
+    res.json({
+      success: true,
+      enabled: settings.enabled || false,
+      folderId: settings.folderId || null,
+      currentIndex: settings.currentIndex || 0
+    });
+  } catch (error) {
+    console.error('Error getting title rotation settings:', error);
+    res.status(500).json({ success: false, error: 'Failed to get settings' });
+  }
+});
+
+// Save title rotation settings for user
+app.post('/api/title-rotation/settings', isAuthenticated, async (req, res) => {
+  try {
+    const { enabled, folderId } = req.body;
+    await saveTitleRotationSettings(req.session.userId, {
+      enabled: enabled || false,
+      folderId: folderId || null
+    });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error saving title rotation settings:', error);
+    res.status(500).json({ success: false, error: 'Failed to save settings' });
+  }
+});
+
+// Get next title in rotation
+app.get('/api/title-rotation/next', isAuthenticated, async (req, res) => {
+  try {
+    const folderId = req.query.folderId || null;
+    const currentIndex = parseInt(req.query.currentIndex) || null;
+    
+    // Use provided currentIndex or get from settings
+    let indexToUse = currentIndex;
+    if (indexToUse === null) {
+      const settings = await getUserTitleRotationSettings(req.session.userId);
+      indexToUse = settings.currentIndex || 0;
+    }
+    
+    const result = await TitleSuggestion.getNextTitle(
+      req.session.userId,
+      indexToUse,
+      folderId
+    );
+    
+    res.json({
+      success: true,
+      title: result.title,
+      nextIndex: result.nextIndex,
+      isPinned: result.isPinned,
+      totalCount: result.totalCount || 0,
+      currentPosition: result.currentPosition || 0
+    });
+  } catch (error) {
+    console.error('Error getting next rotation title:', error);
+    res.status(500).json({ success: false, error: 'Failed to get next title' });
+  }
+});
+
+// Update title rotation index
+app.post('/api/title-rotation/update-index', isAuthenticated, async (req, res) => {
+  try {
+    const { newIndex } = req.body;
+    await updateTitleRotationIndex(req.session.userId, newIndex || 0);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error updating title rotation index:', error);
+    res.status(500).json({ success: false, error: 'Failed to update index' });
+  }
+});
+
+// Helper functions for title rotation settings (stored in user_settings table or similar)
+async function getUserTitleRotationSettings(userId) {
+  return new Promise((resolve, reject) => {
+    db.get(
+      `SELECT * FROM user_title_rotation_settings WHERE user_id = ?`,
+      [userId],
+      (err, row) => {
+        if (err) {
+          // Table might not exist, return defaults
+          return resolve({ enabled: false, folderId: null, currentIndex: 0 });
+        }
+        resolve(row || { enabled: false, folderId: null, currentIndex: 0 });
+      }
+    );
+  });
+}
+
+async function saveTitleRotationSettings(userId, settings) {
+  return new Promise((resolve, reject) => {
+    db.run(
+      `INSERT INTO user_title_rotation_settings (user_id, enabled, folder_id, current_index)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(user_id) DO UPDATE SET
+         enabled = excluded.enabled,
+         folder_id = excluded.folder_id,
+         updated_at = CURRENT_TIMESTAMP`,
+      [userId, settings.enabled ? 1 : 0, settings.folderId, settings.currentIndex || 0],
+      function(err) {
+        if (err) {
+          console.error('Error saving title rotation settings:', err.message);
+          return reject(err);
+        }
+        resolve({ success: true });
+      }
+    );
+  });
+}
+
+async function updateTitleRotationIndex(userId, newIndex) {
+  return new Promise((resolve, reject) => {
+    db.run(
+      `UPDATE user_title_rotation_settings SET current_index = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?`,
+      [newIndex, userId],
+      function(err) {
+        if (err) {
+          console.error('Error updating title rotation index:', err.message);
+          return reject(err);
+        }
+        resolve({ success: true, updated: this.changes > 0 });
+      }
+    );
+  });
+}
+
+// ============================================
 // System Update API Endpoints (Admin only)
 // ============================================
 

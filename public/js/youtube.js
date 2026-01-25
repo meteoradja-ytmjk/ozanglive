@@ -3413,11 +3413,175 @@ function openRecreateFromTemplateModal(template) {
   }).join('');
   
   document.getElementById('recreateFromTemplateModal').classList.remove('hidden');
+  
+  // Load title rotation settings and check if enabled
+  loadRecreateTitleRotationPreview();
 }
 
 function closeRecreateFromTemplateModal() {
   document.getElementById('recreateFromTemplateModal').classList.add('hidden');
   window.currentRecreateTemplate = null;
+  window.recreateUseTitleRotation = false;
+  
+  // Reset title rotation checkbox
+  const checkbox = document.getElementById('recreateUseTitleRotation');
+  if (checkbox) checkbox.checked = false;
+  
+  const preview = document.getElementById('recreateTitleRotationPreview');
+  if (preview) preview.classList.add('hidden');
+}
+
+/**
+ * Toggle title rotation for recreate
+ */
+async function toggleRecreateTitleRotation(enabled) {
+  window.recreateUseTitleRotation = enabled;
+  
+  const preview = document.getElementById('recreateTitleRotationPreview');
+  if (enabled) {
+    if (preview) preview.classList.remove('hidden');
+    await loadRecreateTitleRotationPreview();
+    
+    // Update broadcast list to show rotated titles
+    updateRecreateBroadcastTitles();
+  } else {
+    if (preview) preview.classList.add('hidden');
+    
+    // Reset to original titles
+    resetRecreateBroadcastTitles();
+  }
+}
+
+/**
+ * Load title rotation preview for recreate modal
+ */
+async function loadRecreateTitleRotationPreview() {
+  try {
+    // Get title rotation settings
+    const settingsResponse = await fetch('/api/title-rotation/settings', {
+      headers: { 'X-CSRF-Token': getCsrfToken() }
+    });
+    const settings = await settingsResponse.json();
+    
+    if (settings.success && settings.enabled) {
+      // Auto-enable checkbox if user has title rotation enabled
+      const checkbox = document.getElementById('recreateUseTitleRotation');
+      if (checkbox && !checkbox.checked) {
+        checkbox.checked = true;
+        window.recreateUseTitleRotation = true;
+        const preview = document.getElementById('recreateTitleRotationPreview');
+        if (preview) preview.classList.remove('hidden');
+      }
+    }
+    
+    // Get next title
+    let url = '/api/title-rotation/next';
+    if (settings.folderId) {
+      url += `?folderId=${encodeURIComponent(settings.folderId)}`;
+    }
+    
+    const response = await fetch(url, {
+      headers: { 'X-CSRF-Token': getCsrfToken() }
+    });
+    const data = await response.json();
+    
+    const titleEl = document.getElementById('recreateNextTitle');
+    if (data.success && data.title) {
+      if (titleEl) {
+        titleEl.textContent = data.title.title;
+        titleEl.title = data.title.title;
+      }
+      window.recreateNextTitles = await getNextTitlesForRecreate(data.nextIndex, settings.folderId);
+    } else {
+      if (titleEl) titleEl.textContent = 'Tidak ada judul';
+      window.recreateNextTitles = [];
+    }
+  } catch (error) {
+    console.error('Error loading title rotation preview:', error);
+  }
+}
+
+/**
+ * Get next titles for all broadcasts in recreate
+ */
+async function getNextTitlesForRecreate(startIndex, folderId) {
+  const template = window.currentRecreateTemplate;
+  if (!template) return [];
+  
+  const broadcasts = template.broadcasts || [template];
+  const titles = [];
+  let currentIndex = startIndex;
+  
+  for (let i = 0; i < broadcasts.length; i++) {
+    try {
+      let url = `/api/title-rotation/next?currentIndex=${currentIndex}`;
+      if (folderId) {
+        url += `&folderId=${encodeURIComponent(folderId)}`;
+      }
+      
+      const response = await fetch(url, {
+        headers: { 'X-CSRF-Token': getCsrfToken() }
+      });
+      const data = await response.json();
+      
+      if (data.success && data.title) {
+        titles.push({
+          id: data.title.id,
+          title: data.title.title,
+          index: currentIndex
+        });
+        currentIndex = data.nextIndex;
+      } else {
+        titles.push(null);
+      }
+    } catch (error) {
+      titles.push(null);
+    }
+  }
+  
+  return titles;
+}
+
+/**
+ * Update broadcast list with rotated titles
+ */
+function updateRecreateBroadcastTitles() {
+  const template = window.currentRecreateTemplate;
+  if (!template || !window.recreateNextTitles) return;
+  
+  const broadcasts = template.broadcasts || [template];
+  const listEl = document.getElementById('recreateBroadcastList');
+  if (!listEl) return;
+  
+  const items = listEl.querySelectorAll('.bg-dark-700');
+  items.forEach((item, i) => {
+    const titleSpan = item.querySelector('.font-medium');
+    if (titleSpan && window.recreateNextTitles[i]) {
+      const originalTitle = broadcasts[i].title;
+      const rotatedTitle = window.recreateNextTitles[i].title;
+      titleSpan.innerHTML = `${i + 1}. <span class="text-primary">${escapeHtml(rotatedTitle)}</span> <span class="text-xs text-gray-500">(was: ${escapeHtml(originalTitle)})</span>`;
+    }
+  });
+}
+
+/**
+ * Reset broadcast list to original titles
+ */
+function resetRecreateBroadcastTitles() {
+  const template = window.currentRecreateTemplate;
+  if (!template) return;
+  
+  const broadcasts = template.broadcasts || [template];
+  const listEl = document.getElementById('recreateBroadcastList');
+  if (!listEl) return;
+  
+  const items = listEl.querySelectorAll('.bg-dark-700');
+  items.forEach((item, i) => {
+    const titleSpan = item.querySelector('.font-medium');
+    if (titleSpan) {
+      titleSpan.textContent = `${i + 1}. ${broadcasts[i].title}`;
+    }
+  });
 }
 
 // Re-create Form Handler
@@ -3437,9 +3601,11 @@ if (recreateFromTemplateForm) {
       const schedules = Array.from(scheduleInputs).map(input => input.value).filter(v => v);
       
       const broadcasts = template.broadcasts || [template];
+      const useTitleRotation = window.recreateUseTitleRotation && window.recreateNextTitles && window.recreateNextTitles.length > 0;
       
       console.log('[recreate] Template stream_key_folder_mapping:', template.stream_key_folder_mapping);
       console.log('[recreate] Broadcasts:', broadcasts.map(b => ({ title: b.title, streamId: b.streamId, thumbnailFolder: b.thumbnailFolder })));
+      console.log('[recreate] Use title rotation:', useTitleRotation);
       
       if (schedules.length !== broadcasts.length) {
         showToast('Please set schedule time for all broadcasts', 'error');
@@ -3456,15 +3622,24 @@ if (recreateFromTemplateForm) {
       
       // Create broadcasts one by one
       const results = { total: broadcasts.length, success: 0, failed: 0, errors: [] };
+      const usedTitleIds = []; // Track used title IDs for incrementing use count
       
       for (let i = 0; i < broadcasts.length; i++) {
         const broadcast = broadcasts[i];
         const schedule = schedules[i];
         
+        // Determine title - use rotated title if enabled
+        let finalTitle = broadcast.title;
+        if (useTitleRotation && window.recreateNextTitles[i]) {
+          finalTitle = window.recreateNextTitles[i].title;
+          usedTitleIds.push(window.recreateNextTitles[i].id);
+          console.log(`[recreate] Broadcast ${i + 1} using rotated title: "${finalTitle}"`);
+        }
+        
         try {
           const formData = new FormData();
           formData.append('accountId', accountId);
-          formData.append('title', broadcast.title);
+          formData.append('title', finalTitle);
           formData.append('description', broadcast.description || '');
           formData.append('scheduledStartTime', schedule);
           formData.append('privacyStatus', broadcast.privacyStatus || 'unlisted');
@@ -3532,11 +3707,39 @@ if (recreateFromTemplateForm) {
             results.success++;
           } else {
             results.failed++;
-            results.errors.push({ title: broadcast.title, error: data.error });
+            results.errors.push({ title: finalTitle, error: data.error });
           }
         } catch (err) {
           results.failed++;
-          results.errors.push({ title: broadcast.title, error: err.message });
+          results.errors.push({ title: finalTitle, error: err.message });
+        }
+      }
+      
+      // If title rotation was used and broadcasts were created successfully, update use counts and rotation index
+      if (useTitleRotation && results.success > 0 && usedTitleIds.length > 0) {
+        try {
+          // Increment use count for each used title
+          for (const titleId of usedTitleIds) {
+            await fetch(`/api/title-suggestions/${titleId}/use`, {
+              method: 'POST',
+              headers: { 'X-CSRF-Token': getCsrfToken() }
+            });
+          }
+          
+          // Update rotation index
+          const lastUsedIndex = window.recreateNextTitles[results.success - 1]?.index || 0;
+          await fetch('/api/title-rotation/update-index', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRF-Token': getCsrfToken()
+            },
+            body: JSON.stringify({ newIndex: lastUsedIndex + 1 })
+          });
+          
+          console.log('[recreate] Updated title rotation index to:', lastUsedIndex + 1);
+        } catch (err) {
+          console.error('[recreate] Failed to update title rotation:', err);
         }
       }
       
@@ -4601,6 +4804,8 @@ let titleFolders = [];
 let titleManagerContext = 'edit'; // 'edit' or 'create'
 let selectedTitleFolderId = null;
 let selectedFolderColor = '#8B5CF6';
+let titleAutoRotationEnabled = false;
+let titleRotationFolderId = null;
 
 /**
  * Open Title Manager Modal
@@ -4610,6 +4815,7 @@ function openTitleManagerModal(context = 'edit') {
   document.getElementById('titleManagerModal').classList.remove('hidden');
   loadTitleFolders();
   loadTitleSuggestions();
+  loadTitleRotationSettings();
 }
 
 /**
@@ -4617,6 +4823,174 @@ function openTitleManagerModal(context = 'edit') {
  */
 function closeTitleManagerModal() {
   document.getElementById('titleManagerModal').classList.add('hidden');
+}
+
+// ============================================
+// Title Auto Rotation Functions
+// ============================================
+
+/**
+ * Load title rotation settings from server
+ */
+async function loadTitleRotationSettings() {
+  try {
+    const response = await fetch('/api/title-rotation/settings', {
+      headers: { 'X-CSRF-Token': getCsrfToken() }
+    });
+    const data = await response.json();
+    
+    if (data.success) {
+      titleAutoRotationEnabled = data.enabled || false;
+      titleRotationFolderId = data.folderId || null;
+      
+      // Update UI
+      const toggle = document.getElementById('titleAutoRotationEnabled');
+      if (toggle) toggle.checked = titleAutoRotationEnabled;
+      
+      const folderSection = document.getElementById('titleRotationFolderSection');
+      const statusSection = document.getElementById('titleRotationStatus');
+      
+      if (titleAutoRotationEnabled) {
+        if (folderSection) folderSection.classList.remove('hidden');
+        if (statusSection) statusSection.classList.remove('hidden');
+        
+        // Populate folder dropdown
+        populateTitleRotationFolderDropdown();
+        
+        // Load next title preview
+        loadNextRotationTitle();
+      } else {
+        if (folderSection) folderSection.classList.add('hidden');
+        if (statusSection) statusSection.classList.add('hidden');
+      }
+    }
+  } catch (error) {
+    console.error('Error loading title rotation settings:', error);
+  }
+}
+
+/**
+ * Toggle title auto rotation
+ */
+async function toggleTitleAutoRotation(enabled) {
+  titleAutoRotationEnabled = enabled;
+  
+  const folderSection = document.getElementById('titleRotationFolderSection');
+  const statusSection = document.getElementById('titleRotationStatus');
+  
+  if (enabled) {
+    if (folderSection) folderSection.classList.remove('hidden');
+    if (statusSection) statusSection.classList.remove('hidden');
+    populateTitleRotationFolderDropdown();
+    loadNextRotationTitle();
+  } else {
+    if (folderSection) folderSection.classList.add('hidden');
+    if (statusSection) statusSection.classList.add('hidden');
+  }
+  
+  // Save to server
+  try {
+    await fetch('/api/title-rotation/settings', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getCsrfToken()
+      },
+      body: JSON.stringify({
+        enabled: enabled,
+        folderId: titleRotationFolderId
+      })
+    });
+    
+    showToast(enabled ? 'Auto rotation diaktifkan' : 'Auto rotation dinonaktifkan');
+  } catch (error) {
+    console.error('Error saving title rotation settings:', error);
+    showToast('Gagal menyimpan pengaturan', 'error');
+  }
+}
+
+/**
+ * Populate title rotation folder dropdown
+ */
+function populateTitleRotationFolderDropdown() {
+  const select = document.getElementById('titleRotationFolderSelect');
+  if (!select) return;
+  
+  // Keep "Semua Judul" option
+  select.innerHTML = '<option value="">Semua Judul</option>';
+  
+  // Add folders
+  titleFolders.forEach(folder => {
+    const option = document.createElement('option');
+    option.value = folder.id;
+    option.textContent = folder.name;
+    if (folder.id === titleRotationFolderId) {
+      option.selected = true;
+    }
+    select.appendChild(option);
+  });
+}
+
+/**
+ * Handle title rotation folder change
+ */
+async function onTitleRotationFolderChange(folderId) {
+  titleRotationFolderId = folderId || null;
+  
+  // Save to server
+  try {
+    await fetch('/api/title-rotation/settings', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getCsrfToken()
+      },
+      body: JSON.stringify({
+        enabled: titleAutoRotationEnabled,
+        folderId: titleRotationFolderId
+      })
+    });
+    
+    // Reload next title preview
+    loadNextRotationTitle();
+  } catch (error) {
+    console.error('Error saving title rotation folder:', error);
+  }
+}
+
+/**
+ * Load next rotation title preview
+ */
+async function loadNextRotationTitle() {
+  try {
+    let url = '/api/title-rotation/next';
+    if (titleRotationFolderId) {
+      url += `?folderId=${encodeURIComponent(titleRotationFolderId)}`;
+    }
+    
+    const response = await fetch(url, {
+      headers: { 'X-CSRF-Token': getCsrfToken() }
+    });
+    const data = await response.json();
+    
+    const titleEl = document.getElementById('nextRotationTitle');
+    const positionEl = document.getElementById('rotationPosition');
+    
+    if (data.success && data.title) {
+      if (titleEl) {
+        titleEl.textContent = data.title.title;
+        titleEl.title = data.title.title; // Full title on hover
+      }
+      if (positionEl) {
+        positionEl.textContent = `${data.currentPosition}/${data.totalCount}`;
+      }
+    } else {
+      if (titleEl) titleEl.textContent = 'Tidak ada judul';
+      if (positionEl) positionEl.textContent = '0/0';
+    }
+  } catch (error) {
+    console.error('Error loading next rotation title:', error);
+  }
 }
 
 // ============================================
@@ -4635,6 +5009,11 @@ async function loadTitleFolders() {
     if (data.success) {
       titleFolders = data.folders || [];
       renderTitleFolderList();
+      
+      // Also update rotation folder dropdown if visible
+      if (titleAutoRotationEnabled) {
+        populateTitleRotationFolderDropdown();
+      }
     }
   } catch (error) {
     console.error('Error loading folders:', error);

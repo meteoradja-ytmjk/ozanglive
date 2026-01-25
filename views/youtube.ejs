@@ -903,6 +903,43 @@
       </div>
       
       <div class="p-3 flex-grow overflow-y-auto">
+        <!-- Auto Rotation Section -->
+        <div class="mb-3 p-2 bg-dark-700/50 rounded-lg">
+          <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center gap-2">
+              <i class="ti ti-rotate-clockwise text-primary"></i>
+              <span class="text-sm font-medium text-white">Auto Rotation</span>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="titleAutoRotationEnabled" class="sr-only peer" onchange="toggleTitleAutoRotation(this.checked)">
+              <div class="w-9 h-5 bg-dark-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+            </label>
+          </div>
+          <p class="text-xs text-gray-500 mb-2">Judul akan berganti otomatis saat broadcast dijadwalkan ulang</p>
+          
+          <!-- Rotation Folder Selection (shown when enabled) -->
+          <div id="titleRotationFolderSection" class="hidden mt-2 pt-2 border-t border-gray-700/50">
+            <label class="text-xs text-gray-400 block mb-1">Folder untuk Rotasi</label>
+            <select id="titleRotationFolderSelect" class="w-full px-2 py-1.5 bg-dark-600 border border-gray-600 rounded text-sm focus:border-primary focus:outline-none" onchange="onTitleRotationFolderChange(this.value)">
+              <option value="">Semua Judul</option>
+              <!-- Folders will be loaded dynamically -->
+            </select>
+            <p class="text-xs text-gray-500 mt-1">Pilih folder untuk membatasi rotasi judul</p>
+          </div>
+          
+          <!-- Current Rotation Status -->
+          <div id="titleRotationStatus" class="hidden mt-2 pt-2 border-t border-gray-700/50">
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-gray-400">Judul berikutnya:</span>
+              <span id="nextRotationTitle" class="text-primary truncate max-w-[200px]">-</span>
+            </div>
+            <div class="flex items-center justify-between text-xs mt-1">
+              <span class="text-gray-400">Posisi:</span>
+              <span id="rotationPosition" class="text-gray-300">0/0</span>
+            </div>
+          </div>
+        </div>
+        
         <!-- Folder Section - Collapsible -->
         <div class="mb-3">
           <div class="flex items-center justify-between w-full py-1">
@@ -1513,6 +1550,29 @@
         <!-- Account Selector (shown when original account is disconnected) -->
         <div id="recreateAccountSelector" class="hidden">
           <!-- Will be populated by JavaScript when account is invalid -->
+        </div>
+        
+        <!-- Title Rotation Option -->
+        <div class="bg-dark-700/50 rounded-lg p-3 border border-gray-700">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <i class="ti ti-rotate-clockwise text-primary"></i>
+              <span class="text-sm font-medium text-white">Gunakan Title Rotation</span>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="recreateUseTitleRotation" class="sr-only peer" onchange="toggleRecreateTitleRotation(this.checked)">
+              <div class="w-9 h-5 bg-dark-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+            </label>
+          </div>
+          <p class="text-xs text-gray-500 mt-1">Judul akan diambil dari Title Manager secara berurutan</p>
+          
+          <!-- Title Rotation Preview (shown when enabled) -->
+          <div id="recreateTitleRotationPreview" class="hidden mt-2 pt-2 border-t border-gray-700/50">
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-gray-400">Judul berikutnya:</span>
+              <span id="recreateNextTitle" class="text-primary truncate max-w-[200px]">-</span>
+            </div>
+          </div>
         </div>
         
         <div>
