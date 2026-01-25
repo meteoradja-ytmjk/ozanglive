@@ -52,6 +52,16 @@ class BroadcastTemplate {
       row.pinned_title_id = null;
     }
     
+    // Ensure title_folder_id is properly set
+    if (row.title_folder_id === undefined) {
+      row.title_folder_id = null;
+    }
+    
+    // Ensure thumbnail_index has default value
+    if (row.thumbnail_index === undefined || row.thumbnail_index === null) {
+      row.thumbnail_index = 0;
+    }
+    
     return row;
   }
 
@@ -81,6 +91,7 @@ class BroadcastTemplate {
       // Title rotation fields
       title_index = 0,
       pinned_title_id = null,
+      title_folder_id = null,
       // Recurring fields
       recurring_enabled = false,
       recurring_pattern = null,
@@ -126,14 +137,14 @@ class BroadcastTemplate {
           id, user_id, account_id, name, title, description,
           privacy_status, tags, category_id, thumbnail_path, thumbnail_folder, 
           thumbnail_index, pinned_thumbnail, thumbnail_mode, stream_key_folder_mapping, stream_id,
-          title_index, pinned_title_id,
+          title_index, pinned_title_id, title_folder_id,
           recurring_enabled, recurring_pattern, recurring_time, recurring_days, next_run_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id, user_id, account_id, name.trim(), title, description,
           privacy_status, tagsJson, category_id, thumbnail_path, thumbnail_folder,
           thumbnail_index || 0, pinned_thumbnail, thumbnail_mode || 'sequential', streamKeyFolderMappingJson, stream_id,
-          title_index || 0, pinned_title_id,
+          title_index || 0, pinned_title_id, title_folder_id,
           recurring_enabled ? 1 : 0, recurring_pattern, recurring_time, daysJson, next_run_at
         ],
         function (err) {
@@ -163,6 +174,7 @@ class BroadcastTemplate {
             stream_id,
             title_index: title_index || 0,
             pinned_title_id,
+            title_folder_id,
             recurring_enabled: !!recurring_enabled,
             recurring_pattern,
             recurring_time,

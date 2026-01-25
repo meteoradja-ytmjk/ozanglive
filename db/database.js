@@ -410,6 +410,9 @@ async function createCoreTablesAsync() {
   // Add pinned_title_id column for pinning specific title
   await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN pinned_title_id TEXT`, 'broadcast_templates.pinned_title_id');
 
+  // Add title_folder_id column for title rotation from specific folder
+  await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN title_folder_id TEXT`, 'broadcast_templates.title_folder_id');
+
   // Create recurring_schedules table for scheduled recurring broadcasts
   await runTableQuery(`CREATE TABLE IF NOT EXISTS recurring_schedules (
     id TEXT PRIMARY KEY,

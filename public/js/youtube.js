@@ -2114,6 +2114,9 @@ function openCreateTemplateModal() {
   
   // Load thumbnail folders for template modal
   loadTemplateThumbnailFolders();
+  
+  // Load title folders for template modal
+  loadTemplateTitleFolders();
 }
 
 // Load thumbnail folders for template modal
@@ -2162,6 +2165,44 @@ async function loadTemplateThumbnailFolders(selectedFolder = null) {
     console.log('[loadTemplateThumbnailFolders] Loaded', data.folders?.length || 0, 'folders, selected:', selectedFolder);
   } catch (error) {
     console.error('Error loading thumbnail folders:', error);
+    select.innerHTML = '<option value="">Error loading folders</option>';
+  }
+}
+
+// Load title folders for template modal
+async function loadTemplateTitleFolders(selectedFolderId = null) {
+  const select = document.getElementById('templateTitleFolder');
+  if (!select) return;
+  
+  try {
+    const response = await fetch('/api/title-folders', {
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+    
+    const data = await response.json();
+    
+    // Clear and rebuild options
+    select.innerHTML = '<option value="">-- Semua Judul (Tanpa Filter Folder) --</option>';
+    
+    if (data.success && data.folders && data.folders.length > 0) {
+      data.folders.forEach(folder => {
+        const option = document.createElement('option');
+        option.value = folder.id;
+        option.textContent = `📂 ${folder.name} (${folder.title_count || 0} judul)`;
+        select.appendChild(option);
+      });
+    }
+    
+    // Pre-select folder if provided
+    if (selectedFolderId) {
+      select.value = selectedFolderId;
+    }
+    
+    console.log('[loadTemplateTitleFolders] Loaded', data.folders?.length || 0, 'folders, selected:', selectedFolderId);
+  } catch (error) {
+    console.error('Error loading title folders:', error);
     select.innerHTML = '<option value="">Error loading folders</option>';
   }
 }
@@ -2301,6 +2342,10 @@ if (createTemplateForm) {
       // Empty string means root folder (thumbnails without subfolder)
       const thumbnailFolder = thumbnailFolderValue === '__ROOT__' ? '' : thumbnailFolderValue;
       
+      // Get title folder ID
+      const titleFolderSelect = document.getElementById('templateTitleFolder');
+      const titleFolderId = titleFolderSelect ? (titleFolderSelect.value || null) : null;
+      
       const templateData = {
         name: document.getElementById('templateName').value,
         accountId: document.getElementById('templateAccountSelect').value,
@@ -2311,6 +2356,8 @@ if (createTemplateForm) {
         streamId: document.getElementById('templateStreamKeySelect').value || null,
         // IMPORTANT: Use the selected folder from the dropdown, NOT currentThumbnailFolder
         thumbnailFolder: thumbnailFolder,
+        // Title folder for rotation
+        titleFolderId: titleFolderId,
         // Include recurring data
         recurringEnabled: recurringData.recurring_enabled,
         recurringPattern: recurringData.recurring_pattern,
@@ -2320,6 +2367,7 @@ if (createTemplateForm) {
       
       console.log('[createTemplate] Sending template data:', templateData);
       console.log('[createTemplate] thumbnailFolder value:', thumbnailFolder, '(from select:', thumbnailFolderValue, ')');
+      console.log('[createTemplate] titleFolderId value:', titleFolderId);
       
       // Check if editing
       const editId = createTemplateForm.dataset.editId;
@@ -2523,6 +2571,9 @@ function openEditTemplateModal(template) {
   // Store template data for later use
   window.currentEditTemplate = template;
   
+  // Load title folders and pre-select current folder
+  loadEditTemplateTitleFolders(template.title_folder_id || null);
+  
   // Set recurring enabled
   const recurringEnabled = document.getElementById('editRecurringEnabled');
   recurringEnabled.checked = template.recurring_enabled || false;
@@ -2574,6 +2625,44 @@ function closeEditTemplateModal() {
   document.getElementById('editTemplateForm').reset();
   // Clear stored template data
   window.currentEditTemplate = null;
+}
+
+// Load title folders for edit template modal
+async function loadEditTemplateTitleFolders(selectedFolderId = null) {
+  const select = document.getElementById('editTemplateTitleFolder');
+  if (!select) return;
+  
+  try {
+    const response = await fetch('/api/title-folders', {
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+    
+    const data = await response.json();
+    
+    // Clear and rebuild options
+    select.innerHTML = '<option value="">-- Semua Judul (Tanpa Filter Folder) --</option>';
+    
+    if (data.success && data.folders && data.folders.length > 0) {
+      data.folders.forEach(folder => {
+        const option = document.createElement('option');
+        option.value = folder.id;
+        option.textContent = `📂 ${folder.name} (${folder.title_count || 0} judul)`;
+        select.appendChild(option);
+      });
+    }
+    
+    // Pre-select folder if provided
+    if (selectedFolderId) {
+      select.value = selectedFolderId;
+    }
+    
+    console.log('[loadEditTemplateTitleFolders] Loaded folders, selected:', selectedFolderId);
+  } catch (error) {
+    console.error('Error loading title folders:', error);
+    select.innerHTML = '<option value="">Error loading folders</option>';
+  }
 }
 
 // Load thumbnail folders for edit template modal
@@ -2716,7 +2805,12 @@ if (editTemplateForm) {
         recurringEnabled: recurringEnabled
       };
       
-      console.log('[editTemplate] Updating recurring config only');
+      // Get title folder ID
+      const titleFolderSelect = document.getElementById('editTemplateTitleFolder');
+      const titleFolderId = titleFolderSelect ? (titleFolderSelect.value || null) : null;
+      updateData.titleFolderId = titleFolderId;
+      
+      console.log('[editTemplate] Updating template with titleFolderId:', titleFolderId);
       
       if (recurringEnabled) {
         const pattern = document.querySelector('input[name="editRecurringPattern"]:checked')?.value;

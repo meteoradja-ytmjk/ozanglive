@@ -5887,7 +5887,7 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
     const { 
       name, title, description, privacyStatus, tags, categoryId, 
       thumbnailPath, thumbnailFolder, pinnedThumbnail, streamKeyFolderMapping,
-      streamId, accountId, titleIndex, pinnedTitleId,
+      streamId, accountId, titleIndex, pinnedTitleId, titleFolderId,
       // Recurring schedule fields
       recurringEnabled, recurringPattern, recurringTime, recurringDays
     } = req.body;
@@ -5898,6 +5898,7 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
     console.log('[create-template] Received streamKeyFolderMapping:', streamKeyFolderMapping);
     console.log('[create-template] Received titleIndex:', titleIndex);
     console.log('[create-template] Received pinnedTitleId:', pinnedTitleId);
+    console.log('[create-template] Received titleFolderId:', titleFolderId);
     console.log('[create-template] Received recurring config:', { recurringEnabled, recurringPattern, recurringTime, recurringDays });
     
     if (!name || !title || !accountId) {
@@ -5987,6 +5988,7 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
       stream_id: streamId || null,
       title_index: titleIndex || 0,
       pinned_title_id: pinnedTitleId || null,
+      title_folder_id: titleFolderId || null,
       // Recurring schedule fields
       recurring_enabled: !!recurringEnabled,
       recurring_pattern: recurringPattern || null,
@@ -6431,7 +6433,7 @@ app.put('/api/youtube/templates/:id', isAuthenticated, async (req, res) => {
     const { 
       name, title, description, privacyStatus, tags, categoryId, 
       thumbnailPath, thumbnailFolder, pinnedThumbnail, streamKeyFolderMapping,
-      streamId, accountId, titleIndex, pinnedTitleId,
+      streamId, accountId, titleIndex, pinnedTitleId, titleFolderId,
       // Recurring schedule fields
       recurringEnabled, recurringPattern, recurringTime, recurringDays
     } = req.body;
@@ -6439,6 +6441,7 @@ app.put('/api/youtube/templates/:id', isAuthenticated, async (req, res) => {
     console.log('[update-template] Received thumbnailFolder:', thumbnailFolder);
     console.log('[update-template] Received pinnedThumbnail:', pinnedThumbnail);
     console.log('[update-template] Received streamKeyFolderMapping:', streamKeyFolderMapping);
+    console.log('[update-template] Received titleFolderId:', titleFolderId);
     
     const updateData = {};
     if (name !== undefined) updateData.name = name;
@@ -6466,6 +6469,7 @@ app.put('/api/youtube/templates/:id', isAuthenticated, async (req, res) => {
     if (accountId !== undefined) updateData.account_id = parseInt(accountId);
     if (titleIndex !== undefined) updateData.title_index = titleIndex;
     if (pinnedTitleId !== undefined) updateData.pinned_title_id = pinnedTitleId;
+    if (titleFolderId !== undefined) updateData.title_folder_id = titleFolderId;
 
     // Handle recurring schedule fields
     if (recurringEnabled !== undefined) {

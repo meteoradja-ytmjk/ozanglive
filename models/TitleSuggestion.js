@@ -143,59 +143,66 @@ class TitleSuggestion {
    * Get next title in rotation for a user
    * @param {string} userId - User ID
    * @param {number} currentIndex - Current title index
+   * @param {string} folderId - Optional folder ID to filter titles
    * @returns {Promise<{title: Object|null, nextIndex: number}>} Next title and index
    */
-  static async getNextTitle(userId, currentIndex = 0) {
+  static async getNextTitle(userId, currentIndex = 0, folderId = null) {
     return new Promise((resolve, reject) => {
-      // First check for pinned title
-      db.get(
-        `SELECT * FROM title_suggestions 
-         WHERE user_id = ? AND is_pinned = 1
-         LIMIT 1`,
-        [userId],
-        (err, pinnedTitle) => {
+      // First check for pinned title (optionally in folder)
+      let pinnedQuery = `SELECT * FROM title_suggestions WHERE user_id = ? AND is_pinned = 1`;
+      const pinnedParams = [userId];
+      
+      if (folderId) {
+        pinnedQuery += ` AND folder_id = ?`;
+        pinnedParams.push(folderId);
+      }
+      pinnedQuery += ` LIMIT 1`;
+      
+      db.get(pinnedQuery, pinnedParams, (err, pinnedTitle) => {
+        if (err) {
+          console.error('Error finding pinned title:', err.message);
+          return reject(err);
+        }
+        
+        // If pinned title exists, always use it
+        if (pinnedTitle) {
+          return resolve({ title: pinnedTitle, nextIndex: currentIndex, isPinned: true });
+        }
+        
+        // Get all titles for this user (optionally filtered by folder), ordered by sort_order
+        let query = `SELECT * FROM title_suggestions WHERE user_id = ?`;
+        const params = [userId];
+        
+        if (folderId) {
+          query += ` AND folder_id = ?`;
+          params.push(folderId);
+        }
+        query += ` ORDER BY sort_order ASC`;
+        
+        db.all(query, params, (err, titles) => {
           if (err) {
-            console.error('Error finding pinned title:', err.message);
+            console.error('Error finding titles:', err.message);
             return reject(err);
           }
           
-          // If pinned title exists, always use it
-          if (pinnedTitle) {
-            return resolve({ title: pinnedTitle, nextIndex: currentIndex, isPinned: true });
+          if (!titles || titles.length === 0) {
+            return resolve({ title: null, nextIndex: 0, isPinned: false });
           }
           
-          // Get all titles for this user, ordered by sort_order
-          db.all(
-            `SELECT * FROM title_suggestions 
-             WHERE user_id = ?
-             ORDER BY sort_order ASC`,
-            [userId],
-            (err, titles) => {
-              if (err) {
-                console.error('Error finding titles:', err.message);
-                return reject(err);
-              }
-              
-              if (!titles || titles.length === 0) {
-                return resolve({ title: null, nextIndex: 0, isPinned: false });
-              }
-              
-              // Calculate actual index (wrap around)
-              const actualIndex = currentIndex % titles.length;
-              const selectedTitle = titles[actualIndex];
-              const nextIndex = (actualIndex + 1) % titles.length;
-              
-              resolve({ 
-                title: selectedTitle, 
-                nextIndex, 
-                isPinned: false,
-                totalCount: titles.length,
-                currentPosition: actualIndex + 1
-              });
-            }
-          );
-        }
-      );
+          // Calculate actual index (wrap around)
+          const actualIndex = currentIndex % titles.length;
+          const selectedTitle = titles[actualIndex];
+          const nextIndex = (actualIndex + 1) % titles.length;
+          
+          resolve({ 
+            title: selectedTitle, 
+            nextIndex, 
+            isPinned: false,
+            totalCount: titles.length,
+            currentPosition: actualIndex + 1
+          });
+        });
+      });
     });
   }
 

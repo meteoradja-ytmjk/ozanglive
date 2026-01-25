@@ -821,16 +821,17 @@ class ScheduleService {
       } else {
         // Single broadcast template
         
-        // Get title from rotation
+        // Get title from rotation (use folder if specified)
         let finalTitle = template.title;
         const titleResult = await this.getNextTitleForBroadcast(
           template.user_id,
-          template.title_index || 0
+          template.title_index || 0,
+          template.title_folder_id || null
         );
         
         if (titleResult.title) {
           finalTitle = titleResult.title.title;
-          console.log(`[ScheduleService] Using rotated title: "${finalTitle}" (index: ${titleResult.currentPosition}/${titleResult.totalCount}, pinned: ${titleResult.isPinned})`);
+          console.log(`[ScheduleService] Using rotated title: "${finalTitle}" (index: ${titleResult.currentPosition}/${titleResult.totalCount}, pinned: ${titleResult.isPinned}, folder: ${template.title_folder_id || 'all'})`);
           
           // Update title index for next run (only if not pinned)
           if (!titleResult.isPinned && template.id) {
@@ -848,6 +849,8 @@ class ScheduleService {
           } catch (err) {
             console.error(`[ScheduleService] Failed to increment title use count:`, err.message);
           }
+        } else {
+          console.log(`[ScheduleService] No titles found for rotation, using template title: "${template.title}"`);
         }
         
         const title = replaceTitlePlaceholders(finalTitle, now);
@@ -921,6 +924,7 @@ class ScheduleService {
         // Upload thumbnail - use sequential or random selection from folder based on template mode
         if (thumbnailFolder !== null || template.thumbnail_path || template.pinned_thumbnail) {
           const isRandomMode = template.thumbnail_mode === 'random';
+          console.log(`[ScheduleService] Uploading thumbnail: folder=${thumbnailFolder || 'none'}, mode=${isRandomMode ? 'random' : 'sequential'}, currentIndex=${template.thumbnail_index || 0}`);
           await this.uploadThumbnailForBroadcast(
             accessToken, 
             result.broadcastId || result.id, 
@@ -932,6 +936,8 @@ class ScheduleService {
             template.thumbnail_index || 0,
             isRandomMode
           );
+        } else {
+          console.log(`[ScheduleService] No thumbnail to upload (folder=${thumbnailFolder}, path=${template.thumbnail_path}, pinned=${template.pinned_thumbnail})`);
         }
       }
       
@@ -1208,12 +1214,13 @@ class ScheduleService {
    * Get next title for broadcast using sequential rotation
    * @param {string} userId - User ID
    * @param {number} currentIndex - Current title index
+   * @param {string} folderId - Optional folder ID to filter titles
    * @returns {Promise<{title: Object|null, nextIndex: number, isPinned: boolean, totalCount: number, currentPosition: number}>}
    */
-  async getNextTitleForBroadcast(userId, currentIndex = 0) {
+  async getNextTitleForBroadcast(userId, currentIndex = 0, folderId = null) {
     try {
-      // Use TitleSuggestion.getNextTitle for sequential rotation
-      const result = await TitleSuggestion.getNextTitle(userId, currentIndex);
+      // Use TitleSuggestion.getNextTitle for sequential rotation with optional folder filter
+      const result = await TitleSuggestion.getNextTitle(userId, currentIndex, folderId);
       
       if (result.title) {
         return {
