@@ -4281,13 +4281,29 @@ async function loadEditThumbnailFolder(folderName = null) {
     if (data.success && data.thumbnails && data.thumbnails.length > 0) {
       const pinnedPath = document.getElementById('editPinnedThumbnail')?.value || '';
       
-      data.thumbnails.forEach(thumb => {
+      data.thumbnails.forEach((thumb, index) => {
         const isPinned = pinnedPath && thumb.path === pinnedPath;
         const div = document.createElement('div');
-        div.className = `edit-thumbnail-item aspect-video bg-dark-700 rounded cursor-pointer overflow-hidden border-2 ${isPinned ? 'border-green-500' : 'border-transparent'} hover:border-primary transition-colors`;
+        div.className = `edit-thumbnail-item aspect-video bg-dark-700 rounded cursor-pointer overflow-hidden border-2 ${isPinned ? 'border-green-500 ring-2 ring-green-500/50' : 'border-transparent'} hover:border-primary transition-colors relative group`;
         div.dataset.path = thumb.path;
         div.dataset.url = thumb.url;
-        div.innerHTML = `<img src="${thumb.url}" class="w-full h-full object-cover" alt="Thumbnail">`;
+        div.dataset.index = index;
+        div.innerHTML = `
+          <img src="${thumb.url}" class="w-full h-full object-cover" alt="Thumbnail">
+          <div class="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors"></div>
+          <div class="absolute top-0.5 left-0.5 w-4 h-4 bg-dark-800/80 rounded-full flex items-center justify-center text-[9px] text-gray-300 font-medium">${index + 1}</div>
+          ${isPinned ? '<div class="absolute top-0.5 left-5 px-1 py-0.5 bg-green-500/90 rounded text-[8px] text-white font-medium flex items-center gap-0.5"><i class="ti ti-pin-filled text-[7px]"></i>PIN</div>' : ''}
+          <button type="button" onclick="event.stopPropagation(); pinEditThumbnail('${escapeJsString(thumb.path)}')" 
+            class="absolute top-0.5 right-5 w-4 h-4 ${isPinned ? 'bg-green-500' : 'bg-yellow-500/90 hover:bg-yellow-500'} rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"
+            title="${isPinned ? 'Thumbnail di-pin' : 'Pin thumbnail ini'}">
+            <i class="ti ti-pin${isPinned ? '-filled' : ''} text-white text-[8px]"></i>
+          </button>
+          <button type="button" onclick="event.stopPropagation(); deleteEditThumbnail('${escapeJsString(thumb.filename)}', '${escapeJsString(thumb.folder || '')}')" 
+            class="absolute top-0.5 right-0.5 w-4 h-4 bg-red-500/90 hover:bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"
+            title="Delete thumbnail">
+            <i class="ti ti-x text-white text-[8px]"></i>
+          </button>
+        `;
         div.onclick = () => selectEditThumbnailFromGallery(thumb.url, thumb.path, div);
         gallery.appendChild(div);
       });
@@ -4495,15 +4511,8 @@ function pinEditThumbnail(path) {
     modeRadio.checked = true;
   }
   
-  // Update gallery to show pinned state
-  document.querySelectorAll('.edit-thumbnail-item').forEach(item => {
-    item.classList.remove('border-green-500', 'border-primary');
-    if (item.dataset.path === path) {
-      item.classList.add('border-green-500');
-    } else {
-      item.classList.add('border-transparent');
-    }
-  });
+  // Refresh gallery to show pinned state with proper styling
+  loadEditThumbnailFolder(currentEditThumbnailFolder);
   
   showToast('Thumbnail di-pin');
 }
@@ -4536,6 +4545,42 @@ function unpinEditThumbnail() {
   loadEditThumbnailFolder(currentEditThumbnailFolder);
   
   showToast('Pin thumbnail dihapus');
+}
+
+/**
+ * Delete thumbnail from edit modal gallery
+ */
+async function deleteEditThumbnail(filename, folder) {
+  if (!confirm(`Delete thumbnail "${filename}"?`)) {
+    return;
+  }
+  
+  try {
+    let url = `/api/thumbnails/${encodeURIComponent(filename)}`;
+    if (folder) {
+      url += `?folder=${encodeURIComponent(folder)}`;
+    }
+    
+    const response = await fetch(url, {
+      method: 'DELETE',
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      showToast('Thumbnail deleted');
+      // Refresh gallery
+      loadEditThumbnailFolder(currentEditThumbnailFolder);
+    } else {
+      showToast(data.error || 'Failed to delete thumbnail', 'error');
+    }
+  } catch (error) {
+    console.error('[deleteEditThumbnail] Error:', error);
+    showToast('Failed to delete thumbnail', 'error');
+  }
 }
 
 /**
