@@ -13,6 +13,68 @@ const { calculateNextRun, formatNextRunAt, replaceTitlePlaceholders, isScheduleM
 const { db } = require('../db/database');
 
 /**
+ * Get thumbnail index for a specific stream key
+ * @param {string} userId - User ID
+ * @param {string} streamKeyId - Stream Key ID
+ * @returns {Promise<number>} Thumbnail index (default 0)
+ */
+async function getStreamKeyThumbnailIndex(userId, streamKeyId) {
+  return new Promise((resolve) => {
+    db.get(
+      `SELECT thumbnail_index FROM stream_key_folder_mapping WHERE user_id = ? AND stream_key_id = ?`,
+      [userId, streamKeyId],
+      (err, row) => {
+        if (err || !row) {
+          return resolve(0);
+        }
+        resolve(row.thumbnail_index || 0);
+      }
+    );
+  });
+}
+
+/**
+ * Update thumbnail index for a specific stream key
+ * @param {string} userId - User ID
+ * @param {string} streamKeyId - Stream Key ID
+ * @param {number} newIndex - New thumbnail index
+ * @returns {Promise<boolean>}
+ */
+async function updateStreamKeyThumbnailIndex(userId, streamKeyId, newIndex) {
+  return new Promise((resolve) => {
+    // First try to update existing record
+    db.run(
+      `UPDATE stream_key_folder_mapping SET thumbnail_index = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND stream_key_id = ?`,
+      [newIndex, userId, streamKeyId],
+      function(err) {
+        if (err) {
+          console.error(`[ScheduleService] Error updating stream key thumbnail index:`, err.message);
+          return resolve(false);
+        }
+        if (this.changes === 0) {
+          // Record doesn't exist, create it
+          db.run(
+            `INSERT INTO stream_key_folder_mapping (user_id, stream_key_id, folder_name, thumbnail_index, updated_at) VALUES (?, ?, '', ?, CURRENT_TIMESTAMP)`,
+            [userId, streamKeyId, newIndex],
+            function(insertErr) {
+              if (insertErr) {
+                console.error(`[ScheduleService] Error creating stream key thumbnail index:`, insertErr.message);
+                return resolve(false);
+              }
+              console.log(`[ScheduleService] Created stream key thumbnail index: ${streamKeyId} -> ${newIndex}`);
+              resolve(true);
+            }
+          );
+        } else {
+          console.log(`[ScheduleService] Updated stream key thumbnail index: ${streamKeyId} -> ${newIndex}`);
+          resolve(true);
+        }
+      }
+    );
+  });
+}
+
+/**
  * Get user title rotation settings from database
  * @param {string} userId - User ID
  * @returns {Promise<{enabled: boolean, folderId: string|null, currentIndex: number}>}
@@ -827,20 +889,30 @@ class ScheduleService {
               console.error(`[ScheduleService] Failed to save broadcast settings:`, settingsErr.message);
             }
             
-            // Upload thumbnail - use sequential selection from folder
+            // Upload thumbnail - use sequential selection from folder with per-stream-key index
             if (thumbnailFolder !== null || b.thumbnailPath || b.pinnedThumbnail) {
-              // Calculate broadcast-specific index for multi-broadcast templates
-              const broadcastIndex = (template.thumbnail_index || 0) + i;
-              await this.uploadThumbnailForBroadcast(
+              // Get thumbnail index for this specific stream key
+              let thumbnailIndex = 0;
+              if (b.streamId) {
+                thumbnailIndex = await getStreamKeyThumbnailIndex(template.user_id, b.streamId);
+                console.log(`[ScheduleService] Stream key ${b.streamId} current thumbnail_index: ${thumbnailIndex}`);
+              }
+              
+              const uploadResult = await this.uploadThumbnailForBroadcast(
                 accessToken, 
                 result.broadcastId || result.id, 
                 b.thumbnailPath,
                 thumbnailFolder,
                 template.user_id,
                 b.pinnedThumbnail,
-                null, // Don't update index for individual broadcasts in multi-template
-                broadcastIndex
+                null, // Don't update template index
+                thumbnailIndex
               );
+              
+              // Update thumbnail index for this stream key after successful upload
+              if (uploadResult && uploadResult.newIndex !== undefined && b.streamId) {
+                await updateStreamKeyThumbnailIndex(template.user_id, b.streamId, uploadResult.newIndex);
+              }
             }
           } catch (err) {
             console.error(`[ScheduleService] Failed to create broadcast ${i + 1}:`, err.message);
@@ -849,17 +921,6 @@ class ScheduleService {
           // Small delay between broadcasts to avoid rate limiting
           if (i < broadcasts.length - 1) {
             await new Promise(resolve => setTimeout(resolve, 2000));
-          }
-        }
-        
-        // Update thumbnail index for multi-broadcast template after all broadcasts
-        if (template.thumbnail_folder !== null && template.thumbnail_folder !== undefined) {
-          const newIndex = ((template.thumbnail_index || 0) + broadcasts.length);
-          try {
-            await BroadcastTemplate.updateThumbnailIndex(template.id, newIndex);
-            console.log(`[ScheduleService] Updated multi-template ${template.id} thumbnail_index to ${newIndex}`);
-          } catch (err) {
-            console.error(`[ScheduleService] Failed to update thumbnail index:`, err.message);
           }
         }
         
@@ -1013,19 +1074,31 @@ class ScheduleService {
           console.error(`[ScheduleService] Failed to save broadcast settings:`, settingsErr.message);
         }
         
-        // Upload thumbnail - use sequential selection from folder
+        // Upload thumbnail - use sequential selection from folder with per-stream-key index
         if (thumbnailFolder !== null || template.thumbnail_path || template.pinned_thumbnail) {
-          console.log(`[ScheduleService] Uploading thumbnail: folder=${thumbnailFolder || 'none'}, currentIndex=${template.thumbnail_index || 0}`);
-          await this.uploadThumbnailForBroadcast(
+          // Get thumbnail index for this specific stream key (if stream_id exists)
+          let thumbnailIndex = template.thumbnail_index || 0;
+          if (template.stream_id) {
+            thumbnailIndex = await getStreamKeyThumbnailIndex(template.user_id, template.stream_id);
+            console.log(`[ScheduleService] Stream key ${template.stream_id} current thumbnail_index: ${thumbnailIndex}`);
+          }
+          
+          console.log(`[ScheduleService] Uploading thumbnail: folder=${thumbnailFolder || 'none'}, currentIndex=${thumbnailIndex}`);
+          const uploadResult = await this.uploadThumbnailForBroadcast(
             accessToken, 
             result.broadcastId || result.id, 
             template.thumbnail_path,
             thumbnailFolder,
             template.user_id,
             template.pinned_thumbnail,
-            template.id,
-            template.thumbnail_index || 0
+            template.stream_id ? null : template.id, // Only update template index if no stream_id
+            thumbnailIndex
           );
+          
+          // Update thumbnail index for this stream key after successful upload
+          if (uploadResult && uploadResult.newIndex !== undefined && template.stream_id) {
+            await updateStreamKeyThumbnailIndex(template.user_id, template.stream_id, uploadResult.newIndex);
+          }
         } else {
           console.log(`[ScheduleService] No thumbnail to upload (folder=${thumbnailFolder}, path=${template.thumbnail_path}, pinned=${template.pinned_thumbnail})`);
         }
@@ -1119,9 +1192,9 @@ class ScheduleService {
    * @param {string} thumbnailFolder - Folder name for thumbnail selection
    * @param {string} userId - User ID for folder-based thumbnail lookup
    * @param {string} pinnedThumbnail - Pinned thumbnail path (highest priority)
-   * @param {string} templateId - Template ID for updating thumbnail index
+   * @param {string} templateId - Template ID for updating thumbnail index (null if using per-stream-key index)
    * @param {number} currentIndex - Current thumbnail index for sequential mode
-   * @returns {Promise<boolean>} True if upload successful, false otherwise
+   * @returns {Promise<{success: boolean, newIndex: number}|false>} Result with newIndex or false on failure
    */
   async uploadThumbnailForBroadcast(accessToken, broadcastId, thumbnailPath, thumbnailFolder = null, userId = null, pinnedThumbnail = null, templateId = null, currentIndex = 0) {
     try {
@@ -1147,7 +1220,7 @@ class ScheduleService {
           newThumbnailIndex = result.newIndex;
           console.log(`[ScheduleService] Selected sequential thumbnail from folder "${thumbnailFolder}": ${result.path} (index: ${currentIndex} -> ${newThumbnailIndex})`);
           
-          // Update thumbnail index in template for next run
+          // Update thumbnail index in template for next run (only if templateId provided)
           if (templateId) {
             try {
               await BroadcastTemplate.updateThumbnailIndex(templateId, newThumbnailIndex);
@@ -1177,7 +1250,9 @@ class ScheduleService {
       const thumbnailBuffer = fs.readFileSync(fullPath);
       await youtubeService.uploadThumbnail(accessToken, broadcastId, thumbnailBuffer);
       console.log(`[ScheduleService] Thumbnail uploaded for broadcast: ${broadcastId}`);
-      return true;
+      
+      // Return success with newIndex for caller to update per-stream-key index
+      return { success: true, newIndex: newThumbnailIndex };
     } catch (error) {
       console.error(`[ScheduleService] Thumbnail upload failed for ${broadcastId}:`, error.message);
       // Continue without failing - thumbnail is optional

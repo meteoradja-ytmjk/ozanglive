@@ -514,11 +514,15 @@ async function createCoreTablesAsync() {
     user_id TEXT NOT NULL,
     stream_key_id TEXT NOT NULL,
     folder_name TEXT DEFAULT '',
+    thumbnail_index INTEGER DEFAULT 0,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     UNIQUE(user_id, stream_key_id)
   )`, 'stream_key_folder_mapping');
+
+  // Add thumbnail_index column to stream_key_folder_mapping if not exists
+  await runTableQuery(`ALTER TABLE stream_key_folder_mapping ADD COLUMN thumbnail_index INTEGER DEFAULT 0`, 'stream_key_folder_mapping.thumbnail_index');
 
   await runTableQuery(`CREATE INDEX IF NOT EXISTS idx_stream_key_folder_mapping_user 
           ON stream_key_folder_mapping(user_id)`, 'stream_key_folder_mapping.user_index');

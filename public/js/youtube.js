@@ -3705,6 +3705,25 @@ if (recreateFromTemplateForm) {
             formData.append('thumbnailFolder', thumbnailFolder);
           }
           
+          // Get thumbnail index for this stream key (per-stream-key index)
+          if (streamId) {
+            try {
+              const indexResponse = await fetch(`/api/stream-key-folder-mapping/${streamId}`, {
+                headers: { 'X-CSRF-Token': getCsrfToken() }
+              });
+              const indexData = await indexResponse.json();
+              if (indexData.success && indexData.thumbnailIndex !== undefined) {
+                formData.append('thumbnailIndex', indexData.thumbnailIndex);
+                console.log('[recreate] Using stream key thumbnail index:', streamId, '->', indexData.thumbnailIndex);
+              }
+            } catch (indexErr) {
+              console.warn('[recreate] Failed to get stream key thumbnail index:', indexErr.message);
+            }
+          }
+          
+          // Store streamId for updating thumbnail index after successful creation
+          formData.append('_streamKeyId', streamId || '');
+          
           const response = await fetch('/api/youtube/broadcasts', {
             method: 'POST',
             headers: {

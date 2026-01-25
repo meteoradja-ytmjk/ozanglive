@@ -5150,10 +5150,10 @@ app.post('/api/stream-key-folder-mapping', isAuthenticated, async (req, res) => 
     
     const db = require('./db/database').getDb();
     
-    // Upsert the mapping
+    // Upsert the mapping (preserve thumbnail_index if exists)
     db.run(`
-      INSERT INTO stream_key_folder_mapping (user_id, stream_key_id, folder_name, updated_at)
-      VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+      INSERT INTO stream_key_folder_mapping (user_id, stream_key_id, folder_name, thumbnail_index, updated_at)
+      VALUES (?, ?, ?, 0, CURRENT_TIMESTAMP)
       ON CONFLICT(user_id, stream_key_id) DO UPDATE SET
         folder_name = excluded.folder_name,
         updated_at = CURRENT_TIMESTAMP
@@ -5181,7 +5181,7 @@ app.get('/api/stream-key-folder-mapping/:streamKeyId', isAuthenticated, async (r
     const db = require('./db/database').getDb();
     
     db.get(`
-      SELECT folder_name FROM stream_key_folder_mapping
+      SELECT folder_name, thumbnail_index FROM stream_key_folder_mapping
       WHERE user_id = ? AND stream_key_id = ?
     `, [userId, streamKeyId], (err, row) => {
       if (err) {
@@ -5190,14 +5190,57 @@ app.get('/api/stream-key-folder-mapping/:streamKeyId', isAuthenticated, async (r
       }
       
       if (row) {
-        res.json({ success: true, streamKeyId, folderName: row.folder_name, found: true });
+        res.json({ success: true, streamKeyId, folderName: row.folder_name, thumbnailIndex: row.thumbnail_index || 0, found: true });
       } else {
-        res.json({ success: true, streamKeyId, folderName: null, found: false });
+        res.json({ success: true, streamKeyId, folderName: null, thumbnailIndex: 0, found: false });
       }
     });
   } catch (error) {
     console.error('[stream-key-folder-mapping] Error:', error.message);
     res.status(500).json({ success: false, error: 'Failed to get mapping' });
+  }
+});
+
+// Update thumbnail index for stream key
+app.put('/api/stream-key-folder-mapping/:streamKeyId/thumbnail-index', isAuthenticated, async (req, res) => {
+  try {
+    const { streamKeyId } = req.params;
+    const { thumbnailIndex } = req.body;
+    const userId = req.session.userId;
+    
+    const db = require('./db/database').getDb();
+    
+    db.run(`
+      UPDATE stream_key_folder_mapping 
+      SET thumbnail_index = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE user_id = ? AND stream_key_id = ?
+    `, [thumbnailIndex || 0, userId, streamKeyId], function(err) {
+      if (err) {
+        console.error('[stream-key-folder-mapping] Error updating thumbnail index:', err.message);
+        return res.status(500).json({ success: false, error: 'Failed to update thumbnail index' });
+      }
+      
+      if (this.changes === 0) {
+        // Record doesn't exist, create it
+        db.run(`
+          INSERT INTO stream_key_folder_mapping (user_id, stream_key_id, folder_name, thumbnail_index, updated_at)
+          VALUES (?, ?, '', ?, CURRENT_TIMESTAMP)
+        `, [userId, streamKeyId, thumbnailIndex || 0], function(insertErr) {
+          if (insertErr) {
+            console.error('[stream-key-folder-mapping] Error creating record:', insertErr.message);
+            return res.status(500).json({ success: false, error: 'Failed to create mapping' });
+          }
+          console.log(`[stream-key-folder-mapping] Created with thumbnail_index: ${streamKeyId} -> ${thumbnailIndex}`);
+          res.json({ success: true, streamKeyId, thumbnailIndex: thumbnailIndex || 0 });
+        });
+      } else {
+        console.log(`[stream-key-folder-mapping] Updated thumbnail_index: ${streamKeyId} -> ${thumbnailIndex}`);
+        res.json({ success: true, streamKeyId, thumbnailIndex: thumbnailIndex || 0 });
+      }
+    });
+  } catch (error) {
+    console.error('[stream-key-folder-mapping] Error:', error.message);
+    res.status(500).json({ success: false, error: 'Failed to update thumbnail index' });
   }
 });
 
@@ -5581,12 +5624,46 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       // Handle thumbnail from folder (sequential mode - only if no specific thumbnail selected)
       try {
         let selectedThumbnailPath = null;
+        const streamKeyId = req.body.streamId || req.body._streamKeyId;
+        
+        // Get thumbnail index - priority: request > stream key mapping > 0
+        let currentIndex = thumbnailIndex;
+        if (streamKeyId && currentIndex === 0) {
+          // Try to get index from stream key mapping
+          const db = require('./db/database').getDb();
+          const mapping = await new Promise((resolve) => {
+            db.get(`SELECT thumbnail_index FROM stream_key_folder_mapping WHERE user_id = ? AND stream_key_id = ?`,
+              [req.session.userId, streamKeyId], (err, row) => resolve(row));
+          });
+          if (mapping && mapping.thumbnail_index !== undefined) {
+            currentIndex = mapping.thumbnail_index;
+            console.log('[API] Using stream key thumbnail index:', streamKeyId, '->', currentIndex);
+          }
+        }
         
         // Sequential mode: select next thumbnail in order
-        const result = await scheduleService.getSequentialThumbnailFromFolder(req.session.userId, thumbnailFolder, 0);
+        const result = await scheduleService.getSequentialThumbnailFromFolder(req.session.userId, thumbnailFolder, currentIndex);
         if (result && result.path) {
           selectedThumbnailPath = result.path;
-          console.log('[API] Sequential mode - selected thumbnail:', selectedThumbnailPath);
+          console.log('[API] Sequential mode - selected thumbnail:', selectedThumbnailPath, 'index:', currentIndex, '->', result.newIndex);
+          
+          // Update thumbnail index for this stream key
+          if (streamKeyId && result.newIndex !== undefined) {
+            const db = require('./db/database').getDb();
+            db.run(`
+              INSERT INTO stream_key_folder_mapping (user_id, stream_key_id, folder_name, thumbnail_index, updated_at)
+              VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+              ON CONFLICT(user_id, stream_key_id) DO UPDATE SET
+                thumbnail_index = excluded.thumbnail_index,
+                updated_at = CURRENT_TIMESTAMP
+            `, [req.session.userId, streamKeyId, thumbnailFolder || '', result.newIndex], function(err) {
+              if (err) {
+                console.error('[API] Error updating stream key thumbnail index:', err.message);
+              } else {
+                console.log('[API] Updated stream key thumbnail index:', streamKeyId, '->', result.newIndex);
+              }
+            });
+          }
         }
         
         if (selectedThumbnailPath) {
