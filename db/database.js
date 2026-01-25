@@ -388,10 +388,10 @@ async function createCoreTablesAsync() {
   await runTableQuery(`CREATE INDEX IF NOT EXISTS idx_broadcast_templates_recurring 
           ON broadcast_templates(recurring_enabled)`, 'broadcast_templates.recurring_index');
 
-  // Add thumbnail_folder column for random thumbnail selection
+  // Add thumbnail_folder column for thumbnail selection from folder
   await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN thumbnail_folder TEXT`, 'broadcast_templates.thumbnail_folder');
 
-  // Add thumbnail_index column for sequential thumbnail selection (not random)
+  // Add thumbnail_index column for sequential thumbnail selection
   await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN thumbnail_index INTEGER DEFAULT 0`, 'broadcast_templates.thumbnail_index');
 
   // Add pinned_thumbnail column for pinning specific thumbnail
@@ -401,7 +401,7 @@ async function createCoreTablesAsync() {
   // Format: {"streamKeyId": "folderName", ...}
   await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN stream_key_folder_mapping TEXT`, 'broadcast_templates.stream_key_folder_mapping');
 
-  // Add thumbnail_mode column for thumbnail selection mode (sequential, random, pinned)
+  // Add thumbnail_mode column (deprecated - kept for backward compatibility)
   await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN thumbnail_mode TEXT DEFAULT 'sequential'`, 'broadcast_templates.thumbnail_mode');
 
   // Add title_index column for sequential title rotation

@@ -865,7 +865,6 @@ function unpinThumbnail() {
 function updateThumbnailMode(mode) {
   const pinnedInput = document.getElementById('pinnedThumbnail');
   const indicator = document.getElementById('pinnedThumbnailIndicator');
-  const randomInput = document.getElementById('thumbnailModeRandom');
   
   if (mode === 'sequential') {
     // Clear pinned thumbnail when switching to sequential
@@ -875,27 +874,9 @@ function updateThumbnailMode(mode) {
     if (indicator) {
       indicator.classList.add('hidden');
     }
-    if (randomInput) {
-      randomInput.value = '';
-    }
     fetchThumbnails(currentThumbnailFolder);
-  } else if (mode === 'random') {
-    // Clear pinned thumbnail when switching to random
-    if (pinnedInput && pinnedInput.value) {
-      pinnedInput.value = '';
-    }
-    if (indicator) {
-      indicator.classList.add('hidden');
-    }
-    if (randomInput) {
-      randomInput.value = 'true';
-    }
-    fetchThumbnails(currentThumbnailFolder);
-    showToast('Mode Random: Thumbnail akan dipilih secara acak dari folder', 'info');
   } else if (mode === 'pinned') {
-    if (randomInput) {
-      randomInput.value = '';
-    }
+    // Pinned mode - user will select a specific thumbnail
   }
 }
 
@@ -1504,12 +1485,6 @@ if (createBroadcastForm) {
       const pinnedThumbnail = document.getElementById('pinnedThumbnail')?.value;
       if (pinnedThumbnail) {
         formData.append('pinnedThumbnail', pinnedThumbnail);
-      }
-      
-      // Add thumbnail mode random flag
-      const thumbnailModeRandom = document.getElementById('thumbnailModeRandom')?.value;
-      if (thumbnailModeRandom === 'true') {
-        formData.append('thumbnailModeRandom', 'true');
       }
       
       // Add stream key folder mapping if set
@@ -4780,33 +4755,7 @@ function selectEditThumbnailFromGallery(url, path, element) {
 }
 
 /**
- * Select random thumbnail from current folder in edit modal
- */
-function selectRandomEditThumbnail() {
-  const items = document.querySelectorAll('.edit-thumbnail-item');
-  
-  if (items.length === 0) {
-    showToast('No thumbnails available in this folder', 'error');
-    return;
-  }
-  
-  // Select random item
-  const randomIndex = Math.floor(Math.random() * items.length);
-  const randomItem = items[randomIndex];
-  
-  const url = randomItem.dataset.url;
-  const path = randomItem.dataset.path;
-  
-  selectEditThumbnailFromGallery(url, path, randomItem);
-  
-  // Scroll to selected item
-  randomItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  
-  showToast('Random thumbnail selected!', 'success');
-}
-
-/**
- * Update edit thumbnail mode (sequential/random/pinned)
+ * Update edit thumbnail mode (sequential/pinned)
  */
 function updateEditThumbnailMode(mode) {
   const pinnedInput = document.getElementById('editPinnedThumbnail');
@@ -4820,21 +4769,9 @@ function updateEditThumbnailMode(mode) {
     if (indicator) {
       indicator.classList.add('hidden');
     }
-    window.editThumbnailModeRandom = false;
     loadEditThumbnailFolder(currentEditThumbnailFolder);
-  } else if (mode === 'random') {
-    // Clear pinned thumbnail when switching to random
-    if (pinnedInput && pinnedInput.value) {
-      pinnedInput.value = '';
-    }
-    if (indicator) {
-      indicator.classList.add('hidden');
-    }
-    window.editThumbnailModeRandom = true;
-    loadEditThumbnailFolder(currentEditThumbnailFolder);
-    showToast('Mode Random: Thumbnail akan dipilih secara acak dari folder', 'info');
   } else if (mode === 'pinned') {
-    window.editThumbnailModeRandom = false;
+    // Pinned mode - user will select a specific thumbnail
   }
 }
 
