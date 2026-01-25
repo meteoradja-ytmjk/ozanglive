@@ -901,6 +901,15 @@ function updateThumbnailMode(mode) {
 
 // Select thumbnail from gallery
 function selectGalleryThumbnail(element, url, path) {
+  // Get the index from element dataset
+  const index = element ? parseInt(element.dataset.index || '0') : 0;
+  
+  // Store the selected thumbnail index and path for create broadcast
+  window.createSelectedThumbnailIndex = index;
+  window.createSelectedThumbnailPath = path;
+  
+  console.log('[selectGalleryThumbnail] Selected thumbnail index:', index, 'path:', path);
+  
   // Remove selection from all thumbnails
   document.querySelectorAll('.thumbnail-item').forEach(item => {
     item.classList.remove('border-primary', 'border-primary/70', 'border-red-500', 'ring-2', 'ring-primary/50');
@@ -1395,6 +1404,10 @@ function closeCreateBroadcastModal() {
   const folderInput = document.getElementById('currentThumbnailFolder');
   if (folderInput) folderInput.value = '';
   
+  // Reset selected thumbnail index
+  window.createSelectedThumbnailIndex = 0;
+  window.createSelectedThumbnailPath = null;
+  
   // Reset pinned thumbnail
   const pinnedInput = document.getElementById('pinnedThumbnail');
   if (pinnedInput) pinnedInput.value = '';
@@ -1477,6 +1490,10 @@ if (createBroadcastForm) {
       if (thumbnailPath) {
         formData.append('thumbnailPath', thumbnailPath);
       }
+      
+      // Add selected thumbnail index
+      const thumbnailIndex = window.createSelectedThumbnailIndex || 0;
+      formData.append('thumbnailIndex', thumbnailIndex);
       
       // Add current thumbnail folder for sequential selection
       // Always send thumbnailFolder - empty string for root, folder name for specific folder
@@ -1723,6 +1740,12 @@ if (editBroadcastForm) {
       
       console.log('[EditBroadcast-Original] Thumbnail folder:', thumbnailFolderValue === '' ? '(root)' : thumbnailFolderValue);
       
+      // Get selected thumbnail index and path
+      const thumbnailIndex = window.editSelectedThumbnailIndex || 0;
+      const thumbnailPath = window.editSelectedThumbnailPath || null;
+      
+      console.log('[EditBroadcast-Original] Thumbnail index:', thumbnailIndex, 'path:', thumbnailPath);
+      
       const updateData = {
         title: document.getElementById('editBroadcastTitle').value,
         description: document.getElementById('editBroadcastDescription').value,
@@ -1730,7 +1753,10 @@ if (editBroadcastForm) {
         privacyStatus: document.getElementById('editPrivacyStatus').value,
         categoryId: categoryId,
         // Include thumbnail folder so it's saved when editing
-        thumbnailFolder: thumbnailFolderValue !== null ? thumbnailFolderValue : ''
+        thumbnailFolder: thumbnailFolderValue !== null ? thumbnailFolderValue : '',
+        // Include thumbnail index and path for consistency
+        thumbnailIndex: thumbnailIndex,
+        thumbnailPath: thumbnailPath
       };
       
       console.log('[EditBroadcast-Original] Update data:', JSON.stringify(updateData));
@@ -4537,6 +4563,139 @@ async function loadEditThumbnailFolder(folderName = null) {
 }
 
 /**
+ * Load thumbnails for edit modal and auto-select saved thumbnail
+ * @param {string} folderName - Folder name (null for root)
+ * @param {number} savedIndex - Saved thumbnail index (0-based)
+ * @param {string} savedPath - Saved thumbnail path
+ */
+async function loadEditThumbnailFolderWithSelection(folderName = null, savedIndex = 0, savedPath = null) {
+  // Use the exact value passed - don't convert empty string to null
+  currentEditThumbnailFolder = folderName !== null && folderName !== undefined ? folderName : null;
+  
+  console.log('[loadEditThumbnailFolderWithSelection] Loading folder:', currentEditThumbnailFolder === '' ? '(root)' : currentEditThumbnailFolder, 'savedIndex:', savedIndex, 'savedPath:', savedPath);
+  
+  // Auto-bind folder to stream key (automatic binding)
+  autoBindEditFolderToStreamKey(folderName);
+  
+  const gallery = document.getElementById('editThumbnailGallery');
+  const loading = document.getElementById('editThumbnailGalleryLoading');
+  const empty = document.getElementById('editThumbnailGalleryEmpty');
+  const countEl = document.getElementById('editThumbnailCount');
+  
+  if (!gallery) return;
+  
+  gallery.innerHTML = '';
+  if (loading) loading.classList.remove('hidden');
+  if (empty) empty.classList.add('hidden');
+  
+  try {
+    let url = '/api/thumbnails';
+    if (folderName) {
+      url += `?folder=${encodeURIComponent(folderName)}`;
+    }
+    
+    const response = await fetch(url, {
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+    
+    const data = await response.json();
+    
+    // Update count
+    if (countEl) {
+      countEl.textContent = `(${data.count || 0})`;
+    }
+    
+    if (data.success && data.thumbnails && data.thumbnails.length > 0) {
+      const pinnedPath = document.getElementById('editPinnedThumbnail')?.value || '';
+      
+      // Find the saved thumbnail - first try by path, then by index
+      let selectedElement = null;
+      let selectedThumb = null;
+      
+      data.thumbnails.forEach((thumb, index) => {
+        const isPinned = pinnedPath && thumb.path === pinnedPath;
+        // Check if this is the saved thumbnail (by path or by index)
+        const isSaved = (savedPath && thumb.path === savedPath) || (!savedPath && index === savedIndex);
+        
+        const div = document.createElement('div');
+        div.className = `edit-thumbnail-item aspect-video bg-dark-700 rounded cursor-pointer overflow-hidden border-2 ${isPinned ? 'border-green-500 ring-2 ring-green-500/50' : (isSaved ? 'border-primary ring-2 ring-primary/50' : 'border-transparent')} hover:border-primary transition-colors relative group`;
+        div.dataset.path = thumb.path;
+        div.dataset.url = thumb.url;
+        div.dataset.index = index;
+        div.innerHTML = `
+          <img src="${thumb.url}" class="w-full h-full object-cover" alt="Thumbnail">
+          <div class="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors"></div>
+          <div class="absolute top-0.5 left-0.5 w-4 h-4 bg-dark-800/80 rounded-full flex items-center justify-center text-[9px] text-gray-300 font-medium">${index + 1}</div>
+          ${isPinned ? '<div class="absolute top-0.5 left-5 px-1 py-0.5 bg-green-500/90 rounded text-[8px] text-white font-medium flex items-center gap-0.5"><i class="ti ti-pin-filled text-[7px]"></i>PIN</div>' : ''}
+          ${isSaved && !isPinned ? '<div class="absolute top-0.5 left-5 px-1 py-0.5 bg-primary/90 rounded text-[8px] text-white font-medium">SAVED</div>' : ''}
+          <button type="button" onclick="event.stopPropagation(); pinEditThumbnail('${escapeJsString(thumb.path)}')" 
+            class="absolute top-0.5 right-5 w-4 h-4 ${isPinned ? 'bg-green-500' : 'bg-yellow-500/90 hover:bg-yellow-500'} rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"
+            title="${isPinned ? 'Thumbnail di-pin' : 'Pin thumbnail ini'}">
+            <i class="ti ti-pin${isPinned ? '-filled' : ''} text-white text-[8px]"></i>
+          </button>
+          <button type="button" onclick="event.stopPropagation(); deleteEditThumbnail('${escapeJsString(thumb.filename)}', '${escapeJsString(thumb.folder || '')}')" 
+            class="absolute top-0.5 right-0.5 w-4 h-4 bg-red-500/90 hover:bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"
+            title="Delete thumbnail">
+            <i class="ti ti-x text-white text-[8px]"></i>
+          </button>
+        `;
+        div.onclick = () => selectEditThumbnailFromGalleryWithIndex(thumb.url, thumb.path, div, index);
+        gallery.appendChild(div);
+        
+        // Track the saved thumbnail element
+        if (isSaved && !selectedElement) {
+          selectedElement = div;
+          selectedThumb = thumb;
+        }
+      });
+      
+      // Auto-select the saved thumbnail and update preview
+      if (selectedElement && selectedThumb) {
+        console.log('[loadEditThumbnailFolderWithSelection] Auto-selecting saved thumbnail:', selectedThumb.path, 'index:', savedIndex);
+        
+        // Update preview with saved thumbnail
+        const preview = document.getElementById('editThumbnailPreview');
+        if (preview) {
+          preview.innerHTML = `<img src="${selectedThumb.url}" class="w-full h-full object-cover">`;
+        }
+        
+        // Store the selected thumbnail index
+        window.editSelectedThumbnailIndex = savedIndex;
+        window.editSelectedThumbnailPath = selectedThumb.path;
+        
+        // Scroll to the selected thumbnail
+        selectedElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+      
+      if (empty) empty.classList.add('hidden');
+    } else {
+      if (empty) empty.classList.remove('hidden');
+    }
+  } catch (error) {
+    console.error('[loadEditThumbnailFolderWithSelection] Error:', error);
+    if (empty) empty.classList.remove('hidden');
+  } finally {
+    if (loading) loading.classList.add('hidden');
+  }
+}
+
+/**
+ * Select thumbnail from gallery in edit modal and track index
+ */
+function selectEditThumbnailFromGalleryWithIndex(url, path, element, index) {
+  // Store the selected thumbnail index and path
+  window.editSelectedThumbnailIndex = index;
+  window.editSelectedThumbnailPath = path;
+  
+  console.log('[selectEditThumbnailFromGalleryWithIndex] Selected thumbnail index:', index, 'path:', path);
+  
+  // Call the original function
+  selectEditThumbnailFromGallery(url, path, element);
+}
+
+/**
  * Auto-bind folder to stream key for edit modal when folder is selected
  */
 function autoBindEditFolderToStreamKey(folderName) {
@@ -4569,6 +4728,15 @@ function selectEditThumbnailFromGallery(url, path, element) {
   const pinnedMode = document.querySelector('input[name="editThumbnailMode"][value="pinned"]');
   const isPinnedMode = pinnedMode && pinnedMode.checked;
   
+  // Get the index from element dataset
+  const index = element ? parseInt(element.dataset.index || '0') : 0;
+  
+  // Store the selected thumbnail index and path
+  window.editSelectedThumbnailIndex = index;
+  window.editSelectedThumbnailPath = path;
+  
+  console.log('[selectEditThumbnailFromGallery] Selected thumbnail index:', index, 'path:', path);
+  
   // Update preview
   const preview = document.getElementById('editThumbnailPreview');
   if (preview) {
@@ -4582,17 +4750,17 @@ function selectEditThumbnailFromGallery(url, path, element) {
   
   // Highlight selected
   document.querySelectorAll('.edit-thumbnail-item').forEach(item => {
-    item.classList.remove('border-primary', 'border-green-500');
+    item.classList.remove('border-primary', 'border-green-500', 'ring-2', 'ring-primary/50');
     item.classList.add('border-transparent');
   });
   if (element) {
     element.classList.remove('border-transparent');
     if (isPinnedMode) {
-      element.classList.add('border-green-500');
+      element.classList.add('border-green-500', 'ring-2', 'ring-green-500/50');
       // Pin the thumbnail
       pinEditThumbnail(path);
     } else {
-      element.classList.add('border-primary');
+      element.classList.add('border-primary', 'ring-2', 'ring-primary/50');
     }
   }
   
@@ -5865,6 +6033,12 @@ window.closeEditBroadcastModal = function() {
   }
   window.editThumbnailFile = null;
   
+  // Reset selected thumbnail index and path
+  window.editSelectedThumbnailIndex = 0;
+  window.editSelectedThumbnailPath = null;
+  window.editSavedThumbnailIndex = 0;
+  window.editSavedThumbnailPath = null;
+  
   // Reset file input
   const fileInput = document.getElementById('editThumbnailFile');
   if (fileInput) fileInput.value = '';
@@ -5919,21 +6093,29 @@ window.openEditBroadcastModal = async function(broadcast) {
   // Load thumbnail folders first
   await loadEditThumbnailFolders();
   
-  // Get thumbnail folder from broadcast settings (saved when broadcast was created)
+  // Get thumbnail folder and index from broadcast settings (saved when broadcast was created)
   const broadcastId = broadcast.id;
   let boundFolder = '';
+  let savedThumbnailIndex = 0;
+  let savedThumbnailPath = null;
   
   if (broadcastId) {
     const settings = await getBroadcastSettingsFromServer(broadcastId);
     // Check if settings exist and thumbnailFolder is explicitly set (including empty string for root)
     if (settings && (settings.thumbnailFolder !== null && settings.thumbnailFolder !== undefined)) {
       boundFolder = settings.thumbnailFolder;
-      console.log(`[openEditBroadcastModal] Broadcast ${broadcastId} has folder: "${boundFolder}" (${boundFolder === '' ? 'root' : 'folder'})`);
+      savedThumbnailIndex = settings.thumbnailIndex || 0;
+      savedThumbnailPath = settings.thumbnailPath || null;
+      console.log(`[openEditBroadcastModal] Broadcast ${broadcastId} has folder: "${boundFolder}" (${boundFolder === '' ? 'root' : 'folder'}), index: ${savedThumbnailIndex}, path: ${savedThumbnailPath}`);
     } else {
       console.log(`[openEditBroadcastModal] Broadcast ${broadcastId} has no saved folder settings, will use root`);
       boundFolder = '';
     }
   }
+  
+  // Store saved thumbnail info for use after gallery loads
+  window.editSavedThumbnailIndex = savedThumbnailIndex;
+  window.editSavedThumbnailPath = savedThumbnailPath;
   
   // Set the folder dropdown value
   const folderSelect = document.getElementById('editThumbnailFolderSelect');
@@ -5942,11 +6124,11 @@ window.openEditBroadcastModal = async function(broadcast) {
     console.log('[openEditBroadcastModal] Folder dropdown set to:', folderSelect.value || 'Root');
   }
   
-  // Load thumbnails from the bound folder (convert '' to null for loadEditThumbnailFolder)
-  loadEditThumbnailFolder(boundFolder === '' ? null : boundFolder);
+  // Load thumbnails from the bound folder and auto-select saved thumbnail
+  await loadEditThumbnailFolderWithSelection(boundFolder === '' ? null : boundFolder, savedThumbnailIndex, savedThumbnailPath);
   
   document.getElementById('editBroadcastModal').classList.remove('hidden');
-  console.log('[openEditBroadcastModal] Modal opened with folder:', boundFolder || 'Root');
+  console.log('[openEditBroadcastModal] Modal opened with folder:', boundFolder || 'Root', 'thumbnail index:', savedThumbnailIndex);
 };
 
 

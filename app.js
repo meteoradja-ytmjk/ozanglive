@@ -5294,7 +5294,9 @@ app.get('/api/youtube/broadcast-settings/:broadcastId', isAuthenticated, async (
           templateId: settings.templateId,
           enableAutoStart: settings.enableAutoStart,
           enableAutoStop: settings.enableAutoStop,
-          unlistReplayOnEnd: settings.unlistReplayOnEnd
+          unlistReplayOnEnd: settings.unlistReplayOnEnd,
+          thumbnailIndex: settings.thumbnailIndex || 0,
+          thumbnailPath: settings.thumbnailPath || null
         },
         found: true 
       });
@@ -5556,6 +5558,8 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
     // Get thumbnail folder from request
     const thumbnailFolder = req.body.thumbnailFolder;
     const thumbnailModeRandom = req.body.thumbnailModeRandom === 'true' || req.body.thumbnailModeRandom === true;
+    const thumbnailIndex = parseInt(req.body.thumbnailIndex) || 0;
+    const thumbnailPathFromRequest = req.body.thumbnailPath;
     
     // Save broadcast settings for later use (e.g., unlist replay on end, thumbnail folder)
     try {
@@ -5567,9 +5571,11 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         enableAutoStop: enableAutoStop !== 'false' && enableAutoStop !== false,
         unlistReplayOnEnd: unlistReplayOnEnd === 'true' || unlistReplayOnEnd === true,
         originalPrivacyStatus: privacyStatus || 'unlisted',
-        thumbnailFolder: thumbnailFolder !== undefined ? thumbnailFolder : null
+        thumbnailFolder: thumbnailFolder !== undefined ? thumbnailFolder : null,
+        thumbnailIndex: thumbnailIndex,
+        thumbnailPath: thumbnailPathFromRequest || null
       });
-      console.log('[API] Saved broadcast settings for:', broadcast.broadcastId, 'thumbnailFolder:', thumbnailFolder);
+      console.log('[API] Saved broadcast settings for:', broadcast.broadcastId, 'thumbnailFolder:', thumbnailFolder, 'thumbnailIndex:', thumbnailIndex, 'thumbnailPath:', thumbnailPathFromRequest);
     } catch (settingsErr) {
       console.error('[API] Error saving broadcast settings:', settingsErr.message);
       // Don't fail the request, just log the error
@@ -5656,7 +5662,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
 app.put('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
   try {
     const accountId = req.query.accountId ? parseInt(req.query.accountId) : null;
-    const { title, description, scheduledStartTime, privacyStatus, categoryId, thumbnailFolder } = req.body;
+    const { title, description, scheduledStartTime, privacyStatus, categoryId, thumbnailFolder, thumbnailIndex, thumbnailPath } = req.body;
     
     console.log('[API] Update broadcast request:', {
       broadcastId: req.params.id,
@@ -5666,7 +5672,9 @@ app.put('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
       scheduledStartTime,
       privacyStatus,
       categoryId,
-      thumbnailFolder
+      thumbnailFolder,
+      thumbnailIndex,
+      thumbnailPath
     });
     
     let credentials;
@@ -5730,11 +5738,19 @@ app.put('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
             broadcastId: req.params.id,
             userId: req.session.userId,
             accountId: accountId || null,
-            thumbnailFolder: thumbnailFolder
+            thumbnailFolder: thumbnailFolder,
+            thumbnailIndex: thumbnailIndex || 0,
+            thumbnailPath: thumbnailPath || null
           });
           console.log('[API] Created new broadcast settings with thumbnail folder for:', req.params.id);
         } else {
           console.log('[API] Updated thumbnail folder for broadcast:', req.params.id, 'to:', thumbnailFolder || 'root');
+          
+          // Also update thumbnail index and path if provided
+          if (thumbnailIndex !== undefined || thumbnailPath !== undefined) {
+            await YouTubeBroadcastSettings.updateThumbnailSelection(req.params.id, thumbnailIndex || 0, thumbnailPath || null);
+            console.log('[API] Updated thumbnail selection for broadcast:', req.params.id, 'index:', thumbnailIndex, 'path:', thumbnailPath);
+          }
         }
       } catch (settingsErr) {
         console.error('[API] Error updating thumbnail folder:', settingsErr.message);
