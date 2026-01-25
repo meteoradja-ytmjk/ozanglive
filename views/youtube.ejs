@@ -931,11 +931,16 @@
           <div id="titleRotationStatus" class="hidden mt-2 pt-2 border-t border-gray-700/50">
             <div class="flex items-center justify-between text-xs">
               <span class="text-gray-400">Judul berikutnya:</span>
-              <span id="nextRotationTitle" class="text-primary truncate max-w-[200px]">-</span>
+              <span id="nextRotationTitle" class="text-primary truncate max-w-[180px]">-</span>
             </div>
             <div class="flex items-center justify-between text-xs mt-1">
               <span class="text-gray-400">Posisi:</span>
-              <span id="rotationPosition" class="text-gray-300">0/0</span>
+              <div class="flex items-center gap-2">
+                <span id="rotationPosition" class="text-gray-300">0/0</span>
+                <button type="button" onclick="resetTitleRotation()" class="text-yellow-400 hover:text-yellow-300" title="Reset ke posisi 1">
+                  <i class="ti ti-refresh text-xs"></i>
+                </button>
+              </div>
             </div>
           </div>
         </div>
