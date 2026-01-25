@@ -5527,6 +5527,37 @@ async function selectTitle(id, title) {
     console.error('Error incrementing use count:', error);
   }
   
+  // If auto rotation is enabled, move NEXT indicator to the next title
+  if (titleAutoRotationEnabled) {
+    // Find the index of the selected title
+    const selectedIndex = titleSuggestions.findIndex(t => t.id === id);
+    
+    if (selectedIndex !== -1) {
+      // Calculate next index (wrap around to 0 if at end)
+      const nextIndex = (selectedIndex + 1) % titleSuggestions.length;
+      
+      // Update rotation index to next position
+      try {
+        await fetch('/api/title-rotation/update-index', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': getCsrfToken()
+          },
+          body: JSON.stringify({ newIndex: nextIndex })
+        });
+        
+        // Update local state
+        window.currentTitleRotationIndex = nextIndex;
+        
+        // Update rotation preview
+        loadNextRotationTitle();
+      } catch (error) {
+        console.error('Error updating rotation index:', error);
+      }
+    }
+  }
+  
   closeTitleManagerModal();
   showToast('Judul dipilih');
 }
@@ -5669,6 +5700,37 @@ async function selectTitleFromDropdown(id, title, context = 'edit') {
     });
   } catch (error) {
     console.error('Error incrementing use count:', error);
+  }
+  
+  // If auto rotation is enabled, move NEXT indicator to the next title
+  if (titleAutoRotationEnabled) {
+    // Find the index of the selected title
+    const selectedIndex = titleSuggestions.findIndex(t => t.id === id);
+    
+    if (selectedIndex !== -1) {
+      // Calculate next index (wrap around to 0 if at end)
+      const nextIndex = (selectedIndex + 1) % titleSuggestions.length;
+      
+      // Update rotation index to next position
+      try {
+        await fetch('/api/title-rotation/update-index', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': getCsrfToken()
+          },
+          body: JSON.stringify({ newIndex: nextIndex })
+        });
+        
+        // Update local state
+        window.currentTitleRotationIndex = nextIndex;
+        
+        // Update rotation preview
+        loadNextRotationTitle();
+      } catch (error) {
+        console.error('Error updating rotation index:', error);
+      }
+    }
   }
 }
 
