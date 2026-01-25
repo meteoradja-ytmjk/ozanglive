@@ -3463,6 +3463,9 @@ async function loadRecreateTitleRotationPreview() {
     });
     const settings = await settingsResponse.json();
     
+    // Store settings for later use
+    window.recreateTitleRotationSettings = settings;
+    
     if (settings.success && settings.enabled) {
       // Auto-enable checkbox if user has title rotation enabled
       const checkbox = document.getElementById('recreateUseTitleRotation');
@@ -3474,10 +3477,13 @@ async function loadRecreateTitleRotationPreview() {
       }
     }
     
-    // Get next title
-    let url = '/api/title-rotation/next';
+    // Use currentIndex from settings (this is the user-selected start position)
+    const currentIndex = settings.currentIndex || 0;
+    
+    // Get next title starting from currentIndex
+    let url = `/api/title-rotation/next?currentIndex=${currentIndex}`;
     if (settings.folderId) {
-      url += `?folderId=${encodeURIComponent(settings.folderId)}`;
+      url += `&folderId=${encodeURIComponent(settings.folderId)}`;
     }
     
     const response = await fetch(url, {
@@ -3491,7 +3497,8 @@ async function loadRecreateTitleRotationPreview() {
         titleEl.textContent = data.title.title;
         titleEl.title = data.title.title;
       }
-      window.recreateNextTitles = await getNextTitlesForRecreate(data.nextIndex, settings.folderId);
+      // Get all titles for all broadcasts starting from currentIndex
+      window.recreateNextTitles = await getNextTitlesForRecreate(currentIndex, settings.folderId);
     } else {
       if (titleEl) titleEl.textContent = 'Tidak ada judul';
       window.recreateNextTitles = [];
@@ -3726,18 +3733,22 @@ if (recreateFromTemplateForm) {
             });
           }
           
-          // Update rotation index
-          const lastUsedIndex = window.recreateNextTitles[results.success - 1]?.index || 0;
+          // Update rotation index to the next position after all used titles
+          // Find the last successfully used title's index and add 1
+          const lastSuccessfulTitleIndex = usedTitleIds.length - 1;
+          const lastUsedTitle = window.recreateNextTitles[lastSuccessfulTitleIndex];
+          const newRotationIndex = lastUsedTitle ? (lastUsedTitle.index + 1) : 0;
+          
           await fetch('/api/title-rotation/update-index', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               'X-CSRF-Token': getCsrfToken()
             },
-            body: JSON.stringify({ newIndex: lastUsedIndex + 1 })
+            body: JSON.stringify({ newIndex: newRotationIndex })
           });
           
-          console.log('[recreate] Updated title rotation index to:', lastUsedIndex + 1);
+          console.log('[recreate] Updated title rotation index to:', newRotationIndex);
         } catch (err) {
           console.error('[recreate] Failed to update title rotation:', err);
         }
@@ -4842,6 +4853,7 @@ async function loadTitleRotationSettings() {
     if (data.success) {
       titleAutoRotationEnabled = data.enabled || false;
       titleRotationFolderId = data.folderId || null;
+      window.currentTitleRotationIndex = data.currentIndex || 0;
       
       // Update UI
       const toggle = document.getElementById('titleAutoRotationEnabled');
@@ -4862,6 +4874,11 @@ async function loadTitleRotationSettings() {
       } else {
         if (folderSection) folderSection.classList.add('hidden');
         if (statusSection) statusSection.classList.add('hidden');
+      }
+      
+      // Re-render title list to show current rotation position
+      if (titleSuggestions.length > 0) {
+        renderTitleManagerList();
       }
     }
   } catch (error) {
@@ -4886,6 +4903,11 @@ async function toggleTitleAutoRotation(enabled) {
   } else {
     if (folderSection) folderSection.classList.add('hidden');
     if (statusSection) statusSection.classList.add('hidden');
+  }
+  
+  // Re-render title list to show/hide rotation indicator
+  if (titleSuggestions.length > 0) {
+    renderTitleManagerList();
   }
   
   // Save to server
@@ -5278,27 +5300,66 @@ function renderTitleManagerList() {
     return;
   }
   
+  // Get current rotation index to highlight
+  const currentRotationIndex = window.currentTitleRotationIndex || 0;
+  
   listEl.innerHTML = titleSuggestions.map((title, index) => {
     const isPinned = title.is_pinned === 1;
     const folder = titleFolders.find(f => f.id === title.folder_id);
+    const isCurrentRotation = titleAutoRotationEnabled && index === currentRotationIndex;
     
     return `
-    <div class="flex items-center gap-2 py-1.5 border-b border-gray-700/30 last:border-0">
-      <span class="text-xs ${isPinned ? 'text-green-400' : 'text-gray-600'} w-5 text-center">${isPinned ? '📌' : index + 1}</span>
+    <div class="flex items-center gap-2 py-1.5 border-b border-gray-700/30 last:border-0 ${isCurrentRotation ? 'bg-primary/10 rounded' : ''}">
+      <button type="button" onclick="setTitleRotationStart(${index})" 
+        class="text-xs ${isCurrentRotation ? 'text-primary font-bold' : (isPinned ? 'text-green-400' : 'text-gray-600')} w-5 text-center hover:text-primary cursor-pointer" 
+        title="Klik untuk set sebagai posisi awal rotasi">
+        ${isPinned ? '📌' : index + 1}
+      </button>
       <div class="flex-1 min-w-0">
         <button type="button" onclick="selectTitle('${escapeJsString(title.id)}', '${escapeJsString(title.title)}')"
-          class="text-left text-sm text-gray-200 hover:text-primary truncate block w-full">
+          class="text-left text-sm ${isCurrentRotation ? 'text-primary font-medium' : 'text-gray-200'} hover:text-primary truncate block w-full">
           ${escapeHtml(title.title)}
         </button>
         ${folder ? `<span class="text-xs" style="color: ${folder.color}">${escapeHtml(folder.name)}</span>` : ''}
       </div>
       <span class="text-xs text-gray-600">${title.use_count || 0}x</span>
-      <button type="button" onclick="showTitleMoveMenu(event, '${escapeJsString(title.id)}')" class="px-1.5 py-0.5 text-xs text-blue-400 hover:bg-blue-500/20 rounded">📁</button>
-      <button type="button" onclick="toggleTitlePin('${escapeJsString(title.id)}', ${isPinned ? 'false' : 'true'})" class="px-1.5 py-0.5 text-xs ${isPinned ? 'text-green-400' : 'text-gray-500'} hover:bg-green-500/20 rounded">${isPinned ? '📌' : '📍'}</button>
-      <button type="button" onclick="deleteTitleSuggestion('${escapeJsString(title.id)}')" class="px-1.5 py-0.5 text-xs text-red-400 hover:bg-red-500/20 rounded">✕</button>
+      <button type="button" onclick="showTitleMoveMenu(event, '${escapeJsString(title.id)}')" class="px-1.5 py-0.5 text-xs text-blue-400 hover:bg-blue-500/20 rounded" title="Pindah ke folder">📁</button>
+      <button type="button" onclick="toggleTitlePin('${escapeJsString(title.id)}', ${isPinned ? 'false' : 'true'})" class="px-1.5 py-0.5 text-xs ${isPinned ? 'text-green-400' : 'text-gray-500'} hover:bg-green-500/20 rounded" title="${isPinned ? 'Lepas pin' : 'Pin judul ini'}">${isPinned ? '📌' : '📍'}</button>
+      <button type="button" onclick="deleteTitleSuggestion('${escapeJsString(title.id)}')" class="px-1.5 py-0.5 text-xs text-red-400 hover:bg-red-500/20 rounded" title="Hapus">✕</button>
     </div>
   `;
   }).join('');
+}
+
+/**
+ * Set title rotation start position
+ */
+async function setTitleRotationStart(index) {
+  try {
+    // Save the new rotation index
+    await fetch('/api/title-rotation/update-index', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getCsrfToken()
+      },
+      body: JSON.stringify({ newIndex: index })
+    });
+    
+    // Update local state
+    window.currentTitleRotationIndex = index;
+    
+    // Re-render list to show new position
+    renderTitleManagerList();
+    
+    // Update rotation preview
+    loadNextRotationTitle();
+    
+    showToast(`Rotasi dimulai dari posisi ${index + 1}`);
+  } catch (error) {
+    console.error('Error setting rotation start:', error);
+    showToast('Gagal mengatur posisi awal', 'error');
+  }
 }
 
 /**

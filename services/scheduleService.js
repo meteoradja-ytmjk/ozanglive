@@ -10,6 +10,49 @@ const TitleSuggestion = require('../models/TitleSuggestion');
 const YouTubeBroadcastSettings = require('../models/YouTubeBroadcastSettings');
 const youtubeService = require('./youtubeService');
 const { calculateNextRun, formatNextRunAt, replaceTitlePlaceholders, isScheduleMissed } = require('../utils/recurringUtils');
+const { db } = require('../db/database');
+
+/**
+ * Get user title rotation settings from database
+ * @param {string} userId - User ID
+ * @returns {Promise<{enabled: boolean, folderId: string|null, currentIndex: number}>}
+ */
+async function getUserTitleRotationSettings(userId) {
+  return new Promise((resolve) => {
+    db.get(
+      `SELECT * FROM user_title_rotation_settings WHERE user_id = ?`,
+      [userId],
+      (err, row) => {
+        if (err || !row) {
+          return resolve({ enabled: false, folderId: null, currentIndex: 0 });
+        }
+        resolve({
+          enabled: !!row.enabled,
+          folderId: row.folder_id || null,
+          currentIndex: row.current_index || 0
+        });
+      }
+    );
+  });
+}
+
+/**
+ * Update user title rotation index
+ * @param {string} userId - User ID
+ * @param {number} newIndex - New index
+ * @returns {Promise<boolean>}
+ */
+async function updateUserTitleRotationIndex(userId, newIndex) {
+  return new Promise((resolve) => {
+    db.run(
+      `UPDATE user_title_rotation_settings SET current_index = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?`,
+      [newIndex, userId],
+      function(err) {
+        resolve(!err && this.changes > 0);
+      }
+    );
+  });
+}
 
 /**
  * Get current time in Asia/Jakarta timezone (WIB)
@@ -672,8 +715,20 @@ class ScheduleService {
       
       if (broadcasts.length > 0) {
         // Multi-broadcast template - create all broadcasts
-        // Track title index for multi-broadcast rotation
+        // Check user title rotation settings first
+        let titleFolderId = template.title_folder_id || null;
         let currentTitleIndex = template.title_index || 0;
+        let useUserRotation = false;
+        
+        if (!titleFolderId) {
+          const userRotationSettings = await getUserTitleRotationSettings(template.user_id);
+          if (userRotationSettings.enabled) {
+            titleFolderId = userRotationSettings.folderId;
+            currentTitleIndex = userRotationSettings.currentIndex;
+            useUserRotation = true;
+            console.log(`[ScheduleService] Multi-broadcast using user title rotation: folder=${titleFolderId || 'all'}, index=${currentTitleIndex}`);
+          }
+        }
         
         for (let i = 0; i < broadcasts.length; i++) {
           const b = broadcasts[i];
@@ -682,7 +737,8 @@ class ScheduleService {
           let finalTitle = b.title;
           const titleResult = await this.getNextTitleForBroadcast(
             template.user_id,
-            currentTitleIndex
+            currentTitleIndex,
+            titleFolderId
           );
           
           if (titleResult.title) {
@@ -811,35 +867,73 @@ class ScheduleService {
         
         // Update title index for multi-broadcast template after all broadcasts
         if (currentTitleIndex !== (template.title_index || 0)) {
-          try {
-            await BroadcastTemplate.updateTitleIndex(template.id, currentTitleIndex);
-            console.log(`[ScheduleService] Updated multi-template ${template.id} title_index to ${currentTitleIndex}`);
-          } catch (err) {
-            console.error(`[ScheduleService] Failed to update title index:`, err.message);
+          if (useUserRotation) {
+            // Update user-level rotation index
+            try {
+              await updateUserTitleRotationIndex(template.user_id, currentTitleIndex);
+              console.log(`[ScheduleService] Updated user title rotation index to ${currentTitleIndex}`);
+            } catch (err) {
+              console.error(`[ScheduleService] Failed to update user title rotation index:`, err.message);
+            }
+          } else {
+            // Update template-level rotation index
+            try {
+              await BroadcastTemplate.updateTitleIndex(template.id, currentTitleIndex);
+              console.log(`[ScheduleService] Updated multi-template ${template.id} title_index to ${currentTitleIndex}`);
+            } catch (err) {
+              console.error(`[ScheduleService] Failed to update title index:`, err.message);
+            }
           }
         }
       } else {
         // Single broadcast template
         
-        // Get title from rotation (use folder if specified)
+        // Get title from rotation
+        // Priority: 1. Template title_folder_id, 2. User title rotation settings, 3. All titles
         let finalTitle = template.title;
+        let titleFolderId = template.title_folder_id || null;
+        let titleIndex = template.title_index || 0;
+        let useUserRotation = false;
+        
+        // If template doesn't have specific folder, check user title rotation settings
+        if (!titleFolderId) {
+          const userRotationSettings = await getUserTitleRotationSettings(template.user_id);
+          if (userRotationSettings.enabled) {
+            titleFolderId = userRotationSettings.folderId;
+            titleIndex = userRotationSettings.currentIndex;
+            useUserRotation = true;
+            console.log(`[ScheduleService] Using user title rotation settings: folder=${titleFolderId || 'all'}, index=${titleIndex}`);
+          }
+        }
+        
         const titleResult = await this.getNextTitleForBroadcast(
           template.user_id,
-          template.title_index || 0,
-          template.title_folder_id || null
+          titleIndex,
+          titleFolderId
         );
         
         if (titleResult.title) {
           finalTitle = titleResult.title.title;
-          console.log(`[ScheduleService] Using rotated title: "${finalTitle}" (index: ${titleResult.currentPosition}/${titleResult.totalCount}, pinned: ${titleResult.isPinned}, folder: ${template.title_folder_id || 'all'})`);
+          console.log(`[ScheduleService] Using rotated title: "${finalTitle}" (index: ${titleResult.currentPosition}/${titleResult.totalCount}, pinned: ${titleResult.isPinned}, folder: ${titleFolderId || 'all'})`);
           
           // Update title index for next run (only if not pinned)
-          if (!titleResult.isPinned && template.id) {
-            try {
-              await BroadcastTemplate.updateTitleIndex(template.id, titleResult.nextIndex);
-              console.log(`[ScheduleService] Updated template ${template.id} title_index to ${titleResult.nextIndex}`);
-            } catch (err) {
-              console.error(`[ScheduleService] Failed to update title index:`, err.message);
+          if (!titleResult.isPinned) {
+            if (useUserRotation) {
+              // Update user-level rotation index
+              try {
+                await updateUserTitleRotationIndex(template.user_id, titleResult.nextIndex);
+                console.log(`[ScheduleService] Updated user title rotation index to ${titleResult.nextIndex}`);
+              } catch (err) {
+                console.error(`[ScheduleService] Failed to update user title rotation index:`, err.message);
+              }
+            } else if (template.id) {
+              // Update template-level rotation index
+              try {
+                await BroadcastTemplate.updateTitleIndex(template.id, titleResult.nextIndex);
+                console.log(`[ScheduleService] Updated template ${template.id} title_index to ${titleResult.nextIndex}`);
+              } catch (err) {
+                console.error(`[ScheduleService] Failed to update title index:`, err.message);
+              }
             }
           }
           

@@ -7507,7 +7507,16 @@ async function getUserTitleRotationSettings(userId) {
           // Table might not exist, return defaults
           return resolve({ enabled: false, folderId: null, currentIndex: 0 });
         }
-        resolve(row || { enabled: false, folderId: null, currentIndex: 0 });
+        if (row) {
+          // Map database column names to camelCase
+          resolve({
+            enabled: row.enabled === 1,
+            folderId: row.folder_id || null,
+            currentIndex: row.current_index || 0
+          });
+        } else {
+          resolve({ enabled: false, folderId: null, currentIndex: 0 });
+        }
       }
     );
   });
