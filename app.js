@@ -5561,6 +5561,14 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
     const thumbnailIndex = parseInt(req.body.thumbnailIndex) || 0;
     const thumbnailPathFromRequest = req.body.thumbnailPath;
     
+    console.log('[API] Create broadcast - thumbnail settings:', {
+      thumbnailFolder: thumbnailFolder,
+      thumbnailModeRandom: thumbnailModeRandom,
+      thumbnailIndex: thumbnailIndex,
+      thumbnailPath: thumbnailPathFromRequest,
+      hasFile: !!req.file
+    });
+    
     // Save broadcast settings for later use (e.g., unlist replay on end, thumbnail folder)
     try {
       await YouTubeBroadcastSettings.upsert({
@@ -5585,7 +5593,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
     const thumbnailPath = req.body.thumbnailPath;
     
     if (req.file) {
-      // Handle file upload
+      // Handle file upload (highest priority)
       try {
         const thumbnailResult = await youtubeService.uploadThumbnail(
           accessToken,
@@ -5593,11 +5601,32 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
           req.file.buffer
         );
         broadcast.thumbnailUrl = thumbnailResult.thumbnailUrl;
+        console.log('[API] Thumbnail uploaded from file upload');
       } catch (thumbErr) {
         console.error('Error uploading thumbnail:', thumbErr.message);
       }
+    } else if (thumbnailPath) {
+      // Handle gallery selection (user explicitly selected a thumbnail - second priority)
+      try {
+        const fullPath = path.join(__dirname, 'public', thumbnailPath);
+        console.log('[API] Using user-selected thumbnail:', thumbnailPath);
+        if (fs.existsSync(fullPath)) {
+          const imageBuffer = fs.readFileSync(fullPath);
+          const thumbnailResult = await youtubeService.uploadThumbnail(
+            accessToken,
+            broadcast.broadcastId,
+            imageBuffer
+          );
+          broadcast.thumbnailUrl = thumbnailResult.thumbnailUrl;
+          console.log('[API] Thumbnail uploaded from user selection:', thumbnailPath);
+        } else {
+          console.error('[API] User-selected thumbnail not found:', fullPath);
+        }
+      } catch (thumbErr) {
+        console.error('Error uploading gallery thumbnail:', thumbErr.message);
+      }
     } else if (thumbnailFolder !== undefined && thumbnailFolder !== null) {
-      // Handle thumbnail from folder (random or sequential based on mode)
+      // Handle thumbnail from folder (random or sequential based on mode - only if no specific thumbnail selected)
       try {
         let selectedThumbnailPath = null;
         
@@ -5629,22 +5658,6 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         }
       } catch (thumbErr) {
         console.error('Error uploading thumbnail from folder:', thumbErr.message);
-      }
-    } else if (thumbnailPath) {
-      // Handle gallery selection
-      try {
-        const fullPath = path.join(__dirname, 'public', thumbnailPath);
-        if (fs.existsSync(fullPath)) {
-          const imageBuffer = fs.readFileSync(fullPath);
-          const thumbnailResult = await youtubeService.uploadThumbnail(
-            accessToken,
-            broadcast.broadcastId,
-            imageBuffer
-          );
-          broadcast.thumbnailUrl = thumbnailResult.thumbnailUrl;
-        }
-      } catch (thumbErr) {
-        console.error('Error uploading gallery thumbnail:', thumbErr.message);
       }
     }
     
