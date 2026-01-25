@@ -2055,25 +2055,11 @@ function renderTemplateList(templates) {
             <span>Run</span>
           </button>
           ` : ''}
-          ${!isMulti ? `
-          <button onclick="toggleTemplateRecurring('${template.id}', ${hasRecurring})"
-            class="recurring-toggle px-3 py-1.5 ${hasRecurring ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'} hover:opacity-80 rounded-lg transition-colors text-sm flex items-center gap-1" title="${hasRecurring ? 'Disable Recurring' : 'Enable Recurring'}" data-recurring="${hasRecurring}">
-            <i class="ti ti-repeat"></i>
-            <span>${hasRecurring ? 'On' : 'Off'}</span>
-          </button>
-          ` : ''}
           <button onclick="recreateFromTemplate('${template.id}')"
             class="px-3 py-1.5 bg-green-500/10 hover:bg-green-500/20 text-green-400 rounded-lg transition-colors text-sm flex items-center gap-1" title="Re-create Broadcasts">
             <i class="ti ti-refresh"></i>
             <span>Re-create</span>
           </button>
-          ${!isMulti ? `
-          <button onclick="openBulkCreateModal('${template.id}', '${escapeJsString(template.name)}')"
-            class="px-3 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg transition-colors text-sm flex items-center gap-1" title="Bulk Create">
-            <i class="ti ti-stack-2"></i>
-            <span>Bulk</span>
-          </button>
-          ` : ''}
           <button onclick="editTemplate('${template.id}')"
             class="px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-lg transition-colors text-sm flex items-center gap-1" title="Edit">
             <i class="ti ti-edit"></i>
@@ -2100,22 +2086,10 @@ function renderTemplateList(templates) {
             class="w-8 h-8 flex items-center justify-center text-green-400 hover:bg-green-500/20 rounded transition-colors" title="Re-create">
             <i class="ti ti-refresh text-sm"></i>
           </button>
-          ${!isMulti ? `
-          <button onclick="openBulkCreateModal('${template.id}', '${escapeJsString(template.name)}')"
-            class="w-8 h-8 flex items-center justify-center text-primary hover:bg-primary/20 rounded transition-colors" title="Bulk Create">
-            <i class="ti ti-stack-2 text-sm"></i>
-          </button>
-          ` : ''}
           <button onclick="editTemplate('${template.id}')"
             class="w-8 h-8 flex items-center justify-center text-blue-400 hover:bg-blue-500/20 rounded transition-colors" title="Edit">
             <i class="ti ti-edit text-sm"></i>
           </button>
-          ${!isMulti ? `
-          <button onclick="toggleTemplateRecurring('${template.id}', ${hasRecurring})"
-            class="recurring-toggle w-8 h-8 flex items-center justify-center ${hasRecurring ? 'text-green-400 hover:bg-green-500/20' : 'text-gray-400 hover:bg-gray-500/20'} rounded transition-colors" title="${hasRecurring ? 'Disable Recurring' : 'Enable Recurring'}" data-recurring="${hasRecurring}">
-            <i class="ti ti-repeat text-sm"></i>
-          </button>
-          ` : ''}
           <button onclick="deleteTemplate('${template.id}', '${escapeJsString(template.name)}')"
             class="w-8 h-8 flex items-center justify-center text-red-400 hover:bg-red-500/20 rounded transition-colors" title="Delete">
             <i class="ti ti-trash text-sm"></i>
@@ -2849,137 +2823,6 @@ async function createFromTemplate(templateId) {
     console.error('Error:', error);
     showToast('An error occurred', 'error');
   }
-}
-
-// Bulk Create Modal
-let bulkScheduleCount = 0;
-
-function openBulkCreateModal(templateId, templateName) {
-  closeTemplateLibraryModal();
-  document.getElementById('bulkCreateTemplateId').value = templateId;
-  document.getElementById('bulkCreateTemplateName').textContent = templateName;
-  document.getElementById('bulkScheduleList').innerHTML = '';
-  bulkScheduleCount = 0;
-  
-  // Add initial schedule
-  addBulkSchedule();
-  
-  document.getElementById('bulkCreateModal').classList.remove('hidden');
-}
-
-function closeBulkCreateModal() {
-  document.getElementById('bulkCreateModal').classList.add('hidden');
-  document.getElementById('bulkCreateForm').reset();
-  document.getElementById('bulkScheduleList').innerHTML = '';
-  bulkScheduleCount = 0;
-}
-
-// Add schedule input for bulk create
-function addBulkSchedule() {
-  bulkScheduleCount++;
-  const list = document.getElementById('bulkScheduleList');
-  
-  const minDate = new Date(Date.now() + 11 * 60 * 1000);
-  const minDateStr = minDate.toISOString().slice(0, 16);
-  
-  const div = document.createElement('div');
-  div.className = 'flex items-center gap-2';
-  div.id = `bulkSchedule${bulkScheduleCount}`;
-  div.innerHTML = `
-    <span class="text-sm text-gray-400 w-6">${bulkScheduleCount}.</span>
-    <input type="datetime-local" name="schedule[]" required min="${minDateStr}"
-      class="flex-1 px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none text-sm [color-scheme:dark]">
-    <button type="button" onclick="removeBulkSchedule(${bulkScheduleCount})"
-      class="p-2 text-gray-400 hover:text-red-400 transition-colors ${bulkScheduleCount === 1 ? 'invisible' : ''}">
-      <i class="ti ti-x"></i>
-    </button>
-  `;
-  list.appendChild(div);
-}
-
-// Remove schedule input
-function removeBulkSchedule(index) {
-  const element = document.getElementById(`bulkSchedule${index}`);
-  if (element) {
-    element.remove();
-    // Re-number remaining schedules
-    const schedules = document.querySelectorAll('#bulkScheduleList > div');
-    schedules.forEach((div, i) => {
-      div.querySelector('span').textContent = `${i + 1}.`;
-    });
-  }
-}
-
-// Bulk Create Form Handler
-const bulkCreateForm = document.getElementById('bulkCreateForm');
-if (bulkCreateForm) {
-  bulkCreateForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    const createBtn = document.getElementById('bulkCreateBtn');
-    const originalText = createBtn.innerHTML;
-    createBtn.innerHTML = '<i class="ti ti-loader animate-spin"></i> Creating...';
-    createBtn.disabled = true;
-    
-    try {
-      const templateId = document.getElementById('bulkCreateTemplateId').value;
-      const scheduleInputs = document.querySelectorAll('input[name="schedule[]"]');
-      const schedules = Array.from(scheduleInputs).map(input => input.value).filter(v => v);
-      
-      if (schedules.length === 0) {
-        showToast('Please add at least one schedule', 'error');
-        return;
-      }
-      
-      const response = await fetch(`/api/youtube/templates/${templateId}/bulk-create`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRF-Token': getCsrfToken()
-        },
-        body: JSON.stringify({ schedules })
-      });
-      
-      const data = await response.json();
-      
-      closeBulkCreateModal();
-      showBulkCreateResult(data);
-      
-    } catch (error) {
-      console.error('Error:', error);
-      showToast('An error occurred', 'error');
-    } finally {
-      createBtn.innerHTML = originalText;
-      createBtn.disabled = false;
-    }
-  });
-}
-
-// Show Bulk Create Result
-function showBulkCreateResult(result) {
-  document.getElementById('bulkResultTotal').textContent = result.total || 0;
-  document.getElementById('bulkResultSuccess').textContent = result.success || 0;
-  document.getElementById('bulkResultFailed').textContent = result.failed || 0;
-  
-  const errorsSection = document.getElementById('bulkCreateErrors');
-  const errorList = document.getElementById('bulkCreateErrorList');
-  
-  if (result.errors && result.errors.length > 0) {
-    errorsSection.classList.remove('hidden');
-    errorList.innerHTML = result.errors.map(err => 
-      `<p>${new Date(err.schedule).toLocaleString()}: ${escapeHtml(err.error)}</p>`
-    ).join('');
-  } else {
-    errorsSection.classList.add('hidden');
-  }
-  
-  document.getElementById('bulkCreateResultModal').classList.remove('hidden');
-}
-
-function closeBulkCreateResultModal() {
-  document.getElementById('bulkCreateResultModal').classList.add('hidden');
-  // Reload page to show new broadcasts
-  window.location.reload();
 }
 
 // Add Save as Template button to broadcast actions
