@@ -5211,29 +5211,76 @@ function selectTitleFolder(folderId) {
  * Open create title folder modal
  */
 function openCreateTitleFolderModal() {
-  document.getElementById('folderModalTitle').textContent = 'Buat Folder Baru';
-  document.getElementById('editFolderId').value = '';
-  document.getElementById('folderNameInput').value = '';
+  console.log('[TITLE FOLDER] openCreateTitleFolderModal called');
+  
+  const modal = document.getElementById('titleFolderModal');
+  if (!modal) {
+    console.error('[TITLE FOLDER] Modal titleFolderModal not found!');
+    showToast('Error: Modal tidak ditemukan', 'error');
+    return;
+  }
+  
+  const titleEl = document.getElementById('folderModalTitle');
+  const idEl = document.getElementById('editFolderId');
+  const nameEl = document.getElementById('folderNameInput');
+  
+  if (!titleEl || !idEl || !nameEl) {
+    console.error('[TITLE FOLDER] Missing elements:', { titleEl: !!titleEl, idEl: !!idEl, nameEl: !!nameEl });
+    showToast('Error: Element tidak ditemukan', 'error');
+    return;
+  }
+  
+  titleEl.textContent = 'Buat Folder Baru';
+  idEl.value = '';
+  nameEl.value = '';
   selectFolderColor('#8B5CF6');
-  document.getElementById('titleFolderModal').classList.remove('hidden');
+  
+  // Show modal using style.display (avoid hidden class conflict)
+  modal.style.display = 'flex';
+  
+  // Focus input after a short delay
+  setTimeout(() => {
+    nameEl.focus();
+  }, 100);
+  
+  console.log('[TITLE FOLDER] Modal opened successfully');
 }
 
 /**
  * Open edit folder modal
  */
 function openEditFolderModal(id, name, color) {
+  console.log('[TITLE FOLDER] openEditFolderModal called:', { id, name, color });
+  
+  const modal = document.getElementById('titleFolderModal');
+  if (!modal) {
+    console.error('[TITLE FOLDER] Modal titleFolderModal not found!');
+    showToast('Error: Modal tidak ditemukan', 'error');
+    return;
+  }
+  
   document.getElementById('folderModalTitle').textContent = 'Edit Folder';
   document.getElementById('editFolderId').value = id;
   document.getElementById('folderNameInput').value = name;
   selectFolderColor(color);
-  document.getElementById('titleFolderModal').classList.remove('hidden');
+  
+  // Show modal using style.display
+  modal.style.display = 'flex';
+  
+  // Focus input after a short delay
+  setTimeout(() => {
+    document.getElementById('folderNameInput').focus();
+  }, 100);
 }
 
 /**
  * Close folder modal
  */
 function closeFolderModal() {
-  document.getElementById('titleFolderModal').classList.add('hidden');
+  const modal = document.getElementById('titleFolderModal');
+  if (modal) {
+    modal.style.display = 'none';
+  }
 }
 
 /**
@@ -5252,8 +5299,12 @@ function selectFolderColor(color) {
  * Save folder (create or update)
  */
 async function saveFolder() {
+  console.log('[TITLE FOLDER] saveFolder called');
+  
   const id = document.getElementById('editFolderId').value;
   const name = document.getElementById('folderNameInput').value.trim();
+  
+  console.log('[TITLE FOLDER] Saving folder:', { id, name, color: selectedFolderColor });
   
   if (!name) {
     showToast('Masukkan nama folder', 'error');
@@ -5263,6 +5314,8 @@ async function saveFolder() {
   try {
     const url = id ? `/api/title-folders/${id}` : '/api/title-folders';
     const method = id ? 'PUT' : 'POST';
+    
+    console.log('[TITLE FOLDER] Sending request to:', url, 'method:', method);
     
     const response = await fetch(url, {
       method,
@@ -5274,6 +5327,8 @@ async function saveFolder() {
     });
     
     const data = await response.json();
+    console.log('[TITLE FOLDER] Response:', data);
+    
     if (data.success) {
       showToast(id ? 'Folder diupdate' : 'Folder dibuat');
       closeFolderModal();
@@ -5282,7 +5337,7 @@ async function saveFolder() {
       showToast(data.error || 'Gagal menyimpan folder', 'error');
     }
   } catch (error) {
-    console.error('Error saving folder:', error);
+    console.error('[TITLE FOLDER] Error saving folder:', error);
     showToast('Gagal menyimpan folder', 'error');
   }
 }
