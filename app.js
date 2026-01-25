@@ -5150,21 +5150,42 @@ app.post('/api/stream-key-folder-mapping', isAuthenticated, async (req, res) => 
     
     const db = require('./db/database').getDb();
     
-    // Upsert the mapping (preserve thumbnail_index if exists)
+    // Check if mapping exists and get current thumbnail_index
+    const existing = await new Promise((resolve) => {
+      db.get(`SELECT thumbnail_index, folder_name FROM stream_key_folder_mapping WHERE user_id = ? AND stream_key_id = ?`,
+        [userId, streamKeyId], (err, row) => resolve(row));
+    });
+    
+    // If folder changed, reset thumbnail_index to 0
+    // If folder same, preserve thumbnail_index
+    let newIndex = 0;
+    if (existing) {
+      if (existing.folder_name === (folderName || '')) {
+        // Same folder, preserve index
+        newIndex = existing.thumbnail_index || 0;
+        console.log(`[stream-key-folder-mapping] Same folder, preserving index: ${newIndex}`);
+      } else {
+        // Different folder, reset index
+        console.log(`[stream-key-folder-mapping] Folder changed from "${existing.folder_name}" to "${folderName || ''}", resetting index to 0`);
+      }
+    }
+    
+    // Upsert the mapping
     db.run(`
       INSERT INTO stream_key_folder_mapping (user_id, stream_key_id, folder_name, thumbnail_index, updated_at)
-      VALUES (?, ?, ?, 0, CURRENT_TIMESTAMP)
+      VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
       ON CONFLICT(user_id, stream_key_id) DO UPDATE SET
         folder_name = excluded.folder_name,
+        thumbnail_index = excluded.thumbnail_index,
         updated_at = CURRENT_TIMESTAMP
-    `, [userId, streamKeyId, folderName || ''], function(err) {
+    `, [userId, streamKeyId, folderName || '', newIndex], function(err) {
       if (err) {
         console.error('[stream-key-folder-mapping] Error saving:', err.message);
         return res.status(500).json({ success: false, error: 'Failed to save mapping' });
       }
       
-      console.log(`[stream-key-folder-mapping] Saved: ${streamKeyId} -> ${folderName || 'root'}`);
-      res.json({ success: true, streamKeyId, folderName: folderName || '' });
+      console.log(`[stream-key-folder-mapping] Saved: ${streamKeyId} -> ${folderName || 'root'}, index: ${newIndex}`);
+      res.json({ success: true, streamKeyId, folderName: folderName || '', thumbnailIndex: newIndex });
     });
   } catch (error) {
     console.error('[stream-key-folder-mapping] Error:', error.message);
@@ -5624,21 +5645,27 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       // Handle thumbnail from folder (sequential mode - only if no specific thumbnail selected)
       try {
         let selectedThumbnailPath = null;
-        const streamKeyId = req.body.streamId || req.body._streamKeyId;
+        // Use streamId from request body (already extracted above)
+        const streamKeyId = streamId;
         
-        // Get thumbnail index - priority: request > stream key mapping > 0
-        let currentIndex = thumbnailIndex;
-        if (streamKeyId && currentIndex === 0) {
-          // Try to get index from stream key mapping
+        // ALWAYS get thumbnail index from stream key mapping if streamKeyId exists
+        let currentIndex = 0;
+        if (streamKeyId) {
           const db = require('./db/database').getDb();
           const mapping = await new Promise((resolve) => {
-            db.get(`SELECT thumbnail_index FROM stream_key_folder_mapping WHERE user_id = ? AND stream_key_id = ?`,
+            db.get(`SELECT thumbnail_index, folder_name FROM stream_key_folder_mapping WHERE user_id = ? AND stream_key_id = ?`,
               [req.session.userId, streamKeyId], (err, row) => resolve(row));
           });
           if (mapping && mapping.thumbnail_index !== undefined) {
             currentIndex = mapping.thumbnail_index;
-            console.log('[API] Using stream key thumbnail index:', streamKeyId, '->', currentIndex);
+            console.log('[API] Got stream key thumbnail index from DB:', streamKeyId, '->', currentIndex);
+          } else {
+            console.log('[API] No existing thumbnail index for stream key:', streamKeyId, '- starting from 0');
           }
+        } else {
+          // Fallback to request thumbnailIndex if no streamKeyId
+          currentIndex = thumbnailIndex;
+          console.log('[API] No streamKeyId, using request thumbnailIndex:', currentIndex);
         }
         
         // Sequential mode: select next thumbnail in order
@@ -5650,18 +5677,22 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
           // Update thumbnail index for this stream key
           if (streamKeyId && result.newIndex !== undefined) {
             const db = require('./db/database').getDb();
-            db.run(`
-              INSERT INTO stream_key_folder_mapping (user_id, stream_key_id, folder_name, thumbnail_index, updated_at)
-              VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-              ON CONFLICT(user_id, stream_key_id) DO UPDATE SET
-                thumbnail_index = excluded.thumbnail_index,
-                updated_at = CURRENT_TIMESTAMP
-            `, [req.session.userId, streamKeyId, thumbnailFolder || '', result.newIndex], function(err) {
-              if (err) {
-                console.error('[API] Error updating stream key thumbnail index:', err.message);
-              } else {
-                console.log('[API] Updated stream key thumbnail index:', streamKeyId, '->', result.newIndex);
-              }
+            await new Promise((resolve, reject) => {
+              db.run(`
+                INSERT INTO stream_key_folder_mapping (user_id, stream_key_id, folder_name, thumbnail_index, updated_at)
+                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(user_id, stream_key_id) DO UPDATE SET
+                  thumbnail_index = excluded.thumbnail_index,
+                  updated_at = CURRENT_TIMESTAMP
+              `, [req.session.userId, streamKeyId, thumbnailFolder || '', result.newIndex], function(err) {
+                if (err) {
+                  console.error('[API] Error updating stream key thumbnail index:', err.message);
+                  reject(err);
+                } else {
+                  console.log('[API] Updated stream key thumbnail index:', streamKeyId, '->', result.newIndex);
+                  resolve();
+                }
+              });
             });
           }
         }
