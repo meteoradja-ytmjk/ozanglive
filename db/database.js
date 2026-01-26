@@ -475,6 +475,28 @@ async function createCoreTablesAsync() {
   // Add sort_order column for manual ordering
   await runTableQuery(`ALTER TABLE title_suggestions ADD COLUMN sort_order INTEGER DEFAULT 0`, 'title_suggestions.sort_order');
 
+  // Create title_folders table for organizing titles into folders
+  await runTableQuery(`CREATE TABLE IF NOT EXISTS title_folders (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    color TEXT DEFAULT '#8B5CF6',
+    sort_order INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, name),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  )`, 'title_folders');
+
+  await runTableQuery(`CREATE INDEX IF NOT EXISTS idx_title_folders_user 
+          ON title_folders(user_id)`, 'title_folders.user_index');
+
+  // Add folder_id column to title_suggestions for folder organization
+  await runTableQuery(`ALTER TABLE title_suggestions ADD COLUMN folder_id TEXT REFERENCES title_folders(id) ON DELETE SET NULL`, 'title_suggestions.folder_id');
+
+  await runTableQuery(`CREATE INDEX IF NOT EXISTS idx_title_suggestions_folder 
+          ON title_suggestions(folder_id)`, 'title_suggestions.folder_index');
+
   // Create youtube_broadcast_settings table for storing broadcast-specific settings
   await runTableQuery(`CREATE TABLE IF NOT EXISTS youtube_broadcast_settings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

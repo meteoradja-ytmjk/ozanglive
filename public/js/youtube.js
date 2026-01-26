@@ -590,6 +590,14 @@ async function submitAddThumbnailFolder(event) {
     return;
   }
   
+  const csrfToken = getCsrfToken();
+  console.log('[THUMBNAIL] CSRF Token:', csrfToken ? 'present (' + csrfToken.substring(0, 10) + '...)' : 'MISSING');
+  
+  if (!csrfToken) {
+    showToast('Session expired. Please refresh the page.', 'error');
+    return;
+  }
+  
   const btn = document.getElementById('addThumbnailFolderBtn2');
   const originalText = btn.innerHTML;
   btn.innerHTML = '<i class="ti ti-loader animate-spin"></i> Creating...';
@@ -601,10 +609,22 @@ async function submitAddThumbnailFolder(event) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-CSRF-Token': getCsrfToken()
+        'X-CSRF-Token': csrfToken
       },
       body: JSON.stringify({ name: folderName })
     });
+    
+    console.log('[THUMBNAIL] Response status:', response.status);
+    
+    // Check if response is JSON
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      console.error('[THUMBNAIL] Non-JSON response:', contentType);
+      const text = await response.text();
+      console.error('[THUMBNAIL] Response text:', text.substring(0, 200));
+      showToast('Server error. Please refresh the page and try again.', 'error');
+      return;
+    }
     
     const data = await response.json();
     console.log('[THUMBNAIL] Response:', data);
@@ -5127,10 +5147,12 @@ let titleRotationFolderId = null;
 /**
  * Open Title Manager Modal
  */
-function openTitleManagerModal(context = 'edit') {
+async function openTitleManagerModal(context = 'edit') {
   titleManagerContext = context;
   document.getElementById('titleManagerModal').classList.remove('hidden');
-  loadTitleFolders();
+  
+  // Load folders first, then rotation settings (which depends on folders)
+  await loadTitleFolders();
   loadTitleSuggestions();
   loadTitleRotationSettings();
 }
@@ -5252,16 +5274,22 @@ function populateTitleRotationFolderDropdown() {
   // Clear dropdown
   select.innerHTML = '';
   
-  // Add folders
+  // Add folders only
   titleFolders.forEach(folder => {
     const option = document.createElement('option');
     option.value = folder.id;
-    option.textContent = folder.name;
+    option.textContent = `📂 ${folder.name} (${folder.title_count || 0} judul)`;
     if (folder.id === titleRotationFolderId) {
       option.selected = true;
     }
     select.appendChild(option);
   });
+  
+  // Auto-select first folder if none selected
+  if (!titleRotationFolderId && titleFolders.length > 0) {
+    titleRotationFolderId = titleFolders[0].id;
+    select.value = titleRotationFolderId;
+  }
 }
 
 /**
@@ -5495,11 +5523,18 @@ async function saveFolder() {
   
   const id = document.getElementById('editFolderId').value;
   const name = document.getElementById('folderNameInput').value.trim();
+  const csrfToken = getCsrfToken();
   
   console.log('[TITLE FOLDER] Saving folder:', { id, name, color: selectedFolderColor });
+  console.log('[TITLE FOLDER] CSRF Token:', csrfToken ? 'present (' + csrfToken.substring(0, 10) + '...)' : 'MISSING');
   
   if (!name) {
     showToast('Masukkan nama folder', 'error');
+    return;
+  }
+  
+  if (!csrfToken) {
+    showToast('Session expired. Please refresh the page.', 'error');
     return;
   }
   
@@ -5513,10 +5548,22 @@ async function saveFolder() {
       method,
       headers: {
         'Content-Type': 'application/json',
-        'X-CSRF-Token': getCsrfToken()
+        'X-CSRF-Token': csrfToken
       },
       body: JSON.stringify({ name, color: selectedFolderColor })
     });
+    
+    console.log('[TITLE FOLDER] Response status:', response.status);
+    
+    // Check if response is JSON
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      console.error('[TITLE FOLDER] Non-JSON response:', contentType);
+      const text = await response.text();
+      console.error('[TITLE FOLDER] Response text:', text.substring(0, 200));
+      showToast('Server error. Please refresh the page and try again.', 'error');
+      return;
+    }
     
     const data = await response.json();
     console.log('[TITLE FOLDER] Response:', data);
@@ -5788,11 +5835,19 @@ async function addNewTitle() {
   }
   
   const title = input.value.trim();
+  const csrfToken = getCsrfToken();
+  
   console.log('[ADD TITLE] Title value:', title);
   console.log('[ADD TITLE] Selected folder ID:', selectedTitleFolderId);
+  console.log('[ADD TITLE] CSRF Token:', csrfToken ? 'present (' + csrfToken.substring(0, 10) + '...)' : 'MISSING');
   
   if (!title) {
     showToast('Masukkan judul', 'error');
+    return;
+  }
+  
+  if (!csrfToken) {
+    showToast('Session expired. Please refresh the page.', 'error');
     return;
   }
   
@@ -5802,13 +5857,25 @@ async function addNewTitle() {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-CSRF-Token': getCsrfToken()
+        'X-CSRF-Token': csrfToken
       },
       body: JSON.stringify({ 
         title,
         folderId: selectedTitleFolderId || null
       })
     });
+    
+    console.log('[ADD TITLE] Response status:', response.status);
+    
+    // Check if response is JSON
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      console.error('[ADD TITLE] Non-JSON response:', contentType);
+      const text = await response.text();
+      console.error('[ADD TITLE] Response text:', text.substring(0, 200));
+      showToast('Server error. Please refresh the page and try again.', 'error');
+      return;
+    }
     
     const data = await response.json();
     console.log('[ADD TITLE] Response:', data);

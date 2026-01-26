@@ -462,6 +462,13 @@ const csrfProtection = function (req, res, next) {
   }
   const token = req.body._csrf || req.query._csrf || req.headers['x-csrf-token'];
   if (!token || !tokens.verify(req.session.csrfSecret, token)) {
+    // Return JSON for API calls, HTML for regular requests
+    if (req.path.startsWith('/api/') || req.xhr || req.headers.accept?.includes('application/json')) {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'CSRF validation failed. Please refresh the page and try again.' 
+      });
+    }
     return res.status(403).render('error', {
       title: 'Error',
       error: 'CSRF validation failed. Please try again.'
@@ -472,6 +479,14 @@ const csrfProtection = function (req, res, next) {
 const isAuthenticated = (req, res, next) => {
   if (req.session.userId) {
     return next();
+  }
+  // Return JSON for API calls, redirect for regular requests
+  if (req.path.startsWith('/api/') || req.xhr || req.headers.accept?.includes('application/json')) {
+    return res.status(401).json({ 
+      success: false, 
+      error: 'Session expired. Please login again.',
+      redirect: '/login'
+    });
   }
   res.redirect('/login');
 };
@@ -7587,8 +7602,12 @@ app.get('/api/title-folders', isAuthenticated, async (req, res) => {
 // Create new folder
 app.post('/api/title-folders', isAuthenticated, async (req, res) => {
   try {
+    console.log('[API] POST /api/title-folders - userId:', req.session.userId);
+    console.log('[API] Request body:', req.body);
+    
     const { name, color } = req.body;
     if (!name || !name.trim()) {
+      console.log('[API] Error: Folder name is required');
       return res.status(400).json({ success: false, error: 'Folder name is required' });
     }
     const folder = await TitleFolder.create({
@@ -7596,6 +7615,7 @@ app.post('/api/title-folders', isAuthenticated, async (req, res) => {
       name: name.trim(),
       color: color || '#8B5CF6'
     });
+    console.log('[API] Folder created:', folder);
     res.json({ success: true, folder });
   } catch (error) {
     console.error('Error creating title folder:', error);

@@ -3,8 +3,8 @@
  * Run this script to add folder support to title_suggestions table
  */
 
-const path = require('path');
 const sqlite3 = require('sqlite3').verbose();
+const path = require('path');
 
 const dbPath = path.join(__dirname, '..', 'db', 'streamflow.db');
 const db = new sqlite3.Database(dbPath);
@@ -22,7 +22,8 @@ db.serialize(() => {
       sort_order INTEGER DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE(user_id, name)
+      UNIQUE(user_id, name),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )
   `, (err) => {
     if (err) {
@@ -45,12 +46,12 @@ db.serialize(() => {
     }
   });
 
-  // Create index
+  // Create index for title_folders
   db.run(`CREATE INDEX IF NOT EXISTS idx_title_folders_user ON title_folders(user_id)`, (err) => {
     if (err) {
       console.error('Error creating index:', err.message);
     } else {
-      console.log('✓ Index created');
+      console.log('✓ Index idx_title_folders_user created/verified');
     }
   });
 
@@ -59,7 +60,7 @@ db.serialize(() => {
     if (err) {
       console.error('Error creating folder index:', err.message);
     } else {
-      console.log('✓ Folder index created on title_suggestions');
+      console.log('✓ Index idx_title_suggestions_folder created/verified');
     }
   });
 });
@@ -68,6 +69,7 @@ db.close((err) => {
   if (err) {
     console.error('Error closing database:', err.message);
   } else {
-    console.log('\n✓ Migration completed successfully!');
+    console.log('\n✓ Title Folders migration completed successfully!');
+    console.log('You can now use folders to organize your broadcast titles.');
   }
 });
