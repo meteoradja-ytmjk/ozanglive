@@ -5626,24 +5626,6 @@ async function loadTitleSuggestions() {
 }
 
 let titleListVisible = false;
-let folderSectionVisible = true;
-
-/**
- * Toggle folder section visibility
- */
-function toggleFolderSection() {
-  folderSectionVisible = !folderSectionVisible;
-  const listEl = document.getElementById('titleFolderList');
-  const icon = document.getElementById('folderToggleIcon');
-  
-  if (folderSectionVisible) {
-    listEl.classList.remove('hidden');
-    icon.textContent = '▼';
-  } else {
-    listEl.classList.add('hidden');
-    icon.textContent = '▶';
-  }
-}
 
 /**
  * Toggle title list visibility
