@@ -5626,7 +5626,7 @@ async function loadTitleSuggestions() {
 }
 
 let titleListVisible = false;
-let folderSectionVisible = false;
+let folderSectionVisible = true;
 
 /**
  * Toggle folder section visibility
