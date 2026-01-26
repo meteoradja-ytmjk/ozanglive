@@ -2031,6 +2031,7 @@ document.querySelectorAll('.modal-overlay').forEach(modal => {
   modal.addEventListener('click', (e) => {
     if (e.target === modal) {
       modal.classList.add('hidden');
+      modal.classList.remove('flex');
     }
   });
 });
@@ -2040,6 +2041,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     document.querySelectorAll('.modal-overlay').forEach(modal => {
       modal.classList.add('hidden');
+      modal.classList.remove('flex');
     });
   }
 });
@@ -5408,8 +5410,9 @@ function openCreateTitleFolderModal() {
   nameEl.value = '';
   selectFolderColor('#8B5CF6');
   
-  // Show modal using style.display (avoid hidden class conflict)
-  modal.style.display = 'flex';
+  // Show modal using classList (consistent with other modals)
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
   
   // Focus input after a short delay
   setTimeout(() => {
@@ -5437,8 +5440,9 @@ function openEditFolderModal(id, name, color) {
   document.getElementById('folderNameInput').value = name;
   selectFolderColor(color);
   
-  // Show modal using style.display
-  modal.style.display = 'flex';
+  // Show modal using classList (consistent with other modals)
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
   
   // Focus input after a short delay
   setTimeout(() => {
@@ -5452,7 +5456,8 @@ function openEditFolderModal(id, name, color) {
 function closeFolderModal() {
   const modal = document.getElementById('titleFolderModal');
   if (modal) {
-    modal.style.display = 'none';
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
   }
 }
 
