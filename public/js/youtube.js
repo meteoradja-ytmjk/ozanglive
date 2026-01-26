@@ -5244,8 +5244,8 @@ function populateTitleRotationFolderDropdown() {
   const select = document.getElementById('titleRotationFolderSelect');
   if (!select) return;
   
-  // Keep "Semua Judul" option
-  select.innerHTML = '<option value="">Semua Judul</option>';
+  // Clear dropdown
+  select.innerHTML = '';
   
   // Add folders
   titleFolders.forEach(folder => {
