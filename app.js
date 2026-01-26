@@ -5742,14 +5742,14 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
                 VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
                 ON CONFLICT(user_id, stream_key_id) DO UPDATE SET
                   thumbnail_index = excluded.thumbnail_index,
-                  folder_name = COALESCE(excluded.folder_name, folder_name),
+                  folder_name = excluded.folder_name,
                   updated_at = CURRENT_TIMESTAMP
               `, [req.session.userId, streamId, thumbnailFolder || '', nextIndex], function(err) {
                 if (err) {
                   console.error('[API] Error updating stream key thumbnail index for user selection:', err.message);
                   reject(err);
                 } else {
-                  console.log('[API] Updated stream key thumbnail index for user selection:', streamId, '-> next index:', nextIndex);
+                  console.log('[API] Updated stream key thumbnail index for user selection:', streamId, '-> next index:', nextIndex, '(folder:', thumbnailFolder || 'root', ')');
                   resolve();
                 }
               });
@@ -5970,14 +5970,14 @@ app.put('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
               VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
               ON CONFLICT(user_id, stream_key_id) DO UPDATE SET
                 thumbnail_index = excluded.thumbnail_index,
-                folder_name = COALESCE(excluded.folder_name, folder_name),
+                folder_name = excluded.folder_name,
                 updated_at = CURRENT_TIMESTAMP
             `, [req.session.userId, streamId, thumbnailFolder || '', nextIndex], function(err) {
               if (err) {
                 console.error('[API] Error updating stream key thumbnail index on edit:', err.message);
                 reject(err);
               } else {
-                console.log('[API] Updated stream key thumbnail index on edit:', streamId, '-> next index:', nextIndex);
+                console.log('[API] Updated stream key thumbnail index on edit:', streamId, '-> next index:', nextIndex, '(folder:', thumbnailFolder || 'root', ')');
                 resolve();
               }
             });
