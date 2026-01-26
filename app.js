@@ -5269,7 +5269,6 @@ app.put('/api/stream-key-folder-mapping/:streamKeyId/thumbnail-index', isAuthent
 app.post('/api/stream-key-folder-mapping/:streamKeyId/increment-thumbnail', isAuthenticated, async (req, res) => {
   try {
     const { streamKeyId } = req.params;
-    const { totalThumbnails } = req.body;
     const userId = req.session.userId;
     
     const db = require('./db/database').getDb();
@@ -5286,8 +5285,9 @@ app.post('/api/stream-key-folder-mapping/:streamKeyId/increment-thumbnail', isAu
       
       const currentIndex = row ? (row.thumbnail_index || 0) : 0;
       const folderName = row ? (row.folder_name || '') : '';
-      // Calculate next index (wrap around if totalThumbnails provided)
-      const nextIndex = totalThumbnails ? ((currentIndex + 1) % totalThumbnails) : (currentIndex + 1);
+      // Calculate next index - NO modulo! Just increment.
+      // Modulo is applied when selecting thumbnail, not when storing index.
+      const nextIndex = currentIndex + 1;
       
       if (row) {
         // Update existing record

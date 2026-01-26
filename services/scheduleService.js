@@ -1308,14 +1308,17 @@ class ScheduleService {
         return { path: null, newIndex: 0, totalCount: 0 };
       }
       
-      // Calculate the actual index (wrap around if needed)
+      // Calculate the actual index (wrap around if needed for file selection)
       const actualIndex = currentIndex % files.length;
       const selectedFile = files[actualIndex];
       
       // Calculate next index for next run
-      const newIndex = (actualIndex + 1) % files.length;
+      // IMPORTANT: Don't use modulo here! Store the raw incremented value.
+      // The modulo will be applied when selecting the next thumbnail.
+      // This ensures NEXT indicator shows the correct position.
+      const newIndex = currentIndex + 1;
       
-      console.log(`[ScheduleService] Sequential thumbnail: index ${actualIndex}/${files.length - 1}, file: ${selectedFile}, next index: ${newIndex}`);
+      console.log(`[ScheduleService] Sequential thumbnail: currentIndex=${currentIndex}, actualIndex=${actualIndex}/${files.length - 1}, file: ${selectedFile}, newIndex: ${newIndex}`);
       
       // Return relative path from /public
       let thumbnailPath;
