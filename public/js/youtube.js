@@ -463,6 +463,58 @@ async function getStreamKeyFolderMappingFromServer(streamKeyId) {
   }
 }
 
+// Get stream key thumbnail index from server database
+async function getStreamKeyThumbnailIndexFromServer(streamKeyId) {
+  try {
+    const response = await fetch(`/api/stream-key-folder-mapping/${encodeURIComponent(streamKeyId)}`, {
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+    
+    const data = await response.json();
+    if (data.success && data.found) {
+      return {
+        thumbnailIndex: data.thumbnailIndex || 0,
+        folderName: data.folderName || ''
+      };
+    }
+    return { thumbnailIndex: 0, folderName: '' };
+  } catch (e) {
+    console.warn('[Server] Failed to get stream key thumbnail index:', e.message);
+    return { thumbnailIndex: 0, folderName: '' };
+  }
+}
+
+// Increment stream key thumbnail index (for reschedule)
+async function incrementStreamKeyThumbnailIndex(streamKeyId, totalThumbnails = null) {
+  try {
+    const response = await fetch(`/api/stream-key-folder-mapping/${encodeURIComponent(streamKeyId)}/increment-thumbnail`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getCsrfToken()
+      },
+      body: JSON.stringify({ totalThumbnails })
+    });
+    
+    const data = await response.json();
+    if (data.success) {
+      console.log(`[incrementStreamKeyThumbnailIndex] Incremented: ${streamKeyId} ${data.previousIndex} -> ${data.thumbnailIndex}`);
+      return {
+        success: true,
+        previousIndex: data.previousIndex,
+        thumbnailIndex: data.thumbnailIndex,
+        folderName: data.folderName || ''
+      };
+    }
+    return { success: false };
+  } catch (e) {
+    console.warn('[Server] Failed to increment stream key thumbnail index:', e.message);
+    return { success: false };
+  }
+}
+
 // Get broadcast settings (including thumbnail folder) from server
 async function getBroadcastSettingsFromServer(broadcastId, accountId = null) {
   try {
@@ -735,6 +787,15 @@ async function fetchThumbnails(folder = null) {
   loading.classList.remove('hidden');
   empty.classList.add('hidden');
   
+  // Get stream key thumbnail index for "NEXT" indicator
+  const streamKeySelect = document.getElementById('streamKeySelect');
+  let nextThumbnailIndex = 0;
+  if (streamKeySelect && streamKeySelect.value) {
+    const streamKeyData = await getStreamKeyThumbnailIndexFromServer(streamKeySelect.value);
+    nextThumbnailIndex = streamKeyData.thumbnailIndex || 0;
+    console.log('[fetchThumbnails] Stream key next thumbnail index:', nextThumbnailIndex);
+  }
+  
   try {
     let url = '/api/thumbnails';
     if (targetFolder) {
@@ -769,16 +830,28 @@ async function fetchThumbnails(folder = null) {
     const thumbnailMode = document.querySelector('input[name="thumbnailMode"]:checked')?.value || 'sequential';
     const pinnedThumbnailPath = document.getElementById('pinnedThumbnail')?.value || '';
     
+    // Get currently selected thumbnail path for "SAVED" indicator
+    const selectedThumbnailPath = document.getElementById('selectedThumbnailPath')?.value || '';
+    
     if (data.success && data.thumbnails && data.thumbnails.length > 0) {
+      const totalThumbnails = data.thumbnails.length;
+      // Calculate actual next index (wrap around if needed)
+      const actualNextIndex = nextThumbnailIndex % totalThumbnails;
+      
       data.thumbnails.forEach((thumb, index) => {
         const div = document.createElement('div');
         const isPinned = pinnedThumbnailPath === thumb.path;
-        div.className = `thumbnail-item w-full aspect-video bg-dark-600 rounded-lg cursor-pointer overflow-hidden border-2 ${isPinned ? 'border-green-500 ring-2 ring-green-500/50' : 'border-transparent'} hover:border-primary/70 transition-all relative group shadow-sm hover:shadow-md`;
+        const isSaved = selectedThumbnailPath === thumb.path;
+        const isNext = !isPinned && !isSaved && index === actualNextIndex;
+        
+        div.className = `thumbnail-item w-full aspect-video bg-dark-600 rounded-lg cursor-pointer overflow-hidden border-2 ${isPinned ? 'border-green-500 ring-2 ring-green-500/50' : (isSaved ? 'border-primary ring-2 ring-primary/50' : (isNext ? 'border-yellow-500 ring-2 ring-yellow-500/50' : 'border-transparent'))} hover:border-primary/70 transition-all relative group shadow-sm hover:shadow-md`;
         div.innerHTML = `
           <img src="${thumb.url}" class="w-full h-full object-cover" alt="Thumbnail" loading="lazy">
           <div class="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors"></div>
           <div class="absolute top-1 left-1 w-5 h-5 bg-dark-800/80 rounded-full flex items-center justify-center text-[10px] text-gray-300 font-medium">${index + 1}</div>
           ${isPinned ? '<div class="absolute top-1 left-7 px-1.5 py-0.5 bg-green-500/90 rounded text-[9px] text-white font-medium flex items-center gap-0.5"><i class="ti ti-pin-filled text-[8px]"></i>PIN</div>' : ''}
+          ${isSaved && !isPinned ? '<div class="absolute top-1 left-7 px-1.5 py-0.5 bg-primary/90 rounded text-[9px] text-white font-medium">SAVED</div>' : ''}
+          ${isNext && !isSaved && !isPinned ? '<div class="absolute top-1 left-7 px-1.5 py-0.5 bg-yellow-500/90 rounded text-[9px] text-white font-medium">NEXT</div>' : ''}
           <button type="button" onclick="event.stopPropagation(); pinThumbnail('${escapeJsString(thumb.path)}', '${escapeJsString(thumb.filename)}')" 
             class="absolute top-1 right-7 w-5 h-5 sm:w-6 sm:h-6 ${isPinned ? 'bg-green-500' : 'bg-yellow-500/90 hover:bg-yellow-500'} rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all scale-90 group-hover:scale-100"
             title="${isPinned ? 'Thumbnail di-pin' : 'Pin thumbnail ini'}">
@@ -891,18 +964,41 @@ function selectGalleryThumbnail(element, url, path) {
   
   console.log('[selectGalleryThumbnail] Selected thumbnail index:', index, 'path:', path);
   
-  // Remove selection from all thumbnails
+  // Remove selection from all thumbnails and update labels
   document.querySelectorAll('.thumbnail-item').forEach(item => {
     item.classList.remove('border-primary', 'border-primary/70', 'border-red-500', 'ring-2', 'ring-primary/50');
-    // Keep green border for pinned thumbnail
-    if (!item.classList.contains('border-green-500')) {
+    // Keep green border for pinned thumbnail, yellow for NEXT
+    if (!item.classList.contains('border-green-500') && !item.classList.contains('border-yellow-500')) {
       item.classList.add('border-transparent');
     }
+    
+    // Remove SAVED label from all items
+    const savedLabel = item.querySelector('.saved-label');
+    if (savedLabel) savedLabel.remove();
   });
   
   // Add selection to clicked thumbnail
-  element.classList.remove('border-transparent');
+  element.classList.remove('border-transparent', 'border-yellow-500', 'ring-yellow-500/50');
   element.classList.add('border-primary', 'ring-2', 'ring-primary/50');
+  
+  // Add SAVED label to selected thumbnail (if not pinned)
+  const isPinned = element.classList.contains('border-green-500');
+  if (!isPinned) {
+    // Remove NEXT label if exists
+    const nextLabel = element.querySelector('div[class*="bg-yellow-500"]');
+    if (nextLabel && nextLabel.textContent.includes('NEXT')) {
+      nextLabel.remove();
+    }
+    
+    // Add SAVED label
+    const numberLabel = element.querySelector('.bg-dark-800\\/80');
+    if (numberLabel && !element.querySelector('.saved-label')) {
+      const savedLabel = document.createElement('div');
+      savedLabel.className = 'saved-label absolute top-1 left-7 px-1.5 py-0.5 bg-primary/90 rounded text-[9px] text-white font-medium';
+      savedLabel.textContent = 'SAVED';
+      numberLabel.parentElement.insertBefore(savedLabel, numberLabel.nextSibling);
+    }
+  }
   
   // Update preview
   const preview = document.getElementById('thumbnailPreview');
@@ -1504,6 +1600,20 @@ if (createBroadcastForm) {
       const data = await response.json();
       
       if (data.success) {
+        // Increment thumbnail index for this stream key (for next schedule)
+        // This ensures thumbnail rotates automatically when same stream key is scheduled again
+        if (streamId) {
+          // Get total thumbnails in current folder to wrap around correctly
+          const gallery = document.getElementById('thumbnailGalleryGrid');
+          const totalThumbnails = gallery ? gallery.querySelectorAll('.thumbnail-item').length : null;
+          
+          console.log('[CreateBroadcast] Incrementing thumbnail index for stream key:', streamId, 'total thumbnails:', totalThumbnails);
+          const incrementResult = await incrementStreamKeyThumbnailIndex(streamId, totalThumbnails);
+          if (incrementResult.success) {
+            console.log('[CreateBroadcast] Thumbnail index incremented:', incrementResult.previousIndex, '->', incrementResult.thumbnailIndex);
+          }
+        }
+        
         showToast('Broadcast created successfully!');
         closeCreateBroadcastModal();
         setTimeout(() => window.location.reload(), 1000);
@@ -1590,6 +1700,10 @@ async function openEditBroadcastModal(broadcast) {
   document.getElementById('editBroadcastTitle').value = broadcast.title || '';
   document.getElementById('editBroadcastDescription').value = broadcast.description || '';
   document.getElementById('editPrivacyStatus').value = broadcast.privacyStatus || 'unlisted';
+  
+  // Store stream key ID for thumbnail rotation
+  window.editBroadcastStreamId = broadcast.streamId || null;
+  console.log('[openEditBroadcastModal] Stream ID:', window.editBroadcastStreamId);
   
   // Format datetime for input
   if (broadcast.scheduledStartTime) {
@@ -4479,6 +4593,22 @@ async function loadEditThumbnailFolder(folderName = null) {
   if (loading) loading.classList.remove('hidden');
   if (empty) empty.classList.add('hidden');
   
+  // Get stream key thumbnail index for "NEXT" indicator
+  // First try editStreamKeySelect, then fallback to window.editBroadcastStreamId
+  const streamKeySelect = document.getElementById('editStreamKeySelect');
+  let streamKeyId = streamKeySelect ? streamKeySelect.value : null;
+  if (!streamKeyId && window.editBroadcastStreamId) {
+    streamKeyId = window.editBroadcastStreamId;
+    console.log('[loadEditThumbnailFolder] Using stream ID from broadcast:', streamKeyId);
+  }
+  
+  let nextThumbnailIndex = 0;
+  if (streamKeyId) {
+    const streamKeyData = await getStreamKeyThumbnailIndexFromServer(streamKeyId);
+    nextThumbnailIndex = streamKeyData.thumbnailIndex || 0;
+    console.log('[loadEditThumbnailFolder] Stream key next thumbnail index:', nextThumbnailIndex);
+  }
+  
   try {
     let url = '/api/thumbnails';
     if (folderName) {
@@ -4500,11 +4630,24 @@ async function loadEditThumbnailFolder(folderName = null) {
     
     if (data.success && data.thumbnails && data.thumbnails.length > 0) {
       const pinnedPath = document.getElementById('editPinnedThumbnail')?.value || '';
+      const totalThumbnails = data.thumbnails.length;
+      
+      // Calculate actual next index (wrap around if needed)
+      const actualNextIndex = nextThumbnailIndex % totalThumbnails;
+      
+      // Get saved thumbnail info
+      const savedIndex = window.editSavedThumbnailIndex || 0;
+      const savedPath = window.editSavedThumbnailPath || null;
       
       data.thumbnails.forEach((thumb, index) => {
         const isPinned = pinnedPath && thumb.path === pinnedPath;
+        // Check if this is the saved thumbnail (by path or by index)
+        const isSaved = (savedPath && thumb.path === savedPath) || (!savedPath && index === savedIndex);
+        // Check if this is the NEXT thumbnail to be used
+        const isNext = !isPinned && index === actualNextIndex;
+        
         const div = document.createElement('div');
-        div.className = `edit-thumbnail-item aspect-video bg-dark-700 rounded cursor-pointer overflow-hidden border-2 ${isPinned ? 'border-green-500 ring-2 ring-green-500/50' : 'border-transparent'} hover:border-primary transition-colors relative group`;
+        div.className = `edit-thumbnail-item aspect-video bg-dark-700 rounded cursor-pointer overflow-hidden border-2 ${isPinned ? 'border-green-500 ring-2 ring-green-500/50' : (isSaved ? 'border-primary ring-2 ring-primary/50' : (isNext ? 'border-yellow-500 ring-2 ring-yellow-500/50' : 'border-transparent'))} hover:border-primary transition-colors relative group`;
         div.dataset.path = thumb.path;
         div.dataset.url = thumb.url;
         div.dataset.index = index;
@@ -4513,6 +4656,8 @@ async function loadEditThumbnailFolder(folderName = null) {
           <div class="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors"></div>
           <div class="absolute top-0.5 left-0.5 w-4 h-4 bg-dark-800/80 rounded-full flex items-center justify-center text-[9px] text-gray-300 font-medium">${index + 1}</div>
           ${isPinned ? '<div class="absolute top-0.5 left-5 px-1 py-0.5 bg-green-500/90 rounded text-[8px] text-white font-medium flex items-center gap-0.5"><i class="ti ti-pin-filled text-[7px]"></i>PIN</div>' : ''}
+          ${isSaved && !isPinned ? '<div class="absolute top-0.5 left-5 px-1 py-0.5 bg-primary/90 rounded text-[8px] text-white font-medium">SAVED</div>' : ''}
+          ${isNext && !isSaved && !isPinned ? '<div class="absolute top-0.5 left-5 px-1 py-0.5 bg-yellow-500/90 rounded text-[8px] text-white font-medium">NEXT</div>' : ''}
           <button type="button" onclick="event.stopPropagation(); pinEditThumbnail('${escapeJsString(thumb.path)}')" 
             class="absolute top-0.5 right-5 w-4 h-4 ${isPinned ? 'bg-green-500' : 'bg-yellow-500/90 hover:bg-yellow-500'} rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"
             title="${isPinned ? 'Thumbnail di-pin' : 'Pin thumbnail ini'}">
@@ -4566,6 +4711,22 @@ async function loadEditThumbnailFolderWithSelection(folderName = null, savedInde
   if (loading) loading.classList.remove('hidden');
   if (empty) empty.classList.add('hidden');
   
+  // Get stream key thumbnail index for "NEXT" indicator
+  // First try editStreamKeySelect, then fallback to window.editBroadcastStreamId
+  const streamKeySelect = document.getElementById('editStreamKeySelect');
+  let streamKeyId = streamKeySelect ? streamKeySelect.value : null;
+  if (!streamKeyId && window.editBroadcastStreamId) {
+    streamKeyId = window.editBroadcastStreamId;
+    console.log('[loadEditThumbnailFolderWithSelection] Using stream ID from broadcast:', streamKeyId);
+  }
+  
+  let nextThumbnailIndex = 0;
+  if (streamKeyId) {
+    const streamKeyData = await getStreamKeyThumbnailIndexFromServer(streamKeyId);
+    nextThumbnailIndex = streamKeyData.thumbnailIndex || 0;
+    console.log('[loadEditThumbnailFolderWithSelection] Stream key next thumbnail index:', nextThumbnailIndex);
+  }
+  
   try {
     let url = '/api/thumbnails';
     if (folderName) {
@@ -4587,6 +4748,10 @@ async function loadEditThumbnailFolderWithSelection(folderName = null, savedInde
     
     if (data.success && data.thumbnails && data.thumbnails.length > 0) {
       const pinnedPath = document.getElementById('editPinnedThumbnail')?.value || '';
+      const totalThumbnails = data.thumbnails.length;
+      
+      // Calculate actual next index (wrap around if needed)
+      const actualNextIndex = nextThumbnailIndex % totalThumbnails;
       
       // Find the saved thumbnail - first try by path, then by index
       let selectedElement = null;
@@ -4596,9 +4761,11 @@ async function loadEditThumbnailFolderWithSelection(folderName = null, savedInde
         const isPinned = pinnedPath && thumb.path === pinnedPath;
         // Check if this is the saved thumbnail (by path or by index)
         const isSaved = (savedPath && thumb.path === savedPath) || (!savedPath && index === savedIndex);
+        // Check if this is the NEXT thumbnail to be used
+        const isNext = !isPinned && index === actualNextIndex;
         
         const div = document.createElement('div');
-        div.className = `edit-thumbnail-item aspect-video bg-dark-700 rounded cursor-pointer overflow-hidden border-2 ${isPinned ? 'border-green-500 ring-2 ring-green-500/50' : (isSaved ? 'border-primary ring-2 ring-primary/50' : 'border-transparent')} hover:border-primary transition-colors relative group`;
+        div.className = `edit-thumbnail-item aspect-video bg-dark-700 rounded cursor-pointer overflow-hidden border-2 ${isPinned ? 'border-green-500 ring-2 ring-green-500/50' : (isSaved ? 'border-primary ring-2 ring-primary/50' : (isNext ? 'border-yellow-500 ring-2 ring-yellow-500/50' : 'border-transparent'))} hover:border-primary transition-colors relative group`;
         div.dataset.path = thumb.path;
         div.dataset.url = thumb.url;
         div.dataset.index = index;
@@ -4608,6 +4775,7 @@ async function loadEditThumbnailFolderWithSelection(folderName = null, savedInde
           <div class="absolute top-0.5 left-0.5 w-4 h-4 bg-dark-800/80 rounded-full flex items-center justify-center text-[9px] text-gray-300 font-medium">${index + 1}</div>
           ${isPinned ? '<div class="absolute top-0.5 left-5 px-1 py-0.5 bg-green-500/90 rounded text-[8px] text-white font-medium flex items-center gap-0.5"><i class="ti ti-pin-filled text-[7px]"></i>PIN</div>' : ''}
           ${isSaved && !isPinned ? '<div class="absolute top-0.5 left-5 px-1 py-0.5 bg-primary/90 rounded text-[8px] text-white font-medium">SAVED</div>' : ''}
+          ${isNext && !isSaved && !isPinned ? '<div class="absolute top-0.5 left-5 px-1 py-0.5 bg-yellow-500/90 rounded text-[8px] text-white font-medium">NEXT</div>' : ''}
           <button type="button" onclick="event.stopPropagation(); pinEditThumbnail('${escapeJsString(thumb.path)}')" 
             class="absolute top-0.5 right-5 w-4 h-4 ${isPinned ? 'bg-green-500' : 'bg-yellow-500/90 hover:bg-yellow-500'} rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"
             title="${isPinned ? 'Thumbnail di-pin' : 'Pin thumbnail ini'}">
@@ -4805,13 +4973,21 @@ async function onEditStreamKeyChange(streamKeyId) {
     boundFolder = await getStreamKeyFolderMappingFromServer(streamKeyId);
   }
   
-  // If found, auto-select the bound folder
+  // If found, auto-select the bound folder and reload thumbnails with NEXT indicator
   if (boundFolder !== undefined) {
     console.log(`[onEditStreamKeyChange] Stream key ${streamKeyId} bound to folder: ${boundFolder || 'root'}`);
     folderSelect.value = boundFolder;
     // Pass the exact value - empty string for root, folder name for folder
-    loadEditThumbnailFolder(boundFolder);
+    // Use loadEditThumbnailFolderWithSelection to show NEXT indicator
+    const savedIndex = window.editSavedThumbnailIndex || 0;
+    const savedPath = window.editSavedThumbnailPath || null;
+    await loadEditThumbnailFolderWithSelection(boundFolder, savedIndex, savedPath);
     showToast(`Folder "${boundFolder || 'Root'}" otomatis dipilih`);
+  } else {
+    // No bound folder, but still reload to update NEXT indicator for new stream key
+    const savedIndex = window.editSavedThumbnailIndex || 0;
+    const savedPath = window.editSavedThumbnailPath || null;
+    await loadEditThumbnailFolderWithSelection(currentEditThumbnailFolder, savedIndex, savedPath);
   }
 }
 
@@ -5956,9 +6132,13 @@ if (originalEditBroadcastForm) {
       const categorySelect = document.getElementById('editCategoryId');
       const categoryId = categorySelect ? categorySelect.value : '22';
       
-      // Get stream key value
+      // Get stream key value - first try select, then fallback to stored broadcast stream ID
       const streamKeySelect = document.getElementById('editStreamKeySelect');
-      const streamId = streamKeySelect ? streamKeySelect.value : null;
+      let streamId = streamKeySelect ? streamKeySelect.value : null;
+      if (!streamId && window.editBroadcastStreamId) {
+        streamId = window.editBroadcastStreamId;
+        console.log('[EditBroadcast] Using stream ID from broadcast:', streamId);
+      }
       
       console.log('[EditBroadcast] Category:', categoryId);
       console.log('[EditBroadcast] Stream ID:', streamId);
@@ -5998,6 +6178,20 @@ if (originalEditBroadcastForm) {
       }
       
       if (data.success) {
+        // Increment thumbnail index for this stream key (for next reschedule)
+        // This ensures thumbnail rotates automatically when same stream key is rescheduled
+        if (streamId) {
+          // Get total thumbnails in current folder to wrap around correctly
+          const gallery = document.getElementById('editThumbnailGallery');
+          const totalThumbnails = gallery ? gallery.querySelectorAll('.edit-thumbnail-item').length : null;
+          
+          console.log('[EditBroadcast] Incrementing thumbnail index for stream key:', streamId, 'total thumbnails:', totalThumbnails);
+          const incrementResult = await incrementStreamKeyThumbnailIndex(streamId, totalThumbnails);
+          if (incrementResult.success) {
+            console.log('[EditBroadcast] Thumbnail index incremented:', incrementResult.previousIndex, '->', incrementResult.thumbnailIndex);
+          }
+        }
+        
         showToast('Broadcast updated successfully!');
         closeEditBroadcastModal();
         setTimeout(() => window.location.reload(), 1500);
@@ -6034,6 +6228,9 @@ window.closeEditBroadcastModal = function() {
   window.editSavedThumbnailIndex = 0;
   window.editSavedThumbnailPath = null;
   
+  // Reset stream ID from broadcast
+  window.editBroadcastStreamId = null;
+  
   // Reset file input
   const fileInput = document.getElementById('editThumbnailFile');
   if (fileInput) fileInput.value = '';
@@ -6055,6 +6252,10 @@ window.openEditBroadcastModal = async function(broadcast) {
   document.getElementById('editBroadcastTitle').value = broadcast.title || '';
   document.getElementById('editBroadcastDescription').value = broadcast.description || '';
   document.getElementById('editPrivacyStatus').value = broadcast.privacyStatus || 'unlisted';
+  
+  // Store stream key ID for thumbnail rotation
+  window.editBroadcastStreamId = broadcast.streamId || null;
+  console.log('[openEditBroadcastModal] Stream ID:', window.editBroadcastStreamId);
   
   // Set category - preserve existing value
   const categorySelect = document.getElementById('editCategoryId');

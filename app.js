@@ -5265,6 +5265,77 @@ app.put('/api/stream-key-folder-mapping/:streamKeyId/thumbnail-index', isAuthent
   }
 });
 
+// Increment thumbnail index for stream key (for reschedule)
+app.post('/api/stream-key-folder-mapping/:streamKeyId/increment-thumbnail', isAuthenticated, async (req, res) => {
+  try {
+    const { streamKeyId } = req.params;
+    const { totalThumbnails } = req.body;
+    const userId = req.session.userId;
+    
+    const db = require('./db/database').getDb();
+    
+    // First get current index
+    db.get(`
+      SELECT thumbnail_index, folder_name FROM stream_key_folder_mapping 
+      WHERE user_id = ? AND stream_key_id = ?
+    `, [userId, streamKeyId], (err, row) => {
+      if (err) {
+        console.error('[stream-key-folder-mapping] Error getting current index:', err.message);
+        return res.status(500).json({ success: false, error: 'Failed to get current index' });
+      }
+      
+      const currentIndex = row ? (row.thumbnail_index || 0) : 0;
+      const folderName = row ? (row.folder_name || '') : '';
+      // Calculate next index (wrap around if totalThumbnails provided)
+      const nextIndex = totalThumbnails ? ((currentIndex + 1) % totalThumbnails) : (currentIndex + 1);
+      
+      if (row) {
+        // Update existing record
+        db.run(`
+          UPDATE stream_key_folder_mapping 
+          SET thumbnail_index = ?, updated_at = CURRENT_TIMESTAMP
+          WHERE user_id = ? AND stream_key_id = ?
+        `, [nextIndex, userId, streamKeyId], function(updateErr) {
+          if (updateErr) {
+            console.error('[stream-key-folder-mapping] Error incrementing thumbnail index:', updateErr.message);
+            return res.status(500).json({ success: false, error: 'Failed to increment thumbnail index' });
+          }
+          console.log(`[stream-key-folder-mapping] Incremented thumbnail_index: ${streamKeyId} ${currentIndex} -> ${nextIndex}`);
+          res.json({ 
+            success: true, 
+            streamKeyId, 
+            previousIndex: currentIndex,
+            thumbnailIndex: nextIndex,
+            folderName 
+          });
+        });
+      } else {
+        // Create new record with index 1 (since we're incrementing from 0)
+        db.run(`
+          INSERT INTO stream_key_folder_mapping (user_id, stream_key_id, folder_name, thumbnail_index, updated_at)
+          VALUES (?, ?, '', 1, CURRENT_TIMESTAMP)
+        `, [userId, streamKeyId], function(insertErr) {
+          if (insertErr) {
+            console.error('[stream-key-folder-mapping] Error creating record:', insertErr.message);
+            return res.status(500).json({ success: false, error: 'Failed to create mapping' });
+          }
+          console.log(`[stream-key-folder-mapping] Created with thumbnail_index: ${streamKeyId} -> 1`);
+          res.json({ 
+            success: true, 
+            streamKeyId, 
+            previousIndex: 0,
+            thumbnailIndex: 1,
+            folderName: '' 
+          });
+        });
+      }
+    });
+  } catch (error) {
+    console.error('[stream-key-folder-mapping] Error:', error.message);
+    res.status(500).json({ success: false, error: 'Failed to increment thumbnail index' });
+  }
+});
+
 // Get broadcast settings (including thumbnail folder)
 app.get('/api/youtube/broadcast-settings/:broadcastId', isAuthenticated, async (req, res) => {
   try {
