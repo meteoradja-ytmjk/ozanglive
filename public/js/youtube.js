@@ -5837,8 +5837,15 @@ async function addNewTitle() {
   const title = input.value.trim();
   const csrfToken = getCsrfToken();
   
+  // Use selected folder from folder list, or rotation folder if auto rotation is enabled
+  let targetFolderId = selectedTitleFolderId;
+  if (!targetFolderId && titleAutoRotationEnabled && titleRotationFolderId) {
+    targetFolderId = titleRotationFolderId;
+  }
+  
   console.log('[ADD TITLE] Title value:', title);
   console.log('[ADD TITLE] Selected folder ID:', selectedTitleFolderId);
+  console.log('[ADD TITLE] Target folder ID:', targetFolderId);
   console.log('[ADD TITLE] CSRF Token:', csrfToken ? 'present (' + csrfToken.substring(0, 10) + '...)' : 'MISSING');
   
   if (!title) {
@@ -5861,7 +5868,7 @@ async function addNewTitle() {
       },
       body: JSON.stringify({ 
         title,
-        folderId: selectedTitleFolderId || null
+        folderId: targetFolderId || null
       })
     });
     
