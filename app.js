@@ -5715,6 +5715,31 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
           } catch (updateErr) {
             console.error('[API] Error updating broadcast thumbnail settings:', updateErr.message);
           }
+          
+          // IMPORTANT: Also update stream_key_folder_mapping with the NEXT index (selected + 1)
+          // This ensures thumbnail rotation continues from the correct position
+          if (streamId) {
+            const nextIndex = thumbnailIndex + 1;
+            const db = require('./db/database').getDb();
+            await new Promise((resolve, reject) => {
+              db.run(`
+                INSERT INTO stream_key_folder_mapping (user_id, stream_key_id, folder_name, thumbnail_index, updated_at)
+                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(user_id, stream_key_id) DO UPDATE SET
+                  thumbnail_index = excluded.thumbnail_index,
+                  folder_name = COALESCE(excluded.folder_name, folder_name),
+                  updated_at = CURRENT_TIMESTAMP
+              `, [req.session.userId, streamId, thumbnailFolder || '', nextIndex], function(err) {
+                if (err) {
+                  console.error('[API] Error updating stream key thumbnail index for user selection:', err.message);
+                  reject(err);
+                } else {
+                  console.log('[API] Updated stream key thumbnail index for user selection:', streamId, '-> next index:', nextIndex);
+                  resolve();
+                }
+              });
+            });
+          }
         } else {
           console.error('[API] User-selected thumbnail not found:', fullPath);
         }
@@ -5907,6 +5932,31 @@ app.put('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
             await YouTubeBroadcastSettings.updateThumbnailSelection(req.params.id, thumbnailIndex || 0, thumbnailPath || null);
             console.log('[API] Updated thumbnail selection for broadcast:', req.params.id, 'index:', thumbnailIndex, 'path:', thumbnailPath);
           }
+        }
+        
+        // Update stream key thumbnail index if streamId is provided in request body
+        const streamId = req.body.streamId;
+        if (streamId && thumbnailIndex !== undefined) {
+          const nextIndex = (parseInt(thumbnailIndex) || 0) + 1;
+          const db = require('./db/database').getDb();
+          await new Promise((resolve, reject) => {
+            db.run(`
+              INSERT INTO stream_key_folder_mapping (user_id, stream_key_id, folder_name, thumbnail_index, updated_at)
+              VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+              ON CONFLICT(user_id, stream_key_id) DO UPDATE SET
+                thumbnail_index = excluded.thumbnail_index,
+                folder_name = COALESCE(excluded.folder_name, folder_name),
+                updated_at = CURRENT_TIMESTAMP
+            `, [req.session.userId, streamId, thumbnailFolder || '', nextIndex], function(err) {
+              if (err) {
+                console.error('[API] Error updating stream key thumbnail index on edit:', err.message);
+                reject(err);
+              } else {
+                console.log('[API] Updated stream key thumbnail index on edit:', streamId, '-> next index:', nextIndex);
+                resolve();
+              }
+            });
+          });
         }
       } catch (settingsErr) {
         console.error('[API] Error updating thumbnail folder:', settingsErr.message);

@@ -1830,7 +1830,10 @@ if (editBroadcastForm) {
       const thumbnailIndex = window.editSelectedThumbnailIndex || 0;
       const thumbnailPath = window.editSelectedThumbnailPath || null;
       
-      console.log('[EditBroadcast-Original] Thumbnail index:', thumbnailIndex, 'path:', thumbnailPath);
+      // Get stream ID for thumbnail rotation
+      const streamId = window.editBroadcastStreamId || null;
+      
+      console.log('[EditBroadcast-Original] Thumbnail index:', thumbnailIndex, 'path:', thumbnailPath, 'streamId:', streamId);
       
       const updateData = {
         title: document.getElementById('editBroadcastTitle').value,
@@ -1842,7 +1845,9 @@ if (editBroadcastForm) {
         thumbnailFolder: thumbnailFolderValue !== null ? thumbnailFolderValue : '',
         // Include thumbnail index and path for consistency
         thumbnailIndex: thumbnailIndex,
-        thumbnailPath: thumbnailPath
+        thumbnailPath: thumbnailPath,
+        // Include stream ID for thumbnail rotation tracking
+        streamId: streamId
       };
       
       console.log('[EditBroadcast-Original] Update data:', JSON.stringify(updateData));
