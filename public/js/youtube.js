@@ -4608,6 +4608,14 @@ async function loadEditThumbnailFolder(folderName = null) {
     console.log('[loadEditThumbnailFolder] Stream key next thumbnail index:', nextThumbnailIndex);
   }
   
+  // If no stream key index found, try to get from broadcast settings
+  // This handles cases where stream_key_folder_mapping doesn't exist yet
+  if (nextThumbnailIndex === 0 && window.editSavedThumbnailIndex !== undefined && window.editSavedThumbnailIndex !== null) {
+    // NEXT should be after SAVED, so add 1 to saved index
+    nextThumbnailIndex = window.editSavedThumbnailIndex + 1;
+    console.log('[loadEditThumbnailFolder] Using saved thumbnail index + 1:', nextThumbnailIndex);
+  }
+  
   try {
     let url = '/api/thumbnails';
     if (folderName) {
@@ -4724,6 +4732,14 @@ async function loadEditThumbnailFolderWithSelection(folderName = null, savedInde
     const streamKeyData = await getStreamKeyThumbnailIndexFromServer(streamKeyId);
     nextThumbnailIndex = streamKeyData.thumbnailIndex || 0;
     console.log('[loadEditThumbnailFolderWithSelection] Stream key next thumbnail index:', nextThumbnailIndex);
+  }
+  
+  // If no stream key index found, NEXT should be after SAVED
+  // savedIndex is the index of the currently saved thumbnail (0-based)
+  if (nextThumbnailIndex === 0 && savedIndex > 0) {
+    // NEXT should be after SAVED, so add 1 to saved index
+    nextThumbnailIndex = savedIndex + 1;
+    console.log('[loadEditThumbnailFolderWithSelection] Using saved index + 1 for NEXT:', nextThumbnailIndex);
   }
   
   try {

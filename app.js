@@ -5706,6 +5706,15 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
           );
           broadcast.thumbnailUrl = thumbnailResult.thumbnailUrl;
           console.log('[API] Thumbnail uploaded from user selection:', thumbnailPath);
+          
+          // Update youtube_broadcast_settings with the selected thumbnail path
+          // thumbnailIndex from request is the index of the selected thumbnail
+          try {
+            await YouTubeBroadcastSettings.updateThumbnailSelection(broadcast.broadcastId, thumbnailIndex, thumbnailPath);
+            console.log('[API] Updated broadcast settings with user-selected thumbnail index:', thumbnailIndex, 'path:', thumbnailPath);
+          } catch (updateErr) {
+            console.error('[API] Error updating broadcast thumbnail settings:', updateErr.message);
+          }
         } else {
           console.error('[API] User-selected thumbnail not found:', fullPath);
         }
@@ -5765,6 +5774,15 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
                 }
               });
             });
+          }
+          
+          // Update youtube_broadcast_settings with the actual thumbnail index and path
+          // This is important for Edit Broadcast to show correct SAVED and NEXT indicators
+          try {
+            await YouTubeBroadcastSettings.updateThumbnailSelection(broadcast.broadcastId, currentIndex, selectedThumbnailPath);
+            console.log('[API] Updated broadcast settings with thumbnail index:', currentIndex, 'path:', selectedThumbnailPath);
+          } catch (updateErr) {
+            console.error('[API] Error updating broadcast thumbnail settings:', updateErr.message);
           }
         }
         
