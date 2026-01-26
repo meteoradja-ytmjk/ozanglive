@@ -952,13 +952,15 @@
           </div>
         </div>
         
-        <!-- Title Section - Collapsible, hidden by default -->
+        <!-- Title Section - Always Visible -->
         <div>
-          <button type="button" onclick="toggleTitleList()" class="flex items-center justify-between w-full py-1 mb-2">
+          <div class="flex items-center justify-between w-full py-1 mb-2">
             <span class="text-xs font-medium text-gray-500 uppercase">Judul <span id="titleCount" class="text-gray-600">(0)</span></span>
-            <span id="titleToggleIcon" class="text-gray-500 text-xs">▶</span>
-          </button>
-          <div id="titleManagerList" class="hidden">
+            <button type="button" onclick="toggleTitleList()" class="text-gray-500 hover:text-gray-300" title="Toggle list">
+              <span id="titleToggleIcon" class="text-xs">▼</span>
+            </button>
+          </div>
+          <div id="titleManagerList">
             <div class="text-center py-3 text-gray-500 text-sm">Loading...</div>
           </div>
         </div>

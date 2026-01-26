@@ -5670,7 +5670,7 @@ async function loadTitleSuggestions() {
   }
 }
 
-let titleListVisible = false;
+let titleListVisible = true;
 
 /**
  * Toggle title list visibility
