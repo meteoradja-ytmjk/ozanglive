@@ -5288,17 +5288,18 @@ function populateTitleRotationFolderDropdown() {
   // Auto-select first folder if none selected
   if (!titleRotationFolderId && titleFolders.length > 0) {
     titleRotationFolderId = titleFolders[0].id;
+    selectedTitleFolderId = titleFolders[0].id;
     select.value = titleRotationFolderId;
+    
+    // Save the auto-selected folder to server
+    saveTitleRotationSettings();
   }
 }
 
 /**
- * Handle title rotation folder change
+ * Save title rotation settings to server
  */
-async function onTitleRotationFolderChange(folderId) {
-  titleRotationFolderId = folderId || null;
-  
-  // Save to server
+async function saveTitleRotationSettings() {
   try {
     await fetch('/api/title-rotation/settings', {
       method: 'POST',
@@ -5311,12 +5312,31 @@ async function onTitleRotationFolderChange(folderId) {
         folderId: titleRotationFolderId
       })
     });
-    
-    // Reload next title preview
-    loadNextRotationTitle();
   } catch (error) {
-    console.error('Error saving title rotation folder:', error);
+    console.error('Error saving title rotation settings:', error);
   }
+}
+
+/**
+ * Handle title rotation folder change
+ */
+async function onTitleRotationFolderChange(folderId) {
+  titleRotationFolderId = folderId || null;
+  
+  // Also set selectedTitleFolderId so new titles go to this folder
+  selectedTitleFolderId = folderId || null;
+  
+  // Update folder list UI to show selected folder
+  renderTitleFolderList();
+  
+  // Reload titles for this folder
+  loadTitleSuggestions();
+  
+  // Save to server
+  await saveTitleRotationSettings();
+  
+  // Reload next title preview
+  loadNextRotationTitle();
 }
 
 /**
@@ -5420,6 +5440,18 @@ function renderTitleFolderList() {
  */
 function selectTitleFolder(folderId) {
   selectedTitleFolderId = folderId;
+  
+  // Also sync with rotation folder if auto rotation is enabled
+  if (titleAutoRotationEnabled) {
+    titleRotationFolderId = folderId;
+    const rotationSelect = document.getElementById('titleRotationFolderSelect');
+    if (rotationSelect) {
+      rotationSelect.value = folderId || '';
+    }
+    saveTitleRotationSettings();
+    loadNextRotationTitle();
+  }
+  
   renderTitleFolderList();
   loadTitleSuggestions();
 }
