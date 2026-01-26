@@ -5778,8 +5778,18 @@ function closeTitleDropdown() {
  * Add new title suggestion
  */
 async function addNewTitle() {
+  console.log('[ADD TITLE] addNewTitle called');
+  
   const input = document.getElementById('newTitleInput');
+  if (!input) {
+    console.error('[ADD TITLE] Input element not found!');
+    showToast('Error: Input tidak ditemukan', 'error');
+    return;
+  }
+  
   const title = input.value.trim();
+  console.log('[ADD TITLE] Title value:', title);
+  console.log('[ADD TITLE] Selected folder ID:', selectedTitleFolderId);
   
   if (!title) {
     showToast('Masukkan judul', 'error');
@@ -5787,6 +5797,7 @@ async function addNewTitle() {
   }
   
   try {
+    console.log('[ADD TITLE] Sending request to /api/title-suggestions');
     const response = await fetch('/api/title-suggestions', {
       method: 'POST',
       headers: {
@@ -5800,6 +5811,7 @@ async function addNewTitle() {
     });
     
     const data = await response.json();
+    console.log('[ADD TITLE] Response:', data);
     
     if (data.success) {
       input.value = '';
@@ -5810,7 +5822,7 @@ async function addNewTitle() {
       showToast(data.error || 'Gagal menambahkan judul', 'error');
     }
   } catch (error) {
-    console.error('Error adding title:', error);
+    console.error('[ADD TITLE] Error adding title:', error);
     showToast('Gagal menambahkan judul', 'error');
   }
 }
