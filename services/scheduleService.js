@@ -910,8 +910,12 @@ class ScheduleService {
               );
               
               // Update thumbnail index for this stream key after successful upload
-              if (uploadResult && uploadResult.newIndex !== undefined && b.streamId) {
+              // ONLY update if NOT using pinned thumbnail (sequential mode)
+              if (uploadResult && uploadResult.newIndex !== undefined && b.streamId && !uploadResult.usedPinned) {
                 await updateStreamKeyThumbnailIndex(template.user_id, b.streamId, uploadResult.newIndex);
+                console.log(`[ScheduleService] Stream key ${b.streamId} thumbnail_index updated: ${thumbnailIndex} -> ${uploadResult.newIndex}`);
+              } else if (uploadResult && uploadResult.usedPinned) {
+                console.log(`[ScheduleService] Stream key ${b.streamId} using pinned thumbnail, index NOT updated (stays at ${thumbnailIndex})`);
               }
             }
           } catch (err) {
@@ -1096,8 +1100,12 @@ class ScheduleService {
           );
           
           // Update thumbnail index for this stream key after successful upload
-          if (uploadResult && uploadResult.newIndex !== undefined && template.stream_id) {
+          // ONLY update if NOT using pinned thumbnail (sequential mode)
+          if (uploadResult && uploadResult.newIndex !== undefined && template.stream_id && !uploadResult.usedPinned) {
             await updateStreamKeyThumbnailIndex(template.user_id, template.stream_id, uploadResult.newIndex);
+            console.log(`[ScheduleService] Stream key ${template.stream_id} thumbnail_index updated: ${thumbnailIndex} -> ${uploadResult.newIndex}`);
+          } else if (uploadResult && uploadResult.usedPinned) {
+            console.log(`[ScheduleService] Stream key ${template.stream_id} using pinned thumbnail, index NOT updated (stays at ${thumbnailIndex})`);
           }
         } else {
           console.log(`[ScheduleService] No thumbnail to upload (folder=${thumbnailFolder}, path=${template.thumbnail_path}, pinned=${template.pinned_thumbnail})`);
@@ -1194,18 +1202,22 @@ class ScheduleService {
    * @param {string} pinnedThumbnail - Pinned thumbnail path (highest priority)
    * @param {string} templateId - Template ID for updating thumbnail index (null if using per-stream-key index)
    * @param {number} currentIndex - Current thumbnail index for sequential mode
-   * @returns {Promise<{success: boolean, newIndex: number}|false>} Result with newIndex or false on failure
+   * @returns {Promise<{success: boolean, newIndex: number, usedPinned: boolean}|false>} Result with newIndex or false on failure
    */
   async uploadThumbnailForBroadcast(accessToken, broadcastId, thumbnailPath, thumbnailFolder = null, userId = null, pinnedThumbnail = null, templateId = null, currentIndex = 0) {
     try {
       let fullPath = null;
       let newThumbnailIndex = currentIndex;
+      let usedPinned = false;
       
       // Priority 1: Use pinned thumbnail if set
       if (pinnedThumbnail && userId) {
         fullPath = path.join(__dirname, '..', 'public', pinnedThumbnail);
         if (fs.existsSync(fullPath)) {
           console.log(`[ScheduleService] Using pinned thumbnail: ${pinnedThumbnail}`);
+          usedPinned = true;
+          // IMPORTANT: When using pinned thumbnail, DO NOT increment index
+          // Index stays the same so sequential mode continues from correct position
         } else {
           console.warn(`[ScheduleService] Pinned thumbnail not found: ${fullPath}, falling back to sequential`);
           fullPath = null;
@@ -1213,6 +1225,7 @@ class ScheduleService {
       }
       
       // Priority 2: If thumbnail_folder is specified, select thumbnail sequentially from that folder
+      // This runs when: no pinned thumbnail OR pinned thumbnail not found
       if (!fullPath && thumbnailFolder !== null && thumbnailFolder !== undefined && userId) {
         const result = await this.getSequentialThumbnailFromFolder(userId, thumbnailFolder, currentIndex);
         if (result.path) {
@@ -1252,7 +1265,8 @@ class ScheduleService {
       console.log(`[ScheduleService] Thumbnail uploaded for broadcast: ${broadcastId}`);
       
       // Return success with newIndex for caller to update per-stream-key index
-      return { success: true, newIndex: newThumbnailIndex };
+      // usedPinned indicates if pinned thumbnail was used (index should not change)
+      return { success: true, newIndex: newThumbnailIndex, usedPinned };
     } catch (error) {
       console.error(`[ScheduleService] Thumbnail upload failed for ${broadcastId}:`, error.message);
       // Continue without failing - thumbnail is optional
