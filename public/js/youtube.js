@@ -1562,11 +1562,19 @@ if (createBroadcastForm) {
       formData.append('enableAutoStop', enableAutoStop);
       formData.append('unlistReplayOnEnd', unlistReplayOnEnd);
       
-      // Add thumbnail from gallery selection
+      // Add thumbnail from gallery selection - ONLY if pinned mode
+      const thumbnailMode = document.querySelector('input[name="thumbnailMode"]:checked')?.value || 'sequential';
       const thumbnailPath = document.getElementById('selectedThumbnailPath').value;
-      if (thumbnailPath) {
-        formData.append('thumbnailPath', thumbnailPath);
+      const pinnedThumbnail = document.getElementById('pinnedThumbnail')?.value;
+      
+      // Only send thumbnailPath if:
+      // 1. Mode is pinned AND pinnedThumbnail is set, OR
+      // 2. User explicitly selected a thumbnail AND mode is pinned
+      if (thumbnailMode === 'pinned' && pinnedThumbnail) {
+        formData.append('thumbnailPath', pinnedThumbnail);
+        console.log('[CreateBroadcast] Using pinned thumbnail:', pinnedThumbnail);
       }
+      // For sequential mode, don't send thumbnailPath - let backend handle sequential selection
       
       // Add selected thumbnail index
       const thumbnailIndex = window.createSelectedThumbnailIndex || 0;
@@ -1577,8 +1585,7 @@ if (createBroadcastForm) {
       // This ensures the folder selection is saved and can be restored when editing
       formData.append('thumbnailFolder', currentThumbnailFolder || '');
       
-      // Add pinned thumbnail if set
-      const pinnedThumbnail = document.getElementById('pinnedThumbnail')?.value;
+      // Add pinned thumbnail if set (for backward compatibility)
       if (pinnedThumbnail) {
         formData.append('pinnedThumbnail', pinnedThumbnail);
       }
@@ -1600,19 +1607,9 @@ if (createBroadcastForm) {
       const data = await response.json();
       
       if (data.success) {
-        // Increment thumbnail index for this stream key (for next schedule)
-        // This ensures thumbnail rotates automatically when same stream key is scheduled again
-        if (streamId) {
-          // Get total thumbnails in current folder to wrap around correctly
-          const gallery = document.getElementById('thumbnailGalleryGrid');
-          const totalThumbnails = gallery ? gallery.querySelectorAll('.thumbnail-item').length : null;
-          
-          console.log('[CreateBroadcast] Incrementing thumbnail index for stream key:', streamId, 'total thumbnails:', totalThumbnails);
-          const incrementResult = await incrementStreamKeyThumbnailIndex(streamId, totalThumbnails);
-          if (incrementResult.success) {
-            console.log('[CreateBroadcast] Thumbnail index incremented:', incrementResult.previousIndex, '->', incrementResult.thumbnailIndex);
-          }
-        }
+        // NOTE: Thumbnail index is already incremented by backend in sequential mode
+        // No need to increment here to avoid double increment
+        console.log('[CreateBroadcast] Broadcast created successfully, thumbnail index handled by backend');
         
         showToast('Broadcast created successfully!');
         closeCreateBroadcastModal();
@@ -6178,19 +6175,10 @@ if (originalEditBroadcastForm) {
       }
       
       if (data.success) {
-        // Increment thumbnail index for this stream key (for next reschedule)
-        // This ensures thumbnail rotates automatically when same stream key is rescheduled
-        if (streamId) {
-          // Get total thumbnails in current folder to wrap around correctly
-          const gallery = document.getElementById('editThumbnailGallery');
-          const totalThumbnails = gallery ? gallery.querySelectorAll('.edit-thumbnail-item').length : null;
-          
-          console.log('[EditBroadcast] Incrementing thumbnail index for stream key:', streamId, 'total thumbnails:', totalThumbnails);
-          const incrementResult = await incrementStreamKeyThumbnailIndex(streamId, totalThumbnails);
-          if (incrementResult.success) {
-            console.log('[EditBroadcast] Thumbnail index incremented:', incrementResult.previousIndex, '->', incrementResult.thumbnailIndex);
-          }
-        }
+        // NOTE: Don't increment thumbnail index on edit/reschedule
+        // Thumbnail index should only increment when creating NEW broadcasts
+        // The same broadcast keeps the same thumbnail
+        console.log('[EditBroadcast] Broadcast updated successfully');
         
         showToast('Broadcast updated successfully!');
         closeEditBroadcastModal();
