@@ -5362,13 +5362,6 @@ async function loadTitleFolders() {
  */
 function renderTitleFolderList() {
   const container = document.getElementById('titleFolderList');
-  const allBtn = `
-    <div class="flex items-center justify-between py-1 cursor-pointer" onclick="selectTitleFolder(null)">
-      <div class="flex items-center gap-2 ${!selectedTitleFolderId ? 'text-primary' : 'text-gray-300'}">
-        <span>📋</span>
-        <span class="text-sm">Semua</span>
-      </div>
-    </div>`;
   
   const folderItems = titleFolders.map(f => `
     <div class="flex items-center justify-between py-1">
@@ -5386,7 +5379,7 @@ function renderTitleFolderList() {
     </div>
   `).join('');
   
-  container.innerHTML = allBtn + folderItems;
+  container.innerHTML = folderItems;
 }
 
 /**
