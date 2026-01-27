@@ -3825,7 +3825,8 @@ if (recreateFromTemplateForm) {
           // 1. Stream key folder mapping (binding stream key to folder)
           // 2. Broadcast-specific thumbnailFolder
           // 3. Template thumbnail_folder
-          let thumbnailFolder = null;
+          // 4. Default to root folder ('') for rotation
+          let thumbnailFolder = '';  // Default to root folder for rotation
           
           // First check stream_key_folder_mapping for this stream key
           if (streamId && template.stream_key_folder_mapping && template.stream_key_folder_mapping[streamId] !== undefined) {
@@ -3837,11 +3838,12 @@ if (recreateFromTemplateForm) {
           } else if (template.thumbnail_folder !== null && template.thumbnail_folder !== undefined) {
             thumbnailFolder = template.thumbnail_folder;
             console.log('[recreate] Using template thumbnail folder:', thumbnailFolder || 'root');
+          } else {
+            console.log('[recreate] Using default root folder for thumbnail rotation');
           }
           
-          if (thumbnailFolder !== null) {
-            formData.append('thumbnailFolder', thumbnailFolder);
-          }
+          // Always send thumbnailFolder for rotation (empty string = root folder)
+          formData.append('thumbnailFolder', thumbnailFolder);
           
           // Send streamId - backend will get thumbnail index from database
           // No need to fetch index here, backend handles it

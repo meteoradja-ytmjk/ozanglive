@@ -5762,22 +5762,38 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         console.error('Error uploading gallery thumbnail:', thumbErr.message);
       }
     } else if (thumbnailFolder !== undefined && thumbnailFolder !== null) {
-      // Handle thumbnail from folder (sequential mode - only if no specific thumbnail selected)
+      // Handle thumbnail from folder (rotation mode - only if no specific thumbnail selected)
       try {
         let selectedThumbnailPath = null;
         // Use streamId from request body (already extracted above)
         const streamKeyId = streamId;
         
-        // ALWAYS get thumbnail index from stream key mapping if streamKeyId exists
+        console.log('[API] Rotation mode - streamKeyId:', streamKeyId, 'thumbnailFolder:', thumbnailFolder, 'requestThumbnailIndex:', thumbnailIndex);
+        
+        // Get thumbnail index - priority:
+        // 1. If stream key exists in DB, use that index (for rotation continuity)
+        // 2. If no DB record but user selected a thumbnail (thumbnailIndex > 0), use that
+        // 3. Default to 0
         let currentIndex = 0;
         let storedFolderName = null;
+        let hasDbRecord = false;
+        
         if (streamKeyId) {
           const db = require('./db/database').getDb();
           const mapping = await new Promise((resolve) => {
             db.get(`SELECT thumbnail_index, folder_name FROM stream_key_folder_mapping WHERE user_id = ? AND stream_key_id = ?`,
-              [req.session.userId, streamKeyId], (err, row) => resolve(row));
+              [req.session.userId, streamKeyId], (err, row) => {
+                if (err) {
+                  console.error('[API] Error getting stream key mapping:', err.message);
+                }
+                resolve(row);
+              });
           });
+          
+          console.log('[API] Stream key mapping from DB:', mapping);
+          
           if (mapping) {
+            hasDbRecord = true;
             storedFolderName = mapping.folder_name;
             // Check if folder changed - if so, reset index to 0
             const currentFolder = thumbnailFolder || '';
@@ -5789,7 +5805,14 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
               console.log('[API] Got stream key thumbnail index from DB:', streamKeyId, '->', currentIndex, '(folder:', currentFolder || 'root', ')');
             }
           } else {
-            console.log('[API] No existing thumbnail index for stream key:', streamKeyId, '- starting from 0');
+            // No DB record - this is first time for this stream key
+            // Use the index from request (user's selection) if provided
+            if (thumbnailIndex > 0) {
+              currentIndex = thumbnailIndex;
+              console.log('[API] First time for stream key, using user selection:', currentIndex);
+            } else {
+              console.log('[API] No existing thumbnail index for stream key:', streamKeyId, '- starting from 0');
+            }
           }
         } else {
           // Fallback to request thumbnailIndex if no streamKeyId
@@ -5797,11 +5820,13 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
           console.log('[API] No streamKeyId, using request thumbnailIndex:', currentIndex);
         }
         
-        // Sequential mode: select next thumbnail in order
+        // Rotation mode: select next thumbnail in order
         const result = await scheduleService.getSequentialThumbnailFromFolder(req.session.userId, thumbnailFolder, currentIndex);
+        console.log('[API] getSequentialThumbnailFromFolder result:', result);
+        
         if (result && result.path) {
           selectedThumbnailPath = result.path;
-          console.log('[API] Sequential mode - selected thumbnail:', selectedThumbnailPath, 'index:', currentIndex, '->', result.newIndex);
+          console.log('[API] Rotation mode - selected thumbnail:', selectedThumbnailPath, 'index:', currentIndex, '->', result.newIndex);
           
           // Update thumbnail index for this stream key (also update folder_name for consistency tracking)
           if (streamKeyId && result.newIndex !== undefined) {
@@ -5819,11 +5844,13 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
                   console.error('[API] Error updating stream key thumbnail index:', err.message);
                   reject(err);
                 } else {
-                  console.log('[API] Updated stream key thumbnail index:', streamKeyId, '->', result.newIndex, '(folder:', thumbnailFolder || 'root', ')');
+                  console.log('[API] ✅ SAVED stream key thumbnail index:', streamKeyId, '->', result.newIndex, '(folder:', thumbnailFolder || 'root', ')');
                   resolve();
                 }
               });
             });
+          } else {
+            console.log('[API] ⚠️ NOT saving thumbnail index - streamKeyId:', streamKeyId, 'newIndex:', result.newIndex);
           }
           
           // Update youtube_broadcast_settings with the actual thumbnail index and path
