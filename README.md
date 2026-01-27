@@ -352,9 +352,7 @@ cd ~/ozanglive
 npm start
 ```
 ------------  PM2 JIKA EROR -------------- 
-```bash
-pm2 start npm --name ozanglive -- start
-```
+
 ```bash
 pm2 start npm --name ozanglive -- start
 ```
