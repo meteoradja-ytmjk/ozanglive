@@ -4953,7 +4953,9 @@ app.get('/api/thumbnails', isAuthenticated, async (req, res) => {
           mtime: stat.mtime
         };
       })
-      .sort((a, b) => b.mtime - a.mtime);
+      // Sort alphabetically with numeric sorting (same as backend getSequentialThumbnailFromFolder)
+      // This ensures frontend display order matches backend rotation order
+      .sort((a, b) => a.filename.localeCompare(b.filename, undefined, { numeric: true, sensitivity: 'base' }));
     
     const totalCount = thumbnails.length;
     
@@ -5812,12 +5814,18 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         console.log('[API] Rotation mode - streamKeyId:', streamKeyId, 'thumbnailFolder:', thumbnailFolder, 'requestThumbnailIndex:', thumbnailIndex);
         
         // Get thumbnail index - priority:
-        // 1. If stream key exists in DB, use that index (for rotation continuity)
-        // 2. If no DB record but user selected a thumbnail (thumbnailIndex > 0), use that
+        // 1. If user explicitly selected a thumbnail (thumbnailIndex from request), use that
+        // 2. If stream key exists in DB and user didn't select, use DB index (for auto rotation)
         // 3. Default to 0
         let currentIndex = 0;
         let storedFolderName = null;
         let hasDbRecord = false;
+        let userExplicitlySelected = false;
+        
+        // Check if user explicitly selected a thumbnail (thumbnailIndex > 0 means user clicked on a specific thumbnail)
+        // thumbnailIndex = 0 could mean either "user selected first thumbnail" or "no selection"
+        // We need to check if selectedThumbnailPath is set to determine if user made a selection
+        const userSelectedPath = req.body.selectedThumbnailPath || req.body.thumbnailPath;
         
         if (streamKeyId) {
           const db = require('./db/database').getDb();
@@ -5841,24 +5849,20 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
             if (storedFolderName !== null && storedFolderName !== currentFolder) {
               console.log('[API] Stream key folder changed from "' + storedFolderName + '" to "' + currentFolder + '", resetting index to 0');
               currentIndex = 0;
-            } else if (mapping.thumbnail_index !== undefined) {
-              currentIndex = mapping.thumbnail_index;
+            } else {
+              // Use index from database for auto rotation
+              currentIndex = mapping.thumbnail_index || 0;
               console.log('[API] Got stream key thumbnail index from DB:', streamKeyId, '->', currentIndex, '(folder:', currentFolder || 'root', ')');
             }
           } else {
-            // No DB record - this is first time for this stream key
-            // Use the index from request (user's selection) if provided
-            if (thumbnailIndex > 0) {
-              currentIndex = thumbnailIndex;
-              console.log('[API] First time for stream key, using user selection:', currentIndex);
-            } else {
-              console.log('[API] No existing thumbnail index for stream key:', streamKeyId, '- starting from 0');
-            }
+            // No DB record - this is first time for this stream key, start from 0
+            console.log('[API] No existing thumbnail index for stream key:', streamKeyId, '- starting from 0');
+            currentIndex = 0;
           }
         } else {
-          // Fallback to request thumbnailIndex if no streamKeyId
-          currentIndex = thumbnailIndex;
-          console.log('[API] No streamKeyId, using request thumbnailIndex:', currentIndex);
+          // No streamKeyId - start from 0
+          console.log('[API] No streamKeyId, starting from 0');
+          currentIndex = 0;
         }
         
         // Rotation mode: select next thumbnail in order

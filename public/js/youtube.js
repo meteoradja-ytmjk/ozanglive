@@ -850,18 +850,30 @@ async function fetchThumbnails(folder = null) {
     const thumbnailMode = document.querySelector('input[name="thumbnailMode"]:checked')?.value || 'sequential';
     const pinnedThumbnailPath = document.getElementById('pinnedThumbnail')?.value || '';
     
-    // Get currently selected thumbnail path for "SAVED" indicator
+    // Get currently selected thumbnail path for "SAVED" indicator (user's manual selection in UI)
     const selectedThumbnailPath = document.getElementById('selectedThumbnailPath')?.value || '';
     
     if (data.success && data.thumbnails && data.thumbnails.length > 0) {
       const totalThumbnails = data.thumbnails.length;
-      // Calculate actual next index (wrap around if needed)
+      
+      // For rotation mode:
+      // - nextThumbnailIndex from DB is the index that WILL BE USED next
+      // - So NEXT = nextThumbnailIndex % totalThumbnails
+      // - And SAVED (last used) = (nextThumbnailIndex - 1) % totalThumbnails
       const actualNextIndex = nextThumbnailIndex % totalThumbnails;
+      // Calculate last used index (the one before nextThumbnailIndex)
+      // If nextThumbnailIndex is 0, last used was totalThumbnails - 1
+      const lastUsedIndex = nextThumbnailIndex > 0 ? (nextThumbnailIndex - 1) % totalThumbnails : -1;
+      
+      console.log('[fetchThumbnails] Rotation: nextThumbnailIndex=' + nextThumbnailIndex + ', actualNextIndex=' + actualNextIndex + ', lastUsedIndex=' + lastUsedIndex);
       
       data.thumbnails.forEach((thumb, index) => {
         const div = document.createElement('div');
         const isPinned = pinnedThumbnailPath === thumb.path;
-        const isSaved = selectedThumbnailPath === thumb.path;
+        // SAVED: either user's manual selection OR last used from rotation (if no manual selection)
+        const isManualSelection = selectedThumbnailPath === thumb.path;
+        const isLastUsedFromRotation = !selectedThumbnailPath && lastUsedIndex >= 0 && index === lastUsedIndex;
+        const isSaved = isManualSelection || isLastUsedFromRotation;
         const isNext = !isPinned && !isSaved && index === actualNextIndex;
         
         div.className = `thumbnail-item w-full aspect-video bg-dark-600 rounded-lg cursor-pointer overflow-hidden border-2 ${isPinned ? 'border-green-500 ring-2 ring-green-500/50' : (isSaved ? 'border-primary ring-2 ring-primary/50' : (isNext ? 'border-yellow-500 ring-2 ring-yellow-500/50' : 'border-transparent'))} hover:border-primary/70 transition-all relative group shadow-sm hover:shadow-md`;
