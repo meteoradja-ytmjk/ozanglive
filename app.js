@@ -5783,30 +5783,30 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
             console.error('[API] Error updating broadcast thumbnail settings:', updateErr.message);
           }
           
-          // IMPORTANT: Also update stream_key_folder_mapping with the NEXT index (selected + 1)
+          // IMPORTANT: Update GLOBAL thumbnail index with the NEXT index (selected + 1)
           // This ensures thumbnail rotation continues from the correct position
-          if (streamId) {
-            const nextIndex = thumbnailIndex + 1;
-            const db = require('./db/database').getDb();
-            await new Promise((resolve, reject) => {
-              db.run(`
-                INSERT INTO stream_key_folder_mapping (user_id, stream_key_id, folder_name, thumbnail_index, updated_at)
-                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-                ON CONFLICT(user_id, stream_key_id) DO UPDATE SET
-                  thumbnail_index = excluded.thumbnail_index,
-                  folder_name = excluded.folder_name,
-                  updated_at = CURRENT_TIMESTAMP
-              `, [req.session.userId, streamId, thumbnailFolder || '', nextIndex], function(err) {
-                if (err) {
-                  console.error('[API] Error updating stream key thumbnail index for user selection:', err.message);
-                  reject(err);
-                } else {
-                  console.log('[API] Updated stream key thumbnail index for user selection:', streamId, '-> next index:', nextIndex, '(folder:', thumbnailFolder || 'root', ')');
-                  resolve();
-                }
-              });
+          // Use GLOBAL index (__GLOBAL__ + folder) for consistency across all stream keys
+          const nextIndex = thumbnailIndex + 1;
+          const db = require('./db/database').getDb();
+          const globalStreamKeyId = '__GLOBAL__' + (thumbnailFolder || '');
+          await new Promise((resolve, reject) => {
+            db.run(`
+              INSERT INTO stream_key_folder_mapping (user_id, stream_key_id, folder_name, thumbnail_index, updated_at)
+              VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+              ON CONFLICT(user_id, stream_key_id) DO UPDATE SET
+                thumbnail_index = excluded.thumbnail_index,
+                folder_name = excluded.folder_name,
+                updated_at = CURRENT_TIMESTAMP
+            `, [req.session.userId, globalStreamKeyId, thumbnailFolder || '', nextIndex], function(err) {
+              if (err) {
+                console.error('[API] Error updating GLOBAL thumbnail index for user selection:', err.message);
+                reject(err);
+              } else {
+                console.log('[API] ✅ Updated GLOBAL thumbnail index for user selection:', globalStreamKeyId, '-> next index:', nextIndex, '(folder:', thumbnailFolder || 'root', ')');
+                resolve();
+              }
             });
-          }
+          });
         } else {
           console.error('[API] User-selected thumbnail not found:', fullPath);
         }
@@ -5822,55 +5822,31 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         
         console.log('[API] Rotation mode - streamKeyId:', streamKeyId, 'thumbnailFolder:', thumbnailFolder, 'requestThumbnailIndex:', thumbnailIndex);
         
-        // Get thumbnail index - priority:
-        // 1. If user explicitly selected a thumbnail (thumbnailIndex from request), use that
-        // 2. If stream key exists in DB and user didn't select, use DB index (for auto rotation)
-        // 3. Default to 0
+        // Get GLOBAL thumbnail index for this folder (shared across all stream keys)
+        // This ensures sequential rotation: stream key A gets #3, stream key B gets #4, etc.
         let currentIndex = 0;
-        let storedFolderName = null;
-        let hasDbRecord = false;
-        let userExplicitlySelected = false;
+        const currentFolder = thumbnailFolder || '';
+        const globalStreamKeyId = '__GLOBAL__' + currentFolder;
         
-        // Check if user explicitly selected a thumbnail (thumbnailIndex > 0 means user clicked on a specific thumbnail)
-        // thumbnailIndex = 0 could mean either "user selected first thumbnail" or "no selection"
-        // We need to check if selectedThumbnailPath is set to determine if user made a selection
-        const userSelectedPath = req.body.selectedThumbnailPath || req.body.thumbnailPath;
+        const db = require('./db/database').getDb();
         
-        if (streamKeyId) {
-          const db = require('./db/database').getDb();
-          const mapping = await new Promise((resolve) => {
-            db.get(`SELECT thumbnail_index, folder_name FROM stream_key_folder_mapping WHERE user_id = ? AND stream_key_id = ?`,
-              [req.session.userId, streamKeyId], (err, row) => {
-                if (err) {
-                  console.error('[API] Error getting stream key mapping:', err.message);
-                }
-                resolve(row);
-              });
-          });
-          
-          console.log('[API] Stream key mapping from DB:', mapping);
-          
-          if (mapping) {
-            hasDbRecord = true;
-            storedFolderName = mapping.folder_name;
-            // Check if folder changed - if so, reset index to 0
-            const currentFolder = thumbnailFolder || '';
-            if (storedFolderName !== null && storedFolderName !== currentFolder) {
-              console.log('[API] Stream key folder changed from "' + storedFolderName + '" to "' + currentFolder + '", resetting index to 0');
-              currentIndex = 0;
-            } else {
-              // Use index from database for auto rotation
-              currentIndex = mapping.thumbnail_index || 0;
-              console.log('[API] Got stream key thumbnail index from DB:', streamKeyId, '->', currentIndex, '(folder:', currentFolder || 'root', ')');
-            }
-          } else {
-            // No DB record - this is first time for this stream key, start from 0
-            console.log('[API] No existing thumbnail index for stream key:', streamKeyId, '- starting from 0');
-            currentIndex = 0;
-          }
+        // Get global index for this user + folder combination
+        const globalMapping = await new Promise((resolve) => {
+          db.get(`SELECT thumbnail_index FROM stream_key_folder_mapping 
+                  WHERE user_id = ? AND stream_key_id = ?`,
+            [req.session.userId, globalStreamKeyId], (err, row) => {
+              if (err) {
+                console.error('[API] Error getting global folder mapping:', err.message);
+              }
+              resolve(row);
+            });
+        });
+        
+        if (globalMapping) {
+          currentIndex = globalMapping.thumbnail_index || 0;
+          console.log('[API] Got GLOBAL thumbnail index for folder "' + currentFolder + '":', currentIndex);
         } else {
-          // No streamKeyId - start from 0
-          console.log('[API] No streamKeyId, starting from 0');
+          console.log('[API] No global index for folder "' + currentFolder + '", starting from 0');
           currentIndex = 0;
         }
         
@@ -5882,9 +5858,10 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
           selectedThumbnailPath = result.path;
           console.log('[API] Rotation mode - selected thumbnail:', selectedThumbnailPath, 'index:', currentIndex, '->', result.newIndex);
           
-          // Update thumbnail index for this stream key (also update folder_name for consistency tracking)
-          if (streamKeyId && result.newIndex !== undefined) {
-            const db = require('./db/database').getDb();
+          // Update GLOBAL thumbnail index for this folder (shared across all stream keys)
+          // Use special stream_key_id '__GLOBAL__{folder}' to store global index per folder
+          if (result.newIndex !== undefined) {
+            const globalStreamKeyId = '__GLOBAL__' + (thumbnailFolder || '');
             await new Promise((resolve, reject) => {
               db.run(`
                 INSERT INTO stream_key_folder_mapping (user_id, stream_key_id, folder_name, thumbnail_index, updated_at)
@@ -5893,18 +5870,18 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
                   thumbnail_index = excluded.thumbnail_index,
                   folder_name = excluded.folder_name,
                   updated_at = CURRENT_TIMESTAMP
-              `, [req.session.userId, streamKeyId, thumbnailFolder || '', result.newIndex], function(err) {
+              `, [req.session.userId, globalStreamKeyId, thumbnailFolder || '', result.newIndex], function(err) {
                 if (err) {
-                  console.error('[API] Error updating stream key thumbnail index:', err.message);
+                  console.error('[API] Error updating GLOBAL thumbnail index:', err.message);
                   reject(err);
                 } else {
-                  console.log('[API] ✅ SAVED stream key thumbnail index:', streamKeyId, '->', result.newIndex, '(folder:', thumbnailFolder || 'root', ')');
+                  console.log('[API] ✅ SAVED GLOBAL thumbnail index for folder "' + (thumbnailFolder || 'root') + '":', result.newIndex);
                   resolve();
                 }
               });
             });
           } else {
-            console.log('[API] ⚠️ NOT saving thumbnail index - streamKeyId:', streamKeyId, 'newIndex:', result.newIndex);
+            console.log('[API] ⚠️ NOT saving thumbnail index - newIndex:', result.newIndex);
           }
           
           // Update youtube_broadcast_settings with the actual thumbnail index and path
@@ -6057,30 +6034,10 @@ app.put('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
           }
         }
         
-        // Update stream key thumbnail index if streamId is provided in request body
-        const streamId = req.body.streamId;
-        if (streamId && thumbnailIndex !== undefined) {
-          const nextIndex = (parseInt(thumbnailIndex) || 0) + 1;
-          const db = require('./db/database').getDb();
-          await new Promise((resolve, reject) => {
-            db.run(`
-              INSERT INTO stream_key_folder_mapping (user_id, stream_key_id, folder_name, thumbnail_index, updated_at)
-              VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-              ON CONFLICT(user_id, stream_key_id) DO UPDATE SET
-                thumbnail_index = excluded.thumbnail_index,
-                folder_name = excluded.folder_name,
-                updated_at = CURRENT_TIMESTAMP
-            `, [req.session.userId, streamId, thumbnailFolder || '', nextIndex], function(err) {
-              if (err) {
-                console.error('[API] Error updating stream key thumbnail index on edit:', err.message);
-                reject(err);
-              } else {
-                console.log('[API] Updated stream key thumbnail index on edit:', streamId, '-> next index:', nextIndex, '(folder:', thumbnailFolder || 'root', ')');
-                resolve();
-              }
-            });
-          });
-        }
+        // NOTE: Do NOT update stream_key_folder_mapping on edit/reschedule
+        // Thumbnail index should only be incremented when creating NEW broadcasts
+        // Editing an existing broadcast should not affect the rotation index
+        console.log('[API] Edit broadcast - NOT updating GLOBAL thumbnail index (only incremented on new broadcast creation)');
       } catch (settingsErr) {
         console.error('[API] Error updating thumbnail folder:', settingsErr.message);
         // Don't fail the request, just log the error

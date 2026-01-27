@@ -13,7 +13,66 @@ const { calculateNextRun, formatNextRunAt, replaceTitlePlaceholders, isScheduleM
 const { db } = require('../db/database');
 
 /**
- * Get thumbnail index for a specific stream key
+ * Get GLOBAL thumbnail index for a folder (shared across all stream keys)
+ * This ensures consistent rotation: stream key A gets #3, stream key B gets #4, etc.
+ * @param {string} userId - User ID
+ * @param {string} folderName - Folder name (empty string for root)
+ * @returns {Promise<{thumbnailIndex: number, folderName: string|null}>} Thumbnail index and folder name
+ */
+async function getGlobalThumbnailIndex(userId, folderName = '') {
+  const globalStreamKeyId = '__GLOBAL__' + (folderName || '');
+  return new Promise((resolve) => {
+    db.get(
+      `SELECT thumbnail_index, folder_name FROM stream_key_folder_mapping WHERE user_id = ? AND stream_key_id = ?`,
+      [userId, globalStreamKeyId],
+      (err, row) => {
+        if (err || !row) {
+          console.log(`[ScheduleService] No GLOBAL index found for folder "${folderName || 'root'}", starting from 0`);
+          return resolve({ thumbnailIndex: 0, folderName: folderName || '' });
+        }
+        console.log(`[ScheduleService] Got GLOBAL thumbnail index for folder "${folderName || 'root'}": ${row.thumbnail_index || 0}`);
+        resolve({ 
+          thumbnailIndex: row.thumbnail_index || 0, 
+          folderName: row.folder_name !== undefined ? row.folder_name : (folderName || '')
+        });
+      }
+    );
+  });
+}
+
+/**
+ * Update GLOBAL thumbnail index for a folder (shared across all stream keys)
+ * @param {string} userId - User ID
+ * @param {string} folderName - Folder name (empty string for root)
+ * @param {number} newIndex - New thumbnail index
+ * @returns {Promise<boolean>}
+ */
+async function updateGlobalThumbnailIndex(userId, folderName = '', newIndex) {
+  const globalStreamKeyId = '__GLOBAL__' + (folderName || '');
+  return new Promise((resolve) => {
+    // Use UPSERT to handle both insert and update in one query
+    db.run(
+      `INSERT INTO stream_key_folder_mapping (user_id, stream_key_id, folder_name, thumbnail_index, updated_at) 
+       VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+       ON CONFLICT(user_id, stream_key_id) DO UPDATE SET 
+         thumbnail_index = excluded.thumbnail_index,
+         folder_name = excluded.folder_name,
+         updated_at = CURRENT_TIMESTAMP`,
+      [userId, globalStreamKeyId, folderName || '', newIndex],
+      function(err) {
+        if (err) {
+          console.error(`[ScheduleService] Error updating GLOBAL thumbnail index:`, err.message);
+          return resolve(false);
+        }
+        console.log(`[ScheduleService] ✅ Updated GLOBAL thumbnail index for folder "${folderName || 'root'}": ${newIndex}`);
+        resolve(true);
+      }
+    );
+  });
+}
+
+/**
+ * Get thumbnail index for a specific stream key (legacy - kept for backward compatibility)
  * Also returns the folder_name to check for folder consistency
  * @param {string} userId - User ID
  * @param {string} streamKeyId - Stream Key ID
@@ -38,7 +97,7 @@ async function getStreamKeyThumbnailIndex(userId, streamKeyId) {
 }
 
 /**
- * Update thumbnail index for a specific stream key
+ * Update thumbnail index for a specific stream key (legacy - kept for backward compatibility)
  * Also updates folder_name to ensure consistency
  * @param {string} userId - User ID
  * @param {string} streamKeyId - Stream Key ID
@@ -884,25 +943,15 @@ class ScheduleService {
               console.error(`[ScheduleService] Failed to save broadcast settings:`, settingsErr.message);
             }
             
-            // Upload thumbnail - use sequential selection from folder with per-stream-key index
+            // Upload thumbnail - use sequential selection from folder with GLOBAL index
+            // GLOBAL index ensures consistent rotation across all stream keys
             if (thumbnailFolder !== null || b.thumbnailPath || b.pinnedThumbnail) {
-              // Get thumbnail index for this specific stream key
-              let thumbnailIndex = 0;
-              let storedFolderName = null;
-              if (b.streamId) {
-                const indexData = await getStreamKeyThumbnailIndex(template.user_id, b.streamId);
-                storedFolderName = indexData.folderName;
-                
-                // Check if folder changed - if so, reset index to 0
-                const currentFolder = thumbnailFolder !== null ? thumbnailFolder : '';
-                if (storedFolderName !== null && storedFolderName !== currentFolder) {
-                  console.log(`[ScheduleService] Stream key ${b.streamId} folder changed from "${storedFolderName}" to "${currentFolder}", resetting index to 0`);
-                  thumbnailIndex = 0;
-                } else {
-                  thumbnailIndex = indexData.thumbnailIndex;
-                }
-                console.log(`[ScheduleService] Stream key ${b.streamId} current thumbnail_index: ${thumbnailIndex} (folder: ${currentFolder || 'root'})`);
-              }
+              // Get GLOBAL thumbnail index for this folder (shared across all stream keys)
+              const currentFolder = thumbnailFolder !== null ? thumbnailFolder : '';
+              const indexData = await getGlobalThumbnailIndex(template.user_id, currentFolder);
+              let thumbnailIndex = indexData.thumbnailIndex;
+              
+              console.log(`[ScheduleService] GLOBAL thumbnail index for folder "${currentFolder || 'root'}": ${thumbnailIndex}`);
               
               const uploadResult = await this.uploadThumbnailForBroadcast(
                 accessToken, 
@@ -915,14 +964,14 @@ class ScheduleService {
                 thumbnailIndex
               );
               
-              // Update thumbnail index for this stream key after successful upload
+              // Update GLOBAL thumbnail index after successful upload
               // ONLY update if NOT using pinned thumbnail (sequential mode)
-              if (uploadResult && uploadResult.newIndex !== undefined && b.streamId && !uploadResult.usedPinned) {
+              if (uploadResult && uploadResult.newIndex !== undefined && !uploadResult.usedPinned) {
                 const currentFolder = thumbnailFolder !== null ? thumbnailFolder : '';
-                await updateStreamKeyThumbnailIndex(template.user_id, b.streamId, uploadResult.newIndex, currentFolder);
-                console.log(`[ScheduleService] Stream key ${b.streamId} thumbnail_index updated: ${thumbnailIndex} -> ${uploadResult.newIndex} (folder: ${currentFolder || 'root'})`);
+                await updateGlobalThumbnailIndex(template.user_id, currentFolder, uploadResult.newIndex);
+                console.log(`[ScheduleService] GLOBAL thumbnail_index updated: ${thumbnailIndex} -> ${uploadResult.newIndex} (folder: ${currentFolder || 'root'})`);
               } else if (uploadResult && uploadResult.usedPinned) {
-                console.log(`[ScheduleService] Stream key ${b.streamId} using pinned thumbnail, index NOT updated (stays at ${thumbnailIndex})`);
+                console.log(`[ScheduleService] Using pinned thumbnail, GLOBAL index NOT updated (stays at ${thumbnailIndex})`);
               }
             }
           } catch (err) {
@@ -1085,26 +1134,15 @@ class ScheduleService {
           console.error(`[ScheduleService] Failed to save broadcast settings:`, settingsErr.message);
         }
         
-        // Upload thumbnail - use sequential selection from folder with per-stream-key index
+        // Upload thumbnail - use sequential selection from folder with GLOBAL index
+        // GLOBAL index ensures consistent rotation across all stream keys
         if (thumbnailFolder !== null || template.thumbnail_path || template.pinned_thumbnail) {
-          // Get thumbnail index for this specific stream key (if stream_id exists)
-          let thumbnailIndex = template.thumbnail_index || 0;
-          let storedFolderName = null;
-          if (template.stream_id) {
-            const indexData = await getStreamKeyThumbnailIndex(template.user_id, template.stream_id);
-            storedFolderName = indexData.folderName;
-            
-            // Check if folder changed - if so, reset index to 0
-            const currentFolder = thumbnailFolder !== null ? thumbnailFolder : '';
-            if (storedFolderName !== null && storedFolderName !== currentFolder) {
-              console.log(`[ScheduleService] Stream key ${template.stream_id} folder changed from "${storedFolderName}" to "${currentFolder}", resetting index to 0`);
-              thumbnailIndex = 0;
-            } else {
-              thumbnailIndex = indexData.thumbnailIndex;
-            }
-            console.log(`[ScheduleService] Stream key ${template.stream_id} current thumbnail_index: ${thumbnailIndex} (folder: ${currentFolder || 'root'})`);
-          }
+          // Get GLOBAL thumbnail index for this folder (shared across all stream keys)
+          const currentFolder = thumbnailFolder !== null ? thumbnailFolder : '';
+          const indexData = await getGlobalThumbnailIndex(template.user_id, currentFolder);
+          let thumbnailIndex = indexData.thumbnailIndex;
           
+          console.log(`[ScheduleService] GLOBAL thumbnail index for folder "${currentFolder || 'root'}": ${thumbnailIndex}`);
           console.log(`[ScheduleService] Uploading thumbnail: folder=${thumbnailFolder || 'none'}, currentIndex=${thumbnailIndex}`);
           const uploadResult = await this.uploadThumbnailForBroadcast(
             accessToken, 
@@ -1113,18 +1151,17 @@ class ScheduleService {
             thumbnailFolder,
             template.user_id,
             template.pinned_thumbnail,
-            template.stream_id ? null : template.id, // Only update template index if no stream_id
+            null, // Don't update template index, use GLOBAL index instead
             thumbnailIndex
           );
           
-          // Update thumbnail index for this stream key after successful upload
+          // Update GLOBAL thumbnail index after successful upload
           // ONLY update if NOT using pinned thumbnail (sequential mode)
-          if (uploadResult && uploadResult.newIndex !== undefined && template.stream_id && !uploadResult.usedPinned) {
-            const currentFolder = thumbnailFolder !== null ? thumbnailFolder : '';
-            await updateStreamKeyThumbnailIndex(template.user_id, template.stream_id, uploadResult.newIndex, currentFolder);
-            console.log(`[ScheduleService] Stream key ${template.stream_id} thumbnail_index updated: ${thumbnailIndex} -> ${uploadResult.newIndex} (folder: ${currentFolder || 'root'})`);
+          if (uploadResult && uploadResult.newIndex !== undefined && !uploadResult.usedPinned) {
+            await updateGlobalThumbnailIndex(template.user_id, currentFolder, uploadResult.newIndex);
+            console.log(`[ScheduleService] GLOBAL thumbnail_index updated: ${thumbnailIndex} -> ${uploadResult.newIndex} (folder: ${currentFolder || 'root'})`);
           } else if (uploadResult && uploadResult.usedPinned) {
-            console.log(`[ScheduleService] Stream key ${template.stream_id} using pinned thumbnail, index NOT updated (stays at ${thumbnailIndex})`);
+            console.log(`[ScheduleService] Using pinned thumbnail, GLOBAL index NOT updated (stays at ${thumbnailIndex})`);
           }
         } else {
           console.log(`[ScheduleService] No thumbnail to upload (folder=${thumbnailFolder}, path=${template.thumbnail_path}, pinned=${template.pinned_thumbnail})`);

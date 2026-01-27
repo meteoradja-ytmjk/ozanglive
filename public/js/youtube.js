@@ -486,6 +486,30 @@ async function getStreamKeyThumbnailIndexFromServer(streamKeyId) {
   }
 }
 
+// Get GLOBAL thumbnail index for a folder (shared across all stream keys)
+async function getGlobalThumbnailIndexFromServer(folderName) {
+  try {
+    const globalStreamKeyId = '__GLOBAL__' + (folderName || '');
+    const response = await fetch(`/api/stream-key-folder-mapping/${encodeURIComponent(globalStreamKeyId)}`, {
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+    
+    const data = await response.json();
+    if (data.success && data.found) {
+      return {
+        thumbnailIndex: data.thumbnailIndex || 0,
+        folderName: data.folderName || ''
+      };
+    }
+    return { thumbnailIndex: 0, folderName: folderName || '' };
+  } catch (e) {
+    console.warn('[Server] Failed to get global thumbnail index:', e.message);
+    return { thumbnailIndex: 0, folderName: folderName || '' };
+  }
+}
+
 // Increment stream key thumbnail index (for reschedule)
 async function incrementStreamKeyThumbnailIndex(streamKeyId, totalThumbnails = null) {
   try {
@@ -807,14 +831,11 @@ async function fetchThumbnails(folder = null) {
   loading.classList.remove('hidden');
   empty.classList.add('hidden');
   
-  // Get stream key thumbnail index for "NEXT" indicator
-  const streamKeySelect = document.getElementById('streamKeySelect');
+  // Get GLOBAL thumbnail index for "NEXT" indicator (shared across all stream keys)
   let nextThumbnailIndex = 0;
-  if (streamKeySelect && streamKeySelect.value) {
-    const streamKeyData = await getStreamKeyThumbnailIndexFromServer(streamKeySelect.value);
-    nextThumbnailIndex = streamKeyData.thumbnailIndex || 0;
-    console.log('[fetchThumbnails] Stream key next thumbnail index:', nextThumbnailIndex);
-  }
+  const globalIndexData = await getGlobalThumbnailIndexFromServer(targetFolder);
+  nextThumbnailIndex = globalIndexData.thumbnailIndex || 0;
+  console.log('[fetchThumbnails] GLOBAL thumbnail index for folder "' + (targetFolder || 'root') + '":', nextThumbnailIndex);
   
   try {
     let url = '/api/thumbnails';
@@ -4667,14 +4688,13 @@ async function loadEditThumbnailFolder(folderName = null) {
     console.log('[loadEditThumbnailFolder] Using stream ID from broadcast:', streamKeyId);
   }
   
+  // Get GLOBAL thumbnail index for this folder (shared across all stream keys)
   let nextThumbnailIndex = 0;
-  if (streamKeyId) {
-    const streamKeyData = await getStreamKeyThumbnailIndexFromServer(streamKeyId);
-    nextThumbnailIndex = streamKeyData.thumbnailIndex || 0;
-    console.log('[loadEditThumbnailFolder] Stream key next thumbnail index:', nextThumbnailIndex);
-  }
+  const globalIndexData = await getGlobalThumbnailIndexFromServer(folderName);
+  nextThumbnailIndex = globalIndexData.thumbnailIndex || 0;
+  console.log('[loadEditThumbnailFolder] GLOBAL thumbnail index for folder "' + (folderName || 'root') + '":', nextThumbnailIndex);
   
-  // If no stream key index found, try to get from broadcast settings
+  // If no global index found, try to get from broadcast settings
   // This handles cases where stream_key_folder_mapping doesn't exist yet
   if (nextThumbnailIndex === 0 && window.editSavedThumbnailIndex !== undefined && window.editSavedThumbnailIndex !== null) {
     // NEXT should be after SAVED, so add 1 to saved index
@@ -4793,14 +4813,13 @@ async function loadEditThumbnailFolderWithSelection(folderName = null, savedInde
     console.log('[loadEditThumbnailFolderWithSelection] Using stream ID from broadcast:', streamKeyId);
   }
   
+  // Get GLOBAL thumbnail index for this folder (shared across all stream keys)
   let nextThumbnailIndex = 0;
-  if (streamKeyId) {
-    const streamKeyData = await getStreamKeyThumbnailIndexFromServer(streamKeyId);
-    nextThumbnailIndex = streamKeyData.thumbnailIndex || 0;
-    console.log('[loadEditThumbnailFolderWithSelection] Stream key next thumbnail index:', nextThumbnailIndex);
-  }
+  const globalIndexData = await getGlobalThumbnailIndexFromServer(folderName);
+  nextThumbnailIndex = globalIndexData.thumbnailIndex || 0;
+  console.log('[loadEditThumbnailFolderWithSelection] GLOBAL thumbnail index for folder "' + (folderName || 'root') + '":', nextThumbnailIndex);
   
-  // If no stream key index found, NEXT should be after SAVED
+  // If no global index found, NEXT should be after SAVED
   // savedIndex is the index of the currently saved thumbnail (0-based)
   if (nextThumbnailIndex === 0 && savedIndex > 0) {
     // NEXT should be after SAVED, so add 1 to saved index
