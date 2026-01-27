@@ -351,6 +351,20 @@ sqlite3 db/streamflow.db "SELECT id, username FROM users;"
 cd ~/ozanglive
 npm start
 ```
+------------  PM2 JIKA EROR -------------- 
+```bash
+pm2 start npm --name ozanglive -- start
+```
+```bash
+pm2 start npm --name ozanglive -- start
+```
+```bash
+pm2 restart ozanglive
+```
+```bash
+pm2 save
+```
+
 
 ## 📊 Bersihkan VPS
 ```bash
