@@ -33,6 +33,7 @@ const TitleSuggestion = require('./models/TitleSuggestion');
 const TitleFolder = require('./models/TitleFolder');
 const SystemSettings = require('./models/SystemSettings');
 const YouTubeBroadcastSettings = require('./models/YouTubeBroadcastSettings');
+const scheduleService = require('./services/scheduleService');
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 // Track if we're shutting down to prevent multiple shutdown attempts
 let isShuttingDown = false;
@@ -5737,6 +5738,14 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
     // Upload thumbnail if provided (either file upload, gallery selection, or from folder)
     const thumbnailPath = req.body.thumbnailPath;
     
+    console.log('[API] Thumbnail upload decision:', {
+      hasFile: !!req.file,
+      thumbnailPath: thumbnailPath,
+      thumbnailPathTruthy: !!thumbnailPath,
+      thumbnailFolder: thumbnailFolder,
+      thumbnailFolderDefined: thumbnailFolder !== undefined && thumbnailFolder !== null
+    });
+    
     if (req.file) {
       // Handle file upload (highest priority)
       try {
@@ -5910,16 +5919,33 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         
         if (selectedThumbnailPath) {
           const fullPath = path.join(__dirname, 'public', selectedThumbnailPath);
+          console.log('[API] Attempting to upload thumbnail:', selectedThumbnailPath);
+          console.log('[API] Full path:', fullPath);
+          console.log('[API] File exists:', fs.existsSync(fullPath));
+          
           if (fs.existsSync(fullPath)) {
             const imageBuffer = fs.readFileSync(fullPath);
-            const thumbnailResult = await youtubeService.uploadThumbnail(
-              accessToken,
-              broadcast.broadcastId,
-              imageBuffer
-            );
-            broadcast.thumbnailUrl = thumbnailResult.thumbnailUrl;
-            console.log('[API] Thumbnail uploaded from folder:', thumbnailFolder || 'root');
+            console.log('[API] Image buffer size:', imageBuffer.length, 'bytes');
+            
+            try {
+              const thumbnailResult = await youtubeService.uploadThumbnail(
+                accessToken,
+                broadcast.broadcastId,
+                imageBuffer
+              );
+              broadcast.thumbnailUrl = thumbnailResult.thumbnailUrl;
+              console.log('[API] ✅ Thumbnail uploaded successfully to YouTube:', thumbnailResult.thumbnailUrl);
+            } catch (uploadErr) {
+              console.error('[API] ❌ Failed to upload thumbnail to YouTube:', uploadErr.message);
+              if (uploadErr.response) {
+                console.error('[API] YouTube API error:', JSON.stringify(uploadErr.response.data, null, 2));
+              }
+            }
+          } else {
+            console.error('[API] ❌ Thumbnail file not found:', fullPath);
           }
+        } else {
+          console.log('[API] ⚠️ No thumbnail path selected for upload');
         }
       } catch (thumbErr) {
         console.error('Error uploading thumbnail from folder:', thumbErr.message);
@@ -7234,7 +7260,7 @@ app.post('/api/youtube/templates/:id/bulk-create', isAuthenticated, async (req, 
 // RECURRING BROADCAST SCHEDULES API
 // ============================================
 const RecurringSchedule = require('./models/RecurringSchedule');
-const scheduleService = require('./services/scheduleService');
+// scheduleService already imported at top of file
 
 // Get all recurring schedules for user
 app.get('/api/recurring-schedules', isAuthenticated, async (req, res) => {
