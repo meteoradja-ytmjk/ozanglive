@@ -5284,6 +5284,7 @@ app.put('/api/stream-key-folder-mapping/:streamKeyId/thumbnail-index', isAuthent
 app.post('/api/stream-key-folder-mapping/:streamKeyId/increment-thumbnail', isAuthenticated, async (req, res) => {
   try {
     const { streamKeyId } = req.params;
+    const { totalThumbnails } = req.body;
     const userId = req.session.userId;
     
     const db = require('./db/database').getDb();
@@ -5304,6 +5305,8 @@ app.post('/api/stream-key-folder-mapping/:streamKeyId/increment-thumbnail', isAu
       // Modulo is applied when selecting thumbnail, not when storing index.
       const nextIndex = currentIndex + 1;
       
+      console.log(`[stream-key-folder-mapping] Incrementing: ${streamKeyId} ${currentIndex} -> ${nextIndex}`);
+      
       if (row) {
         // Update existing record
         db.run(`
@@ -5315,7 +5318,7 @@ app.post('/api/stream-key-folder-mapping/:streamKeyId/increment-thumbnail', isAu
             console.error('[stream-key-folder-mapping] Error incrementing thumbnail index:', updateErr.message);
             return res.status(500).json({ success: false, error: 'Failed to increment thumbnail index' });
           }
-          console.log(`[stream-key-folder-mapping] Incremented thumbnail_index: ${streamKeyId} ${currentIndex} -> ${nextIndex}`);
+          console.log(`[stream-key-folder-mapping] ✅ Incremented thumbnail_index: ${streamKeyId} ${currentIndex} -> ${nextIndex}`);
           res.json({ 
             success: true, 
             streamKeyId, 
@@ -5334,7 +5337,7 @@ app.post('/api/stream-key-folder-mapping/:streamKeyId/increment-thumbnail', isAu
             console.error('[stream-key-folder-mapping] Error creating record:', insertErr.message);
             return res.status(500).json({ success: false, error: 'Failed to create mapping' });
           }
-          console.log(`[stream-key-folder-mapping] Created with thumbnail_index: ${streamKeyId} -> 1`);
+          console.log(`[stream-key-folder-mapping] ✅ Created with thumbnail_index: ${streamKeyId} -> 1`);
           res.json({ 
             success: true, 
             streamKeyId, 
@@ -5348,6 +5351,44 @@ app.post('/api/stream-key-folder-mapping/:streamKeyId/increment-thumbnail', isAu
   } catch (error) {
     console.error('[stream-key-folder-mapping] Error:', error.message);
     res.status(500).json({ success: false, error: 'Failed to increment thumbnail index' });
+  }
+});
+
+// Initialize thumbnail rotation for a stream key (set starting index)
+app.post('/api/stream-key-folder-mapping/:streamKeyId/init', isAuthenticated, async (req, res) => {
+  try {
+    const { streamKeyId } = req.params;
+    const { folderName, thumbnailIndex } = req.body;
+    const userId = req.session.userId;
+    
+    const db = require('./db/database').getDb();
+    
+    const index = parseInt(thumbnailIndex) || 0;
+    const folder = folderName || '';
+    
+    db.run(`
+      INSERT INTO stream_key_folder_mapping (user_id, stream_key_id, folder_name, thumbnail_index, updated_at)
+      VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(user_id, stream_key_id) DO UPDATE SET
+        folder_name = excluded.folder_name,
+        thumbnail_index = excluded.thumbnail_index,
+        updated_at = CURRENT_TIMESTAMP
+    `, [userId, streamKeyId, folder, index], function(err) {
+      if (err) {
+        console.error('[stream-key-folder-mapping] Error initializing:', err.message);
+        return res.status(500).json({ success: false, error: 'Failed to initialize' });
+      }
+      console.log(`[stream-key-folder-mapping] ✅ Initialized: ${streamKeyId} -> index=${index}, folder="${folder}"`);
+      res.json({ 
+        success: true, 
+        streamKeyId, 
+        thumbnailIndex: index,
+        folderName: folder 
+      });
+    });
+  } catch (error) {
+    console.error('[stream-key-folder-mapping] Error:', error.message);
+    res.status(500).json({ success: false, error: 'Failed to initialize' });
   }
 });
 

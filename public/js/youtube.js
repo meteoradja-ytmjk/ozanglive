@@ -1907,7 +1907,7 @@ if (editBroadcastForm) {
   });
 }
 
-// Reuse Broadcast - opens create modal with pre-filled data
+// Reuse Broadcast - opens create modal with pre-filled data and handles thumbnail rotation
 async function reuseBroadcast(broadcastId, accountId) {
   // Open create modal
   openCreateBroadcastModal();
@@ -1934,12 +1934,39 @@ async function reuseBroadcast(broadcastId, accountId) {
         const accountSelect = document.getElementById('accountSelect');
         if (accountSelect) {
           accountSelect.value = accountId;
+          // Trigger account change to load stream keys
+          onAccountChange(accountId);
         }
         
         // Clear scheduled time - user must set new time
         document.getElementById('scheduledStartTime').value = '';
         
-        showToast('Broadcast settings copied. Please set a new schedule time.', 'info');
+        // Handle stream key and thumbnail rotation
+        if (broadcast.streamId) {
+          console.log('[reuseBroadcast] Stream ID found:', broadcast.streamId);
+          
+          // Wait for stream keys to load, then select the stream key
+          setTimeout(async () => {
+            const streamKeySelect = document.getElementById('streamKeySelect');
+            if (streamKeySelect) {
+              streamKeySelect.value = broadcast.streamId;
+              
+              // Trigger stream key change to load thumbnail folder and index
+              await onStreamKeyChange(broadcast.streamId);
+              
+              console.log('[reuseBroadcast] Stream key selected, thumbnail rotation will be handled automatically');
+            }
+          }, 1000); // Wait for stream keys to load
+        }
+        
+        // Set thumbnail mode to rotation (sequential)
+        const rotationRadio = document.querySelector('input[name="thumbnailMode"][value="sequential"]');
+        if (rotationRadio) {
+          rotationRadio.checked = true;
+          updateThumbnailMode('sequential');
+        }
+        
+        showToast('Broadcast settings copied. Thumbnail will rotate automatically.', 'info');
       }
     }
   } catch (error) {

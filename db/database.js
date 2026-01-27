@@ -781,8 +781,17 @@ function checkIfAdminExists() {
   });
 }
 
+/**
+ * Get database instance
+ * @returns {sqlite3.Database} Database instance
+ */
+function getDb() {
+  return db;
+}
+
 module.exports = {
   db,
+  getDb,
   checkIfUsersExist,
   checkIfAdminExists,
   waitForDbInit,
