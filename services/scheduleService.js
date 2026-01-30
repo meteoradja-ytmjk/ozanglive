@@ -318,19 +318,19 @@ class ScheduleService {
   }
 
   /**
-   * Start the schedule checker that runs every 30 seconds
-   * More frequent checks ensure schedules are triggered within the 5-minute window
+   * Start the schedule checker that runs every 60 seconds
+   * Balanced between accuracy and CPU usage
    */
   startChecker() {
     if (this.checkInterval) return;
     
-    // Check every 30 seconds for more precise scheduling
+    // Check every 60 seconds - balanced accuracy vs CPU
     // This ensures we catch the schedule within the 5-minute execution window
     this.checkInterval = setInterval(async () => {
       await this.checkSchedules();
-    }, 30000); // 30 seconds
+    }, 60000); // 60 seconds
     
-    console.log('[ScheduleService] Schedule checker started (30 sec interval for WIB precision)');
+    console.log('[ScheduleService] Schedule checker started (60 sec interval)');
     
     // Also run immediately on start
     setTimeout(() => this.checkSchedules(), 5000);
