@@ -681,7 +681,19 @@ app.post('/login', loginDelayMiddleware, loginLimiter, async (req, res) => {
     req.session.username = user.username;
     req.session.avatar_path = user.avatar_path;
     req.session.user_role = user.user_role;
-    res.redirect('/dashboard');
+    
+    // Force session save before redirect
+    req.session.save((err) => {
+      if (err) {
+        console.error('[Login] Session save error:', err);
+        return res.render('login', {
+          title: 'Login',
+          error: 'Session error. Please try again.'
+        });
+      }
+      console.log('[Login] Session saved, redirecting...');
+      res.redirect('/dashboard');
+    });
   } catch (error) {
     console.error('[Login] Error:', error);
     res.render('login', {
