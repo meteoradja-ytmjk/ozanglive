@@ -1715,9 +1715,14 @@
           <i class="ti ti-brand-youtube text-red-500"></i>
           YouTube API Setup
         </h3>
-        <button onclick="closeYouTubeGuideModal()" class="text-gray-400 hover:text-white">
-          <i class="ti ti-x text-xl"></i>
-        </button>
+        <div class="flex items-center gap-2">
+          <a href="https://console.cloud.google.com/apis/credentials" target="_blank" class="text-gray-400 hover:text-primary" title="Edit di Google Cloud Console">
+            <i class="ti ti-pencil text-xl"></i>
+          </a>
+          <button onclick="closeYouTubeGuideModal()" class="text-gray-400 hover:text-white">
+            <i class="ti ti-x text-xl"></i>
+          </button>
+        </div>
       </div>
       
       <div class="p-6 overflow-y-auto max-h-[calc(90vh-80px)] space-y-6">
