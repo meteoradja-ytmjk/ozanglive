@@ -12,7 +12,11 @@ const StreamTemplate = require('../models/StreamTemplate');
 const Playlist = require('../models/Playlist');
 const Video = require('../models/Video');
 const Audio = require('../models/Audio');
+const TitleFolder = require('../models/TitleFolder');
+const TitleSuggestion = require('../models/TitleSuggestion');
 const path = require('path');
+const fs = require('fs').promises;
+const fsSync = require('fs');
 
 // Fields to include in export (non-sensitive configuration fields)
 const EXPORT_FIELDS = [
@@ -74,6 +78,13 @@ const BROADCAST_TEMPLATE_FIELDS = [
   'tags',
   'category_id',
   'thumbnail_path',
+  'thumbnail_folder',
+  'thumbnail_index',
+  'pinned_thumbnail',
+  'stream_key_folder_mapping',
+  'title_index',
+  'pinned_title_id',
+  'title_folder_id',
   'stream_id',
   'account_id',
   'recurring_enabled',
@@ -122,6 +133,22 @@ const PLAYLIST_FIELDS = [
   'is_shuffle'
 ];
 
+// Title Folder export fields
+const TITLE_FOLDER_FIELDS = [
+  'name',
+  'color',
+  'sort_order'
+];
+
+// Title Suggestion export fields
+const TITLE_SUGGESTION_FIELDS = [
+  'title',
+  'use_count',
+  'sort_order',
+  'is_pinned',
+  'folder_name' // For matching folder on import
+];
+
 // All available categories for comprehensive export
 const ALL_CATEGORIES = [
   'streams',
@@ -129,7 +156,10 @@ const ALL_CATEGORIES = [
   'broadcast_templates',
   'recurring_schedules',
   'stream_templates',
-  'playlists'
+  'playlists',
+  'title_folders',
+  'title_suggestions',
+  'thumbnail_files'
 ];
 
 /**
@@ -264,7 +294,7 @@ function validateStreamConfig(streamConfig) {
  * @param {string} userId - User ID
  * @returns {Promise<{imported: number, skipped: number, matched: {video: number, audio: number}, errors: string[]}>}
  */
-async function importStreams(backupData, userId) {
+async function importStreams(backupData, userId, options = {}) {
   const result = {
     imported: 0,
     skipped: 0,
@@ -278,6 +308,15 @@ async function importStreams(backupData, userId) {
     result.errors = formatValidation.errors;
     return result;
   }
+
+  // Get existing streams to check for duplicates
+  const existingStreams = await Stream.findAll(userId);
+  const existingByKey = new Map();
+  existingStreams.forEach(s => {
+    // Create unique key from title + stream_key
+    const key = `${s.title}|${s.stream_key}`;
+    existingByKey.set(key, s);
+  });
 
   // Get all videos and audios for this user to match by filename
   const videos = await Video.findAll(userId);
@@ -316,6 +355,16 @@ async function importStreams(backupData, userId) {
     }
 
     try {
+      // Check for duplicate by title + stream_key
+      const duplicateKey = `${streamConfig.title}|${streamConfig.stream_key}`;
+      if (existingByKey.has(duplicateKey)) {
+        if (options.skipDuplicates !== false) {
+          result.skipped++;
+          result.errors.push(`Stream ${i + 1}: Stream "${streamConfig.title}" with same stream key already exists (skipped)`);
+          continue;
+        }
+      }
+
       // Parse schedule_days - ensure it's an array
       let scheduleDays = streamConfig.schedule_days;
       if (typeof scheduleDays === 'string') {
@@ -598,6 +647,143 @@ async function exportStreamsOnly(userId) {
 }
 
 /**
+ * Export title folders for a user
+ * @param {string} userId - User ID
+ * @returns {Promise<Array>} Array of exported title folders
+ */
+async function exportTitleFolders(userId) {
+  const folders = await TitleFolder.findByUserId(userId);
+  
+  return folders.map(folder => {
+    const exported = {};
+    TITLE_FOLDER_FIELDS.forEach(field => {
+      if (folder[field] !== undefined) {
+        exported[field] = folder[field];
+      }
+    });
+    return exported;
+  });
+}
+
+/**
+ * Export title suggestions for a user
+ * Includes folder_name for matching folder on import
+ * @param {string} userId - User ID
+ * @returns {Promise<Array>} Array of exported title suggestions
+ */
+async function exportTitleSuggestions(userId) {
+  const titles = await TitleSuggestion.findByUserId(userId);
+  const folders = await TitleFolder.findByUserId(userId);
+  
+  // Create folder lookup map
+  const folderMap = new Map(folders.map(f => [f.id, f]));
+  
+  return titles.map(title => {
+    const exported = {
+      title: title.title,
+      use_count: title.use_count || 0,
+      sort_order: title.sort_order || 0,
+      is_pinned: title.is_pinned || 0
+    };
+    
+    // Add folder_name for matching on import
+    if (title.folder_id) {
+      const folder = folderMap.get(title.folder_id);
+      if (folder) {
+        exported.folder_name = folder.name;
+      }
+    }
+    
+    return exported;
+  });
+}
+
+/**
+ * Export thumbnail files with folder structure
+ * Returns metadata about thumbnails and their folder structure
+ * @param {string} userId - User ID
+ * @returns {Promise<Object>} Thumbnail files metadata
+ */
+async function exportThumbnailFiles(userId) {
+  const templates = await BroadcastTemplate.findByUserId(userId);
+  const thumbnailsDir = path.join(process.cwd(), 'public', 'uploads', 'thumbnails');
+  
+  const result = {
+    folders: [],
+    files: []
+  };
+  
+  // Collect all thumbnail folders from templates
+  const folderSet = new Set();
+  templates.forEach(template => {
+    if (template.thumbnail_folder) {
+      folderSet.add(template.thumbnail_folder);
+    }
+  });
+  
+  // Process each folder
+  for (const folderId of folderSet) {
+    const folderPath = path.join(thumbnailsDir, folderId);
+    try {
+      const stats = await fs.stat(folderPath);
+      if (stats.isDirectory()) {
+        const files = await fs.readdir(folderPath);
+        const folderFiles = [];
+        
+        for (const file of files) {
+          const filePath = path.join(folderPath, file);
+          const fileStats = await fs.stat(filePath);
+          if (fileStats.isFile()) {
+            // Read file as base64 for backup
+            const fileContent = await fs.readFile(filePath);
+            folderFiles.push({
+              filename: file,
+              size: fileStats.size,
+              data: fileContent.toString('base64')
+            });
+          }
+        }
+        
+        result.folders.push({
+          folder_id: folderId,
+          files: folderFiles
+        });
+      }
+    } catch (err) {
+      // Folder doesn't exist, skip
+      console.log(`Thumbnail folder ${folderId} not found, skipping`);
+    }
+  }
+  
+  // Also collect standalone thumbnail files (not in folders)
+  try {
+    const rootFiles = await fs.readdir(thumbnailsDir);
+    for (const file of rootFiles) {
+      const filePath = path.join(thumbnailsDir, file);
+      const stats = await fs.stat(filePath);
+      if (stats.isFile()) {
+        // Check if this thumbnail is used by any template
+        const isUsed = templates.some(t => 
+          t.thumbnail_path && t.thumbnail_path.includes(file)
+        );
+        if (isUsed) {
+          const fileContent = await fs.readFile(filePath);
+          result.files.push({
+            filename: file,
+            size: stats.size,
+            data: fileContent.toString('base64')
+          });
+        }
+      }
+    }
+  } catch (err) {
+    console.log('Error reading thumbnails directory:', err.message);
+  }
+  
+  return result;
+}
+
+/**
  * Comprehensive export of all user data
  * @param {string} userId - User ID
  * @param {Array<string>|null} categories - Categories to export (null = all)
@@ -644,6 +830,19 @@ async function comprehensiveExport(userId, categories = null) {
         backup.playlists = await exportPlaylists(userId);
         backup.metadata.counts.playlists = backup.playlists.length;
         break;
+      case 'title_folders':
+        backup.title_folders = await exportTitleFolders(userId);
+        backup.metadata.counts.title_folders = backup.title_folders.length;
+        break;
+      case 'title_suggestions':
+        backup.title_suggestions = await exportTitleSuggestions(userId);
+        backup.metadata.counts.title_suggestions = backup.title_suggestions.length;
+        break;
+      case 'thumbnail_files':
+        backup.thumbnail_files = await exportThumbnailFiles(userId);
+        backup.metadata.counts.thumbnail_folders = backup.thumbnail_files.folders.length;
+        backup.metadata.counts.thumbnail_standalone_files = backup.thumbnail_files.files.length;
+        break;
     }
   }
 
@@ -678,9 +877,13 @@ function validateComprehensiveBackup(data) {
     return { valid: false, errors };
   }
 
-  // Check for at least one category
-  const hasCategory = ALL_CATEGORIES.some(cat => Array.isArray(data[cat]));
-  if (!hasCategory) {
+  // Check for at least one category (arrays or thumbnail_files object)
+  const hasArrayCategory = ALL_CATEGORIES.some(cat => 
+    cat !== 'thumbnail_files' && Array.isArray(data[cat])
+  );
+  const hasThumbnailFiles = data.thumbnail_files && typeof data.thumbnail_files === 'object';
+  
+  if (!hasArrayCategory && !hasThumbnailFiles) {
     errors.push('Invalid backup format: no valid data categories found');
     return { valid: false, errors };
   }
@@ -823,6 +1026,7 @@ async function importBroadcastTemplatesData(templates, userId, options = {}) {
       if (exists) {
         if (options.skipDuplicates) {
           result.skipped++;
+          result.errors.push(`broadcast_templates[${i}]: Template "${template.name}" already exists (skipped)`);
           continue;
         }
       }
@@ -837,6 +1041,13 @@ async function importBroadcastTemplatesData(templates, userId, options = {}) {
         tags: template.tags,
         category_id: template.category_id || '20',
         thumbnail_path: template.thumbnail_path,
+        thumbnail_folder: template.thumbnail_folder,
+        thumbnail_index: template.thumbnail_index || 0,
+        pinned_thumbnail: template.pinned_thumbnail,
+        stream_key_folder_mapping: template.stream_key_folder_mapping,
+        title_index: template.title_index || 0,
+        pinned_title_id: template.pinned_title_id,
+        title_folder_id: template.title_folder_id,
         stream_id: template.stream_id,
         recurring_enabled: template.recurring_enabled || false,
         recurring_pattern: template.recurring_pattern,
@@ -1077,6 +1288,225 @@ async function importPlaylistsData(playlists, userId, options = {}) {
 }
 
 /**
+ * Import title folders from backup
+ * @param {Array} folders - Array of folders to import
+ * @param {string} userId - User ID
+ * @param {Object} options - Import options
+ * @returns {Promise<{imported: number, skipped: number, errors: string[], folderMap: Map}>}
+ */
+async function importTitleFoldersData(folders, userId, options = {}) {
+  const result = { imported: 0, skipped: 0, errors: [], folderMap: new Map() };
+  
+  if (!Array.isArray(folders)) return result;
+
+  // Get existing folders to check for duplicates
+  const existingFolders = await TitleFolder.findByUserId(userId);
+  const existingByName = new Map(existingFolders.map(f => [f.name, f]));
+
+  for (let i = 0; i < folders.length; i++) {
+    const folder = folders[i];
+
+    if (!folder.name || folder.name.trim() === '') {
+      result.skipped++;
+      result.errors.push(`title_folders[${i}]: Missing required field: name`);
+      continue;
+    }
+
+    try {
+      // Check for duplicate by name
+      const existing = existingByName.get(folder.name);
+      if (existing) {
+        if (options.skipDuplicates) {
+          result.skipped++;
+          result.errors.push(`title_folders[${i}]: Folder "${folder.name}" already exists (skipped)`);
+          // Map the existing folder for title matching
+          result.folderMap.set(folder.name, existing.id);
+          continue;
+        }
+      }
+
+      const created = await TitleFolder.create({
+        user_id: userId,
+        name: folder.name,
+        color: folder.color || '#8B5CF6'
+      });
+      
+      result.folderMap.set(folder.name, created.id);
+      result.imported++;
+    } catch (error) {
+      if (error.message.includes('already exists')) {
+        result.skipped++;
+        result.errors.push(`title_folders[${i}]: Folder "${folder.name}" already exists`);
+        // Try to get existing folder ID for mapping
+        const existing = existingByName.get(folder.name);
+        if (existing) {
+          result.folderMap.set(folder.name, existing.id);
+        }
+      } else {
+        result.skipped++;
+        result.errors.push(`title_folders[${i}]: ${error.message}`);
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Import title suggestions from backup
+ * @param {Array} titles - Array of titles to import
+ * @param {string} userId - User ID
+ * @param {Map} folderMap - Map of folder names to IDs
+ * @param {Object} options - Import options
+ * @returns {Promise<{imported: number, skipped: number, errors: string[]}>}
+ */
+async function importTitleSuggestionsData(titles, userId, folderMap, options = {}) {
+  const result = { imported: 0, skipped: 0, errors: [] };
+  
+  if (!Array.isArray(titles)) return result;
+
+  // Get existing titles to check for duplicates
+  const existingTitles = await TitleSuggestion.findByUserId(userId);
+  const existingByTitle = new Set(existingTitles.map(t => t.title.toLowerCase()));
+
+  for (let i = 0; i < titles.length; i++) {
+    const title = titles[i];
+
+    if (!title.title || title.title.trim() === '') {
+      result.skipped++;
+      result.errors.push(`title_suggestions[${i}]: Missing required field: title`);
+      continue;
+    }
+
+    try {
+      // Check for duplicate by title text (case-insensitive)
+      if (existingByTitle.has(title.title.toLowerCase())) {
+        if (options.skipDuplicates) {
+          result.skipped++;
+          result.errors.push(`title_suggestions[${i}]: Title "${title.title}" already exists (skipped)`);
+          continue;
+        }
+      }
+
+      // Match folder by name if provided
+      let folderId = null;
+      if (title.folder_name && folderMap) {
+        folderId = folderMap.get(title.folder_name) || null;
+      }
+
+      await TitleSuggestion.create({
+        user_id: userId,
+        title: title.title,
+        folder_id: folderId
+      });
+      
+      // Add to existing set to prevent duplicates within same import
+      existingByTitle.add(title.title.toLowerCase());
+      result.imported++;
+    } catch (error) {
+      if (error.message.includes('already exists')) {
+        result.skipped++;
+        result.errors.push(`title_suggestions[${i}]: Title "${title.title}" already exists`);
+      } else {
+        result.skipped++;
+        result.errors.push(`title_suggestions[${i}]: ${error.message}`);
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Import thumbnail files from backup
+ * Restores thumbnail folders and files, skipping duplicates
+ * @param {Object} thumbnailData - Thumbnail files data
+ * @param {Object} options - Import options
+ * @returns {Promise<{imported: number, skipped: number, errors: string[]}>}
+ */
+async function importThumbnailFilesData(thumbnailData, options = {}) {
+  const result = { imported: 0, skipped: 0, errors: [] };
+  
+  if (!thumbnailData) return result;
+  
+  const thumbnailsDir = path.join(process.cwd(), 'public', 'uploads', 'thumbnails');
+  
+  // Ensure thumbnails directory exists
+  try {
+    await fs.mkdir(thumbnailsDir, { recursive: true });
+  } catch (err) {
+    // Directory may already exist
+  }
+  
+  // Import folder-based thumbnails
+  if (thumbnailData.folders && Array.isArray(thumbnailData.folders)) {
+    for (const folder of thumbnailData.folders) {
+      const folderPath = path.join(thumbnailsDir, folder.folder_id);
+      
+      try {
+        // Create folder if it doesn't exist
+        await fs.mkdir(folderPath, { recursive: true });
+        
+        if (folder.files && Array.isArray(folder.files)) {
+          for (const file of folder.files) {
+            const filePath = path.join(folderPath, file.filename);
+            
+            try {
+              // Check if file already exists
+              const exists = fsSync.existsSync(filePath);
+              if (exists) {
+                if (options.skipDuplicates) {
+                  result.skipped++;
+                  continue;
+                }
+              }
+              
+              // Write file from base64
+              const buffer = Buffer.from(file.data, 'base64');
+              await fs.writeFile(filePath, buffer);
+              result.imported++;
+            } catch (fileErr) {
+              result.errors.push(`thumbnail ${folder.folder_id}/${file.filename}: ${fileErr.message}`);
+              result.skipped++;
+            }
+          }
+        }
+      } catch (folderErr) {
+        result.errors.push(`thumbnail folder ${folder.folder_id}: ${folderErr.message}`);
+      }
+    }
+  }
+  
+  // Import standalone thumbnail files
+  if (thumbnailData.files && Array.isArray(thumbnailData.files)) {
+    for (const file of thumbnailData.files) {
+      const filePath = path.join(thumbnailsDir, file.filename);
+      
+      try {
+        // Check if file already exists
+        const exists = fsSync.existsSync(filePath);
+        if (exists) {
+          if (options.skipDuplicates) {
+            result.skipped++;
+            continue;
+          }
+        }
+        
+        // Write file from base64
+        const buffer = Buffer.from(file.data, 'base64');
+        await fs.writeFile(filePath, buffer);
+        result.imported++;
+      } catch (fileErr) {
+        result.errors.push(`thumbnail ${file.filename}: ${fileErr.message}`);
+        result.skipped++;
+      }
+    }
+  }
+  
+  return result;
+}
+
+/**
  * Comprehensive import of all user data
  * @param {Object} backupData - Backup data object
  * @param {string} userId - User ID
@@ -1110,7 +1540,7 @@ async function comprehensiveImport(backupData, userId, options = {}) {
 
   // 2. Streams (independent)
   if (backupData.streams) {
-    results.results.streams = await importStreams({ streams: backupData.streams }, userId);
+    results.results.streams = await importStreams({ streams: backupData.streams }, userId, options);
   }
 
   // 3. Broadcast templates (may reference credentials)
@@ -1138,6 +1568,34 @@ async function comprehensiveImport(backupData, userId, options = {}) {
   if (backupData.playlists) {
     results.results.playlists = await importPlaylistsData(
       backupData.playlists, userId, options
+    );
+  }
+
+  // 7. Title folders (must be imported before title suggestions)
+  let folderMap = new Map();
+  if (backupData.title_folders) {
+    const folderResult = await importTitleFoldersData(
+      backupData.title_folders, userId, options
+    );
+    results.results.title_folders = {
+      imported: folderResult.imported,
+      skipped: folderResult.skipped,
+      errors: folderResult.errors
+    };
+    folderMap = folderResult.folderMap;
+  }
+
+  // 8. Title suggestions (references title folders)
+  if (backupData.title_suggestions) {
+    results.results.title_suggestions = await importTitleSuggestionsData(
+      backupData.title_suggestions, userId, folderMap, options
+    );
+  }
+
+  // 9. Thumbnail files (independent, but should be imported for templates to work)
+  if (backupData.thumbnail_files) {
+    results.results.thumbnail_files = await importThumbnailFilesData(
+      backupData.thumbnail_files, options
     );
   }
 
@@ -1345,6 +1803,15 @@ module.exports = {
   exportRecurringSchedules,
   exportStreamTemplates,
   exportPlaylists,
+  // Title Manager functions
+  exportTitleFolders,
+  exportTitleSuggestions,
+  importTitleFoldersData,
+  importTitleSuggestionsData,
+  // Thumbnail files functions
+  exportThumbnailFiles,
+  importThumbnailFilesData,
+  // Comprehensive backup functions
   comprehensiveExport,
   comprehensiveImport,
   validateComprehensiveBackup,
@@ -1365,5 +1832,7 @@ module.exports = {
   RECURRING_SCHEDULE_FIELDS,
   STREAM_TEMPLATE_FIELDS,
   PLAYLIST_FIELDS,
+  TITLE_FOLDER_FIELDS,
+  TITLE_SUGGESTION_FIELDS,
   ALL_CATEGORIES
 };
