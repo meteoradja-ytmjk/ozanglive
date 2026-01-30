@@ -701,11 +701,11 @@ async function exportTitleSuggestions(userId) {
 /**
  * Export thumbnail files with folder structure
  * Returns metadata about thumbnails and their folder structure
+ * Exports ALL thumbnails in the thumbnails directory, not just those linked to templates
  * @param {string} userId - User ID
  * @returns {Promise<Object>} Thumbnail files metadata
  */
 async function exportThumbnailFiles(userId) {
-  const templates = await BroadcastTemplate.findByUserId(userId);
   const thumbnailsDir = path.join(process.cwd(), 'public', 'uploads', 'thumbnails');
   
   const result = {
@@ -713,26 +713,30 @@ async function exportThumbnailFiles(userId) {
     files: []
   };
   
-  // Collect all thumbnail folders from templates
-  const folderSet = new Set();
-  templates.forEach(template => {
-    if (template.thumbnail_folder) {
-      folderSet.add(template.thumbnail_folder);
+  try {
+    // Check if thumbnails directory exists
+    const dirExists = fsSync.existsSync(thumbnailsDir);
+    if (!dirExists) {
+      console.log('Thumbnails directory does not exist');
+      return result;
     }
-  });
-  
-  // Process each folder
-  for (const folderId of folderSet) {
-    const folderPath = path.join(thumbnailsDir, folderId);
-    try {
-      const stats = await fs.stat(folderPath);
+    
+    // Read all items in thumbnails directory
+    const items = await fs.readdir(thumbnailsDir);
+    
+    for (const item of items) {
+      const itemPath = path.join(thumbnailsDir, item);
+      const stats = await fs.stat(itemPath);
+      
       if (stats.isDirectory()) {
-        const files = await fs.readdir(folderPath);
+        // This is a thumbnail folder - export all files in it
         const folderFiles = [];
+        const files = await fs.readdir(itemPath);
         
         for (const file of files) {
-          const filePath = path.join(folderPath, file);
+          const filePath = path.join(itemPath, file);
           const fileStats = await fs.stat(filePath);
+          
           if (fileStats.isFile()) {
             // Read file as base64 for backup
             const fileContent = await fs.readFile(filePath);
@@ -741,43 +745,31 @@ async function exportThumbnailFiles(userId) {
               size: fileStats.size,
               data: fileContent.toString('base64')
             });
+            console.log(`Exported thumbnail: ${item}/${file} (${fileStats.size} bytes)`);
           }
         }
         
-        result.folders.push({
-          folder_id: folderId,
-          files: folderFiles
-        });
-      }
-    } catch (err) {
-      // Folder doesn't exist, skip
-      console.log(`Thumbnail folder ${folderId} not found, skipping`);
-    }
-  }
-  
-  // Also collect standalone thumbnail files (not in folders)
-  try {
-    const rootFiles = await fs.readdir(thumbnailsDir);
-    for (const file of rootFiles) {
-      const filePath = path.join(thumbnailsDir, file);
-      const stats = await fs.stat(filePath);
-      if (stats.isFile()) {
-        // Check if this thumbnail is used by any template
-        const isUsed = templates.some(t => 
-          t.thumbnail_path && t.thumbnail_path.includes(file)
-        );
-        if (isUsed) {
-          const fileContent = await fs.readFile(filePath);
-          result.files.push({
-            filename: file,
-            size: stats.size,
-            data: fileContent.toString('base64')
+        if (folderFiles.length > 0) {
+          result.folders.push({
+            folder_id: item,
+            files: folderFiles
           });
         }
+      } else if (stats.isFile()) {
+        // This is a standalone thumbnail file
+        const fileContent = await fs.readFile(itemPath);
+        result.files.push({
+          filename: item,
+          size: stats.size,
+          data: fileContent.toString('base64')
+        });
+        console.log(`Exported standalone thumbnail: ${item} (${stats.size} bytes)`);
       }
     }
+    
+    console.log(`Total exported: ${result.folders.length} folders, ${result.files.length} standalone files`);
   } catch (err) {
-    console.log('Error reading thumbnails directory:', err.message);
+    console.error('Error exporting thumbnail files:', err.message);
   }
   
   return result;
