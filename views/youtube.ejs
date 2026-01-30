@@ -1716,23 +1716,26 @@
           YouTube API Setup
         </h3>
         <div class="flex items-center gap-2">
-          <a href="https://console.cloud.google.com/apis/credentials" target="_blank" class="text-gray-400 hover:text-primary" title="Edit di Google Cloud Console">
+          <% if (user && user.role === 'admin') { %>
+          <button onclick="toggleGuideEditMode()" id="guideEditBtn" class="text-gray-400 hover:text-primary" title="Edit Panduan">
             <i class="ti ti-pencil text-xl"></i>
-          </a>
+          </button>
+          <% } %>
           <button onclick="closeYouTubeGuideModal()" class="text-gray-400 hover:text-white">
             <i class="ti ti-x text-xl"></i>
           </button>
         </div>
       </div>
       
-      <div class="p-6 overflow-y-auto max-h-[calc(90vh-80px)] space-y-6">
+      <!-- View Mode -->
+      <div id="guideViewMode" class="p-6 overflow-y-auto max-h-[calc(90vh-80px)] space-y-6">
         <!-- Step 1 -->
         <div class="bg-dark-700 rounded-lg p-4 border border-gray-600">
           <h4 class="text-primary font-semibold mb-2 flex items-center gap-2">
             <span class="w-6 h-6 bg-primary/20 rounded-full flex items-center justify-center text-sm">1</span>
             Buat Project di Google Cloud
           </h4>
-          <ol class="text-sm text-gray-300 space-y-1 ml-8 list-decimal">
+          <ol id="guideStep1" class="text-sm text-gray-300 space-y-1 ml-8 list-decimal">
             <li>Buka <a href="https://console.cloud.google.com" target="_blank" class="text-primary hover:underline">Google Cloud Console</a></li>
             <li><strong>Select Project</strong> → <strong>New Project</strong> → Buat project baru</li>
           </ol>
@@ -1744,7 +1747,7 @@
             <span class="w-6 h-6 bg-primary/20 rounded-full flex items-center justify-center text-sm">2</span>
             Aktifkan YouTube Data API
           </h4>
-          <ol class="text-sm text-gray-300 space-y-1 ml-8 list-decimal">
+          <ol id="guideStep2" class="text-sm text-gray-300 space-y-1 ml-8 list-decimal">
             <li><strong>APIs & Services</strong> → <strong>Library</strong></li>
             <li>Cari <strong>YouTube Data API v3</strong> → <strong>Enable</strong></li>
           </ol>
@@ -1756,7 +1759,7 @@
             <span class="w-6 h-6 bg-primary/20 rounded-full flex items-center justify-center text-sm">3</span>
             Setup OAuth Consent Screen
           </h4>
-          <ol class="text-sm text-gray-300 space-y-1 ml-8 list-decimal">
+          <ol id="guideStep3" class="text-sm text-gray-300 space-y-1 ml-8 list-decimal">
             <li><strong>APIs & Services</strong> → <strong>OAuth consent screen</strong></li>
             <li>Pilih <strong>External</strong> → Isi informasi yang diperlukan</li>
             <li>Klik <strong>Audience</strong></li>
@@ -1770,7 +1773,7 @@
             <span class="w-6 h-6 bg-primary/20 rounded-full flex items-center justify-center text-sm">4</span>
             Buat OAuth Client ID
           </h4>
-          <ol class="text-sm text-gray-300 space-y-1 ml-8 list-decimal">
+          <ol id="guideStep4" class="text-sm text-gray-300 space-y-1 ml-8 list-decimal">
             <li><strong>APIs & Services</strong> → <strong>Credentials</strong> → <strong>Create Credentials</strong> → <strong>OAuth Client ID</strong></li>
             <li>Pilih <strong>Web application</strong></li>
             <li>Authorized redirect URIs: <code class="bg-dark-600 px-1 rounded text-xs">https://developers.google.com/oauthplayground</code></li>
@@ -1784,7 +1787,7 @@
             <span class="w-6 h-6 bg-primary/20 rounded-full flex items-center justify-center text-sm">5</span>
             Generate Refresh Token
           </h4>
-          <ol class="text-sm text-gray-300 space-y-1 ml-8 list-decimal">
+          <ol id="guideStep5" class="text-sm text-gray-300 space-y-1 ml-8 list-decimal">
             <li>Buka <a href="https://developers.google.com/oauthplayground" target="_blank" class="text-primary hover:underline">OAuth Playground</a></li>
             <li>⚙️ Settings → ✅ <strong>Use your own OAuth credentials</strong></li>
             <li>Masukkan Client ID & Client Secret</li>
@@ -1800,7 +1803,7 @@
             <span class="w-6 h-6 bg-red-500/20 rounded-full flex items-center justify-center text-sm">6</span>
             Masukkan di OzangLive
           </h4>
-          <p class="text-sm text-gray-300 ml-8">
+          <p id="guideStep6" class="text-sm text-gray-300 ml-8">
             Menu <strong>YouTube</strong> → <strong>Tambah Akun</strong> → Masukkan credentials → <strong>Simpan</strong>
           </p>
         </div>
@@ -1810,20 +1813,164 @@
           <p class="text-gray-400 text-sm">Semoga berhasil, Amiin 🤲</p>
         </div>
       </div>
+
+      <!-- Edit Mode (Admin Only) -->
+      <% if (user && user.role === 'admin') { %>
+      <div id="guideEditMode" class="p-6 overflow-y-auto max-h-[calc(90vh-80px)] space-y-4 hidden">
+        <div class="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 mb-4">
+          <p class="text-yellow-400 text-sm"><i class="ti ti-info-circle mr-1"></i> Gunakan format: satu instruksi per baris. Gunakan **teks** untuk bold, `kode` untuk code.</p>
+        </div>
+        
+        <div class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-300 mb-1">Step 1: Buat Project di Google Cloud</label>
+            <textarea id="editStep1" rows="3" class="w-full bg-dark-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:border-primary focus:ring-1 focus:ring-primary"></textarea>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-300 mb-1">Step 2: Aktifkan YouTube Data API</label>
+            <textarea id="editStep2" rows="3" class="w-full bg-dark-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:border-primary focus:ring-1 focus:ring-primary"></textarea>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-300 mb-1">Step 3: Setup OAuth Consent Screen</label>
+            <textarea id="editStep3" rows="4" class="w-full bg-dark-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:border-primary focus:ring-1 focus:ring-primary"></textarea>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-300 mb-1">Step 4: Buat OAuth Client ID</label>
+            <textarea id="editStep4" rows="4" class="w-full bg-dark-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:border-primary focus:ring-1 focus:ring-primary"></textarea>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-300 mb-1">Step 5: Generate Refresh Token</label>
+            <textarea id="editStep5" rows="6" class="w-full bg-dark-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:border-primary focus:ring-1 focus:ring-primary"></textarea>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-300 mb-1">Step 6: Masukkan di OzangLive</label>
+            <textarea id="editStep6" rows="2" class="w-full bg-dark-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:border-primary focus:ring-1 focus:ring-primary"></textarea>
+          </div>
+        </div>
+
+        <div class="flex gap-3 pt-4 border-t border-gray-700">
+          <button onclick="saveGuideChanges()" class="flex-1 bg-primary hover:bg-primary/80 text-white py-2 px-4 rounded-lg text-sm font-medium transition-colors">
+            <i class="ti ti-check mr-1"></i> Simpan
+          </button>
+          <button onclick="toggleGuideEditMode()" class="flex-1 bg-gray-600 hover:bg-gray-500 text-white py-2 px-4 rounded-lg text-sm font-medium transition-colors">
+            <i class="ti ti-x mr-1"></i> Batal
+          </button>
+        </div>
+      </div>
+      <% } %>
     </div>
   </div>
 </div>
 
 <script>
 // YouTube Guide Modal Functions
+let guideEditMode = false;
+
 function openYouTubeGuideModal() {
   document.getElementById('youtubeGuideModal').classList.remove('hidden');
   document.body.style.overflow = 'hidden';
+  loadGuideFromStorage();
 }
 
 function closeYouTubeGuideModal() {
   document.getElementById('youtubeGuideModal').classList.add('hidden');
   document.body.style.overflow = '';
+  if (guideEditMode) {
+    toggleGuideEditMode();
+  }
+}
+
+function toggleGuideEditMode() {
+  guideEditMode = !guideEditMode;
+  const viewMode = document.getElementById('guideViewMode');
+  const editMode = document.getElementById('guideEditMode');
+  const editBtn = document.getElementById('guideEditBtn');
+  
+  if (guideEditMode) {
+    viewMode.classList.add('hidden');
+    editMode.classList.remove('hidden');
+    editBtn.innerHTML = '<i class="ti ti-eye text-xl"></i>';
+    editBtn.title = 'Lihat Panduan';
+    populateEditFields();
+  } else {
+    viewMode.classList.remove('hidden');
+    editMode.classList.add('hidden');
+    editBtn.innerHTML = '<i class="ti ti-pencil text-xl"></i>';
+    editBtn.title = 'Edit Panduan';
+  }
+}
+
+function populateEditFields() {
+  const savedGuide = localStorage.getItem('youtubeApiGuide');
+  if (savedGuide) {
+    const guide = JSON.parse(savedGuide);
+    for (let i = 1; i <= 6; i++) {
+      const textarea = document.getElementById('editStep' + i);
+      if (textarea && guide['step' + i]) {
+        textarea.value = guide['step' + i];
+      }
+    }
+  } else {
+    // Load from current HTML
+    for (let i = 1; i <= 6; i++) {
+      const stepEl = document.getElementById('guideStep' + i);
+      const textarea = document.getElementById('editStep' + i);
+      if (stepEl && textarea) {
+        const items = stepEl.querySelectorAll('li');
+        if (items.length > 0) {
+          textarea.value = Array.from(items).map(li => li.textContent.trim()).join('\n');
+        } else {
+          textarea.value = stepEl.textContent.trim();
+        }
+      }
+    }
+  }
+}
+
+function parseGuideText(text) {
+  return text
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/`([^`]+)`/g, '<code class="bg-dark-600 px-1 rounded text-xs">$1</code>')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" class="text-primary hover:underline">$1</a>');
+}
+
+function saveGuideChanges() {
+  const guide = {};
+  for (let i = 1; i <= 6; i++) {
+    const textarea = document.getElementById('editStep' + i);
+    if (textarea) {
+      guide['step' + i] = textarea.value;
+    }
+  }
+  
+  localStorage.setItem('youtubeApiGuide', JSON.stringify(guide));
+  applyGuideToView(guide);
+  toggleGuideEditMode();
+  
+  if (typeof showToast === 'function') {
+    showToast('Panduan berhasil disimpan', 'success');
+  }
+}
+
+function applyGuideToView(guide) {
+  for (let i = 1; i <= 6; i++) {
+    const stepEl = document.getElementById('guideStep' + i);
+    if (stepEl && guide['step' + i]) {
+      const lines = guide['step' + i].split('\n').filter(line => line.trim());
+      if (stepEl.tagName === 'OL') {
+        stepEl.innerHTML = lines.map(line => '<li>' + parseGuideText(line) + '</li>').join('');
+      } else {
+        stepEl.innerHTML = parseGuideText(lines.join(' '));
+      }
+    }
+  }
+}
+
+function loadGuideFromStorage() {
+  const savedGuide = localStorage.getItem('youtubeApiGuide');
+  if (savedGuide) {
+    applyGuideToView(JSON.parse(savedGuide));
+  }
 }
 
 // Close modal when clicking outside
