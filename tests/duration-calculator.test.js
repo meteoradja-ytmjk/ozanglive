@@ -437,15 +437,15 @@ describe('FFmpeg Duration Parameter', () => {
         '-re',
         '-i', 'video.mp4',
         '-c:v', 'copy',
-        '-c:a', 'copy',
-        '-f', 'flv'
+        '-c:a', 'copy'
       ];
       
-      // Duration limit must be just before output URL
+      // CRITICAL: Duration limit (-t) must be BEFORE -f flv and output URL
       if (durationSeconds && durationSeconds > 0) {
         args.push('-t', durationSeconds.toString());
       }
       
+      args.push('-f', 'flv');
       args.push(rtmpUrl);
       
       return args;
@@ -460,6 +460,7 @@ describe('FFmpeg Duration Parameter', () => {
             const args = buildTestFFmpegArgs(durationSeconds, `rtmp://test/${rtmpUrl}`);
             
             const tIndex = args.indexOf('-t');
+            const fIndex = args.indexOf('-f');
             const urlIndex = args.length - 1;
             
             // -t should exist
@@ -468,8 +469,11 @@ describe('FFmpeg Duration Parameter', () => {
             // -t value should be the duration
             expect(args[tIndex + 1]).toBe(durationSeconds.toString());
             
-            // -t should be just before the URL (2 positions before end)
-            expect(tIndex).toBe(urlIndex - 2);
+            // -t should be before -f flv (CRITICAL for FFmpeg)
+            expect(tIndex).toBeLessThan(fIndex);
+            
+            // -t should be before the URL
+            expect(tIndex).toBeLessThan(urlIndex);
             
             // Last element should be the URL
             expect(args[urlIndex]).toBe(`rtmp://test/${rtmpUrl}`);

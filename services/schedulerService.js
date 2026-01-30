@@ -8,8 +8,8 @@ const SCHEDULE_LOOKAHEAD_SECONDS = 60; // Increased to 60 seconds for less frequ
 const RECURRING_CHECK_INTERVAL = 2 * 60 * 1000; // Check recurring schedules every 2 minutes (was 1 min)
 const ONCE_SCHEDULE_CHECK_INTERVAL = 2 * 60 * 1000; // Check one-time schedules every 2 minutes (was 1 min)
 const TRIGGER_COOLDOWN_MS = 10 * 60 * 1000; // 10 minute cooldown to prevent double triggers
-const DURATION_CHECK_INTERVAL = 2 * 60 * 1000; // Check durations every 2 minutes (was 1 min)
-const FORCE_STOP_BUFFER_MS = 60 * 1000; // 60 seconds buffer for force stop (was 30s)
+const DURATION_CHECK_INTERVAL = 30 * 1000; // Check durations every 30 seconds for more accurate end time
+const FORCE_STOP_BUFFER_MS = 30 * 1000; // 30 seconds buffer for force stop (reduced from 60s for accuracy)
 const CLEANUP_INTERVAL = 6 * 60 * 60 * 1000; // Clean up stale entries every 6 hours (was 4 hours)
 
 let streamingService = null;
@@ -61,7 +61,7 @@ function init(streamingServiceInstance) {
   // MEMORY MANAGEMENT: Cleanup stale entries from Maps
   cleanupIntervalId = setInterval(cleanupStaleMaps, CLEANUP_INTERVAL);
   
-  console.log('[Scheduler] Intervals set: once-schedules=2min, recurring=2min, duration=2min, cleanup=6hr');
+  console.log('[Scheduler] Intervals set: once-schedules=2min, recurring=2min, duration=30sec, cleanup=6hr');
   
   // Initial checks with error handling (run immediately on startup)
   safeCheckScheduledStreams();

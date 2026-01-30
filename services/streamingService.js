@@ -555,14 +555,15 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
       '-f', 'concat',
       '-safe', '0',
       '-i', concatFile,
-      '-c', 'copy',
-      '-f', 'flv'
+      '-c', 'copy'
     ];
     
+    // CRITICAL: -t must be placed BEFORE -f flv and output URL
     if (durationSeconds && durationSeconds > 0) {
       args.push('-t', durationSeconds.toString());
     }
     
+    args.push('-f', 'flv');
     args.push(rtmpUrl);
     console.log('[StreamingService] Playlist: minimal copy');
     return args;
@@ -588,14 +589,15 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
     '-g', `${fps * 2}`,
     '-s', resolution,
     '-r', fps.toString(),
-    '-c:a', 'copy',
-    '-f', 'flv'
+    '-c:a', 'copy'
   ];
   
+  // CRITICAL: -t must be placed BEFORE -f flv and output URL
   if (durationSeconds && durationSeconds > 0) {
     advancedArgs.push('-t', durationSeconds.toString());
   }
   
+  advancedArgs.push('-f', 'flv');
   advancedArgs.push(rtmpUrl);
   console.log('[StreamingService] Playlist: encoding mode');
   return advancedArgs;
@@ -708,15 +710,15 @@ function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds
   args.push('-map', '0:v:0', '-map', '1:a:0');
   args.push('-c', 'copy');  // Copy both
   args.push('-shortest');
-  args.push('-f', 'flv');
   
-  // CRITICAL: -t must be placed BEFORE the output URL
-  // This limits the OUTPUT duration, not input duration
+  // CRITICAL: -t must be placed BEFORE -f flv and output URL
+  // This limits the OUTPUT duration correctly
   if (durationSeconds && durationSeconds > 0) {
     args.push('-t', durationSeconds.toString());
     console.log(`[StreamingService] Audio-merge: duration limit set to ${durationSeconds} seconds (${durationSeconds / 60} minutes)`);
   }
   
+  args.push('-f', 'flv');
   args.push(rtmpUrl);
   console.log('[StreamingService] Audio-merge: minimal copy');
   return args;
@@ -738,15 +740,15 @@ function buildFFmpegArgsVideoOnly(videoPath, rtmpUrl, durationSeconds, loopVideo
   }
   args.push('-i', videoPath);
   args.push('-c', 'copy');
-  args.push('-f', 'flv');
   
-  // CRITICAL: -t must be placed BEFORE the output URL
-  // This limits the OUTPUT duration, not input duration
+  // CRITICAL: -t must be placed BEFORE -f flv and output URL
+  // This limits the OUTPUT duration correctly
   if (durationSeconds && durationSeconds > 0) {
     args.push('-t', durationSeconds.toString());
     console.log(`[StreamingService] Video-only: duration limit set to ${durationSeconds} seconds (${durationSeconds / 60} minutes)`);
   }
   
+  args.push('-f', 'flv');
   args.push(rtmpUrl);
   console.log('[StreamingService] Video-only: minimal copy');
   return args;

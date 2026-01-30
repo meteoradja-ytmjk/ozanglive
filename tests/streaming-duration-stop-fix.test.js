@@ -58,15 +58,15 @@ function buildTestFFmpegArgs(durationSeconds, rtmpUrl) {
     '-re',
     '-i', 'test_video.mp4',
     '-c:v', 'copy',
-    '-c:a', 'copy',
-    '-f', 'flv'
+    '-c:a', 'copy'
   ];
   
-  // CRITICAL: Duration limit (-t) must be placed just before output URL
+  // CRITICAL: Duration limit (-t) must be placed BEFORE -f flv and output URL
   if (durationSeconds && durationSeconds > 0) {
     args.push('-t', durationSeconds.toString());
   }
   
+  args.push('-f', 'flv');
   args.push(rtmpUrl);
   return args;
 }
@@ -183,6 +183,10 @@ describe('Streaming Duration Stop Fix', () => {
             const tValue = args[tIndex + 1];
             expect(tValue).toBe(durationSeconds.toString());
             
+            // Verify -t is before -f flv (CRITICAL for FFmpeg to respect duration)
+            const fIndex = args.indexOf('-f');
+            expect(tIndex).toBeLessThan(fIndex);
+            
             // Verify -t is before output URL
             const urlIndex = args.indexOf(rtmpUrl);
             expect(tIndex).toBeLessThan(urlIndex);
@@ -226,9 +230,14 @@ describe('Streaming Duration Stop Fix', () => {
         fc.property(
           fc.integer({ min: 1, max: 10080 }), // stream_duration_minutes
           fc.constantFrom('daily', 'weekly'), // schedule_type
-          fc.date({ min: new Date('2024-01-01'), max: new Date('2024-12-31') }), // stale schedule_time
-          fc.date({ min: new Date('2024-01-01'), max: new Date('2024-12-31') }), // stale end_time
-          (durationMinutes, scheduleType, staleScheduleTime, staleEndTime) => {
+          fc.integer({ min: 0, max: 365 }), // days offset for stale schedule_time
+          fc.integer({ min: 1, max: 24 }), // hours for stale end_time offset
+          (durationMinutes, scheduleType, daysOffset, hoursOffset) => {
+            // Create valid dates using offsets
+            const baseDate = new Date('2024-06-15T10:00:00.000Z');
+            const staleScheduleTime = new Date(baseDate.getTime() + daysOffset * 24 * 60 * 60 * 1000);
+            const staleEndTime = new Date(staleScheduleTime.getTime() + hoursOffset * 60 * 60 * 1000);
+            
             const stream = {
               stream_duration_minutes: durationMinutes,
               schedule_type: scheduleType,
