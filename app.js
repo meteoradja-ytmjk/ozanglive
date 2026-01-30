@@ -4783,6 +4783,179 @@ app.post('/api/youtube/credentials/refresh-all', isAuthenticated, async (req, re
   }
 });
 
+// ============================================
+// YouTube Live Stats & Connection Monitoring
+// ============================================
+
+// Get live stats for all active broadcasts across all accounts
+app.get('/api/youtube/live-stats', isAuthenticated, async (req, res) => {
+  try {
+    const accounts = await YouTubeCredentials.findAllByUserId(req.session.userId);
+    const allStats = [];
+    
+    for (const account of accounts) {
+      try {
+        const accessToken = await youtubeService.getAccessToken(
+          account.clientId,
+          account.clientSecret,
+          account.refreshToken
+        );
+        
+        const stats = await youtubeService.getAllLiveBroadcastsWithStats(accessToken);
+        
+        if (stats.error) {
+          allStats.push({
+            accountId: account.id,
+            channelName: account.channelName,
+            error: stats.error
+          });
+        } else {
+          // Add account info to each broadcast
+          stats.forEach(s => {
+            allStats.push({
+              ...s,
+              accountId: account.id,
+              channelName: account.channelName
+            });
+          });
+        }
+      } catch (err) {
+        console.error(`Error fetching live stats for ${account.channelName}:`, err.message);
+        allStats.push({
+          accountId: account.id,
+          channelName: account.channelName,
+          error: err.message
+        });
+      }
+    }
+    
+    res.json({
+      success: true,
+      stats: allStats,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Error fetching live stats:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch live stats' });
+  }
+});
+
+// Get live stats for a specific broadcast
+app.get('/api/youtube/live-stats/:accountId/:broadcastId', isAuthenticated, async (req, res) => {
+  try {
+    const { accountId, broadcastId } = req.params;
+    
+    const account = await YouTubeCredentials.findById(parseInt(accountId));
+    if (!account || account.userId !== req.session.userId) {
+      return res.status(404).json({ success: false, error: 'Account not found' });
+    }
+    
+    const accessToken = await youtubeService.getAccessToken(
+      account.clientId,
+      account.clientSecret,
+      account.refreshToken
+    );
+    
+    const stats = await youtubeService.getLiveStreamStats(accessToken, broadcastId);
+    
+    if (stats.error) {
+      return res.status(400).json({ success: false, error: stats.error });
+    }
+    
+    res.json({
+      success: true,
+      stats: {
+        ...stats,
+        accountId: account.id,
+        channelName: account.channelName
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching broadcast stats:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch broadcast stats' });
+  }
+});
+
+// Test connection and get quota status for an account
+app.get('/api/youtube/connection-status/:accountId', isAuthenticated, async (req, res) => {
+  try {
+    const accountId = parseInt(req.params.accountId);
+    
+    const account = await YouTubeCredentials.findById(accountId);
+    if (!account || account.userId !== req.session.userId) {
+      return res.status(404).json({ success: false, error: 'Account not found' });
+    }
+    
+    const accessToken = await youtubeService.getAccessToken(
+      account.clientId,
+      account.clientSecret,
+      account.refreshToken
+    );
+    
+    const connectionStatus = await youtubeService.testConnection(accessToken);
+    const quotaInfo = youtubeService.getQuotaInfo();
+    
+    res.json({
+      success: true,
+      accountId: account.id,
+      channelName: account.channelName,
+      connection: connectionStatus,
+      quota: quotaInfo
+    });
+  } catch (error) {
+    console.error('Error checking connection status:', error);
+    res.status(500).json({ success: false, error: 'Failed to check connection status' });
+  }
+});
+
+// Get connection status for all accounts
+app.get('/api/youtube/connection-status', isAuthenticated, async (req, res) => {
+  try {
+    const accounts = await YouTubeCredentials.findAllByUserId(req.session.userId);
+    const statuses = [];
+    
+    for (const account of accounts) {
+      try {
+        const accessToken = await youtubeService.getAccessToken(
+          account.clientId,
+          account.clientSecret,
+          account.refreshToken
+        );
+        
+        const connectionStatus = await youtubeService.testConnection(accessToken);
+        
+        statuses.push({
+          accountId: account.id,
+          channelName: account.channelName,
+          connected: connectionStatus.connected,
+          quotaOk: connectionStatus.quotaOk,
+          error: connectionStatus.error
+        });
+      } catch (err) {
+        statuses.push({
+          accountId: account.id,
+          channelName: account.channelName,
+          connected: false,
+          quotaOk: false,
+          error: err.message
+        });
+      }
+    }
+    
+    const quotaInfo = youtubeService.getQuotaInfo();
+    
+    res.json({
+      success: true,
+      accounts: statuses,
+      quota: quotaInfo,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Error checking connection statuses:', error);
+    res.status(500).json({ success: false, error: 'Failed to check connection statuses' });
+  }
+});
+
 // List thumbnail folders (per user)
 app.get('/api/thumbnail-folders', isAuthenticated, async (req, res) => {
   try {

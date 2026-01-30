@@ -971,4 +971,273 @@ class YouTubeService {
   }
 }
 
+  /**
+   * Get live stream statistics (viewers, health, etc.)
+   * @param {string} accessToken - Access token
+   * @param {string} broadcastId - Broadcast ID
+   * @returns {Promise<{concurrentViewers: number, totalChatMessages: number, streamHealth: string, streamHealthStatus: object}>}
+   */
+  async getLiveStreamStats(accessToken, broadcastId) {
+    try {
+      const oauth2Client = new google.auth.OAuth2();
+      oauth2Client.setCredentials({ access_token: accessToken });
+      
+      const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+      
+      // Get broadcast details with liveStreamingDetails
+      const broadcastResponse = await youtube.liveBroadcasts.list({
+        part: 'snippet,status,statistics,contentDetails',
+        id: broadcastId
+      });
+      
+      if (!broadcastResponse.data.items || broadcastResponse.data.items.length === 0) {
+        return { error: 'Broadcast not found' };
+      }
+      
+      const broadcast = broadcastResponse.data.items[0];
+      const lifeCycleStatus = broadcast.status?.lifeCycleStatus;
+      
+      // Get video statistics for concurrent viewers
+      const videoResponse = await youtube.videos.list({
+        part: 'liveStreamingDetails,statistics',
+        id: broadcastId
+      });
+      
+      let concurrentViewers = 0;
+      let totalChatMessages = 0;
+      
+      if (videoResponse.data.items && videoResponse.data.items.length > 0) {
+        const video = videoResponse.data.items[0];
+        concurrentViewers = parseInt(video.liveStreamingDetails?.concurrentViewers || '0');
+        // Note: totalChatMessages is not directly available, using activeLiveChatId presence as indicator
+      }
+      
+      // Get stream health if broadcast has bound stream
+      let streamHealth = 'unknown';
+      let streamHealthStatus = {};
+      
+      if (broadcast.contentDetails?.boundStreamId) {
+        try {
+          const streamResponse = await youtube.liveStreams.list({
+            part: 'status,cdn,snippet',
+            id: broadcast.contentDetails.boundStreamId
+          });
+          
+          if (streamResponse.data.items && streamResponse.data.items.length > 0) {
+            const stream = streamResponse.data.items[0];
+            streamHealth = stream.status?.streamStatus || 'unknown';
+            streamHealthStatus = {
+              streamStatus: stream.status?.streamStatus,
+              healthStatus: stream.status?.healthStatus?.status,
+              configurationIssues: stream.status?.healthStatus?.configurationIssues || [],
+              lastUpdateTime: stream.status?.healthStatus?.lastUpdateTimeSeconds
+            };
+          }
+        } catch (err) {
+          console.error('[YouTubeService.getLiveStreamStats] Error fetching stream health:', err.message);
+        }
+      }
+      
+      return {
+        broadcastId,
+        lifeCycleStatus,
+        concurrentViewers,
+        streamHealth,
+        streamHealthStatus,
+        title: broadcast.snippet?.title,
+        thumbnailUrl: broadcast.snippet?.thumbnails?.medium?.url || broadcast.snippet?.thumbnails?.default?.url
+      };
+    } catch (error) {
+      console.error('[YouTubeService.getLiveStreamStats] Error:', error.message);
+      
+      // Check for quota exceeded
+      if (error.code === 403 && error.message?.includes('quota')) {
+        return { error: 'quota_exceeded' };
+      }
+      
+      return { error: error.message };
+    }
+  }
+
+  /**
+   * Get all live broadcasts with their stats for a channel
+   * @param {string} accessToken - Access token
+   * @returns {Promise<Array<{broadcastId: string, title: string, concurrentViewers: number, streamHealth: string}>>}
+   */
+  async getAllLiveBroadcastsWithStats(accessToken) {
+    try {
+      const oauth2Client = new google.auth.OAuth2();
+      oauth2Client.setCredentials({ access_token: accessToken });
+      
+      const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+      
+      // Get active broadcasts (live and testing)
+      const broadcastResponse = await youtube.liveBroadcasts.list({
+        part: 'snippet,status,contentDetails',
+        broadcastStatus: 'active',
+        maxResults: 50
+      });
+      
+      const broadcasts = broadcastResponse.data.items || [];
+      const results = [];
+      
+      for (const broadcast of broadcasts) {
+        // Get video stats for concurrent viewers
+        let concurrentViewers = 0;
+        try {
+          const videoResponse = await youtube.videos.list({
+            part: 'liveStreamingDetails',
+            id: broadcast.id
+          });
+          
+          if (videoResponse.data.items && videoResponse.data.items.length > 0) {
+            concurrentViewers = parseInt(videoResponse.data.items[0].liveStreamingDetails?.concurrentViewers || '0');
+          }
+        } catch (err) {
+          console.log(`[YouTubeService] Error fetching viewers for ${broadcast.id}:`, err.message);
+        }
+        
+        // Get stream health
+        let streamHealth = 'unknown';
+        let healthDetails = {};
+        
+        if (broadcast.contentDetails?.boundStreamId) {
+          try {
+            const streamResponse = await youtube.liveStreams.list({
+              part: 'status',
+              id: broadcast.contentDetails.boundStreamId
+            });
+            
+            if (streamResponse.data.items && streamResponse.data.items.length > 0) {
+              const stream = streamResponse.data.items[0];
+              streamHealth = stream.status?.streamStatus || 'unknown';
+              healthDetails = {
+                status: stream.status?.healthStatus?.status || 'noData',
+                configurationIssues: stream.status?.healthStatus?.configurationIssues || []
+              };
+            }
+          } catch (err) {
+            console.log(`[YouTubeService] Error fetching stream health for ${broadcast.id}:`, err.message);
+          }
+        }
+        
+        results.push({
+          broadcastId: broadcast.id,
+          title: broadcast.snippet?.title,
+          lifeCycleStatus: broadcast.status?.lifeCycleStatus,
+          concurrentViewers,
+          streamHealth,
+          healthDetails,
+          streamKey: '', // Will be populated if needed
+          thumbnailUrl: broadcast.snippet?.thumbnails?.default?.url
+        });
+      }
+      
+      return results;
+    } catch (error) {
+      console.error('[YouTubeService.getAllLiveBroadcastsWithStats] Error:', error.message);
+      
+      if (error.code === 403 && error.message?.includes('quota')) {
+        return { error: 'quota_exceeded' };
+      }
+      
+      return [];
+    }
+  }
+
+  /**
+   * Get YouTube API quota usage estimate
+   * Note: YouTube API doesn't provide direct quota endpoint, so we estimate based on usage
+   * Daily quota is typically 10,000 units
+   * @returns {Object} Quota information
+   */
+  getQuotaInfo() {
+    // YouTube API quota costs (approximate):
+    // - liveBroadcasts.list: 1 unit
+    // - liveBroadcasts.insert: 50 units
+    // - liveBroadcasts.update: 50 units
+    // - liveBroadcasts.delete: 50 units
+    // - liveStreams.list: 1 unit
+    // - liveStreams.insert: 50 units
+    // - videos.list: 1 unit
+    // - videos.update: 50 units
+    // - thumbnails.set: 50 units
+    // - channels.list: 1 unit
+    
+    // Since YouTube doesn't expose quota directly, we return static info
+    // In production, you'd track usage in a database
+    return {
+      dailyLimit: 10000,
+      estimatedUsed: 0, // Would need to track this
+      resetTime: this.getQuotaResetTime(),
+      costReference: {
+        'list operations': 1,
+        'insert/update/delete': 50,
+        'thumbnail upload': 50
+      }
+    };
+  }
+
+  /**
+   * Get quota reset time (Pacific Time midnight)
+   * @returns {string} ISO string of next reset time
+   */
+  getQuotaResetTime() {
+    const now = new Date();
+    // YouTube quota resets at midnight Pacific Time
+    const pacificOffset = -8; // PST (or -7 for PDT)
+    const utcHours = now.getUTCHours();
+    const pacificHours = (utcHours + pacificOffset + 24) % 24;
+    
+    const resetDate = new Date(now);
+    if (pacificHours >= 0) {
+      // Reset is tomorrow
+      resetDate.setUTCDate(resetDate.getUTCDate() + 1);
+    }
+    resetDate.setUTCHours(-pacificOffset, 0, 0, 0);
+    
+    return resetDate.toISOString();
+  }
+
+  /**
+   * Test API connection and get quota status
+   * @param {string} accessToken - Access token
+   * @returns {Promise<{connected: boolean, quotaOk: boolean, error?: string}>}
+   */
+  async testConnection(accessToken) {
+    try {
+      const oauth2Client = new google.auth.OAuth2();
+      oauth2Client.setCredentials({ access_token: accessToken });
+      
+      const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+      
+      // Simple API call to test connection (1 quota unit)
+      const response = await youtube.channels.list({
+        part: 'id',
+        mine: true
+      });
+      
+      return {
+        connected: true,
+        quotaOk: true,
+        channelId: response.data.items?.[0]?.id
+      };
+    } catch (error) {
+      if (error.code === 403 && error.message?.includes('quota')) {
+        return {
+          connected: true,
+          quotaOk: false,
+          error: 'API quota exceeded'
+        };
+      }
+      
+      return {
+        connected: false,
+        quotaOk: false,
+        error: error.message
+      };
+    }
+  }
+}
+
 module.exports = new YouTubeService();
