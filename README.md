@@ -218,7 +218,7 @@ npm run generate-secret
 
 1. **APIs & Services** → **OAuth consent screen**
 2. Pilih **External** → Isi informasi yang diperlukan
-3. Tambahkan scope: `https://www.googleapis.com/auth/youtube`
+3. Klik **Audience**
 4. Tambahkan email ke **Test users**
 
 ### Step 4: Buat OAuth Client ID
