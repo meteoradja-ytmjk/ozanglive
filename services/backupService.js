@@ -1456,16 +1456,18 @@ async function importTitleSuggestionsData(titles, userId, folderMap, options = {
 
 /**
  * Import thumbnail files from backup
- * Restores thumbnail folders and files, skipping duplicates
+ * Restores thumbnail folders and files
+ * For thumbnail files, we always overwrite existing files since backup is the source of truth
  * Returns folder mapping for updating broadcast templates
  * @param {Object} thumbnailData - Thumbnail files data
- * @param {Object} options - Import options
- * @returns {Promise<{imported: number, skipped: number, errors: string[], folderMap: Map}>}
+ * @param {Object} options - Import options (skipDuplicates only affects count reporting)
+ * @returns {Promise<{imported: number, skipped: number, overwritten: number, errors: string[], folderMap: Map}>}
  */
 async function importThumbnailFilesData(thumbnailData, options = {}) {
   const result = { 
     imported: 0, 
-    skipped: 0, 
+    skipped: 0,
+    overwritten: 0, // Track overwritten files
     errors: [],
     folderMap: new Map(), // Maps template_name to folder_id for updating templates
     templateFolderMapping: [] // Original mapping from backup
@@ -1525,18 +1527,19 @@ async function importThumbnailFilesData(thumbnailData, options = {}) {
             try {
               // Check if file already exists
               const exists = fsSync.existsSync(filePath);
-              if (exists) {
-                if (options.skipDuplicates) {
-                  result.skipped++;
-                  continue;
-                }
-              }
               
-              // Write file from base64
+              // Always write the file (overwrite if exists)
+              // Thumbnail files should always be restored from backup
               const buffer = Buffer.from(file.data, 'base64');
               await fs.writeFile(filePath, buffer);
-              result.imported++;
-              console.log(`Imported thumbnail: ${folder.folder_id}/${file.filename}`);
+              
+              if (exists) {
+                result.overwritten++;
+                console.log(`Overwritten thumbnail: ${folder.folder_id}/${file.filename}`);
+              } else {
+                result.imported++;
+                console.log(`Imported thumbnail: ${folder.folder_id}/${file.filename}`);
+              }
             } catch (fileErr) {
               result.errors.push(`thumbnail ${folder.folder_id}/${file.filename}: ${fileErr.message}`);
               result.skipped++;
@@ -1557,18 +1560,18 @@ async function importThumbnailFilesData(thumbnailData, options = {}) {
       try {
         // Check if file already exists
         const exists = fsSync.existsSync(filePath);
-        if (exists) {
-          if (options.skipDuplicates) {
-            result.skipped++;
-            continue;
-          }
-        }
         
-        // Write file from base64
+        // Always write the file (overwrite if exists)
         const buffer = Buffer.from(file.data, 'base64');
         await fs.writeFile(filePath, buffer);
-        result.imported++;
-        console.log(`Imported standalone thumbnail: ${file.filename}`);
+        
+        if (exists) {
+          result.overwritten++;
+          console.log(`Overwritten standalone thumbnail: ${file.filename}`);
+        } else {
+          result.imported++;
+          console.log(`Imported standalone thumbnail: ${file.filename}`);
+        }
       } catch (fileErr) {
         result.errors.push(`thumbnail ${file.filename}: ${fileErr.message}`);
         result.skipped++;
@@ -1576,7 +1579,7 @@ async function importThumbnailFilesData(thumbnailData, options = {}) {
     }
   }
   
-  console.log(`Thumbnail import complete: ${result.imported} imported, ${result.skipped} skipped, ${result.folderMap.size} template mappings`);
+  console.log(`Thumbnail import complete: ${result.imported} new, ${result.overwritten} overwritten, ${result.skipped} failed, ${result.folderMap.size} template mappings`);
   
   return result;
 }
@@ -1614,6 +1617,7 @@ async function comprehensiveImport(backupData, userId, options = {}) {
     );
     results.results.thumbnail_files = {
       imported: thumbnailResult.imported,
+      overwritten: thumbnailResult.overwritten,
       skipped: thumbnailResult.skipped,
       errors: thumbnailResult.errors
     };

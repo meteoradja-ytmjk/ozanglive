@@ -1015,7 +1015,12 @@
             // Show results
             let resultsHtml = '<ul class="list-disc list-inside space-y-1">';
             for (const [category, result] of Object.entries(data.results || {})) {
-              resultsHtml += `<li><strong>${category}:</strong> ${result.imported} imported, ${result.skipped} skipped</li>`;
+              let statusText = `${result.imported} imported`;
+              if (result.overwritten) {
+                statusText += `, ${result.overwritten} overwritten`;
+              }
+              statusText += `, ${result.skipped} skipped`;
+              resultsHtml += `<li><strong>${category}:</strong> ${statusText}</li>`;
             }
             resultsHtml += '</ul>';
             
