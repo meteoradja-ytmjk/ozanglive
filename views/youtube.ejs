@@ -153,30 +153,33 @@
     <!-- Stats Bar -->
     <div class="flex items-center justify-between">
       <!-- Left: Stats -->
-      <div class="flex items-center gap-6">
+      <div class="flex items-center gap-6 text-sm">
         <!-- Live Count -->
-        <div class="flex items-center gap-2">
-          <i class="ti ti-broadcast text-lg text-purple-400"></i>
+        <div class="flex items-center gap-1.5" title="Active Broadcasts">
+          <i class="ti ti-broadcast text-purple-400"></i>
           <span id="liveCountNum" class="text-white font-semibold">0</span>
-          <span class="text-gray-400 text-sm">live</span>
+          <span class="text-gray-500">live</span>
         </div>
         
         <!-- API Quota -->
-        <div class="flex items-center gap-2">
-          <i class="ti ti-api text-lg text-cyan-400"></i>
-          <span id="quotaUsed" class="text-white font-semibold">OK</span>
+        <div class="flex items-center gap-1.5" title="API Quota">
+          <i class="ti ti-api text-cyan-400"></i>
+          <span id="quotaUsed" class="text-white font-semibold">10,000</span>
+          <span class="text-gray-500">/ 10,000</span>
         </div>
         
         <!-- Viewers -->
-        <div class="flex items-center gap-2">
-          <i class="ti ti-users text-lg text-yellow-400"></i>
+        <div class="flex items-center gap-1.5" title="Total Viewers">
+          <i class="ti ti-users text-yellow-400"></i>
           <span id="totalViewers" class="text-white font-semibold">0</span>
+          <span class="text-gray-500">viewers</span>
         </div>
         
         <!-- Connection -->
-        <div class="flex items-center gap-2">
-          <i class="ti ti-wifi text-lg text-green-400" id="connectionIcon"></i>
-          <span id="connectionStatus" class="text-green-400 font-semibold text-sm">OK</span>
+        <div class="flex items-center gap-1.5" title="Connection Status">
+          <i class="ti ti-wifi text-green-400" id="connectionIcon"></i>
+          <span id="connectionStatus" class="text-green-400 font-medium">Connected</span>
+          <span id="connectionDetail" class="text-gray-500"></span>
         </div>
       </div>
       
@@ -194,7 +197,6 @@
     <!-- Hidden elements for compatibility -->
     <span id="liveCount" class="hidden"></span>
     <p id="quotaResetTime" class="hidden"></p>
-    <p id="connectionDetail" class="hidden"></p>
     <p id="viewersDetail" class="hidden"></p>
     <div id="quotaBar" class="hidden"></div>
     <span id="autoRefreshText" class="hidden"></span>
@@ -2087,6 +2089,7 @@ function getStatusBadge(streamHealth, healthDetails) {
 // Update connection UI
 function updateConnectionUI(data) {
   const connectionStatus = document.getElementById('connectionStatus');
+  const connectionDetail = document.getElementById('connectionDetail');
   const connectionIcon = document.getElementById('connectionIcon');
   const quotaUsed = document.getElementById('quotaUsed');
   
@@ -2097,26 +2100,33 @@ function updateConnectionUI(data) {
   const quotaOk = data.accounts.every(a => a.quotaOk !== false);
   
   if (allConnected && quotaOk) {
-    connectionStatus.textContent = 'OK';
-    connectionStatus.className = 'text-green-400 font-semibold text-sm';
-    connectionIcon.className = 'ti ti-wifi text-lg text-green-400';
+    connectionStatus.textContent = 'Connected';
+    connectionStatus.className = 'text-green-400 font-medium';
+    connectionIcon.className = 'ti ti-wifi text-green-400';
+    connectionDetail.textContent = `(${totalAccounts})`;
   } else if (connectedCount > 0) {
-    connectionStatus.textContent = `${connectedCount}/${totalAccounts}`;
-    connectionStatus.className = 'text-yellow-400 font-semibold text-sm';
-    connectionIcon.className = 'ti ti-wifi-1 text-lg text-yellow-400';
+    connectionStatus.textContent = 'Partial';
+    connectionStatus.className = 'text-yellow-400 font-medium';
+    connectionIcon.className = 'ti ti-wifi-1 text-yellow-400';
+    connectionDetail.textContent = `(${connectedCount}/${totalAccounts})`;
   } else {
-    connectionStatus.textContent = 'Off';
-    connectionStatus.className = 'text-red-400 font-semibold text-sm';
-    connectionIcon.className = 'ti ti-wifi-off text-lg text-red-400';
+    connectionStatus.textContent = 'Disconnected';
+    connectionStatus.className = 'text-red-400 font-medium';
+    connectionIcon.className = 'ti ti-wifi-off text-red-400';
+    connectionDetail.textContent = '';
   }
   
-  // Quota info
+  // Quota info - show remaining quota
   if (data.quota) {
-    if (!quotaOk) {
-      quotaUsed.textContent = 'Low';
+    const remaining = data.quota.remaining || 10000;
+    if (!quotaOk || remaining < 1000) {
+      quotaUsed.textContent = formatNumber(remaining);
       quotaUsed.className = 'text-red-400 font-semibold';
+    } else if (remaining < 5000) {
+      quotaUsed.textContent = formatNumber(remaining);
+      quotaUsed.className = 'text-yellow-400 font-semibold';
     } else {
-      quotaUsed.textContent = 'OK';
+      quotaUsed.textContent = formatNumber(remaining);
       quotaUsed.className = 'text-white font-semibold';
     }
   }
