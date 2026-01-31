@@ -2162,22 +2162,21 @@ function renderSchedules(schedules, type) {
     const liveCount = groupSchedules.filter(s => s.status === 'live').length;
     
     html += '<div class="schedule-group">' +
-      // Group Header - compact
+      // Group Header - collapsed by default
       '<div class="flex items-center justify-between px-3 py-2 bg-dark-600 rounded-lg cursor-pointer hover:bg-dark-500 transition-colors" onclick="toggleScheduleGroup(' + groupIndex + ')">' +
         '<div class="flex items-center gap-2">' +
+          '<i class="ti ti-chevron-right text-gray-400 transition-transform" id="scheduleGroupChevron_' + groupIndex + '"></i>' +
           '<span class="font-semibold text-white">' + escapeHtml(groupName) + '</span>' +
           '<span class="text-gray-400">(' + groupSchedules.length + ')</span>' +
         '</div>' +
         '<div class="flex items-center gap-2">' +
-          (liveCount > 0 ? '<span class="text-xs text-green-400">' + liveCount + ' live</span>' : '') +
-          '<i class="ti ti-chevron-down text-gray-400 transition-transform" id="scheduleGroupChevron_' + groupIndex + '"></i>' +
+          (liveCount > 0 ? '<span class="px-2 py-0.5 text-xs rounded bg-green-500/20 text-green-400">' + liveCount + ' live</span>' : '') +
         '</div>' +
       '</div>' +
-      // Group Items - compact
-      '<div id="scheduleGroupItems_' + groupIndex + '" class="mt-1 space-y-1">';
+      // Group Items - hidden by default
+      '<div id="scheduleGroupItems_' + groupIndex + '" class="hidden mt-1 space-y-1">';
     
     groupSchedules.forEach(stream => {
-      // Only show LIVE badge if actually streaming
       const isLive = stream.status === 'live';
       
       let timeInfo = '';
@@ -2190,14 +2189,14 @@ function renderSchedules(schedules, type) {
         timeInfo = days.map(d => dayNames[d]).join(',') + ' ' + (stream.recurring_time || '--');
       }
       
-      html += '<div class="flex items-center justify-between bg-dark-700 rounded px-3 py-2 hover:bg-dark-600 transition-colors border-l-2 ' + (isLive ? 'border-green-500' : 'border-primary/30') + '">' +
+      html += '<div class="flex items-center justify-between bg-dark-700 rounded px-3 py-2 hover:bg-dark-600 transition-colors border-l-2 ' + (isLive ? 'border-green-500' : 'border-gray-600') + '">' +
         '<div class="flex items-center gap-3 flex-1 min-w-0">' +
-          '<span class="text-sm text-white font-medium truncate">' + escapeHtml(stream.title) + '</span>' +
+          '<span class="text-sm text-white truncate">' + escapeHtml(stream.title) + '</span>' +
           '<span class="text-xs text-gray-500 flex-shrink-0">' + timeInfo + '</span>' +
         '</div>' +
         '<div class="flex items-center gap-2 flex-shrink-0">' +
           (isLive ? '<span class="px-2 py-0.5 text-xs rounded bg-green-500/20 text-green-400">LIVE</span>' : '') +
-          '<button onclick="event.stopPropagation(); openScheduleEditModal(\'' + stream.id + '\')" class="w-8 h-8 flex items-center justify-center bg-primary/20 hover:bg-primary text-primary hover:text-white rounded-lg transition-all" title="Edit">' +
+          '<button onclick="event.stopPropagation(); openScheduleEditModal(\'' + stream.id + '\')" class="w-8 h-8 flex items-center justify-center bg-primary hover:bg-secondary text-white rounded-lg transition-all" title="Edit">' +
             '<i class="ti ti-edit text-base"></i>' +
           '</button>' +
         '</div>' +
@@ -2216,7 +2215,6 @@ function renderFlatScheduleList(content, schedules, type, dayNames) {
   let html = '<div class="space-y-1">';
   
   schedules.forEach(stream => {
-    // Only show LIVE badge if actually streaming
     const isLive = stream.status === 'live';
     
     let timeInfo = '';
@@ -2231,12 +2229,12 @@ function renderFlatScheduleList(content, schedules, type, dayNames) {
     
     html += '<div class="flex items-center justify-between bg-dark-700 rounded-lg px-3 py-2 hover:bg-dark-600 transition-colors">' +
       '<div class="flex items-center gap-3 flex-1 min-w-0">' +
-        '<span class="text-sm text-white font-medium truncate">' + escapeHtml(stream.title) + '</span>' +
+        '<span class="text-sm text-white truncate">' + escapeHtml(stream.title) + '</span>' +
         '<span class="text-xs text-gray-500 flex-shrink-0">' + timeInfo + '</span>' +
       '</div>' +
       '<div class="flex items-center gap-2 flex-shrink-0">' +
         (isLive ? '<span class="px-2 py-0.5 text-xs rounded bg-green-500/20 text-green-400">LIVE</span>' : '') +
-        '<button onclick="openScheduleEditModal(\'' + stream.id + '\')" class="w-8 h-8 flex items-center justify-center bg-primary/20 hover:bg-primary text-primary hover:text-white rounded-lg transition-all" title="Edit">' +
+        '<button onclick="openScheduleEditModal(\'' + stream.id + '\')" class="w-8 h-8 flex items-center justify-center bg-primary hover:bg-secondary text-white rounded-lg transition-all" title="Edit">' +
           '<i class="ti ti-edit text-base"></i>' +
         '</button>' +
       '</div>' +
@@ -2254,10 +2252,12 @@ function toggleScheduleGroup(groupIndex) {
   
   if (items.classList.contains('hidden')) {
     items.classList.remove('hidden');
-    chevron.classList.remove('rotate-[-90deg]');
+    chevron.classList.remove('ti-chevron-right');
+    chevron.classList.add('ti-chevron-down');
   } else {
     items.classList.add('hidden');
-    chevron.classList.add('rotate-[-90deg]');
+    chevron.classList.remove('ti-chevron-down');
+    chevron.classList.add('ti-chevron-right');
   }
 }
 
