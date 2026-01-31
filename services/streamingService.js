@@ -624,7 +624,10 @@ async function buildFFmpegArgs(stream) {
   
   const relativeVideoPath = video.filepath.startsWith('/') ? video.filepath.substring(1) : video.filepath;
   const projectRoot = path.resolve(__dirname, '..');
-  const videoPath = path.join(projectRoot, 'public', relativeVideoPath);
+  // FIXED: Don't add 'public' if relativeVideoPath already starts with 'public/'
+  const videoPath = relativeVideoPath.startsWith('public/') 
+    ? path.join(projectRoot, relativeVideoPath)
+    : path.join(projectRoot, 'public', relativeVideoPath);
   
   if (!fs.existsSync(videoPath)) {
     console.error(`[StreamingService] CRITICAL: Video file not found on disk.`);
@@ -644,7 +647,10 @@ async function buildFFmpegArgs(stream) {
       throw new Error(`Audio not found for audio_id: ${stream.audio_id}`);
     }
     const relativeAudioPath = audio.filepath.startsWith('/') ? audio.filepath.substring(1) : audio.filepath;
-    audioPath = path.join(projectRoot, 'public', relativeAudioPath);
+    // FIXED: Don't add 'public' if relativeAudioPath already starts with 'public/'
+    audioPath = relativeAudioPath.startsWith('public/') 
+      ? path.join(projectRoot, relativeAudioPath)
+      : path.join(projectRoot, 'public', relativeAudioPath);
     if (!fs.existsSync(audioPath)) {
       console.error(`[StreamingService] CRITICAL: Audio file not found on disk.`);
       console.error(`[StreamingService] Checked path: ${audioPath}`);
