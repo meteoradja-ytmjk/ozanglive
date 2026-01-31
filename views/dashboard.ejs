@@ -500,25 +500,25 @@
 <!-- Schedule Modal -->
 <div id="scheduleModal" class="fixed inset-0 bg-black/60 z-50 hidden overflow-y-auto">
   <div class="flex min-h-screen items-center justify-center p-4">
-    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-2xl flex flex-col max-h-[90vh]">
-      <div class="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-700">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-md flex flex-col max-h-[85vh]">
+      <div class="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-gray-700">
         <div class="flex items-center gap-3">
-          <h3 class="text-lg font-semibold" id="scheduleModalTitle">Schedule</h3>
+          <h3 class="text-base font-semibold" id="scheduleModalTitle">Schedule</h3>
           <div class="flex gap-1">
-            <button onclick="switchScheduleTab('once')" id="scheduleTabOnce" class="px-3 py-1 text-xs rounded-lg bg-primary text-white">Once</button>
-            <button onclick="switchScheduleTab('daily')" id="scheduleTabDaily" class="px-3 py-1 text-xs rounded-lg bg-dark-700 text-gray-300 hover:bg-dark-600">Daily</button>
-            <button onclick="switchScheduleTab('weekly')" id="scheduleTabWeekly" class="px-3 py-1 text-xs rounded-lg bg-dark-700 text-gray-300 hover:bg-dark-600">Weekly</button>
+            <button onclick="switchScheduleTab('once')" id="scheduleTabOnce" class="px-2.5 py-1 text-xs rounded-lg bg-primary text-white">Once</button>
+            <button onclick="switchScheduleTab('daily')" id="scheduleTabDaily" class="px-2.5 py-1 text-xs rounded-lg bg-dark-700 text-gray-300 hover:bg-dark-600">Daily</button>
+            <button onclick="switchScheduleTab('weekly')" id="scheduleTabWeekly" class="px-2.5 py-1 text-xs rounded-lg bg-dark-700 text-gray-300 hover:bg-dark-600">Weekly</button>
           </div>
         </div>
         <button onclick="closeScheduleModal()" class="text-gray-400 hover:text-white">
           <i class="ti ti-x text-xl"></i>
         </button>
       </div>
-      <div class="p-4 overflow-y-auto flex-grow">
-        <div id="scheduleModalContent" class="space-y-3">
-          <div class="text-center py-8 text-gray-400">
-            <i class="ti ti-loader-2 animate-spin text-2xl"></i>
-            <p class="mt-2">Loading schedules...</p>
+      <div class="p-3 overflow-y-auto flex-grow">
+        <div id="scheduleModalContent">
+          <div class="text-center py-6 text-gray-400">
+            <i class="ti ti-loader-2 animate-spin text-xl"></i>
+            <p class="mt-2 text-sm">Loading...</p>
           </div>
         </div>
       </div>
@@ -2127,16 +2127,15 @@ function renderSchedules(schedules, type) {
   const content = document.getElementById('scheduleModalContent');
   
   if (!schedules || schedules.length === 0) {
-    content.innerHTML = '<div class="text-center py-8 text-gray-400"><i class="ti ti-calendar-off text-3xl mb-2"></i><p>No ' + type + ' schedules found</p></div>';
+    content.innerHTML = '<div class="text-center py-6 text-gray-400"><i class="ti ti-calendar-off text-2xl mb-2"></i><p class="text-sm">No ' + type + ' schedules</p></div>';
     return;
   }
   
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   
-  // Group schedules by prefix (e.g., "grupera", "PAGI Davina", etc.)
+  // Group schedules by prefix
   const groups = {};
   schedules.forEach(stream => {
-    // Extract group name from title (first word or before number)
     const title = stream.title || 'Unknown';
     const match = title.match(/^([A-Za-z\s]+?)(?:\s*\d|$)/);
     const groupName = match ? match[1].trim() : title.split(' ')[0];
@@ -2149,40 +2148,37 @@ function renderSchedules(schedules, type) {
   
   const groupNames = Object.keys(groups);
   
-  // If only one group or all different, render flat list
+  // If all different names, render flat list
   if (groupNames.length === schedules.length) {
     renderFlatScheduleList(content, schedules, type, dayNames);
     return;
   }
   
   // Render grouped
-  let html = '<div class="space-y-3">';
+  let html = '<div class="space-y-2">';
   
   groupNames.forEach((groupName, groupIndex) => {
     const groupSchedules = groups[groupName];
-    const activeCount = groupSchedules.filter(s => s.recurring_enabled !== false || s.status === 'live').length;
+    const liveCount = groupSchedules.filter(s => s.status === 'live').length;
     
     html += '<div class="schedule-group">' +
-      // Group Header
+      // Group Header - compact
       '<div class="flex items-center justify-between px-3 py-2 bg-dark-600 rounded-lg cursor-pointer hover:bg-dark-500 transition-colors" onclick="toggleScheduleGroup(' + groupIndex + ')">' +
         '<div class="flex items-center gap-2">' +
-          '<i class="ti ti-folder text-primary"></i>' +
-          '<span class="font-medium text-sm text-white">' + escapeHtml(groupName) + '</span>' +
-          '<span class="text-xs text-gray-400">(' + groupSchedules.length + ')</span>' +
+          '<span class="font-semibold text-white">' + escapeHtml(groupName) + '</span>' +
+          '<span class="text-gray-400">(' + groupSchedules.length + ')</span>' +
         '</div>' +
         '<div class="flex items-center gap-2">' +
-          '<span class="text-xs text-green-400">' + activeCount + ' active</span>' +
-          '<i class="ti ti-chevron-down text-gray-400 text-sm transition-transform" id="scheduleGroupChevron_' + groupIndex + '"></i>' +
+          (liveCount > 0 ? '<span class="text-xs text-green-400">' + liveCount + ' live</span>' : '') +
+          '<i class="ti ti-chevron-down text-gray-400 transition-transform" id="scheduleGroupChevron_' + groupIndex + '"></i>' +
         '</div>' +
       '</div>' +
-      // Group Items
-      '<div id="scheduleGroupItems_' + groupIndex + '" class="mt-1 ml-4 space-y-1">';
+      // Group Items - compact
+      '<div id="scheduleGroupItems_' + groupIndex + '" class="mt-1 space-y-1">';
     
     groupSchedules.forEach(stream => {
-      const statusClass = stream.status === 'live' ? 'bg-green-500/20 text-green-400' : 
-                          stream.recurring_enabled !== false ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400';
-      const statusText = stream.status === 'live' ? 'LIVE' : 
-                         stream.recurring_enabled !== false ? 'Active' : 'Paused';
+      // Only show LIVE badge if actually streaming
+      const isLive = stream.status === 'live';
       
       let timeInfo = '';
       if (type === 'once') {
@@ -2191,18 +2187,18 @@ function renderSchedules(schedules, type) {
         timeInfo = stream.recurring_time || '--';
       } else if (type === 'weekly') {
         const days = Array.isArray(stream.schedule_days) ? stream.schedule_days : [];
-        timeInfo = days.map(d => dayNames[d]).join(', ') + ' ' + (stream.recurring_time || '--');
+        timeInfo = days.map(d => dayNames[d]).join(',') + ' ' + (stream.recurring_time || '--');
       }
       
-      html += '<div class="flex items-center justify-between bg-dark-700/50 rounded-lg px-3 py-2 hover:bg-dark-700 transition-colors">' +
-        '<div class="flex items-center gap-2 flex-1 min-w-0">' +
-          '<span class="text-xs text-gray-300 truncate">' + escapeHtml(stream.title) + '</span>' +
-          '<span class="text-xs text-gray-500">' + timeInfo + '</span>' +
+      html += '<div class="flex items-center justify-between bg-dark-700 rounded px-3 py-2 hover:bg-dark-600 transition-colors border-l-2 ' + (isLive ? 'border-green-500' : 'border-primary/30') + '">' +
+        '<div class="flex items-center gap-3 flex-1 min-w-0">' +
+          '<span class="text-sm text-white font-medium truncate">' + escapeHtml(stream.title) + '</span>' +
+          '<span class="text-xs text-gray-500 flex-shrink-0">' + timeInfo + '</span>' +
         '</div>' +
         '<div class="flex items-center gap-2 flex-shrink-0">' +
-          '<span class="px-1.5 py-0.5 text-[10px] rounded ' + statusClass + '">' + statusText + '</span>' +
-          '<button onclick="openScheduleEditModal(\'' + stream.id + '\')" class="w-7 h-7 flex items-center justify-center text-primary hover:bg-primary/20 rounded transition-colors" title="Edit">' +
-            '<i class="ti ti-edit text-sm"></i>' +
+          (isLive ? '<span class="px-2 py-0.5 text-xs rounded bg-green-500/20 text-green-400">LIVE</span>' : '') +
+          '<button onclick="event.stopPropagation(); openScheduleEditModal(\'' + stream.id + '\')" class="w-8 h-8 flex items-center justify-center bg-primary/20 hover:bg-primary text-primary hover:text-white rounded-lg transition-all" title="Edit">' +
+            '<i class="ti ti-edit text-base"></i>' +
           '</button>' +
         '</div>' +
       '</div>';
@@ -2217,38 +2213,31 @@ function renderSchedules(schedules, type) {
 
 // Render flat list (no grouping)
 function renderFlatScheduleList(content, schedules, type, dayNames) {
-  let html = '<div class="space-y-2">';
+  let html = '<div class="space-y-1">';
   
   schedules.forEach(stream => {
-    const statusClass = stream.status === 'live' ? 'bg-green-500/20 text-green-400' : 
-                        stream.recurring_enabled !== false ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400';
-    const statusText = stream.status === 'live' ? 'LIVE' : 
-                       stream.recurring_enabled !== false ? 'Active' : 'Paused';
+    // Only show LIVE badge if actually streaming
+    const isLive = stream.status === 'live';
     
     let timeInfo = '';
     if (type === 'once') {
       timeInfo = stream.schedule_time ? formatDateTime(stream.schedule_time) : '--';
     } else if (type === 'daily') {
-      timeInfo = 'Daily at ' + (stream.recurring_time || '--');
+      timeInfo = stream.recurring_time || '--';
     } else if (type === 'weekly') {
       const days = Array.isArray(stream.schedule_days) ? stream.schedule_days : [];
-      timeInfo = days.map(d => dayNames[d]).join(', ') + ' at ' + (stream.recurring_time || '--');
+      timeInfo = days.map(d => dayNames[d]).join(',') + ' ' + (stream.recurring_time || '--');
     }
     
-    html += '<div class="flex items-center justify-between bg-dark-700 rounded-lg px-3 py-2.5 hover:bg-dark-600 transition-colors">' +
-      '<div class="flex items-center gap-2 flex-1 min-w-0">' +
-        '<div class="w-8 h-8 bg-dark-600 rounded-lg flex items-center justify-center flex-shrink-0">' +
-          '<i class="ti ti-brand-' + getPlatformIcon(stream.platform) + ' text-' + getPlatformColor(stream.platform) + '"></i>' +
-        '</div>' +
-        '<div class="min-w-0">' +
-          '<div class="font-medium text-sm truncate text-white">' + escapeHtml(stream.title) + '</div>' +
-          '<div class="text-xs text-gray-400">' + timeInfo + '</div>' +
-        '</div>' +
+    html += '<div class="flex items-center justify-between bg-dark-700 rounded-lg px-3 py-2 hover:bg-dark-600 transition-colors">' +
+      '<div class="flex items-center gap-3 flex-1 min-w-0">' +
+        '<span class="text-sm text-white font-medium truncate">' + escapeHtml(stream.title) + '</span>' +
+        '<span class="text-xs text-gray-500 flex-shrink-0">' + timeInfo + '</span>' +
       '</div>' +
       '<div class="flex items-center gap-2 flex-shrink-0">' +
-        '<span class="px-2 py-0.5 text-xs rounded-full ' + statusClass + '">' + statusText + '</span>' +
-        '<button onclick="openScheduleEditModal(\'' + stream.id + '\')" class="w-8 h-8 flex items-center justify-center text-primary hover:bg-primary/20 rounded-lg transition-colors" title="Edit">' +
-          '<i class="ti ti-edit"></i>' +
+        (isLive ? '<span class="px-2 py-0.5 text-xs rounded bg-green-500/20 text-green-400">LIVE</span>' : '') +
+        '<button onclick="openScheduleEditModal(\'' + stream.id + '\')" class="w-8 h-8 flex items-center justify-center bg-primary/20 hover:bg-primary text-primary hover:text-white rounded-lg transition-all" title="Edit">' +
+          '<i class="ti ti-edit text-base"></i>' +
         '</button>' +
       '</div>' +
     '</div>';
