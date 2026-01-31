@@ -29,21 +29,21 @@
 
 <div class="max-w-6xl mx-auto">
   <!-- Page Header -->
-  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-    <div class="flex items-center gap-3">
+  <div class="flex items-center justify-between mb-6">
+    <div class="flex items-center gap-3 min-w-0">
       <div class="w-10 h-10 bg-red-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
         <i class="ti ti-brand-youtube text-red-500 text-xl"></i>
       </div>
-      <div>
-        <h1 class="text-xl sm:text-2xl font-bold">YouTube Sync</h1>
-        <p class="text-xs sm:text-sm text-gray-400">Create scheduled broadcasts directly to YouTube</p>
+      <div class="min-w-0">
+        <h1 class="text-lg sm:text-2xl font-bold truncate">YouTube Sync</h1>
+        <p class="text-xs sm:text-sm text-gray-400 hidden sm:block">Create scheduled broadcasts directly to YouTube</p>
       </div>
     </div>
     <!-- Guide Button -->
     <button onclick="openYouTubeGuideModal()" 
-      class="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-4 py-2.5 rounded-xl text-sm transition-all duration-200 flex items-center justify-center gap-2 font-medium shadow-lg shadow-blue-500/25 w-full sm:w-auto">
-      <i class="ti ti-help-circle text-lg"></i>
-      <span>Panduan API</span>
+      class="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm transition-all duration-200 flex items-center gap-1.5 sm:gap-2 font-medium shadow-lg shadow-blue-500/25 flex-shrink-0">
+      <i class="ti ti-help-circle text-base sm:text-lg"></i>
+      <span class="whitespace-nowrap">Panduan API</span>
     </button>
   </div>
 
