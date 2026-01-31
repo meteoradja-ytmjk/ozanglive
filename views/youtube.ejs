@@ -176,8 +176,6 @@
         <!-- Connection - icon only -->
         <div class="flex items-center" title="Connection Status">
           <i class="ti ti-wifi text-green-400" id="connectionIcon"></i>
-          <span id="connectionStatus" class="hidden"></span>
-          <span id="connectionDetail" class="hidden"></span>
         </div>
       </div>
       
@@ -206,7 +204,6 @@
           <div class="flex items-center gap-1.5" title="API Quota">
             <i class="ti ti-api text-cyan-400 text-base"></i>
             <span id="quotaUsedMobile" class="text-white font-semibold">10K</span>
-            <span id="quotaChannelNameMobile" class="text-gray-500 text-xs"></span>
           </div>
           <!-- Viewers -->
           <div class="flex items-center gap-1.5" title="Total Viewers">
@@ -216,7 +213,6 @@
           <!-- Connection - icon only -->
           <div class="flex items-center" title="Connection Status">
             <i class="ti ti-wifi text-green-400 text-base" id="connectionIconMobile"></i>
-            <span id="connectionStatusMobile" class="hidden"></span>
           </div>
         </div>
         <!-- Actions -->
@@ -233,6 +229,10 @@
     
     <!-- Hidden elements for compatibility -->
     <span id="liveCount" class="hidden"></span>
+    <span id="connectionStatus" class="hidden"></span>
+    <span id="connectionStatusMobile" class="hidden"></span>
+    <span id="connectionDetail" class="hidden"></span>
+    <span id="quotaChannelNameMobile" class="hidden"></span>
     <p id="quotaResetTime" class="hidden"></p>
     <p id="viewersDetail" class="hidden"></p>
     <div id="quotaBar" class="hidden"></div>
@@ -2238,69 +2238,35 @@ function updateConnectionUI(data) {
   const primaryAccount = data.accounts.find(a => a.isPrimary) || data.accounts[0];
   const quotaOk = primaryAccount ? primaryAccount.quotaOk : true;
   
+  // Update connection icon only (no text)
   if (allConnected && quotaOk) {
-    if (connectionStatus) {
-      connectionStatus.textContent = 'Connected';
-      connectionStatus.className = 'text-green-400 font-medium';
-    }
-    if (connectionStatusMobile) {
-      connectionStatusMobile.textContent = 'OK';
-      connectionStatusMobile.className = 'text-green-400 font-medium';
-    }
     if (connectionIcon) connectionIcon.className = 'ti ti-wifi text-green-400';
     if (connectionIconMobile) connectionIconMobile.className = 'ti ti-wifi text-green-400';
-    if (connectionDetail) connectionDetail.textContent = `(${totalAccounts})`;
   } else if (connectedCount > 0) {
-    if (connectionStatus) {
-      connectionStatus.textContent = 'Partial';
-      connectionStatus.className = 'text-yellow-400 font-medium';
-    }
-    if (connectionStatusMobile) {
-      connectionStatusMobile.textContent = `${connectedCount}/${totalAccounts}`;
-      connectionStatusMobile.className = 'text-yellow-400 font-medium';
-    }
     if (connectionIcon) connectionIcon.className = 'ti ti-wifi-1 text-yellow-400';
     if (connectionIconMobile) connectionIconMobile.className = 'ti ti-wifi-1 text-yellow-400';
-    if (connectionDetail) connectionDetail.textContent = `(${connectedCount}/${totalAccounts})`;
   } else {
-    if (connectionStatus) {
-      connectionStatus.textContent = 'Disconnected';
-      connectionStatus.className = 'text-red-400 font-medium';
-    }
-    if (connectionStatusMobile) {
-      connectionStatusMobile.textContent = 'Off';
-      connectionStatusMobile.className = 'text-red-400 font-medium';
-    }
     if (connectionIcon) connectionIcon.className = 'ti ti-wifi-off text-red-400';
     if (connectionIconMobile) connectionIconMobile.className = 'ti ti-wifi-off text-red-400';
-    if (connectionDetail) connectionDetail.textContent = '';
   }
   
   // Quota info - show for primary channel
   if (data.quota && primaryAccount) {
     const dailyLimit = data.quota.dailyLimit || 10000;
-    // Estimate remaining based on quotaOk status
-    // In real implementation, you'd track actual usage per account
     const remaining = quotaOk ? dailyLimit : 0;
     const remainingK = remaining >= 1000 ? `${(remaining/1000).toFixed(remaining >= 10000 ? 0 : 1)}K` : remaining;
-    const limitK = dailyLimit >= 1000 ? `${(dailyLimit/1000).toFixed(0)}K` : dailyLimit;
     
-    // Show primary channel name (short format)
-    if (primaryAccount.channelName) {
-      const shortName = primaryAccount.channelName.length > 8 
-        ? primaryAccount.channelName.substring(0, 6) + '..' 
+    // Show channel name on desktop only
+    if (quotaChannelName && primaryAccount.channelName) {
+      const shortName = primaryAccount.channelName.length > 12 
+        ? primaryAccount.channelName.substring(0, 10) + '..' 
         : primaryAccount.channelName;
-      if (quotaChannelName) {
-        quotaChannelName.textContent = shortName;
-      }
-      if (quotaChannelNameMobile) {
-        quotaChannelNameMobile.textContent = shortName;
-      }
+      quotaChannelName.textContent = `[${shortName}]`;
     }
     
     if (!quotaOk) {
       if (quotaUsed) {
-        quotaUsed.textContent = 'Exceeded';
+        quotaUsed.textContent = '0';
         quotaUsed.className = 'text-red-400 font-semibold';
       }
       if (quotaUsedMobile) {
@@ -2309,7 +2275,7 @@ function updateConnectionUI(data) {
       }
     } else {
       if (quotaUsed) {
-        quotaUsed.textContent = formatNumber(remaining);
+        quotaUsed.textContent = remainingK;
         quotaUsed.className = 'text-white font-semibold';
       }
       if (quotaUsedMobile) {
