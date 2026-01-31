@@ -244,103 +244,143 @@
     </div>
   </div>
 
-  <!-- Broadcasts List -->
+  <!-- Broadcasts List - Grouped by Channel -->
   <% if (broadcasts && broadcasts.length > 0) { %>
-  
-  <!-- Compact List View (Desktop & Mobile) -->
-  <div class="bg-gray-800 rounded-lg shadow-md overflow-hidden">
-    <!-- List Header (Desktop only) -->
-    <div class="hidden md:flex items-center gap-2 px-3 py-2 bg-dark-700 border-b border-gray-700 text-xs font-medium text-gray-400 uppercase">
-      <div class="w-8 text-center">
-        <input type="checkbox" id="selectAllBroadcasts" onchange="toggleSelectAll(this)"
-          class="w-4 h-4 rounded border-gray-600 bg-dark-700 text-primary focus:ring-primary cursor-pointer">
-      </div>
-      <div class="w-8 text-center">No</div>
-      <div class="flex-1">Title</div>
-      <div class="w-20 text-center">Status</div>
-      <div class="w-40">Stream Key</div>
-      <div class="w-24 text-center">Actions</div>
-    </div>
+  <%
+    // Group broadcasts by account/channel
+    const groupedBroadcasts = {};
+    const accountMap = {};
     
-    <!-- List Items -->
-    <div class="divide-y divide-gray-700/50">
-      <% broadcasts.forEach(function(broadcast, index) { %>
-      <div class="broadcast-list-item broadcast-row hover:bg-dark-700/30 transition-colors" data-broadcast-id="<%= broadcast.id %>" data-account-id="<%= broadcast.accountId %>">
-        <!-- Desktop Row -->
-        <div class="hidden md:flex items-center gap-2 px-3 py-2">
-          <div class="w-8 text-center">
-            <input type="checkbox" class="broadcast-checkbox w-4 h-4 rounded border-gray-600 bg-dark-700 text-primary focus:ring-primary cursor-pointer"
+    // Create account map for quick lookup
+    if (accounts && accounts.length > 0) {
+      accounts.forEach(acc => {
+        accountMap[acc.id] = acc.channelName || 'Unknown Channel';
+      });
+    }
+    
+    // Group broadcasts
+    broadcasts.forEach(broadcast => {
+      const channelName = accountMap[broadcast.accountId] || 'Unknown Channel';
+      if (!groupedBroadcasts[channelName]) {
+        groupedBroadcasts[channelName] = {
+          accountId: broadcast.accountId,
+          broadcasts: []
+        };
+      }
+      groupedBroadcasts[channelName].broadcasts.push(broadcast);
+    });
+    
+    const channelNames = Object.keys(groupedBroadcasts);
+  %>
+  
+  <div class="space-y-4">
+    <% channelNames.forEach(function(channelName, channelIndex) { %>
+    <% const group = groupedBroadcasts[channelName]; %>
+    <div class="channel-broadcast-group bg-gray-800 rounded-lg shadow-md overflow-hidden">
+      <!-- Channel Header - Collapsible -->
+      <div class="flex items-center justify-between px-4 py-3 bg-dark-700 cursor-pointer hover:bg-dark-600 transition-colors"
+        onclick="toggleBroadcastChannel('<%= channelIndex %>')">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 bg-red-500/20 rounded-lg flex items-center justify-center">
+            <i class="ti ti-brand-youtube text-red-400"></i>
+          </div>
+          <div>
+            <span class="font-medium text-white"><%= channelName %></span>
+            <span class="ml-2 text-xs text-gray-400">(<%= group.broadcasts.length %> broadcasts)</span>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <input type="checkbox" class="channel-select-all w-4 h-4 rounded border-gray-600 bg-dark-700 text-primary focus:ring-primary cursor-pointer"
+            onclick="event.stopPropagation(); toggleChannelSelectAll(this, <%= group.accountId %>)"
+            title="Select all in this channel">
+          <i class="ti ti-chevron-down text-gray-400 transition-transform" id="channelChevron_<%= channelIndex %>"></i>
+        </div>
+      </div>
+      
+      <!-- Channel Broadcasts -->
+      <div id="channelBroadcasts_<%= channelIndex %>" class="divide-y divide-gray-700/50">
+        <% group.broadcasts.forEach(function(broadcast, index) { %>
+        <div class="broadcast-list-item broadcast-row hover:bg-dark-700/30 transition-colors" data-broadcast-id="<%= broadcast.id %>" data-account-id="<%= broadcast.accountId %>">
+          <!-- Desktop Row -->
+          <div class="hidden md:flex items-center gap-2 px-4 py-2">
+            <div class="w-8 text-center">
+              <input type="checkbox" class="broadcast-checkbox w-4 h-4 rounded border-gray-600 bg-dark-700 text-primary focus:ring-primary cursor-pointer"
+                data-broadcast-id="<%= broadcast.id %>"
+                data-account-id="<%= broadcast.accountId %>"
+                data-broadcast='<%= JSON.stringify({id: broadcast.id, accountId: broadcast.accountId, title: broadcast.title, description: broadcast.description || "", privacyStatus: broadcast.privacyStatus, streamId: broadcast.streamId || null, streamKey: broadcast.streamKey || "", categoryId: broadcast.categoryId || "22", tags: broadcast.tags || [], thumbnailPath: broadcast.thumbnailPath || null}) %>'
+                onchange="syncCheckboxes(this); updateSelectionCount()">
+            </div>
+            <div class="w-8 text-center text-xs text-gray-500"><%= index + 1 %></div>
+            <div class="flex-1 min-w-0">
+              <span class="text-sm text-white truncate block"><%= broadcast.title %></span>
+            </div>
+            <div class="w-20 text-center">
+              <span class="px-2 py-0.5 rounded text-xs font-medium uppercase
+                <%= broadcast.privacyStatus === 'public' ? 'bg-green-500/20 text-green-400' : 
+                    broadcast.privacyStatus === 'unlisted' ? 'bg-yellow-500/20 text-yellow-400' : 
+                    'bg-gray-500/20 text-gray-400' %>">
+                <%= broadcast.privacyStatus %>
+              </span>
+            </div>
+            <div class="w-36">
+              <span class="font-mono text-xs text-gray-400 truncate block cursor-pointer hover:text-primary" 
+                onclick="copyStreamKey('<%= broadcast.streamKey || '' %>')" title="Click to copy">
+                <%= broadcast.streamKey ? broadcast.streamKey.substring(0, 16) + '...' : '-' %>
+              </span>
+            </div>
+            <div class="w-24 flex items-center justify-center gap-1">
+              <button onclick="editBroadcast('<%= broadcast.id %>', <%= broadcast.accountId %>)"
+                class="w-7 h-7 flex items-center justify-center text-blue-400 hover:bg-blue-500/20 rounded transition-colors" title="Edit">
+                <i class="ti ti-edit text-sm"></i>
+              </button>
+              <button onclick="reuseBroadcast('<%= broadcast.id %>', <%= broadcast.accountId %>)"
+                class="w-7 h-7 flex items-center justify-center text-green-400 hover:bg-green-500/20 rounded transition-colors" title="Sync">
+                <i class="ti ti-refresh text-sm"></i>
+              </button>
+              <button onclick="deleteBroadcast('<%= broadcast.id %>', '<%= broadcast.title.replace(/'/g, "\\'") %>', <%= broadcast.accountId %>)"
+                class="w-7 h-7 flex items-center justify-center text-red-400 hover:bg-red-500/20 rounded transition-colors" title="Delete">
+                <i class="ti ti-trash text-sm"></i>
+              </button>
+            </div>
+          </div>
+          
+          <!-- Mobile Row -->
+          <div class="md:hidden flex items-center gap-2 px-3 py-2">
+            <input type="checkbox" class="broadcast-checkbox w-4 h-4 rounded border-gray-600 bg-dark-700 text-primary focus:ring-primary cursor-pointer flex-shrink-0"
               data-broadcast-id="<%= broadcast.id %>"
+              data-account-id="<%= broadcast.accountId %>"
               data-broadcast='<%= JSON.stringify({id: broadcast.id, accountId: broadcast.accountId, title: broadcast.title, description: broadcast.description || "", privacyStatus: broadcast.privacyStatus, streamId: broadcast.streamId || null, streamKey: broadcast.streamKey || "", categoryId: broadcast.categoryId || "22", tags: broadcast.tags || [], thumbnailPath: broadcast.thumbnailPath || null}) %>'
               onchange="syncCheckboxes(this); updateSelectionCount()">
-          </div>
-          <div class="w-8 text-center text-sm text-primary font-semibold"><%= index + 1 %></div>
-          <div class="flex-1 min-w-0">
-            <span class="text-sm text-white truncate block"><%= broadcast.title %></span>
-          </div>
-          <div class="w-20 text-center">
-            <span class="px-2 py-0.5 rounded text-xs font-medium uppercase
+            <span class="text-gray-500 text-xs w-4 flex-shrink-0"><%= index + 1 %></span>
+            <span class="flex-1 text-xs text-white truncate min-w-0"><%= broadcast.title %></span>
+            <span class="px-1.5 py-0.5 rounded text-[10px] font-medium uppercase flex-shrink-0
               <%= broadcast.privacyStatus === 'public' ? 'bg-green-500/20 text-green-400' : 
                   broadcast.privacyStatus === 'unlisted' ? 'bg-yellow-500/20 text-yellow-400' : 
                   'bg-gray-500/20 text-gray-400' %>">
-              <%= broadcast.privacyStatus %>
+              <%= broadcast.privacyStatus.substring(0, 3) %>
             </span>
-          </div>
-          <div class="w-40">
-            <span class="item-streamkey font-mono text-xs text-gray-400 truncate block cursor-pointer hover:text-primary" 
-              onclick="copyStreamKey('<%= broadcast.streamKey || '' %>')" title="Click to copy">
-              <%= broadcast.streamKey ? broadcast.streamKey.substring(0, 20) + '...' : '-' %>
-            </span>
-          </div>
-          <div class="w-24 flex items-center justify-center gap-1">
-            <button onclick="editBroadcast('<%= broadcast.id %>', <%= broadcast.accountId %>)"
-              class="action-btn w-8 h-8 flex items-center justify-center text-blue-400 hover:bg-blue-500/20 rounded-md transition-colors" title="Edit">
-              <i class="ti ti-edit text-sm"></i>
-            </button>
-            <button onclick="reuseBroadcast('<%= broadcast.id %>', <%= broadcast.accountId %>)"
-              class="action-btn w-8 h-8 flex items-center justify-center text-green-400 hover:bg-green-500/20 rounded-md transition-colors" title="Sync">
-              <i class="ti ti-refresh text-sm"></i>
-            </button>
-            <button onclick="deleteBroadcast('<%= broadcast.id %>', '<%= broadcast.title.replace(/'/g, "\\'") %>', <%= broadcast.accountId %>)"
-              class="action-btn w-8 h-8 flex items-center justify-center text-red-400 hover:bg-red-500/20 rounded-md transition-colors" title="Delete">
-              <i class="ti ti-trash text-sm"></i>
-            </button>
+            <div class="flex items-center gap-0.5 flex-shrink-0">
+              <button onclick="editBroadcast('<%= broadcast.id %>', <%= broadcast.accountId %>)"
+                class="w-8 h-8 flex items-center justify-center text-blue-400 hover:bg-blue-500/20 rounded transition-colors" title="Edit">
+                <i class="ti ti-edit text-sm"></i>
+              </button>
+              <button onclick="reuseBroadcast('<%= broadcast.id %>', <%= broadcast.accountId %>)"
+                class="w-8 h-8 flex items-center justify-center text-green-400 hover:bg-green-500/20 rounded transition-colors" title="Sync">
+                <i class="ti ti-refresh text-sm"></i>
+              </button>
+              <button onclick="deleteBroadcast('<%= broadcast.id %>', '<%= broadcast.title.replace(/'/g, "\\'") %>', <%= broadcast.accountId %>)"
+                class="w-8 h-8 flex items-center justify-center text-red-400 hover:bg-red-500/20 rounded transition-colors" title="Delete">
+                <i class="ti ti-trash text-sm"></i>
+              </button>
+            </div>
           </div>
         </div>
-        
-        <!-- Mobile Row (Simple List) -->
-        <div class="md:hidden flex items-center gap-2 px-3 py-2">
-          <input type="checkbox" class="broadcast-checkbox w-4 h-4 rounded border-gray-600 bg-dark-700 text-primary focus:ring-primary cursor-pointer flex-shrink-0"
-            data-broadcast-id="<%= broadcast.id %>"
-            data-broadcast='<%= JSON.stringify({id: broadcast.id, accountId: broadcast.accountId, title: broadcast.title, description: broadcast.description || "", privacyStatus: broadcast.privacyStatus, streamId: broadcast.streamId || null, streamKey: broadcast.streamKey || "", categoryId: broadcast.categoryId || "22", tags: broadcast.tags || [], thumbnailPath: broadcast.thumbnailPath || null}) %>'
-            onchange="syncCheckboxes(this); updateSelectionCount()">
-          <span class="text-primary font-semibold text-xs w-5 flex-shrink-0"><%= index + 1 %></span>
-          <span class="flex-1 text-xs text-white truncate min-w-0"><%= broadcast.title %></span>
-          <span class="px-1.5 py-0.5 rounded text-[10px] font-medium uppercase flex-shrink-0
-            <%= broadcast.privacyStatus === 'public' ? 'bg-green-500/20 text-green-400' : 
-                broadcast.privacyStatus === 'unlisted' ? 'bg-yellow-500/20 text-yellow-400' : 
-                'bg-gray-500/20 text-gray-400' %>">
-            <%= broadcast.privacyStatus.substring(0, 3) %>
-          </span>
-          <div class="flex items-center gap-0.5 flex-shrink-0">
-            <button onclick="editBroadcast('<%= broadcast.id %>', <%= broadcast.accountId %>)"
-              class="w-9 h-9 flex items-center justify-center text-blue-400 hover:bg-blue-500/20 rounded transition-colors" title="Edit">
-              <i class="ti ti-edit text-sm"></i>
-            </button>
-            <button onclick="reuseBroadcast('<%= broadcast.id %>', <%= broadcast.accountId %>)"
-              class="w-9 h-9 flex items-center justify-center text-green-400 hover:bg-green-500/20 rounded transition-colors" title="Sync">
-              <i class="ti ti-refresh text-sm"></i>
-            </button>
-            <button onclick="deleteBroadcast('<%= broadcast.id %>', '<%= broadcast.title.replace(/'/g, "\\'") %>', <%= broadcast.accountId %>)"
-              class="w-9 h-9 flex items-center justify-center text-red-400 hover:bg-red-500/20 rounded transition-colors" title="Delete">
-              <i class="ti ti-trash text-sm"></i>
-            </button>
-          </div>
-        </div>
+        <% }); %>
       </div>
-      <% }); %>
     </div>
+    <% }); %>
   </div>
+  
   <% } else { %>
   <!-- Empty State -->
   <div class="bg-gray-800 rounded-lg p-10 text-center">
@@ -1922,6 +1962,39 @@
 </div>
 
 <script>
+// ============================================
+// Broadcast Channel Grouping Functions
+// ============================================
+let collapsedBroadcastChannels = new Set();
+
+// Toggle broadcast channel visibility
+function toggleBroadcastChannel(channelIndex) {
+  const content = document.getElementById(`channelBroadcasts_${channelIndex}`);
+  const chevron = document.getElementById(`channelChevron_${channelIndex}`);
+  
+  if (content.classList.contains('hidden')) {
+    content.classList.remove('hidden');
+    chevron.classList.remove('rotate-[-90deg]');
+    collapsedBroadcastChannels.delete(channelIndex);
+  } else {
+    content.classList.add('hidden');
+    chevron.classList.add('rotate-[-90deg]');
+    collapsedBroadcastChannels.add(channelIndex);
+  }
+}
+
+// Toggle select all broadcasts in a channel
+function toggleChannelSelectAll(checkbox, accountId) {
+  const isChecked = checkbox.checked;
+  const channelCheckboxes = document.querySelectorAll(`.broadcast-checkbox[data-account-id="${accountId}"]`);
+  
+  channelCheckboxes.forEach(cb => {
+    cb.checked = isChecked;
+  });
+  
+  updateSelectionCount();
+}
+
 // ============================================
 // Live Stats Dashboard Functions
 // ============================================
