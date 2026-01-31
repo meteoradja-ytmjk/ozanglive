@@ -969,7 +969,6 @@ class YouTubeService {
       return { success: false, error: error.message };
     }
   }
-}
 
   /**
    * Get live stream statistics (viewers, health, etc.)
