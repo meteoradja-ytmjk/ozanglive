@@ -2196,8 +2196,8 @@ function renderSchedules(schedules, type) {
         '</div>' +
         '<div class="flex items-center gap-2 flex-shrink-0">' +
           (isLive ? '<span class="px-2 py-0.5 text-xs rounded bg-green-500/20 text-green-400">LIVE</span>' : '') +
-          '<button onclick="event.stopPropagation(); openScheduleEditModal(\'' + stream.id + '\')" class="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-primary hover:bg-primary/10 rounded transition-colors" title="Edit">' +
-            '<i class="ti ti-dots-vertical"></i>' +
+          '<button onclick="event.stopPropagation(); openScheduleEditModal(\'' + stream.id + '\')" class="px-2 py-1 text-xs text-gray-400 hover:text-primary hover:bg-primary/10 rounded transition-colors" title="Edit">' +
+            '✎' +
           '</button>' +
         '</div>' +
       '</div>';
@@ -2234,8 +2234,8 @@ function renderFlatScheduleList(content, schedules, type, dayNames) {
       '</div>' +
       '<div class="flex items-center gap-2 flex-shrink-0">' +
         (isLive ? '<span class="px-2 py-0.5 text-xs rounded bg-green-500/20 text-green-400">LIVE</span>' : '') +
-        '<button onclick="openScheduleEditModal(\'' + stream.id + '\')" class="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-primary hover:bg-primary/10 rounded transition-colors" title="Edit">' +
-          '<i class="ti ti-dots-vertical"></i>' +
+        '<button onclick="openScheduleEditModal(\'' + stream.id + '\')" class="px-2 py-1 text-xs text-gray-400 hover:text-primary hover:bg-primary/10 rounded transition-colors" title="Edit">' +
+          '✎' +
         '</button>' +
       '</div>' +
     '</div>';
