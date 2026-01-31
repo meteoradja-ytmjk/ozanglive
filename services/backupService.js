@@ -701,13 +701,14 @@ async function exportTitleSuggestions(userId) {
 /**
  * Export thumbnail files with folder structure
  * Returns metadata about thumbnails and their folder structure
- * Exports ALL thumbnails in the thumbnails directory, not just those linked to templates
+ * Exports ALL thumbnails in the user's thumbnails directory
  * Also exports template-to-folder mapping for proper restoration
  * @param {string} userId - User ID
  * @returns {Promise<Object>} Thumbnail files metadata
  */
 async function exportThumbnailFiles(userId) {
-  const thumbnailsDir = path.join(process.cwd(), 'public', 'uploads', 'thumbnails');
+  // User-specific thumbnail directory
+  const userThumbnailsDir = path.join(process.cwd(), 'public', 'uploads', 'thumbnails', String(userId));
   
   const result = {
     folders: [],
@@ -721,7 +722,7 @@ async function exportThumbnailFiles(userId) {
     const templateFolderMap = new Map();
     
     for (const template of templates) {
-      if (template.thumbnail_folder) {
+      if (template.thumbnail_folder !== null && template.thumbnail_folder !== undefined) {
         templateFolderMap.set(template.thumbnail_folder, {
           template_name: template.name,
           thumbnail_index: template.thumbnail_index || 0,
@@ -739,18 +740,19 @@ async function exportThumbnailFiles(userId) {
       }
     }
     
-    // Check if thumbnails directory exists
-    const dirExists = fsSync.existsSync(thumbnailsDir);
+    // Check if user's thumbnails directory exists
+    const dirExists = fsSync.existsSync(userThumbnailsDir);
     if (!dirExists) {
-      console.log('Thumbnails directory does not exist');
+      console.log(`User thumbnails directory does not exist: ${userThumbnailsDir}`);
       return result;
     }
     
-    // Read all items in thumbnails directory
-    const items = await fs.readdir(thumbnailsDir);
+    // Read all items in user's thumbnails directory
+    const items = await fs.readdir(userThumbnailsDir);
+    console.log(`Found ${items.length} items in user thumbnails directory`);
     
     for (const item of items) {
-      const itemPath = path.join(thumbnailsDir, item);
+      const itemPath = path.join(userThumbnailsDir, item);
       const stats = await fs.stat(itemPath);
       
       if (stats.isDirectory()) {
@@ -762,7 +764,7 @@ async function exportThumbnailFiles(userId) {
           const filePath = path.join(itemPath, file);
           const fileStats = await fs.stat(filePath);
           
-          if (fileStats.isFile()) {
+          if (fileStats.isFile() && /\.(jpg|jpeg|png|gif|webp)$/i.test(file)) {
             // Read file as base64 for backup
             const fileContent = await fs.readFile(filePath);
             folderFiles.push({
@@ -783,8 +785,8 @@ async function exportThumbnailFiles(userId) {
             files: folderFiles
           });
         }
-      } else if (stats.isFile()) {
-        // This is a standalone thumbnail file
+      } else if (stats.isFile() && /\.(jpg|jpeg|png|gif|webp)$/i.test(item)) {
+        // This is a standalone thumbnail file (root level)
         const fileContent = await fs.readFile(itemPath);
         result.files.push({
           filename: item,
@@ -795,7 +797,7 @@ async function exportThumbnailFiles(userId) {
       }
     }
     
-    console.log(`Total exported: ${result.folders.length} folders, ${result.files.length} standalone files, ${result.template_folder_mapping.length} template mappings`);
+    console.log(`Total exported for user ${userId}: ${result.folders.length} folders, ${result.files.length} standalone files, ${result.template_folder_mapping.length} template mappings`);
   } catch (err) {
     console.error('Error exporting thumbnail files:', err.message);
   }
@@ -1456,14 +1458,15 @@ async function importTitleSuggestionsData(titles, userId, folderMap, options = {
 
 /**
  * Import thumbnail files from backup
- * Restores thumbnail folders and files
+ * Restores thumbnail folders and files to user's thumbnail directory
  * For thumbnail files, we always overwrite existing files since backup is the source of truth
  * Returns folder mapping for updating broadcast templates
  * @param {Object} thumbnailData - Thumbnail files data
+ * @param {string} userId - User ID for user-specific thumbnail directory
  * @param {Object} options - Import options (skipDuplicates only affects count reporting)
  * @returns {Promise<{imported: number, skipped: number, overwritten: number, errors: string[], folderMap: Map}>}
  */
-async function importThumbnailFilesData(thumbnailData, options = {}) {
+async function importThumbnailFilesData(thumbnailData, userId, options = {}) {
   const result = { 
     imported: 0, 
     skipped: 0,
@@ -1475,11 +1478,13 @@ async function importThumbnailFilesData(thumbnailData, options = {}) {
   
   if (!thumbnailData) return result;
   
-  const thumbnailsDir = path.join(process.cwd(), 'public', 'uploads', 'thumbnails');
+  // User-specific thumbnail directory
+  const userThumbnailsDir = path.join(process.cwd(), 'public', 'uploads', 'thumbnails', String(userId));
   
-  // Ensure thumbnails directory exists
+  // Ensure user's thumbnails directory exists
   try {
-    await fs.mkdir(thumbnailsDir, { recursive: true });
+    await fs.mkdir(userThumbnailsDir, { recursive: true });
+    console.log(`Created/verified user thumbnail directory: ${userThumbnailsDir}`);
   } catch (err) {
     // Directory may already exist
   }
@@ -1490,7 +1495,7 @@ async function importThumbnailFilesData(thumbnailData, options = {}) {
     
     // Build folder map from template mapping
     for (const mapping of thumbnailData.template_folder_mapping) {
-      if (mapping.template_name && mapping.folder_id) {
+      if (mapping.template_name && mapping.folder_id !== undefined) {
         result.folderMap.set(mapping.template_name, {
           folder_id: mapping.folder_id,
           thumbnail_index: mapping.thumbnail_index || 0,
@@ -1504,7 +1509,7 @@ async function importThumbnailFilesData(thumbnailData, options = {}) {
   // Import folder-based thumbnails
   if (thumbnailData.folders && Array.isArray(thumbnailData.folders)) {
     for (const folder of thumbnailData.folders) {
-      const folderPath = path.join(thumbnailsDir, folder.folder_id);
+      const folderPath = path.join(userThumbnailsDir, folder.folder_id);
       
       try {
         // Create folder if it doesn't exist
@@ -1552,10 +1557,10 @@ async function importThumbnailFilesData(thumbnailData, options = {}) {
     }
   }
   
-  // Import standalone thumbnail files
+  // Import standalone thumbnail files (root level)
   if (thumbnailData.files && Array.isArray(thumbnailData.files)) {
     for (const file of thumbnailData.files) {
-      const filePath = path.join(thumbnailsDir, file.filename);
+      const filePath = path.join(userThumbnailsDir, file.filename);
       
       try {
         // Check if file already exists
@@ -1579,7 +1584,7 @@ async function importThumbnailFilesData(thumbnailData, options = {}) {
     }
   }
   
-  console.log(`Thumbnail import complete: ${result.imported} new, ${result.overwritten} overwritten, ${result.skipped} failed, ${result.folderMap.size} template mappings`);
+  console.log(`Thumbnail import complete for user ${userId}: ${result.imported} new, ${result.overwritten} overwritten, ${result.skipped} failed, ${result.folderMap.size} template mappings`);
   
   return result;
 }
@@ -1613,7 +1618,7 @@ async function comprehensiveImport(backupData, userId, options = {}) {
   let thumbnailFolderMap = new Map();
   if (backupData.thumbnail_files) {
     const thumbnailResult = await importThumbnailFilesData(
-      backupData.thumbnail_files, options
+      backupData.thumbnail_files, userId, options
     );
     results.results.thumbnail_files = {
       imported: thumbnailResult.imported,
