@@ -213,16 +213,20 @@
       </div>
     </div>
     
-    <!-- Active Streams List -->
+    <!-- Active Broadcasts - Grouped by Channel -->
     <div id="activeStreamsContainer">
       <div class="flex items-center justify-between mb-3">
-        <h3 class="text-sm font-medium text-gray-300">Active Broadcasts</h3>
+        <h3 class="text-sm font-medium text-gray-300 flex items-center gap-2">
+          Active Broadcasts
+          <button onclick="toggleAllChannels()" id="toggleAllBtn" class="hidden text-xs text-gray-500 hover:text-gray-300 transition-colors">
+            <i class="ti ti-arrows-maximize" id="toggleAllIcon"></i>
+          </button>
+        </h3>
       </div>
       <div id="activeStreamsList" class="space-y-2">
-        <div class="text-center py-6 text-gray-500">
-          <i class="ti ti-broadcast-off text-3xl mb-2"></i>
-          <p class="text-sm">No active broadcasts</p>
-          <p class="text-xs text-gray-600">Start streaming to see live stats here</p>
+        <div class="text-center py-4 text-gray-500">
+          <i class="ti ti-broadcast-off text-2xl mb-1"></i>
+          <p class="text-xs">No active broadcasts</p>
         </div>
       </div>
     </div>
@@ -1997,11 +2001,16 @@ async function refreshConnectionStatus() {
 }
 
 // Update live stats UI
+// Track collapsed channels state
+let collapsedChannels = new Set();
+let allChannelsCollapsed = false;
+
 function updateLiveStatsUI(stats) {
   const activeStreamsList = document.getElementById('activeStreamsList');
   const liveCount = document.getElementById('liveCount');
   const totalViewers = document.getElementById('totalViewers');
   const viewersDetail = document.getElementById('viewersDetail');
+  const toggleAllBtn = document.getElementById('toggleAllBtn');
   
   // Filter only live broadcasts
   const liveStreams = stats.filter(s => s.lifeCycleStatus === 'live' && !s.error);
@@ -2021,41 +2030,151 @@ function updateLiveStatsUI(stats) {
   
   // Update active streams list
   if (liveStreams.length === 0) {
+    toggleAllBtn?.classList.add('hidden');
     activeStreamsList.innerHTML = `
-      <div class="text-center py-6 text-gray-500">
-        <i class="ti ti-broadcast-off text-3xl mb-2"></i>
-        <p class="text-sm">No active broadcasts</p>
-        <p class="text-xs text-gray-600">Start streaming to see live stats here</p>
+      <div class="text-center py-4 text-gray-500">
+        <i class="ti ti-broadcast-off text-2xl mb-1"></i>
+        <p class="text-xs">No active broadcasts</p>
       </div>
     `;
     return;
   }
   
-  activeStreamsList.innerHTML = liveStreams.map(stream => `
-    <div class="flex items-center justify-between p-3 bg-dark-700/50 rounded-xl border border-gray-600/30 hover:border-red-500/30 transition-colors">
-      <div class="flex items-center gap-3 min-w-0 flex-1">
-        <div class="relative flex-shrink-0">
-          <div class="w-10 h-10 bg-red-500/20 rounded-lg flex items-center justify-center">
-            <i class="ti ti-broadcast text-red-400"></i>
+  // Group streams by channel
+  const channelGroups = {};
+  liveStreams.forEach(stream => {
+    const channelName = stream.channelName || 'Unknown Channel';
+    if (!channelGroups[channelName]) {
+      channelGroups[channelName] = {
+        streams: [],
+        totalViewers: 0
+      };
+    }
+    channelGroups[channelName].streams.push(stream);
+    channelGroups[channelName].totalViewers += (stream.concurrentViewers || 0);
+  });
+  
+  const channelNames = Object.keys(channelGroups);
+  
+  // Show toggle all button if multiple channels
+  if (channelNames.length > 1) {
+    toggleAllBtn?.classList.remove('hidden');
+  } else {
+    toggleAllBtn?.classList.add('hidden');
+  }
+  
+  // Render grouped channels
+  activeStreamsList.innerHTML = channelNames.map(channelName => {
+    const group = channelGroups[channelName];
+    const isCollapsed = collapsedChannels.has(channelName);
+    const channelId = channelName.replace(/[^a-zA-Z0-9]/g, '_');
+    
+    return `
+      <div class="channel-group" data-channel="${escapeHtml(channelName)}">
+        <!-- Channel Header -->
+        <div class="flex items-center justify-between px-3 py-2 bg-dark-700/80 rounded-lg cursor-pointer hover:bg-dark-700 transition-colors border border-gray-700/50"
+          onclick="toggleChannel('${escapeHtml(channelName)}')">
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="w-2 h-2 bg-red-500 rounded-full animate-pulse flex-shrink-0"></span>
+            <span class="text-sm font-medium text-white truncate">${escapeHtml(channelName)}</span>
+            <span class="text-xs text-gray-500">(${group.streams.length})</span>
           </div>
-          <span class="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-pulse"></span>
+          <div class="flex items-center gap-3 flex-shrink-0">
+            <span class="text-sm font-semibold text-white">${formatNumber(group.totalViewers)}</span>
+            <i class="ti ti-chevron-${isCollapsed ? 'down' : 'up'} text-gray-400 text-sm transition-transform" id="chevron_${channelId}"></i>
+          </div>
         </div>
-        <div class="min-w-0 flex-1">
-          <p class="text-sm font-medium text-white truncate">${escapeHtml(stream.title || 'Untitled')}</p>
-          <p class="text-xs text-gray-400">${escapeHtml(stream.channelName || 'Unknown Channel')}</p>
+        
+        <!-- Channel Streams -->
+        <div id="streams_${channelId}" class="${isCollapsed ? 'hidden' : ''} mt-1 space-y-1 pl-4">
+          ${group.streams.map(stream => `
+            <div class="flex items-center justify-between px-3 py-2 bg-dark-700/30 rounded-lg border-l-2 border-red-500/50">
+              <div class="flex items-center gap-2 min-w-0 flex-1">
+                <i class="ti ti-broadcast text-red-400 text-sm flex-shrink-0"></i>
+                <span class="text-xs text-gray-300 truncate">${escapeHtml(stream.title || 'Untitled')}</span>
+              </div>
+              <div class="flex items-center gap-2 flex-shrink-0">
+                <span class="text-xs font-medium text-white">${formatNumber(stream.concurrentViewers || 0)}</span>
+                ${getConnectionBadgeCompact(stream.streamHealth, stream.healthDetails)}
+              </div>
+            </div>
+          `).join('')}
         </div>
       </div>
-      <div class="flex items-center gap-4 flex-shrink-0">
-        <div class="text-center">
-          <p class="text-lg font-bold text-white">${formatNumber(stream.concurrentViewers || 0)}</p>
-          <p class="text-xs text-gray-500">viewers</p>
-        </div>
-        <div class="text-center">
-          ${getConnectionBadge(stream.streamHealth, stream.healthDetails)}
-        </div>
-      </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
+}
+
+// Toggle single channel visibility
+function toggleChannel(channelName) {
+  const channelId = channelName.replace(/[^a-zA-Z0-9]/g, '_');
+  const streamsDiv = document.getElementById(`streams_${channelId}`);
+  const chevron = document.getElementById(`chevron_${channelId}`);
+  
+  if (collapsedChannels.has(channelName)) {
+    collapsedChannels.delete(channelName);
+    streamsDiv?.classList.remove('hidden');
+    chevron?.classList.remove('ti-chevron-down');
+    chevron?.classList.add('ti-chevron-up');
+  } else {
+    collapsedChannels.add(channelName);
+    streamsDiv?.classList.add('hidden');
+    chevron?.classList.remove('ti-chevron-up');
+    chevron?.classList.add('ti-chevron-down');
+  }
+  updateToggleAllIcon();
+}
+
+// Toggle all channels
+function toggleAllChannels() {
+  const channelGroups = document.querySelectorAll('.channel-group');
+  allChannelsCollapsed = !allChannelsCollapsed;
+  
+  channelGroups.forEach(group => {
+    const channelName = group.dataset.channel;
+    const channelId = channelName.replace(/[^a-zA-Z0-9]/g, '_');
+    const streamsDiv = document.getElementById(`streams_${channelId}`);
+    const chevron = document.getElementById(`chevron_${channelId}`);
+    
+    if (allChannelsCollapsed) {
+      collapsedChannels.add(channelName);
+      streamsDiv?.classList.add('hidden');
+      chevron?.classList.remove('ti-chevron-up');
+      chevron?.classList.add('ti-chevron-down');
+    } else {
+      collapsedChannels.delete(channelName);
+      streamsDiv?.classList.remove('hidden');
+      chevron?.classList.remove('ti-chevron-down');
+      chevron?.classList.add('ti-chevron-up');
+    }
+  });
+  updateToggleAllIcon();
+}
+
+// Update toggle all icon
+function updateToggleAllIcon() {
+  const toggleAllIcon = document.getElementById('toggleAllIcon');
+  if (toggleAllIcon) {
+    toggleAllIcon.className = allChannelsCollapsed ? 'ti ti-arrows-maximize' : 'ti ti-arrows-minimize';
+  }
+}
+
+// Compact connection badge for stream items
+function getConnectionBadgeCompact(streamHealth, healthDetails) {
+  const status = healthDetails?.status || streamHealth || 'unknown';
+  
+  const badges = {
+    'good': '<span class="px-1.5 py-0.5 bg-green-500/20 text-green-400 text-[10px] rounded">Good</span>',
+    'ok': '<span class="px-1.5 py-0.5 bg-yellow-500/20 text-yellow-400 text-[10px] rounded">OK</span>',
+    'bad': '<span class="px-1.5 py-0.5 bg-red-500/20 text-red-400 text-[10px] rounded">Poor</span>',
+    'noData': '<span class="px-1.5 py-0.5 bg-gray-500/20 text-gray-400 text-[10px] rounded">-</span>',
+    'active': '<span class="px-1.5 py-0.5 bg-green-500/20 text-green-400 text-[10px] rounded">Good</span>',
+    'ready': '<span class="px-1.5 py-0.5 bg-blue-500/20 text-blue-400 text-[10px] rounded">Ready</span>',
+    'inactive': '<span class="px-1.5 py-0.5 bg-gray-500/20 text-gray-400 text-[10px] rounded">-</span>',
+    'unknown': '<span class="px-1.5 py-0.5 bg-gray-500/20 text-gray-400 text-[10px] rounded">-</span>'
+  };
+  
+  return badges[status] || badges['unknown'];
 }
 
 // Update connection UI
