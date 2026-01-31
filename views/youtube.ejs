@@ -175,10 +175,10 @@
           <span class="text-gray-500">viewers</span>
         </div>
         
-        <!-- Connection -->
+        <!-- Connection - icon only, hide OK/Connected text -->
         <div class="flex items-center gap-1.5" title="Connection Status">
           <i class="ti ti-wifi text-green-400" id="connectionIcon"></i>
-          <span id="connectionStatus" class="text-green-400 font-medium">Connected</span>
+          <span id="connectionStatus" class="hidden">Connected</span>
           <span id="connectionDetail" class="text-gray-500"></span>
         </div>
       </div>
@@ -204,9 +204,10 @@
             <span id="liveCountNumMobile" class="text-white font-semibold text-base">0</span>
             <span class="text-gray-500">live</span>
           </div>
-          <!-- Quota -->
+          <!-- Quota with Channel Name -->
           <div class="flex items-center gap-2">
             <i class="ti ti-api text-cyan-400 text-lg"></i>
+            <span id="quotaChannelNameMobile" class="text-gray-400 text-xs"></span>
             <span id="quotaUsedMobile" class="text-white font-semibold text-base">10K</span>
           </div>
           <!-- Viewers -->
@@ -2228,6 +2229,7 @@ function updateConnectionUI(data) {
   const quotaUsed = document.getElementById('quotaUsed');
   const quotaUsedMobile = document.getElementById('quotaUsedMobile');
   const quotaChannelName = document.getElementById('quotaChannelName');
+  const quotaChannelNameMobile = document.getElementById('quotaChannelNameMobile');
   
   // Connection status
   const connectedCount = data.accounts.filter(a => a.connected).length;
@@ -2286,11 +2288,19 @@ function updateConnectionUI(data) {
     const limitK = dailyLimit >= 1000 ? `${(dailyLimit/1000).toFixed(0)}K` : dailyLimit;
     
     // Show primary channel name
-    if (quotaChannelName && primaryAccount.channelName) {
+    if (primaryAccount.channelName) {
       const shortName = primaryAccount.channelName.length > 15 
         ? primaryAccount.channelName.substring(0, 12) + '...' 
         : primaryAccount.channelName;
-      quotaChannelName.textContent = `[${shortName}]`;
+      const mobileShortName = primaryAccount.channelName.length > 10 
+        ? primaryAccount.channelName.substring(0, 8) + '..' 
+        : primaryAccount.channelName;
+      if (quotaChannelName) {
+        quotaChannelName.textContent = `[${shortName}]`;
+      }
+      if (quotaChannelNameMobile) {
+        quotaChannelNameMobile.textContent = `[${mobileShortName}]`;
+      }
     }
     
     if (!quotaOk) {
