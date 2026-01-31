@@ -631,10 +631,56 @@
           <input type="hidden" id="tagsHidden" name="tags" value="">
         </div>
 
-        <!-- Hidden default settings (always ON) -->
-        <input type="hidden" id="enableAutoStart" name="enableAutoStart" value="true">
-        <input type="hidden" id="enableAutoStop" name="enableAutoStop" value="true">
-        <input type="hidden" id="unlistReplayOnEnd" name="unlistReplayOnEnd" value="true">
+        <!-- Stream Settings -->
+        <div class="bg-dark-700/50 rounded-lg p-4 space-y-3">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <i class="ti ti-settings text-primary"></i>
+              <label class="text-sm font-medium text-white">Stream Settings</label>
+            </div>
+          </div>
+          
+          <div class="space-y-2">
+            <!-- Auto Start -->
+            <label class="flex items-center justify-between cursor-pointer group">
+              <span class="text-sm text-gray-300 group-hover:text-white transition-colors">Auto-start stream</span>
+              <div class="relative">
+                <input type="checkbox" id="enableAutoStart" name="enableAutoStart" value="true" checked
+                  class="sr-only peer"
+                  onchange="this.value = this.checked ? 'true' : 'false'">
+                <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+              </div>
+            </label>
+            
+            <!-- Auto Stop -->
+            <label class="flex items-center justify-between cursor-pointer group">
+              <span class="text-sm text-gray-300 group-hover:text-white transition-colors">Auto-stop stream</span>
+              <div class="relative">
+                <input type="checkbox" id="enableAutoStop" name="enableAutoStop" value="true" checked
+                  class="sr-only peer"
+                  onchange="this.value = this.checked ? 'true' : 'false'">
+                <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+              </div>
+            </label>
+            
+            <!-- Unlist Replay on End -->
+            <label class="flex items-center justify-between cursor-pointer group">
+              <span class="text-sm text-gray-300 group-hover:text-white transition-colors">Unlist replay when stream ends</span>
+              <div class="relative">
+                <input type="checkbox" id="unlistReplayOnEnd" name="unlistReplayOnEnd" value="true" checked
+                  class="sr-only peer"
+                  onchange="this.value = this.checked ? 'true' : 'false'">
+                <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+              </div>
+            </label>
+          </div>
+          
+          <p class="text-xs text-gray-500 mt-2">
+            <i class="ti ti-info-circle"></i>
+            Unlist replay will automatically change video privacy to unlisted after stream ends
+          </p>
+        </div>
+
         <input type="hidden" id="pinnedThumbnail" name="pinnedThumbnail" value="">
         <input type="hidden" id="streamKeyFolderMapping" name="streamKeyFolderMapping" value="">
 
