@@ -148,56 +148,76 @@
     </div>
   </div>
 
-  <!-- Live Stats Dashboard - Minimalist -->
-  <div id="liveStatsDashboard" class="bg-gray-800 rounded-xl p-3 sm:p-4 shadow-lg border border-gray-700/50 mb-6">
-    <!-- Header Row: Title + Stats + Actions -->
-    <div class="flex items-center justify-between gap-3 flex-wrap">
-      <!-- Left: Title & Live Badge -->
-      <div class="flex items-center gap-2">
+  <!-- Live Stats Dashboard - Compact -->
+  <div id="liveStatsDashboard" class="bg-gray-800 rounded-xl p-4 shadow-lg border border-gray-700/50 mb-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-base font-semibold flex items-center gap-2">
         <i class="ti ti-broadcast text-green-400"></i>
-        <span class="font-semibold text-sm">Live Dashboard</span>
-        <span id="liveCount" class="bg-red-500 text-white text-xs px-1.5 py-0.5 rounded hidden">0</span>
-      </div>
-      
-      <!-- Center: Compact Stats -->
-      <div class="flex items-center gap-4 text-xs">
-        <div class="flex items-center gap-1.5" title="API Quota">
-          <i class="ti ti-api text-primary"></i>
-          <span id="quotaUsed" class="text-white font-medium">-</span>
-          <span class="text-gray-500">/ 10k</span>
-        </div>
-        <div class="flex items-center gap-1.5" title="Connection">
-          <i class="ti ti-wifi text-green-400" id="connectionIcon"></i>
-          <span id="connectionStatus" class="text-green-400 font-medium">-</span>
-        </div>
-        <div class="flex items-center gap-1.5" title="Total Viewers">
-          <i class="ti ti-users text-blue-400"></i>
-          <span id="totalViewers" class="text-white font-medium">0</span>
-        </div>
-      </div>
-      
-      <!-- Right: Actions -->
-      <div class="flex items-center gap-1">
-        <button onclick="refreshLiveStats()" id="refreshStatsBtn" class="p-1.5 hover:bg-dark-700 rounded transition-colors" title="Refresh">
-          <i class="ti ti-refresh text-gray-400 text-sm" id="refreshIcon"></i>
+        <span>Live Dashboard</span>
+        <span id="liveCount" class="bg-red-500/20 text-red-400 text-xs px-2 py-0.5 rounded-full hidden">0 Live</span>
+      </h2>
+      <div class="flex items-center gap-2">
+        <button onclick="refreshLiveStats()" id="refreshStatsBtn"
+          class="bg-dark-700 hover:bg-dark-600 text-gray-300 px-2.5 py-1 rounded-lg text-xs transition-colors flex items-center gap-1">
+          <i class="ti ti-refresh text-sm" id="refreshIcon"></i>
+          <span>Refresh</span>
         </button>
-        <button onclick="toggleAutoRefresh()" id="autoRefreshBtn" class="p-1.5 hover:bg-dark-700 rounded transition-colors" title="Auto refresh">
-          <i class="ti ti-clock text-gray-400 text-sm"></i>
-          <span id="autoRefreshText" class="hidden"></span>
+        <button onclick="toggleAutoRefresh()" id="autoRefreshBtn"
+          class="bg-dark-700 hover:bg-dark-600 text-gray-400 px-2.5 py-1 rounded-lg text-xs transition-colors flex items-center gap-1" title="Auto refresh every 30s">
+          <i class="ti ti-clock text-sm"></i>
+          <span id="autoRefreshText">Auto</span>
         </button>
       </div>
     </div>
     
-    <!-- Hidden elements for compatibility -->
-    <p id="quotaResetTime" class="hidden"></p>
-    <p id="connectionDetail" class="hidden"></p>
-    <p id="viewersDetail" class="hidden"></p>
+    <!-- Stats Row - Compact -->
+    <div class="grid grid-cols-3 gap-3 mb-4">
+      <div class="bg-dark-700/50 rounded-lg p-3 border border-gray-600/30">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-[10px] text-gray-400 uppercase">API Quota</span>
+          <i class="ti ti-api text-primary text-sm"></i>
+        </div>
+        <div class="flex items-baseline gap-1">
+          <span id="quotaUsed" class="text-lg font-bold text-white">-</span>
+          <span class="text-gray-500 text-xs">/ 10k</span>
+        </div>
+        <p id="quotaResetTime" class="text-[10px] text-gray-500 mt-1">Reset: -</p>
+      </div>
+      
+      <div class="bg-dark-700/50 rounded-lg p-3 border border-gray-600/30">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-[10px] text-gray-400 uppercase">Connection</span>
+          <i class="ti ti-wifi text-green-400 text-sm" id="connectionIcon"></i>
+        </div>
+        <span id="connectionStatus" class="text-lg font-bold text-green-400">-</span>
+        <p id="connectionDetail" class="text-[10px] text-gray-500 mt-1">Checking...</p>
+      </div>
+      
+      <div class="bg-dark-700/50 rounded-lg p-3 border border-gray-600/30">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-[10px] text-gray-400 uppercase">Viewers</span>
+          <i class="ti ti-users text-blue-400 text-sm"></i>
+        </div>
+        <div class="flex items-baseline gap-1">
+          <span id="totalViewers" class="text-lg font-bold text-white">0</span>
+          <span class="text-gray-500 text-xs">watching</span>
+        </div>
+        <p id="viewersDetail" class="text-[10px] text-gray-500 mt-1">Across 0 streams</p>
+      </div>
+    </div>
+    
+    <!-- Hidden elements -->
     <div id="quotaBar" class="hidden"></div>
     
-    <!-- Active Broadcasts - Compact List -->
-    <div id="activeStreamsContainer" class="mt-3">
-      <div id="activeStreamsList">
-        <!-- Will be populated by JS -->
+    <!-- Active Broadcasts -->
+    <div id="activeStreamsContainer">
+      <h3 class="text-xs font-medium text-gray-400 uppercase mb-2">Active Broadcasts</h3>
+      <div id="activeStreamsList" class="space-y-1.5">
+        <div class="text-center py-4 text-gray-500">
+          <i class="ti ti-broadcast-off text-xl mb-1"></i>
+          <p class="text-xs">No active broadcasts</p>
+        </div>
       </div>
     </div>
   </div>
@@ -1973,19 +1993,19 @@ async function refreshConnectionStatus() {
 // Update live stats UI
 // Track collapsed channels state
 let collapsedChannels = new Set();
-let allChannelsCollapsed = false;
 
 function updateLiveStatsUI(stats) {
   const activeStreamsList = document.getElementById('activeStreamsList');
   const liveCount = document.getElementById('liveCount');
   const totalViewers = document.getElementById('totalViewers');
+  const viewersDetail = document.getElementById('viewersDetail');
   
   // Filter only live broadcasts
   const liveStreams = stats.filter(s => s.lifeCycleStatus === 'live' && !s.error);
   
-  // Update live count badge - compact
+  // Update live count badge
   if (liveStreams.length > 0) {
-    liveCount.textContent = liveStreams.length;
+    liveCount.textContent = `${liveStreams.length} Live`;
     liveCount.classList.remove('hidden');
   } else {
     liveCount.classList.add('hidden');
@@ -1994,17 +2014,23 @@ function updateLiveStatsUI(stats) {
   // Calculate total viewers
   const total = liveStreams.reduce((sum, s) => sum + (s.concurrentViewers || 0), 0);
   totalViewers.textContent = formatNumber(total);
+  viewersDetail.textContent = `Across ${liveStreams.length} stream${liveStreams.length !== 1 ? 's' : ''}`;
   
-  // No active streams - hide container
+  // No active streams
   if (liveStreams.length === 0) {
-    activeStreamsList.innerHTML = '';
+    activeStreamsList.innerHTML = `
+      <div class="text-center py-4 text-gray-500">
+        <i class="ti ti-broadcast-off text-xl mb-1"></i>
+        <p class="text-xs">No active broadcasts</p>
+      </div>
+    `;
     return;
   }
   
   // Group streams by channel
   const channelGroups = {};
   liveStreams.forEach(stream => {
-    const channelName = stream.channelName || 'Unknown';
+    const channelName = stream.channelName || 'Unknown Channel';
     if (!channelGroups[channelName]) {
       channelGroups[channelName] = { streams: [], totalViewers: 0 };
     }
@@ -2014,7 +2040,7 @@ function updateLiveStatsUI(stats) {
   
   const channelNames = Object.keys(channelGroups);
   
-  // Render ultra-compact grouped channels
+  // Render grouped channels - compact but readable
   activeStreamsList.innerHTML = channelNames.map(channelName => {
     const group = channelGroups[channelName];
     const isCollapsed = collapsedChannels.has(channelName);
@@ -2022,20 +2048,33 @@ function updateLiveStatsUI(stats) {
     
     return `
       <div class="channel-group" data-channel="${escapeHtml(channelName)}">
-        <div class="flex items-center gap-2 px-2 py-1.5 bg-dark-700/60 rounded cursor-pointer hover:bg-dark-700 transition-colors text-xs"
+        <!-- Channel Header -->
+        <div class="flex items-center justify-between px-3 py-2 bg-dark-700/70 rounded-lg cursor-pointer hover:bg-dark-700 transition-colors"
           onclick="toggleChannel('${escapeHtml(channelName)}')">
-          <span class="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></span>
-          <span class="text-gray-300 truncate flex-1">${escapeHtml(channelName)}</span>
-          <span class="text-gray-500">${group.streams.length}</span>
-          <span class="text-white font-medium">${formatNumber(group.totalViewers)}</span>
-          <i class="ti ti-chevron-${isCollapsed ? 'right' : 'down'} text-gray-500 text-[10px]" id="chevron_${channelId}"></i>
+          <div class="flex items-center gap-2 min-w-0 flex-1">
+            <span class="w-2 h-2 bg-red-500 rounded-full animate-pulse flex-shrink-0"></span>
+            <span class="text-sm font-medium text-white truncate">${escapeHtml(channelName)}</span>
+            <span class="text-xs text-gray-500">(${group.streams.length})</span>
+          </div>
+          <div class="flex items-center gap-2 flex-shrink-0">
+            <span class="text-sm font-semibold text-white">${formatNumber(group.totalViewers)}</span>
+            <span class="text-[10px] text-gray-500">viewers</span>
+            <i class="ti ti-chevron-${isCollapsed ? 'right' : 'down'} text-gray-400 text-xs" id="chevron_${channelId}"></i>
+          </div>
         </div>
-        <div id="streams_${channelId}" class="${isCollapsed ? 'hidden' : ''} mt-1 ml-3 space-y-0.5">
+        
+        <!-- Channel Streams -->
+        <div id="streams_${channelId}" class="${isCollapsed ? 'hidden' : ''} mt-1 space-y-1 ml-4">
           ${group.streams.map(stream => `
-            <div class="flex items-center gap-2 px-2 py-1 text-[11px] text-gray-400 border-l border-red-500/30">
-              <span class="truncate flex-1">${escapeHtml(stream.title || 'Untitled')}</span>
-              <span class="text-white">${formatNumber(stream.concurrentViewers || 0)}</span>
-              ${getStatusDot(stream.streamHealth, stream.healthDetails)}
+            <div class="flex items-center justify-between px-2.5 py-1.5 bg-dark-700/40 rounded border-l-2 border-red-500/50 text-xs">
+              <div class="flex items-center gap-2 min-w-0 flex-1">
+                <i class="ti ti-broadcast text-red-400 text-xs flex-shrink-0"></i>
+                <span class="text-gray-300 truncate">${escapeHtml(stream.title || 'Untitled')}</span>
+              </div>
+              <div class="flex items-center gap-2 flex-shrink-0">
+                <span class="font-medium text-white">${formatNumber(stream.concurrentViewers || 0)}</span>
+                ${getStatusBadge(stream.streamHealth, stream.healthDetails)}
+              </div>
             </div>
           `).join('')}
         </div>
@@ -2044,7 +2083,7 @@ function updateLiveStatsUI(stats) {
   }).join('');
 }
 
-// Toggle single channel visibility
+// Toggle channel visibility
 function toggleChannel(channelName) {
   const channelId = channelName.replace(/[^a-zA-Z0-9]/g, '_');
   const streamsDiv = document.getElementById(`streams_${channelId}`);
@@ -2061,15 +2100,17 @@ function toggleChannel(channelName) {
   }
 }
 
-// Simple status dot
-function getStatusDot(streamHealth, healthDetails) {
+// Compact status badge
+function getStatusBadge(streamHealth, healthDetails) {
   const status = healthDetails?.status || streamHealth || 'unknown';
-  const colors = {
-    'good': 'bg-green-400', 'active': 'bg-green-400',
-    'ok': 'bg-yellow-400', 'ready': 'bg-blue-400',
-    'bad': 'bg-red-400'
+  const badges = {
+    'good': '<span class="px-1.5 py-0.5 bg-green-500/20 text-green-400 text-[10px] rounded">Good</span>',
+    'ok': '<span class="px-1.5 py-0.5 bg-yellow-500/20 text-yellow-400 text-[10px] rounded">OK</span>',
+    'bad': '<span class="px-1.5 py-0.5 bg-red-500/20 text-red-400 text-[10px] rounded">Poor</span>',
+    'active': '<span class="px-1.5 py-0.5 bg-green-500/20 text-green-400 text-[10px] rounded">Good</span>',
+    'ready': '<span class="px-1.5 py-0.5 bg-blue-500/20 text-blue-400 text-[10px] rounded">Ready</span>',
   };
-  return `<span class="w-1.5 h-1.5 rounded-full ${colors[status] || 'bg-gray-400'}"></span>`;
+  return badges[status] || '<span class="px-1.5 py-0.5 bg-gray-500/20 text-gray-400 text-[10px] rounded">-</span>';
 }
 
 // Update connection UI
@@ -2078,37 +2119,46 @@ function updateConnectionUI(data) {
   const connectionDetail = document.getElementById('connectionDetail');
   const connectionIcon = document.getElementById('connectionIcon');
   const quotaUsed = document.getElementById('quotaUsed');
-  const quotaBar = document.getElementById('quotaBar');
   const quotaResetTime = document.getElementById('quotaResetTime');
   
-  // Connection status - compact
+  // Connection status
   const connectedCount = data.accounts.filter(a => a.connected).length;
   const totalAccounts = data.accounts.length;
   const allConnected = connectedCount === totalAccounts;
   const quotaOk = data.accounts.every(a => a.quotaOk !== false);
   
   if (allConnected && quotaOk) {
-    connectionStatus.textContent = 'OK';
-    connectionStatus.className = 'text-green-400 font-medium';
-    connectionIcon.className = 'ti ti-wifi text-green-400';
+    connectionStatus.textContent = 'Good';
+    connectionStatus.className = 'text-lg font-bold text-green-400';
+    connectionIcon.className = 'ti ti-wifi text-green-400 text-sm';
+    connectionDetail.textContent = `${totalAccounts} account${totalAccounts !== 1 ? 's' : ''} connected`;
   } else if (connectedCount > 0) {
-    connectionStatus.textContent = `${connectedCount}/${totalAccounts}`;
-    connectionStatus.className = 'text-yellow-400 font-medium';
-    connectionIcon.className = 'ti ti-wifi-1 text-yellow-400';
+    connectionStatus.textContent = 'Partial';
+    connectionStatus.className = 'text-lg font-bold text-yellow-400';
+    connectionIcon.className = 'ti ti-wifi-1 text-yellow-400 text-sm';
+    connectionDetail.textContent = `${connectedCount}/${totalAccounts} connected`;
   } else {
-    connectionStatus.textContent = 'Off';
-    connectionStatus.className = 'text-red-400 font-medium';
-    connectionIcon.className = 'ti ti-wifi-off text-red-400';
+    connectionStatus.textContent = 'Offline';
+    connectionStatus.className = 'text-lg font-bold text-red-400';
+    connectionIcon.className = 'ti ti-wifi-off text-red-400 text-sm';
+    connectionDetail.textContent = 'No connection';
   }
   
-  // Quota info - compact
+  // Quota info
   if (data.quota) {
     if (!quotaOk) {
       quotaUsed.textContent = 'Low';
-      quotaUsed.className = 'text-red-400 font-medium';
+      quotaUsed.className = 'text-lg font-bold text-red-400';
     } else {
       quotaUsed.textContent = 'OK';
-      quotaUsed.className = 'text-white font-medium';
+      quotaUsed.className = 'text-lg font-bold text-white';
+    }
+    
+    if (data.quota.resetTime) {
+      const resetDate = new Date(data.quota.resetTime);
+      const now = new Date();
+      const hoursUntilReset = Math.round((resetDate - now) / (1000 * 60 * 60));
+      quotaResetTime.textContent = `Reset ~${hoursUntilReset}h`;
     }
   }
 }
@@ -2116,11 +2166,14 @@ function updateConnectionUI(data) {
 // Toggle auto refresh
 function toggleAutoRefresh() {
   const btn = document.getElementById('autoRefreshBtn');
+  const text = document.getElementById('autoRefreshText');
   
   isAutoRefreshEnabled = !isAutoRefreshEnabled;
   
   if (isAutoRefreshEnabled) {
     btn.classList.add('text-green-400', 'bg-green-500/10');
+    btn.classList.remove('text-gray-400');
+    text.textContent = 'On';
     
     // Start auto refresh every 30 seconds
     autoRefreshInterval = setInterval(() => {
@@ -2129,6 +2182,8 @@ function toggleAutoRefresh() {
     }, 30000);
   } else {
     btn.classList.remove('text-green-400', 'bg-green-500/10');
+    btn.classList.add('text-gray-400');
+    text.textContent = 'Auto';
     
     if (autoRefreshInterval) {
       clearInterval(autoRefreshInterval);
