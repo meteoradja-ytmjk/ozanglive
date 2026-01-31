@@ -184,8 +184,9 @@
         <button onclick="refreshLiveStats()" id="refreshStatsBtn" class="p-1.5 hover:bg-dark-700 rounded-lg transition-colors" title="Refresh">
           <i class="ti ti-refresh text-gray-400 hover:text-white" id="refreshIcon"></i>
         </button>
-        <button onclick="toggleAutoRefresh()" id="autoRefreshBtn" class="p-1.5 hover:bg-dark-700 rounded-lg transition-colors" title="Auto refresh">
-          <i class="ti ti-clock text-gray-400"></i>
+        <button onclick="toggleAutoRefresh()" id="autoRefreshBtn" class="p-1.5 hover:bg-dark-700 rounded-lg transition-colors flex items-center gap-1" title="Auto refresh">
+          <i class="ti ti-clock text-gray-400" id="autoRefreshIcon"></i>
+          <span id="autoRefreshLabel" class="text-xs text-gray-500">OFF</span>
         </button>
       </div>
     </div>
@@ -220,8 +221,9 @@
           <button onclick="refreshLiveStats()" id="refreshStatsBtnMobile" class="p-1.5 hover:bg-dark-700 rounded transition-colors" title="Refresh">
             <i class="ti ti-refresh text-gray-400 text-base" id="refreshIconMobile"></i>
           </button>
-          <button onclick="toggleAutoRefresh()" id="autoRefreshBtnMobile" class="p-1.5 hover:bg-dark-700 rounded transition-colors" title="Auto">
-            <i class="ti ti-clock text-gray-400 text-base"></i>
+          <button onclick="toggleAutoRefresh()" id="autoRefreshBtnMobile" class="p-1.5 hover:bg-dark-700 rounded transition-colors flex items-center gap-1" title="Auto">
+            <i class="ti ti-clock text-gray-400 text-base" id="autoRefreshIconMobile"></i>
+            <span id="autoRefreshLabelMobile" class="text-xs text-gray-500">OFF</span>
           </button>
         </div>
       </div>
@@ -2289,14 +2291,29 @@ function updateConnectionUI(data) {
 // Toggle auto refresh
 function toggleAutoRefresh() {
   const btn = document.getElementById('autoRefreshBtn');
+  const btnMobile = document.getElementById('autoRefreshBtnMobile');
+  const icon = document.getElementById('autoRefreshIcon');
+  const iconMobile = document.getElementById('autoRefreshIconMobile');
+  const label = document.getElementById('autoRefreshLabel');
+  const labelMobile = document.getElementById('autoRefreshLabelMobile');
   const text = document.getElementById('autoRefreshText');
   
   isAutoRefreshEnabled = !isAutoRefreshEnabled;
   
   if (isAutoRefreshEnabled) {
-    btn.classList.add('text-green-400', 'bg-green-500/10');
-    btn.classList.remove('text-gray-400');
-    text.textContent = 'On';
+    // Desktop
+    if (icon) icon.className = 'ti ti-clock text-green-400';
+    if (label) {
+      label.textContent = 'ON';
+      label.className = 'text-xs text-green-400 font-semibold';
+    }
+    // Mobile
+    if (iconMobile) iconMobile.className = 'ti ti-clock text-green-400 text-base';
+    if (labelMobile) {
+      labelMobile.textContent = 'ON';
+      labelMobile.className = 'text-xs text-green-400 font-semibold';
+    }
+    if (text) text.textContent = 'On';
     
     // Start auto refresh every 30 seconds
     autoRefreshInterval = setInterval(() => {
@@ -2304,9 +2321,19 @@ function toggleAutoRefresh() {
       refreshConnectionStatus();
     }, 30000);
   } else {
-    btn.classList.remove('text-green-400', 'bg-green-500/10');
-    btn.classList.add('text-gray-400');
-    text.textContent = 'Auto';
+    // Desktop
+    if (icon) icon.className = 'ti ti-clock text-gray-400';
+    if (label) {
+      label.textContent = 'OFF';
+      label.className = 'text-xs text-gray-500';
+    }
+    // Mobile
+    if (iconMobile) iconMobile.className = 'ti ti-clock text-gray-400 text-base';
+    if (labelMobile) {
+      labelMobile.textContent = 'OFF';
+      labelMobile.className = 'text-xs text-gray-500';
+    }
+    if (text) text.textContent = 'Auto';
     
     if (autoRefreshInterval) {
       clearInterval(autoRefreshInterval);
