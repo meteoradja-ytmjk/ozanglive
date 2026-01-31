@@ -4927,6 +4927,7 @@ app.get('/api/youtube/connection-status', isAuthenticated, async (req, res) => {
         statuses.push({
           accountId: account.id,
           channelName: account.channelName,
+          isPrimary: account.isPrimary || false,
           connected: connectionStatus.connected,
           quotaOk: connectionStatus.quotaOk,
           error: connectionStatus.error
@@ -4935,6 +4936,7 @@ app.get('/api/youtube/connection-status', isAuthenticated, async (req, res) => {
         statuses.push({
           accountId: account.id,
           channelName: account.channelName,
+          isPrimary: account.isPrimary || false,
           connected: false,
           quotaOk: false,
           error: err.message

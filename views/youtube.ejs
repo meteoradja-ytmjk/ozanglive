@@ -160,9 +160,10 @@
           <span class="text-gray-500">live</span>
         </div>
         
-        <!-- API Quota -->
-        <div class="flex items-center gap-1.5" title="API Quota">
+        <!-- API Quota - Per Primary Channel -->
+        <div class="flex items-center gap-1.5" title="API Quota (Primary Channel)">
           <i class="ti ti-api text-cyan-400"></i>
+          <span id="quotaChannelName" class="text-gray-400 text-xs"></span>
           <span id="quotaUsed" class="text-white font-semibold">10,000</span>
           <span class="text-gray-500">/ 10,000</span>
         </div>
@@ -193,11 +194,10 @@
       </div>
     </div>
     
-    <!-- Stats Bar - Mobile (2 rows) -->
+    <!-- Stats Bar - Mobile (compact) -->
     <div class="md:hidden">
-      <!-- Row 1: Main stats -->
       <div class="flex items-center justify-between text-xs">
-        <div class="flex items-center gap-4">
+        <div class="flex items-center gap-3">
           <!-- Live -->
           <div class="flex items-center gap-1">
             <i class="ti ti-broadcast text-purple-400"></i>
@@ -205,9 +205,10 @@
             <span class="text-gray-500">live</span>
           </div>
           <!-- Quota -->
-          <div class="flex items-center gap-1">
+          <div class="flex items-center gap-1" title="API Quota">
             <i class="ti ti-api text-cyan-400"></i>
             <span id="quotaUsedMobile" class="text-white font-semibold">10K</span>
+            <span class="text-gray-500">/ 10K</span>
           </div>
           <!-- Viewers -->
           <div class="flex items-center gap-1">
@@ -2211,12 +2212,16 @@ function updateConnectionUI(data) {
   const connectionIconMobile = document.getElementById('connectionIconMobile');
   const quotaUsed = document.getElementById('quotaUsed');
   const quotaUsedMobile = document.getElementById('quotaUsedMobile');
+  const quotaChannelName = document.getElementById('quotaChannelName');
   
   // Connection status
   const connectedCount = data.accounts.filter(a => a.connected).length;
   const totalAccounts = data.accounts.length;
   const allConnected = connectedCount === totalAccounts;
-  const quotaOk = data.accounts.every(a => a.quotaOk !== false);
+  
+  // Find primary account for quota display
+  const primaryAccount = data.accounts.find(a => a.isPrimary) || data.accounts[0];
+  const quotaOk = primaryAccount ? primaryAccount.quotaOk : true;
   
   if (allConnected && quotaOk) {
     if (connectionStatus) {
@@ -2256,28 +2261,31 @@ function updateConnectionUI(data) {
     if (connectionDetail) connectionDetail.textContent = '';
   }
   
-  // Quota info - show remaining quota
-  if (data.quota) {
-    const remaining = data.quota.remaining || 10000;
+  // Quota info - show for primary channel
+  if (data.quota && primaryAccount) {
+    const dailyLimit = data.quota.dailyLimit || 10000;
+    // Estimate remaining based on quotaOk status
+    // In real implementation, you'd track actual usage per account
+    const remaining = quotaOk ? dailyLimit : 0;
     const remainingK = remaining >= 1000 ? `${(remaining/1000).toFixed(remaining >= 10000 ? 0 : 1)}K` : remaining;
+    const limitK = dailyLimit >= 1000 ? `${(dailyLimit/1000).toFixed(0)}K` : dailyLimit;
     
-    if (!quotaOk || remaining < 1000) {
+    // Show primary channel name
+    if (quotaChannelName && primaryAccount.channelName) {
+      const shortName = primaryAccount.channelName.length > 15 
+        ? primaryAccount.channelName.substring(0, 12) + '...' 
+        : primaryAccount.channelName;
+      quotaChannelName.textContent = `[${shortName}]`;
+    }
+    
+    if (!quotaOk) {
       if (quotaUsed) {
-        quotaUsed.textContent = formatNumber(remaining);
+        quotaUsed.textContent = 'Exceeded';
         quotaUsed.className = 'text-red-400 font-semibold';
       }
       if (quotaUsedMobile) {
-        quotaUsedMobile.textContent = remainingK;
+        quotaUsedMobile.textContent = '0';
         quotaUsedMobile.className = 'text-red-400 font-semibold';
-      }
-    } else if (remaining < 5000) {
-      if (quotaUsed) {
-        quotaUsed.textContent = formatNumber(remaining);
-        quotaUsed.className = 'text-yellow-400 font-semibold';
-      }
-      if (quotaUsedMobile) {
-        quotaUsedMobile.textContent = remainingK;
-        quotaUsedMobile.className = 'text-yellow-400 font-semibold';
       }
     } else {
       if (quotaUsed) {
