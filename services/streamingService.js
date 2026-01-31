@@ -47,6 +47,7 @@ const PROCESS_CHECK_INTERVAL = 60 * 60 * 1000; // Every 60 minutes (was 30 minut
 /**
  * Handle unlist replay on stream end
  * Checks if the stream has YouTube broadcast settings with unlistReplayOnEnd enabled
+ * Uses delayed retry mechanism to wait for YouTube replay processing
  * @param {Object} stream - Stream object from database
  */
 async function handleUnlistReplayOnEnd(stream) {
@@ -54,38 +55,10 @@ async function handleUnlistReplayOnEnd(stream) {
   
   try {
     // Lazy require to avoid circular dependency
-    const youtubeService = require('./youtubeService');
-    const YouTubeCredentials = require('../models/YouTubeCredentials');
-    const YouTubeBroadcastSettings = require('../models/YouTubeBroadcastSettings');
+    const unlistReplayService = require('./unlistReplayService');
     
-    const settings = await YouTubeBroadcastSettings.findByBroadcastId(stream.youtube_broadcast_id);
-    
-    if (!settings || !settings.unlistReplayOnEnd) {
-      console.log(`[StreamingService] Unlist replay not enabled for broadcast ${stream.youtube_broadcast_id}`);
-      return;
-    }
-    
-    console.log(`[StreamingService] Unlisting replay for broadcast ${stream.youtube_broadcast_id}`);
-    
-    // Get credentials to make API call
-    const credentials = await YouTubeCredentials.findByUserId(stream.user_id);
-    if (!credentials) {
-      console.error(`[StreamingService] No YouTube credentials found for user ${stream.user_id}`);
-      return;
-    }
-    
-    const accessToken = await youtubeService.getAccessToken(
-      credentials.clientId,
-      credentials.clientSecret,
-      credentials.refreshToken
-    );
-    
-    const unlistResult = await youtubeService.unlistBroadcast(accessToken, stream.youtube_broadcast_id);
-    if (unlistResult.success) {
-      console.log(`[StreamingService] Successfully unlisted replay for broadcast ${stream.youtube_broadcast_id}`);
-    } else {
-      console.error(`[StreamingService] Failed to unlist replay: ${unlistResult.error}`);
-    }
+    // Use the new service which handles delayed retry logic
+    await unlistReplayService.handleStreamEnd(stream);
   } catch (err) {
     console.error(`[StreamingService] Error handling unlist replay:`, err.message);
   }

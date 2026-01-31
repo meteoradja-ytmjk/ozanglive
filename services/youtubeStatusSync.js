@@ -309,33 +309,23 @@ class YouTubeStatusSync {
     const check = this.activeChecks.get(streamId);
     
     // Handle unlist replay on end if configured
+    // Use the new unlistReplayService which handles delayed retry logic
     if (check && check.broadcastId && (reason === 'complete' || reason === 'broadcast_deleted')) {
       try {
         const YouTubeBroadcastSettings = require('../models/YouTubeBroadcastSettings');
         const settings = await YouTubeBroadcastSettings.findByBroadcastId(check.broadcastId);
         
+        // Only schedule unlist if user enabled it
         if (settings && settings.unlistReplayOnEnd) {
-          console.log(`[YouTubeStatusSync] Unlisting replay for broadcast ${check.broadcastId}`);
+          console.log(`[YouTubeStatusSync] Scheduling unlist for broadcast ${check.broadcastId}`);
           
-          // Get credentials to make API call
-          const credentials = await YouTubeCredentials.findByUserId(check.userId);
-          if (credentials) {
-            const accessToken = await youtubeService.getAccessToken(
-              credentials.clientId,
-              credentials.clientSecret,
-              credentials.refreshToken
-            );
-            
-            const unlistResult = await youtubeService.unlistBroadcast(accessToken, check.broadcastId);
-            if (unlistResult.success) {
-              console.log(`[YouTubeStatusSync] Successfully unlisted replay for broadcast ${check.broadcastId}`);
-            } else {
-              console.error(`[YouTubeStatusSync] Failed to unlist replay: ${unlistResult.error}`);
-            }
-          }
+          const unlistReplayService = require('./unlistReplayService');
+          unlistReplayService.scheduleUnlist(check.broadcastId, check.userId);
+        } else {
+          console.log(`[YouTubeStatusSync] Unlist replay not enabled for broadcast ${check.broadcastId}`);
         }
       } catch (err) {
-        console.error(`[YouTubeStatusSync] Error handling unlist replay:`, err.message);
+        console.error(`[YouTubeStatusSync] Error scheduling unlist replay:`, err.message);
       }
     }
 

@@ -910,46 +910,81 @@ class YouTubeService {
   }
 
   /**
-   * Update broadcast privacy status to unlisted
+   * Update broadcast/video privacy status to unlisted
    * Used to unlist live replay once stream ends
+   * Uses Videos API instead of LiveBroadcasts API for better compatibility
    * @param {string} accessToken - Access token
-   * @param {string} broadcastId - Broadcast ID
-   * @returns {Promise<{success: boolean, error?: string}>}
+   * @param {string} videoId - Video/Broadcast ID
+   * @param {number} retryCount - Current retry count (for delayed processing)
+   * @returns {Promise<{success: boolean, error?: string, needsRetry?: boolean}>}
    */
-  async unlistBroadcast(accessToken, broadcastId) {
+  async unlistBroadcast(accessToken, videoId, retryCount = 0) {
+    const maxRetries = 3;
+    
     try {
+      // Validate inputs
+      if (!accessToken || !videoId) {
+        console.error('[YouTubeService.unlistBroadcast] Missing required parameters');
+        return { success: false, error: 'Missing accessToken or videoId' };
+      }
+      
       const oauth2Client = new google.auth.OAuth2();
       oauth2Client.setCredentials({ access_token: accessToken });
       
       const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
       
-      console.log(`[YouTubeService.unlistBroadcast] Unlisting broadcast ${broadcastId}`);
+      console.log(`[YouTubeService.unlistBroadcast] Unlisting video ${videoId} (attempt ${retryCount + 1}/${maxRetries + 1})`);
       
-      // First get current broadcast info
-      const currentResponse = await youtube.liveBroadcasts.list({
+      // Use Videos API instead of LiveBroadcasts API
+      // This works better for completed broadcasts/replays
+      const currentResponse = await youtube.videos.list({
         part: 'snippet,status',
-        id: broadcastId
+        id: videoId
       });
       
       if (!currentResponse.data.items || currentResponse.data.items.length === 0) {
-        console.log(`[YouTubeService.unlistBroadcast] Broadcast ${broadcastId} not found`);
-        return { success: false, error: 'Broadcast not found' };
+        console.log(`[YouTubeService.unlistBroadcast] Video ${videoId} not found yet`);
+        
+        // Video might not be available yet (processing), retry if within limit
+        if (retryCount < maxRetries) {
+          console.log(`[YouTubeService.unlistBroadcast] Video not ready, will retry`);
+          return { success: false, needsRetry: true, error: 'Video not ready yet' };
+        }
+        
+        return { success: false, error: 'Video not found after retries' };
       }
       
       const current = currentResponse.data.items[0];
       
+      // Validate video data
+      if (!current.status || !current.snippet) {
+        console.error(`[YouTubeService.unlistBroadcast] Invalid video data for ${videoId}`);
+        return { success: false, error: 'Invalid video data' };
+      }
+      
       // Check if already unlisted
       if (current.status.privacyStatus === 'unlisted') {
-        console.log(`[YouTubeService.unlistBroadcast] Broadcast ${broadcastId} is already unlisted`);
+        console.log(`[YouTubeService.unlistBroadcast] Video ${videoId} is already unlisted`);
         return { success: true };
       }
       
-      // Update to unlisted
+      // Check if video is still processing
+      if (current.status.uploadStatus === 'processing') {
+        console.log(`[YouTubeService.unlistBroadcast] Video ${videoId} is still processing`);
+        
+        if (retryCount < maxRetries) {
+          console.log(`[YouTubeService.unlistBroadcast] Will retry after processing completes`);
+          return { success: false, needsRetry: true, error: 'Video still processing' };
+        }
+      }
+      
+      // Build update request with safe defaults
       const updateRequest = {
-        id: broadcastId,
+        id: videoId,
         snippet: {
-          title: current.snippet.title,
-          scheduledStartTime: current.snippet.scheduledStartTime
+          title: current.snippet.title || 'Untitled',
+          description: current.snippet.description || '',
+          categoryId: current.snippet.categoryId || '22'
         },
         status: {
           privacyStatus: 'unlisted',
@@ -957,16 +992,61 @@ class YouTubeService {
         }
       };
       
-      await youtube.liveBroadcasts.update({
+      // Add tags if they exist
+      if (current.snippet.tags && Array.isArray(current.snippet.tags)) {
+        updateRequest.snippet.tags = current.snippet.tags;
+      }
+      
+      // Preserve embeddable and publicStatsViewable if they exist
+      if (current.status.embeddable !== undefined) {
+        updateRequest.status.embeddable = current.status.embeddable;
+      }
+      if (current.status.publicStatsViewable !== undefined) {
+        updateRequest.status.publicStatsViewable = current.status.publicStatsViewable;
+      }
+      
+      // Attempt to update
+      await youtube.videos.update({
         part: 'snippet,status',
         requestBody: updateRequest
       });
       
-      console.log(`[YouTubeService.unlistBroadcast] Successfully unlisted broadcast ${broadcastId}`);
+      console.log(`[YouTubeService.unlistBroadcast] Successfully unlisted video ${videoId}`);
       return { success: true };
+      
     } catch (error) {
-      console.error(`[YouTubeService.unlistBroadcast] Error unlisting broadcast ${broadcastId}:`, error.message);
-      return { success: false, error: error.message };
+      const errorMessage = error.message || 'Unknown error';
+      console.error(`[YouTubeService.unlistBroadcast] Error unlisting video ${videoId}:`, errorMessage);
+      
+      // Check for specific error types
+      if (error.code === 403) {
+        // Quota exceeded or permission denied
+        if (errorMessage.includes('quota')) {
+          return { success: false, error: 'API quota exceeded', needsRetry: false };
+        }
+        return { success: false, error: 'Permission denied', needsRetry: false };
+      }
+      
+      if (error.code === 401) {
+        // Token expired
+        return { success: false, error: 'Token expired', needsRetry: false };
+      }
+      
+      // Check if it's a retryable error
+      const isRetryable = 
+        error.code === 404 ||
+        error.code === 503 ||
+        errorMessage.includes('not found') ||
+        errorMessage.includes('processing') ||
+        errorMessage.includes('timeout') ||
+        errorMessage.includes('ECONNRESET');
+      
+      if (isRetryable && retryCount < maxRetries) {
+        console.log(`[YouTubeService.unlistBroadcast] Retryable error, will retry`);
+        return { success: false, needsRetry: true, error: errorMessage };
+      }
+      
+      return { success: false, error: errorMessage, needsRetry: false };
     }
   }
 
