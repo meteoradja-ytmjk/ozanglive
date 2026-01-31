@@ -150,9 +150,8 @@
 
   <!-- Live Stats Dashboard - Horizontal Bar -->
   <div id="liveStatsDashboard" class="bg-gray-800 rounded-xl p-3 shadow-lg border border-gray-700/50 mb-6">
-    <!-- Stats Bar -->
-    <div class="flex items-center justify-between">
-      <!-- Left: Stats -->
+    <!-- Stats Bar - Desktop -->
+    <div class="hidden md:flex items-center justify-between">
       <div class="flex items-center gap-6 text-sm">
         <!-- Live Count -->
         <div class="flex items-center gap-1.5" title="Active Broadcasts">
@@ -183,7 +182,7 @@
         </div>
       </div>
       
-      <!-- Right: Actions -->
+      <!-- Actions -->
       <div class="flex items-center gap-1">
         <button onclick="refreshLiveStats()" id="refreshStatsBtn" class="p-1.5 hover:bg-dark-700 rounded-lg transition-colors" title="Refresh">
           <i class="ti ti-refresh text-gray-400 hover:text-white" id="refreshIcon"></i>
@@ -191,6 +190,45 @@
         <button onclick="toggleAutoRefresh()" id="autoRefreshBtn" class="p-1.5 hover:bg-dark-700 rounded-lg transition-colors" title="Auto refresh">
           <i class="ti ti-clock text-gray-400"></i>
         </button>
+      </div>
+    </div>
+    
+    <!-- Stats Bar - Mobile (2 rows) -->
+    <div class="md:hidden">
+      <!-- Row 1: Main stats -->
+      <div class="flex items-center justify-between text-xs">
+        <div class="flex items-center gap-4">
+          <!-- Live -->
+          <div class="flex items-center gap-1">
+            <i class="ti ti-broadcast text-purple-400"></i>
+            <span id="liveCountNumMobile" class="text-white font-semibold">0</span>
+            <span class="text-gray-500">live</span>
+          </div>
+          <!-- Quota -->
+          <div class="flex items-center gap-1">
+            <i class="ti ti-api text-cyan-400"></i>
+            <span id="quotaUsedMobile" class="text-white font-semibold">10K</span>
+          </div>
+          <!-- Viewers -->
+          <div class="flex items-center gap-1">
+            <i class="ti ti-users text-yellow-400"></i>
+            <span id="totalViewersMobile" class="text-white font-semibold">0</span>
+          </div>
+          <!-- Connection -->
+          <div class="flex items-center gap-1">
+            <i class="ti ti-wifi text-green-400" id="connectionIconMobile"></i>
+            <span id="connectionStatusMobile" class="text-green-400 font-medium">OK</span>
+          </div>
+        </div>
+        <!-- Actions -->
+        <div class="flex items-center">
+          <button onclick="refreshLiveStats()" id="refreshStatsBtnMobile" class="p-1 hover:bg-dark-700 rounded transition-colors" title="Refresh">
+            <i class="ti ti-refresh text-gray-400 text-sm" id="refreshIconMobile"></i>
+          </button>
+          <button onclick="toggleAutoRefresh()" id="autoRefreshBtnMobile" class="p-1 hover:bg-dark-700 rounded transition-colors" title="Auto">
+            <i class="ti ti-clock text-gray-400 text-sm"></i>
+          </button>
+        </div>
       </div>
     </div>
     
@@ -2056,17 +2094,22 @@ function updateLiveStatsUI(stats) {
   const activeStreamsContainer = document.getElementById('activeStreamsContainer');
   const activeStreamsList = document.getElementById('activeStreamsList');
   const liveCountNum = document.getElementById('liveCountNum');
+  const liveCountNumMobile = document.getElementById('liveCountNumMobile');
   const totalViewers = document.getElementById('totalViewers');
+  const totalViewersMobile = document.getElementById('totalViewersMobile');
   
   // Filter only live broadcasts
   const liveStreams = stats.filter(s => s.lifeCycleStatus === 'live' && !s.error);
   
-  // Update live count
-  liveCountNum.textContent = liveStreams.length;
+  // Update live count (desktop & mobile)
+  const liveCount = liveStreams.length;
+  if (liveCountNum) liveCountNum.textContent = liveCount;
+  if (liveCountNumMobile) liveCountNumMobile.textContent = liveCount;
   
   // Calculate total viewers
   const total = liveStreams.reduce((sum, s) => sum + (s.concurrentViewers || 0), 0);
-  totalViewers.textContent = formatNumber(total);
+  if (totalViewers) totalViewers.textContent = formatNumber(total);
+  if (totalViewersMobile) totalViewersMobile.textContent = formatNumber(total);
   
   // Show/hide active broadcasts container
   if (liveStreams.length === 0) {
@@ -2107,7 +2150,7 @@ function updateLiveStatsUI(stats) {
           </div>
           <div class="flex items-center gap-2 flex-shrink-0">
             <span class="text-sm font-medium text-white">${formatNumber(group.totalViewers)}</span>
-            <span class="text-xs text-gray-500">viewers</span>
+            <span class="text-xs text-gray-500 hidden sm:inline">viewers</span>
             <i class="ti ti-chevron-${isCollapsed ? 'right' : 'down'} text-gray-500 text-xs" id="chevron_${channelId}"></i>
           </div>
         </div>
@@ -2162,9 +2205,12 @@ function getStatusBadge(streamHealth, healthDetails) {
 // Update connection UI
 function updateConnectionUI(data) {
   const connectionStatus = document.getElementById('connectionStatus');
+  const connectionStatusMobile = document.getElementById('connectionStatusMobile');
   const connectionDetail = document.getElementById('connectionDetail');
   const connectionIcon = document.getElementById('connectionIcon');
+  const connectionIconMobile = document.getElementById('connectionIconMobile');
   const quotaUsed = document.getElementById('quotaUsed');
+  const quotaUsedMobile = document.getElementById('quotaUsedMobile');
   
   // Connection status
   const connectedCount = data.accounts.filter(a => a.connected).length;
@@ -2173,34 +2219,75 @@ function updateConnectionUI(data) {
   const quotaOk = data.accounts.every(a => a.quotaOk !== false);
   
   if (allConnected && quotaOk) {
-    connectionStatus.textContent = 'Connected';
-    connectionStatus.className = 'text-green-400 font-medium';
-    connectionIcon.className = 'ti ti-wifi text-green-400';
-    connectionDetail.textContent = `(${totalAccounts})`;
+    if (connectionStatus) {
+      connectionStatus.textContent = 'Connected';
+      connectionStatus.className = 'text-green-400 font-medium';
+    }
+    if (connectionStatusMobile) {
+      connectionStatusMobile.textContent = 'OK';
+      connectionStatusMobile.className = 'text-green-400 font-medium';
+    }
+    if (connectionIcon) connectionIcon.className = 'ti ti-wifi text-green-400';
+    if (connectionIconMobile) connectionIconMobile.className = 'ti ti-wifi text-green-400';
+    if (connectionDetail) connectionDetail.textContent = `(${totalAccounts})`;
   } else if (connectedCount > 0) {
-    connectionStatus.textContent = 'Partial';
-    connectionStatus.className = 'text-yellow-400 font-medium';
-    connectionIcon.className = 'ti ti-wifi-1 text-yellow-400';
-    connectionDetail.textContent = `(${connectedCount}/${totalAccounts})`;
+    if (connectionStatus) {
+      connectionStatus.textContent = 'Partial';
+      connectionStatus.className = 'text-yellow-400 font-medium';
+    }
+    if (connectionStatusMobile) {
+      connectionStatusMobile.textContent = `${connectedCount}/${totalAccounts}`;
+      connectionStatusMobile.className = 'text-yellow-400 font-medium';
+    }
+    if (connectionIcon) connectionIcon.className = 'ti ti-wifi-1 text-yellow-400';
+    if (connectionIconMobile) connectionIconMobile.className = 'ti ti-wifi-1 text-yellow-400';
+    if (connectionDetail) connectionDetail.textContent = `(${connectedCount}/${totalAccounts})`;
   } else {
-    connectionStatus.textContent = 'Disconnected';
-    connectionStatus.className = 'text-red-400 font-medium';
-    connectionIcon.className = 'ti ti-wifi-off text-red-400';
-    connectionDetail.textContent = '';
+    if (connectionStatus) {
+      connectionStatus.textContent = 'Disconnected';
+      connectionStatus.className = 'text-red-400 font-medium';
+    }
+    if (connectionStatusMobile) {
+      connectionStatusMobile.textContent = 'Off';
+      connectionStatusMobile.className = 'text-red-400 font-medium';
+    }
+    if (connectionIcon) connectionIcon.className = 'ti ti-wifi-off text-red-400';
+    if (connectionIconMobile) connectionIconMobile.className = 'ti ti-wifi-off text-red-400';
+    if (connectionDetail) connectionDetail.textContent = '';
   }
   
   // Quota info - show remaining quota
   if (data.quota) {
     const remaining = data.quota.remaining || 10000;
+    const remainingK = remaining >= 1000 ? `${(remaining/1000).toFixed(remaining >= 10000 ? 0 : 1)}K` : remaining;
+    
     if (!quotaOk || remaining < 1000) {
-      quotaUsed.textContent = formatNumber(remaining);
-      quotaUsed.className = 'text-red-400 font-semibold';
+      if (quotaUsed) {
+        quotaUsed.textContent = formatNumber(remaining);
+        quotaUsed.className = 'text-red-400 font-semibold';
+      }
+      if (quotaUsedMobile) {
+        quotaUsedMobile.textContent = remainingK;
+        quotaUsedMobile.className = 'text-red-400 font-semibold';
+      }
     } else if (remaining < 5000) {
-      quotaUsed.textContent = formatNumber(remaining);
-      quotaUsed.className = 'text-yellow-400 font-semibold';
+      if (quotaUsed) {
+        quotaUsed.textContent = formatNumber(remaining);
+        quotaUsed.className = 'text-yellow-400 font-semibold';
+      }
+      if (quotaUsedMobile) {
+        quotaUsedMobile.textContent = remainingK;
+        quotaUsedMobile.className = 'text-yellow-400 font-semibold';
+      }
     } else {
-      quotaUsed.textContent = formatNumber(remaining);
-      quotaUsed.className = 'text-white font-semibold';
+      if (quotaUsed) {
+        quotaUsed.textContent = formatNumber(remaining);
+        quotaUsed.className = 'text-white font-semibold';
+      }
+      if (quotaUsedMobile) {
+        quotaUsedMobile.textContent = remainingK;
+        quotaUsedMobile.className = 'text-white font-semibold';
+      }
     }
   }
 }
