@@ -160,26 +160,24 @@
           <span class="text-gray-500">live</span>
         </div>
         
-        <!-- API Quota - Per Primary Channel -->
-        <div class="flex items-center gap-1.5" title="API Quota (Primary Channel)">
+        <!-- API Quota -->
+        <div class="flex items-center gap-1.5" title="API Quota">
           <i class="ti ti-api text-cyan-400"></i>
+          <span id="quotaUsed" class="text-white font-semibold">10K</span>
           <span id="quotaChannelName" class="text-gray-400 text-xs"></span>
-          <span id="quotaUsed" class="text-white font-semibold">10,000</span>
-          <span class="text-gray-500">/ 10,000</span>
         </div>
         
         <!-- Viewers -->
         <div class="flex items-center gap-1.5" title="Total Viewers">
           <i class="ti ti-users text-yellow-400"></i>
           <span id="totalViewers" class="text-white font-semibold">0</span>
-          <span class="text-gray-500">viewers</span>
         </div>
         
-        <!-- Connection - icon only, hide OK/Connected text -->
-        <div class="flex items-center gap-1.5" title="Connection Status">
+        <!-- Connection - icon only -->
+        <div class="flex items-center" title="Connection Status">
           <i class="ti ti-wifi text-green-400" id="connectionIcon"></i>
-          <span id="connectionStatus" class="hidden">Connected</span>
-          <span id="connectionDetail" class="text-gray-500"></span>
+          <span id="connectionStatus" class="hidden"></span>
+          <span id="connectionDetail" class="hidden"></span>
         </div>
       </div>
       
@@ -194,40 +192,40 @@
       </div>
     </div>
     
-    <!-- Stats Bar - Mobile (compact) -->
+    <!-- Stats Bar - Mobile -->
     <div class="md:hidden">
-      <div class="flex items-center justify-between text-sm">
-        <div class="flex items-center gap-4">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-5">
           <!-- Live -->
-          <div class="flex items-center gap-2">
-            <i class="ti ti-broadcast text-purple-400 text-lg"></i>
-            <span id="liveCountNumMobile" class="text-white font-semibold text-base">0</span>
-            <span class="text-gray-500">live</span>
+          <div class="flex items-center gap-1.5" title="Active Broadcasts">
+            <i class="ti ti-broadcast text-purple-400 text-base"></i>
+            <span id="liveCountNumMobile" class="text-white font-semibold">0</span>
+            <span class="text-gray-500 text-sm">live</span>
           </div>
-          <!-- Quota with Channel Name -->
-          <div class="flex items-center gap-2">
-            <i class="ti ti-api text-cyan-400 text-lg"></i>
-            <span id="quotaChannelNameMobile" class="text-gray-400 text-xs"></span>
-            <span id="quotaUsedMobile" class="text-white font-semibold text-base">10K</span>
+          <!-- Quota -->
+          <div class="flex items-center gap-1.5" title="API Quota">
+            <i class="ti ti-api text-cyan-400 text-base"></i>
+            <span id="quotaUsedMobile" class="text-white font-semibold">10K</span>
+            <span id="quotaChannelNameMobile" class="text-gray-500 text-xs"></span>
           </div>
           <!-- Viewers -->
-          <div class="flex items-center gap-2">
-            <i class="ti ti-users text-yellow-400 text-lg"></i>
-            <span id="totalViewersMobile" class="text-white font-semibold text-base">0</span>
+          <div class="flex items-center gap-1.5" title="Total Viewers">
+            <i class="ti ti-users text-yellow-400 text-base"></i>
+            <span id="totalViewersMobile" class="text-white font-semibold">0</span>
           </div>
-          <!-- Connection - icon only, no OK text -->
-          <div class="flex items-center">
-            <i class="ti ti-wifi text-green-400 text-lg" id="connectionIconMobile"></i>
-            <span id="connectionStatusMobile" class="hidden">OK</span>
+          <!-- Connection - icon only -->
+          <div class="flex items-center" title="Connection Status">
+            <i class="ti ti-wifi text-green-400 text-base" id="connectionIconMobile"></i>
+            <span id="connectionStatusMobile" class="hidden"></span>
           </div>
         </div>
         <!-- Actions -->
-        <div class="flex items-center gap-2">
-          <button onclick="refreshLiveStats()" id="refreshStatsBtnMobile" class="p-2 hover:bg-dark-700 rounded transition-colors" title="Refresh">
-            <i class="ti ti-refresh text-gray-400 text-lg" id="refreshIconMobile"></i>
+        <div class="flex items-center gap-1">
+          <button onclick="refreshLiveStats()" id="refreshStatsBtnMobile" class="p-1.5 hover:bg-dark-700 rounded transition-colors" title="Refresh">
+            <i class="ti ti-refresh text-gray-400 text-base" id="refreshIconMobile"></i>
           </button>
-          <button onclick="toggleAutoRefresh()" id="autoRefreshBtnMobile" class="p-2 hover:bg-dark-700 rounded transition-colors" title="Auto">
-            <i class="ti ti-clock text-gray-400 text-lg"></i>
+          <button onclick="toggleAutoRefresh()" id="autoRefreshBtnMobile" class="p-1.5 hover:bg-dark-700 rounded transition-colors" title="Auto">
+            <i class="ti ti-clock text-gray-400 text-base"></i>
           </button>
         </div>
       </div>
@@ -2287,19 +2285,16 @@ function updateConnectionUI(data) {
     const remainingK = remaining >= 1000 ? `${(remaining/1000).toFixed(remaining >= 10000 ? 0 : 1)}K` : remaining;
     const limitK = dailyLimit >= 1000 ? `${(dailyLimit/1000).toFixed(0)}K` : dailyLimit;
     
-    // Show primary channel name
+    // Show primary channel name (short format)
     if (primaryAccount.channelName) {
-      const shortName = primaryAccount.channelName.length > 15 
-        ? primaryAccount.channelName.substring(0, 12) + '...' 
-        : primaryAccount.channelName;
-      const mobileShortName = primaryAccount.channelName.length > 10 
-        ? primaryAccount.channelName.substring(0, 8) + '..' 
+      const shortName = primaryAccount.channelName.length > 8 
+        ? primaryAccount.channelName.substring(0, 6) + '..' 
         : primaryAccount.channelName;
       if (quotaChannelName) {
-        quotaChannelName.textContent = `[${shortName}]`;
+        quotaChannelName.textContent = shortName;
       }
       if (quotaChannelNameMobile) {
-        quotaChannelNameMobile.textContent = `[${mobileShortName}]`;
+        quotaChannelNameMobile.textContent = shortName;
       }
     }
     
