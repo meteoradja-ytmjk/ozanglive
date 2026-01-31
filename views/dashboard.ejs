@@ -2133,12 +2133,97 @@ function renderSchedules(schedules, type) {
   
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   
-  let html = '';
+  // Group schedules by prefix (e.g., "grupera", "PAGI Davina", etc.)
+  const groups = {};
+  schedules.forEach(stream => {
+    // Extract group name from title (first word or before number)
+    const title = stream.title || 'Unknown';
+    const match = title.match(/^([A-Za-z\s]+?)(?:\s*\d|$)/);
+    const groupName = match ? match[1].trim() : title.split(' ')[0];
+    
+    if (!groups[groupName]) {
+      groups[groupName] = [];
+    }
+    groups[groupName].push(stream);
+  });
+  
+  const groupNames = Object.keys(groups);
+  
+  // If only one group or all different, render flat list
+  if (groupNames.length === schedules.length) {
+    renderFlatScheduleList(content, schedules, type, dayNames);
+    return;
+  }
+  
+  // Render grouped
+  let html = '<div class="space-y-3">';
+  
+  groupNames.forEach((groupName, groupIndex) => {
+    const groupSchedules = groups[groupName];
+    const activeCount = groupSchedules.filter(s => s.recurring_enabled !== false || s.status === 'live').length;
+    
+    html += '<div class="schedule-group">' +
+      // Group Header
+      '<div class="flex items-center justify-between px-3 py-2 bg-dark-600 rounded-lg cursor-pointer hover:bg-dark-500 transition-colors" onclick="toggleScheduleGroup(' + groupIndex + ')">' +
+        '<div class="flex items-center gap-2">' +
+          '<i class="ti ti-folder text-primary"></i>' +
+          '<span class="font-medium text-sm text-white">' + escapeHtml(groupName) + '</span>' +
+          '<span class="text-xs text-gray-400">(' + groupSchedules.length + ')</span>' +
+        '</div>' +
+        '<div class="flex items-center gap-2">' +
+          '<span class="text-xs text-green-400">' + activeCount + ' active</span>' +
+          '<i class="ti ti-chevron-down text-gray-400 text-sm transition-transform" id="scheduleGroupChevron_' + groupIndex + '"></i>' +
+        '</div>' +
+      '</div>' +
+      // Group Items
+      '<div id="scheduleGroupItems_' + groupIndex + '" class="mt-1 ml-4 space-y-1">';
+    
+    groupSchedules.forEach(stream => {
+      const statusClass = stream.status === 'live' ? 'bg-green-500/20 text-green-400' : 
+                          stream.recurring_enabled !== false ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400';
+      const statusText = stream.status === 'live' ? 'LIVE' : 
+                         stream.recurring_enabled !== false ? 'Active' : 'Paused';
+      
+      let timeInfo = '';
+      if (type === 'once') {
+        timeInfo = stream.schedule_time ? formatDateTime(stream.schedule_time) : '--';
+      } else if (type === 'daily') {
+        timeInfo = stream.recurring_time || '--';
+      } else if (type === 'weekly') {
+        const days = Array.isArray(stream.schedule_days) ? stream.schedule_days : [];
+        timeInfo = days.map(d => dayNames[d]).join(', ') + ' ' + (stream.recurring_time || '--');
+      }
+      
+      html += '<div class="flex items-center justify-between bg-dark-700/50 rounded-lg px-3 py-2 hover:bg-dark-700 transition-colors">' +
+        '<div class="flex items-center gap-2 flex-1 min-w-0">' +
+          '<span class="text-xs text-gray-300 truncate">' + escapeHtml(stream.title) + '</span>' +
+          '<span class="text-xs text-gray-500">' + timeInfo + '</span>' +
+        '</div>' +
+        '<div class="flex items-center gap-2 flex-shrink-0">' +
+          '<span class="px-1.5 py-0.5 text-[10px] rounded ' + statusClass + '">' + statusText + '</span>' +
+          '<button onclick="openScheduleEditModal(\'' + stream.id + '\')" class="w-7 h-7 flex items-center justify-center text-primary hover:bg-primary/20 rounded transition-colors" title="Edit">' +
+            '<i class="ti ti-edit text-sm"></i>' +
+          '</button>' +
+        '</div>' +
+      '</div>';
+    });
+    
+    html += '</div></div>';
+  });
+  
+  html += '</div>';
+  content.innerHTML = html;
+}
+
+// Render flat list (no grouping)
+function renderFlatScheduleList(content, schedules, type, dayNames) {
+  let html = '<div class="space-y-2">';
+  
   schedules.forEach(stream => {
     const statusClass = stream.status === 'live' ? 'bg-green-500/20 text-green-400' : 
-                        stream.recurring_enabled !== false ? 'bg-primary/20 text-primary' : 'bg-gray-500/20 text-gray-400';
+                        stream.recurring_enabled !== false ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400';
     const statusText = stream.status === 'live' ? 'LIVE' : 
-                       stream.recurring_enabled !== false ? (type === 'once' ? 'Scheduled' : 'Active') : 'Paused';
+                       stream.recurring_enabled !== false ? 'Active' : 'Paused';
     
     let timeInfo = '';
     if (type === 'once') {
@@ -2150,26 +2235,41 @@ function renderSchedules(schedules, type) {
       timeInfo = days.map(d => dayNames[d]).join(', ') + ' at ' + (stream.recurring_time || '--');
     }
     
-    html += '<div class="flex items-center justify-between bg-dark-700 rounded-lg p-3 hover:bg-dark-600 transition-colors">' +
-      '<div class="flex items-center gap-3 flex-1 min-w-0">' +
-        '<div class="w-10 h-10 bg-dark-600 rounded-lg flex items-center justify-center flex-shrink-0">' +
-          '<i class="ti ti-brand-' + getPlatformIcon(stream.platform) + ' text-' + getPlatformColor(stream.platform) + ' text-lg"></i>' +
+    html += '<div class="flex items-center justify-between bg-dark-700 rounded-lg px-3 py-2.5 hover:bg-dark-600 transition-colors">' +
+      '<div class="flex items-center gap-2 flex-1 min-w-0">' +
+        '<div class="w-8 h-8 bg-dark-600 rounded-lg flex items-center justify-center flex-shrink-0">' +
+          '<i class="ti ti-brand-' + getPlatformIcon(stream.platform) + ' text-' + getPlatformColor(stream.platform) + '"></i>' +
         '</div>' +
         '<div class="min-w-0">' +
           '<div class="font-medium text-sm truncate text-white">' + escapeHtml(stream.title) + '</div>' +
-          '<div class="text-xs text-gray-400 truncate">' + timeInfo + '</div>' +
+          '<div class="text-xs text-gray-400">' + timeInfo + '</div>' +
         '</div>' +
       '</div>' +
       '<div class="flex items-center gap-2 flex-shrink-0">' +
-        '<span class="px-2 py-1 text-xs rounded-full ' + statusClass + '">' + statusText + '</span>' +
-        '<button onclick="openScheduleEditModal(\'' + stream.id + '\')" class="w-8 h-8 flex items-center justify-center bg-primary/20 hover:bg-primary text-primary hover:text-white rounded-lg transition-all" title="Edit Schedule">' +
-          '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>' +
+        '<span class="px-2 py-0.5 text-xs rounded-full ' + statusClass + '">' + statusText + '</span>' +
+        '<button onclick="openScheduleEditModal(\'' + stream.id + '\')" class="w-8 h-8 flex items-center justify-center text-primary hover:bg-primary/20 rounded-lg transition-colors" title="Edit">' +
+          '<i class="ti ti-edit"></i>' +
         '</button>' +
       '</div>' +
     '</div>';
   });
   
+  html += '</div>';
   content.innerHTML = html;
+}
+
+// Toggle schedule group visibility
+function toggleScheduleGroup(groupIndex) {
+  const items = document.getElementById('scheduleGroupItems_' + groupIndex);
+  const chevron = document.getElementById('scheduleGroupChevron_' + groupIndex);
+  
+  if (items.classList.contains('hidden')) {
+    items.classList.remove('hidden');
+    chevron.classList.remove('rotate-[-90deg]');
+  } else {
+    items.classList.add('hidden');
+    chevron.classList.add('rotate-[-90deg]');
+  }
 }
 
 function formatDateTime(dateStr) {

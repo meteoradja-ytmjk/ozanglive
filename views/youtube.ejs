@@ -197,37 +197,36 @@
     <!-- Stats Bar - Mobile (compact) -->
     <div class="md:hidden">
       <div class="flex items-center justify-between text-xs">
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-5">
           <!-- Live -->
-          <div class="flex items-center gap-1">
+          <div class="flex items-center gap-1.5">
             <i class="ti ti-broadcast text-purple-400"></i>
             <span id="liveCountNumMobile" class="text-white font-semibold">0</span>
             <span class="text-gray-500">live</span>
           </div>
           <!-- Quota -->
-          <div class="flex items-center gap-1" title="API Quota">
+          <div class="flex items-center gap-1.5">
             <i class="ti ti-api text-cyan-400"></i>
             <span id="quotaUsedMobile" class="text-white font-semibold">10K</span>
-            <span class="text-gray-500">/ 10K</span>
           </div>
           <!-- Viewers -->
-          <div class="flex items-center gap-1">
+          <div class="flex items-center gap-1.5">
             <i class="ti ti-users text-yellow-400"></i>
             <span id="totalViewersMobile" class="text-white font-semibold">0</span>
           </div>
-          <!-- Connection -->
-          <div class="flex items-center gap-1">
+          <!-- Connection - icon only -->
+          <div class="flex items-center">
             <i class="ti ti-wifi text-green-400" id="connectionIconMobile"></i>
-            <span id="connectionStatusMobile" class="text-green-400 font-medium">OK</span>
+            <span id="connectionStatusMobile" class="hidden">OK</span>
           </div>
         </div>
         <!-- Actions -->
-        <div class="flex items-center">
-          <button onclick="refreshLiveStats()" id="refreshStatsBtnMobile" class="p-1 hover:bg-dark-700 rounded transition-colors" title="Refresh">
-            <i class="ti ti-refresh text-gray-400 text-sm" id="refreshIconMobile"></i>
+        <div class="flex items-center gap-2">
+          <button onclick="refreshLiveStats()" id="refreshStatsBtnMobile" class="p-1.5 hover:bg-dark-700 rounded transition-colors" title="Refresh">
+            <i class="ti ti-refresh text-gray-400" id="refreshIconMobile"></i>
           </button>
-          <button onclick="toggleAutoRefresh()" id="autoRefreshBtnMobile" class="p-1 hover:bg-dark-700 rounded transition-colors" title="Auto">
-            <i class="ti ti-clock text-gray-400 text-sm"></i>
+          <button onclick="toggleAutoRefresh()" id="autoRefreshBtnMobile" class="p-1.5 hover:bg-dark-700 rounded transition-colors" title="Auto">
+            <i class="ti ti-clock text-gray-400"></i>
           </button>
         </div>
       </div>
@@ -251,22 +250,38 @@
     <div class="flex flex-col sm:flex-row sm:items-center gap-3">
       <h2 class="text-xl font-semibold">Scheduled Broadcasts</h2>
       <!-- Selection Actions (hidden by default) -->
-      <div id="selectionActions" class="hidden flex flex-wrap items-center gap-2">
-        <span id="selectedCount" class="text-sm text-gray-400 bg-dark-700 px-2 py-1 rounded">0 selected</span>
-        <button onclick="saveSelectedAsTemplate()"
-          class="bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-1">
-          <i class="ti ti-template"></i>
-          <span>Save as Template</span>
-        </button>
-        <button onclick="deleteSelectedBroadcasts()"
-          class="bg-red-500/20 hover:bg-red-500/30 text-red-400 px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-1">
-          <i class="ti ti-trash"></i>
-          <span>Delete All</span>
-        </button>
-        <button onclick="clearSelection()"
-          class="text-gray-400 hover:text-white px-2 py-1 text-sm transition-colors">
-          <i class="ti ti-x"></i>
-        </button>
+      <div id="selectionActions" class="hidden">
+        <!-- Desktop: inline -->
+        <div class="hidden sm:flex items-center gap-2">
+          <span id="selectedCount" class="text-sm text-gray-400 bg-dark-700 px-2 py-1 rounded">0 selected</span>
+          <button onclick="saveSelectedAsTemplate()"
+            class="bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-1">
+            <i class="ti ti-template"></i>
+            <span>Save as Template</span>
+          </button>
+          <button onclick="deleteSelectedBroadcasts()"
+            class="bg-red-500/20 hover:bg-red-500/30 text-red-400 px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-1">
+            <i class="ti ti-trash"></i>
+            <span>Delete All</span>
+          </button>
+          <button onclick="clearSelection()"
+            class="text-gray-400 hover:text-white px-2 py-1 text-sm transition-colors">
+            <i class="ti ti-x"></i>
+          </button>
+        </div>
+        <!-- Mobile: 2 column grid -->
+        <div class="sm:hidden grid grid-cols-2 gap-2 mt-3">
+          <button onclick="saveSelectedAsTemplate()"
+            class="bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-center gap-1.5">
+            <i class="ti ti-template"></i>
+            <span>Template</span>
+          </button>
+          <button onclick="deleteSelectedBroadcasts()"
+            class="bg-red-500/20 hover:bg-red-500/30 text-red-400 px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-center gap-1.5">
+            <i class="ti ti-trash"></i>
+            <span>Delete</span>
+          </button>
+        </div>
       </div>
     </div>
     <div class="header-buttons grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex-shrink-0">
