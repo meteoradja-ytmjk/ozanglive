@@ -702,6 +702,7 @@ async function exportTitleSuggestions(userId) {
  * Export thumbnail files with folder structure
  * Returns metadata about thumbnails and their folder structure
  * Exports ALL thumbnails in the thumbnails directory, not just those linked to templates
+ * Also exports template-to-folder mapping for proper restoration
  * @param {string} userId - User ID
  * @returns {Promise<Object>} Thumbnail files metadata
  */
@@ -710,10 +711,34 @@ async function exportThumbnailFiles(userId) {
   
   const result = {
     folders: [],
-    files: []
+    files: [],
+    template_folder_mapping: [] // Maps template names to their thumbnail folders
   };
   
   try {
+    // Get broadcast templates to map thumbnail folders to template names
+    const templates = await BroadcastTemplate.findByUserId(userId);
+    const templateFolderMap = new Map();
+    
+    for (const template of templates) {
+      if (template.thumbnail_folder) {
+        templateFolderMap.set(template.thumbnail_folder, {
+          template_name: template.name,
+          thumbnail_index: template.thumbnail_index || 0,
+          pinned_thumbnail: template.pinned_thumbnail,
+          stream_key_folder_mapping: template.stream_key_folder_mapping
+        });
+        
+        result.template_folder_mapping.push({
+          template_name: template.name,
+          folder_id: template.thumbnail_folder,
+          thumbnail_index: template.thumbnail_index || 0,
+          pinned_thumbnail: template.pinned_thumbnail,
+          stream_key_folder_mapping: template.stream_key_folder_mapping
+        });
+      }
+    }
+    
     // Check if thumbnails directory exists
     const dirExists = fsSync.existsSync(thumbnailsDir);
     if (!dirExists) {
@@ -750,8 +775,11 @@ async function exportThumbnailFiles(userId) {
         }
         
         if (folderFiles.length > 0) {
+          // Include template mapping info if this folder is linked to a template
+          const templateInfo = templateFolderMap.get(item);
           result.folders.push({
             folder_id: item,
+            template_name: templateInfo ? templateInfo.template_name : null,
             files: folderFiles
           });
         }
@@ -767,7 +795,7 @@ async function exportThumbnailFiles(userId) {
       }
     }
     
-    console.log(`Total exported: ${result.folders.length} folders, ${result.files.length} standalone files`);
+    console.log(`Total exported: ${result.folders.length} folders, ${result.files.length} standalone files, ${result.template_folder_mapping.length} template mappings`);
   } catch (err) {
     console.error('Error exporting thumbnail files:', err.message);
   }
@@ -995,9 +1023,10 @@ async function importYouTubeCredentialsData(credentials, userId, options = {}) {
  * @param {Array} templates - Array of templates to import
  * @param {string} userId - User ID
  * @param {Object} options - Import options
+ * @param {Map} thumbnailFolderMap - Map of template names to thumbnail folder info
  * @returns {Promise<{imported: number, skipped: number, errors: string[]}>}
  */
-async function importBroadcastTemplatesData(templates, userId, options = {}) {
+async function importBroadcastTemplatesData(templates, userId, options = {}, thumbnailFolderMap = new Map()) {
   const result = { imported: 0, skipped: 0, errors: [] };
   
   if (!Array.isArray(templates)) return result;
@@ -1023,6 +1052,22 @@ async function importBroadcastTemplatesData(templates, userId, options = {}) {
         }
       }
 
+      // Get thumbnail folder info from mapping if available
+      let thumbnailFolder = template.thumbnail_folder;
+      let thumbnailIndex = template.thumbnail_index || 0;
+      let pinnedThumbnail = template.pinned_thumbnail;
+      let streamKeyFolderMapping = template.stream_key_folder_mapping;
+      
+      // Check if we have mapping info for this template
+      if (thumbnailFolderMap.has(template.name)) {
+        const folderInfo = thumbnailFolderMap.get(template.name);
+        thumbnailFolder = folderInfo.folder_id;
+        thumbnailIndex = folderInfo.thumbnail_index || thumbnailIndex;
+        pinnedThumbnail = folderInfo.pinned_thumbnail || pinnedThumbnail;
+        streamKeyFolderMapping = folderInfo.stream_key_folder_mapping || streamKeyFolderMapping;
+        console.log(`Restored thumbnail folder mapping for template "${template.name}": ${thumbnailFolder}`);
+      }
+
       await BroadcastTemplate.create({
         user_id: userId,
         account_id: template.account_id,
@@ -1033,10 +1078,10 @@ async function importBroadcastTemplatesData(templates, userId, options = {}) {
         tags: template.tags,
         category_id: template.category_id || '20',
         thumbnail_path: template.thumbnail_path,
-        thumbnail_folder: template.thumbnail_folder,
-        thumbnail_index: template.thumbnail_index || 0,
-        pinned_thumbnail: template.pinned_thumbnail,
-        stream_key_folder_mapping: template.stream_key_folder_mapping,
+        thumbnail_folder: thumbnailFolder,
+        thumbnail_index: thumbnailIndex,
+        pinned_thumbnail: pinnedThumbnail,
+        stream_key_folder_mapping: streamKeyFolderMapping,
         title_index: template.title_index || 0,
         pinned_title_id: template.pinned_title_id,
         title_folder_id: template.title_folder_id,
@@ -1412,12 +1457,19 @@ async function importTitleSuggestionsData(titles, userId, folderMap, options = {
 /**
  * Import thumbnail files from backup
  * Restores thumbnail folders and files, skipping duplicates
+ * Returns folder mapping for updating broadcast templates
  * @param {Object} thumbnailData - Thumbnail files data
  * @param {Object} options - Import options
- * @returns {Promise<{imported: number, skipped: number, errors: string[]}>}
+ * @returns {Promise<{imported: number, skipped: number, errors: string[], folderMap: Map}>}
  */
 async function importThumbnailFilesData(thumbnailData, options = {}) {
-  const result = { imported: 0, skipped: 0, errors: [] };
+  const result = { 
+    imported: 0, 
+    skipped: 0, 
+    errors: [],
+    folderMap: new Map(), // Maps template_name to folder_id for updating templates
+    templateFolderMapping: [] // Original mapping from backup
+  };
   
   if (!thumbnailData) return result;
   
@@ -1430,6 +1482,23 @@ async function importThumbnailFilesData(thumbnailData, options = {}) {
     // Directory may already exist
   }
   
+  // Store template folder mapping for later use
+  if (thumbnailData.template_folder_mapping && Array.isArray(thumbnailData.template_folder_mapping)) {
+    result.templateFolderMapping = thumbnailData.template_folder_mapping;
+    
+    // Build folder map from template mapping
+    for (const mapping of thumbnailData.template_folder_mapping) {
+      if (mapping.template_name && mapping.folder_id) {
+        result.folderMap.set(mapping.template_name, {
+          folder_id: mapping.folder_id,
+          thumbnail_index: mapping.thumbnail_index || 0,
+          pinned_thumbnail: mapping.pinned_thumbnail,
+          stream_key_folder_mapping: mapping.stream_key_folder_mapping
+        });
+      }
+    }
+  }
+  
   // Import folder-based thumbnails
   if (thumbnailData.folders && Array.isArray(thumbnailData.folders)) {
     for (const folder of thumbnailData.folders) {
@@ -1438,6 +1507,16 @@ async function importThumbnailFilesData(thumbnailData, options = {}) {
       try {
         // Create folder if it doesn't exist
         await fs.mkdir(folderPath, { recursive: true });
+        
+        // Add to folderMap if template_name is provided and not already in map from template_folder_mapping
+        if (folder.template_name && !result.folderMap.has(folder.template_name)) {
+          result.folderMap.set(folder.template_name, {
+            folder_id: folder.folder_id,
+            thumbnail_index: 0,
+            pinned_thumbnail: null,
+            stream_key_folder_mapping: null
+          });
+        }
         
         if (folder.files && Array.isArray(folder.files)) {
           for (const file of folder.files) {
@@ -1457,6 +1536,7 @@ async function importThumbnailFilesData(thumbnailData, options = {}) {
               const buffer = Buffer.from(file.data, 'base64');
               await fs.writeFile(filePath, buffer);
               result.imported++;
+              console.log(`Imported thumbnail: ${folder.folder_id}/${file.filename}`);
             } catch (fileErr) {
               result.errors.push(`thumbnail ${folder.folder_id}/${file.filename}: ${fileErr.message}`);
               result.skipped++;
@@ -1488,12 +1568,15 @@ async function importThumbnailFilesData(thumbnailData, options = {}) {
         const buffer = Buffer.from(file.data, 'base64');
         await fs.writeFile(filePath, buffer);
         result.imported++;
+        console.log(`Imported standalone thumbnail: ${file.filename}`);
       } catch (fileErr) {
         result.errors.push(`thumbnail ${file.filename}: ${fileErr.message}`);
         result.skipped++;
       }
     }
   }
+  
+  console.log(`Thumbnail import complete: ${result.imported} imported, ${result.skipped} skipped, ${result.folderMap.size} template mappings`);
   
   return result;
 }
@@ -1522,6 +1605,22 @@ async function comprehensiveImport(backupData, userId, options = {}) {
     };
   }
 
+  // Import thumbnail files FIRST to get folder mapping
+  // This ensures thumbnail folders exist before importing templates that reference them
+  let thumbnailFolderMap = new Map();
+  if (backupData.thumbnail_files) {
+    const thumbnailResult = await importThumbnailFilesData(
+      backupData.thumbnail_files, options
+    );
+    results.results.thumbnail_files = {
+      imported: thumbnailResult.imported,
+      skipped: thumbnailResult.skipped,
+      errors: thumbnailResult.errors
+    };
+    thumbnailFolderMap = thumbnailResult.folderMap;
+    console.log(`Thumbnail folder map has ${thumbnailFolderMap.size} entries`);
+  }
+
   // Import in correct order for referential integrity
   // 1. YouTube credentials first (referenced by templates)
   if (backupData.youtube_credentials) {
@@ -1535,10 +1634,10 @@ async function comprehensiveImport(backupData, userId, options = {}) {
     results.results.streams = await importStreams({ streams: backupData.streams }, userId, options);
   }
 
-  // 3. Broadcast templates (may reference credentials)
+  // 3. Broadcast templates (may reference credentials and thumbnail folders)
   if (backupData.broadcast_templates) {
     results.results.broadcast_templates = await importBroadcastTemplatesData(
-      backupData.broadcast_templates, userId, options
+      backupData.broadcast_templates, userId, options, thumbnailFolderMap
     );
   }
 
@@ -1581,13 +1680,6 @@ async function comprehensiveImport(backupData, userId, options = {}) {
   if (backupData.title_suggestions) {
     results.results.title_suggestions = await importTitleSuggestionsData(
       backupData.title_suggestions, userId, folderMap, options
-    );
-  }
-
-  // 9. Thumbnail files (independent, but should be imported for templates to work)
-  if (backupData.thumbnail_files) {
-    results.results.thumbnail_files = await importThumbnailFilesData(
-      backupData.thumbnail_files, options
     );
   }
 
