@@ -318,19 +318,21 @@ class ScheduleService {
   }
 
   /**
-   * Start the schedule checker that runs every 60 seconds
-   * Balanced between accuracy and CPU usage
+   * Start the schedule checker that runs every 2 minutes
+   * OPTIMIZED: Increased from 60s to 120s to reduce CPU usage
+   * With 5-minute execution window, 2-minute check interval is sufficient
    */
   startChecker() {
     if (this.checkInterval) return;
     
-    // Check every 60 seconds - balanced accuracy vs CPU
-    // This ensures we catch the schedule within the 5-minute execution window
+    // Check every 120 seconds (2 minutes) - optimized for CPU usage
+    // With 5-minute execution window, we have 2-3 chances to catch the schedule
+    // This reduces CPU usage by 50% compared to 60-second interval
     this.checkInterval = setInterval(async () => {
       await this.checkSchedules();
-    }, 60000); // 60 seconds
+    }, 120000); // 120 seconds = 2 minutes
     
-    console.log('[ScheduleService] Schedule checker started (60 sec interval)');
+    console.log('[ScheduleService] Schedule checker started (2 min interval - CPU optimized)');
     
     // Also run immediately on start
     setTimeout(() => this.checkSchedules(), 5000);
@@ -350,6 +352,7 @@ class ScheduleService {
   /**
    * Check all templates with recurring and execute if it's time
    * Uses WIB timezone for all time comparisons
+   * OPTIMIZED: Reduced logging to minimize I/O overhead
    */
   async checkSchedules() {
     try {
@@ -358,20 +361,16 @@ class ScheduleService {
       const wibTime = getWIBTime(now);
       const nowMs = now.getTime();
       
-      // Log current WIB time for debugging (with seconds for precision)
-      const wibTimeStr = `${String(wibTime.hours).padStart(2,'0')}:${String(wibTime.minutes).padStart(2,'0')}:${String(wibTime.seconds || 0).padStart(2,'0')}`;
-      const wibDateStr = `${wibTime.year}-${String(wibTime.month + 1).padStart(2,'0')}-${String(wibTime.dayOfMonth).padStart(2,'0')}`;
-      const dayNamesLong = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-      
-      console.log(`[ScheduleService] ========== SCHEDULE CHECK ==========`);
-      console.log(`[ScheduleService] Current WIB: ${wibDateStr} ${wibTimeStr} (${dayNamesLong[wibTime.day]})`);
-      console.log(`[ScheduleService] Current UTC: ${now.toISOString()}`);
-      console.log(`[ScheduleService] Templates with recurring enabled: ${templates.length}`);
-      
+      // OPTIMIZED: Only log detailed info when there are templates to check
       if (templates.length === 0) {
-        console.log(`[ScheduleService] No templates to check`);
-        return;
+        return; // Silent return when no templates
       }
+      
+      // Log current WIB time for debugging (only when templates exist)
+      const wibTimeStr = `${String(wibTime.hours).padStart(2,'0')}:${String(wibTime.minutes).padStart(2,'0')}`;
+      const wibDateStr = `${wibTime.year}-${String(wibTime.month + 1).padStart(2,'0')}-${String(wibTime.dayOfMonth).padStart(2,'0')}`;
+      
+      console.log(`[ScheduleService] Check: ${wibDateStr} ${wibTimeStr} WIB | ${templates.length} templates`);
       
       // Day names for comparison (lowercase)
       const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
@@ -381,27 +380,15 @@ class ScheduleService {
         try {
           // Skip if this template is currently being executed (prevent duplicate execution)
           if (this.executingTemplates.has(template.id)) {
-            console.log(`[ScheduleService]   SKIP: Template "${template.name}" is currently being executed`);
-            continue;
+            continue; // Silent skip
           }
           
-          // Log template info for debugging
-          const nextRunStr = template.next_run_at ? new Date(template.next_run_at).toISOString() : 'not set';
-          const lastRunStr = template.last_run_at ? new Date(template.last_run_at).toISOString() : 'never';
+          // OPTIMIZED: Only log when action is needed (skip verbose logging for waiting templates)
           const hasRunToday = this.hasRunToday(template, now);
-          
-          console.log(`[ScheduleService] --- Template: "${template.name}" ---`);
-          console.log(`[ScheduleService]   Pattern: ${template.recurring_pattern}, Time: ${template.recurring_time} WIB`);
-          console.log(`[ScheduleService]   Days: ${JSON.stringify(template.recurring_days)}`);
-          console.log(`[ScheduleService]   Next run (UTC): ${nextRunStr}`);
-          console.log(`[ScheduleService]   Last run (UTC): ${lastRunStr}`);
-          console.log(`[ScheduleService]   Has run today (WIB): ${hasRunToday}`);
-          console.log(`[ScheduleService]   Has credentials: ${!!(template.client_id && template.refresh_token)}`);
           
           // Skip if already run today (in WIB timezone)
           if (hasRunToday) {
-            console.log(`[ScheduleService]   SKIP: Already run today (WIB)`);
-            continue;
+            continue; // Silent skip
           }
           
           // Check if today is a valid day for this schedule (in WIB)
@@ -412,19 +399,15 @@ class ScheduleService {
           } else if (template.recurring_pattern === 'weekly') {
             const scheduledDays = (template.recurring_days || []).map(d => d.toLowerCase());
             isTodayValid = scheduledDays.includes(todayWIB);
-            console.log(`[ScheduleService]   Today WIB: ${todayWIB}, Scheduled days: [${scheduledDays.join(', ')}]`);
-            console.log(`[ScheduleService]   Today is scheduled: ${isTodayValid}`);
           }
           
           if (!isTodayValid) {
-            console.log(`[ScheduleService]   SKIP: Today (${todayWIB}) is not a scheduled day`);
-            continue;
+            continue; // Silent skip - not scheduled for today
           }
           
           // Parse scheduled time (in WIB)
           if (!template.recurring_time) {
-            console.log(`[ScheduleService]   SKIP: No recurring_time set`);
-            continue;
+            continue; // Silent skip - no time set
           }
           
           const [schedHour, schedMin] = template.recurring_time.split(':').map(Number);
@@ -434,19 +417,28 @@ class ScheduleService {
           const currentMinutesWIB = wibTime.hours * 60 + wibTime.minutes;
           const timeDiffMinutes = currentMinutesWIB - scheduleMinutesWIB;
           
-          console.log(`[ScheduleService]   Scheduled: ${String(schedHour).padStart(2,'0')}:${String(schedMin).padStart(2,'0')} WIB (${scheduleMinutesWIB} min)`);
-          console.log(`[ScheduleService]   Current: ${String(wibTime.hours).padStart(2,'0')}:${String(wibTime.minutes).padStart(2,'0')} WIB (${currentMinutesWIB} min)`);
-          console.log(`[ScheduleService]   Time diff: ${timeDiffMinutes} minutes (positive = past scheduled time)`);
-          
           // EXECUTE CONDITIONS (in order of priority):
-          // 1. Scheduled time has passed today but not run yet - EXECUTE
+          // 1. Scheduled time has passed today but not run yet - EXECUTE (STRICT 5-minute window)
           // 2. Scheduled time is coming up within 2 minutes - EXECUTE (early trigger)
           // 3. next_run_at is overdue - EXECUTE
           
-          // Condition 1: Scheduled time has passed today (0 to 720 minutes = 12 hours)
-          // If it's past the scheduled time today and hasn't run, execute it
-          if (timeDiffMinutes >= 0 && timeDiffMinutes <= 720) {
-            console.log(`[ScheduleService]   >>> EXECUTING (scheduled time passed ${timeDiffMinutes} min ago)`);
+          // CRITICAL FIX: Check last_run_at to prevent duplicate execution
+          // If last_run_at is within the last 10 minutes, SKIP (already executed recently)
+          if (template.last_run_at) {
+            const lastRunTime = new Date(template.last_run_at);
+            const timeSinceLastRun = nowMs - lastRunTime.getTime();
+            const minutesSinceLastRun = Math.floor(timeSinceLastRun / (1000 * 60));
+            
+            if (minutesSinceLastRun < 10) {
+              continue; // Silent skip - recently executed
+            }
+          }
+          
+          // Condition 1: Scheduled time has passed today (0 to 5 minutes ONLY)
+          // CRITICAL FIX: Reduced from 720 minutes to 5 minutes to prevent duplicate execution
+          // This ensures template only executes within a tight window after scheduled time
+          if (timeDiffMinutes >= 0 && timeDiffMinutes <= 5) {
+            console.log(`[ScheduleService] EXEC: "${template.name}" (${timeDiffMinutes}m past schedule)`);
             await this.executeTemplate(template);
             continue;
           }
@@ -454,7 +446,7 @@ class ScheduleService {
           // Condition 2: Early trigger - within 2 minutes before scheduled time
           // This helps ensure we don't miss the exact time
           if (timeDiffMinutes >= -2 && timeDiffMinutes < 0) {
-            console.log(`[ScheduleService]   >>> EXECUTING (early trigger, ${Math.abs(timeDiffMinutes)} min before scheduled time)`);
+            console.log(`[ScheduleService] EXEC: "${template.name}" (early trigger, ${Math.abs(timeDiffMinutes)}m before)`);
             await this.executeTemplate(template);
             continue;
           }
@@ -465,36 +457,27 @@ class ScheduleService {
             const timeDiffMs = nowMs - nextRunAt.getTime();
             const timeDiffFromNextRun = Math.floor(timeDiffMs / (1000 * 60));
             
-            console.log(`[ScheduleService]   next_run_at diff: ${timeDiffFromNextRun} minutes`);
-            
-            // Execute if next_run_at is overdue but within 24 hours
-            if (timeDiffFromNextRun > 0 && timeDiffFromNextRun <= 1440) {
-              console.log(`[ScheduleService]   >>> EXECUTING (next_run_at overdue by ${timeDiffFromNextRun} min)`);
+            // CRITICAL FIX: Reduced execution window from 1440 minutes (24 hours) to 60 minutes (1 hour)
+            // This prevents old schedules from being executed multiple times
+            // Execute if next_run_at is overdue but within 60 minutes only
+            if (timeDiffFromNextRun > 0 && timeDiffFromNextRun <= 60) {
+              console.log(`[ScheduleService] EXEC: "${template.name}" (next_run_at overdue ${timeDiffFromNextRun}m)`);
               await this.executeTemplate(template);
               continue;
             }
             
-            // If overdue by more than 24 hours, update next_run_at to future
-            if (timeDiffFromNextRun > 1440) {
-              console.log(`[ScheduleService]   next_run_at too old (${timeDiffFromNextRun} min), updating to future`);
+            // If overdue by more than 60 minutes, update next_run_at to future (skip execution)
+            if (timeDiffFromNextRun > 60) {
               await this.updateNextRunToFuture(template);
             }
           }
           
-          // Log waiting status
-          if (timeDiffMinutes < -2) {
-            console.log(`[ScheduleService]   WAITING: ${Math.abs(timeDiffMinutes)} minutes until scheduled time`);
-          } else if (timeDiffMinutes > 720) {
-            console.log(`[ScheduleService]   MISSED: ${timeDiffMinutes} minutes past (>12 hours, updating next_run_at)`);
-            await this.updateNextRunToFuture(template);
-          }
+          // OPTIMIZED: No logging for waiting templates (reduces I/O)
         } catch (templateError) {
           console.error(`[ScheduleService] Error processing template "${template.name}":`, templateError.message);
           // Continue with next template
         }
       }
-      
-      console.log(`[ScheduleService] ========== CHECK COMPLETE ==========`);
     } catch (error) {
       console.error('[ScheduleService] Check schedules error:', error.message);
       console.error(error.stack);
@@ -504,11 +487,25 @@ class ScheduleService {
   /**
    * Check if a missed schedule should be executed
    * Uses WIB timezone for all comparisons
+   * CRITICAL FIX: Reduced execution windows to prevent duplicate execution
    * @param {Object} template - Template object with recurring config
    * @param {Date} now - Current time
    * @returns {boolean}
    */
   shouldExecuteMissed(template, now) {
+    // CRITICAL FIX: Check last_run_at first to prevent duplicate execution
+    // If last_run_at is within the last 10 minutes, SKIP
+    if (template.last_run_at) {
+      const lastRunTime = new Date(template.last_run_at);
+      const timeSinceLastRun = now.getTime() - lastRunTime.getTime();
+      const minutesSinceLastRun = Math.floor(timeSinceLastRun / (1000 * 60));
+      
+      if (minutesSinceLastRun < 10) {
+        console.log(`[ScheduleService] SKIP missed check: Last run was ${minutesSinceLastRun} minutes ago (< 10 min cooldown)`);
+        return false;
+      }
+    }
+    
     // If already run today (in WIB), skip
     if (this.hasRunToday(template, now)) {
       return false;
@@ -535,8 +532,9 @@ class ScheduleService {
       const currentMinutesWIB = wibTime.hours * 60 + wibTime.minutes;
       const timeDiffMinutes = currentMinutesWIB - scheduleMinutesWIB;
       
-      // If scheduled time has passed today (within 12 hours), execute
-      if (timeDiffMinutes >= 0 && timeDiffMinutes <= 720) {
+      // CRITICAL FIX: Reduced from 720 minutes (12 hours) to 60 minutes (1 hour)
+      // If scheduled time has passed today (within 60 minutes only), execute
+      if (timeDiffMinutes >= 0 && timeDiffMinutes <= 60) {
         console.log(`[ScheduleService] Detected missed schedule for template: ${template.name}`);
         console.log(`[ScheduleService]   Scheduled: ${template.recurring_time} WIB`);
         console.log(`[ScheduleService]   Current: ${String(wibTime.hours).padStart(2,'0')}:${String(wibTime.minutes).padStart(2,'0')} WIB`);
@@ -551,14 +549,15 @@ class ScheduleService {
       const overdueMs = now.getTime() - nextRunAt.getTime();
       const overdueMinutes = Math.floor(overdueMs / (1000 * 60));
       
-      // If next_run_at is overdue but less than 24 hours
-      if (overdueMinutes > 0 && overdueMinutes <= 1440) {
+      // CRITICAL FIX: Reduced from 1440 minutes (24 hours) to 60 minutes (1 hour)
+      // If next_run_at is overdue but less than 60 minutes
+      if (overdueMinutes > 0 && overdueMinutes <= 60) {
         console.log(`[ScheduleService] Detected OVERDUE schedule for template: ${template.name}`);
         console.log(`[ScheduleService]   next_run_at: ${template.next_run_at}`);
         console.log(`[ScheduleService]   Overdue by: ${overdueMinutes} minutes`);
         return true;
-      } else if (overdueMinutes > 1440) {
-        console.log(`[ScheduleService] Skipping very old schedule for template: ${template.name} (overdue ${overdueMinutes} min > 24h)`);
+      } else if (overdueMinutes > 60) {
+        console.log(`[ScheduleService] Skipping very old schedule for template: ${template.name} (overdue ${overdueMinutes} min > 60 min)`);
         // Update next_run_at to future date
         this.updateNextRunToFuture(template);
         return false;
@@ -649,6 +648,8 @@ class ScheduleService {
 
   /**
    * Check if template has already run today (in WIB timezone)
+   * CRITICAL FIX: Added time-based check to prevent duplicate execution within same day
+   * OPTIMIZED: Reduced logging to minimize I/O overhead
    * @param {Object} template - Template object
    * @param {Date} now - Current time
    * @returns {boolean}
@@ -658,15 +659,23 @@ class ScheduleService {
     
     const lastRun = new Date(template.last_run_at);
     
+    // CRITICAL FIX: First check if last run was within the last 10 minutes
+    // This prevents duplicate execution even if date comparison fails
+    const timeSinceLastRun = now.getTime() - lastRun.getTime();
+    const minutesSinceLastRun = Math.floor(timeSinceLastRun / (1000 * 60));
+    
+    if (minutesSinceLastRun < 10) {
+      // OPTIMIZED: Only log when blocking execution (important info)
+      return true;
+    }
+    
     // Get date strings in WIB for comparison
     const nowDateStr = this.getWIBDateString(now);
     const lastRunDateStr = this.getWIBDateString(lastRun);
     
     const result = nowDateStr === lastRunDateStr;
     
-    if (result) {
-      console.log(`[ScheduleService]   hasRunToday: YES (last run: ${lastRunDateStr} WIB, today: ${nowDateStr} WIB)`);
-    }
+    // OPTIMIZED: No logging here to reduce I/O
     
     return result;
   }
@@ -728,6 +737,7 @@ class ScheduleService {
   /**
    * Execute a template - create broadcast(s)
    * Handles token errors gracefully and updates next_run_at even on failure
+   * CRITICAL FIX: Added database-level duplicate check before execution
    * @param {Object} template - Template object with recurring config
    * @param {number} retryCount - Current retry count
    */
@@ -735,10 +745,29 @@ class ScheduleService {
     const maxRetries = 3;
     const now = new Date();
     
-    // CRITICAL: Check if this template is already being executed (prevent duplicate execution)
+    // CRITICAL FIX 1: Check if this template is already being executed (prevent duplicate execution)
     if (this.executingTemplates.has(template.id)) {
       console.log(`[ScheduleService] BLOCKED: Template "${template.name}" (${template.id}) is already being executed`);
       return { error: 'ALREADY_EXECUTING', template: template.name };
+    }
+    
+    // CRITICAL FIX 2: Database-level duplicate check - verify last_run_at before execution
+    // This prevents duplicate execution even if multiple processes are running
+    try {
+      const freshTemplate = await BroadcastTemplate.findById(template.id);
+      if (freshTemplate && freshTemplate.last_run_at) {
+        const lastRunTime = new Date(freshTemplate.last_run_at);
+        const timeSinceLastRun = now.getTime() - lastRunTime.getTime();
+        const minutesSinceLastRun = Math.floor(timeSinceLastRun / (1000 * 60));
+        
+        if (minutesSinceLastRun < 10) {
+          console.log(`[ScheduleService] BLOCKED: Template "${template.name}" was executed ${minutesSinceLastRun} minutes ago (< 10 min cooldown)`);
+          return { error: 'RECENTLY_EXECUTED', template: template.name, minutesAgo: minutesSinceLastRun };
+        }
+      }
+    } catch (dbError) {
+      console.error(`[ScheduleService] Error checking last_run_at for template ${template.id}:`, dbError.message);
+      // Continue execution if database check fails (don't block legitimate execution)
     }
     
     // Mark template as executing BEFORE any async operations
