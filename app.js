@@ -1071,9 +1071,22 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
     if (!req.session.user_role) {
       console.log('[Dashboard] Setting missing user_role in session:', user.user_role);
       req.session.user_role = user.user_role;
+
+      // IMPORTANT: Save session BEFORE rendering to ensure user_role is available
+      await new Promise((resolve, reject) => {
+        req.session.save((err) => {
+          if (err) {
+            console.error('[Dashboard] Session save error:', err);
+            reject(err);
+          } else {
+            console.log('[Dashboard] Session saved successfully with user_role');
+            resolve();
+          }
+        });
+      });
     }
 
-    console.log('[Dashboard] Rendering dashboard for user:', user.username);
+    console.log('[Dashboard] Rendering dashboard for user:', user.username, 'role:', user.user_role);
     res.render('dashboard', {
       title: 'Dashboard',
       active: 'dashboard',
@@ -1149,9 +1162,22 @@ app.get('/settings', isAuthenticated, async (req, res) => {
     if (!req.session.user_role) {
       console.log('[Settings] Setting missing user_role in session:', user.user_role);
       req.session.user_role = user.user_role;
+
+      // IMPORTANT: Save session BEFORE rendering to ensure user_role is available
+      await new Promise((resolve, reject) => {
+        req.session.save((err) => {
+          if (err) {
+            console.error('[Settings] Session save error:', err);
+            reject(err);
+          } else {
+            console.log('[Settings] Session saved successfully with user_role');
+            resolve();
+          }
+        });
+      });
     }
 
-    console.log('[Settings] Rendering settings for user:', user.username);
+    console.log('[Settings] Rendering settings for user:', user.username, 'role:', user.user_role);
     res.render('settings', {
       title: 'Settings',
       active: 'settings',
