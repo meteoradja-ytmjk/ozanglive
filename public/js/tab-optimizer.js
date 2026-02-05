@@ -7,7 +7,7 @@
  * - Smooth transitions
  */
 
-(function() {
+(function () {
   'use strict';
 
   // Cache untuk menyimpan data yang sudah di-load
@@ -17,7 +17,7 @@
   // Prefetch links saat hover
   function setupPrefetch() {
     const navLinks = document.querySelectorAll('a[href^="/"]');
-    
+
     navLinks.forEach(link => {
       // Prefetch saat hover (desktop) atau touchstart (mobile)
       link.addEventListener('mouseenter', () => prefetchPage(link.href), { once: false, passive: true });
@@ -43,15 +43,15 @@
   // Instant visual feedback saat klik navigasi
   function setupInstantFeedback() {
     const navLinks = document.querySelectorAll('.sidebar-icon, .bottom-nav-item');
-    
+
     navLinks.forEach(link => {
-      link.addEventListener('click', function(e) {
+      link.addEventListener('click', function (e) {
         // Hapus active state dari semua link
         navLinks.forEach(l => {
           l.classList.remove('bg-primary', 'bottom-nav-active');
           l.style.color = '';
         });
-        
+
         // Tambahkan active state ke link yang diklik
         this.classList.add('bg-primary');
         if (this.classList.contains('bottom-nav-item')) {
@@ -61,9 +61,9 @@
             this.style.color = '#EF4444';
           }
         }
-        
-        // Tampilkan loading overlay dengan smooth fade
-        showLoadingOverlay();
+
+        // DISABLED: Loading overlay mengurangi responsivitas
+        // showLoadingOverlay();
       }, { passive: true });
     });
   }
@@ -72,7 +72,7 @@
   function showLoadingOverlay() {
     // Cek apakah overlay sudah ada
     let overlay = document.getElementById('page-loading-overlay');
-    
+
     if (!overlay) {
       overlay = document.createElement('div');
       overlay.id = 'page-loading-overlay';
@@ -84,7 +84,7 @@
       `;
       document.body.appendChild(overlay);
     }
-    
+
     // Trigger reflow untuk animasi
     overlay.offsetHeight;
     overlay.classList.add('active');
@@ -102,7 +102,7 @@
   // Optimasi untuk mobile: prevent double-tap zoom
   function preventDoubleTapZoom() {
     let lastTouchEnd = 0;
-    document.addEventListener('touchend', function(e) {
+    document.addEventListener('touchend', function (e) {
       const now = Date.now();
       if (now - lastTouchEnd <= 300) {
         e.preventDefault();
@@ -170,7 +170,7 @@
   // Optimasi scroll performance
   function optimizeScrollPerformance() {
     let ticking = false;
-    
+
     const handleScroll = () => {
       if (!ticking) {
         window.requestAnimationFrame(() => {
@@ -180,7 +180,7 @@
         ticking = true;
       }
     };
-    
+
     window.addEventListener('scroll', handleScroll, { passive: true });
   }
 
