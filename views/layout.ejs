@@ -421,6 +421,10 @@
 </style>
 <script>
   document.addEventListener('DOMContentLoaded', () => {
+    // CRITICAL: Ensure scroll is always enabled on page load
+    // This prevents stuck overflow:hidden from modals
+    document.body.style.overflow = '';
+
     // Desktop profile dropdown
     const profileButton = document.getElementById('profile-menu-button');
     const profileDropdown = document.getElementById('profile-dropdown');

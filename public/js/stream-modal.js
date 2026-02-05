@@ -29,7 +29,7 @@ function closeNewStreamModal() {
     console.error('newStreamModal not found');
     return;
   }
-  document.body.style.overflow = 'auto';
+  document.body.style.overflow = '';
   modal.classList.remove('active');
   if (typeof resetModalForm === 'function') {
     resetModalForm();
@@ -152,7 +152,7 @@ function handleAudioSearch(e) {
 
 function filterAudios(audios, query) {
   if (!query) return audios;
-  return audios.filter(audio => 
+  return audios.filter(audio =>
     (audio.title && audio.title.toLowerCase().includes(query.toLowerCase())) ||
     (audio.name && audio.name.toLowerCase().includes(query.toLowerCase()))
   );
@@ -196,27 +196,27 @@ function selectVideo(video) {
   selectedVideoData = video;
   const displayText = video.type === 'playlist' ? `[Playlist] ${video.name}` : video.name;
   document.getElementById('selectedVideo').textContent = displayText;
-  
+
   const videoSelector = document.querySelector('[onclick="toggleVideoSelector()"]');
   if (videoSelector) {
     videoSelector.classList.remove('border-red-500');
     videoSelector.classList.add('border-gray-600');
   }
-  
+
   // Close dropdown immediately after selection (like audio selector)
   document.getElementById('videoSelectorDropdown').classList.add('hidden');
   isDropdownOpen = false;
-  
+
   // Clear search input
   const searchInput = document.getElementById('videoSearchInput');
   if (searchInput) searchInput.value = '';
-  
+
   // Update hidden input
   const hiddenVideoInput = document.getElementById('selectedVideoId');
   if (hiddenVideoInput) {
     hiddenVideoInput.value = video.id;
   }
-  
+
   // Update preview
   const desktopEmptyPreview = document.getElementById('emptyPreview');
   if (desktopEmptyPreview) {
@@ -300,7 +300,7 @@ function displayFilteredVideos(videos) {
       button.type = 'button';
       button.className = 'w-full flex items-start space-x-3 p-2 rounded hover:bg-dark-600 transition-colors text-left';
       button.onclick = () => selectVideo(item);
-      
+
       if (item.type === 'playlist') {
         button.innerHTML = `
           <div class="w-16 h-12 bg-gradient-to-br from-blue-600 to-purple-600 rounded flex-shrink-0 overflow-hidden relative">
@@ -349,28 +349,28 @@ function resetModalForm() {
     // Reset edit mode
     delete form.dataset.editId;
   }
-  
+
   selectedVideoData = null;
   selectedAudioData = null;
   isDropdownOpen = false;
   isAudioDropdownOpen = false;
-  
+
   // Reset modal title and button
   const modalTitle = document.querySelector('#newStreamModal h3');
   const submitBtn = document.querySelector('button[type="submit"][form="newStreamForm"]');
   if (modalTitle) modalTitle.textContent = 'Create New Stream';
   if (submitBtn) submitBtn.textContent = 'Create Stream';
-  
+
   // Reset template selector
   const templateSelector = document.getElementById('templateSelector');
   if (templateSelector) templateSelector.value = '';
-  
+
   // Reset video selection
   const selectedVideoEl = document.getElementById('selectedVideo');
   const selectedVideoIdEl = document.getElementById('selectedVideoId');
   if (selectedVideoEl) selectedVideoEl.textContent = 'Choose a video...';
   if (selectedVideoIdEl) selectedVideoIdEl.value = '';
-  
+
   // Reset audio selection
   const selectedAudioEl = document.getElementById('selectedAudio');
   const selectedAudioIdEl = document.getElementById('selectedAudioId');
@@ -378,13 +378,13 @@ function resetModalForm() {
   if (selectedAudioEl) selectedAudioEl.textContent = 'No audio selected';
   if (selectedAudioIdEl) selectedAudioIdEl.value = '';
   if (clearAudioBtn) clearAudioBtn.classList.add('hidden');
-  
+
   // Reset duration (hours and minutes)
   const durationHoursInput = document.getElementById('streamDurationHours');
   const durationMinutesInput = document.getElementById('streamDurationMinutes');
   if (durationHoursInput) durationHoursInput.value = '';
   if (durationMinutesInput) durationMinutesInput.value = '';
-  
+
   // Reset preview
   const desktopEmptyPreview = document.getElementById('emptyPreview');
   if (desktopEmptyPreview) {
@@ -395,7 +395,7 @@ function resetModalForm() {
       </div>
     `;
   }
-  
+
   // Close dropdowns
   const videoDropdown = document.getElementById('videoSelectorDropdown');
   const audioDropdown = document.getElementById('audioSelectorDropdown');
@@ -405,13 +405,13 @@ function resetModalForm() {
 function initModal() {
   const modal = document.getElementById('newStreamModal');
   if (!modal) return;
-  
+
   modal.addEventListener('click', (e) => {
     if (e.target === modal) {
       closeNewStreamModal();
     }
   });
-  
+
   if (videoSelectorDropdown) {
     document.addEventListener('click', (e) => {
       const isClickInsideDropdown = videoSelectorDropdown.contains(e.target);
@@ -421,7 +421,7 @@ function initModal() {
       }
     });
   }
-  
+
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       if (isDropdownOpen) {
@@ -601,15 +601,15 @@ function validateStreamKeyForPlatform(streamKey, platform) {
 document.addEventListener('DOMContentLoaded', initModal);
 
 // Form submission handler
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
   const form = document.getElementById('newStreamForm');
   if (form) {
-    form.addEventListener('submit', async function(e) {
+    form.addEventListener('submit', async function (e) {
       e.preventDefault();
-      
+
       const editId = form.dataset.editId;
       const isEdit = !!editId;
-      
+
       // Validate video selection
       if (!selectedVideoData && !document.getElementById('selectedVideoId').value) {
         const videoSelector = document.querySelector('[onclick="toggleVideoSelector()"]');
@@ -624,11 +624,11 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         return;
       }
-      
+
       // Get form data
       const formData = new FormData(form);
       const scheduleType = formData.get('scheduleType') || 'once';
-      
+
       const data = {
         videoId: selectedVideoData ? selectedVideoData.id : document.getElementById('selectedVideoId').value,
         audioId: selectedAudioData ? selectedAudioData.id : (document.getElementById('selectedAudioId').value || null),
@@ -647,11 +647,11 @@ document.addEventListener('DOMContentLoaded', function() {
         scheduleDays: scheduleType === 'weekly' ? (formData.get('scheduleDays') || '[]') : null,
         recurringEnabled: formData.get('recurringEnabled') === 'on'
       };
-      
+
       try {
         const url = isEdit ? `/api/streams/${editId}` : '/api/streams';
         const method = isEdit ? 'PUT' : 'POST';
-        
+
         const response = await fetch(url, {
           method: method,
           headers: {
@@ -659,9 +659,9 @@ document.addEventListener('DOMContentLoaded', function() {
           },
           body: JSON.stringify(data)
         });
-        
+
         const result = await response.json();
-        
+
         if (result.success) {
           closeNewStreamModal();
           if (typeof showToast === 'function') {
@@ -671,7 +671,7 @@ document.addEventListener('DOMContentLoaded', function() {
           delete form.dataset.editId;
           document.querySelector('#newStreamModal h3').textContent = 'Create New Stream';
           document.querySelector('button[type="submit"][form="newStreamForm"]').textContent = 'Create Stream';
-          
+
           // Reload streams list
           if (typeof loadStreams === 'function') {
             loadStreams();
@@ -711,12 +711,12 @@ let selectedDays = [];
  */
 function setScheduleType(type) {
   currentScheduleType = type;
-  
+
   const scheduleTypeInput = document.getElementById('scheduleType');
   if (scheduleTypeInput) {
     scheduleTypeInput.value = type;
   }
-  
+
   // Update button styles
   const buttons = ['scheduleTypeOnce', 'scheduleTypeDaily', 'scheduleTypeWeekly'];
   buttons.forEach(btnId => {
@@ -731,12 +731,12 @@ function setScheduleType(type) {
       }
     }
   });
-  
+
   // Show/hide appropriate settings - works for both mobile and desktop
   const onceSettings = document.getElementById('onceScheduleSettings');
   const recurringSettings = document.getElementById('recurringScheduleSettings');
   const weeklyDaysSelector = document.getElementById('weeklyDaysSelector');
-  
+
   if (type === 'once') {
     // Show Start/End Stream fields, hide recurring settings
     if (onceSettings) {
@@ -753,7 +753,7 @@ function setScheduleType(type) {
     if (recurringSettings) {
       recurringSettings.classList.remove('hidden');
     }
-    
+
     // Show/hide weekly day selector based on type
     if (type === 'weekly') {
       if (weeklyDaysSelector) {
@@ -774,16 +774,16 @@ function setScheduleType(type) {
 function toggleDay(day) {
   const dayNum = parseInt(day);
   const index = selectedDays.indexOf(dayNum);
-  
+
   if (index > -1) {
     selectedDays.splice(index, 1);
   } else {
     selectedDays.push(dayNum);
   }
-  
+
   // Update hidden input
   document.getElementById('scheduleDays').value = JSON.stringify(selectedDays);
-  
+
   // Update button style
   const btn = document.querySelector(`[data-day="${day}"]`);
   if (btn) {
@@ -803,21 +803,21 @@ function toggleDay(day) {
 function resetRecurringScheduleForm() {
   currentScheduleType = 'once';
   selectedDays = [];
-  
+
   // Reset schedule type buttons
   setScheduleType('once');
-  
+
   // Reset day buttons
   document.querySelectorAll('.day-btn').forEach(btn => {
     btn.classList.remove('border-primary', 'bg-primary', 'text-white');
     btn.classList.add('border-gray-600', 'bg-dark-700', 'text-gray-300');
   });
-  
+
   // Reset inputs
   const recurringTime = document.getElementById('recurringTime');
   const scheduleDays = document.getElementById('scheduleDays');
   const recurringEnabled = document.getElementById('recurringEnabled');
-  
+
   if (recurringTime) recurringTime.value = '';
   if (scheduleDays) scheduleDays.value = '[]';
   if (recurringEnabled) recurringEnabled.checked = true;
@@ -828,23 +828,23 @@ function resetRecurringScheduleForm() {
  */
 function loadRecurringScheduleData(stream) {
   if (!stream) return;
-  
+
   const scheduleType = stream.schedule_type || 'once';
   setScheduleType(scheduleType);
-  
+
   if (scheduleType === 'daily' || scheduleType === 'weekly') {
     // Set recurring time
     const recurringTime = document.getElementById('recurringTime');
     if (recurringTime && stream.recurring_time) {
       recurringTime.value = stream.recurring_time;
     }
-    
+
     // Set recurring enabled
     const recurringEnabled = document.getElementById('recurringEnabled');
     if (recurringEnabled) {
       recurringEnabled.checked = stream.recurring_enabled !== false && stream.recurring_enabled !== 0;
     }
-    
+
     // Set weekly days
     if (scheduleType === 'weekly' && stream.schedule_days) {
       let days = stream.schedule_days;
@@ -855,10 +855,10 @@ function loadRecurringScheduleData(stream) {
           days = [];
         }
       }
-      
+
       selectedDays = Array.isArray(days) ? days : [];
       document.getElementById('scheduleDays').value = JSON.stringify(selectedDays);
-      
+
       // Update day button styles
       selectedDays.forEach(day => {
         const btn = document.querySelector(`[data-day="${day}"]`);
@@ -873,7 +873,7 @@ function loadRecurringScheduleData(stream) {
 
 // Update the original resetModalForm to include recurring schedule reset
 const originalResetModalForm = resetModalForm;
-resetModalForm = function() {
+resetModalForm = function () {
   originalResetModalForm();
   resetRecurringScheduleForm();
 };
