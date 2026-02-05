@@ -1066,6 +1066,13 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
       return;
     }
 
+    // CRITICAL FIX: Ensure user_role is set in session
+    // This prevents undefined errors in layout.ejs which uses req.session.user_role
+    if (!req.session.user_role) {
+      console.log('[Dashboard] Setting missing user_role in session:', user.user_role);
+      req.session.user_role = user.user_role;
+    }
+
     console.log('[Dashboard] Rendering dashboard for user:', user.username);
     res.render('dashboard', {
       title: 'Dashboard',
@@ -1121,12 +1128,30 @@ app.get('/gallery', isAuthenticated, canViewVideos, async (req, res) => {
   }
 });
 app.get('/settings', isAuthenticated, async (req, res) => {
+  console.log('[Settings] Access attempt:', {
+    userId: req.session.userId,
+    username: req.session.username,
+    user_role: req.session.user_role,
+    sessionID: req.sessionID,
+    cookies: req.headers.cookie
+  });
+
   try {
     const user = await User.findById(req.session.userId);
     if (!user) {
+      console.error('[Settings] User not found for session userId:', req.session.userId);
       req.session.destroy();
       return res.redirect('/login');
     }
+
+    // CRITICAL FIX: Ensure user_role is set in session
+    // This prevents undefined errors in settings.ejs which uses req.session.user_role
+    if (!req.session.user_role) {
+      console.log('[Settings] Setting missing user_role in session:', user.user_role);
+      req.session.user_role = user.user_role;
+    }
+
+    console.log('[Settings] Rendering settings for user:', user.username);
     res.render('settings', {
       title: 'Settings',
       active: 'settings',
