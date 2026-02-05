@@ -1,97 +1,108 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
-  <% if (typeof csrfToken !== 'undefined') { %>
-  <meta name="csrf-token" content="<%= csrfToken %>">
-  <% } %>
-  <title>
-    <%= title %> - StreamFlow
-  </title>
-  <link rel="icon" href="/images/logo.svg" type="image/svg+xml">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-  <link rel="preload" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.30.0/tabler-icons.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
-  <noscript><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.30.0/tabler-icons.min.css"></noscript>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="/css/styles.css">
-  <link href="https://vjs.zencdn.net/7.20.3/video-js.css" rel="stylesheet" />
-  <script src="https://vjs.zencdn.net/7.20.3/video.min.js"></script>
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        fontFamily: {
-          'inter': ['Inter', 'sans-serif'],
-          'sans': ['Inter', 'system-ui', 'sans-serif']
-        },
-        extend: {
-          colors: {
-            'primary': '#8B5CF6',
-            'secondary': '#7C3AED',
-            'accent': '#A78BFA',
-            'dark': {
-              '900': '#0F172A',
-              '800': '#1E293B',
-              '700': '#334155',
-              '600': '#475569',
-              '500': '#64748B',
-              '400': '#94A3B8',
-              '300': '#CBD5E1',
-              '200': '#E2E8F0',
-              '100': '#F1F5F9',
+  <% if (typeof csrfToken !=='undefined' ) { %>
+    <meta name="csrf-token" content="<%= csrfToken %>">
+    <% } %>
+      <title>
+        <%= title %> - StreamFlow
+      </title>
+      <link rel="icon" href="/images/logo.svg" type="image/svg+xml">
+      <link rel="preconnect" href="https://fonts.googleapis.com">
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+      <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+      <link rel="preload" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.30.0/tabler-icons.min.css"
+        as="style" onload="this.onload=null;this.rel='stylesheet'">
+      <noscript>
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.30.0/tabler-icons.min.css">
+      </noscript>
+      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+      <script src="https://cdn.tailwindcss.com"></script>
+      <link rel="stylesheet" href="/css/styles.css">
+      <link href="https://vjs.zencdn.net/7.20.3/video-js.css" rel="stylesheet" />
+      <script src="https://vjs.zencdn.net/7.20.3/video.min.js"></script>
+      <script>
+        tailwind.config = {
+          darkMode: 'class',
+          theme: {
+            fontFamily: {
+              'inter': ['Inter', 'sans-serif'],
+              'sans': ['Inter', 'system-ui', 'sans-serif']
             },
-            'gray': {
-              '900': '#0F172A',
-              '800': '#1E293B',
-              '700': '#334155',
-              '600': '#475569',
-              '500': '#64748B',
-              '400': '#94A3B8',
-              '300': '#CBD5E1',
-              '200': '#E2E8F0',
-              '100': '#F1F5F9',
-              '50': '#F8FAFC',
+            extend: {
+              colors: {
+                'primary': '#8B5CF6',
+                'secondary': '#7C3AED',
+                'accent': '#A78BFA',
+                'dark': {
+                  '900': '#0F172A',
+                  '800': '#1E293B',
+                  '700': '#334155',
+                  '600': '#475569',
+                  '500': '#64748B',
+                  '400': '#94A3B8',
+                  '300': '#CBD5E1',
+                  '200': '#E2E8F0',
+                  '100': '#F1F5F9',
+                },
+                'gray': {
+                  '900': '#0F172A',
+                  '800': '#1E293B',
+                  '700': '#334155',
+                  '600': '#475569',
+                  '500': '#64748B',
+                  '400': '#94A3B8',
+                  '300': '#CBD5E1',
+                  '200': '#E2E8F0',
+                  '100': '#F1F5F9',
+                  '50': '#F8FAFC',
+                }
+              }
             }
           }
         }
-      }
-    }
-  </script>
-  <script src="/js/stream-modal.js" defer></script>
-  <script src="/js/tab-optimizer.js" defer></script>
-  <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      if (document.fonts && document.fonts.ready) {
-        document.fonts.ready.then(function() {
-          document.querySelectorAll('.ti').forEach(function(icon) {
-            icon.classList.add('font-loaded');
-          });
+      </script>
+      <script src="/js/stream-modal.js" defer></script>
+      <script src="/js/tab-optimizer.js" defer></script>
+      <script>
+        document.addEventListener('DOMContentLoaded', function () {
+          if (document.fonts && document.fonts.ready) {
+            document.fonts.ready.then(function () {
+              document.querySelectorAll('.ti').forEach(function (icon) {
+                icon.classList.add('font-loaded');
+              });
+            });
+          } else {
+            setTimeout(function () {
+              document.querySelectorAll('.ti').forEach(function (icon) {
+                icon.classList.add('font-loaded');
+              });
+            }, 100);
+          }
         });
-      } else {
-        setTimeout(function() {
-          document.querySelectorAll('.ti').forEach(function(icon) {
-            icon.classList.add('font-loaded');
-          });
-        }, 100);
-      }
-    });
-  </script>
+      </script>
 </head>
+
 <body class="bg-dark-900 text-white font-inter">
   <!-- Mobile Header -->
-  <div class="lg:hidden fixed top-0 left-0 right-0 h-16 bg-dark-800 shadow-lg flex items-center justify-between px-4 z-30">
+  <div
+    class="lg:hidden fixed top-0 left-0 right-0 h-16 bg-dark-800 shadow-lg flex items-center justify-between px-4 z-30">
     <div class="flex items-center">
       <img src="/images/logo_mobile.svg" alt="StreamFlow Logo" class="h-8">
     </div>
     <div class="flex items-center gap-2">
-      <a href="https://wa.me/6289621453431" target="_blank" class="flex items-center justify-center h-6 text-green-500 hover:text-green-400 transition-colors" title="WhatsApp">
+      <a href="https://wa.me/6289621453431" target="_blank"
+        class="flex items-center justify-center h-6 text-green-500 hover:text-green-400 transition-colors"
+        title="WhatsApp">
         <i class="ti ti-brand-whatsapp text-xl"></i>
       </a>
-      <a href="https://link.dana.id/minta?full_url=https://qr.dana.id/v1/281012012021122332030646" target="_blank" class="flex items-center justify-center h-6 text-blue-400 hover:text-blue-300 transition-colors" title="Donate via Dana">
+      <a href="https://link.dana.id/minta?full_url=https://qr.dana.id/v1/281012012021122332030646" target="_blank"
+        class="flex items-center justify-center h-6 text-blue-400 hover:text-blue-300 transition-colors"
+        title="Donate via Dana">
         <i class="ti ti-wallet text-xl"></i>
       </a>
     </div>
@@ -127,19 +138,20 @@
           <span class="text-xs mt-1">YouTube</span>
           <span class="sidebar-tooltip group-hover:scale-100">YouTube Sync</span>
         </a>
-        <% if (req.session && req.session.user_role === 'admin') { %>
-        <a href="/users" class="sidebar-icon group <%= active === 'users' ? 'bg-primary' : '' %>">
-          <i class="ti ti-users-group text-xl"></i>
-          <span class="text-xs mt-1">Users</span>
-          <span class="sidebar-tooltip group-hover:scale-100">User Management</span>
-        </a>
-        <% } %>
+        <% if (req.session && req.session.user_role==='admin' ) { %>
+          <a href="/users" class="sidebar-icon group <%= active === 'users' ? 'bg-primary' : '' %>">
+            <i class="ti ti-users-group text-xl"></i>
+            <span class="text-xs mt-1">Users</span>
+            <span class="sidebar-tooltip group-hover:scale-100">User Management</span>
+          </a>
+          <% } %>
       </div>
       <div class="mt-auto overflow-hidden">
         <div class="h-px bg-gray-700 w-full"></div>
         <div class="relative" id="profile-menu-container">
           <div class="h-20 flex items-center justify-center px-3 py-4 hover:bg-dark-700/50 transition-colors">
-            <button id="profile-menu-button" class="w-12 h-12 rounded-full flex items-center justify-center overflow-hidden ring-2 ring-gray-700 hover:ring-primary transition-all">
+            <button id="profile-menu-button"
+              class="w-12 h-12 rounded-full flex items-center justify-center overflow-hidden ring-2 ring-gray-700 hover:ring-primary transition-all">
               <%- helpers.getAvatar(req) %>
             </button>
           </div>
@@ -150,10 +162,13 @@
     <!-- Profile Dropdown -->
     <div id="profile-dropdown" class="fixed bg-dark-800 shadow-xl border border-gray-700 hidden">
       <div class="px-4 py-2 border-b border-gray-700">
-        <div class="font-medium"><%= helpers.getUsername(req) %></div>
+        <div class="font-medium">
+          <%= helpers.getUsername(req) %>
+        </div>
         <div class="mt-1"><%- helpers.getRoleBadge(req) %></div>
       </div>
-      <a href="/settings" class="flex items-center px-4 py-2.5 text-sm text-gray-300 hover:bg-dark-700 hover:text-white transition-colors">
+      <a href="/settings"
+        class="flex items-center px-4 py-2.5 text-sm text-gray-300 hover:bg-dark-700 hover:text-white transition-colors">
         <i class="ti ti-settings mr-3"></i><span>Settings</span>
       </a>
       <div class="h-px bg-gray-700 mx-4"></div>
@@ -165,17 +180,22 @@
     <!-- Main Content -->
     <div class="w-full lg:ml-20 main-container">
       <!-- Desktop Header -->
-      <div class="hidden lg:fixed lg:flex top-0 right-0 left-20 items-center justify-end h-14 px-6 bg-dark-800 shadow-md z-10 gap-3">
-        <a href="https://wa.me/6289621453431" target="_blank" class="flex items-center justify-center h-7 text-green-500 hover:text-green-400 transition-colors" title="WhatsApp">
+      <div
+        class="hidden lg:fixed lg:flex top-0 right-0 left-20 items-center justify-end h-14 px-6 bg-dark-800 shadow-md z-10 gap-3">
+        <a href="https://wa.me/6289621453431" target="_blank"
+          class="flex items-center justify-center h-7 text-green-500 hover:text-green-400 transition-colors"
+          title="WhatsApp">
           <i class="ti ti-brand-whatsapp text-2xl"></i>
         </a>
-        <a href="https://link.dana.id/minta?full_url=https://qr.dana.id/v1/281012012021122332030646" target="_blank" class="flex items-center justify-center h-7 text-blue-400 hover:text-blue-300 transition-colors" title="Donate via Dana">
+        <a href="https://link.dana.id/minta?full_url=https://qr.dana.id/v1/281012012021122332030646" target="_blank"
+          class="flex items-center justify-center h-7 text-blue-400 hover:text-blue-300 transition-colors"
+          title="Donate via Dana">
           <i class="ti ti-wallet text-2xl"></i>
         </a>
       </div>
 
       <!-- Page Content -->
-      <div class="p-4 lg:p-6 pt-4 lg:pt-20 pb-20 lg:pb-6 main-content-wrapper">
+      <div class="p-4 lg:p-6 pt-4 lg:pt-20 pb-24 lg:pb-6 main-content-wrapper">
         <%- body %>
       </div>
 
@@ -194,7 +214,8 @@
       <a href="/playlist" class="bottom-nav-item <%= active === 'playlist' ? 'bottom-nav-active' : '' %>">
         <i class="ti ti-list-details"></i><span>Playlist</span>
       </a>
-      <a href="/youtube" class="bottom-nav-item <%= active === 'youtube' ? 'bottom-nav-active' : '' %>" style="<%= active === 'youtube' ? 'color: #EF4444;' : '' %>">
+      <a href="/youtube" class="bottom-nav-item <%= active === 'youtube' ? 'bottom-nav-active' : '' %>"
+        style="<%= active === 'youtube' ? 'color: #EF4444;' : '' %>">
         <i class="ti ti-brand-youtube"></i><span>YouTube</span>
       </a>
       <button id="mobile-profile-btn" class="bottom-nav-item">
@@ -204,27 +225,35 @@
         <span>Profile</span>
       </button>
     </nav>
-    <div id="mobile-profile-popup" class="fixed bottom-20 right-2 bg-dark-800 rounded-lg shadow-xl border border-gray-700 overflow-hidden w-48 z-50 transition-all duration-200 ease-out" style="display: none;">
+    <div id="mobile-profile-popup"
+      class="fixed bottom-20 right-2 bg-dark-800 rounded-lg shadow-xl border border-gray-700 overflow-hidden w-48 z-50 transition-all duration-200 ease-out"
+      style="display: none;">
       <div class="py-3 px-4">
-        <div class="text-sm font-medium mb-1"><%= helpers.getUsername(req) %></div>
+        <div class="text-sm font-medium mb-1">
+          <%= helpers.getUsername(req) %>
+        </div>
         <div class="mb-2"><%- helpers.getRoleBadge(req) %></div>
         <div class="h-px bg-gray-700 my-2"></div>
-        <% if (req.session && req.session.user_role === 'admin') { %>
-        <a href="/users" class="flex items-center py-2.5 text-gray-300 hover:text-white text-sm active:bg-dark-700 rounded">
-          <i class="ti ti-users mr-2"></i><span>Users</span>
-        </a>
-        <% } %>
-        <a href="/settings" class="flex items-center py-2.5 text-gray-300 hover:text-white text-sm active:bg-dark-700 rounded">
-          <i class="ti ti-settings mr-2"></i><span>Settings</span>
-        </a>
-        <div class="h-px bg-gray-700 my-2"></div>
-        <a href="/logout" class="flex items-center py-2.5 text-red-400 hover:text-red-300 text-sm active:bg-dark-700 rounded">
-          <i class="ti ti-logout mr-2"></i><span>Sign Out</span>
-        </a>
+        <% if (req.session && req.session.user_role==='admin' ) { %>
+          <a href="/users"
+            class="flex items-center py-2.5 text-gray-300 hover:text-white text-sm active:bg-dark-700 rounded">
+            <i class="ti ti-users mr-2"></i><span>Users</span>
+          </a>
+          <% } %>
+            <a href="/settings"
+              class="flex items-center py-2.5 text-gray-300 hover:text-white text-sm active:bg-dark-700 rounded">
+              <i class="ti ti-settings mr-2"></i><span>Settings</span>
+            </a>
+            <div class="h-px bg-gray-700 my-2"></div>
+            <a href="/logout"
+              class="flex items-center py-2.5 text-red-400 hover:text-red-300 text-sm active:bg-dark-700 rounded">
+              <i class="ti ti-logout mr-2"></i><span>Sign Out</span>
+            </a>
       </div>
     </div>
   </div>
 </body>
+
 </html>
 <style>
   /* Mobile viewport fix */
@@ -232,7 +261,7 @@
     height: 100%;
     overflow-x: hidden;
   }
-  
+
   body {
     width: 100%;
     overflow-x: hidden;
@@ -240,23 +269,23 @@
     -webkit-overflow-scrolling: touch;
     position: relative;
   }
-  
+
   /* Main content wrapper */
   .main-content-wrapper {
     width: 100%;
   }
-  
+
   .main-container {
     min-height: 100vh;
   }
-  
+
   @media (min-width: 1024px) {
     .main-container {
       display: flex;
       flex-direction: column;
     }
   }
-  
+
   #profile-dropdown {
     position: fixed;
     z-index: 100;
@@ -265,7 +294,7 @@
     bottom: 80px;
     left: 15px;
   }
-  
+
   /* Desktop logo overflow styling - CANGGIH! */
   .desktop-logo-container {
     position: absolute !important;
@@ -276,25 +305,34 @@
     height: auto !important;
     z-index: 50;
   }
-  
+
   .desktop-logo {
     position: relative;
     width: auto !important;
     height: 32px !important;
     max-width: none !important;
-    filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.3));
+    filter: drop-shadow(2px 2px 4px rgba(0, 0, 0, 0.3));
   }
+
   #profile-dropdown.hidden {
     opacity: 0;
     pointer-events: none;
     visibility: hidden;
   }
-  .text-logout { color: #FF5555; }
-  .text-logout:hover { color: #FF7777; }
+
+  .text-logout {
+    color: #FF5555;
+  }
+
+  .text-logout:hover {
+    color: #FF7777;
+  }
+
   .kirim-tip-button {
     border-radius: 5px;
     background: linear-gradient(45deg, #8B5CF6, #A78BFA);
   }
+
   .bottom-nav-item {
     display: flex;
     flex-direction: column;
@@ -309,26 +347,34 @@
     touch-action: manipulation;
     user-select: none;
   }
-  .bottom-nav-item i { font-size: 22px; margin-bottom: 4px; }
-  .bottom-nav-active { color: #8B5CF6; }
-  
+
+  .bottom-nav-item i {
+    font-size: 22px;
+    margin-bottom: 4px;
+  }
+
+  .bottom-nav-active {
+    color: #8B5CF6;
+  }
+
   /* Mobile profile popup */
   #mobile-profile-popup {
     z-index: 100;
   }
+
   #mobile-profile-btn {
     position: relative;
     z-index: 31;
   }
-  
+
   /* Mobile specific fixes */
   @media (max-width: 1023px) {
     html {
       overflow-y: scroll !important;
       height: auto !important;
     }
-    
-    body { 
+
+    body {
       padding-top: 64px;
       padding-bottom: 80px;
       min-height: 100vh;
@@ -336,36 +382,36 @@
       overflow-y: scroll !important;
       position: relative !important;
     }
-    
+
     .mobile-safe-wrapper {
       display: block !important;
       width: 100%;
       overflow: visible !important;
     }
-    
+
     .main-content-wrapper {
       padding-bottom: 3rem !important;
       overflow: visible !important;
     }
-    
+
     .main-container {
       min-height: 100vh;
       overflow: visible !important;
       display: block !important;
     }
-    
+
     /* Remove any height restrictions */
-    .min-h-screen { 
+    .min-h-screen {
       min-height: auto !important;
       height: auto !important;
     }
-    
+
     /* Force scrollable */
     * {
       -webkit-overflow-scrolling: touch;
     }
   }
-  
+
   /* Fix for iOS Safari */
   @supports (-webkit-touch-callout: none) {
     body {
@@ -389,47 +435,47 @@
         }
       });
     }
-    
+
     // Mobile profile popup - Fixed for touch devices
     const mobileProfileBtn = document.getElementById('mobile-profile-btn');
     const mobileProfilePopup = document.getElementById('mobile-profile-popup');
-    
+
     if (mobileProfileBtn && mobileProfilePopup) {
       // Toggle popup on click/touch
       mobileProfileBtn.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        
+
         const isVisible = mobileProfilePopup.style.display === 'block';
-        
+
         if (isVisible) {
           mobileProfilePopup.style.display = 'none';
         } else {
           mobileProfilePopup.style.display = 'block';
         }
       });
-      
+
       // Also handle touchend for better mobile response
       mobileProfileBtn.addEventListener('touchend', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        
+
         const isVisible = mobileProfilePopup.style.display === 'block';
-        
+
         if (isVisible) {
           mobileProfilePopup.style.display = 'none';
         } else {
           mobileProfilePopup.style.display = 'block';
         }
       }, { passive: false });
-      
+
       // Close popup when clicking outside
       document.addEventListener('click', (e) => {
         if (!mobileProfilePopup.contains(e.target) && !mobileProfileBtn.contains(e.target)) {
           mobileProfilePopup.style.display = 'none';
         }
       });
-      
+
       // Close popup when touching outside
       document.addEventListener('touchstart', (e) => {
         if (!mobileProfilePopup.contains(e.target) && !mobileProfileBtn.contains(e.target)) {

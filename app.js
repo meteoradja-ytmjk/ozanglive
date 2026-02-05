@@ -1146,7 +1146,12 @@ app.get('/settings', isAuthenticated, async (req, res) => {
     username: req.session.username,
     user_role: req.session.user_role,
     sessionID: req.sessionID,
-    cookies: req.headers.cookie
+    cookies: req.headers.cookie,
+    userAgent: req.headers['user-agent'],
+    referer: req.headers.referer,
+    ip: req.ip,
+    method: req.method,
+    url: req.url
   });
 
   try {

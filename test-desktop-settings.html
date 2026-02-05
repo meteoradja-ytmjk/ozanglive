@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Desktop Settings Link Test</title>
+    <style>
+        body {
+            font-family: Arial;
+            padding: 20px;
+            background: #1a1a1a;
+            color: white;
+        }
+
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            background: #2a2a2a;
+            border-radius: 8px;
+        }
+
+        .test-link {
+            display: inline-block;
+            padding: 10px 20px;
+            background: #8B5CF6;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            margin: 10px;
+        }
+
+        .test-link:hover {
+            background: #7C3AED;
+        }
+
+        .dropdown {
+            position: relative;
+            display: inline-block;
+        }
+
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            background-color: #2a2a2a;
+            min-width: 160px;
+            box-shadow: 0px 8px 16px 0px rgba(0, 0, 0, 0.2);
+            z-index: 1;
+            border-radius: 4px;
+        }
+
+        .dropdown-content a {
+            color: white;
+            padding: 12px 16px;
+            text-decoration: none;
+            display: block;
+        }
+
+        .dropdown-content a:hover {
+            background-color: #3a3a3a;
+        }
+
+        .dropdown:hover .dropdown-content {
+            display: block;
+        }
+
+        .dropdown button {
+            background-color: #8B5CF6;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            background: #3a3a3a;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Desktop Settings Link Test</h1>
+
+    <div class="test-section">
+        <h2>Test 1: Direct Link (seperti mobile)</h2>
+        <a href="http://103.150.196.231:7575/settings" class="test-link">Direct Settings Link</a>
+        <div class="result">Klik link ini - harusnya langsung ke settings</div>
+    </div>
+
+    <div class="test-section">
+        <h2>Test 2: Link dalam Dropdown (seperti desktop)</h2>
+        <div class="dropdown">
+            <button>Profile Menu ▼</button>
+            <div class="dropdown-content">
+                <a href="http://103.150.196.231:7575/settings">Settings</a>
+                <a href="http://103.150.196.231:7575/logout">Sign Out</a>
+            </div>
+        </div>
+        <div class="result">Hover button, lalu klik Settings - harusnya langsung ke settings</div>
+    </div>
+
+    <div class="test-section">
+        <h2>Test 3: Link dengan Event Listener</h2>
+        <a href="http://103.150.196.231:7575/settings" id="test-link-3" class="test-link">Settings dengan Event</a>
+        <div class="result">Klik link ini - harusnya langsung ke settings (ada console.log)</div>
+    </div>
+
+    <div class="test-section">
+        <h2>Test 4: Simulasi Desktop Dropdown Exact</h2>
+        <div id="profile-dropdown-test" style="position: relative; display: inline-block;">
+            <button id="profile-btn-test"
+                style="background-color: #8B5CF6; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;">
+                Profile
+            </button>
+            <div id="dropdown-test" class="dropdown-content" style="display: none;">
+                <a href="http://103.150.196.231:7575/settings">Settings</a>
+                <a href="http://103.150.196.231:7575/logout">Sign Out</a>
+            </div>
+        </div>
+        <div class="result">Klik Profile button, lalu klik Settings</div>
+    </div>
+
+    <script>
+        // Test 3: Add event listener
+        document.getElementById('test-link-3').addEventListener('click', function (e) {
+            console.log('[Test 3] Settings link clicked');
+            console.log('[Test 3] Event:', e);
+            console.log('[Test 3] Target:', e.target);
+            console.log('[Test 3] href:', this.href);
+            // Don't prevent default - let it navigate
+        });
+
+        // Test 4: Simulasi exact desktop dropdown behavior
+        const profileBtn = document.getElementById('profile-btn-test');
+        const dropdown = document.getElementById('dropdown-test');
+
+        profileBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+            console.log('[Test 4] Dropdown toggled, display:', dropdown.style.display);
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!dropdown.contains(e.target) && !profileBtn.contains(e.target)) {
+                dropdown.style.display = 'none';
+                console.log('[Test 4] Dropdown closed by outside click');
+            }
+        });
+
+        // Log all clicks on settings links
+        document.querySelectorAll('a[href*="/settings"]').forEach(link => {
+            link.addEventListener('click', function (e) {
+                console.log('[Global] Settings link clicked:', this.href);
+                console.log('[Global] Event:', e);
+            }, true); // Use capture phase
+        });
+    </script>
+</body>
+
+</html>
