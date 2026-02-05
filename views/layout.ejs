@@ -258,14 +258,13 @@
 <style>
   /* Mobile viewport fix */
   html {
-    height: 100%;
     overflow-x: hidden;
   }
 
   body {
     width: 100%;
-    overflow-x: hidden;
-    overflow-y: scroll;
+    overflow-x: hidden !important;
+    overflow-y: scroll !important;
     -webkit-overflow-scrolling: touch;
     position: relative;
   }
@@ -423,7 +422,40 @@
   document.addEventListener('DOMContentLoaded', () => {
     // CRITICAL: Ensure scroll is always enabled on page load
     // This prevents stuck overflow:hidden from modals
-    document.body.style.overflow = '';
+    function forceScrollEnabled() {
+      // Remove any inline overflow styles
+      document.body.style.removeProperty('overflow');
+      document.documentElement.style.removeProperty('overflow');
+
+      // Force scroll to be enabled
+      if (window.innerWidth < 1024) {
+        // Mobile: ensure scroll is always enabled
+        document.body.style.setProperty('overflow-y', 'scroll', 'important');
+        document.body.style.setProperty('overflow-x', 'hidden', 'important');
+      }
+    }
+
+    // Force scroll on load
+    forceScrollEnabled();
+
+    // Monitor for any changes to body overflow and fix them
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
+          const bodyOverflow = document.body.style.overflow;
+          if (bodyOverflow === 'hidden' && window.innerWidth < 1024) {
+            // On mobile, if something sets overflow to hidden, wait a bit then restore scroll
+            setTimeout(forceScrollEnabled, 100);
+          }
+        }
+      });
+    });
+
+    // Start observing body for style changes
+    observer.observe(document.body, {
+      attributes: true,
+      attributeFilter: ['style']
+    });
 
     // Desktop profile dropdown
     const profileButton = document.getElementById('profile-menu-button');
