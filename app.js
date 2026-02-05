@@ -353,6 +353,11 @@ const sessionStore = new SQLiteStore({
   cleanupInterval: 900000 // Clean expired sessions every 15 minutes (900000ms)
 });
 
+// Add session store error handling
+sessionStore.on('error', (err) => {
+  console.error('[Session Store] Error:', err);
+});
+
 console.log('[Session] Session store initialized');
 
 app.use(session({
@@ -369,6 +374,22 @@ app.use(session({
 }));
 
 console.log('[Session] Session middleware initialized');
+
+// Session debugging middleware
+app.use((req, res, next) => {
+  // Skip logging for static assets
+  if (!req.path.startsWith('/css') && !req.path.startsWith('/js') && !req.path.startsWith('/images') && !req.path.startsWith('/uploads')) {
+    console.log('[Session Debug]', {
+      path: req.path,
+      method: req.method,
+      sessionID: req.sessionID,
+      userId: req.session?.userId,
+      username: req.session?.username,
+      hasSession: !!req.session
+    });
+  }
+  next();
+});
 
 // Session error handling middleware
 app.use((err, req, res, next) => {
@@ -1025,6 +1046,12 @@ app.get('/health', async (req, res) => {
   }
 });
 app.get('/dashboard', isAuthenticated, async (req, res) => {
+  console.log('[Dashboard] Access attempt:', {
+    userId: req.session.userId,
+    username: req.session.username,
+    sessionID: req.sessionID
+  });
+
   try {
     const user = await User.findById(req.session.userId);
 
@@ -1038,6 +1065,7 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
       return;
     }
 
+    console.log('[Dashboard] Rendering dashboard for user:', user.username);
     res.render('dashboard', {
       title: 'Dashboard',
       active: 'dashboard',

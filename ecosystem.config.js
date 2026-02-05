@@ -22,6 +22,9 @@
  *   pm2 save
  */
 
+// CRITICAL: Load environment variables from .env file
+require('dotenv').config();
+
 module.exports = {
   apps: [
     {
@@ -47,6 +50,8 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         PORT: 7575,
+        // CRITICAL: Pass SESSION_SECRET from .env to PM2
+        SESSION_SECRET: process.env.SESSION_SECRET,
         // CRITICAL: Disable Node.js memory warnings that can cause issues
         NODE_OPTIONS: '--max-old-space-size=768 --no-warnings'
       },
