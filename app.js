@@ -1027,14 +1027,29 @@ app.get('/health', async (req, res) => {
 app.get('/dashboard', isAuthenticated, async (req, res) => {
   try {
     const user = await User.findById(req.session.userId);
+
+    // If user not found, destroy session to prevent redirect loop
+    if (!user) {
+      console.error('[Dashboard] User not found for session userId:', req.session.userId);
+      req.session.destroy((err) => {
+        if (err) console.error('[Dashboard] Session destroy error:', err);
+        return res.redirect('/login');
+      });
+      return;
+    }
+
     res.render('dashboard', {
       title: 'Dashboard',
       active: 'dashboard',
       user: user
     });
   } catch (error) {
-    console.error('Dashboard error:', error);
-    res.redirect('/login');
+    console.error('[Dashboard] Error:', error);
+    // Destroy session to prevent redirect loop
+    req.session.destroy((err) => {
+      if (err) console.error('[Dashboard] Session destroy error:', err);
+      res.redirect('/login');
+    });
   }
 });
 app.get('/gallery', isAuthenticated, canViewVideos, async (req, res) => {
