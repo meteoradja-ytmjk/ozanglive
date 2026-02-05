@@ -37,7 +37,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
       db.run('PRAGMA page_size = 4096'); // Optimal page size
       db.run('PRAGMA locking_mode = NORMAL'); // Allow multiple connections
     });
-    
+
     dbInitPromise = createTables();
   }
 });
@@ -77,13 +77,13 @@ async function verifyTables() {
         }
         const existingTables = rows.map(r => r.name);
         const missingTables = REQUIRED_TABLES.filter(t => !existingTables.includes(t));
-        
+
         if (missingTables.length > 0) {
           console.warn(`[Database] Missing tables: ${missingTables.join(', ')}`);
         } else {
           console.log('[Database] All required tables verified');
         }
-        
+
         resolve({
           success: missingTables.length === 0,
           missingTables,
@@ -122,14 +122,14 @@ async function createTables() {
   try {
     // Create all tables sequentially to ensure proper order
     await createCoreTablesAsync();
-    
+
     // Verify all tables were created
     const verification = await verifyTables();
     if (!verification.success) {
       console.error('[Database] Some tables failed to create:', verification.missingTables);
       // Don't throw - some tables might be created by migrations
     }
-    
+
     dbInitialized = true;
     console.log('[Database] Database tables initialized successfully');
   } catch (error) {
@@ -279,6 +279,7 @@ async function createCoreTablesAsync() {
   await runTableQuery(`ALTER TABLE users ADD COLUMN can_download_videos INTEGER DEFAULT 1`, 'users.can_download_videos');
   await runTableQuery(`ALTER TABLE users ADD COLUMN can_delete_videos INTEGER DEFAULT 1`, 'users.can_delete_videos');
   await runTableQuery(`ALTER TABLE users ADD COLUMN storage_limit INTEGER DEFAULT NULL`, 'users.storage_limit');
+  await runTableQuery(`ALTER TABLE users ADD COLUMN storage_used INTEGER DEFAULT 0`, 'users.storage_used');
 
   // Add columns to streams table
   await runTableQuery(`ALTER TABLE streams ADD COLUMN audio_id TEXT`, 'streams.audio_id');
@@ -289,11 +290,11 @@ async function createCoreTablesAsync() {
   await runTableQuery(`ALTER TABLE streams ADD COLUMN recurring_time TEXT`, 'streams.recurring_time');
   await runTableQuery(`ALTER TABLE streams ADD COLUMN recurring_enabled INTEGER DEFAULT 1`, 'streams.recurring_enabled');
   await runTableQuery(`ALTER TABLE streams ADD COLUMN original_settings TEXT`, 'streams.original_settings');
-  
+
   // YouTube status sync columns
   await runTableQuery(`ALTER TABLE streams ADD COLUMN youtube_broadcast_id TEXT`, 'streams.youtube_broadcast_id');
   await runTableQuery(`ALTER TABLE streams ADD COLUMN youtube_lifecycle_status TEXT`, 'streams.youtube_lifecycle_status');
-  
+
   // YouTube broadcast settings columns
   await runTableQuery(`ALTER TABLE streams ADD COLUMN youtube_enable_auto_start INTEGER DEFAULT 1`, 'streams.youtube_enable_auto_start');
   await runTableQuery(`ALTER TABLE streams ADD COLUMN youtube_enable_auto_stop INTEGER DEFAULT 1`, 'streams.youtube_enable_auto_stop');
@@ -581,11 +582,11 @@ async function migrateYouTubeCredentialsTableAsync() {
         resolve();
         return;
       }
-      
+
       const sql = row.sql;
       if (sql.includes('user_id TEXT NOT NULL UNIQUE') && !sql.includes('UNIQUE(user_id, channel_id)')) {
         console.log('[Database] Migrating youtube_credentials table for multiple accounts support...');
-        
+
         db.serialize(() => {
           db.run(`CREATE TABLE IF NOT EXISTS youtube_credentials_new (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -654,7 +655,7 @@ async function checkConnectivity() {
       // On timeout, assume connected to avoid false failures
       resolve({ connected: true, latency: 10000, warning: 'Database query slow but assuming connected' });
     }, 10000);
-    
+
     db.get('SELECT 1 as test', [], (err) => {
       clearTimeout(timeout);
       const latency = Date.now() - startTime;
@@ -679,7 +680,7 @@ function safeDbQuery(sql, params = [], timeoutMs = 30000) {
     const timeout = setTimeout(() => {
       reject(new Error(`Database query timeout after ${timeoutMs}ms`));
     }, timeoutMs);
-    
+
     db.all(sql, params, (err, rows) => {
       clearTimeout(timeout);
       if (err) {
@@ -704,8 +705,8 @@ function safeDbRun(sql, params = [], timeoutMs = 30000) {
     const timeout = setTimeout(() => {
       reject(new Error(`Database run timeout after ${timeoutMs}ms`));
     }, timeoutMs);
-    
-    db.run(sql, params, function(err) {
+
+    db.run(sql, params, function (err) {
       clearTimeout(timeout);
       if (err) {
         console.error('[Database] Run error:', err.message);
@@ -726,13 +727,13 @@ function checkIfUsersExist() {
         resolve(false);
         return;
       }
-      
+
       if (!tableExists) {
         // Table doesn't exist yet, no users
         resolve(false);
         return;
       }
-      
+
       // Table exists, check for users
       db.get('SELECT COUNT(*) as count FROM users', [], (err, result) => {
         if (err) {
@@ -762,13 +763,13 @@ function checkIfAdminExists() {
         resolve(false);
         return;
       }
-      
+
       if (!tableExists) {
         // Table doesn't exist yet, no admin
         resolve(false);
         return;
       }
-      
+
       // Table exists, check for active admin
       db.get("SELECT COUNT(*) as count FROM users WHERE user_role = 'admin' AND status = 'active'", [], (err, result) => {
         if (err) {
