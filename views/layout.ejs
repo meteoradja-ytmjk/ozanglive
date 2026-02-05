@@ -66,6 +66,30 @@
           }
         }
       </script>
+      <script>
+          // CRITICAL: Force scroll enabled IMMEDIATELY (runs before page loads)
+          (function () {
+            function forceScroll() {
+              if (window.innerWidth < 1024) {
+                document.documentElement.style.cssText = 'overflow-y: scroll !important; overflow-x: hidden !important;';
+                if (document.body) {
+                  document.body.style.cssText += '; overflow-y: scroll !important; overflow-x: hidden !important; -webkit-overflow-scrolling: touch;';
+                }
+              }
+            }
+
+            // Run immediately
+            forceScroll();
+
+            // Run when DOM is ready
+            if (document.readyState === 'loading') {
+              document.addEventListener('DOMContentLoaded', forceScroll);
+            }
+
+            // Run periodically to catch any changes
+            setInterval(forceScroll, 500);
+          })();
+      </script>
       <script src="/js/stream-modal.js" defer></script>
       <script src="/js/tab-optimizer.js" defer></script>
       <script>
@@ -87,7 +111,8 @@
       </script>
 </head>
 
-<body class="bg-dark-900 text-white font-inter">
+<body class="bg-dark-900 text-white font-inter"
+  style="overflow-y: scroll !important; overflow-x: hidden !important; -webkit-overflow-scrolling: touch;">
   <!-- Mobile Header -->
   <div
     class="lg:hidden fixed top-0 left-0 right-0 h-16 bg-dark-800 shadow-lg flex items-center justify-between px-4 z-30">
