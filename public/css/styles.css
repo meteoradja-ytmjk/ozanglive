@@ -212,6 +212,12 @@ body {
   .min-h-screen {
     padding-bottom: 80px !important;
   }
+
+  .settings-scroll-container {
+    max-height: calc(100dvh - 200px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
 }
 
 /* Mobile responsiveness fixes */
