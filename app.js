@@ -363,8 +363,8 @@ console.log('[Session] Session store initialized');
 app.use(session({
   store: sessionStore,
   secret: sessionSecret,
-  resave: true, // CHANGED: Force session save on every request to ensure persistence
-  saveUninitialized: true, // CHANGED: Save new sessions immediately
+  resave: true, // Force session save on every request to ensure persistence
+  saveUninitialized: false, // Avoid overwriting authenticated cookies from anonymous/prefetch requests
   rolling: true,
   cookie: {
     httpOnly: true,
