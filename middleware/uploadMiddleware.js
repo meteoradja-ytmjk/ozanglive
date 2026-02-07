@@ -6,7 +6,10 @@ const StorageService = require('../services/storageService');
 
 // Optimized stream options for faster uploads
 const STREAM_OPTIONS = {
-  highWaterMark: 1024 * 1024 * 2 // 2MB buffer for faster disk writes
+  highWaterMark: 1024 * 1024 * 16, // 16MB buffer for faster disk writes
+  flags: 'w',
+  autoClose: true,
+  emitClose: true
 };
 
 /**
@@ -70,17 +73,26 @@ const createOptimizedStorage = (destinationPath) => ({
     const filename = getUniqueFilename(file.originalname);
     const finalPath = path.join(destinationPath, filename);
     const outStream = createOptimizedWriteStream(finalPath);
+    let handled = false;
 
-    file.stream.pipe(outStream);
-    outStream.on('error', cb);
+    const done = (err, info) => {
+      if (handled) return;
+      handled = true;
+      cb(err, info);
+    };
+
+    file.stream.on('error', (err) => done(err));
+    outStream.on('error', (err) => done(err));
     outStream.on('finish', () => {
-      cb(null, {
+      done(null, {
         destination: destinationPath,
         filename,
         path: finalPath,
         size: outStream.bytesWritten
       });
     });
+
+    file.stream.pipe(outStream);
   },
   _removeFile: (req, file, cb) => {
     if (file.path) {
