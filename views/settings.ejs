@@ -24,7 +24,7 @@
         data-tab="backup">
         <i class="ti ti-database-export mr-2"></i>Backup
       </button>
-      <% if (req.session.user_role==='admin' ) { %>
+      <% if (userRole === 'admin') { %>
         <button
           class="settings-tab mr-2 py-2 px-4 text-gray-400 hover:text-white border-b-2 border-transparent hover:border-gray-700 font-medium"
           data-tab="system">
@@ -39,7 +39,7 @@
     </div>
 
     <!-- Mobile tabs - grid rata kanan kiri -->
-    <% if (req.session.user_role==='admin' ) { %>
+    <% if (userRole === 'admin') { %>
       <div class="sm:hidden grid grid-cols-5 -mb-px">
         <% } else { %>
           <div class="sm:hidden grid grid-cols-3 -mb-px">
@@ -62,7 +62,7 @@
                 <i class="ti ti-database-export text-lg mb-1"></i>
                 <span class="text-xs font-medium">Backup</span>
               </button>
-              <% if (req.session.user_role==='admin' ) { %>
+              <% if (userRole === 'admin') { %>
                 <button
                   class="settings-tab py-3 flex flex-col items-center justify-center text-gray-400 border-b-2 border-transparent"
                   data-tab="system">
@@ -379,7 +379,7 @@
           </div>
         </div>
 
-        <% if (req.session.user_role==='admin' ) { %>
+        <% if (userRole === 'admin') { %>
           <div id="system-tab" class="settings-content hidden">
             <div class="p-6">
               <h3 class="text-lg font-semibold mb-6">System Settings</h3>
@@ -786,7 +786,7 @@
     <% } %>
 
       // Live Limit Settings (Admin only)
-      <% if (req.session.user_role === 'admin') { %>
+      <% if (userRole === 'admin') { %>
       const liveLimitInput = document.getElementById('default-live-limit');
             const saveLiveLimitBtn = document.getElementById('save-live-limit');
 
@@ -1280,7 +1280,7 @@
           });
 
       // Update System functionality (Admin only)
-      <% if (req.session.user_role === 'admin') { %>
+      <% if (userRole === 'admin') { %>
       const checkUpdateBtn = document.getElementById('check-update-btn');
             const performUpdateBtn = document.getElementById('perform-update-btn');
             const reloadPageBtn = document.getElementById('reload-page-btn');
