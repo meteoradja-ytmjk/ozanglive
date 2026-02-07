@@ -28,16 +28,25 @@
   // Prefetch halaman di background
   function prefetchPage(url) {
     // Skip jika sudah di-cache atau sedang di-prefetch
-    if (pageCache.has(url) || document.querySelector(`link[rel="prefetch"][href="${url}"]`)) {
+    if (pageCache.has(url)) {
       return;
     }
 
-    // Buat prefetch link
-    const link = document.createElement('link');
-    link.rel = 'prefetch';
-    link.href = url;
-    link.as = 'document';
-    document.head.appendChild(link);
+    // Gunakan fetch dengan credentials agar session cookie tetap konsisten
+    fetch(url, {
+      method: 'GET',
+      credentials: 'same-origin',
+      cache: 'force-cache',
+      headers: {
+        'X-Prefetch': '1'
+      }
+    }).then(response => {
+      if (response.ok) {
+        pageCache.set(url, Date.now());
+      }
+    }).catch(() => {
+      // Silent fail untuk prefetch
+    });
   }
 
   // Instant visual feedback saat klik navigasi
