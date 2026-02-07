@@ -1141,6 +1141,10 @@ app.get('/gallery', isAuthenticated, canViewVideos, async (req, res) => {
   }
 });
 app.get('/settings', isAuthenticated, async (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+
   console.log('[Settings] Access attempt:', {
     userId: req.session.userId,
     username: req.session.username,
@@ -1167,6 +1171,17 @@ app.get('/settings', isAuthenticated, async (req, res) => {
     if (!req.session.user_role) {
       console.log('[Settings] Setting missing user_role in session:', user.user_role);
       req.session.user_role = user.user_role;
+      await new Promise((resolve, reject) => {
+        req.session.save((err) => {
+          if (err) {
+            console.error('[Settings] Session save error:', err);
+            reject(err);
+          } else {
+            console.log('[Settings] Session saved successfully with user_role');
+            resolve();
+          }
+        });
+      });
     }
 
     console.log('[Settings] Rendering settings for user:', user.username, 'role:', user.user_role);
@@ -1184,6 +1199,22 @@ app.get('/settings', isAuthenticated, async (req, res) => {
       error: 'Failed to load settings. Please try again.'
     });
   }
+});
+
+app.get(['/stream', '/streams'], isAuthenticated, (req, res) => {
+  res.redirect('/dashboard');
+});
+
+app.get('/galery', isAuthenticated, (req, res) => {
+  res.redirect('/gallery');
+});
+
+app.get('/plalist', isAuthenticated, (req, res) => {
+  res.redirect('/playlist');
+});
+
+app.get('/user', isAuthenticated, (req, res) => {
+  res.redirect('/users');
 });
 // Schedule page - shows all scheduled streams
 app.get('/schedule', isAuthenticated, async (req, res) => {
