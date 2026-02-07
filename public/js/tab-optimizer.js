@@ -17,27 +17,38 @@
   // Prefetch links saat hover
   function setupPrefetch() {
     const navLinks = document.querySelectorAll('a[href^="/"]');
+    const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 
     navLinks.forEach(link => {
-      // Prefetch saat hover (desktop) atau touchstart (mobile)
-      link.addEventListener('mouseenter', () => prefetchPage(link.href), { once: false, passive: true });
-      link.addEventListener('touchstart', () => prefetchPage(link.href), { once: false, passive: true });
+      // Prefetch hanya untuk perangkat touch agar tidak mereset sesi desktop
+      if (isTouchDevice) {
+        link.addEventListener('touchstart', () => prefetchPage(link.href), { once: false, passive: true });
+      }
     });
   }
 
   // Prefetch halaman di background
   function prefetchPage(url) {
     // Skip jika sudah di-cache atau sedang di-prefetch
-    if (pageCache.has(url) || document.querySelector(`link[rel="prefetch"][href="${url}"]`)) {
+    if (pageCache.has(url)) {
       return;
     }
 
-    // Buat prefetch link
-    const link = document.createElement('link');
-    link.rel = 'prefetch';
-    link.href = url;
-    link.as = 'document';
-    document.head.appendChild(link);
+    // Gunakan fetch dengan credentials agar session cookie tetap konsisten
+    fetch(url, {
+      method: 'GET',
+      credentials: 'same-origin',
+      cache: 'force-cache',
+      headers: {
+        'X-Prefetch': '1'
+      }
+    }).then(response => {
+      if (response.ok) {
+        pageCache.set(url, Date.now());
+      }
+    }).catch(() => {
+      // Silent fail untuk prefetch
+    });
   }
 
   // Instant visual feedback saat klik navigasi
