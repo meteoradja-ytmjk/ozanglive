@@ -1047,6 +1047,9 @@ function formatDuration(seconds) {
         audioButtonsCol.classList.add('tab-hidden');
       }
     }
+
+    updateMinimizedVideoStatus();
+    updateMinimizedAudioStatus();
   }
   
   // Toast notification
@@ -1246,6 +1249,8 @@ function formatDuration(seconds) {
     const statusEl = document.getElementById('minimizedVideoStatus');
     const progressBarContainer = document.getElementById('minimizedVideoProgressBar');
     const progressBar = progressBarContainer?.querySelector('div');
+    const modal = document.getElementById('uploadModal');
+    const minimized = document.getElementById('minimizedVideoModal');
     
     if (!window.videoQueueManager) return;
     
@@ -1254,11 +1259,16 @@ function formatDuration(seconds) {
     const completed = files.filter(f => f.status === 'success').length;
     const failed = files.filter(f => f.status === 'error').length;
     const total = files.length;
+    const pending = files.filter(f => f.status === 'pending').length;
+    
+    if (modal?.classList.contains('hidden') && minimized && (uploading > 0 || pending > 0)) {
+      minimized.classList.remove('hidden');
+    }
     
     if (uploading > 0) {
       statusEl.textContent = `Uploading ${uploading} of ${total} files...`;
       progressBarContainer.classList.remove('hidden');
-      const progress = Math.round((completed / total) * 100);
+      const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
       if (progressBar) progressBar.style.width = `${progress}%`;
     } else if (completed > 0 || failed > 0) {
       statusEl.textContent = `${completed} success, ${failed} failed`;
@@ -1306,6 +1316,8 @@ function formatDuration(seconds) {
     const statusEl = document.getElementById('minimizedAudioStatus');
     const progressBarContainer = document.getElementById('minimizedAudioProgressBar');
     const progressBar = progressBarContainer?.querySelector('div');
+    const modal = document.getElementById('audioUploadModal');
+    const minimized = document.getElementById('minimizedAudioModal');
     
     if (!window.audioQueueManager) return;
     
@@ -1314,11 +1326,16 @@ function formatDuration(seconds) {
     const completed = files.filter(f => f.status === 'success').length;
     const failed = files.filter(f => f.status === 'error').length;
     const total = files.length;
+    const pending = files.filter(f => f.status === 'pending').length;
+    
+    if (modal?.classList.contains('hidden') && minimized && (uploading > 0 || pending > 0)) {
+      minimized.classList.remove('hidden');
+    }
     
     if (uploading > 0) {
       statusEl.textContent = `Uploading ${uploading} of ${total} files...`;
       progressBarContainer.classList.remove('hidden');
-      const progress = Math.round((completed / total) * 100);
+      const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
       if (progressBar) progressBar.style.width = `${progress}%`;
     } else if (completed > 0 || failed > 0) {
       statusEl.textContent = `${completed} success, ${failed} failed`;
@@ -1560,6 +1577,9 @@ function formatDuration(seconds) {
       if (gdriveBtnDesktop) gdriveBtnDesktop.style.display = 'flex';
       if (gdriveAudioBtnDesktop) gdriveAudioBtnDesktop.style.display = 'none';
     }
+
+    updateMinimizedVideoStatus();
+    updateMinimizedAudioStatus();
     
     // Audio conversion toggle event listener
     const audioConvertToggle = document.getElementById('audioConvertToggle');
