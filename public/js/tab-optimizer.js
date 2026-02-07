@@ -19,36 +19,29 @@
     const navLinks = document.querySelectorAll('a[href^="/"]');
     const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 
+    if (!isTouchDevice) {
+      return;
+    }
+
     navLinks.forEach(link => {
       // Prefetch hanya untuk perangkat touch agar tidak mereset sesi desktop
-      if (isTouchDevice) {
-        link.addEventListener('touchstart', () => prefetchPage(link.href), { once: false, passive: true });
-      }
+      link.addEventListener('touchstart', () => prefetchPage(link.href), { once: false, passive: true });
     });
   }
 
   // Prefetch halaman di background
   function prefetchPage(url) {
     // Skip jika sudah di-cache atau sedang di-prefetch
-    if (pageCache.has(url)) {
+    if (pageCache.has(url) || document.querySelector(`link[rel="prefetch"][href="${url}"]`)) {
       return;
     }
 
-    // Gunakan fetch dengan credentials agar session cookie tetap konsisten
-    fetch(url, {
-      method: 'GET',
-      credentials: 'same-origin',
-      cache: 'force-cache',
-      headers: {
-        'X-Prefetch': '1'
-      }
-    }).then(response => {
-      if (response.ok) {
-        pageCache.set(url, Date.now());
-      }
-    }).catch(() => {
-      // Silent fail untuk prefetch
-    });
+    // Buat prefetch link
+    const link = document.createElement('link');
+    link.rel = 'prefetch';
+    link.href = url;
+    link.as = 'document';
+    document.head.appendChild(link);
   }
 
   // Instant visual feedback saat klik navigasi
