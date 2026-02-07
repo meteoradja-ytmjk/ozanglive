@@ -1047,6 +1047,9 @@ function formatDuration(seconds) {
         audioButtonsCol.classList.add('tab-hidden');
       }
     }
+
+    updateMinimizedVideoStatus();
+    updateMinimizedAudioStatus();
   }
   
   // Toast notification
@@ -1094,6 +1097,10 @@ function formatDuration(seconds) {
     document.getElementById('videoCancelAllBtn').classList.add('hidden');
     document.getElementById('videoRetryBtn').classList.add('hidden');
     document.getElementById('videoUploadButton').disabled = true;
+    localStorage.removeItem('streamflowUploadState:video');
+    if (!localStorage.getItem('streamflowUploadState:audio')) {
+      localStorage.removeItem('streamflowUploadOwner');
+    }
   }
   
   // Audio Upload Modal
@@ -1136,6 +1143,10 @@ function formatDuration(seconds) {
     document.getElementById('audioCancelAllBtn').classList.add('hidden');
     document.getElementById('audioRetryBtn').classList.add('hidden');
     document.getElementById('audioUploadButton').disabled = true;
+    localStorage.removeItem('streamflowUploadState:audio');
+    if (!localStorage.getItem('streamflowUploadState:video')) {
+      localStorage.removeItem('streamflowUploadOwner');
+    }
     
     // Reset toggle
     const toggle = document.getElementById('audioConvertToggle');
@@ -1246,6 +1257,8 @@ function formatDuration(seconds) {
     const statusEl = document.getElementById('minimizedVideoStatus');
     const progressBarContainer = document.getElementById('minimizedVideoProgressBar');
     const progressBar = progressBarContainer?.querySelector('div');
+    const modal = document.getElementById('uploadModal');
+    const minimized = document.getElementById('minimizedVideoModal');
     
     if (!window.videoQueueManager) return;
     
@@ -1254,18 +1267,49 @@ function formatDuration(seconds) {
     const completed = files.filter(f => f.status === 'success').length;
     const failed = files.filter(f => f.status === 'error').length;
     const total = files.length;
+    const pending = files.filter(f => f.status === 'pending').length;
+    let statusText = '';
+    let progress = 0;
+    
+    if (modal?.classList.contains('hidden') && minimized && (uploading > 0 || pending > 0)) {
+      minimized.classList.remove('hidden');
+    }
     
     if (uploading > 0) {
-      statusEl.textContent = `Uploading ${uploading} of ${total} files...`;
+      statusText = `Uploading ${uploading} of ${total} files...`;
+      statusEl.textContent = statusText;
       progressBarContainer.classList.remove('hidden');
-      const progress = Math.round((completed / total) * 100);
+      progress = total > 0 ? Math.round((completed / total) * 100) : 0;
       if (progressBar) progressBar.style.width = `${progress}%`;
     } else if (completed > 0 || failed > 0) {
-      statusEl.textContent = `${completed} success, ${failed} failed`;
+      statusText = `${completed} success, ${failed} failed`;
+      statusEl.textContent = statusText;
       progressBarContainer.classList.add('hidden');
     } else {
-      statusEl.textContent = `${total} file(s) ready`;
+      statusText = `${total} file(s) ready`;
+      statusEl.textContent = statusText;
       progressBarContainer.classList.add('hidden');
+    }
+
+    const shouldPersist = uploading > 0 || pending > 0;
+    if (shouldPersist) {
+      localStorage.setItem('streamflowUploadOwner', window.streamflowTabId || '');
+      localStorage.setItem('streamflowUploadState:video', JSON.stringify({
+        type: 'video',
+        statusText,
+        progress,
+        uploading,
+        pending,
+        completed,
+        failed,
+        total,
+        updatedAt: Date.now()
+      }));
+    } else {
+      localStorage.removeItem('streamflowUploadState:video');
+      if (!localStorage.getItem('streamflowUploadState:audio')) {
+        localStorage.removeItem('streamflowUploadOwner');
+      }
     }
   }
   
@@ -1306,6 +1350,8 @@ function formatDuration(seconds) {
     const statusEl = document.getElementById('minimizedAudioStatus');
     const progressBarContainer = document.getElementById('minimizedAudioProgressBar');
     const progressBar = progressBarContainer?.querySelector('div');
+    const modal = document.getElementById('audioUploadModal');
+    const minimized = document.getElementById('minimizedAudioModal');
     
     if (!window.audioQueueManager) return;
     
@@ -1314,18 +1360,49 @@ function formatDuration(seconds) {
     const completed = files.filter(f => f.status === 'success').length;
     const failed = files.filter(f => f.status === 'error').length;
     const total = files.length;
+    const pending = files.filter(f => f.status === 'pending').length;
+    let statusText = '';
+    let progress = 0;
+    
+    if (modal?.classList.contains('hidden') && minimized && (uploading > 0 || pending > 0)) {
+      minimized.classList.remove('hidden');
+    }
     
     if (uploading > 0) {
-      statusEl.textContent = `Uploading ${uploading} of ${total} files...`;
+      statusText = `Uploading ${uploading} of ${total} files...`;
+      statusEl.textContent = statusText;
       progressBarContainer.classList.remove('hidden');
-      const progress = Math.round((completed / total) * 100);
+      progress = total > 0 ? Math.round((completed / total) * 100) : 0;
       if (progressBar) progressBar.style.width = `${progress}%`;
     } else if (completed > 0 || failed > 0) {
-      statusEl.textContent = `${completed} success, ${failed} failed`;
+      statusText = `${completed} success, ${failed} failed`;
+      statusEl.textContent = statusText;
       progressBarContainer.classList.add('hidden');
     } else {
-      statusEl.textContent = `${total} file(s) ready`;
+      statusText = `${total} file(s) ready`;
+      statusEl.textContent = statusText;
       progressBarContainer.classList.add('hidden');
+    }
+
+    const shouldPersist = uploading > 0 || pending > 0;
+    if (shouldPersist) {
+      localStorage.setItem('streamflowUploadOwner', window.streamflowTabId || '');
+      localStorage.setItem('streamflowUploadState:audio', JSON.stringify({
+        type: 'audio',
+        statusText,
+        progress,
+        uploading,
+        pending,
+        completed,
+        failed,
+        total,
+        updatedAt: Date.now()
+      }));
+    } else {
+      localStorage.removeItem('streamflowUploadState:audio');
+      if (!localStorage.getItem('streamflowUploadState:video')) {
+        localStorage.removeItem('streamflowUploadOwner');
+      }
     }
   }
   
@@ -1560,6 +1637,9 @@ function formatDuration(seconds) {
       if (gdriveBtnDesktop) gdriveBtnDesktop.style.display = 'flex';
       if (gdriveAudioBtnDesktop) gdriveAudioBtnDesktop.style.display = 'none';
     }
+
+    updateMinimizedVideoStatus();
+    updateMinimizedAudioStatus();
     
     // Audio conversion toggle event listener
     const audioConvertToggle = document.getElementById('audioConvertToggle');
@@ -2230,6 +2310,10 @@ function formatDuration(seconds) {
     updateVideoFileListUI();
     document.getElementById('videoCancelAllBtn').classList.add('hidden');
     document.getElementById('videoUploadButton').disabled = false;
+    localStorage.removeItem('streamflowUploadState:video');
+    if (!localStorage.getItem('streamflowUploadState:audio')) {
+      localStorage.removeItem('streamflowUploadOwner');
+    }
   }
   
   function cancelAllAudioUploads() {
@@ -2237,6 +2321,10 @@ function formatDuration(seconds) {
     updateAudioFileListUI();
     document.getElementById('audioCancelAllBtn').classList.add('hidden');
     document.getElementById('audioUploadButton').disabled = false;
+    localStorage.removeItem('streamflowUploadState:audio');
+    if (!localStorage.getItem('streamflowUploadState:video')) {
+      localStorage.removeItem('streamflowUploadOwner');
+    }
   }
   
   async function retryFailedVideos() {

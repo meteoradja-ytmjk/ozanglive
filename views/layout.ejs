@@ -93,6 +93,12 @@
       <script src="/js/stream-modal.js" defer></script>
       <script src="/js/tab-optimizer.js" defer></script>
       <script>
+        if (!sessionStorage.getItem('streamflowTabId')) {
+          sessionStorage.setItem('streamflowTabId', `tab-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+        }
+        window.streamflowTabId = sessionStorage.getItem('streamflowTabId');
+      </script>
+      <script>
         document.addEventListener('DOMContentLoaded', function () {
           if (document.fonts && document.fonts.ready) {
             document.fonts.ready.then(function () {
@@ -111,7 +117,7 @@
       </script>
 </head>
 
-<body class="bg-dark-900 text-white font-inter"
+<body class="bg-dark-900 text-white font-inter" data-active="<%= active %>"
   style="overflow-y: scroll !important; overflow-x: hidden !important; -webkit-overflow-scrolling: touch;">
   <!-- Mobile Header -->
   <div
@@ -224,6 +230,51 @@
         <%- body %>
       </div>
 
+    </div>
+  </div>
+
+  <!-- Global Upload Status (visible outside Gallery) -->
+  <div id="globalUploadFloating" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 hidden">
+    <div id="globalUploadNavHint" class="hidden bg-dark-800 border border-gray-600 rounded-lg shadow-xl px-3 py-2 text-xs text-gray-300">
+      Upload masih berjalan di tab ini. Halaman dibuka di tab baru.
+    </div>
+    <div id="globalVideoUploadCard" class="hidden bg-dark-800 border border-gray-600 rounded-lg shadow-xl p-3 w-80 cursor-pointer hover:bg-dark-700 transition-colors">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3 flex-1 min-w-0">
+          <div class="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center flex-shrink-0">
+            <i class="ti ti-video text-primary text-xl"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-medium text-white">Upload Videos</p>
+            <div class="text-xs text-gray-400">
+              <span id="globalVideoStatus">Uploading...</span>
+            </div>
+            <div id="globalVideoProgressBar" class="hidden w-full bg-dark-600 rounded-full h-1 mt-1">
+              <div class="bg-primary h-1 rounded-full transition-all" style="width: 0%"></div>
+            </div>
+          </div>
+        </div>
+        <button type="button" class="text-xs text-primary hover:text-secondary" data-open-gallery="video">Buka</button>
+      </div>
+    </div>
+    <div id="globalAudioUploadCard" class="hidden bg-dark-800 border border-gray-600 rounded-lg shadow-xl p-3 w-80 cursor-pointer hover:bg-dark-700 transition-colors">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3 flex-1 min-w-0">
+          <div class="w-10 h-10 rounded-lg bg-green-500/20 flex items-center justify-center flex-shrink-0">
+            <i class="ti ti-music text-green-500 text-xl"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-medium text-white">Upload Audio</p>
+            <div class="text-xs text-gray-400">
+              <span id="globalAudioStatus">Uploading...</span>
+            </div>
+            <div id="globalAudioProgressBar" class="hidden w-full bg-dark-600 rounded-full h-1 mt-1">
+              <div class="bg-green-500 h-1 rounded-full transition-all" style="width: 0%"></div>
+            </div>
+          </div>
+        </div>
+        <button type="button" class="text-xs text-green-400 hover:text-green-300" data-open-gallery="audio">Buka</button>
+      </div>
     </div>
   </div>
 
@@ -544,5 +595,111 @@
         }
       }, { passive: true });
     }
+
+    const uploadKeys = {
+      video: 'streamflowUploadState:video',
+      audio: 'streamflowUploadState:audio'
+    };
+    const uploadOwnerKey = 'streamflowUploadOwner';
+    const activePage = document.body.dataset.active;
+    const floatingContainer = document.getElementById('globalUploadFloating');
+    const navHint = document.getElementById('globalUploadNavHint');
+    const videoCard = document.getElementById('globalVideoUploadCard');
+    const audioCard = document.getElementById('globalAudioUploadCard');
+
+    function getUploadState(key) {
+      const raw = localStorage.getItem(key);
+      if (!raw) return null;
+      try {
+        return JSON.parse(raw);
+      } catch (error) {
+        return null;
+      }
+    }
+
+    function updateUploadCard(type, state) {
+      if (activePage === 'gallery') {
+        if (floatingContainer) floatingContainer.classList.add('hidden');
+        return false;
+      }
+
+      const isVideo = type === 'video';
+      const card = isVideo ? videoCard : audioCard;
+      const statusEl = document.getElementById(isVideo ? 'globalVideoStatus' : 'globalAudioStatus');
+      const barContainer = document.getElementById(isVideo ? 'globalVideoProgressBar' : 'globalAudioProgressBar');
+      const bar = barContainer?.querySelector('div');
+
+      if (!state || !card) {
+        card?.classList.add('hidden');
+        return false;
+      }
+
+      card.classList.remove('hidden');
+      if (statusEl) statusEl.textContent = state.statusText || 'Uploading...';
+      if (state.uploading > 0) {
+        barContainer?.classList.remove('hidden');
+        if (bar) bar.style.width = `${Math.min(Math.max(state.progress || 0, 0), 100)}%`;
+      } else {
+        barContainer?.classList.add('hidden');
+      }
+
+      return true;
+    }
+
+    function renderGlobalUploadStatus() {
+      if (!floatingContainer) return;
+
+      const videoState = getUploadState(uploadKeys.video);
+      const audioState = getUploadState(uploadKeys.audio);
+      const hasVideo = updateUploadCard('video', videoState);
+      const hasAudio = updateUploadCard('audio', audioState);
+
+      if (hasVideo || hasAudio) {
+        floatingContainer.classList.remove('hidden');
+      } else {
+        floatingContainer.classList.add('hidden');
+      }
+    }
+
+    function hasActiveUploads() {
+      return Boolean(localStorage.getItem(uploadKeys.video) || localStorage.getItem(uploadKeys.audio));
+    }
+
+    function showNavHint() {
+      if (!navHint) return;
+      navHint.classList.remove('hidden');
+      setTimeout(() => navHint.classList.add('hidden'), 2500);
+    }
+
+    document.addEventListener('click', (event) => {
+      const openGalleryBtn = event.target.closest('[data-open-gallery]');
+      if (openGalleryBtn) {
+        window.open('/gallery', '_blank');
+        return;
+      }
+
+      const link = event.target.closest('a');
+      if (!link) return;
+
+      const href = link.getAttribute('href');
+      const target = link.getAttribute('target');
+      if (!href || !href.startsWith('/') || target === '_blank') return;
+
+      const uploadOwner = localStorage.getItem(uploadOwnerKey);
+      const isOwnerTab = uploadOwner && uploadOwner === window.streamflowTabId;
+      if (isOwnerTab && hasActiveUploads()) {
+        event.preventDefault();
+        window.open(href, '_blank');
+        showNavHint();
+      }
+    });
+
+    window.addEventListener('storage', (event) => {
+      if (event.key === uploadKeys.video || event.key === uploadKeys.audio) {
+        renderGlobalUploadStatus();
+      }
+    });
+
+    renderGlobalUploadStatus();
   });
 </script>
