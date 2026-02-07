@@ -396,14 +396,17 @@
     html {
       overflow-y: scroll !important;
       height: auto !important;
+      min-height: 100% !important;
     }
 
     body {
       padding-top: 64px;
       padding-bottom: 120px !important;
-      min-height: 100vh;
+      min-height: 100%;
       height: auto !important;
-      overflow-y: scroll !important;
+      max-height: none !important;
+      overflow-y: auto !important;
+      touch-action: pan-y;
       position: relative !important;
     }
 
@@ -416,10 +419,12 @@
     .main-content-wrapper {
       padding-bottom: 6rem !important;
       overflow: visible !important;
+      min-height: auto !important;
     }
 
     .main-container {
-      min-height: 100vh;
+      min-height: 100%;
+      height: auto !important;
       overflow: visible !important;
       display: block !important;
     }
