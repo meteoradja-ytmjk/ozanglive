@@ -15,11 +15,33 @@
   const prefetchInFlight = new Map();
   const CACHE_DURATION = 5 * 60 * 1000; // 5 menit
 
+  const PREFETCH_SKIP_PATHS = new Set(['/logout', '/login', '/signup', '/setup-account']);
+
+  function shouldPrefetchLink(link) {
+    if (!link || !link.href) {
+      return false;
+    }
+
+    if (link.dataset && link.dataset.noPrefetch === 'true') {
+      return false;
+    }
+
+    const url = new URL(link.href, window.location.origin);
+    if (PREFETCH_SKIP_PATHS.has(url.pathname)) {
+      return false;
+    }
+
+    return true;
+  }
+
   // Prefetch links saat hover
   function setupPrefetch() {
     const navLinks = document.querySelectorAll('a[href^="/"]');
 
     navLinks.forEach(link => {
+      if (!shouldPrefetchLink(link)) {
+        return;
+      }
       // Prefetch saat hover (desktop) atau touchstart (mobile)
       link.addEventListener('mouseenter', () => prefetchPage(link.href, { priority: 'low' }), { once: false, passive: true });
       link.addEventListener('touchstart', () => prefetchPage(link.href, { priority: 'high' }), { once: false, passive: true });
@@ -107,7 +129,7 @@
 
     const prefetchAll = () => {
       navLinks.forEach(link => {
-        if (link.href !== window.location.href) {
+        if (link.href !== window.location.href && shouldPrefetchLink(link)) {
           prefetchPage(link.href, { priority: 'low' });
         }
       });
