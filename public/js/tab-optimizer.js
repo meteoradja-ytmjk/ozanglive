@@ -12,6 +12,7 @@
 
   // Cache untuk menyimpan data yang sudah di-load
   const pageCache = new Map();
+  const prefetchInFlight = new Map();
   const CACHE_DURATION = 5 * 60 * 1000; // 5 menit
 
   // Prefetch links saat hover
@@ -20,17 +21,58 @@
 
     navLinks.forEach(link => {
       // Prefetch saat hover (desktop) atau touchstart (mobile)
-      link.addEventListener('mouseenter', () => prefetchPage(link.href), { once: false, passive: true });
-      link.addEventListener('touchstart', () => prefetchPage(link.href), { once: false, passive: true });
+      link.addEventListener('mouseenter', () => prefetchPage(link.href, { priority: 'low' }), { once: false, passive: true });
+      link.addEventListener('touchstart', () => prefetchPage(link.href, { priority: 'high' }), { once: false, passive: true });
+      link.addEventListener('pointerdown', () => prefetchPage(link.href, { priority: 'high' }), { once: false, passive: true });
     });
   }
 
   // Prefetch halaman di background
-  function prefetchPage(url) {
+  function isCacheValid(timestamp) {
+    return typeof timestamp === 'number' && (Date.now() - timestamp) < CACHE_DURATION;
+  }
+
+  function shouldSkipPrefetch(priority) {
+    const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    if (!connection) {
+      return false;
+    }
+
+    if (connection.saveData) {
+      return priority !== 'high';
+    }
+
+    const slowTypes = ['slow-2g', '2g'];
+    if (slowTypes.includes(connection.effectiveType || '')) {
+      return priority !== 'high';
+    }
+
+    return false;
+  }
+
+  function prefetchPage(url, options = {}) {
+    const { priority = 'low' } = options;
+    const cachedAt = pageCache.get(url);
+
     // Skip jika sudah di-cache atau sedang di-prefetch
-    if (pageCache.has(url)) {
+    if (isCacheValid(cachedAt) || prefetchInFlight.has(url)) {
       return;
     }
+
+    if (shouldSkipPrefetch(priority)) {
+      return;
+    }
+
+    // Tambahkan hint browser untuk prefetch
+    const link = document.createElement('link');
+    link.rel = 'prefetch';
+    link.as = 'document';
+    link.href = url;
+    link.crossOrigin = 'same-origin';
+    document.head.appendChild(link);
+
+    const controller = new AbortController();
+    prefetchInFlight.set(url, controller);
 
     // Gunakan fetch dengan credentials agar session cookie tetap konsisten
     fetch(url, {
@@ -39,14 +81,43 @@
       cache: 'force-cache',
       headers: {
         'X-Prefetch': '1'
-      }
+      },
+      signal: controller.signal
     }).then(response => {
       if (response.ok) {
         pageCache.set(url, Date.now());
       }
     }).catch(() => {
       // Silent fail untuk prefetch
+    }).finally(() => {
+      prefetchInFlight.delete(url);
+      setTimeout(() => {
+        if (link && link.parentNode) {
+          link.remove();
+        }
+      }, 1000);
     });
+  }
+
+  function prefetchNavLinksOnIdle() {
+    const navLinks = document.querySelectorAll('.sidebar-icon[href^="/"], .bottom-nav-item[href^="/"]');
+    if (navLinks.length === 0) {
+      return;
+    }
+
+    const prefetchAll = () => {
+      navLinks.forEach(link => {
+        if (link.href !== window.location.href) {
+          prefetchPage(link.href, { priority: 'low' });
+        }
+      });
+    };
+
+    if ('requestIdleCallback' in window) {
+      requestIdleCallback(prefetchAll, { timeout: 1500 });
+    } else {
+      setTimeout(prefetchAll, 800);
+    }
   }
 
   // Instant visual feedback saat klik navigasi
@@ -208,6 +279,7 @@
       setupLazyLoading();
       optimizeScrollPerformance();
       preventDoubleTapZoom();
+      prefetchNavLinksOnIdle();
     });
 
     // Hide loading overlay jika ada
