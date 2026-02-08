@@ -458,6 +458,7 @@ body {
   text-align: center;
   min-width: 200px;
   max-width: 80vw;
+  pointer-events: auto;
 }
 
 /* Center toast icon - always hidden by default */
