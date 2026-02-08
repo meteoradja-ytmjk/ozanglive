@@ -3268,7 +3268,7 @@ app.post('/api/backup/import-all', isAuthenticated, (req, res, next) => {
           return res.status(413).json({
             success: false,
             error: 'File terlalu besar',
-            details: 'Ukuran file backup maksimal 100MB. Coba export tanpa thumbnail files atau kurangi data yang di-export.'
+            details: 'File backup terlalu besar untuk diproses. Periksa batas upload server atau reverse proxy yang digunakan.'
           });
         }
         return res.status(400).json({

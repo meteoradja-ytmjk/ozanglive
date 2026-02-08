@@ -217,9 +217,8 @@
                 <div class="bg-yellow-900/20 border border-yellow-700/50 rounded-lg p-3 mb-4">
                   <p class="text-xs text-yellow-400">
                     <i class="ti ti-info-circle mr-1"></i>
-                    <strong>Catatan:</strong> Jika Anda memiliki banyak thumbnail files, beberapa mungkin di-skip untuk
-                    menjaga ukuran file export tetap wajar (max 30MB untuk thumbnails). Template mapping akan tetap
-                    di-export.
+                    <strong>Catatan:</strong> Semua thumbnail files akan di-export sesuai kondisi data Anda. Template
+                    mapping tetap ikut di-export.
                   </p>
                 </div>
 
@@ -1058,12 +1057,6 @@
               try {
                 const text = await blob.text();
                 const data = JSON.parse(text);
-
-                // Check for skipped thumbnail files
-                if (data.metadata && data.metadata.counts && data.metadata.counts.thumbnail_skipped_files > 0) {
-                  console.warn('[Export] Warning: Some thumbnail files were skipped due to size limit');
-                  showToast('warning', `Export berhasil, tetapi ${data.metadata.counts.thumbnail_skipped_files} thumbnail files di-skip karena ukuran terlalu besar`);
-                }
 
                 // Re-create blob from text for download
                 const newBlob = new Blob([text], { type: 'application/json' });

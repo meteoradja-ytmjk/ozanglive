@@ -180,10 +180,7 @@ const jsonFilter = (req, file, cb) => {
 // Memory storage for backup files (no need to save to disk)
 const uploadBackup = multer({
   storage: multer.memoryStorage(),
-  fileFilter: jsonFilter,
-  limits: {
-    fileSize: 100 * 1024 * 1024 // 100MB max (increased for large backups with thumbnails)
-  }
+  fileFilter: jsonFilter
 });
 
 module.exports = {
