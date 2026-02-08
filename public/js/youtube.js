@@ -1497,7 +1497,9 @@ function initTagInput() {
 
 // Create Broadcast Modal
 function openCreateBroadcastModal() {
-  document.getElementById('createBroadcastModal').classList.remove('hidden');
+  const modal = document.getElementById('createBroadcastModal');
+  modal.classList.remove('hidden');
+  modal.classList.remove('thumbnail-manager-mode');
   
   // Set minimum datetime to 10 minutes from now
   const minDate = new Date(Date.now() + 11 * 60 * 1000);
@@ -1529,8 +1531,33 @@ function openCreateBroadcastModal() {
   fetchChannelDefaults(accountId);
 }
 
+function openThumbnailManager() {
+  openCreateBroadcastModal();
+
+  setTimeout(() => {
+    const modal = document.getElementById('createBroadcastModal');
+    modal.classList.add('thumbnail-manager-mode');
+    const section = document.getElementById('thumbnailManagerSection');
+    if (!section) return;
+    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    section.classList.add('thumbnail-manager-highlight');
+    setTimeout(() => {
+      section.classList.remove('thumbnail-manager-highlight');
+    }, 2000);
+  }, 200);
+}
+
+function exitThumbnailManagerMode() {
+  const modal = document.getElementById('createBroadcastModal');
+  if (!modal) return;
+  modal.classList.remove('thumbnail-manager-mode');
+  modal.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
 function closeCreateBroadcastModal() {
-  document.getElementById('createBroadcastModal').classList.add('hidden');
+  const modal = document.getElementById('createBroadcastModal');
+  modal.classList.add('hidden');
+  modal.classList.remove('thumbnail-manager-mode');
   document.getElementById('createBroadcastForm').reset();
   document.getElementById('thumbnailPreview').innerHTML = '<i class="ti ti-photo text-gray-500 text-2xl"></i>';
   document.getElementById('selectedThumbnailPath').value = '';
