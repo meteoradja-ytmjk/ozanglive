@@ -1,12 +1,13 @@
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const { pipeline } = require('stream');
 const { getUniqueFilename, paths } = require('../utils/storage');
 const StorageService = require('../services/storageService');
 
 // Optimized stream options for faster uploads
 const STREAM_OPTIONS = {
-  highWaterMark: 1024 * 1024 * 2 // 2MB buffer for faster disk writes
+  highWaterMark: 1024 * 1024 * 16 // 16MB buffer for faster disk writes
 };
 
 /**
@@ -65,15 +66,34 @@ const checkStorageLimit = async (req, res, next) => {
   }
 };
 
-const videoStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, paths.videos);
+const createOptimizedStorage = (destinationPath) => ({
+  _handleFile: (req, file, cb) => {
+    const filename = getUniqueFilename(file.originalname);
+    const finalPath = path.join(destinationPath, filename);
+    const outStream = createOptimizedWriteStream(finalPath);
+
+    pipeline(file.stream, outStream, (err) => {
+      if (err) {
+        return cb(err);
+      }
+      cb(null, {
+        destination: destinationPath,
+        filename,
+        path: finalPath,
+        size: outStream.bytesWritten
+      });
+    });
   },
-  filename: (req, file, cb) => {
-    const uniqueFilename = getUniqueFilename(file.originalname);
-    cb(null, uniqueFilename);
+  _removeFile: (req, file, cb) => {
+    if (file.path) {
+      fs.unlink(file.path, cb);
+    } else {
+      cb(null);
+    }
   }
 });
+
+const videoStorage = createOptimizedStorage(paths.videos);
 
 const avatarStorage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -107,15 +127,7 @@ const imageFilter = (req, file, cb) => {
   }
 };
 
-const audioStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, paths.audios);
-  },
-  filename: (req, file, cb) => {
-    const uniqueFilename = getUniqueFilename(file.originalname);
-    cb(null, uniqueFilename);
-  }
-});
+const audioStorage = createOptimizedStorage(paths.audios);
 
 const audioFilter = (req, file, cb) => {
   const allowedFormats = ['audio/mpeg', 'audio/wav', 'audio/aac', 'audio/x-m4a', 'audio/mp4'];

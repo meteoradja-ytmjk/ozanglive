@@ -2126,12 +2126,8 @@ app.post('/upload/video', isAuthenticated, uploadVideo.single('video'), async (r
       return res.status(400).json({ error: 'No video file provided' });
     }
 
-    const { filename, originalname, path: videoPath, mimetype, size } = req.file;
-    const thumbnailName = path.basename(filename, path.extname(filename)) + '.jpg';
-    const videoInfo = await getVideoInfo(videoPath);
-    const thumbnailRelativePath = await generateThumbnail(videoPath, thumbnailName)
-      .then(() => `/uploads/thumbnails/${thumbnailName}`)
-      .catch(() => null);
+    const { filename, originalname, mimetype, size } = req.file;
+    const filePath = `/uploads/videos/${filename}`;
 
     let format = 'unknown';
     if (mimetype === 'video/mp4') format = 'mp4';
@@ -2141,10 +2137,10 @@ app.post('/upload/video', isAuthenticated, uploadVideo.single('video'), async (r
     const videoData = {
       title: path.basename(originalname, path.extname(originalname)),
       original_filename: originalname,
-      filepath: `/uploads/videos/${filename}`,
-      thumbnail_path: thumbnailRelativePath,
+      filepath: filePath,
+      thumbnail_path: null,
       file_size: size,
-      duration: videoInfo.duration,
+      duration: 0,
       format: format,
       user_id: req.session.userId
     };
@@ -2160,6 +2156,35 @@ app.post('/upload/video', isAuthenticated, uploadVideo.single('video'), async (r
         duration: video.duration,
         file_size: video.file_size,
         format: video.format
+      }
+    });
+
+    setImmediate(async () => {
+      try {
+        const videoPath = path.join(__dirname, 'public', filePath);
+        const thumbnailName = path.basename(filename, path.extname(filename)) + '.jpg';
+        const [videoInfo, thumbnailRelativePath] = await Promise.all([
+          getVideoInfo(videoPath).catch((err) => {
+            console.error('Video info error:', err);
+            return null;
+          }),
+          generateThumbnail(videoPath, thumbnailName)
+            .then(() => `/uploads/thumbnails/${thumbnailName}`)
+            .catch((err) => {
+              console.error('Thumbnail generation error:', err);
+              return null;
+            })
+        ]);
+
+        const updateData = {};
+        if (videoInfo?.duration) updateData.duration = videoInfo.duration;
+        if (thumbnailRelativePath) updateData.thumbnail_path = thumbnailRelativePath;
+
+        if (Object.keys(updateData).length > 0) {
+          await Video.update(video.id, updateData);
+        }
+      } catch (error) {
+        console.error('Background video processing failed:', error);
       }
     });
   } catch (error) {
@@ -2204,65 +2229,19 @@ app.post('/api/videos/upload', isAuthenticated, (req, res, next) => {
 
     const title = path.parse(req.file.originalname).name;
     const filePath = `/uploads/videos/${req.file.filename}`;
-    const fullFilePath = path.join(__dirname, 'public', filePath);
     const fileSize = req.file.size;
-
-    // Generate thumbnail filename early
-    const thumbnailFilename = `thumb-${path.parse(req.file.filename).name}.jpg`;
-    const thumbnailPath = `/uploads/thumbnails/${thumbnailFilename}`;
-
-    // Run ffprobe and thumbnail generation in parallel for faster processing
-    const [metadata] = await Promise.all([
-      // Get video metadata
-      new Promise((resolve, reject) => {
-        ffmpeg.ffprobe(fullFilePath, (err, metadata) => {
-          if (err) return reject(err);
-          resolve(metadata);
-        });
-      }),
-      // Generate thumbnail in parallel (don't wait for it to complete response)
-      new Promise((resolve) => {
-        ffmpeg(fullFilePath)
-          .screenshots({
-            timestamps: ['10%'],
-            filename: thumbnailFilename,
-            folder: path.join(__dirname, 'public', 'uploads', 'thumbnails'),
-            size: '854x480'
-          })
-          .on('end', resolve)
-          .on('error', (err) => {
-            console.error('Thumbnail generation error:', err.message);
-            resolve(); // Don't fail upload if thumbnail fails
-          });
-      })
-    ]);
-
-    const videoStream = metadata.streams.find(stream => stream.codec_type === 'video');
-    const duration = metadata.format.duration || 0;
-    const format = metadata.format.format_name || path.extname(req.file.filename).replace('.', '');
-    const resolution = videoStream ? `${videoStream.width}x${videoStream.height}` : '';
-    const bitrate = metadata.format.bit_rate ? Math.round(parseInt(metadata.format.bit_rate) / 1000) : null;
-
-    let fps = null;
-    if (videoStream && videoStream.avg_frame_rate) {
-      const fpsRatio = videoStream.avg_frame_rate.split('/');
-      if (fpsRatio.length === 2 && parseInt(fpsRatio[1]) !== 0) {
-        fps = Math.round((parseInt(fpsRatio[0]) / parseInt(fpsRatio[1]) * 100)) / 100;
-      } else {
-        fps = parseInt(fpsRatio[0]) || null;
-      }
-    }
+    const format = path.extname(req.file.filename).replace('.', '');
 
     const videoData = {
       title,
       filepath: filePath,
-      thumbnail_path: thumbnailPath,
+      thumbnail_path: null,
       file_size: fileSize,
-      duration,
+      duration: 0,
       format,
-      resolution,
-      bitrate,
-      fps,
+      resolution: '',
+      bitrate: null,
+      fps: null,
       user_id: req.session.userId
     };
 
@@ -2270,8 +2249,76 @@ app.post('/api/videos/upload', isAuthenticated, (req, res, next) => {
 
     res.json({
       success: true,
-      message: 'Video uploaded successfully',
+      message: 'Video uploaded successfully. Metadata sedang diproses di background.',
       video
+    });
+
+    setImmediate(async () => {
+      try {
+        const fullFilePath = path.join(__dirname, 'public', filePath);
+        const thumbnailFilename = `thumb-${path.parse(req.file.filename).name}.jpg`;
+        const thumbnailPath = `/uploads/thumbnails/${thumbnailFilename}`;
+
+        const metadata = await new Promise((resolve, reject) => {
+          ffmpeg.ffprobe(fullFilePath, (err, metadata) => {
+            if (err) return reject(err);
+            resolve(metadata);
+          });
+        });
+
+        const videoStream = metadata.streams.find(stream => stream.codec_type === 'video');
+        const duration = metadata.format.duration || 0;
+        const detectedFormat = metadata.format.format_name || format;
+        const resolution = videoStream ? `${videoStream.width}x${videoStream.height}` : '';
+        const bitrate = metadata.format.bit_rate ? Math.round(parseInt(metadata.format.bit_rate) / 1000) : null;
+
+        let fps = null;
+        if (videoStream && videoStream.avg_frame_rate) {
+          const fpsRatio = videoStream.avg_frame_rate.split('/');
+          if (fpsRatio.length === 2 && parseInt(fpsRatio[1]) !== 0) {
+            fps = Math.round((parseInt(fpsRatio[0]) / parseInt(fpsRatio[1]) * 100)) / 100;
+          } else {
+            fps = parseInt(fpsRatio[0]) || null;
+          }
+        }
+
+        let finalThumbnailPath = null;
+        try {
+          await new Promise((resolve) => {
+            ffmpeg(fullFilePath)
+              .screenshots({
+                timestamps: ['10%'],
+                filename: thumbnailFilename,
+                folder: path.join(__dirname, 'public', 'uploads', 'thumbnails'),
+                size: '854x480'
+              })
+              .on('end', resolve)
+              .on('error', (err) => {
+                console.error('Thumbnail generation error:', err.message);
+                resolve();
+              });
+          });
+          finalThumbnailPath = thumbnailPath;
+        } catch (thumbErr) {
+          console.error('Thumbnail generation error:', thumbErr.message);
+        }
+
+        const updateData = {
+          duration,
+          format: detectedFormat,
+          resolution,
+          bitrate,
+          fps
+        };
+
+        if (finalThumbnailPath) {
+          updateData.thumbnail_path = finalThumbnailPath;
+        }
+
+        await Video.update(video.id, updateData);
+      } catch (error) {
+        console.error('Background video metadata processing failed:', error);
+      }
     });
 
   } catch (error) {
@@ -4154,58 +4201,19 @@ app.post('/api/audios/upload', isAuthenticated, (req, res, next) => {
       });
     }
 
-    const { processAudioForStreaming } = require('./utils/audioProcessor');
-
     const originalTitle = path.parse(req.file.originalname).name;
-    const fullFilePath = path.join(__dirname, 'public', 'uploads', 'audios', req.file.filename);
+    const filePath = `/uploads/audios/${req.file.filename}`;
+    const fileSize = req.file.size;
+    const format = path.extname(req.file.filename).replace('.', '').toUpperCase();
 
     // Check if user wants to skip conversion (for faster upload but higher CPU during streaming)
     const skipConversion = req.body.skipConversion === 'true';
-
-    let finalFilePath = fullFilePath;
-    let finalFileName = req.file.filename;
-    let processingMessage = 'Audio uploaded';
-
-    if (skipConversion) {
-      // Skip conversion - faster upload, but may use more CPU during streaming
-      console.log(`[AudioUpload] Skipping conversion (user preference): ${req.file.filename}`);
-      processingMessage = 'Audio uploaded (tanpa konversi)';
-    } else {
-      // Pre-process audio for optimal streaming (converts to AAC with clean timestamps)
-      console.log(`[AudioUpload] Processing audio for streaming: ${req.file.filename}`);
-
-      try {
-        const result = await processAudioForStreaming(fullFilePath);
-        finalFilePath = result.outputPath;
-        finalFileName = path.basename(result.outputPath);
-        console.log(`[AudioUpload] Audio processed successfully: ${finalFileName}`);
-        processingMessage = result.skipped ? 'Audio uploaded (sudah optimal)' : 'Audio uploaded dan dioptimasi untuk streaming';
-      } catch (processError) {
-        console.error(`[AudioUpload] Processing failed, using original: ${processError.message}`);
-        processingMessage = 'Audio uploaded (konversi gagal, menggunakan file asli)';
-        // Continue with original file if processing fails
-      }
-    }
-
-    const filePath = `/uploads/audios/${finalFileName}`;
-    const fileSize = fs.statSync(finalFilePath).size;
-    const format = path.extname(finalFileName).replace('.', '').toUpperCase();
-
-    // Get audio duration
-    const metadata = await new Promise((resolve, reject) => {
-      ffmpeg.ffprobe(finalFilePath, (err, metadata) => {
-        if (err) return reject(err);
-        resolve(metadata);
-      });
-    });
-
-    const duration = metadata.format.duration || 0;
 
     const audioData = {
       title: originalTitle,
       filepath: filePath,
       file_size: fileSize,
-      duration,
+      duration: 0,
       format,
       user_id: req.session.userId
     };
@@ -4214,8 +4222,56 @@ app.post('/api/audios/upload', isAuthenticated, (req, res, next) => {
 
     res.json({
       success: true,
-      message: processingMessage,
+      message: skipConversion
+        ? 'Audio uploaded (tanpa konversi)'
+        : 'Audio uploaded. Optimasi sedang diproses di background.',
       audio
+    });
+
+    setImmediate(async () => {
+      let currentFilePath = path.join(__dirname, 'public', 'uploads', 'audios', req.file.filename);
+      let updatedFilePath = filePath;
+      const updateData = {};
+
+      try {
+        if (!skipConversion) {
+          const { processAudioForStreaming } = require('./utils/audioProcessor');
+          console.log(`[AudioUpload] Processing audio for streaming: ${req.file.filename}`);
+          const result = await processAudioForStreaming(currentFilePath);
+          currentFilePath = result.outputPath;
+          const finalFileName = path.basename(result.outputPath);
+          updatedFilePath = `/uploads/audios/${finalFileName}`;
+          updateData.filepath = updatedFilePath;
+          updateData.format = path.extname(finalFileName).replace('.', '').toUpperCase();
+          updateData.file_size = fs.statSync(currentFilePath).size;
+
+          if (finalFileName !== req.file.filename) {
+            const legacyPath = path.join(__dirname, 'public', filePath);
+            try {
+              if (!fs.existsSync(legacyPath)) {
+                fs.symlinkSync(currentFilePath, legacyPath);
+              }
+            } catch (linkErr) {
+              console.error(`[AudioUpload] Failed to create legacy symlink: ${linkErr.message}`);
+            }
+          }
+        }
+
+        const metadata = await new Promise((resolve, reject) => {
+          ffmpeg.ffprobe(currentFilePath, (err, metadata) => {
+            if (err) return reject(err);
+            resolve(metadata);
+          });
+        });
+
+        updateData.duration = metadata.format.duration || 0;
+
+        if (Object.keys(updateData).length > 0) {
+          await Audio.update(audio.id, updateData);
+        }
+      } catch (processError) {
+        console.error(`[AudioUpload] Background processing failed: ${processError.message}`);
+      }
     });
 
   } catch (error) {
