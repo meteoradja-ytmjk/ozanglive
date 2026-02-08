@@ -595,8 +595,8 @@ const canDeleteVideos = async (req, res, next) => {
       req.user = user;
       return next();
     }
-    // Check member permission
-    if (user.can_delete_videos !== 1) {
+    // Allow members to delete their own videos (ownership checked in handler)
+    if (user.user_role !== 'member' && user.can_delete_videos !== 1) {
       return res.status(403).json({ success: false, message: "You don't have permission to delete videos" });
     }
     req.user = user;
@@ -1106,15 +1106,9 @@ app.get('/gallery', isAuthenticated, canViewVideos, async (req, res) => {
     const tab = req.query.tab || 'video';
     const user = await User.findById(req.session.userId);
 
-    // Check view permission for members
-    let videos = [];
-    let viewPermissionDenied = false;
-
-    if (user.user_role === 'admin' || user.can_view_videos === 1) {
-      videos = await Video.findAll(req.session.userId);
-    } else {
-      viewPermissionDenied = true;
-    }
+    // Members should always be able to view their own gallery items
+    const videos = await Video.findAll(req.session.userId);
+    const viewPermissionDenied = false;
 
     const audios = await Audio.findAll(req.session.userId);
 
@@ -1122,7 +1116,7 @@ app.get('/gallery', isAuthenticated, canViewVideos, async (req, res) => {
     const permissions = {
       can_view_videos: user.user_role === 'admin' || user.can_view_videos === 1,
       can_download_videos: user.user_role === 'admin' || user.can_download_videos === 1,
-      can_delete_videos: user.user_role === 'admin' || user.can_delete_videos === 1
+      can_delete_videos: user.user_role === 'admin' || user.can_delete_videos === 1 || user.user_role === 'member'
     };
 
     res.render('gallery', {
