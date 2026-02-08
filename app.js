@@ -1106,15 +1106,9 @@ app.get('/gallery', isAuthenticated, canViewVideos, async (req, res) => {
     const tab = req.query.tab || 'video';
     const user = await User.findById(req.session.userId);
 
-    // Check view permission for members
-    let videos = [];
-    let viewPermissionDenied = false;
-
-    if (user.user_role === 'admin' || user.can_view_videos === 1) {
-      videos = await Video.findAll(req.session.userId);
-    } else {
-      viewPermissionDenied = true;
-    }
+    // Members should always be able to view their own gallery items
+    const videos = await Video.findAll(req.session.userId);
+    const viewPermissionDenied = false;
 
     const audios = await Audio.findAll(req.session.userId);
 
