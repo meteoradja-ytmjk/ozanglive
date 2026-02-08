@@ -149,44 +149,68 @@
   </div>
 
   <!-- Live Stats Dashboard - Horizontal Bar -->
-  <div id="liveStatsDashboard" class="bg-gray-800 rounded-xl p-3 shadow-lg border border-gray-700/50 mb-6">
+  <div id="liveStatsDashboard" class="bg-gray-800 rounded-xl p-3 shadow-lg border border-gray-700/50 mb-6 live-stats-dashboard">
     <!-- Stats Bar - Desktop -->
-    <div class="hidden md:flex items-center justify-between">
-      <div class="flex items-center gap-6 text-sm">
+    <div class="hidden md:flex items-center justify-between live-stats-desktop">
+      <div class="flex items-center gap-4 text-sm live-stats-group">
         <!-- Live Count -->
-        <div class="flex items-center gap-1.5" title="Active Broadcasts">
+        <div class="live-stat-chip" title="Active Broadcasts">
           <i class="ti ti-broadcast text-purple-400"></i>
-          <span id="liveCountNum" class="text-white font-semibold">0</span>
-          <span class="text-gray-500">live</span>
+          <div class="live-stat-text">
+            <span class="live-stat-label">Active live</span>
+            <div class="live-stat-value">
+              <span id="liveCountNum" class="text-white font-semibold">0</span>
+              <span class="text-gray-400">streams</span>
+            </div>
+          </div>
         </div>
         
         <!-- API Quota -->
-        <div class="flex items-center gap-1.5" title="API Quota">
+        <div class="live-stat-chip" title="API Quota">
           <i class="ti ti-api text-cyan-400"></i>
-          <span id="quotaUsed" class="text-white font-semibold">10K</span>
-          <span id="quotaChannelName" class="text-gray-400 text-xs"></span>
+          <div class="live-stat-text">
+            <span class="live-stat-label">API quota</span>
+            <div class="live-stat-value">
+              <span id="quotaUsed" class="text-white font-semibold">10K</span>
+              <span id="quotaChannelName" class="text-gray-400 text-xs"></span>
+            </div>
+          </div>
         </div>
         
         <!-- Viewers -->
-        <div class="flex items-center gap-1.5" title="Total Viewers">
+        <div class="live-stat-chip" title="Total Viewers">
           <i class="ti ti-users text-yellow-400"></i>
-          <span id="totalViewers" class="text-white font-semibold">0</span>
+          <div class="live-stat-text">
+            <span class="live-stat-label">Total viewers</span>
+            <div class="live-stat-value">
+              <span id="totalViewers" class="text-white font-semibold">0</span>
+              <span class="text-gray-400">watching</span>
+            </div>
+          </div>
         </div>
         
         <!-- Connection - icon only -->
-        <div class="flex items-center" title="Connection Status">
+        <div class="live-stat-chip live-stat-compact" title="Connection Status">
           <i class="ti ti-wifi text-green-400" id="connectionIcon"></i>
+          <div class="live-stat-text">
+            <span class="live-stat-label">Connection</span>
+            <div class="live-stat-value">
+              <span id="connectionLabel" class="text-green-400">Online</span>
+            </div>
+          </div>
         </div>
       </div>
       
       <!-- Actions -->
-      <div class="flex items-center gap-1">
-        <button onclick="refreshLiveStats()" id="refreshStatsBtn" class="p-1.5 hover:bg-dark-700 rounded-lg transition-colors" title="Refresh">
-          <i class="ti ti-refresh text-gray-400 hover:text-white" id="refreshIcon"></i>
+      <div class="flex items-center gap-2 live-stats-actions">
+        <button onclick="refreshLiveStats()" id="refreshStatsBtn" class="live-stat-action" title="Refresh">
+          <i class="ti ti-refresh" id="refreshIcon"></i>
+          <span>Refresh</span>
         </button>
-        <button onclick="toggleAutoRefresh()" id="autoRefreshBtn" class="p-1.5 hover:bg-dark-700 rounded-lg transition-colors flex items-center gap-1" title="Auto refresh">
-          <i class="ti ti-clock text-gray-400" id="autoRefreshIcon"></i>
-          <span id="autoRefreshLabel" class="text-xs text-gray-500">OFF</span>
+        <button onclick="toggleAutoRefresh()" id="autoRefreshBtn" class="live-stat-action live-stat-toggle" title="Auto refresh">
+          <i class="ti ti-clock" id="autoRefreshIcon"></i>
+          <span>Auto</span>
+          <span id="autoRefreshLabel" class="live-stat-toggle-label">OFF</span>
         </button>
       </div>
     </div>
@@ -2248,6 +2272,7 @@ function updateConnectionUI(data) {
   const connectionDetail = document.getElementById('connectionDetail');
   const connectionIcon = document.getElementById('connectionIcon');
   const connectionIconMobile = document.getElementById('connectionIconMobile');
+  const connectionLabel = document.getElementById('connectionLabel');
   const quotaUsed = document.getElementById('quotaUsed');
   const quotaUsedMobile = document.getElementById('quotaUsedMobile');
   const quotaChannelName = document.getElementById('quotaChannelName');
@@ -2262,16 +2287,28 @@ function updateConnectionUI(data) {
   const primaryAccount = data.accounts.find(a => a.isPrimary) || data.accounts[0];
   const quotaOk = primaryAccount ? primaryAccount.quotaOk : true;
   
-  // Update connection icon only (no text)
+  // Update connection icon + label
   if (allConnected && quotaOk) {
     if (connectionIcon) connectionIcon.className = 'ti ti-wifi text-green-400';
     if (connectionIconMobile) connectionIconMobile.className = 'ti ti-wifi text-green-400';
+    if (connectionLabel) {
+      connectionLabel.textContent = 'Online';
+      connectionLabel.className = 'text-green-400';
+    }
   } else if (connectedCount > 0) {
     if (connectionIcon) connectionIcon.className = 'ti ti-wifi-1 text-yellow-400';
     if (connectionIconMobile) connectionIconMobile.className = 'ti ti-wifi-1 text-yellow-400';
+    if (connectionLabel) {
+      connectionLabel.textContent = 'Limited';
+      connectionLabel.className = 'text-yellow-400';
+    }
   } else {
     if (connectionIcon) connectionIcon.className = 'ti ti-wifi-off text-red-400';
     if (connectionIconMobile) connectionIconMobile.className = 'ti ti-wifi-off text-red-400';
+    if (connectionLabel) {
+      connectionLabel.textContent = 'Offline';
+      connectionLabel.className = 'text-red-400';
+    }
   }
   
   // Quota info - show for primary channel
@@ -2633,5 +2670,3 @@ document.addEventListener('keydown', function(e) {
 </div>
 
 <script src="/js/youtube.js"></script>
-
-
