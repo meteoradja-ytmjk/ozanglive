@@ -5,7 +5,10 @@ const { getUniqueFilename, paths } = require('../utils/storage');
 const StorageService = require('../services/storageService');
 
 const UPLOAD_BUFFER_SIZE = 16 * 1024 * 1024; // 16MB buffer for faster disk writes
-const MAX_INFLIGHT_UPLOADS = Math.max(1, parseInt(process.env.UPLOAD_INFLIGHT_LIMIT || '0', 10)) || null;
+const parsedInflightLimit = parseInt(process.env.UPLOAD_INFLIGHT_LIMIT || '0', 10);
+const MAX_INFLIGHT_UPLOADS = Number.isFinite(parsedInflightLimit) && parsedInflightLimit > 0
+  ? parsedInflightLimit
+  : null;
 // Optimized stream options for faster uploads
 const STREAM_OPTIONS = {
   highWaterMark: UPLOAD_BUFFER_SIZE,
