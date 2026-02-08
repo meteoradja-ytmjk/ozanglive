@@ -328,6 +328,9 @@ async function fetchThumbnailFolders() {
         div.innerHTML = `
           <i class="ti ti-folder text-gray-400 shrink-0"></i>
           <span class="flex-1 truncate">${escapeHtml(folder.name)}</span>
+          <button type="button" class="shrink-0 text-blue-400 hover:text-blue-300" onclick="event.stopPropagation(); openRenameFolderModal('${escapeJsString(folder.name)}')" title="Rename">
+            <i class="ti ti-pencil text-sm"></i>
+          </button>
           <button type="button" class="shrink-0 text-red-500 hover:text-red-400 font-bold" onclick="event.stopPropagation(); deleteThumbnailFolder('${escapeJsString(folder.name)}')" title="Delete">
             ✕
           </button>
@@ -354,16 +357,19 @@ function openThumbnailFolder(folderName) {
   const indicator = document.getElementById('currentFolderIndicator');
   const folderNameEl = document.getElementById('currentFolderName');
   const rootBtn = document.getElementById('thumbnailRootBtn');
+  const editFolderBtn = document.getElementById('editThumbnailFolderBtn');
   
   if (folderName) {
     if (indicator) indicator.classList.remove('hidden');
     if (folderNameEl) folderNameEl.textContent = folderName;
+    if (editFolderBtn) editFolderBtn.disabled = false;
     if (rootBtn) {
       rootBtn.classList.remove('bg-primary/20', 'text-primary');
       rootBtn.classList.add('bg-dark-600', 'text-gray-300');
     }
   } else {
     if (indicator) indicator.classList.add('hidden');
+    if (editFolderBtn) editFolderBtn.disabled = true;
     if (rootBtn) {
       rootBtn.classList.add('bg-primary/20', 'text-primary');
       rootBtn.classList.remove('bg-dark-600', 'text-gray-300');
