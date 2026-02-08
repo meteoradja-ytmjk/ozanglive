@@ -238,6 +238,7 @@ process.on('SIGTERM', () => gracefulShutdown('SIGTERM', 0));
 process.on('SIGINT', () => gracefulShutdown('SIGINT', 0));
 const app = express();
 app.set("trust proxy", 1);
+app.locals.activeUploadCount = 0;
 const port = process.env.PORT || 7575;
 const tokens = new csrf();
 ensureDirectories();
