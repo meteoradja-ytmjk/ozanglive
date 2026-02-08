@@ -39,6 +39,8 @@ ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 const uploadProcessingConcurrency = Math.max(1, parseInt(process.env.UPLOAD_PROCESSING_CONCURRENCY || '1', 10));
 const videoProcessingQueue = new ProcessingQueue({ concurrency: uploadProcessingConcurrency, name: 'video-processing' });
 const audioProcessingQueue = new ProcessingQueue({ concurrency: uploadProcessingConcurrency, name: 'audio-processing' });
+const pendingVideoMetadataRefresh = new Set();
+const pendingAudioMetadataRefresh = new Set();
 // Track if we're shutting down to prevent multiple shutdown attempts
 let isShuttingDown = false;
 let httpServer = null;
@@ -257,6 +259,120 @@ const waitForUploadsToIdle = async (appInstance, {
     }
     await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
   }
+};
+
+const queueVideoMetadataRefresh = (appInstance, video) => {
+  if (!video?.id || pendingVideoMetadataRefresh.has(video.id)) return;
+  pendingVideoMetadataRefresh.add(video.id);
+
+  videoProcessingQueue.add(async () => {
+    try {
+      await waitForUploadsToIdle(appInstance);
+      if (!video.filepath) return;
+
+      const fullVideoPath = path.join(__dirname, 'public', video.filepath);
+      if (!fs.existsSync(fullVideoPath)) return;
+
+      const metadata = await new Promise((resolve, reject) => {
+        ffmpeg.ffprobe(fullVideoPath, (err, data) => {
+          if (err) return reject(err);
+          resolve(data);
+        });
+      });
+
+      const updateData = {};
+      const videoStream = metadata.streams?.find(stream => stream.codec_type === 'video');
+
+      if (!video.duration || video.duration === 0) {
+        updateData.duration = metadata.format?.duration || 0;
+      }
+
+      if (!video.resolution && videoStream?.width && videoStream?.height) {
+        updateData.resolution = `${videoStream.width}x${videoStream.height}`;
+      }
+
+      if (!video.bitrate && metadata.format?.bit_rate) {
+        updateData.bitrate = Math.round(parseInt(metadata.format.bit_rate, 10) / 1000);
+      }
+
+      if (!video.fps && videoStream?.avg_frame_rate) {
+        const [num, den] = videoStream.avg_frame_rate.split('/').map(value => parseInt(value, 10));
+        if (den && Number.isFinite(num) && Number.isFinite(den) && den !== 0) {
+          updateData.fps = Math.round((num / den) * 100) / 100;
+        }
+      }
+
+      const thumbnailRelativePath = video.thumbnail_path || `/uploads/thumbnails/thumb-${path.parse(video.filepath).name}.jpg`;
+      const thumbnailDiskPath = path.join(__dirname, 'public', thumbnailRelativePath);
+      if (!fs.existsSync(thumbnailDiskPath)) {
+        const thumbnailFilename = path.basename(thumbnailRelativePath);
+        await new Promise((resolve) => {
+          ffmpeg(fullVideoPath)
+            .screenshots({
+              timestamps: ['10%'],
+              filename: thumbnailFilename,
+              folder: path.join(__dirname, 'public', 'uploads', 'thumbnails'),
+              size: '854x480'
+            })
+            .on('end', resolve)
+            .on('error', (err) => {
+              console.error('Thumbnail generation error:', err.message);
+              resolve();
+            });
+        });
+        if (fs.existsSync(thumbnailDiskPath)) {
+          updateData.thumbnail_path = thumbnailRelativePath;
+        }
+      }
+
+      if (Object.keys(updateData).length > 0) {
+        await Video.update(video.id, updateData);
+      }
+    } catch (error) {
+      console.error('[MetadataRefresh] Video metadata refresh failed:', error.message);
+    } finally {
+      pendingVideoMetadataRefresh.delete(video.id);
+    }
+  }).catch((error) => {
+    console.error('[MetadataRefresh] Video queue error:', error.message);
+    pendingVideoMetadataRefresh.delete(video.id);
+  });
+};
+
+const queueAudioMetadataRefresh = (appInstance, audio) => {
+  if (!audio?.id || pendingAudioMetadataRefresh.has(audio.id)) return;
+  pendingAudioMetadataRefresh.add(audio.id);
+
+  audioProcessingQueue.add(async () => {
+    try {
+      await waitForUploadsToIdle(appInstance);
+      if (!audio.filepath) return;
+
+      const fullAudioPath = path.join(__dirname, 'public', audio.filepath);
+      if (!fs.existsSync(fullAudioPath)) return;
+
+      if (!audio.duration || audio.duration === 0) {
+        const metadata = await new Promise((resolve, reject) => {
+          ffmpeg.ffprobe(fullAudioPath, (err, data) => {
+            if (err) return reject(err);
+            resolve(data);
+          });
+        });
+
+        const duration = metadata.format?.duration || 0;
+        if (duration) {
+          await Audio.update(audio.id, { duration });
+        }
+      }
+    } catch (error) {
+      console.error('[MetadataRefresh] Audio metadata refresh failed:', error.message);
+    } finally {
+      pendingAudioMetadataRefresh.delete(audio.id);
+    }
+  }).catch((error) => {
+    console.error('[MetadataRefresh] Audio queue error:', error.message);
+    pendingAudioMetadataRefresh.delete(audio.id);
+  });
 };
 
 app.locals.helpers = {
@@ -1131,6 +1247,25 @@ app.get('/gallery', isAuthenticated, canViewVideos, async (req, res) => {
     const viewPermissionDenied = false;
 
     const audios = await Audio.findAll(req.session.userId);
+
+    videos.forEach((video) => {
+      const thumbnailDiskPath = video.thumbnail_path
+        ? path.join(__dirname, 'public', video.thumbnail_path)
+        : null;
+      const needsThumbnail = !video.thumbnail_path || (thumbnailDiskPath && !fs.existsSync(thumbnailDiskPath));
+      const needsDuration = !video.duration || video.duration === 0;
+      const needsMetadata = needsDuration || needsThumbnail || !video.resolution || !video.bitrate || !video.fps;
+      if (needsMetadata) {
+        queueVideoMetadataRefresh(req.app, video);
+      }
+    });
+
+    audios.forEach((audio) => {
+      const needsDuration = !audio.duration || audio.duration === 0;
+      if (needsDuration) {
+        queueAudioMetadataRefresh(req.app, audio);
+      }
+    });
 
     // Get user permissions for UI
     const permissions = {
@@ -2863,6 +2998,17 @@ async function processBatchVideoImport(batchId, files, userId) {
 app.get('/api/stream/videos', isAuthenticated, async (req, res) => {
   try {
     const videos = await Video.findAll(req.session.userId);
+    videos.forEach((video) => {
+      const thumbnailDiskPath = video.thumbnail_path
+        ? path.join(__dirname, 'public', video.thumbnail_path)
+        : null;
+      const needsThumbnail = !video.thumbnail_path || (thumbnailDiskPath && !fs.existsSync(thumbnailDiskPath));
+      const needsDuration = !video.duration || video.duration === 0;
+      const needsMetadata = needsDuration || needsThumbnail || !video.resolution || !video.bitrate || !video.fps;
+      if (needsMetadata) {
+        queueVideoMetadataRefresh(req.app, video);
+      }
+    });
     const formattedVideos = videos.map(video => {
       const duration = video.duration ? Math.floor(video.duration) : 0;
       const minutes = Math.floor(duration / 60);
@@ -2888,6 +3034,17 @@ app.get('/api/stream/videos', isAuthenticated, async (req, res) => {
 app.get('/api/stream/content', isAuthenticated, async (req, res) => {
   try {
     const videos = await Video.findAll(req.session.userId);
+    videos.forEach((video) => {
+      const thumbnailDiskPath = video.thumbnail_path
+        ? path.join(__dirname, 'public', video.thumbnail_path)
+        : null;
+      const needsThumbnail = !video.thumbnail_path || (thumbnailDiskPath && !fs.existsSync(thumbnailDiskPath));
+      const needsDuration = !video.duration || video.duration === 0;
+      const needsMetadata = needsDuration || needsThumbnail || !video.resolution || !video.bitrate || !video.fps;
+      if (needsMetadata) {
+        queueVideoMetadataRefresh(req.app, video);
+      }
+    });
     const formattedVideos = videos.map(video => {
       const duration = video.duration ? Math.floor(video.duration) : 0;
       const minutes = Math.floor(duration / 60);
@@ -2932,6 +3089,12 @@ app.get('/api/stream/content', isAuthenticated, async (req, res) => {
 app.get('/api/stream/audios', isAuthenticated, async (req, res) => {
   try {
     const audios = await Audio.findAll(req.session.userId);
+    audios.forEach((audio) => {
+      const needsDuration = !audio.duration || audio.duration === 0;
+      if (needsDuration) {
+        queueAudioMetadataRefresh(req.app, audio);
+      }
+    });
     const formattedAudios = audios.map(audio => {
       let formattedDuration = 'Unknown';
       if (audio.duration) {
