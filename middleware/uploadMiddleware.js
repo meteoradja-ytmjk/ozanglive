@@ -5,6 +5,7 @@ const { getUniqueFilename, paths } = require('../utils/storage');
 const StorageService = require('../services/storageService');
 
 const UPLOAD_BUFFER_SIZE = 16 * 1024 * 1024; // 16MB buffer for faster disk writes
+const MAX_INFLIGHT_UPLOADS = Math.max(1, parseInt(process.env.UPLOAD_INFLIGHT_LIMIT || '0', 10)) || null;
 // Optimized stream options for faster uploads
 const STREAM_OPTIONS = {
   highWaterMark: UPLOAD_BUFFER_SIZE,
@@ -18,6 +19,15 @@ const STREAM_OPTIONS = {
  */
 const createOptimizedWriteStream = (filepath) => {
   return fs.createWriteStream(filepath, STREAM_OPTIONS);
+};
+
+const optimizeIncomingStream = (stream) => {
+  if (stream?.readableHighWaterMark && stream.readableHighWaterMark >= UPLOAD_BUFFER_SIZE) {
+    return;
+  }
+  if (stream?._readableState && stream._readableState.highWaterMark) {
+    stream._readableState.highWaterMark = UPLOAD_BUFFER_SIZE;
+  }
 };
 
 /**
@@ -71,14 +81,27 @@ const checkStorageLimit = async (req, res, next) => {
 
 const createOptimizedStorage = (destinationPath) => ({
   _handleFile: (req, file, cb) => {
+    if (MAX_INFLIGHT_UPLOADS && req.app.locals.activeUploadCount >= MAX_INFLIGHT_UPLOADS) {
+      return cb(new Error('Server is busy. Please retry upload in a moment.'));
+    }
+
+    if (MAX_INFLIGHT_UPLOADS) {
+      req.app.locals.activeUploadCount += 1;
+    }
+
     const filename = getUniqueFilename(file.originalname);
     const finalPath = path.join(destinationPath, filename);
     const outStream = createOptimizedWriteStream(finalPath);
     let handled = false;
 
+    optimizeIncomingStream(file.stream);
+
     const done = (err, info) => {
       if (handled) return;
       handled = true;
+      if (MAX_INFLIGHT_UPLOADS) {
+        req.app.locals.activeUploadCount = Math.max(0, req.app.locals.activeUploadCount - 1);
+      }
       cb(err, info);
     };
 
