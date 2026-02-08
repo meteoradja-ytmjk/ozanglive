@@ -228,7 +228,7 @@
       </div>
 
       <!-- Page Content -->
-      <div class="p-4 lg:p-6 pt-4 lg:pt-20 pb-24 lg:pb-6 main-content-wrapper">
+      <div class="p-4 lg:p-6 pt-4 lg:pt-20 pb-24 lg:pb-6 main-content-wrapper mobile-scroll-view">
         <%- body %>
       </div>
 
@@ -306,6 +306,10 @@
   /* Main content wrapper */
   .main-content-wrapper {
     width: 100%;
+  }
+
+  .mobile-scroll-view {
+    overflow-y: visible;
   }
 
   .main-container {
@@ -426,6 +430,13 @@
     .main-content-wrapper {
       padding-bottom: 6rem !important;
       overflow: visible !important;
+    }
+
+    .mobile-scroll-view {
+      max-height: calc(100dvh - 64px - 64px);
+      overflow-y: auto !important;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior-y: contain;
     }
 
     .main-container {
