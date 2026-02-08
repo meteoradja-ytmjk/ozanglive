@@ -19,6 +19,7 @@ const systemMonitor = require('./services/systemMonitor');
 const { uploadVideo, upload, uploadAudio, uploadBackup, checkStorageLimit } = require('./middleware/uploadMiddleware');
 const { ensureDirectories } = require('./utils/storage');
 const { getVideoInfo, generateThumbnail } = require('./utils/videoProcessor');
+const ProcessingQueue = require('./utils/processingQueue');
 const Video = require('./models/Video');
 const Audio = require('./models/Audio');
 const Playlist = require('./models/Playlist');
@@ -35,6 +36,9 @@ const SystemSettings = require('./models/SystemSettings');
 const YouTubeBroadcastSettings = require('./models/YouTubeBroadcastSettings');
 const scheduleService = require('./services/scheduleService');
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
+const uploadProcessingConcurrency = Math.max(1, parseInt(process.env.UPLOAD_PROCESSING_CONCURRENCY || '1', 10));
+const videoProcessingQueue = new ProcessingQueue({ concurrency: uploadProcessingConcurrency, name: 'video-processing' });
+const audioProcessingQueue = new ProcessingQueue({ concurrency: uploadProcessingConcurrency, name: 'audio-processing' });
 // Track if we're shutting down to prevent multiple shutdown attempts
 let isShuttingDown = false;
 let httpServer = null;
@@ -2247,7 +2251,7 @@ app.post('/api/videos/upload', isAuthenticated, (req, res, next) => {
       video
     });
 
-    setImmediate(async () => {
+    videoProcessingQueue.add(async () => {
       try {
         const fullFilePath = path.join(__dirname, 'public', filePath);
         const thumbnailFilename = `thumb-${path.parse(req.file.filename).name}.jpg`;
@@ -4222,7 +4226,7 @@ app.post('/api/audios/upload', isAuthenticated, (req, res, next) => {
       audio
     });
 
-    setImmediate(async () => {
+    audioProcessingQueue.add(async () => {
       let currentFilePath = path.join(__dirname, 'public', 'uploads', 'audios', req.file.filename);
       let updatedFilePath = filePath;
       const updateData = {};
