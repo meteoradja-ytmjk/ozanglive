@@ -4,9 +4,10 @@ const fs = require('fs');
 const { getUniqueFilename, paths } = require('../utils/storage');
 const StorageService = require('../services/storageService');
 
+const UPLOAD_BUFFER_SIZE = 16 * 1024 * 1024; // 16MB buffer for faster disk writes
 // Optimized stream options for faster uploads
 const STREAM_OPTIONS = {
-  highWaterMark: 1024 * 1024 * 16, // 16MB buffer for faster disk writes
+  highWaterMark: UPLOAD_BUFFER_SIZE,
   flags: 'w',
   autoClose: true,
   emitClose: true
