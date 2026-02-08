@@ -737,6 +737,11 @@
     <div class="center-toast-content">
       <i id="center-toast-icon" class="ti font-loaded"></i>
       <span id="center-toast-message"></span>
+      <a id="center-toast-whatsapp" href="#" target="_blank"
+        class="hidden mt-3 inline-flex items-center justify-center gap-2 px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-sm">
+        <i class="ti ti-brand-whatsapp text-lg"></i>
+        <span>Tambah Limit</span>
+      </a>
     </div>
   </div>
 
@@ -1332,10 +1337,21 @@
 
     // Center Toast Notification Function
     let centerToastTimeout = null;
-    function showCenterToast(type, message, duration = 3000) {
+    let liveLimitWhatsappNumber = null;
+
+    function buildLimitWhatsappUrl(whatsappNumber) {
+      if (!whatsappNumber) return null;
+      const currentHost = window.location.hostname;
+      const appAddress = `http://${currentHost}:7575/dashboard`;
+      const message = encodeURIComponent(`[${appAddress}] tambah limit guys..`);
+      return `https://wa.me/${whatsappNumber}?text=${message}`;
+    }
+
+    function showCenterToast(type, message, duration = 3000, options = {}) {
       const toast = document.getElementById('center-toast');
       const toastIcon = document.getElementById('center-toast-icon');
       const toastMessage = document.getElementById('center-toast-message');
+      const toastWhatsapp = document.getElementById('center-toast-whatsapp');
 
       if (!toast || !toastIcon || !toastMessage) {
         console.log('Center toast elements not found:', message);
@@ -1361,6 +1377,16 @@
       // Set message
       toastMessage.textContent = message;
 
+      // Handle WhatsApp button
+      if (toastWhatsapp) {
+        toastWhatsapp.classList.add('hidden');
+        const whatsappUrl = options.whatsappUrl || null;
+        if (options.showWhatsapp && whatsappUrl) {
+          toastWhatsapp.href = whatsappUrl;
+          toastWhatsapp.classList.remove('hidden');
+        }
+      }
+
       // Show toast with animation
       toast.style.display = 'block';
       toast.classList.remove('hidden', 'animate-out');
@@ -1376,6 +1402,9 @@
           toastIcon.style.display = 'none';
           toastIcon.style.visibility = 'hidden';
           toastIcon.className = '';
+          if (toastWhatsapp) {
+            toastWhatsapp.classList.add('hidden');
+          }
           toast.classList.add('hidden');
           toast.classList.remove('animate-out');
         }, 300);
@@ -1462,6 +1491,7 @@
           const warningDesktop = document.getElementById('limit-warning-desktop');
           const warningMobile = document.getElementById('limit-warning-mobile');
           const whatsappBtnDesktop = document.getElementById('whatsapp-btn-desktop');
+          liveLimitWhatsappNumber = data.whatsappNumber || null;
 
           if (!data.canStart && !data.isAdmin) {
             warningDesktop.classList.remove('hidden');
@@ -1469,17 +1499,11 @@
 
             // Show WhatsApp button if number is configured
             if (data.whatsappNumber && whatsappBtnDesktop) {
-              // Get IP address from current URL (the one user is using to access the app)
-              // This will be the server IP/domain that user accessed (e.g., 103.147.8.123:7575)
-              const currentHost = window.location.hostname; // Gets IP/domain without port
-              const currentPort = window.location.port; // Gets port (7575)
-              const appAddress = currentPort ? `${currentHost}:${currentPort}` : currentHost;
-
-              // Create WhatsApp message with the app address
-              const message = encodeURIComponent(`[${appAddress}] tambah limit live`);
-              const whatsappUrl = `https://wa.me/${data.whatsappNumber}?text=${message}`;
-              whatsappBtnDesktop.href = whatsappUrl;
-              whatsappBtnDesktop.classList.remove('hidden');
+              const whatsappUrl = buildLimitWhatsappUrl(data.whatsappNumber);
+              if (whatsappUrl) {
+                whatsappBtnDesktop.href = whatsappUrl;
+                whatsappBtnDesktop.classList.remove('hidden');
+              }
             }
           } else {
             warningDesktop.classList.add('hidden');
@@ -1809,7 +1833,13 @@
         } else {
           // Only show toast for limit reached - this is important info
           if (result.limitReached) {
-            showCenterToast('warning', result.error || 'Hubungi Admin Untuk Menambah Limit');
+            const whatsappUrl = buildLimitWhatsappUrl(liveLimitWhatsappNumber);
+            showCenterToast(
+              'warning',
+              result.error || 'Hubungi Admin Untuk Menambah Limit',
+              5000,
+              { showWhatsapp: Boolean(whatsappUrl), whatsappUrl }
+            );
             loadLiveLimitInfo();
           }
           // No toast for other errors
