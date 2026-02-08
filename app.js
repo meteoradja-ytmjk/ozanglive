@@ -8595,6 +8595,48 @@ async function updateTitleRotationIndex(userId, newIndex) {
   });
 }
 
+async function createUpdateBackup(appDir, addLog) {
+  const backupDir = path.join(appDir, 'db', 'backups');
+  await fs.promises.mkdir(backupDir, { recursive: true });
+
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const backupBase = path.join(backupDir, `auto-update-${timestamp}`);
+  const dbBase = path.join(appDir, 'db', 'streamflow.db');
+
+  if (!fs.existsSync(dbBase)) {
+    throw new Error('Database file not found. Aborting update to prevent data loss.');
+  }
+
+  const backupTargets = [
+    { source: dbBase, suffix: '.db', required: true },
+    { source: `${dbBase}-wal`, suffix: '.db-wal', required: false },
+    { source: `${dbBase}-shm`, suffix: '.db-shm', required: false },
+    { source: path.join(appDir, '.env'), suffix: '.env', required: false }
+  ];
+
+  for (const target of backupTargets) {
+    if (!fs.existsSync(target.source)) {
+      if (target.required) {
+        throw new Error(`Required backup source missing: ${target.source}`);
+      }
+      addLog(`Backup notice: Optional file not found (${path.basename(target.source)})`);
+      continue;
+    }
+
+    try {
+      await fs.promises.copyFile(target.source, `${backupBase}${target.suffix}`);
+      addLog(`Backup created: ${path.basename(backupBase)}${target.suffix}`);
+    } catch (copyErr) {
+      if (target.required) {
+        throw new Error(`Failed to backup ${target.source}: ${copyErr.message}`);
+      }
+      addLog(`Backup warning: Could not copy ${target.source} (${copyErr.message})`);
+    }
+  }
+
+  return backupBase;
+}
+
 // ============================================
 // System Update API Endpoints (Admin only)
 // ============================================
@@ -8799,12 +8841,13 @@ app.get('/api/system/check-update', isAuthenticated, isAdmin, async (req, res) =
 // Perform update
 app.post('/api/system/perform-update', isAuthenticated, isAdmin, async (req, res) => {
   try {
-    const { exec } = require('child_process');
+    const { exec, spawn } = require('child_process');
     const { promisify } = require('util');
     const execAsync = promisify(exec);
     const appDir = __dirname;
     const log = [];
     const { mode } = req.body; // 'normal', 'stash', or 'force'
+    const healthPort = process.env.PORT || '7575';
 
     const addLog = (message) => {
       console.log(`[Update] ${message}`);
@@ -8812,6 +8855,29 @@ app.post('/api/system/perform-update', isAuthenticated, isAdmin, async (req, res
     };
 
     addLog('Starting update process...');
+
+    // Capture current commit for rollback
+    let previousHead = '';
+    try {
+      previousHead = (await execAsync('git rev-parse HEAD', { cwd: appDir, timeout: 5000 })).stdout.trim();
+      addLog(`Current commit: ${previousHead}`);
+    } catch (err) {
+      addLog(`Warning: Unable to capture current commit (${err.message})`);
+    }
+
+    // Auto backup before update
+    addLog('Creating pre-update backup...');
+    let backupBase = '';
+    try {
+      backupBase = await createUpdateBackup(appDir, addLog);
+    } catch (backupErr) {
+      addLog(`Backup failed: ${backupErr.message}`);
+      return res.json({
+        success: false,
+        error: `Backup failed: ${backupErr.message}`,
+        log
+      });
+    }
 
     // Get current branch
     let currentBranch = 'main';
@@ -8914,7 +8980,7 @@ app.post('/api/system/perform-update', isAuthenticated, isAdmin, async (req, res
     }
 
     addLog('Update completed successfully!');
-    addLog('Restarting application...');
+    addLog('Restarting application and running health check...');
 
     // Send response before restart
     res.json({
@@ -8923,25 +8989,10 @@ app.post('/api/system/perform-update', isAuthenticated, isAdmin, async (req, res
       log
     });
 
-    // Step 3: Restart PM2 (delayed to allow response to be sent)
-    setTimeout(async () => {
-      try {
-        // Try PM2 restart first
-        await execAsync('pm2 restart ozanglive', { cwd: appDir, timeout: 30000 });
-        console.log('[Update] PM2 restart successful');
-      } catch (pm2Err) {
-        console.log('[Update] PM2 restart failed, trying alternative methods...', pm2Err.message);
-        try {
-          // Try PM2 with ecosystem file
-          await execAsync('pm2 restart ecosystem.config.js', { cwd: appDir, timeout: 30000 });
-          console.log('[Update] Ecosystem restart successful');
-        } catch (e) {
-          console.log('[Update] Ecosystem restart failed, process will exit for manual restart');
-          // Exit process - systemd or PM2 should restart it
-          process.exit(0);
-        }
-      }
-    }, 2000);
+    const postUpdateScript = path.join(appDir, 'scripts', 'post-update-health-check.sh');
+    const postUpdateArgs = [postUpdateScript, appDir, previousHead || '', backupBase || '', String(healthPort)];
+    const postUpdateProcess = spawn('bash', postUpdateArgs, { detached: true, stdio: 'ignore' });
+    postUpdateProcess.unref();
 
   } catch (error) {
     console.error('Error performing update:', error);
