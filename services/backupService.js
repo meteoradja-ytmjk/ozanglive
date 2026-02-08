@@ -717,9 +717,7 @@ async function exportThumbnailFiles(userId) {
     totalSize: 0,
     skippedFiles: 0
   };
-  
-  const MAX_TOTAL_SIZE = 30 * 1024 * 1024; // 30MB limit for thumbnails to leave room for other data
-  
+
   try {
     // Get broadcast templates to map thumbnail folders to template names
     const templates = await BroadcastTemplate.findByUserId(userId);
@@ -769,14 +767,6 @@ async function exportThumbnailFiles(userId) {
           const fileStats = await fs.stat(filePath);
           
           if (fileStats.isFile() && /\.(jpg|jpeg|png|gif|webp)$/i.test(file)) {
-            // Check if adding this file would exceed the limit
-            const estimatedBase64Size = Math.ceil(fileStats.size * 1.37); // Base64 is ~37% larger
-            if (result.totalSize + estimatedBase64Size > MAX_TOTAL_SIZE) {
-              console.warn(`Skipping thumbnail ${item}/${file} - would exceed size limit`);
-              result.skippedFiles++;
-              continue;
-            }
-            
             // Read file as base64 for backup
             const fileContent = await fs.readFile(filePath);
             const base64Data = fileContent.toString('base64');
@@ -801,14 +791,6 @@ async function exportThumbnailFiles(userId) {
         }
       } else if (stats.isFile() && /\.(jpg|jpeg|png|gif|webp)$/i.test(item)) {
         // This is a standalone thumbnail file (root level)
-        // Check if adding this file would exceed the limit
-        const estimatedBase64Size = Math.ceil(stats.size * 1.37);
-        if (result.totalSize + estimatedBase64Size > MAX_TOTAL_SIZE) {
-          console.warn(`Skipping standalone thumbnail ${item} - would exceed size limit`);
-          result.skippedFiles++;
-          continue;
-        }
-        
         const fileContent = await fs.readFile(itemPath);
         const base64Data = fileContent.toString('base64');
         result.files.push({
@@ -824,9 +806,6 @@ async function exportThumbnailFiles(userId) {
     const totalSizeMB = result.totalSize / (1024 * 1024);
     console.log(`Total exported for user ${userId}: ${result.folders.length} folders, ${result.files.length} standalone files, ${result.template_folder_mapping.length} template mappings, total size: ${totalSizeMB.toFixed(2)} MB`);
     
-    if (result.skippedFiles > 0) {
-      console.warn(`Warning: ${result.skippedFiles} thumbnail files were skipped due to size limit`);
-    }
   } catch (err) {
     console.error('Error exporting thumbnail files:', err);
     throw new Error(`Failed to export thumbnail files: ${err.message}`);
