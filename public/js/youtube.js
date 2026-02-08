@@ -1529,6 +1529,20 @@ function openCreateBroadcastModal() {
   fetchChannelDefaults(accountId);
 }
 
+function openThumbnailManager() {
+  openCreateBroadcastModal();
+
+  setTimeout(() => {
+    const section = document.getElementById('thumbnailManagerSection');
+    if (!section) return;
+    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    section.classList.add('thumbnail-manager-highlight');
+    setTimeout(() => {
+      section.classList.remove('thumbnail-manager-highlight');
+    }, 2000);
+  }, 200);
+}
+
 function closeCreateBroadcastModal() {
   document.getElementById('createBroadcastModal').classList.add('hidden');
   document.getElementById('createBroadcastForm').reset();

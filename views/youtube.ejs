@@ -25,6 +25,13 @@
     scrollbar-width: thin;
     scrollbar-color: rgba(107, 114, 128, 0.4) transparent;
   }
+
+  .thumbnail-manager-highlight {
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.6);
+    background: rgba(30, 58, 138, 0.12);
+    border-radius: 12px;
+    transition: box-shadow 0.3s ease, background 0.3s ease;
+  }
 </style>
 
 <div class="max-w-6xl mx-auto">
@@ -309,11 +316,16 @@
         </div>
       </div>
     </div>
-    <div class="header-buttons grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex-shrink-0">
+    <div class="header-buttons grid grid-cols-3 gap-2 w-full sm:w-auto sm:flex-shrink-0">
       <button onclick="openTemplateLibraryModal()"
         class="bg-primary/20 hover:bg-primary/30 text-primary px-4 py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2 font-medium">
         <i class="ti ti-template text-lg"></i>
         <span>Templates</span>
+      </button>
+      <button onclick="openThumbnailManager()"
+        class="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 px-4 py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2 font-medium">
+        <i class="ti ti-photo text-lg"></i>
+        <span>Thumbnail</span>
       </button>
       <button onclick="openCreateBroadcastModal()"
         class="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-4 py-2.5 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 font-medium shadow-lg shadow-red-500/25">
@@ -684,7 +696,7 @@
         <input type="hidden" id="pinnedThumbnail" name="pinnedThumbnail" value="">
         <input type="hidden" id="streamKeyFolderMapping" name="streamKeyFolderMapping" value="">
 
-        <div>
+        <div id="thumbnailManagerSection">
           <label class="text-sm font-medium text-white block mb-2">
             Thumbnail
             <span id="thumbnailCount" class="ml-2 text-xs text-gray-400">(0/20)</span>
