@@ -88,9 +88,7 @@ const createOptimizedStorage = (destinationPath) => ({
       return cb(new Error('Server is busy. Please retry upload in a moment.'));
     }
 
-    if (MAX_INFLIGHT_UPLOADS) {
-      req.app.locals.activeUploadCount += 1;
-    }
+    req.app.locals.activeUploadCount += 1;
 
     const filename = getUniqueFilename(file.originalname);
     const finalPath = path.join(destinationPath, filename);
@@ -102,9 +100,7 @@ const createOptimizedStorage = (destinationPath) => ({
     const done = (err, info) => {
       if (handled) return;
       handled = true;
-      if (MAX_INFLIGHT_UPLOADS) {
-        req.app.locals.activeUploadCount = Math.max(0, req.app.locals.activeUploadCount - 1);
-      }
+      req.app.locals.activeUploadCount = Math.max(0, req.app.locals.activeUploadCount - 1);
       cb(err, info);
     };
 
