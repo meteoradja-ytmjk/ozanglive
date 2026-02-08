@@ -69,11 +69,19 @@
       <script>
           // CRITICAL: Force scroll enabled IMMEDIATELY (runs before page loads)
           (function () {
+            function applyScrollStyles(target) {
+              if (!target) return;
+              target.style.setProperty('overflow-y', 'auto', 'important');
+              target.style.setProperty('overflow-x', 'hidden', 'important');
+            }
+
             function forceScroll() {
               if (window.innerWidth < 1024) {
-                document.documentElement.style.cssText = 'overflow-y: scroll !important; overflow-x: hidden !important;';
+                applyScrollStyles(document.documentElement);
+                applyScrollStyles(document.body);
                 if (document.body) {
-                  document.body.style.cssText += '; overflow-y: scroll !important; overflow-x: hidden !important; -webkit-overflow-scrolling: touch;';
+                  document.body.style.setProperty('-webkit-overflow-scrolling', 'touch');
+                  document.body.style.setProperty('touch-action', 'pan-y');
                 }
               }
             }
@@ -289,9 +297,10 @@
   body {
     width: 100%;
     overflow-x: hidden !important;
-    overflow-y: scroll !important;
+    overflow-y: auto !important;
     -webkit-overflow-scrolling: touch;
     position: relative;
+    touch-action: pan-y;
   }
 
   /* Main content wrapper */
@@ -394,7 +403,7 @@
   /* Mobile specific fixes */
   @media (max-width: 1023px) {
     html {
-      overflow-y: scroll !important;
+      overflow-y: auto !important;
       height: auto !important;
     }
 
@@ -403,8 +412,9 @@
       padding-bottom: 120px !important;
       min-height: 100vh;
       height: auto !important;
-      overflow-y: scroll !important;
+      overflow-y: auto !important;
       position: relative !important;
+      touch-action: pan-y;
     }
 
     .mobile-safe-wrapper {
@@ -455,8 +465,9 @@
       // Force scroll to be enabled
       if (window.innerWidth < 1024) {
         // Mobile: ensure scroll is always enabled
-        document.body.style.setProperty('overflow-y', 'scroll', 'important');
+        document.body.style.setProperty('overflow-y', 'auto', 'important');
         document.body.style.setProperty('overflow-x', 'hidden', 'important');
+        document.body.style.setProperty('touch-action', 'pan-y');
       }
     }
 
