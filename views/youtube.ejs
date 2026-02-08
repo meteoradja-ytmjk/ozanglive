@@ -25,6 +25,23 @@
     scrollbar-width: thin;
     scrollbar-color: rgba(107, 114, 128, 0.4) transparent;
   }
+
+  .thumbnail-manager-highlight {
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.6);
+    background: rgba(30, 58, 138, 0.12);
+    border-radius: 12px;
+    transition: box-shadow 0.3s ease, background 0.3s ease;
+  }
+
+  .thumbnail-manager-mode #createBroadcastFields,
+  .thumbnail-manager-mode #createBroadcastActions {
+    display: none;
+  }
+
+  .thumbnail-manager-mode #thumbnailManagerHeader,
+  .thumbnail-manager-mode #thumbnailManagerActions {
+    display: flex;
+  }
 </style>
 
 <div class="max-w-6xl mx-auto">
@@ -309,11 +326,16 @@
         </div>
       </div>
     </div>
-    <div class="header-buttons grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex-shrink-0">
+    <div class="header-buttons grid grid-cols-3 gap-2 w-full sm:w-auto sm:flex-shrink-0">
       <button onclick="openTemplateLibraryModal()"
         class="bg-primary/20 hover:bg-primary/30 text-primary px-4 py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2 font-medium">
         <i class="ti ti-template text-lg"></i>
         <span>Templates</span>
+      </button>
+      <button onclick="openThumbnailManager()"
+        class="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 px-4 py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2 font-medium">
+        <i class="ti ti-photo text-lg"></i>
+        <span>Thumbnail</span>
       </button>
       <button onclick="openCreateBroadcastModal()"
         class="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-4 py-2.5 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 font-medium shadow-lg shadow-red-500/25">
@@ -491,6 +513,18 @@
       </div>
       
       <form id="createBroadcastForm" class="p-6 space-y-4">
+        <div id="thumbnailManagerHeader" class="hidden items-center justify-between bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-3 py-2">
+          <div class="flex items-center gap-2 text-emerald-300 text-sm font-medium">
+            <i class="ti ti-photo"></i>
+            <span>Mode Manajemen Thumbnail</span>
+          </div>
+          <button type="button" onclick="exitThumbnailManagerMode()" class="text-xs text-emerald-200 hover:text-emerald-100 flex items-center gap-1">
+            <i class="ti ti-arrow-left"></i>
+            <span>Kembali ke Create</span>
+          </button>
+        </div>
+
+        <div id="createBroadcastFields" class="space-y-4">
         <!-- Account Selector -->
         <div>
           <label class="text-sm font-medium text-white block mb-2">YouTube Account <span class="text-red-400">*</span></label>
@@ -680,11 +714,12 @@
             </div>
           </label>
         </div>
+        </div>
 
         <input type="hidden" id="pinnedThumbnail" name="pinnedThumbnail" value="">
         <input type="hidden" id="streamKeyFolderMapping" name="streamKeyFolderMapping" value="">
 
-        <div>
+        <div id="thumbnailManagerSection">
           <label class="text-sm font-medium text-white block mb-2">
             Thumbnail
             <span id="thumbnailCount" class="ml-2 text-xs text-gray-400">(0/20)</span>
@@ -797,7 +832,7 @@
           </div>
         </div>
         
-        <div class="pt-4 flex gap-3">
+        <div id="createBroadcastActions" class="pt-4 flex gap-3">
           <button type="button" onclick="closeCreateBroadcastModal()"
             class="flex-1 bg-dark-700 hover:bg-dark-600 text-white px-4 py-2.5 rounded-lg transition-colors">
             Cancel
@@ -806,6 +841,13 @@
             class="flex-1 bg-red-500 hover:bg-red-600 text-white px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
             <i class="ti ti-broadcast"></i>
             <span>Create Broadcast</span>
+          </button>
+        </div>
+        <div id="thumbnailManagerActions" class="hidden pt-4 gap-3">
+          <button type="button" onclick="closeCreateBroadcastModal()"
+            class="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
+            <i class="ti ti-check"></i>
+            <span>Selesai</span>
           </button>
         </div>
       </form>
