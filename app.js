@@ -244,6 +244,21 @@ const tokens = new csrf();
 ensureDirectories();
 ensureDirectories();
 
+const waitForUploadsToIdle = async (appInstance, {
+  timeoutMs = 120000,
+  pollIntervalMs = 200
+} = {}) => {
+  if (!appInstance?.locals) return;
+  const start = Date.now();
+  while (appInstance.locals.activeUploadCount > 0) {
+    if (Date.now() - start > timeoutMs) {
+      console.warn('[UploadWait] Timed out waiting for active uploads to finish');
+      break;
+    }
+    await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+  }
+};
+
 app.locals.helpers = {
   getUsername: function (req) {
     if (req.session && req.session.username) {
@@ -2160,6 +2175,7 @@ app.post('/upload/video', isAuthenticated, uploadVideo.single('video'), async (r
 
     setImmediate(async () => {
       try {
+        await waitForUploadsToIdle(req.app);
         const videoPath = path.join(__dirname, 'public', filePath);
         const thumbnailName = path.basename(filename, path.extname(filename)) + '.jpg';
         const [videoInfo, thumbnailRelativePath] = await Promise.all([
@@ -2254,6 +2270,7 @@ app.post('/api/videos/upload', isAuthenticated, (req, res, next) => {
 
     videoProcessingQueue.add(async () => {
       try {
+        await waitForUploadsToIdle(req.app);
         const fullFilePath = path.join(__dirname, 'public', filePath);
         const thumbnailFilename = `thumb-${path.parse(req.file.filename).name}.jpg`;
         const thumbnailPath = `/uploads/thumbnails/${thumbnailFilename}`;
@@ -4233,6 +4250,7 @@ app.post('/api/audios/upload', isAuthenticated, (req, res, next) => {
       const updateData = {};
 
       try {
+        await waitForUploadsToIdle(req.app);
         if (!skipConversion) {
           const { processAudioForStreaming } = require('./utils/audioProcessor');
           console.log(`[AudioUpload] Processing audio for streaming: ${req.file.filename}`);
