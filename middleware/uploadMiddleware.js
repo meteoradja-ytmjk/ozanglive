@@ -4,7 +4,10 @@ const fs = require('fs');
 const { getUniqueFilename, paths } = require('../utils/storage');
 const StorageService = require('../services/storageService');
 
-const UPLOAD_BUFFER_SIZE = 16 * 1024 * 1024; // 16MB buffer for faster disk writes
+const parsedBufferSizeMb = parseInt(process.env.UPLOAD_BUFFER_SIZE_MB || '32', 10);
+const UPLOAD_BUFFER_SIZE = Number.isFinite(parsedBufferSizeMb) && parsedBufferSizeMb > 0
+  ? parsedBufferSizeMb * 1024 * 1024
+  : 32 * 1024 * 1024; // 32MB buffer for faster disk writes
 const parsedInflightLimit = parseInt(process.env.UPLOAD_INFLIGHT_LIMIT || '0', 10);
 const MAX_INFLIGHT_UPLOADS = Number.isFinite(parsedInflightLimit) && parsedInflightLimit > 0
   ? parsedInflightLimit
