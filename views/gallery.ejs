@@ -1598,7 +1598,9 @@ function formatDuration(seconds) {
       allowedExtensions: ['.mp4', '.avi', '.mov'],
       allowedMimeTypes: ['video/mp4', 'video/avi', 'video/quicktime'],
       csrfToken: '<%= csrfToken %>',
-      concurrentUploads: 3, // Upload 3 files simultaneously for more stable upload speed
+      concurrentUploads: 4, // Upload 4 files simultaneously for faster upload speed
+      enableChunking: <%= uploadChunkConfig?.enabled ? 'true' : 'false' %>,
+      chunkThresholdBytes: <%= uploadChunkConfig?.thresholdBytes || 67108864 %>,
       onProgress: (item, fileProgress, overallProgress) => {
         document.getElementById('videoUploadBar').style.width = overallProgress + '%';
         document.getElementById('videoUploadPercent').textContent = overallProgress + '%';
@@ -1690,7 +1692,9 @@ function formatDuration(seconds) {
       allowedExtensions: ['.mp3', '.wav', '.aac', '.m4a'],
       allowedMimeTypes: ['audio/mpeg', 'audio/wav', 'audio/aac', 'audio/x-m4a', 'audio/mp4'],
       csrfToken: '<%= csrfToken %>',
-      concurrentUploads: 3, // Upload 3 files simultaneously for more stable upload speed
+      concurrentUploads: 4, // Upload 4 files simultaneously for faster upload speed
+      enableChunking: <%= uploadChunkConfig?.enabled ? 'true' : 'false' %>,
+      chunkThresholdBytes: <%= uploadChunkConfig?.thresholdBytes || 67108864 %>,
       extraDataCallback: () => {
         const skipConversion = document.getElementById('skipConversionInput')?.value === 'true';
         return { skipConversion: skipConversion ? 'true' : 'false' };
