@@ -10,7 +10,9 @@ class FileQueueManager {
    * @param {string[]} options.allowedExtensions - Allowed file extensions
    * @param {string[]} options.allowedMimeTypes - Allowed MIME types
    * @param {string} options.csrfToken - CSRF token for requests
-   * @param {number} options.concurrentUploads - Number of concurrent uploads (default: 5)
+   * @param {number} options.concurrentUploads - Number of concurrent uploads (default: 3)
+   * @param {number} options.maxRetries - Maximum retry attempts for retryable failures (default: 2)
+   * @param {number} options.retryDelayMs - Base delay between retries in ms (default: 1000)
    * @param {Function} options.onProgress - Callback for progress updates
    * @param {Function} options.onFileComplete - Callback when a file completes
    * @param {Function} options.onAllComplete - Callback when all files complete
@@ -23,7 +25,9 @@ class FileQueueManager {
     this.allowedMimeTypes = options.allowedMimeTypes || ['video/mp4', 'video/avi', 'video/quicktime'];
     this.csrfToken = options.csrfToken || '';
     this.extraDataCallback = options.extraDataCallback || null; // Function to get extra form data
-    this.concurrentUploads = options.concurrentUploads || 5; // Default 5 concurrent uploads
+    this.concurrentUploads = options.concurrentUploads || 3; // Default 3 concurrent uploads
+    this.maxRetries = Number.isFinite(options.maxRetries) ? options.maxRetries : 2;
+    this.retryDelayMs = Number.isFinite(options.retryDelayMs) ? options.retryDelayMs : 1000;
     
     // Callbacks
     this.onProgress = options.onProgress || (() => {});
@@ -366,14 +370,30 @@ class FileQueueManager {
    * @returns {Promise<Object>} - Server response
    */
   uploadFile(item) {
-    return new Promise((resolve, reject) => {
+    const shouldRetry = (error) => {
+      if (this.isCancelled) return false;
+      if (error && error.retryable === false) return false;
+      if (error && error.httpStatus) {
+        return error.httpStatus >= 500 || error.httpStatus === 408 || error.httpStatus === 429;
+      }
+      return true;
+    };
+
+    const attemptUpload = (attempt) => new Promise((resolve, reject) => {
+      if (this.isCancelled) {
+        const cancelledError = new Error('Upload cancelled');
+        cancelledError.retryable = false;
+        reject(cancelledError);
+        return;
+      }
+
       const xhr = new XMLHttpRequest();
       item.xhr = xhr;
       item.status = 'uploading';
       item.progress = 0;
-      
+
       this.onQueueUpdate(this.files);
-      
+
       // Progress handler
       xhr.upload.addEventListener('progress', (e) => {
         if (e.lengthComputable) {
@@ -382,74 +402,89 @@ class FileQueueManager {
           this.onQueueUpdate(this.files);
         }
       });
-      
+
       // Load handler (success)
       xhr.addEventListener('load', () => {
         item.xhr = null;
-        
+
         if (xhr.status >= 200 && xhr.status < 300) {
           try {
             const response = JSON.parse(xhr.responseText);
             if (response.success) {
               resolve(response);
             } else {
-              reject(new Error(response.error || 'Upload failed'));
+              const error = new Error(response.error || 'Upload failed');
+              error.httpStatus = xhr.status;
+              reject(error);
             }
           } catch (e) {
-            reject(new Error('Invalid server response'));
+            const error = new Error('Invalid server response');
+            error.httpStatus = xhr.status;
+            reject(error);
           }
-        } else if (xhr.status === 401) {
-          // Unauthorized - session expired or not logged in
-          reject(new Error('Unauthorized - please login again'));
+          return;
+        }
+
+        const error = new Error(`HTTP ${xhr.status}`);
+        error.httpStatus = xhr.status;
+        error.retryable = !(xhr.status === 401 || xhr.status === 413 || (xhr.status >= 400 && xhr.status < 500 && xhr.status !== 408 && xhr.status !== 429));
+
+        if (xhr.status === 401) {
+          error.message = 'Unauthorized - please login again';
         } else if (xhr.status === 413) {
-          // Storage limit exceeded
           try {
             const response = JSON.parse(xhr.responseText);
             const errorMsg = response.message || 'Storage limit exceeded';
-            const details = response.formatted ? 
+            const details = response.formatted ?
               `\nCurrent: ${response.formatted.usage}\nLimit: ${response.formatted.limit}` : '';
-            reject(new Error(errorMsg + details));
+            error.message = errorMsg + details;
           } catch (e) {
-            reject(new Error('Storage limit exceeded'));
+            error.message = 'Storage limit exceeded';
           }
         } else if (xhr.status === 408) {
-          // Request timeout
-          reject(new Error('Upload timeout - file may be too large'));
+          error.message = 'Upload timeout - file may be too large';
         } else {
           try {
             const response = JSON.parse(xhr.responseText);
-            reject(new Error(response.error || `HTTP ${xhr.status}`));
+            error.message = response.error || `HTTP ${xhr.status}`;
           } catch (e) {
-            reject(new Error(`HTTP ${xhr.status}`));
+            error.message = `HTTP ${xhr.status}`;
           }
         }
+
+        reject(error);
       });
-      
+
       // Error handler
       xhr.addEventListener('error', () => {
         item.xhr = null;
-        reject(new Error('Network error'));
+        const error = new Error('Network error');
+        reject(error);
       });
-      
+
       // Abort handler
       xhr.addEventListener('abort', () => {
         item.xhr = null;
-        reject(new Error('Upload cancelled'));
+        const error = new Error('Upload cancelled');
+        error.retryable = false;
+        reject(error);
       });
-      
+
       // Timeout handler
       xhr.addEventListener('timeout', () => {
         item.xhr = null;
-        reject(new Error('Upload timeout'));
+        const error = new Error('Upload timeout');
+        error.httpStatus = 408;
+        reject(error);
       });
-      
+
       // Prepare form data
       const formData = new FormData();
       formData.append(this.fileFieldName, item.file);
       if (this.csrfToken) {
         formData.append('_csrf', this.csrfToken);
       }
-      
+
       // Add extra data if callback provided
       if (this.extraDataCallback && typeof this.extraDataCallback === 'function') {
         const extraData = this.extraDataCallback();
@@ -459,13 +494,22 @@ class FileQueueManager {
           }
         }
       }
-      
+
       // Send request
       xhr.open('POST', this.uploadUrl, true);
       xhr.setRequestHeader('X-CSRF-Token', this.csrfToken);
       xhr.timeout = 0; // No timeout for large files
       xhr.send(formData);
+    }).catch(async (error) => {
+      if (attempt < this.maxRetries && shouldRetry(error)) {
+        const delay = this.retryDelayMs * Math.pow(2, attempt);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return attemptUpload(attempt + 1);
+      }
+      throw error;
     });
+
+    return attemptUpload(0);
   }
 
   /**
@@ -540,7 +584,7 @@ class FileQueueManager {
    * @param {number} count
    */
   setConcurrentUploads(count) {
-    this.concurrentUploads = Math.max(1, Math.min(count, 5)); // Limit between 1-5
+    this.concurrentUploads = Math.max(1, Math.min(count, 3)); // Limit between 1-3
   }
 }
 

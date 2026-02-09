@@ -1598,7 +1598,7 @@ function formatDuration(seconds) {
       allowedExtensions: ['.mp4', '.avi', '.mov'],
       allowedMimeTypes: ['video/mp4', 'video/avi', 'video/quicktime'],
       csrfToken: '<%= csrfToken %>',
-      concurrentUploads: 5, // Upload 5 files simultaneously for faster upload
+      concurrentUploads: 3, // Upload 3 files simultaneously for more stable upload speed
       onProgress: (item, fileProgress, overallProgress) => {
         document.getElementById('videoUploadBar').style.width = overallProgress + '%';
         document.getElementById('videoUploadPercent').textContent = overallProgress + '%';
@@ -1690,7 +1690,7 @@ function formatDuration(seconds) {
       allowedExtensions: ['.mp3', '.wav', '.aac', '.m4a'],
       allowedMimeTypes: ['audio/mpeg', 'audio/wav', 'audio/aac', 'audio/x-m4a', 'audio/mp4'],
       csrfToken: '<%= csrfToken %>',
-      concurrentUploads: 5, // Upload 5 files simultaneously for faster upload
+      concurrentUploads: 3, // Upload 3 files simultaneously for more stable upload speed
       extraDataCallback: () => {
         const skipConversion = document.getElementById('skipConversionInput')?.value === 'true';
         return { skipConversion: skipConversion ? 'true' : 'false' };
