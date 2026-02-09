@@ -10,7 +10,7 @@ class FileQueueManager {
    * @param {string[]} options.allowedExtensions - Allowed file extensions
    * @param {string[]} options.allowedMimeTypes - Allowed MIME types
    * @param {string} options.csrfToken - CSRF token for requests
-   * @param {number} options.concurrentUploads - Number of concurrent uploads (default: 3)
+   * @param {number} options.concurrentUploads - Number of concurrent uploads (default: 5)
    * @param {Function} options.onProgress - Callback for progress updates
    * @param {Function} options.onFileComplete - Callback when a file completes
    * @param {Function} options.onAllComplete - Callback when all files complete
@@ -23,7 +23,7 @@ class FileQueueManager {
     this.allowedMimeTypes = options.allowedMimeTypes || ['video/mp4', 'video/avi', 'video/quicktime'];
     this.csrfToken = options.csrfToken || '';
     this.extraDataCallback = options.extraDataCallback || null; // Function to get extra form data
-    this.concurrentUploads = options.concurrentUploads || 3; // Default 3 concurrent uploads
+    this.concurrentUploads = options.concurrentUploads || 5; // Default 5 concurrent uploads
     
     // Callbacks
     this.onProgress = options.onProgress || (() => {});
