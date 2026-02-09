@@ -28,6 +28,13 @@ class FileQueueManager {
     this.concurrentUploads = options.concurrentUploads || 3; // Default 3 concurrent uploads
     this.maxRetries = Number.isFinite(options.maxRetries) ? options.maxRetries : 2;
     this.retryDelayMs = Number.isFinite(options.retryDelayMs) ? options.retryDelayMs : 1000;
+    this.enableChunking = options.enableChunking === true;
+    this.chunkThresholdBytes = Number.isFinite(options.chunkThresholdBytes)
+      ? options.chunkThresholdBytes
+      : 64 * 1024 * 1024;
+    this.chunkInitUrl = options.chunkInitUrl || '/api/uploads/init';
+    this.chunkUploadUrl = options.chunkUploadUrl || '/api/uploads/chunk';
+    this.chunkCompleteUrl = options.chunkCompleteUrl || '/api/uploads/complete';
     
     // Callbacks
     this.onProgress = options.onProgress || (() => {});
@@ -41,6 +48,39 @@ class FileQueueManager {
     this.isUploading = false;
     this.isCancelled = false;
     this.activeUploads = 0; // Track number of active uploads
+  }
+
+  /**
+   * Get extra data for upload
+   * @returns {Object|null}
+   */
+  getExtraData() {
+    if (this.extraDataCallback && typeof this.extraDataCallback === 'function') {
+      const extraData = this.extraDataCallback();
+      if (extraData && typeof extraData === 'object') {
+        return extraData;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Abort any active uploads for a queue item
+   * @param {Object} item
+   */
+  abortItemUploads(item) {
+    if (!item) return;
+    if (item.xhr) {
+      item.xhr.abort();
+      item.xhr = null;
+    }
+    if (item.activeXhrs) {
+      for (const xhr of item.activeXhrs) {
+        xhr.abort();
+      }
+      item.activeXhrs.clear();
+      item.activeXhrs = null;
+    }
   }
 
   /**
@@ -141,8 +181,8 @@ class FileQueueManager {
     const item = this.files[index];
     
     // If currently uploading this file, abort it
-    if (item.status === 'uploading' && item.xhr) {
-      item.xhr.abort();
+    if (item.status === 'uploading') {
+      this.abortItemUploads(item);
     }
     
     this.files.splice(index, 1);
@@ -370,6 +410,10 @@ class FileQueueManager {
    * @returns {Promise<Object>} - Server response
    */
   uploadFile(item) {
+    if (this.enableChunking && item.file.size >= this.chunkThresholdBytes) {
+      return this.uploadFileChunked(item);
+    }
+
     const shouldRetry = (error) => {
       if (this.isCancelled) return false;
       if (error && error.retryable === false) return false;
@@ -486,12 +530,10 @@ class FileQueueManager {
       }
 
       // Add extra data if callback provided
-      if (this.extraDataCallback && typeof this.extraDataCallback === 'function') {
-        const extraData = this.extraDataCallback();
-        if (extraData && typeof extraData === 'object') {
-          for (const [key, value] of Object.entries(extraData)) {
-            formData.append(key, value);
-          }
+      const extraData = this.getExtraData();
+      if (extraData) {
+        for (const [key, value] of Object.entries(extraData)) {
+          formData.append(key, value);
         }
       }
 
@@ -513,13 +555,221 @@ class FileQueueManager {
   }
 
   /**
+   * Upload a single file using chunked uploads
+   * @param {Object} item - File queue item
+   * @returns {Promise<Object>} - Server response
+   */
+  async uploadFileChunked(item) {
+    const shouldRetry = (error) => {
+      if (this.isCancelled) return false;
+      if (error && error.retryable === false) return false;
+      if (error && error.httpStatus) {
+        return error.httpStatus >= 500 || error.httpStatus === 408 || error.httpStatus === 429;
+      }
+      return true;
+    };
+
+    item.status = 'uploading';
+    item.progress = 0;
+    item.xhr = null;
+    this.onQueueUpdate(this.files);
+
+    const extraData = this.getExtraData();
+    const initPayload = {
+      type: this.fileFieldName === 'audio' ? 'audio' : 'video',
+      originalName: item.file.name,
+      size: item.file.size,
+      mimeType: item.file.type || ''
+    };
+
+    if (extraData) {
+      Object.assign(initPayload, extraData);
+    }
+
+    try {
+      const initResponse = await fetch(this.chunkInitUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': this.csrfToken
+        },
+        body: JSON.stringify(initPayload)
+      });
+
+      if (!initResponse.ok) {
+        const initData = await initResponse.json().catch(() => ({}));
+        const error = new Error(initData.error || 'Failed to initialize upload');
+        error.httpStatus = initResponse.status;
+        throw error;
+      }
+
+      const initData = await initResponse.json();
+      if (!initData.uploadId || !initData.chunkSize) {
+        throw new Error('Invalid upload initialization response');
+      }
+
+      const uploadId = initData.uploadId;
+      const chunkSize = initData.chunkSize;
+      const parallelChunks = initData.parallelChunks || 2;
+      const totalChunks = Math.ceil(item.file.size / chunkSize);
+      const chunkProgress = new Array(totalChunks).fill(0);
+      let completedChunks = 0;
+
+      item.activeXhrs = new Set();
+
+      const updateProgress = () => {
+        const totalLoaded = chunkProgress.reduce((sum, value) => sum + value, 0);
+        item.progress = Math.round((totalLoaded / item.file.size) * 100);
+        this.onProgress(item, item.progress, this.getOverallProgress());
+        this.onQueueUpdate(this.files);
+      };
+
+      const uploadChunk = (chunkIndex, attempt = 0) => new Promise((resolve, reject) => {
+        if (this.isCancelled) {
+          const cancelError = new Error('Upload cancelled');
+          cancelError.retryable = false;
+          reject(cancelError);
+          return;
+        }
+
+        const start = chunkIndex * chunkSize;
+        const end = Math.min(start + chunkSize, item.file.size);
+        const chunkBlob = item.file.slice(start, end);
+        const xhr = new XMLHttpRequest();
+        item.activeXhrs.add(xhr);
+
+        xhr.upload.addEventListener('progress', (event) => {
+          if (event.lengthComputable) {
+            chunkProgress[chunkIndex] = event.loaded;
+            updateProgress();
+          }
+        });
+
+        xhr.addEventListener('load', () => {
+          item.activeXhrs.delete(xhr);
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              const response = JSON.parse(xhr.responseText);
+              if (response.success) {
+                completedChunks += 1;
+                chunkProgress[chunkIndex] = chunkBlob.size;
+                updateProgress();
+                resolve();
+                return;
+              }
+            } catch (e) {
+              // fall through
+            }
+          }
+
+          const error = new Error(`HTTP ${xhr.status}`);
+          error.httpStatus = xhr.status;
+          error.retryable = !(xhr.status === 401 || xhr.status === 413 || (xhr.status >= 400 && xhr.status < 500 && xhr.status !== 408 && xhr.status !== 429));
+          reject(error);
+        });
+
+        xhr.addEventListener('error', () => {
+          item.activeXhrs.delete(xhr);
+          const error = new Error('Network error');
+          reject(error);
+        });
+
+        xhr.addEventListener('abort', () => {
+          item.activeXhrs.delete(xhr);
+          const error = new Error('Upload cancelled');
+          error.retryable = false;
+          reject(error);
+        });
+
+        xhr.addEventListener('timeout', () => {
+          item.activeXhrs.delete(xhr);
+          const error = new Error('Upload timeout');
+          error.httpStatus = 408;
+          reject(error);
+        });
+
+        const formData = new FormData();
+        formData.append('uploadId', uploadId);
+        formData.append('chunkIndex', String(chunkIndex));
+        formData.append('chunk', chunkBlob, `${item.file.name}.part${chunkIndex}`);
+
+        xhr.open('POST', this.chunkUploadUrl, true);
+        xhr.setRequestHeader('X-CSRF-Token', this.csrfToken);
+        xhr.timeout = 0;
+        xhr.send(formData);
+      }).catch(async (error) => {
+        if (attempt < this.maxRetries && shouldRetry(error)) {
+          const delay = this.retryDelayMs * Math.pow(2, attempt);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return uploadChunk(chunkIndex, attempt + 1);
+        }
+        throw error;
+      });
+
+      const queue = Array.from({ length: totalChunks }, (_, index) => index);
+      const workers = [];
+
+      for (let i = 0; i < Math.min(parallelChunks, totalChunks); i += 1) {
+        workers.push((async () => {
+          while (queue.length > 0 && !this.isCancelled) {
+            const chunkIndex = queue.shift();
+            await uploadChunk(chunkIndex);
+          }
+        })());
+      }
+
+      await Promise.all(workers);
+
+      if (this.isCancelled) {
+        const error = new Error('Upload cancelled');
+        error.retryable = false;
+        throw error;
+      }
+
+      if (completedChunks !== totalChunks) {
+        throw new Error('Incomplete upload');
+      }
+
+      const completeResponse = await fetch(this.chunkCompleteUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': this.csrfToken
+        },
+        body: JSON.stringify({ uploadId, totalChunks })
+      });
+
+      if (!completeResponse.ok) {
+        const completeData = await completeResponse.json().catch(() => ({}));
+        const error = new Error(completeData.error || 'Failed to finalize upload');
+        error.httpStatus = completeResponse.status;
+        throw error;
+      }
+
+      const completeData = await completeResponse.json();
+      item.progress = 100;
+      this.onProgress(item, item.progress, this.getOverallProgress());
+      this.onQueueUpdate(this.files);
+      return completeData;
+    } finally {
+      if (item.activeXhrs) {
+        for (const xhr of item.activeXhrs) {
+          xhr.abort();
+        }
+        item.activeXhrs.clear();
+        item.activeXhrs = null;
+      }
+    }
+  }
+
+  /**
    * Cancel current upload
    */
   cancelCurrent() {
     if (this.currentIndex >= 0 && this.currentIndex < this.files.length) {
       const item = this.files[this.currentIndex];
-      if (item.xhr) {
-        item.xhr.abort();
+      if (item.status === 'uploading') {
+        this.abortItemUploads(item);
         item.status = 'pending'; // Reset to pending so it can be retried
         item.progress = 0;
         item.error = null;
@@ -536,8 +786,8 @@ class FileQueueManager {
     
     // Abort all active uploads
     for (const file of this.files) {
-      if (file.status === 'uploading' && file.xhr) {
-        file.xhr.abort();
+      if (file.status === 'uploading') {
+        this.abortItemUploads(file);
         file.status = 'pending';
         file.progress = 0;
         file.error = null;
@@ -584,7 +834,7 @@ class FileQueueManager {
    * @param {number} count
    */
   setConcurrentUploads(count) {
-    this.concurrentUploads = Math.max(1, Math.min(count, 3)); // Limit between 1-3
+    this.concurrentUploads = Math.max(1, Math.min(count, 6)); // Limit between 1-6
   }
 }
 

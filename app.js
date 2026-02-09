@@ -6,6 +6,7 @@ const engine = require('ejs-mate');
 const os = require('os');
 const multer = require('multer');
 const fs = require('fs');
+const crypto = require('crypto');
 const csrf = require('csrf');
 const { v4: uuidv4 } = require('uuid');
 const session = require('express-session');
@@ -16,13 +17,14 @@ const rateLimit = require('express-rate-limit');
 const User = require('./models/User');
 const { db, checkIfUsersExist, checkIfAdminExists, waitForDbInit, verifyTables, checkConnectivity, closeDatabase } = require('./db/database');
 const systemMonitor = require('./services/systemMonitor');
-const { uploadVideo, upload, uploadAudio, uploadBackup, checkStorageLimit } = require('./middleware/uploadMiddleware');
-const { ensureDirectories } = require('./utils/storage');
+const { uploadVideo, upload, uploadAudio, uploadBackup, uploadChunk, checkStorageLimit } = require('./middleware/uploadMiddleware');
+const { ensureDirectories, getUniqueFilename, paths } = require('./utils/storage');
 const { getVideoInfo, generateThumbnail } = require('./utils/videoProcessor');
 const ProcessingQueue = require('./utils/processingQueue');
 const Video = require('./models/Video');
 const Audio = require('./models/Audio');
 const Playlist = require('./models/Playlist');
+const StorageService = require('./services/storageService');
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
 const streamingService = require('./services/streamingService');
@@ -39,6 +41,18 @@ ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 const uploadProcessingConcurrency = Math.max(1, parseInt(process.env.UPLOAD_PROCESSING_CONCURRENCY || '1', 10));
 const videoProcessingQueue = new ProcessingQueue({ concurrency: uploadProcessingConcurrency, name: 'video-processing' });
 const audioProcessingQueue = new ProcessingQueue({ concurrency: uploadProcessingConcurrency, name: 'audio-processing' });
+const parsedUploadChunkSizeMb = parseInt(process.env.UPLOAD_CHUNK_SIZE_MB || '8', 10);
+const UPLOAD_CHUNK_SIZE = Number.isFinite(parsedUploadChunkSizeMb) && parsedUploadChunkSizeMb > 0
+  ? parsedUploadChunkSizeMb * 1024 * 1024
+  : 8 * 1024 * 1024;
+const parsedUploadChunkConcurrency = parseInt(process.env.UPLOAD_CHUNK_CONCURRENCY || '4', 10);
+const UPLOAD_CHUNK_CONCURRENCY = Number.isFinite(parsedUploadChunkConcurrency) && parsedUploadChunkConcurrency > 0
+  ? parsedUploadChunkConcurrency
+  : 4;
+const parsedUploadChunkThresholdMb = parseInt(process.env.UPLOAD_CHUNK_THRESHOLD_MB || '64', 10);
+const UPLOAD_CHUNK_THRESHOLD = Number.isFinite(parsedUploadChunkThresholdMb) && parsedUploadChunkThresholdMb > 0
+  ? parsedUploadChunkThresholdMb * 1024 * 1024
+  : 64 * 1024 * 1024;
 const pendingVideoMetadataRefresh = new Set();
 const pendingAudioMetadataRefresh = new Set();
 // Track if we're shutting down to prevent multiple shutdown attempts
@@ -375,6 +389,167 @@ const queueAudioMetadataRefresh = (appInstance, audio) => {
   });
 };
 
+const queueVideoProcessing = (appInstance, videoId, filePath, filename, formatFallback = 'mp4') => {
+  videoProcessingQueue.add(async () => {
+    try {
+      await waitForUploadsToIdle(appInstance);
+      const fullFilePath = path.join(__dirname, 'public', filePath);
+      const thumbnailFilename = `thumb-${path.parse(filename).name}.jpg`;
+      const thumbnailPath = `/uploads/thumbnails/${thumbnailFilename}`;
+
+      const metadata = await new Promise((resolve, reject) => {
+        ffmpeg.ffprobe(fullFilePath, (err, data) => {
+          if (err) return reject(err);
+          resolve(data);
+        });
+      });
+
+      const videoStream = metadata.streams.find(stream => stream.codec_type === 'video');
+      const duration = metadata.format.duration || 0;
+      const detectedFormat = metadata.format.format_name || formatFallback;
+      const resolution = videoStream ? `${videoStream.width}x${videoStream.height}` : '';
+      const bitrate = metadata.format.bit_rate ? Math.round(parseInt(metadata.format.bit_rate) / 1000) : null;
+
+      let fps = null;
+      if (videoStream && videoStream.avg_frame_rate) {
+        const fpsRatio = videoStream.avg_frame_rate.split('/');
+        if (fpsRatio.length === 2 && parseInt(fpsRatio[1]) !== 0) {
+          fps = Math.round((parseInt(fpsRatio[0]) / parseInt(fpsRatio[1]) * 100)) / 100;
+        } else {
+          fps = parseInt(fpsRatio[0]) || null;
+        }
+      }
+
+      let finalThumbnailPath = null;
+      try {
+        await new Promise((resolve) => {
+          ffmpeg(fullFilePath)
+            .screenshots({
+              timestamps: ['10%'],
+              filename: thumbnailFilename,
+              folder: path.join(__dirname, 'public', 'uploads', 'thumbnails'),
+              size: '854x480'
+            })
+            .on('end', resolve)
+            .on('error', (err) => {
+              console.error('Thumbnail generation error:', err.message);
+              resolve();
+            });
+        });
+        finalThumbnailPath = thumbnailPath;
+      } catch (thumbErr) {
+        console.error('Thumbnail generation error:', thumbErr.message);
+      }
+
+      const updateData = {
+        duration,
+        format: detectedFormat,
+        resolution,
+        bitrate,
+        fps
+      };
+
+      if (finalThumbnailPath) {
+        updateData.thumbnail_path = finalThumbnailPath;
+      }
+
+      await Video.update(videoId, updateData);
+    } catch (error) {
+      console.error('Background video metadata processing failed:', error);
+    }
+  });
+};
+
+const queueAudioProcessing = (appInstance, audioId, filePath, filename, skipConversion = false) => {
+  audioProcessingQueue.add(async () => {
+    let currentFilePath = path.join(__dirname, 'public', filePath);
+    let updatedFilePath = filePath;
+    const updateData = {};
+
+    try {
+      await waitForUploadsToIdle(appInstance);
+      if (!skipConversion) {
+        const { processAudioForStreaming } = require('./utils/audioProcessor');
+        console.log(`[AudioUpload] Processing audio for streaming: ${filename}`);
+        const result = await processAudioForStreaming(currentFilePath);
+        currentFilePath = result.outputPath;
+        const finalFileName = path.basename(result.outputPath);
+        updatedFilePath = `/uploads/audios/${finalFileName}`;
+        updateData.filepath = updatedFilePath;
+        updateData.format = path.extname(finalFileName).replace('.', '').toUpperCase();
+        updateData.file_size = fs.statSync(currentFilePath).size;
+
+        if (finalFileName !== filename) {
+          const legacyPath = path.join(__dirname, 'public', filePath);
+          try {
+            if (!fs.existsSync(legacyPath)) {
+              fs.symlinkSync(currentFilePath, legacyPath);
+            }
+          } catch (linkErr) {
+            console.error(`[AudioUpload] Failed to create legacy symlink: ${linkErr.message}`);
+          }
+        }
+      }
+
+      const metadata = await new Promise((resolve, reject) => {
+        ffmpeg.ffprobe(currentFilePath, (err, data) => {
+          if (err) return reject(err);
+          resolve(data);
+        });
+      });
+
+      updateData.duration = metadata.format.duration || 0;
+
+      if (Object.keys(updateData).length > 0) {
+        await Audio.update(audioId, updateData);
+      }
+    } catch (processError) {
+      console.error(`[AudioUpload] Background processing failed: ${processError.message}`);
+    }
+  });
+};
+
+const generateUploadId = () => {
+  if (typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${crypto.randomBytes(8).toString('hex')}`;
+};
+
+const getUploadChunkDir = (uploadId) => path.join(paths.uploadChunks, uploadId);
+
+const readUploadMetadata = async (uploadDir) => {
+  const metadataPath = path.join(uploadDir, 'metadata.json');
+  const raw = await fs.promises.readFile(metadataPath, 'utf8');
+  return JSON.parse(raw);
+};
+
+const writeUploadMetadata = async (uploadDir, metadata) => {
+  const metadataPath = path.join(uploadDir, 'metadata.json');
+  await fs.promises.writeFile(metadataPath, JSON.stringify(metadata, null, 2));
+};
+
+const appendChunksToFile = async (chunkDir, finalPath, totalChunks) => {
+  await fs.promises.mkdir(path.dirname(finalPath), { recursive: true });
+  const outputStream = fs.createWriteStream(finalPath);
+
+  for (let index = 0; index < totalChunks; index += 1) {
+    const chunkPath = path.join(chunkDir, `chunk-${index}`);
+    await new Promise((resolve, reject) => {
+      const inputStream = fs.createReadStream(chunkPath);
+      inputStream.on('error', reject);
+      inputStream.on('end', resolve);
+      inputStream.pipe(outputStream, { end: false });
+    });
+  }
+
+  await new Promise((resolve, reject) => {
+    outputStream.on('error', reject);
+    outputStream.on('finish', resolve);
+    outputStream.end();
+  });
+};
+
 app.locals.helpers = {
   getUsername: function (req) {
     if (req.session && req.session.username) {
@@ -592,6 +767,9 @@ app.use((req, res, next) => {
   // Skip timeout for upload endpoints - they need more time for large files
   const isUploadEndpoint = req.path.includes('/api/videos/upload') ||
     req.path.includes('/api/audios/upload') ||
+    req.path.includes('/api/uploads/init') ||
+    req.path.includes('/api/uploads/chunk') ||
+    req.path.includes('/api/uploads/complete') ||
     req.path.includes('/api/drive/import') ||
     req.path.includes('/api/backup/import') || // Added: backup import needs more time
     req.path.includes('/api/backup/export'); // Added: backup export needs more time
@@ -1282,7 +1460,11 @@ app.get('/gallery', isAuthenticated, canViewVideos, async (req, res) => {
       audios: audios,
       activeTab: tab,
       permissions: permissions,
-      viewPermissionDenied: viewPermissionDenied
+      viewPermissionDenied: viewPermissionDenied,
+      uploadChunkConfig: {
+        enabled: true,
+        thresholdBytes: UPLOAD_CHUNK_THRESHOLD
+      }
     });
   } catch (error) {
     console.error('Gallery error:', error);
@@ -1936,9 +2118,6 @@ app.get('/api/users/:id/permissions', isAdmin, async (req, res) => {
   }
 });
 
-// Storage Limit API
-const StorageService = require('./services/storageService');
-
 app.get('/api/users/:id/storage', isAuthenticated, async (req, res) => {
   try {
     const userId = req.params.id;
@@ -2346,6 +2525,186 @@ app.post('/upload/video', isAuthenticated, uploadVideo.single('video'), async (r
   }
 });
 
+app.post('/api/uploads/init', isAuthenticated, async (req, res) => {
+  try {
+    const { type, originalName, size, mimeType, skipConversion } = req.body || {};
+    const normalizedType = typeof type === 'string' ? type.toLowerCase() : '';
+    const fileSize = parseInt(size, 10);
+
+    if (!normalizedType || !['video', 'audio'].includes(normalizedType)) {
+      return res.status(400).json({ success: false, error: 'Invalid upload type.' });
+    }
+    if (!originalName || !Number.isFinite(fileSize) || fileSize <= 0) {
+      return res.status(400).json({ success: false, error: 'Invalid upload metadata.' });
+    }
+
+    const limit = await StorageService.getUserStorageLimit(req.session.userId);
+    if (limit && limit > 0) {
+      const result = await StorageService.canUpload(req.session.userId, fileSize);
+      if (!result.allowed) {
+        return res.status(413).json({
+          success: false,
+          error: 'Storage limit exceeded',
+          message: `Storage limit exceeded. Current usage: ${StorageService.formatBytes(result.currentUsage)}, Limit: ${StorageService.formatBytes(result.limit)}`
+        });
+      }
+    }
+
+    const uploadId = generateUploadId();
+    const uploadDir = getUploadChunkDir(uploadId);
+    await fs.promises.mkdir(uploadDir, { recursive: true });
+
+    const metadata = {
+      uploadId,
+      userId: req.session.userId,
+      type: normalizedType,
+      originalName,
+      size: fileSize,
+      mimeType: mimeType || null,
+      skipConversion: skipConversion === 'true',
+      createdAt: new Date().toISOString()
+    };
+    await writeUploadMetadata(uploadDir, metadata);
+
+    res.json({
+      success: true,
+      uploadId,
+      chunkSize: UPLOAD_CHUNK_SIZE,
+      parallelChunks: UPLOAD_CHUNK_CONCURRENCY
+    });
+  } catch (error) {
+    console.error('Chunked upload init error:', error);
+    res.status(500).json({ success: false, error: 'Failed to initialize upload' });
+  }
+});
+
+app.post('/api/uploads/chunk', isAuthenticated, (req, res, next) => {
+  uploadChunk.single('chunk')(req, res, (err) => {
+    if (err) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(413).json({
+          success: false,
+          error: 'Chunk too large.'
+        });
+      }
+      return res.status(400).json({
+        success: false,
+        error: err.message
+      });
+    }
+    next();
+  });
+}, async (req, res) => {
+  try {
+    const { uploadId, chunkIndex } = req.body || {};
+    const parsedIndex = parseInt(chunkIndex, 10);
+    if (!uploadId || !Number.isFinite(parsedIndex) || parsedIndex < 0) {
+      return res.status(400).json({ success: false, error: 'Invalid chunk metadata.' });
+    }
+    if (!req.file?.buffer) {
+      return res.status(400).json({ success: false, error: 'No chunk provided.' });
+    }
+
+    const uploadDir = getUploadChunkDir(uploadId);
+    const metadata = await readUploadMetadata(uploadDir);
+    if (metadata.userId !== req.session.userId) {
+      return res.status(403).json({ success: false, error: 'Not authorized.' });
+    }
+
+    const chunkPath = path.join(uploadDir, `chunk-${parsedIndex}`);
+    await fs.promises.writeFile(chunkPath, req.file.buffer);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Chunked upload chunk error:', error);
+    res.status(500).json({ success: false, error: 'Failed to upload chunk' });
+  }
+});
+
+app.post('/api/uploads/complete', isAuthenticated, async (req, res) => {
+  try {
+    const { uploadId, totalChunks } = req.body || {};
+    const parsedTotalChunks = parseInt(totalChunks, 10);
+    if (!uploadId || !Number.isFinite(parsedTotalChunks) || parsedTotalChunks <= 0) {
+      return res.status(400).json({ success: false, error: 'Invalid completion metadata.' });
+    }
+
+    const uploadDir = getUploadChunkDir(uploadId);
+    const metadata = await readUploadMetadata(uploadDir);
+    if (metadata.userId !== req.session.userId) {
+      return res.status(403).json({ success: false, error: 'Not authorized.' });
+    }
+
+    for (let index = 0; index < parsedTotalChunks; index += 1) {
+      const chunkPath = path.join(uploadDir, `chunk-${index}`);
+      if (!fs.existsSync(chunkPath)) {
+        return res.status(400).json({ success: false, error: `Missing chunk ${index}` });
+      }
+    }
+
+    const finalFilename = getUniqueFilename(metadata.originalName);
+    const targetDir = metadata.type === 'video' ? paths.videos : paths.audios;
+    const finalPath = path.join(targetDir, finalFilename);
+
+    await appendChunksToFile(uploadDir, finalPath, parsedTotalChunks);
+    const finalSize = fs.statSync(finalPath).size;
+
+    if (metadata.type === 'video') {
+      const filePath = `/uploads/videos/${finalFilename}`;
+      const format = path.extname(finalFilename).replace('.', '');
+      const videoData = {
+        title: path.parse(metadata.originalName).name,
+        filepath: filePath,
+        thumbnail_path: null,
+        file_size: finalSize,
+        duration: 0,
+        format,
+        resolution: '',
+        bitrate: null,
+        fps: null,
+        user_id: req.session.userId
+      };
+
+      const video = await Video.create(videoData);
+
+      res.json({
+        success: true,
+        message: 'Video uploaded successfully. Metadata sedang diproses di background.',
+        video
+      });
+
+      queueVideoProcessing(req.app, video.id, filePath, finalFilename, format);
+    } else {
+      const filePath = `/uploads/audios/${finalFilename}`;
+      const format = path.extname(finalFilename).replace('.', '').toUpperCase();
+      const audioData = {
+        title: path.parse(metadata.originalName).name,
+        filepath: filePath,
+        file_size: finalSize,
+        duration: 0,
+        format,
+        user_id: req.session.userId
+      };
+
+      const audio = await Audio.create(audioData);
+
+      res.json({
+        success: true,
+        message: metadata.skipConversion
+          ? 'Audio uploaded (tanpa konversi)'
+          : 'Audio uploaded. Optimasi sedang diproses di background.',
+        audio
+      });
+
+      queueAudioProcessing(req.app, audio.id, filePath, finalFilename, metadata.skipConversion);
+    }
+
+    await fs.promises.rm(uploadDir, { recursive: true, force: true });
+  } catch (error) {
+    console.error('Chunked upload completion error:', error);
+    res.status(500).json({ success: false, error: 'Failed to finalize upload' });
+  }
+});
+
 app.post('/api/videos/upload', isAuthenticated, (req, res, next) => {
   uploadVideo.single('video')(req, res, (err) => {
     if (err) {
@@ -2403,74 +2762,7 @@ app.post('/api/videos/upload', isAuthenticated, (req, res, next) => {
       video
     });
 
-    videoProcessingQueue.add(async () => {
-      try {
-        await waitForUploadsToIdle(req.app);
-        const fullFilePath = path.join(__dirname, 'public', filePath);
-        const thumbnailFilename = `thumb-${path.parse(req.file.filename).name}.jpg`;
-        const thumbnailPath = `/uploads/thumbnails/${thumbnailFilename}`;
-
-        const metadata = await new Promise((resolve, reject) => {
-          ffmpeg.ffprobe(fullFilePath, (err, metadata) => {
-            if (err) return reject(err);
-            resolve(metadata);
-          });
-        });
-
-        const videoStream = metadata.streams.find(stream => stream.codec_type === 'video');
-        const duration = metadata.format.duration || 0;
-        const detectedFormat = metadata.format.format_name || format;
-        const resolution = videoStream ? `${videoStream.width}x${videoStream.height}` : '';
-        const bitrate = metadata.format.bit_rate ? Math.round(parseInt(metadata.format.bit_rate) / 1000) : null;
-
-        let fps = null;
-        if (videoStream && videoStream.avg_frame_rate) {
-          const fpsRatio = videoStream.avg_frame_rate.split('/');
-          if (fpsRatio.length === 2 && parseInt(fpsRatio[1]) !== 0) {
-            fps = Math.round((parseInt(fpsRatio[0]) / parseInt(fpsRatio[1]) * 100)) / 100;
-          } else {
-            fps = parseInt(fpsRatio[0]) || null;
-          }
-        }
-
-        let finalThumbnailPath = null;
-        try {
-          await new Promise((resolve) => {
-            ffmpeg(fullFilePath)
-              .screenshots({
-                timestamps: ['10%'],
-                filename: thumbnailFilename,
-                folder: path.join(__dirname, 'public', 'uploads', 'thumbnails'),
-                size: '854x480'
-              })
-              .on('end', resolve)
-              .on('error', (err) => {
-                console.error('Thumbnail generation error:', err.message);
-                resolve();
-              });
-          });
-          finalThumbnailPath = thumbnailPath;
-        } catch (thumbErr) {
-          console.error('Thumbnail generation error:', thumbErr.message);
-        }
-
-        const updateData = {
-          duration,
-          format: detectedFormat,
-          resolution,
-          bitrate,
-          fps
-        };
-
-        if (finalThumbnailPath) {
-          updateData.thumbnail_path = finalThumbnailPath;
-        }
-
-        await Video.update(video.id, updateData);
-      } catch (error) {
-        console.error('Background video metadata processing failed:', error);
-      }
-    });
+    queueVideoProcessing(req.app, video.id, filePath, req.file.filename, format);
 
   } catch (error) {
     console.error('Upload error details:', error);
@@ -4407,52 +4699,7 @@ app.post('/api/audios/upload', isAuthenticated, (req, res, next) => {
       audio
     });
 
-    audioProcessingQueue.add(async () => {
-      let currentFilePath = path.join(__dirname, 'public', 'uploads', 'audios', req.file.filename);
-      let updatedFilePath = filePath;
-      const updateData = {};
-
-      try {
-        await waitForUploadsToIdle(req.app);
-        if (!skipConversion) {
-          const { processAudioForStreaming } = require('./utils/audioProcessor');
-          console.log(`[AudioUpload] Processing audio for streaming: ${req.file.filename}`);
-          const result = await processAudioForStreaming(currentFilePath);
-          currentFilePath = result.outputPath;
-          const finalFileName = path.basename(result.outputPath);
-          updatedFilePath = `/uploads/audios/${finalFileName}`;
-          updateData.filepath = updatedFilePath;
-          updateData.format = path.extname(finalFileName).replace('.', '').toUpperCase();
-          updateData.file_size = fs.statSync(currentFilePath).size;
-
-          if (finalFileName !== req.file.filename) {
-            const legacyPath = path.join(__dirname, 'public', filePath);
-            try {
-              if (!fs.existsSync(legacyPath)) {
-                fs.symlinkSync(currentFilePath, legacyPath);
-              }
-            } catch (linkErr) {
-              console.error(`[AudioUpload] Failed to create legacy symlink: ${linkErr.message}`);
-            }
-          }
-        }
-
-        const metadata = await new Promise((resolve, reject) => {
-          ffmpeg.ffprobe(currentFilePath, (err, metadata) => {
-            if (err) return reject(err);
-            resolve(metadata);
-          });
-        });
-
-        updateData.duration = metadata.format.duration || 0;
-
-        if (Object.keys(updateData).length > 0) {
-          await Audio.update(audio.id, updateData);
-        }
-      } catch (processError) {
-        console.error(`[AudioUpload] Background processing failed: ${processError.message}`);
-      }
-    });
+    queueAudioProcessing(req.app, audio.id, filePath, req.file.filename, skipConversion);
 
   } catch (error) {
     console.error('Audio upload error:', error);
