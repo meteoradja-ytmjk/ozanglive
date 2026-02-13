@@ -112,17 +112,19 @@
 ```bash
 curl -fsSL https://raw.githubusercontent.com/meteoradja-ytmjk/ozanglive/main/install.sh | bash
 ```
-### Untuk reset VPS jika Sebelumnya sudah ada / Terinstal 
+### Untuk reset VPS jika sebelumnya sudah terinstal
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/meteoradja-ytmjk/ozanglive/main/uninstall.sh | bash
 ```
 
-> 💡 **Installer otomatis mendeteksi** jika sudah ada instalasi sebelumnya dan memberikan pilihan:
-> - **Install ulang** - Hapus instalasi lama dan install fresh
-> - **Update saja** - Pertahankan data, update kode terbaru
-> - **Batalkan** - Tidak melakukan apa-apa
-> 💡 Installer otomatis mendeteksi instalasi sebelumnya dan memberikan pilihan: **Install ulang**, **Update saja**, atau **Batalkan**
+Jika disk masih terlihat terpakai setelah uninstall (cache/log OS), jalankan mode pembersihan lebih dalam:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/meteoradja-ytmjk/ozanglive/main/uninstall.sh | bash -s -- --full-clean
+```
+
+> 💡 Catatan: penggunaan disk VPS tidak hanya dari folder aplikasi. Package cache, PM2 logs, journal logs, dan folder cache user juga bisa tetap terhitung.
 
 ### Manual Installation
 
