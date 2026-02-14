@@ -2286,6 +2286,424 @@ app.get('/api/system-stats', isAuthenticated, async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+const DISK_CLEANUP_ROOTS = [
+  path.join(__dirname, 'public', 'uploads', 'videos'),
+  path.join(__dirname, 'public', 'uploads', 'audios'),
+  path.join(__dirname, 'public', 'uploads', 'thumbnails')
+];
+
+const STALE_CLEANUP_ROOTS = {
+  uploadChunks: {
+    label: 'Cache Upload Chunks (lama)',
+    path: path.join(__dirname, 'tmp', 'upload-chunks'),
+    maxAgeMs: 6 * 60 * 60 * 1000
+  },
+  streamTemp: {
+    label: 'Cache Streaming Temp (lama)',
+    path: path.join(__dirname, 'temp'),
+    maxAgeMs: 6 * 60 * 60 * 1000,
+    filePattern: /^playlist_.*\.txt$/
+  },
+  logArchive: {
+    label: 'Log Lama (arsip)',
+    path: path.join(__dirname, 'logs'),
+    maxAgeMs: 24 * 60 * 60 * 1000,
+    filePattern: /^app\.log\./
+  }
+};
+
+async function getDirectorySize(targetPath) {
+  const stats = await fs.promises.stat(targetPath);
+  if (!stats.isDirectory()) {
+    return stats.size;
+  }
+
+  const entries = await fs.promises.readdir(targetPath, { withFileTypes: true });
+  let totalSize = 0;
+
+  for (const entry of entries) {
+    const fullPath = path.join(targetPath, entry.name);
+    if (entry.isDirectory()) {
+      totalSize += await getDirectorySize(fullPath);
+    } else if (entry.isFile()) {
+      const fileStats = await fs.promises.stat(fullPath);
+      totalSize += fileStats.size;
+    }
+  }
+
+  return totalSize;
+}
+
+function isWithinCleanupRoots(targetPath) {
+  const normalized = path.resolve(targetPath);
+  return DISK_CLEANUP_ROOTS.some((rootPath) => {
+    const allowedPath = path.resolve(rootPath);
+    return normalized === allowedPath || normalized.startsWith(allowedPath + path.sep);
+  });
+}
+
+function isWithinSpecificRoot(targetPath, rootPath) {
+  const normalized = path.resolve(targetPath);
+  const allowedPath = path.resolve(rootPath);
+  return normalized === allowedPath || normalized.startsWith(allowedPath + path.sep);
+}
+
+function safeUnlink(filePath) {
+  if (!filePath) {
+    return;
+  }
+
+  const fullPath = path.resolve(__dirname, 'public', filePath.replace(/^\//, ''));
+  if (!isWithinCleanupRoots(fullPath)) {
+    return;
+  }
+
+  if (fs.existsSync(fullPath)) {
+    fs.unlinkSync(fullPath);
+  }
+}
+
+function queryAll(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    db.all(sql, params, (err, rows) => {
+      if (err) {
+        return reject(err);
+      }
+      resolve(rows || []);
+    });
+  });
+}
+
+function runQuery(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    db.run(sql, params, function (err) {
+      if (err) {
+        return reject(err);
+      }
+      resolve(this);
+    });
+  });
+}
+
+async function getFileSizeSafe(filePath, fallbackSize = 0) {
+  try {
+    if (filePath && fs.existsSync(filePath)) {
+      return (await fs.promises.stat(filePath)).size;
+    }
+  } catch (error) {
+    console.warn('Failed to get file size:', error.message);
+  }
+  return Number(fallbackSize) || 0;
+}
+
+async function listFilesRecursive(basePath, maxDepth = 3) {
+  const files = [];
+  if (!fs.existsSync(basePath)) {
+    return files;
+  }
+
+  const stack = [{ dir: basePath, depth: 0 }];
+  while (stack.length > 0) {
+    const current = stack.pop();
+    const entries = await fs.promises.readdir(current.dir, { withFileTypes: true });
+
+    for (const entry of entries) {
+      const fullPath = path.join(current.dir, entry.name);
+      if (entry.isDirectory()) {
+        if (current.depth < maxDepth) {
+          stack.push({ dir: fullPath, depth: current.depth + 1 });
+        }
+        continue;
+      }
+
+      if (entry.isFile()) {
+        files.push(fullPath);
+      }
+    }
+  }
+
+  return files;
+}
+
+async function collectStaleCleanupOptions() {
+  const now = Date.now();
+  const staleOptions = [];
+
+  for (const [rootKey, rootConfig] of Object.entries(STALE_CLEANUP_ROOTS)) {
+    if (!fs.existsSync(rootConfig.path)) {
+      continue;
+    }
+
+    const files = await listFilesRecursive(rootConfig.path, 4);
+    for (const fullPath of files) {
+      const fileName = path.basename(fullPath);
+      if (rootConfig.filePattern && !rootConfig.filePattern.test(fileName)) {
+        continue;
+      }
+
+      const fileStats = await fs.promises.stat(fullPath);
+      const isStale = now - fileStats.mtimeMs >= rootConfig.maxAgeMs;
+      if (!isStale) {
+        continue;
+      }
+
+      const relativePath = path.relative(rootConfig.path, fullPath);
+      staleOptions.push({
+        id: `stale:${rootKey}:${relativePath}`,
+        name: relativePath,
+        type: 'file',
+        category: rootConfig.label,
+        size: fileStats.size
+      });
+    }
+  }
+
+  return staleOptions;
+}
+
+async function collectOrphanUploadOptions() {
+  const oneDayMs = 24 * 60 * 60 * 1000;
+  const now = Date.now();
+  const options = [];
+
+  const [allVideos, allAudios] = await Promise.all([
+    queryAll('SELECT filepath FROM videos').catch(() => []),
+    queryAll('SELECT filepath FROM audios').catch(() => [])
+  ]);
+
+  const usedPaths = new Set([
+    ...allVideos.map((row) => row.filepath).filter(Boolean),
+    ...allAudios.map((row) => row.filepath).filter(Boolean)
+  ]);
+
+  const roots = [
+    { dir: path.join(__dirname, 'public', 'uploads', 'videos'), category: 'Sisa Upload Video (orphan)' },
+    { dir: path.join(__dirname, 'public', 'uploads', 'audios'), category: 'Sisa Upload Audio (orphan)' }
+  ];
+
+  for (const root of roots) {
+    if (!fs.existsSync(root.dir)) {
+      continue;
+    }
+
+    const files = await listFilesRecursive(root.dir, 2);
+    for (const fullPath of files) {
+      const relativeWebPath = `/${path.relative(path.join(__dirname, 'public'), fullPath).replace(/\\/g, '/')}`;
+      if (usedPaths.has(relativeWebPath)) {
+        continue;
+      }
+
+      const fileStats = await fs.promises.stat(fullPath);
+      if (now - fileStats.mtimeMs < oneDayMs) {
+        continue;
+      }
+
+      options.push({
+        id: `orphan:${relativeWebPath}`,
+        name: path.basename(fullPath),
+        type: 'file',
+        category: root.category,
+        size: fileStats.size
+      });
+    }
+  }
+
+  return options;
+}
+
+app.get('/api/system/cleanup-options', isAuthenticated, async (req, res) => {
+  try {
+    const userId = req.session.userId;
+    const options = [];
+
+    const [videos, audios, staleOptions, orphanUploadOptions] = await Promise.all([
+      queryAll(
+        'SELECT id, title, filepath, thumbnail_path, file_size FROM videos WHERE user_id = ? ORDER BY created_at DESC',
+        [userId]
+      ).catch(() => []),
+      queryAll(
+        'SELECT id, title, filepath, file_size FROM audios WHERE user_id = ? ORDER BY created_at DESC',
+        [userId]
+      ).catch(() => []),
+      collectStaleCleanupOptions().catch((error) => {
+        console.warn('Stale cleanup options error:', error.message);
+        return [];
+      }),
+      collectOrphanUploadOptions().catch((error) => {
+        console.warn('Orphan upload options error:', error.message);
+        return [];
+      })
+    ]);
+
+    for (const video of videos) {
+      const fullPath = video.filepath ? path.join(__dirname, 'public', video.filepath) : null;
+      options.push({
+        id: `video:${video.id}`,
+        name: video.title || path.basename(video.filepath || ''),
+        type: 'file',
+        category: 'Video Saya',
+        size: await getFileSizeSafe(fullPath, video.file_size)
+      });
+    }
+
+    for (const audio of audios) {
+      const fullPath = audio.filepath ? path.join(__dirname, 'public', audio.filepath) : null;
+      options.push({
+        id: `audio:${audio.id}`,
+        name: audio.title || path.basename(audio.filepath || ''),
+        type: 'file',
+        category: 'Audio Saya',
+        size: await getFileSizeSafe(fullPath, audio.file_size)
+      });
+    }
+
+    const userThumbnailFolder = path.join(__dirname, 'public', 'uploads', 'thumbnails', String(userId));
+    if (fs.existsSync(userThumbnailFolder)) {
+      options.push({
+        id: `thumb-folder:${userId}`,
+        name: path.basename(userThumbnailFolder),
+        type: 'folder',
+        category: 'Folder Thumbnail Saya',
+        size: await getDirectorySize(userThumbnailFolder)
+      });
+    }
+
+    options.push(...orphanUploadOptions, ...staleOptions);
+    options.sort((a, b) => b.size - a.size);
+    res.json({ success: true, options });
+  } catch (error) {
+    console.error('Cleanup options error:', error);
+    res.status(500).json({ success: false, message: 'Gagal memuat daftar file/folder.' });
+  }
+});
+
+app.post('/api/system/cleanup', isAuthenticated, async (req, res) => {
+  try {
+    const selectedItems = Array.isArray(req.body?.items) ? req.body.items : [];
+    if (selectedItems.length === 0) {
+      return res.status(400).json({ success: false, message: 'Pilih minimal satu folder/file.' });
+    }
+
+    const userId = req.session.userId;
+    let deletedItems = 0;
+    let freedBytes = 0;
+
+    for (const selectedItem of selectedItems) {
+      if (typeof selectedItem !== 'string' || !selectedItem.includes(':')) {
+        continue;
+      }
+
+      const [itemType, ...rawParts] = selectedItem.split(':');
+      const itemId = rawParts.join(':');
+
+      if (itemType === 'video') {
+        const video = await Video.findById(itemId);
+        if (!video || video.user_id !== userId) {
+          continue;
+        }
+
+        const videoPath = path.join(__dirname, 'public', video.filepath);
+        if (fs.existsSync(videoPath)) {
+          freedBytes += (await fs.promises.stat(videoPath)).size;
+        }
+
+        safeUnlink(video.filepath);
+        safeUnlink(video.thumbnail_path);
+        await runQuery('DELETE FROM videos WHERE id = ? AND user_id = ?', [video.id, userId]);
+        deletedItems += 1;
+        continue;
+      }
+
+      if (itemType === 'audio') {
+        const audio = await Audio.findById(itemId);
+        if (!audio || audio.user_id !== userId) {
+          continue;
+        }
+
+        const audioPath = path.join(__dirname, 'public', audio.filepath);
+        if (fs.existsSync(audioPath)) {
+          freedBytes += (await fs.promises.stat(audioPath)).size;
+        }
+
+        safeUnlink(audio.filepath);
+        await runQuery('DELETE FROM audios WHERE id = ? AND user_id = ?', [audio.id, userId]);
+        deletedItems += 1;
+        continue;
+      }
+
+      if (itemType === 'thumb-folder' && itemId === String(userId)) {
+        const folderPath = path.join(__dirname, 'public', 'uploads', 'thumbnails', String(userId));
+        if (!isWithinCleanupRoots(folderPath) || !fs.existsSync(folderPath)) {
+          continue;
+        }
+
+        freedBytes += await getDirectorySize(folderPath);
+        await fs.promises.rm(folderPath, { recursive: true, force: true });
+        deletedItems += 1;
+        continue;
+      }
+
+      if (itemType === 'orphan') {
+        const orphanPath = itemId;
+        const fullPath = path.resolve(__dirname, 'public', orphanPath.replace(/^\//, ''));
+        if (!isWithinCleanupRoots(fullPath) || !fs.existsSync(fullPath)) {
+          continue;
+        }
+
+        const fileStats = await fs.promises.stat(fullPath);
+        const oneDayMs = 24 * 60 * 60 * 1000;
+        if (Date.now() - fileStats.mtimeMs < oneDayMs) {
+          continue;
+        }
+
+        await fs.promises.rm(fullPath, { force: true });
+        freedBytes += fileStats.size;
+        deletedItems += 1;
+        continue;
+      }
+
+      if (itemType === 'stale') {
+        const [rootKey, ...relativeParts] = itemId.split(':');
+        const relativePath = relativeParts.join(':');
+        const rootConfig = STALE_CLEANUP_ROOTS[rootKey];
+        if (!rootConfig || relativePath.includes('..')) {
+          continue;
+        }
+
+        const fullPath = path.resolve(rootConfig.path, relativePath);
+        if (!isWithinSpecificRoot(fullPath, rootConfig.path) || !fs.existsSync(fullPath)) {
+          continue;
+        }
+
+        const fileName = path.basename(fullPath);
+        if (rootConfig.filePattern && !rootConfig.filePattern.test(fileName)) {
+          continue;
+        }
+
+        const fileStats = await fs.promises.stat(fullPath);
+        if (Date.now() - fileStats.mtimeMs < rootConfig.maxAgeMs) {
+          continue;
+        }
+
+        await fs.promises.rm(fullPath, { force: true });
+        freedBytes += fileStats.size;
+        deletedItems += 1;
+      }
+    }
+
+    res.json({
+      success: true,
+      deletedItems,
+      freedBytes,
+      message: `${deletedItems} item berhasil dibersihkan.`
+    });
+  } catch (error) {
+    console.error('Disk cleanup error:', error);
+    res.status(500).json({ success: false, message: 'Terjadi kesalahan saat membersihkan disk.' });
+  }
+});
+
 function getLocalIpAddresses() {
   const interfaces = os.networkInterfaces();
   const addresses = [];
