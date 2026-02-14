@@ -112,19 +112,17 @@
 ```bash
 curl -fsSL https://raw.githubusercontent.com/meteoradja-ytmjk/ozanglive/main/install.sh | bash
 ```
-### Untuk reset VPS jika sebelumnya sudah terinstal
+### Untuk reset VPS jika Sebelumnya sudah ada / Terinstal 
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/meteoradja-ytmjk/ozanglive/main/uninstall.sh | bash
 ```
 
-Jika disk masih terlihat terpakai setelah uninstall (cache/log OS), jalankan mode pembersihan lebih dalam:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/meteoradja-ytmjk/ozanglive/main/uninstall.sh | bash -s -- --full-clean
-```
-
-> 💡 Catatan: penggunaan disk VPS tidak hanya dari folder aplikasi. Package cache, PM2 logs, journal logs, dan folder cache user juga bisa tetap terhitung.
+> 💡 **Installer otomatis mendeteksi** jika sudah ada instalasi sebelumnya dan memberikan pilihan:
+> - **Install ulang** - Hapus instalasi lama dan install fresh
+> - **Update saja** - Pertahankan data, update kode terbaru
+> - **Batalkan** - Tidak melakukan apa-apa
+> 💡 Installer otomatis mendeteksi instalasi sebelumnya dan memberikan pilihan: **Install ulang**, **Update saja**, atau **Batalkan**
 
 ### Manual Installation
 
@@ -141,7 +139,7 @@ npm install
 npm run generate-secret
 
 # Setup firewall
-sudo ufw allow ssh && sudo ufw allow 80 && sudo ufw allow 7575 && sudo ufw --force enable
+sudo ufw allow ssh && sudo ufw allow 7575 && sudo ufw --force enable
 
 # Start dengan PM2
 sudo npm install -g pm2
@@ -158,8 +156,6 @@ cp .env.example .env
 node generate-secret.js
 docker-compose up -d
 ```
-
-Docker compose default memetakan aplikasi ke port `80` host (`80:7575`), jadi bisa diakses langsung tanpa menulis port.
 
 ---
 
@@ -403,9 +399,7 @@ ozanglive/
 
 ## 🌐 Akses Aplikasi
 
-1. Buka browser:
-   - Docker: `http://IP_SERVER`
-   - PM2/manual Node.js: `http://IP_SERVER:7575`
+1. Buka browser: `http://IP_SERVER:7575`
 2. Buat akun admin pertama
 3. Login dan mulai streaming!
 
