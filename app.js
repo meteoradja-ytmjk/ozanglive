@@ -2538,6 +2538,17 @@ app.get('/api/system/cleanup-options', isAuthenticated, async (req, res) => {
 
     for (const video of videos) {
       const fullPath = video.filepath ? path.join(__dirname, 'public', video.filepath) : null;
+    const videos = await queryAll(
+      'SELECT id, title, filepath, file_size FROM videos WHERE user_id = ? ORDER BY created_at DESC',
+      [userId]
+    ).catch(() => []);
+
+    const audios = await queryAll(
+      'SELECT id, title, filepath, file_size FROM audios WHERE user_id = ? ORDER BY created_at DESC',
+      [userId]
+    ).catch(() => []);
+
+    videos.forEach((video) => {
       options.push({
         id: `video:${video.id}`,
         name: video.title || path.basename(video.filepath || ''),
@@ -2549,6 +2560,11 @@ app.get('/api/system/cleanup-options', isAuthenticated, async (req, res) => {
 
     for (const audio of audios) {
       const fullPath = audio.filepath ? path.join(__dirname, 'public', audio.filepath) : null;
+        size: Number(video.file_size) || 0
+      });
+    });
+
+    audios.forEach((audio) => {
       options.push({
         id: `audio:${audio.id}`,
         name: audio.title || path.basename(audio.filepath || ''),
@@ -2557,6 +2573,9 @@ app.get('/api/system/cleanup-options', isAuthenticated, async (req, res) => {
         size: await getFileSizeSafe(fullPath, audio.file_size)
       });
     }
+        size: Number(audio.file_size) || 0
+      });
+    });
 
     const userThumbnailFolder = path.join(__dirname, 'public', 'uploads', 'thumbnails', String(userId));
     if (fs.existsSync(userThumbnailFolder)) {
@@ -2596,6 +2615,7 @@ app.post('/api/system/cleanup', isAuthenticated, async (req, res) => {
 
       const [itemType, ...rawParts] = selectedItem.split(':');
       const itemId = rawParts.join(':');
+      const [itemType, itemId] = selectedItem.split(':');
 
       if (itemType === 'video') {
         const video = await Video.findById(itemId);
