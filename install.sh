@@ -159,9 +159,18 @@ echo "🕐 Setup timezone ke Asia/Jakarta..."
 sudo timedatectl set-timezone Asia/Jakarta
 
 echo "🔧 Setup firewall..."
-sudo ufw allow ssh
-sudo ufw allow 7575
-sudo ufw --force enable
+if command -v ufw &> /dev/null; then
+    sudo ufw allow ssh || echo "⚠️  Gagal menambahkan rule SSH ke UFW"
+    sudo ufw allow 7575 || echo "⚠️  Gagal menambahkan rule port 7575 ke UFW"
+
+    if sudo ufw --force enable; then
+        echo "✅ Firewall UFW aktif"
+    else
+        echo "⚠️  UFW gagal diaktifkan. Instalasi tetap dilanjutkan, cek konfigurasi firewall manual."
+    fi
+else
+    echo "⚠️  UFW tidak terinstall. Lewati setup firewall otomatis."
+fi
 
 # Cek dan install PM2 jika belum ada
 if ! command -v pm2 &> /dev/null; then
