@@ -141,7 +141,7 @@ npm install
 npm run generate-secret
 
 # Setup firewall
-sudo ufw allow ssh && sudo ufw allow 7575 && sudo ufw --force enable
+sudo ufw allow ssh && sudo ufw allow 80 && sudo ufw allow 7575 && sudo ufw --force enable
 
 # Start dengan PM2
 sudo npm install -g pm2
@@ -158,6 +158,8 @@ cp .env.example .env
 node generate-secret.js
 docker-compose up -d
 ```
+
+Docker compose default memetakan aplikasi ke port `80` host (`80:7575`), jadi bisa diakses langsung tanpa menulis port.
 
 ---
 
@@ -401,7 +403,9 @@ ozanglive/
 
 ## 🌐 Akses Aplikasi
 
-1. Buka browser: `http://IP_SERVER:7575`
+1. Buka browser:
+   - Docker: `http://IP_SERVER`
+   - PM2/manual Node.js: `http://IP_SERVER:7575`
 2. Buat akun admin pertama
 3. Login dan mulai streaming!
 
