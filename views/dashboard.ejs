@@ -146,10 +146,17 @@
       <div class="neon-inner-glow"></div>
       <div class="flex items-center justify-between relative z-10">
         <h3 class="text-lg font-semibold" id="network-disk-title">Internet Speed</h3>
-        <div
-          class="w-10 h-10 icon-gradient-bg-orange hover:bg-dark-600 rounded-lg flex items-center justify-center cursor-pointer float"
-          onclick="toggleNetworkDiskDisplay('desktop')" title="Click to switch">
-          <i class="ti ti-world-upload text-xl text-orange-400 font-loaded" id="toggle-icon-desktop"></i>
+        <div class="flex items-center gap-2">
+          <button id="clean-disk-btn-desktop" type="button"
+            class="hidden w-10 h-10 icon-gradient-bg-orange hover:bg-dark-600 rounded-lg flex items-center justify-center cursor-pointer"
+            onclick="openDiskCleanupModal()" title="Bersihkan Disk Saya">
+            <i class="ti ti-trash text-xl text-orange-400 font-loaded"></i>
+          </button>
+          <div
+            class="w-10 h-10 icon-gradient-bg-orange hover:bg-dark-600 rounded-lg flex items-center justify-center cursor-pointer float"
+            onclick="toggleNetworkDiskDisplay('desktop')" title="Click to switch">
+            <i class="ti ti-world-upload text-xl text-orange-400 font-loaded" id="toggle-icon-desktop"></i>
+          </div>
         </div>
       </div>
       <div id="network-content-desktop" class="mt-2 space-y-2 relative z-10">
@@ -731,6 +738,36 @@
       </div>
     </div>
   </div>
+
+  <!-- Disk Cleanup Modal -->
+  <div id="diskCleanupModal" class="fixed inset-0 bg-black/60 z-[70] hidden overflow-y-auto">
+      <div class="flex min-h-screen items-center justify-center p-4">
+        <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-2xl border border-gray-700">
+          <div class="flex items-center justify-between p-4 border-b border-gray-700">
+            <h3 class="text-lg font-semibold">Bersihkan Disk</h3>
+            <button type="button" onclick="closeDiskCleanupModal()" class="text-gray-400 hover:text-white">
+              <i class="ti ti-x text-xl"></i>
+            </button>
+          </div>
+          <div class="p-4">
+            <p class="text-sm text-gray-400 mb-4">Pilih file/folder milik akun Anda yang ingin dihapus.</p>
+            <div id="disk-cleanup-list" class="space-y-2 max-h-80 overflow-y-auto pr-1">
+              <div class="text-sm text-gray-400">Memuat data...</div>
+            </div>
+          </div>
+          <div class="flex items-center justify-between gap-3 p-4 border-t border-gray-700">
+            <button type="button" onclick="toggleSelectAllCleanupItems()"
+              class="text-sm text-gray-300 hover:text-white">Pilih/Batal Semua</button>
+            <div class="flex items-center gap-3">
+              <button type="button" onclick="closeDiskCleanupModal()"
+                class="px-4 py-2 text-sm text-gray-300 hover:text-white">Batal</button>
+              <button type="button" onclick="submitDiskCleanup()"
+                class="px-4 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg">Bersihkan Sekarang</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
 
   <!-- Center Toast Notification -->
   <div id="center-toast" class="center-toast hidden">
@@ -2197,22 +2234,136 @@
       }
     }
 
+    let diskCleanupOptions = [];
+
+    function formatBytesForCleanup(bytes) {
+      if (!bytes || bytes <= 0) return '0 B';
+      const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+      let size = bytes;
+      let unitIndex = 0;
+      while (size >= 1024 && unitIndex < units.length - 1) {
+        size /= 1024;
+        unitIndex += 1;
+      }
+      return `${size.toFixed(size >= 10 ? 0 : 1)} ${units[unitIndex]}`;
+    }
+
+    async function openDiskCleanupModal() {
+      const modal = document.getElementById('diskCleanupModal');
+      if (!modal) return;
+      modal.classList.remove('hidden');
+      await loadDiskCleanupOptions();
+    }
+
+    function closeDiskCleanupModal() {
+      document.getElementById('diskCleanupModal')?.classList.add('hidden');
+    }
+
+    function renderDiskCleanupOptions() {
+      const container = document.getElementById('disk-cleanup-list');
+      if (!container) return;
+
+      if (!diskCleanupOptions.length) {
+        container.innerHTML = '<div class="text-sm text-gray-400">Tidak ada file/folder yang bisa dibersihkan.</div>';
+        return;
+      }
+
+      container.innerHTML = diskCleanupOptions.map((item) => `
+        <label class="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-dark-700 border border-gray-600 hover:border-gray-500 cursor-pointer">
+          <span class="flex items-center gap-2 min-w-0">
+            <input type="checkbox" class="disk-cleanup-item" value="${item.id}">
+            <i class="ti ${item.type === 'folder' ? 'ti-folder' : 'ti-file'} text-gray-400"></i>
+            <span class="text-sm text-gray-200 truncate">${item.category} / ${item.name}</span>
+          </span>
+          <span class="text-xs text-gray-400 whitespace-nowrap">${formatBytesForCleanup(item.size)}</span>
+        </label>
+      `).join('');
+    }
+
+    async function loadDiskCleanupOptions() {
+      const container = document.getElementById('disk-cleanup-list');
+      if (!container) return;
+      container.innerHTML = '<div class="text-sm text-gray-400">Memuat data...</div>';
+
+      try {
+        const response = await fetch('/api/system/cleanup-options');
+        const result = await response.json();
+
+        if (!result.success) {
+          throw new Error(result.message || 'Gagal memuat opsi cleanup');
+        }
+
+        diskCleanupOptions = result.options || [];
+        renderDiskCleanupOptions();
+      } catch (error) {
+        console.error('Disk cleanup option load error:', error);
+        container.innerHTML = '<div class="text-sm text-red-400">Gagal memuat daftar file/folder.</div>';
+      }
+    }
+
+    function toggleSelectAllCleanupItems() {
+      const checkboxes = Array.from(document.querySelectorAll('.disk-cleanup-item'));
+      if (!checkboxes.length) return;
+      const shouldSelectAll = checkboxes.some((checkbox) => !checkbox.checked);
+      checkboxes.forEach((checkbox) => {
+        checkbox.checked = shouldSelectAll;
+      });
+    }
+
+    async function submitDiskCleanup() {
+      const selected = Array.from(document.querySelectorAll('.disk-cleanup-item:checked')).map((el) => el.value);
+      if (!selected.length) {
+        showCenterToast('error', 'Pilih minimal satu folder/file.');
+        return;
+      }
+
+      if (!confirm(`Hapus ${selected.length} item yang dipilih? Aksi ini tidak bisa dibatalkan.`)) {
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/system/cleanup', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': '<%= locals.csrfToken %>'
+          },
+          body: JSON.stringify({ items: selected })
+        });
+
+        const result = await response.json();
+        if (!result.success) {
+          throw new Error(result.message || 'Cleanup gagal');
+        }
+
+        closeDiskCleanupModal();
+        showCenterToast('success', `${result.message} (bebas ${formatBytesForCleanup(result.freedBytes || 0)})`);
+        loadSystemStats();
+      } catch (error) {
+        console.error('Disk cleanup error:', error);
+        showCenterToast('error', error.message || 'Terjadi kesalahan saat membersihkan disk.');
+      }
+    }
+
     function toggleNetworkDiskDisplay(type) {
       const networkContent = document.getElementById(`network-content-${type}`);
       const diskContent = document.getElementById(`disk-content-${type}`);
       const title = document.getElementById(type === 'mobile' ? 'network-disk-title-mobile' : 'network-disk-title');
       const icon = document.getElementById(`toggle-icon-${type}`);
+      const cleanBtn = type === 'desktop' ? document.getElementById('clean-disk-btn-desktop') : null;
 
       if (networkContent.style.display !== 'none') {
         networkContent.style.display = 'none';
         diskContent.style.display = 'block';
         title.textContent = 'Disk Usage';
         icon.className = 'ti ti-device-sd-card text-white text-' + (type === 'mobile' ? 'sm' : 'xl') + ' font-loaded';
+        if (cleanBtn) cleanBtn.classList.remove('hidden');
       } else {
         networkContent.style.display = 'block';
         diskContent.style.display = 'none';
         title.textContent = 'Internet Speed';
         icon.className = 'ti ti-wifi text-white text-' + (type === 'mobile' ? 'sm' : 'xl') + ' font-loaded';
+        if (cleanBtn) cleanBtn.classList.add('hidden');
       }
     }
 
