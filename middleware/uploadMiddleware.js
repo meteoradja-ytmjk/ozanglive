@@ -12,10 +12,10 @@ const parsedInflightLimit = parseInt(process.env.UPLOAD_INFLIGHT_LIMIT || '0', 1
 const MAX_INFLIGHT_UPLOADS = Number.isFinite(parsedInflightLimit) && parsedInflightLimit > 0
   ? parsedInflightLimit
   : null;
-const parsedChunkSizeMb = parseInt(process.env.UPLOAD_CHUNK_SIZE_MB || '8', 10);
+const parsedChunkSizeMb = parseFloat(process.env.UPLOAD_CHUNK_SIZE_MB || '0.5');
 const UPLOAD_CHUNK_SIZE = Number.isFinite(parsedChunkSizeMb) && parsedChunkSizeMb > 0
   ? parsedChunkSizeMb * 1024 * 1024
-  : 8 * 1024 * 1024;
+  : Math.round(0.5 * 1024 * 1024);
 // Optimized stream options for faster uploads
 const STREAM_OPTIONS = {
   highWaterMark: UPLOAD_BUFFER_SIZE,
