@@ -21,6 +21,19 @@ class StorageService {
       return null;
     }
 
+    // Backward compatibility for legacy limits that were saved without byte conversion.
+    // Newer versions store bytes, while older deployments may have raw unit numbers.
+    if (parsedLimit < 1024) {
+      // Typical historical values were plain numbers like 5/10/20 (GB) or 256/512 (MB).
+      if (parsedLimit <= 100) {
+        return Math.floor(parsedLimit * 1024 * 1024 * 1024); // legacy GB value
+      }
+      return Math.floor(parsedLimit * 1024 * 1024); // legacy MB value
+    }
+    if (parsedLimit < 1024 * 1024) {
+      return Math.floor(parsedLimit * 1024 * 1024); // legacy MB value
+    }
+
     return Math.floor(parsedLimit);
   }
 
@@ -84,6 +97,16 @@ class StorageService {
   static async canUpload(userId, fileSize) {
     const usage = await this.calculateUsage(userId);
     const limit = this.normalizeLimit(await this.getUserStorageLimit(userId));
+    const normalizedFileSize = Number(fileSize);
+
+    if (!Number.isFinite(normalizedFileSize) || normalizedFileSize <= 0) {
+      return {
+        allowed: false,
+        currentUsage: usage.totalBytes,
+        limit,
+        remaining: limit === null ? null : Math.max(0, limit - usage.totalBytes)
+      };
+    }
 
     // If limit is null or 0, user has unlimited storage
     if (!limit) {
@@ -96,7 +119,7 @@ class StorageService {
     }
 
     const remaining = Math.max(0, limit - usage.totalBytes);
-    const allowed = (usage.totalBytes + fileSize) <= limit;
+    const allowed = (usage.totalBytes + normalizedFileSize) <= limit;
 
     return {
       allowed,
