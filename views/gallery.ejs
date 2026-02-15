@@ -133,6 +133,12 @@ function formatDuration(seconds) {
         <option value="newest" selected>Z to A</option>
         <option value="oldest">A to Z</option>
       </select>
+      <% if (typeof permissions !== 'undefined' && permissions.can_delete_videos) { %>
+      <button onclick="deleteSelectedFolders()" title="Delete Selected Folders"
+        class="px-3 py-2.5 bg-red-500/10 border border-red-500/40 text-red-400 hover:text-red-300 hover:bg-red-500/20 rounded-lg transition-colors">
+        <i class="ti ti-trash"></i>
+      </button>
+      <% } %>
       <button onclick="expandAllGroups()" title="Expand All Groups"
         class="px-3 py-2.5 bg-dark-700 border border-gray-600 text-gray-400 hover:text-white hover:border-primary rounded-lg transition-colors">
         <i class="ti ti-chevrons-down"></i>
@@ -192,7 +198,7 @@ function formatDuration(seconds) {
       const groupVideos = group.videos.sort((a, b) => new Date(b.upload_date) - new Date(a.upload_date));
     %>
       <!-- Video Group -->
-      <div class="video-group" data-name="<%= groupKey %>">
+      <div class="video-group" data-name="<%= groupKey %>" data-video-ids='<%- JSON.stringify(groupVideos.map(v => v.id)) %>'>
         <!-- Group Header -->
         <div class="bg-gray-800/50 rounded-lg p-3 flex items-center justify-between cursor-pointer hover:bg-gray-800/70 transition-colors border border-gray-700/50" onclick="toggleVideoGroup('<%= groupIndex %>')">
           <div class="flex items-center gap-3">
@@ -202,8 +208,17 @@ function formatDuration(seconds) {
               <p class="text-xs text-gray-400"><%= groupVideos.length %> video<%= groupVideos.length > 1 ? 's' : '' %></p>
             </div>
           </div>
-          <div class="text-xs text-gray-500">
-            <i class="ti ti-folder"></i>
+          <div class="flex items-center gap-2">
+            <% if (typeof permissions !== 'undefined' && permissions.can_delete_videos) { %>
+            <label class="flex items-center gap-2 text-xs text-gray-300 cursor-pointer" onclick="event.stopPropagation()">
+              <input type="checkbox" class="video-folder-checkbox rounded border-gray-500 bg-dark-700 text-red-500 focus:ring-red-500"
+                data-folder-name="<%= group.displayName %>" data-ids='<%- JSON.stringify(groupVideos.map(v => v.id)) %>'>
+              <span>Select</span>
+            </label>
+            <% } %>
+            <div class="text-xs text-gray-500">
+              <i class="ti ti-folder"></i>
+            </div>
           </div>
         </div>
         
@@ -305,7 +320,7 @@ function formatDuration(seconds) {
       const groupAudios = group.audios.sort((a, b) => new Date(b.upload_date) - new Date(a.upload_date));
     %>
       <!-- Audio Group -->
-      <div class="audio-group" data-name="<%= groupKey %>">
+      <div class="audio-group" data-name="<%= groupKey %>" data-audio-ids='<%- JSON.stringify(groupAudios.map(a => a.id)) %>'>
         <!-- Group Header -->
         <div class="bg-gray-800/50 rounded-lg p-3 flex items-center justify-between cursor-pointer hover:bg-gray-800/70 transition-colors border border-gray-700/50" onclick="toggleAudioGroup('<%= groupIndex %>')">
           <div class="flex items-center gap-3">
@@ -315,8 +330,17 @@ function formatDuration(seconds) {
               <p class="text-xs text-gray-400"><%= groupAudios.length %> audio<%= groupAudios.length > 1 ? 's' : '' %></p>
             </div>
           </div>
-          <div class="text-xs text-gray-500">
-            <i class="ti ti-folder"></i>
+          <div class="flex items-center gap-2">
+            <% if (typeof permissions !== 'undefined' && permissions.can_delete_videos) { %>
+            <label class="flex items-center gap-2 text-xs text-gray-300 cursor-pointer" onclick="event.stopPropagation()">
+              <input type="checkbox" class="audio-folder-checkbox rounded border-gray-500 bg-dark-700 text-red-500 focus:ring-red-500"
+                data-folder-name="<%= group.displayName %>" data-ids='<%- JSON.stringify(groupAudios.map(a => a.id)) %>'>
+              <span>Select</span>
+            </label>
+            <% } %>
+            <div class="text-xs text-gray-500">
+              <i class="ti ti-folder"></i>
+            </div>
           </div>
         </div>
         
@@ -1428,6 +1452,70 @@ function formatDuration(seconds) {
         else showToast('error', data.error || 'Failed to delete');
       });
     }
+  }
+
+  function getSelectedFolderPayload() {
+    if (currentTab === 'audio') {
+      const checkboxes = Array.from(document.querySelectorAll('.audio-folder-checkbox:checked'));
+      const audioIds = [...new Set(checkboxes.flatMap((checkbox) => {
+        try {
+          const ids = JSON.parse(checkbox.dataset.ids || '[]');
+          return Array.isArray(ids) ? ids : [];
+        } catch {
+          return [];
+        }
+      }))];
+      const folderCount = checkboxes.length;
+      return { type: 'audio', ids: audioIds, folderCount };
+    }
+
+    const checkboxes = Array.from(document.querySelectorAll('.video-folder-checkbox:checked'));
+    const videoIds = [...new Set(checkboxes.flatMap((checkbox) => {
+      try {
+        const ids = JSON.parse(checkbox.dataset.ids || '[]');
+        return Array.isArray(ids) ? ids : [];
+      } catch {
+        return [];
+      }
+    }))];
+    const folderCount = checkboxes.length;
+    return { type: 'video', ids: videoIds, folderCount };
+  }
+
+  function deleteSelectedFolders() {
+    const payload = getSelectedFolderPayload();
+    if (payload.folderCount === 0) {
+      showToast('error', currentTab === 'audio' ? 'Pilih folder audio dulu' : 'Pilih folder video dulu');
+      return;
+    }
+
+    if (payload.ids.length === 0) {
+      showToast('error', 'Folder terpilih tidak punya item yang bisa dihapus');
+      return;
+    }
+
+    const itemLabel = payload.type === 'audio' ? 'audio' : 'video';
+    const ok = confirm(`Delete ${payload.folderCount} selected folder(s) with ${payload.ids.length} ${itemLabel}?`);
+    if (!ok) return;
+
+    const endpoint = payload.type === 'audio' ? '/api/audios/delete-folder' : '/api/videos/delete-folder';
+    const body = payload.type === 'audio' ? { audioIds: payload.ids } : { videoIds: payload.ids };
+
+    fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': '<%= csrfToken %>'
+      },
+      body: JSON.stringify(body)
+    }).then(r => r.json()).then(data => {
+      if (data.success) {
+        showToast('success', data.message || 'Selected folders deleted');
+        setTimeout(() => location.reload(), 1000);
+      } else {
+        showToast('error', data.error || 'Failed to delete selected folders');
+      }
+    }).catch(() => showToast('error', 'Failed to delete selected folders'));
   }
   
   // Download video
