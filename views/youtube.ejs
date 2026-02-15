@@ -139,6 +139,10 @@
           </div>
         </div>
         <div class="flex items-center gap-1">
+          <button onclick="openEditAccountModal(<%= account.id %>, '<%= (account.channelName || 'YouTube Channel').replace(/'/g, "\\'") %>')" 
+            class="w-9 h-9 flex items-center justify-center text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors" title="Edit Credentials">
+            <i class="ti ti-edit text-lg"></i>
+          </button>
           <% if (!account.isPrimary) { %>
           <button onclick="setPrimaryAccount(<%= account.id %>)" 
             class="w-9 h-9 flex items-center justify-center text-gray-400 hover:text-yellow-400 hover:bg-yellow-500/10 rounded-lg transition-colors" title="Set as Primary">
@@ -912,6 +916,62 @@
             class="flex-1 bg-red-500 hover:bg-red-600 text-white px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
             <i class="ti ti-brand-youtube"></i>
             <span>Add Account</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Account Modal -->
+<div id="editAccountModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto">
+  <div class="flex min-h-screen items-center justify-center p-4">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-lg">
+      <div class="flex items-center justify-between p-6 border-b border-gray-700">
+        <div>
+          <h3 class="text-lg font-semibold">Edit YouTube Account</h3>
+          <p id="editAccountChannelName" class="text-sm text-gray-400 mt-1"></p>
+        </div>
+        <button onclick="closeEditAccountModal()" class="text-gray-400 hover:text-white">
+          <i class="ti ti-x text-xl"></i>
+        </button>
+      </div>
+
+      <form id="editAccountForm" class="p-6 space-y-4">
+        <input type="hidden" id="editAccountId" name="accountId">
+
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Client ID <span class="text-red-400">*</span></label>
+          <input type="text" id="editClientId" name="clientId" required
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none"
+            placeholder="Masukkan Client ID baru">
+        </div>
+
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Client Secret <span class="text-red-400">*</span></label>
+          <input type="text" id="editClientSecret" name="clientSecret" required
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none"
+            placeholder="Masukkan Client Secret baru">
+        </div>
+
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Refresh Token <span class="text-red-400">*</span></label>
+          <textarea id="editRefreshToken" name="refreshToken" required rows="3"
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none resize-none"
+            placeholder="Masukkan Refresh Token baru"></textarea>
+        </div>
+
+        <p class="text-xs text-gray-500">Gunakan kredensial baru untuk memperbarui token tanpa perlu disconnect akun.</p>
+
+        <div class="pt-4 flex gap-3">
+          <button type="button" onclick="closeEditAccountModal()"
+            class="flex-1 bg-dark-700 hover:bg-dark-600 text-white px-4 py-2.5 rounded-lg transition-colors">
+            Cancel
+          </button>
+          <button type="submit" id="editAccountBtn"
+            class="flex-1 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
+            <i class="ti ti-device-floppy"></i>
+            <span>Update Account</span>
           </button>
         </div>
       </form>

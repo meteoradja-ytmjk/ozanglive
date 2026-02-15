@@ -5614,6 +5614,32 @@ app.get('/api/youtube/accounts', isAuthenticated, async (req, res) => {
   }
 });
 
+// Get one YouTube account detail for edit form
+app.get('/api/youtube/credentials/:id', isAuthenticated, async (req, res) => {
+  try {
+    const credentialId = parseInt(req.params.id);
+    const credential = await YouTubeCredentials.findById(credentialId);
+
+    if (!credential || credential.userId !== req.session.userId) {
+      return res.status(404).json({ success: false, error: 'Account not found' });
+    }
+
+    res.json({
+      success: true,
+      account: {
+        id: credential.id,
+        channelName: credential.channelName,
+        clientId: credential.clientId,
+        clientSecret: credential.clientSecret,
+        refreshToken: credential.refreshToken
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching YouTube credential detail:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch account detail' });
+  }
+});
+
 // Check if credentials exist (backward compatibility)
 app.get('/api/youtube/credentials', isAuthenticated, async (req, res) => {
   try {
@@ -5655,6 +5681,67 @@ app.delete('/api/youtube/credentials/:id', isAuthenticated, async (req, res) => 
   } catch (error) {
     console.error('Error removing YouTube credentials:', error);
     res.status(500).json({ success: false, error: 'Failed to remove credentials' });
+  }
+});
+
+// Update specific YouTube account credentials
+app.put('/api/youtube/credentials/:id', isAuthenticated, async (req, res) => {
+  try {
+    const credentialId = parseInt(req.params.id);
+    const { clientId, clientSecret, refreshToken } = req.body;
+
+    if (!clientId || !clientSecret || !refreshToken) {
+      return res.status(400).json({
+        success: false,
+        error: 'Client ID, Client Secret, and Refresh Token are required'
+      });
+    }
+
+    // Verify the credential belongs to this user
+    const credential = await YouTubeCredentials.findById(credentialId);
+    if (!credential || credential.userId !== req.session.userId) {
+      return res.status(404).json({ success: false, error: 'Account not found' });
+    }
+
+    // Validate updated credentials and fetch latest channel info
+    const validation = await youtubeService.validateCredentials(clientId, clientSecret, refreshToken);
+    if (!validation.valid) {
+      return res.status(400).json({
+        success: false,
+        error: validation.error || 'Invalid credentials'
+      });
+    }
+
+    // Prevent updating to a channel already connected by another account
+    const existingChannel = await YouTubeCredentials.existsByChannel(req.session.userId, validation.channelId);
+    if (existingChannel && validation.channelId !== credential.channelId) {
+      return res.status(400).json({
+        success: false,
+        error: 'This YouTube channel is already connected'
+      });
+    }
+
+    const updated = await YouTubeCredentials.update(credentialId, {
+      clientId,
+      clientSecret,
+      refreshToken,
+      channelName: validation.channelName,
+      channelId: validation.channelId
+    });
+
+    res.json({
+      success: true,
+      account: {
+        id: updated.id,
+        channelName: updated.channelName,
+        channelId: updated.channelId,
+        isPrimary: updated.isPrimary
+      },
+      message: 'Account credentials updated'
+    });
+  } catch (error) {
+    console.error('Error updating YouTube credentials:', error);
+    res.status(500).json({ success: false, error: 'Failed to update credentials' });
   }
 });
 
