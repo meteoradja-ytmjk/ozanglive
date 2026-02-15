@@ -2837,7 +2837,7 @@ app.delete('/api/videos/:id', isAuthenticated, canDeleteVideos, async (req, res)
     if (!video) {
       return res.status(404).json({ success: false, error: 'Video not found' });
     }
-    if (video.user_id !== req.session.userId) {
+    if (req.user.user_role !== 'admin' && video.user_id !== req.session.userId) {
       return res.status(403).json({ success: false, error: 'Not authorized' });
     }
     await Video.delete(videoId);
