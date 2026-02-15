@@ -2781,9 +2781,12 @@ app.get('/api/videos', isAuthenticated, async (req, res) => {
     res.status(500).json({ success: false, error: 'Failed to fetch videos' });
   }
 });
-app.delete('/api/videos/:id', isAuthenticated, canDeleteVideos, async (req, res) => {
+app.delete('/api/videos/:id', isAuthenticated, canDeleteVideos, async (req, res, next) => {
   try {
     const videoId = req.params.id;
+    if (videoId === 'folder' || videoId === 'all') {
+      return next();
+    }
     const video = await Video.findById(videoId);
     if (!video) {
       return res.status(404).json({ success: false, error: 'Video not found' });
@@ -2791,21 +2794,57 @@ app.delete('/api/videos/:id', isAuthenticated, canDeleteVideos, async (req, res)
     if (video.user_id !== req.session.userId) {
       return res.status(403).json({ success: false, error: 'Not authorized' });
     }
-    const videoPath = path.join(__dirname, 'public', video.filepath);
-    if (fs.existsSync(videoPath)) {
-      fs.unlinkSync(videoPath);
-    }
-    if (video.thumbnail_path) {
-      const thumbnailPath = path.join(__dirname, 'public', video.thumbnail_path);
-      if (fs.existsSync(thumbnailPath)) {
-        fs.unlinkSync(thumbnailPath);
-      }
-    }
-    await Video.delete(videoId, req.session.userId);
+    await Video.delete(videoId);
     res.json({ success: true, message: 'Video deleted successfully' });
   } catch (error) {
     console.error('Error deleting video:', error);
     res.status(500).json({ success: false, error: 'Failed to delete video' });
+  }
+});
+
+app.delete('/api/videos/folder', isAuthenticated, canDeleteVideos, async (req, res) => {
+  try {
+    const videoIds = Array.isArray(req.body?.videoIds) ? req.body.videoIds : [];
+    if (videoIds.length === 0) {
+      return res.status(400).json({ success: false, error: 'No videos selected' });
+    }
+
+    const deleted = [];
+    for (const videoId of videoIds) {
+      const video = await Video.findById(videoId);
+      if (!video || video.user_id !== req.session.userId) {
+        continue;
+      }
+      await Video.delete(videoId);
+      deleted.push(videoId);
+    }
+
+    res.json({
+      success: true,
+      message: `${deleted.length} video deleted successfully`,
+      deletedCount: deleted.length
+    });
+  } catch (error) {
+    console.error('Error deleting video folder:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete folder videos' });
+  }
+});
+
+app.delete('/api/videos/all', isAuthenticated, canDeleteVideos, async (req, res) => {
+  try {
+    const videos = await Video.findAll(req.session.userId);
+    for (const video of videos) {
+      await Video.delete(video.id);
+    }
+
+    res.json({
+      success: true,
+      message: `${videos.length} video deleted successfully`,
+      deletedCount: videos.length
+    });
+  } catch (error) {
+    console.error('Error deleting all videos:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete all videos' });
   }
 });
 // Video download endpoint with permission check
@@ -4743,9 +4782,12 @@ app.post('/api/audios/:id/rename', isAuthenticated, [
   }
 });
 
-app.delete('/api/audios/:id', isAuthenticated, async (req, res) => {
+app.delete('/api/audios/:id', isAuthenticated, canDeleteVideos, async (req, res, next) => {
   try {
     const audioId = req.params.id;
+    if (audioId === 'folder' || audioId === 'all') {
+      return next();
+    }
     const audio = await Audio.findById(audioId);
     if (!audio) {
       return res.status(404).json({ success: false, error: 'Audio not found' });
@@ -4758,6 +4800,52 @@ app.delete('/api/audios/:id', isAuthenticated, async (req, res) => {
   } catch (error) {
     console.error('Error deleting audio:', error);
     res.status(500).json({ success: false, error: 'Failed to delete audio' });
+  }
+});
+
+app.delete('/api/audios/folder', isAuthenticated, canDeleteVideos, async (req, res) => {
+  try {
+    const audioIds = Array.isArray(req.body?.audioIds) ? req.body.audioIds : [];
+    if (audioIds.length === 0) {
+      return res.status(400).json({ success: false, error: 'No audios selected' });
+    }
+
+    const deleted = [];
+    for (const audioId of audioIds) {
+      const audio = await Audio.findById(audioId);
+      if (!audio || audio.user_id !== req.session.userId) {
+        continue;
+      }
+      await Audio.delete(audioId);
+      deleted.push(audioId);
+    }
+
+    res.json({
+      success: true,
+      message: `${deleted.length} audio deleted successfully`,
+      deletedCount: deleted.length
+    });
+  } catch (error) {
+    console.error('Error deleting audio folder:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete folder audios' });
+  }
+});
+
+app.delete('/api/audios/all', isAuthenticated, canDeleteVideos, async (req, res) => {
+  try {
+    const audios = await Audio.findAll(req.session.userId);
+    for (const audio of audios) {
+      await Audio.delete(audio.id);
+    }
+
+    res.json({
+      success: true,
+      message: `${audios.length} audio deleted successfully`,
+      deletedCount: audios.length
+    });
+  } catch (error) {
+    console.error('Error deleting all audios:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete all audios' });
   }
 });
 
