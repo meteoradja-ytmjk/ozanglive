@@ -476,14 +476,31 @@ class FileQueueManager {
         if (xhr.status === 401) {
           error.message = 'Unauthorized - please login again';
         } else if (xhr.status === 413) {
+          let response = null;
           try {
-            const response = JSON.parse(xhr.responseText);
-            const errorMsg = response.message || 'Storage limit exceeded';
-            const details = response.formatted ?
-              `\nCurrent: ${response.formatted.usage}\nLimit: ${response.formatted.limit}` : '';
-            error.message = errorMsg + details;
+            response = JSON.parse(xhr.responseText);
           } catch (e) {
-            error.message = 'Storage limit exceeded';
+            response = null;
+          }
+
+          const rawMessage = (response?.message || response?.error || '').toLowerCase();
+          const isStorageError = rawMessage.includes('storage limit exceeded');
+
+          if (isStorageError) {
+            const details = response?.formatted
+              ? `
+Current: ${response.formatted.usage}
+Limit: ${response.formatted.limit}`
+              : '';
+            error.message = response?.message || response?.error || 'Storage limit exceeded';
+            error.message += details;
+            error.retryable = false;
+          } else if (this.enableChunking && item.file.size > 0) {
+            error.message = 'Payload too large for direct upload, retrying with chunk upload...';
+            error.fallbackToChunked = true;
+            error.retryable = false;
+          } else {
+            error.message = response?.message || response?.error || 'File too large for server limit';
           }
         } else if (xhr.status === 408) {
           error.message = 'Upload timeout - file may be too large';
@@ -551,7 +568,12 @@ class FileQueueManager {
       throw error;
     });
 
-    return attemptUpload(0);
+    return attemptUpload(0).catch((error) => {
+      if (error?.fallbackToChunked && this.enableChunking) {
+        return this.uploadFileChunked(item);
+      }
+      throw error;
+    });
   }
 
   /**

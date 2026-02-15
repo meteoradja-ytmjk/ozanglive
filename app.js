@@ -41,18 +41,18 @@ ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 const uploadProcessingConcurrency = Math.max(1, parseInt(process.env.UPLOAD_PROCESSING_CONCURRENCY || '1', 10));
 const videoProcessingQueue = new ProcessingQueue({ concurrency: uploadProcessingConcurrency, name: 'video-processing' });
 const audioProcessingQueue = new ProcessingQueue({ concurrency: uploadProcessingConcurrency, name: 'audio-processing' });
-const parsedUploadChunkSizeMb = parseInt(process.env.UPLOAD_CHUNK_SIZE_MB || '8', 10);
+const parsedUploadChunkSizeMb = parseFloat(process.env.UPLOAD_CHUNK_SIZE_MB || '0.5');
 const UPLOAD_CHUNK_SIZE = Number.isFinite(parsedUploadChunkSizeMb) && parsedUploadChunkSizeMb > 0
   ? parsedUploadChunkSizeMb * 1024 * 1024
-  : 8 * 1024 * 1024;
+  : Math.round(0.5 * 1024 * 1024);
 const parsedUploadChunkConcurrency = parseInt(process.env.UPLOAD_CHUNK_CONCURRENCY || '4', 10);
 const UPLOAD_CHUNK_CONCURRENCY = Number.isFinite(parsedUploadChunkConcurrency) && parsedUploadChunkConcurrency > 0
   ? parsedUploadChunkConcurrency
   : 4;
-const parsedUploadChunkThresholdMb = parseInt(process.env.UPLOAD_CHUNK_THRESHOLD_MB || '64', 10);
+const parsedUploadChunkThresholdMb = parseFloat(process.env.UPLOAD_CHUNK_THRESHOLD_MB || '1');
 const UPLOAD_CHUNK_THRESHOLD = Number.isFinite(parsedUploadChunkThresholdMb) && parsedUploadChunkThresholdMb > 0
   ? parsedUploadChunkThresholdMb * 1024 * 1024
-  : 64 * 1024 * 1024;
+  : 1 * 1024 * 1024;
 const pendingVideoMetadataRefresh = new Set();
 const pendingAudioMetadataRefresh = new Set();
 // Track if we're shutting down to prevent multiple shutdown attempts
