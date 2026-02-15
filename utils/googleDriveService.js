@@ -20,6 +20,107 @@ function extractFileId(driveUrl) {
   throw new Error('Invalid Google Drive URL format');
 }
 
+function extractFolderId(driveUrl) {
+  let match = driveUrl.match(/\/folders\/([^\/?]+)/);
+  if (match) return match[1];
+
+  match = driveUrl.match(/[?&]folder=([^&]+)/);
+  if (match) return match[1];
+
+  if (/^[a-zA-Z0-9_-]{25,}$/.test(driveUrl.trim())) {
+    return driveUrl.trim();
+  }
+
+  throw new Error('Invalid Google Drive folder URL format');
+}
+
+function parseDriveUrl(driveUrl) {
+  const trimmedUrl = (driveUrl || '').trim();
+  if (!trimmedUrl) {
+    throw new Error('Google Drive URL is empty');
+  }
+
+  if (trimmedUrl.includes('/folders/')) {
+    return {
+      type: 'folder',
+      id: extractFolderId(trimmedUrl),
+      originalUrl: trimmedUrl
+    };
+  }
+
+  return {
+    type: 'file',
+    id: extractFileId(trimmedUrl),
+    originalUrl: trimmedUrl
+  };
+}
+
+async function listPublicFolderFilesWithoutApiKey(folderId) {
+  const url = `https://drive.google.com/embeddedfolderview?id=${encodeURIComponent(folderId)}#list`;
+  const response = await axios.get(url, {
+    timeout: 30000,
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    }
+  });
+
+  const html = typeof response.data === 'string' ? response.data : '';
+  const fileIds = new Set();
+
+  const fileLinkMatches = html.matchAll(/\/file\/d\/([a-zA-Z0-9_-]{20,})/g);
+  for (const match of fileLinkMatches) {
+    fileIds.add(match[1]);
+  }
+
+  const dataIdMatches = html.matchAll(/data-id="([a-zA-Z0-9_-]{20,})"/g);
+  for (const match of dataIdMatches) {
+    fileIds.add(match[1]);
+  }
+
+  return Array.from(fileIds).map((fileId, index) => ({
+    fileId,
+    name: `Folder File ${index + 1}`,
+    mimeType: null
+  }));
+}
+
+async function listFilesInFolder(folderId, apiKey, allowedMimePrefix = 'video/') {
+  if (!apiKey) {
+    const fallbackFiles = await listPublicFolderFilesWithoutApiKey(folderId);
+    return fallbackFiles;
+  }
+
+  const files = [];
+  let pageToken = null;
+
+  do {
+    const response = await axios.get('https://www.googleapis.com/drive/v3/files', {
+      params: {
+        key: apiKey,
+        q: `'${folderId}' in parents and trashed = false`,
+        fields: 'nextPageToken,files(id,name,mimeType)',
+        pageSize: 1000,
+        pageToken: pageToken || undefined,
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true
+      },
+      timeout: 30000
+    });
+
+    const items = response.data?.files || [];
+    const mediaFiles = items.filter(file => file?.mimeType?.startsWith(allowedMimePrefix));
+    files.push(...mediaFiles.map(file => ({
+      fileId: file.id,
+      name: file.name,
+      mimeType: file.mimeType
+    })));
+
+    pageToken = response.data?.nextPageToken || null;
+  } while (pageToken);
+
+  return files;
+}
+
 async function downloadFile(fileId, progressCallback = null, targetFolder = 'videos') {
   try {
     const targetPath = targetFolder === 'audios' ? paths.audios : paths.videos;
@@ -396,5 +497,8 @@ async function downloadFile(fileId, progressCallback = null, targetFolder = 'vid
 
 module.exports = {
   extractFileId,
+  extractFolderId,
+  parseDriveUrl,
+  listFilesInFolder,
   downloadFile
 };
