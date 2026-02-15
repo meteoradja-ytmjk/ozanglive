@@ -350,7 +350,7 @@
   </div>
 </div>
 
-<div id="confirmModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden transition-opacity">
+<div id="confirmModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] hidden transition-opacity">
   <div class="flex items-center justify-center min-h-screen p-4">
     <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-md border border-gray-600/50 transform transition-all opacity-0 scale-95" id="confirmModalContent">
       <div class="flex items-center justify-between p-4 border-b border-gray-600/50">
@@ -439,6 +439,8 @@
 
 <script>
 let currentAction = null;
+let currentVideoModalUserId = null;
+let currentVideoModalUsername = '';
 
 // Function to update Live Limit UI based on role
 function updateLiveLimitUI(role, liveLimit) {
@@ -851,66 +853,112 @@ function filterUsers() {
 }
 
 function showVideoModal(element) {
-  const userId = element.dataset.userId;
-  const username = element.dataset.username;
+  currentVideoModalUserId = element.dataset.userId;
+  currentVideoModalUsername = element.dataset.username;
   
   const modal = document.getElementById('videoModal');
-  const videoList = document.getElementById('videoList');
   const title = document.getElementById('videoModalTitle');
   
-  title.textContent = `Videos by ${username}`;
+  title.textContent = `Videos by ${currentVideoModalUsername}`;
   
   modal.classList.remove('opacity-0', 'pointer-events-none');
   modal.querySelector('.bg-dark-800').classList.remove('scale-95');
   
-  videoList.innerHTML = '<div class="flex items-center justify-center p-8"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div></div>';
+  loadMemberVideos();
+}
+
+function renderMemberVideos(videos) {
+  const videoList = document.getElementById('videoList');
+  const emptyState = document.getElementById('videoEmptyState');
   
-  fetch(`/api/users/${userId}/videos`)
-    .then(response => response.json())
-    .then(data => {
-      const emptyState = document.getElementById('videoEmptyState');
-      
-      if (data.success && data.videos && data.videos.length > 0) {
-        videoList.innerHTML = data.videos.map(video => `
-          <div class="flex items-center justify-between p-4 bg-dark-700 rounded-lg border border-gray-600/50 hover:bg-dark-600/50 transition-colors">
-            <div class="flex items-center space-x-4">
-              <div class="w-16 h-12 bg-gray-600 rounded-lg overflow-hidden flex-shrink-0">
-                ${video.thumbnail_path ? 
-                  `<img src="${video.thumbnail_path}" alt="${video.title || video.filename}" class="w-full h-full object-cover" onerror="this.onerror=null; this.parentElement.innerHTML='<i class=\\'ti ti-video text-gray-400 text-lg\\' style=\\'display: flex; align-items: center; justify-content: center; height: 100%;\\' ></i>';">` :
-                  `<i class="ti ti-video text-gray-400 text-lg" style="display: flex; align-items: center; justify-content: center; height: 100%;"></i>`
-                }
-              </div>
-              <div class="flex-1 min-w-0">
-                <p class="text-white font-medium truncate">${video.title || video.filename}</p>
-                <div class="flex items-center space-x-2 mt-1">
-                  <p class="text-gray-400 text-sm">${formatDate(video.created_at)}</p>
-                  <span class="text-gray-500">•</span>
-                  <p class="text-gray-400 text-sm">${formatDuration(video.duration)}</p>
-                </div>
-              </div>
-            </div>
-            <div class="flex items-center gap-2 flex-shrink-0">
-              <span class="inline-flex px-2.5 py-1 text-xs font-medium rounded-md bg-primary/20 text-accent border border-primary/30">
-                ${formatFileSize(video.file_size)}
-              </span>
-              <button onclick="playMemberVideo('${video.id}', '${(video.title || video.filename).replace(/'/g, "\\'")}')" 
-                class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white text-sm font-medium rounded-lg transition-colors" title="Play">
-                <i class="ti ti-player-play"></i>
-                <span>Play</span>
-              </button>
+  if (videos && videos.length > 0) {
+    videoList.innerHTML = videos.map(video => `
+      <div class="flex items-center justify-between p-4 bg-dark-700 rounded-lg border border-gray-600/50 hover:bg-dark-600/50 transition-colors">
+        <div class="flex items-center space-x-4">
+          <div class="w-16 h-12 bg-gray-600 rounded-lg overflow-hidden flex-shrink-0">
+            ${video.thumbnail_path ? 
+              `<img src="${video.thumbnail_path}" alt="${video.title || video.filename}" class="w-full h-full object-cover" onerror="this.onerror=null; this.parentElement.innerHTML='<i class=\'ti ti-video text-gray-400 text-lg\' style=\'display: flex; align-items: center; justify-content: center; height: 100%;\' ></i>';">` :
+              `<i class="ti ti-video text-gray-400 text-lg" style="display: flex; align-items: center; justify-content: center; height: 100%;"></i>`
+            }
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-white font-medium truncate">${video.title || video.filename}</p>
+            <div class="flex items-center space-x-2 mt-1">
+              <p class="text-gray-400 text-sm">${formatDate(video.created_at)}</p>
+              <span class="text-gray-500">•</span>
+              <p class="text-gray-400 text-sm">${formatDuration(video.duration)}</p>
             </div>
           </div>
-        `).join('');
-        emptyState.classList.add('hidden');
+        </div>
+        <div class="flex items-center gap-2 flex-shrink-0">
+          <span class="inline-flex px-2.5 py-1 text-xs font-medium rounded-md bg-primary/20 text-accent border border-primary/30">
+            ${formatFileSize(video.file_size)}
+          </span>
+          <button onclick="playMemberVideo('${video.id}', '${(video.title || video.filename).replace(/'/g, "\\'")}')" 
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white text-sm font-medium rounded-lg transition-colors" title="Play">
+            <i class="ti ti-player-play"></i>
+            <span>Play</span>
+          </button>
+          <button onclick="deleteMemberVideo('${video.id}', '${(video.title || video.filename).replace(/'/g, "\\'")}')"
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white text-sm font-medium rounded-lg transition-colors" title="Delete">
+            <i class="ti ti-trash"></i>
+            <span>Delete</span>
+          </button>
+        </div>
+      </div>
+    `).join('');
+    emptyState.classList.add('hidden');
+  } else {
+    videoList.innerHTML = '';
+    emptyState.classList.remove('hidden');
+  }
+}
+
+function loadMemberVideos() {
+  const videoList = document.getElementById('videoList');
+  videoList.innerHTML = '<div class="flex items-center justify-center p-8"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div></div>';
+  
+  fetch(`/api/users/${currentVideoModalUserId}/videos`)
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        renderMemberVideos(data.videos || []);
       } else {
-        videoList.innerHTML = '';
-        emptyState.classList.remove('hidden');
+        document.getElementById('videoList').innerHTML = '<p class="text-red-400 text-center">Failed to load videos</p>';
       }
     })
     .catch(error => {
       console.error('Error fetching videos:', error);
       document.getElementById('videoList').innerHTML = '<p class="text-red-400 text-center">Error loading videos</p>';
     });
+}
+
+function deleteMemberVideo(videoId, videoTitle) {
+  showConfirmModal(
+    'Delete Video',
+    `Are you sure you want to delete "${videoTitle}" from ${currentVideoModalUsername}?`,
+    () => {
+      fetch(`/api/videos/${videoId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      })
+        .then(response => response.json())
+        .then(data => {
+          if (!data.success) {
+            throw new Error(data.error || 'Failed to delete video');
+          }
+          showToast('Video deleted successfully', 'success');
+          loadMemberVideos();
+          setTimeout(() => window.location.reload(), 500);
+        })
+        .catch(error => {
+          console.error('Error deleting member video:', error);
+          showToast(error.message || 'Failed to delete video', 'error');
+        });
+    }
+  );
 }
 
 function showStreamModal(element) {
