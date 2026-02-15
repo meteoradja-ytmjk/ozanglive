@@ -1461,8 +1461,8 @@ function formatDuration(seconds) {
     }
 
     if (confirm(`Delete all videos in folder "${folderName}"? (${videoIds.length} video)`)) {
-      fetch('/api/videos/folder', {
-        method: 'DELETE',
+      fetch('/api/videos/delete-folder', {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-CSRF-Token': '<%= csrfToken %>'
@@ -1481,8 +1481,8 @@ function formatDuration(seconds) {
 
   function showDeleteAllDialog() {
     if (confirm('Delete all videos in gallery? This action cannot be undone.')) {
-      fetch('/api/videos/all', {
-        method: 'DELETE',
+      fetch('/api/videos/delete-all', {
+        method: 'POST',
         headers: { 'X-CSRF-Token': '<%= csrfToken %>' }
       }).then(r => r.json()).then(data => {
         if (data.success) {
@@ -1502,8 +1502,8 @@ function formatDuration(seconds) {
     }
 
     if (confirm(`Delete all audios in folder "${folderName}"? (${audioIds.length} audio)`)) {
-      fetch('/api/audios/folder', {
-        method: 'DELETE',
+      fetch('/api/audios/delete-folder', {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-CSRF-Token': '<%= csrfToken %>'
@@ -1522,8 +1522,8 @@ function formatDuration(seconds) {
 
   function showDeleteAllAudiosDialog() {
     if (confirm('Delete all audios in gallery? This action cannot be undone.')) {
-      fetch('/api/audios/all', {
-        method: 'DELETE',
+      fetch('/api/audios/delete-all', {
+        method: 'POST',
         headers: { 'X-CSRF-Token': '<%= csrfToken %>' }
       }).then(r => r.json()).then(data => {
         if (data.success) {
