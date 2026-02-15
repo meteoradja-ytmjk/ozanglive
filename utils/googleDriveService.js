@@ -55,9 +55,39 @@ function parseDriveUrl(driveUrl) {
   };
 }
 
+async function listPublicFolderFilesWithoutApiKey(folderId) {
+  const url = `https://drive.google.com/embeddedfolderview?id=${encodeURIComponent(folderId)}#list`;
+  const response = await axios.get(url, {
+    timeout: 30000,
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    }
+  });
+
+  const html = typeof response.data === 'string' ? response.data : '';
+  const fileIds = new Set();
+
+  const fileLinkMatches = html.matchAll(/\/file\/d\/([a-zA-Z0-9_-]{20,})/g);
+  for (const match of fileLinkMatches) {
+    fileIds.add(match[1]);
+  }
+
+  const dataIdMatches = html.matchAll(/data-id="([a-zA-Z0-9_-]{20,})"/g);
+  for (const match of dataIdMatches) {
+    fileIds.add(match[1]);
+  }
+
+  return Array.from(fileIds).map((fileId, index) => ({
+    fileId,
+    name: `Folder File ${index + 1}`,
+    mimeType: null
+  }));
+}
+
 async function listFilesInFolder(folderId, apiKey, allowedMimePrefix = 'video/') {
   if (!apiKey) {
-    throw new Error('Google Drive API key is required to import from folder links');
+    const fallbackFiles = await listPublicFolderFilesWithoutApiKey(folderId);
+    return fallbackFiles;
   }
 
   const files = [];

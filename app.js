@@ -3183,19 +3183,27 @@ app.post('/api/videos/import-drive-batch', isAuthenticated, [
 
     const files = [];
     for (let i = 0; i < driveUrls.length; i++) {
+      let parsed;
       try {
-        const parsed = parseDriveUrl(driveUrls[i]);
+        parsed = parseDriveUrl(driveUrls[i]);
+      } catch (error) {
+        return res.status(400).json({
+          success: false,
+          error: `Invalid Google Drive URL at position ${i + 1}: ${error.message}`
+        });
+      }
 
-        if (parsed.type === 'file') {
-          files.push({ index: i, link: parsed.originalUrl, fileId: parsed.id });
-          continue;
-        }
+      if (parsed.type === 'file') {
+        files.push({ index: i, link: parsed.originalUrl, fileId: parsed.id });
+        continue;
+      }
 
+      try {
         const folderFiles = await listFilesInFolder(parsed.id, user?.gdrive_api_key, 'video/');
         if (folderFiles.length === 0) {
           return res.status(400).json({
             success: false,
-            error: `Google Drive folder at position ${i + 1} has no public video files`
+            error: `Google Drive folder at position ${i + 1} has no files that can be imported`
           });
         }
 
@@ -3212,7 +3220,7 @@ app.post('/api/videos/import-drive-batch', isAuthenticated, [
       } catch (error) {
         return res.status(400).json({
           success: false,
-          error: `Invalid Google Drive URL at position ${i + 1}: ${error.message}`
+          error: `Failed to read Google Drive folder at position ${i + 1}: ${error.message}`
         });
       }
     }
@@ -5157,19 +5165,27 @@ app.post('/api/audios/import-drive-batch', isAuthenticated, [
 
     const files = [];
     for (let i = 0; i < driveUrls.length; i++) {
+      let parsed;
       try {
-        const parsed = parseDriveUrl(driveUrls[i]);
+        parsed = parseDriveUrl(driveUrls[i]);
+      } catch (error) {
+        return res.status(400).json({
+          success: false,
+          error: `Invalid Google Drive URL at position ${i + 1}: ${error.message}`
+        });
+      }
 
-        if (parsed.type === 'file') {
-          files.push({ index: i, link: parsed.originalUrl, fileId: parsed.id });
-          continue;
-        }
+      if (parsed.type === 'file') {
+        files.push({ index: i, link: parsed.originalUrl, fileId: parsed.id });
+        continue;
+      }
 
+      try {
         const folderFiles = await listFilesInFolder(parsed.id, user?.gdrive_api_key, 'audio/');
         if (folderFiles.length === 0) {
           return res.status(400).json({
             success: false,
-            error: `Google Drive folder at position ${i + 1} has no public audio files`
+            error: `Google Drive folder at position ${i + 1} has no files that can be imported`
           });
         }
 
@@ -5186,7 +5202,7 @@ app.post('/api/audios/import-drive-batch', isAuthenticated, [
       } catch (error) {
         return res.status(400).json({
           success: false,
-          error: `Invalid Google Drive URL at position ${i + 1}: ${error.message}`
+          error: `Failed to read Google Drive folder at position ${i + 1}: ${error.message}`
         });
       }
     }
