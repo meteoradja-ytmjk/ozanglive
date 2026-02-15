@@ -163,6 +163,92 @@ function closeAddAccountModal() {
   document.getElementById('addAccountForm').reset();
 }
 
+// Edit Account Modal
+async function openEditAccountModal(accountId, channelName) {
+  document.getElementById('editAccountId').value = accountId;
+  document.getElementById('editAccountChannelName').textContent = channelName || 'YouTube Channel';
+  document.getElementById('editAccountModal').classList.remove('hidden');
+
+  try {
+    const response = await fetch(`/api/youtube/credentials/${accountId}`, {
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+
+    const data = await response.json();
+    if (!data.success || !data.account) {
+      showToast(data.error || 'Failed to load account credentials', 'error');
+      return;
+    }
+
+    document.getElementById('editClientId').value = data.account.clientId || '';
+    document.getElementById('editClientSecret').value = data.account.clientSecret || '';
+    document.getElementById('editRefreshToken').value = data.account.refreshToken || '';
+  } catch (error) {
+    console.error('Error:', error);
+    showToast('An error occurred while loading account', 'error');
+  }
+}
+
+function closeEditAccountModal() {
+  document.getElementById('editAccountModal').classList.add('hidden');
+  document.getElementById('editAccountForm').reset();
+  document.getElementById('editAccountId').value = '';
+  document.getElementById('editAccountChannelName').textContent = '';
+}
+
+const editAccountForm = document.getElementById('editAccountForm');
+if (editAccountForm) {
+  editAccountForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const accountId = document.getElementById('editAccountId').value;
+    if (!accountId) {
+      showToast('Account not found', 'error');
+      return;
+    }
+
+    const editBtn = document.getElementById('editAccountBtn');
+    const originalText = editBtn.innerHTML;
+    editBtn.innerHTML = '<i class="ti ti-loader animate-spin"></i> Updating...';
+    editBtn.disabled = true;
+
+    try {
+      const formData = {
+        clientId: document.getElementById('editClientId').value,
+        clientSecret: document.getElementById('editClientSecret').value,
+        refreshToken: document.getElementById('editRefreshToken').value
+      };
+
+      const response = await fetch(`/api/youtube/credentials/${accountId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': getCsrfToken()
+        },
+        body: JSON.stringify(formData)
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        showToast('YouTube account updated successfully!');
+        closeEditAccountModal();
+        setTimeout(() => window.location.reload(), 1000);
+      } else {
+        showToast(data.error || 'Failed to update account', 'error');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      showToast('An error occurred', 'error');
+    } finally {
+      editBtn.innerHTML = originalText;
+      editBtn.disabled = false;
+    }
+  });
+}
+
 // Add Account Form Handler
 const addAccountForm = document.getElementById('addAccountForm');
 if (addAccountForm) {
