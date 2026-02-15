@@ -133,6 +133,12 @@ function formatDuration(seconds) {
         <option value="newest" selected>Z to A</option>
         <option value="oldest">A to Z</option>
       </select>
+      <% if (typeof permissions !== 'undefined' && permissions.can_delete_videos) { %>
+      <button onclick="currentTab === 'audio' ? showDeleteAllAudiosDialog() : showDeleteAllDialog()" title="Delete All"
+        class="px-3 py-2.5 bg-red-500/10 border border-red-500/40 text-red-400 hover:text-red-300 hover:bg-red-500/20 rounded-lg transition-colors">
+        <i class="ti ti-trash"></i>
+      </button>
+      <% } %>
       <button onclick="expandAllGroups()" title="Expand All Groups"
         class="px-3 py-2.5 bg-dark-700 border border-gray-600 text-gray-400 hover:text-white hover:border-primary rounded-lg transition-colors">
         <i class="ti ti-chevrons-down"></i>
@@ -202,8 +208,17 @@ function formatDuration(seconds) {
               <p class="text-xs text-gray-400"><%= groupVideos.length %> video<%= groupVideos.length > 1 ? 's' : '' %></p>
             </div>
           </div>
-          <div class="text-xs text-gray-500">
-            <i class="ti ti-folder"></i>
+          <div class="flex items-center gap-2">
+            <% if (typeof permissions !== 'undefined' && permissions.can_delete_videos) { %>
+            <button onclick="event.stopPropagation(); showDeleteFolderDialog('<%= group.displayName.replace(/'/g, "\\'") %>', <%- JSON.stringify(groupVideos.map(v => v.id)) %>)"
+              title="Delete Folder"
+              class="p-1.5 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors">
+              <i class="ti ti-trash"></i>
+            </button>
+            <% } %>
+            <div class="text-xs text-gray-500">
+              <i class="ti ti-folder"></i>
+            </div>
           </div>
         </div>
         
@@ -315,8 +330,17 @@ function formatDuration(seconds) {
               <p class="text-xs text-gray-400"><%= groupAudios.length %> audio<%= groupAudios.length > 1 ? 's' : '' %></p>
             </div>
           </div>
-          <div class="text-xs text-gray-500">
-            <i class="ti ti-folder"></i>
+          <div class="flex items-center gap-2">
+            <% if (typeof permissions !== 'undefined' && permissions.can_delete_videos) { %>
+            <button onclick="event.stopPropagation(); showDeleteAudioFolderDialog('<%= group.displayName.replace(/'/g, "\\'") %>', <%- JSON.stringify(groupAudios.map(a => a.id)) %>)"
+              title="Delete Folder"
+              class="p-1.5 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors">
+              <i class="ti ti-trash"></i>
+            </button>
+            <% } %>
+            <div class="text-xs text-gray-500">
+              <i class="ti ti-folder"></i>
+            </div>
           </div>
         </div>
         
@@ -1427,6 +1451,88 @@ function formatDuration(seconds) {
         if (data.success) { showToast('success', 'Video deleted'); setTimeout(() => location.reload(), 1000); }
         else showToast('error', data.error || 'Failed to delete');
       });
+    }
+  }
+
+  function showDeleteFolderDialog(folderName, videoIds) {
+    if (!Array.isArray(videoIds) || videoIds.length === 0) {
+      showToast('error', 'Folder kosong, tidak ada video yang bisa dihapus');
+      return;
+    }
+
+    if (confirm(`Delete all videos in folder "${folderName}"? (${videoIds.length} video)`)) {
+      fetch('/api/videos/folder', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': '<%= csrfToken %>'
+        },
+        body: JSON.stringify({ videoIds })
+      }).then(r => r.json()).then(data => {
+        if (data.success) {
+          showToast('success', data.message || 'Folder videos deleted');
+          setTimeout(() => location.reload(), 1000);
+        } else {
+          showToast('error', data.error || 'Failed to delete folder videos');
+        }
+      }).catch(() => showToast('error', 'Failed to delete folder videos'));
+    }
+  }
+
+  function showDeleteAllDialog() {
+    if (confirm('Delete all videos in gallery? This action cannot be undone.')) {
+      fetch('/api/videos/all', {
+        method: 'DELETE',
+        headers: { 'X-CSRF-Token': '<%= csrfToken %>' }
+      }).then(r => r.json()).then(data => {
+        if (data.success) {
+          showToast('success', data.message || 'All videos deleted');
+          setTimeout(() => location.reload(), 1000);
+        } else {
+          showToast('error', data.error || 'Failed to delete all videos');
+        }
+      }).catch(() => showToast('error', 'Failed to delete all videos'));
+    }
+  }
+
+  function showDeleteAudioFolderDialog(folderName, audioIds) {
+    if (!Array.isArray(audioIds) || audioIds.length === 0) {
+      showToast('error', 'Folder kosong, tidak ada audio yang bisa dihapus');
+      return;
+    }
+
+    if (confirm(`Delete all audios in folder "${folderName}"? (${audioIds.length} audio)`)) {
+      fetch('/api/audios/folder', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': '<%= csrfToken %>'
+        },
+        body: JSON.stringify({ audioIds })
+      }).then(r => r.json()).then(data => {
+        if (data.success) {
+          showToast('success', data.message || 'Folder audios deleted');
+          setTimeout(() => location.reload(), 1000);
+        } else {
+          showToast('error', data.error || 'Failed to delete folder audios');
+        }
+      }).catch(() => showToast('error', 'Failed to delete folder audios'));
+    }
+  }
+
+  function showDeleteAllAudiosDialog() {
+    if (confirm('Delete all audios in gallery? This action cannot be undone.')) {
+      fetch('/api/audios/all', {
+        method: 'DELETE',
+        headers: { 'X-CSRF-Token': '<%= csrfToken %>' }
+      }).then(r => r.json()).then(data => {
+        if (data.success) {
+          showToast('success', data.message || 'All audios deleted');
+          setTimeout(() => location.reload(), 1000);
+        } else {
+          showToast('error', data.error || 'Failed to delete all audios');
+        }
+      }).catch(() => showToast('error', 'Failed to delete all audios'));
     }
   }
   
