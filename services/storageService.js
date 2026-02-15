@@ -6,6 +6,38 @@ const CACHE_TTL = 60000; // 1 minute cache
 
 class StorageService {
   /**
+   * Normalize storage limit values from DB/API.
+   * Supports legacy/string values and treats invalid/non-positive values as unlimited.
+   * @param {unknown} rawLimit
+   * @returns {number|null}
+   */
+  static normalizeLimit(rawLimit) {
+    if (rawLimit === null || rawLimit === undefined || rawLimit === '') {
+      return null;
+    }
+
+    const parsedLimit = Number(rawLimit);
+    if (!Number.isFinite(parsedLimit) || parsedLimit <= 0) {
+      return null;
+    }
+
+    // Backward compatibility for legacy limits that were saved without byte conversion.
+    // Newer versions store bytes, while older deployments may have raw unit numbers.
+    if (parsedLimit < 1024) {
+      // Typical historical values were plain numbers like 5/10/20 (GB) or 256/512 (MB).
+      if (parsedLimit <= 100) {
+        return Math.floor(parsedLimit * 1024 * 1024 * 1024); // legacy GB value
+      }
+      return Math.floor(parsedLimit * 1024 * 1024); // legacy MB value
+    }
+    if (parsedLimit < 1024 * 1024) {
+      return Math.floor(parsedLimit * 1024 * 1024); // legacy MB value
+    }
+
+    return Math.floor(parsedLimit);
+  }
+
+  /**
    * Calculate total storage usage for a user
    * @param {string} userId - User ID
    * @returns {Promise<{totalBytes: number, videoBytes: number, audioBytes: number}>}
@@ -25,8 +57,8 @@ class StorageService {
           return reject(err);
         }
 
-        const videoBytes = result?.videoBytes || 0;
-        const audioBytes = result?.audioBytes || 0;
+        const videoBytes = Number(result?.videoBytes) || 0;
+        const audioBytes = Number(result?.audioBytes) || 0;
         const totalBytes = videoBytes + audioBytes;
 
         resolve({
@@ -64,10 +96,20 @@ class StorageService {
    */
   static async canUpload(userId, fileSize) {
     const usage = await this.calculateUsage(userId);
-    const limit = await this.getUserStorageLimit(userId);
+    const limit = this.normalizeLimit(await this.getUserStorageLimit(userId));
+    const normalizedFileSize = Number(fileSize);
+
+    if (!Number.isFinite(normalizedFileSize) || normalizedFileSize <= 0) {
+      return {
+        allowed: false,
+        currentUsage: usage.totalBytes,
+        limit,
+        remaining: limit === null ? null : Math.max(0, limit - usage.totalBytes)
+      };
+    }
 
     // If limit is null or 0, user has unlimited storage
-    if (!limit || limit === 0) {
+    if (!limit) {
       return {
         allowed: true,
         currentUsage: usage.totalBytes,
@@ -76,14 +118,14 @@ class StorageService {
       };
     }
 
-    const remaining = limit - usage.totalBytes;
-    const allowed = (usage.totalBytes + fileSize) <= limit;
+    const remaining = Math.max(0, limit - usage.totalBytes);
+    const allowed = (usage.totalBytes + normalizedFileSize) <= limit;
 
     return {
       allowed,
       currentUsage: usage.totalBytes,
       limit,
-      remaining: Math.max(0, remaining)
+      remaining
     };
   }
 
@@ -105,7 +147,7 @@ class StorageService {
           console.error('Error getting storage limit:', err.message);
           return reject(err);
         }
-        const limit = row?.storage_limit || null;
+        const limit = this.normalizeLimit(row?.storage_limit);
         
         // Cache the result
         storageLimitCache.set(userId, { limit, timestamp: Date.now() });
@@ -134,7 +176,7 @@ class StorageService {
    */
   static async getStorageInfo(userId) {
     const usage = await this.calculateUsage(userId);
-    const limit = await this.getUserStorageLimit(userId);
+    const limit = this.normalizeLimit(await this.getUserStorageLimit(userId));
 
     let percentage = null;
     let status = 'normal';
@@ -184,12 +226,8 @@ class StorageService {
           return reject(err);
         }
         
-        if (!row || row.value === 'null' || row.value === '') {
-          return resolve(null);
-        }
-        
-        const limit = parseInt(row.value, 10);
-        resolve(isNaN(limit) ? null : limit);
+        const limit = this.normalizeLimit(row?.value);
+        resolve(limit);
       });
     });
   }
