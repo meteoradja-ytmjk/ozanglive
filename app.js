@@ -9399,6 +9399,127 @@ async function createUpdateBackup(appDir, addLog) {
   return backupBase;
 }
 
+function getUpdateStateFilePath(appDir) {
+  return path.join(appDir, 'logs', 'update-state.json');
+}
+
+
+function getVersionPoint(currentVersion, latestVersion) {
+  const semverPattern = /^(\d+)\.(\d+)\.(\d+)$/;
+  const currentMatch = String(currentVersion || '').match(semverPattern);
+  const latestMatch = String(latestVersion || '').match(semverPattern);
+
+  if (!currentMatch || !latestMatch) {
+    return null;
+  }
+
+  const current = currentMatch.slice(1).map(Number);
+  const latest = latestMatch.slice(1).map(Number);
+
+  if (latest[0] > current[0]) {
+    return {
+      type: 'major',
+      label: `+${latest[0] - current[0]}.0.0 (Major)`
+    };
+  }
+
+  if (latest[1] > current[1]) {
+    return {
+      type: 'minor',
+      label: `+0.${latest[1] - current[1]}.0 (Minor)`
+    };
+  }
+
+  if (latest[2] > current[2]) {
+    return {
+      type: 'patch',
+      label: `+0.0.${latest[2] - current[2]} (Patch)`
+    };
+  }
+
+  return {
+    type: 'none',
+    label: '+0.0.0 (No change)'
+  };
+}
+
+async function saveUpdateState(appDir, state) {
+  const stateFile = getUpdateStateFilePath(appDir);
+  await fs.promises.mkdir(path.dirname(stateFile), { recursive: true });
+  await fs.promises.writeFile(stateFile, JSON.stringify(state, null, 2), 'utf8');
+}
+
+function loadUpdateState(appDir) {
+  const stateFile = getUpdateStateFilePath(appDir);
+  if (!fs.existsSync(stateFile)) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+  } catch (err) {
+    console.error('Failed to parse update state file:', err.message);
+    return null;
+  }
+}
+
+
+function isSafeBackupBase(appDir, backupBase) {
+  if (!backupBase || typeof backupBase !== 'string') return false;
+
+  const resolvedBase = path.resolve(backupBase);
+  const allowedRoot = path.resolve(path.join(appDir, 'db', 'backups'));
+  return resolvedBase.startsWith(allowedRoot + path.sep) || resolvedBase === allowedRoot;
+}
+
+async function restoreDatabaseBackup(appDir, backupBase, addLog) {
+  if (!isSafeBackupBase(appDir, backupBase)) {
+    addLog('Warning: Invalid backup path, skip database restore.');
+    return;
+  }
+
+  const dbDir = path.join(appDir, 'db');
+  const restoreTargets = [
+    { source: `${backupBase}.db`, target: path.join(dbDir, 'streamflow.db'), required: true },
+    { source: `${backupBase}.db-wal`, target: path.join(dbDir, 'streamflow.db-wal'), required: false },
+    { source: `${backupBase}.db-shm`, target: path.join(dbDir, 'streamflow.db-shm'), required: false }
+  ];
+
+  for (const target of restoreTargets) {
+    if (!fs.existsSync(target.source)) {
+      if (target.required) {
+        addLog(`Warning: Required backup file not found (${path.basename(target.source)}).`);
+      }
+      continue;
+    }
+
+    try {
+      await fs.promises.copyFile(target.source, target.target);
+      addLog(`Database restored: ${path.basename(target.target)}`);
+    } catch (err) {
+      addLog(`Warning: Failed to restore ${path.basename(target.target)} (${err.message})`);
+    }
+  }
+}
+
+async function checkHealthEndpoint(healthUrl, attempts = 8, intervalMs = 3000) {
+  for (let i = 0; i < attempts; i += 1) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+      const res = await fetch(healthUrl, { signal: controller.signal });
+      clearTimeout(timeout);
+      if (res.ok) return true;
+    } catch (err) {
+      // Retry on next loop
+    }
+
+    await new Promise(resolve => setTimeout(resolve, intervalMs));
+  }
+
+  return false;
+}
+
 // ============================================
 // System Update API Endpoints (Admin only)
 // ============================================
@@ -9577,10 +9698,13 @@ app.get('/api/system/check-update', isAuthenticated, isAdmin, async (req, res) =
         }
       }
 
+      const versionPoint = getVersionPoint(currentVersion, latestVersion);
+
       res.json({
         success: true,
         currentVersion,
         latestVersion,
+        versionPoint,
         updateAvailable: behindCount > 0,
         commitsAhead: 0,
         commitsBehind: behindCount,
@@ -9625,6 +9749,16 @@ app.post('/api/system/perform-update', isAuthenticated, isAdmin, async (req, res
       addLog(`Current commit: ${previousHead}`);
     } catch (err) {
       addLog(`Warning: Unable to capture current commit (${err.message})`);
+    }
+
+    // Capture current version
+    let previousVersion = 'Unknown';
+    try {
+      const packagePath = path.join(appDir, 'package.json');
+      const packageData = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
+      previousVersion = packageData.version || 'Unknown';
+    } catch (versionErr) {
+      addLog(`Warning: Unable to read current version (${versionErr.message})`);
     }
 
     // Auto backup before update
@@ -9741,6 +9875,33 @@ app.post('/api/system/perform-update', isAuthenticated, isAdmin, async (req, res
       // Don't fail on npm warnings, continue
     }
 
+    // Capture target commit + version after update for rollback metadata
+    let updatedHead = '';
+    let updatedVersion = 'Unknown';
+    try {
+      updatedHead = (await execAsync('git rev-parse HEAD', { cwd: appDir, timeout: 5000 })).stdout.trim();
+    } catch (headErr) {
+      addLog(`Warning: Unable to capture updated commit (${headErr.message})`);
+    }
+
+    try {
+      const packagePath = path.join(appDir, 'package.json');
+      const packageData = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
+      updatedVersion = packageData.version || 'Unknown';
+    } catch (versionErr) {
+      addLog(`Warning: Unable to read updated version (${versionErr.message})`);
+    }
+
+    await saveUpdateState(appDir, {
+      canRollback: Boolean(previousHead),
+      previousHead: previousHead || null,
+      previousVersion,
+      currentHead: updatedHead || null,
+      currentVersion: updatedVersion,
+      backupBase: backupBase || null,
+      updatedAt: new Date().toISOString()
+    });
+
     addLog('Update completed successfully!');
     addLog('Restarting application and running health check...');
 
@@ -9762,6 +9923,129 @@ app.post('/api/system/perform-update', isAuthenticated, isAdmin, async (req, res
       success: false,
       error: 'Failed to perform update: ' + error.message,
       log: [`Error: ${error.message}`]
+    });
+  }
+});
+
+// Get rollback status
+app.get('/api/system/rollback-status', isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    const appDir = __dirname;
+    const state = loadUpdateState(appDir);
+
+    if (!state || !state.canRollback || !state.previousHead) {
+      return res.json({
+        success: true,
+        canRollback: false,
+        message: 'No rollback point available yet.'
+      });
+    }
+
+    return res.json({
+      success: true,
+      canRollback: true,
+      previousVersion: state.previousVersion || 'Unknown',
+      currentVersion: state.currentVersion || 'Unknown',
+      updatedAt: state.updatedAt || null
+    });
+  } catch (error) {
+    console.error('Error getting rollback status:', error);
+    res.status(500).json({ success: false, error: 'Failed to get rollback status: ' + error.message });
+  }
+});
+
+// Perform rollback to previous version
+app.post('/api/system/rollback-update', isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    const { exec } = require('child_process');
+    const { promisify } = require('util');
+    const execAsync = promisify(exec);
+    const appDir = __dirname;
+    const log = [];
+    const healthPort = process.env.PORT || '7575';
+    const healthUrl = `http://localhost:${healthPort}/health`;
+
+    const addLog = (message) => {
+      console.log(`[Rollback] ${message}`);
+      log.push(message);
+    };
+
+    const state = loadUpdateState(appDir);
+    if (!state || !state.canRollback || !state.previousHead) {
+      return res.json({
+        success: false,
+        error: 'Rollback data not found. Please run an update first.',
+        log
+      });
+    }
+
+    addLog(`Validating rollback target ${state.previousHead}...`);
+    await execAsync(`git rev-parse --verify ${state.previousHead}^{commit}`, { cwd: appDir, timeout: 15000 });
+
+    addLog('Stopping app via PM2 before rollback...');
+    try {
+      await execAsync('pm2 stop ozanglive || pm2 stop ecosystem.config.js', { cwd: appDir, timeout: 30000 });
+      addLog('Application stopped.');
+    } catch (pm2StopErr) {
+      addLog(`Warning: PM2 stop skipped (${pm2StopErr.message})`);
+    }
+
+    addLog(`Rolling back to commit ${state.previousHead}...`);
+    await execAsync(`git reset --hard ${state.previousHead}`, { cwd: appDir, timeout: 60000 });
+
+    if (state.backupBase) {
+      addLog('Restoring database backup from pre-update snapshot...');
+      await restoreDatabaseBackup(appDir, state.backupBase, addLog);
+    } else {
+      addLog('No database backup path found; skip DB restore.');
+    }
+
+    addLog('Installing dependencies for rolled back version...');
+    try {
+      await execAsync('npm install', { cwd: appDir, timeout: 300000 });
+      addLog('Dependencies installed.');
+    } catch (npmErr) {
+      addLog(`Warning: npm install failed (${npmErr.message})`);
+    }
+
+    addLog('Starting app via PM2 after rollback...');
+    try {
+      await execAsync('pm2 restart ozanglive || pm2 restart ecosystem.config.js', { cwd: appDir, timeout: 45000 });
+      addLog('Application restarted after rollback.');
+    } catch (pm2Err) {
+      addLog(`Warning: PM2 restart failed (${pm2Err.message})`);
+    }
+
+    const healthy = await checkHealthEndpoint(healthUrl);
+    if (healthy) {
+      addLog('Health check passed after rollback.');
+    } else {
+      addLog('Warning: Health check failed after rollback.');
+    }
+
+    try {
+      await saveUpdateState(appDir, {
+        ...state,
+        canRollback: false,
+        rolledBackAt: new Date().toISOString(),
+        rollbackHealthCheckPassed: healthy
+      });
+    } catch (stateErr) {
+      addLog(`Warning: Unable to update rollback state (${stateErr.message})`);
+    }
+
+    return res.json({
+      success: healthy,
+      message: healthy
+        ? `Rollback to version ${state.previousVersion || 'previous'} completed.`
+        : `Rollback executed but health check failed. Please inspect logs and service status.`,
+      log
+    });
+  } catch (error) {
+    console.error('Error performing rollback:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to rollback update: ' + error.message
     });
   }
 });
