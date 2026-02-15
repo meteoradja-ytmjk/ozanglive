@@ -3178,14 +3178,37 @@ app.post('/api/videos/import-drive-batch', isAuthenticated, [
     }
 
     const { driveUrls } = req.body;
-    const { extractFileId } = require('./utils/googleDriveService');
+    const { parseDriveUrl, listFilesInFolder } = require('./utils/googleDriveService');
+    const user = await User.findById(req.session.userId);
 
-    // Validate and extract file IDs
     const files = [];
     for (let i = 0; i < driveUrls.length; i++) {
       try {
-        const fileId = extractFileId(driveUrls[i]);
-        files.push({ index: i, link: driveUrls[i], fileId });
+        const parsed = parseDriveUrl(driveUrls[i]);
+
+        if (parsed.type === 'file') {
+          files.push({ index: i, link: parsed.originalUrl, fileId: parsed.id });
+          continue;
+        }
+
+        const folderFiles = await listFilesInFolder(parsed.id, user?.gdrive_api_key, 'video/');
+        if (folderFiles.length === 0) {
+          return res.status(400).json({
+            success: false,
+            error: `Google Drive folder at position ${i + 1} has no public video files`
+          });
+        }
+
+        for (const folderFile of folderFiles) {
+          files.push({
+            index: i,
+            link: parsed.originalUrl,
+            fileId: folderFile.fileId,
+            source: 'folder',
+            folderId: parsed.id,
+            name: folderFile.name
+          });
+        }
       } catch (error) {
         return res.status(400).json({
           success: false,
@@ -5129,14 +5152,37 @@ app.post('/api/audios/import-drive-batch', isAuthenticated, [
     }
 
     const { driveUrls } = req.body;
-    const { extractFileId } = require('./utils/googleDriveService');
+    const { parseDriveUrl, listFilesInFolder } = require('./utils/googleDriveService');
+    const user = await User.findById(req.session.userId);
 
-    // Validate and extract file IDs
     const files = [];
     for (let i = 0; i < driveUrls.length; i++) {
       try {
-        const fileId = extractFileId(driveUrls[i]);
-        files.push({ index: i, link: driveUrls[i], fileId });
+        const parsed = parseDriveUrl(driveUrls[i]);
+
+        if (parsed.type === 'file') {
+          files.push({ index: i, link: parsed.originalUrl, fileId: parsed.id });
+          continue;
+        }
+
+        const folderFiles = await listFilesInFolder(parsed.id, user?.gdrive_api_key, 'audio/');
+        if (folderFiles.length === 0) {
+          return res.status(400).json({
+            success: false,
+            error: `Google Drive folder at position ${i + 1} has no public audio files`
+          });
+        }
+
+        for (const folderFile of folderFiles) {
+          files.push({
+            index: i,
+            link: parsed.originalUrl,
+            fileId: folderFile.fileId,
+            source: 'folder',
+            folderId: parsed.id,
+            name: folderFile.name
+          });
+        }
       } catch (error) {
         return res.status(400).json({
           success: false,

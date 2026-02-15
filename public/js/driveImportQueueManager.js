@@ -76,6 +76,16 @@ class DriveImportQueueManager {
       return { valid: false, link: trimmedLink, fileId: null, error: 'Not a Google Drive URL' };
     }
     
+    // Folder link support: /folders/{folderId}
+    let folderMatch = trimmedLink.match(/\/folders\/([^\/?]+)/);
+    if (folderMatch) {
+      const folderId = folderMatch[1];
+      if (!/^[a-zA-Z0-9_-]{10,}$/.test(folderId)) {
+        return { valid: false, link: trimmedLink, fileId: null, error: 'Invalid folder ID format' };
+      }
+      return { valid: true, link: trimmedLink, fileId: `folder:${folderId}`, error: null };
+    }
+
     // Try to extract file ID
     let fileId = null;
     
