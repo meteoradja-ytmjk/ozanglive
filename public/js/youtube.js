@@ -28,6 +28,19 @@ function showToast(message, type = 'success') {
   }, 3000);
 }
 
+// Restore preferred account selectors on page load
+document.addEventListener('DOMContentLoaded', () => {
+  const accountId = restorePreferredAccount('accountSelect');
+  if (accountId) {
+    onAccountChange(accountId);
+  }
+
+  const templateAccountId = restorePreferredAccount('templateAccountSelect');
+  if (templateAccountId) {
+    onTemplateAccountChange(templateAccountId);
+  }
+});
+
 // Credentials Form Handler
 const credentialsForm = document.getElementById('credentialsForm');
 if (credentialsForm) {
@@ -342,9 +355,40 @@ async function fetchStreams(accountId = null) {
   }
 }
 
+// Persist preferred account selection so users don't need to set global primary first
+function savePreferredAccount(selectId, accountId) {
+  if (!accountId) return;
+  try {
+    localStorage.setItem(`youtube:${selectId}:preferredAccountId`, String(accountId));
+  } catch (err) {
+    // Ignore storage failures
+  }
+}
+
+function restorePreferredAccount(selectId) {
+  const select = document.getElementById(selectId);
+  if (!select || !select.options || select.options.length === 0) return null;
+
+  try {
+    const preferred = localStorage.getItem(`youtube:${selectId}:preferredAccountId`);
+    if (!preferred) return null;
+
+    const option = Array.from(select.options).find(o => String(o.value) === String(preferred));
+    if (option) {
+      select.value = option.value;
+      return option.value;
+    }
+  } catch (err) {
+    // Ignore storage failures
+  }
+
+  return null;
+}
+
 // Handle account change in create broadcast modal
 function onAccountChange(accountId) {
   if (accountId) {
+    savePreferredAccount('accountSelect', accountId);
     fetchStreams(accountId);
     fetchChannelDefaults(accountId);
   }
@@ -2413,9 +2457,12 @@ function renderTemplateList(templates) {
 function openCreateTemplateModal() {
   closeTemplateLibraryModal();
   document.getElementById('createTemplateModal').classList.remove('hidden');
+
+  // Restore preferred account so template flow is independent from global primary account
+  const restoredAccountId = restorePreferredAccount('templateAccountSelect');
   
   // Load stream keys for the selected account
-  const accountId = document.getElementById('templateAccountSelect').value;
+  const accountId = restoredAccountId || document.getElementById('templateAccountSelect').value;
   if (accountId) {
     fetchTemplateStreamKeys(accountId);
   }
@@ -2601,6 +2648,7 @@ async function fetchTemplateStreamKeys(accountId) {
 // Handle account change in template modal
 function onTemplateAccountChange(accountId) {
   if (accountId) {
+    savePreferredAccount('templateAccountSelect', accountId);
     fetchTemplateStreamKeys(accountId);
   }
 }
