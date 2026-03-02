@@ -143,12 +143,10 @@
             class="w-9 h-9 flex items-center justify-center text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors" title="Edit Credentials">
             <i class="ti ti-edit text-lg"></i>
           </button>
-          <% if (!account.isPrimary) { %>
           <button onclick="setPrimaryAccount(<%= account.id %>)" 
-            class="w-9 h-9 flex items-center justify-center text-gray-400 hover:text-yellow-400 hover:bg-yellow-500/10 rounded-lg transition-colors" title="Set as Primary">
-            <i class="ti ti-star text-lg"></i>
+            class="w-9 h-9 flex items-center justify-center rounded-lg transition-colors <%= account.isPrimary ? 'text-yellow-400 bg-yellow-500/10' : 'text-gray-400 hover:text-yellow-400 hover:bg-yellow-500/10' %>" title="<%= account.isPrimary ? 'Primary Account' : 'Set as Primary' %>">
+            <i class="ti <%= account.isPrimary ? 'ti-star-filled' : 'ti-star' %> text-lg"></i>
           </button>
-          <% } %>
           <button onclick="disconnectAccount(<%= account.id %>, '<%= (account.channelName || 'this account').replace(/'/g, "\\'") %>')" 
             class="w-9 h-9 flex items-center justify-center text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors" title="Disconnect">
             <i class="ti ti-unlink text-lg"></i>
@@ -510,7 +508,7 @@
             onchange="onAccountChange(this.value)">
             <% if (accounts && accounts.length > 0) { %>
               <% accounts.forEach(function(account) { %>
-              <option value="<%= account.id %>" <%= account.isPrimary ? 'selected' : '' %>><%= account.channelName || 'YouTube Channel' %></option>
+              <option value="<%= account.id %>"><%= account.channelName || 'YouTube Channel' %></option>
               <% }); %>
             <% } %>
           </select>
@@ -1408,7 +1406,7 @@
             class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none">
             <% if (accounts && accounts.length > 0) { %>
               <% accounts.forEach(function(account) { %>
-              <option value="<%= account.id %>" <%= account.isPrimary ? 'selected' : '' %>><%= account.channelName || 'YouTube Channel' %></option>
+              <option value="<%= account.id %>"><%= account.channelName || 'YouTube Channel' %></option>
               <% }); %>
             <% } %>
           </select>
