@@ -918,6 +918,98 @@
       document.getElementById('clearAudioBtn').classList.add('hidden');
     };
 
+    function createGroupHeader(title, count) {
+      const header = document.createElement('div');
+      header.className = 'sticky top-0 z-[1] px-2 py-1 mt-1 bg-dark-700/95 border-b border-gray-600/60';
+      header.innerHTML = `<p class="text-[11px] uppercase tracking-wider text-gray-400 font-semibold">${title} <span class="text-gray-500">(${count})</span></p>`;
+      return header;
+    }
+
+    function createVideoButton(item) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'w-full flex items-start space-x-3 p-2 rounded hover:bg-dark-600 transition-colors text-left';
+
+      if (item.type === 'playlist') {
+        btn.innerHTML = `
+      <div class="w-16 h-12 bg-gradient-to-br from-blue-600 to-purple-600 rounded flex-shrink-0 overflow-hidden relative">
+        <img src="${item.thumbnail}" alt="" class="w-full h-full object-cover rounded" onerror="this.src='/images/playlist-thumbnail.svg'">
+        <div class="absolute top-0 right-0 bg-green-500 text-white text-xs px-1 rounded-bl text-[8px] font-bold">PL</div>
+      </div>
+      <div class="flex-1 min-w-0 ml-3 text-left">
+        <p class="text-sm font-medium text-white truncate flex items-center">
+          <i class="ti ti-playlist text-blue-400 mr-1 text-xs"></i>
+          ${item.name}
+        </p>
+        <p class="text-xs text-blue-300">${item.resolution} • ${item.duration}</p>
+      </div>
+    `;
+      } else {
+        btn.innerHTML = `
+      <div class="w-16 h-12 bg-dark-800 rounded flex-shrink-0 overflow-hidden">
+        <img src="${item.thumbnail || '/images/default-thumbnail.jpg'}" alt="" class="w-full h-full object-cover rounded" onerror="this.src='/images/default-thumbnail.jpg'">
+      </div>
+      <div class="flex-1 min-w-0 ml-3 text-left">
+        <p class="text-sm font-medium text-white truncate">${item.name}</p>
+        <p class="text-xs text-gray-400">${item.resolution} • ${item.duration}</p>
+      </div>
+    `;
+      }
+
+      btn.onclick = () => {
+        window.selectedVideoData = item;
+        document.getElementById('selectedVideo').textContent = item.type === 'playlist' ? '[Playlist] ' + item.name : item.name;
+        document.getElementById('selectedVideoId').value = item.id;
+        document.getElementById('videoSelectorDropdown').classList.add('hidden');
+
+        const preview = document.getElementById('emptyPreview');
+        if (preview) {
+          if (item.type === 'playlist') {
+            preview.innerHTML = `
+          <div class="text-center">
+            <i class="ti ti-playlist text-4xl text-blue-400 mb-2"></i>
+            <p class="text-sm text-gray-300 font-medium">${item.name}</p>
+            <p class="text-xs text-blue-300 mt-1">Playlist • ${item.duration || 'Multiple videos'}</p>
+          </div>
+        `;
+          } else {
+            preview.innerHTML = `
+          <div class="text-center">
+            <i class="ti ti-video text-4xl text-green-400 mb-2"></i>
+            <p class="text-sm text-gray-300 font-medium">${item.name}</p>
+            <p class="text-xs text-gray-400 mt-1">${item.resolution} • ${item.duration}</p>
+          </div>
+        `;
+          }
+        }
+      };
+
+      return btn;
+    }
+
+    function createAudioButton(audio) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'w-full flex items-center space-x-3 p-2 rounded hover:bg-dark-600 transition-colors text-left';
+      btn.innerHTML = `
+    <div class="w-10 h-10 bg-dark-800 rounded flex-shrink-0 flex items-center justify-center">
+      <i class="ti ti-music text-primary"></i>
+    </div>
+    <div class="flex-1 min-w-0">
+      <p class="text-sm font-medium text-white truncate">${audio.title || audio.name}</p>
+      <p class="text-xs text-gray-400">${audio.duration || 'Unknown'} • ${audio.format || 'audio'}</p>
+    </div>
+  `;
+      btn.onclick = () => {
+        window.selectedAudioData = audio;
+        document.getElementById('selectedAudio').textContent = audio.title || audio.name;
+        document.getElementById('selectedAudioId').value = audio.id;
+        document.getElementById('clearAudioBtn').classList.remove('hidden');
+        document.getElementById('audioSelectorDropdown').classList.add('hidden');
+      };
+      return btn;
+    }
+
     // Fallback for loadGalleryVideos - always define to ensure it works
     window.loadGalleryVideos = async function () {
       const container = document.getElementById('videoListContainer');
@@ -927,84 +1019,15 @@
         const response = await fetch('/api/stream/content');
         const content = await response.json();
         window.allStreamVideos = content;
+        window.loadGalleryVideos._displayVideos(content, container);
 
-        // Always use inline display function for reliability
-        container.innerHTML = '';
-        if (content && content.length > 0) {
-          content.forEach(item => {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'w-full flex items-start space-x-3 p-2 rounded hover:bg-dark-600 transition-colors text-left';
-
-            if (item.type === 'playlist') {
-              btn.innerHTML = `
-            <div class="w-16 h-12 bg-gradient-to-br from-blue-600 to-purple-600 rounded flex-shrink-0 overflow-hidden relative">
-              <img src="${item.thumbnail}" alt="" class="w-full h-full object-cover rounded" onerror="this.src='/images/playlist-thumbnail.svg'">
-              <div class="absolute top-0 right-0 bg-green-500 text-white text-xs px-1 rounded-bl text-[8px] font-bold">PL</div>
-            </div>
-            <div class="flex-1 min-w-0 ml-3 text-left">
-              <p class="text-sm font-medium text-white truncate flex items-center">
-                <i class="ti ti-playlist text-blue-400 mr-1 text-xs"></i>
-                ${item.name}
-              </p>
-              <p class="text-xs text-blue-300">${item.resolution} • ${item.duration}</p>
-            </div>
-          `;
-            } else {
-              btn.innerHTML = `
-            <div class="w-16 h-12 bg-dark-800 rounded flex-shrink-0 overflow-hidden">
-              <img src="${item.thumbnail || '/images/default-thumbnail.jpg'}" alt="" class="w-full h-full object-cover rounded" onerror="this.src='/images/default-thumbnail.jpg'">
-            </div>
-            <div class="flex-1 min-w-0 ml-3 text-left">
-              <p class="text-sm font-medium text-white truncate">${item.name}</p>
-              <p class="text-xs text-gray-400">${item.resolution} • ${item.duration}</p>
-            </div>
-          `;
-            }
-
-            btn.onclick = () => {
-              // Update selection
-              window.selectedVideoData = item;
-              document.getElementById('selectedVideo').textContent = item.type === 'playlist' ? '[Playlist] ' + item.name : item.name;
-              document.getElementById('selectedVideoId').value = item.id;
-              document.getElementById('videoSelectorDropdown').classList.add('hidden');
-
-              // Update preview
-              const preview = document.getElementById('emptyPreview');
-              if (preview) {
-                if (item.type === 'playlist') {
-                  preview.innerHTML = `
-                <div class="text-center">
-                  <i class="ti ti-playlist text-4xl text-blue-400 mb-2"></i>
-                  <p class="text-sm text-gray-300 font-medium">${item.name}</p>
-                  <p class="text-xs text-blue-300 mt-1">Playlist • ${item.duration || 'Multiple videos'}</p>
-                </div>
-              `;
-                } else {
-                  preview.innerHTML = `
-                <div class="text-center">
-                  <i class="ti ti-video text-4xl text-green-400 mb-2"></i>
-                  <p class="text-sm text-gray-300 font-medium">${item.name}</p>
-                  <p class="text-xs text-gray-400 mt-1">${item.resolution} • ${item.duration}</p>
-                </div>
-              `;
-                }
-              }
-            };
-            container.appendChild(btn);
-          });
-
-          // Setup search
-          const searchInput = document.getElementById('videoSearchInput');
-          if (searchInput) {
-            searchInput.oninput = function () {
-              const term = this.value.toLowerCase().trim();
-              const filtered = term ? content.filter(v => v.name.toLowerCase().includes(term)) : content;
-              window.loadGalleryVideos._displayVideos(filtered, container);
-            };
-          }
-        } else {
-          container.innerHTML = '<div class="text-center py-5 text-gray-400"><i class="ti ti-video-off text-2xl mb-2"></i><p>No videos found</p><p class="text-xs text-gray-500 mt-1">Upload videos in Gallery</p></div>';
+        const searchInput = document.getElementById('videoSearchInput');
+        if (searchInput) {
+          searchInput.oninput = function () {
+            const term = this.value.toLowerCase().trim();
+            const filtered = term ? content.filter(v => v.name.toLowerCase().includes(term)) : content;
+            window.loadGalleryVideos._displayVideos(filtered, container);
+          };
         }
       } catch (error) {
         console.error('Error loading videos:', error);
@@ -1015,48 +1038,21 @@
     // Helper function for video search filtering
     window.loadGalleryVideos._displayVideos = function (videos, container) {
       container.innerHTML = '';
-      if (videos && videos.length > 0) {
-        videos.forEach(item => {
-          const btn = document.createElement('button');
-          btn.type = 'button';
-          btn.className = 'w-full flex items-start space-x-3 p-2 rounded hover:bg-dark-600 transition-colors text-left';
-
-          if (item.type === 'playlist') {
-            btn.innerHTML = `
-          <div class="w-16 h-12 bg-gradient-to-br from-blue-600 to-purple-600 rounded flex-shrink-0 overflow-hidden relative">
-            <img src="${item.thumbnail}" alt="" class="w-full h-full object-cover rounded" onerror="this.src='/images/playlist-thumbnail.svg'">
-            <div class="absolute top-0 right-0 bg-green-500 text-white text-xs px-1 rounded-bl text-[8px] font-bold">PL</div>
-          </div>
-          <div class="flex-1 min-w-0 ml-3 text-left">
-            <p class="text-sm font-medium text-white truncate flex items-center">
-              <i class="ti ti-playlist text-blue-400 mr-1 text-xs"></i>
-              ${item.name}
-            </p>
-            <p class="text-xs text-blue-300">${item.resolution} • ${item.duration}</p>
-          </div>
-        `;
-          } else {
-            btn.innerHTML = `
-          <div class="w-16 h-12 bg-dark-800 rounded flex-shrink-0 overflow-hidden">
-            <img src="${item.thumbnail || '/images/default-thumbnail.jpg'}" alt="" class="w-full h-full object-cover rounded" onerror="this.src='/images/default-thumbnail.jpg'">
-          </div>
-          <div class="flex-1 min-w-0 ml-3 text-left">
-            <p class="text-sm font-medium text-white truncate">${item.name}</p>
-            <p class="text-xs text-gray-400">${item.resolution} • ${item.duration}</p>
-          </div>
-        `;
-          }
-
-          btn.onclick = () => {
-            window.selectedVideoData = item;
-            document.getElementById('selectedVideo').textContent = item.type === 'playlist' ? '[Playlist] ' + item.name : item.name;
-            document.getElementById('selectedVideoId').value = item.id;
-            document.getElementById('videoSelectorDropdown').classList.add('hidden');
-          };
-          container.appendChild(btn);
-        });
-      } else {
+      if (!videos || videos.length === 0) {
         container.innerHTML = '<div class="text-center py-5 text-gray-400"><i class="ti ti-search-off text-2xl mb-2"></i><p>No matching content found</p></div>';
+        return;
+      }
+
+      const playlists = videos.filter(item => item.type === 'playlist').sort((a, b) => a.name.localeCompare(b.name));
+      const regularVideos = videos.filter(item => item.type !== 'playlist').sort((a, b) => a.name.localeCompare(b.name));
+
+      if (regularVideos.length > 0) {
+        container.appendChild(createGroupHeader('Videos', regularVideos.length));
+        regularVideos.forEach(item => container.appendChild(createVideoButton(item)));
+      }
+      if (playlists.length > 0) {
+        container.appendChild(createGroupHeader('Playlists', playlists.length));
+        playlists.forEach(item => container.appendChild(createVideoButton(item)));
       }
     };
 
@@ -1069,44 +1065,15 @@
         const response = await fetch('/api/stream/audios');
         const audios = await response.json();
         window.allStreamAudios = audios;
+        window.loadGalleryAudios._displayAudios(audios, container);
 
-        // Always use inline display function for reliability
-        container.innerHTML = '';
-        if (audios && audios.length > 0) {
-          audios.forEach(audio => {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'w-full flex items-center space-x-3 p-2 rounded hover:bg-dark-600 transition-colors text-left';
-            btn.innerHTML = `
-          <div class="w-10 h-10 bg-dark-800 rounded flex-shrink-0 flex items-center justify-center">
-            <i class="ti ti-music text-primary"></i>
-          </div>
-          <div class="flex-1 min-w-0">
-            <p class="text-sm font-medium text-white truncate">${audio.title || audio.name}</p>
-            <p class="text-xs text-gray-400">${audio.duration || 'Unknown'} • ${audio.format || 'audio'}</p>
-          </div>
-        `;
-            btn.onclick = () => {
-              window.selectedAudioData = audio;
-              document.getElementById('selectedAudio').textContent = audio.title || audio.name;
-              document.getElementById('selectedAudioId').value = audio.id;
-              document.getElementById('clearAudioBtn').classList.remove('hidden');
-              document.getElementById('audioSelectorDropdown').classList.add('hidden');
-            };
-            container.appendChild(btn);
-          });
-
-          // Setup search
-          const searchInput = document.getElementById('audioSearchInput');
-          if (searchInput) {
-            searchInput.oninput = function () {
-              const term = this.value.toLowerCase().trim();
-              const filtered = term ? audios.filter(a => (a.title || a.name || '').toLowerCase().includes(term)) : audios;
-              window.loadGalleryAudios._displayAudios(filtered, container);
-            };
-          }
-        } else {
-          container.innerHTML = '<div class="text-center py-5 text-gray-400"><i class="ti ti-music-off text-2xl mb-2"></i><p>No audios found</p><p class="text-xs text-gray-500 mt-1">Upload audio files in Gallery</p></div>';
+        const searchInput = document.getElementById('audioSearchInput');
+        if (searchInput) {
+          searchInput.oninput = function () {
+            const term = this.value.toLowerCase().trim();
+            const filtered = term ? audios.filter(a => (a.title || a.name || '').toLowerCase().includes(term)) : audios;
+            window.loadGalleryAudios._displayAudios(filtered, container);
+          };
         }
       } catch (error) {
         console.error('Error loading audios:', error);
@@ -1117,32 +1084,24 @@
     // Helper function for audio search filtering
     window.loadGalleryAudios._displayAudios = function (audios, container) {
       container.innerHTML = '';
-      if (audios && audios.length > 0) {
-        audios.forEach(audio => {
-          const btn = document.createElement('button');
-          btn.type = 'button';
-          btn.className = 'w-full flex items-center space-x-3 p-2 rounded hover:bg-dark-600 transition-colors text-left';
-          btn.innerHTML = `
-        <div class="w-10 h-10 bg-dark-800 rounded flex-shrink-0 flex items-center justify-center">
-          <i class="ti ti-music text-primary"></i>
-        </div>
-        <div class="flex-1 min-w-0">
-          <p class="text-sm font-medium text-white truncate">${audio.title || audio.name}</p>
-          <p class="text-xs text-gray-400">${audio.duration || 'Unknown'} • ${audio.format || 'audio'}</p>
-        </div>
-      `;
-          btn.onclick = () => {
-            window.selectedAudioData = audio;
-            document.getElementById('selectedAudio').textContent = audio.title || audio.name;
-            document.getElementById('selectedAudioId').value = audio.id;
-            document.getElementById('clearAudioBtn').classList.remove('hidden');
-            document.getElementById('audioSelectorDropdown').classList.add('hidden');
-          };
-          container.appendChild(btn);
-        });
-      } else {
+      if (!audios || audios.length === 0) {
         container.innerHTML = '<div class="text-center py-5 text-gray-400"><i class="ti ti-search-off text-2xl mb-2"></i><p>No matching audios found</p></div>';
+        return;
       }
+
+      const groupedAudios = {};
+      audios.forEach(audio => {
+        const label = (audio.title || audio.name || '').trim();
+        const firstChar = (label.charAt(0).toUpperCase().match(/[A-Z]/) || ['#'])[0];
+        if (!groupedAudios[firstChar]) groupedAudios[firstChar] = [];
+        groupedAudios[firstChar].push(audio);
+      });
+
+      Object.keys(groupedAudios).sort().forEach(groupKey => {
+        const groupItems = groupedAudios[groupKey].sort((a, b) => (a.title || a.name || '').localeCompare(b.title || b.name || ''));
+        container.appendChild(createGroupHeader(groupKey, groupItems.length));
+        groupItems.forEach(audio => container.appendChild(createAudioButton(audio)));
+      });
     };
 
     // Fallback for setScheduleType
