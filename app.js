@@ -7885,6 +7885,51 @@ app.get('/api/youtube/templates', isAuthenticated, async (req, res) => {
 });
 
 
+// Relink disconnected template account IDs to a newly connected account
+app.put('/api/youtube/templates/relink-account', isAuthenticated, async (req, res) => {
+  try {
+    const oldAccountId = parseInt(req.body.oldAccountId);
+    const newAccountId = parseInt(req.body.newAccountId);
+
+    if (!oldAccountId || !newAccountId) {
+      return res.status(400).json({
+        success: false,
+        error: 'oldAccountId and newAccountId are required'
+      });
+    }
+
+    const newAccount = await YouTubeCredentials.findById(newAccountId);
+    if (!newAccount || newAccount.userId !== req.session.userId) {
+      return res.status(404).json({
+        success: false,
+        error: 'New account not found'
+      });
+    }
+
+    const templates = await BroadcastTemplate.findByUserId(req.session.userId);
+    const disconnectedTemplates = templates.filter(t => t.account_id === oldAccountId);
+
+    let updatedCount = 0;
+    for (const template of disconnectedTemplates) {
+      await BroadcastTemplate.update(template.id, { account_id: newAccountId });
+      updatedCount++;
+    }
+
+    res.json({
+      success: true,
+      updatedCount,
+      message: `${updatedCount} template(s) relinked to the new account`
+    });
+  } catch (error) {
+    console.error('[templates/relink-account] Error:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to relink template account'
+    });
+  }
+});
+
+
 // Get all templates with recurring enabled (must be before :id route)
 app.get('/api/youtube/templates/recurring', isAuthenticated, async (req, res) => {
   try {
