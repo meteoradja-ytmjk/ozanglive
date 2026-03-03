@@ -2494,8 +2494,15 @@ function renderTemplateList(templates) {
           <i class="ti ti-brand-youtube"></i>
           ${escapeHtml(template.channel_name || 'Disconnected Channel')}
         </span>`;
-    const recreateActionLabel = accountInvalid ? 'Pilih Channel' : 'Re-create';
+    const recreateActionLabel = accountInvalid ? 'Reconnect' : 'Re-create';
     const recreateActionTitle = accountInvalid ? 'Pilih channel yang terhubung' : 'Re-create Broadcasts';
+    const recreateActionIcon = accountInvalid ? 'ti-link' : 'ti-refresh';
+    const recreateActionDesktopClass = accountInvalid
+      ? 'px-3 py-1.5 bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 rounded-lg transition-colors text-sm flex items-center gap-1'
+      : 'px-3 py-1.5 bg-green-500/10 hover:bg-green-500/20 text-green-400 rounded-lg transition-colors text-sm flex items-center gap-1';
+    const recreateActionMobileClass = accountInvalid
+      ? 'w-8 h-8 flex items-center justify-center text-orange-400 hover:bg-orange-500/20 rounded transition-colors'
+      : 'w-8 h-8 flex items-center justify-center text-green-400 hover:bg-green-500/20 rounded transition-colors';
     
     const div = document.createElement('div');
     div.className = 'template-list-item';
@@ -2534,8 +2541,8 @@ function renderTemplateList(templates) {
           </button>
           ` : ''}
           <button onclick="recreateFromTemplate('${template.id}')"
-            class="px-3 py-1.5 bg-green-500/10 hover:bg-green-500/20 text-green-400 rounded-lg transition-colors text-sm flex items-center gap-1" title="${recreateActionTitle}">
-            <i class="ti ti-refresh"></i>
+            class="${recreateActionDesktopClass}" title="${recreateActionTitle}">
+            <i class="ti ${recreateActionIcon}"></i>
             <span>${recreateActionLabel}</span>
           </button>
           <button onclick="editTemplate('${template.id}')"
@@ -2565,8 +2572,8 @@ function renderTemplateList(templates) {
             <i class="ti ti-plug-connected text-sm"></i>
           </button>` : ''}
           <button onclick="recreateFromTemplate('${template.id}')"
-            class="w-8 h-8 flex items-center justify-center text-green-400 hover:bg-green-500/20 rounded transition-colors" title="${recreateActionTitle}">
-            <i class="ti ti-refresh text-sm"></i>
+            class="${recreateActionMobileClass}" title="${recreateActionTitle}">
+            <i class="ti ${recreateActionIcon} text-sm"></i>
           </button>
           <button onclick="editTemplate('${template.id}')"
             class="w-8 h-8 flex items-center justify-center text-blue-400 hover:bg-blue-500/20 rounded transition-colors" title="Edit">
