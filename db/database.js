@@ -416,6 +416,11 @@ async function createCoreTablesAsync() {
   // Add title_folder_id column for title rotation from specific folder
   await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN title_folder_id TEXT`, 'broadcast_templates.title_folder_id');
 
+  // Store original channel snapshot so template still knows its channel
+  // even if credentials are reconnected with a different account_id.
+  await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN channel_name TEXT`, 'broadcast_templates.channel_name');
+  await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN channel_id TEXT`, 'broadcast_templates.channel_id');
+
   // Create recurring_schedules table for scheduled recurring broadcasts
   await runTableQuery(`CREATE TABLE IF NOT EXISTS recurring_schedules (
     id TEXT PRIMARY KEY,
