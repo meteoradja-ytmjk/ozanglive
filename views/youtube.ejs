@@ -876,6 +876,17 @@
       </div>
       
       <form id="addAccountForm" class="p-6 space-y-4">
+        <div id="reconnectTargetContainer" class="hidden bg-orange-500/10 border border-orange-500/30 rounded-lg p-3">
+          <div class="flex items-start gap-2">
+            <i class="ti ti-plug-connected-x text-orange-400 mt-0.5"></i>
+            <div class="flex-1">
+              <p class="text-sm text-orange-300 font-medium">Reconnect disconnected channel</p>
+              <p class="text-xs text-gray-400 mt-1">Pilih channel/template yang disconnected agar setelah connect, template lama otomatis diarahkan ke akun baru ini.</p>
+            </div>
+          </div>
+          <select id="reconnectTargetSelect" class="w-full mt-3 px-3 py-2 bg-dark-600 border border-gray-600 rounded-lg focus:border-primary focus:outline-none text-sm"></select>
+        </div>
+
         <div>
           <label class="text-sm font-medium text-white block mb-2">Client ID <span class="text-red-400">*</span></label>
           <input type="text" id="newClientId" name="clientId" required

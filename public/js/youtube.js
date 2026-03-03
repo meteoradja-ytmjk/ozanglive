@@ -167,13 +167,80 @@ async function disconnectYouTube() {
 }
 
 // Add Account Modal
-function openAddAccountModal() {
+let reconnectTargetsCache = [];
+let selectedReconnectTarget = null;
+
+function getDisconnectedTargetLabel(target) {
+  const channel = target.channel_name || target.channelName || (target.account_id ? `Disconnected account #${target.account_id}` : 'Unknown Channel');
+  return `${channel} — Template: ${target.name || 'Untitled'}`;
+}
+
+async function loadReconnectTargets() {
+  const select = document.getElementById('reconnectTargetSelect');
+  const container = document.getElementById('reconnectTargetContainer');
+  if (!select || !container) return;
+
+  try {
+    const response = await fetch('/api/youtube/templates', {
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+    const data = await response.json();
+    if (!data.success || !Array.isArray(data.templates)) {
+      reconnectTargetsCache = [];
+      container.classList.add('hidden');
+      return;
+    }
+
+    reconnectTargetsCache = data.templates.filter(t => t.account_valid === false);
+    if (reconnectTargetsCache.length === 0) {
+      container.classList.add('hidden');
+      return;
+    }
+
+    select.innerHTML = '<option value="">Tidak, hanya tambah akun baru</option>';
+    reconnectTargetsCache.forEach((target, idx) => {
+      const option = document.createElement('option');
+      option.value = String(idx);
+      option.textContent = getDisconnectedTargetLabel(target);
+      select.appendChild(option);
+    });
+
+    if (selectedReconnectTarget && selectedReconnectTarget.templateId) {
+      const foundIndex = reconnectTargetsCache.findIndex(t => t.id === selectedReconnectTarget.templateId);
+      if (foundIndex >= 0) {
+        select.value = String(foundIndex);
+      }
+    }
+
+    container.classList.remove('hidden');
+  } catch (error) {
+    reconnectTargetsCache = [];
+    container.classList.add('hidden');
+    console.warn('[reconnect] Failed to load disconnected targets:', error.message);
+  }
+}
+
+function openAddAccountModal(reconnectTarget = null) {
+  selectedReconnectTarget = reconnectTarget;
   document.getElementById('addAccountModal').classList.remove('hidden');
+  loadReconnectTargets();
+}
+
+function openReconnectAccountModal(templateId, templateName, accountId, channelName) {
+  openAddAccountModal({
+    templateId,
+    templateName,
+    accountId,
+    channelName
+  });
 }
 
 function closeAddAccountModal() {
   document.getElementById('addAccountModal').classList.add('hidden');
   document.getElementById('addAccountForm').reset();
+  selectedReconnectTarget = null;
 }
 
 // Edit Account Modal
@@ -292,7 +359,37 @@ if (addAccountForm) {
       const data = await response.json();
       
       if (data.success) {
-        showToast('YouTube account added successfully!');
+        const reconnectSelect = document.getElementById('reconnectTargetSelect');
+        const selectedIndex = reconnectSelect ? reconnectSelect.value : '';
+
+        if (selectedIndex !== '' && reconnectTargetsCache[Number(selectedIndex)]) {
+          const target = reconnectTargetsCache[Number(selectedIndex)];
+          try {
+            const relinkResponse = await fetch('/api/youtube/templates/relink-account', {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': getCsrfToken()
+              },
+              body: JSON.stringify({
+                oldAccountId: target.account_id,
+                newAccountId: data.id
+              })
+            });
+            const relinkData = await relinkResponse.json();
+            if (relinkData.success) {
+              showToast(`Akun tersambung. ${relinkData.updatedCount || 0} template dialihkan ke channel baru.`);
+            } else {
+              showToast('Akun tersambung, tapi gagal update template disconnected.', 'error');
+            }
+          } catch (relinkErr) {
+            console.warn('[reconnect] Failed to relink templates:', relinkErr.message);
+            showToast('Akun tersambung, tapi gagal relink template.', 'error');
+          }
+        } else {
+          showToast('YouTube account added successfully!');
+        }
+
         closeAddAccountModal();
         setTimeout(() => window.location.reload(), 1000);
       } else {
@@ -307,6 +404,11 @@ if (addAccountForm) {
     }
   });
 }
+
+let streamFetchState = {
+  tokenExpired: false,
+  accountId: null
+};
 
 // Fetch available stream keys for specific account
 async function fetchStreams(accountId = null) {
@@ -338,6 +440,7 @@ async function fetchStreams(accountId = null) {
     select.innerHTML = '<option value="">Create new stream key</option>';
     
     if (data.success && data.streams && data.streams.length > 0) {
+      streamFetchState = { tokenExpired: false, accountId };
       console.log('[fetchStreams] Found', data.streams.length, 'stream keys');
       data.streams.forEach(stream => {
         const option = document.createElement('option');
@@ -347,6 +450,11 @@ async function fetchStreams(accountId = null) {
       });
     } else {
       console.log('[fetchStreams] No stream keys found or error:', data.error || 'empty response');
+
+      if (data.error && data.error.includes('TOKEN_EXPIRED')) {
+        streamFetchState = { tokenExpired: true, accountId };
+        showToast('Token YouTube untuk akun ini sudah expired. Silakan reconnect akun agar stream key lama tetap bisa dipakai.', 'error');
+      }
     }
   } catch (error) {
     console.error('[fetchStreams] Error:', error);
@@ -1744,6 +1852,12 @@ if (createBroadcastForm) {
       
       // Add stream key if selected
       const streamId = document.getElementById('streamKeySelect').value;
+
+      if (!streamId && streamFetchState.tokenExpired) {
+        showToast('Tidak bisa membuat broadcast saat token expired karena akan memicu stream key baru. Reconnect akun YouTube dulu.', 'error');
+        return;
+      }
+
       if (streamId) {
         formData.append('streamId', streamId);
       }
@@ -2344,6 +2458,9 @@ function renderTemplateList(templates) {
     const hasThumbnailFolder = template.thumbnail_folder !== null && template.thumbnail_folder !== undefined;
     const hasPinnedThumbnail = template.pinned_thumbnail !== null && template.pinned_thumbnail !== undefined && template.pinned_thumbnail !== '';
     const accountInvalid = template.account_valid === false;
+    const channelLabel = template.channel_name
+      || template.channelName
+      || (template.account_id ? `Disconnected account #${template.account_id}` : 'Unknown Channel');
     
     // Build recurring info HTML for desktop
     let recurringHtmlDesktop = '';
@@ -2445,6 +2562,10 @@ function renderTemplateList(templates) {
         ${hasRecurring ? `<span class="px-1.5 py-0.5 bg-green-500/20 text-green-400 text-[10px] rounded flex-shrink-0"><i class="ti ti-repeat text-[8px]"></i></span>` : ''}
         ${isMulti ? `<span class="px-1.5 py-0.5 bg-primary/20 text-primary text-[10px] rounded flex-shrink-0">${broadcastCount}</span>` : ''}
         <div class="flex items-center gap-0.5 flex-shrink-0">
+          ${accountInvalid ? `<button onclick="openReconnectAccountModal('${template.id}', '${escapeJsString(template.name)}', ${template.account_id || 0}, '${escapeJsString(channelLabel)}')"
+            class="w-8 h-8 flex items-center justify-center text-orange-400 hover:bg-orange-500/20 rounded transition-colors" title="Reconnect">
+            <i class="ti ti-plug-connected text-sm"></i>
+          </button>` : ''}
           <button onclick="recreateFromTemplate('${template.id}')"
             class="${recreateActionMobileClass}" title="${recreateActionTitle}">
             <i class="ti ${recreateActionIcon} text-sm"></i>
@@ -3264,7 +3385,23 @@ async function createFromTemplate(templateId) {
       
       // Pre-fill form with template data
       const template = data.template;
-      document.getElementById('accountSelect').value = template.account_id;
+      const accountSelect = document.getElementById('accountSelect');
+      const hasTemplateAccount = accountSelect && Array.from(accountSelect.options || []).some(opt => String(opt.value) === String(template.account_id));
+
+      if (accountSelect) {
+        if (hasTemplateAccount) {
+          accountSelect.value = template.account_id;
+        } else if (template.available_accounts && template.available_accounts.length > 0) {
+          const fallback = template.available_accounts.find(acc => acc.isPrimary) || template.available_accounts[0];
+          accountSelect.value = fallback.id;
+          showToast('Channel template tidak tersedia, otomatis pakai channel terhubung.', 'info');
+        }
+
+        if (accountSelect.value) {
+          onAccountChange(accountSelect.value);
+        }
+      }
+
       document.getElementById('broadcastTitle').value = template.title;
       document.getElementById('broadcastDescription').value = template.description || '';
       document.getElementById('privacyStatus').value = template.privacy_status || 'unlisted';
@@ -3663,13 +3800,8 @@ async function recreateFromTemplate(templateId) {
     if (data.success && data.template) {
       closeTemplateLibraryModal();
       
-      // Check if template has multiple broadcasts
-      if (data.template.broadcasts && data.template.broadcasts.length > 0) {
-        openRecreateFromTemplateModal(data.template);
-      } else {
-        // Single broadcast template - use existing flow
-        createFromTemplate(templateId);
-      }
+      // Always use re-create modal (single or multi) so account fallback + stream reuse logic is consistent
+      openRecreateFromTemplateModal(data.template);
     } else {
       showToast(data.error || 'Failed to load template', 'error');
     }
@@ -3679,36 +3811,72 @@ async function recreateFromTemplate(templateId) {
   }
 }
 
+// Get set of stream IDs for an account, used to safely reuse stream key during re-create
+async function fetchStreamIdsForAccount(accountId) {
+  if (!accountId) return null;
+
+  try {
+    const response = await fetch(`/api/youtube/streams?accountId=${accountId}`, {
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+
+    const data = await response.json();
+    if (!data.success || !Array.isArray(data.streams)) {
+      console.warn('[recreate] Failed to fetch streams for account:', accountId, data.error || 'unknown error');
+      return null;
+    }
+
+    return new Set(data.streams.map(s => s.id).filter(Boolean));
+  } catch (error) {
+    console.warn('[recreate] Error fetching account streams:', error.message);
+    return null;
+  }
+}
+
 // Open Re-create from Template Modal
 function openRecreateFromTemplateModal(template) {
   window.currentRecreateTemplate = template;
   
   document.getElementById('recreateTemplateName').textContent = template.name;
   
-  // Check if account is invalid and show account selector
+  // Always show channel selector so user can efficiently switch to any connected channel
   const accountSelectorContainer = document.getElementById('recreateAccountSelector');
   if (accountSelectorContainer) {
-    if (template.account_valid === false && template.available_accounts && template.available_accounts.length > 0) {
-      // Show account selector with warning
+    const createBtn = document.getElementById('recreateBtn');
+    const availableAccounts = Array.isArray(template.available_accounts) ? template.available_accounts : [];
+
+    if (availableAccounts.length > 0) {
+      const selectedAccount = availableAccounts.find(acc => String(acc.id) === String(template.account_id));
+      const defaultAccount = selectedAccount || availableAccounts.find(acc => acc.isPrimary) || availableAccounts[0];
+      const noteHtml = template.account_valid === false
+        ? '<p class="text-xs text-orange-400 mt-1">Channel asli template tidak aktif. Silakan pilih channel terhubung di bawah.</p>'
+        : '<p class="text-xs text-gray-400 mt-1">Pilih channel YouTube terhubung untuk re-create (default: channel template).</p>';
+
       accountSelectorContainer.innerHTML = `
-        <div class="bg-orange-500/10 border border-orange-500/30 rounded-lg p-3 mb-4">
+        <div class="bg-dark-700/60 border border-gray-600 rounded-lg p-3 mb-4">
           <div class="flex items-start gap-2">
-            <i class="ti ti-alert-triangle text-orange-400 mt-0.5"></i>
+            <i class="ti ti-brand-youtube text-red-400 mt-0.5"></i>
             <div class="flex-1">
               <p class="text-sm text-orange-400 font-medium">Akun YouTube template sudah terputus</p>
               <p class="text-xs text-gray-400 mt-1">Silakan pilih channel yang terhubung untuk lanjut membuat broadcast:</p>
             </div>
           </div>
           <select id="recreateAccountSelect" class="w-full mt-3 px-3 py-2 bg-dark-600 border border-gray-600 rounded-lg focus:border-primary focus:outline-none text-sm">
-            ${template.available_accounts.map(acc => 
-              `<option value="${acc.id}" ${acc.isPrimary ? 'selected' : ''}>${escapeHtml(acc.channelName || 'YouTube Channel')}${acc.isPrimary ? ' (Primary)' : ''}</option>`
+            ${availableAccounts.map(acc => 
+              `<option value="${acc.id}" ${String(acc.id) === String(defaultAccount.id) ? 'selected' : ''}>${escapeHtml(acc.channelName || 'YouTube Channel')}${acc.isPrimary ? ' (Primary)' : ''}</option>`
             ).join('')}
           </select>
         </div>
       `;
       accountSelectorContainer.classList.remove('hidden');
-    } else if (template.account_valid === false) {
-      // No accounts available
+
+      if (createBtn) {
+        createBtn.disabled = false;
+        createBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+      }
+    } else {
       accountSelectorContainer.innerHTML = `
         <div class="bg-red-500/10 border border-red-500/30 rounded-lg p-3 mb-4">
           <div class="flex items-start gap-2">
@@ -3721,21 +3889,10 @@ function openRecreateFromTemplateModal(template) {
         </div>
       `;
       accountSelectorContainer.classList.remove('hidden');
-      // Disable the create button
-      const createBtn = document.getElementById('recreateBtn');
+
       if (createBtn) {
         createBtn.disabled = true;
         createBtn.classList.add('opacity-50', 'cursor-not-allowed');
-      }
-    } else {
-      // Account is valid, hide selector
-      accountSelectorContainer.innerHTML = '';
-      accountSelectorContainer.classList.add('hidden');
-      // Enable the create button
-      const createBtn = document.getElementById('recreateBtn');
-      if (createBtn) {
-        createBtn.disabled = false;
-        createBtn.classList.remove('opacity-50', 'cursor-not-allowed');
       }
     }
   }
@@ -3990,14 +4147,17 @@ if (recreateFromTemplateForm) {
         return;
       }
       
-      // Get account ID - use selected account if original is invalid
+      // Get selected account ID from recreate modal (always available when accounts exist)
       let accountId = template.account_id;
       const accountSelect = document.getElementById('recreateAccountSelect');
-      if (accountSelect && template.account_valid === false) {
+      if (accountSelect && accountSelect.value) {
         accountId = parseInt(accountSelect.value);
-        console.log('[recreate] Using new account ID:', accountId, '(original was invalid)');
+        console.log('[recreate] Using selected account ID:', accountId, '(template account:', template.account_id, ')');
       }
       
+      // Fetch account stream IDs once, so we only reuse template streamId when still available
+      const reusableStreamIds = await fetchStreamIdsForAccount(accountId);
+
       // Create broadcasts one by one
       const results = { total: broadcasts.length, success: 0, failed: 0, errors: [] };
       const usedTitleIds = []; // Track used title IDs for incrementing use count
@@ -4033,20 +4193,19 @@ if (recreateFromTemplateForm) {
             formData.append('tags', JSON.stringify(broadcast.tags));
           }
           
-          // Use streamId to reuse the same stream key (only if account is still valid)
-          // If account changed, don't use old streamId as it belongs to different account
+          // Always try to reuse the template streamId first.
+          // If invalid for the selected account, API will return an explicit error,
+          // but we avoid silently creating a new stream key.
           const streamId = broadcast.streamId || template.stream_id;
-          if (template.account_valid !== false) {
-            if (broadcast.streamId) {
-              formData.append('streamId', broadcast.streamId);
-              console.log('[recreate] Using streamId:', broadcast.streamId);
-            } else if (template.stream_id) {
-              // Fallback to template's stream_id for single broadcast templates
-              formData.append('streamId', template.stream_id);
-              console.log('[recreate] Using template stream_id:', template.stream_id);
-            }
+          if (broadcast.streamId) {
+            formData.append('streamId', broadcast.streamId);
+            console.log('[recreate] Using streamId:', broadcast.streamId);
+          } else if (template.stream_id) {
+            // Fallback to template's stream_id for single broadcast templates
+            formData.append('streamId', template.stream_id);
+            console.log('[recreate] Using template stream_id:', template.stream_id);
           } else {
-            console.log('[recreate] Skipping streamId - account changed, will create new stream key');
+            console.log('[recreate] No streamId in template - YouTube may create a new stream key');
           }
           
           // Determine thumbnail folder - priority:
@@ -4129,7 +4288,7 @@ if (recreateFromTemplateForm) {
       }
       
       // If account was changed and broadcasts were created successfully, update template
-      if (template.account_valid === false && results.success > 0 && accountId !== template.account_id) {
+      if (results.success > 0 && accountId !== template.account_id) {
         try {
           await fetch(`/api/youtube/templates/${template.id}`, {
             method: 'PUT',
