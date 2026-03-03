@@ -1035,6 +1035,12 @@
       }
     };
 
+    function getGroupingKeyByName(label) {
+      const safeLabel = (label || '').trim();
+      const firstChar = safeLabel.charAt(0).toUpperCase();
+      return firstChar.match(/[A-Z]/) ? firstChar : '#';
+    }
+
     // Helper function for video search filtering
     window.loadGalleryVideos._displayVideos = function (videos, container) {
       container.innerHTML = '';
@@ -1043,17 +1049,18 @@
         return;
       }
 
-      const playlists = videos.filter(item => item.type === 'playlist').sort((a, b) => a.name.localeCompare(b.name));
-      const regularVideos = videos.filter(item => item.type !== 'playlist').sort((a, b) => a.name.localeCompare(b.name));
+      const groupedVideos = {};
+      videos.forEach(item => {
+        const groupKey = getGroupingKeyByName(item.name);
+        if (!groupedVideos[groupKey]) groupedVideos[groupKey] = [];
+        groupedVideos[groupKey].push(item);
+      });
 
-      if (regularVideos.length > 0) {
-        container.appendChild(createGroupHeader('Videos', regularVideos.length));
-        regularVideos.forEach(item => container.appendChild(createVideoButton(item)));
-      }
-      if (playlists.length > 0) {
-        container.appendChild(createGroupHeader('Playlists', playlists.length));
-        playlists.forEach(item => container.appendChild(createVideoButton(item)));
-      }
+      Object.keys(groupedVideos).sort().forEach(groupKey => {
+        const groupItems = groupedVideos[groupKey].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        container.appendChild(createGroupHeader(groupKey, groupItems.length));
+        groupItems.forEach(item => container.appendChild(createVideoButton(item)));
+      });
     };
 
     // Fallback for loadGalleryAudios - always define to ensure it works
@@ -1092,7 +1099,7 @@
       const groupedAudios = {};
       audios.forEach(audio => {
         const label = (audio.title || audio.name || '').trim();
-        const firstChar = (label.charAt(0).toUpperCase().match(/[A-Z]/) || ['#'])[0];
+        const firstChar = getGroupingKeyByName(label);
         if (!groupedAudios[firstChar]) groupedAudios[firstChar] = [];
         groupedAudios[firstChar].push(audio);
       });
