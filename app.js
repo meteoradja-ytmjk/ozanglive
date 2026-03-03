@@ -6392,6 +6392,11 @@ app.get('/api/youtube/streams', isAuthenticated, async (req, res) => {
     res.json({ success: true, streams, accountId: credentials.id });
   } catch (error) {
     console.error('[/api/youtube/streams] Error:', error.message);
+
+    if (error.message && error.message.includes('TOKEN_EXPIRED')) {
+      return res.status(401).json({ success: false, error: error.message });
+    }
+
     res.status(500).json({ success: false, error: 'Failed to list stream keys' });
   }
 });
@@ -7944,14 +7949,12 @@ app.get('/api/youtube/templates/:id', isAuthenticated, async (req, res) => {
       template.channel_name = account.channelName;
     }
 
-    // Include available accounts for re-create modal if account is invalid
-    if (!template.account_valid && userAccounts.length > 0) {
-      template.available_accounts = userAccounts.map(a => ({
-        id: a.id,
-        channelName: a.channelName,
-        isPrimary: a.isPrimary
-      }));
-    }
+    // Include available connected accounts for efficient channel switching in template flows
+    template.available_accounts = userAccounts.map(a => ({
+      id: a.id,
+      channelName: a.channelName,
+      isPrimary: a.isPrimary
+    }));
 
     res.json({ success: true, template });
   } catch (error) {
@@ -8266,6 +8269,18 @@ app.post('/api/youtube/templates/:id/create-broadcast', isAuthenticated, async (
       credentials.refreshToken
     );
 
+    if (template.stream_id) {
+      const accountStreams = await youtubeService.listStreams(accessToken);
+      const hasMatchingStream = accountStreams.some(stream => String(stream.id) === String(template.stream_id));
+
+      if (!hasMatchingStream) {
+        return res.status(400).json({
+          success: false,
+          error: 'Saved stream key for this template is not available in selected account. Please reconnect the original account or select a valid stream key.'
+        });
+      }
+    }
+
     console.log('[create-broadcast-from-template] Using streamId:', template.stream_id);
 
     // Create broadcast on YouTube
@@ -8367,6 +8382,18 @@ app.post('/api/youtube/templates/:id/bulk-create', isAuthenticated, async (req, 
       credentials.clientSecret,
       credentials.refreshToken
     );
+
+    if (template.stream_id) {
+      const accountStreams = await youtubeService.listStreams(accessToken);
+      const hasMatchingStream = accountStreams.some(stream => String(stream.id) === String(template.stream_id));
+
+      if (!hasMatchingStream) {
+        return res.status(400).json({
+          success: false,
+          error: 'Saved stream key for this template is not available in selected account. Please reconnect the original account or select a valid stream key.'
+        });
+      }
+    }
 
     const results = {
       total: schedules.length,
