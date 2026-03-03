@@ -2371,12 +2371,14 @@ function renderTemplateList(templates) {
     const channelDisplay = accountInvalid 
       ? `<span class="text-xs text-orange-400 flex items-center gap-1" title="YouTube account disconnected. Select a new account when re-creating.">
           <i class="ti ti-alert-triangle"></i>
-          ${escapeHtml(template.channel_name || 'Unknown Channel')}
+          ${escapeHtml(template.channel_name || 'Disconnected Channel')}
         </span>`
       : `<span class="text-xs text-red-400 flex items-center gap-1">
           <i class="ti ti-brand-youtube"></i>
-          ${escapeHtml(template.channel_name || 'Unknown Channel')}
+          ${escapeHtml(template.channel_name || 'Disconnected Channel')}
         </span>`;
+    const recreateActionLabel = accountInvalid ? 'Pilih Channel' : 'Re-create';
+    const recreateActionTitle = accountInvalid ? 'Pilih channel yang terhubung' : 'Re-create Broadcasts';
     
     const div = document.createElement('div');
     div.className = 'template-list-item';
@@ -2408,9 +2410,9 @@ function renderTemplateList(templates) {
           </button>
           ` : ''}
           <button onclick="recreateFromTemplate('${template.id}')"
-            class="px-3 py-1.5 bg-green-500/10 hover:bg-green-500/20 text-green-400 rounded-lg transition-colors text-sm flex items-center gap-1" title="Re-create Broadcasts">
+            class="px-3 py-1.5 bg-green-500/10 hover:bg-green-500/20 text-green-400 rounded-lg transition-colors text-sm flex items-center gap-1" title="${recreateActionTitle}">
             <i class="ti ti-refresh"></i>
-            <span>Re-create</span>
+            <span>${recreateActionLabel}</span>
           </button>
           <button onclick="editTemplate('${template.id}')"
             class="px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-lg transition-colors text-sm flex items-center gap-1" title="Edit">
@@ -2435,7 +2437,7 @@ function renderTemplateList(templates) {
         ${isMulti ? `<span class="px-1.5 py-0.5 bg-primary/20 text-primary text-[10px] rounded flex-shrink-0">${broadcastCount}</span>` : ''}
         <div class="flex items-center gap-0.5 flex-shrink-0">
           <button onclick="recreateFromTemplate('${template.id}')"
-            class="w-8 h-8 flex items-center justify-center text-green-400 hover:bg-green-500/20 rounded transition-colors" title="Re-create">
+            class="w-8 h-8 flex items-center justify-center text-green-400 hover:bg-green-500/20 rounded transition-colors" title="${recreateActionTitle}">
             <i class="ti ti-refresh text-sm"></i>
           </button>
           <button onclick="editTemplate('${template.id}')"
@@ -3684,8 +3686,8 @@ function openRecreateFromTemplateModal(template) {
           <div class="flex items-start gap-2">
             <i class="ti ti-alert-triangle text-orange-400 mt-0.5"></i>
             <div class="flex-1">
-              <p class="text-sm text-orange-400 font-medium">YouTube account disconnected</p>
-              <p class="text-xs text-gray-400 mt-1">The original account for this template is no longer connected. Please select a new account:</p>
+              <p class="text-sm text-orange-400 font-medium">Akun YouTube template sudah terputus</p>
+              <p class="text-xs text-gray-400 mt-1">Silakan pilih channel yang terhubung untuk lanjut membuat broadcast:</p>
             </div>
           </div>
           <select id="recreateAccountSelect" class="w-full mt-3 px-3 py-2 bg-dark-600 border border-gray-600 rounded-lg focus:border-primary focus:outline-none text-sm">
