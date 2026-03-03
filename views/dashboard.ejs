@@ -918,11 +918,42 @@
       document.getElementById('clearAudioBtn').classList.add('hidden');
     };
 
-    function createGroupHeader(title, count) {
-      const header = document.createElement('div');
-      header.className = 'sticky top-0 z-[1] px-2 py-1 mt-1 bg-dark-700/95 border-b border-gray-600/60';
-      header.innerHTML = `<p class="text-[11px] uppercase tracking-wider text-gray-400 font-semibold">${title} <span class="text-gray-500">(${count})</span></p>`;
+    function createGroupHeader(title, count, isCollapsed) {
+      const header = document.createElement('button');
+      header.type = 'button';
+      header.className = 'w-full sticky top-0 z-[1] px-2 py-1 mt-1 bg-dark-700/95 border-b border-gray-600/60 flex items-center justify-between hover:bg-dark-600/90 transition-colors';
+      header.innerHTML = `
+        <p class="text-[11px] uppercase tracking-wider text-gray-400 font-semibold">${title} <span class="text-gray-500">(${count})</span></p>
+        <i class="ti ${isCollapsed ? 'ti-chevron-right' : 'ti-chevron-down'} text-xs text-gray-400"></i>
+      `;
       return header;
+    }
+
+    function renderCollapsibleGroup(container, groupType, groupKey, items, renderItem) {
+      const stateKey = `${groupType}:${groupKey}`;
+      if (!window.streamGroupVisibilityState) {
+        window.streamGroupVisibilityState = {};
+      }
+      const isCollapsed = window.streamGroupVisibilityState[stateKey] === true;
+
+      const header = createGroupHeader(groupKey, items.length, isCollapsed);
+      const body = document.createElement('div');
+      body.className = isCollapsed ? 'hidden' : '';
+
+      items.forEach(item => body.appendChild(renderItem(item)));
+
+      header.onclick = () => {
+        body.classList.toggle('hidden');
+        const collapsed = body.classList.contains('hidden');
+        window.streamGroupVisibilityState[stateKey] = collapsed;
+        const icon = header.querySelector('i');
+        if (icon) {
+          icon.className = `ti ${collapsed ? 'ti-chevron-right' : 'ti-chevron-down'} text-xs text-gray-400`;
+        }
+      };
+
+      container.appendChild(header);
+      container.appendChild(body);
     }
 
     function createVideoButton(item) {
@@ -1058,8 +1089,7 @@
 
       Object.keys(groupedVideos).sort().forEach(groupKey => {
         const groupItems = groupedVideos[groupKey].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-        container.appendChild(createGroupHeader(groupKey, groupItems.length));
-        groupItems.forEach(item => container.appendChild(createVideoButton(item)));
+        renderCollapsibleGroup(container, 'video', groupKey, groupItems, createVideoButton);
       });
     };
 
@@ -1106,8 +1136,7 @@
 
       Object.keys(groupedAudios).sort().forEach(groupKey => {
         const groupItems = groupedAudios[groupKey].sort((a, b) => (a.title || a.name || '').localeCompare(b.title || b.name || ''));
-        container.appendChild(createGroupHeader(groupKey, groupItems.length));
-        groupItems.forEach(audio => container.appendChild(createAudioButton(audio)));
+        renderCollapsibleGroup(container, 'audio', groupKey, groupItems, createAudioButton);
       });
     };
 
