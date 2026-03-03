@@ -2533,18 +2533,13 @@ function renderTemplateList(templates) {
             <span>Run</span>
           </button>
           ` : ''}
-          ${accountInvalid ? `
-          <button onclick="openReconnectAccountModal('${template.id}', '${escapeJsString(template.name)}', ${template.account_id || 0}, '${escapeJsString(channelLabel)}')"
-            class="px-3 py-1.5 bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 rounded-lg transition-colors text-sm flex items-center gap-1" title="Reconnect disconnected channel">
-            <i class="ti ti-plug-connected"></i>
-            <span>Reconnect</span>
-          </button>
-          ` : ''}
+          ${!accountInvalid ? `
           <button onclick="recreateFromTemplate('${template.id}')"
             class="${recreateActionDesktopClass}" title="${recreateActionTitle}">
             <i class="ti ${recreateActionIcon}"></i>
             <span>${recreateActionLabel}</span>
           </button>
+          ` : ''}
           <button onclick="editTemplate('${template.id}')"
             class="px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-lg transition-colors text-sm flex items-center gap-1" title="Edit">
             <i class="ti ti-edit"></i>
