@@ -96,7 +96,9 @@ class BroadcastTemplate {
       recurring_pattern = null,
       recurring_time = null,
       recurring_days = null,
-      next_run_at = null
+      next_run_at = null,
+      channel_name = null,
+      channel_id = null
     } = templateData;
 
     // Validate required fields
@@ -137,14 +139,16 @@ class BroadcastTemplate {
           privacy_status, tags, category_id, thumbnail_path, thumbnail_folder, 
           thumbnail_index, pinned_thumbnail, stream_key_folder_mapping, stream_id,
           title_index, pinned_title_id, title_folder_id,
-          recurring_enabled, recurring_pattern, recurring_time, recurring_days, next_run_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          recurring_enabled, recurring_pattern, recurring_time, recurring_days, next_run_at,
+          channel_name, channel_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id, user_id, account_id, name.trim(), title, description,
           privacy_status, tagsJson, category_id, thumbnail_path, thumbnail_folder,
           thumbnail_index || 0, pinned_thumbnail, streamKeyFolderMappingJson, stream_id,
           title_index || 0, pinned_title_id, title_folder_id,
-          recurring_enabled ? 1 : 0, recurring_pattern, recurring_time, daysJson, next_run_at
+          recurring_enabled ? 1 : 0, recurring_pattern, recurring_time, daysJson, next_run_at,
+          channel_name, channel_id
         ],
         function (err) {
           if (err) {
@@ -178,6 +182,8 @@ class BroadcastTemplate {
             recurring_time,
             recurring_days: Array.isArray(recurring_days) ? recurring_days : null,
             next_run_at,
+            channel_name,
+            channel_id,
             last_run_at: null,
             created_at: new Date().toISOString()
           });
@@ -194,7 +200,7 @@ class BroadcastTemplate {
   static findById(id) {
     return new Promise((resolve, reject) => {
       db.get(
-        `SELECT bt.*, yc.channel_name
+        `SELECT bt.*, COALESCE(yc.channel_name, bt.channel_name) AS channel_name
          FROM broadcast_templates bt
          LEFT JOIN youtube_credentials yc ON bt.account_id = yc.id
          WHERE bt.id = ?`,
@@ -218,7 +224,7 @@ class BroadcastTemplate {
   static findByUserId(userId) {
     return new Promise((resolve, reject) => {
       db.all(
-        `SELECT bt.*, yc.channel_name
+        `SELECT bt.*, COALESCE(yc.channel_name, bt.channel_name) AS channel_name
          FROM broadcast_templates bt
          LEFT JOIN youtube_credentials yc ON bt.account_id = yc.id
          WHERE bt.user_id = ?
@@ -244,7 +250,7 @@ class BroadcastTemplate {
   static findByName(userId, name) {
     return new Promise((resolve, reject) => {
       db.get(
-        `SELECT bt.*, yc.channel_name
+        `SELECT bt.*, COALESCE(yc.channel_name, bt.channel_name) AS channel_name
          FROM broadcast_templates bt
          LEFT JOIN youtube_credentials yc ON bt.account_id = yc.id
          WHERE bt.user_id = ? AND bt.name = ?`,
@@ -388,7 +394,7 @@ class BroadcastTemplate {
   static findWithRecurringEnabled() {
     return new Promise((resolve, reject) => {
       db.all(
-        `SELECT bt.*, yc.channel_name, yc.client_id, yc.client_secret, yc.refresh_token
+        `SELECT bt.*, COALESCE(yc.channel_name, bt.channel_name) AS channel_name, COALESCE(yc.channel_id, bt.channel_id) AS channel_id, yc.client_id, yc.client_secret, yc.refresh_token
          FROM broadcast_templates bt
          LEFT JOIN youtube_credentials yc ON bt.account_id = yc.id
          WHERE bt.recurring_enabled = 1

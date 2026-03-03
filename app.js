@@ -7525,6 +7525,8 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
     const template = await BroadcastTemplate.create({
       user_id: req.session.userId,
       account_id: parseInt(accountId),
+      channel_name: credentials.channelName || null,
+      channel_id: credentials.channelId || null,
       name,
       title,
       description: description || null,
@@ -7650,6 +7652,8 @@ app.post('/api/youtube/templates/multi', isAuthenticated, async (req, res) => {
     const template = await BroadcastTemplate.create({
       user_id: req.session.userId,
       account_id: parseInt(accountId),
+      channel_name: credentials.channelName || null,
+      channel_id: credentials.channelId || null,
       name,
       title: broadcasts[0].title, // Use first broadcast title as main title
       description: JSON.stringify(broadcastsWithStreamId), // Store all broadcasts as JSON in description
@@ -7872,6 +7876,11 @@ app.get('/api/youtube/templates', isAuthenticated, async (req, res) => {
             });
         }
       }
+
+      // Final fallback to avoid showing "Unknown Channel" in UI
+      if (!template.channel_name) {
+        template.channel_name = template.channel_id ? `Channel ${template.channel_id}` : 'Disconnected Channel';
+      }
     }
 
     res.json({ success: true, templates });
@@ -7994,12 +8003,19 @@ app.get('/api/youtube/templates/:id', isAuthenticated, async (req, res) => {
       template.channel_name = account.channelName;
     }
 
-    // Include available connected accounts for efficient channel switching in template flows
-    template.available_accounts = userAccounts.map(a => ({
-      id: a.id,
-      channelName: a.channelName,
-      isPrimary: a.isPrimary
-    }));
+    // Final fallback to avoid showing "Unknown Channel" in UI
+    if (!template.channel_name) {
+      template.channel_name = template.channel_id ? `Channel ${template.channel_id}` : 'Disconnected Channel';
+    }
+
+    // Include available accounts for re-create modal if account is invalid
+    if (!template.account_valid && userAccounts.length > 0) {
+      template.available_accounts = userAccounts.map(a => ({
+        id: a.id,
+        channelName: a.channelName,
+        isPrimary: a.isPrimary
+      }));
+    }
 
     res.json({ success: true, template });
   } catch (error) {
@@ -8060,7 +8076,16 @@ app.put('/api/youtube/templates/:id', isAuthenticated, async (req, res) => {
       }
     }
     if (streamId !== undefined) updateData.stream_id = streamId;
-    if (accountId !== undefined) updateData.account_id = parseInt(accountId);
+    if (accountId !== undefined) {
+      const parsedAccountId = parseInt(accountId);
+      const targetAccount = await YouTubeCredentials.findById(parsedAccountId);
+      if (!targetAccount || targetAccount.userId !== req.session.userId) {
+        return res.status(404).json({ success: false, error: 'Account not found' });
+      }
+      updateData.account_id = parsedAccountId;
+      updateData.channel_name = targetAccount.channelName || null;
+      updateData.channel_id = targetAccount.channelId || null;
+    }
     if (titleIndex !== undefined) updateData.title_index = titleIndex;
     if (pinnedTitleId !== undefined) updateData.pinned_title_id = pinnedTitleId;
     if (titleFolderId !== undefined) updateData.title_folder_id = titleFolderId;
