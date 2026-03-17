@@ -8008,11 +8008,12 @@ app.get('/api/youtube/templates/:id', isAuthenticated, async (req, res) => {
       template.channel_name = template.channel_id ? `Channel ${template.channel_id}` : 'Disconnected Channel';
     }
 
-    // Include available accounts for re-create modal if account is invalid
-    if (!template.account_valid && userAccounts.length > 0) {
+    // Always include available accounts so user can manually pick the correct connected channel
+    if (userAccounts.length > 0) {
       template.available_accounts = userAccounts.map(a => ({
         id: a.id,
         channelName: a.channelName,
+        channelId: a.channelId,
         isPrimary: a.isPrimary
       }));
     }

@@ -2494,9 +2494,9 @@ function renderTemplateList(templates) {
           <i class="ti ti-brand-youtube"></i>
           ${escapeHtml(template.channel_name || 'Disconnected Channel')}
         </span>`;
-    const recreateActionLabel = accountInvalid ? 'Reconnect' : 'Re-create';
-    const recreateActionTitle = accountInvalid ? 'Pilih channel yang terhubung' : 'Re-create Broadcasts';
-    const recreateActionIcon = accountInvalid ? 'ti-link' : 'ti-refresh';
+    const recreateActionLabel = 'Pilih Channel';
+    const recreateActionTitle = 'Pilih channel yang terhubung';
+    const recreateActionIcon = accountInvalid ? 'ti-link' : 'ti-route';
     const recreateActionDesktopClass = accountInvalid
       ? 'px-3 py-1.5 bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 rounded-lg transition-colors text-sm flex items-center gap-1'
       : 'px-3 py-1.5 bg-green-500/10 hover:bg-green-500/20 text-green-400 rounded-lg transition-colors text-sm flex items-center gap-1';
@@ -2533,13 +2533,11 @@ function renderTemplateList(templates) {
             <span>Run</span>
           </button>
           ` : ''}
-          ${!accountInvalid ? `
           <button onclick="recreateFromTemplate('${template.id}')"
             class="${recreateActionDesktopClass}" title="${recreateActionTitle}">
             <i class="ti ${recreateActionIcon}"></i>
             <span>${recreateActionLabel}</span>
           </button>
-          ` : ''}
           <button onclick="editTemplate('${template.id}')"
             class="px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-lg transition-colors text-sm flex items-center gap-1" title="Edit">
             <i class="ti ti-edit"></i>
@@ -2548,13 +2546,6 @@ function renderTemplateList(templates) {
             class="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors text-sm flex items-center gap-1" title="Delete">
             <i class="ti ti-trash"></i>
           </button>
-          ${accountInvalid ? `
-          <button onclick="recreateFromTemplate('${template.id}')"
-            class="px-3 py-1.5 bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 rounded-lg transition-colors text-sm flex items-center gap-1" title="Pilih channel yang terhubung">
-            <i class="ti ti-link"></i>
-            <span>Reconnect</span>
-          </button>
-          ` : ''}
         </div>
       </div>
       
@@ -2569,12 +2560,10 @@ function renderTemplateList(templates) {
         ${hasRecurring ? `<span class="px-1.5 py-0.5 bg-green-500/20 text-green-400 text-[10px] rounded flex-shrink-0"><i class="ti ti-repeat text-[8px]"></i></span>` : ''}
         ${isMulti ? `<span class="px-1.5 py-0.5 bg-primary/20 text-primary text-[10px] rounded flex-shrink-0">${broadcastCount}</span>` : ''}
         <div class="flex items-center gap-0.5 flex-shrink-0">
-          ${!accountInvalid ? `
           <button onclick="recreateFromTemplate('${template.id}')"
             class="${recreateActionMobileClass}" title="${recreateActionTitle}">
             <i class="ti ${recreateActionIcon} text-sm"></i>
           </button>
-          ` : ''}
           <button onclick="editTemplate('${template.id}')"
             class="w-8 h-8 flex items-center justify-center text-blue-400 hover:bg-blue-500/20 rounded transition-colors" title="Edit">
             <i class="ti ti-edit text-sm"></i>
@@ -2583,12 +2572,6 @@ function renderTemplateList(templates) {
             class="w-8 h-8 flex items-center justify-center text-red-400 hover:bg-red-500/20 rounded transition-colors" title="Delete">
             <i class="ti ti-trash text-sm"></i>
           </button>
-          ${accountInvalid ? `
-          <button onclick="recreateFromTemplate('${template.id}')"
-            class="w-8 h-8 flex items-center justify-center text-orange-400 hover:bg-orange-500/20 rounded transition-colors" title="Pilih channel yang terhubung">
-            <i class="ti ti-link text-sm"></i>
-          </button>
-          ` : ''}
         </div>
       </div>
     `;
@@ -3861,17 +3844,22 @@ function openRecreateFromTemplateModal(template) {
     if (availableAccounts.length > 0) {
       const selectedAccount = availableAccounts.find(acc => String(acc.id) === String(template.account_id));
       const defaultAccount = selectedAccount || availableAccounts.find(acc => acc.isPrimary) || availableAccounts[0];
-      const noteHtml = template.account_valid === false
-        ? '<p class="text-xs text-orange-400 mt-1">Channel asli template tidak aktif. Silakan pilih channel terhubung di bawah.</p>'
-        : '<p class="text-xs text-gray-400 mt-1">Pilih channel YouTube terhubung untuk re-create (default: channel template).</p>';
+      const isDisconnected = template.account_valid === false;
+      const titleText = isDisconnected
+        ? 'Akun YouTube template sudah terputus'
+        : 'Pilih channel tujuan untuk re-create';
+      const titleClass = isDisconnected ? 'text-orange-400' : 'text-primary';
+      const noteHtml = isDisconnected
+        ? '<p class="text-xs text-gray-400 mt-1">Silakan pilih channel yang masih terhubung untuk lanjut membuat broadcast.</p>'
+        : '<p class="text-xs text-gray-400 mt-1">Jika nama channel template tidak sesuai, pilih channel yang benar di bawah.</p>';
 
       accountSelectorContainer.innerHTML = `
         <div class="bg-dark-700/60 border border-gray-600 rounded-lg p-3 mb-4">
           <div class="flex items-start gap-2">
             <i class="ti ti-brand-youtube text-red-400 mt-0.5"></i>
             <div class="flex-1">
-              <p class="text-sm text-orange-400 font-medium">Akun YouTube template sudah terputus</p>
-              <p class="text-xs text-gray-400 mt-1">Silakan pilih channel yang terhubung untuk lanjut membuat broadcast:</p>
+              <p class="text-sm ${titleClass} font-medium">${titleText}</p>
+              ${noteHtml}
             </div>
           </div>
           <select id="recreateAccountSelect" class="w-full mt-3 px-3 py-2 bg-dark-600 border border-gray-600 rounded-lg focus:border-primary focus:outline-none text-sm">
