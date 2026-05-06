@@ -58,6 +58,155 @@ class TitleSuggestion {
   }
 
   /**
+   * Import multiple title suggestions for a user.
+   * Duplicate titles are skipped so a .txt file can be re-imported safely.
+   * @param {Object} data - Import data
+   * @param {string} data.user_id - User ID
+   * @param {Array<string>} data.titles - Titles to import
+   * @param {string|null} data.stream_key_id - Optional stream key filter
+   * @param {string|null} data.folder_id - Optional folder filter
+   * @returns {Promise<Object>} Import summary
+   */
+  static bulkImport(data) {
+    const { user_id, titles, stream_key_id = null, folder_id = null } = data;
+
+    if (!user_id) {
+      return Promise.reject(new Error('user_id is required'));
+    }
+
+    if (!Array.isArray(titles) || titles.length === 0) {
+      return Promise.reject(new Error('titles are required'));
+    }
+
+    const uniqueTitles = [];
+    const seen = new Set();
+
+    titles.forEach((title) => {
+      const cleaned = String(title || '').trim().replace(/\s+/g, ' ');
+      const key = cleaned.toLowerCase();
+
+      if (cleaned && !seen.has(key)) {
+        seen.add(key);
+        uniqueTitles.push(cleaned);
+      }
+    });
+
+    if (uniqueTitles.length === 0) {
+      return Promise.resolve({ imported: 0, skipped: titles.length, total: titles.length });
+    }
+
+    return new Promise((resolve, reject) => {
+      db.get(
+        `SELECT MAX(sort_order) as max_order FROM title_suggestions WHERE user_id = ?`,
+        [user_id],
+        (err, row) => {
+          if (err) {
+            console.error('Error getting max sort_order for title import:', err.message);
+            return reject(err);
+          }
+
+          const insertSql = `INSERT OR IGNORE INTO title_suggestions (id, user_id, title, stream_key_id, folder_id, use_count, sort_order, is_pinned)
+             VALUES (?, ?, ?, ?, ?, 0, ?, 0)`;
+
+          let sortOrder = row?.max_order || 0;
+          let imported = 0;
+          let skipped = titles.length - uniqueTitles.length;
+
+          db.serialize(() => {
+            db.run('BEGIN TRANSACTION');
+
+            const insertNext = (index) => {
+              if (index >= uniqueTitles.length) {
+                db.run('COMMIT', (commitErr) => {
+                  if (commitErr) {
+                    console.error('Error committing title import:', commitErr.message);
+                    return reject(commitErr);
+                  }
+
+                  resolve({
+                    imported,
+                    skipped,
+                    total: titles.length
+                  });
+                });
+                return;
+              }
+
+              sortOrder += 1;
+              db.run(
+                insertSql,
+                [uuidv4(), user_id, uniqueTitles[index], stream_key_id, folder_id, sortOrder],
+                function (insertErr) {
+                  if (insertErr) {
+                    db.run('ROLLBACK');
+                    console.error('Error importing title suggestion:', insertErr.message);
+                    return reject(insertErr);
+                  }
+
+                  if (this.changes > 0) {
+                    imported += 1;
+                  } else {
+                    skipped += 1;
+                  }
+
+                  insertNext(index + 1);
+                }
+              );
+            };
+
+            insertNext(0);
+          });
+        }
+      );
+    });
+  }
+
+  /**
+   * Delete all titles within a selected folder or channel scope.
+   * Folder scope takes priority because the Title Manager list is folder-based.
+   * @param {string} userId - User ID
+   * @param {Object} scope - Delete scope
+   * @param {string|null} scope.folderId - Folder ID to delete from
+   * @param {string|null} scope.streamKeyId - Stream key/channel ID to delete from when no folder is selected
+   * @returns {Promise<Object>} Delete summary
+   */
+  static deleteByScope(userId, scope = {}) {
+    const { folderId = null, streamKeyId = null } = scope;
+
+    if (!userId) {
+      return Promise.reject(new Error('userId is required'));
+    }
+
+    const params = [userId];
+    let scopeCondition = '';
+
+    if (folderId) {
+      scopeCondition = 'folder_id = ?';
+      params.push(folderId);
+    } else if (streamKeyId) {
+      scopeCondition = 'stream_key_id = ?';
+      params.push(streamKeyId);
+    } else {
+      return Promise.reject(new Error('folderId or streamKeyId is required'));
+    }
+
+    return new Promise((resolve, reject) => {
+      db.run(
+        `DELETE FROM title_suggestions WHERE user_id = ? AND ${scopeCondition}`,
+        params,
+        function (err) {
+          if (err) {
+            console.error('Error deleting titles by scope:', err.message);
+            return reject(err);
+          }
+
+          resolve({ success: true, deleted: this.changes || 0 });
+        }
+      );
+    });
+  }
+
+  /**
    * Find all titles for a user
    * @param {string} userId - User ID
    * @param {string} streamKeyId - Optional stream key filter

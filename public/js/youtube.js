@@ -6320,6 +6320,174 @@ async function addNewTitle() {
 }
 
 /**
+ * Resolve target folder for title actions.
+ */
+function getTitleManagerTargetFolderId() {
+  if (selectedTitleFolderId) return selectedTitleFolderId;
+  if (titleAutoRotationEnabled && titleRotationFolderId) return titleRotationFolderId;
+  return null;
+}
+
+/**
+ * Resolve the active stream key/channel from the modal that opened Title Manager.
+ */
+function getTitleManagerStreamKeyId() {
+  if (titleManagerContext === 'edit') {
+    const editStreamKeySelect = document.getElementById('editStreamKeySelect');
+    return editStreamKeySelect?.value || window.editBroadcastStreamId || null;
+  }
+
+  const streamKeySelect = document.getElementById('streamKeySelect');
+  return streamKeySelect?.value || null;
+}
+
+/**
+ * Open .txt picker for bulk title import.
+ */
+function openTitleTxtImportPicker() {
+  const input = document.getElementById('titleTxtImportInput');
+  if (!input) {
+    showToast('Input import tidak ditemukan', 'error');
+    return;
+  }
+
+  if (!getTitleManagerTargetFolderId() && titleFolders.length > 0) {
+    showToast('Pilih folder/channel tujuan sebelum import .txt', 'error');
+    return;
+  }
+
+  input.value = '';
+  input.click();
+}
+
+/**
+ * Import title suggestions from a .txt file. Each non-empty line becomes one title.
+ */
+function importTitleTxtFile(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  const maxFileSize = 512 * 1024;
+  if (file.size > maxFileSize) {
+    showToast('File terlalu besar. Maksimal 512 KB.', 'error');
+    event.target.value = '';
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = async () => {
+    const rawText = String(reader.result || '').replace(/^\uFEFF/, '');
+    const titles = rawText
+      .split(/\r?\n/)
+      .map(line => line.trim().replace(/^(?:[-*•]\s+|\d+[.)]\s+)/, '').trim())
+      .filter(Boolean);
+
+    if (titles.length === 0) {
+      showToast('File .txt tidak berisi judul', 'error');
+      event.target.value = '';
+      return;
+    }
+
+    if (titles.length > 1000) {
+      showToast('Maksimal 1000 judul per import', 'error');
+      event.target.value = '';
+      return;
+    }
+
+    const targetFolderId = getTitleManagerTargetFolderId();
+    const streamKeyId = getTitleManagerStreamKeyId();
+
+    try {
+      const response = await fetch('/api/title-suggestions/import', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': getCsrfToken()
+        },
+        body: JSON.stringify({
+          titles,
+          folderId: targetFolderId,
+          streamKeyId
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        showToast(`Import selesai: ${data.imported || 0} judul ditambahkan, ${data.skipped || 0} dilewati`);
+        await loadTitleFolders();
+        loadTitleSuggestions();
+        if (titleAutoRotationEnabled) loadNextRotationTitle();
+      } else {
+        showToast(data.error || 'Gagal import judul', 'error');
+      }
+    } catch (error) {
+      console.error('Error importing titles:', error);
+      showToast('Gagal import judul', 'error');
+    } finally {
+      event.target.value = '';
+    }
+  };
+
+  reader.onerror = () => {
+    showToast('Gagal membaca file .txt', 'error');
+    event.target.value = '';
+  };
+
+  reader.readAsText(file);
+}
+
+/**
+ * Delete every title in the currently selected folder/channel scope.
+ */
+async function deleteAllTitlesInCurrentScope() {
+  const targetFolderId = getTitleManagerTargetFolderId();
+  const streamKeyId = getTitleManagerStreamKeyId();
+
+  if (!targetFolderId && !streamKeyId) {
+    showToast('Pilih folder/channel terlebih dahulu', 'error');
+    return;
+  }
+
+  const selectedFolder = targetFolderId ? titleFolders.find(folder => folder.id === targetFolderId) : null;
+  const scopeLabel = selectedFolder?.name || 'channel yang sedang dipilih';
+  const currentCount = titleSuggestions.length;
+  const countLabel = currentCount > 0 ? `${currentCount} ` : '';
+
+  if (!confirm(`Hapus semua ${countLabel}judul di ${scopeLabel}? Tindakan ini tidak bisa dibatalkan.`)) {
+    return;
+  }
+
+  try {
+    const response = await fetch('/api/title-suggestions/bulk-delete', {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getCsrfToken()
+      },
+      body: JSON.stringify({
+        folderId: targetFolderId,
+        streamKeyId
+      })
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      showToast(`${data.deleted || 0} judul dihapus`);
+      await loadTitleFolders();
+      loadTitleSuggestions();
+      if (titleAutoRotationEnabled) loadNextRotationTitle();
+    } else {
+      showToast(data.error || 'Gagal menghapus semua judul', 'error');
+    }
+  } catch (error) {
+    console.error('Error deleting titles by scope:', error);
+    showToast('Gagal menghapus semua judul', 'error');
+  }
+}
+
+/**
  * Toggle pin status for a title
  */
 async function toggleTitlePin(id, shouldPin) {

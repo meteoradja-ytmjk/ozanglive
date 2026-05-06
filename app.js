@@ -9162,6 +9162,41 @@ app.post('/api/title-suggestions', isAuthenticated, async (req, res) => {
   }
 });
 
+// Import multiple title suggestions from a .txt file payload
+app.post('/api/title-suggestions/import', isAuthenticated, async (req, res) => {
+  try {
+    const { titles, streamKeyId, folderId } = req.body;
+
+    if (!Array.isArray(titles) || titles.length === 0) {
+      return res.status(400).json({ success: false, error: 'Titles are required' });
+    }
+
+    if (titles.length > 1000) {
+      return res.status(400).json({ success: false, error: 'Maximum 1000 titles per import' });
+    }
+
+    const targetFolderId = folderId || null;
+    if (targetFolderId) {
+      const folder = await TitleFolder.findById(targetFolderId, req.session.userId);
+      if (!folder) {
+        return res.status(404).json({ success: false, error: 'Folder not found' });
+      }
+    }
+
+    const summary = await TitleSuggestion.bulkImport({
+      user_id: req.session.userId,
+      titles,
+      stream_key_id: streamKeyId || null,
+      folder_id: targetFolderId
+    });
+
+    res.json({ success: true, ...summary });
+  } catch (error) {
+    console.error('Error importing title suggestions:', error);
+    res.status(500).json({ success: false, error: 'Failed to import titles' });
+  }
+});
+
 // Update title suggestion
 app.put('/api/title-suggestions/:id', isAuthenticated, async (req, res) => {
   try {
@@ -9206,6 +9241,36 @@ app.post('/api/title-suggestions/:id/use', isAuthenticated, async (req, res) => 
   } catch (error) {
     console.error('Error incrementing title use count:', error);
     res.status(500).json({ success: false, error: 'Failed to update title' });
+  }
+});
+
+// Delete all title suggestions from the selected folder/channel scope
+app.delete('/api/title-suggestions/bulk-delete', isAuthenticated, async (req, res) => {
+  try {
+    const { folderId, streamKeyId } = req.body;
+    const targetFolderId = folderId || null;
+    const targetStreamKeyId = streamKeyId || null;
+
+    if (!targetFolderId && !targetStreamKeyId) {
+      return res.status(400).json({ success: false, error: 'Folder or channel is required' });
+    }
+
+    if (targetFolderId) {
+      const folder = await TitleFolder.findById(targetFolderId, req.session.userId);
+      if (!folder) {
+        return res.status(404).json({ success: false, error: 'Folder not found' });
+      }
+    }
+
+    const result = await TitleSuggestion.deleteByScope(req.session.userId, {
+      folderId: targetFolderId,
+      streamKeyId: targetStreamKeyId
+    });
+
+    res.json({ success: true, deleted: result.deleted || 0 });
+  } catch (error) {
+    console.error('Error deleting titles by scope:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete titles' });
   }
 });
 
