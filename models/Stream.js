@@ -32,7 +32,7 @@ class Stream {
     const recurring_enabled_int = recurring_enabled ? 1 : 0;
     const schedule_days_json = schedule_days ? JSON.stringify(schedule_days) : null;
     const original_settings_json = original_settings ? JSON.stringify(original_settings) : null;
-    
+
     // Determine final status based on schedule type
     let final_status = status;
     if (!final_status) {
@@ -45,9 +45,9 @@ class Stream {
       }
     }
     const status_updated_at = new Date().toISOString();
-    
+
     console.log(`[Stream.create] Creating stream with duration: ${stream_duration_minutes} minutes`);
-    
+
     return new Promise((resolve, reject) => {
       db.run(
         `INSERT INTO streams (
@@ -77,11 +77,13 @@ class Stream {
   static findById(id) {
     return new Promise((resolve, reject) => {
       db.get(
-        `SELECT s.*, 
-                v.title AS video_title,
-                a.title AS audio_title
+        `SELECT s.*,
+                COALESCE(v.title, p.name) AS video_title,
+                a.title AS audio_title,
+                CASE WHEN p.id IS NOT NULL THEN 'playlist' ELSE 'video' END AS video_type
          FROM streams s
          LEFT JOIN videos v ON s.video_id = v.id
+         LEFT JOIN playlists p ON s.video_id = p.id
          LEFT JOIN audios a ON s.audio_id = a.id
          WHERE s.id = ?`,
         [id],
@@ -110,30 +112,31 @@ class Stream {
   }
   static findAll(userId = null, filter = null) {
     return new Promise((resolve, reject) => {
-      // Query without playlist join to avoid errors if table doesn't exist
+      // Include playlist metadata because streams can target either a single video or a playlist.
       let query = `
-        SELECT s.*, 
-               v.title AS video_title, 
+        SELECT s.*,
+               COALESCE(v.title, p.name) AS video_title,
                v.filepath AS video_filepath,
-               v.thumbnail_path AS video_thumbnail, 
+               COALESCE(v.thumbnail_path, '/images/playlist-thumbnail.svg') AS video_thumbnail,
                v.duration AS video_duration,
-               v.resolution AS video_resolution,  
-               v.bitrate AS video_bitrate,        
+               v.resolution AS video_resolution,
+               v.bitrate AS video_bitrate,
                v.fps AS video_fps,
                a.title AS audio_title,
-               'video' AS video_type
+               CASE WHEN p.id IS NOT NULL THEN 'playlist' ELSE 'video' END AS video_type
         FROM streams s
         LEFT JOIN videos v ON s.video_id = v.id
+        LEFT JOIN playlists p ON s.video_id = p.id
         LEFT JOIN audios a ON s.audio_id = a.id
       `;
       const params = [];
       const conditions = [];
-      
+
       if (userId) {
         conditions.push('s.user_id = ?');
         params.push(userId);
       }
-      
+
       // FIXED: Apply filter regardless of userId
       if (filter) {
         if (filter === 'live') {
@@ -144,11 +147,11 @@ class Stream {
           conditions.push("s.status = 'offline'");
         }
       }
-      
+
       if (conditions.length > 0) {
         query += ' WHERE ' + conditions.join(' AND ');
       }
-      
+
       query += ' ORDER BY s.created_at DESC';
       db.all(query, params, (err, rows) => {
         if (err) {
@@ -220,7 +223,7 @@ class Stream {
     let start_time = null;
     let end_time = null;
     let clear_start_time = false;
-    
+
     if (status === 'live') {
       start_time = startTimeOverride || new Date().toISOString();
     } else if (status === 'offline') {
@@ -231,24 +234,24 @@ class Stream {
       // from using old start_time values
       clear_start_time = true;
     }
-    
+
     // FIXED: Always update by id only to avoid user_id mismatch issues
     // The user_id check was causing status updates to fail when scheduler starts streams
     // FIXED: Clear start_time when status is 'scheduled' to prevent stale duration checks
-    const query = `UPDATE streams SET 
-        status = ?, 
-        status_updated_at = ?, 
-        start_time = CASE 
-          WHEN ? = 1 THEN NULL 
-          WHEN ? IS NOT NULL THEN ? 
-          ELSE start_time 
-        END, 
+    const query = `UPDATE streams SET
+        status = ?,
+        status_updated_at = ?,
+        start_time = CASE
+          WHEN ? = 1 THEN NULL
+          WHEN ? IS NOT NULL THEN ?
+          ELSE start_time
+        END,
         end_time = CASE WHEN ? IS NOT NULL THEN ? ELSE end_time END,
         updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`;
-    
+
     const params = [status, status_updated_at, clear_start_time ? 1 : 0, start_time, start_time, end_time, end_time, id];
-    
+
     return new Promise((resolve, reject) => {
       db.run(query, params,
         function (err) {
@@ -256,13 +259,13 @@ class Stream {
             console.error('Error updating stream status:', err.message);
             return reject(err);
           }
-          
+
           if (this.changes === 0) {
             console.warn(`[Stream.updateStatus] WARNING: No rows updated for stream ${id} to status '${status}'`);
           } else {
             console.log(`[Stream.updateStatus] Updated stream ${id} to status '${status}'${clear_start_time ? ' (start_time cleared)' : ''}, rows affected: ${this.changes}`);
           }
-          
+
           resolve({
             id,
             status,
@@ -278,15 +281,16 @@ class Stream {
   static async getStreamWithVideo(id) {
     return new Promise((resolve, reject) => {
       db.get(
-        `SELECT s.*, 
-                v.title AS video_title, 
-                v.filepath AS video_filepath, 
-                v.thumbnail_path AS video_thumbnail, 
+        `SELECT s.*,
+                COALESCE(v.title, p.name) AS video_title,
+                v.filepath AS video_filepath,
+                COALESCE(v.thumbnail_path, '/images/playlist-thumbnail.svg') AS video_thumbnail,
                 v.duration AS video_duration,
                 a.title AS audio_title,
-                'video' AS video_type
+                CASE WHEN p.id IS NOT NULL THEN 'playlist' ELSE 'video' END AS video_type
          FROM streams s
          LEFT JOIN videos v ON s.video_id = v.id
+         LEFT JOIN playlists p ON s.video_id = p.id
          LEFT JOIN audios a ON s.audio_id = a.id
          WHERE s.id = ?`,
         [id],
@@ -321,23 +325,25 @@ class Stream {
       const missedWindowMs = 10 * 60 * 1000; // 10 minutes (increased from 5)
       const missedStartTime = new Date(startTime.getTime() - missedWindowMs);
       const missedStartTimeStr = missedStartTime.toISOString();
-      
+
       // FIXED: Use simple string comparison for ISO 8601 format
       // ISO 8601 strings are lexicographically sortable
       // FIXED: Include both 'scheduled' and 'offline' status for once schedules
       // Streams may be in 'offline' status if they were stopped manually or due to error
       // but should still be triggered if schedule_time is in range
       const query = `
-        SELECT s.*, 
-               v.title AS video_title, 
+        SELECT s.*,
+               COALESCE(v.title, p.name) AS video_title,
                v.filepath AS video_filepath,
-               v.thumbnail_path AS video_thumbnail, 
+               COALESCE(v.thumbnail_path, '/images/playlist-thumbnail.svg') AS video_thumbnail,
                v.duration AS video_duration,
                v.resolution AS video_resolution,
                v.bitrate AS video_bitrate,
-               v.fps AS video_fps  
+               v.fps AS video_fps,
+               CASE WHEN p.id IS NOT NULL THEN 'playlist' ELSE 'video' END AS video_type
         FROM streams s
         LEFT JOIN videos v ON s.video_id = v.id
+        LEFT JOIN playlists p ON s.video_id = p.id
         WHERE s.status IN ('scheduled', 'offline')
         AND s.schedule_type = 'once'
         AND s.schedule_time IS NOT NULL
@@ -375,16 +381,18 @@ class Stream {
       // Include 'scheduled' and 'offline' status for recurring streams
       // (offline status may occur if stream was stopped manually or due to error)
       let query = `
-        SELECT s.*, 
-               v.title AS video_title, 
+        SELECT s.*,
+               COALESCE(v.title, p.name) AS video_title,
                v.filepath AS video_filepath,
-               v.thumbnail_path AS video_thumbnail, 
+               COALESCE(v.thumbnail_path, '/images/playlist-thumbnail.svg') AS video_thumbnail,
                v.duration AS video_duration,
                v.resolution AS video_resolution,
                v.bitrate AS video_bitrate,
-               v.fps AS video_fps
+               v.fps AS video_fps,
+               CASE WHEN p.id IS NOT NULL THEN 'playlist' ELSE 'video' END AS video_type
         FROM streams s
         LEFT JOIN videos v ON s.video_id = v.id
+        LEFT JOIN playlists p ON s.video_id = p.id
         WHERE s.recurring_enabled = 1
         AND s.schedule_type IN ('daily', 'weekly')
         AND s.status IN ('scheduled', 'offline')
@@ -432,7 +440,7 @@ class Stream {
     const recurring_enabled_int = enabled ? 1 : 0;
     return new Promise((resolve, reject) => {
       db.run(
-        `UPDATE streams SET 
+        `UPDATE streams SET
           recurring_enabled = ?,
           updated_at = CURRENT_TIMESTAMP
          WHERE id = ? AND user_id = ?`,
@@ -471,10 +479,10 @@ class Stream {
         day: 'numeric',
         hour12: false
       });
-      
+
       const parts = formatter.formatToParts(date);
       let hours = 0, minutes = 0, dayName = '', year = 0, month = 0, dayOfMonth = 0;
-      
+
       for (const part of parts) {
         if (part.type === 'hour') hours = parseInt(part.value, 10);
         if (part.type === 'minute') minutes = parseInt(part.value, 10);
@@ -483,21 +491,21 @@ class Stream {
         if (part.type === 'month') month = parseInt(part.value, 10);
         if (part.type === 'day') dayOfMonth = parseInt(part.value, 10);
       }
-      
+
       // Convert day name to number (0=Sun, 1=Mon, etc.)
       const dayMap = { 'Sun': 0, 'Mon': 1, 'Tue': 2, 'Wed': 3, 'Thu': 4, 'Fri': 5, 'Sat': 6 };
       const day = dayMap[dayName] ?? date.getDay();
-      
+
       return { hours, minutes, day, year, month, dayOfMonth };
     } catch (e) {
       // Fallback to manual calculation if Intl fails
       const wibOffset = 7 * 60; // 7 hours in minutes
       const utcMinutes = date.getUTCHours() * 60 + date.getUTCMinutes();
       const wibMinutes = (utcMinutes + wibOffset) % (24 * 60);
-      
+
       const hours = Math.floor(wibMinutes / 60);
       const minutes = wibMinutes % 60;
-      
+
       // Calculate day in WIB
       const utcDay = date.getUTCDay();
       const utcHours = date.getUTCHours();
@@ -505,10 +513,10 @@ class Stream {
       if (utcHours + 7 >= 24) {
         day = (utcDay + 1) % 7;
       }
-      
-      return { 
-        hours, 
-        minutes, 
+
+      return {
+        hours,
+        minutes,
         day,
         year: date.getFullYear(),
         month: date.getMonth() + 1,
@@ -536,11 +544,11 @@ class Stream {
       // Create date in WIB context
       const nextRun = new Date(now);
       nextRun.setHours(hours, minutes, 0, 0);
-      
+
       // Compare using WIB time
       const currentTimeWIB = wibNow.hours * 60 + wibNow.minutes;
       const scheduleTimeWIB = hours * 60 + minutes;
-      
+
       // If time has passed today in WIB, schedule for tomorrow
       if (scheduleTimeWIB <= currentTimeWIB) {
         nextRun.setDate(nextRun.getDate() + 1);
@@ -549,17 +557,17 @@ class Stream {
     }
 
     if (stream.schedule_type === 'weekly') {
-      const scheduleDays = Array.isArray(stream.schedule_days) 
-        ? stream.schedule_days 
+      const scheduleDays = Array.isArray(stream.schedule_days)
+        ? stream.schedule_days
         : (stream.schedule_days ? JSON.parse(stream.schedule_days) : []);
-      
+
       if (scheduleDays.length === 0) {
         return null;
       }
 
       // Sort days for easier processing
       const sortedDays = [...scheduleDays].sort((a, b) => a - b);
-      
+
       // Use WIB day and time for comparison
       const currentDayWIB = wibNow.day;
       const currentTimeWIB = wibNow.hours * 60 + wibNow.minutes;
@@ -572,7 +580,7 @@ class Stream {
           const nextRun = new Date(now);
           nextRun.setDate(now.getDate() + i);
           nextRun.setHours(hours, minutes, 0, 0);
-          
+
           // If it's today in WIB but time has passed, continue to next day
           if (i === 0 && scheduleTimeWIB <= currentTimeWIB) {
             continue;
@@ -638,34 +646,35 @@ class Stream {
   static findAllScheduled(userId) {
     return new Promise((resolve, reject) => {
       const query = `
-        SELECT s.*, 
-               v.title AS video_title, 
+        SELECT s.*,
+               COALESCE(v.title, p.name) AS video_title,
                v.filepath AS video_filepath,
-               v.thumbnail_path AS video_thumbnail, 
+               COALESCE(v.thumbnail_path, '/images/playlist-thumbnail.svg') AS video_thumbnail,
                v.duration AS video_duration,
                v.resolution AS video_resolution,
                v.bitrate AS video_bitrate,
                v.fps AS video_fps,
                a.title AS audio_title,
-               'video' AS video_type
+               CASE WHEN p.id IS NOT NULL THEN 'playlist' ELSE 'video' END AS video_type
         FROM streams s
         LEFT JOIN videos v ON s.video_id = v.id
+        LEFT JOIN playlists p ON s.video_id = p.id
         LEFT JOIN audios a ON s.audio_id = a.id
         WHERE s.user_id = ?
         AND (
           (s.schedule_type = 'once' AND s.schedule_time IS NOT NULL)
           OR (s.schedule_type IN ('daily', 'weekly') AND s.recurring_enabled = 1)
         )
-        ORDER BY 
-          CASE s.schedule_type 
-            WHEN 'once' THEN 1 
-            WHEN 'daily' THEN 2 
-            WHEN 'weekly' THEN 3 
+        ORDER BY
+          CASE s.schedule_type
+            WHEN 'once' THEN 1
+            WHEN 'daily' THEN 2
+            WHEN 'weekly' THEN 3
           END,
           s.schedule_time ASC,
           s.recurring_time ASC
       `;
-      
+
       db.all(query, [userId], (err, rows) => {
         if (err) {
           console.error('Error finding all scheduled streams:', err.message);
@@ -716,7 +725,7 @@ class Stream {
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
-    
+
     const todayStreams = streams.filter(stream => {
       if (stream.schedule_type === 'once' && stream.schedule_time) {
         const scheduleDate = new Date(stream.schedule_time);
@@ -735,7 +744,7 @@ class Stream {
 
     // Sort by time
     return todayStreams.sort((a, b) => {
-      const timeA = a.schedule_type === 'once' 
+      const timeA = a.schedule_type === 'once'
         ? new Date(a.schedule_time).getTime()
         : Stream.getTimeInMinutes(a.recurring_time);
       const timeB = b.schedule_type === 'once'
@@ -792,13 +801,13 @@ class Stream {
           }
 
           // Prepare schedule_days for storage
-          const schedule_days_json = originalSettings.schedule_days 
-            ? JSON.stringify(originalSettings.schedule_days) 
+          const schedule_days_json = originalSettings.schedule_days
+            ? JSON.stringify(originalSettings.schedule_days)
             : null;
 
           // Update stream with original values
           db.run(
-            `UPDATE streams SET 
+            `UPDATE streams SET
               schedule_time = ?,
               recurring_time = ?,
               stream_duration_minutes = ?,
@@ -879,11 +888,13 @@ class Stream {
   static findByStreamKey(streamKey, userId) {
     return new Promise((resolve, reject) => {
       db.get(
-        `SELECT s.*, 
-                v.title AS video_title,
-                a.title AS audio_title
+        `SELECT s.*,
+                COALESCE(v.title, p.name) AS video_title,
+                a.title AS audio_title,
+                CASE WHEN p.id IS NOT NULL THEN 'playlist' ELSE 'video' END AS video_type
          FROM streams s
          LEFT JOIN videos v ON s.video_id = v.id
+         LEFT JOIN playlists p ON s.video_id = p.id
          LEFT JOIN audios a ON s.audio_id = a.id
          WHERE s.stream_key = ? AND s.user_id = ?`,
         [streamKey, userId],

@@ -91,6 +91,7 @@ function toggleAudioSelector() {
 
 function selectAudio(audio) {
   selectedAudioData = audio;
+  window.selectedAudioData = audio;
   document.getElementById('selectedAudio').textContent = audio.title || audio.name;
   document.getElementById('selectedAudioId').value = audio.id;
   document.getElementById('clearAudioBtn').classList.remove('hidden');
@@ -100,6 +101,7 @@ function selectAudio(audio) {
 
 function clearAudioSelection() {
   selectedAudioData = null;
+  window.selectedAudioData = null;
   document.getElementById('selectedAudio').textContent = 'No audio selected';
   document.getElementById('selectedAudioId').value = '';
   document.getElementById('clearAudioBtn').classList.add('hidden');
@@ -194,6 +196,7 @@ function displayFilteredAudios(audios) {
 
 function selectVideo(video) {
   selectedVideoData = video;
+  window.selectedVideoData = video;
   const displayText = video.type === 'playlist' ? `[Playlist] ${video.name}` : video.name;
   document.getElementById('selectedVideo').textContent = displayText;
 
@@ -629,9 +632,12 @@ document.addEventListener('DOMContentLoaded', function () {
       const formData = new FormData(form);
       const scheduleType = formData.get('scheduleType') || 'once';
 
+      const activeSelectedVideo = window.selectedVideoData || selectedVideoData;
+      const activeSelectedAudio = window.selectedAudioData || selectedAudioData;
+
       const data = {
-        videoId: selectedVideoData ? selectedVideoData.id : document.getElementById('selectedVideoId').value,
-        audioId: selectedAudioData ? selectedAudioData.id : (document.getElementById('selectedAudioId').value || null),
+        videoId: activeSelectedVideo ? activeSelectedVideo.id : document.getElementById('selectedVideoId').value,
+        audioId: activeSelectedAudio ? activeSelectedAudio.id : (document.getElementById('selectedAudioId').value || null),
         streamTitle: formData.get('streamTitle'),
         rtmpUrl: formData.get('rtmpUrl') || 'rtmp://a.rtmp.youtube.com/live2',
         streamKey: formData.get('streamKey'),
