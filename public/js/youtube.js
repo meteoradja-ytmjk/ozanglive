@@ -6438,6 +6438,56 @@ function importTitleTxtFile(event) {
 }
 
 /**
+ * Delete every title in the currently selected folder/channel scope.
+ */
+async function deleteAllTitlesInCurrentScope() {
+  const targetFolderId = getTitleManagerTargetFolderId();
+  const streamKeyId = getTitleManagerStreamKeyId();
+
+  if (!targetFolderId && !streamKeyId) {
+    showToast('Pilih folder/channel terlebih dahulu', 'error');
+    return;
+  }
+
+  const selectedFolder = targetFolderId ? titleFolders.find(folder => folder.id === targetFolderId) : null;
+  const scopeLabel = selectedFolder?.name || 'channel yang sedang dipilih';
+  const currentCount = titleSuggestions.length;
+  const countLabel = currentCount > 0 ? `${currentCount} ` : '';
+
+  if (!confirm(`Hapus semua ${countLabel}judul di ${scopeLabel}? Tindakan ini tidak bisa dibatalkan.`)) {
+    return;
+  }
+
+  try {
+    const response = await fetch('/api/title-suggestions/bulk-delete', {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getCsrfToken()
+      },
+      body: JSON.stringify({
+        folderId: targetFolderId,
+        streamKeyId
+      })
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      showToast(`${data.deleted || 0} judul dihapus`);
+      await loadTitleFolders();
+      loadTitleSuggestions();
+      if (titleAutoRotationEnabled) loadNextRotationTitle();
+    } else {
+      showToast(data.error || 'Gagal menghapus semua judul', 'error');
+    }
+  } catch (error) {
+    console.error('Error deleting titles by scope:', error);
+    showToast('Gagal menghapus semua judul', 'error');
+  }
+}
+
+/**
  * Toggle pin status for a title
  */
 async function toggleTitlePin(id, shouldPin) {

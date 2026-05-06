@@ -9244,6 +9244,36 @@ app.post('/api/title-suggestions/:id/use', isAuthenticated, async (req, res) => 
   }
 });
 
+// Delete all title suggestions from the selected folder/channel scope
+app.delete('/api/title-suggestions/bulk-delete', isAuthenticated, async (req, res) => {
+  try {
+    const { folderId, streamKeyId } = req.body;
+    const targetFolderId = folderId || null;
+    const targetStreamKeyId = streamKeyId || null;
+
+    if (!targetFolderId && !targetStreamKeyId) {
+      return res.status(400).json({ success: false, error: 'Folder or channel is required' });
+    }
+
+    if (targetFolderId) {
+      const folder = await TitleFolder.findById(targetFolderId, req.session.userId);
+      if (!folder) {
+        return res.status(404).json({ success: false, error: 'Folder not found' });
+      }
+    }
+
+    const result = await TitleSuggestion.deleteByScope(req.session.userId, {
+      folderId: targetFolderId,
+      streamKeyId: targetStreamKeyId
+    });
+
+    res.json({ success: true, deleted: result.deleted || 0 });
+  } catch (error) {
+    console.error('Error deleting titles by scope:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete titles' });
+  }
+});
+
 // Delete title suggestion
 app.delete('/api/title-suggestions/:id', isAuthenticated, async (req, res) => {
   try {
