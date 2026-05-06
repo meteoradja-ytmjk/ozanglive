@@ -541,37 +541,21 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
   
   fs.writeFileSync(concatFile, concatContent);
   
-  // Non-advanced mode - minimal copy
-  if (!stream.use_advanced_settings) {
-    const args = [
-      '-re',
-      '-f', 'concat',
-      '-safe', '0',
-      '-i', concatFile,
-      '-c', 'copy'
-    ];
-    
-    // CRITICAL: -t must be placed BEFORE -f flv and output URL
-    if (durationSeconds && durationSeconds > 0) {
-      args.push('-t', durationSeconds.toString());
-    }
-    
-    args.push('-f', 'flv');
-    args.push(rtmpUrl);
-    console.log('[StreamingService] Playlist: minimal copy');
-    return args;
-  }
-  
-  // Advanced mode - encode video, copy audio
+  // Playlist streams are always normalized before RTMP output.
+  // Copy mode is fragile for playlists because files can have different codecs,
+  // resolutions, timestamps, or audio formats that FLV/RTMP cannot accept.
   const resolution = stream.resolution || '1280x720';
   const bitrate = stream.bitrate || 2500;
   const fps = stream.fps || 30;
-  
-  const advancedArgs = [
+
+  const args = [
     '-re',
+    '-fflags', '+genpts',
     '-f', 'concat',
     '-safe', '0',
     '-i', concatFile,
+    '-map', '0:v:0',
+    '-map', '0:a?',
     '-c:v', 'libx264',
     '-preset', 'ultrafast',
     '-tune', 'zerolatency',
@@ -582,18 +566,21 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
     '-g', `${fps * 2}`,
     '-s', resolution,
     '-r', fps.toString(),
-    '-c:a', 'copy'
+    '-c:a', 'aac',
+    '-b:a', '128k',
+    '-ar', '44100',
+    '-ac', '2'
   ];
-  
+
   // CRITICAL: -t must be placed BEFORE -f flv and output URL
   if (durationSeconds && durationSeconds > 0) {
-    advancedArgs.push('-t', durationSeconds.toString());
+    args.push('-t', durationSeconds.toString());
   }
-  
-  advancedArgs.push('-f', 'flv');
-  advancedArgs.push(rtmpUrl);
-  console.log('[StreamingService] Playlist: encoding mode');
-  return advancedArgs;
+
+  args.push('-f', 'flv');
+  args.push(rtmpUrl);
+  console.log('[StreamingService] Playlist: normalized encoding mode');
+  return args;
 }
 
 async function buildFFmpegArgs(stream) {
@@ -780,12 +767,20 @@ async function startStream(streamId) {
     // Wait for FFmpeg to confirm it's running before updating status
     let streamConfirmed = false;
     let earlyExitError = null;
-    
+    let earlyStderrBuffer = '';
+
+    ffmpegProcess.stderr.on('data', (data) => {
+      if (!streamConfirmed) {
+        earlyStderrBuffer = `${earlyStderrBuffer}${data.toString()}`.slice(-1500);
+      }
+    });
+
     // Set up early exit detection
     const earlyExitPromise = new Promise((resolve) => {
       ffmpegProcess.once('exit', (code, signal) => {
         if (!streamConfirmed) {
-          earlyExitError = `FFmpeg exited early with code ${code}, signal: ${signal}`;
+          const stderrDetails = earlyStderrBuffer.trim();
+          earlyExitError = `FFmpeg exited early with code ${code}, signal: ${signal}${stderrDetails ? `: ${stderrDetails}` : ''}`;
           resolve(false);
         }
       });

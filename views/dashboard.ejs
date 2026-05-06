@@ -1838,12 +1838,15 @@
               { showWhatsapp: Boolean(whatsappUrl), whatsappUrl }
             );
             loadLiveLimitInfo();
+          } else if (typeof showCenterToast === 'function') {
+            showCenterToast('error', result.error || 'Failed to start stream', 7000);
           }
-          // No toast for other errors
         }
       } catch (error) {
         console.error('Error starting stream:', error);
-        // No toast for errors
+        if (typeof showCenterToast === 'function') {
+          showCenterToast('error', 'Failed to start stream. Please try again.', 7000);
+        }
       }
     }
 
