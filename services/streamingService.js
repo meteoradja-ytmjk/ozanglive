@@ -435,6 +435,31 @@ function calculateStreamRemainingDuration(streamId) {
   }
   return calculateRemainingDuration(info.startTime, info.originalDurationMs);
 }
+
+function resolvePublicMediaPath(mediaFilePath) {
+  if (!mediaFilePath || typeof mediaFilePath !== 'string') {
+    throw new Error('Media filepath is missing');
+  }
+
+  if (path.isAbsolute(mediaFilePath)) {
+    return mediaFilePath;
+  }
+
+  const projectRoot = path.resolve(__dirname, '..');
+  const relativeMediaPath = mediaFilePath.replace(/^[\\/]+/, '');
+  const isAlreadyPublicPath = relativeMediaPath === 'public'
+    || relativeMediaPath.startsWith('public/')
+    || relativeMediaPath.startsWith('public\\');
+
+  return isAlreadyPublicPath
+    ? path.join(projectRoot, relativeMediaPath)
+    : path.join(projectRoot, 'public', relativeMediaPath);
+}
+
+function formatConcatFilePath(mediaFilePath) {
+  return mediaFilePath.replace(/\\/g, '/').replace(/'/g, "\\'");
+}
+
 function addStreamLog(streamId, message) {
   if (!streamLogs.has(streamId)) {
     streamLogs.set(streamId, []);
@@ -478,24 +503,19 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
     console.log('[StreamingService] No duration set for playlist - stream will run until playlist ends or loop exhausts');
   }
   
-  let videoPaths = [];
+  const playlistVideos = playlist.is_shuffle || playlist.shuffle
+    ? [...playlist.videos].sort(() => Math.random() - 0.5)
+    : playlist.videos;
+  const videoPaths = playlistVideos.map(video => resolvePublicMediaPath(video.filepath));
   
-  if (playlist.is_shuffle || playlist.shuffle) {
-    const shuffledVideos = [...playlist.videos].sort(() => Math.random() - 0.5);
-    videoPaths = shuffledVideos.map(video => {
-      const relativeVideoPath = video.filepath.startsWith('/') ? video.filepath.substring(1) : video.filepath;
-      return path.join(projectRoot, 'public', relativeVideoPath);
-    });
-  } else {
-    videoPaths = playlist.videos.map(video => {
-      const relativeVideoPath = video.filepath.startsWith('/') ? video.filepath.substring(1) : video.filepath;
-      return path.join(projectRoot, 'public', relativeVideoPath);
-    });
-  }
-  
-  for (const videoPath of videoPaths) {
+  for (const [index, videoPath] of videoPaths.entries()) {
     if (!fs.existsSync(videoPath)) {
-      throw new Error(`Video file not found: ${videoPath}`);
+      const sourceFilepath = playlistVideos[index]?.filepath || 'unknown';
+      console.error(`[StreamingService] CRITICAL: Playlist video file not found on disk.`);
+      console.error(`[StreamingService] Checked path: ${videoPath}`);
+      console.error(`[StreamingService] playlist_id: ${stream.video_id}`);
+      console.error(`[StreamingService] video.filepath (from DB): ${sourceFilepath}`);
+      throw new Error('Playlist video file not found on disk. Please check paths and file existence.');
     }
   }
   
@@ -510,48 +530,32 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
   if (stream.loop_video) {
     for (let i = 0; i < 1000; i++) {
       videoPaths.forEach(videoPath => {
-        concatContent += `file '${videoPath.replace(/\\/g, '/')}'\n`;
+        concatContent += `file '${formatConcatFilePath(videoPath)}'\n`;
       });
     }
   } else {
     videoPaths.forEach(videoPath => {
-      concatContent += `file '${videoPath.replace(/\\/g, '/')}'\n`;
+      concatContent += `file '${formatConcatFilePath(videoPath)}'\n`;
     });
   }
   
   fs.writeFileSync(concatFile, concatContent);
   
-  // Non-advanced mode - minimal copy
-  if (!stream.use_advanced_settings) {
-    const args = [
-      '-re',
-      '-f', 'concat',
-      '-safe', '0',
-      '-i', concatFile,
-      '-c', 'copy'
-    ];
-    
-    // CRITICAL: -t must be placed BEFORE -f flv and output URL
-    if (durationSeconds && durationSeconds > 0) {
-      args.push('-t', durationSeconds.toString());
-    }
-    
-    args.push('-f', 'flv');
-    args.push(rtmpUrl);
-    console.log('[StreamingService] Playlist: minimal copy');
-    return args;
-  }
-  
-  // Advanced mode - encode video, copy audio
+  // Playlist streams are always normalized before RTMP output.
+  // Copy mode is fragile for playlists because files can have different codecs,
+  // resolutions, timestamps, or audio formats that FLV/RTMP cannot accept.
   const resolution = stream.resolution || '1280x720';
   const bitrate = stream.bitrate || 2500;
   const fps = stream.fps || 30;
-  
-  const advancedArgs = [
+
+  const args = [
     '-re',
+    '-fflags', '+genpts',
     '-f', 'concat',
     '-safe', '0',
     '-i', concatFile,
+    '-map', '0:v:0',
+    '-map', '0:a?',
     '-c:v', 'libx264',
     '-preset', 'ultrafast',
     '-tune', 'zerolatency',
@@ -562,18 +566,21 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
     '-g', `${fps * 2}`,
     '-s', resolution,
     '-r', fps.toString(),
-    '-c:a', 'copy'
+    '-c:a', 'aac',
+    '-b:a', '128k',
+    '-ar', '44100',
+    '-ac', '2'
   ];
-  
+
   // CRITICAL: -t must be placed BEFORE -f flv and output URL
   if (durationSeconds && durationSeconds > 0) {
-    advancedArgs.push('-t', durationSeconds.toString());
+    args.push('-t', durationSeconds.toString());
   }
-  
-  advancedArgs.push('-f', 'flv');
-  advancedArgs.push(rtmpUrl);
-  console.log('[StreamingService] Playlist: encoding mode');
-  return advancedArgs;
+
+  args.push('-f', 'flv');
+  args.push(rtmpUrl);
+  console.log('[StreamingService] Playlist: normalized encoding mode');
+  return args;
 }
 
 async function buildFFmpegArgs(stream) {
@@ -595,19 +602,13 @@ async function buildFFmpegArgs(stream) {
     throw new Error(`Video record not found in database for video_id: ${stream.video_id}`);
   }
   
-  const relativeVideoPath = video.filepath.startsWith('/') ? video.filepath.substring(1) : video.filepath;
-  const projectRoot = path.resolve(__dirname, '..');
-  // FIXED: Don't add 'public' if relativeVideoPath already starts with 'public/'
-  const videoPath = relativeVideoPath.startsWith('public/') 
-    ? path.join(projectRoot, relativeVideoPath)
-    : path.join(projectRoot, 'public', relativeVideoPath);
+  const videoPath = resolvePublicMediaPath(video.filepath);
   
   if (!fs.existsSync(videoPath)) {
     console.error(`[StreamingService] CRITICAL: Video file not found on disk.`);
     console.error(`[StreamingService] Checked path: ${videoPath}`);
     console.error(`[StreamingService] stream.video_id: ${stream.video_id}`);
     console.error(`[StreamingService] video.filepath (from DB): ${video.filepath}`);
-    console.error(`[StreamingService] Calculated relativeVideoPath: ${relativeVideoPath}`);
     console.error(`[StreamingService] process.cwd(): ${process.cwd()}`);
     throw new Error('Video file not found on disk. Please check paths and file existence.');
   }
@@ -619,11 +620,7 @@ async function buildFFmpegArgs(stream) {
     if (!audio) {
       throw new Error(`Audio not found for audio_id: ${stream.audio_id}`);
     }
-    const relativeAudioPath = audio.filepath.startsWith('/') ? audio.filepath.substring(1) : audio.filepath;
-    // FIXED: Don't add 'public' if relativeAudioPath already starts with 'public/'
-    audioPath = relativeAudioPath.startsWith('public/') 
-      ? path.join(projectRoot, relativeAudioPath)
-      : path.join(projectRoot, 'public', relativeAudioPath);
+    audioPath = resolvePublicMediaPath(audio.filepath);
     if (!fs.existsSync(audioPath)) {
       console.error(`[StreamingService] CRITICAL: Audio file not found on disk.`);
       console.error(`[StreamingService] Checked path: ${audioPath}`);
@@ -770,12 +767,20 @@ async function startStream(streamId) {
     // Wait for FFmpeg to confirm it's running before updating status
     let streamConfirmed = false;
     let earlyExitError = null;
-    
+    let earlyStderrBuffer = '';
+
+    ffmpegProcess.stderr.on('data', (data) => {
+      if (!streamConfirmed) {
+        earlyStderrBuffer = `${earlyStderrBuffer}${data.toString()}`.slice(-1500);
+      }
+    });
+
     // Set up early exit detection
     const earlyExitPromise = new Promise((resolve) => {
       ffmpegProcess.once('exit', (code, signal) => {
         if (!streamConfirmed) {
-          earlyExitError = `FFmpeg exited early with code ${code}, signal: ${signal}`;
+          const stderrDetails = earlyStderrBuffer.trim();
+          earlyExitError = `FFmpeg exited early with code ${code}, signal: ${signal}${stderrDetails ? `: ${stderrDetails}` : ''}`;
           resolve(false);
         }
       });
