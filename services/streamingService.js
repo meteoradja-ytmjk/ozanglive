@@ -441,19 +441,26 @@ function resolvePublicMediaPath(mediaFilePath) {
     throw new Error('Media filepath is missing');
   }
 
-  if (path.isAbsolute(mediaFilePath)) {
+  const projectRoot = path.resolve(__dirname, '..');
+  const normalizedMediaPath = mediaFilePath.replace(/\\/g, '/');
+  const relativeMediaPath = normalizedMediaPath.replace(/^[\/]+/, '');
+  const isPublicRelativePath = relativeMediaPath === 'public' || relativeMediaPath.startsWith('public/');
+  const publicCandidate = isPublicRelativePath
+    ? path.join(projectRoot, relativeMediaPath)
+    : path.join(projectRoot, 'public', relativeMediaPath);
+
+  // Most DB values are URL-style paths like /uploads/videos/foo.mp4. Those are
+  // absolute to the web server, not absolute filesystem paths, so resolve them
+  // under public/ before considering them as OS paths.
+  if (fs.existsSync(publicCandidate)) {
+    return publicCandidate;
+  }
+
+  if (path.isAbsolute(mediaFilePath) && fs.existsSync(mediaFilePath)) {
     return mediaFilePath;
   }
 
-  const projectRoot = path.resolve(__dirname, '..');
-  const relativeMediaPath = mediaFilePath.replace(/^[\\/]+/, '');
-  const isAlreadyPublicPath = relativeMediaPath === 'public'
-    || relativeMediaPath.startsWith('public/')
-    || relativeMediaPath.startsWith('public\\');
-
-  return isAlreadyPublicPath
-    ? path.join(projectRoot, relativeMediaPath)
-    : path.join(projectRoot, 'public', relativeMediaPath);
+  return publicCandidate;
 }
 
 function formatConcatFilePath(mediaFilePath) {
@@ -506,17 +513,28 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
   const playlistVideos = playlist.is_shuffle || playlist.shuffle
     ? [...playlist.videos].sort(() => Math.random() - 0.5)
     : playlist.videos;
-  const videoPaths = playlistVideos.map(video => resolvePublicMediaPath(video.filepath));
-  
-  for (const [index, videoPath] of videoPaths.entries()) {
-    if (!fs.existsSync(videoPath)) {
-      const sourceFilepath = playlistVideos[index]?.filepath || 'unknown';
-      console.error(`[StreamingService] CRITICAL: Playlist video file not found on disk.`);
-      console.error(`[StreamingService] Checked path: ${videoPath}`);
-      console.error(`[StreamingService] playlist_id: ${stream.video_id}`);
-      console.error(`[StreamingService] video.filepath (from DB): ${sourceFilepath}`);
-      throw new Error('Playlist video file not found on disk. Please check paths and file existence.');
+  const videoPaths = [];
+  const missingVideos = [];
+
+  playlistVideos.forEach((video) => {
+    const videoPath = resolvePublicMediaPath(video.filepath);
+    if (fs.existsSync(videoPath)) {
+      videoPaths.push(videoPath);
+      return;
     }
+
+    missingVideos.push({ title: video.title || video.id || 'unknown', filepath: video.filepath, checkedPath: videoPath });
+  });
+
+  if (missingVideos.length > 0) {
+    console.error(`[StreamingService] Playlist ${stream.video_id}: ${missingVideos.length} video file(s) missing.`);
+    missingVideos.slice(0, 5).forEach((video) => {
+      console.error(`[StreamingService] Missing playlist item: title=${video.title}, filepath=${video.filepath}, checked=${video.checkedPath}`);
+    });
+  }
+
+  if (videoPaths.length === 0) {
+    throw new Error('All playlist video files are missing on disk. Please re-upload or remove missing videos from this playlist.');
   }
   
   const concatFile = path.join(projectRoot, 'temp', `playlist_${stream.id}.txt`);
