@@ -1238,6 +1238,16 @@
             <button type="button" onclick="addNewTitle()"
               class="px-3 py-2 bg-primary hover:bg-primary/80 text-white rounded-lg text-sm flex-shrink-0">+</button>
           </div>
+          <div class="flex items-center justify-between gap-2 mt-2">
+            <p class="text-xs text-gray-500">Import .txt: 1 judul per baris ke folder/channel yang dipilih.</p>
+            <input type="file" id="titleTxtImportInput" accept=".txt,text/plain" class="hidden" onchange="importTitleTxtFile(event)">
+            <button type="button" onclick="openTitleTxtImportPicker()"
+              class="px-2.5 py-1.5 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-gray-200 rounded-lg text-xs flex items-center gap-1 flex-shrink-0"
+              title="Import judul dari file .txt">
+              <i class="ti ti-file-import"></i>
+              <span>Import .txt</span>
+            </button>
+          </div>
         </div>
         
         <!-- Title Section - Always Visible -->

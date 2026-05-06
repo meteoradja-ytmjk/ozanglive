@@ -9162,6 +9162,41 @@ app.post('/api/title-suggestions', isAuthenticated, async (req, res) => {
   }
 });
 
+// Import multiple title suggestions from a .txt file payload
+app.post('/api/title-suggestions/import', isAuthenticated, async (req, res) => {
+  try {
+    const { titles, streamKeyId, folderId } = req.body;
+
+    if (!Array.isArray(titles) || titles.length === 0) {
+      return res.status(400).json({ success: false, error: 'Titles are required' });
+    }
+
+    if (titles.length > 1000) {
+      return res.status(400).json({ success: false, error: 'Maximum 1000 titles per import' });
+    }
+
+    const targetFolderId = folderId || null;
+    if (targetFolderId) {
+      const folder = await TitleFolder.findById(targetFolderId, req.session.userId);
+      if (!folder) {
+        return res.status(404).json({ success: false, error: 'Folder not found' });
+      }
+    }
+
+    const summary = await TitleSuggestion.bulkImport({
+      user_id: req.session.userId,
+      titles,
+      stream_key_id: streamKeyId || null,
+      folder_id: targetFolderId
+    });
+
+    res.json({ success: true, ...summary });
+  } catch (error) {
+    console.error('Error importing title suggestions:', error);
+    res.status(500).json({ success: false, error: 'Failed to import titles' });
+  }
+});
+
 // Update title suggestion
 app.put('/api/title-suggestions/:id', isAuthenticated, async (req, res) => {
   try {
