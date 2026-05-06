@@ -435,6 +435,31 @@ function calculateStreamRemainingDuration(streamId) {
   }
   return calculateRemainingDuration(info.startTime, info.originalDurationMs);
 }
+
+function resolvePublicMediaPath(mediaFilePath) {
+  if (!mediaFilePath || typeof mediaFilePath !== 'string') {
+    throw new Error('Media filepath is missing');
+  }
+
+  if (path.isAbsolute(mediaFilePath)) {
+    return mediaFilePath;
+  }
+
+  const projectRoot = path.resolve(__dirname, '..');
+  const relativeMediaPath = mediaFilePath.replace(/^[\\/]+/, '');
+  const isAlreadyPublicPath = relativeMediaPath === 'public'
+    || relativeMediaPath.startsWith('public/')
+    || relativeMediaPath.startsWith('public\\');
+
+  return isAlreadyPublicPath
+    ? path.join(projectRoot, relativeMediaPath)
+    : path.join(projectRoot, 'public', relativeMediaPath);
+}
+
+function formatConcatFilePath(mediaFilePath) {
+  return mediaFilePath.replace(/\\/g, '/').replace(/'/g, "\\'");
+}
+
 function addStreamLog(streamId, message) {
   if (!streamLogs.has(streamId)) {
     streamLogs.set(streamId, []);
@@ -478,24 +503,19 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
     console.log('[StreamingService] No duration set for playlist - stream will run until playlist ends or loop exhausts');
   }
   
-  let videoPaths = [];
+  const playlistVideos = playlist.is_shuffle || playlist.shuffle
+    ? [...playlist.videos].sort(() => Math.random() - 0.5)
+    : playlist.videos;
+  const videoPaths = playlistVideos.map(video => resolvePublicMediaPath(video.filepath));
   
-  if (playlist.is_shuffle || playlist.shuffle) {
-    const shuffledVideos = [...playlist.videos].sort(() => Math.random() - 0.5);
-    videoPaths = shuffledVideos.map(video => {
-      const relativeVideoPath = video.filepath.startsWith('/') ? video.filepath.substring(1) : video.filepath;
-      return path.join(projectRoot, 'public', relativeVideoPath);
-    });
-  } else {
-    videoPaths = playlist.videos.map(video => {
-      const relativeVideoPath = video.filepath.startsWith('/') ? video.filepath.substring(1) : video.filepath;
-      return path.join(projectRoot, 'public', relativeVideoPath);
-    });
-  }
-  
-  for (const videoPath of videoPaths) {
+  for (const [index, videoPath] of videoPaths.entries()) {
     if (!fs.existsSync(videoPath)) {
-      throw new Error(`Video file not found: ${videoPath}`);
+      const sourceFilepath = playlistVideos[index]?.filepath || 'unknown';
+      console.error(`[StreamingService] CRITICAL: Playlist video file not found on disk.`);
+      console.error(`[StreamingService] Checked path: ${videoPath}`);
+      console.error(`[StreamingService] playlist_id: ${stream.video_id}`);
+      console.error(`[StreamingService] video.filepath (from DB): ${sourceFilepath}`);
+      throw new Error('Playlist video file not found on disk. Please check paths and file existence.');
     }
   }
   
@@ -510,12 +530,12 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
   if (stream.loop_video) {
     for (let i = 0; i < 1000; i++) {
       videoPaths.forEach(videoPath => {
-        concatContent += `file '${videoPath.replace(/\\/g, '/')}'\n`;
+        concatContent += `file '${formatConcatFilePath(videoPath)}'\n`;
       });
     }
   } else {
     videoPaths.forEach(videoPath => {
-      concatContent += `file '${videoPath.replace(/\\/g, '/')}'\n`;
+      concatContent += `file '${formatConcatFilePath(videoPath)}'\n`;
     });
   }
   
@@ -595,19 +615,13 @@ async function buildFFmpegArgs(stream) {
     throw new Error(`Video record not found in database for video_id: ${stream.video_id}`);
   }
   
-  const relativeVideoPath = video.filepath.startsWith('/') ? video.filepath.substring(1) : video.filepath;
-  const projectRoot = path.resolve(__dirname, '..');
-  // FIXED: Don't add 'public' if relativeVideoPath already starts with 'public/'
-  const videoPath = relativeVideoPath.startsWith('public/') 
-    ? path.join(projectRoot, relativeVideoPath)
-    : path.join(projectRoot, 'public', relativeVideoPath);
+  const videoPath = resolvePublicMediaPath(video.filepath);
   
   if (!fs.existsSync(videoPath)) {
     console.error(`[StreamingService] CRITICAL: Video file not found on disk.`);
     console.error(`[StreamingService] Checked path: ${videoPath}`);
     console.error(`[StreamingService] stream.video_id: ${stream.video_id}`);
     console.error(`[StreamingService] video.filepath (from DB): ${video.filepath}`);
-    console.error(`[StreamingService] Calculated relativeVideoPath: ${relativeVideoPath}`);
     console.error(`[StreamingService] process.cwd(): ${process.cwd()}`);
     throw new Error('Video file not found on disk. Please check paths and file existence.');
   }
@@ -619,11 +633,7 @@ async function buildFFmpegArgs(stream) {
     if (!audio) {
       throw new Error(`Audio not found for audio_id: ${stream.audio_id}`);
     }
-    const relativeAudioPath = audio.filepath.startsWith('/') ? audio.filepath.substring(1) : audio.filepath;
-    // FIXED: Don't add 'public' if relativeAudioPath already starts with 'public/'
-    audioPath = relativeAudioPath.startsWith('public/') 
-      ? path.join(projectRoot, relativeAudioPath)
-      : path.join(projectRoot, 'public', relativeAudioPath);
+    audioPath = resolvePublicMediaPath(audio.filepath);
     if (!fs.existsSync(audioPath)) {
       console.error(`[StreamingService] CRITICAL: Audio file not found on disk.`);
       console.error(`[StreamingService] Checked path: ${audioPath}`);
