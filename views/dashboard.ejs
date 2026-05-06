@@ -989,6 +989,7 @@
 
       btn.onclick = () => {
         window.selectedVideoData = item;
+        if (typeof selectedVideoData !== 'undefined') selectedVideoData = item;
         document.getElementById('selectedVideo').textContent = item.type === 'playlist' ? '[Playlist] ' + item.name : item.name;
         document.getElementById('selectedVideoId').value = item.id;
         document.getElementById('videoSelectorDropdown').classList.add('hidden');
@@ -1033,6 +1034,7 @@
   `;
       btn.onclick = () => {
         window.selectedAudioData = audio;
+        if (typeof selectedAudioData !== 'undefined') selectedAudioData = audio;
         document.getElementById('selectedAudio').textContent = audio.title || audio.name;
         document.getElementById('selectedAudioId').value = audio.id;
         document.getElementById('clearAudioBtn').classList.remove('hidden');
@@ -2145,14 +2147,17 @@
 
           // Set video selection
           if (stream.video_id) {
-            selectedVideoData = { id: stream.video_id, name: stream.video_title || 'Selected Video' };
-            document.getElementById('selectedVideo').textContent = stream.video_title || 'Selected Video';
+            const selectedStreamVideo = { id: stream.video_id, name: stream.video_title || 'Selected Video', type: stream.video_type || 'video' };
+            selectedVideoData = selectedStreamVideo;
+            window.selectedVideoData = selectedStreamVideo;
+            document.getElementById('selectedVideo').textContent = stream.video_type === 'playlist' ? '[Playlist] ' + (stream.video_title || 'Selected Playlist') : (stream.video_title || 'Selected Video');
             document.getElementById('selectedVideoId').value = stream.video_id;
           }
 
           // Set audio selection
           if (stream.audio_id) {
             selectedAudioData = { id: stream.audio_id, title: stream.audio_title || 'Selected Audio' };
+            window.selectedAudioData = selectedAudioData;
             document.getElementById('selectedAudio').textContent = stream.audio_title || 'Selected Audio';
             document.getElementById('selectedAudioId').value = stream.audio_id;
             document.getElementById('clearAudioBtn').classList.remove('hidden');
