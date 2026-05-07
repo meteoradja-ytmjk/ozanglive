@@ -46,6 +46,32 @@ function formatDuration(seconds) {
   .audio-group > div:first-child {
     user-select: none;
   }
+
+  .video-card[draggable="true"],
+  .audio-card[draggable="true"] {
+    cursor: grab;
+  }
+
+  .video-card.dragging,
+  .audio-card.dragging {
+    opacity: 0.55;
+    transform: scale(0.99);
+  }
+
+  .media-drop-target {
+    outline: 2px dashed transparent;
+    outline-offset: 3px;
+  }
+
+  .media-drop-target.drag-over {
+    outline-color: rgba(139, 92, 246, 0.9);
+    background-color: rgba(139, 92, 246, 0.16);
+  }
+
+  .audio-group .media-drop-target.drag-over {
+    outline-color: rgba(34, 197, 94, 0.9);
+    background-color: rgba(34, 197, 94, 0.14);
+  }
 </style>
 
 <div class="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
@@ -121,6 +147,10 @@ function formatDuration(seconds) {
 
 <!-- Search and Sort -->
 <div class="bg-gray-800 rounded-lg p-4 mb-6">
+  <div class="mb-3 flex items-start gap-2 text-xs text-gray-400">
+    <i class="ti ti-drag-drop text-primary mt-0.5"></i>
+    <span>Drag kartu video/audio ke header folder tujuan untuk merapikan media tanpa menghapus file.</span>
+  </div>
   <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
     <div class="relative flex-1 sm:w-80 md:w-96">
       <input type="text" id="searchInput" placeholder="Search media..."
@@ -176,10 +206,11 @@ function formatDuration(seconds) {
     // Group videos by base name
     const videosByName = {};
     videos.forEach(function(video) {
-      const baseName = getBaseName(video.title);
+      const explicitFolder = (video.folder_name || '').trim();
+      const baseName = explicitFolder ? explicitFolder.toLowerCase() : getBaseName(video.title);
       if (!videosByName[baseName]) {
         videosByName[baseName] = {
-          displayName: video.title.replace(/[-_\s]*\d+\s*$/g, '').replace(/\s*[\(\[\{]\d+[\)\]\}]\s*$/g, '').trim(),
+          displayName: explicitFolder || video.title.replace(/[-_\s]*\d+\s*$/g, '').replace(/\s*[\(\[\{]\d+[\)\]\}]\s*$/g, '').trim(),
           videos: []
         };
       }
@@ -200,7 +231,7 @@ function formatDuration(seconds) {
       <!-- Video Group -->
       <div class="video-group" data-name="<%= groupKey %>" data-video-ids='<%- JSON.stringify(groupVideos.map(v => v.id)) %>'>
         <!-- Group Header -->
-        <div class="bg-gray-800/50 rounded-lg p-3 flex items-center justify-between cursor-pointer hover:bg-gray-800/70 transition-colors border border-gray-700/50" onclick="toggleVideoGroup('<%= groupIndex %>')">
+        <div class="media-drop-target bg-gray-800/50 rounded-lg p-3 flex items-center justify-between cursor-pointer hover:bg-gray-800/70 transition-colors border border-gray-700/50" onclick="toggleVideoGroup('<%= groupIndex %>')" data-media-type="video" data-folder-name="<%= group.displayName %>" ondragover="handleMediaDragOver(event)" ondragenter="handleMediaDragEnter(event)" ondragleave="handleMediaDragLeave(event)" ondrop="handleMediaDrop(event)">
           <div class="flex items-center gap-3">
             <i class="ti ti-chevron-down text-gray-400 transition-transform duration-200" id="videoGroupIcon<%= groupIndex %>"></i>
             <div>
@@ -225,7 +256,7 @@ function formatDuration(seconds) {
         <!-- Group Content -->
         <div class="video-group-content mt-2 space-y-2" id="videoGroupContent<%= groupIndex %>">
           <% groupVideos.forEach(function(video) { %>
-            <div class="video-card bg-gray-800 rounded-lg p-3 flex items-center gap-3 hover:bg-gray-700/50 transition-colors ml-4 border-l-2 border-primary/30" data-title="<%= video.title.toLowerCase() %>" data-date="<%= video.upload_date %>">
+            <div class="video-card bg-gray-800 rounded-lg p-3 flex items-center gap-3 hover:bg-gray-700/50 transition-colors ml-4 border-l-2 border-primary/30" data-title="<%= video.title.toLowerCase() %>" data-date="<%= video.upload_date %>" data-id="<%= video.id %>" data-current-folder="<%= group.displayName %>" data-media-type="video" draggable="true" ondragstart="handleMediaDragStart(event)" ondragend="handleMediaDragEnd(event)">
               <!-- Thumbnail -->
               <div class="relative w-20 h-14 md:w-24 md:h-16 flex-shrink-0 rounded-md overflow-hidden group cursor-pointer" onclick="playVideo('<%= video.id %>', '<%= video.title %>')">
                 <img src="<%= video.thumbnail_path %>" alt="<%= video.title %>" class="w-full h-full object-cover">
@@ -298,10 +329,11 @@ function formatDuration(seconds) {
     // Group audios by base name
     const audiosByName = {};
     audios.forEach(function(audio) {
-      const baseName = getAudioBaseName(audio.title);
+      const explicitFolder = (audio.folder_name || '').trim();
+      const baseName = explicitFolder ? explicitFolder.toLowerCase() : getAudioBaseName(audio.title);
       if (!audiosByName[baseName]) {
         audiosByName[baseName] = {
-          displayName: audio.title.replace(/[-_\s]*\d+\s*$/g, '').replace(/\s*[\(\[\{]\d+[\)\]\}]\s*$/g, '').trim(),
+          displayName: explicitFolder || audio.title.replace(/[-_\s]*\d+\s*$/g, '').replace(/\s*[\(\[\{]\d+[\)\]\}]\s*$/g, '').trim(),
           audios: []
         };
       }
@@ -322,7 +354,7 @@ function formatDuration(seconds) {
       <!-- Audio Group -->
       <div class="audio-group" data-name="<%= groupKey %>" data-audio-ids='<%- JSON.stringify(groupAudios.map(a => a.id)) %>'>
         <!-- Group Header -->
-        <div class="bg-gray-800/50 rounded-lg p-3 flex items-center justify-between cursor-pointer hover:bg-gray-800/70 transition-colors border border-gray-700/50" onclick="toggleAudioGroup('<%= groupIndex %>')">
+        <div class="media-drop-target bg-gray-800/50 rounded-lg p-3 flex items-center justify-between cursor-pointer hover:bg-gray-800/70 transition-colors border border-gray-700/50" onclick="toggleAudioGroup('<%= groupIndex %>')" data-media-type="audio" data-folder-name="<%= group.displayName %>" ondragover="handleMediaDragOver(event)" ondragenter="handleMediaDragEnter(event)" ondragleave="handleMediaDragLeave(event)" ondrop="handleMediaDrop(event)">
           <div class="flex items-center gap-3">
             <i class="ti ti-chevron-down text-gray-400 transition-transform duration-200" id="audioGroupIcon<%= groupIndex %>"></i>
             <div>
@@ -347,7 +379,7 @@ function formatDuration(seconds) {
         <!-- Group Content -->
         <div class="audio-group-content mt-2 space-y-2" id="audioGroupContent<%= groupIndex %>">
           <% groupAudios.forEach(function(audio) { %>
-            <div class="audio-card bg-gray-800 rounded-lg p-3 flex items-center gap-3 hover:bg-gray-700/50 transition-colors ml-4 border-l-2 border-green-500/30" data-title="<%= audio.title.toLowerCase() %>" data-date="<%= audio.upload_date %>">
+            <div class="audio-card bg-gray-800 rounded-lg p-3 flex items-center gap-3 hover:bg-gray-700/50 transition-colors ml-4 border-l-2 border-green-500/30" data-title="<%= audio.title.toLowerCase() %>" data-date="<%= audio.upload_date %>" data-id="<%= audio.id %>" data-current-folder="<%= group.displayName %>" data-media-type="audio" draggable="true" ondragstart="handleMediaDragStart(event)" ondragend="handleMediaDragEnd(event)">
               <!-- Audio Icon -->
               <div class="relative w-14 h-14 md:w-16 md:h-16 flex-shrink-0 rounded-lg bg-gradient-to-br from-green-600/30 to-green-900/30 flex items-center justify-center cursor-pointer group" onclick="playAudio('<%= audio.id %>', '<%= audio.title %>')">
                 <i class="ti ti-music text-2xl md:text-3xl text-green-500"></i>
@@ -827,6 +859,94 @@ function formatDuration(seconds) {
 <script src="/js/driveImportQueueManager.js"></script>
 <script>
   let currentTab = '<%= activeTab || "video" %>';
+  let draggedMedia = null;
+
+  function getDropTarget(element) {
+    return element?.closest?.('.media-drop-target') || null;
+  }
+
+  function handleMediaDragStart(event) {
+    const card = event.currentTarget;
+    draggedMedia = {
+      id: card.dataset.id,
+      type: card.dataset.mediaType,
+      currentFolder: card.dataset.currentFolder || ''
+    };
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('application/json', JSON.stringify(draggedMedia));
+    event.dataTransfer.setData('text/plain', draggedMedia.id);
+    card.classList.add('dragging');
+  }
+
+  function handleMediaDragEnd(event) {
+    event.currentTarget.classList.remove('dragging');
+    document.querySelectorAll('.media-drop-target.drag-over').forEach((target) => {
+      target.classList.remove('drag-over');
+    });
+    draggedMedia = null;
+  }
+
+  function handleMediaDragOver(event) {
+    const target = getDropTarget(event.target);
+    if (!target || !draggedMedia || target.dataset.mediaType !== draggedMedia.type) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+  }
+
+  function handleMediaDragEnter(event) {
+    const target = getDropTarget(event.target);
+    if (!target || !draggedMedia || target.dataset.mediaType !== draggedMedia.type) return;
+    event.preventDefault();
+    target.classList.add('drag-over');
+  }
+
+  function handleMediaDragLeave(event) {
+    const target = getDropTarget(event.target);
+    if (!target || target.contains(event.relatedTarget)) return;
+    target.classList.remove('drag-over');
+  }
+
+  async function handleMediaDrop(event) {
+    const target = getDropTarget(event.target);
+    if (!target || !draggedMedia || target.dataset.mediaType !== draggedMedia.type) return;
+    event.preventDefault();
+    event.stopPropagation();
+    target.classList.remove('drag-over');
+
+    const folderName = (target.dataset.folderName || '').trim();
+    if (!folderName) {
+      showToast('error', 'Folder tujuan tidak valid');
+      return;
+    }
+    if ((draggedMedia.currentFolder || '').toLowerCase() === folderName.toLowerCase()) {
+      showToast('error', 'Media sudah berada di folder tersebut');
+      return;
+    }
+
+    const endpoint = draggedMedia.type === 'audio'
+      ? `/api/audios/${draggedMedia.id}/move`
+      : `/api/videos/${draggedMedia.id}/move`;
+
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': '<%= csrfToken %>'
+        },
+        body: JSON.stringify({ folderName })
+      });
+      const data = await response.json();
+      if (data.success) {
+        showToast('success', data.message || 'Media dipindahkan');
+        setTimeout(() => location.reload(), 700);
+      } else {
+        showToast('error', data.error || 'Gagal memindahkan media');
+      }
+    } catch (error) {
+      showToast('error', 'Gagal memindahkan media');
+    }
+  }
   
   // Group collapse state management
   const videoGroupStates = {};

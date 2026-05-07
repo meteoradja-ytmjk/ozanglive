@@ -2915,6 +2915,35 @@ app.get('/api/videos/:id/download', isAuthenticated, canDownloadVideos, async (r
   }
 });
 
+app.post('/api/videos/:id/move', isAuthenticated, [
+  body('folderName')
+    .trim()
+    .isLength({ min: 1, max: 120 })
+    .withMessage('Folder tujuan tidak valid')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, error: errors.array()[0].msg });
+    }
+
+    const video = await Video.findById(req.params.id);
+    if (!video) {
+      return res.status(404).json({ success: false, error: 'Video not found' });
+    }
+    if (video.user_id !== req.session.userId) {
+      return res.status(403).json({ success: false, error: 'You don\'t have permission to move this video' });
+    }
+
+    const folderName = req.body.folderName.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
+    await Video.update(req.params.id, { folder_name: folderName });
+    res.json({ success: true, message: `Video moved to ${folderName}` });
+  } catch (error) {
+    console.error('Error moving video:', error);
+    res.status(500).json({ success: false, error: 'Failed to move video' });
+  }
+});
+
 app.post('/api/videos/:id/rename', isAuthenticated, [
   body('title').trim().isLength({ min: 1 }).withMessage('Title cannot be empty')
 ], async (req, res) => {
@@ -4833,6 +4862,35 @@ app.get('/api/audios', isAuthenticated, async (req, res) => {
   } catch (error) {
     console.error('Error fetching audios:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch audios' });
+  }
+});
+
+app.post('/api/audios/:id/move', isAuthenticated, [
+  body('folderName')
+    .trim()
+    .isLength({ min: 1, max: 120 })
+    .withMessage('Folder tujuan tidak valid')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, error: errors.array()[0].msg });
+    }
+
+    const audio = await Audio.findById(req.params.id);
+    if (!audio) {
+      return res.status(404).json({ success: false, error: 'Audio not found' });
+    }
+    if (audio.user_id !== req.session.userId) {
+      return res.status(403).json({ success: false, error: 'Not authorized' });
+    }
+
+    const folderName = req.body.folderName.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
+    await Audio.update(req.params.id, { folder_name: folderName });
+    res.json({ success: true, message: `Audio moved to ${folderName}` });
+  } catch (error) {
+    console.error('Error moving audio:', error);
+    res.status(500).json({ success: false, error: 'Failed to move audio' });
   }
 });
 
