@@ -188,9 +188,9 @@
 
     <div class="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between mb-6">
       <!-- Desktop: Title with clock -->
-      <div class="hidden md:flex items-center gap-3">
-        <h2 class="text-xl font-bold">Streaming Status</h2>
-        <div class="flex items-center gap-2 text-sm text-gray-400">
+      <div class="hidden md:flex items-center gap-3 shrink-0">
+        <h2 class="text-xl font-bold leading-none whitespace-nowrap">Streaming Status</h2>
+        <div class="flex items-center gap-2 text-sm text-gray-400 whitespace-nowrap">
           <i class="ti ti-clock text-primary font-loaded"></i>
           <span id="realtime-clock">--:--:--</span>
           <span class="text-gray-600">|</span>
@@ -200,7 +200,7 @@
       </div>
 
       <!-- Desktop: All in one row -->
-      <div class="hidden md:flex items-center gap-3">
+      <div class="hidden md:flex items-center gap-2.5 flex-wrap justify-end flex-1">
         <div class="relative w-64">
           <select id="streamFilter" onchange="applyStreamFilter(this.value)"
             class="w-full bg-dark-700 border border-gray-600 text-white pl-9 pr-4 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary appearance-none cursor-pointer">
@@ -210,18 +210,18 @@
           <i class="ti ti-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
         </div>
         <button type="button" id="toggleAllGroupsBtn" onclick="toggleAllStreamGroups()"
-          class="flex items-center justify-center gap-2 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white px-4 py-2 rounded-lg transition-colors">
-          <i class="ti ti-fold-down"></i>
+          class="flex items-center justify-center gap-2 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white px-3.5 py-2 rounded-lg transition-colors whitespace-nowrap min-w-[124px]">
+          <i class="ti ti-fold-down text-sm"></i>
           <span id="toggleAllGroupsLabel">Expand All</span>
         </button>
         <button type="button" onclick="openNewStreamModal()"
-          class="flex items-center justify-center gap-2 bg-primary hover:bg-secondary text-white px-4 py-2 rounded-lg transition-colors">
+          class="flex items-center justify-center gap-2 bg-primary hover:bg-secondary text-white px-4 py-2 rounded-lg transition-colors whitespace-nowrap min-w-[132px]">
           <i class="ti ti-plus"></i>
           <span>New Stream</span>
         </button>
         <div class="relative" id="scheduleDropdown">
           <button onclick="toggleScheduleDropdown()"
-            class="flex items-center justify-center gap-2 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white px-4 py-2 rounded-lg transition-colors">
+            class="flex items-center justify-center gap-2 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white px-4 py-2 rounded-lg transition-colors whitespace-nowrap min-w-[128px]">
             <i class="ti ti-calendar-event"></i>
             <span>Schedule</span>
             <i class="ti ti-chevron-down text-xs"></i>
@@ -247,7 +247,7 @@
         </div>
         <div class="relative" id="backupDropdown">
           <button onclick="toggleBackupDropdown()"
-            class="flex items-center justify-center gap-2 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white px-4 py-2 rounded-lg transition-colors">
+            class="flex items-center justify-center gap-2 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white px-4 py-2 rounded-lg transition-colors whitespace-nowrap min-w-[118px]">
             <i class="ti ti-settings-2"></i>
             <span>Backup</span>
             <i class="ti ti-chevron-down text-xs"></i>
