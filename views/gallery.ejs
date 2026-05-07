@@ -149,7 +149,7 @@ function formatDuration(seconds) {
 <div class="bg-gray-800 rounded-lg p-4 mb-6">
   <div class="mb-3 flex items-start gap-2 text-xs text-gray-400">
     <i class="ti ti-drag-drop text-primary mt-0.5"></i>
-    <span>Drag kartu video/audio ke header folder tujuan untuk merapikan media tanpa menghapus file.</span>
+    <span>Drag kartu video/audio ke header folder tujuan, atau klik ikon pensil di folder untuk rename.</span>
   </div>
   <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
     <div class="relative flex-1 sm:w-80 md:w-96">
@@ -240,6 +240,9 @@ function formatDuration(seconds) {
             </div>
           </div>
           <div class="flex items-center gap-2">
+            <button type="button" onclick="renameMediaFolder(event, 'video')" title="Rename Folder" class="p-1.5 text-gray-400 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors">
+              <i class="ti ti-pencil"></i>
+            </button>
             <% if (typeof permissions !== 'undefined' && permissions.can_delete_videos) { %>
             <label class="flex items-center gap-2 text-xs text-gray-300 cursor-pointer" onclick="event.stopPropagation()">
               <input type="checkbox" class="video-folder-checkbox rounded border-gray-500 bg-dark-700 text-red-500 focus:ring-red-500"
@@ -363,6 +366,9 @@ function formatDuration(seconds) {
             </div>
           </div>
           <div class="flex items-center gap-2">
+            <button type="button" onclick="renameMediaFolder(event, 'audio')" title="Rename Folder" class="p-1.5 text-gray-400 hover:text-green-400 hover:bg-green-500/10 rounded-lg transition-colors">
+              <i class="ti ti-pencil"></i>
+            </button>
             <% if (typeof permissions !== 'undefined' && permissions.can_delete_videos) { %>
             <label class="flex items-center gap-2 text-xs text-gray-300 cursor-pointer" onclick="event.stopPropagation()">
               <input type="checkbox" class="audio-folder-checkbox rounded border-gray-500 bg-dark-700 text-red-500 focus:ring-red-500"
@@ -945,6 +951,70 @@ function formatDuration(seconds) {
       }
     } catch (error) {
       showToast('error', 'Gagal memindahkan media');
+    }
+  }
+
+  async function renameMediaFolder(event, type) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const group = event.currentTarget.closest(type === 'audio' ? '.audio-group' : '.video-group');
+    const dropTarget = group?.querySelector('.media-drop-target');
+    if (!group || !dropTarget) {
+      showToast('error', 'Folder tidak ditemukan');
+      return;
+    }
+
+    const currentName = dropTarget.dataset.folderName || '';
+    const newName = prompt('Masukkan nama folder baru:', currentName);
+    if (!newName) return;
+
+    const folderName = newName.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!folderName) {
+      showToast('error', 'Nama folder tidak boleh kosong');
+      return;
+    }
+    if (folderName.length > 120) {
+      showToast('error', 'Nama folder maksimal 120 karakter');
+      return;
+    }
+    if (folderName.toLowerCase() === currentName.toLowerCase()) {
+      showToast('error', 'Nama folder belum berubah');
+      return;
+    }
+
+    let ids = [];
+    try {
+      ids = JSON.parse(group.dataset[type === 'audio' ? 'audioIds' : 'videoIds'] || '[]');
+    } catch {
+      ids = [];
+    }
+    if (!Array.isArray(ids) || ids.length === 0) {
+      showToast('error', 'Folder tidak punya media untuk di-rename');
+      return;
+    }
+
+    const endpoint = type === 'audio' ? '/api/audios/rename-folder' : '/api/videos/rename-folder';
+    const body = type === 'audio' ? { audioIds: ids, folderName } : { videoIds: ids, folderName };
+
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': '<%= csrfToken %>'
+        },
+        body: JSON.stringify(body)
+      });
+      const data = await response.json();
+      if (data.success) {
+        showToast('success', data.message || 'Folder berhasil di-rename');
+        setTimeout(() => location.reload(), 700);
+      } else {
+        showToast('error', data.error || 'Gagal rename folder');
+      }
+    } catch (error) {
+      showToast('error', 'Gagal rename folder');
     }
   }
   

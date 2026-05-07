@@ -2915,6 +2915,49 @@ app.get('/api/videos/:id/download', isAuthenticated, canDownloadVideos, async (r
   }
 });
 
+app.post('/api/videos/rename-folder', isAuthenticated, [
+  body('folderName')
+    .trim()
+    .isLength({ min: 1, max: 120 })
+    .withMessage('Nama folder tidak valid'),
+  body('videoIds')
+    .isArray({ min: 1 })
+    .withMessage('Tidak ada video yang dipilih')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, error: errors.array()[0].msg });
+    }
+
+    const folderName = req.body.folderName.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const videoIds = [...new Set(req.body.videoIds.filter(Boolean))];
+    const updated = [];
+
+    for (const videoId of videoIds) {
+      const video = await Video.findById(videoId);
+      if (!video || video.user_id !== req.session.userId) {
+        continue;
+      }
+      await Video.update(videoId, { folder_name: folderName });
+      updated.push(videoId);
+    }
+
+    if (updated.length === 0) {
+      return res.status(404).json({ success: false, error: 'Tidak ada video yang bisa di-rename' });
+    }
+
+    res.json({
+      success: true,
+      message: `Folder video renamed to ${folderName}`,
+      updatedCount: updated.length
+    });
+  } catch (error) {
+    console.error('Error renaming video folder:', error);
+    res.status(500).json({ success: false, error: 'Failed to rename video folder' });
+  }
+});
+
 app.post('/api/videos/:id/move', isAuthenticated, [
   body('folderName')
     .trim()
@@ -4862,6 +4905,49 @@ app.get('/api/audios', isAuthenticated, async (req, res) => {
   } catch (error) {
     console.error('Error fetching audios:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch audios' });
+  }
+});
+
+app.post('/api/audios/rename-folder', isAuthenticated, [
+  body('folderName')
+    .trim()
+    .isLength({ min: 1, max: 120 })
+    .withMessage('Nama folder tidak valid'),
+  body('audioIds')
+    .isArray({ min: 1 })
+    .withMessage('Tidak ada audio yang dipilih')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, error: errors.array()[0].msg });
+    }
+
+    const folderName = req.body.folderName.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const audioIds = [...new Set(req.body.audioIds.filter(Boolean))];
+    const updated = [];
+
+    for (const audioId of audioIds) {
+      const audio = await Audio.findById(audioId);
+      if (!audio || audio.user_id !== req.session.userId) {
+        continue;
+      }
+      await Audio.update(audioId, { folder_name: folderName });
+      updated.push(audioId);
+    }
+
+    if (updated.length === 0) {
+      return res.status(404).json({ success: false, error: 'Tidak ada audio yang bisa di-rename' });
+    }
+
+    res.json({
+      success: true,
+      message: `Folder audio renamed to ${folderName}`,
+      updatedCount: updated.length
+    });
+  } catch (error) {
+    console.error('Error renaming audio folder:', error);
+    res.status(500).json({ success: false, error: 'Failed to rename audio folder' });
   }
 });
 
