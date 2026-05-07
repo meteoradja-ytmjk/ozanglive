@@ -271,6 +271,10 @@ async function createCoreTablesAsync() {
     FOREIGN KEY (user_id) REFERENCES users(id)
   )`, 'audios');
 
+  // Add optional gallery folder columns for drag-and-drop organization
+  await runTableQuery(`ALTER TABLE videos ADD COLUMN folder_name TEXT`, 'videos.folder_name');
+  await runTableQuery(`ALTER TABLE audios ADD COLUMN folder_name TEXT`, 'audios.folder_name');
+
   // Add columns to users table
   await runTableQuery(`ALTER TABLE users ADD COLUMN user_role TEXT DEFAULT 'admin'`, 'users.user_role');
   await runTableQuery(`ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active'`, 'users.status');
