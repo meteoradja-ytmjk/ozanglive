@@ -209,6 +209,11 @@
           <i class="ti ti-filter absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
           <i class="ti ti-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
         </div>
+        <button type="button" id="toggleAllGroupsBtn" onclick="toggleAllStreamGroups()"
+          class="flex items-center justify-center gap-2 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white px-4 py-2 rounded-lg transition-colors">
+          <i class="ti ti-fold-down"></i>
+          <span id="toggleAllGroupsLabel">Expand All</span>
+        </button>
         <button type="button" onclick="openNewStreamModal()"
           class="flex items-center justify-center gap-2 bg-primary hover:bg-secondary text-white px-4 py-2 rounded-lg transition-colors">
           <i class="ti ti-plus"></i>
@@ -304,6 +309,11 @@
             </button>
           </div>
         </div>
+        <button type="button" id="toggleAllGroupsBtnMobile" onclick="toggleAllStreamGroups()"
+          class="w-full mt-2 flex items-center justify-center gap-2 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white px-3 py-2 rounded-lg transition-colors text-sm">
+          <i class="ti ti-fold-down"></i>
+          <span id="toggleAllGroupsLabelMobile">Expand All</span>
+        </button>
         <!-- Mobile Schedule Dropdown Menu -->
         <div id="scheduleDropdownMenuMobile"
           class="hidden absolute left-4 right-4 mt-2 bg-dark-700 border border-gray-600 rounded-lg shadow-lg z-20 overflow-hidden">
@@ -1676,7 +1686,42 @@
 
       emptyState.style.display = 'none';
 
-      streams.forEach((stream, index) => {
+      const sortedStreams = [...streams].sort((a, b) => {
+        const ga = getStreamCollabKey(a).toLowerCase();
+        const gb = getStreamCollabKey(b).toLowerCase();
+        if (ga !== gb) return ga.localeCompare(gb);
+        return (a.title || '').localeCompare(b.title || '');
+      });
+
+      let activeGroup = null;
+      let index = 0;
+      sortedStreams.forEach((stream) => {
+        const groupKey = getStreamCollabKey(stream);
+
+        if (groupKey !== activeGroup) {
+          activeGroup = groupKey;
+          const groupStreams = sortedStreams.filter(item => getStreamCollabKey(item) === groupKey);
+          const isCollapsed = collapsedStreamGroups.has(groupKey);
+          const headerRow = document.createElement('tr');
+          headerRow.className = 'bg-dark-700/60';
+          headerRow.innerHTML = `
+            <td colspan="7" class="px-3 py-2 cursor-pointer" onclick="toggleStreamGroup('${groupKey.replace(/'/g, "\\'")}')">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <i class="ti ${isCollapsed ? 'ti-chevron-right' : 'ti-chevron-down'} text-gray-300"></i>
+                  <span class="text-sm font-semibold text-white">${escapeHtml(groupKey)}</span>
+                  <span class="text-xs text-gray-400">(${groupStreams.length})</span>
+                </div>
+                <span class="text-xs px-2 py-0.5 rounded bg-primary/20 text-primary">Collabs</span>
+              </div>
+            </td>
+          `;
+          tbody.appendChild(headerRow);
+        }
+
+        if (collapsedStreamGroups.has(groupKey)) return;
+        index += 1;
+
         const row = document.createElement('tr');
         row.className = 'hover:bg-dark-700/50 transition-colors';
 
@@ -1722,7 +1767,7 @@
         // Desktop table row
         row.innerHTML = `
       <td class="px-3 py-4 text-center">
-        <span class="text-sm text-gray-400">${index + 1}</span>
+        <span class="text-sm text-gray-400">${index}</span>
       </td>
       <td class="px-3 py-4">
         <div>
@@ -1783,7 +1828,7 @@
           item.innerHTML = `
         <div class="flex-1 min-w-0 mr-2">
           <div class="flex items-center gap-2 mb-1">
-            <span class="text-xs text-gray-500">#${index + 1}</span>
+            <span class="text-xs text-gray-500">#${index}</span>
             <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${statusClass} text-white">
               ${statusText}
             </span>
@@ -2781,6 +2826,49 @@
     // Store all streams for filtering
     let allStreamsData = [];
     let currentFilter = 'all';
+    let collapsedStreamGroups = new Set();
+    let allStreamGroupsExpanded = true;
+
+    function getStreamCollabKey(stream) {
+      const title = (stream?.title || '').trim();
+      if (!title) return 'Ungrouped';
+      const cleaned = title.replace(/\s*\d+\s*$/, '').trim();
+      return cleaned || title;
+    }
+
+    function updateToggleAllGroupButton() {
+      const label = allStreamGroupsExpanded ? 'Collapse All' : 'Expand All';
+      const desktopLabel = document.getElementById('toggleAllGroupsLabel');
+      const mobileLabel = document.getElementById('toggleAllGroupsLabelMobile');
+      if (desktopLabel) desktopLabel.textContent = label;
+      if (mobileLabel) mobileLabel.textContent = label;
+    }
+
+    function toggleAllStreamGroups() {
+      const filteredStreams = filterStreams(allStreamsData, currentFilter);
+      const keys = [...new Set(filteredStreams.map(getStreamCollabKey))];
+      allStreamGroupsExpanded = !allStreamGroupsExpanded;
+      if (allStreamGroupsExpanded) {
+        collapsedStreamGroups.clear();
+      } else {
+        collapsedStreamGroups = new Set(keys);
+      }
+      updateToggleAllGroupButton();
+      renderStreams(filteredStreams);
+    }
+
+    function toggleStreamGroup(groupKey) {
+      if (collapsedStreamGroups.has(groupKey)) {
+        collapsedStreamGroups.delete(groupKey);
+      } else {
+        collapsedStreamGroups.add(groupKey);
+      }
+      const filteredStreams = filterStreams(allStreamsData, currentFilter);
+      const keys = [...new Set(filteredStreams.map(getStreamCollabKey))];
+      allStreamGroupsExpanded = keys.every(key => !collapsedStreamGroups.has(key));
+      updateToggleAllGroupButton();
+      renderStreams(filteredStreams);
+    }
 
     // Generate filter options from stream names
     function generateFilterOptions(streams) {
@@ -2805,7 +2893,7 @@
       // Build options HTML
       let optionsHtml = '<option value="all">All Streams (' + streams.length + ')</option>';
       prefixes.forEach((count, prefix) => {
-        optionsHtml += `<option value="${prefix}">${prefix} (${count})</option>`;
+        optionsHtml += `<option value="${prefix}">Collabs: ${prefix} (${count})</option>`;
       });
 
       // Update both dropdowns
@@ -2843,6 +2931,7 @@
       // Filter and render
       const filteredStreams = filterStreams(allStreamsData, filterValue);
       renderStreams(filteredStreams);
+      updateToggleAllGroupButton();
     }
 
     // Update Delete All button label based on current filter
