@@ -3843,7 +3843,8 @@ app.get('/api/stream/audios', isAuthenticated, async (req, res) => {
         name: audio.title,
         duration: formattedDuration,
         format: audio.format || 'audio',
-        filepath: audio.filepath
+        filepath: audio.filepath,
+        folder_name: audio.folder_name || null
       };
     });
     res.json(formattedAudios);

@@ -9,7 +9,15 @@
 .actions{display:flex;gap:12px}.btn{height:46px;border-radius:14px;padding:0 18px;border:0;cursor:pointer;font-weight:800}.btn-p{background:linear-gradient(135deg,var(--primary),var(--success));color:#06202a}.btn-g{color:#cbd5e1;border:1px solid rgba(148,163,184,.24);background:rgba(15,23,42,.72)}
 .option{min-height:164px;max-height:190px;overflow:auto;border:1px solid rgba(148,163,184,.22);border-radius:16px;padding:12px;background:#081224}.chips{display:flex;flex-wrap:wrap;gap:9px}.chip input{display:none}.chip span{display:inline-flex;min-height:32px;padding:7px 10px;border:1px solid rgba(148,163,184,.2);border-radius:999px;background:rgba(30,41,59,.7);font-size:12px;cursor:pointer}.chip input:checked + span{border-color:rgba(34,211,238,.8);background:rgba(34,211,238,.14)}
 .jobs{padding:0 22px 22px}.job{border:1px solid var(--line);border-radius:12px;padding:10px;background:#081224;margin-top:10px}.muted{color:var(--muted);font-size:12px}.job-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
-@media(max-width:900px){.content,.two{grid-template-columns:1fr}.actions{flex-direction:column}}
+@media(max-width:900px){
+  .content,.two{grid-template-columns:1fr}
+  .actions{flex-direction:column}
+  .top h2{font-size:18px}
+  .muted{font-size:11px}
+  .input,.select{height:42px;font-size:14px}
+  .btn{height:42px;font-size:14px}
+  .chip span{font-size:11px;padding:6px 9px}
+}
 </style>
 <div class="r-shell"><div class="r-card">
   <div class="top"><div style="display:flex;gap:14px;align-items:center"><div style="width:46px;height:46px;border-radius:15px;display:grid;place-items:center;font-weight:900;color:#05202b;background:linear-gradient(135deg,var(--primary),var(--success))">R</div><div><h2 style="margin:0">Render Dashboard</h2><div class="muted">Pilih channel, jam, menit, video, dan audio untuk proses render.</div></div></div><div style="padding:10px 14px;border:1px solid rgba(52,211,153,.28);border-radius:999px;color:#bbf7d0;background:rgba(52,211,153,.10);font-size:13px">● Sistem siap render</div></div>
