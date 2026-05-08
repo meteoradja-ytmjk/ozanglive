@@ -1,6 +1,30 @@
 const { google } = require('googleapis');
 
 class YouTubeService {
+  async uploadRegularVideo(accessToken, { title, description, filePath, privacyStatus = 'unlisted' }) {
+    const oauth2Client = new google.auth.OAuth2();
+    oauth2Client.setCredentials({ access_token: accessToken });
+    const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+    const fs = require('fs');
+
+    const response = await youtube.videos.insert({
+      part: 'snippet,status',
+      requestBody: {
+        snippet: {
+          title: title || 'Rendered Video',
+          description: description || ''
+        },
+        status: {
+          privacyStatus
+        }
+      },
+      media: {
+        body: fs.createReadStream(filePath)
+      }
+    });
+
+    return response.data;
+  }
   /**
    * Get access token from refresh token with retry logic
    * @param {string} clientId - Google Client ID
