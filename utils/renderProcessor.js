@@ -89,7 +89,7 @@ async function renderLoopVideo({ videoPaths, audioPaths, outputPath, targetDurat
       await runFfmpeg((cmd) => {
         cmd.input(mergedVideo);
         if (finalAudio) cmd.input(finalAudio);
-        const out = ['-t', String(targetDurationSeconds), '-c:v libx264', '-preset veryfast', '-pix_fmt yuv420p'];
+        const out = ['-t', String(targetDurationSeconds), '-c:v libx264', '-preset ultrafast', '-tune', 'zerolatency', '-pix_fmt yuv420p', '-threads', '0'];
         if (finalAudio) out.push('-c:a aac', '-shortest');
         else out.push('-an');
         return cmd.outputOptions(out).output(outputPath);
@@ -99,7 +99,7 @@ async function renderLoopVideo({ videoPaths, audioPaths, outputPath, targetDurat
     await runFfmpeg((cmd) => {
       cmd.input(mergedVideo);
       if (finalAudio) cmd.input(finalAudio);
-      const out = ['-t', String(targetDurationSeconds), '-c:v libx264', '-preset veryfast', '-pix_fmt yuv420p'];
+      const out = ['-t', String(targetDurationSeconds), '-c:v libx264', '-preset ultrafast', '-tune', 'zerolatency', '-pix_fmt yuv420p', '-threads', '0'];
       if (shouldUseOverlay) {
         const overlayFilter = visualizerPreset === 'wave'
           ? '[1:a]showwaves=s=1280x220:mode=line:colors=00d4ff,format=rgba[sw];[0:v][sw]overlay=0:H-h-20[v]'
