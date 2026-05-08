@@ -3626,7 +3626,7 @@ app.post('/api/render/jobs', isAuthenticated, async (req, res) => {
         const videoPaths = safeVideos.map((v) => path.join(__dirname, 'public', v.filepath));
         const audioPaths = safeAudios.map((a) => path.join(__dirname, 'public', a.filepath));
 
-        await renderLoopVideo({ videoPaths, audioPaths, outputPath, targetDurationSeconds: target });
+        await renderLoopVideo({ videoPaths, audioPaths, outputPath, targetDurationSeconds: target, visualizerPreset: visualizerPreset || 'none' });
 
         const baseUpdate = { status: 'completed', progress: 100, output_path: `/uploads/videos/${outputName}` };
         if (autoUploadToYoutube && targetAccountId) {
@@ -3713,7 +3713,8 @@ app.post('/api/render/jobs/:id/retry', isAuthenticated, async (req, res) => {
           videoPaths,
           audioPaths,
           outputPath,
-          targetDurationSeconds: original.target_duration_seconds
+          targetDurationSeconds: original.target_duration_seconds,
+          visualizerPreset: original.visualizer_preset || 'none'
         });
 
         const retryUpdate = { status: 'completed', progress: 100, output_path: `/uploads/videos/${outputName}` };

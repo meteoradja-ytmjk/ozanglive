@@ -21,7 +21,7 @@ const writeConcatFile = (items, filePath) => {
   fs.writeFileSync(filePath, content, 'utf8');
 };
 
-async function renderLoopVideo({ videoPaths, audioPaths, outputPath, targetDurationSeconds }) {
+async function renderLoopVideo({ videoPaths, audioPaths, outputPath, targetDurationSeconds, visualizerPreset = 'none' }) {
   if (!videoPaths?.length) throw new Error('Minimal 1 video diperlukan');
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ozang-render-'));
   const repeatedVideoList = [];
@@ -74,20 +74,40 @@ async function renderLoopVideo({ videoPaths, audioPaths, outputPath, targetDurat
     }
   }
 
-  try {
-    await runFfmpeg((cmd) => {
-      cmd.input(mergedVideo);
-      if (finalAudio) cmd.input(finalAudio);
-      const out = ['-t', String(targetDurationSeconds), '-c copy'];
-      if (finalAudio) out.push('-shortest');
-      else out.push('-an');
-      return cmd.outputOptions(out).output(outputPath);
-    });
-  } catch (error) {
+  const shouldUseOverlay = finalAudio && visualizerPreset && visualizerPreset !== 'none';
+  if (!shouldUseOverlay) {
+    try {
+      await runFfmpeg((cmd) => {
+        cmd.input(mergedVideo);
+        if (finalAudio) cmd.input(finalAudio);
+        const out = ['-t', String(targetDurationSeconds), '-c copy'];
+        if (finalAudio) out.push('-shortest');
+        else out.push('-an');
+        return cmd.outputOptions(out).output(outputPath);
+      });
+    } catch (error) {
+      await runFfmpeg((cmd) => {
+        cmd.input(mergedVideo);
+        if (finalAudio) cmd.input(finalAudio);
+        const out = ['-t', String(targetDurationSeconds), '-c:v libx264', '-preset veryfast', '-pix_fmt yuv420p'];
+        if (finalAudio) out.push('-c:a aac', '-shortest');
+        else out.push('-an');
+        return cmd.outputOptions(out).output(outputPath);
+      });
+    }
+  } else {
     await runFfmpeg((cmd) => {
       cmd.input(mergedVideo);
       if (finalAudio) cmd.input(finalAudio);
       const out = ['-t', String(targetDurationSeconds), '-c:v libx264', '-preset veryfast', '-pix_fmt yuv420p'];
+      if (shouldUseOverlay) {
+        const overlayFilter = visualizerPreset === 'wave'
+          ? '[1:a]showwaves=s=1280x220:mode=line:colors=00d4ff,format=rgba[sw];[0:v][sw]overlay=0:H-h-20[v]'
+          : visualizerPreset === 'bars'
+            ? '[1:a]showfreqs=s=1280x220:mode=bar:ascale=lin:fscale=lin:colors=00e5ff|7c3aed,format=rgba[sf];[0:v][sf]overlay=0:H-h-20[v]'
+            : '[1:a]showspectrum=s=1280x220:mode=combined:color=intensity:scale=lin,format=rgba[ss];[0:v][ss]overlay=0:H-h-20[v]';
+        out.push('-filter_complex', overlayFilter, '-map', '[v]', '-map', '1:a');
+      }
       if (finalAudio) out.push('-c:a aac', '-shortest');
       else out.push('-an');
       return cmd.outputOptions(out).output(outputPath);
