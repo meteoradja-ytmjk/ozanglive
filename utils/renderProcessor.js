@@ -10,6 +10,9 @@ const runFfmpeg = (configure) => new Promise((resolve, reject) => {
   const cmd = configure(ffmpeg());
   cmd.on('end', resolve).on('error', reject).run();
 });
+const ffprobeAsync = (filePath) => new Promise((resolve, reject) => {
+  ffmpeg.ffprobe(filePath, (err, data) => (err ? reject(err) : resolve(data)));
+});
 
 const writeConcatFile = (items, filePath) => {
   const content = items
@@ -24,7 +27,12 @@ async function renderLoopVideo({ videoPaths, audioPaths, outputPath, targetDurat
   const repeatedVideoList = [];
   const repeatedAudioList = [];
 
-  const loops = Math.max(1, Math.ceil(targetDurationSeconds / 60));
+  const videoDurations = await Promise.all(videoPaths.map(async (videoPath) => {
+    const meta = await ffprobeAsync(videoPath);
+    return Number(meta?.format?.duration || 0);
+  }));
+  const totalSourceVideoDuration = videoDurations.reduce((sum, val) => sum + val, 0);
+  const loops = Math.max(1, Math.ceil(targetDurationSeconds / Math.max(1, totalSourceVideoDuration)));
   for (let i = 0; i < loops; i += 1) repeatedVideoList.push(...videoPaths);
   for (let i = 0; i < loops; i += 1) repeatedAudioList.push(...(audioPaths?.length ? audioPaths : []));
 
@@ -32,32 +40,59 @@ async function renderLoopVideo({ videoPaths, audioPaths, outputPath, targetDurat
   writeConcatFile(repeatedVideoList, videoConcatList);
   const mergedVideo = path.join(workDir, 'video-merged.mp4');
 
-  await runFfmpeg((cmd) => cmd
-    .input(videoConcatList)
-    .inputOptions(['-f concat', '-safe 0'])
-    .outputOptions(['-c:v libx264', '-preset veryfast', '-pix_fmt yuv420p', '-an'])
-    .output(mergedVideo));
+  try {
+    await runFfmpeg((cmd) => cmd
+      .input(videoConcatList)
+      .inputOptions(['-f concat', '-safe 0'])
+      .outputOptions(['-c copy', '-an'])
+      .output(mergedVideo));
+  } catch (error) {
+    await runFfmpeg((cmd) => cmd
+      .input(videoConcatList)
+      .inputOptions(['-f concat', '-safe 0'])
+      .outputOptions(['-c:v libx264', '-preset veryfast', '-pix_fmt yuv420p', '-an'])
+      .output(mergedVideo));
+  }
 
   let finalAudio = null;
   if (repeatedAudioList.length > 0) {
     const audioConcatList = path.join(workDir, 'audio.txt');
     writeConcatFile(repeatedAudioList, audioConcatList);
     finalAudio = path.join(workDir, 'audio-merged.aac');
-    await runFfmpeg((cmd) => cmd
-      .input(audioConcatList)
-      .inputOptions(['-f concat', '-safe 0'])
-      .outputOptions(['-vn', '-c:a aac', '-b:a 192k'])
-      .output(finalAudio));
+    try {
+      await runFfmpeg((cmd) => cmd
+        .input(audioConcatList)
+        .inputOptions(['-f concat', '-safe 0'])
+        .outputOptions(['-vn', '-c copy'])
+        .output(finalAudio));
+    } catch (error) {
+      await runFfmpeg((cmd) => cmd
+        .input(audioConcatList)
+        .inputOptions(['-f concat', '-safe 0'])
+        .outputOptions(['-vn', '-c:a aac', '-b:a 192k'])
+        .output(finalAudio));
+    }
   }
 
-  await runFfmpeg((cmd) => {
-    cmd.input(mergedVideo);
-    if (finalAudio) cmd.input(finalAudio);
-    const out = ['-t', String(targetDurationSeconds), '-c:v libx264', '-preset veryfast', '-pix_fmt yuv420p'];
-    if (finalAudio) out.push('-c:a aac', '-shortest');
-    else out.push('-an');
-    return cmd.outputOptions(out).output(outputPath);
-  });
+  try {
+    await runFfmpeg((cmd) => {
+      cmd.input(mergedVideo);
+      if (finalAudio) cmd.input(finalAudio);
+      const out = ['-t', String(targetDurationSeconds), '-c copy'];
+      if (finalAudio) out.push('-shortest');
+      else out.push('-an');
+      return cmd.outputOptions(out).output(outputPath);
+    });
+  } catch (error) {
+    await runFfmpeg((cmd) => {
+      cmd.input(mergedVideo);
+      if (finalAudio) cmd.input(finalAudio);
+      const out = ['-t', String(targetDurationSeconds), '-c:v libx264', '-preset veryfast', '-pix_fmt yuv420p'];
+      if (finalAudio) out.push('-c:a aac', '-shortest');
+      else out.push('-an');
+      return cmd.outputOptions(out).output(outputPath);
+    });
+  }
 
   fs.rmSync(workDir, { recursive: true, force: true });
   return outputPath;
