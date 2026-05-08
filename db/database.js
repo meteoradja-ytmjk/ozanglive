@@ -271,6 +271,23 @@ async function createCoreTablesAsync() {
     FOREIGN KEY (user_id) REFERENCES users(id)
   )`, 'audios');
 
+  await runTableQuery(`CREATE TABLE IF NOT EXISTS render_jobs (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    title TEXT,
+    status TEXT DEFAULT 'queued',
+    progress INTEGER DEFAULT 0,
+    target_duration_seconds INTEGER NOT NULL,
+    loop_mode TEXT DEFAULT 'duration',
+    video_ids TEXT NOT NULL,
+    audio_ids TEXT,
+    output_path TEXT,
+    error_message TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  )`, 'render_jobs');
+
   // Add optional gallery folder columns for drag-and-drop organization
   await runTableQuery(`ALTER TABLE videos ADD COLUMN folder_name TEXT`, 'videos.folder_name');
   await runTableQuery(`ALTER TABLE audios ADD COLUMN folder_name TEXT`, 'audios.folder_name');
