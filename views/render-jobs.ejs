@@ -1,0 +1,77 @@
+<style>
+  .main-content-wrapper { background: #0f172a !important; }
+  .rj-shell { background: #0f172a; border: 1px solid #1e293b; border-radius: 16px; padding: 18px; min-height: calc(100vh - 160px); }
+  .rj-page { max-width: 1100px; margin: 0 auto; color: #e2e8f0; }
+  .rj-card { background: #1e293b; border: 1px solid #334155; border-radius: 14px; padding: 16px; }
+  .rj-title { font-size: 1.6rem; font-weight: 700; color: #fff; }
+  .rj-sub { color: #94a3b8; font-size: .92rem; }
+  .rj-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .rj-input, .rj-select { width: 100%; background: #0f172a; border: 1px solid #475569; color: #e2e8f0; border-radius: 10px; padding: 10px 12px; }
+  .rj-list { max-height: 200px; overflow: auto; border: 1px solid #475569; border-radius: 10px; padding: 10px; background: #0f172a; }
+  .rj-list label { display: flex; align-items: center; gap: 8px; padding: 4px 0; color: #cbd5e1; font-size: .9rem; }
+  .rj-btn { background: #8b5cf6; color: white; border: 0; border-radius: 10px; padding: 10px 14px; font-weight: 600; cursor: pointer; }
+  .rj-btn:hover { background: #7c3aed; }
+  .rj-job { border: 1px solid #475569; border-radius: 10px; padding: 12px; background: #0f172a; margin-bottom: 10px; }
+  .rj-meta { color: #94a3b8; font-size: .8rem; margin: 6px 0; }
+  .rj-progress-wrap { width: 100%; height: 8px; border-radius: 99px; background: #1e293b; overflow: hidden; }
+  .rj-progress { height: 8px; background: #8b5cf6; }
+  .rj-actions { display: flex; gap: 8px; align-items: center; }
+  .rj-link { color: #60a5fa; text-decoration: none; font-size: .88rem; }
+  .rj-retry { background: #d97706; color: white; border: 0; border-radius: 8px; padding: 6px 10px; font-size: .8rem; cursor: pointer; }
+  .rj-error { color: #f87171; font-size: .8rem; margin-top: 8px; }
+  .rj-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; }
+  @media (max-width: 768px) { .rj-grid { grid-template-columns: 1fr; } .rj-top { flex-direction: column; align-items: flex-start; } }
+</style>
+
+<div class="rj-shell">
+<div class="rj-page">
+  <div class="rj-top">
+    <div>
+      <h1 class="rj-title">Render Jobs</h1>
+      <p class="rj-sub">Render video reguler untuk upload YouTube (bukan livestream).</p>
+    </div>
+    <select id="statusFilter" class="rj-select" style="max-width:220px;">
+      <option value="all">Semua status</option><option value="queued">Queued</option><option value="processing">Processing</option><option value="completed">Completed</option><option value="failed">Failed</option>
+    </select>
+  </div>
+
+  <div class="rj-card" style="margin-bottom:16px;">
+    <h2 style="font-size:1.2rem;font-weight:700;margin-bottom:12px;color:#fff;">Buat Job Baru</h2>
+    <form id="renderForm">
+      <div class="rj-grid" style="margin-bottom:12px;">
+        <input id="title" class="rj-input" placeholder="Judul render" />
+        <input id="duration" type="number" min="1" class="rj-input" placeholder="Target durasi (detik), contoh 3600" required />
+      </div>
+      <div class="rj-grid" style="margin-bottom:12px;">
+        <select id="targetAccountId" class="rj-select">
+          <option value="">Target channel > pilih channel</option>
+        </select>
+        <label class="rj-sub" style="display:flex;align-items:center;gap:8px;"><input type="checkbox" id="autoUploadToYoutube" checked> Upload otomatis ke channel setelah render selesai</label>
+      </div>
+      <div class="rj-grid" style="margin-bottom:12px;">
+        <div><div class="rj-sub" style="margin-bottom:6px;">Pilih Video</div><div id="videoList" class="rj-list"></div></div>
+        <div><div class="rj-sub" style="margin-bottom:6px;">Pilih Audio (opsional)</div><div id="audioList" class="rj-list"></div></div>
+      </div>
+      <button class="rj-btn" type="submit">Mulai Render</button>
+    </form>
+  </div>
+
+  <div class="rj-card">
+    <h2 style="font-size:1.2rem;font-weight:700;margin-bottom:12px;color:#fff;">Daftar Job</h2>
+    <div id="jobs"></div>
+  </div>
+</div>
+</div>
+
+<div id="toast" style="position:fixed;top:16px;right:16px;display:none;z-index:9999;padding:10px 14px;border-radius:10px;color:#fff;font-size:13px;"></div>
+<script>
+const statusFilter = document.getElementById('statusFilter');
+function showToast(message, type='success'){const t=document.getElementById('toast');t.textContent=message;t.style.background=type==='error'?'#dc2626':'#059669';t.style.display='block';setTimeout(()=>t.style.display='none',2300)}
+function toArray(data,key){if(Array.isArray(data))return data;if(Array.isArray(data?.[key]))return data[key];return []}
+async function loadMedia(){const [v,a]=await Promise.all([fetch('/api/videos'),fetch('/api/stream/audios')]);const vd=await v.json();const ad=await a.json();const videos=toArray(vd,'videos');const audios=toArray(ad,'audios');document.getElementById('videoList').innerHTML=videos.map(v=>`<label><input type='checkbox' value='${v.id}' name='video'> ${v.title}</label>`).join('')||'<div class="rj-sub">Belum ada video</div>';document.getElementById('audioList').innerHTML=audios.map(a=>`<label><input type='checkbox' value='${a.id}' name='audio'> ${a.title}</label>`).join('')||'<div class="rj-sub">Belum ada audio</div>'}
+async function loadAccounts(){const r=await fetch('/api/youtube/accounts');const d=await r.json();const accounts=toArray(d,'accounts');const sel=document.getElementById('targetAccountId');sel.innerHTML=`<option value=''>Target channel > pilih channel</option>`+accounts.map(a=>`<option value='${a.id}'>${a.channelName || ('Channel '+a.id)}</option>`).join('')}
+async function loadJobs(){const r=await fetch('/api/render/jobs');const d=await r.json();const all=toArray(d,'jobs');const f=statusFilter.value==='all'?all:all.filter(j=>j.status===statusFilter.value);const el=document.getElementById('jobs');el.innerHTML=f.map(j=>{const p=Number.isFinite(Number(j.progress))?Number(j.progress):0;return `<div class='rj-job'><div style='display:flex;justify-content:space-between;gap:8px;align-items:center;'><div style='min-width:0;flex:1;'><div style='font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'>${j.title||'Tanpa judul'}</div><div class='rj-meta'>${j.status} • ${p}% • target ${j.target_duration_seconds}s</div><div class='rj-progress-wrap'><div class='rj-progress' style='width:${Math.max(0,Math.min(100,p))}%;${j.status==='failed'?'background:#ef4444;':''}'></div></div>${j.error_message?`<div class='rj-error'>${j.error_message}</div>`:''}</div><div class='rj-actions'>${j.status==='failed'?`<button class='rj-retry' onclick="retryJob('${j.id}')">Retry</button>`:''}${j.output_path?`<a class='rj-link' target='_blank' href='${j.output_path}'>Download</a>`:''}</div></div></div>`;}).join('')||'<div class="rj-sub">Belum ada job render.</div>'}
+async function retryJob(jobId){const r=await fetch(`/api/render/jobs/${jobId}/retry`,{method:'POST'});const d=await r.json();if(!d.success)return showToast(d.message||'Gagal retry job','error');showToast('Retry job berhasil dibuat');loadJobs()}
+document.getElementById('renderForm').addEventListener('submit',async(e)=>{e.preventDefault();const title=document.getElementById('title').value;const targetDurationSeconds=parseInt(document.getElementById('duration').value,10);const videoIds=[...document.querySelectorAll('input[name="video"]:checked')].map(i=>i.value);const audioIds=[...document.querySelectorAll('input[name="audio"]:checked')].map(i=>i.value);const targetAccountId=document.getElementById('targetAccountId').value;const autoUploadToYoutube=document.getElementById('autoUploadToYoutube').checked;const r=await fetch('/api/render/jobs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,targetDurationSeconds,videoIds,audioIds,targetAccountId,autoUploadToYoutube})});const d=await r.json();if(!d.success)return showToast(d.message||'Gagal membuat job','error');showToast('Job render dibuat');e.target.reset();loadJobs()});
+statusFilter.addEventListener('change',loadJobs);loadMedia();loadAccounts();loadJobs();setInterval(loadJobs,5000);
+</script>
