@@ -40,6 +40,20 @@ async function renderLoopVideo({ videoPaths, audioPaths, outputPath, targetDurat
   }));
   const totalAudioDuration = audioDurations.reduce((sum, val) => sum + (Number.isFinite(val) && val > 0 ? val : 0), 0);
   const effectiveTargetDuration = followAudioDuration && totalAudioDuration > 0 ? Math.ceil(totalAudioDuration) : targetDurationSeconds;
+  const simpleCopyMode = (videoPaths.length === 1) && (!audioPaths || audioPaths.length <= 1) && (visualizerPreset === 'none');
+
+  if (simpleCopyMode) {
+    await runFfmpeg((cmd) => {
+      cmd.input(videoPaths[0]).inputOptions(['-stream_loop -1']);
+      if (audioPaths?.length === 1) cmd.input(audioPaths[0]).inputOptions(['-stream_loop -1']);
+      const out = ['-t', String(effectiveTargetDuration), '-c copy'];
+      if (audioPaths?.length === 1) out.push('-shortest');
+      else out.push('-an');
+      return cmd.outputOptions(out).output(outputPath);
+    }, { onProgress: (p) => onProgress?.(Math.min(99, Math.round((parseTimeToSeconds(p.timemark) / effectiveTargetDuration) * 100))) });
+    fs.rmSync(workDir, { recursive: true, force: true });
+    return outputPath;
+  }
 
   const videoDurations = await Promise.all(videoPaths.map(async (videoPath) => {
     const meta = await ffprobeAsync(videoPath);
