@@ -1,0 +1,34 @@
+<style>
+  .main-content-wrapper{background:#0f172a!important}.rj{max-width:1100px;margin:0 auto;color:#e5e7eb}.card{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:14px;margin-bottom:12px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.inp,select{width:100%;background:#0b1220;border:1px solid #475569;color:#f8fafc;border-radius:8px;padding:9px}.btn{background:#22d3ee;border:0;color:#082f49;border-radius:8px;padding:9px 12px;font-weight:600;cursor:pointer}
+  .job{background:#0b1220;border:1px solid #334155;border-radius:10px;padding:10px;margin-bottom:10px}.muted{color:#94a3b8;font-size:12px}.list{max-height:180px;overflow:auto;border:1px solid #475569;border-radius:8px;padding:8px}
+  @media(max-width:900px){.grid{grid-template-columns:1fr}}
+</style>
+<div class="rj">
+  <h1>Render Jobs</h1>
+  <div class="card grid">
+    <div>
+      <label>Target Channel</label><select id="targetAccountId"></select>
+      <label>Judul</label><input id="title" class="inp" placeholder="Nama render">
+      <div class="grid"><div><label>Jam</label><input id="durationHours" class="inp" type="number" min="0" value="1"></div><div><label>Menit</label><input id="durationMinutes" class="inp" type="number" min="0" max="59" value="0"></div></div>
+      <label><input type="checkbox" id="autoUploadToYoutube"> Upload otomatis setelah render</label><br><br>
+      <button id="createBtn" class="btn" type="button">Render Sekarang</button>
+    </div>
+    <div>
+      <label>Video terpilih</label><div id="videoList" class="list"></div>
+      <label>Audio terpilih (opsional)</label><div id="audioList" class="list"></div>
+    </div>
+  </div>
+
+  <div class="card"><h3>Hasil & Preview</h3><div id="jobs"></div></div>
+</div>
+<script>
+const toArray=(d,k)=>Array.isArray(d)?d:(Array.isArray(d?.[k])?d[k]:[]);
+async function loadAccounts(){const r=await fetch('/api/youtube/accounts');const d=await r.json();document.getElementById('targetAccountId').innerHTML=`<option value=''>-- Pilih Channel --</option>`+toArray(d,'accounts').map(a=>`<option value='${a.id}'>${a.channelName||('Channel '+a.id)}</option>`).join('')}
+async function loadMedia(){const [vr,ar]=await Promise.all([fetch('/api/videos'),fetch('/api/stream/audios')]);const vd=await vr.json();const ad=await ar.json();document.getElementById('videoList').innerHTML=toArray(vd,'videos').map(v=>`<label><input type='checkbox' name='video' value='${v.id}'> ${v.title}</label>`).join('')||'Tidak ada video';document.getElementById('audioList').innerHTML=toArray(ad,'audios').map(a=>`<label><input type='checkbox' name='audio' value='${a.id}'> ${a.title}</label>`).join('')||'Tidak ada audio';}
+async function uploadJob(jobId){const targetAccountId=document.getElementById('targetAccountId').value;const r=await fetch(`/api/render/jobs/${jobId}/upload`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({targetAccountId})});const d=await r.json();if(!d.success)return alert(d.message||'Upload gagal');alert('Upload berhasil: '+d.youtubeVideoId);loadJobs();}
+async function loadJobs(){const r=await fetch('/api/render/jobs');const d=await r.json();document.getElementById('jobs').innerHTML=toArray(d,'jobs').map(j=>`<div class='job'><b>${j.title||'Tanpa judul'}</b><div class='muted'>${j.status} • progress ${j.progress||0}% • target ${(j.target_duration_seconds||0)} detik ${j.youtube_video_id?`• YouTube: ${j.youtube_video_id}`:''}</div>${j.output_path?`<video controls style='width:100%;margin-top:8px;border-radius:8px' src='${j.output_path}'></video><div style='display:flex;gap:8px;margin-top:8px'><a class='btn' style='text-decoration:none;display:inline-block' href='${j.output_path}' target='_blank'>Download</a><button class='btn' onclick="uploadJob('${j.id}')">Upload ke Channel Target</button></div>`:''}</div>`).join('')||'Belum ada job';}
+
+document.getElementById('createBtn').addEventListener('click',async()=>{const btn=document.getElementById('createBtn');const title=document.getElementById('title').value;const durationHours=parseInt(document.getElementById('durationHours').value||0,10);const durationMinutes=parseInt(document.getElementById('durationMinutes').value||0,10);const targetDurationSeconds=(durationHours*3600)+(durationMinutes*60);const targetAccountId=document.getElementById('targetAccountId').value;const autoUploadToYoutube=document.getElementById('autoUploadToYoutube').checked;const videoIds=[...document.querySelectorAll("input[name='video']:checked")].map(i=>i.value);const audioIds=[...document.querySelectorAll("input[name='audio']:checked")].map(i=>i.value);if(videoIds.length===0)return alert('Pilih minimal 1 video');if(targetDurationSeconds<=0)return alert('Durasi tidak valid');btn.disabled=true;btn.textContent='Memproses...';const resp=await fetch('/api/render/jobs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,targetDurationSeconds,durationHours,durationMinutes,targetAccountId,autoUploadToYoutube,videoIds,audioIds})});const data=await resp.json();btn.disabled=false;btn.textContent='Render Sekarang';if(!resp.ok||!data.success)return alert(data.message||'Gagal membuat render job');alert('Render job dibuat');loadJobs();});
+loadAccounts();loadMedia();loadJobs();setInterval(loadJobs,5000);
+</script>
