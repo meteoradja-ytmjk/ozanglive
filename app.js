@@ -3591,8 +3591,11 @@ app.post('/api/render/jobs', isAuthenticated, async (req, res) => {
     }
     const computedSeconds = (parseInt(durationHours || 0, 10) * 3600) + (parseInt(durationMinutes || 0, 10) * 60);
     const target = parseInt(targetDurationSeconds, 10) || computedSeconds;
-    if (!Number.isFinite(target) || target <= 0) {
+    if (!followAudioDuration && (!Number.isFinite(target) || target <= 0)) {
       return res.status(400).json({ success: false, message: 'targetDurationSeconds tidak valid' });
+    }
+    if (followAudioDuration && (!Array.isArray(audioIds) || audioIds.length === 0)) {
+      return res.status(400).json({ success: false, message: 'Pilih minimal 1 audio jika mengikuti total durasi audio' });
     }
 
     const videos = await Promise.all(videoIds.map((id) => Video.findById(id)));
