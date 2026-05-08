@@ -11,9 +11,9 @@ class RenderJob {
           id, user_id, title, status, progress, target_duration_seconds,
           loop_mode, video_ids, audio_ids, output_path, error_message,
           target_account_id, auto_upload, youtube_video_id,
-          scheduled_upload_at, visualizer_preset,
+          scheduled_upload_at, visualizer_preset, follow_audio_duration,
           created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id,
           data.user_id,
@@ -31,6 +31,7 @@ class RenderJob {
           data.youtube_video_id || null,
           data.scheduled_upload_at || null,
           data.visualizer_preset || 'none',
+          data.follow_audio_duration ? 1 : 0,
           now,
           now
         ],

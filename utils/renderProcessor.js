@@ -6,8 +6,11 @@ const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
 
 ffmpeg.setFfmpegPath(ffmpegPath);
 
-const runFfmpeg = (configure) => new Promise((resolve, reject) => {
+const runFfmpeg = (configure, { onProgress } = {}) => new Promise((resolve, reject) => {
   const cmd = configure(ffmpeg());
+  if (typeof onProgress === 'function') {
+    cmd.on('progress', (p) => onProgress(p));
+  }
   cmd.on('end', resolve).on('error', reject).run();
 });
 const ffprobeAsync = (filePath) => new Promise((resolve, reject) => {
@@ -21,11 +24,22 @@ const writeConcatFile = (items, filePath) => {
   fs.writeFileSync(filePath, content, 'utf8');
 };
 
-async function renderLoopVideo({ videoPaths, audioPaths, outputPath, targetDurationSeconds, visualizerPreset = 'none' }) {
+const parseTimeToSeconds = (timemark = '') => {
+  const [h = 0, m = 0, s = 0] = String(timemark).split(':');
+  return (parseFloat(h) * 3600) + (parseFloat(m) * 60) + parseFloat(s);
+};
+
+async function renderLoopVideo({ videoPaths, audioPaths, outputPath, targetDurationSeconds, visualizerPreset = 'none', followAudioDuration = false, onProgress }) {
   if (!videoPaths?.length) throw new Error('Minimal 1 video diperlukan');
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ozang-render-'));
   const repeatedVideoList = [];
   const repeatedAudioList = [];
+  const audioDurations = await Promise.all((audioPaths || []).map(async (audioPath) => {
+    const meta = await ffprobeAsync(audioPath);
+    return Number(meta?.format?.duration || 0);
+  }));
+  const totalAudioDuration = audioDurations.reduce((sum, val) => sum + (Number.isFinite(val) && val > 0 ? val : 0), 0);
+  const effectiveTargetDuration = followAudioDuration && totalAudioDuration > 0 ? Math.ceil(totalAudioDuration) : targetDurationSeconds;
 
   const videoDurations = await Promise.all(videoPaths.map(async (videoPath) => {
     const meta = await ffprobeAsync(videoPath);
@@ -33,7 +47,7 @@ async function renderLoopVideo({ videoPaths, audioPaths, outputPath, targetDurat
   }));
   const totalSourceVideoDuration = videoDurations.reduce((sum, val) => sum + (Number.isFinite(val) && val > 0 ? val : 0), 0);
   const safeDuration = totalSourceVideoDuration > 1 ? totalSourceVideoDuration : Math.max(30, targetDurationSeconds);
-  const loops = Math.max(1, Math.ceil(targetDurationSeconds / safeDuration));
+  const loops = Math.max(1, Math.ceil(effectiveTargetDuration / safeDuration));
   for (let i = 0; i < loops; i += 1) repeatedVideoList.push(...videoPaths);
   for (let i = 0; i < loops; i += 1) repeatedAudioList.push(...(audioPaths?.length ? audioPaths : []));
 
@@ -42,7 +56,7 @@ async function renderLoopVideo({ videoPaths, audioPaths, outputPath, targetDurat
     await runFfmpeg((cmd) => cmd
       .input(videoPaths[0])
       .inputOptions(['-stream_loop -1'])
-      .outputOptions(['-t', String(targetDurationSeconds), '-c copy', '-an'])
+      .outputOptions(['-t', String(effectiveTargetDuration), '-c copy', '-an'])
       .output(mergedVideo));
   } else {
     const videoConcatList = path.join(workDir, 'video.txt');
@@ -69,7 +83,7 @@ async function renderLoopVideo({ videoPaths, audioPaths, outputPath, targetDurat
       await runFfmpeg((cmd) => cmd
         .input(audioPaths[0])
         .inputOptions(['-stream_loop -1'])
-        .outputOptions(['-vn', '-t', String(targetDurationSeconds), '-c copy'])
+        .outputOptions(['-vn', '-t', String(effectiveTargetDuration), '-c copy'])
         .output(finalAudio));
     } else {
       const audioConcatList = path.join(workDir, 'audio.txt');
@@ -96,26 +110,26 @@ async function renderLoopVideo({ videoPaths, audioPaths, outputPath, targetDurat
       await runFfmpeg((cmd) => {
         cmd.input(mergedVideo);
         if (finalAudio) cmd.input(finalAudio);
-        const out = ['-t', String(targetDurationSeconds), '-c copy'];
+        const out = ['-t', String(effectiveTargetDuration), '-c copy'];
         if (finalAudio) out.push('-shortest');
         else out.push('-an');
         return cmd.outputOptions(out).output(outputPath);
-      });
+      }, { onProgress: (p) => onProgress?.(Math.min(99, Math.round((parseTimeToSeconds(p.timemark) / effectiveTargetDuration) * 100))) });
     } catch (error) {
       await runFfmpeg((cmd) => {
         cmd.input(mergedVideo);
         if (finalAudio) cmd.input(finalAudio);
-        const out = ['-t', String(targetDurationSeconds), '-c:v libx264', '-preset ultrafast', '-tune', 'zerolatency', '-pix_fmt yuv420p', '-threads', '0'];
+        const out = ['-t', String(effectiveTargetDuration), '-c:v libx264', '-preset ultrafast', '-tune', 'zerolatency', '-pix_fmt yuv420p', '-threads', '0'];
         if (finalAudio) out.push('-c:a aac', '-shortest');
         else out.push('-an');
         return cmd.outputOptions(out).output(outputPath);
-      });
+      }, { onProgress: (p) => onProgress?.(Math.min(99, Math.round((parseTimeToSeconds(p.timemark) / effectiveTargetDuration) * 100))) });
     }
   } else {
     await runFfmpeg((cmd) => {
       cmd.input(mergedVideo);
       if (finalAudio) cmd.input(finalAudio);
-      const out = ['-t', String(targetDurationSeconds), '-c:v libx264', '-preset ultrafast', '-tune', 'zerolatency', '-pix_fmt yuv420p', '-threads', '0'];
+      const out = ['-t', String(effectiveTargetDuration), '-c:v libx264', '-preset ultrafast', '-tune', 'zerolatency', '-pix_fmt yuv420p', '-threads', '0'];
       if (shouldUseOverlay) {
         const overlayFilter = visualizerPreset === 'wave'
           ? '[1:a]showwaves=s=1280x220:mode=line:colors=00d4ff,format=rgba[sw];[0:v][sw]overlay=0:H-h-20[v]'
@@ -127,7 +141,7 @@ async function renderLoopVideo({ videoPaths, audioPaths, outputPath, targetDurat
       if (finalAudio) out.push('-c:a aac', '-shortest');
       else out.push('-an');
       return cmd.outputOptions(out).output(outputPath);
-    });
+    }, { onProgress: (p) => onProgress?.(Math.min(99, Math.round((parseTimeToSeconds(p.timemark) / effectiveTargetDuration) * 100))) });
   }
 
   fs.rmSync(workDir, { recursive: true, force: true });

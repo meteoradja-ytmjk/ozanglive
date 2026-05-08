@@ -3585,7 +3585,7 @@ app.get('/api/stream/content', isAuthenticated, async (req, res) => {
 
 app.post('/api/render/jobs', isAuthenticated, async (req, res) => {
   try {
-    const { title, videoIds, audioIds, targetDurationSeconds, durationHours, durationMinutes, targetAccountId, autoUploadToYoutube, scheduledUploadAt, visualizerPreset } = req.body;
+    const { title, videoIds, audioIds, targetDurationSeconds, durationHours, durationMinutes, targetAccountId, autoUploadToYoutube, scheduledUploadAt, visualizerPreset, followAudioDuration } = req.body;
     if (!Array.isArray(videoIds) || videoIds.length === 0) {
       return res.status(400).json({ success: false, message: 'videoIds wajib diisi minimal 1' });
     }
@@ -3614,6 +3614,7 @@ app.post('/api/render/jobs', isAuthenticated, async (req, res) => {
       auto_upload: autoUploadToYoutube ? 1 : 0,
       scheduled_upload_at: scheduledUploadAt || null,
       visualizer_preset: visualizerPreset || 'none',
+      follow_audio_duration: !!followAudioDuration,
       status: 'queued',
       progress: 0
     });
@@ -3626,7 +3627,19 @@ app.post('/api/render/jobs', isAuthenticated, async (req, res) => {
         const videoPaths = safeVideos.map((v) => path.join(__dirname, 'public', v.filepath));
         const audioPaths = safeAudios.map((a) => path.join(__dirname, 'public', a.filepath));
 
-        await renderLoopVideo({ videoPaths, audioPaths, outputPath, targetDurationSeconds: target, visualizerPreset: visualizerPreset || 'none' });
+        await renderLoopVideo({
+          videoPaths,
+          audioPaths,
+          outputPath,
+          targetDurationSeconds: target,
+          visualizerPreset: visualizerPreset || 'none',
+          followAudioDuration: !!followAudioDuration,
+          onProgress: async (progressPercent) => {
+            if (Number.isFinite(progressPercent) && progressPercent > 10) {
+              await RenderJob.update(job.id, { progress: progressPercent });
+            }
+          }
+        });
 
         const baseUpdate = { status: 'completed', progress: 100, output_path: `/uploads/videos/${outputName}` };
         if (autoUploadToYoutube && targetAccountId) {
@@ -3691,6 +3704,7 @@ app.post('/api/render/jobs/:id/retry', isAuthenticated, async (req, res) => {
       audio_ids: audioIds,
       target_account_id: original.target_account_id || null,
       auto_upload: original.auto_upload || 0,
+      follow_audio_duration: original.follow_audio_duration || 0,
       status: 'queued',
       progress: 0
     });
@@ -3714,7 +3728,13 @@ app.post('/api/render/jobs/:id/retry', isAuthenticated, async (req, res) => {
           audioPaths,
           outputPath,
           targetDurationSeconds: original.target_duration_seconds,
-          visualizerPreset: original.visualizer_preset || 'none'
+          visualizerPreset: original.visualizer_preset || 'none',
+          followAudioDuration: !!original.follow_audio_duration,
+          onProgress: async (progressPercent) => {
+            if (Number.isFinite(progressPercent) && progressPercent > 10) {
+              await RenderJob.update(retryJob.id, { progress: progressPercent });
+            }
+          }
         });
 
         const retryUpdate = { status: 'completed', progress: 100, output_path: `/uploads/videos/${outputName}` };
