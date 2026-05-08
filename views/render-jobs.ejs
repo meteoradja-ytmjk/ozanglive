@@ -1,0 +1,79 @@
+<style>
+  .main-content-wrapper { background: radial-gradient(circle at 20% 0%, #0b1938 0%, #070d1f 38%, #050914 100%) !important; }
+  .rj-wrap { max-width: 1180px; margin: 0 auto; color: #dbe7ff; }
+  .rj-head h1 { font-size: 46px; font-weight: 800; margin: 0; letter-spacing: .4px; }
+  .rj-head p { margin: 4px 0 0; color: #7e93be; font-size: 18px; }
+  .rj-stepper { margin: 24px 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .rj-step { display:flex; align-items:center; gap:10px; opacity:.55; }
+  .rj-step.active { opacity:1; }
+  .rj-badge { width:38px; height:38px; border-radius:50%; background:#1d2949; display:flex; align-items:center; justify-content:center; font-weight:700; }
+  .rj-step.active .rj-badge { background:#1fd8ff; color:#00151d; box-shadow:0 0 24px rgba(31,216,255,.65); }
+  .rj-card-grid { display:grid; grid-template-columns: 1fr 1fr; gap:18px; }
+  .rj-card { background:#142849; border:1px solid #2a3e63; border-radius:22px; padding:22px; }
+  .rj-card-title { color:#44dcff; font-size:30px; font-weight:800; letter-spacing:.5px; margin:0 0 18px; }
+  .rj-label { display:block; color:#c8d7f6; font-weight:700; margin:14px 0 6px; }
+  .rj-input,.rj-select{ width:100%; background:#070f20; border:1px solid #2d4064; color:#f1f6ff; border-radius:14px; padding:14px; font-size:28px; }
+  .rj-mini-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .rj-list-box{ background:#0c1528; border:1px solid #2d4064; border-radius:14px; padding:12px; max-height:170px; overflow:auto; }
+  .rj-list-box label { display:flex; gap:8px; font-size:14px; color:#bfd2f8; padding:5px 0; }
+  .rj-btn{margin-top:16px; background:linear-gradient(90deg,#00d7ff,#36b8ff); color:#00222f; border:0; border-radius:12px; padding:11px 18px; font-weight:800; cursor:pointer; }
+  .rj-job{ border:1px solid #30486f; border-radius:14px; padding:12px; margin-bottom:10px; background:#0a1428; }
+  .rj-progress{height:8px;background:#1c2e50;border-radius:999px;overflow:hidden}.rj-progress > div{height:100%;background:#31d5ff}
+  @media (max-width: 1024px){ .rj-head h1{font-size:32px}.rj-card-grid{grid-template-columns:1fr}.rj-stepper{grid-template-columns:1fr 1fr}.rj-input,.rj-select{font-size:18px;} }
+</style>
+
+<div class="rj-wrap">
+  <div class="rj-head">
+    <h1>Batch Creator</h1>
+    <p>Buat banyak video sekaligus dengan satu kali setting</p>
+  </div>
+
+  <div class="rj-stepper">
+    <div class="rj-step active"><div class="rj-badge">1</div><div><b>Channel</b><br>& Jumlah</div></div>
+    <div class="rj-step"><div class="rj-badge">2</div><div><b>Jadwal</b></div></div>
+    <div class="rj-step"><div class="rj-badge">3</div><div><b>Visualizer</b></div></div>
+    <div class="rj-step"><div class="rj-badge">4</div><div><b>Preview</b><br>& Proses</div></div>
+  </div>
+
+  <div class="rj-card-grid">
+    <div class="rj-card">
+      <h2 class="rj-card-title">◌ TARGET CHANNEL & KUANTITAS</h2>
+      <label class="rj-label">Channel YouTube</label>
+      <select id="targetAccountId" class="rj-select"><option value="">-- Pilih Channel --</option></select>
+
+      <label class="rj-label">Judul Render</label>
+      <input id="title" class="rj-input" placeholder="Nama batch / judul" />
+
+      <div class="rj-mini-grid">
+        <div><label class="rj-label">Jumlah Video</label><input id="videoCount" class="rj-input" type="number" min="1" value="1"></div>
+        <div><label class="rj-label">Target Durasi (detik)</label><input id="duration" class="rj-input" type="number" min="1" value="3600"></div>
+      </div>
+
+      <label class="rj-label"><input type="checkbox" id="autoUploadToYoutube" checked> Upload otomatis setelah render selesai</label>
+      <button id="createBtn" class="rj-btn">Mulai Render Batch</button>
+    </div>
+
+    <div class="rj-card">
+      <h2 class="rj-card-title">🎲 KONTEN SUMBER</h2>
+      <label class="rj-label">VIDEO DI GALLERY</label>
+      <div id="videoList" class="rj-list-box"></div>
+      <label class="rj-label">AUDIO DI GALLERY (opsional)</label>
+      <div id="audioList" class="rj-list-box"></div>
+    </div>
+  </div>
+
+  <div class="rj-card" style="margin-top:18px;">
+    <h2 class="rj-card-title">Preview & Proses</h2>
+    <div id="jobs"></div>
+  </div>
+</div>
+
+<script>
+const toArray=(d,k)=>Array.isArray(d)?d:(Array.isArray(d?.[k])?d[k]:[]);
+async function loadAccounts(){const r=await fetch('/api/youtube/accounts');const d=await r.json();document.getElementById('targetAccountId').innerHTML=`<option value=''>-- Pilih Channel --</option>`+toArray(d,'accounts').map(a=>`<option value='${a.id}'>${a.channelName||('Channel '+a.id)}</option>`).join('')}
+async function loadMedia(){const [vr,ar]=await Promise.all([fetch('/api/videos'),fetch('/api/stream/audios')]);const vd=await vr.json();const ad=await ar.json();document.getElementById('videoList').innerHTML=toArray(vd,'videos').map(v=>`<label><input type='checkbox' name='video' value='${v.id}'> ${v.title}</label>`).join('')||'Tidak ada video';document.getElementById('audioList').innerHTML=toArray(ad,'audios').map(a=>`<label><input type='checkbox' name='audio' value='${a.id}'> ${a.title}</label>`).join('')||'Tidak ada audio';}
+async function loadJobs(){const r=await fetch('/api/render/jobs');const d=await r.json();document.getElementById('jobs').innerHTML=toArray(d,'jobs').map(j=>{const p=Number(j.progress||0);return `<div class='rj-job'><div style='display:flex;justify-content:space-between;gap:8px'><div><b>${j.title||'Tanpa judul'}</b><div style='font-size:12px;color:#8cabdd'>${j.status} • target ${j.target_duration_seconds}s ${j.youtube_video_id?`• YouTube: ${j.youtube_video_id}`:''}</div></div>${j.output_path?`<a href='${j.output_path}' target='_blank' style='color:#68dfff'>Download</a>`:''}</div><div class='rj-progress' style='margin-top:8px'><div style='width:${Math.max(0,Math.min(100,p))}%'></div></div></div>`;}).join('')||'Belum ada job render';}
+
+document.getElementById('createBtn').addEventListener('click', async ()=>{const title=document.getElementById('title').value;const targetDurationSeconds=parseInt(document.getElementById('duration').value,10);const targetAccountId=document.getElementById('targetAccountId').value;const autoUploadToYoutube=document.getElementById('autoUploadToYoutube').checked;const videoIds=[...document.querySelectorAll("input[name='video']:checked")].map(i=>i.value);const audioIds=[...document.querySelectorAll("input[name='audio']:checked")].map(i=>i.value);const resp=await fetch('/api/render/jobs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,targetDurationSeconds,targetAccountId,autoUploadToYoutube,videoIds,audioIds})});const data=await resp.json();if(!data.success){alert(data.message||'Gagal membuat job');return;}loadJobs();});
+loadAccounts();loadMedia();loadJobs();setInterval(loadJobs,4000);
+</script>
