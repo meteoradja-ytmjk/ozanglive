@@ -1,5 +1,7 @@
 <style>
-  .rj-page { max-width: 1100px; margin: 0 auto; }
+  .main-content-wrapper { background: #0f172a !important; }
+  .rj-shell { background: #0f172a; border: 1px solid #1e293b; border-radius: 16px; padding: 18px; min-height: calc(100vh - 160px); }
+  .rj-page { max-width: 1100px; margin: 0 auto; color: #e2e8f0; }
   .rj-card { background: #1e293b; border: 1px solid #334155; border-radius: 14px; padding: 16px; }
   .rj-title { font-size: 1.6rem; font-weight: 700; color: #fff; }
   .rj-sub { color: #94a3b8; font-size: .92rem; }
@@ -21,6 +23,7 @@
   @media (max-width: 768px) { .rj-grid { grid-template-columns: 1fr; } .rj-top { flex-direction: column; align-items: flex-start; } }
 </style>
 
+<div class="rj-shell">
 <div class="rj-page">
   <div class="rj-top">
     <div>
@@ -57,6 +60,7 @@
     <h2 style="font-size:1.2rem;font-weight:700;margin-bottom:12px;color:#fff;">Daftar Job</h2>
     <div id="jobs"></div>
   </div>
+</div>
 </div>
 
 <div id="toast" style="position:fixed;top:16px;right:16px;display:none;z-index:9999;padding:10px 14px;border-radius:10px;color:#fff;font-size:13px;"></div>
