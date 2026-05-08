@@ -10,8 +10,9 @@ class RenderJob {
         `INSERT INTO render_jobs (
           id, user_id, title, status, progress, target_duration_seconds,
           loop_mode, video_ids, audio_ids, output_path, error_message,
+          target_account_id, auto_upload, youtube_video_id,
           created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id,
           data.user_id,
@@ -24,6 +25,9 @@ class RenderJob {
           JSON.stringify(data.audio_ids || []),
           data.output_path || null,
           data.error_message || null,
+          data.target_account_id || null,
+          data.auto_upload ? 1 : 0,
+          data.youtube_video_id || null,
           now,
           now
         ],

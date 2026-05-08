@@ -281,12 +281,18 @@ async function createCoreTablesAsync() {
     loop_mode TEXT DEFAULT 'duration',
     video_ids TEXT NOT NULL,
     audio_ids TEXT,
+    target_account_id INTEGER,
+    auto_upload INTEGER DEFAULT 0,
+    youtube_video_id TEXT,
     output_path TEXT,
     error_message TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id)
   )`, 'render_jobs');
+  await runTableQuery(`ALTER TABLE render_jobs ADD COLUMN target_account_id INTEGER`, 'render_jobs.target_account_id');
+  await runTableQuery(`ALTER TABLE render_jobs ADD COLUMN auto_upload INTEGER DEFAULT 0`, 'render_jobs.auto_upload');
+  await runTableQuery(`ALTER TABLE render_jobs ADD COLUMN youtube_video_id TEXT`, 'render_jobs.youtube_video_id');
 
   // Add optional gallery folder columns for drag-and-drop organization
   await runTableQuery(`ALTER TABLE videos ADD COLUMN folder_name TEXT`, 'videos.folder_name');
