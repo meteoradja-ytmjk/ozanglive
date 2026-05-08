@@ -210,9 +210,10 @@
           <i class="ti ti-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
         </div>
         <button type="button" id="toggleAllGroupsBtn" onclick="toggleAllStreamGroups()"
-          class="flex items-center justify-center gap-2 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white px-3.5 py-2 rounded-lg transition-colors whitespace-nowrap min-w-[124px]">
+          class="flex items-center justify-center bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white w-10 h-10 rounded-lg transition-colors"
+          title="Expand/Collapse All Group">
           <i class="ti ti-fold-down text-sm"></i>
-          <span id="toggleAllGroupsLabel">Expand All</span>
+          <span id="toggleAllGroupsLabel" class="sr-only">Expand All</span>
         </button>
         <button type="button" onclick="openNewStreamModal()"
           class="flex items-center justify-center gap-2 bg-primary hover:bg-secondary text-white px-4 py-2 rounded-lg transition-colors whitespace-nowrap min-w-[132px]">
@@ -247,10 +248,10 @@
         </div>
         <div class="relative" id="backupDropdown">
           <button onclick="toggleBackupDropdown()"
-            class="flex items-center justify-center gap-2 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white px-4 py-2 rounded-lg transition-colors whitespace-nowrap min-w-[118px]">
+            class="flex items-center justify-center gap-1 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white w-10 h-10 rounded-lg transition-colors"
+            title="Backup Menu">
             <i class="ti ti-settings-2"></i>
-            <span>Backup</span>
-            <i class="ti ti-chevron-down text-xs"></i>
+            <i class="ti ti-chevron-down text-[10px]"></i>
           </button>
           <div id="backupDropdownMenu"
             class="hidden absolute right-0 mt-2 w-48 bg-dark-700 border border-gray-600 rounded-lg shadow-lg z-20 overflow-hidden">
@@ -310,7 +311,8 @@
           </div>
         </div>
         <button type="button" id="toggleAllGroupsBtnMobile" onclick="toggleAllStreamGroups()"
-          class="w-full mt-2 flex items-center justify-center gap-2 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white px-3 py-2 rounded-lg transition-colors text-sm">
+          class="w-full mt-2 flex items-center justify-center gap-2 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white px-3 py-2 rounded-lg transition-colors text-sm"
+          title="Expand/Collapse All Group">
           <i class="ti ti-fold-down"></i>
           <span id="toggleAllGroupsLabelMobile">Expand All</span>
         </button>
