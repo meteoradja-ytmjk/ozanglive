@@ -3753,6 +3753,44 @@ app.get('/api/render/jobs/:id', isAuthenticated, async (req, res) => {
   }
 });
 
+app.post('/api/render/jobs/:id/upload', isAuthenticated, async (req, res) => {
+  try {
+    const job = await RenderJob.findById(req.params.id);
+    if (!job || job.user_id !== req.session.userId) {
+      return res.status(404).json({ success: false, message: 'Job tidak ditemukan' });
+    }
+    if (!job.output_path) {
+      return res.status(400).json({ success: false, message: 'Output render belum tersedia' });
+    }
+
+    const { targetAccountId } = req.body;
+    const accountId = targetAccountId || job.target_account_id;
+    if (!accountId) {
+      return res.status(400).json({ success: false, message: 'Pilih channel target terlebih dahulu' });
+    }
+
+    const account = await YouTubeCredentials.findById(accountId);
+    if (!account || account.userId !== req.session.userId) {
+      return res.status(403).json({ success: false, message: 'Akun YouTube tidak valid' });
+    }
+
+    const accessToken = await youtubeService.getAccessToken(account.clientId, account.clientSecret, account.refreshToken);
+    const filePath = path.join(__dirname, 'public', job.output_path);
+    const uploadResult = await youtubeService.uploadRegularVideo(accessToken, {
+      title: job.title || `Render ${job.id}`,
+      description: 'Uploaded from Render Jobs',
+      filePath,
+      privacyStatus: 'unlisted'
+    });
+
+    await RenderJob.update(job.id, { youtube_video_id: uploadResult?.id || null, target_account_id: accountId, auto_upload: 0 });
+    return res.json({ success: true, youtubeVideoId: uploadResult?.id || null });
+  } catch (error) {
+    console.error('Manual upload render job error:', error);
+    return res.status(500).json({ success: false, message: 'Gagal upload ke YouTube' });
+  }
+});
+
 app.get('/api/stream/audios', isAuthenticated, async (req, res) => {
   try {
     const audios = await Audio.findAll(req.session.userId);
