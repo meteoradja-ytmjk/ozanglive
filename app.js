@@ -23,6 +23,7 @@ const { getVideoInfo, generateThumbnail } = require('./utils/videoProcessor');
 const ProcessingQueue = require('./utils/processingQueue');
 const Video = require('./models/Video');
 const Audio = require('./models/Audio');
+const RenderJob = require('./models/RenderJob');
 const Playlist = require('./models/Playlist');
 const StorageService = require('./services/storageService');
 const ffmpeg = require('fluent-ffmpeg');
@@ -37,6 +38,7 @@ const TitleFolder = require('./models/TitleFolder');
 const SystemSettings = require('./models/SystemSettings');
 const YouTubeBroadcastSettings = require('./models/YouTubeBroadcastSettings');
 const scheduleService = require('./services/scheduleService');
+const { renderLoopVideo } = require('./utils/renderProcessor');
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 const uploadProcessingConcurrency = Math.max(1, parseInt(process.env.UPLOAD_PROCESSING_CONCURRENCY || '1', 10));
 const videoProcessingQueue = new ProcessingQueue({ concurrency: uploadProcessingConcurrency, name: 'video-processing' });
@@ -1471,6 +1473,20 @@ app.get('/gallery', isAuthenticated, canViewVideos, async (req, res) => {
     res.redirect('/dashboard');
   }
 });
+app.get('/render-jobs', isAuthenticated, async (req, res) => {
+  try {
+    const user = await User.findById(req.session.userId);
+    res.render('render-jobs', {
+      title: 'Render Jobs',
+      active: 'render-jobs',
+      user
+    });
+  } catch (error) {
+    console.error('Render jobs page error:', error);
+    res.redirect('/dashboard');
+  }
+});
+
 app.get('/settings', isAuthenticated, async (req, res) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
   res.set('Pragma', 'no-cache');
@@ -3566,6 +3582,245 @@ app.get('/api/stream/content', isAuthenticated, async (req, res) => {
 });
 
 // API endpoint for fetching audio list for stream modal
+
+app.post('/api/render/jobs', isAuthenticated, async (req, res) => {
+  try {
+    const { title, videoIds, audioIds, targetDurationSeconds, durationHours, durationMinutes, targetAccountId, autoUploadToYoutube, scheduledUploadAt, visualizerPreset } = req.body;
+    if (!Array.isArray(videoIds) || videoIds.length === 0) {
+      return res.status(400).json({ success: false, message: 'videoIds wajib diisi minimal 1' });
+    }
+    const computedSeconds = (parseInt(durationHours || 0, 10) * 3600) + (parseInt(durationMinutes || 0, 10) * 60);
+    const target = parseInt(targetDurationSeconds, 10) || computedSeconds;
+    if (!Number.isFinite(target) || target <= 0) {
+      return res.status(400).json({ success: false, message: 'targetDurationSeconds tidak valid' });
+    }
+
+    const videos = await Promise.all(videoIds.map((id) => Video.findById(id)));
+    const audios = await Promise.all((audioIds || []).map((id) => Audio.findById(id)));
+
+    const currentUserId = req.session.userId;
+    const safeVideos = videos.filter((v) => v && (!currentUserId || v.user_id === currentUserId));
+    const safeAudios = audios.filter((a) => a && (!currentUserId || a.user_id === currentUserId));
+
+    if (safeVideos.length === 0) return res.status(404).json({ success: false, message: 'Video tidak ditemukan' });
+
+    const job = await RenderJob.create({
+      user_id: currentUserId,
+      title: title || `Render ${new Date().toISOString()}`,
+      target_duration_seconds: target,
+      video_ids: safeVideos.map((v) => v.id),
+      audio_ids: safeAudios.map((a) => a.id),
+      target_account_id: targetAccountId || null,
+      auto_upload: autoUploadToYoutube ? 1 : 0,
+      scheduled_upload_at: scheduledUploadAt || null,
+      visualizer_preset: visualizerPreset || 'none',
+      status: 'queued',
+      progress: 0
+    });
+
+    setImmediate(async () => {
+      try {
+        await RenderJob.update(job.id, { status: 'processing', progress: 10 });
+        const outputName = `render-${job.id}.mp4`;
+        const outputPath = path.join(__dirname, 'public', 'uploads', 'videos', outputName);
+        const videoPaths = safeVideos.map((v) => path.join(__dirname, 'public', v.filepath));
+        const audioPaths = safeAudios.map((a) => path.join(__dirname, 'public', a.filepath));
+
+        await renderLoopVideo({ videoPaths, audioPaths, outputPath, targetDurationSeconds: target, visualizerPreset: visualizerPreset || 'none' });
+
+        const baseUpdate = { status: 'completed', progress: 100, output_path: `/uploads/videos/${outputName}` };
+        if (autoUploadToYoutube && targetAccountId) {
+          const account = await YouTubeCredentials.findById(targetAccountId);
+          if (account && account.userId === currentUserId) {
+            const doUpload = async () => {
+              const accessToken = await youtubeService.getAccessToken(account.clientId, account.clientSecret, account.refreshToken);
+              const uploadResult = await youtubeService.uploadRegularVideo(accessToken, {
+                title: title || `Render ${new Date().toISOString()}`,
+                description: `Uploaded automatically from Render Jobs (visualizer: ${visualizerPreset || 'none'})`,
+                filePath: outputPath,
+                privacyStatus: 'unlisted'
+              });
+              await RenderJob.update(job.id, { youtube_video_id: uploadResult?.id || null });
+            };
+            if (scheduledUploadAt && new Date(scheduledUploadAt).getTime() > Date.now()) {
+              const delayMs = new Date(scheduledUploadAt).getTime() - Date.now();
+              setTimeout(() => doUpload().catch(err => console.error('Scheduled upload failed:', err.message)), delayMs);
+            } else {
+              await doUpload();
+            }
+          }
+        }
+        await RenderJob.update(job.id, baseUpdate);
+      } catch (e) {
+        await RenderJob.update(job.id, { status: 'failed', error_message: e.message });
+      }
+    });
+
+    return res.json({ success: true, jobId: job.id });
+  } catch (error) {
+    console.error('Error creating render job:', error);
+    return res.status(500).json({ success: false, message: 'Gagal membuat render job' });
+  }
+});
+
+app.get('/api/render/jobs', isAuthenticated, async (req, res) => {
+  try {
+    const jobs = await RenderJob.findAllByUser(req.session.userId);
+    return res.json({ success: true, jobs });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Gagal mengambil job' });
+  }
+});
+
+app.post('/api/render/jobs/:id/retry', isAuthenticated, async (req, res) => {
+  try {
+    const original = await RenderJob.findById(req.params.id);
+    const currentUserId = req.session.userId;
+    if (!original || original.user_id !== currentUserId) {
+      return res.status(404).json({ success: false, message: 'Job tidak ditemukan' });
+    }
+
+    const videoIds = JSON.parse(original.video_ids || '[]');
+    const audioIds = JSON.parse(original.audio_ids || '[]');
+
+    const retryJob = await RenderJob.create({
+      user_id: currentUserId,
+      title: `${original.title || 'Render'} (retry)`,
+      target_duration_seconds: original.target_duration_seconds,
+      video_ids: videoIds,
+      audio_ids: audioIds,
+      target_account_id: original.target_account_id || null,
+      auto_upload: original.auto_upload || 0,
+      status: 'queued',
+      progress: 0
+    });
+
+    setImmediate(async () => {
+      try {
+        const videos = await Promise.all(videoIds.map((id) => Video.findById(id)));
+        const audios = await Promise.all(audioIds.map((id) => Audio.findById(id)));
+        const safeVideos = videos.filter((v) => v && v.user_id === currentUserId);
+        const safeAudios = audios.filter((a) => a && a.user_id === currentUserId);
+
+        await RenderJob.update(retryJob.id, { status: 'processing', progress: 10 });
+
+        const outputName = `render-${retryJob.id}.mp4`;
+        const outputPath = path.join(__dirname, 'public', 'uploads', 'videos', outputName);
+        const videoPaths = safeVideos.map((v) => path.join(__dirname, 'public', v.filepath));
+        const audioPaths = safeAudios.map((a) => path.join(__dirname, 'public', a.filepath));
+
+        await renderLoopVideo({
+          videoPaths,
+          audioPaths,
+          outputPath,
+          targetDurationSeconds: original.target_duration_seconds,
+          visualizerPreset: original.visualizer_preset || 'none'
+        });
+
+        const retryUpdate = { status: 'completed', progress: 100, output_path: `/uploads/videos/${outputName}` };
+        if (original.auto_upload && original.target_account_id) {
+          const account = await YouTubeCredentials.findById(original.target_account_id);
+          if (account && account.userId === currentUserId) {
+            const accessToken = await youtubeService.getAccessToken(account.clientId, account.clientSecret, account.refreshToken);
+            const uploadResult = await youtubeService.uploadRegularVideo(accessToken, {
+              title: `${original.title || 'Render'} (retry)`,
+              description: 'Uploaded automatically from Render Jobs',
+              filePath: outputPath,
+              privacyStatus: 'unlisted'
+            });
+            retryUpdate.youtube_video_id = uploadResult?.id || null;
+          }
+        }
+        await RenderJob.update(retryJob.id, retryUpdate);
+      } catch (e) {
+        await RenderJob.update(retryJob.id, { status: 'failed', error_message: e.message });
+      }
+    });
+
+    return res.json({ success: true, jobId: retryJob.id });
+  } catch (error) {
+    console.error('Retry render job error:', error);
+    return res.status(500).json({ success: false, message: 'Gagal retry job' });
+  }
+});
+
+app.get('/api/render/jobs/:id', isAuthenticated, async (req, res) => {
+  try {
+    const job = await RenderJob.findById(req.params.id);
+    if (!job || job.user_id !== req.session.userId) return res.status(404).json({ success: false, message: 'Job tidak ditemukan' });
+    return res.json({ success: true, job });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Gagal mengambil job' });
+  }
+});
+
+app.post('/api/render/jobs/:id/upload', isAuthenticated, async (req, res) => {
+  try {
+    const job = await RenderJob.findById(req.params.id);
+    if (!job || job.user_id !== req.session.userId) {
+      return res.status(404).json({ success: false, message: 'Job tidak ditemukan' });
+    }
+    if (!job.output_path) {
+      return res.status(400).json({ success: false, message: 'Output render belum tersedia' });
+    }
+
+    const { targetAccountId } = req.body;
+    const accountId = targetAccountId || job.target_account_id;
+    if (!accountId) {
+      return res.status(400).json({ success: false, message: 'Pilih channel target terlebih dahulu' });
+    }
+
+    const account = await YouTubeCredentials.findById(accountId);
+    if (!account || account.userId !== req.session.userId) {
+      return res.status(403).json({ success: false, message: 'Akun YouTube tidak valid' });
+    }
+
+    const accessToken = await youtubeService.getAccessToken(account.clientId, account.clientSecret, account.refreshToken);
+    const filePath = path.join(__dirname, 'public', job.output_path);
+    const uploadResult = await youtubeService.uploadRegularVideo(accessToken, {
+      title: job.title || `Render ${job.id}`,
+      description: 'Uploaded from Render Jobs',
+      filePath,
+      privacyStatus: 'unlisted'
+    });
+
+    await RenderJob.update(job.id, { youtube_video_id: uploadResult?.id || null, target_account_id: accountId, auto_upload: 0 });
+    return res.json({ success: true, youtubeVideoId: uploadResult?.id || null });
+  } catch (error) {
+    console.error('Manual upload render job error:', error);
+    return res.status(500).json({ success: false, message: 'Gagal upload ke YouTube' });
+  }
+});
+
+app.delete('/api/render/jobs/:id', isAuthenticated, async (req, res) => {
+  try {
+    const job = await RenderJob.findById(req.params.id);
+    if (!job || job.user_id !== req.session.userId) {
+      return res.status(404).json({ success: false, message: 'Job tidak ditemukan' });
+    }
+
+    if (job.output_path) {
+      const filePath = path.join(__dirname, 'public', job.output_path);
+      try {
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      } catch (e) {
+        console.warn('Failed deleting render output:', e.message);
+      }
+    }
+
+    await new Promise((resolve, reject) => {
+      db.run('DELETE FROM render_jobs WHERE id = ?', [req.params.id], function (err) {
+        if (err) return reject(err);
+        resolve(true);
+      });
+    });
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('Delete render job error:', error);
+    return res.status(500).json({ success: false, message: 'Gagal menghapus job' });
+  }
+});
+
 app.get('/api/stream/audios', isAuthenticated, async (req, res) => {
   try {
     const audios = await Audio.findAll(req.session.userId);
@@ -3589,7 +3844,8 @@ app.get('/api/stream/audios', isAuthenticated, async (req, res) => {
         name: audio.title,
         duration: formattedDuration,
         format: audio.format || 'audio',
-        filepath: audio.filepath
+        filepath: audio.filepath,
+        folder_name: audio.folder_name || null
       };
     });
     res.json(formattedAudios);
