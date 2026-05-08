@@ -31,46 +31,62 @@ async function renderLoopVideo({ videoPaths, audioPaths, outputPath, targetDurat
     const meta = await ffprobeAsync(videoPath);
     return Number(meta?.format?.duration || 0);
   }));
-  const totalSourceVideoDuration = videoDurations.reduce((sum, val) => sum + val, 0);
-  const loops = Math.max(1, Math.ceil(targetDurationSeconds / Math.max(1, totalSourceVideoDuration)));
+  const totalSourceVideoDuration = videoDurations.reduce((sum, val) => sum + (Number.isFinite(val) && val > 0 ? val : 0), 0);
+  const safeDuration = totalSourceVideoDuration > 1 ? totalSourceVideoDuration : Math.max(30, targetDurationSeconds);
+  const loops = Math.max(1, Math.ceil(targetDurationSeconds / safeDuration));
   for (let i = 0; i < loops; i += 1) repeatedVideoList.push(...videoPaths);
   for (let i = 0; i < loops; i += 1) repeatedAudioList.push(...(audioPaths?.length ? audioPaths : []));
 
-  const videoConcatList = path.join(workDir, 'video.txt');
-  writeConcatFile(repeatedVideoList, videoConcatList);
   const mergedVideo = path.join(workDir, 'video-merged.mp4');
-
-  try {
+  if (videoPaths.length === 1) {
     await runFfmpeg((cmd) => cmd
-      .input(videoConcatList)
-      .inputOptions(['-f concat', '-safe 0'])
-      .outputOptions(['-c copy', '-an'])
+      .input(videoPaths[0])
+      .inputOptions(['-stream_loop -1'])
+      .outputOptions(['-t', String(targetDurationSeconds), '-c copy', '-an'])
       .output(mergedVideo));
-  } catch (error) {
-    await runFfmpeg((cmd) => cmd
-      .input(videoConcatList)
-      .inputOptions(['-f concat', '-safe 0'])
-      .outputOptions(['-c:v libx264', '-preset veryfast', '-pix_fmt yuv420p', '-an'])
-      .output(mergedVideo));
+  } else {
+    const videoConcatList = path.join(workDir, 'video.txt');
+    writeConcatFile(repeatedVideoList, videoConcatList);
+    try {
+      await runFfmpeg((cmd) => cmd
+        .input(videoConcatList)
+        .inputOptions(['-f concat', '-safe 0'])
+        .outputOptions(['-c copy', '-an'])
+        .output(mergedVideo));
+    } catch (error) {
+      await runFfmpeg((cmd) => cmd
+        .input(videoConcatList)
+        .inputOptions(['-f concat', '-safe 0'])
+        .outputOptions(['-c:v libx264', '-preset ultrafast', '-tune', 'zerolatency', '-pix_fmt yuv420p'])
+        .output(mergedVideo));
+    }
   }
 
   let finalAudio = null;
   if (repeatedAudioList.length > 0) {
-    const audioConcatList = path.join(workDir, 'audio.txt');
-    writeConcatFile(repeatedAudioList, audioConcatList);
     finalAudio = path.join(workDir, 'audio-merged.aac');
-    try {
+    if (audioPaths?.length === 1) {
       await runFfmpeg((cmd) => cmd
-        .input(audioConcatList)
-        .inputOptions(['-f concat', '-safe 0'])
-        .outputOptions(['-vn', '-c copy'])
+        .input(audioPaths[0])
+        .inputOptions(['-stream_loop -1'])
+        .outputOptions(['-vn', '-t', String(targetDurationSeconds), '-c copy'])
         .output(finalAudio));
-    } catch (error) {
-      await runFfmpeg((cmd) => cmd
-        .input(audioConcatList)
-        .inputOptions(['-f concat', '-safe 0'])
-        .outputOptions(['-vn', '-c:a aac', '-b:a 192k'])
-        .output(finalAudio));
+    } else {
+      const audioConcatList = path.join(workDir, 'audio.txt');
+      writeConcatFile(repeatedAudioList, audioConcatList);
+      try {
+        await runFfmpeg((cmd) => cmd
+          .input(audioConcatList)
+          .inputOptions(['-f concat', '-safe 0'])
+          .outputOptions(['-vn', '-c copy'])
+          .output(finalAudio));
+      } catch (error) {
+        await runFfmpeg((cmd) => cmd
+          .input(audioConcatList)
+          .inputOptions(['-f concat', '-safe 0'])
+          .outputOptions(['-vn', '-c:a aac', '-b:a 192k'])
+          .output(finalAudio));
+      }
     }
   }
 
