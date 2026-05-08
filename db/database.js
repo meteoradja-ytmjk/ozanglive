@@ -284,6 +284,8 @@ async function createCoreTablesAsync() {
     target_account_id INTEGER,
     auto_upload INTEGER DEFAULT 0,
     youtube_video_id TEXT,
+    scheduled_upload_at TEXT,
+    visualizer_preset TEXT,
     output_path TEXT,
     error_message TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -293,6 +295,8 @@ async function createCoreTablesAsync() {
   await runTableQuery(`ALTER TABLE render_jobs ADD COLUMN target_account_id INTEGER`, 'render_jobs.target_account_id');
   await runTableQuery(`ALTER TABLE render_jobs ADD COLUMN auto_upload INTEGER DEFAULT 0`, 'render_jobs.auto_upload');
   await runTableQuery(`ALTER TABLE render_jobs ADD COLUMN youtube_video_id TEXT`, 'render_jobs.youtube_video_id');
+  await runTableQuery(`ALTER TABLE render_jobs ADD COLUMN scheduled_upload_at TEXT`, 'render_jobs.scheduled_upload_at');
+  await runTableQuery(`ALTER TABLE render_jobs ADD COLUMN visualizer_preset TEXT`, 'render_jobs.visualizer_preset');
 
   // Add optional gallery folder columns for drag-and-drop organization
   await runTableQuery(`ALTER TABLE videos ADD COLUMN folder_name TEXT`, 'videos.folder_name');

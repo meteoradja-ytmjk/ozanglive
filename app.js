@@ -3585,11 +3585,12 @@ app.get('/api/stream/content', isAuthenticated, async (req, res) => {
 
 app.post('/api/render/jobs', isAuthenticated, async (req, res) => {
   try {
-    const { title, videoIds, audioIds, targetDurationSeconds, targetAccountId, autoUploadToYoutube } = req.body;
+    const { title, videoIds, audioIds, targetDurationSeconds, durationHours, durationMinutes, targetAccountId, autoUploadToYoutube, scheduledUploadAt, visualizerPreset } = req.body;
     if (!Array.isArray(videoIds) || videoIds.length === 0) {
       return res.status(400).json({ success: false, message: 'videoIds wajib diisi minimal 1' });
     }
-    const target = parseInt(targetDurationSeconds, 10);
+    const computedSeconds = (parseInt(durationHours || 0, 10) * 3600) + (parseInt(durationMinutes || 0, 10) * 60);
+    const target = parseInt(targetDurationSeconds, 10) || computedSeconds;
     if (!Number.isFinite(target) || target <= 0) {
       return res.status(400).json({ success: false, message: 'targetDurationSeconds tidak valid' });
     }
@@ -3610,6 +3611,8 @@ app.post('/api/render/jobs', isAuthenticated, async (req, res) => {
       audio_ids: safeAudios.map((a) => a.id),
       target_account_id: targetAccountId || null,
       auto_upload: autoUploadToYoutube ? 1 : 0,
+      scheduled_upload_at: scheduledUploadAt || null,
+      visualizer_preset: visualizerPreset || 'none',
       status: 'queued',
       progress: 0
     });
@@ -3628,14 +3631,22 @@ app.post('/api/render/jobs', isAuthenticated, async (req, res) => {
         if (autoUploadToYoutube && targetAccountId) {
           const account = await YouTubeCredentials.findById(targetAccountId);
           if (account && account.userId === req.user.id) {
-            const accessToken = await youtubeService.getAccessToken(account.clientId, account.clientSecret, account.refreshToken);
-            const uploadResult = await youtubeService.uploadRegularVideo(accessToken, {
-              title: title || `Render ${new Date().toISOString()}`,
-              description: 'Uploaded automatically from Render Jobs',
-              filePath: outputPath,
-              privacyStatus: 'unlisted'
-            });
-            baseUpdate.youtube_video_id = uploadResult?.id || null;
+            const doUpload = async () => {
+              const accessToken = await youtubeService.getAccessToken(account.clientId, account.clientSecret, account.refreshToken);
+              const uploadResult = await youtubeService.uploadRegularVideo(accessToken, {
+                title: title || `Render ${new Date().toISOString()}`,
+                description: `Uploaded automatically from Render Jobs (visualizer: ${visualizerPreset || 'none'})`,
+                filePath: outputPath,
+                privacyStatus: 'unlisted'
+              });
+              await RenderJob.update(job.id, { youtube_video_id: uploadResult?.id || null });
+            };
+            if (scheduledUploadAt && new Date(scheduledUploadAt).getTime() > Date.now()) {
+              const delayMs = new Date(scheduledUploadAt).getTime() - Date.now();
+              setTimeout(() => doUpload().catch(err => console.error('Scheduled upload failed:', err.message)), delayMs);
+            } else {
+              await doUpload();
+            }
           }
         }
         await RenderJob.update(job.id, baseUpdate);
