@@ -171,6 +171,11 @@
           <span class="text-xs mt-1">YouTube</span>
           <span class="sidebar-tooltip group-hover:scale-100">YouTube Sync</span>
         </a>
+        <a href="/render-jobs" class="sidebar-icon group <%= active === 'render-jobs' ? 'bg-primary' : '' %>">
+          <i class="ti ti-movie text-xl"></i>
+          <span class="text-xs mt-1">Render</span>
+          <span class="sidebar-tooltip group-hover:scale-100">Render Jobs</span>
+        </a>
         <% if (req.session && req.session.user_role==='admin' ) { %>
           <a href="/users" class="sidebar-icon group <%= active === 'users' ? 'bg-primary' : '' %>">
             <i class="ti ti-users-group text-xl"></i>
@@ -250,6 +255,9 @@
       <a href="/youtube" class="bottom-nav-item <%= active === 'youtube' ? 'bottom-nav-active' : '' %>"
         style="<%= active === 'youtube' ? 'color: #EF4444;' : '' %>">
         <i class="ti ti-brand-youtube"></i><span>YouTube</span>
+      </a>
+      <a href="/render-jobs" class="bottom-nav-item <%= active === 'render-jobs' ? 'bottom-nav-active' : '' %>">
+        <i class="ti ti-movie"></i><span>Render</span>
       </a>
       <button id="mobile-profile-btn" class="bottom-nav-item">
         <div class="relative">
