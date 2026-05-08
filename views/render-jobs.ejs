@@ -2,6 +2,9 @@
   .main-content-wrapper { background: #0f172a !important; }
   .rj-shell { background: #0f172a; border: 1px solid #1e293b; border-radius: 16px; padding: 18px; min-height: calc(100vh - 160px); }
   .rj-page { max-width: 1100px; margin: 0 auto; color: #e2e8f0; }
+  .rj-quicknav { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
+  .rj-quicknav a { text-decoration:none; color:#cbd5e1; border:1px solid #334155; background:#1e293b; border-radius:999px; padding:7px 12px; font-size:.82rem; }
+  .rj-quicknav a:hover { background:#334155; color:#fff; }
   .rj-card { background: #1e293b; border: 1px solid #334155; border-radius: 14px; padding: 16px; }
   .rj-title { font-size: 1.6rem; font-weight: 700; color: #fff; }
   .rj-sub { color: #94a3b8; font-size: .92rem; }
@@ -25,6 +28,14 @@
 
 <div class="rj-shell">
 <div class="rj-page">
+  <div class="rj-quicknav">
+    <a href="/dashboard">Streams</a>
+    <a href="/gallery">Gallery</a>
+    <a href="/playlist">Playlist</a>
+    <a href="/youtube">YouTube</a>
+    <a href="/render-jobs">Render</a>
+    <% if (req.session && req.session.user_role==='admin' ) { %><a href="/users">Users</a><% } %>
+  </div>
   <div class="rj-top">
     <div>
       <h1 class="rj-title">Render Jobs</h1>
