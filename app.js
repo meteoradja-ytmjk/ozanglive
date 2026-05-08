@@ -3791,6 +3791,35 @@ app.post('/api/render/jobs/:id/upload', isAuthenticated, async (req, res) => {
   }
 });
 
+app.delete('/api/render/jobs/:id', isAuthenticated, async (req, res) => {
+  try {
+    const job = await RenderJob.findById(req.params.id);
+    if (!job || job.user_id !== req.session.userId) {
+      return res.status(404).json({ success: false, message: 'Job tidak ditemukan' });
+    }
+
+    if (job.output_path) {
+      const filePath = path.join(__dirname, 'public', job.output_path);
+      try {
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      } catch (e) {
+        console.warn('Failed deleting render output:', e.message);
+      }
+    }
+
+    await new Promise((resolve, reject) => {
+      db.run('DELETE FROM render_jobs WHERE id = ?', [req.params.id], function (err) {
+        if (err) return reject(err);
+        resolve(true);
+      });
+    });
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('Delete render job error:', error);
+    return res.status(500).json({ success: false, message: 'Gagal menghapus job' });
+  }
+});
+
 app.get('/api/stream/audios', isAuthenticated, async (req, res) => {
   try {
     const audios = await Audio.findAll(req.session.userId);
