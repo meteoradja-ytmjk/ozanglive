@@ -1,0 +1,137 @@
+<div class="max-w-6xl mx-auto">
+  <div class="mb-6 flex items-center justify-between gap-3">
+    <div>
+      <h1 class="text-2xl font-bold">Render Jobs</h1>
+      <p class="text-gray-400 text-sm">Render video reguler untuk upload YouTube (bukan livestream).</p>
+    </div>
+    <select id="statusFilter" class="bg-dark-900 border border-gray-700 rounded px-3 py-2 text-sm">
+      <option value="all">Semua status</option>
+      <option value="queued">Queued</option>
+      <option value="processing">Processing</option>
+      <option value="completed">Completed</option>
+      <option value="failed">Failed</option>
+    </select>
+  </div>
+
+  <div class="bg-dark-800 border border-gray-700 rounded-xl p-4 mb-6">
+    <h2 class="font-semibold mb-3">Buat Job Baru</h2>
+    <form id="renderForm" class="space-y-4">
+      <input id="title" class="w-full bg-dark-900 border border-gray-700 rounded px-3 py-2" placeholder="Judul render" />
+      <input id="duration" type="number" min="1" class="w-full bg-dark-900 border border-gray-700 rounded px-3 py-2" placeholder="Target durasi (detik), contoh 3600" required />
+      <div>
+        <label class="block mb-1 text-sm text-gray-300">Pilih Video</label>
+        <div id="videoList" class="max-h-44 overflow-auto border border-gray-700 rounded p-2 text-sm"></div>
+      </div>
+      <div>
+        <label class="block mb-1 text-sm text-gray-300">Pilih Audio (opsional)</label>
+        <div id="audioList" class="max-h-44 overflow-auto border border-gray-700 rounded p-2 text-sm"></div>
+      </div>
+      <button class="bg-primary hover:bg-secondary px-4 py-2 rounded font-medium" type="submit">Mulai Render</button>
+    </form>
+  </div>
+
+  <div class="bg-dark-800 border border-gray-700 rounded-xl p-4">
+    <h2 class="font-semibold mb-3">Daftar Job</h2>
+    <div id="jobs" class="space-y-3"></div>
+  </div>
+</div>
+
+<div id="toast" class="fixed top-4 right-4 hidden z-50 px-4 py-2 rounded shadow-lg text-sm"></div>
+
+<script>
+  const statusFilter = document.getElementById('statusFilter');
+
+  function showToast(message, type = 'success') {
+    const toast = document.getElementById('toast');
+    toast.textContent = message;
+    toast.className = `fixed top-4 right-4 z-50 px-4 py-2 rounded shadow-lg text-sm ${type === 'error' ? 'bg-red-600 text-white' : 'bg-emerald-600 text-white'}`;
+    toast.classList.remove('hidden');
+    setTimeout(() => toast.classList.add('hidden'), 2400);
+  }
+
+  function toArray(data, key) {
+    if (Array.isArray(data)) return data;
+    if (Array.isArray(data?.[key])) return data[key];
+    return [];
+  }
+
+  async function loadMedia() {
+    const [videosRes, audiosRes] = await Promise.all([fetch('/api/videos'), fetch('/api/stream/audios')]);
+    const videosData = await videosRes.json();
+    const audiosData = await audiosRes.json();
+
+    const videos = toArray(videosData, 'videos');
+    const audios = toArray(audiosData, 'audios');
+
+    document.getElementById('videoList').innerHTML = videos.map(v => `
+      <label class="flex items-center gap-2 py-1"><input type="checkbox" value="${v.id}" name="video"> <span>${v.title}</span></label>
+    `).join('') || '<p class="text-gray-400">Belum ada video</p>';
+
+    document.getElementById('audioList').innerHTML = audios.map(a => `
+      <label class="flex items-center gap-2 py-1"><input type="checkbox" value="${a.id}" name="audio"> <span>${a.title}</span></label>
+    `).join('') || '<p class="text-gray-400">Belum ada audio</p>';
+  }
+
+  async function loadJobs() {
+    const res = await fetch('/api/render/jobs');
+    const data = await res.json();
+    const jobs = toArray(data, 'jobs');
+    const filter = statusFilter.value;
+    const filtered = filter === 'all' ? jobs : jobs.filter(j => j.status === filter);
+
+    const el = document.getElementById('jobs');
+    el.innerHTML = filtered.map(j => {
+      const progress = Number.isFinite(Number(j.progress)) ? Number(j.progress) : 0;
+      return `
+      <div class="border border-gray-700 rounded p-3">
+        <div class="flex justify-between items-center gap-3">
+          <div class="min-w-0 flex-1">
+            <div class="font-medium truncate">${j.title || 'Tanpa judul'}</div>
+            <div class="text-xs text-gray-400 mb-2">${j.status} • ${progress}% • target ${j.target_duration_seconds}s</div>
+            <div class="w-full h-2 rounded bg-dark-900 overflow-hidden">
+              <div class="h-2 ${j.status === 'failed' ? 'bg-red-500' : 'bg-primary'}" style="width:${Math.max(0, Math.min(progress,100))}%"></div>
+            </div>
+            ${j.error_message ? `<div class="text-xs text-red-400 mt-2">${j.error_message}</div>` : ''}
+          </div>
+          <div class="flex gap-2 items-center">
+            ${j.status === 'failed' ? `<button onclick="retryJob('${j.id}')" class="text-xs px-2 py-1 bg-amber-600 rounded">Retry</button>` : ''}
+            ${j.output_path ? `<a href="${j.output_path}" class="text-blue-400 text-sm" target="_blank">Download</a>` : ''}
+          </div>
+        </div>
+      </div>`;
+    }).join('') || '<p class="text-gray-400">Belum ada job render.</p>';
+  }
+
+  async function retryJob(jobId) {
+    const res = await fetch(`/api/render/jobs/${jobId}/retry`, { method: 'POST' });
+    const data = await res.json();
+    if (!data.success) return showToast(data.message || 'Gagal retry job', 'error');
+    showToast('Retry job berhasil dibuat');
+    await loadJobs();
+  }
+
+  document.getElementById('renderForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const title = document.getElementById('title').value;
+    const targetDurationSeconds = parseInt(document.getElementById('duration').value, 10);
+    const videoIds = [...document.querySelectorAll('input[name="video"]:checked')].map(i => i.value);
+    const audioIds = [...document.querySelectorAll('input[name="audio"]:checked')].map(i => i.value);
+
+    const res = await fetch('/api/render/jobs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, targetDurationSeconds, videoIds, audioIds })
+    });
+    const data = await res.json();
+    if (!data.success) return showToast(data.message || 'Gagal membuat job', 'error');
+
+    showToast('Job render dibuat');
+    e.target.reset();
+    await loadJobs();
+  });
+
+  statusFilter.addEventListener('change', loadJobs);
+  loadMedia();
+  loadJobs();
+  setInterval(loadJobs, 5000);
+</script>
