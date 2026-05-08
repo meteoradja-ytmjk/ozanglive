@@ -3598,13 +3598,14 @@ app.post('/api/render/jobs', isAuthenticated, async (req, res) => {
     const videos = await Promise.all(videoIds.map((id) => Video.findById(id)));
     const audios = await Promise.all((audioIds || []).map((id) => Audio.findById(id)));
 
-    const safeVideos = videos.filter((v) => v && (!req.user?.id || v.user_id === req.user.id));
-    const safeAudios = audios.filter((a) => a && (!req.user?.id || a.user_id === req.user.id));
+    const currentUserId = req.session.userId;
+    const safeVideos = videos.filter((v) => v && (!currentUserId || v.user_id === currentUserId));
+    const safeAudios = audios.filter((a) => a && (!currentUserId || a.user_id === currentUserId));
 
     if (safeVideos.length === 0) return res.status(404).json({ success: false, message: 'Video tidak ditemukan' });
 
     const job = await RenderJob.create({
-      user_id: req.user.id,
+      user_id: currentUserId,
       title: title || `Render ${new Date().toISOString()}`,
       target_duration_seconds: target,
       video_ids: safeVideos.map((v) => v.id),
@@ -3630,7 +3631,7 @@ app.post('/api/render/jobs', isAuthenticated, async (req, res) => {
         const baseUpdate = { status: 'completed', progress: 100, output_path: `/uploads/videos/${outputName}` };
         if (autoUploadToYoutube && targetAccountId) {
           const account = await YouTubeCredentials.findById(targetAccountId);
-          if (account && account.userId === req.user.id) {
+          if (account && account.userId === currentUserId) {
             const doUpload = async () => {
               const accessToken = await youtubeService.getAccessToken(account.clientId, account.clientSecret, account.refreshToken);
               const uploadResult = await youtubeService.uploadRegularVideo(accessToken, {
@@ -3664,7 +3665,7 @@ app.post('/api/render/jobs', isAuthenticated, async (req, res) => {
 
 app.get('/api/render/jobs', isAuthenticated, async (req, res) => {
   try {
-    const jobs = await RenderJob.findAllByUser(req.user.id);
+    const jobs = await RenderJob.findAllByUser(req.session.userId);
     return res.json({ success: true, jobs });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Gagal mengambil job' });
@@ -3674,7 +3675,8 @@ app.get('/api/render/jobs', isAuthenticated, async (req, res) => {
 app.post('/api/render/jobs/:id/retry', isAuthenticated, async (req, res) => {
   try {
     const original = await RenderJob.findById(req.params.id);
-    if (!original || original.user_id !== req.user.id) {
+    const currentUserId = req.session.userId;
+    if (!original || original.user_id !== currentUserId) {
       return res.status(404).json({ success: false, message: 'Job tidak ditemukan' });
     }
 
@@ -3682,7 +3684,7 @@ app.post('/api/render/jobs/:id/retry', isAuthenticated, async (req, res) => {
     const audioIds = JSON.parse(original.audio_ids || '[]');
 
     const retryJob = await RenderJob.create({
-      user_id: req.user.id,
+      user_id: currentUserId,
       title: `${original.title || 'Render'} (retry)`,
       target_duration_seconds: original.target_duration_seconds,
       video_ids: videoIds,
@@ -3697,8 +3699,8 @@ app.post('/api/render/jobs/:id/retry', isAuthenticated, async (req, res) => {
       try {
         const videos = await Promise.all(videoIds.map((id) => Video.findById(id)));
         const audios = await Promise.all(audioIds.map((id) => Audio.findById(id)));
-        const safeVideos = videos.filter((v) => v && v.user_id === req.user.id);
-        const safeAudios = audios.filter((a) => a && a.user_id === req.user.id);
+        const safeVideos = videos.filter((v) => v && v.user_id === currentUserId);
+        const safeAudios = audios.filter((a) => a && a.user_id === currentUserId);
 
         await RenderJob.update(retryJob.id, { status: 'processing', progress: 10 });
 
@@ -3717,7 +3719,7 @@ app.post('/api/render/jobs/:id/retry', isAuthenticated, async (req, res) => {
         const retryUpdate = { status: 'completed', progress: 100, output_path: `/uploads/videos/${outputName}` };
         if (original.auto_upload && original.target_account_id) {
           const account = await YouTubeCredentials.findById(original.target_account_id);
-          if (account && account.userId === req.user.id) {
+          if (account && account.userId === currentUserId) {
             const accessToken = await youtubeService.getAccessToken(account.clientId, account.clientSecret, account.refreshToken);
             const uploadResult = await youtubeService.uploadRegularVideo(accessToken, {
               title: `${original.title || 'Render'} (retry)`,
@@ -3744,7 +3746,7 @@ app.post('/api/render/jobs/:id/retry', isAuthenticated, async (req, res) => {
 app.get('/api/render/jobs/:id', isAuthenticated, async (req, res) => {
   try {
     const job = await RenderJob.findById(req.params.id);
-    if (!job || job.user_id !== req.user.id) return res.status(404).json({ success: false, message: 'Job tidak ditemukan' });
+    if (!job || job.user_id !== req.session.userId) return res.status(404).json({ success: false, message: 'Job tidak ditemukan' });
     return res.json({ success: true, job });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Gagal mengambil job' });
