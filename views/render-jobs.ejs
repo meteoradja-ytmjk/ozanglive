@@ -23,25 +23,41 @@
   .chip span{font-size:11px;padding:6px 9px}
   .job-grid{grid-template-columns:1fr}
 }
+
+@media(max-width:900px){
+  .content{grid-template-columns:1fr;grid-template-areas:"target" "video" "audio";gap:12px}
+  .panel-target{grid-area:target}
+  .panel-media{display:grid;grid-template-columns:1fr;grid-template-areas:"video" "audio";gap:12px}
+  .panel-video{grid-area:video;margin-top:0!important;margin-bottom:0!important}
+  .panel-audio{grid-area:audio;margin-top:0!important;margin-bottom:0!important}
+  .panel-jobs{padding-top:2px}
+}
 @media(max-width:640px){
   .r-shell{border-radius:14px;box-shadow:none}
   .r-card{border-radius:13px}
-  .top{padding:12px;align-items:flex-start;flex-direction:column;gap:10px}
+  .top{padding:14px;align-items:flex-start;flex-direction:column;gap:10px}
   .top > div:first-child{width:100%}
+  .top h2{font-size:20px;line-height:1.25;font-weight:800}
+  .top .muted{font-size:13px;line-height:1.4}
   .content{padding:12px}
   .section{padding:12px;border-radius:12px}
   .content > aside.section{margin-bottom:12px}
   .content > section .section{margin-top:0!important;margin-bottom:12px}
   .jobs{padding:0 12px 12px}
+  .jobs > .muted{font-size:12px}
   .job-grid{grid-template-columns:1fr}
-  .option{min-height:120px;max-height:150px;padding:8px;border-radius:12px}
-  .field label{font-size:12px}
-  .btn{width:100%;justify-content:center}
+  .option{min-height:140px;max-height:180px;padding:10px;border-radius:12px}
+  .field label{font-size:14px;line-height:1.35}
+  .input,.select{height:46px;font-size:16px}
+  .btn{width:100%;justify-content:center;height:46px;font-size:16px}
   .actions{gap:8px}
-  .job-actions .btn{height:38px;font-size:12px;padding:0 12px}
+  .muted{font-size:12px}
+  .job{padding:12px}
+  .job b{font-size:15px}
+  .job-actions .btn{height:40px;font-size:13px;padding:0 12px}
   .job video{max-height:150px!important}
   .top + div[style*='padding:10px 22px']{padding:8px 12px!important;overflow:auto;white-space:nowrap;flex-wrap:nowrap}
-  .top + div[style*='padding:10px 22px'] .btn{width:auto;height:34px;font-size:12px;padding:0 12px}
+  .top + div[style*='padding:10px 22px'] .btn{width:auto;height:36px;font-size:14px;padding:0 12px}
   .main-content-wrapper{padding-bottom:90px!important}
 }
 </style>
@@ -55,7 +71,7 @@
     <a class="btn btn-g" href="/render-jobs" style="text-decoration:none;display:inline-flex;align-items:center">Render</a>
   </div>
   <div class="content">
-    <aside class="section">
+    <aside class="section panel-target">
       <div class="field"><label>Target Channel</label><select id="targetAccountId" class="select"></select></div>
       <div class="field"><label>Judul</label><input id="title" class="input" value="1"></div>
       <div class="two"><div class="field"><label>Jam</label><input id="durationHours" class="input" type="number" min="0" value="1"></div><div class="field"><label>Menit</label><input id="durationMinutes" class="input" type="number" min="0" max="59" value="0"></div></div>
@@ -64,12 +80,12 @@
       <div class="field" style="display:flex;justify-content:space-between;align-items:center;border:1px solid rgba(148,163,184,.18);border-radius:14px;padding:13px 14px;background:rgba(15,23,42,.54)"><div><b style="font-size:13px">Upload otomatis</b><div class="muted">Upload otomatis setelah render selesai</div></div><label class="switch"><input id="autoUploadToYoutube" type="checkbox"><span class="slider"></span></label></div>
       <div class="actions"><button id="createBtn" class="btn btn-p">Render Sekarang</button><button id="resetBtn" class="btn btn-g">Reset</button></div>
     </aside>
-    <section>
-      <div class="section"><div style="display:flex;justify-content:space-between"><b>Video Terpilih</b><span class="muted">Multi-select</span></div><div id="videoList" class="option"></div></div>
-      <div class="section" style="margin-top:14px"><div style="display:flex;justify-content:space-between"><b>Audio Terpilih</b><span class="muted">Opsional</span></div><div id="audioList" class="option"></div></div>
+    <section class="panel-media">
+      <div class="section panel-video"><div style="display:flex;justify-content:space-between"><b>Video Terpilih</b><span class="muted">Multi-select</span></div><div id="videoList" class="option"></div></div>
+      <div class="section panel-audio" style="margin-top:14px"><div style="display:flex;justify-content:space-between"><b>Audio Terpilih</b><span class="muted">Opsional</span></div><div id="audioList" class="option"></div></div>
     </section>
   </div>
-  <div class="jobs"><div class="muted">Daftar List Job</div><div id="jobs"></div></div>
+  <div class="jobs panel-jobs"><div class="muted">Daftar List Job</div><div id="jobs"></div></div>
 </div></div>
 <script>
 const toArray=(d,k)=>Array.isArray(d)?d:((d && Array.isArray(d[k])) ? d[k] : []);
