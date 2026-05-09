@@ -23,6 +23,15 @@
   .chip span{font-size:11px;padding:6px 9px}
   .job-grid{grid-template-columns:1fr}
 }
+
+@media(max-width:900px){
+  .content{grid-template-columns:1fr;grid-template-areas:"target" "video" "audio";gap:12px}
+  .panel-target{grid-area:target}
+  .panel-media{display:grid;grid-template-columns:1fr;grid-template-areas:"video" "audio";gap:12px}
+  .panel-video{grid-area:video;margin-top:0!important;margin-bottom:0!important}
+  .panel-audio{grid-area:audio;margin-top:0!important;margin-bottom:0!important}
+  .panel-jobs{padding-top:2px}
+}
 @media(max-width:640px){
   .r-shell{border-radius:14px;box-shadow:none}
   .r-card{border-radius:13px}
@@ -55,7 +64,7 @@
     <a class="btn btn-g" href="/render-jobs" style="text-decoration:none;display:inline-flex;align-items:center">Render</a>
   </div>
   <div class="content">
-    <aside class="section">
+    <aside class="section panel-target">
       <div class="field"><label>Target Channel</label><select id="targetAccountId" class="select"></select></div>
       <div class="field"><label>Judul</label><input id="title" class="input" value="1"></div>
       <div class="two"><div class="field"><label>Jam</label><input id="durationHours" class="input" type="number" min="0" value="1"></div><div class="field"><label>Menit</label><input id="durationMinutes" class="input" type="number" min="0" max="59" value="0"></div></div>
@@ -64,12 +73,12 @@
       <div class="field" style="display:flex;justify-content:space-between;align-items:center;border:1px solid rgba(148,163,184,.18);border-radius:14px;padding:13px 14px;background:rgba(15,23,42,.54)"><div><b style="font-size:13px">Upload otomatis</b><div class="muted">Upload otomatis setelah render selesai</div></div><label class="switch"><input id="autoUploadToYoutube" type="checkbox"><span class="slider"></span></label></div>
       <div class="actions"><button id="createBtn" class="btn btn-p">Render Sekarang</button><button id="resetBtn" class="btn btn-g">Reset</button></div>
     </aside>
-    <section>
-      <div class="section"><div style="display:flex;justify-content:space-between"><b>Video Terpilih</b><span class="muted">Multi-select</span></div><div id="videoList" class="option"></div></div>
-      <div class="section" style="margin-top:14px"><div style="display:flex;justify-content:space-between"><b>Audio Terpilih</b><span class="muted">Opsional</span></div><div id="audioList" class="option"></div></div>
+    <section class="panel-media">
+      <div class="section panel-video"><div style="display:flex;justify-content:space-between"><b>Video Terpilih</b><span class="muted">Multi-select</span></div><div id="videoList" class="option"></div></div>
+      <div class="section panel-audio" style="margin-top:14px"><div style="display:flex;justify-content:space-between"><b>Audio Terpilih</b><span class="muted">Opsional</span></div><div id="audioList" class="option"></div></div>
     </section>
   </div>
-  <div class="jobs"><div class="muted">Daftar List Job</div><div id="jobs"></div></div>
+  <div class="jobs panel-jobs"><div class="muted">Daftar List Job</div><div id="jobs"></div></div>
 </div></div>
 <script>
 const toArray=(d,k)=>Array.isArray(d)?d:((d && Array.isArray(d[k])) ? d[k] : []);
