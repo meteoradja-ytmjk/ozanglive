@@ -18,6 +18,24 @@
   .btn{height:42px;font-size:14px}
   .chip span{font-size:11px;padding:6px 9px}
 }
+@media(max-width:640px){
+  .r-shell{border-radius:14px;box-shadow:none}
+  .r-card{border-radius:13px}
+  .top{padding:12px;align-items:flex-start;flex-direction:column;gap:10px}
+  .top > div:first-child{width:100%}
+  .content{padding:12px;gap:12px}
+  .section{padding:12px;border-radius:12px}
+  .jobs{padding:0 12px 12px}
+  .job-grid{grid-template-columns:1fr}
+  .option{min-height:120px;max-height:150px;padding:8px;border-radius:12px}
+  .field label{font-size:12px}
+  .btn{width:100%;justify-content:center}
+  .actions{gap:8px}
+  .job-actions .btn{height:38px;font-size:12px;padding:0 12px}
+  .job video{max-height:150px!important}
+  .top + div[style*='padding:10px 22px']{padding:8px 12px!important;overflow:auto;white-space:nowrap;flex-wrap:nowrap}
+  .top + div[style*='padding:10px 22px'] .btn{width:auto;height:34px;font-size:12px;padding:0 12px}
+}
 </style>
 <div class="r-shell"><div class="r-card">
   <div class="top"><div style="display:flex;gap:14px;align-items:center"><div style="width:46px;height:46px;border-radius:15px;display:grid;place-items:center;font-weight:900;color:#05202b;background:linear-gradient(135deg,var(--primary),var(--success))">R</div><div><h2 style="margin:0">Render Dashboard</h2><div class="muted">Pilih channel, jam, menit, video, dan audio untuk proses render.</div></div></div><div style="padding:10px 14px;border:1px solid rgba(52,211,153,.28);border-radius:999px;color:#bbf7d0;background:rgba(52,211,153,.10);font-size:13px">● Sistem siap render</div></div>
