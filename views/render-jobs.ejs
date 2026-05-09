@@ -1,0 +1,91 @@
+<style>
+:root{--line:rgba(148,163,184,.22);--text:#e5edf8;--muted:#94a3b8;--primary:#22d3ee;--accent:#a78bfa;--success:#34d399}
+.main-content-wrapper{background:radial-gradient(circle at 15% 10%, rgba(34,211,238,.20), transparent 30%),radial-gradient(circle at 80% 0%, rgba(167,139,250,.18), transparent 28%),linear-gradient(135deg,#06101e 0%,#0b1220 45%,#020617 100%)!important}
+.r-shell{width:min(1180px,100%);border:1px solid rgba(255,255,255,.1);border-radius:24px;padding:1px;background:linear-gradient(135deg, rgba(34,211,238,.45), rgba(167,139,250,.25), rgba(255,255,255,.08));box-shadow:0 24px 90px rgba(0,0,0,.45);margin:0 auto}
+.r-card{border-radius:23px;background:rgba(17,29,49,.88);overflow:hidden;color:var(--text)}.top{display:flex;justify-content:space-between;align-items:center;padding:22px 24px;border-bottom:1px solid var(--line)}
+.content{display:grid;grid-template-columns:1fr 1.05fr;gap:18px;padding:22px}.section{border:1px solid var(--line);border-radius:18px;background:rgba(13,23,40,.72);padding:18px}.field{margin-bottom:12px}.field label{display:block;margin-bottom:8px;color:#cbd5e1;font-size:13px}
+.input,.select{width:100%;height:46px;border:1px solid rgba(148,163,184,.26);border-radius:14px;padding:0 14px;color:var(--text);background:#081224}.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.switch{position:relative;width:48px;height:28px}.switch input{display:none}.slider{position:absolute;inset:0;border-radius:999px;background:#334155}.slider:before{content:"";position:absolute;width:22px;height:22px;left:3px;top:3px;border-radius:50%;background:#fff;transition:.2s}.switch input:checked + .slider{background:linear-gradient(135deg,var(--primary),var(--success))}.switch input:checked + .slider:before{transform:translateX(20px)}
+.actions{display:flex;gap:12px}.btn{height:46px;border-radius:14px;padding:0 18px;border:0;cursor:pointer;font-weight:800}.btn-p{background:linear-gradient(135deg,var(--primary),var(--success));color:#06202a}.btn-g{color:#cbd5e1;border:1px solid rgba(148,163,184,.24);background:rgba(15,23,42,.72)}
+.option{min-height:164px;max-height:190px;overflow:auto;border:1px solid rgba(148,163,184,.22);border-radius:16px;padding:12px;background:#081224}.chips{display:flex;flex-wrap:wrap;gap:9px}.chip input{display:none}.chip span{display:inline-flex;min-height:32px;padding:7px 10px;border:1px solid rgba(148,163,184,.2);border-radius:999px;background:rgba(30,41,59,.7);font-size:12px;cursor:pointer}.chip input:checked + span{border-color:rgba(34,211,238,.8);background:rgba(34,211,238,.14)}
+.jobs{padding:0 22px 22px}.job-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin-top:10px}.job{border:1px solid var(--line);border-radius:12px;padding:10px;background:#081224}.muted{color:var(--muted);font-size:12px}.job-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+@media(max-width:900px){
+  .content,.two{grid-template-columns:1fr}
+  .actions{flex-direction:column}
+  .top h2{font-size:18px}
+  .muted{font-size:11px}
+  .input,.select{height:42px;font-size:14px}
+  .btn{height:42px;font-size:14px}
+  .chip span{font-size:11px;padding:6px 9px}
+}
+@media(max-width:640px){
+  .r-shell{border-radius:14px;box-shadow:none}
+  .r-card{border-radius:13px}
+  .top{padding:12px;align-items:flex-start;flex-direction:column;gap:10px}
+  .top > div:first-child{width:100%}
+  .content{padding:12px;gap:12px}
+  .section{padding:12px;border-radius:12px}
+  .jobs{padding:0 12px 12px}
+  .job-grid{grid-template-columns:1fr}
+  .option{min-height:120px;max-height:150px;padding:8px;border-radius:12px}
+  .field label{font-size:12px}
+  .btn{width:100%;justify-content:center}
+  .actions{gap:8px}
+  .job-actions .btn{height:38px;font-size:12px;padding:0 12px}
+  .job video{max-height:150px!important}
+  .top + div[style*='padding:10px 22px']{padding:8px 12px!important;overflow:auto;white-space:nowrap;flex-wrap:nowrap}
+  .top + div[style*='padding:10px 22px'] .btn{width:auto;height:34px;font-size:12px;padding:0 12px}
+}
+</style>
+<div class="r-shell"><div class="r-card">
+  <div class="top"><div style="display:flex;gap:14px;align-items:center"><div style="width:46px;height:46px;border-radius:15px;display:grid;place-items:center;font-weight:900;color:#05202b;background:linear-gradient(135deg,var(--primary),var(--success))">R</div><div><h2 style="margin:0">Render Dashboard</h2><div class="muted">Pilih channel, jam, menit, video, dan audio untuk proses render.</div></div></div><div style="padding:10px 14px;border:1px solid rgba(52,211,153,.28);border-radius:999px;color:#bbf7d0;background:rgba(52,211,153,.10);font-size:13px">● Sistem siap render</div></div>
+  <div style="padding:10px 22px;display:flex;gap:8px;flex-wrap:wrap;border-bottom:1px solid var(--line)">
+    <a class="btn btn-g" href="/dashboard" style="text-decoration:none;display:inline-flex;align-items:center">Streams</a>
+    <a class="btn btn-g" href="/gallery" style="text-decoration:none;display:inline-flex;align-items:center">Gallery</a>
+    <a class="btn btn-g" href="/playlist" style="text-decoration:none;display:inline-flex;align-items:center">Playlist</a>
+    <a class="btn btn-g" href="/youtube" style="text-decoration:none;display:inline-flex;align-items:center">YouTube</a>
+    <a class="btn btn-g" href="/render-jobs" style="text-decoration:none;display:inline-flex;align-items:center">Render</a>
+  </div>
+  <div class="content">
+    <aside class="section">
+      <div class="field"><label>Target Channel</label><select id="targetAccountId" class="select"></select></div>
+      <div class="field"><label>Judul</label><input id="title" class="input" value="1"></div>
+      <div class="two"><div class="field"><label>Jam</label><input id="durationHours" class="input" type="number" min="0" value="1"></div><div class="field"><label>Menit</label><input id="durationMinutes" class="input" type="number" min="0" max="59" value="0"></div></div>
+      <div class="field"><label>Overlay / Spectrum Effect</label><select id="visualizerPreset" class="select"><option value="none">Tanpa overlay</option><option value="spectrum">Spectrum</option><option value="bars">Bars</option><option value="wave">Wave</option></select></div>
+      <div class="field"><label><input id="followAudioDuration" type="checkbox"> Loop mengikuti total durasi audio</label></div>
+      <div class="field" style="display:flex;justify-content:space-between;align-items:center;border:1px solid rgba(148,163,184,.18);border-radius:14px;padding:13px 14px;background:rgba(15,23,42,.54)"><div><b style="font-size:13px">Upload otomatis</b><div class="muted">Upload otomatis setelah render selesai</div></div><label class="switch"><input id="autoUploadToYoutube" type="checkbox"><span class="slider"></span></label></div>
+      <div class="actions"><button id="createBtn" class="btn btn-p">Render Sekarang</button><button id="resetBtn" class="btn btn-g">Reset</button></div>
+    </aside>
+    <section>
+      <div class="section"><div style="display:flex;justify-content:space-between"><b>Video Terpilih</b><span class="muted">Multi-select</span></div><div id="videoList" class="option"></div></div>
+      <div class="section" style="margin-top:14px"><div style="display:flex;justify-content:space-between"><b>Audio Terpilih</b><span class="muted">Opsional</span></div><div id="audioList" class="option"></div></div>
+    </section>
+  </div>
+  <div class="jobs"><div class="muted">Daftar List Job</div><div id="jobs"></div></div>
+</div></div>
+<script>
+const toArray=(d,k)=>Array.isArray(d)?d:(Array.isArray(d?.[k])?d[k]:[]);
+const normalizeName=(title)=>String(title||'').toLowerCase().replace(/[0-9]+([.,][0-9]+)?/g,'').replace(/[_-]+/g,' ').replace(/\\s+/g,' ').trim();
+const groupByName=(items)=>items.reduce((acc,item)=>{const key=normalizeName(item.title)||'lainnya';if(!acc[key])acc[key]=[];acc[key].push(item);return acc;},{});
+const fmtMB=(bytes)=>{const n=Number(bytes||0);if(!n)return '-';return `${(n/1024/1024).toFixed(1)} MB`;};
+const renderGroupedRows=(items,name,type)=>{const grouped=groupByName(items);return Object.entries(grouped).map(([nameGroup,rows],idx)=>`<details ${idx===0?'open':''} style='margin-bottom:10px;border:1px solid rgba(148,163,184,.18);border-radius:12px;background:rgba(15,23,42,.55)'><summary style='cursor:pointer;list-style:none;padding:10px 12px;display:flex;justify-content:space-between;align-items:center'><div style='font-weight:700;color:#dbeafe;text-transform:capitalize'>${nameGroup}</div><span class='muted'>${rows.length} ${type}</span></summary>${rows.map(x=>`<label style='display:flex;align-items:center;gap:10px;padding:10px 12px;border-top:1px solid rgba(148,163,184,.12);cursor:pointer'><input type='checkbox' name='${name}' value='${x.id}'><div style='width:66px;height:40px;border-radius:8px;overflow:hidden;background:#0b1220;flex:0 0 auto'>${x.thumbnail_path?`<img src='${x.thumbnail_path}' style='width:100%;height:100%;object-fit:cover'>`:`<div style='display:grid;place-items:center;height:100%;font-size:11px;color:#93c5fd'>${type==='videos'?'VIDEO':'AUDIO'}</div>`}</div><div><div style='font-size:14px;color:#e2e8f0'>${x.title}</div><div class='muted'>${x.duration||'-'} • ${fmtMB(x.file_size)}</div></div></label>`).join('')}</details>`).join('');};
+async function loadAccounts(){const r=await fetch('/api/youtube/accounts');const d=await r.json();targetAccountId.innerHTML=`<option value=''>-- Pilih Channel --</option>`+toArray(d,'accounts').map(a=>`<option value='${a.id}'>${a.channelName||('Channel '+a.id)}</option>`).join('')}
+async function loadMedia(){const [vr,ar]=await Promise.all([fetch('/api/videos'),fetch('/api/stream/audios')]);const vd=await vr.json();const ad=await ar.json();videoList.innerHTML=renderGroupedRows(toArray(vd,'videos'),'video','videos')||'<div class=\"muted\">Tidak ada video</div>';audioList.innerHTML=renderGroupedRows(toArray(ad,'audios'),'audio','audios')||'<div class=\"muted\">Tidak ada audio</div>'}
+async function uploadJob(id){const r=await fetch(`/api/render/jobs/${id}/upload`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({targetAccountId:targetAccountId.value})});const d=await r.json();if(!d.success)return alert(d.message||'Upload gagal');loadJobs();}
+async function deleteJob(id){if(!confirm('Hapus project ini?'))return;const r=await fetch(`/api/render/jobs/${id}`,{method:'DELETE'});const d=await r.json();if(!d.success)return alert(d.message||'Gagal hapus');loadJobs();}
+async function loadJobs(){const r=await fetch('/api/render/jobs');const d=await r.json();const cards=toArray(d,'jobs').map(j=>`<div class='job'><b>${j.title||'Tanpa judul'}</b><div class='muted'>${j.status} • ${j.progress||0}% • target ${j.target_duration_seconds||0}s</div><div style='height:7px;background:rgba(148,163,184,.2);border-radius:999px;overflow:hidden;margin-top:6px'><div style='height:100%;width:${Math.max(0,Math.min(100,Number(j.progress||0)))}%;background:linear-gradient(90deg,#22d3ee,#a78bfa)'></div></div>${j.output_path?`<video controls preload='metadata' style='width:100%;max-height:180px;object-fit:contain;margin-top:8px;border-radius:8px' src='${j.output_path}'></video>`:''}<div class='job-actions'>${j.output_path?`<a class='btn btn-g' href='${j.output_path}' target='_blank' style='text-decoration:none;display:inline-flex;align-items:center'>Preview</a><button class='btn btn-p' onclick="uploadJob('${j.id}')">Upload</button>`:''}<button class='btn btn-g' onclick="deleteJob('${j.id}')">Hapus</button></div></div>`).join('');jobs.innerHTML=cards?`<div class='job-grid'>${cards}</div>`:'<div class=\"muted\">Belum ada job</div>'}
+createBtn.addEventListener('click',async()=>{const titleV=title.value;const h=parseInt(durationHours.value||0,10);const m=parseInt(durationMinutes.value||0,10);const targetDurationSeconds=(h*3600)+(m*60);const videoIds=[...document.querySelectorAll("input[name='video']:checked")].map(i=>i.value);const audioIds=[...document.querySelectorAll("input[name='audio']:checked")].map(i=>i.value);if(videoIds.length===0)return alert('Pilih minimal 1 video');const resp=await fetch('/api/render/jobs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:titleV,targetDurationSeconds,durationHours:h,durationMinutes:m,targetAccountId:targetAccountId.value,autoUploadToYoutube:autoUploadToYoutube.checked,visualizerPreset:visualizerPreset.value,followAudioDuration:followAudioDuration.checked,videoIds,audioIds})});const data=await resp.json();if(!resp.ok||!data.success)return alert(data.message||'Gagal');loadJobs();});
+resetBtn.addEventListener('click',()=>{title.value='';durationHours.value=1;durationMinutes.value=0;document.querySelectorAll("input[name='video'],input[name='audio']").forEach(x=>x.checked=false)});
+const toggleDurationInputs = () => {
+  const follow = followAudioDuration.checked;
+  durationHours.disabled = follow;
+  durationMinutes.disabled = follow;
+  durationHours.style.opacity = follow ? '0.55' : '1';
+  durationMinutes.style.opacity = follow ? '0.55' : '1';
+  durationHours.title = follow ? 'Dinonaktifkan karena mengikuti total durasi audio' : '';
+  durationMinutes.title = follow ? 'Dinonaktifkan karena mengikuti total durasi audio' : '';
+};
+followAudioDuration.addEventListener('change', toggleDurationInputs);
+toggleDurationInputs();
+loadAccounts();loadMedia();loadJobs();setInterval(loadJobs,5000);
+</script>
