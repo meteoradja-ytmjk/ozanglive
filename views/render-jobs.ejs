@@ -596,9 +596,11 @@ html {
     <a class="btn btn-g" href="/youtube" style="text-decoration:none">YouTube</a>
     <a class="btn btn-p" href="/render-jobs" style="text-decoration:none">Render</a>
   </div>
+  
+  <!-- Single Column Layout for Mobile-First -->
   <div class="content">
-    <!-- Panel Target - Form Utama -->
-    <aside class="section panel-target">
+    <!-- Panel Target - Form Utama (TOP) -->
+    <section class="section panel-target" style="margin-bottom:var(--spacing-md)">
       <div class="field">
         <label for="targetAccountId">Target Channel</label>
         <select id="targetAccountId" class="select"></select>
@@ -646,28 +648,28 @@ html {
         <button id="createBtn" class="btn btn-p">Render Sekarang</button>
         <button id="resetBtn" class="btn btn-g">Reset</button>
       </div>
-    </aside>
+    </section>
     
-    <!-- Panel Media - Video & Audio -->
-    <section class="panel-media">
-      <div class="section panel-video">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--spacing-sm)">
-          <b>Video Terpilih</b>
-          <span class="muted">Multi-select</span>
-        </div>
-        <div id="videoList" class="option"></div>
+    <!-- Panel Video (SECOND) -->
+    <section class="section panel-video" style="margin-bottom:var(--spacing-md)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--spacing-sm)">
+        <b>Video Terpilih</b>
+        <span class="muted">Multi-select</span>
       </div>
-      <div class="section panel-audio" style="margin-top:var(--spacing-md)">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--spacing-sm)">
-          <b>Audio Terpilih</b>
-          <span class="muted">Opsional</span>
-        </div>
-        <div id="audioList" class="option"></div>
+      <div id="videoList" class="option"></div>
+    </section>
+    
+    <!-- Panel Audio (THIRD) -->
+    <section class="section panel-audio" style="margin-bottom:var(--spacing-md)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--spacing-sm)">
+        <b>Audio Terpilih</b>
+        <span class="muted">Opsional</span>
       </div>
+      <div id="audioList" class="option"></div>
     </section>
   </div>
   
-  <!-- Jobs Section -->
+  <!-- Jobs Section (BOTTOM) -->
   <div class="jobs panel-jobs">
     <div class="muted" style="margin-bottom:var(--spacing-sm)">Daftar List Job</div>
     <div id="jobs"></div>
