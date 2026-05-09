@@ -72,7 +72,7 @@
   <div class="jobs"><div class="muted">Daftar List Job</div><div id="jobs"></div></div>
 </div></div>
 <script>
-const toArray=(d,k)=>Array.isArray(d)?d:(Array.isArray(d?.[k])?d[k]:[]);
+const toArray=(d,k)=>Array.isArray(d)?d:((d && Array.isArray(d[k])) ? d[k] : []);
 const el = {
   targetAccountId: document.getElementById('targetAccountId'),
   title: document.getElementById('title'),
@@ -100,8 +100,8 @@ async function loadMedia(){ensureEl('videoList');ensureEl('audioList');const [vr
 async function uploadJob(id){const r=await fetch(`/api/render/jobs/${id}/upload`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({targetAccountId:el.targetAccountId.value})});const d=await r.json();if(!d.success)return alert(d.message||'Upload gagal');loadJobs();}
 async function deleteJob(id){if(!confirm('Hapus project ini?'))return;const r=await fetch(`/api/render/jobs/${id}`,{method:'DELETE'});const d=await r.json();if(!d.success)return alert(d.message||'Gagal hapus');loadJobs();}
 async function loadJobs(){const r=await fetch('/api/render/jobs');const d=await r.json();const cards=toArray(d,'jobs').map(j=>`<div class='job'><b>${j.title||'Tanpa judul'}</b><div class='muted'>${j.status} • ${j.progress||0}% • target ${j.target_duration_seconds||0}s</div><div style='height:7px;background:rgba(148,163,184,.2);border-radius:999px;overflow:hidden;margin-top:6px'><div style='height:100%;width:${Math.max(0,Math.min(100,Number(j.progress||0)))}%;background:linear-gradient(90deg,#22d3ee,#a78bfa)'></div></div>${j.output_path?`<video controls preload='metadata' style='width:100%;max-height:180px;object-fit:contain;margin-top:8px;border-radius:8px' src='${j.output_path}'></video>`:''}<div class='job-actions'>${j.output_path?`<a class='btn btn-g' href='${j.output_path}' target='_blank' style='text-decoration:none;display:inline-flex;align-items:center'>Preview</a><button class='btn btn-p' onclick="uploadJob('${j.id}')">Upload</button>`:''}<button class='btn btn-g' onclick="deleteJob('${j.id}')">Hapus</button></div></div>`).join('');el.jobs.innerHTML=cards?`<div class='job-grid'>${cards}</div>`:'<div class=\"muted\">Belum ada job</div>'}
-el.createBtn?.addEventListener('click',async()=>{try{const titleV=el.title.value;const h=parseInt(el.durationHours.value||0,10);const m=parseInt(el.durationMinutes.value||0,10);const targetDurationSeconds=(h*3600)+(m*60);const videoIds=[...document.querySelectorAll("input[name='video']:checked")].map(i=>i.value);const audioIds=[...document.querySelectorAll("input[name='audio']:checked")].map(i=>i.value);if(videoIds.length===0)return alert('Pilih minimal 1 video');const resp=await fetch('/api/render/jobs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:titleV,targetDurationSeconds,durationHours:h,durationMinutes:m,targetAccountId:el.targetAccountId.value,autoUploadToYoutube:el.autoUploadToYoutube.checked,visualizerPreset:el.visualizerPreset.value,followAudioDuration:el.followAudioDuration.checked,videoIds,audioIds})});const data=await resp.json();if(!resp.ok||!data.success)return alert(data.message||'Gagal');loadJobs();}catch(err){console.error('Create render job error:', err);alert('Terjadi error saat membuat render job');}});
-el.resetBtn?.addEventListener('click',()=>{el.title.value='';el.durationHours.value=1;el.durationMinutes.value=0;document.querySelectorAll("input[name='video'],input[name='audio']").forEach(x=>x.checked=false)});
+if (el.createBtn) el.createBtn.addEventListener('click',async()=>{try{const titleV=el.title.value;const h=parseInt(el.durationHours.value||0,10);const m=parseInt(el.durationMinutes.value||0,10);const targetDurationSeconds=(h*3600)+(m*60);const videoIds=[...document.querySelectorAll("input[name='video']:checked")].map(i=>i.value);const audioIds=[...document.querySelectorAll("input[name='audio']:checked")].map(i=>i.value);if(videoIds.length===0)return alert('Pilih minimal 1 video');const resp=await fetch('/api/render/jobs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:titleV,targetDurationSeconds,durationHours:h,durationMinutes:m,targetAccountId:el.targetAccountId.value,autoUploadToYoutube:el.autoUploadToYoutube.checked,visualizerPreset:el.visualizerPreset.value,followAudioDuration:el.followAudioDuration.checked,videoIds,audioIds})});const data=await resp.json();if(!resp.ok||!data.success)return alert(data.message||'Gagal');loadJobs();}catch(err){console.error('Create render job error:', err);alert('Terjadi error saat membuat render job');}});
+if (el.resetBtn) el.resetBtn.addEventListener('click',()=>{el.title.value='';el.durationHours.value=1;el.durationMinutes.value=0;document.querySelectorAll("input[name='video'],input[name='audio']").forEach(x=>x.checked=false)});
 const toggleDurationInputs = () => {
   const follow = el.followAudioDuration.checked;
   el.durationHours.disabled = follow;
@@ -111,7 +111,7 @@ const toggleDurationInputs = () => {
   el.durationHours.title = follow ? 'Dinonaktifkan karena mengikuti total durasi audio' : '';
   el.durationMinutes.title = follow ? 'Dinonaktifkan karena mengikuti total durasi audio' : '';
 };
-el.followAudioDuration?.addEventListener('change', toggleDurationInputs);
+if (el.followAudioDuration) el.followAudioDuration.addEventListener('change', toggleDurationInputs);
 toggleDurationInputs();
 Promise.resolve()
   .then(loadAccounts)
