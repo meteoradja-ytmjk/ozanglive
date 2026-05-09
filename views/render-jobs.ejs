@@ -1,5 +1,6 @@
 <style>
 :root{--line:rgba(148,163,184,.22);--text:#e5edf8;--muted:#94a3b8;--primary:#22d3ee;--accent:#a78bfa;--success:#34d399}
+.dark, body, html{background:#0b1220!important}
 .main-content-wrapper{background:radial-gradient(circle at 15% 10%, rgba(34,211,238,.20), transparent 30%),radial-gradient(circle at 80% 0%, rgba(167,139,250,.18), transparent 28%),linear-gradient(135deg,#06101e 0%,#0b1220 45%,#020617 100%)!important}
 .r-shell{width:min(1180px,100%);border:1px solid rgba(255,255,255,.1);border-radius:24px;padding:1px;background:linear-gradient(135deg, rgba(34,211,238,.45), rgba(167,139,250,.25), rgba(255,255,255,.08));box-shadow:0 24px 90px rgba(0,0,0,.45);margin:0 auto}
 .r-card{border-radius:23px;background:rgba(17,29,49,.88);overflow:hidden;color:var(--text)}.top{display:flex;justify-content:space-between;align-items:center;padding:22px 24px;border-bottom:1px solid var(--line)}
@@ -23,8 +24,10 @@
   .r-card{border-radius:13px}
   .top{padding:12px;align-items:flex-start;flex-direction:column;gap:10px}
   .top > div:first-child{width:100%}
-  .content{padding:12px;gap:12px}
+  .content{display:block;padding:12px}
   .section{padding:12px;border-radius:12px}
+  .content > aside.section{margin-bottom:12px}
+  .content > section .section{margin-top:0!important;margin-bottom:12px}
   .jobs{padding:0 12px 12px}
   .job-grid{grid-template-columns:1fr}
   .option{min-height:120px;max-height:150px;padding:8px;border-radius:12px}
@@ -35,6 +38,7 @@
   .job video{max-height:150px!important}
   .top + div[style*='padding:10px 22px']{padding:8px 12px!important;overflow:auto;white-space:nowrap;flex-wrap:nowrap}
   .top + div[style*='padding:10px 22px'] .btn{width:auto;height:34px;font-size:12px;padding:0 12px}
+  .main-content-wrapper{padding-bottom:90px!important}
 }
 </style>
 <div class="r-shell"><div class="r-card">
