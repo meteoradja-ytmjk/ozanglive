@@ -1,5 +1,5 @@
 <style>
-/* Render Dashboard - Consistent with App Design */
+/* Render Dashboard - Match App Design Exactly */
 
 /* Prevent zoom on mobile */
 input[type="text"],
@@ -9,498 +9,14 @@ textarea {
   font-size: 16px !important;
 }
 
-.r-shell {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 1rem;
-}
-
-@media (min-width: 768px) {
-  .r-shell {
-    padding: 0 1.5rem;
-  }
-}
-
-.r-card {
-  background: #1F2937;
-  border-radius: 0.75rem;
-  overflow: hidden;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  margin-bottom: 1.5rem;
-}
-
-.top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1.5rem;
-  border-bottom: 1px solid #374151;
-  gap: 1rem;
-}
-
+/* Mobile action buttons */
 @media (max-width: 767px) {
-  .top {
-    flex-direction: column;
-    align-items: flex-start;
-    padding: 1rem;
-  }
-}
-
-.top h2 {
-  margin: 0;
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: white;
-  line-height: 1.2;
-}
-
-@media (max-width: 767px) {
-  .top h2 {
-    font-size: 1.125rem;
-  }
-}
-
-.nav-scroll {
-  display: flex;
-  gap: 0.5rem;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  padding: 0.75rem 1.5rem;
-  background: #111827;
-  border-bottom: 1px solid #374151;
-}
-
-.nav-scroll::-webkit-scrollbar {
-  height: 4px;
-}
-
-.nav-scroll::-webkit-scrollbar-thumb {
-  background: #4B5563;
-  border-radius: 2px;
-}
-
-@media (max-width: 767px) {
-  .nav-scroll {
-    padding: 0.75rem 1rem;
-  }
-}
-
-.content {
-  padding: 1.5rem;
-}
-
-@media (max-width: 767px) {
-  .content {
-    padding: 1rem;
-  }
-}
-
-.section {
-  background: #111827;
-  border: 1px solid #374151;
-  border-radius: 0.75rem;
-  padding: 1.5rem;
-  margin-bottom: 1.5rem;
-}
-
-@media (max-width: 767px) {
-  .section {
-    padding: 1rem;
-  }
-}
-
-.field {
-  margin-bottom: 1rem;
-}
-
-.field:last-child {
-  margin-bottom: 0;
-}
-
-.field label {
-  display: block;
-  margin-bottom: 0.5rem;
-  color: white;
-  font-size: 0.875rem;
-  font-weight: 500;
-}
-
-.input, .select {
-  width: 100%;
-  height: 44px;
-  padding: 0 1rem;
-  background: #1F2937;
-  border: 1px solid #4B5563;
-  border-radius: 0.5rem;
-  color: white;
-  font-size: 0.875rem;
-  transition: all 0.2s ease;
-}
-
-.input:hover, .select:hover {
-  border-color: #6B7280;
-}
-
-.input:focus, .select:focus {
-  outline: none;
-  border-color: #8B5CF6;
-  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
-}
-
-.select {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%239CA3AF' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 1rem center;
-  padding-right: 2.5rem;
-  -webkit-appearance: none;
-  appearance: none;
-}
-
-@media (max-width: 767px) {
-  .input, .select {
-    font-size: 0.875rem;
-    height: 42px;
-  }
-}
-
-.two {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem;
-}
-
-.media-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 1.5rem;
-}
-
-@media (max-width: 767px) {
-  .media-grid {
-    grid-template-columns: 1fr;
-    gap: 1rem;
-  }
-}
-
-.switch {
-  position: relative;
-  width: 52px;
-  height: 30px;
-  flex-shrink: 0;
-}
-
-.switch input {
-  display: none;
-}
-
-.slider {
-  position: absolute;
-  inset: 0;
-  border-radius: 999px;
-  background: #374151;
-  transition: 0.3s;
-  cursor: pointer;
-}
-
-.slider:before {
-  content: "";
-  position: absolute;
-  width: 24px;
-  height: 24px;
-  left: 3px;
-  top: 3px;
-  border-radius: 50%;
-  background: white;
-  transition: 0.3s;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-}
-
-.switch input:checked + .slider {
-  background: #8B5CF6;
-}
-
-.switch input:checked + .slider:before {
-  transform: translateX(22px);
-}
-
-.actions {
-  display: flex;
-  gap: 0.75rem;
-  margin-top: 1.5rem;
-}
-
-@media (max-width: 767px) {
-  .actions {
-    display: none;
-  }
-}
-
-.btn {
-  height: 44px;
-  padding: 0 1.5rem;
-  border: 0;
-  border-radius: 0.5rem;
-  font-weight: 600;
-  font-size: 0.875rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  text-decoration: none;
-}
-
-@media (max-width: 767px) {
-  .btn {
-    height: 42px;
-    font-size: 0.875rem;
-  }
-}
-
-.btn:active {
-  transform: scale(0.98);
-}
-
-.btn-p {
-  background: #8B5CF6;
-  color: white;
-}
-
-.btn-p:hover {
-  background: #7C3AED;
-}
-
-.btn-g {
-  background: #1F2937;
-  color: #D1D5DB;
-  border: 1px solid #4B5563;
-}
-
-.btn-g:hover {
-  background: #374151;
-  border-color: #6B7280;
-}
-
-.option {
-  min-height: 200px;
-  max-height: 350px;
-  overflow-y: auto;
-  border: 1px solid #374151;
-  border-radius: 0.5rem;
-  padding: 0.5rem;
-  background: #1F2937;
-}
-
-.option::-webkit-scrollbar {
-  width: 8px;
-}
-
-.option::-webkit-scrollbar-track {
-  background: #111827;
-  border-radius: 4px;
-}
-
-.option::-webkit-scrollbar-thumb {
-  background: #4B5563;
-  border-radius: 4px;
-}
-
-.option::-webkit-scrollbar-thumb:hover {
-  background: #6B7280;
-}
-
-.jobs {
-  padding: 1.5rem;
-  background: #111827;
-  border-top: 1px solid #374151;
-}
-
-@media (max-width: 767px) {
-  .jobs {
-    padding: 1rem;
-  }
-}
-
-.job-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 1rem;
-  margin-top: 1rem;
-}
-
-@media (max-width: 767px) {
-  .job-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-.job {
-  background: #1F2937;
-  border: 1px solid #374151;
-  border-radius: 0.75rem;
-  padding: 1rem;
-  transition: all 0.2s ease;
-}
-
-.job:hover {
-  border-color: #8B5CF6;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.2);
-}
-
-.job b {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: white;
-  display: block;
-  margin-bottom: 0.5rem;
-}
-
-.job-actions {
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 1rem;
-  flex-wrap: wrap;
-}
-
-@media (max-width: 767px) {
-  .job-actions {
-    flex-direction: column;
-  }
-  
-  .job-actions .btn {
-    width: 100%;
-  }
-}
-
-.muted {
-  color: #9CA3AF;
-  font-size: 0.75rem;
-  line-height: 1.5;
-}
-
-details {
-  margin-bottom: 0.5rem;
-  border: 1px solid #374151;
-  border-radius: 0.5rem;
-  background: #1F2937;
-  overflow: hidden;
-}
-
-summary {
-  cursor: pointer;
-  list-style: none;
-  padding: 0.75rem 1rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-weight: 600;
-  font-size: 0.875rem;
-  color: white;
-  user-select: none;
-}
-
-summary::-webkit-details-marker {
-  display: none;
-}
-
-summary:hover {
-  background: #374151;
-}
-
-summary::after {
-  content: '▼';
-  font-size: 0.625rem;
-  color: #8B5CF6;
-  transition: transform 0.3s ease;
-}
-
-details[open] summary::after {
-  transform: rotate(180deg);
-}
-
-label[style*="display:flex"][style*="align-items:center"] {
-  padding: 0.75rem 1rem !important;
-  border-top: 1px solid #374151;
-  cursor: pointer;
-  transition: background 0.2s ease;
-}
-
-label[style*="display:flex"][style*="align-items:center"]:hover {
-  background: #374151;
-}
-
-.job video {
-  width: 100%;
-  max-height: 180px;
-  object-fit: contain;
-  margin-top: 0.75rem;
-  border-radius: 0.5rem;
-  background: #000;
-}
-
-.icon-badge {
-  width: 40px;
-  height: 40px;
-  border-radius: 0.75rem;
-  display: grid;
-  place-items: center;
-  font-weight: 700;
-  font-size: 1.25rem;
-  color: white;
-  background: linear-gradient(135deg, #8B5CF6, #A78BFA);
-  flex-shrink: 0;
-}
-
-@media (min-width: 768px) {
-  .icon-badge {
-    width: 48px;
-    height: 48px;
-    font-size: 1.5rem;
-  }
-}
-
-.status-badge {
-  padding: 0.375rem 0.75rem;
-  border: 1px solid #10B981;
-  border-radius: 999px;
-  color: #10B981;
-  background: rgba(16, 185, 129, 0.1);
-  font-size: 0.75rem;
-  font-weight: 600;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-}
-
-.progress-bar {
-  height: 6px;
-  background: #374151;
-  border-radius: 999px;
-  overflow: hidden;
-  margin-top: 0.5rem;
-}
-
-.progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #8B5CF6, #A78BFA);
-  border-radius: 999px;
-  transition: width 0.5s ease;
-}
-
-@media (max-width: 767px) {
-  .hide-mobile {
-    display: none !important;
-  }
-  
-  /* Mobile action buttons */
   .mobile-actions {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 0.75rem;
     padding: 1rem;
-    background: #111827;
-    border-bottom: 1px solid #374151;
+    background: transparent;
   }
   
   .mobile-action-btn {
@@ -511,14 +27,13 @@ label[style*="display:flex"][style*="align-items:center"]:hover {
     gap: 0.5rem;
     padding: 1rem 0.5rem;
     background: #1F2937;
-    border: 1px solid #374151;
+    border: 1px solid #4B5563;
     border-radius: 0.75rem;
     color: #D1D5DB;
     font-size: 0.75rem;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s ease;
-    text-decoration: none;
   }
   
   .mobile-action-btn:active {
@@ -535,158 +50,148 @@ label[style*="display:flex"][style*="align-items:center"]:hover {
     font-size: 1.5rem;
   }
   
-  .mobile-expand-btn {
-    width: 100%;
-    padding: 0.75rem;
-    background: #1F2937;
-    border: 1px solid #374151;
-    border-radius: 0.75rem;
-    color: #D1D5DB;
-    font-size: 0.875rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    margin-top: 0.75rem;
-  }
-  
-  .mobile-expand-btn:active {
-    transform: scale(0.98);
-    background: #374151;
-  }
-}
-
-@media (min-width: 768px) {
-  .mobile-actions,
-  .mobile-expand-btn {
+  .hide-mobile {
     display: none !important;
   }
 }
 
-html {
-  scroll-behavior: smooth;
-}
-
-* {
-  -webkit-text-size-adjust: 100%;
+@media (min-width: 768px) {
+  .mobile-actions {
+    display: none !important;
+  }
 }
 </style>
-<div class="r-shell"><div class="r-card">
-  <div class="top">
-    <div style="display:flex;gap:14px;align-items:center;flex:1">
-      <div class="icon-badge">R</div>
-      <div style="min-width:0">
-        <h2>Render Dashboard</h2>
-        <div class="muted" style="margin-top:0.25rem">Pilih channel, jam, menit, video, dan audio untuk proses render.</div>
-      </div>
+
+<!-- Page Header -->
+<div class="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+  <div>
+    <h2 class="text-2xl font-bold">Render Dashboard</h2>
+    <p class="text-gray-400 text-sm mt-1">Pilih channel, jam, menit, video, dan audio untuk proses render</p>
+  </div>
+</div>
+
+<!-- Mobile Action Buttons -->
+<div class="mobile-actions mb-4">
+  <button class="mobile-action-btn primary" id="mobileCreateBtn">
+    <i class="ti ti-plus"></i>
+    <span>New</span>
+  </button>
+  <button class="mobile-action-btn" id="mobileRefreshBtn">
+    <i class="ti ti-refresh"></i>
+    <span>Refresh</span>
+  </button>
+  <button class="mobile-action-btn" id="mobileResetBtn">
+    <i class="ti ti-eraser"></i>
+    <span>Reset</span>
+  </button>
+</div>
+
+<!-- Main Form Card -->
+<div class="bg-gray-800 rounded-lg p-4 md:p-6 mb-6">
+  <h3 class="text-lg font-semibold mb-4">Render Settings</h3>
+  
+  <div class="space-y-4">
+    <!-- Target Channel -->
+    <div>
+      <label class="text-sm font-medium text-white block mb-2">Target Channel</label>
+      <select id="targetAccountId" class="w-full bg-dark-700 text-white px-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
+        <option value="">-- Pilih Channel --</option>
+      </select>
     </div>
-    <div class="status-badge hide-mobile">
-      <span>●</span> Sistem siap
-    </div>
-  </div>
-  
-  <!-- Mobile Action Buttons (only visible on mobile) -->
-  <div class="mobile-actions">
-    <button class="mobile-action-btn primary" id="mobileCreateBtn">
-      <i class="ti ti-plus"></i>
-      <span>New</span>
-    </button>
-    <button class="mobile-action-btn" id="mobileRefreshBtn">
-      <i class="ti ti-refresh"></i>
-      <span>Refresh</span>
-    </button>
-    <button class="mobile-action-btn" id="mobileResetBtn">
-      <i class="ti ti-eraser"></i>
-      <span>Reset</span>
-    </button>
-  </div>
-  
-  <div class="nav-scroll">
-    <a class="btn btn-g" href="/dashboard" style="text-decoration:none">Streams</a>
-    <a class="btn btn-g" href="/gallery" style="text-decoration:none">Gallery</a>
-    <a class="btn btn-g" href="/playlist" style="text-decoration:none">Playlist</a>
-    <a class="btn btn-g" href="/youtube" style="text-decoration:none">YouTube</a>
-    <a class="btn btn-p" href="/render-jobs" style="text-decoration:none">Render</a>
-  </div>
-  
-  <div class="content">
-    <section class="section panel-target">
-      <div class="field">
-        <label for="targetAccountId">Target Channel</label>
-        <select id="targetAccountId" class="select"></select>
-      </div>
-      <div class="field">
-        <label for="title">Judul</label>
-        <input id="title" class="input" value="1" placeholder="Masukkan judul">
-      </div>
-      <div class="two">
-        <div class="field">
-          <label for="durationHours">Jam</label>
-          <input id="durationHours" class="input" type="number" min="0" value="0">
-        </div>
-        <div class="field">
-          <label for="durationMinutes">Menit</label>
-          <input id="durationMinutes" class="input" type="number" min="0" max="59" value="0">
-        </div>
-      </div>
-      <div class="field">
-        <label for="visualizerPreset">Overlay / Spectrum Effect</label>
-        <select id="visualizerPreset" class="select">
-          <option value="none">Tanpa overlay</option>
-          <option value="spectrum">Spectrum</option>
-          <option value="bars">Bars</option>
-          <option value="wave">Wave</option>
-        </select>
-      </div>
-      <div class="field">
-        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;text-transform:none">
-          <input id="followAudioDuration" type="checkbox" style="width:auto;height:18px">
-          <span>Loop mengikuti total durasi audio</span>
-        </label>
-      </div>
-      <div class="field" style="display:flex;justify-content:space-between;align-items:center;border:1px solid #374151;border-radius:0.75rem;padding:1rem;background:#111827">
-        <div>
-          <b style="font-size:0.875rem;color:white;font-weight:600">Upload otomatis</b>
-          <div class="muted">Upload otomatis setelah render selesai</div>
-        </div>
-        <label class="switch">
-          <input id="autoUploadToYoutube" type="checkbox">
-          <span class="slider"></span>
-        </label>
-      </div>
-      <div class="actions">
-        <button id="createBtn" class="btn btn-p">Render Sekarang</button>
-        <button id="resetBtn" class="btn btn-g">Reset</button>
-      </div>
-    </section>
     
-    <div class="media-grid">
-      <section class="section panel-video">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">
-          <b style="font-size:0.875rem;color:white;font-weight:600">Video</b>
-          <span class="muted">Multi-select</span>
-        </div>
-        <div id="videoList" class="option"></div>
-      </section>
-      
-      <section class="section panel-audio">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">
-          <b style="font-size:0.875rem;color:white;font-weight:600">Audio</b>
-          <span class="muted">Opsional</span>
-        </div>
-        <div id="audioList" class="option"></div>
-      </section>
+    <!-- Title -->
+    <div>
+      <label class="text-sm font-medium text-white block mb-2">Judul</label>
+      <input type="text" id="title" value="1" placeholder="Masukkan judul" class="w-full bg-dark-700 text-white px-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
+    </div>
+    
+    <!-- Duration -->
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label class="text-sm font-medium text-white block mb-2">Jam</label>
+        <input type="number" id="durationHours" min="0" value="0" class="w-full bg-dark-700 text-white px-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
+      </div>
+      <div>
+        <label class="text-sm font-medium text-white block mb-2">Menit</label>
+        <input type="number" id="durationMinutes" min="0" max="59" value="0" class="w-full bg-dark-700 text-white px-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
+      </div>
+    </div>
+    
+    <!-- Visualizer -->
+    <div>
+      <label class="text-sm font-medium text-white block mb-2">Overlay / Spectrum Effect</label>
+      <select id="visualizerPreset" class="w-full bg-dark-700 text-white px-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
+        <option value="none">Tanpa overlay</option>
+        <option value="spectrum">Spectrum</option>
+        <option value="bars">Bars</option>
+        <option value="wave">Wave</option>
+      </select>
+    </div>
+    
+    <!-- Follow Audio Duration -->
+    <div class="flex items-center gap-2">
+      <input type="checkbox" id="followAudioDuration" class="w-4 h-4 rounded border-gray-500 bg-dark-700 text-primary focus:ring-primary">
+      <label for="followAudioDuration" class="text-sm text-gray-300">Loop mengikuti total durasi audio</label>
+    </div>
+    
+    <!-- Auto Upload -->
+    <div class="flex items-center justify-between p-4 bg-dark-700 rounded-lg border border-gray-600">
+      <div>
+        <div class="text-sm font-medium text-white">Upload otomatis</div>
+        <div class="text-xs text-gray-400 mt-1">Upload otomatis setelah render selesai</div>
+      </div>
+      <label class="relative inline-flex items-center cursor-pointer">
+        <input type="checkbox" id="autoUploadToYoutube" class="sr-only peer">
+        <div class="w-11 h-6 bg-gray-600 rounded-full peer peer-checked:bg-primary transition-colors"></div>
+        <div class="absolute left-[2px] top-[2px] w-5 h-5 bg-white rounded-full transition-all peer-checked:translate-x-5"></div>
+      </label>
+    </div>
+    
+    <!-- Action Buttons (Desktop) -->
+    <div class="hidden md:flex gap-3 pt-2">
+      <button id="createBtn" class="flex-1 bg-primary hover:bg-secondary text-white px-6 py-2.5 rounded-lg font-medium transition-colors">
+        Render Sekarang
+      </button>
+      <button id="resetBtn" class="px-6 py-2.5 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-gray-300 rounded-lg font-medium transition-colors">
+        Reset
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Video & Audio Selection -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+  <!-- Video Selection -->
+  <div class="bg-gray-800 rounded-lg p-4">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="text-sm font-semibold text-white">Video</h3>
+      <span class="text-xs text-gray-400">Multi-select</span>
+    </div>
+    <div id="videoList" class="max-h-80 overflow-y-auto bg-dark-700 rounded-lg p-2 border border-gray-600">
+      <div class="text-sm text-gray-400 text-center py-4">Loading...</div>
     </div>
   </div>
   
-  <div class="jobs panel-jobs">
-    <div class="muted" style="margin-bottom:1rem">Daftar List Job</div>
-    <div id="jobs"></div>
+  <!-- Audio Selection -->
+  <div class="bg-gray-800 rounded-lg p-4">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="text-sm font-semibold text-white">Audio</h3>
+      <span class="text-xs text-gray-400">Opsional</span>
+    </div>
+    <div id="audioList" class="max-h-80 overflow-y-auto bg-dark-700 rounded-lg p-2 border border-gray-600">
+      <div class="text-sm text-gray-400 text-center py-4">Loading...</div>
+    </div>
   </div>
-</div></div>
+</div>
+
+<!-- Jobs List -->
+<div class="bg-gray-800 rounded-lg p-4 md:p-6">
+  <h3 class="text-lg font-semibold mb-4">Daftar Render Jobs</h3>
+  <div id="jobs">
+    <div class="text-sm text-gray-400 text-center py-8">Belum ada job</div>
+  </div>
+</div>
+
 <script>
 const toArray=(d,k)=>Array.isArray(d)?d:((d && Array.isArray(d[k])) ? d[k] : []);
 const el = {
@@ -703,40 +208,148 @@ const el = {
   audioList: document.getElementById('audioList'),
   jobs: document.getElementById('jobs')
 };
+
 const ensureEl = (name) => {
   if (!el[name]) throw new Error(`Element "${name}" tidak ditemukan`);
   return el[name];
 };
-const normalizeName=(title)=>String(title||'').toLowerCase().replace(/[0-9]+([.,][0-9]+)?/g,'').replace(/[_-]+/g,' ').replace(/\\s+/g,' ').trim();
+
+const normalizeName=(title)=>String(title||'').toLowerCase().replace(/[0-9]+([.,][0-9]+)?/g,'').replace(/[_-]+/g,' ').replace(/\s+/g,' ').trim();
 const groupByName=(items)=>items.reduce((acc,item)=>{const key=normalizeName(item.title)||'lainnya';if(!acc[key])acc[key]=[];acc[key].push(item);return acc;},{});
 const fmtMB=(bytes)=>{const n=Number(bytes||0);if(!n)return '-';return `${(n/1024/1024).toFixed(1)} MB`;};
-const renderGroupedRows=(items,name,type)=>{const grouped=groupByName(items);return Object.entries(grouped).map(([nameGroup,rows],idx)=>`<details ${idx===0?'open':''} style='margin-bottom:10px;border:1px solid #374151;border-radius:0.5rem;background:#1F2937'><summary style='cursor:pointer;list-style:none;padding:10px 12px;display:flex;justify-content:space-between;align-items:center'><div style='font-weight:600;color:white;text-transform:capitalize;font-size:0.875rem'>${nameGroup}</div><span class='muted'>${rows.length} ${type}</span></summary>${rows.map(x=>`<label style='display:flex;align-items:center;gap:10px;padding:10px 12px;border-top:1px solid #374151;cursor:pointer'><input type='checkbox' name='${name}' value='${x.id}'><div style='width:66px;height:40px;border-radius:0.5rem;overflow:hidden;background:#111827;flex:0 0 auto'>${x.thumbnail_path?`<img src='${x.thumbnail_path}' style='width:100%;height:100%;object-fit:cover'>`:`<div style='display:grid;place-items:center;height:100%;font-size:0.6875rem;color:#8B5CF6'>${type==='videos'?'VIDEO':'AUDIO'}</div>`}</div><div><div style='font-size:0.875rem;color:white'>${x.title}</div><div class='muted'>${x.duration||'-'} • ${fmtMB(x.file_size)}</div></div></label>`).join('')}</details>`).join('');};
-async function loadAccounts(){const target=ensureEl('targetAccountId');const r=await fetch('/api/youtube/accounts');const d=await r.json();target.innerHTML=`<option value=''>-- Pilih Channel --</option>`+toArray(d,'accounts').map(a=>`<option value='${a.id}'>${a.channelName||('Channel '+a.id)}</option>`).join('')}
-async function loadMedia(){ensureEl('videoList');ensureEl('audioList');const [vr,ar]=await Promise.all([fetch('/api/videos'),fetch('/api/stream/audios')]);const vd=await vr.json();const ad=await ar.json();el.videoList.innerHTML=renderGroupedRows(toArray(vd,'videos'),'video','videos')||'<div class=\"muted\">Tidak ada video</div>';el.audioList.innerHTML=renderGroupedRows(toArray(ad,'audios'),'audio','audios')||'<div class=\"muted\">Tidak ada audio</div>'}
-async function uploadJob(id){const r=await fetch(`/api/render/jobs/${id}/upload`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({targetAccountId:el.targetAccountId.value})});const d=await r.json();if(!d.success)return alert(d.message||'Upload gagal');loadJobs();}
-async function deleteJob(id){if(!confirm('Hapus project ini?'))return;const r=await fetch(`/api/render/jobs/${id}`,{method:'DELETE'});const d=await r.json();if(!d.success)return alert(d.message||'Gagal hapus');loadJobs();}
-async function loadJobs(){const r=await fetch('/api/render/jobs');const d=await r.json();const cards=toArray(d,'jobs').map(j=>`<div class='job'><b>${j.title||'Tanpa judul'}</b><div class='muted'>${j.status} • ${j.progress||0}% • target ${j.target_duration_seconds||0}s</div><div class='progress-bar'><div class='progress-fill' style='width:${Math.max(0,Math.min(100,Number(j.progress||0)))}%'></div></div>${j.output_path?`<video controls preload='metadata' src='${j.output_path}'></video>`:''}<div class='job-actions'>${j.output_path?`<a class='btn btn-g' href='${j.output_path}' target='_blank' style='text-decoration:none;display:inline-flex;align-items:center'>Preview</a><button class='btn btn-p' onclick="uploadJob('${j.id}')">Upload</button>`:''}<button class='btn btn-g' onclick="deleteJob('${j.id}')">Hapus</button></div></div>`).join('');el.jobs.innerHTML=cards?`<div class='job-grid'>${cards}</div>`:'<div class=\"muted\">Belum ada job</div>'}
-if (el.createBtn) el.createBtn.addEventListener('click',async()=>{try{const titleV=el.title.value;const h=parseInt(el.durationHours.value||0,10);const m=parseInt(el.durationMinutes.value||0,10);const targetDurationSeconds=(h*3600)+(m*60);const videoIds=[...document.querySelectorAll("input[name='video']:checked")].map(i=>i.value);const audioIds=[...document.querySelectorAll("input[name='audio']:checked")].map(i=>i.value);if(videoIds.length===0)return alert('Pilih minimal 1 video');const resp=await fetch('/api/render/jobs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:titleV,targetDurationSeconds,durationHours:h,durationMinutes:m,targetAccountId:el.targetAccountId.value,autoUploadToYoutube:el.autoUploadToYoutube.checked,visualizerPreset:el.visualizerPreset.value,followAudioDuration:el.followAudioDuration.checked,videoIds,audioIds})});const data=await resp.json();if(!resp.ok||!data.success)return alert(data.message||'Gagal');loadJobs();}catch(err){console.error('Create render job error:', err);alert('Terjadi error saat membuat render job');}});
-if (el.resetBtn) el.resetBtn.addEventListener('click',()=>{el.title.value='';el.durationHours.value=0;el.durationMinutes.value=0;document.querySelectorAll("input[name='video'],input[name='audio']").forEach(x=>x.checked=false)});
+
+const renderGroupedRows=(items,name,type)=>{
+  const grouped=groupByName(items);
+  return Object.entries(grouped).map(([nameGroup,rows],idx)=>`
+    <details ${idx===0?'open':''} class="mb-2 bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
+      <summary class="cursor-pointer px-3 py-2 flex items-center justify-between hover:bg-gray-700/50 transition-colors">
+        <div class="flex items-center gap-2">
+          <i class="ti ti-chevron-down text-xs text-primary"></i>
+          <span class="text-sm font-medium text-white capitalize">${nameGroup}</span>
+        </div>
+        <span class="text-xs text-gray-400">${rows.length} ${type}</span>
+      </summary>
+      <div class="border-t border-gray-700">
+        ${rows.map(x=>`
+          <label class="flex items-center gap-3 px-3 py-2 hover:bg-gray-700/30 cursor-pointer border-t border-gray-700/50 first:border-t-0">
+            <input type="checkbox" name="${name}" value="${x.id}" class="w-4 h-4 rounded border-gray-500 bg-dark-700 text-primary focus:ring-primary">
+            <div class="w-16 h-10 rounded bg-gray-900 flex-shrink-0 overflow-hidden">
+              ${x.thumbnail_path?`<img src="${x.thumbnail_path}" class="w-full h-full object-cover">`:`<div class="w-full h-full flex items-center justify-center text-xs text-primary">${type==='videos'?'VID':'AUD'}</div>`}
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="text-sm text-white truncate">${x.title}</div>
+              <div class="text-xs text-gray-400">${x.duration||'-'} • ${fmtMB(x.file_size)}</div>
+            </div>
+          </label>
+        `).join('')}
+      </div>
+    </details>
+  `).join('');
+};
+
+async function loadAccounts(){
+  const target=ensureEl('targetAccountId');
+  const r=await fetch('/api/youtube/accounts');
+  const d=await r.json();
+  target.innerHTML=`<option value="">-- Pilih Channel --</option>`+toArray(d,'accounts').map(a=>`<option value="${a.id}">${a.channelName||('Channel '+a.id)}</option>`).join('');
+}
+
+async function loadMedia(){
+  ensureEl('videoList');
+  ensureEl('audioList');
+  const [vr,ar]=await Promise.all([fetch('/api/videos'),fetch('/api/stream/audios')]);
+  const vd=await vr.json();
+  const ad=await ar.json();
+  el.videoList.innerHTML=renderGroupedRows(toArray(vd,'videos'),'video','videos')||'<div class="text-sm text-gray-400 text-center py-4">Tidak ada video</div>';
+  el.audioList.innerHTML=renderGroupedRows(toArray(ad,'audios'),'audio','audios')||'<div class="text-sm text-gray-400 text-center py-4">Tidak ada audio</div>';
+}
+
+async function uploadJob(id){
+  const r=await fetch(`/api/render/jobs/${id}/upload`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({targetAccountId:el.targetAccountId.value})});
+  const d=await r.json();
+  if(!d.success)return alert(d.message||'Upload gagal');
+  loadJobs();
+}
+
+async function deleteJob(id){
+  if(!confirm('Hapus project ini?'))return;
+  const r=await fetch(`/api/render/jobs/${id}`,{method:'DELETE'});
+  const d=await r.json();
+  if(!d.success)return alert(d.message||'Gagal hapus');
+  loadJobs();
+}
+
+async function loadJobs(){
+  const r=await fetch('/api/render/jobs');
+  const d=await r.json();
+  const cards=toArray(d,'jobs').map(j=>`
+    <div class="bg-dark-700 rounded-lg p-4 border border-gray-600 hover:border-primary transition-colors mb-3">
+      <div class="flex items-start justify-between mb-2">
+        <div class="flex-1">
+          <h4 class="text-sm font-semibold text-white mb-1">${j.title||'Tanpa judul'}</h4>
+          <div class="text-xs text-gray-400">${j.status} • ${j.progress||0}% • target ${j.target_duration_seconds||0}s</div>
+        </div>
+      </div>
+      <div class="w-full bg-gray-600 rounded-full h-1.5 mb-3">
+        <div class="bg-primary h-1.5 rounded-full transition-all" style="width:${Math.max(0,Math.min(100,Number(j.progress||0)))}%"></div>
+      </div>
+      ${j.output_path?`<video controls preload="metadata" src="${j.output_path}" class="w-full rounded-lg mb-3 bg-black"></video>`:''}
+      <div class="flex gap-2">
+        ${j.output_path?`
+          <a href="${j.output_path}" target="_blank" class="flex-1 text-center px-3 py-2 bg-gray-600 hover:bg-gray-500 text-white text-sm rounded-lg transition-colors">Preview</a>
+          <button onclick="uploadJob('${j.id}')" class="flex-1 px-3 py-2 bg-primary hover:bg-secondary text-white text-sm rounded-lg transition-colors">Upload</button>
+        `:''}
+        <button onclick="deleteJob('${j.id}')" class="px-3 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 text-sm rounded-lg transition-colors">Hapus</button>
+      </div>
+    </div>
+  `).join('');
+  el.jobs.innerHTML=cards||'<div class="text-sm text-gray-400 text-center py-8">Belum ada job</div>';
+}
+
+if (el.createBtn) {
+  el.createBtn.addEventListener('click',async()=>{
+    try{
+      const titleV=el.title.value;
+      const h=parseInt(el.durationHours.value||0,10);
+      const m=parseInt(el.durationMinutes.value||0,10);
+      const targetDurationSeconds=(h*3600)+(m*60);
+      const videoIds=[...document.querySelectorAll("input[name='video']:checked")].map(i=>i.value);
+      const audioIds=[...document.querySelectorAll("input[name='audio']:checked")].map(i=>i.value);
+      if(videoIds.length===0)return alert('Pilih minimal 1 video');
+      const resp=await fetch('/api/render/jobs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:titleV,targetDurationSeconds,durationHours:h,durationMinutes:m,targetAccountId:el.targetAccountId.value,autoUploadToYoutube:el.autoUploadToYoutube.checked,visualizerPreset:el.visualizerPreset.value,followAudioDuration:el.followAudioDuration.checked,videoIds,audioIds})});
+      const data=await resp.json();
+      if(!resp.ok||!data.success)return alert(data.message||'Gagal');
+      loadJobs();
+    }catch(err){
+      console.error('Create render job error:', err);
+      alert('Terjadi error saat membuat render job');
+    }
+  });
+}
+
+if (el.resetBtn) {
+  el.resetBtn.addEventListener('click',()=>{
+    el.title.value='';
+    el.durationHours.value=0;
+    el.durationMinutes.value=0;
+    document.querySelectorAll("input[name='video'],input[name='audio']").forEach(x=>x.checked=false);
+  });
+}
+
 const toggleDurationInputs = () => {
   const follow = el.followAudioDuration.checked;
   el.durationHours.disabled = follow;
   el.durationMinutes.disabled = follow;
-  el.durationHours.style.opacity = follow ? '0.55' : '1';
-  el.durationMinutes.style.opacity = follow ? '0.55' : '1';
-  el.durationHours.title = follow ? 'Dinonaktifkan karena mengikuti total durasi audio' : '';
-  el.durationMinutes.title = follow ? 'Dinonaktifkan karena mengikuti total durasi audio' : '';
+  el.durationHours.style.opacity = follow ? '0.5' : '1';
+  el.durationMinutes.style.opacity = follow ? '0.5' : '1';
 };
-if (el.followAudioDuration) el.followAudioDuration.addEventListener('change', toggleDurationInputs);
-toggleDurationInputs();
-Promise.resolve()
-  .then(loadAccounts)
-  .then(loadMedia)
-  .then(loadJobs)
-  .catch((err) => console.error('Render dashboard init error:', err));
-setInterval(() => loadJobs().catch(() => {}), 5000);
 
-// Mobile action buttons
+if (el.followAudioDuration) {
+  el.followAudioDuration.addEventListener('change', toggleDurationInputs);
+}
+toggleDurationInputs();
+
+// Mobile buttons
 const mobileCreateBtn = document.getElementById('mobileCreateBtn');
 const mobileRefreshBtn = document.getElementById('mobileRefreshBtn');
 const mobileResetBtn = document.getElementById('mobileResetBtn');
@@ -762,4 +375,13 @@ if (mobileResetBtn) {
     if (el.resetBtn) el.resetBtn.click();
   });
 }
+
+// Initialize
+Promise.resolve()
+  .then(loadAccounts)
+  .then(loadMedia)
+  .then(loadJobs)
+  .catch((err) => console.error('Render dashboard init error:', err));
+
+setInterval(() => loadJobs().catch(() => {}), 5000);
 </script>
