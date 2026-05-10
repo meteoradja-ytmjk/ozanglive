@@ -539,6 +539,50 @@
     </div>
   </div>
   
+  <!-- Video & Audio Selection Combined -->
+  <div class="bg-gray-800 rounded-lg p-4">
+    <!-- Tabs -->
+    <div class="flex items-center justify-between border-b border-gray-700 mb-4">
+      <div class="flex">
+        <button onclick="switchMediaTab('video')" id="videoMediaTab" class="px-4 py-2 text-sm font-medium transition-colors border-b-2 border-primary text-primary">
+          <i class="ti ti-video mr-1"></i>Videos
+          <span class="ml-1 text-xs" id="videoSelectedCount">(0)</span>
+        </button>
+        <button onclick="switchMediaTab('audio')" id="audioMediaTab" class="px-4 py-2 text-sm font-medium transition-colors border-b-2 border-transparent text-gray-400 hover:text-white">
+          <i class="ti ti-music mr-1"></i>Audio
+          <span class="ml-1 text-xs" id="audioSelectedCount">(0)</span>
+        </button>
+      </div>
+      
+      <!-- Action Buttons -->
+      <div class="flex gap-1">
+        <button onclick="selectAllMedia()" class="text-xs px-2 py-1 bg-primary/20 hover:bg-primary/30 text-primary rounded transition-colors" title="Select All">
+          <i class="ti ti-checkbox"></i>
+        </button>
+        <button onclick="deselectAllMedia()" class="text-xs px-2 py-1 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-gray-300 rounded transition-colors" title="Deselect All">
+          <i class="ti ti-square"></i>
+        </button>
+        <button onclick="shuffleMedia()" class="text-xs px-2 py-1 bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-500/50 text-yellow-400 rounded transition-colors" title="Shuffle">
+          <i class="ti ti-arrows-shuffle"></i>
+        </button>
+      </div>
+    </div>
+    
+    <!-- Video Content -->
+    <div id="videoMediaContent">
+      <div id="videoList" class="max-h-80 overflow-y-auto bg-dark-700 rounded-lg p-2 border border-gray-600">
+        <div class="text-sm text-gray-400 text-center py-4">Loading...</div>
+      </div>
+    </div>
+    
+    <!-- Audio Content -->
+    <div id="audioMediaContent" class="hidden">
+      <div id="audioList" class="max-h-80 overflow-y-auto bg-dark-700 rounded-lg p-2 border border-gray-600">
+        <div class="text-sm text-gray-400 text-center py-4">Loading...</div>
+      </div>
+    </div>
+  </div>
+  
   <!-- Watermark & Batch Queue Combined -->
   <div class="bg-gray-800 rounded-lg p-4">
     <!-- Tabs -->
@@ -611,50 +655,6 @@
     </div>
   </div>
   
-</div>
-
-<!-- Video & Audio Selection Combined -->
-<div class="bg-gray-800 rounded-lg p-4 mb-6">
-  <!-- Tabs -->
-  <div class="flex items-center justify-between border-b border-gray-700 mb-4">
-    <div class="flex">
-      <button onclick="switchMediaTab('video')" id="videoMediaTab" class="px-4 py-2 text-sm font-medium transition-colors border-b-2 border-primary text-primary">
-        <i class="ti ti-video mr-1"></i>Videos
-        <span class="ml-1 text-xs" id="videoSelectedCount">(0)</span>
-      </button>
-      <button onclick="switchMediaTab('audio')" id="audioMediaTab" class="px-4 py-2 text-sm font-medium transition-colors border-b-2 border-transparent text-gray-400 hover:text-white">
-        <i class="ti ti-music mr-1"></i>Audio
-        <span class="ml-1 text-xs" id="audioSelectedCount">(0)</span>
-      </button>
-    </div>
-    
-    <!-- Action Buttons -->
-    <div class="flex gap-2">
-      <button onclick="selectAllMedia()" class="text-xs px-3 py-1.5 bg-primary/20 hover:bg-primary/30 text-primary rounded-lg transition-colors">
-        <i class="ti ti-checkbox mr-1"></i>Select All
-      </button>
-      <button onclick="deselectAllMedia()" class="text-xs px-3 py-1.5 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-gray-300 rounded-lg transition-colors">
-        <i class="ti ti-square mr-1"></i>Deselect All
-      </button>
-      <button onclick="shuffleMedia()" class="text-xs px-3 py-1.5 bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-500/50 text-yellow-400 rounded-lg transition-colors">
-        <i class="ti ti-arrows-shuffle mr-1"></i>Shuffle
-      </button>
-    </div>
-  </div>
-  
-  <!-- Video Content -->
-  <div id="videoMediaContent">
-    <div id="videoList" class="max-h-80 overflow-y-auto bg-dark-700 rounded-lg p-2 border border-gray-600">
-      <div class="text-sm text-gray-400 text-center py-4">Loading...</div>
-    </div>
-  </div>
-  
-  <!-- Audio Content -->
-  <div id="audioMediaContent" class="hidden">
-    <div id="audioList" class="max-h-80 overflow-y-auto bg-dark-700 rounded-lg p-2 border border-gray-600">
-      <div class="text-sm text-gray-400 text-center py-4">Loading...</div>
-    </div>
-  </div>
 </div>
 
 <!-- Jobs List -->
