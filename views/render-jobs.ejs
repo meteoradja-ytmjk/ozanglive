@@ -1,14 +1,14 @@
 <style>
 /* Modern Mobile-First Design System */
 :root {
-  /* Typography - Modern Scale */
+  /* Typography - Jumbo Mobile-First Scale */
   --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-size-xs: 0.75rem;    /* 12px */
-  --font-size-sm: 0.875rem;   /* 14px */
-  --font-size-base: 1rem;     /* 16px */
-  --font-size-lg: 1.125rem;   /* 18px */
-  --font-size-xl: 1.25rem;    /* 20px */
-  --font-size-2xl: 1.5rem;    /* 24px */
+  --font-size-xs: 0.8125rem;   /* 13px */
+  --font-size-sm: 0.9375rem;   /* 15px */
+  --font-size-base: 1.0625rem; /* 17px */
+  --font-size-lg: 1.25rem;     /* 20px */
+  --font-size-xl: 1.375rem;    /* 22px */
+  --font-size-2xl: 1.625rem;   /* 26px */
   
   /* Colors */
   --line: rgba(148, 163, 184, 0.22);
@@ -19,21 +19,21 @@
   --success: #34d399;
   --danger: #f87171;
   
-  /* Spacing */
-  --spacing-xs: 0.5rem;   /* 8px */
-  --spacing-sm: 0.75rem;  /* 12px */
-  --spacing-md: 1rem;     /* 16px */
-  --spacing-lg: 1.5rem;   /* 24px */
-  --spacing-xl: 2rem;     /* 32px */
+  /* Spacing - Larger for Mobile Comfort */
+  --spacing-xs: 0.625rem;   /* 10px */
+  --spacing-sm: 0.875rem;   /* 14px */
+  --spacing-md: 1.125rem;   /* 18px */
+  --spacing-lg: 1.625rem;   /* 26px */
+  --spacing-xl: 2.25rem;    /* 36px */
   
   /* Border Radius */
-  --radius-sm: 0.5rem;    /* 8px */
-  --radius-md: 0.75rem;   /* 12px */
-  --radius-lg: 1rem;      /* 16px */
-  --radius-xl: 1.5rem;    /* 24px */
+  --radius-sm: 0.625rem;    /* 10px */
+  --radius-md: 0.875rem;    /* 14px */
+  --radius-lg: 1.125rem;    /* 18px */
+  --radius-xl: 1.625rem;    /* 26px */
   
   /* Touch Targets for Mobile */
-  --touch-target: 48px;
+  --touch-target: 52px;
 }
 
 .dark, body, html {
@@ -185,7 +185,7 @@
   letter-spacing: 0.01em;
 }
 
-/* Input & Select - Touch Friendly */
+/* Input & Select - Touch Friendly with Larger Font */
 .input, .select {
   width: 100%;
   height: var(--touch-target);
@@ -209,15 +209,29 @@
 
 @media (max-width: 639px) {
   .input, .select {
-    font-size: 16px; /* Prevent zoom on iOS */
+    font-size: 17px; /* Prevent zoom on iOS */
   }
 }
 
-/* Two Column Grid */
+/* Two Column Grid - For Video & Audio Selection */
 .two {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--spacing-sm);
+}
+
+/* Video & Audio Lists Side by Side on Mobile */
+.media-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-md);
+}
+
+@media (max-width: 639px) {
+  .media-grid {
+    gap: var(--spacing-sm);
+  }
 }
 
 /* Toggle Switch */
@@ -317,10 +331,10 @@
   border-color: rgba(148, 163, 184, 0.4);
 }
 
-/* Option Lists */
+/* Option Lists - Larger for Mobile */
 .option {
-  min-height: 180px;
-  max-height: 220px;
+  min-height: 160px;
+  max-height: 240px;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   border: 1px solid rgba(148, 163, 184, 0.22);
@@ -330,19 +344,19 @@
 }
 
 .option::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
 }
 
 .option::-webkit-scrollbar-thumb {
   background: rgba(148, 163, 184, 0.3);
-  border-radius: 3px;
+  border-radius: 4px;
 }
 
-/* Chips */
+/* Chips - Larger Touch Targets */
 .chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
 }
 
 .chip input {
@@ -351,13 +365,13 @@
 
 .chip span {
   display: inline-flex;
-  min-height: 36px;
-  padding: 8px 14px;
+  min-height: 42px;
+  padding: 10px 16px;
   border: 1px solid rgba(148, 163, 184, 0.2);
   border-radius: 999px;
   background: rgba(30, 41, 59, 0.7);
-  font-size: var(--font-size-xs);
-  font-weight: 500;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
   align-items: center;
@@ -500,14 +514,15 @@ label[style*="display:flex"][style*="align-items-center"] div[style*="width:66px
   }
 }
 
-/* Icon Badge */
+/* Icon Badge - Larger for Mobile */
 .icon-badge {
-  width: 46px;
-  height: 46px;
+  width: 52px;
+  height: 52px;
   border-radius: var(--radius-md);
   display: grid;
   place-items: center;
   font-weight: 900;
+  font-size: var(--font-size-lg);
   color: #05202b;
   background: linear-gradient(135deg, var(--primary), var(--success));
   flex-shrink: 0;
@@ -515,29 +530,29 @@ label[style*="display:flex"][style*="align-items-center"] div[style*="width:66px
 
 @media (min-width: 640px) {
   .icon-badge {
-    width: 46px;
-    height: 46px;
+    width: 52px;
+    height: 52px;
     border-radius: 15px;
   }
 }
 
-/* Status Badge */
+/* Status Badge - Larger */
 .status-badge {
-  padding: var(--spacing-xs) var(--spacing-sm);
+  padding: var(--spacing-xs) var(--spacing-md);
   border: 1px solid rgba(52, 211, 153, 0.28);
   border-radius: 999px;
   color: #bbf7d0;
   background: rgba(52, 211, 153, 0.10);
-  font-size: var(--font-size-xs);
+  font-size: var(--font-size-sm);
   font-weight: 600;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
-/* Progress Bar */
+/* Progress Bar - Larger */
 .progress-bar {
-  height: 8px;
+  height: 10px;
   background: rgba(148, 163, 184, 0.2);
   border-radius: 999px;
   overflow: hidden;
@@ -649,23 +664,26 @@ html {
       </div>
     </section>
     
-    <!-- Panel Video (SECOND) -->
-    <section class="section panel-video" style="margin-bottom:var(--spacing-md)">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--spacing-sm)">
-        <b>Video Terpilih</b>
-        <span class="muted">Multi-select</span>
-      </div>
-      <div id="videoList" class="option"></div>
-    </section>
-    
-    <!-- Panel Audio (THIRD) -->
-    <section class="section panel-audio" style="margin-bottom:var(--spacing-md)">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--spacing-sm)">
-        <b>Audio Terpilih</b>
-        <span class="muted">Opsional</span>
-      </div>
-      <div id="audioList" class="option"></div>
-    </section>
+    <!-- Video & Audio Side by Side (SECOND & THIRD) -->
+    <div class="media-grid">
+      <!-- Panel Video -->
+      <section class="section panel-video">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--spacing-sm)">
+          <b style="font-size:var(--font-size-base)">Video</b>
+          <span class="muted" style="font-size:var(--font-size-xs)">Multi-select</span>
+        </div>
+        <div id="videoList" class="option" style="min-height:150px;max-height:200px"></div>
+      </section>
+      
+      <!-- Panel Audio -->
+      <section class="section panel-audio">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--spacing-sm)">
+          <b style="font-size:var(--font-size-base)">Audio</b>
+          <span class="muted" style="font-size:var(--font-size-xs)">Opsional</span>
+        </div>
+        <div id="audioList" class="option" style="min-height:150px;max-height:200px"></div>
+      </section>
+    </div>
   </div>
   
   <!-- Jobs Section (BOTTOM) -->
