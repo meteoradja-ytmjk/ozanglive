@@ -99,6 +99,127 @@
   color: white;
   border-color: #8B5CF6;
 }
+
+/* Mini Live Preview */
+.mini-preview {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16/9;
+  background: #000;
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+.mini-preview video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.mini-preview-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #6B7280;
+}
+
+/* Watermark Preview */
+.watermark-preview {
+  position: relative;
+  width: 100%;
+  height: 120px;
+  background: linear-gradient(135deg, #1F2937 0%, #111827 100%);
+  border-radius: 0.5rem;
+  overflow: hidden;
+  border: 1px solid #374151;
+}
+
+.watermark-overlay {
+  position: absolute;
+  pointer-events: none;
+  max-width: 30%;
+  max-height: 30%;
+  opacity: 0.7;
+}
+
+.watermark-overlay.top-left { top: 10px; left: 10px; }
+.watermark-overlay.top-right { top: 10px; right: 10px; }
+.watermark-overlay.bottom-left { bottom: 10px; left: 10px; }
+.watermark-overlay.bottom-right { bottom: 10px; right: 10px; }
+.watermark-overlay.center { top: 50%; left: 50%; transform: translate(-50%, -50%); }
+
+/* Advanced Visualizer Preview */
+.visualizer-preview {
+  width: 100%;
+  height: 60px;
+  background: #000;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  position: relative;
+}
+
+.visualizer-bars {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-around;
+  height: 100%;
+  padding: 5px;
+  gap: 2px;
+}
+
+.visualizer-bar {
+  flex: 1;
+  background: linear-gradient(to top, #8B5CF6, #EC4899);
+  border-radius: 2px;
+  animation: visualizerPulse 1s ease-in-out infinite;
+}
+
+@keyframes visualizerPulse {
+  0%, 100% { height: 20%; }
+  50% { height: 80%; }
+}
+
+.visualizer-bar:nth-child(2n) { animation-delay: 0.1s; }
+.visualizer-bar:nth-child(3n) { animation-delay: 0.2s; }
+.visualizer-bar:nth-child(4n) { animation-delay: 0.3s; }
+
+/* Batch Render Queue */
+.batch-queue-item {
+  transition: all 0.2s ease;
+}
+
+.batch-queue-item:hover {
+  background: rgba(139, 92, 246, 0.1);
+  border-color: #8B5CF6;
+}
+
+.batch-queue-item.processing {
+  border-color: #10B981;
+  background: rgba(16, 185, 129, 0.05);
+}
+
+/* Real-time Progress Ring */
+.progress-ring {
+  transform: rotate(-90deg);
+}
+
+.progress-ring-circle {
+  transition: stroke-dashoffset 0.3s ease;
+}
+
+/* Collapsible sections */
+.collapsible-content {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+
+.collapsible-content.open {
+  max-height: 2000px;
+}
+</style>
 </style>
 
 <!-- Page Header -->
@@ -230,6 +351,144 @@
       </button>
     </div>
   </div>
+</div>
+
+<!-- Advanced Features Grid -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+  
+  <!-- Mini Live Preview -->
+  <div class="bg-gray-800 rounded-lg p-4">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+        <i class="ti ti-eye text-primary"></i>
+        Mini Live Preview
+      </h3>
+      <button onclick="refreshMiniPreview()" class="text-xs text-gray-400 hover:text-primary">
+        <i class="ti ti-refresh"></i>
+      </button>
+    </div>
+    <div class="mini-preview" id="miniPreview">
+      <div class="mini-preview-placeholder">
+        <i class="ti ti-video text-4xl mb-2"></i>
+        <span class="text-xs">Select videos to preview</span>
+      </div>
+    </div>
+    <div class="mt-2 text-xs text-gray-400 text-center" id="previewInfo">
+      No preview available
+    </div>
+  </div>
+  
+  <!-- Advanced Visualizer -->
+  <div class="bg-gray-800 rounded-lg p-4">
+    <h3 class="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+      <i class="ti ti-waveform text-primary"></i>
+      Advanced Visualizer
+    </h3>
+    <div class="space-y-3">
+      <div>
+        <label class="text-xs font-medium text-gray-300 block mb-2">Intensity</label>
+        <input type="range" id="visualizerIntensity" min="0" max="100" value="50" class="w-full h-2 bg-dark-700 rounded-lg appearance-none cursor-pointer accent-primary">
+        <div class="flex justify-between text-xs text-gray-500 mt-1">
+          <span>Low</span>
+          <span id="intensityValue">50%</span>
+          <span>High</span>
+        </div>
+      </div>
+      <div>
+        <label class="text-xs font-medium text-gray-300 block mb-2">Color Scheme</label>
+        <select id="visualizerColor" class="w-full bg-dark-700 text-white px-3 py-2 border border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary">
+          <option value="purple">Purple Gradient</option>
+          <option value="blue">Blue Wave</option>
+          <option value="green">Green Pulse</option>
+          <option value="rainbow">Rainbow</option>
+          <option value="fire">Fire</option>
+        </select>
+      </div>
+      <div class="visualizer-preview" id="visualizerPreviewBox">
+        <div class="visualizer-bars">
+          <div class="visualizer-bar"></div>
+          <div class="visualizer-bar"></div>
+          <div class="visualizer-bar"></div>
+          <div class="visualizer-bar"></div>
+          <div class="visualizer-bar"></div>
+          <div class="visualizer-bar"></div>
+          <div class="visualizer-bar"></div>
+          <div class="visualizer-bar"></div>
+          <div class="visualizer-bar"></div>
+          <div class="visualizer-bar"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Watermark Settings -->
+  <div class="bg-gray-800 rounded-lg p-4">
+    <h3 class="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+      <i class="ti ti-photo text-primary"></i>
+      Watermark
+    </h3>
+    <div class="space-y-3">
+      <div>
+        <label class="text-xs font-medium text-gray-300 block mb-2">Watermark Image</label>
+        <input type="file" id="watermarkFile" accept="image/*" class="hidden" onchange="handleWatermarkUpload(event)">
+        <button onclick="document.getElementById('watermarkFile').click()" class="w-full bg-dark-700 hover:bg-dark-600 border border-gray-600 text-gray-300 px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-center gap-2">
+          <i class="ti ti-upload"></i>
+          <span>Upload Image</span>
+        </button>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-xs font-medium text-gray-300 block mb-2">Position</label>
+          <select id="watermarkPosition" class="w-full bg-dark-700 text-white px-3 py-2 border border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary" onchange="updateWatermarkPreview()">
+            <option value="top-left">Top Left</option>
+            <option value="top-right">Top Right</option>
+            <option value="bottom-left">Bottom Left</option>
+            <option value="bottom-right" selected>Bottom Right</option>
+            <option value="center">Center</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-300 block mb-2">Opacity</label>
+          <input type="range" id="watermarkOpacity" min="0" max="100" value="70" class="w-full h-2 bg-dark-700 rounded-lg appearance-none cursor-pointer accent-primary" onchange="updateWatermarkPreview()">
+          <div class="text-xs text-gray-500 text-center mt-1" id="opacityValue">70%</div>
+        </div>
+      </div>
+      <div class="watermark-preview" id="watermarkPreviewBox">
+        <div class="flex items-center justify-center h-full text-gray-500 text-xs">
+          <span>Watermark preview</span>
+        </div>
+        <img id="watermarkOverlay" class="watermark-overlay bottom-right hidden" src="" alt="Watermark">
+      </div>
+    </div>
+  </div>
+  
+  <!-- Batch Render Queue -->
+  <div class="bg-gray-800 rounded-lg p-4">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+        <i class="ti ti-list-check text-primary"></i>
+        Batch Render Queue
+        <span class="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full" id="batchCount">0</span>
+      </h3>
+      <button onclick="clearBatchQueue()" class="text-xs text-red-400 hover:text-red-300">
+        <i class="ti ti-trash"></i>
+      </button>
+    </div>
+    <div class="space-y-2 max-h-48 overflow-y-auto" id="batchQueueList">
+      <div class="text-xs text-gray-400 text-center py-4">
+        No items in queue
+      </div>
+    </div>
+    <button onclick="addToBatchQueue()" class="w-full mt-3 bg-primary/20 hover:bg-primary/30 border border-primary/50 text-primary px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-center gap-2">
+      <i class="ti ti-plus"></i>
+      <span>Add Current to Queue</span>
+    </button>
+    <button onclick="processBatchQueue()" class="w-full mt-2 bg-green-500/20 hover:bg-green-500/30 border border-green-500/50 text-green-400 px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-center gap-2">
+      <i class="ti ti-player-play"></i>
+      <span>Process Queue</span>
+    </button>
+  </div>
+  
 </div>
 
 <!-- Video & Audio Selection -->
@@ -472,30 +731,54 @@ async function loadJobs(){
       }
     }
     
+    // Create circular progress
+    const radius = 18;
+    const circumference = 2 * Math.PI * radius;
+    const offset = circumference - (progress / 100) * circumference;
+    
     return `
     <div class="bg-dark-700 rounded-lg p-4 border border-gray-600 hover:border-primary transition-colors mb-3">
-      <div class="flex items-start justify-between mb-2">
-        <div class="flex-1">
-          <h4 class="text-sm font-semibold text-white mb-1">${j.title||'Tanpa judul'}</h4>
-          <div class="flex flex-wrap gap-2 text-xs text-gray-400">
-            <span class="flex items-center gap-1">
-              <i class="ti ti-clock"></i>
-              ${j.status}
-            </span>
-            ${speedText ? `<span class="flex items-center gap-1 text-primary"><i class="ti ti-activity"></i>${speedText}</span>` : ''}
-            ${etaText ? `<span class="flex items-center gap-1 text-green-400"><i class="ti ti-hourglass"></i>${etaText}</span>` : ''}
+      <div class="flex items-start justify-between mb-3">
+        <div class="flex items-start gap-3 flex-1">
+          <!-- Circular Progress -->
+          <div class="relative flex-shrink-0">
+            <svg class="progress-ring" width="40" height="40">
+              <circle class="text-gray-600" stroke-width="3" stroke="currentColor" fill="transparent" r="${radius}" cx="20" cy="20"/>
+              <circle class="progress-ring-circle text-primary" stroke-width="3" stroke-dasharray="${circumference}" stroke-dashoffset="${offset}" stroke-linecap="round" stroke="currentColor" fill="transparent" r="${radius}" cx="20" cy="20"/>
+            </svg>
+            <div class="absolute inset-0 flex items-center justify-center">
+              <span class="text-xs font-bold text-white">${Math.round(progress)}</span>
+            </div>
+          </div>
+          
+          <!-- Job Info -->
+          <div class="flex-1 min-w-0">
+            <h4 class="text-sm font-semibold text-white mb-1 truncate">${j.title||'Tanpa judul'}</h4>
+            <div class="flex flex-wrap gap-2 text-xs">
+              <span class="flex items-center gap-1 text-gray-400">
+                <i class="ti ti-clock"></i>
+                ${j.status}
+              </span>
+              ${speedText ? `<span class="flex items-center gap-1 text-primary"><i class="ti ti-activity"></i>${speedText}</span>` : ''}
+              ${etaText ? `<span class="flex items-center gap-1 text-green-400"><i class="ti ti-hourglass"></i>${etaText}</span>` : ''}
+            </div>
           </div>
         </div>
-        ${isActive ? '<div class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>' : ''}
+        ${isActive ? '<div class="w-2 h-2 bg-green-400 rounded-full animate-pulse flex-shrink-0"></div>' : ''}
       </div>
+      
+      <!-- Linear Progress Bar -->
       <div class="w-full bg-gray-600 rounded-full h-2 mb-3">
         <div class="bg-primary h-2 rounded-full transition-all ${isActive ? 'progress-active' : ''}" style="width:${progress}%"></div>
       </div>
+      
       <div class="flex items-center justify-between text-xs mb-3">
         <span class="text-gray-400">${progress}% complete</span>
         <span class="text-gray-400">Target: ${j.target_duration_seconds||0}s</span>
       </div>
+      
       ${j.output_path?`<video controls preload="metadata" src="${j.output_path}" class="w-full rounded-lg mb-3 bg-black"></video>`:''}
+      
       <div class="flex gap-2">
         ${j.output_path?`
           <a href="${j.output_path}" target="_blank" class="flex-1 text-center px-3 py-2 bg-gray-600 hover:bg-gray-500 text-white text-sm rounded-lg transition-colors">Preview</a>
@@ -926,6 +1209,258 @@ if (mobileRefreshBtn) {
       .then(loadJobs)
       .catch((err) => console.error('Refresh error:', err));
   });
+}
+
+// ===== NEW ADVANCED FEATURES =====
+
+// FEATURE 1: MINI LIVE PREVIEW
+let previewVideoElement = null;
+
+function refreshMiniPreview() {
+  const videoIds = [...document.querySelectorAll("input[name='video']:checked")].map(i=>i.value);
+  const miniPreview = document.getElementById('miniPreview');
+  const previewInfo = document.getElementById('previewInfo');
+  
+  if (videoIds.length === 0) {
+    miniPreview.innerHTML = `
+      <div class="mini-preview-placeholder">
+        <i class="ti ti-video text-4xl mb-2"></i>
+        <span class="text-xs">Select videos to preview</span>
+      </div>
+    `;
+    previewInfo.textContent = 'No preview available';
+    return;
+  }
+  
+  // Get first video for preview
+  fetch(`/api/videos/${videoIds[0]}`)
+    .then(r => r.json())
+    .then(data => {
+      if (data.video && data.video.file_path) {
+        miniPreview.innerHTML = `<video src="${data.video.file_path}" controls muted loop class="w-full h-full object-cover"></video>`;
+        previewInfo.textContent = `Previewing: ${data.video.title} (${videoIds.length} video${videoIds.length > 1 ? 's' : ''} selected)`;
+      }
+    })
+    .catch(err => {
+      console.error('Preview error:', err);
+      previewInfo.textContent = 'Preview unavailable';
+    });
+}
+
+// Auto-refresh preview when videos are selected
+document.addEventListener('change', (e) => {
+  if (e.target.name === 'video') {
+    refreshMiniPreview();
+  }
+});
+
+// FEATURE 2: ADVANCED VISUALIZER
+const visualizerIntensity = document.getElementById('visualizerIntensity');
+const visualizerColor = document.getElementById('visualizerColor');
+const intensityValue = document.getElementById('intensityValue');
+
+if (visualizerIntensity) {
+  visualizerIntensity.addEventListener('input', (e) => {
+    intensityValue.textContent = e.target.value + '%';
+    updateVisualizerPreview();
+  });
+}
+
+if (visualizerColor) {
+  visualizerColor.addEventListener('change', updateVisualizerPreview);
+}
+
+function updateVisualizerPreview() {
+  const color = visualizerColor?.value || 'purple';
+  const bars = document.querySelectorAll('.visualizer-bar');
+  
+  const colorSchemes = {
+    purple: 'linear-gradient(to top, #8B5CF6, #EC4899)',
+    blue: 'linear-gradient(to top, #3B82F6, #06B6D4)',
+    green: 'linear-gradient(to top, #10B981, #34D399)',
+    rainbow: 'linear-gradient(to top, #EF4444, #F59E0B, #10B981, #3B82F6, #8B5CF6)',
+    fire: 'linear-gradient(to top, #DC2626, #F59E0B, #FCD34D)'
+  };
+  
+  bars.forEach(bar => {
+    bar.style.background = colorSchemes[color] || colorSchemes.purple;
+  });
+}
+
+// FEATURE 3: WATERMARK
+let watermarkImageData = null;
+
+function handleWatermarkUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    watermarkImageData = e.target.result;
+    const overlay = document.getElementById('watermarkOverlay');
+    overlay.src = watermarkImageData;
+    overlay.classList.remove('hidden');
+    updateWatermarkPreview();
+  };
+  reader.readAsDataURL(file);
+}
+
+function updateWatermarkPreview() {
+  const position = document.getElementById('watermarkPosition')?.value || 'bottom-right';
+  const opacity = document.getElementById('watermarkOpacity')?.value || 70;
+  const overlay = document.getElementById('watermarkOverlay');
+  const opacityValue = document.getElementById('opacityValue');
+  
+  if (opacityValue) opacityValue.textContent = opacity + '%';
+  
+  if (overlay && !overlay.classList.contains('hidden')) {
+    // Remove all position classes
+    overlay.className = 'watermark-overlay';
+    // Add new position class
+    overlay.classList.add(position);
+    overlay.style.opacity = opacity / 100;
+  }
+}
+
+// FEATURE 4: BATCH RENDER QUEUE
+let batchQueue = [];
+
+function addToBatchQueue() {
+  const titleV = el.title.value;
+  const h = parseInt(el.durationHours.value || 0, 10);
+  const m = parseInt(el.durationMinutes.value || 0, 10);
+  const videoIds = [...document.querySelectorAll("input[name='video']:checked")].map(i=>i.value);
+  const audioIds = [...document.querySelectorAll("input[name='audio']:checked")].map(i=>i.value);
+  
+  if (videoIds.length === 0) {
+    alert('Please select at least one video');
+    return;
+  }
+  
+  const queueItem = {
+    id: Date.now(),
+    title: titleV || `Render ${batchQueue.length + 1}`,
+    durationHours: h,
+    durationMinutes: m,
+    targetDurationSeconds: (h * 3600) + (m * 60),
+    targetAccountId: el.targetAccountId.value,
+    autoUploadToYoutube: el.autoUploadToYoutube.checked,
+    visualizerPreset: el.visualizerPreset.value,
+    visualizerIntensity: visualizerIntensity?.value || 50,
+    visualizerColor: visualizerColor?.value || 'purple',
+    followAudioDuration: el.followAudioDuration.checked,
+    videoIds: videoIds,
+    audioIds: audioIds,
+    watermark: watermarkImageData ? {
+      image: watermarkImageData,
+      position: document.getElementById('watermarkPosition')?.value || 'bottom-right',
+      opacity: document.getElementById('watermarkOpacity')?.value || 70
+    } : null,
+    status: 'pending'
+  };
+  
+  batchQueue.push(queueItem);
+  updateBatchQueueUI();
+  showToast(`Added "${queueItem.title}" to queue`);
+}
+
+function updateBatchQueueUI() {
+  const batchCount = document.getElementById('batchCount');
+  const batchQueueList = document.getElementById('batchQueueList');
+  
+  batchCount.textContent = batchQueue.length;
+  
+  if (batchQueue.length === 0) {
+    batchQueueList.innerHTML = '<div class="text-xs text-gray-400 text-center py-4">No items in queue</div>';
+    return;
+  }
+  
+  batchQueueList.innerHTML = batchQueue.map((item, idx) => `
+    <div class="batch-queue-item bg-dark-700 p-2 rounded-lg border border-gray-600 ${item.status === 'processing' ? 'processing' : ''}">
+      <div class="flex items-center justify-between">
+        <div class="flex-1 min-w-0">
+          <div class="text-xs font-medium text-white truncate">${item.title}</div>
+          <div class="text-xs text-gray-400">${item.videoIds.length} videos • ${item.durationHours}h ${item.durationMinutes}m</div>
+        </div>
+        <div class="flex items-center gap-1">
+          ${item.status === 'processing' ? '<i class="ti ti-loader animate-spin text-green-400"></i>' : ''}
+          <button onclick="removeBatchItem(${idx})" class="text-red-400 hover:text-red-300 p-1">
+            <i class="ti ti-x text-sm"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function removeBatchItem(index) {
+  batchQueue.splice(index, 1);
+  updateBatchQueueUI();
+}
+
+function clearBatchQueue() {
+  if (!confirm('Clear all items from queue?')) return;
+  batchQueue = [];
+  updateBatchQueueUI();
+}
+
+async function processBatchQueue() {
+  if (batchQueue.length === 0) {
+    alert('Queue is empty');
+    return;
+  }
+  
+  if (!confirm(`Process ${batchQueue.length} render job(s)?`)) return;
+  
+  showToast(`Processing ${batchQueue.length} jobs...`);
+  
+  for (let i = 0; i < batchQueue.length; i++) {
+    const item = batchQueue[i];
+    item.status = 'processing';
+    updateBatchQueueUI();
+    
+    try {
+      const resp = await fetch('/api/render/jobs', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(item)
+      });
+      
+      const data = await resp.json();
+      
+      if (resp.ok && data.success) {
+        showToast(`✓ ${item.title} queued`);
+      } else {
+        showToast(`✗ ${item.title} failed: ${data.message}`);
+      }
+    } catch (err) {
+      console.error('Batch render error:', err);
+      showToast(`✗ ${item.title} error`);
+    }
+    
+    // Small delay between jobs
+    await new Promise(resolve => setTimeout(resolve, 500));
+  }
+  
+  // Clear queue after processing
+  batchQueue = [];
+  updateBatchQueueUI();
+  loadJobs();
+  showNotification('Batch Processing Complete', `All ${batchQueue.length} jobs have been queued`);
+}
+
+// FEATURE 5: ENHANCED REAL-TIME PROGRESS (already implemented, adding circular progress)
+function createProgressRing(progress) {
+  const radius = 18;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (progress / 100) * circumference;
+  
+  return `
+    <svg class="progress-ring" width="40" height="40">
+      <circle class="text-gray-600" stroke-width="3" stroke="currentColor" fill="transparent" r="${radius}" cx="20" cy="20"/>
+      <circle class="progress-ring-circle text-primary" stroke-width="3" stroke-dasharray="${circumference}" stroke-dashoffset="${offset}" stroke-linecap="round" stroke="currentColor" fill="transparent" r="${radius}" cx="20" cy="20"/>
+    </svg>
+  `;
 }
 
 // Initialize
