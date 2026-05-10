@@ -308,13 +308,38 @@
       </div>
       
       <div>
-        <label class="text-sm font-medium text-white block mb-2">Overlay / Spectrum</label>
-        <select id="visualizerPreset" class="w-full bg-dark-700 text-white px-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
-          <option value="none">Tanpa overlay</option>
-          <option value="spectrum">Spectrum</option>
-          <option value="bars">Bars</option>
-          <option value="wave">Wave</option>
-        </select>
+        <label class="text-sm font-medium text-white block mb-2">Overlay Video</label>
+        <div class="space-y-2">
+          <!-- Upload Button -->
+          <input type="file" id="overlayVideoFile" accept="video/mp4" class="hidden" onchange="handleOverlayVideoUpload(event)">
+          <button onclick="document.getElementById('overlayVideoFile').click()" class="w-full bg-dark-700 hover:bg-dark-600 border border-gray-600 text-gray-300 px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
+            <i class="ti ti-upload"></i>
+            <span id="overlayFileName">Upload MP4 Overlay</span>
+          </button>
+          
+          <!-- Overlay Options (shown when file uploaded) -->
+          <div id="overlayOptions" class="hidden space-y-2">
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="text-xs text-gray-400 block mb-1">Blend Mode</label>
+                <select id="overlayBlendMode" class="w-full bg-dark-700 text-white px-3 py-2 border border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary">
+                  <option value="normal">Normal</option>
+                  <option value="screen">Screen (Black BG)</option>
+                  <option value="chromakey">Chroma Key (Green)</option>
+                </select>
+              </div>
+              <div>
+                <label class="text-xs text-gray-400 block mb-1">Opacity</label>
+                <input type="range" id="overlayOpacity" min="0" max="100" value="100" class="w-full h-2 bg-dark-700 rounded-lg appearance-none cursor-pointer accent-primary">
+                <div class="text-xs text-gray-500 text-center" id="overlayOpacityValue">100%</div>
+              </div>
+            </div>
+            <button onclick="removeOverlayVideo()" class="w-full bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-400 px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-center gap-2">
+              <i class="ti ti-x"></i>
+              <span>Remove Overlay</span>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
     
@@ -599,13 +624,22 @@
     <!-- Watermark Content -->
     <div id="watermarkContent" class="space-y-3">
       <div>
-        <label class="text-xs font-medium text-gray-300 block mb-2">Watermark Image</label>
-        <input type="file" id="watermarkFile" accept="image/*" class="hidden" onchange="handleWatermarkUpload(event)">
+        <label class="text-xs font-medium text-gray-300 block mb-2">
+          Upload Watermark Image
+          <span class="text-gray-500 ml-1">(PNG/JPG supported)</span>
+        </label>
+        <input type="file" id="watermarkFile" accept="image/png,image/jpeg,image/jpg" class="hidden" onchange="handleWatermarkUpload(event)">
         <button onclick="document.getElementById('watermarkFile').click()" class="w-full bg-dark-700 hover:bg-dark-600 border border-gray-600 text-gray-300 px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-center gap-2">
           <i class="ti ti-upload"></i>
           <span>Upload Image</span>
         </button>
       </div>
+      
+      <!-- Uploaded Watermarks List -->
+      <div id="watermarkFilesList" class="space-y-2 max-h-40 overflow-y-auto">
+        <!-- Watermark files will be listed here -->
+      </div>
+      
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="text-xs font-medium text-gray-300 block mb-2">Position</label>
@@ -766,7 +800,6 @@ const el = {
   title: document.getElementById('title'),
   durationHours: document.getElementById('durationHours'),
   durationMinutes: document.getElementById('durationMinutes'),
-  visualizerPreset: document.getElementById('visualizerPreset'),
   followAudioDuration: document.getElementById('followAudioDuration'),
   autoUploadToYoutube: document.getElementById('autoUploadToYoutube'),
   createBtn: document.getElementById('createBtn'),
@@ -943,7 +976,26 @@ if (el.createBtn) {
       const videoIds=[...document.querySelectorAll("input[name='video']:checked")].map(i=>i.value);
       const audioIds=[...document.querySelectorAll("input[name='audio']:checked")].map(i=>i.value);
       if(videoIds.length===0)return alert('Pilih minimal 1 video');
-      const resp=await fetch('/api/render/jobs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:titleV,targetDurationSeconds,durationHours:h,durationMinutes:m,targetAccountId:el.targetAccountId.value,autoUploadToYoutube:el.autoUploadToYoutube.checked,visualizerPreset:el.visualizerPreset.value,followAudioDuration:el.followAudioDuration.checked,videoIds,audioIds})});
+      
+      const renderData = {
+        title:titleV,
+        targetDurationSeconds,
+        durationHours:h,
+        durationMinutes:m,
+        targetAccountId:el.targetAccountId.value,
+        autoUploadToYoutube:el.autoUploadToYoutube.checked,
+        followAudioDuration:el.followAudioDuration.checked,
+        videoIds,
+        audioIds,
+        overlayVideo: overlayVideoData ? {
+          data: overlayVideoData,
+          fileName: overlayVideoFile?.name || 'overlay.mp4',
+          blendMode: document.getElementById('overlayBlendMode')?.value || 'normal',
+          opacity: document.getElementById('overlayOpacity')?.value || 100
+        } : null
+      };
+      
+      const resp=await fetch('/api/render/jobs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(renderData)});
       const data=await resp.json();
       if(!resp.ok||!data.success)return alert(data.message||'Gagal');
       
@@ -1280,27 +1332,6 @@ function switchRenderTab(tab) {
     jobsContainer.classList.add('hidden');
     loadHistory();
   }
-}
-
-if (el.createBtn) {
-  el.createBtn.addEventListener('click',async()=>{
-    try{
-      const titleV=el.title.value;
-      const h=parseInt(el.durationHours.value||0,10);
-      const m=parseInt(el.durationMinutes.value||0,10);
-      const targetDurationSeconds=(h*3600)+(m*60);
-      const videoIds=[...document.querySelectorAll("input[name='video']:checked")].map(i=>i.value);
-      const audioIds=[...document.querySelectorAll("input[name='audio']:checked")].map(i=>i.value);
-      if(videoIds.length===0)return alert('Pilih minimal 1 video');
-      const resp=await fetch('/api/render/jobs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:titleV,targetDurationSeconds,durationHours:h,durationMinutes:m,targetAccountId:el.targetAccountId.value,autoUploadToYoutube:el.autoUploadToYoutube.checked,visualizerPreset:el.visualizerPreset.value,followAudioDuration:el.followAudioDuration.checked,videoIds,audioIds})});
-      const data=await resp.json();
-      if(!resp.ok||!data.success)return alert(data.message||'Gagal');
-      loadJobs();
-    }catch(err){
-      console.error('Create render job error:', err);
-      alert('Terjadi error saat membuat render job');
-    }
-  });
 }
 
 if (el.resetBtn) {
@@ -1846,8 +1877,88 @@ function loadVisualizerPreset() {
 // Initialize visualizer with default bars
 generateVisualizerBars(64);
 
+// OVERLAY VIDEO UPLOAD
+let overlayVideoData = null;
+let overlayVideoFile = null;
+
+function handleOverlayVideoUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  // Validate file type
+  if (!file.type.includes('video/mp4')) {
+    alert('Please upload MP4 video only');
+    return;
+  }
+  
+  // Validate file size (max 100MB)
+  const maxSize = 100 * 1024 * 1024; // 100MB
+  if (file.size > maxSize) {
+    alert('File size too large. Maximum 100MB');
+    return;
+  }
+  
+  overlayVideoFile = file;
+  
+  // Read file as data URL for preview
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    overlayVideoData = e.target.result;
+    
+    // Update UI
+    const fileName = document.getElementById('overlayFileName');
+    const overlayOptions = document.getElementById('overlayOptions');
+    
+    if (fileName) {
+      fileName.innerHTML = `<i class="ti ti-video mr-1"></i>${file.name}`;
+    }
+    
+    if (overlayOptions) {
+      overlayOptions.classList.remove('hidden');
+    }
+    
+    showToast(`✓ Overlay video loaded: ${file.name}`);
+  };
+  
+  reader.readAsDataURL(file);
+}
+
+function removeOverlayVideo() {
+  overlayVideoData = null;
+  overlayVideoFile = null;
+  
+  const fileName = document.getElementById('overlayFileName');
+  const overlayOptions = document.getElementById('overlayOptions');
+  const fileInput = document.getElementById('overlayVideoFile');
+  
+  if (fileName) {
+    fileName.innerHTML = 'Upload MP4 Overlay';
+  }
+  
+  if (overlayOptions) {
+    overlayOptions.classList.add('hidden');
+  }
+  
+  if (fileInput) {
+    fileInput.value = '';
+  }
+  
+  showToast('Overlay video removed');
+}
+
+// Update opacity value display
+const overlayOpacityInput = document.getElementById('overlayOpacity');
+if (overlayOpacityInput) {
+  overlayOpacityInput.addEventListener('input', (e) => {
+    const value = document.getElementById('overlayOpacityValue');
+    if (value) value.textContent = e.target.value + '%';
+  });
+}
+
 // FEATURE 3: WATERMARK
 let watermarkImageData = null;
+let uploadedWatermarks = [];
+let activeWatermarkIndex = null;
 
 // Switch between Watermark and Batch tabs
 function switchWatermarkBatchTab(tab) {
@@ -1873,15 +1984,137 @@ function handleWatermarkUpload(event) {
   const file = event.target.files[0];
   if (!file) return;
   
+  // Validate file type
+  const validTypes = ['image/png', 'image/jpeg', 'image/jpg'];
+  if (!validTypes.includes(file.type)) {
+    alert('Please upload PNG or JPG image only');
+    return;
+  }
+  
+  // Validate file size (max 5MB)
+  const maxSize = 5 * 1024 * 1024; // 5MB
+  if (file.size > maxSize) {
+    alert('File size too large. Maximum 5MB');
+    return;
+  }
+  
   const reader = new FileReader();
   reader.onload = (e) => {
-    watermarkImageData = e.target.result;
+    const imageData = e.target.result;
+    
+    // Add to uploaded watermarks list
+    uploadedWatermarks.push({
+      name: file.name,
+      data: imageData,
+      type: file.type,
+      size: file.size,
+      uploadedAt: new Date().toISOString()
+    });
+    
+    // Set as active watermark
+    activeWatermarkIndex = uploadedWatermarks.length - 1;
+    watermarkImageData = imageData;
+    
+    // Update UI
+    updateWatermarkFilesList();
+    
     const overlay = document.getElementById('watermarkOverlay');
     overlay.src = watermarkImageData;
     overlay.classList.remove('hidden');
     updateWatermarkPreview();
+    
+    showToast(`✓ Watermark added: ${file.name}`);
+    
+    // Reset file input
+    event.target.value = '';
   };
   reader.readAsDataURL(file);
+}
+
+function updateWatermarkFilesList() {
+  const list = document.getElementById('watermarkFilesList');
+  
+  if (uploadedWatermarks.length === 0) {
+    list.innerHTML = '';
+    return;
+  }
+  
+  list.innerHTML = uploadedWatermarks.map((file, idx) => `
+    <div class="flex items-center justify-between p-2 bg-dark-700 rounded border ${idx === activeWatermarkIndex ? 'border-primary' : 'border-gray-600'}">
+      <div class="flex items-center gap-2 flex-1 min-w-0">
+        <div class="w-8 h-8 rounded bg-gray-900 flex-shrink-0 overflow-hidden border border-gray-600">
+          <img src="${file.data}" class="w-full h-full object-contain" alt="${file.name}">
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="text-xs font-medium text-white truncate">${file.name}</div>
+          <div class="text-xs text-gray-400">${(file.size / 1024).toFixed(1)} KB</div>
+        </div>
+      </div>
+      <div class="flex items-center gap-1">
+        ${idx === activeWatermarkIndex 
+          ? '<span class="text-xs text-primary px-2 py-0.5 bg-primary/20 rounded">Active</span>'
+          : `<button onclick="selectWatermark(${idx})" class="text-primary hover:text-primary/80 px-2 py-1 text-xs" title="Use">
+              <i class="ti ti-check"></i>
+            </button>`
+        }
+        <button onclick="removeWatermark(${idx})" class="text-red-400 hover:text-red-300 p-1" title="Delete">
+          <i class="ti ti-trash text-sm"></i>
+        </button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function selectWatermark(index) {
+  if (index < 0 || index >= uploadedWatermarks.length) return;
+  
+  activeWatermarkIndex = index;
+  watermarkImageData = uploadedWatermarks[index].data;
+  
+  const overlay = document.getElementById('watermarkOverlay');
+  overlay.src = watermarkImageData;
+  overlay.classList.remove('hidden');
+  
+  updateWatermarkFilesList();
+  updateWatermarkPreview();
+  
+  showToast(`✓ Using: ${uploadedWatermarks[index].name}`);
+}
+
+function removeWatermark(index) {
+  if (!confirm('Delete this watermark?')) return;
+  
+  const removedName = uploadedWatermarks[index].name;
+  uploadedWatermarks.splice(index, 1);
+  
+  // Update active index
+  if (activeWatermarkIndex === index) {
+    // If active watermark was deleted
+    if (uploadedWatermarks.length > 0) {
+      // Select the first available watermark
+      activeWatermarkIndex = 0;
+      watermarkImageData = uploadedWatermarks[0].data;
+      
+      const overlay = document.getElementById('watermarkOverlay');
+      overlay.src = watermarkImageData;
+      overlay.classList.remove('hidden');
+    } else {
+      // No watermarks left
+      activeWatermarkIndex = null;
+      watermarkImageData = null;
+      
+      const overlay = document.getElementById('watermarkOverlay');
+      overlay.classList.add('hidden');
+    }
+  } else if (activeWatermarkIndex > index) {
+    // Adjust active index if needed
+    activeWatermarkIndex--;
+  }
+  
+  updateWatermarkFilesList();
+  updateWatermarkPreview();
+  
+  showToast(`✗ Deleted: ${removedName}`);
 }
 
 function updateWatermarkPreview() {
@@ -1924,12 +2157,18 @@ function addToBatchQueue() {
     targetDurationSeconds: (h * 3600) + (m * 60),
     targetAccountId: el.targetAccountId.value,
     autoUploadToYoutube: el.autoUploadToYoutube.checked,
-    visualizerPreset: el.visualizerPreset.value,
+    visualizerPreset: 'none', // Deprecated, kept for compatibility
     visualizerIntensity: visualizerIntensity?.value || 50,
     visualizerColor: visualizerColor?.value || 'purple',
     followAudioDuration: el.followAudioDuration.checked,
     videoIds: videoIds,
     audioIds: audioIds,
+    overlayVideo: overlayVideoData ? {
+      data: overlayVideoData,
+      fileName: overlayVideoFile?.name || 'overlay.mp4',
+      blendMode: document.getElementById('overlayBlendMode')?.value || 'normal',
+      opacity: document.getElementById('overlayOpacity')?.value || 100
+    } : null,
     watermark: watermarkImageData ? {
       image: watermarkImageData,
       position: document.getElementById('watermarkPosition')?.value || 'bottom-right',
