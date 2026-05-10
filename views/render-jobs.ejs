@@ -613,25 +613,44 @@
   
 </div>
 
-<!-- Video & Audio Selection -->
-<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-  <!-- Video Selection -->
-  <div class="bg-gray-800 rounded-lg p-4">
-    <div class="flex items-center justify-between mb-3">
-      <h3 class="text-sm font-semibold text-white">Video</h3>
-      <span class="text-xs text-gray-400">Multi-select</span>
+<!-- Video & Audio Selection Combined -->
+<div class="bg-gray-800 rounded-lg p-4 mb-6">
+  <!-- Tabs -->
+  <div class="flex items-center justify-between border-b border-gray-700 mb-4">
+    <div class="flex">
+      <button onclick="switchMediaTab('video')" id="videoMediaTab" class="px-4 py-2 text-sm font-medium transition-colors border-b-2 border-primary text-primary">
+        <i class="ti ti-video mr-1"></i>Videos
+        <span class="ml-1 text-xs" id="videoSelectedCount">(0)</span>
+      </button>
+      <button onclick="switchMediaTab('audio')" id="audioMediaTab" class="px-4 py-2 text-sm font-medium transition-colors border-b-2 border-transparent text-gray-400 hover:text-white">
+        <i class="ti ti-music mr-1"></i>Audio
+        <span class="ml-1 text-xs" id="audioSelectedCount">(0)</span>
+      </button>
     </div>
+    
+    <!-- Action Buttons -->
+    <div class="flex gap-2">
+      <button onclick="selectAllMedia()" class="text-xs px-3 py-1.5 bg-primary/20 hover:bg-primary/30 text-primary rounded-lg transition-colors">
+        <i class="ti ti-checkbox mr-1"></i>Select All
+      </button>
+      <button onclick="deselectAllMedia()" class="text-xs px-3 py-1.5 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-gray-300 rounded-lg transition-colors">
+        <i class="ti ti-square mr-1"></i>Deselect All
+      </button>
+      <button onclick="shuffleMedia()" class="text-xs px-3 py-1.5 bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-500/50 text-yellow-400 rounded-lg transition-colors">
+        <i class="ti ti-arrows-shuffle mr-1"></i>Shuffle
+      </button>
+    </div>
+  </div>
+  
+  <!-- Video Content -->
+  <div id="videoMediaContent">
     <div id="videoList" class="max-h-80 overflow-y-auto bg-dark-700 rounded-lg p-2 border border-gray-600">
       <div class="text-sm text-gray-400 text-center py-4">Loading...</div>
     </div>
   </div>
   
-  <!-- Audio Selection -->
-  <div class="bg-gray-800 rounded-lg p-4">
-    <div class="flex items-center justify-between mb-3">
-      <h3 class="text-sm font-semibold text-white">Audio</h3>
-      <span class="text-xs text-gray-400">Opsional</span>
-    </div>
+  <!-- Audio Content -->
+  <div id="audioMediaContent" class="hidden">
     <div id="audioList" class="max-h-80 overflow-y-auto bg-dark-700 rounded-lg p-2 border border-gray-600">
       <div class="text-sm text-gray-400 text-center py-4">Loading...</div>
     </div>
@@ -1334,6 +1353,122 @@ if (mobileRefreshBtn) {
 }
 
 // ===== NEW ADVANCED FEATURES =====
+
+// MEDIA TAB SWITCHING & SHUFFLE
+let currentMediaTab = 'video';
+
+function switchMediaTab(tab) {
+  currentMediaTab = tab;
+  const videoTab = document.getElementById('videoMediaTab');
+  const audioTab = document.getElementById('audioMediaTab');
+  const videoContent = document.getElementById('videoMediaContent');
+  const audioContent = document.getElementById('audioMediaContent');
+  
+  if (tab === 'video') {
+    videoTab.className = 'px-4 py-2 text-sm font-medium transition-colors border-b-2 border-primary text-primary';
+    audioTab.className = 'px-4 py-2 text-sm font-medium transition-colors border-b-2 border-transparent text-gray-400 hover:text-white';
+    videoContent.classList.remove('hidden');
+    audioContent.classList.add('hidden');
+  } else {
+    audioTab.className = 'px-4 py-2 text-sm font-medium transition-colors border-b-2 border-primary text-primary';
+    videoTab.className = 'px-4 py-2 text-sm font-medium transition-colors border-b-2 border-transparent text-gray-400 hover:text-white';
+    audioContent.classList.remove('hidden');
+    videoContent.classList.add('hidden');
+  }
+  
+  updateMediaSelectionCount();
+}
+
+function selectAllMedia() {
+  const checkboxes = currentMediaTab === 'video' 
+    ? document.querySelectorAll("input[name='video']")
+    : document.querySelectorAll("input[name='audio']");
+  
+  checkboxes.forEach(cb => cb.checked = true);
+  updateMediaSelectionCount();
+  
+  if (currentMediaTab === 'video') {
+    refreshMiniPreview();
+  }
+  
+  showToast(`✓ All ${currentMediaTab}s selected`);
+}
+
+function deselectAllMedia() {
+  const checkboxes = currentMediaTab === 'video' 
+    ? document.querySelectorAll("input[name='video']")
+    : document.querySelectorAll("input[name='audio']");
+  
+  checkboxes.forEach(cb => cb.checked = false);
+  updateMediaSelectionCount();
+  
+  if (currentMediaTab === 'video') {
+    refreshMiniPreview();
+  }
+  
+  showToast(`✓ All ${currentMediaTab}s deselected`);
+}
+
+function shuffleMedia() {
+  const checkboxes = currentMediaTab === 'video' 
+    ? Array.from(document.querySelectorAll("input[name='video']"))
+    : Array.from(document.querySelectorAll("input[name='audio']"));
+  
+  if (checkboxes.length === 0) {
+    showToast('No media available to shuffle');
+    return;
+  }
+  
+  // Get currently selected items
+  const selectedIds = checkboxes.filter(cb => cb.checked).map(cb => cb.value);
+  
+  if (selectedIds.length === 0) {
+    showToast('Please select some items first');
+    return;
+  }
+  
+  // Deselect all
+  checkboxes.forEach(cb => cb.checked = false);
+  
+  // Shuffle the selected IDs using Fisher-Yates algorithm
+  const shuffled = [...selectedIds];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  
+  // Reselect in shuffled order
+  shuffled.forEach(id => {
+    const checkbox = checkboxes.find(cb => cb.value === id);
+    if (checkbox) checkbox.checked = true;
+  });
+  
+  updateMediaSelectionCount();
+  
+  if (currentMediaTab === 'video') {
+    refreshMiniPreview();
+  }
+  
+  showToast(`🔀 ${selectedIds.length} ${currentMediaTab}(s) shuffled`);
+}
+
+function updateMediaSelectionCount() {
+  const videoCount = document.querySelectorAll("input[name='video']:checked").length;
+  const audioCount = document.querySelectorAll("input[name='audio']:checked").length;
+  
+  const videoCountEl = document.getElementById('videoSelectedCount');
+  const audioCountEl = document.getElementById('audioSelectedCount');
+  
+  if (videoCountEl) videoCountEl.textContent = `(${videoCount})`;
+  if (audioCountEl) audioCountEl.textContent = `(${audioCount})`;
+}
+
+// Update selection count when checkboxes change
+document.addEventListener('change', (e) => {
+  if (e.target.name === 'video' || e.target.name === 'audio') {
+    updateMediaSelectionCount();
+  }
+});
 
 // FEATURE 1: MINI LIVE PREVIEW
 let previewVideoElement = null;
