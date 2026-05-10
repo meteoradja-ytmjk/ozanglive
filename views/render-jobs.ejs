@@ -158,60 +158,60 @@
   </div>
   
   <div class="space-y-4">
-    <!-- Target Channel -->
-    <div>
-      <label class="text-sm font-medium text-white block mb-2">Target Channel</label>
-      <select id="targetAccountId" class="w-full bg-dark-700 text-white px-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
-        <option value="">-- Pilih Channel --</option>
-      </select>
-    </div>
-    
-    <!-- Title -->
-    <div>
-      <label class="text-sm font-medium text-white block mb-2">Judul</label>
-      <input type="text" id="title" value="1" placeholder="Masukkan judul" class="w-full bg-dark-700 text-white px-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
-    </div>
-    
-    <!-- Duration -->
-    <div class="grid grid-cols-2 gap-4">
+    <!-- Row 1: Target Channel & Title -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
-        <label class="text-sm font-medium text-white block mb-2">Jam</label>
-        <input type="number" id="durationHours" min="0" value="0" class="w-full bg-dark-700 text-white px-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
+        <label class="text-sm font-medium text-white block mb-2">Target Channel</label>
+        <select id="targetAccountId" class="w-full bg-dark-700 text-white px-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
+          <option value="">-- Pilih Channel --</option>
+        </select>
       </div>
+      
       <div>
-        <label class="text-sm font-medium text-white block mb-2">Menit</label>
-        <input type="number" id="durationMinutes" min="0" max="59" value="0" class="w-full bg-dark-700 text-white px-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
+        <label class="text-sm font-medium text-white block mb-2">Judul</label>
+        <input type="text" id="title" value="1" placeholder="Masukkan judul" class="w-full bg-dark-700 text-white px-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
       </div>
     </div>
     
-    <!-- Visualizer -->
-    <div>
-      <label class="text-sm font-medium text-white block mb-2">Overlay / Spectrum Effect</label>
-      <select id="visualizerPreset" class="w-full bg-dark-700 text-white px-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
-        <option value="none">Tanpa overlay</option>
-        <option value="spectrum">Spectrum</option>
-        <option value="bars">Bars</option>
-        <option value="wave">Wave</option>
-      </select>
-    </div>
-    
-    <!-- Follow Audio Duration -->
-    <div class="flex items-center gap-2">
-      <input type="checkbox" id="followAudioDuration" class="w-4 h-4 rounded border-gray-500 bg-dark-700 text-primary focus:ring-primary">
-      <label for="followAudioDuration" class="text-sm text-gray-300">Loop mengikuti total durasi audio</label>
-    </div>
-    
-    <!-- Auto Upload -->
-    <div class="flex items-center justify-between p-4 bg-dark-700 rounded-lg border border-gray-600">
+    <!-- Row 2: Duration & Visualizer -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Jam</label>
+          <input type="number" id="durationHours" min="0" value="0" class="w-full bg-dark-700 text-white px-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
+        </div>
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Menit</label>
+          <input type="number" id="durationMinutes" min="0" max="59" value="0" class="w-full bg-dark-700 text-white px-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
+        </div>
+      </div>
+      
       <div>
+        <label class="text-sm font-medium text-white block mb-2">Overlay / Spectrum</label>
+        <select id="visualizerPreset" class="w-full bg-dark-700 text-white px-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
+          <option value="none">Tanpa overlay</option>
+          <option value="spectrum">Spectrum</option>
+          <option value="bars">Bars</option>
+          <option value="wave">Wave</option>
+        </select>
+      </div>
+    </div>
+    
+    <!-- Row 3: Checkboxes & Toggle in one row -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="flex items-center gap-2 bg-dark-700 p-3 rounded-lg border border-gray-600">
+        <input type="checkbox" id="followAudioDuration" class="w-4 h-4 rounded border-gray-500 bg-dark-700 text-primary focus:ring-primary">
+        <label for="followAudioDuration" class="text-sm text-gray-300">Loop ikuti durasi audio</label>
+      </div>
+      
+      <div class="flex items-center justify-between bg-dark-700 p-3 rounded-lg border border-gray-600">
         <div class="text-sm font-medium text-white">Upload otomatis</div>
-        <div class="text-xs text-gray-400 mt-1">Upload otomatis setelah render selesai</div>
+        <label class="relative inline-flex items-center cursor-pointer">
+          <input type="checkbox" id="autoUploadToYoutube" class="sr-only peer">
+          <div class="w-11 h-6 bg-gray-600 rounded-full peer peer-checked:bg-primary transition-colors"></div>
+          <div class="absolute left-[2px] top-[2px] w-5 h-5 bg-white rounded-full transition-all peer-checked:translate-x-5"></div>
+        </label>
       </div>
-      <label class="relative inline-flex items-center cursor-pointer">
-        <input type="checkbox" id="autoUploadToYoutube" class="sr-only peer">
-        <div class="w-11 h-6 bg-gray-600 rounded-full peer peer-checked:bg-primary transition-colors"></div>
-        <div class="absolute left-[2px] top-[2px] w-5 h-5 bg-white rounded-full transition-all peer-checked:translate-x-5"></div>
-      </label>
     </div>
     
     <!-- Action Buttons (Desktop) -->
