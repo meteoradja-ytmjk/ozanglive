@@ -214,19 +214,19 @@
       </div>
     </div>
     
-    <!-- Action Buttons (Desktop) -->
-    <div class="flex flex-col sm:flex-row gap-3 pt-2">
-      <button id="createBtn" class="flex-1 bg-primary hover:bg-secondary text-white px-6 py-2.5 rounded-lg font-medium transition-colors flex items-center justify-center gap-2">
-        <i class="ti ti-player-play"></i>
-        <span>Render Sekarang</span>
+    <!-- Action Buttons (Desktop & Mobile) -->
+    <div class="grid grid-cols-3 gap-3 pt-2">
+      <button id="createBtn" class="bg-primary hover:bg-secondary text-white px-4 py-2.5 rounded-lg font-medium transition-colors flex flex-col items-center justify-center gap-1">
+        <i class="ti ti-player-play text-lg"></i>
+        <span class="text-sm">Render</span>
       </button>
-      <button onclick="saveAsTemplate()" class="sm:w-auto px-6 py-2.5 bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-500/50 text-yellow-400 rounded-lg font-medium transition-colors flex items-center justify-center gap-2">
-        <i class="ti ti-device-floppy"></i>
-        <span>Save Template</span>
+      <button onclick="saveAsTemplate()" class="bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-500/50 text-yellow-400 px-4 py-2.5 rounded-lg font-medium transition-colors flex flex-col items-center justify-center gap-1">
+        <i class="ti ti-device-floppy text-lg"></i>
+        <span class="text-sm">Template</span>
       </button>
-      <button id="resetBtn" class="sm:w-auto px-6 py-2.5 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-gray-300 rounded-lg font-medium transition-colors flex items-center justify-center gap-2">
-        <i class="ti ti-eraser"></i>
-        <span>Reset</span>
+      <button id="resetBtn" class="bg-dark-700 hover:bg-dark-600 border border-gray-600 text-gray-300 px-4 py-2.5 rounded-lg font-medium transition-colors flex flex-col items-center justify-center gap-1">
+        <i class="ti ti-eraser text-lg"></i>
+        <span class="text-sm">Reset</span>
       </button>
     </div>
   </div>
