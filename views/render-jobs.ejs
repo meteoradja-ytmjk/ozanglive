@@ -48,6 +48,56 @@
     display: none !important;
   }
 }
+
+/* Template & Preview Modals */
+.modal-backdrop {
+  backdrop-filter: blur(4px);
+}
+
+/* Progress animations */
+@keyframes progressPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.progress-active {
+  animation: progressPulse 2s ease-in-out infinite;
+}
+
+/* Notification permission badge */
+.notification-badge {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 9999;
+  animation: slideInRight 0.3s ease;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* Filter chips */
+.filter-chip {
+  transition: all 0.2s ease;
+}
+
+.filter-chip:hover {
+  transform: translateY(-1px);
+}
+
+.filter-chip.active {
+  background: #8B5CF6;
+  color: white;
+  border-color: #8B5CF6;
+}
 </style>
 
 <!-- Page Header -->
@@ -58,25 +108,53 @@
   </div>
 </div>
 
+<!-- Tab Navigation -->
+<div class="flex w-full border border-gray-600 rounded-lg mb-6 overflow-hidden bg-gray-800/50">
+  <button onclick="switchRenderTab('jobs')" id="jobsTab"
+    class="flex-1 px-4 md:px-6 py-3 font-medium transition-colors text-center bg-primary/20 text-primary border-b-2 border-primary">
+    <i class="ti ti-video mr-2"></i>Active Jobs
+  </button>
+  <div class="w-px bg-gray-600"></div>
+  <button onclick="switchRenderTab('history')" id="historyTab"
+    class="flex-1 px-4 md:px-6 py-3 font-medium transition-colors text-center text-gray-400 hover:text-white hover:bg-gray-700/50">
+    <i class="ti ti-history mr-2"></i>History
+  </button>
+</div>
+
 <!-- Mobile Action Buttons -->
 <div class="mobile-actions">
   <button class="mobile-action-btn primary" id="mobileCreateBtn">
     <i class="ti ti-plus"></i>
     <span>New</span>
   </button>
+  <button class="mobile-action-btn" id="mobileTemplateBtn">
+    <i class="ti ti-template"></i>
+    <span>Template</span>
+  </button>
   <button class="mobile-action-btn" id="mobileRefreshBtn">
     <i class="ti ti-refresh"></i>
     <span>Refresh</span>
   </button>
-  <button class="mobile-action-btn" id="mobileResetBtn">
-    <i class="ti ti-eraser"></i>
-    <span>Reset</span>
-  </button>
 </div>
+
+<!-- Jobs Container (Active Tab) -->
+<div id="jobsContainer" class="tab-content">
 
 <!-- Main Form Card -->
 <div class="bg-gray-800 rounded-lg p-4 md:p-6 mb-6">
-  <h3 class="text-lg font-semibold mb-4">Render Settings</h3>
+  <div class="flex items-center justify-between mb-4">
+    <h3 class="text-lg font-semibold">Render Settings</h3>
+    <div class="flex gap-2">
+      <button onclick="openTemplateModal()" class="hidden md:flex items-center gap-2 px-3 py-2 bg-primary/20 hover:bg-primary/30 text-primary rounded-lg text-sm transition-colors">
+        <i class="ti ti-template"></i>
+        <span>Templates</span>
+      </button>
+      <button onclick="openPreviewModal()" class="hidden md:flex items-center gap-2 px-3 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg text-sm transition-colors">
+        <i class="ti ti-eye"></i>
+        <span>Preview</span>
+      </button>
+    </div>
+  </div>
   
   <div class="space-y-4">
     <!-- Target Channel -->
@@ -140,6 +218,9 @@
       <button id="createBtn" class="flex-1 bg-primary hover:bg-secondary text-white px-6 py-2.5 rounded-lg font-medium transition-colors">
         Render Sekarang
       </button>
+      <button onclick="saveAsTemplate()" class="px-6 py-2.5 bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-500/50 text-yellow-400 rounded-lg font-medium transition-colors">
+        Save Template
+      </button>
       <button id="resetBtn" class="px-6 py-2.5 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-gray-300 rounded-lg font-medium transition-colors">
         Reset
       </button>
@@ -177,6 +258,100 @@
   <h3 class="text-lg font-semibold mb-4">Daftar Render Jobs</h3>
   <div id="jobs">
     <div class="text-sm text-gray-400 text-center py-8">Belum ada job</div>
+  </div>
+</div>
+
+</div>
+
+<!-- History Container (Hidden by default) -->
+<div id="historyContainer" class="tab-content hidden">
+  <div class="bg-gray-800 rounded-lg p-4 md:p-6 mb-6">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+      <h3 class="text-lg font-semibold">Render History</h3>
+      <div class="flex gap-2">
+        <button onclick="clearHistory()" class="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg text-sm transition-colors">
+          <i class="ti ti-trash mr-1"></i>Clear History
+        </button>
+      </div>
+    </div>
+    
+    <!-- Filters -->
+    <div class="flex flex-wrap gap-2 mb-4">
+      <button onclick="filterHistory('all')" class="filter-chip active px-3 py-1.5 bg-dark-700 border border-gray-600 rounded-lg text-xs">
+        All
+      </button>
+      <button onclick="filterHistory('success')" class="filter-chip px-3 py-1.5 bg-dark-700 border border-gray-600 rounded-lg text-xs">
+        <i class="ti ti-check text-green-400"></i> Success
+      </button>
+      <button onclick="filterHistory('failed')" class="filter-chip px-3 py-1.5 bg-dark-700 border border-gray-600 rounded-lg text-xs">
+        <i class="ti ti-x text-red-400"></i> Failed
+      </button>
+      <input type="text" id="historySearch" placeholder="Search by title..." class="flex-1 min-w-[200px] px-3 py-1.5 bg-dark-700 border border-gray-600 rounded-lg text-sm" oninput="searchHistory(this.value)">
+    </div>
+    
+    <!-- History List -->
+    <div id="historyList">
+      <div class="text-sm text-gray-400 text-center py-8">No history yet</div>
+    </div>
+  </div>
+</div>
+
+<!-- Template Modal -->
+<div id="templateModal" class="fixed inset-0 bg-black/60 modal-backdrop z-50 hidden">
+  <div class="flex items-center justify-center min-h-screen p-4">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-2xl border border-gray-600/50">
+      <div class="flex items-center justify-between p-4 border-b border-gray-600/50">
+        <h3 class="text-lg font-medium">Render Templates</h3>
+        <button onclick="closeTemplateModal()" class="text-gray-400 hover:text-white">
+          <i class="ti ti-x text-xl"></i>
+        </button>
+      </div>
+      <div class="p-6 max-h-[70vh] overflow-y-auto">
+        <div id="templateList" class="space-y-3">
+          <div class="text-sm text-gray-400 text-center py-8">No templates saved</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Preview Modal -->
+<div id="previewModal" class="fixed inset-0 bg-black/60 modal-backdrop z-50 hidden">
+  <div class="flex items-center justify-center min-h-screen p-4">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-4xl border border-gray-600/50">
+      <div class="flex items-center justify-between p-4 border-b border-gray-600/50">
+        <h3 class="text-lg font-medium">Render Preview</h3>
+        <button onclick="closePreviewModal()" class="text-gray-400 hover:text-white">
+          <i class="ti ti-x text-xl"></i>
+        </button>
+      </div>
+      <div class="p-6">
+        <div class="bg-black rounded-lg aspect-video flex items-center justify-center mb-4">
+          <div id="previewContent" class="text-gray-400">
+            <i class="ti ti-player-play text-6xl mb-2"></i>
+            <p class="text-sm">Preview will be generated here</p>
+          </div>
+        </div>
+        <div id="previewInfo" class="grid grid-cols-2 gap-4 text-sm">
+          <div class="bg-dark-700 p-3 rounded-lg">
+            <span class="text-gray-400">Duration:</span>
+            <span class="text-white ml-2" id="previewDuration">-</span>
+          </div>
+          <div class="bg-dark-700 p-3 rounded-lg">
+            <span class="text-gray-400">Videos:</span>
+            <span class="text-white ml-2" id="previewVideos">-</span>
+          </div>
+          <div class="bg-dark-700 p-3 rounded-lg">
+            <span class="text-gray-400">Audios:</span>
+            <span class="text-white ml-2" id="previewAudios">-</span>
+          </div>
+          <div class="bg-dark-700 p-3 rounded-lg">
+            <span class="text-gray-400">Visualizer:</span>
+            <span class="text-white ml-2" id="previewVisualizer">-</span>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -270,16 +445,51 @@ async function deleteJob(id){
 async function loadJobs(){
   const r=await fetch('/api/render/jobs');
   const d=await r.json();
-  const cards=toArray(d,'jobs').map(j=>`
+  const cards=toArray(d,'jobs').map(j=>{
+    const progress = Math.max(0,Math.min(100,Number(j.progress||0)));
+    const isActive = j.status === 'processing' || j.status === 'pending';
+    
+    // Calculate ETA
+    let etaText = '';
+    let speedText = '';
+    if (isActive && j.progress > 0) {
+      const elapsed = j.elapsed_seconds || 0;
+      const remaining = elapsed > 0 ? (elapsed / j.progress) * (100 - j.progress) : 0;
+      const fps = j.render_speed || 0;
+      
+      if (remaining > 0) {
+        const mins = Math.floor(remaining / 60);
+        const secs = Math.floor(remaining % 60);
+        etaText = `${mins}m ${secs}s tersisa`;
+      }
+      
+      if (fps > 0) {
+        speedText = `${fps.toFixed(1)} fps`;
+      }
+    }
+    
+    return `
     <div class="bg-dark-700 rounded-lg p-4 border border-gray-600 hover:border-primary transition-colors mb-3">
       <div class="flex items-start justify-between mb-2">
         <div class="flex-1">
           <h4 class="text-sm font-semibold text-white mb-1">${j.title||'Tanpa judul'}</h4>
-          <div class="text-xs text-gray-400">${j.status} • ${j.progress||0}% • target ${j.target_duration_seconds||0}s</div>
+          <div class="flex flex-wrap gap-2 text-xs text-gray-400">
+            <span class="flex items-center gap-1">
+              <i class="ti ti-clock"></i>
+              ${j.status}
+            </span>
+            ${speedText ? `<span class="flex items-center gap-1 text-primary"><i class="ti ti-activity"></i>${speedText}</span>` : ''}
+            ${etaText ? `<span class="flex items-center gap-1 text-green-400"><i class="ti ti-hourglass"></i>${etaText}</span>` : ''}
+          </div>
         </div>
+        ${isActive ? '<div class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>' : ''}
       </div>
-      <div class="w-full bg-gray-600 rounded-full h-1.5 mb-3">
-        <div class="bg-primary h-1.5 rounded-full transition-all" style="width:${Math.max(0,Math.min(100,Number(j.progress||0)))}%"></div>
+      <div class="w-full bg-gray-600 rounded-full h-2 mb-3">
+        <div class="bg-primary h-2 rounded-full transition-all ${isActive ? 'progress-active' : ''}" style="width:${progress}%"></div>
+      </div>
+      <div class="flex items-center justify-between text-xs mb-3">
+        <span class="text-gray-400">${progress}% complete</span>
+        <span class="text-gray-400">Target: ${j.target_duration_seconds||0}s</span>
       </div>
       ${j.output_path?`<video controls preload="metadata" src="${j.output_path}" class="w-full rounded-lg mb-3 bg-black"></video>`:''}
       <div class="flex gap-2">
@@ -290,8 +500,358 @@ async function loadJobs(){
         <button onclick="deleteJob('${j.id}')" class="px-3 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 text-sm rounded-lg transition-colors">Hapus</button>
       </div>
     </div>
-  `).join('');
+  `;
+  }).join('');
   el.jobs.innerHTML=cards||'<div class="text-sm text-gray-400 text-center py-8">Belum ada job</div>';
+}
+
+if (el.createBtn) {
+  el.createBtn.addEventListener('click',async()=>{
+    try{
+      const titleV=el.title.value;
+      const h=parseInt(el.durationHours.value||0,10);
+      const m=parseInt(el.durationMinutes.value||0,10);
+      const targetDurationSeconds=(h*3600)+(m*60);
+      const videoIds=[...document.querySelectorAll("input[name='video']:checked")].map(i=>i.value);
+      const audioIds=[...document.querySelectorAll("input[name='audio']:checked")].map(i=>i.value);
+      if(videoIds.length===0)return alert('Pilih minimal 1 video');
+      const resp=await fetch('/api/render/jobs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:titleV,targetDurationSeconds,durationHours:h,durationMinutes:m,targetAccountId:el.targetAccountId.value,autoUploadToYoutube:el.autoUploadToYoutube.checked,visualizerPreset:el.visualizerPreset.value,followAudioDuration:el.followAudioDuration.checked,videoIds,audioIds})});
+      const data=await resp.json();
+      if(!resp.ok||!data.success)return alert(data.message||'Gagal');
+      
+      // Show notification
+      showNotification('Render Started', 'Your render job has been queued');
+      
+      loadJobs();
+    }catch(err){
+      console.error('Create render job error:', err);
+      alert('Terjadi error saat membuat render job');
+    }
+  });
+}
+
+// ===== FEATURE 2: TEMPLATE MANAGEMENT =====
+function saveAsTemplate() {
+  const templateName = prompt('Enter template name:');
+  if (!templateName) return;
+  
+  const template = {
+    name: templateName,
+    title: el.title.value,
+    durationHours: el.durationHours.value,
+    durationMinutes: el.durationMinutes.value,
+    visualizerPreset: el.visualizerPreset.value,
+    followAudioDuration: el.followAudioDuration.checked,
+    autoUploadToYoutube: el.autoUploadToYoutube.checked,
+    videoIds: [...document.querySelectorAll("input[name='video']:checked")].map(i=>i.value),
+    audioIds: [...document.querySelectorAll("input[name='audio']:checked")].map(i=>i.value),
+    createdAt: new Date().toISOString()
+  };
+  
+  const templates = JSON.parse(localStorage.getItem('renderTemplates') || '[]');
+  templates.push(template);
+  localStorage.setItem('renderTemplates', JSON.stringify(templates));
+  
+  alert('Template saved successfully!');
+}
+
+function openTemplateModal() {
+  const modal = document.getElementById('templateModal');
+  const templates = JSON.parse(localStorage.getItem('renderTemplates') || '[]');
+  
+  const templateList = document.getElementById('templateList');
+  if (templates.length === 0) {
+    templateList.innerHTML = '<div class="text-sm text-gray-400 text-center py-8">No templates saved</div>';
+  } else {
+    templateList.innerHTML = templates.map((t, idx) => `
+      <div class="bg-dark-700 p-4 rounded-lg border border-gray-600">
+        <div class="flex items-start justify-between mb-2">
+          <div class="flex-1">
+            <h4 class="text-sm font-semibold text-white">${t.name}</h4>
+            <p class="text-xs text-gray-400 mt-1">${t.title || 'No title'}</p>
+            <p class="text-xs text-gray-500 mt-1">${new Date(t.createdAt).toLocaleDateString()}</p>
+          </div>
+        </div>
+        <div class="flex gap-2 mt-3">
+          <button onclick="loadTemplate(${idx})" class="flex-1 px-3 py-2 bg-primary hover:bg-secondary text-white text-sm rounded-lg transition-colors">
+            Load
+          </button>
+          <button onclick="deleteTemplate(${idx})" class="px-3 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 text-sm rounded-lg transition-colors">
+            Delete
+          </button>
+        </div>
+      </div>
+    `).join('');
+  }
+  
+  modal.classList.remove('hidden');
+}
+
+function closeTemplateModal() {
+  document.getElementById('templateModal').classList.add('hidden');
+}
+
+function loadTemplate(idx) {
+  const templates = JSON.parse(localStorage.getItem('renderTemplates') || '[]');
+  const template = templates[idx];
+  if (!template) return;
+  
+  el.title.value = template.title || '';
+  el.durationHours.value = template.durationHours || 0;
+  el.durationMinutes.value = template.durationMinutes || 0;
+  el.visualizerPreset.value = template.visualizerPreset || 'none';
+  el.followAudioDuration.checked = template.followAudioDuration || false;
+  el.autoUploadToYoutube.checked = template.autoUploadToYoutube || false;
+  
+  // Clear all checkboxes first
+  document.querySelectorAll("input[name='video'],input[name='audio']").forEach(x=>x.checked=false);
+  
+  // Check videos
+  template.videoIds.forEach(id => {
+    const checkbox = document.querySelector(`input[name='video'][value='${id}']`);
+    if (checkbox) checkbox.checked = true;
+  });
+  
+  // Check audios
+  template.audioIds.forEach(id => {
+    const checkbox = document.querySelector(`input[name='audio'][value='${id}']`);
+    if (checkbox) checkbox.checked = true;
+  });
+  
+  closeTemplateModal();
+  alert('Template loaded successfully!');
+}
+
+function deleteTemplate(idx) {
+  if (!confirm('Delete this template?')) return;
+  
+  const templates = JSON.parse(localStorage.getItem('renderTemplates') || '[]');
+  templates.splice(idx, 1);
+  localStorage.setItem('renderTemplates', JSON.stringify(templates));
+  
+  openTemplateModal(); // Refresh list
+}
+
+// ===== FEATURE 3: LIVE PREVIEW =====
+function openPreviewModal() {
+  const videoIds = [...document.querySelectorAll("input[name='video']:checked")].map(i=>i.value);
+  const audioIds = [...document.querySelectorAll("input[name='audio']:checked")].map(i=>i.value);
+  
+  if (videoIds.length === 0) {
+    alert('Please select at least one video');
+    return;
+  }
+  
+  const h = parseInt(el.durationHours.value||0,10);
+  const m = parseInt(el.durationMinutes.value||0,10);
+  const duration = `${h}h ${m}m`;
+  
+  document.getElementById('previewDuration').textContent = duration;
+  document.getElementById('previewVideos').textContent = videoIds.length;
+  document.getElementById('previewAudios').textContent = audioIds.length;
+  document.getElementById('previewVisualizer').textContent = el.visualizerPreset.value;
+  
+  document.getElementById('previewModal').classList.remove('hidden');
+}
+
+function closePreviewModal() {
+  document.getElementById('previewModal').classList.add('hidden');
+}
+
+// ===== FEATURE 4: NOTIFICATIONS =====
+let notificationPermission = false;
+
+async function requestNotificationPermission() {
+  if ('Notification' in window && Notification.permission === 'default') {
+    const permission = await Notification.requestPermission();
+    notificationPermission = permission === 'granted';
+    
+    if (notificationPermission) {
+      showBadge('Notifications enabled!', 'success');
+    }
+  } else if (Notification.permission === 'granted') {
+    notificationPermission = true;
+  }
+}
+
+function showNotification(title, body) {
+  // Browser notification
+  if (notificationPermission && 'Notification' in window) {
+    new Notification(title, {
+      body: body,
+      icon: '/images/logo.svg',
+      badge: '/images/logo.svg'
+    });
+  }
+  
+  // In-app toast
+  showToast(title + ': ' + body);
+}
+
+function showToast(message) {
+  const toast = document.createElement('div');
+  toast.className = 'fixed top-4 right-4 bg-gray-800 border border-primary text-white px-4 py-3 rounded-lg shadow-lg z-50 animate-in';
+  toast.innerHTML = `
+    <div class="flex items-center gap-2">
+      <i class="ti ti-check-circle text-primary"></i>
+      <span class="text-sm">${message}</span>
+    </div>
+  `;
+  document.body.appendChild(toast);
+  
+  setTimeout(() => {
+    toast.remove();
+  }, 3000);
+}
+
+function showBadge(message, type = 'info') {
+  const badge = document.createElement('div');
+  badge.className = `notification-badge bg-${type === 'success' ? 'green' : 'blue'}-500 text-white px-4 py-2 rounded-lg shadow-lg`;
+  badge.textContent = message;
+  document.body.appendChild(badge);
+  
+  setTimeout(() => {
+    badge.remove();
+  }, 3000);
+}
+
+// Monitor job completion for notifications
+let lastJobCount = 0;
+async function checkJobCompletion() {
+  const r = await fetch('/api/render/jobs');
+  const d = await r.json();
+  const jobs = toArray(d, 'jobs');
+  
+  const completedJobs = jobs.filter(j => j.status === 'completed' && j.output_path);
+  const failedJobs = jobs.filter(j => j.status === 'failed');
+  
+  if (completedJobs.length > lastJobCount) {
+    const newCompleted = completedJobs.slice(lastJobCount);
+    newCompleted.forEach(job => {
+      showNotification('Render Complete!', `${job.title} has finished rendering`);
+      addToHistory(job, 'success');
+    });
+  }
+  
+  failedJobs.forEach(job => {
+    if (!job.notified) {
+      showNotification('Render Failed', `${job.title} failed to render`);
+      addToHistory(job, 'failed');
+    }
+  });
+  
+  lastJobCount = completedJobs.length;
+}
+
+// ===== FEATURE 5: RENDER HISTORY & FILTER =====
+function addToHistory(job, status) {
+  const history = JSON.parse(localStorage.getItem('renderHistory') || '[]');
+  history.unshift({
+    id: job.id,
+    title: job.title,
+    status: status,
+    completedAt: new Date().toISOString(),
+    duration: job.target_duration_seconds,
+    outputPath: job.output_path
+  });
+  
+  // Keep only last 50 items
+  if (history.length > 50) history.pop();
+  
+  localStorage.setItem('renderHistory', JSON.stringify(history));
+}
+
+function loadHistory() {
+  const history = JSON.parse(localStorage.getItem('renderHistory') || '[]');
+  const historyList = document.getElementById('historyList');
+  
+  if (history.length === 0) {
+    historyList.innerHTML = '<div class="text-sm text-gray-400 text-center py-8">No history yet</div>';
+    return;
+  }
+  
+  historyList.innerHTML = history.map(h => `
+    <div class="bg-dark-700 rounded-lg p-4 border border-gray-600 mb-3" data-status="${h.status}" data-title="${h.title.toLowerCase()}">
+      <div class="flex items-start justify-between">
+        <div class="flex-1">
+          <h4 class="text-sm font-semibold text-white mb-1">${h.title}</h4>
+          <div class="flex items-center gap-2 text-xs text-gray-400">
+            <span class="flex items-center gap-1 ${h.status === 'success' ? 'text-green-400' : 'text-red-400'}">
+              <i class="ti ti-${h.status === 'success' ? 'check' : 'x'}"></i>
+              ${h.status}
+            </span>
+            <span>${new Date(h.completedAt).toLocaleString()}</span>
+            <span>${h.duration}s</span>
+          </div>
+        </div>
+      </div>
+      ${h.outputPath ? `
+        <div class="mt-3">
+          <a href="${h.outputPath}" target="_blank" class="inline-flex items-center gap-2 px-3 py-2 bg-primary hover:bg-secondary text-white text-sm rounded-lg transition-colors">
+            <i class="ti ti-player-play"></i>
+            View Result
+          </a>
+        </div>
+      ` : ''}
+    </div>
+  `).join('');
+}
+
+function filterHistory(status) {
+  // Update active filter chip
+  document.querySelectorAll('.filter-chip').forEach(chip => {
+    chip.classList.remove('active');
+  });
+  event.target.classList.add('active');
+  
+  const items = document.querySelectorAll('#historyList > div[data-status]');
+  items.forEach(item => {
+    if (status === 'all' || item.dataset.status === status) {
+      item.style.display = 'block';
+    } else {
+      item.style.display = 'none';
+    }
+  });
+}
+
+function searchHistory(query) {
+  const items = document.querySelectorAll('#historyList > div[data-title]');
+  const lowerQuery = query.toLowerCase();
+  
+  items.forEach(item => {
+    if (item.dataset.title.includes(lowerQuery)) {
+      item.style.display = 'block';
+    } else {
+      item.style.display = 'none';
+    }
+  });
+}
+
+function clearHistory() {
+  if (!confirm('Clear all history?')) return;
+  localStorage.setItem('renderHistory', '[]');
+  loadHistory();
+}
+
+// ===== TAB SWITCHING =====
+function switchRenderTab(tab) {
+  const jobsTab = document.getElementById('jobsTab');
+  const historyTab = document.getElementById('historyTab');
+  const jobsContainer = document.getElementById('jobsContainer');
+  const historyContainer = document.getElementById('historyContainer');
+  
+  if (tab === 'jobs') {
+    jobsTab.className = 'flex-1 px-4 md:px-6 py-3 font-medium transition-colors text-center bg-primary/20 text-primary border-b-2 border-primary';
+    historyTab.className = 'flex-1 px-4 md:px-6 py-3 font-medium transition-colors text-center text-gray-400 hover:text-white hover:bg-gray-700/50';
+    jobsContainer.classList.remove('hidden');
+    historyContainer.classList.add('hidden');
+  } else {
+    historyTab.className = 'flex-1 px-4 md:px-6 py-3 font-medium transition-colors text-center bg-primary/20 text-primary border-b-2 border-primary';
+    jobsTab.className = 'flex-1 px-4 md:px-6 py-3 font-medium transition-colors text-center text-gray-400 hover:text-white hover:bg-gray-700/50';
+    historyContainer.classList.remove('hidden');
+    jobsContainer.classList.add('hidden');
+    loadHistory();
+  }
 }
 
 if (el.createBtn) {
@@ -339,12 +899,18 @@ toggleDurationInputs();
 
 // Mobile buttons
 const mobileCreateBtn = document.getElementById('mobileCreateBtn');
+const mobileTemplateBtn = document.getElementById('mobileTemplateBtn');
 const mobileRefreshBtn = document.getElementById('mobileRefreshBtn');
-const mobileResetBtn = document.getElementById('mobileResetBtn');
 
 if (mobileCreateBtn) {
   mobileCreateBtn.addEventListener('click', () => {
     if (el.createBtn) el.createBtn.click();
+  });
+}
+
+if (mobileTemplateBtn) {
+  mobileTemplateBtn.addEventListener('click', () => {
+    openTemplateModal();
   });
 }
 
@@ -358,18 +924,17 @@ if (mobileRefreshBtn) {
   });
 }
 
-if (mobileResetBtn) {
-  mobileResetBtn.addEventListener('click', () => {
-    if (el.resetBtn) el.resetBtn.click();
-  });
-}
-
 // Initialize
 Promise.resolve()
   .then(loadAccounts)
   .then(loadMedia)
   .then(loadJobs)
+  .then(requestNotificationPermission)
   .catch((err) => console.error('Render dashboard init error:', err));
 
-setInterval(() => loadJobs().catch(() => {}), 5000);
+// Auto-refresh jobs every 3 seconds (faster for real-time updates)
+setInterval(() => {
+  loadJobs().catch(() => {});
+  checkJobCompletion().catch(() => {});
+}, 3000);
 </script>
