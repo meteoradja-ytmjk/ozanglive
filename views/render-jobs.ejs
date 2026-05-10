@@ -231,7 +231,7 @@ textarea {
 
 @media (max-width: 767px) {
   .actions {
-    flex-direction: column;
+    display: none;
   }
 }
 
@@ -492,6 +492,78 @@ label[style*="display:flex"][style*="align-items:center"]:hover {
   .hide-mobile {
     display: none !important;
   }
+  
+  /* Mobile action buttons */
+  .mobile-actions {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+    padding: 1rem;
+    background: #111827;
+    border-bottom: 1px solid #374151;
+  }
+  
+  .mobile-action-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 1rem 0.5rem;
+    background: #1F2937;
+    border: 1px solid #374151;
+    border-radius: 0.75rem;
+    color: #D1D5DB;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-decoration: none;
+  }
+  
+  .mobile-action-btn:active {
+    transform: scale(0.95);
+  }
+  
+  .mobile-action-btn.primary {
+    background: #8B5CF6;
+    color: white;
+    border-color: #8B5CF6;
+  }
+  
+  .mobile-action-btn i {
+    font-size: 1.5rem;
+  }
+  
+  .mobile-expand-btn {
+    width: 100%;
+    padding: 0.75rem;
+    background: #1F2937;
+    border: 1px solid #374151;
+    border-radius: 0.75rem;
+    color: #D1D5DB;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+  }
+  
+  .mobile-expand-btn:active {
+    transform: scale(0.98);
+    background: #374151;
+  }
+}
+
+@media (min-width: 768px) {
+  .mobile-actions,
+  .mobile-expand-btn {
+    display: none !important;
+  }
 }
 
 html {
@@ -514,6 +586,22 @@ html {
     <div class="status-badge hide-mobile">
       <span>●</span> Sistem siap
     </div>
+  </div>
+  
+  <!-- Mobile Action Buttons (only visible on mobile) -->
+  <div class="mobile-actions">
+    <button class="mobile-action-btn primary" id="mobileCreateBtn">
+      <i class="ti ti-plus"></i>
+      <span>New</span>
+    </button>
+    <button class="mobile-action-btn" id="mobileRefreshBtn">
+      <i class="ti ti-refresh"></i>
+      <span>Refresh</span>
+    </button>
+    <button class="mobile-action-btn" id="mobileResetBtn">
+      <i class="ti ti-eraser"></i>
+      <span>Reset</span>
+    </button>
   </div>
   
   <div class="nav-scroll">
@@ -647,4 +735,31 @@ Promise.resolve()
   .then(loadJobs)
   .catch((err) => console.error('Render dashboard init error:', err));
 setInterval(() => loadJobs().catch(() => {}), 5000);
+
+// Mobile action buttons
+const mobileCreateBtn = document.getElementById('mobileCreateBtn');
+const mobileRefreshBtn = document.getElementById('mobileRefreshBtn');
+const mobileResetBtn = document.getElementById('mobileResetBtn');
+
+if (mobileCreateBtn) {
+  mobileCreateBtn.addEventListener('click', () => {
+    if (el.createBtn) el.createBtn.click();
+  });
+}
+
+if (mobileRefreshBtn) {
+  mobileRefreshBtn.addEventListener('click', () => {
+    Promise.resolve()
+      .then(loadAccounts)
+      .then(loadMedia)
+      .then(loadJobs)
+      .catch((err) => console.error('Refresh error:', err));
+  });
+}
+
+if (mobileResetBtn) {
+  mobileResetBtn.addEventListener('click', () => {
+    if (el.resetBtn) el.resetBtn.click();
+  });
+}
 </script>
