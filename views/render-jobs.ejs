@@ -1,5 +1,14 @@
 <style>
 /* Render Dashboard - Consistent with App Design */
+
+/* Prevent zoom on mobile */
+input[type="text"],
+input[type="number"],
+select,
+textarea {
+  font-size: 16px !important;
+}
+
 .r-shell {
   max-width: 1200px;
   margin: 0 auto;
@@ -42,11 +51,12 @@
   font-size: 1.5rem;
   font-weight: 700;
   color: white;
+  line-height: 1.2;
 }
 
 @media (max-width: 767px) {
   .top h2 {
-    font-size: 1.25rem;
+    font-size: 1.125rem;
   }
 }
 
@@ -110,7 +120,7 @@
 .field label {
   display: block;
   margin-bottom: 0.5rem;
-  color: #D1D5DB;
+  color: white;
   font-size: 0.875rem;
   font-weight: 500;
 }
@@ -123,7 +133,7 @@
   border: 1px solid #4B5563;
   border-radius: 0.5rem;
   color: white;
-  font-size: 1rem;
+  font-size: 0.875rem;
   transition: all 0.2s ease;
 }
 
@@ -148,7 +158,8 @@
 
 @media (max-width: 767px) {
   .input, .select {
-    font-size: 16px;
+    font-size: 0.875rem;
+    height: 42px;
   }
 }
 
@@ -235,8 +246,15 @@
   transition: all 0.2s ease;
   display: inline-flex;
   align-items: center;
-  justify-center: center;
+  justify-content: center;
   text-decoration: none;
+}
+
+@media (max-width: 767px) {
+  .btn {
+    height: 42px;
+    font-size: 0.875rem;
+  }
 }
 
 .btn:active {
@@ -331,7 +349,7 @@
 }
 
 .job b {
-  font-size: 1rem;
+  font-size: 0.875rem;
   font-weight: 600;
   color: white;
   display: block;
@@ -342,6 +360,7 @@
   display: flex;
   gap: 0.5rem;
   margin-top: 1rem;
+  flex-wrap: wrap;
 }
 
 @media (max-width: 767px) {
@@ -356,7 +375,8 @@
 
 .muted {
   color: #9CA3AF;
-  font-size: 0.875rem;
+  font-size: 0.75rem;
+  line-height: 1.5;
 }
 
 details {
@@ -375,6 +395,7 @@ summary {
   justify-content: space-between;
   align-items: center;
   font-weight: 600;
+  font-size: 0.875rem;
   color: white;
   user-select: none;
 }
@@ -389,7 +410,7 @@ summary:hover {
 
 summary::after {
   content: '▼';
-  font-size: 0.75rem;
+  font-size: 0.625rem;
   color: #8B5CF6;
   transition: transform 0.3s ease;
 }
@@ -419,29 +440,37 @@ label[style*="display:flex"][style*="align-items:center"]:hover {
 }
 
 .icon-badge {
-  width: 48px;
-  height: 48px;
+  width: 40px;
+  height: 40px;
   border-radius: 0.75rem;
   display: grid;
   place-items: center;
   font-weight: 700;
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   color: white;
   background: linear-gradient(135deg, #8B5CF6, #A78BFA);
   flex-shrink: 0;
 }
 
+@media (min-width: 768px) {
+  .icon-badge {
+    width: 48px;
+    height: 48px;
+    font-size: 1.5rem;
+  }
+}
+
 .status-badge {
-  padding: 0.5rem 1rem;
+  padding: 0.375rem 0.75rem;
   border: 1px solid #10B981;
   border-radius: 999px;
   color: #10B981;
   background: rgba(16, 185, 129, 0.1);
-  font-size: 0.875rem;
+  font-size: 0.75rem;
   font-weight: 600;
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.375rem;
 }
 
 .progress-bar {
@@ -479,7 +508,7 @@ html {
       <div class="icon-badge">R</div>
       <div style="min-width:0">
         <h2>Render Dashboard</h2>
-        <div class="muted" style="margin-top:4px">Pilih channel, jam, menit, video, dan audio untuk proses render.</div>
+        <div class="muted" style="margin-top:0.25rem">Pilih channel, jam, menit, video, dan audio untuk proses render.</div>
       </div>
     </div>
     <div class="status-badge hide-mobile">
@@ -532,7 +561,7 @@ html {
       </div>
       <div class="field" style="display:flex;justify-content:space-between;align-items:center;border:1px solid #374151;border-radius:0.75rem;padding:1rem;background:#111827">
         <div>
-          <b style="font-size:0.875rem;color:white">Upload otomatis</b>
+          <b style="font-size:0.875rem;color:white;font-weight:600">Upload otomatis</b>
           <div class="muted">Upload otomatis setelah render selesai</div>
         </div>
         <label class="switch">
@@ -549,16 +578,16 @@ html {
     <div class="media-grid">
       <section class="section panel-video">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">
-          <b style="font-size:1rem;color:white">Video</b>
-          <span class="muted" style="font-size:0.75rem">Multi-select</span>
+          <b style="font-size:0.875rem;color:white;font-weight:600">Video</b>
+          <span class="muted">Multi-select</span>
         </div>
         <div id="videoList" class="option"></div>
       </section>
       
       <section class="section panel-audio">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">
-          <b style="font-size:1rem;color:white">Audio</b>
-          <span class="muted" style="font-size:0.75rem">Opsional</span>
+          <b style="font-size:0.875rem;color:white;font-weight:600">Audio</b>
+          <span class="muted">Opsional</span>
         </div>
         <div id="audioList" class="option"></div>
       </section>
@@ -593,7 +622,7 @@ const ensureEl = (name) => {
 const normalizeName=(title)=>String(title||'').toLowerCase().replace(/[0-9]+([.,][0-9]+)?/g,'').replace(/[_-]+/g,' ').replace(/\\s+/g,' ').trim();
 const groupByName=(items)=>items.reduce((acc,item)=>{const key=normalizeName(item.title)||'lainnya';if(!acc[key])acc[key]=[];acc[key].push(item);return acc;},{});
 const fmtMB=(bytes)=>{const n=Number(bytes||0);if(!n)return '-';return `${(n/1024/1024).toFixed(1)} MB`;};
-const renderGroupedRows=(items,name,type)=>{const grouped=groupByName(items);return Object.entries(grouped).map(([nameGroup,rows],idx)=>`<details ${idx===0?'open':''} style='margin-bottom:10px;border:1px solid #374151;border-radius:0.5rem;background:#1F2937'><summary style='cursor:pointer;list-style:none;padding:10px 12px;display:flex;justify-content:space-between;align-items:center'><div style='font-weight:600;color:white;text-transform:capitalize'>${nameGroup}</div><span class='muted'>${rows.length} ${type}</span></summary>${rows.map(x=>`<label style='display:flex;align-items:center;gap:10px;padding:10px 12px;border-top:1px solid #374151;cursor:pointer'><input type='checkbox' name='${name}' value='${x.id}'><div style='width:66px;height:40px;border-radius:0.5rem;overflow:hidden;background:#111827;flex:0 0 auto'>${x.thumbnail_path?`<img src='${x.thumbnail_path}' style='width:100%;height:100%;object-fit:cover'>`:`<div style='display:grid;place-items:center;height:100%;font-size:11px;color:#8B5CF6'>${type==='videos'?'VIDEO':'AUDIO'}</div>`}</div><div><div style='font-size:14px;color:white'>${x.title}</div><div class='muted'>${x.duration||'-'} • ${fmtMB(x.file_size)}</div></div></label>`).join('')}</details>`).join('');};
+const renderGroupedRows=(items,name,type)=>{const grouped=groupByName(items);return Object.entries(grouped).map(([nameGroup,rows],idx)=>`<details ${idx===0?'open':''} style='margin-bottom:10px;border:1px solid #374151;border-radius:0.5rem;background:#1F2937'><summary style='cursor:pointer;list-style:none;padding:10px 12px;display:flex;justify-content:space-between;align-items:center'><div style='font-weight:600;color:white;text-transform:capitalize;font-size:0.875rem'>${nameGroup}</div><span class='muted'>${rows.length} ${type}</span></summary>${rows.map(x=>`<label style='display:flex;align-items:center;gap:10px;padding:10px 12px;border-top:1px solid #374151;cursor:pointer'><input type='checkbox' name='${name}' value='${x.id}'><div style='width:66px;height:40px;border-radius:0.5rem;overflow:hidden;background:#111827;flex:0 0 auto'>${x.thumbnail_path?`<img src='${x.thumbnail_path}' style='width:100%;height:100%;object-fit:cover'>`:`<div style='display:grid;place-items:center;height:100%;font-size:0.6875rem;color:#8B5CF6'>${type==='videos'?'VIDEO':'AUDIO'}</div>`}</div><div><div style='font-size:0.875rem;color:white'>${x.title}</div><div class='muted'>${x.duration||'-'} • ${fmtMB(x.file_size)}</div></div></label>`).join('')}</details>`).join('');};
 async function loadAccounts(){const target=ensureEl('targetAccountId');const r=await fetch('/api/youtube/accounts');const d=await r.json();target.innerHTML=`<option value=''>-- Pilih Channel --</option>`+toArray(d,'accounts').map(a=>`<option value='${a.id}'>${a.channelName||('Channel '+a.id)}</option>`).join('')}
 async function loadMedia(){ensureEl('videoList');ensureEl('audioList');const [vr,ar]=await Promise.all([fetch('/api/videos'),fetch('/api/stream/audios')]);const vd=await vr.json();const ad=await ar.json();el.videoList.innerHTML=renderGroupedRows(toArray(vd,'videos'),'video','videos')||'<div class=\"muted\">Tidak ada video</div>';el.audioList.innerHTML=renderGroupedRows(toArray(ad,'audios'),'audio','audios')||'<div class=\"muted\">Tidak ada audio</div>'}
 async function uploadJob(id){const r=await fetch(`/api/render/jobs/${id}/upload`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({targetAccountId:el.targetAccountId.value})});const d=await r.json();if(!d.success)return alert(d.message||'Upload gagal');loadJobs();}
