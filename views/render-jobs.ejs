@@ -624,9 +624,12 @@
     <!-- Watermark Content -->
     <div id="watermarkContent" class="space-y-3">
       <div>
-        <label class="text-xs font-medium text-gray-300 block mb-2">
-          Upload Watermark Image
-          <span class="text-gray-500 ml-1">(PNG/JPG supported)</span>
+        <label class="text-xs font-medium text-gray-300 block mb-2 flex items-center justify-between">
+          <span>
+            Upload Watermark Image
+            <span class="text-gray-500 ml-1">(PNG/JPG supported)</span>
+          </span>
+          <span class="text-xs text-primary" id="watermarkCount">0 files</span>
         </label>
         <input type="file" id="watermarkFile" accept="image/png,image/jpeg,image/jpg" class="hidden" onchange="handleWatermarkUpload(event)">
         <button onclick="document.getElementById('watermarkFile').click()" class="w-full bg-dark-700 hover:bg-dark-600 border border-gray-600 text-gray-300 px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-center gap-2">
@@ -636,8 +639,20 @@
       </div>
       
       <!-- Uploaded Watermarks List -->
-      <div id="watermarkFilesList" class="space-y-2 max-h-40 overflow-y-auto">
+      <div id="watermarkFilesList" class="space-y-2 max-h-48 overflow-y-auto">
         <!-- Watermark files will be listed here -->
+        <div class="text-xs text-gray-400 text-center py-4">
+          <i class="ti ti-photo-off text-2xl mb-2 block"></i>
+          No watermarks uploaded yet
+        </div>
+      </div>
+      
+      <!-- Bulk Actions -->
+      <div id="watermarkBulkActions" class="hidden">
+        <button onclick="clearAllWatermarks()" class="w-full bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-400 px-3 py-2 rounded-lg text-xs transition-colors flex items-center justify-center gap-2">
+          <i class="ti ti-trash"></i>
+          <span>Clear All Watermarks</span>
+        </button>
       </div>
       
       <div class="grid grid-cols-2 gap-3">
@@ -2033,31 +2048,54 @@ function handleWatermarkUpload(event) {
 
 function updateWatermarkFilesList() {
   const list = document.getElementById('watermarkFilesList');
+  const counter = document.getElementById('watermarkCount');
+  const bulkActions = document.getElementById('watermarkBulkActions');
+  
+  // Update counter
+  if (counter) {
+    counter.textContent = `${uploadedWatermarks.length} file${uploadedWatermarks.length !== 1 ? 's' : ''}`;
+  }
+  
+  // Show/hide bulk actions
+  if (bulkActions) {
+    if (uploadedWatermarks.length > 0) {
+      bulkActions.classList.remove('hidden');
+    } else {
+      bulkActions.classList.add('hidden');
+    }
+  }
   
   if (uploadedWatermarks.length === 0) {
-    list.innerHTML = '';
+    list.innerHTML = `
+      <div class="text-xs text-gray-400 text-center py-4">
+        <i class="ti ti-photo-off text-2xl mb-2 block"></i>
+        No watermarks uploaded yet
+      </div>
+    `;
     return;
   }
   
   list.innerHTML = uploadedWatermarks.map((file, idx) => `
-    <div class="flex items-center justify-between p-2 bg-dark-700 rounded border ${idx === activeWatermarkIndex ? 'border-primary' : 'border-gray-600'}">
+    <div class="flex items-center justify-between p-2 bg-dark-700 rounded border ${idx === activeWatermarkIndex ? 'border-primary' : 'border-gray-600'} hover:border-primary/50 transition-colors">
       <div class="flex items-center gap-2 flex-1 min-w-0">
-        <div class="w-8 h-8 rounded bg-gray-900 flex-shrink-0 overflow-hidden border border-gray-600">
+        <div class="w-10 h-10 rounded bg-gray-900 flex-shrink-0 overflow-hidden border border-gray-600">
           <img src="${file.data}" class="w-full h-full object-contain" alt="${file.name}">
         </div>
         <div class="flex-1 min-w-0">
-          <div class="text-xs font-medium text-white truncate">${file.name}</div>
-          <div class="text-xs text-gray-400">${(file.size / 1024).toFixed(1)} KB</div>
+          <div class="text-xs font-medium text-white truncate" title="${file.name}">${file.name}</div>
+          <div class="text-xs text-gray-400">
+            ${(file.size / 1024).toFixed(1)} KB • ${file.type.split('/')[1].toUpperCase()}
+          </div>
         </div>
       </div>
       <div class="flex items-center gap-1">
         ${idx === activeWatermarkIndex 
-          ? '<span class="text-xs text-primary px-2 py-0.5 bg-primary/20 rounded">Active</span>'
-          : `<button onclick="selectWatermark(${idx})" class="text-primary hover:text-primary/80 px-2 py-1 text-xs" title="Use">
+          ? '<span class="text-xs text-primary px-2 py-1 bg-primary/20 rounded font-medium flex items-center gap-1"><i class="ti ti-check text-sm"></i>Active</span>'
+          : `<button onclick="selectWatermark(${idx})" class="text-primary hover:text-primary/80 hover:bg-primary/10 px-2 py-1 rounded text-xs transition-colors" title="Use this watermark">
               <i class="ti ti-check"></i>
             </button>`
         }
-        <button onclick="removeWatermark(${idx})" class="text-red-400 hover:text-red-300 p-1" title="Delete">
+        <button onclick="removeWatermark(${idx})" class="text-red-400 hover:text-red-300 hover:bg-red-500/10 p-1 rounded transition-colors" title="Delete watermark">
           <i class="ti ti-trash text-sm"></i>
         </button>
       </div>
@@ -2115,6 +2153,29 @@ function removeWatermark(index) {
   updateWatermarkPreview();
   
   showToast(`✗ Deleted: ${removedName}`);
+}
+
+function clearAllWatermarks() {
+  if (uploadedWatermarks.length === 0) return;
+  
+  if (!confirm(`Delete all ${uploadedWatermarks.length} watermark(s)?`)) return;
+  
+  const count = uploadedWatermarks.length;
+  
+  // Clear all watermarks
+  uploadedWatermarks = [];
+  activeWatermarkIndex = null;
+  watermarkImageData = null;
+  
+  // Hide overlay
+  const overlay = document.getElementById('watermarkOverlay');
+  overlay.classList.add('hidden');
+  
+  // Update UI
+  updateWatermarkFilesList();
+  updateWatermarkPreview();
+  
+  showToast(`✗ Cleared ${count} watermark(s)`);
 }
 
 function updateWatermarkPreview() {
