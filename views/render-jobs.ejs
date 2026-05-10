@@ -7,7 +7,7 @@
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 0.75rem;
-    padding: 1rem;
+    padding: 0 0 1rem 0;
     margin-bottom: 1rem;
   }
   
@@ -26,6 +26,7 @@
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s ease;
+    min-height: 80px;
   }
   
   .mobile-action-btn:active {
@@ -122,10 +123,10 @@
 </div>
 
 <!-- Mobile Action Buttons -->
-<div class="mobile-actions">
+<div class="mobile-actions lg:hidden">
   <button class="mobile-action-btn primary" id="mobileCreateBtn">
-    <i class="ti ti-plus"></i>
-    <span>New</span>
+    <i class="ti ti-player-play"></i>
+    <span>Render</span>
   </button>
   <button class="mobile-action-btn" id="mobileTemplateBtn">
     <i class="ti ti-template"></i>
@@ -142,14 +143,14 @@
 
 <!-- Main Form Card -->
 <div class="bg-gray-800 rounded-lg p-4 md:p-6 mb-6">
-  <div class="flex items-center justify-between mb-4">
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
     <h3 class="text-lg font-semibold">Render Settings</h3>
     <div class="flex gap-2">
-      <button onclick="openTemplateModal()" class="hidden md:flex items-center gap-2 px-3 py-2 bg-primary/20 hover:bg-primary/30 text-primary rounded-lg text-sm transition-colors">
+      <button onclick="openTemplateModal()" class="flex items-center gap-2 px-4 py-2 bg-primary/20 hover:bg-primary/30 text-primary rounded-lg text-sm font-medium transition-colors">
         <i class="ti ti-template"></i>
         <span>Templates</span>
       </button>
-      <button onclick="openPreviewModal()" class="hidden md:flex items-center gap-2 px-3 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg text-sm transition-colors">
+      <button onclick="openPreviewModal()" class="flex items-center gap-2 px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg text-sm font-medium transition-colors">
         <i class="ti ti-eye"></i>
         <span>Preview</span>
       </button>
@@ -214,15 +215,18 @@
     </div>
     
     <!-- Action Buttons (Desktop) -->
-    <div class="flex gap-3 pt-2">
-      <button id="createBtn" class="flex-1 bg-primary hover:bg-secondary text-white px-6 py-2.5 rounded-lg font-medium transition-colors">
-        Render Sekarang
+    <div class="flex flex-col sm:flex-row gap-3 pt-2">
+      <button id="createBtn" class="flex-1 bg-primary hover:bg-secondary text-white px-6 py-2.5 rounded-lg font-medium transition-colors flex items-center justify-center gap-2">
+        <i class="ti ti-player-play"></i>
+        <span>Render Sekarang</span>
       </button>
-      <button onclick="saveAsTemplate()" class="px-6 py-2.5 bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-500/50 text-yellow-400 rounded-lg font-medium transition-colors">
-        Save Template
+      <button onclick="saveAsTemplate()" class="sm:w-auto px-6 py-2.5 bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-500/50 text-yellow-400 rounded-lg font-medium transition-colors flex items-center justify-center gap-2">
+        <i class="ti ti-device-floppy"></i>
+        <span>Save Template</span>
       </button>
-      <button id="resetBtn" class="px-6 py-2.5 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-gray-300 rounded-lg font-medium transition-colors">
-        Reset
+      <button id="resetBtn" class="sm:w-auto px-6 py-2.5 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-gray-300 rounded-lg font-medium transition-colors flex items-center justify-center gap-2">
+        <i class="ti ti-eraser"></i>
+        <span>Reset</span>
       </button>
     </div>
   </div>
