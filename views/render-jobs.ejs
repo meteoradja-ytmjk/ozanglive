@@ -1,22 +1,14 @@
+<% layout('layout') -%>
+
 <style>
-/* Render Dashboard - Match App Design Exactly */
-
-/* Prevent zoom on mobile */
-input[type="text"],
-input[type="number"],
-select,
-textarea {
-  font-size: 16px !important;
-}
-
 /* Mobile action buttons */
-@media (max-width: 767px) {
+@media (max-width: 1023px) {
   .mobile-actions {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 0.75rem;
     padding: 1rem;
-    background: transparent;
+    margin-bottom: 1rem;
   }
   
   .mobile-action-btn {
@@ -49,13 +41,9 @@ textarea {
   .mobile-action-btn i {
     font-size: 1.5rem;
   }
-  
-  .hide-mobile {
-    display: none !important;
-  }
 }
 
-@media (min-width: 768px) {
+@media (min-width: 1024px) {
   .mobile-actions {
     display: none !important;
   }
@@ -71,7 +59,7 @@ textarea {
 </div>
 
 <!-- Mobile Action Buttons -->
-<div class="mobile-actions mb-4">
+<div class="mobile-actions">
   <button class="mobile-action-btn primary" id="mobileCreateBtn">
     <i class="ti ti-plus"></i>
     <span>New</span>
@@ -148,7 +136,7 @@ textarea {
     </div>
     
     <!-- Action Buttons (Desktop) -->
-    <div class="hidden md:flex gap-3 pt-2">
+    <div class="flex gap-3 pt-2">
       <button id="createBtn" class="flex-1 bg-primary hover:bg-secondary text-white px-6 py-2.5 rounded-lg font-medium transition-colors">
         Render Sekarang
       </button>
