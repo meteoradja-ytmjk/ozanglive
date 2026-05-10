@@ -380,43 +380,161 @@
   
   <!-- Advanced Visualizer -->
   <div class="bg-gray-800 rounded-lg p-4">
-    <h3 class="text-sm font-semibold text-white mb-3 flex items-center gap-2">
-      <i class="ti ti-waveform text-primary"></i>
-      Advanced Visualizer
-    </h3>
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+        <i class="ti ti-waveform text-primary"></i>
+        Advanced Visualizer
+      </h3>
+      <button onclick="toggleVisualizerSettings()" class="text-xs text-gray-400 hover:text-primary">
+        <i class="ti ti-settings"></i>
+      </button>
+    </div>
+    
     <div class="space-y-3">
+      <!-- Preset Selection -->
       <div>
-        <label class="text-xs font-medium text-gray-300 block mb-2">Intensity</label>
-        <input type="range" id="visualizerIntensity" min="0" max="100" value="50" class="w-full h-2 bg-dark-700 rounded-lg appearance-none cursor-pointer accent-primary">
-        <div class="flex justify-between text-xs text-gray-500 mt-1">
-          <span>Low</span>
-          <span id="intensityValue">50%</span>
-          <span>High</span>
-        </div>
-      </div>
-      <div>
-        <label class="text-xs font-medium text-gray-300 block mb-2">Color Scheme</label>
-        <select id="visualizerColor" class="w-full bg-dark-700 text-white px-3 py-2 border border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary">
-          <option value="purple">Purple Gradient</option>
-          <option value="blue">Blue Wave</option>
-          <option value="green">Green Pulse</option>
-          <option value="rainbow">Rainbow</option>
-          <option value="fire">Fire</option>
+        <label class="text-xs font-medium text-gray-300 block mb-2">Visualizer Type</label>
+        <select id="visualizerType" class="w-full bg-dark-700 text-white px-3 py-2 border border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary" onchange="updateVisualizerType()">
+          <option value="none">No Visualizer</option>
+          <option value="spectrum">Audio Spectrum</option>
+          <option value="bars">Frequency Bars</option>
+          <option value="wave">Waveform</option>
+          <option value="circular">Circular Spectrum</option>
+          <option value="particles">Audio Particles</option>
+          <option value="custom">Custom JSON</option>
         </select>
       </div>
-      <div class="visualizer-preview" id="visualizerPreviewBox">
-        <div class="visualizer-bars">
-          <div class="visualizer-bar"></div>
-          <div class="visualizer-bar"></div>
-          <div class="visualizer-bar"></div>
-          <div class="visualizer-bar"></div>
-          <div class="visualizer-bar"></div>
-          <div class="visualizer-bar"></div>
-          <div class="visualizer-bar"></div>
-          <div class="visualizer-bar"></div>
-          <div class="visualizer-bar"></div>
-          <div class="visualizer-bar"></div>
+      
+      <!-- Custom JSON Upload Section -->
+      <div id="customJsonSection" class="hidden">
+        <label class="text-xs font-medium text-gray-300 block mb-2">
+          Custom Spectrum Files (.json)
+          <span class="text-gray-500 ml-1">(Multiple files supported)</span>
+        </label>
+        <input type="file" id="spectrumJsonFiles" accept=".json" multiple class="hidden" onchange="handleSpectrumJsonUpload(event)">
+        <button onclick="document.getElementById('spectrumJsonFiles').click()" class="w-full bg-dark-700 hover:bg-dark-600 border border-gray-600 text-gray-300 px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-center gap-2">
+          <i class="ti ti-upload"></i>
+          <span>Upload JSON Spectrum Files</span>
+        </button>
+        
+        <!-- Uploaded Files List -->
+        <div id="spectrumFilesList" class="mt-2 space-y-1 max-h-32 overflow-y-auto">
+          <!-- Files will be listed here -->
         </div>
+        
+        <!-- JSON Format Guide -->
+        <div class="mt-2 p-2 bg-blue-500/10 border border-blue-500/30 rounded text-xs text-blue-300">
+          <div class="flex items-start gap-2">
+            <i class="ti ti-info-circle mt-0.5"></i>
+            <div>
+              <strong>JSON Format:</strong>
+              <pre class="mt-1 text-xs bg-black/30 p-2 rounded overflow-x-auto">{
+  "name": "My Spectrum",
+  "type": "bars|wave|circular",
+  "bars": 64,
+  "smoothing": 0.8,
+  "colors": ["#8B5CF6", "#EC4899"],
+  "sensitivity": 1.5,
+  "mirror": true
+}</pre>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Advanced Settings (Collapsible) -->
+      <div id="visualizerAdvancedSettings" class="collapsible-content">
+        <div class="space-y-3 pt-2 border-t border-gray-700">
+          <!-- Intensity -->
+          <div>
+            <label class="text-xs font-medium text-gray-300 block mb-2 flex items-center justify-between">
+              <span>Intensity</span>
+              <span id="intensityValue" class="text-primary">50%</span>
+            </label>
+            <input type="range" id="visualizerIntensity" min="0" max="100" value="50" class="w-full h-2 bg-dark-700 rounded-lg appearance-none cursor-pointer accent-primary">
+          </div>
+          
+          <!-- Sensitivity -->
+          <div>
+            <label class="text-xs font-medium text-gray-300 block mb-2 flex items-center justify-between">
+              <span>Audio Sensitivity</span>
+              <span id="sensitivityValue" class="text-primary">1.0x</span>
+            </label>
+            <input type="range" id="visualizerSensitivity" min="0.5" max="3" step="0.1" value="1.0" class="w-full h-2 bg-dark-700 rounded-lg appearance-none cursor-pointer accent-primary">
+          </div>
+          
+          <!-- Smoothing -->
+          <div>
+            <label class="text-xs font-medium text-gray-300 block mb-2 flex items-center justify-between">
+              <span>Smoothing</span>
+              <span id="smoothingValue" class="text-primary">0.8</span>
+            </label>
+            <input type="range" id="visualizerSmoothing" min="0" max="1" step="0.1" value="0.8" class="w-full h-2 bg-dark-700 rounded-lg appearance-none cursor-pointer accent-primary">
+          </div>
+          
+          <!-- Bar Count -->
+          <div>
+            <label class="text-xs font-medium text-gray-300 block mb-2 flex items-center justify-between">
+              <span>Bar Count</span>
+              <span id="barCountValue" class="text-primary">64</span>
+            </label>
+            <input type="range" id="visualizerBarCount" min="16" max="128" step="8" value="64" class="w-full h-2 bg-dark-700 rounded-lg appearance-none cursor-pointer accent-primary">
+          </div>
+          
+          <!-- Color Scheme -->
+          <div>
+            <label class="text-xs font-medium text-gray-300 block mb-2">Color Scheme</label>
+            <select id="visualizerColor" class="w-full bg-dark-700 text-white px-3 py-2 border border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary">
+              <option value="purple">Purple Gradient</option>
+              <option value="blue">Blue Wave</option>
+              <option value="green">Green Pulse</option>
+              <option value="rainbow">Rainbow</option>
+              <option value="fire">Fire</option>
+              <option value="neon">Neon Glow</option>
+              <option value="ocean">Ocean Deep</option>
+              <option value="sunset">Sunset</option>
+            </select>
+          </div>
+          
+          <!-- Mirror Effect -->
+          <div class="flex items-center justify-between p-2 bg-dark-700 rounded-lg border border-gray-600">
+            <span class="text-xs font-medium text-gray-300">Mirror Effect</span>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="visualizerMirror" class="sr-only peer">
+              <div class="w-9 h-5 bg-gray-600 rounded-full peer peer-checked:bg-primary transition-colors"></div>
+              <div class="absolute left-[2px] top-[2px] w-4 h-4 bg-white rounded-full transition-all peer-checked:translate-x-4"></div>
+            </label>
+          </div>
+          
+          <!-- Glow Effect -->
+          <div class="flex items-center justify-between p-2 bg-dark-700 rounded-lg border border-gray-600">
+            <span class="text-xs font-medium text-gray-300">Glow Effect</span>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="visualizerGlow" class="sr-only peer" checked>
+              <div class="w-9 h-5 bg-gray-600 rounded-full peer peer-checked:bg-primary transition-colors"></div>
+              <div class="absolute left-[2px] top-[2px] w-4 h-4 bg-white rounded-full transition-all peer-checked:translate-x-4"></div>
+            </label>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Live Preview -->
+      <div class="visualizer-preview" id="visualizerPreviewBox">
+        <div class="visualizer-bars" id="visualizerBars">
+          <!-- Bars will be generated dynamically -->
+        </div>
+      </div>
+      
+      <!-- Preset Actions -->
+      <div class="grid grid-cols-2 gap-2">
+        <button onclick="saveVisualizerPreset()" class="bg-primary/20 hover:bg-primary/30 border border-primary/50 text-primary px-3 py-2 rounded-lg text-xs transition-colors flex items-center justify-center gap-1">
+          <i class="ti ti-device-floppy"></i>
+          <span>Save Preset</span>
+        </button>
+        <button onclick="loadVisualizerPreset()" class="bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-400 px-3 py-2 rounded-lg text-xs transition-colors flex items-center justify-center gap-1">
+          <i class="ti ti-folder-open"></i>
+          <span>Load Preset</span>
+        </button>
       </div>
     </div>
   </div>
@@ -1256,12 +1374,190 @@ document.addEventListener('change', (e) => {
 
 // FEATURE 2: ADVANCED VISUALIZER
 const visualizerIntensity = document.getElementById('visualizerIntensity');
+const visualizerSensitivity = document.getElementById('visualizerSensitivity');
+const visualizerSmoothing = document.getElementById('visualizerSmoothing');
+const visualizerBarCount = document.getElementById('visualizerBarCount');
 const visualizerColor = document.getElementById('visualizerColor');
+const visualizerMirror = document.getElementById('visualizerMirror');
+const visualizerGlow = document.getElementById('visualizerGlow');
+const visualizerType = document.getElementById('visualizerType');
 const intensityValue = document.getElementById('intensityValue');
+const sensitivityValue = document.getElementById('sensitivityValue');
+const smoothingValue = document.getElementById('smoothingValue');
+const barCountValue = document.getElementById('barCountValue');
 
+let uploadedSpectrumFiles = [];
+let currentVisualizerConfig = {};
+
+// Toggle advanced settings
+function toggleVisualizerSettings() {
+  const settings = document.getElementById('visualizerAdvancedSettings');
+  settings.classList.toggle('open');
+}
+
+// Update visualizer type
+function updateVisualizerType() {
+  const type = visualizerType?.value || 'spectrum';
+  const customSection = document.getElementById('customJsonSection');
+  
+  if (type === 'custom') {
+    customSection.classList.remove('hidden');
+  } else {
+    customSection.classList.add('hidden');
+  }
+  
+  updateVisualizerPreview();
+}
+
+// Handle spectrum JSON file upload
+function handleSpectrumJsonUpload(event) {
+  const files = Array.from(event.target.files);
+  
+  files.forEach(file => {
+    if (file.type === 'application/json') {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const jsonData = JSON.parse(e.target.result);
+          
+          // Validate JSON structure
+          if (validateSpectrumJson(jsonData)) {
+            uploadedSpectrumFiles.push({
+              name: file.name,
+              data: jsonData,
+              uploadedAt: new Date().toISOString()
+            });
+            
+            updateSpectrumFilesList();
+            showToast(`✓ ${file.name} loaded successfully`);
+          } else {
+            showToast(`✗ ${file.name} has invalid format`);
+          }
+        } catch (err) {
+          console.error('JSON parse error:', err);
+          showToast(`✗ ${file.name} is not valid JSON`);
+        }
+      };
+      reader.readAsText(file);
+    }
+  });
+}
+
+// Validate spectrum JSON structure
+function validateSpectrumJson(json) {
+  const requiredFields = ['name', 'type'];
+  return requiredFields.every(field => json.hasOwnProperty(field));
+}
+
+// Update spectrum files list UI
+function updateSpectrumFilesList() {
+  const list = document.getElementById('spectrumFilesList');
+  
+  if (uploadedSpectrumFiles.length === 0) {
+    list.innerHTML = '';
+    return;
+  }
+  
+  list.innerHTML = uploadedSpectrumFiles.map((file, idx) => `
+    <div class="flex items-center justify-between p-2 bg-dark-700 rounded border border-gray-600">
+      <div class="flex items-center gap-2 flex-1 min-w-0">
+        <i class="ti ti-file-code text-primary"></i>
+        <div class="flex-1 min-w-0">
+          <div class="text-xs font-medium text-white truncate">${file.data.name || file.name}</div>
+          <div class="text-xs text-gray-400">${file.data.type} • ${file.data.bars || 64} bars</div>
+        </div>
+      </div>
+      <div class="flex items-center gap-1">
+        <button onclick="applySpectrumConfig(${idx})" class="text-primary hover:text-primary/80 p-1" title="Apply">
+          <i class="ti ti-check text-sm"></i>
+        </button>
+        <button onclick="removeSpectrumFile(${idx})" class="text-red-400 hover:text-red-300 p-1" title="Remove">
+          <i class="ti ti-x text-sm"></i>
+        </button>
+      </div>
+    </div>
+  `).join('');
+}
+
+// Apply spectrum configuration
+function applySpectrumConfig(index) {
+  const file = uploadedSpectrumFiles[index];
+  if (!file) return;
+  
+  const config = file.data;
+  currentVisualizerConfig = config;
+  
+  // Apply settings from JSON
+  if (config.bars && visualizerBarCount) {
+    visualizerBarCount.value = config.bars;
+    barCountValue.textContent = config.bars;
+  }
+  
+  if (config.smoothing && visualizerSmoothing) {
+    visualizerSmoothing.value = config.smoothing;
+    smoothingValue.textContent = config.smoothing;
+  }
+  
+  if (config.sensitivity && visualizerSensitivity) {
+    visualizerSensitivity.value = config.sensitivity;
+    sensitivityValue.textContent = config.sensitivity + 'x';
+  }
+  
+  if (config.mirror !== undefined && visualizerMirror) {
+    visualizerMirror.checked = config.mirror;
+  }
+  
+  if (config.colors && config.colors.length > 0) {
+    // Apply custom colors
+    applyCustomColors(config.colors);
+  }
+  
+  updateVisualizerPreview();
+  showToast(`✓ Applied: ${config.name}`);
+}
+
+// Remove spectrum file
+function removeSpectrumFile(index) {
+  uploadedSpectrumFiles.splice(index, 1);
+  updateSpectrumFilesList();
+}
+
+// Apply custom colors from JSON
+function applyCustomColors(colors) {
+  const bars = document.querySelectorAll('.visualizer-bar');
+  const gradient = `linear-gradient(to top, ${colors.join(', ')})`;
+  
+  bars.forEach(bar => {
+    bar.style.background = gradient;
+  });
+}
+
+// Event listeners for sliders
 if (visualizerIntensity) {
   visualizerIntensity.addEventListener('input', (e) => {
     intensityValue.textContent = e.target.value + '%';
+    updateVisualizerPreview();
+  });
+}
+
+if (visualizerSensitivity) {
+  visualizerSensitivity.addEventListener('input', (e) => {
+    sensitivityValue.textContent = parseFloat(e.target.value).toFixed(1) + 'x';
+    updateVisualizerPreview();
+  });
+}
+
+if (visualizerSmoothing) {
+  visualizerSmoothing.addEventListener('input', (e) => {
+    smoothingValue.textContent = parseFloat(e.target.value).toFixed(1);
+    updateVisualizerPreview();
+  });
+}
+
+if (visualizerBarCount) {
+  visualizerBarCount.addEventListener('input', (e) => {
+    barCountValue.textContent = e.target.value;
+    generateVisualizerBars(parseInt(e.target.value));
     updateVisualizerPreview();
   });
 }
@@ -1270,8 +1566,35 @@ if (visualizerColor) {
   visualizerColor.addEventListener('change', updateVisualizerPreview);
 }
 
+if (visualizerMirror) {
+  visualizerMirror.addEventListener('change', updateVisualizerPreview);
+}
+
+if (visualizerGlow) {
+  visualizerGlow.addEventListener('change', updateVisualizerPreview);
+}
+
+// Generate visualizer bars dynamically
+function generateVisualizerBars(count = 64) {
+  const container = document.getElementById('visualizerBars');
+  if (!container) return;
+  
+  container.innerHTML = '';
+  
+  for (let i = 0; i < count; i++) {
+    const bar = document.createElement('div');
+    bar.className = 'visualizer-bar';
+    bar.style.animationDelay = `${(i * 0.05)}s`;
+    container.appendChild(bar);
+  }
+  
+  updateVisualizerPreview();
+}
+
 function updateVisualizerPreview() {
   const color = visualizerColor?.value || 'purple';
+  const mirror = visualizerMirror?.checked || false;
+  const glow = visualizerGlow?.checked || false;
   const bars = document.querySelectorAll('.visualizer-bar');
   
   const colorSchemes = {
@@ -1279,13 +1602,110 @@ function updateVisualizerPreview() {
     blue: 'linear-gradient(to top, #3B82F6, #06B6D4)',
     green: 'linear-gradient(to top, #10B981, #34D399)',
     rainbow: 'linear-gradient(to top, #EF4444, #F59E0B, #10B981, #3B82F6, #8B5CF6)',
-    fire: 'linear-gradient(to top, #DC2626, #F59E0B, #FCD34D)'
+    fire: 'linear-gradient(to top, #DC2626, #F59E0B, #FCD34D)',
+    neon: 'linear-gradient(to top, #FF00FF, #00FFFF)',
+    ocean: 'linear-gradient(to top, #0EA5E9, #06B6D4, #22D3EE)',
+    sunset: 'linear-gradient(to top, #F97316, #FB923C, #FBBF24)'
   };
   
-  bars.forEach(bar => {
+  bars.forEach((bar, index) => {
     bar.style.background = colorSchemes[color] || colorSchemes.purple;
+    
+    if (glow) {
+      bar.style.boxShadow = '0 0 10px currentColor';
+      bar.style.filter = 'brightness(1.2)';
+    } else {
+      bar.style.boxShadow = 'none';
+      bar.style.filter = 'none';
+    }
+    
+    // Mirror effect
+    if (mirror) {
+      const mirrorIndex = bars.length - 1 - index;
+      bar.style.animationDelay = `${(Math.min(index, mirrorIndex) * 0.05)}s`;
+    }
   });
 }
+
+// Save visualizer preset
+function saveVisualizerPreset() {
+  const presetName = prompt('Enter preset name:');
+  if (!presetName) return;
+  
+  const preset = {
+    name: presetName,
+    type: visualizerType?.value || 'spectrum',
+    intensity: visualizerIntensity?.value || 50,
+    sensitivity: visualizerSensitivity?.value || 1.0,
+    smoothing: visualizerSmoothing?.value || 0.8,
+    barCount: visualizerBarCount?.value || 64,
+    color: visualizerColor?.value || 'purple',
+    mirror: visualizerMirror?.checked || false,
+    glow: visualizerGlow?.checked || false,
+    customFiles: uploadedSpectrumFiles.map(f => f.name),
+    createdAt: new Date().toISOString()
+  };
+  
+  const presets = JSON.parse(localStorage.getItem('visualizerPresets') || '[]');
+  presets.push(preset);
+  localStorage.setItem('visualizerPresets', JSON.stringify(presets));
+  
+  showToast(`✓ Preset "${presetName}" saved`);
+}
+
+// Load visualizer preset
+function loadVisualizerPreset() {
+  const presets = JSON.parse(localStorage.getItem('visualizerPresets') || '[]');
+  
+  if (presets.length === 0) {
+    alert('No presets saved');
+    return;
+  }
+  
+  // Create simple selection dialog
+  const presetNames = presets.map((p, i) => `${i + 1}. ${p.name}`).join('\n');
+  const selection = prompt(`Select preset:\n\n${presetNames}\n\nEnter number:`);
+  
+  if (!selection) return;
+  
+  const index = parseInt(selection) - 1;
+  const preset = presets[index];
+  
+  if (!preset) {
+    alert('Invalid selection');
+    return;
+  }
+  
+  // Apply preset
+  if (visualizerType) visualizerType.value = preset.type || 'spectrum';
+  if (visualizerIntensity) {
+    visualizerIntensity.value = preset.intensity || 50;
+    intensityValue.textContent = preset.intensity + '%';
+  }
+  if (visualizerSensitivity) {
+    visualizerSensitivity.value = preset.sensitivity || 1.0;
+    sensitivityValue.textContent = preset.sensitivity + 'x';
+  }
+  if (visualizerSmoothing) {
+    visualizerSmoothing.value = preset.smoothing || 0.8;
+    smoothingValue.textContent = preset.smoothing;
+  }
+  if (visualizerBarCount) {
+    visualizerBarCount.value = preset.barCount || 64;
+    barCountValue.textContent = preset.barCount;
+    generateVisualizerBars(preset.barCount);
+  }
+  if (visualizerColor) visualizerColor.value = preset.color || 'purple';
+  if (visualizerMirror) visualizerMirror.checked = preset.mirror || false;
+  if (visualizerGlow) visualizerGlow.checked = preset.glow || false;
+  
+  updateVisualizerType();
+  updateVisualizerPreview();
+  showToast(`✓ Loaded: ${preset.name}`);
+}
+
+// Initialize visualizer with default bars
+generateVisualizerBars(64);
 
 // FEATURE 3: WATERMARK
 let watermarkImageData = null;
