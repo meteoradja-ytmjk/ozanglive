@@ -252,6 +252,45 @@
 .collapsible-content.open {
   max-height: 2000px;
 }
+
+/* Upload Widget Animations */
+@keyframes slideInUp {
+  from {
+    transform: translateY(100px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.3;
+  }
+  100% {
+    transform: scale(1.2);
+    opacity: 0;
+  }
+}
+
+#uploadWidget {
+  animation: slideInUp 0.3s ease-out;
+}
+
+#uploadWidgetMinimized .animate-ping {
+  animation: pulse-ring 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+#uploadWidgetExpanded {
+  animation: slideInUp 0.2s ease-out;
+}
 </style>
 </style>
 
@@ -648,13 +687,64 @@
   </div>
 </div>
 
+<!-- Minimized Upload Widget (Floating) -->
+<div id="uploadWidget" class="fixed bottom-6 right-6 z-50 hidden">
+  <!-- Minimized State (Circle) -->
+  <div id="uploadWidgetMinimized" class="relative">
+    <button onclick="expandUploadWidget()" class="w-16 h-16 bg-gradient-to-br from-primary to-secondary rounded-full shadow-2xl flex items-center justify-center hover:scale-110 transition-transform">
+      <div class="relative">
+        <i class="ti ti-upload text-white text-2xl"></i>
+        <div class="absolute -top-1 -right-1 w-5 h-5 bg-green-400 rounded-full flex items-center justify-center">
+          <span class="text-xs font-bold text-white" id="widgetProgressText">0</span>
+        </div>
+      </div>
+    </button>
+    <!-- Pulsing ring animation -->
+    <div class="absolute inset-0 rounded-full bg-primary/30 animate-ping"></div>
+  </div>
+  
+  <!-- Expanded State (Card) -->
+  <div id="uploadWidgetExpanded" class="hidden bg-dark-800 rounded-lg shadow-2xl border border-gray-600 w-80">
+    <div class="flex items-center justify-between p-3 border-b border-gray-600">
+      <div class="flex items-center gap-2">
+        <i class="ti ti-upload text-primary"></i>
+        <span class="text-sm font-semibold text-white">Uploading to YouTube</span>
+      </div>
+      <div class="flex items-center gap-1">
+        <button onclick="minimizeUploadWidget()" class="text-gray-400 hover:text-white p-1">
+          <i class="ti ti-minus text-lg"></i>
+        </button>
+        <button onclick="closeUploadWidget()" class="text-gray-400 hover:text-white p-1">
+          <i class="ti ti-x text-lg"></i>
+        </button>
+      </div>
+    </div>
+    <div class="p-4">
+      <div class="mb-3">
+        <div class="text-sm font-medium text-white mb-1 truncate" id="widgetVideoTitle">Video Title</div>
+        <div class="text-xs text-gray-400 truncate" id="widgetChannelName">Channel Name</div>
+      </div>
+      <div class="mb-2">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-xs text-gray-400" id="widgetStatus">Uploading...</span>
+          <span class="text-xs text-primary font-semibold" id="widgetProgressPercent">0%</span>
+        </div>
+        <div class="w-full bg-gray-600 rounded-full h-2">
+          <div class="bg-gradient-to-r from-primary to-secondary h-2 rounded-full transition-all duration-300" id="widgetProgressBar" style="width:0%"></div>
+        </div>
+      </div>
+      <div class="text-xs text-gray-500" id="widgetTimeRemaining">Calculating...</div>
+    </div>
+  </div>
+</div>
+
 <!-- Upload to YouTube Modal -->
 <div id="uploadModal" class="fixed inset-0 bg-black/60 modal-backdrop z-50 hidden overflow-y-auto">
   <div class="flex items-center justify-center min-h-screen p-4">
     <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-3xl border border-gray-600/50 my-8">
       <div class="flex items-center justify-between p-4 border-b border-gray-600/50">
         <h3 class="text-lg font-medium">Upload to YouTube</h3>
-        <button onclick="closeUploadModal()" class="text-gray-400 hover:text-white">
+        <button onclick="handleCloseUploadModal()" class="text-gray-400 hover:text-white">
           <i class="ti ti-x text-xl"></i>
         </button>
       </div>
@@ -1235,6 +1325,79 @@ async function processLoop() {
 let currentUploadJobId = null;
 let currentUploadJob = null;
 let channelDefaults = null;
+let isUploading = false;
+let uploadStartTime = null;
+
+// Upload Widget Functions
+function showUploadWidget() {
+  document.getElementById('uploadWidget').classList.remove('hidden');
+  document.getElementById('uploadWidgetMinimized').classList.remove('hidden');
+  document.getElementById('uploadWidgetExpanded').classList.add('hidden');
+}
+
+function hideUploadWidget() {
+  document.getElementById('uploadWidget').classList.add('hidden');
+}
+
+function minimizeUploadWidget() {
+  document.getElementById('uploadWidgetMinimized').classList.remove('hidden');
+  document.getElementById('uploadWidgetExpanded').classList.add('hidden');
+}
+
+function expandUploadWidget() {
+  document.getElementById('uploadWidgetMinimized').classList.add('hidden');
+  document.getElementById('uploadWidgetExpanded').classList.remove('hidden');
+}
+
+function closeUploadWidget() {
+  if (isUploading) {
+    if (!confirm('Upload is still in progress. Are you sure you want to cancel?')) {
+      return;
+    }
+  }
+  hideUploadWidget();
+  isUploading = false;
+}
+
+function updateUploadWidget(progress, status, videoTitle, channelName) {
+  // Update minimized state
+  document.getElementById('widgetProgressText').textContent = Math.round(progress);
+  
+  // Update expanded state
+  document.getElementById('widgetVideoTitle').textContent = videoTitle || 'Video Title';
+  document.getElementById('widgetChannelName').textContent = channelName || 'Channel Name';
+  document.getElementById('widgetStatus').textContent = status || 'Uploading...';
+  document.getElementById('widgetProgressPercent').textContent = Math.round(progress) + '%';
+  document.getElementById('widgetProgressBar').style.width = progress + '%';
+  
+  // Calculate time remaining
+  if (uploadStartTime && progress > 0 && progress < 100) {
+    const elapsed = (Date.now() - uploadStartTime) / 1000; // seconds
+    const totalTime = (elapsed / progress) * 100;
+    const remaining = totalTime - elapsed;
+    
+    if (remaining > 60) {
+      const mins = Math.floor(remaining / 60);
+      const secs = Math.floor(remaining % 60);
+      document.getElementById('widgetTimeRemaining').textContent = `${mins}m ${secs}s remaining`;
+    } else {
+      document.getElementById('widgetTimeRemaining').textContent = `${Math.floor(remaining)}s remaining`;
+    }
+  } else if (progress >= 100) {
+    document.getElementById('widgetTimeRemaining').textContent = 'Complete!';
+  }
+}
+
+function handleCloseUploadModal() {
+  if (isUploading) {
+    // Minimize to widget instead of closing
+    closeUploadModal();
+    showUploadWidget();
+    minimizeUploadWidget();
+  } else {
+    closeUploadModal();
+  }
+}
 
 async function openUploadModal(jobId) {
   currentUploadJobId = jobId;
@@ -1387,6 +1550,14 @@ async function processUpload() {
   // Parse tags from comma-separated string
   const tags = tagsInput ? tagsInput.split(',').map(t => t.trim()).filter(t => t) : [];
   
+  // Get channel name for widget
+  const channelSelect = document.getElementById('uploadTargetChannel');
+  const channelName = channelSelect.options[channelSelect.selectedIndex].text;
+  
+  // Mark as uploading
+  isUploading = true;
+  uploadStartTime = Date.now();
+  
   // Disable button and show progress
   const btn = document.getElementById('uploadProcessBtn');
   btn.disabled = true;
@@ -1402,6 +1573,9 @@ async function processUpload() {
   progressText.textContent = '0%';
   statusText.textContent = 'Preparing upload...';
   
+  // Initialize widget
+  updateUploadWidget(0, 'Preparing upload...', title, channelName);
+  
   try {
     // Simulate smooth progress (since actual upload progress is hard to track)
     let simulatedProgress = 0;
@@ -1412,13 +1586,18 @@ async function processUpload() {
         progressBar.style.width = simulatedProgress + '%';
         progressText.textContent = Math.round(simulatedProgress) + '%';
         
+        let currentStatus = '';
         if (simulatedProgress < 30) {
-          statusText.textContent = 'Uploading video file...';
+          currentStatus = 'Uploading video file...';
         } else if (simulatedProgress < 60) {
-          statusText.textContent = 'Processing video...';
+          currentStatus = 'Processing video...';
         } else {
-          statusText.textContent = 'Finalizing upload...';
+          currentStatus = 'Finalizing upload...';
         }
+        statusText.textContent = currentStatus;
+        
+        // Update widget
+        updateUploadWidget(simulatedProgress, currentStatus, title, channelName);
       }
     }, 500);
     
@@ -1449,8 +1628,20 @@ async function processUpload() {
     progressText.textContent = '100%';
     statusText.textContent = 'Upload completed successfully!';
     
+    // Update widget to 100%
+    updateUploadWidget(100, 'Upload completed!', title, channelName);
+    
+    // Show success notifications
     showToast('✓ Video uploaded to YouTube!');
-    showNotification('Upload Complete', `"${title}" has been uploaded to YouTube`);
+    showNotification('Upload Complete', `"${title}" has been uploaded to YouTube successfully!`);
+    
+    // Mark as not uploading
+    isUploading = false;
+    
+    // Hide widget after 3 seconds
+    setTimeout(() => {
+      hideUploadWidget();
+    }, 3000);
     
     // Close modal and reload jobs
     setTimeout(() => {
@@ -1460,12 +1651,23 @@ async function processUpload() {
     
   } catch (error) {
     console.error('Upload error:', error);
+    
+    // Update widget with error
+    updateUploadWidget(0, 'Upload failed!', title, channelName);
+    
     alert(error.message || 'Failed to upload video');
     
     // Re-enable button
     btn.disabled = false;
     btn.innerHTML = '<i class="ti ti-upload mr-1"></i>Upload to YouTube';
     progressDiv.classList.add('hidden');
+    
+    isUploading = false;
+    
+    // Hide widget after 2 seconds
+    setTimeout(() => {
+      hideUploadWidget();
+    }, 2000);
   }
 }
 
