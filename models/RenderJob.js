@@ -74,6 +74,15 @@ class RenderJob {
       });
     });
   }
+
+  static delete(id) {
+    return new Promise((resolve, reject) => {
+      db.run('DELETE FROM render_jobs WHERE id = ?', [id], function (err) {
+        if (err) return reject(err);
+        resolve({ success: true, deleted: this.changes > 0 });
+      });
+    });
+  }
 }
 
 module.exports = RenderJob;
