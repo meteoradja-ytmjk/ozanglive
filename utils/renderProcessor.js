@@ -159,3 +159,65 @@ async function renderLoopVideo({ videoPaths, audioPaths, outputPath, targetDurat
 }
 
 module.exports = { renderLoopVideo };
+
+// Fast loop video using stream copy (no re-encoding)
+async function loopVideoFast({ inputPath, outputPath, loopCount, onProgress }) {
+  if (!inputPath || !fs.existsSync(inputPath)) {
+    throw new Error('Input video not found');
+  }
+  
+  if (!loopCount || loopCount < 2) {
+    throw new Error('Loop count must be at least 2');
+  }
+  
+  console.log(`[LOOP] Starting fast loop: ${loopCount}x`);
+  
+  const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ozang-loop-'));
+  
+  try {
+    // Get video duration for progress calculation
+    const meta = await ffprobeAsync(inputPath);
+    const duration = Number(meta?.format?.duration || 0);
+    const totalDuration = duration * loopCount;
+    
+    // Create concat file with repeated entries
+    const concatFile = path.join(workDir, 'concat.txt');
+    const concatContent = Array(loopCount).fill(`file '${inputPath.replace(/'/g, "'\\''")}'`).join('\n');
+    fs.writeFileSync(concatFile, concatContent, 'utf8');
+    
+    // Use concat demuxer with stream copy (FAST!)
+    await runFfmpeg((cmd) => {
+      return cmd
+        .input(concatFile)
+        .inputOptions(['-f', 'concat', '-safe', '0'])
+        .outputOptions([
+          '-c', 'copy',  // Stream copy - NO RE-ENCODING!
+          '-movflags', '+faststart'
+        ])
+        .output(outputPath);
+    }, {
+      onProgress: (p) => {
+        const progress = Math.min(99, Math.round((parseTimeToSeconds(p.timemark) / totalDuration) * 100));
+        onProgress?.(progress);
+      }
+    });
+    
+    console.log('[LOOP] Completed fast loop');
+    return outputPath;
+    
+  } catch (error) {
+    console.error('[LOOP] Error:', error.message);
+    throw error;
+  } finally {
+    // Cleanup
+    try {
+      if (fs.existsSync(workDir)) {
+        fs.rmSync(workDir, { recursive: true, force: true });
+      }
+    } catch (err) {
+      console.error('[LOOP] Cleanup error:', err.message);
+    }
+  }
+}
+
+module.exports = { renderLoopVideo, loopVideoFast };

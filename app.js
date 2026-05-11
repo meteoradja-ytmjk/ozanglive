@@ -38,7 +38,7 @@ const TitleFolder = require('./models/TitleFolder');
 const SystemSettings = require('./models/SystemSettings');
 const YouTubeBroadcastSettings = require('./models/YouTubeBroadcastSettings');
 const scheduleService = require('./services/scheduleService');
-const { renderLoopVideo } = require('./utils/renderProcessor');
+const { renderLoopVideo, loopVideoFast } = require('./utils/renderProcessor');
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 const uploadProcessingConcurrency = Math.max(1, parseInt(process.env.UPLOAD_PROCESSING_CONCURRENCY || '1', 10));
 const videoProcessingQueue = new ProcessingQueue({ concurrency: uploadProcessingConcurrency, name: 'video-processing' });
@@ -3812,6 +3812,114 @@ app.post('/api/render/jobs/:id/upload', isAuthenticated, async (req, res) => {
   } catch (error) {
     console.error('Manual upload render job error:', error);
     return res.status(500).json({ success: false, message: 'Gagal upload ke YouTube' });
+  }
+});
+
+// Loop video endpoint - Fast copy mode
+app.post('/api/render/jobs/:id/loop', isAuthenticated, async (req, res) => {
+  try {
+    const { loopCount, targetAccountId } = req.body;
+    
+    // Validate loop count
+    if (!loopCount || loopCount < 2 || loopCount > 100) {
+      return res.status(400).json({ success: false, message: 'Loop count must be between 2-100' });
+    }
+    
+    // Get original job
+    const originalJob = await RenderJob.findById(req.params.id);
+    if (!originalJob || originalJob.user_id !== req.session.userId) {
+      return res.status(404).json({ success: false, message: 'Job tidak ditemukan' });
+    }
+    
+    if (!originalJob.output_path) {
+      return res.status(400).json({ success: false, message: 'Output render belum tersedia' });
+    }
+    
+    // Create new job for looped video
+    const newJob = await RenderJob.create({
+      user_id: req.session.userId,
+      title: `${originalJob.title} (${loopCount}x Loop)`,
+      target_duration_seconds: originalJob.target_duration_seconds * loopCount,
+      video_ids: originalJob.video_ids,
+      audio_ids: originalJob.audio_ids,
+      target_account_id: targetAccountId || null,
+      auto_upload: targetAccountId ? 1 : 0,
+      status: 'queued',
+      progress: 0
+    });
+    
+    // Process loop in background
+    setImmediate(async () => {
+      const { loopVideoFast } = require('./utils/renderProcessor');
+      
+      try {
+        await RenderJob.update(newJob.id, { status: 'processing', progress: 10 });
+        
+        const inputPath = path.join(__dirname, 'public', originalJob.output_path);
+        const outputName = `render-${newJob.id}-loop${loopCount}x.mp4`;
+        const outputPath = path.join(__dirname, 'public', 'uploads', 'videos', outputName);
+        
+        await loopVideoFast({
+          inputPath,
+          outputPath,
+          loopCount,
+          onProgress: async (progressPercent) => {
+            if (Number.isFinite(progressPercent) && progressPercent > 10) {
+              await RenderJob.update(newJob.id, { progress: progressPercent });
+            }
+          }
+        });
+        
+        const baseUpdate = { 
+          status: 'completed', 
+          progress: 100, 
+          output_path: `/uploads/videos/${outputName}` 
+        };
+        
+        // Auto-upload if target account specified
+        if (targetAccountId) {
+          const account = await YouTubeCredentials.findById(targetAccountId);
+          if (account && account.userId === req.session.userId) {
+            try {
+              const accessToken = await youtubeService.getAccessToken(account.clientId, account.clientSecret, account.refreshToken);
+              const uploadResult = await youtubeService.uploadRegularVideo(accessToken, {
+                title: `${originalJob.title} (${loopCount}x Loop)`,
+                description: `Looped ${loopCount}x from original render`,
+                filePath: outputPath,
+                privacyStatus: 'unlisted'
+              });
+              await RenderJob.update(newJob.id, { youtube_video_id: uploadResult?.id || null });
+            } catch (uploadErr) {
+              console.error('Auto-upload after loop failed:', uploadErr.message);
+            }
+          }
+        }
+        
+        await RenderJob.update(newJob.id, baseUpdate);
+      } catch (e) {
+        console.error('Loop processing error:', e);
+        await RenderJob.update(newJob.id, { status: 'failed', error_message: e.message });
+      }
+    });
+    
+    return res.json({ success: true, jobId: newJob.id });
+  } catch (error) {
+    console.error('Loop job creation error:', error);
+    return res.status(500).json({ success: false, message: 'Gagal membuat loop job' });
+  }
+});
+
+// Get single render job (for polling)
+app.get('/api/render/jobs/:id', isAuthenticated, async (req, res) => {
+  try {
+    const job = await RenderJob.findById(req.params.id);
+    if (!job || job.user_id !== req.session.userId) {
+      return res.status(404).json({ success: false, message: 'Job tidak ditemukan' });
+    }
+    return res.json({ success: true, job });
+  } catch (error) {
+    console.error('Get render job error:', error);
+    return res.status(500).json({ success: false, message: 'Gagal mengambil job' });
   }
 });
 

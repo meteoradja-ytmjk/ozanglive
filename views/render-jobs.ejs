@@ -743,6 +743,64 @@
   </div>
 </div>
 
+<!-- Loop Video Modal -->
+<div id="loopModal" class="fixed inset-0 bg-black/60 modal-backdrop z-50 hidden">
+  <div class="flex items-center justify-center min-h-screen p-4">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-md border border-gray-600/50">
+      <div class="flex items-center justify-between p-4 border-b border-gray-600/50">
+        <h3 class="text-lg font-medium">Loop Video</h3>
+        <button onclick="closeLoopModal()" class="text-gray-400 hover:text-white">
+          <i class="ti ti-x text-xl"></i>
+        </button>
+      </div>
+      <div class="p-6">
+        <div class="mb-4">
+          <label class="text-sm font-medium text-white block mb-2">Jumlah Loop</label>
+          <input type="number" id="loopCount" min="2" max="100" value="2" class="w-full bg-dark-700 text-white px-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
+          <p class="text-xs text-gray-400 mt-1">Berapa kali video akan di-loop (2-100x)</p>
+        </div>
+        
+        <div class="mb-4">
+          <label class="text-sm font-medium text-white block mb-2">Target Channel (Optional)</label>
+          <select id="loopTargetAccountId" class="w-full bg-dark-700 text-white px-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
+            <option value="">-- Pilih Channel (Optional) --</option>
+          </select>
+          <p class="text-xs text-gray-400 mt-1">Pilih channel untuk auto-upload setelah loop selesai</p>
+        </div>
+        
+        <div class="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 mb-4">
+          <div class="flex items-start gap-2">
+            <i class="ti ti-info-circle text-blue-400 mt-0.5"></i>
+            <div class="text-xs text-blue-300">
+              <strong>Fast Copy Mode:</strong> Video akan di-loop menggunakan stream copy (tanpa re-encode) sehingga prosesnya sangat cepat!
+            </div>
+          </div>
+        </div>
+        
+        <div id="loopProgress" class="hidden mb-4">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-sm text-gray-400">Processing...</span>
+            <span class="text-sm text-primary" id="loopProgressText">0%</span>
+          </div>
+          <div class="w-full bg-gray-600 rounded-full h-2">
+            <div class="bg-primary h-2 rounded-full transition-all" id="loopProgressBar" style="width:0%"></div>
+          </div>
+        </div>
+        
+        <div class="flex gap-2">
+          <button onclick="closeLoopModal()" class="flex-1 px-4 py-2.5 bg-gray-600 hover:bg-gray-500 text-white rounded-lg transition-colors">
+            Cancel
+          </button>
+          <button onclick="processLoop()" id="loopProcessBtn" class="flex-1 px-4 py-2.5 bg-primary hover:bg-secondary text-white rounded-lg transition-colors">
+            <i class="ti ti-repeat mr-1"></i>
+            Process Loop
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 const toArray=(d,k)=>Array.isArray(d)?d:((d && Array.isArray(d[k])) ? d[k] : []);
 const el = {
@@ -906,6 +964,7 @@ async function loadJobs(){
       <div class="flex gap-2">
         ${j.output_path?`
           <a href="${j.output_path}" target="_blank" class="flex-1 text-center px-3 py-2 bg-gray-600 hover:bg-gray-500 text-white text-sm rounded-lg transition-colors">Preview</a>
+          <button onclick="openLoopModal('${j.id}')" class="flex-1 px-3 py-2 bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-500/50 text-yellow-400 text-sm rounded-lg transition-colors">Loop</button>
           <button onclick="uploadJob('${j.id}')" class="flex-1 px-3 py-2 bg-primary hover:bg-secondary text-white text-sm rounded-lg transition-colors">Upload</button>
         `:''}
         <button onclick="deleteJob('${j.id}')" class="px-3 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 text-sm rounded-lg transition-colors">Hapus</button>
@@ -1086,6 +1145,125 @@ function openPreviewModal() {
 
 function closePreviewModal() {
   document.getElementById('previewModal').classList.add('hidden');
+}
+
+// ===== LOOP VIDEO FEATURE =====
+let currentLoopJobId = null;
+
+function openLoopModal(jobId) {
+  currentLoopJobId = jobId;
+  
+  // Load accounts for loop target
+  loadAccountsForLoop();
+  
+  // Reset form
+  document.getElementById('loopCount').value = 2;
+  document.getElementById('loopTargetAccountId').value = '';
+  document.getElementById('loopProgress').classList.add('hidden');
+  document.getElementById('loopProcessBtn').disabled = false;
+  
+  // Show modal
+  document.getElementById('loopModal').classList.remove('hidden');
+}
+
+function closeLoopModal() {
+  document.getElementById('loopModal').classList.add('hidden');
+  currentLoopJobId = null;
+}
+
+async function loadAccountsForLoop() {
+  try {
+    const r = await fetch('/api/youtube/accounts');
+    const d = await r.json();
+    const select = document.getElementById('loopTargetAccountId');
+    select.innerHTML = '<option value="">-- Pilih Channel (Optional) --</option>' + 
+      toArray(d, 'accounts').map(a => `<option value="${a.id}">${a.channelName || ('Channel ' + a.id)}</option>`).join('');
+  } catch (err) {
+    console.error('Failed to load accounts:', err);
+  }
+}
+
+async function processLoop() {
+  if (!currentLoopJobId) return;
+  
+  const loopCount = parseInt(document.getElementById('loopCount').value, 10);
+  const targetAccountId = document.getElementById('loopTargetAccountId').value;
+  
+  if (!loopCount || loopCount < 2 || loopCount > 100) {
+    alert('Jumlah loop harus antara 2-100');
+    return;
+  }
+  
+  // Disable button and show progress
+  const btn = document.getElementById('loopProcessBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ti ti-loader animate-spin mr-1"></i>Processing...';
+  
+  const progressDiv = document.getElementById('loopProgress');
+  const progressBar = document.getElementById('loopProgressBar');
+  const progressText = document.getElementById('loopProgressText');
+  progressDiv.classList.remove('hidden');
+  
+  try {
+    const response = await fetch(`/api/render/jobs/${currentLoopJobId}/loop`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        loopCount: loopCount,
+        targetAccountId: targetAccountId || null
+      })
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok || !data.success) {
+      throw new Error(data.message || 'Failed to process loop');
+    }
+    
+    // Poll for progress
+    const newJobId = data.jobId;
+    const pollInterval = setInterval(async () => {
+      try {
+        const jobResponse = await fetch(`/api/render/jobs/${newJobId}`);
+        const jobData = await jobResponse.json();
+        
+        if (jobData.job) {
+          const progress = jobData.job.progress || 0;
+          progressBar.style.width = progress + '%';
+          progressText.textContent = progress + '%';
+          
+          if (jobData.job.status === 'completed') {
+            clearInterval(pollInterval);
+            progressBar.style.width = '100%';
+            progressText.textContent = '100%';
+            
+            showToast('✓ Loop completed successfully!');
+            
+            // Close modal and reload jobs
+            setTimeout(() => {
+              closeLoopModal();
+              loadJobs();
+            }, 1000);
+          } else if (jobData.job.status === 'failed') {
+            clearInterval(pollInterval);
+            throw new Error(jobData.job.error_message || 'Loop failed');
+          }
+        }
+      } catch (err) {
+        clearInterval(pollInterval);
+        console.error('Poll error:', err);
+      }
+    }, 1000);
+    
+  } catch (error) {
+    console.error('Loop error:', error);
+    alert(error.message || 'Failed to process loop');
+    
+    // Re-enable button
+    btn.disabled = false;
+    btn.innerHTML = '<i class="ti ti-repeat mr-1"></i>Process Loop';
+    progressDiv.classList.add('hidden');
+  }
 }
 
 // ===== FEATURE 4: NOTIFICATIONS =====
