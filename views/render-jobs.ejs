@@ -688,8 +688,8 @@ const renderGroupedRows=(items,name,type)=>{
         ${rows.map(x=>`
           <label class="flex items-center gap-2 px-3 py-2 hover:bg-gray-700/30 cursor-pointer border-t border-gray-700/50 first:border-t-0 media-item" data-id="${x.id}" data-pinned="false">
             <input type="checkbox" name="${name}" value="${x.id}" class="w-4 h-4 rounded border-gray-500 bg-dark-700 text-primary focus:ring-primary" onchange="updateSelectedCount()">
-            <button type="button" onclick="togglePin(event, '${x.id}', '${name}')" class="pin-btn w-6 h-6 flex items-center justify-center rounded hover:bg-gray-600 transition-colors flex-shrink-0" title="Pin to top">
-              <i class="ti ti-pin text-xs text-gray-500"></i>
+            <button type="button" onclick="togglePin(event, '${x.id}', '${name}')" class="pin-btn w-6 h-6 flex items-center justify-center rounded hover:bg-gray-600 transition-colors flex-shrink-0 text-base" title="Pin to top">
+              📍
             </button>
             <div class="w-14 h-9 rounded bg-gray-900 flex-shrink-0 overflow-hidden">
               ${x.thumbnail_path?`<img src="${x.thumbnail_path}" class="w-full h-full object-cover">`:`<div class="w-full h-full flex items-center justify-center text-xs text-primary">${type==='videos'?'VID':'AUD'}</div>`}
@@ -1394,67 +1394,41 @@ function shuffleMedia() {
   
   if (!container) return;
   
-  // Get all media items
-  const allItems = Array.from(container.querySelectorAll('.media-item'));
+  // Get all details (groups)
+  const allDetails = Array.from(container.querySelectorAll('details'));
   
-  if (allItems.length === 0) {
-    showToast('No media available to shuffle');
-    return;
-  }
-  
-  // Separate pinned and unpinned items
-  const pinnedItems = allItems.filter(item => item.dataset.pinned === 'true');
-  const unpinnedItems = allItems.filter(item => item.dataset.pinned === 'false');
-  
-  // Only shuffle selected unpinned items
-  const selectedUnpinned = unpinnedItems.filter(item => {
-    const checkbox = item.querySelector('input[type="checkbox"]');
-    return checkbox && checkbox.checked;
-  });
-  
-  if (selectedUnpinned.length === 0) {
-    showToast('Please select some items first (pinned items won\'t shuffle)');
-    return;
-  }
-  
-  // Fisher-Yates shuffle
-  for (let i = selectedUnpinned.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [selectedUnpinned[i], selectedUnpinned[j]] = [selectedUnpinned[j], selectedUnpinned[i]];
-  }
-  
-  // Rebuild the list: pinned first, then shuffled selected, then unselected
-  const unselectedUnpinned = unpinnedItems.filter(item => {
-    const checkbox = item.querySelector('input[type="checkbox"]');
-    return checkbox && !checkbox.checked;
-  });
-  
-  const newOrder = [...pinnedItems, ...selectedUnpinned, ...unselectedUnpinned];
-  
-  // Clear and rebuild
-  const details = container.querySelectorAll('details');
-  details.forEach(detail => {
+  allDetails.forEach(detail => {
     const itemsContainer = detail.querySelector('div.border-t');
-    if (itemsContainer) {
-      itemsContainer.innerHTML = '';
-      newOrder.forEach(item => {
-        // Find which detail this item belongs to
-        const itemId = item.dataset.id;
-        const originalItem = allItems.find(i => i.dataset.id === itemId);
-        if (originalItem && originalItem.closest('details') === detail) {
-          itemsContainer.appendChild(item);
-        }
-      });
+    if (!itemsContainer) return;
+    
+    // Get all items in this group
+    const allItems = Array.from(itemsContainer.querySelectorAll('.media-item'));
+    
+    if (allItems.length === 0) return;
+    
+    // Separate pinned and unpinned
+    const pinnedItems = allItems.filter(item => item.dataset.pinned === 'true');
+    const unpinnedItems = allItems.filter(item => item.dataset.pinned === 'false');
+    
+    // Shuffle unpinned items using Fisher-Yates
+    for (let i = unpinnedItems.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [unpinnedItems[i], unpinnedItems[j]] = [unpinnedItems[j], unpinnedItems[i]];
     }
+    
+    // Clear container
+    itemsContainer.innerHTML = '';
+    
+    // Append pinned first, then shuffled unpinned
+    [...pinnedItems, ...unpinnedItems].forEach(item => {
+      itemsContainer.appendChild(item);
+    });
   });
   
-  updateMediaSelectionCount();
+  const pinnedCount = container.querySelectorAll('.media-item[data-pinned="true"]').length;
+  const totalCount = container.querySelectorAll('.media-item').length;
   
-  if (currentMediaTab === 'video') {
-    refreshMiniPreview();
-  }
-  
-  showToast(`🔀 ${selectedUnpinned.length} ${currentMediaTab}(s) shuffled (${pinnedItems.length} pinned items stayed on top)`);
+  showToast(`🔀 Shuffled! ${pinnedCount} pinned items stayed on top`);
 }
 
 function togglePin(event, id, type) {
@@ -1469,13 +1443,15 @@ function togglePin(event, id, type) {
   
   item.dataset.pinned = newPinnedState;
   
-  const pinBtn = item.querySelector('.pin-btn i');
+  const pinBtn = item.querySelector('.pin-btn');
   if (pinBtn) {
     if (newPinnedState) {
-      pinBtn.className = 'ti ti-pin-filled text-xs text-yellow-400';
+      pinBtn.textContent = '📌';
+      pinBtn.style.background = 'rgba(234, 179, 8, 0.2)';
       item.style.background = 'rgba(234, 179, 8, 0.1)';
     } else {
-      pinBtn.className = 'ti ti-pin text-xs text-gray-500';
+      pinBtn.textContent = '📍';
+      pinBtn.style.background = '';
       item.style.background = '';
     }
   }
