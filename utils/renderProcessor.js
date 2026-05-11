@@ -94,15 +94,14 @@ async function renderLoopVideo({ videoPaths, audioPaths, outputPath, targetDurat
     filterComplex += `[vout]loop=loop=-1:size=1:start=0[vloop]`;
     
     // Concat audios if present
-    let audioMap = '-an';
-    if (audioPaths?.length > 0) {
+    const hasAudio = audioPaths?.length > 0;
+    if (hasAudio) {
       const audioStartIdx = videoPaths.length;
       for (let i = 0; i < audioPaths.length; i++) {
         filterComplex += `[${audioStartIdx + i}:a]`;
       }
       filterComplex += `concat=n=${audioPaths.length}:v=0:a=1[aout];`;
       filterComplex += `[aout]aloop=loop=-1:size=2e+09[aloop]`;
-      audioMap = '[aloop]';
     }
     
     await runFfmpeg((cmd) => {
@@ -110,7 +109,7 @@ async function renderLoopVideo({ videoPaths, audioPaths, outputPath, targetDurat
       videoPaths.forEach(vPath => cmd.input(vPath));
       
       // Add all audio inputs
-      if (audioPaths?.length > 0) {
+      if (hasAudio) {
         audioPaths.forEach(aPath => cmd.input(aPath));
       }
       
@@ -126,8 +125,8 @@ async function renderLoopVideo({ videoPaths, audioPaths, outputPath, targetDurat
         '-threads', '0'
       ];
       
-      if (audioPaths?.length > 0) {
-        outputOptions.push('-map', audioMap, '-c:a', 'aac', '-b:a', '192k', '-shortest');
+      if (hasAudio) {
+        outputOptions.push('-map', '[aloop]', '-c:a', 'aac', '-b:a', '192k', '-shortest');
       } else {
         outputOptions.push('-an');
       }
