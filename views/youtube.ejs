@@ -318,11 +318,16 @@
         </div>
       </div>
     </div>
-    <div class="header-buttons grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex-shrink-0">
+    <div class="header-buttons grid grid-cols-3 gap-2 w-full sm:w-auto sm:flex-shrink-0">
       <button onclick="openTemplateLibraryModal()"
         class="bg-primary/20 hover:bg-primary/30 text-primary px-4 py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2 font-medium">
         <i class="ti ti-template text-lg"></i>
         <span>Templates</span>
+      </button>
+      <button onclick="openThumbnailManagerModal()"
+        class="bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 px-4 py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2 font-medium">
+        <i class="ti ti-photo text-lg"></i>
+        <span>Thumbnails</span>
       </button>
       <button onclick="openCreateBroadcastModal()"
         class="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-4 py-2.5 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 font-medium shadow-lg shadow-red-500/25">
@@ -2770,6 +2775,132 @@ document.addEventListener('keydown', function(e) {
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Thumbnail Manager Modal (Standalone) -->
+<div id="thumbnailManagerModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] hidden modal-overlay overflow-y-auto">
+  <div class="flex min-h-screen items-center justify-center p-4">
+    <div class="bg-dark-800 rounded-xl shadow-2xl w-full max-w-4xl border border-gray-700 my-8">
+      <!-- Header -->
+      <div class="flex items-center justify-between p-6 border-b border-gray-700">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center">
+            <i class="ti ti-photo text-purple-400 text-xl"></i>
+          </div>
+          <div>
+            <h3 class="text-xl font-semibold">Thumbnail Manager</h3>
+            <p class="text-sm text-gray-400">Kelola folder dan thumbnail untuk broadcast</p>
+          </div>
+        </div>
+        <button onclick="closeThumbnailManagerModal()" class="w-10 h-10 rounded-lg hover:bg-dark-600 flex items-center justify-center text-gray-400 hover:text-white transition-colors">
+          <i class="ti ti-x text-xl"></i>
+        </button>
+      </div>
+      
+      <!-- Content -->
+      <div class="p-6">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <!-- Left: Folder Management -->
+          <div class="lg:col-span-1">
+            <div class="bg-dark-700/50 rounded-lg p-4 border border-gray-700">
+              <div class="flex items-center justify-between mb-4">
+                <h4 class="font-semibold flex items-center gap-2">
+                  <i class="ti ti-folder text-primary"></i>
+                  Folders
+                </h4>
+                <button type="button" onclick="openAddThumbnailFolderModal()" 
+                  class="px-3 py-1.5 text-xs rounded-lg bg-primary/20 text-primary hover:bg-primary/30 transition-colors flex items-center gap-1.5">
+                  <i class="ti ti-plus text-sm"></i>
+                  <span>Add</span>
+                </button>
+              </div>
+              
+              <!-- Root Folder -->
+              <button type="button" onclick="openThumbnailFolderInManager(null)" id="thumbnailManagerRootBtn" 
+                class="w-full px-3 py-2 mb-2 text-sm rounded-lg bg-primary/20 text-primary hover:bg-primary/30 transition-colors flex items-center gap-2">
+                <i class="ti ti-home"></i>
+                <span>Root</span>
+                <span id="rootThumbnailCount" class="ml-auto text-xs bg-primary/30 px-2 py-0.5 rounded-full">0</span>
+              </button>
+              
+              <!-- Folder List -->
+              <div id="thumbnailManagerFolderList" class="space-y-1 max-h-96 overflow-y-auto">
+                <!-- Folders will be loaded here -->
+              </div>
+            </div>
+            
+            <!-- Current Folder Info -->
+            <div id="currentFolderInfo" class="mt-4 p-4 bg-dark-700/30 rounded-lg border border-gray-700">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-sm text-gray-400">Current Folder:</span>
+                <button type="button" onclick="openRenameFolderModal(currentThumbnailFolderManager)" id="editThumbnailFolderBtnManager"
+                  class="px-2 py-1 text-xs rounded bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 transition-colors flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
+                  disabled>
+                  <i class="ti ti-pencil text-xs"></i>
+                  <span>Rename</span>
+                </button>
+              </div>
+              <div class="flex items-center gap-2">
+                <i class="ti ti-folder-open text-primary"></i>
+                <span id="currentFolderNameManager" class="font-medium">Root</span>
+              </div>
+              <div class="mt-2 text-xs text-gray-500">
+                <span id="currentFolderThumbnailCount">0</span> thumbnails
+              </div>
+            </div>
+          </div>
+          
+          <!-- Right: Thumbnail Gallery -->
+          <div class="lg:col-span-2">
+            <div class="bg-dark-700/50 rounded-lg p-4 border border-gray-700">
+              <div class="flex items-center justify-between mb-4">
+                <h4 class="font-semibold flex items-center gap-2">
+                  <i class="ti ti-photo text-purple-400"></i>
+                  Thumbnails
+                  <span id="thumbnailManagerCount" class="text-xs text-gray-400">(0/20)</span>
+                </h4>
+                <label class="px-4 py-2 text-sm rounded-lg bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 transition-colors cursor-pointer flex items-center gap-2">
+                  <i class="ti ti-upload"></i>
+                  <span>Upload</span>
+                  <input type="file" id="thumbnailManagerUpload" accept="image/jpeg,image/png" multiple class="hidden" onchange="handleThumbnailManagerUpload(event)">
+                </label>
+              </div>
+              
+              <!-- Thumbnail Grid -->
+              <div id="thumbnailManagerGallery" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3 min-h-[300px]">
+                <!-- Thumbnails will be loaded here -->
+              </div>
+              
+              <!-- Loading State -->
+              <div id="thumbnailManagerLoading" class="hidden text-center py-12">
+                <i class="ti ti-loader animate-spin text-primary text-3xl"></i>
+                <p class="text-gray-400 text-sm mt-3">Loading thumbnails...</p>
+              </div>
+              
+              <!-- Empty State -->
+              <div id="thumbnailManagerEmpty" class="hidden text-center py-12 border-2 border-dashed border-gray-600 rounded-lg">
+                <i class="ti ti-photo-off text-gray-500 text-4xl"></i>
+                <p class="text-gray-500 text-sm mt-3">No thumbnails in this folder</p>
+                <p class="text-gray-600 text-xs mt-1">Upload images to get started</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Footer -->
+      <div class="flex items-center justify-between p-6 border-t border-gray-700 bg-dark-700/30">
+        <div class="text-sm text-gray-400">
+          <i class="ti ti-info-circle"></i>
+          Max 20 thumbnails per folder. Supported: JPG, PNG
+        </div>
+        <button onclick="closeThumbnailManagerModal()"
+          class="px-6 py-2.5 bg-dark-600 hover:bg-dark-500 text-white rounded-lg transition-colors">
+          Close
+        </button>
       </div>
     </div>
   </div>

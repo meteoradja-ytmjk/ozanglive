@@ -7024,3 +7024,308 @@ async function saveCurrentTitleToManager(context = 'edit') {
     showToast('Failed to save title', 'error');
   }
 }
+
+// ============================================
+// THUMBNAIL MANAGER MODAL (STANDALONE)
+// ============================================
+
+let currentThumbnailFolderManager = null;
+
+// Open Thumbnail Manager Modal
+function openThumbnailManagerModal() {
+  const modal = document.getElementById('thumbnailManagerModal');
+  if (!modal) {
+    console.error('[ThumbnailManager] Modal not found');
+    return;
+  }
+  
+  console.log('[ThumbnailManager] Opening modal');
+  modal.classList.remove('hidden');
+  
+  // Load folders and thumbnails
+  fetchThumbnailFoldersForManager();
+  openThumbnailFolderInManager(null); // Start with root folder
+}
+
+// Close Thumbnail Manager Modal
+function closeThumbnailManagerModal() {
+  const modal = document.getElementById('thumbnailManagerModal');
+  if (modal) {
+    modal.classList.add('hidden');
+  }
+  currentThumbnailFolderManager = null;
+}
+
+// Fetch thumbnail folders for manager
+async function fetchThumbnailFoldersForManager() {
+  const folderList = document.getElementById('thumbnailManagerFolderList');
+  if (!folderList) return;
+  
+  try {
+    const response = await fetch('/api/thumbnail-folders', {
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (data.success && data.folders) {
+      folderList.innerHTML = '';
+      
+      data.folders.forEach(folder => {
+        const div = document.createElement('button');
+        div.type = 'button';
+        div.className = `w-full folder-item-manager flex items-center justify-between gap-2 px-3 py-2 text-sm rounded-lg transition-colors hover:bg-dark-600 ${
+          currentThumbnailFolderManager === folder.name 
+            ? 'bg-primary/20 text-primary border border-primary/30' 
+            : 'text-white border border-transparent'
+        }`;
+        div.onclick = () => openThumbnailFolderInManager(folder.name);
+        div.innerHTML = `
+          <div class="flex items-center gap-2 flex-1 min-w-0">
+            <i class="ti ti-folder text-gray-400 shrink-0"></i>
+            <span class="truncate">${escapeHtml(folder.name)}</span>
+          </div>
+          <div class="flex items-center gap-1 shrink-0">
+            <span class="text-xs bg-dark-600 px-2 py-0.5 rounded-full">${folder.count || 0}</span>
+            <button type="button" class="text-blue-400 hover:text-blue-300 p-1" onclick="event.stopPropagation(); openRenameFolderModal('${escapeJsString(folder.name)}')" title="Rename">
+              <i class="ti ti-pencil text-xs"></i>
+            </button>
+            <button type="button" class="text-red-500 hover:text-red-400 p-1" onclick="event.stopPropagation(); deleteThumbnailFolder('${escapeJsString(folder.name)}')" title="Delete">
+              <i class="ti ti-trash text-xs"></i>
+            </button>
+          </div>
+        `;
+        folderList.appendChild(div);
+      });
+      
+      // Update root count
+      updateRootThumbnailCount();
+    }
+  } catch (error) {
+    console.error('[ThumbnailManager] Error fetching folders:', error);
+  }
+}
+
+// Update root thumbnail count
+async function updateRootThumbnailCount() {
+  try {
+    const response = await fetch('/api/thumbnails?folder=', {
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+    
+    const data = await response.json();
+    const rootCount = document.getElementById('rootThumbnailCount');
+    if (rootCount && data.success) {
+      rootCount.textContent = data.thumbnails?.length || 0;
+    }
+  } catch (error) {
+    console.error('[ThumbnailManager] Error fetching root count:', error);
+  }
+}
+
+// Open thumbnail folder in manager
+function openThumbnailFolderInManager(folderName) {
+  currentThumbnailFolderManager = folderName;
+  
+  console.log('[ThumbnailManager] Opening folder:', folderName || 'root');
+  
+  // Update folder info
+  const folderNameEl = document.getElementById('currentFolderNameManager');
+  const editBtn = document.getElementById('editThumbnailFolderBtnManager');
+  const rootBtn = document.getElementById('thumbnailManagerRootBtn');
+  
+  if (folderName) {
+    if (folderNameEl) folderNameEl.textContent = folderName;
+    if (editBtn) editBtn.disabled = false;
+    if (rootBtn) {
+      rootBtn.classList.remove('bg-primary/20', 'text-primary');
+      rootBtn.classList.add('bg-dark-600', 'text-gray-300');
+    }
+  } else {
+    if (folderNameEl) folderNameEl.textContent = 'Root';
+    if (editBtn) editBtn.disabled = true;
+    if (rootBtn) {
+      rootBtn.classList.add('bg-primary/20', 'text-primary');
+      rootBtn.classList.remove('bg-dark-600', 'text-gray-300');
+    }
+  }
+  
+  // Update folder items
+  document.querySelectorAll('.folder-item-manager').forEach(item => {
+    const itemFolder = item.querySelector('span.truncate')?.textContent;
+    if (itemFolder === folderName) {
+      item.classList.add('bg-primary/20', 'text-primary', 'border-primary/30');
+      item.classList.remove('text-white', 'border-transparent');
+    } else {
+      item.classList.remove('bg-primary/20', 'text-primary', 'border-primary/30');
+      item.classList.add('text-white', 'border-transparent');
+    }
+  });
+  
+  // Fetch thumbnails for this folder
+  fetchThumbnailsForManager(folderName);
+}
+
+// Fetch thumbnails for manager
+async function fetchThumbnailsForManager(folderName) {
+  const gallery = document.getElementById('thumbnailManagerGallery');
+  const loading = document.getElementById('thumbnailManagerLoading');
+  const empty = document.getElementById('thumbnailManagerEmpty');
+  const countEl = document.getElementById('thumbnailManagerCount');
+  const folderCountEl = document.getElementById('currentFolderThumbnailCount');
+  
+  if (!gallery) return;
+  
+  // Show loading
+  if (loading) loading.classList.remove('hidden');
+  if (empty) empty.classList.add('hidden');
+  gallery.innerHTML = '';
+  
+  try {
+    const folder = folderName || '';
+    const response = await fetch(`/api/thumbnails?folder=${encodeURIComponent(folder)}`, {
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (loading) loading.classList.add('hidden');
+    
+    if (data.success && data.thumbnails && data.thumbnails.length > 0) {
+      const thumbnails = data.thumbnails;
+      
+      // Update counts
+      if (countEl) countEl.textContent = `(${thumbnails.length}/20)`;
+      if (folderCountEl) folderCountEl.textContent = thumbnails.length;
+      
+      // Render thumbnails
+      gallery.innerHTML = '';
+      thumbnails.forEach((thumb, index) => {
+        const div = document.createElement('div');
+        div.className = 'relative group aspect-video bg-dark-600 rounded-lg overflow-hidden border-2 border-transparent hover:border-primary transition-all cursor-pointer';
+        div.innerHTML = `
+          <img src="${thumb.url}" alt="${thumb.filename}" class="w-full h-full object-cover">
+          <div class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+            <button onclick="viewThumbnailInManager('${escapeJsString(thumb.url)}', '${escapeJsString(thumb.filename)}')" 
+              class="w-8 h-8 bg-blue-500 hover:bg-blue-600 rounded-lg flex items-center justify-center text-white transition-colors" title="View">
+              <i class="ti ti-eye text-sm"></i>
+            </button>
+            <button onclick="deleteThumbnailInManager('${escapeJsString(thumb.filename)}', '${escapeJsString(folder)}')" 
+              class="w-8 h-8 bg-red-500 hover:bg-red-600 rounded-lg flex items-center justify-center text-white transition-colors" title="Delete">
+              <i class="ti ti-trash text-sm"></i>
+            </button>
+          </div>
+          <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2">
+            <p class="text-xs text-white truncate">${thumb.filename}</p>
+          </div>
+        `;
+        gallery.appendChild(div);
+      });
+      
+      if (empty) empty.classList.add('hidden');
+    } else {
+      // Show empty state
+      if (countEl) countEl.textContent = '(0/20)';
+      if (folderCountEl) folderCountEl.textContent = '0';
+      if (empty) empty.classList.remove('hidden');
+    }
+  } catch (error) {
+    console.error('[ThumbnailManager] Error fetching thumbnails:', error);
+    if (loading) loading.classList.add('hidden');
+    if (empty) empty.classList.remove('hidden');
+  }
+}
+
+// Handle thumbnail upload in manager
+async function handleThumbnailManagerUpload(event) {
+  const files = event.target.files;
+  if (!files || files.length === 0) return;
+  
+  const folder = currentThumbnailFolderManager || '';
+  
+  // Show loading toast
+  showToast(`Uploading ${files.length} thumbnail(s)...`, 'info');
+  
+  const formData = new FormData();
+  for (let i = 0; i < files.length; i++) {
+    formData.append('thumbnails', files[i]);
+  }
+  formData.append('folder', folder);
+  
+  try {
+    const response = await fetch('/api/thumbnails/upload', {
+      method: 'POST',
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      },
+      body: formData
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      showToast(`${data.uploaded || files.length} thumbnail(s) uploaded successfully!`);
+      // Refresh thumbnails
+      fetchThumbnailsForManager(folder);
+      fetchThumbnailFoldersForManager(); // Update counts
+    } else {
+      showToast(data.error || 'Failed to upload thumbnails', 'error');
+    }
+  } catch (error) {
+    console.error('[ThumbnailManager] Upload error:', error);
+    showToast('An error occurred while uploading', 'error');
+  } finally {
+    // Reset file input
+    event.target.value = '';
+  }
+}
+
+// View thumbnail in manager
+function viewThumbnailInManager(url, filename) {
+  // Create a simple lightbox
+  const lightbox = document.createElement('div');
+  lightbox.className = 'fixed inset-0 bg-black/90 z-[100] flex items-center justify-center p-4';
+  lightbox.onclick = () => lightbox.remove();
+  lightbox.innerHTML = `
+    <div class="max-w-4xl max-h-full">
+      <img src="${url}" alt="${filename}" class="max-w-full max-h-[90vh] object-contain rounded-lg">
+      <p class="text-white text-center mt-4">${filename}</p>
+    </div>
+  `;
+  document.body.appendChild(lightbox);
+}
+
+// Delete thumbnail in manager
+async function deleteThumbnailInManager(filename, folder) {
+  if (!confirm(`Delete thumbnail "${filename}"?`)) return;
+  
+  try {
+    const response = await fetch('/api/thumbnails', {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getCsrfToken()
+      },
+      body: JSON.stringify({ filename, folder: folder || '' })
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      showToast('Thumbnail deleted');
+      fetchThumbnailsForManager(folder);
+      fetchThumbnailFoldersForManager(); // Update counts
+    } else {
+      showToast(data.error || 'Failed to delete thumbnail', 'error');
+    }
+  } catch (error) {
+    console.error('[ThumbnailManager] Delete error:', error);
+    showToast('An error occurred', 'error');
+  }
+}
