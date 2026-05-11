@@ -7199,21 +7199,21 @@ async function fetchThumbnailsForManager(folderName) {
       gallery.innerHTML = '';
       thumbnails.forEach((thumb, index) => {
         const div = document.createElement('div');
-        div.className = 'relative group aspect-video bg-dark-600 rounded-lg overflow-hidden border-2 border-transparent hover:border-primary transition-all cursor-pointer';
+        div.className = 'relative group aspect-video bg-dark-600 rounded-xl overflow-hidden border-2 border-transparent hover:border-primary transition-all cursor-pointer shadow-lg hover:shadow-xl';
         div.innerHTML = `
           <img src="${thumb.url}" alt="${thumb.filename}" class="w-full h-full object-cover">
-          <div class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+          <div class="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
             <button onclick="viewThumbnailInManager('${escapeJsString(thumb.url)}', '${escapeJsString(thumb.filename)}')" 
-              class="w-8 h-8 bg-blue-500 hover:bg-blue-600 rounded-lg flex items-center justify-center text-white transition-colors" title="View">
-              <i class="ti ti-eye text-sm"></i>
+              class="w-10 h-10 bg-blue-500 hover:bg-blue-600 rounded-lg flex items-center justify-center text-white transition-colors shadow-lg" title="View">
+              <i class="ti ti-eye text-lg"></i>
             </button>
             <button onclick="deleteThumbnailInManager('${escapeJsString(thumb.filename)}', '${escapeJsString(folder)}')" 
-              class="w-8 h-8 bg-red-500 hover:bg-red-600 rounded-lg flex items-center justify-center text-white transition-colors" title="Delete">
-              <i class="ti ti-trash text-sm"></i>
+              class="w-10 h-10 bg-red-500 hover:bg-red-600 rounded-lg flex items-center justify-center text-white transition-colors shadow-lg" title="Delete">
+              <i class="ti ti-trash text-lg"></i>
             </button>
           </div>
-          <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2">
-            <p class="text-xs text-white truncate">${thumb.filename}</p>
+          <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent p-2.5">
+            <p class="text-xs md:text-sm text-white truncate font-medium">${thumb.filename}</p>
           </div>
         `;
         gallery.appendChild(div);
