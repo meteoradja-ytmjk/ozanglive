@@ -1097,19 +1097,10 @@ async function fetchThumbnails(folder = null) {
     
     // Update count display
     if (countEl) {
-      countEl.textContent = `(${data.count || 0}/${data.maxAllowed || 20})`;
+      countEl.textContent = `(${data.count || 0})`;
     }
     
-    // Disable upload button if at max
-    if (uploadBtn && data.count >= data.maxAllowed) {
-      uploadBtn.disabled = true;
-      uploadBtn.classList.add('opacity-50', 'cursor-not-allowed');
-      uploadBtn.title = 'Maximum 20 thumbnails reached in this folder. Delete some to upload new ones.';
-    } else if (uploadBtn) {
-      uploadBtn.disabled = false;
-      uploadBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-      uploadBtn.title = '';
-    }
+    // No limit on thumbnails anymore
     
     // Get current thumbnail mode
     const thumbnailMode = document.querySelector('input[name="thumbnailMode"]:checked')?.value || 'sequential';
@@ -7201,7 +7192,7 @@ async function fetchThumbnailsForManager(folderName) {
       const thumbnails = data.thumbnails;
       
       // Update counts
-      if (countEl) countEl.textContent = `(${thumbnails.length}/20)`;
+      if (countEl) countEl.textContent = `(${thumbnails.length})`;
       if (folderCountEl) folderCountEl.textContent = thumbnails.length;
       
       // Render thumbnails
@@ -7254,12 +7245,12 @@ async function handleThumbnailManagerUpload(event) {
   
   const formData = new FormData();
   for (let i = 0; i < files.length; i++) {
-    formData.append('thumbnails', files[i]);
+    formData.append('thumbnail', files[i]);
   }
   formData.append('folder', folder);
   
   try {
-    const response = await fetch('/api/thumbnails/upload', {
+    const response = await fetch('/api/thumbnails', {
       method: 'POST',
       headers: {
         'X-CSRF-Token': getCsrfToken()
@@ -7270,7 +7261,7 @@ async function handleThumbnailManagerUpload(event) {
     const data = await response.json();
     
     if (data.success) {
-      showToast(`${data.uploaded || files.length} thumbnail(s) uploaded successfully!`);
+      showToast(`${data.uploadedCount || files.length} thumbnail(s) uploaded successfully!`);
       // Refresh thumbnails
       fetchThumbnailsForManager(folder);
       fetchThumbnailFoldersForManager(); // Update counts

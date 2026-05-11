@@ -6759,7 +6759,7 @@ app.get('/api/thumbnails', isAuthenticated, async (req, res) => {
 
     // Check if directory exists
     if (!fs.existsSync(thumbnailsDir)) {
-      return res.json({ success: true, thumbnails: [], count: 0, maxAllowed: 20, folder: folder });
+      return res.json({ success: true, thumbnails: [], count: 0, folder: folder });
     }
 
     const items = fs.readdirSync(thumbnailsDir, { withFileTypes: true });
@@ -6785,7 +6785,7 @@ app.get('/api/thumbnails', isAuthenticated, async (req, res) => {
       thumbnails = thumbnails.slice(0, limit);
     }
 
-    res.json({ success: true, thumbnails, count: totalCount, maxAllowed: 20, folder: folder });
+    res.json({ success: true, thumbnails, count: totalCount, folder: folder });
   } catch (error) {
     console.error('Error listing thumbnails:', error);
     res.status(500).json({ success: false, error: 'Failed to list thumbnails' });
@@ -6808,8 +6808,8 @@ const thumbnailUpload = multer({
   }
 });
 
-// Upload thumbnail to user's gallery (max 20 per folder) - supports multiple files
-app.post('/api/thumbnails', isAuthenticated, thumbnailUpload.array('thumbnail', 20), async (req, res) => {
+// Upload thumbnail to user's gallery - supports multiple files (no limit)
+app.post('/api/thumbnails', isAuthenticated, thumbnailUpload.array('thumbnail', 100), async (req, res) => {
   try {
     const userId = req.session.userId;
     const folder = req.body.folder || null;
@@ -6842,23 +6842,10 @@ app.post('/api/thumbnails', isAuthenticated, thumbnailUpload.array('thumbnail', 
     }
 
     const filesToUpload = req.files;
-    const availableSlots = 20 - currentCount;
-
-    if (availableSlots <= 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'Maximum 20 thumbnails allowed per folder. Please delete some before uploading new ones.'
-      });
-    }
-
-    // Limit files to available slots
-    const filesToProcess = filesToUpload.slice(0, availableSlots);
-    const skippedCount = filesToUpload.length - filesToProcess.length;
-
     const uploadedThumbnails = [];
 
-    for (let i = 0; i < filesToProcess.length; i++) {
-      const file = filesToProcess[i];
+    for (let i = 0; i < filesToUpload.length; i++) {
+      const file = filesToUpload[i];
       const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
       const newFilename = `thumb_${Date.now()}_${i}${ext}`;
       const newPath = path.join(thumbnailsDir, newFilename);
@@ -6880,9 +6867,7 @@ app.post('/api/thumbnails', isAuthenticated, thumbnailUpload.array('thumbnail', 
       // For backward compatibility with single upload
       thumbnail: uploadedThumbnails[0] || null,
       uploadedCount: uploadedThumbnails.length,
-      skippedCount: skippedCount,
       count: currentCount + uploadedThumbnails.length,
-      maxAllowed: 20,
       folder: folder
     });
   } catch (error) {
