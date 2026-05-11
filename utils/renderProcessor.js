@@ -45,46 +45,9 @@ async function renderLoopVideo({ videoPaths, audioPaths, outputPath, targetDurat
     console.log('[RENDER] Video paths:', videoPaths);
     console.log('[RENDER] Audio paths:', audioPaths);
     
-    // OPTIMIZED PATH 1: Single video + single/no audio - FASTEST (stream copy)
-    if (videoPaths.length === 1 && (!audioPaths || audioPaths.length <= 1) && visualizerPreset === 'none') {
-      console.log('[RENDER] Using FAST path: stream copy mode');
-      
-      await runFfmpeg((cmd) => {
-        cmd.input(videoPaths[0]).inputOptions(['-stream_loop', '-1']);
-        
-        if (audioPaths?.length === 1) {
-          console.log('[RENDER] Adding audio input:', audioPaths[0]);
-          cmd.input(audioPaths[0]).inputOptions(['-stream_loop', '-1']);
-        }
-        
-        const outputOptions = [
-          '-t', String(effectiveTargetDuration),
-          '-c:v', 'copy',
-          '-movflags', '+faststart'
-        ];
-        
-        if (audioPaths?.length === 1) {
-          outputOptions.push('-c:a', 'copy');
-          console.log('[RENDER] Audio codec: copy');
-        } else {
-          outputOptions.push('-an');
-          console.log('[RENDER] No audio selected');
-        }
-        
-        return cmd.outputOptions(outputOptions).output(outputPath);
-      }, { 
-        onProgress: (p) => {
-          const progress = Math.min(99, Math.round((parseTimeToSeconds(p.timemark) / effectiveTargetDuration) * 100));
-          onProgress?.(progress);
-        }
-      });
-      
-      console.log('[RENDER] Completed using FAST path');
-      return outputPath;
-    }
-    
-    // OPTIMIZED PATH 2: Multiple videos/audios - Use concat demuxer (more reliable)
-    console.log('[RENDER] Using OPTIMIZED path: concat demuxer');
+    // CRITICAL FIX: Always use concat demuxer for reliable audio/video sync
+    // The old stream_loop approach caused audio sync issues
+    console.log('[RENDER] Using concat demuxer for reliable audio/video sync');
     
     // Get video durations to calculate loops needed
     const videoDurations = await Promise.all(videoPaths.map(async (videoPath) => {
@@ -130,18 +93,26 @@ async function renderLoopVideo({ videoPaths, audioPaths, outputPath, targetDurat
     const hasAudio = audioPaths?.length > 0;
     if (hasAudio) {
       console.log('[RENDER] Processing audio...');
+      console.log('[RENDER] Audio files:', audioPaths);
       
       // Get audio durations
       const audioDurations = await Promise.all(audioPaths.map(async (audioPath) => {
+        console.log(`[RENDER] Checking audio file: ${audioPath}`);
+        if (!fs.existsSync(audioPath)) {
+          console.error(`[RENDER] ERROR: Audio file not found: ${audioPath}`);
+          throw new Error(`Audio file not found: ${audioPath}`);
+        }
         const meta = await ffprobeAsync(audioPath);
         const dur = Number(meta?.format?.duration || 0);
-        console.log(`[RENDER] Audio ${audioPath}: ${dur}s`);
+        console.log(`[RENDER] Audio duration: ${dur}s`);
         return dur;
       }));
       const totalAudioDuration = audioDurations.reduce((sum, val) => sum + val, 0);
+      console.log(`[RENDER] Total audio duration: ${totalAudioDuration}s`);
       
       // Calculate audio loops needed
       const audioLoops = Math.ceil(effectiveTargetDuration / totalAudioDuration) + 1; // +1 for safety
+      console.log(`[RENDER] Audio loops needed: ${audioLoops}`);
       
       // Create concat file for audios - FIXED: proper newline
       const audioConcatFile = path.join(workDir, 'audios.txt');
@@ -151,11 +122,15 @@ async function renderLoopVideo({ videoPaths, audioPaths, outputPath, targetDurat
           audioLines.push(`file '${aPath.replace(/'/g, "'\\''")}'`);
         });
       }
-      fs.writeFileSync(audioConcatFile, audioLines.join('\n'), 'utf8');
+      const audioConcatContent = audioLines.join('\n');
+      fs.writeFileSync(audioConcatFile, audioConcatContent, 'utf8');
       console.log('[RENDER] Audio concat file created with', audioLines.length, 'entries');
+      console.log('[RENDER] Audio concat file path:', audioConcatFile);
+      console.log('[RENDER] Audio concat content preview:', audioConcatContent.substring(0, 200));
       
       // Merge audios
       const mergedAudio = path.join(workDir, 'audio-merged.aac');
+      console.log('[RENDER] Merging audios to:', mergedAudio);
       await runFfmpeg((cmd) => {
         return cmd
           .input(audioConcatFile)
@@ -170,15 +145,27 @@ async function renderLoopVideo({ videoPaths, audioPaths, outputPath, targetDurat
       });
       
       console.log('[RENDER] Audio merged successfully');
+      console.log('[RENDER] Merged audio file exists:', fs.existsSync(mergedAudio));
+      if (fs.existsSync(mergedAudio)) {
+        const audioStats = fs.statSync(mergedAudio);
+        console.log('[RENDER] Merged audio size:', (audioStats.size / 1024).toFixed(2), 'KB');
+      }
       
-      // Combine video + audio
+      // Combine video + audio - CRITICAL: Use shortest stream to prevent issues
+      console.log('[RENDER] Combining video and audio...');
+      console.log('[RENDER] Video input:', mergedVideo);
+      console.log('[RENDER] Audio input:', mergedAudio);
+      console.log('[RENDER] Output:', outputPath);
+      
       await runFfmpeg((cmd) => {
         return cmd
           .input(mergedVideo)
           .input(mergedAudio)
           .outputOptions([
             '-c:v', 'copy',
-            '-c:a', 'copy',
+            '-c:a', 'aac',  // Re-encode audio to ensure compatibility
+            '-b:a', '192k',
+            '-shortest',    // CRITICAL: Stop at shortest stream
             '-movflags', '+faststart'
           ])
           .output(outputPath);
@@ -190,6 +177,20 @@ async function renderLoopVideo({ videoPaths, audioPaths, outputPath, targetDurat
       });
       
       console.log('[RENDER] Video + Audio combined successfully');
+      
+      // Verify output has audio
+      if (fs.existsSync(outputPath)) {
+        try {
+          const outputMeta = await ffprobeAsync(outputPath);
+          const hasAudioStream = outputMeta.streams.some(s => s.codec_type === 'audio');
+          console.log('[RENDER] Output file has audio stream:', hasAudioStream ? '✓ YES' : '✗ NO');
+          if (!hasAudioStream) {
+            console.error('[RENDER] WARNING: Output file has NO audio stream!');
+          }
+        } catch (probeErr) {
+          console.error('[RENDER] Could not probe output file:', probeErr.message);
+        }
+      }
     } else {
       // No audio, just copy the video
       fs.copyFileSync(mergedVideo, outputPath);
