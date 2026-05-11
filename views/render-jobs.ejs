@@ -819,28 +819,7 @@ async function loadJobs(){
   `;
   }).join('');
   
-  // Save current playing video state before updating
-  const playingVideos = new Map();
-  document.querySelectorAll('video[data-video-id]').forEach(video => {
-    if (!video.paused) {
-      playingVideos.set(video.dataset.videoId, {
-        currentTime: video.currentTime,
-        volume: video.volume
-      });
-    }
-  });
-  
   el.jobs.innerHTML=cards||'<div class="text-sm text-gray-400 text-center py-8">Belum ada job</div>';
-  
-  // Restore playing state for videos that were playing
-  playingVideos.forEach((state, videoId) => {
-    const video = document.querySelector(`video[data-video-id="${videoId}"]`);
-    if (video) {
-      video.currentTime = state.currentTime;
-      video.volume = state.volume;
-      video.play().catch(err => console.log('Auto-play prevented:', err));
-    }
-  });
 }
 
 if (el.createBtn) {
@@ -2573,8 +2552,18 @@ Promise.resolve()
   .then(requestNotificationPermission)
   .catch((err) => console.error('Render dashboard init error:', err));
 
-// Smart auto-refresh: only refresh when there are active jobs
+// Smart auto-refresh: only refresh when there are active jobs AND no video is playing
 let refreshInterval = null;
+
+function isAnyVideoPlaying() {
+  const videos = document.querySelectorAll('video[data-video-id]');
+  for (const video of videos) {
+    if (!video.paused) {
+      return true;
+    }
+  }
+  return false;
+}
 
 function startSmartRefresh() {
   // Clear existing interval
@@ -2586,6 +2575,12 @@ function startSmartRefresh() {
   // Only start interval if there are active jobs
   refreshInterval = setInterval(async () => {
     try {
+      // CRITICAL: Don't refresh if any video is playing
+      if (isAnyVideoPlaying()) {
+        console.log('[Auto-Refresh] Skipped - video is playing');
+        return;
+      }
+      
       const r = await fetch('/api/render/jobs');
       const d = await r.json();
       const jobs = toArray(d, 'jobs');
