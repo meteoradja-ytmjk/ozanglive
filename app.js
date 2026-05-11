@@ -3822,7 +3822,7 @@ app.post('/api/render/jobs/:id/upload', isAuthenticated, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Output render belum tersedia' });
     }
 
-    const { targetAccountId, title, useChannelDefaults } = req.body;
+    const { targetAccountId, title, description, tags, categoryId, privacyStatus } = req.body;
     const accountId = targetAccountId || job.target_account_id;
     if (!accountId) {
       return res.status(400).json({ success: false, message: 'Pilih channel target terlebih dahulu' });
@@ -3835,25 +3835,23 @@ app.post('/api/render/jobs/:id/upload', isAuthenticated, async (req, res) => {
 
     const accessToken = await youtubeService.getAccessToken(account.clientId, account.clientSecret, account.refreshToken);
     
-    // Get channel defaults if requested
-    let uploadOptions = {
+    // Build upload options with custom metadata from user
+    const uploadOptions = {
       title: title || job.title || `Render ${job.id}`,
-      description: 'Uploaded from Render Jobs',
+      description: description || 'Uploaded from Render Jobs',
       filePath: path.join(__dirname, 'public', job.output_path),
-      privacyStatus: 'unlisted'
+      privacyStatus: privacyStatus || 'unlisted',
+      tags: tags || [],
+      categoryId: categoryId || '22'
     };
     
-    if (useChannelDefaults) {
-      try {
-        const defaults = await youtubeService.getChannelDefaults(accessToken);
-        uploadOptions.description = defaults.description || uploadOptions.description;
-        uploadOptions.tags = defaults.tags || [];
-        uploadOptions.categoryId = defaults.categoryId || '22'; // Default to People & Blogs
-      } catch (err) {
-        console.error('Failed to get channel defaults:', err.message);
-        // Continue with default values
-      }
-    }
+    console.log('[Upload] Upload options:', {
+      title: uploadOptions.title,
+      description: uploadOptions.description?.substring(0, 100) + '...',
+      tags: uploadOptions.tags,
+      categoryId: uploadOptions.categoryId,
+      privacyStatus: uploadOptions.privacyStatus
+    });
     
     const uploadResult = await youtubeService.uploadRegularVideo(accessToken, uploadOptions);
 

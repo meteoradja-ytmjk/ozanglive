@@ -649,16 +649,16 @@
 </div>
 
 <!-- Upload to YouTube Modal -->
-<div id="uploadModal" class="fixed inset-0 bg-black/60 modal-backdrop z-50 hidden">
+<div id="uploadModal" class="fixed inset-0 bg-black/60 modal-backdrop z-50 hidden overflow-y-auto">
   <div class="flex items-center justify-center min-h-screen p-4">
-    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-2xl border border-gray-600/50">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-3xl border border-gray-600/50 my-8">
       <div class="flex items-center justify-between p-4 border-b border-gray-600/50">
         <h3 class="text-lg font-medium">Upload to YouTube</h3>
         <button onclick="closeUploadModal()" class="text-gray-400 hover:text-white">
           <i class="ti ti-x text-xl"></i>
         </button>
       </div>
-      <div class="p-6">
+      <div class="p-6 max-h-[calc(100vh-200px)] overflow-y-auto">
         <!-- Video Title (Rename) -->
         <div class="mb-4">
           <label class="text-sm font-medium text-white block mb-2">
@@ -676,17 +676,69 @@
           <select id="uploadTargetChannel" class="w-full bg-dark-700 text-white px-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" onchange="loadChannelDefaults()">
             <option value="">-- Select Channel --</option>
           </select>
-          <p class="text-xs text-gray-400 mt-1">Channel defaults will be loaded automatically</p>
+          <p class="text-xs text-gray-400 mt-1">Select channel to load defaults</p>
         </div>
         
-        <!-- Channel Defaults Info -->
-        <div id="channelDefaultsInfo" class="hidden mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-          <div class="flex items-start gap-2">
-            <i class="ti ti-info-circle text-blue-400 mt-0.5"></i>
-            <div class="flex-1 text-xs text-blue-300">
-              <strong>Channel Defaults Loaded:</strong>
-              <div id="defaultsPreview" class="mt-2 space-y-1"></div>
-            </div>
+        <!-- Description Field (Editable) -->
+        <div id="descriptionField" class="hidden mb-4">
+          <label class="text-sm font-medium text-white block mb-2">
+            <i class="ti ti-file-text mr-1"></i>Description
+          </label>
+          <textarea id="uploadDescription" rows="4" class="w-full bg-dark-700 text-white px-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary resize-none" placeholder="Video description..."></textarea>
+          <p class="text-xs text-gray-400 mt-1">Edit description or keep channel default</p>
+        </div>
+        
+        <!-- Tags Field (Editable) -->
+        <div id="tagsField" class="hidden mb-4">
+          <label class="text-sm font-medium text-white block mb-2">
+            <i class="ti ti-tags mr-1"></i>Tags
+          </label>
+          <input type="text" id="uploadTags" class="w-full bg-dark-700 text-white px-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" placeholder="tag1, tag2, tag3">
+          <p class="text-xs text-gray-400 mt-1">Separate tags with commas</p>
+        </div>
+        
+        <!-- Category Field -->
+        <div id="categoryField" class="hidden mb-4">
+          <label class="text-sm font-medium text-white block mb-2">
+            <i class="ti ti-category mr-1"></i>Category
+          </label>
+          <select id="uploadCategory" class="w-full bg-dark-700 text-white px-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
+            <option value="1">Film & Animation</option>
+            <option value="2">Autos & Vehicles</option>
+            <option value="10">Music</option>
+            <option value="15">Pets & Animals</option>
+            <option value="17">Sports</option>
+            <option value="19">Travel & Events</option>
+            <option value="20">Gaming</option>
+            <option value="22" selected>People & Blogs</option>
+            <option value="23">Comedy</option>
+            <option value="24">Entertainment</option>
+            <option value="25">News & Politics</option>
+            <option value="26">Howto & Style</option>
+            <option value="27">Education</option>
+            <option value="28">Science & Technology</option>
+          </select>
+          <p class="text-xs text-gray-400 mt-1">YouTube video category</p>
+        </div>
+        
+        <!-- Privacy Status -->
+        <div id="privacyField" class="hidden mb-4">
+          <label class="text-sm font-medium text-white block mb-2">
+            <i class="ti ti-lock mr-1"></i>Privacy
+          </label>
+          <select id="uploadPrivacy" class="w-full bg-dark-700 text-white px-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
+            <option value="private">Private</option>
+            <option value="unlisted" selected>Unlisted</option>
+            <option value="public">Public</option>
+          </select>
+          <p class="text-xs text-gray-400 mt-1">Video visibility on YouTube</p>
+        </div>
+        
+        <!-- Channel Defaults Loaded Badge -->
+        <div id="channelDefaultsBadge" class="hidden mb-4 p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
+          <div class="flex items-center gap-2">
+            <i class="ti ti-check-circle text-green-400"></i>
+            <span class="text-sm text-green-300 font-medium">Channel defaults loaded - You can edit fields above</span>
           </div>
         </div>
         
@@ -1206,10 +1258,23 @@ async function openUploadModal(jobId) {
     // Load accounts
     await loadAccountsForUpload();
     
+    // Reset all fields
+    document.getElementById('uploadDescription').value = '';
+    document.getElementById('uploadTags').value = '';
+    document.getElementById('uploadCategory').value = '22';
+    document.getElementById('uploadPrivacy').value = 'unlisted';
+    
+    // Hide all fields initially
+    document.getElementById('descriptionField').classList.add('hidden');
+    document.getElementById('tagsField').classList.add('hidden');
+    document.getElementById('categoryField').classList.add('hidden');
+    document.getElementById('privacyField').classList.add('hidden');
+    document.getElementById('channelDefaultsBadge').classList.add('hidden');
+    
     // Reset progress
     document.getElementById('uploadProgress').classList.add('hidden');
-    document.getElementById('channelDefaultsInfo').classList.add('hidden');
     document.getElementById('uploadProcessBtn').disabled = false;
+    document.getElementById('uploadProcessBtn').innerHTML = '<i class="ti ti-upload mr-1"></i>Upload to YouTube';
     
     // Show modal
     document.getElementById('uploadModal').classList.remove('hidden');
@@ -1242,17 +1307,19 @@ async function loadChannelDefaults() {
   const channelId = document.getElementById('uploadTargetChannel').value;
   
   if (!channelId) {
-    document.getElementById('channelDefaultsInfo').classList.add('hidden');
+    // Hide all fields when no channel selected
+    document.getElementById('descriptionField').classList.add('hidden');
+    document.getElementById('tagsField').classList.add('hidden');
+    document.getElementById('categoryField').classList.add('hidden');
+    document.getElementById('privacyField').classList.add('hidden');
+    document.getElementById('channelDefaultsBadge').classList.add('hidden');
     channelDefaults = null;
     return;
   }
   
   try {
-    // Show loading
-    const infoDiv = document.getElementById('channelDefaultsInfo');
-    const previewDiv = document.getElementById('defaultsPreview');
-    infoDiv.classList.remove('hidden');
-    previewDiv.innerHTML = '<div class="text-xs text-gray-400">Loading channel defaults...</div>';
+    // Show loading state
+    showToast('Loading channel defaults...');
     
     // Fetch defaults
     const response = await fetch(`/api/youtube/channel/${channelId}/defaults`);
@@ -1264,19 +1331,36 @@ async function loadChannelDefaults() {
     
     channelDefaults = data.defaults;
     
-    // Display defaults
-    previewDiv.innerHTML = `
-      <div class="text-gray-300"><strong>Description:</strong> ${channelDefaults.description || 'None'}</div>
-      <div class="text-gray-300"><strong>Tags:</strong> ${channelDefaults.tags?.join(', ') || 'None'}</div>
-      <div class="text-gray-300"><strong>Category:</strong> ${channelDefaults.categoryId || 'Default'}</div>
-      <div class="text-gray-300"><strong>Privacy:</strong> Unlisted (default)</div>
-    `;
+    // Populate editable fields with defaults
+    document.getElementById('uploadDescription').value = channelDefaults.description || '';
+    document.getElementById('uploadTags').value = (channelDefaults.tags || []).join(', ');
+    document.getElementById('uploadCategory').value = channelDefaults.categoryId || '22';
+    document.getElementById('uploadPrivacy').value = 'unlisted'; // Default to unlisted for safety
     
-    showToast('✓ Channel defaults loaded');
+    // Show all fields
+    document.getElementById('descriptionField').classList.remove('hidden');
+    document.getElementById('tagsField').classList.remove('hidden');
+    document.getElementById('categoryField').classList.remove('hidden');
+    document.getElementById('privacyField').classList.remove('hidden');
+    document.getElementById('channelDefaultsBadge').classList.remove('hidden');
+    
+    showToast('✓ Channel defaults loaded - You can edit them now');
   } catch (err) {
     console.error('Failed to load channel defaults:', err);
-    document.getElementById('channelDefaultsInfo').classList.add('hidden');
-    showToast('⚠ Failed to load channel defaults');
+    
+    // Show fields with empty values on error
+    document.getElementById('uploadDescription').value = '';
+    document.getElementById('uploadTags').value = '';
+    document.getElementById('uploadCategory').value = '22';
+    document.getElementById('uploadPrivacy').value = 'unlisted';
+    
+    document.getElementById('descriptionField').classList.remove('hidden');
+    document.getElementById('tagsField').classList.remove('hidden');
+    document.getElementById('categoryField').classList.remove('hidden');
+    document.getElementById('privacyField').classList.remove('hidden');
+    document.getElementById('channelDefaultsBadge').classList.add('hidden');
+    
+    showToast('⚠ Could not load defaults - Using empty values');
   }
 }
 
@@ -1285,6 +1369,10 @@ async function processUpload() {
   
   const title = document.getElementById('uploadTitle').value.trim();
   const channelId = document.getElementById('uploadTargetChannel').value;
+  const description = document.getElementById('uploadDescription').value.trim();
+  const tagsInput = document.getElementById('uploadTags').value.trim();
+  const categoryId = document.getElementById('uploadCategory').value;
+  const privacyStatus = document.getElementById('uploadPrivacy').value;
   
   if (!title) {
     alert('Please enter a video title');
@@ -1295,6 +1383,9 @@ async function processUpload() {
     alert('Please select a target channel');
     return;
   }
+  
+  // Parse tags from comma-separated string
+  const tags = tagsInput ? tagsInput.split(',').map(t => t.trim()).filter(t => t) : [];
   
   // Disable button and show progress
   const btn = document.getElementById('uploadProcessBtn');
@@ -1331,14 +1422,17 @@ async function processUpload() {
       }
     }, 500);
     
-    // Actual upload request
+    // Actual upload request with custom metadata
     const response = await fetch(`/api/render/jobs/${currentUploadJobId}/upload`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         targetAccountId: channelId,
         title: title,
-        useChannelDefaults: true
+        description: description,
+        tags: tags,
+        categoryId: categoryId,
+        privacyStatus: privacyStatus
       })
     });
     
