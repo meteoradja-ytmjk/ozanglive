@@ -42,6 +42,8 @@ async function renderLoopVideo({ videoPaths, audioPaths, outputPath, targetDurat
     }
     
     console.log(`[RENDER] Target duration: ${effectiveTargetDuration}s, Videos: ${videoPaths.length}, Audios: ${audioPaths?.length || 0}`);
+    console.log('[RENDER] Video paths:', videoPaths);
+    console.log('[RENDER] Audio paths:', audioPaths);
     
     // OPTIMIZED PATH 1: Single video + single/no audio - FASTEST (stream copy)
     if (videoPaths.length === 1 && (!audioPaths || audioPaths.length <= 1) && visualizerPreset === 'none') {
@@ -51,6 +53,7 @@ async function renderLoopVideo({ videoPaths, audioPaths, outputPath, targetDurat
         cmd.input(videoPaths[0]).inputOptions(['-stream_loop', '-1']);
         
         if (audioPaths?.length === 1) {
+          console.log('[RENDER] Adding audio input:', audioPaths[0]);
           cmd.input(audioPaths[0]).inputOptions(['-stream_loop', '-1']);
         }
         
@@ -62,8 +65,10 @@ async function renderLoopVideo({ videoPaths, audioPaths, outputPath, targetDurat
         
         if (audioPaths?.length === 1) {
           outputOptions.push('-c:a', 'copy');
+          console.log('[RENDER] Audio codec: copy');
         } else {
           outputOptions.push('-an');
+          console.log('[RENDER] No audio selected');
         }
         
         return cmd.outputOptions(outputOptions).output(outputPath);
@@ -91,15 +96,16 @@ async function renderLoopVideo({ videoPaths, audioPaths, outputPath, targetDurat
     // Calculate how many loops we need
     const videoLoops = Math.ceil(effectiveTargetDuration / totalVideoDuration) + 1; // +1 for safety
     
-    // Create concat file for videos
+    // Create concat file for videos - FIXED: proper newline
     const videoConcatFile = path.join(workDir, 'videos.txt');
-    let videoConcatContent = '';
+    const videoLines = [];
     for (let i = 0; i < videoLoops; i++) {
       videoPaths.forEach(vPath => {
-        videoConcatContent += `file '${vPath.replace(/'/g, "'\\\''")}'\\n`;
+        videoLines.push(`file '${vPath.replace(/'/g, "'\\''")}'`);
       });
     }
-    fs.writeFileSync(videoConcatFile, videoConcatContent, 'utf8');
+    fs.writeFileSync(videoConcatFile, videoLines.join('\n'), 'utf8');
+    console.log('[RENDER] Video concat file created with', videoLines.length, 'entries');
     
     // Merge videos first
     const mergedVideo = path.join(workDir, 'video-merged.mp4');
@@ -118,30 +124,35 @@ async function renderLoopVideo({ videoPaths, audioPaths, outputPath, targetDurat
         .output(mergedVideo);
     });
     
-    console.log('[RENDER] Video merged');
+    console.log('[RENDER] Video merged successfully');
     
     // Handle audio if present
     const hasAudio = audioPaths?.length > 0;
     if (hasAudio) {
+      console.log('[RENDER] Processing audio...');
+      
       // Get audio durations
       const audioDurations = await Promise.all(audioPaths.map(async (audioPath) => {
         const meta = await ffprobeAsync(audioPath);
-        return Number(meta?.format?.duration || 0);
+        const dur = Number(meta?.format?.duration || 0);
+        console.log(`[RENDER] Audio ${audioPath}: ${dur}s`);
+        return dur;
       }));
       const totalAudioDuration = audioDurations.reduce((sum, val) => sum + val, 0);
       
       // Calculate audio loops needed
       const audioLoops = Math.ceil(effectiveTargetDuration / totalAudioDuration) + 1; // +1 for safety
       
-      // Create concat file for audios
+      // Create concat file for audios - FIXED: proper newline
       const audioConcatFile = path.join(workDir, 'audios.txt');
-      let audioConcatContent = '';
+      const audioLines = [];
       for (let i = 0; i < audioLoops; i++) {
         audioPaths.forEach(aPath => {
-          audioConcatContent += `file '${aPath.replace(/'/g, "'\\\''")}'\\n`;
+          audioLines.push(`file '${aPath.replace(/'/g, "'\\''")}'`);
         });
       }
-      fs.writeFileSync(audioConcatFile, audioConcatContent, 'utf8');
+      fs.writeFileSync(audioConcatFile, audioLines.join('\n'), 'utf8');
+      console.log('[RENDER] Audio concat file created with', audioLines.length, 'entries');
       
       // Merge audios
       const mergedAudio = path.join(workDir, 'audio-merged.aac');
@@ -158,7 +169,7 @@ async function renderLoopVideo({ videoPaths, audioPaths, outputPath, targetDurat
           .output(mergedAudio);
       });
       
-      console.log('[RENDER] Audio merged');
+      console.log('[RENDER] Audio merged successfully');
       
       // Combine video + audio
       await runFfmpeg((cmd) => {
@@ -178,11 +189,11 @@ async function renderLoopVideo({ videoPaths, audioPaths, outputPath, targetDurat
         }
       });
       
-      console.log('[RENDER] Video + Audio combined');
+      console.log('[RENDER] Video + Audio combined successfully');
     } else {
       // No audio, just copy the video
       fs.copyFileSync(mergedVideo, outputPath);
-      console.log('[RENDER] Video only (no audio)');
+      console.log('[RENDER] Video only (no audio selected)');
     }
     
     console.log('[RENDER] Completed using OPTIMIZED path');
@@ -190,6 +201,7 @@ async function renderLoopVideo({ videoPaths, audioPaths, outputPath, targetDurat
     
   } catch (error) {
     console.error('[RENDER] Error:', error.message);
+    console.error('[RENDER] Stack:', error.stack);
     throw error;
   } finally {
     // Cleanup temp directory
