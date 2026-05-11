@@ -7067,7 +7067,7 @@ async function fetchThumbnailFoldersForManager() {
       data.folders.forEach(folder => {
         const div = document.createElement('button');
         div.type = 'button';
-        div.className = `w-full folder-item-manager flex items-center justify-between gap-2 px-3 py-2 text-sm rounded-lg transition-colors hover:bg-dark-600 ${
+        div.className = `w-full folder-item-manager flex items-center justify-between gap-2 px-3 py-2.5 md:py-2 text-sm rounded-lg transition-colors hover:bg-dark-600 ${
           currentThumbnailFolderManager === folder.name 
             ? 'bg-primary/20 text-primary border border-primary/30' 
             : 'text-white border border-transparent'
@@ -7076,15 +7076,15 @@ async function fetchThumbnailFoldersForManager() {
         div.innerHTML = `
           <div class="flex items-center gap-2 flex-1 min-w-0">
             <i class="ti ti-folder text-gray-400 shrink-0"></i>
-            <span class="truncate">${escapeHtml(folder.name)}</span>
+            <span class="truncate font-medium">${escapeHtml(folder.name)}</span>
           </div>
-          <div class="flex items-center gap-1 shrink-0">
+          <div class="flex items-center gap-1.5 md:gap-1 shrink-0">
             <span class="text-xs bg-dark-600 px-2 py-0.5 rounded-full">${folder.count || 0}</span>
-            <button type="button" class="text-blue-400 hover:text-blue-300 p-1" onclick="event.stopPropagation(); openRenameFolderModal('${escapeJsString(folder.name)}')" title="Rename">
-              <i class="ti ti-pencil text-xs"></i>
+            <button type="button" class="text-blue-400 hover:text-blue-300 p-1.5 md:p-1 hover:bg-blue-500/10 rounded transition-colors" onclick="event.stopPropagation(); openRenameFolderModal('${escapeJsString(folder.name)}')" title="Rename">
+              <i class="ti ti-pencil text-sm md:text-xs"></i>
             </button>
-            <button type="button" class="text-red-500 hover:text-red-400 p-1" onclick="event.stopPropagation(); deleteThumbnailFolder('${escapeJsString(folder.name)}')" title="Delete">
-              <i class="ti ti-trash text-xs"></i>
+            <button type="button" class="text-red-500 hover:text-red-400 p-1.5 md:p-1 hover:bg-red-500/10 rounded transition-colors" onclick="event.stopPropagation(); deleteThumbnailFolder('${escapeJsString(folder.name)}')" title="Delete">
+              <i class="ti ti-trash text-sm md:text-xs"></i>
             </button>
           </div>
         `;
@@ -7124,21 +7124,23 @@ function openThumbnailFolderInManager(folderName) {
   
   console.log('[ThumbnailManager] Opening folder:', folderName || 'root');
   
-  // Update folder info
+  // Update folder info (Desktop)
   const folderNameEl = document.getElementById('currentFolderNameManager');
-  const editBtn = document.getElementById('editThumbnailFolderBtnManager');
   const rootBtn = document.getElementById('thumbnailManagerRootBtn');
+  
+  // Update mobile breadcrumb
+  const folderNameMobile = document.getElementById('currentFolderNameMobile');
   
   if (folderName) {
     if (folderNameEl) folderNameEl.textContent = folderName;
-    if (editBtn) editBtn.disabled = false;
+    if (folderNameMobile) folderNameMobile.textContent = folderName;
     if (rootBtn) {
       rootBtn.classList.remove('bg-primary/20', 'text-primary');
       rootBtn.classList.add('bg-dark-600', 'text-gray-300');
     }
   } else {
     if (folderNameEl) folderNameEl.textContent = 'Root';
-    if (editBtn) editBtn.disabled = true;
+    if (folderNameMobile) folderNameMobile.textContent = 'Root';
     if (rootBtn) {
       rootBtn.classList.add('bg-primary/20', 'text-primary');
       rootBtn.classList.remove('bg-dark-600', 'text-gray-300');
@@ -7168,6 +7170,7 @@ async function fetchThumbnailsForManager(folderName) {
   const empty = document.getElementById('thumbnailManagerEmpty');
   const countEl = document.getElementById('thumbnailManagerCount');
   const folderCountEl = document.getElementById('currentFolderThumbnailCount');
+  const folderCountMobile = document.getElementById('currentFolderThumbnailCountMobile');
   
   if (!gallery) return;
   
@@ -7191,9 +7194,10 @@ async function fetchThumbnailsForManager(folderName) {
     if (data.success && data.thumbnails && data.thumbnails.length > 0) {
       const thumbnails = data.thumbnails;
       
-      // Update counts
+      // Update counts (desktop and mobile)
       if (countEl) countEl.textContent = `(${thumbnails.length})`;
       if (folderCountEl) folderCountEl.textContent = thumbnails.length;
+      if (folderCountMobile) folderCountMobile.textContent = thumbnails.length;
       
       // Render thumbnails
       gallery.innerHTML = '';
@@ -7222,8 +7226,9 @@ async function fetchThumbnailsForManager(folderName) {
       if (empty) empty.classList.add('hidden');
     } else {
       // Show empty state
-      if (countEl) countEl.textContent = '(0/20)';
+      if (countEl) countEl.textContent = '(0)';
       if (folderCountEl) folderCountEl.textContent = '0';
+      if (folderCountMobile) folderCountMobile.textContent = '0';
       if (empty) empty.classList.remove('hidden');
     }
   } catch (error) {
