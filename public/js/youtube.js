@@ -7075,16 +7075,16 @@ async function fetchThumbnailFoldersForManager() {
         div.onclick = () => openThumbnailFolderInManager(folder.name);
         div.innerHTML = `
           <div class="flex items-center gap-2 flex-1 min-w-0">
-            <i class="ti ti-folder text-gray-400 shrink-0"></i>
+            <i class="ti ti-folder text-gray-400 shrink-0 text-base"></i>
             <span class="truncate font-medium">${escapeHtml(folder.name)}</span>
           </div>
           <div class="flex items-center gap-1.5 md:gap-1 shrink-0">
             <span class="text-xs bg-dark-600 px-2 py-0.5 rounded-full">${folder.count || 0}</span>
-            <button type="button" class="text-blue-400 hover:text-blue-300 p-1.5 md:p-1 hover:bg-blue-500/10 rounded transition-colors" onclick="event.stopPropagation(); openRenameFolderModal('${escapeJsString(folder.name)}')" title="Rename">
-              <i class="ti ti-pencil text-sm md:text-xs"></i>
+            <button type="button" class="text-blue-400 hover:text-blue-300 p-2 md:p-1.5 hover:bg-blue-500/10 rounded transition-colors" onclick="event.stopPropagation(); openRenameFolderModal('${escapeJsString(folder.name)}')" title="Rename">
+              <i class="ti ti-edit text-base md:text-sm"></i>
             </button>
-            <button type="button" class="text-red-500 hover:text-red-400 p-1.5 md:p-1 hover:bg-red-500/10 rounded transition-colors" onclick="event.stopPropagation(); deleteThumbnailFolder('${escapeJsString(folder.name)}')" title="Delete">
-              <i class="ti ti-trash text-sm md:text-xs"></i>
+            <button type="button" class="text-red-500 hover:text-red-400 p-2 md:p-1.5 hover:bg-red-500/10 rounded transition-colors" onclick="event.stopPropagation(); deleteThumbnailFolder('${escapeJsString(folder.name)}')" title="Delete">
+              <i class="ti ti-trash text-base md:text-sm"></i>
             </button>
           </div>
         `;
