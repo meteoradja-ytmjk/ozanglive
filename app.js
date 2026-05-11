@@ -3931,6 +3931,23 @@ app.post('/api/render/jobs/:id/loop', isAuthenticated, async (req, res) => {
         }
         
         await RenderJob.update(newJob.id, baseUpdate);
+        
+        // AUTO-DELETE original video after loop completed
+        console.log('[LOOP] Auto-deleting original video:', inputPath);
+        try {
+          if (fs.existsSync(inputPath)) {
+            fs.unlinkSync(inputPath);
+            console.log('[LOOP] Original video deleted ✓');
+            
+            // Update original job to mark as deleted
+            await RenderJob.update(originalJob.id, { 
+              output_path: null,
+              error_message: 'Original video deleted after looping'
+            });
+          }
+        } catch (deleteErr) {
+          console.error('[LOOP] Failed to delete original video:', deleteErr.message);
+        }
       } catch (e) {
         console.error('Loop processing error:', e);
         await RenderJob.update(newJob.id, { status: 'failed', error_message: e.message });

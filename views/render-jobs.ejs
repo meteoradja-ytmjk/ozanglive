@@ -417,49 +417,7 @@
               <div class="text-xs text-gray-400 text-center py-3">Loading...</div>
             </div>
             
-            <!-- Advanced Audio Settings -->
-            <div id="advancedAudioSettings" class="hidden mt-3 p-3 bg-violet-500/10 rounded-lg space-y-3">
-              <div class="flex items-center justify-between mb-3">
-                <h4 class="text-sm font-semibold text-violet-400">
-                  <i class="ti ti-adjustments-horizontal mr-2"></i>Audio Settings
-                </h4>
-                <button type="button" onclick="resetAudioSettings()" class="text-xs text-gray-400 hover:text-white transition-colors">
-                  <i class="ti ti-refresh text-xs"></i> Reset
-                </button>
-              </div>
-              
-              <!-- Fade In/Out -->
-              <div class="grid grid-cols-2 gap-3">
-                <div>
-                  <label class="block text-xs text-gray-400 mb-2">
-                    <i class="ti ti-volume-3 text-xs"></i> Fade In (seconds)
-                  </label>
-                  <input type="number" id="audioFadeIn" min="0" max="10" step="0.5" value="0" 
-                    class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-violet-500">
-                </div>
-                <div>
-                  <label class="block text-xs text-gray-400 mb-2">
-                    <i class="ti ti-volume text-xs"></i> Fade Out (seconds)
-                  </label>
-                  <input type="number" id="audioFadeOut" min="0" max="10" step="0.5" value="0" 
-                    class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-violet-500">
-                </div>
-              </div>
-              
-              <!-- Volume Control -->
-              <div>
-                <label class="block text-xs text-gray-400 mb-2">
-                  <i class="ti ti-volume-2 text-xs"></i> Volume: <span id="volumeValue" class="text-violet-400 font-semibold">100%</span>
-                </label>
-                <input type="range" id="audioVolume" min="0" max="200" value="100" 
-                  class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-violet-500">
-                <div class="flex justify-between text-xs text-gray-500 mt-1">
-                  <span>0%</span>
-                  <span>100%</span>
-                  <span>200%</span>
-                </div>
-              </div>
-            </div>
+            <!-- Advanced Audio Settings - REMOVED (not needed for stream copy) -->
           </div>
         </div>
       </div>
@@ -808,7 +766,7 @@ async function loadJobs(){
     const offset = circumference - (progress / 100) * circumference;
     
     return `
-    <div class="bg-dark-700 rounded-lg p-4 border border-gray-600 hover:border-primary transition-colors mb-3">
+    <div class="bg-dark-700 rounded-lg p-4 border border-gray-600 hover:border-primary transition-colors mb-3" data-job-id="${j.id}">
       <div class="flex items-start justify-between mb-3">
         <div class="flex items-start gap-3 flex-1">
           <!-- Circular Progress -->
@@ -848,7 +806,7 @@ async function loadJobs(){
         <span class="text-gray-400">Target: ${j.target_duration_seconds||0}s</span>
       </div>
       
-      ${j.output_path?`<video controls preload="metadata" src="${j.output_path}" class="w-full rounded-lg mb-3 bg-black"></video>`:''}
+      ${j.output_path?`<video controls preload="metadata" src="${j.output_path}" class="w-full rounded-lg mb-3 bg-black" data-video-id="${j.id}"></video>`:''}
       
       <div class="flex gap-2">
         ${j.output_path?`
@@ -860,7 +818,29 @@ async function loadJobs(){
     </div>
   `;
   }).join('');
+  
+  // Save current playing video state before updating
+  const playingVideos = new Map();
+  document.querySelectorAll('video[data-video-id]').forEach(video => {
+    if (!video.paused) {
+      playingVideos.set(video.dataset.videoId, {
+        currentTime: video.currentTime,
+        volume: video.volume
+      });
+    }
+  });
+  
   el.jobs.innerHTML=cards||'<div class="text-sm text-gray-400 text-center py-8">Belum ada job</div>';
+  
+  // Restore playing state for videos that were playing
+  playingVideos.forEach((state, videoId) => {
+    const video = document.querySelector(`video[data-video-id="${videoId}"]`);
+    if (video) {
+      video.currentTime = state.currentTime;
+      video.volume = state.volume;
+      video.play().catch(err => console.log('Auto-play prevented:', err));
+    }
+  });
 }
 
 if (el.createBtn) {
@@ -883,8 +863,7 @@ if (el.createBtn) {
         autoUploadToYoutube:false,
         followAudioDuration:el.followAudioDuration.checked,
         videoIds,
-        audioIds,
-        advancedAudio: getAdvancedAudioSettings()
+        audioIds
       };
       
       const resp=await fetch('/api/render/jobs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(renderData)});
@@ -2436,7 +2415,6 @@ function addToBatchQueue() {
     followAudioDuration: el.followAudioDuration.checked,
     videoIds: videoIds,
     audioIds: audioIds,
-    advancedAudio: getAdvancedAudioSettings(),
     visualizerSettings: visualizerSettings,
     watermark: watermarkSettings,
     overlayVideo: overlayVideoData ? {
@@ -2674,30 +2652,6 @@ document.getElementById('enableDualAudio')?.addEventListener('change', (e) => {
   }
 });
 
-// Reset audio settings
-function resetAudioSettings() {
-  document.getElementById('audioFadeIn').value = 0;
-  document.getElementById('audioFadeOut').value = 0;
-  document.getElementById('audioVolume').value = 100;
-  document.getElementById('volumeValue').textContent = '100%';
-  
-  showToast('Audio settings reset');
-}
-
-// Listen to audio checkbox changes
-document.addEventListener('change', (e) => {
-  if (e.target.name === 'audio') {
-    updateAdvancedAudioVisibility();
-  }
-});
-
-// Get advanced audio settings
-function getAdvancedAudioSettings() {
-  return {
-    fadeIn: parseFloat(document.getElementById('audioFadeIn')?.value || 0),
-    fadeOut: parseFloat(document.getElementById('audioFadeOut')?.value || 0),
-    volume: parseInt(document.getElementById('audioVolume')?.value || 100)
-  };
-}
+// Audio settings removed - using stream copy for maximum speed
 
 </script>
