@@ -1,6 +1,56 @@
 <% layout('layout') -%>
 
 <style>
+/* Step-by-Step Flow Styling */
+.step-section {
+  background: rgba(31, 41, 55, 0.5);
+  border: 1px solid #374151;
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+  transition: all 0.3s ease;
+}
+
+.step-section:hover {
+  border-color: #8B5CF6;
+  background: rgba(139, 92, 246, 0.05);
+}
+
+.step-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.step-number {
+  width: 2.5rem;
+  height: 2.5rem;
+  background: linear-gradient(135deg, #8B5CF6, #EC4899);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-center;
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: white;
+  flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+}
+
+.step-title {
+  flex: 1;
+}
+
+.step-content {
+  padding-left: 3.5rem;
+}
+
+@media (max-width: 768px) {
+  .step-content {
+    padding-left: 0;
+  }
+}
+
 /* Progress animations */
 .modal-backdrop {
   backdrop-filter: blur(4px);
@@ -197,10 +247,13 @@
 <!-- Jobs Container (Active Tab) -->
 <div id="jobsContainer" class="tab-content">
 
-<!-- Main Form Card -->
+<!-- Main Form Card with Step-by-Step Flow -->
 <div class="bg-gray-800 rounded-lg p-4 md:p-6 mb-6">
-  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-    <h3 class="text-lg font-semibold">Render Settings</h3>
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+    <div>
+      <h3 class="text-xl font-bold text-white">Create Render Job</h3>
+      <p class="text-sm text-gray-400 mt-1">Follow the steps below to create your video</p>
+    </div>
     <div class="flex gap-2">
       <button onclick="openTemplateModal()" class="flex items-center gap-2 px-4 py-2 bg-primary/20 hover:bg-primary/30 text-primary rounded-lg text-sm font-medium transition-colors">
         <i class="ti ti-template"></i>
@@ -213,103 +266,335 @@
     </div>
   </div>
   
-  <div class="space-y-4">
-    <!-- Row 1: Target Channel & Title -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <div>
-        <label class="text-sm font-medium text-white block mb-2">Target Channel</label>
-        <select id="targetAccountId" class="w-full bg-dark-700 text-white px-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
-          <option value="">-- Pilih Channel --</option>
-        </select>
-      </div>
-      
-      <div>
-        <label class="text-sm font-medium text-white block mb-2">Judul</label>
-        <input type="text" id="title" value="1" placeholder="Masukkan judul" class="w-full bg-dark-700 text-white px-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
-      </div>
-    </div>
+  <div class="space-y-6">
     
-    <!-- Row 2: Duration & Visualizer -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <div class="grid grid-cols-2 gap-3">
-        <div>
-          <label class="text-sm font-medium text-white block mb-2">Jam</label>
-          <input type="number" id="durationHours" min="0" value="0" class="w-full bg-dark-700 text-white px-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
-        </div>
-        <div>
-          <label class="text-sm font-medium text-white block mb-2">Menit</label>
-          <input type="number" id="durationMinutes" min="0" max="59" value="0" class="w-full bg-dark-700 text-white px-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
+    <!-- STEP 1: Basic Information -->
+    <div class="step-section">
+      <div class="step-header">
+        <div class="step-number">1</div>
+        <div class="step-title">
+          <h4 class="text-base font-semibold text-white">Basic Information</h4>
+          <p class="text-xs text-gray-400">Set title and target channel</p>
         </div>
       </div>
-      
-      <div>
-        <label class="text-sm font-medium text-white block mb-2">Overlay Video</label>
-        <div class="space-y-2">
-          <!-- Upload Button -->
-          <input type="file" id="overlayVideoFile" accept="video/mp4" class="hidden" onchange="handleOverlayVideoUpload(event)">
-          <button onclick="document.getElementById('overlayVideoFile').click()" class="w-full bg-dark-700 hover:bg-dark-600 border border-gray-600 text-gray-300 px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
-            <i class="ti ti-upload"></i>
-            <span id="overlayFileName">Upload MP4 Overlay</span>
-          </button>
+      <div class="step-content">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="text-sm font-medium text-gray-300 block mb-2">
+              <i class="ti ti-text-size text-xs mr-1"></i>Video Title
+            </label>
+            <input type="text" id="title" value="1" placeholder="Enter video title" class="w-full bg-dark-700 text-white px-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+          </div>
           
-          <!-- Overlay Options (shown when file uploaded) -->
-          <div id="overlayOptions" class="hidden space-y-2">
-            <div class="grid grid-cols-2 gap-2">
-              <div>
-                <label class="text-xs text-gray-400 block mb-1">Blend Mode</label>
-                <select id="overlayBlendMode" class="w-full bg-dark-700 text-white px-3 py-2 border border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary">
-                  <option value="normal">Normal</option>
-                  <option value="screen">Screen (Black BG)</option>
-                  <option value="chromakey">Chroma Key (Green)</option>
-                </select>
-              </div>
-              <div>
-                <label class="text-xs text-gray-400 block mb-1">Opacity</label>
-                <input type="range" id="overlayOpacity" min="0" max="100" value="100" class="w-full h-2 bg-dark-700 rounded-lg appearance-none cursor-pointer accent-primary">
-                <div class="text-xs text-gray-500 text-center" id="overlayOpacityValue">100%</div>
-              </div>
-            </div>
-            <button onclick="removeOverlayVideo()" class="w-full bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-400 px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-center gap-2">
-              <i class="ti ti-x"></i>
-              <span>Remove Overlay</span>
-            </button>
+          <div>
+            <label class="text-sm font-medium text-gray-300 block mb-2">
+              <i class="ti ti-brand-youtube text-xs mr-1"></i>Target YouTube Channel
+            </label>
+            <select id="targetAccountId" class="w-full bg-dark-700 text-white px-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+              <option value="">-- Select Channel (Optional) --</option>
+            </select>
           </div>
         </div>
       </div>
     </div>
     
-    <!-- Row 3: Checkboxes & Toggle in one row -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <div class="flex items-center gap-2 bg-dark-700 p-3 rounded-lg border border-gray-600">
-        <input type="checkbox" id="followAudioDuration" class="w-4 h-4 rounded border-gray-500 bg-dark-700 text-primary focus:ring-primary">
-        <label for="followAudioDuration" class="text-sm text-gray-300">Loop ikuti durasi audio</label>
+    <!-- STEP 2: Duration Settings -->
+    <div class="step-section">
+      <div class="step-header">
+        <div class="step-number">2</div>
+        <div class="step-title">
+          <h4 class="text-base font-semibold text-white">Duration Settings</h4>
+          <p class="text-xs text-gray-400">Set how long your video will be</p>
+        </div>
       </div>
-      
-      <div class="flex items-center justify-between bg-dark-700 p-3 rounded-lg border border-gray-600">
-        <div class="text-sm font-medium text-white">Upload otomatis</div>
-        <label class="relative inline-flex items-center cursor-pointer">
-          <input type="checkbox" id="autoUploadToYoutube" class="sr-only peer">
-          <div class="w-11 h-6 bg-gray-600 rounded-full peer peer-checked:bg-primary transition-colors"></div>
-          <div class="absolute left-[2px] top-[2px] w-5 h-5 bg-white rounded-full transition-all peer-checked:translate-x-5"></div>
-        </label>
+      <div class="step-content">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label class="text-sm font-medium text-gray-300 block mb-2">
+              <i class="ti ti-clock-hour-4 text-xs mr-1"></i>Hours
+            </label>
+            <input type="number" id="durationHours" min="0" value="0" class="w-full bg-dark-700 text-white px-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-center text-lg font-semibold">
+          </div>
+          <div>
+            <label class="text-sm font-medium text-gray-300 block mb-2">
+              <i class="ti ti-clock text-xs mr-1"></i>Minutes
+            </label>
+            <input type="number" id="durationMinutes" min="0" max="59" value="0" class="w-full bg-dark-700 text-white px-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-center text-lg font-semibold">
+          </div>
+          <div class="flex items-end">
+            <div class="flex items-center gap-2 bg-dark-700 p-3 rounded-lg border border-gray-600 w-full">
+              <input type="checkbox" id="followAudioDuration" class="w-4 h-4 rounded border-gray-500 bg-dark-700 text-primary focus:ring-primary">
+              <label for="followAudioDuration" class="text-sm text-gray-300 cursor-pointer">Follow audio duration</label>
+            </div>
+          </div>
+        </div>
+        <div class="mt-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+          <p class="text-xs text-blue-400">
+            <i class="ti ti-info-circle mr-1"></i>
+            <strong>Tip:</strong> Check "Follow audio duration" to automatically match total audio length
+          </p>
+        </div>
       </div>
     </div>
     
-    <!-- Action Buttons (Desktop & Mobile) -->
-    <div class="grid grid-cols-3 gap-3 pt-2">
-      <button id="createBtn" class="bg-primary hover:bg-secondary text-white px-4 py-2.5 rounded-lg font-medium transition-colors flex flex-col items-center justify-center gap-1">
-        <i class="ti ti-player-play text-lg"></i>
-        <span class="text-sm">Render</span>
-      </button>
-      <button onclick="saveAsTemplate()" class="bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-500/50 text-yellow-400 px-4 py-2.5 rounded-lg font-medium transition-colors flex flex-col items-center justify-center gap-1">
-        <i class="ti ti-device-floppy text-lg"></i>
-        <span class="text-sm">Template</span>
-      </button>
-      <button id="resetBtn" class="bg-dark-700 hover:bg-dark-600 border border-gray-600 text-gray-300 px-4 py-2.5 rounded-lg font-medium transition-colors flex flex-col items-center justify-center gap-1">
-        <i class="ti ti-eraser text-lg"></i>
-        <span class="text-sm">Reset</span>
-      </button>
+    
+    <!-- STEP 3: Select Videos & Audio -->
+    <div class="step-section">
+      <div class="step-header">
+        <div class="step-number">3</div>
+        <div class="step-title">
+          <h4 class="text-base font-semibold text-white">Select Videos & Audio</h4>
+          <p class="text-xs text-gray-400">Choose media files for your render</p>
+        </div>
+      </div>
+      <div class="step-content">
+        <!-- Video & Audio Selection Combined -->
+        <div class="bg-gray-800/50 rounded-lg p-4 border border-gray-600">
+          <!-- Tabs -->
+          <div class="flex items-center justify-between border-b border-gray-700 mb-4">
+            <div class="flex">
+              <button onclick="switchMediaTab('video')" id="videoMediaTab" class="px-4 py-2 text-sm font-medium transition-colors border-b-2 border-primary text-primary">
+                <i class="ti ti-video mr-1"></i>Videos
+                <span class="ml-1 text-xs" id="videoSelectedCount">(0)</span>
+              </button>
+              <button onclick="switchMediaTab('audio')" id="audioMediaTab" class="px-4 py-2 text-sm font-medium transition-colors border-b-2 border-transparent text-gray-400 hover:text-white">
+                <i class="ti ti-music mr-1"></i>Audio
+                <span class="ml-1 text-xs" id="audioSelectedCount">(0)</span>
+              </button>
+            </div>
+            
+            <!-- Action Buttons -->
+            <div class="flex gap-1">
+              <button onclick="selectAllMedia()" class="text-xs px-2 py-1 bg-primary/20 hover:bg-primary/30 text-primary rounded transition-colors" title="Select All">
+                <i class="ti ti-checkbox"></i>
+              </button>
+              <button onclick="deselectAllMedia()" class="text-xs px-2 py-1 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-gray-300 rounded transition-colors" title="Deselect All">
+                <i class="ti ti-square"></i>
+              </button>
+              <button onclick="shuffleMedia()" class="text-xs px-2 py-1 bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-500/50 text-yellow-400 rounded transition-colors" title="Shuffle">
+                <i class="ti ti-arrows-shuffle"></i>
+              </button>
+            </div>
+          </div>
+          
+          <!-- Video Content -->
+          <div id="videoMediaContent">
+            <div id="videoList" class="max-h-80 overflow-y-auto bg-dark-700 rounded-lg p-2 border border-gray-600">
+              <div class="text-sm text-gray-400 text-center py-4">Loading...</div>
+            </div>
+          </div>
+          
+          <!-- Audio Content -->
+          <div id="audioMediaContent" class="hidden">
+            <div id="audioList" class="max-h-80 overflow-y-auto bg-dark-700 rounded-lg p-2 border border-gray-600">
+              <div class="text-sm text-gray-400 text-center py-4">Loading...</div>
+            </div>
+            
+            <!-- Advanced Audio Settings -->
+            <div id="advancedAudioSettings" class="hidden mt-4 p-4 bg-gray-800/70 rounded-lg border border-violet-500/30 space-y-4">
+              <div class="flex items-center justify-between mb-3">
+                <h4 class="text-sm font-semibold text-violet-400">
+                  <i class="ti ti-adjustments-horizontal mr-2"></i>Advanced Audio Settings
+                </h4>
+                <button type="button" onclick="resetAudioSettings()" class="text-xs text-gray-400 hover:text-white transition-colors">
+                  <i class="ti ti-refresh text-xs"></i> Reset
+                </button>
+              </div>
+              
+              <!-- Fade In/Out -->
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-xs text-gray-400 mb-2">
+                    <i class="ti ti-volume-3 text-xs"></i> Fade In (seconds)
+                  </label>
+                  <input type="number" id="audioFadeIn" min="0" max="10" step="0.5" value="0" 
+                    class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-violet-500">
+                </div>
+                <div>
+                  <label class="block text-xs text-gray-400 mb-2">
+                    <i class="ti ti-volume text-xs"></i> Fade Out (seconds)
+                  </label>
+                  <input type="number" id="audioFadeOut" min="0" max="10" step="0.5" value="0" 
+                    class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-violet-500">
+                </div>
+              </div>
+              
+              <!-- Volume Control -->
+              <div>
+                <label class="block text-xs text-gray-400 mb-2">
+                  <i class="ti ti-volume-2 text-xs"></i> Volume: <span id="volumeValue" class="text-violet-400 font-semibold">100%</span>
+                </label>
+                <input type="range" id="audioVolume" min="0" max="200" value="100" 
+                  class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-violet-500">
+                <div class="flex justify-between text-xs text-gray-500 mt-1">
+                  <span>0%</span>
+                  <span>100%</span>
+                  <span>200%</span>
+                </div>
+              </div>
+              
+              <!-- Crossfade -->
+              <div>
+                <label class="block text-xs text-gray-400 mb-2">
+                  <i class="ti ti-arrows-shuffle text-xs"></i> Crossfade Between Tracks (seconds)
+                </label>
+                <input type="number" id="audioCrossfade" min="0" max="5" step="0.5" value="0" 
+                  class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-violet-500">
+                <p class="text-xs text-gray-500 mt-1">Smooth transition between audio tracks</p>
+              </div>
+              
+              <!-- Normalization -->
+              <div class="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg">
+                <div>
+                  <label class="text-xs text-gray-300 font-medium">
+                    <i class="ti ti-waveform text-xs"></i> Audio Normalization
+                  </label>
+                  <p class="text-xs text-gray-500 mt-1">Balance volume across all tracks</p>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" id="audioNormalize" class="sr-only peer">
+                  <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-violet-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-violet-600"></div>
+                </label>
+              </div>
+              
+              <!-- Dual Layer Audio -->
+              <div class="border-t border-gray-700 pt-4">
+                <div class="flex items-center justify-between mb-3">
+                  <label class="text-xs text-gray-300 font-medium">
+                    <i class="ti ti-layers-linked text-xs"></i> Dual Audio Layer
+                  </label>
+                  <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="enableDualAudio" class="sr-only peer">
+                    <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-violet-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-violet-600"></div>
+                  </label>
+                </div>
+                
+                <div id="dualAudioControls" class="hidden space-y-3">
+                  <p class="text-xs text-gray-500">Mix background music with voiceover/narration</p>
+                  
+                  <div>
+                    <label class="block text-xs text-gray-400 mb-2">Background Music Volume: <span id="bgVolumeValue" class="text-violet-400">30%</span></label>
+                    <input type="range" id="bgMusicVolume" min="0" max="100" value="30" 
+                      class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-violet-500">
+                  </div>
+                  
+                  <div>
+                    <label class="block text-xs text-gray-400 mb-2">Voiceover Volume: <span id="voiceVolumeValue" class="text-violet-400">100%</span></label>
+                    <input type="range" id="voiceoverVolume" min="0" max="100" value="100" 
+                      class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-violet-500">
+                  </div>
+                  
+                  <div class="bg-gray-700/50 rounded-lg p-3">
+                    <p class="text-xs text-gray-400 mb-2">
+                      <i class="ti ti-info-circle text-xs"></i> How it works:
+                    </p>
+                    <ul class="text-xs text-gray-500 space-y-1 ml-4">
+                      <li>• First audio = Background music (lower volume)</li>
+                      <li>• Other audios = Voiceover/narration (full volume)</li>
+                      <li>• Both layers mixed together</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
+    
+    <!-- STEP 4: Advanced Options (Optional) -->
+    <div class="step-section">
+      <div class="step-header">
+        <div class="step-number">4</div>
+        <div class="step-title">
+          <h4 class="text-base font-semibold text-white">Advanced Options <span class="text-xs text-gray-500">(Optional)</span></h4>
+          <p class="text-xs text-gray-400">Watermark, overlay video, and other effects</p>
+        </div>
+      </div>
+      <div class="step-content">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- Auto Upload Toggle -->
+          <div class="flex items-center justify-between bg-dark-700 p-4 rounded-lg border border-gray-600">
+            <div>
+              <div class="text-sm font-medium text-white flex items-center gap-2">
+                <i class="ti ti-upload"></i>
+                Auto Upload to YouTube
+              </div>
+              <p class="text-xs text-gray-500 mt-1">Upload automatically when render completes</p>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="autoUploadToYoutube" class="sr-only peer">
+              <div class="w-11 h-6 bg-gray-600 rounded-full peer peer-checked:bg-primary transition-colors"></div>
+              <div class="absolute left-[2px] top-[2px] w-5 h-5 bg-white rounded-full transition-all peer-checked:translate-x-5"></div>
+            </label>
+          </div>
+          
+          <!-- Overlay Video -->
+          <div class="bg-dark-700 p-4 rounded-lg border border-gray-600">
+            <label class="text-sm font-medium text-white block mb-2 flex items-center gap-2">
+              <i class="ti ti-layers-intersect"></i>
+              Overlay Video
+            </label>
+            <input type="file" id="overlayVideoFile" accept="video/mp4" class="hidden" onchange="handleOverlayVideoUpload(event)">
+            <button onclick="document.getElementById('overlayVideoFile').click()" class="w-full bg-gray-600 hover:bg-gray-500 text-gray-200 px-3 py-2 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm">
+              <i class="ti ti-upload"></i>
+              <span id="overlayFileName">Upload MP4 Overlay</span>
+            </button>
+            
+            <!-- Overlay Options (shown when file uploaded) -->
+            <div id="overlayOptions" class="hidden mt-3 space-y-2">
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label class="text-xs text-gray-400 block mb-1">Blend Mode</label>
+                  <select id="overlayBlendMode" class="w-full bg-gray-600 text-white px-2 py-1.5 border border-gray-500 rounded text-xs focus:outline-none focus:ring-1 focus:ring-primary">
+                    <option value="normal">Normal</option>
+                    <option value="screen">Screen (Black BG)</option>
+                    <option value="chromakey">Chroma Key (Green)</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="text-xs text-gray-400 block mb-1">Opacity</label>
+                  <input type="range" id="overlayOpacity" min="0" max="100" value="100" class="w-full h-1.5 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-primary">
+                  <div class="text-xs text-gray-500 text-center" id="overlayOpacityValue">100%</div>
+                </div>
+              </div>
+              <button onclick="removeOverlayVideo()" class="w-full bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-400 px-2 py-1.5 rounded text-xs transition-colors flex items-center justify-center gap-1">
+                <i class="ti ti-x"></i>
+                <span>Remove Overlay</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- STEP 5: Start Render -->
+    <div class="step-section border-2 border-primary/50">
+      <div class="step-header">
+        <div class="step-number">5</div>
+        <div class="step-title">
+          <h4 class="text-base font-semibold text-white">Ready to Render!</h4>
+          <p class="text-xs text-gray-400">Review your settings and start rendering</p>
+        </div>
+      </div>
+      <div class="step-content">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <button id="createBtn" class="bg-gradient-to-r from-primary to-secondary hover:from-secondary hover:to-primary text-white px-6 py-4 rounded-lg font-semibold transition-all transform hover:scale-105 flex flex-col items-center justify-center gap-2 shadow-lg shadow-primary/30">
+            <i class="ti ti-player-play text-2xl"></i>
+            <span>Start Render</span>
+          </button>
+          <button onclick="saveAsTemplate()" class="bg-yellow-500/20 hover:bg-yellow-500/30 border-2 border-yellow-500/50 text-yellow-400 px-6 py-4 rounded-lg font-semibold transition-all flex flex-col items-center justify-center gap-2">
+            <i class="ti ti-device-floppy text-2xl"></i>
+            <span>Save Template</span>
+          </button>
+          <button id="resetBtn" class="bg-dark-700 hover:bg-dark-600 border-2 border-gray-600 text-gray-300 px-6 py-4 rounded-lg font-semibold transition-all flex flex-col items-center justify-center gap-2">
+            <i class="ti ti-eraser text-2xl"></i>
+            <span>Reset All</span>
+          </button>
+        </div>
+      </div>
+    </div>
+    
   </div>
 </div>
 
@@ -495,158 +780,6 @@
           <i class="ti ti-folder-open"></i>
           <span>Load Preset</span>
         </button>
-      </div>
-    </div>
-  </div>
-  
-  <!-- Video & Audio Selection Combined -->
-  <div class="bg-gray-800 rounded-lg p-4">
-    <!-- Tabs -->
-    <div class="flex items-center justify-between border-b border-gray-700 mb-4">
-      <div class="flex">
-        <button onclick="switchMediaTab('video')" id="videoMediaTab" class="px-4 py-2 text-sm font-medium transition-colors border-b-2 border-primary text-primary">
-          <i class="ti ti-video mr-1"></i>Videos
-          <span class="ml-1 text-xs" id="videoSelectedCount">(0)</span>
-        </button>
-        <button onclick="switchMediaTab('audio')" id="audioMediaTab" class="px-4 py-2 text-sm font-medium transition-colors border-b-2 border-transparent text-gray-400 hover:text-white">
-          <i class="ti ti-music mr-1"></i>Audio
-          <span class="ml-1 text-xs" id="audioSelectedCount">(0)</span>
-        </button>
-      </div>
-      
-      <!-- Action Buttons -->
-      <div class="flex gap-1">
-        <button onclick="selectAllMedia()" class="text-xs px-2 py-1 bg-primary/20 hover:bg-primary/30 text-primary rounded transition-colors" title="Select All">
-          <i class="ti ti-checkbox"></i>
-        </button>
-        <button onclick="deselectAllMedia()" class="text-xs px-2 py-1 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-gray-300 rounded transition-colors" title="Deselect All">
-          <i class="ti ti-square"></i>
-        </button>
-        <button onclick="shuffleMedia()" class="text-xs px-2 py-1 bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-500/50 text-yellow-400 rounded transition-colors" title="Shuffle">
-          <i class="ti ti-arrows-shuffle"></i>
-        </button>
-      </div>
-    </div>
-    
-    <!-- Video Content -->
-    <div id="videoMediaContent">
-      <div id="videoList" class="max-h-80 overflow-y-auto bg-dark-700 rounded-lg p-2 border border-gray-600">
-        <div class="text-sm text-gray-400 text-center py-4">Loading...</div>
-      </div>
-    </div>
-    
-    <!-- Audio Content -->
-    <div id="audioMediaContent" class="hidden">
-      <div id="audioList" class="max-h-80 overflow-y-auto bg-dark-700 rounded-lg p-2 border border-gray-600">
-        <div class="text-sm text-gray-400 text-center py-4">Loading...</div>
-      </div>
-      
-      <!-- Advanced Audio Settings -->
-      <div id="advancedAudioSettings" class="hidden mt-4 p-4 bg-gray-800/70 rounded-lg border border-violet-500/30 space-y-4">
-        <div class="flex items-center justify-between mb-3">
-          <h4 class="text-sm font-semibold text-violet-400">
-            <i class="ti ti-adjustments-horizontal mr-2"></i>Advanced Audio Settings
-          </h4>
-          <button type="button" onclick="resetAudioSettings()" class="text-xs text-gray-400 hover:text-white transition-colors">
-            <i class="ti ti-refresh text-xs"></i> Reset
-          </button>
-        </div>
-        
-        <!-- Fade In/Out -->
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="block text-xs text-gray-400 mb-2">
-              <i class="ti ti-volume-3 text-xs"></i> Fade In (seconds)
-            </label>
-            <input type="number" id="audioFadeIn" min="0" max="10" step="0.5" value="0" 
-              class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-violet-500">
-          </div>
-          <div>
-            <label class="block text-xs text-gray-400 mb-2">
-              <i class="ti ti-volume text-xs"></i> Fade Out (seconds)
-            </label>
-            <input type="number" id="audioFadeOut" min="0" max="10" step="0.5" value="0" 
-              class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-violet-500">
-          </div>
-        </div>
-        
-        <!-- Volume Control -->
-        <div>
-          <label class="block text-xs text-gray-400 mb-2">
-            <i class="ti ti-volume-2 text-xs"></i> Volume: <span id="volumeValue" class="text-violet-400 font-semibold">100%</span>
-          </label>
-          <input type="range" id="audioVolume" min="0" max="200" value="100" 
-            class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-violet-500">
-          <div class="flex justify-between text-xs text-gray-500 mt-1">
-            <span>0%</span>
-            <span>100%</span>
-            <span>200%</span>
-          </div>
-        </div>
-        
-        <!-- Crossfade -->
-        <div>
-          <label class="block text-xs text-gray-400 mb-2">
-            <i class="ti ti-arrows-shuffle text-xs"></i> Crossfade Between Tracks (seconds)
-          </label>
-          <input type="number" id="audioCrossfade" min="0" max="5" step="0.5" value="0" 
-            class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-violet-500">
-          <p class="text-xs text-gray-500 mt-1">Smooth transition between audio tracks</p>
-        </div>
-        
-        <!-- Normalization -->
-        <div class="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg">
-          <div>
-            <label class="text-xs text-gray-300 font-medium">
-              <i class="ti ti-waveform text-xs"></i> Audio Normalization
-            </label>
-            <p class="text-xs text-gray-500 mt-1">Balance volume across all tracks</p>
-          </div>
-          <label class="relative inline-flex items-center cursor-pointer">
-            <input type="checkbox" id="audioNormalize" class="sr-only peer">
-            <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-violet-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-violet-600"></div>
-          </label>
-        </div>
-        
-        <!-- Dual Layer Audio -->
-        <div class="border-t border-gray-700 pt-4">
-          <div class="flex items-center justify-between mb-3">
-            <label class="text-xs text-gray-300 font-medium">
-              <i class="ti ti-layers-linked text-xs"></i> Dual Audio Layer
-            </label>
-            <label class="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" id="enableDualAudio" class="sr-only peer">
-              <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-violet-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-violet-600"></div>
-            </label>
-          </div>
-          
-          <div id="dualAudioControls" class="hidden space-y-3">
-            <p class="text-xs text-gray-500">Mix background music with voiceover/narration</p>
-            
-            <div>
-              <label class="block text-xs text-gray-400 mb-2">Background Music Volume: <span id="bgVolumeValue" class="text-violet-400">30%</span></label>
-              <input type="range" id="bgMusicVolume" min="0" max="100" value="30" 
-                class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-violet-500">
-            </div>
-            
-            <div>
-              <label class="block text-xs text-gray-400 mb-2">Voiceover Volume: <span id="voiceVolumeValue" class="text-violet-400">100%</span></label>
-              <input type="range" id="voiceoverVolume" min="0" max="100" value="100" 
-                class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-violet-500">
-            </div>
-            
-            <div class="bg-gray-700/50 rounded-lg p-3">
-              <p class="text-xs text-gray-400 mb-2">
-                <i class="ti ti-info-circle text-xs"></i> How it works:
-              </p>
-              <ul class="text-xs text-gray-500 space-y-1 ml-4">
-                <li>• First audio = Background music (lower volume)</li>
-                <li>• Other audios = Voiceover/narration (full volume)</li>
-                <li>• Both layers mixed together</li>
-              </ul>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   </div>
