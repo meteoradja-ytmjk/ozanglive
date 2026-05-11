@@ -609,20 +609,38 @@
     <div class="flex items-center justify-between mb-3">
       <h3 class="text-sm font-semibold text-white flex items-center gap-2">
         <i class="ti ti-eye text-primary"></i>
-        Mini Live Preview
+        Realtime Preview
       </h3>
-      <button onclick="refreshMiniPreview()" class="text-xs text-gray-400 hover:text-primary">
-        <i class="ti ti-refresh"></i>
+      <button onclick="refreshMiniPreview()" class="text-xs text-gray-400 hover:text-primary transition-colors">
+        <i class="ti ti-refresh"></i> Refresh
       </button>
     </div>
-    <div class="mini-preview" id="miniPreview">
+    <div class="mini-preview relative" id="miniPreview">
       <div class="mini-preview-placeholder">
         <i class="ti ti-video text-4xl mb-2"></i>
         <span class="text-xs">Select videos to preview</span>
       </div>
+      
+      <!-- Overlay Preview Layer -->
+      <div id="overlayPreviewLayer" class="absolute inset-0 pointer-events-none hidden">
+        <video id="overlayPreviewVideo" class="w-full h-full object-cover" muted loop></video>
+      </div>
+      
+      <!-- Watermark Preview Layer -->
+      <div id="watermarkPreviewLayer" class="absolute inset-0 pointer-events-none hidden">
+        <img id="watermarkPreviewImage" class="watermark-overlay bottom-right" src="" alt="Watermark">
+      </div>
+      
+      <!-- Visualizer Preview Layer -->
+      <canvas id="visualizerPreviewCanvas" class="absolute bottom-0 left-0 right-0 h-16 pointer-events-none hidden"></canvas>
     </div>
-    <div class="mt-2 text-xs text-gray-400 text-center" id="previewInfo">
-      No preview available
+    <div class="mt-2 text-xs text-gray-400" id="previewInfo">
+      <div class="flex items-center justify-between">
+        <span>No preview available</span>
+        <div class="flex gap-2">
+          <span id="previewFeatures" class="text-primary"></span>
+        </div>
+      </div>
     </div>
   </div>
   
@@ -1871,13 +1889,16 @@ document.addEventListener('change', (e) => {
   }
 });
 
-// FEATURE 1: MINI LIVE PREVIEW
+// FEATURE 1: REALTIME PREVIEW WITH OVERLAY, WATERMARK, AND VISUALIZER
 let previewVideoElement = null;
+let visualizerAnimationFrame = null;
+let visualizerContext = null;
 
 function refreshMiniPreview() {
   const videoIds = [...document.querySelectorAll("input[name='video']:checked")].map(i=>i.value);
   const miniPreview = document.getElementById('miniPreview');
   const previewInfo = document.getElementById('previewInfo');
+  const previewFeatures = document.getElementById('previewFeatures');
   
   if (videoIds.length === 0) {
     miniPreview.innerHTML = `
@@ -1886,7 +1907,8 @@ function refreshMiniPreview() {
         <span class="text-xs">Select videos to preview</span>
       </div>
     `;
-    previewInfo.textContent = 'No preview available';
+    previewInfo.innerHTML = '<div class="flex items-center justify-between"><span>No preview available</span><div class="flex gap-2"><span id="previewFeatures" class="text-primary"></span></div></div>';
+    hideAllPreviewLayers();
     return;
   }
   
@@ -1896,13 +1918,38 @@ function refreshMiniPreview() {
     .then(data => {
       if (data.video && data.video.filepath) {
         const videoPath = data.video.filepath.startsWith('/') ? data.video.filepath : '/' + data.video.filepath;
-        miniPreview.innerHTML = `<video src="${videoPath}" controls muted loop class="w-full h-full object-cover"></video>`;
+        
+        // Create video element
+        miniPreview.innerHTML = `
+          <video id="mainPreviewVideo" src="${videoPath}" controls muted loop autoplay class="w-full h-full object-cover"></video>
+          <div id="overlayPreviewLayer" class="absolute inset-0 pointer-events-none hidden">
+            <video id="overlayPreviewVideo" class="w-full h-full object-cover" muted loop autoplay style="mix-blend-mode: screen;"></video>
+          </div>
+          <div id="watermarkPreviewLayer" class="absolute inset-0 pointer-events-none hidden">
+            <img id="watermarkPreviewImage" class="watermark-overlay bottom-right" src="" alt="Watermark">
+          </div>
+          <canvas id="visualizerPreviewCanvas" class="absolute bottom-0 left-0 right-0 h-16 pointer-events-none hidden"></canvas>
+        `;
+        
+        // Update info
+        const features = [];
+        if (overlayVideoData) features.push('🎬 Overlay');
+        if (activeWatermarkIndex !== null) features.push('💧 Watermark');
+        if (visualizerType?.value !== 'none') features.push('🎵 Visualizer');
+        
         previewInfo.innerHTML = `
           <div class="flex items-center justify-between">
             <span>Previewing: ${data.video.title}</span>
-            <span class="text-primary">${videoIds.length} video${videoIds.length > 1 ? 's' : ''} selected</span>
+            <span class="text-primary">${videoIds.length} video${videoIds.length > 1 ? 's' : ''}</span>
           </div>
         `;
+        
+        if (previewFeatures) {
+          previewFeatures.textContent = features.join(' ');
+        }
+        
+        // Apply overlay, watermark, and visualizer
+        updateRealtimePreview();
       }
     })
     .catch(err => {
@@ -1913,8 +1960,170 @@ function refreshMiniPreview() {
           <span class="text-xs text-red-400">Preview unavailable</span>
         </div>
       `;
-      previewInfo.textContent = 'Error loading preview';
+      previewInfo.innerHTML = '<div class="flex items-center justify-between"><span>Error loading preview</span><div class="flex gap-2"><span id="previewFeatures" class="text-primary"></span></div></div>';
     });
+}
+
+function hideAllPreviewLayers() {
+  const overlayLayer = document.getElementById('overlayPreviewLayer');
+  const watermarkLayer = document.getElementById('watermarkPreviewLayer');
+  const visualizerCanvas = document.getElementById('visualizerPreviewCanvas');
+  
+  if (overlayLayer) overlayLayer.classList.add('hidden');
+  if (watermarkLayer) watermarkLayer.classList.add('hidden');
+  if (visualizerCanvas) visualizerCanvas.classList.add('hidden');
+  
+  // Stop visualizer animation
+  if (visualizerAnimationFrame) {
+    cancelAnimationFrame(visualizerAnimationFrame);
+    visualizerAnimationFrame = null;
+  }
+}
+
+function updateRealtimePreview() {
+  updateOverlayPreview();
+  updateWatermarkPreviewLayer();
+  updateVisualizerPreview();
+  
+  // Update feature badges
+  const previewFeatures = document.getElementById('previewFeatures');
+  if (previewFeatures) {
+    const features = [];
+    if (overlayVideoData) features.push('🎬 Overlay');
+    if (activeWatermarkIndex !== null) features.push('💧 Watermark');
+    if (visualizerType?.value !== 'none') features.push('🎵 Visualizer');
+    previewFeatures.textContent = features.join(' ');
+  }
+}
+
+function updateOverlayPreview() {
+  const overlayLayer = document.getElementById('overlayPreviewLayer');
+  const overlayVideo = document.getElementById('overlayPreviewVideo');
+  
+  if (!overlayLayer || !overlayVideo) return;
+  
+  if (overlayVideoData) {
+    overlayVideo.src = overlayVideoData;
+    overlayLayer.classList.remove('hidden');
+    
+    // Apply blend mode and opacity
+    const blendMode = document.getElementById('overlayBlendMode')?.value || 'screen';
+    const opacity = (document.getElementById('overlayOpacity')?.value || 100) / 100;
+    
+    overlayVideo.style.mixBlendMode = blendMode;
+    overlayVideo.style.opacity = opacity;
+  } else {
+    overlayLayer.classList.add('hidden');
+  }
+}
+
+function updateWatermarkPreviewLayer() {
+  const watermarkLayer = document.getElementById('watermarkPreviewLayer');
+  const watermarkImage = document.getElementById('watermarkPreviewImage');
+  
+  if (!watermarkLayer || !watermarkImage) return;
+  
+  if (activeWatermarkIndex !== null && uploadedWatermarks[activeWatermarkIndex]) {
+    const watermark = uploadedWatermarks[activeWatermarkIndex];
+    const position = document.getElementById('watermarkPosition')?.value || 'bottom-right';
+    const opacity = (document.getElementById('watermarkOpacity')?.value || 70) / 100;
+    
+    watermarkImage.src = watermark.data;
+    watermarkImage.className = 'watermark-overlay ' + position;
+    watermarkImage.style.opacity = opacity;
+    watermarkLayer.classList.remove('hidden');
+  } else {
+    watermarkLayer.classList.add('hidden');
+  }
+}
+
+function updateVisualizerPreview() {
+  const canvas = document.getElementById('visualizerPreviewCanvas');
+  if (!canvas) return;
+  
+  const type = visualizerType?.value || 'none';
+  
+  if (type === 'none') {
+    canvas.classList.add('hidden');
+    if (visualizerAnimationFrame) {
+      cancelAnimationFrame(visualizerAnimationFrame);
+      visualizerAnimationFrame = null;
+    }
+    return;
+  }
+  
+  canvas.classList.remove('hidden');
+  
+  // Setup canvas
+  const ctx = canvas.getContext('2d');
+  visualizerContext = ctx;
+  
+  // Set canvas size
+  canvas.width = canvas.offsetWidth;
+  canvas.height = 64;
+  
+  // Get settings
+  const barCount = parseInt(visualizerBarCount?.value || 64);
+  const color = visualizerColor?.value || 'purple';
+  const mirror = visualizerMirror?.checked || false;
+  const glow = visualizerGlow?.checked || false;
+  
+  // Color schemes
+  const colorSchemes = {
+    purple: ['#8B5CF6', '#EC4899'],
+    blue: ['#3B82F6', '#06B6D4'],
+    green: ['#10B981', '#34D399'],
+    rainbow: ['#EF4444', '#F59E0B', '#10B981', '#3B82F6', '#8B5CF6'],
+    fire: ['#DC2626', '#F59E0B', '#FCD34D'],
+    neon: ['#FF00FF', '#00FFFF'],
+    ocean: ['#0EA5E9', '#06B6D4', '#22D3EE'],
+    sunset: ['#F97316', '#FB923C', '#FBBF24']
+  };
+  
+  const colors = colorSchemes[color] || colorSchemes.purple;
+  
+  // Animate visualizer
+  let time = 0;
+  
+  function animate() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    const barWidth = canvas.width / barCount;
+    
+    for (let i = 0; i < barCount; i++) {
+      // Generate pseudo-random height based on time and position
+      const frequency = (i / barCount) * Math.PI * 2;
+      const height = (Math.sin(time + frequency) * 0.5 + 0.5) * canvas.height * 0.8;
+      
+      const x = i * barWidth;
+      const y = canvas.height - height;
+      
+      // Create gradient
+      const gradient = ctx.createLinearGradient(x, canvas.height, x, y);
+      colors.forEach((color, idx) => {
+        gradient.addColorStop(idx / (colors.length - 1), color);
+      });
+      
+      ctx.fillStyle = gradient;
+      
+      if (glow) {
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = colors[0];
+      }
+      
+      ctx.fillRect(x, y, barWidth - 2, height);
+    }
+    
+    time += 0.05;
+    visualizerAnimationFrame = requestAnimationFrame(animate);
+  }
+  
+  // Stop previous animation
+  if (visualizerAnimationFrame) {
+    cancelAnimationFrame(visualizerAnimationFrame);
+  }
+  
+  animate();
 }
 
 // Auto-refresh preview when videos are selected
@@ -1959,6 +2168,7 @@ function updateVisualizerType() {
   }
   
   updateVisualizerPreview();
+  updateRealtimePreview();
 }
 
 // Handle spectrum JSON file upload
@@ -2115,15 +2325,24 @@ if (visualizerBarCount) {
 }
 
 if (visualizerColor) {
-  visualizerColor.addEventListener('change', updateVisualizerPreview);
+  visualizerColor.addEventListener('change', () => {
+    updateVisualizerPreview();
+    updateRealtimePreview();
+  });
 }
 
 if (visualizerMirror) {
-  visualizerMirror.addEventListener('change', updateVisualizerPreview);
+  visualizerMirror.addEventListener('change', () => {
+    updateVisualizerPreview();
+    updateRealtimePreview();
+  });
 }
 
 if (visualizerGlow) {
-  visualizerGlow.addEventListener('change', updateVisualizerPreview);
+  visualizerGlow.addEventListener('change', () => {
+    updateVisualizerPreview();
+    updateRealtimePreview();
+  });
 }
 
 // Generate visualizer bars dynamically
@@ -2299,6 +2518,9 @@ function handleOverlayVideoUpload(event) {
       overlayOptions.classList.remove('hidden');
     }
     
+    // Update realtime preview
+    updateRealtimePreview();
+    
     showToast(`✓ Overlay video loaded: ${file.name}`);
   };
   
@@ -2314,7 +2536,7 @@ function removeOverlayVideo() {
   const fileInput = document.getElementById('overlayVideoFile');
   
   if (fileName) {
-    fileName.innerHTML = 'Upload MP4 Overlay';
+    fileName.innerHTML = 'Overlay';
   }
   
   if (overlayOptions) {
@@ -2324,6 +2546,9 @@ function removeOverlayVideo() {
   if (fileInput) {
     fileInput.value = '';
   }
+  
+  // Update realtime preview
+  updateRealtimePreview();
   
   showToast('Overlay video removed');
 }
@@ -2482,6 +2707,7 @@ function selectWatermark(index) {
   
   updateWatermarkFilesList();
   updateWatermarkPreview();
+  updateRealtimePreview();
   
   showToast(`✓ Using: ${uploadedWatermarks[index].name}`);
 }
@@ -2560,6 +2786,9 @@ function updateWatermarkPreview() {
     overlay.classList.add(position);
     overlay.style.opacity = opacity / 100;
   }
+  
+  // Update realtime preview
+  updateRealtimePreview();
 }
 
 // FEATURE 4: BATCH RENDER QUEUE

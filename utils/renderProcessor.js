@@ -23,12 +23,35 @@ const parseTimeToSeconds = (timemark = '') => {
   return (parseFloat(h) * 3600) + (parseFloat(m) * 60) + parseFloat(s);
 };
 
-async function renderLoopVideo({ videoPaths, audioPaths, outputPath, targetDurationSeconds, visualizerPreset = 'none', followAudioDuration = false, advancedAudio = {}, onProgress }) {
+async function renderLoopVideo({ 
+  videoPaths, 
+  audioPaths, 
+  outputPath, 
+  targetDurationSeconds, 
+  visualizerPreset = 'none', 
+  followAudioDuration = false, 
+  advancedAudio = {}, 
+  watermark = null,
+  overlayVideo = null,
+  visualizerSettings = null,
+  onProgress 
+}) {
   if (!videoPaths?.length) throw new Error('Minimal 1 video diperlukan');
   
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ozang-render-'));
   
   try {
+    // Log all parameters for debugging
+    console.log('[RENDER] === RENDER JOB STARTED ===');
+    console.log('[RENDER] Target duration:', targetDurationSeconds, 's');
+    console.log('[RENDER] Videos:', videoPaths.length);
+    console.log('[RENDER] Audios:', audioPaths?.length || 0);
+    console.log('[RENDER] Follow audio duration:', followAudioDuration);
+    console.log('[RENDER] Has watermark:', !!watermark);
+    console.log('[RENDER] Has overlay:', !!overlayVideo);
+    console.log('[RENDER] Visualizer:', visualizerSettings?.type || 'none');
+    console.log('[RENDER] Advanced audio:', JSON.stringify(advancedAudio));
+    
     // Parse advanced audio settings
     const audioSettings = {
       fadeIn: advancedAudio?.fadeIn || 0,
@@ -38,8 +61,6 @@ async function renderLoopVideo({ videoPaths, audioPaths, outputPath, targetDurat
       normalize: advancedAudio?.normalize || false,
       dualLayer: advancedAudio?.dualLayer || { enabled: false, bgVolume: 30, voiceVolume: 100 }
     };
-    
-    console.log('[RENDER] Advanced audio settings:', audioSettings);
     // Calculate effective target duration
     let effectiveTargetDuration = targetDurationSeconds;
     
