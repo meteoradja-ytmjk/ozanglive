@@ -686,9 +686,12 @@ const renderGroupedRows=(items,name,type)=>{
       </summary>
       <div class="border-t border-gray-700">
         ${rows.map(x=>`
-          <label class="flex items-center gap-3 px-3 py-2 hover:bg-gray-700/30 cursor-pointer border-t border-gray-700/50 first:border-t-0">
-            <input type="checkbox" name="${name}" value="${x.id}" class="w-4 h-4 rounded border-gray-500 bg-dark-700 text-primary focus:ring-primary">
-            <div class="w-16 h-10 rounded bg-gray-900 flex-shrink-0 overflow-hidden">
+          <label class="flex items-center gap-2 px-3 py-2 hover:bg-gray-700/30 cursor-pointer border-t border-gray-700/50 first:border-t-0 media-item" data-id="${x.id}" data-pinned="false">
+            <input type="checkbox" name="${name}" value="${x.id}" class="w-4 h-4 rounded border-gray-500 bg-dark-700 text-primary focus:ring-primary" onchange="updateSelectedCount()">
+            <button type="button" onclick="togglePin(event, '${x.id}', '${name}')" class="pin-btn w-6 h-6 flex items-center justify-center rounded hover:bg-gray-600 transition-colors flex-shrink-0" title="Pin to top">
+              <i class="ti ti-pin text-xs text-gray-500"></i>
+            </button>
+            <div class="w-14 h-9 rounded bg-gray-900 flex-shrink-0 overflow-hidden">
               ${x.thumbnail_path?`<img src="${x.thumbnail_path}" class="w-full h-full object-cover">`:`<div class="w-full h-full flex items-center justify-center text-xs text-primary">${type==='videos'?'VID':'AUD'}</div>`}
             </div>
             <div class="flex-1 min-w-0">
@@ -1385,37 +1388,64 @@ function deselectAllMedia() {
 }
 
 function shuffleMedia() {
-  const checkboxes = currentMediaTab === 'video' 
-    ? Array.from(document.querySelectorAll("input[name='video']"))
-    : Array.from(document.querySelectorAll("input[name='audio']"));
+  const container = currentMediaTab === 'video' 
+    ? document.getElementById('videoList')
+    : document.getElementById('audioList');
   
-  if (checkboxes.length === 0) {
+  if (!container) return;
+  
+  // Get all media items
+  const allItems = Array.from(container.querySelectorAll('.media-item'));
+  
+  if (allItems.length === 0) {
     showToast('No media available to shuffle');
     return;
   }
   
-  // Get currently selected items
-  const selectedIds = checkboxes.filter(cb => cb.checked).map(cb => cb.value);
+  // Separate pinned and unpinned items
+  const pinnedItems = allItems.filter(item => item.dataset.pinned === 'true');
+  const unpinnedItems = allItems.filter(item => item.dataset.pinned === 'false');
   
-  if (selectedIds.length === 0) {
-    showToast('Please select some items first');
+  // Only shuffle selected unpinned items
+  const selectedUnpinned = unpinnedItems.filter(item => {
+    const checkbox = item.querySelector('input[type="checkbox"]');
+    return checkbox && checkbox.checked;
+  });
+  
+  if (selectedUnpinned.length === 0) {
+    showToast('Please select some items first (pinned items won\'t shuffle)');
     return;
   }
   
-  // Deselect all
-  checkboxes.forEach(cb => cb.checked = false);
-  
-  // Shuffle the selected IDs using Fisher-Yates algorithm
-  const shuffled = [...selectedIds];
-  for (let i = shuffled.length - 1; i > 0; i--) {
+  // Fisher-Yates shuffle
+  for (let i = selectedUnpinned.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    [selectedUnpinned[i], selectedUnpinned[j]] = [selectedUnpinned[j], selectedUnpinned[i]];
   }
   
-  // Reselect in shuffled order
-  shuffled.forEach(id => {
-    const checkbox = checkboxes.find(cb => cb.value === id);
-    if (checkbox) checkbox.checked = true;
+  // Rebuild the list: pinned first, then shuffled selected, then unselected
+  const unselectedUnpinned = unpinnedItems.filter(item => {
+    const checkbox = item.querySelector('input[type="checkbox"]');
+    return checkbox && !checkbox.checked;
+  });
+  
+  const newOrder = [...pinnedItems, ...selectedUnpinned, ...unselectedUnpinned];
+  
+  // Clear and rebuild
+  const details = container.querySelectorAll('details');
+  details.forEach(detail => {
+    const itemsContainer = detail.querySelector('div.border-t');
+    if (itemsContainer) {
+      itemsContainer.innerHTML = '';
+      newOrder.forEach(item => {
+        // Find which detail this item belongs to
+        const itemId = item.dataset.id;
+        const originalItem = allItems.find(i => i.dataset.id === itemId);
+        if (originalItem && originalItem.closest('details') === detail) {
+          itemsContainer.appendChild(item);
+        }
+      });
+    }
   });
   
   updateMediaSelectionCount();
@@ -1424,7 +1454,58 @@ function shuffleMedia() {
     refreshMiniPreview();
   }
   
-  showToast(`🔀 ${selectedIds.length} ${currentMediaTab}(s) shuffled`);
+  showToast(`🔀 ${selectedUnpinned.length} ${currentMediaTab}(s) shuffled (${pinnedItems.length} pinned items stayed on top)`);
+}
+
+function togglePin(event, id, type) {
+  event.preventDefault();
+  event.stopPropagation();
+  
+  const item = event.target.closest('.media-item');
+  if (!item) return;
+  
+  const isPinned = item.dataset.pinned === 'true';
+  const newPinnedState = !isPinned;
+  
+  item.dataset.pinned = newPinnedState;
+  
+  const pinBtn = item.querySelector('.pin-btn i');
+  if (pinBtn) {
+    if (newPinnedState) {
+      pinBtn.className = 'ti ti-pin-filled text-xs text-yellow-400';
+      item.style.background = 'rgba(234, 179, 8, 0.1)';
+    } else {
+      pinBtn.className = 'ti ti-pin text-xs text-gray-500';
+      item.style.background = '';
+    }
+  }
+  
+  // Move pinned items to top
+  const container = type === 'video' 
+    ? document.getElementById('videoList')
+    : document.getElementById('audioList');
+  
+  if (!container) return;
+  
+  const detail = item.closest('details');
+  if (!detail) return;
+  
+  const itemsContainer = detail.querySelector('div.border-t');
+  if (!itemsContainer) return;
+  
+  const allItems = Array.from(itemsContainer.querySelectorAll('.media-item'));
+  const pinnedItems = allItems.filter(i => i.dataset.pinned === 'true');
+  const unpinnedItems = allItems.filter(i => i.dataset.pinned === 'false');
+  
+  // Rebuild: pinned first, then unpinned
+  itemsContainer.innerHTML = '';
+  [...pinnedItems, ...unpinnedItems].forEach(i => itemsContainer.appendChild(i));
+  
+  showToast(newPinnedState ? '📌 Pinned to top' : '📍 Unpinned');
+}
+
+function updateSelectedCount() {
+  updateMediaSelectionCount();
 }
 
 function updateMediaSelectionCount() {
