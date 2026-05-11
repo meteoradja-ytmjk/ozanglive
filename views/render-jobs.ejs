@@ -963,9 +963,8 @@ async function loadJobs(){
       
       <div class="flex gap-2">
         ${j.output_path?`
-          <a href="${j.output_path}" target="_blank" class="flex-1 text-center px-3 py-2 bg-gray-600 hover:bg-gray-500 text-white text-sm rounded-lg transition-colors">Preview</a>
-          <button onclick="openLoopModal('${j.id}')" class="flex-1 px-3 py-2 bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-500/50 text-yellow-400 text-sm rounded-lg transition-colors">Loop</button>
           <button onclick="uploadJob('${j.id}')" class="flex-1 px-3 py-2 bg-primary hover:bg-secondary text-white text-sm rounded-lg transition-colors">Upload</button>
+          <button onclick="openLoopModal('${j.id}')" class="flex-1 px-3 py-2 bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-500/50 text-yellow-400 text-sm rounded-lg transition-colors">Loop</button>
         `:''}
         <button onclick="deleteJob('${j.id}')" class="px-3 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 text-sm rounded-lg transition-colors">Hapus</button>
       </div>
@@ -1012,6 +1011,7 @@ if (el.createBtn) {
       showNotification('Render Started', 'Your render job has been queued');
       
       loadJobs();
+      startSmartRefresh(); // Start auto-refresh for new job
     }catch(err){
       console.error('Create render job error:', err);
       alert('Terjadi error saat membuat render job');
@@ -1243,6 +1243,7 @@ async function processLoop() {
             setTimeout(() => {
               closeLoopModal();
               loadJobs();
+              startSmartRefresh(); // Restart auto-refresh
             }, 1000);
           } else if (jobData.job.status === 'failed') {
             clearInterval(pollInterval);
@@ -2413,6 +2414,7 @@ async function processBatchQueue() {
   batchQueue = [];
   updateBatchQueueUI();
   loadJobs();
+  startSmartRefresh(); // Start auto-refresh for batch jobs
   showNotification('Batch Processing Complete', `All ${batchQueue.length} jobs have been queued`);
 }
 
@@ -2438,9 +2440,41 @@ Promise.resolve()
   .then(requestNotificationPermission)
   .catch((err) => console.error('Render dashboard init error:', err));
 
-// Auto-refresh jobs every 3 seconds (faster for real-time updates)
-setInterval(() => {
-  loadJobs().catch(() => {});
-  checkJobCompletion().catch(() => {});
-}, 3000);
+// Smart auto-refresh: only refresh when there are active jobs
+let refreshInterval = null;
+
+function startSmartRefresh() {
+  // Clear existing interval
+  if (refreshInterval) {
+    clearInterval(refreshInterval);
+    refreshInterval = null;
+  }
+  
+  // Only start interval if there are active jobs
+  refreshInterval = setInterval(async () => {
+    try {
+      const r = await fetch('/api/render/jobs');
+      const d = await r.json();
+      const jobs = toArray(d, 'jobs');
+      
+      // Check if there are any active jobs
+      const hasActiveJobs = jobs.some(j => j.status === 'processing' || j.status === 'queued' || j.status === 'pending');
+      
+      if (hasActiveJobs) {
+        // Only update jobs list, don't reload everything
+        await loadJobs();
+        await checkJobCompletion();
+      } else {
+        // No active jobs, stop auto-refresh
+        clearInterval(refreshInterval);
+        refreshInterval = null;
+      }
+    } catch (err) {
+      console.error('Smart refresh error:', err);
+    }
+  }, 5000); // 5 seconds instead of 3
+}
+
+// Start smart refresh
+startSmartRefresh();
 </script>
