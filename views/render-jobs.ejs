@@ -1,53 +1,88 @@
 <% layout('layout') -%>
 
 <style>
-/* Step-by-Step Flow Styling */
+<style>
+/* Step-by-Step Flow Styling - COMPACT & CLEAN */
 .step-section {
-  background: rgba(31, 41, 55, 0.5);
-  border: 1px solid #374151;
-  border-radius: 0.75rem;
-  padding: 1.25rem;
-  transition: all 0.3s ease;
+  background: rgba(31, 41, 55, 0.3);
+  border-left: 3px solid #8B5CF6;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  transition: all 0.2s ease;
 }
 
 .step-section:hover {
-  border-color: #8B5CF6;
+  border-left-color: #EC4899;
   background: rgba(139, 92, 246, 0.05);
 }
 
 .step-header {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  margin-bottom: 1rem;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
 }
 
 .step-number {
-  width: 2.5rem;
-  height: 2.5rem;
+  width: 2rem;
+  height: 2rem;
   background: linear-gradient(135deg, #8B5CF6, #EC4899);
-  border-radius: 50%;
+  border-radius: 0.375rem;
   display: flex;
   align-items: center;
-  justify-center;
-  font-size: 1.125rem;
+  justify-content: center;
+  font-size: 1rem;
   font-weight: 700;
   color: white;
   flex-shrink: 0;
-  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
 }
 
-.step-title {
-  flex: 1;
+.step-title h4 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: white;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.step-title p {
+  font-size: 0.75rem;
+  color: #9CA3AF;
+  margin: 0.125rem 0 0 0;
+  line-height: 1.2;
 }
 
 .step-content {
-  padding-left: 3.5rem;
+  padding-left: 2.75rem;
 }
 
 @media (max-width: 768px) {
+  .step-section {
+    padding: 0.75rem;
+  }
+  
+  .step-header {
+    gap: 0.5rem;
+  }
+  
+  .step-number {
+    width: 1.75rem;
+    height: 1.75rem;
+    font-size: 0.875rem;
+  }
+  
+  .step-title h4 {
+    font-size: 0.875rem;
+  }
+  
+  .step-title p {
+    font-size: 0.7rem;
+  }
+  
   .step-content {
     padding-left: 0;
+    margin-top: 0.75rem;
   }
 }
 
@@ -248,50 +283,50 @@
 <div id="jobsContainer" class="tab-content">
 
 <!-- Main Form Card with Step-by-Step Flow -->
-<div class="bg-gray-800 rounded-lg p-4 md:p-6 mb-6">
-  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+<div class="bg-gray-800 rounded-lg p-3 md:p-4 mb-4">
+  <div class="flex items-center justify-between mb-4">
     <div>
-      <h3 class="text-xl font-bold text-white">Create Render Job</h3>
-      <p class="text-sm text-gray-400 mt-1">Follow the steps below to create your video</p>
+      <h3 class="text-lg font-bold text-white">Create Render Job</h3>
+      <p class="text-xs text-gray-400 mt-0.5">Follow the steps below</p>
     </div>
     <div class="flex gap-2">
-      <button onclick="openTemplateModal()" class="flex items-center gap-2 px-4 py-2 bg-primary/20 hover:bg-primary/30 text-primary rounded-lg text-sm font-medium transition-colors">
-        <i class="ti ti-template"></i>
+      <button onclick="openTemplateModal()" class="hidden md:flex items-center gap-1.5 px-3 py-1.5 bg-primary/20 hover:bg-primary/30 text-primary rounded-lg text-xs font-medium transition-colors">
+        <i class="ti ti-template text-sm"></i>
         <span>Templates</span>
       </button>
-      <button onclick="openPreviewModal()" class="flex items-center gap-2 px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg text-sm font-medium transition-colors">
-        <i class="ti ti-eye"></i>
+      <button onclick="openPreviewModal()" class="hidden md:flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg text-xs font-medium transition-colors">
+        <i class="ti ti-eye text-sm"></i>
         <span>Preview</span>
       </button>
     </div>
   </div>
   
-  <div class="space-y-6">
+  <div class="space-y-3">
     
     <!-- STEP 1: Basic Information -->
     <div class="step-section">
       <div class="step-header">
         <div class="step-number">1</div>
         <div class="step-title">
-          <h4 class="text-base font-semibold text-white">Basic Information</h4>
-          <p class="text-xs text-gray-400">Set title and target channel</p>
+          <h4>Basic Information</h4>
+          <p>Title and target channel</p>
         </div>
       </div>
       <div class="step-content">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
-            <label class="text-sm font-medium text-gray-300 block mb-2">
+            <label class="text-xs font-medium text-gray-300 block mb-1.5">
               <i class="ti ti-text-size text-xs mr-1"></i>Video Title
             </label>
-            <input type="text" id="title" value="1" placeholder="Enter video title" class="w-full bg-dark-700 text-white px-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+            <input type="text" id="title" value="1" placeholder="Enter video title" class="w-full bg-dark-700 text-white px-3 py-2 border border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary">
           </div>
           
           <div>
-            <label class="text-sm font-medium text-gray-300 block mb-2">
-              <i class="ti ti-brand-youtube text-xs mr-1"></i>Target YouTube Channel
+            <label class="text-xs font-medium text-gray-300 block mb-1.5">
+              <i class="ti ti-brand-youtube text-xs mr-1"></i>Target Channel (Optional)
             </label>
-            <select id="targetAccountId" class="w-full bg-dark-700 text-white px-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
-              <option value="">-- Select Channel (Optional) --</option>
+            <select id="targetAccountId" class="w-full bg-dark-700 text-white px-3 py-2 border border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary">
+              <option value="">-- Select Channel --</option>
             </select>
           </div>
         </div>
@@ -303,36 +338,31 @@
       <div class="step-header">
         <div class="step-number">2</div>
         <div class="step-title">
-          <h4 class="text-base font-semibold text-white">Duration Settings</h4>
-          <p class="text-xs text-gray-400">Set how long your video will be</p>
+          <h4>Duration Settings</h4>
+          <p>Set video length</p>
         </div>
       </div>
       <div class="step-content">
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
           <div>
-            <label class="text-sm font-medium text-gray-300 block mb-2">
+            <label class="text-xs font-medium text-gray-300 block mb-1.5">
               <i class="ti ti-clock-hour-4 text-xs mr-1"></i>Hours
             </label>
-            <input type="number" id="durationHours" min="0" value="0" class="w-full bg-dark-700 text-white px-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-center text-lg font-semibold">
+            <input type="number" id="durationHours" min="0" value="0" class="w-full bg-dark-700 text-white px-3 py-2 border border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary text-center font-semibold">
           </div>
           <div>
-            <label class="text-sm font-medium text-gray-300 block mb-2">
+            <label class="text-xs font-medium text-gray-300 block mb-1.5">
               <i class="ti ti-clock text-xs mr-1"></i>Minutes
             </label>
-            <input type="number" id="durationMinutes" min="0" max="59" value="0" class="w-full bg-dark-700 text-white px-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-center text-lg font-semibold">
+            <input type="number" id="durationMinutes" min="0" max="59" value="0" class="w-full bg-dark-700 text-white px-3 py-2 border border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary text-center font-semibold">
           </div>
-          <div class="flex items-end">
-            <div class="flex items-center gap-2 bg-dark-700 p-3 rounded-lg border border-gray-600 w-full">
-              <input type="checkbox" id="followAudioDuration" class="w-4 h-4 rounded border-gray-500 bg-dark-700 text-primary focus:ring-primary">
-              <label for="followAudioDuration" class="text-sm text-gray-300 cursor-pointer">Follow audio duration</label>
+          <div class="col-span-2 md:col-span-1">
+            <label class="text-xs font-medium text-gray-300 block mb-1.5">Options</label>
+            <div class="flex items-center gap-2 bg-dark-700 px-3 py-2 rounded-lg border border-gray-600 h-[38px]">
+              <input type="checkbox" id="followAudioDuration" class="w-3.5 h-3.5 rounded border-gray-500 bg-dark-700 text-primary focus:ring-primary">
+              <label for="followAudioDuration" class="text-xs text-gray-300 cursor-pointer whitespace-nowrap">Follow audio</label>
             </div>
           </div>
-        </div>
-        <div class="mt-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-          <p class="text-xs text-blue-400">
-            <i class="ti ti-info-circle mr-1"></i>
-            <strong>Tip:</strong> Check "Follow audio duration" to automatically match total audio length
-          </p>
         </div>
       </div>
     </div>
