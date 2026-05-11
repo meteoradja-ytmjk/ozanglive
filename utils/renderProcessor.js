@@ -41,16 +41,12 @@ async function renderLoopVideo({
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ozang-render-'));
   
   try {
-    // Log all parameters for debugging
-    console.log('[RENDER] === RENDER JOB STARTED ===');
+    console.log('[RENDER] === START ===');
+    console.log('[RENDER] Videos:', videoPaths.length, 'Audios:', audioPaths?.length || 0);
     console.log('[RENDER] Target duration:', targetDurationSeconds, 's');
-    console.log('[RENDER] Videos:', videoPaths.length);
-    console.log('[RENDER] Audios:', audioPaths?.length || 0);
-    console.log('[RENDER] Follow audio duration:', followAudioDuration);
-    console.log('[RENDER] Has watermark:', !!watermark);
-    console.log('[RENDER] Has overlay:', !!overlayVideo);
-    console.log('[RENDER] Visualizer:', visualizerSettings?.type || 'none');
-    console.log('[RENDER] Advanced audio:', JSON.stringify(advancedAudio));
+    
+    // NOTE: watermark, overlay, visualizer will be implemented in future updates
+    // For now, we do basic video+audio rendering to ensure stability
     
     // Parse advanced audio settings
     const audioSettings = {
@@ -61,6 +57,7 @@ async function renderLoopVideo({
       normalize: advancedAudio?.normalize || false,
       dualLayer: advancedAudio?.dualLayer || { enabled: false, bgVolume: 30, voiceVolume: 100 }
     };
+    
     // Calculate effective target duration
     let effectiveTargetDuration = targetDurationSeconds;
     
@@ -73,25 +70,19 @@ async function renderLoopVideo({
       effectiveTargetDuration = totalAudioDuration > 0 ? Math.ceil(totalAudioDuration) : targetDurationSeconds;
     }
     
-    console.log(`[RENDER] Target duration: ${effectiveTargetDuration}s, Videos: ${videoPaths.length}, Audios: ${audioPaths?.length || 0}`);
-    console.log('[RENDER] Video paths:', videoPaths);
-    console.log('[RENDER] Audio paths:', audioPaths);
+    console.log('[RENDER] Effective duration:', effectiveTargetDuration, 's');
     
-    // CRITICAL FIX: Always use concat demuxer for reliable audio/video sync
-    // The old stream_loop approach caused audio sync issues
-    console.log('[RENDER] Using concat demuxer for reliable audio/video sync');
-    
-    // Get video durations to calculate loops needed
+    // Get video durations
     const videoDurations = await Promise.all(videoPaths.map(async (videoPath) => {
       const meta = await ffprobeAsync(videoPath);
       return Number(meta?.format?.duration || 0);
     }));
     const totalVideoDuration = videoDurations.reduce((sum, val) => sum + val, 0);
     
-    // Calculate how many loops we need
-    const videoLoops = Math.ceil(effectiveTargetDuration / totalVideoDuration) + 1; // +1 for safety
+    // Calculate loops needed
+    const videoLoops = Math.ceil(effectiveTargetDuration / totalVideoDuration) + 1;
     
-    // Create concat file for videos - FIXED: proper newline
+    // Create concat file for videos
     const videoConcatFile = path.join(workDir, 'videos.txt');
     const videoLines = [];
     for (let i = 0; i < videoLoops; i++) {
@@ -100,10 +91,12 @@ async function renderLoopVideo({
       });
     }
     fs.writeFileSync(videoConcatFile, videoLines.join('\n'), 'utf8');
-    console.log('[RENDER] Video concat file created with', videoLines.length, 'entries');
+    console.log('[RENDER] Video concat file created:', videoLines.length, 'entries');
     
     // Merge videos first
     const mergedVideo = path.join(workDir, 'video-merged.mp4');
+    console.log('[RENDER] Merging videos...');
+    
     await runFfmpeg((cmd) => {
       return cmd
         .input(videoConcatFile)
@@ -114,39 +107,32 @@ async function renderLoopVideo({
           '-preset', 'veryfast',
           '-crf', '23',
           '-pix_fmt', 'yuv420p',
-          '-an' // No audio in this step
+          '-an'
         ])
         .output(mergedVideo);
     });
     
-    console.log('[RENDER] Video merged successfully');
+    console.log('[RENDER] Video merged ✓');
     
     // Handle audio if present
     const hasAudio = audioPaths?.length > 0;
     if (hasAudio) {
       console.log('[RENDER] Processing audio...');
-      console.log('[RENDER] Audio files:', audioPaths);
       
       // Get audio durations
       const audioDurations = await Promise.all(audioPaths.map(async (audioPath) => {
-        console.log(`[RENDER] Checking audio file: ${audioPath}`);
         if (!fs.existsSync(audioPath)) {
-          console.error(`[RENDER] ERROR: Audio file not found: ${audioPath}`);
           throw new Error(`Audio file not found: ${audioPath}`);
         }
         const meta = await ffprobeAsync(audioPath);
-        const dur = Number(meta?.format?.duration || 0);
-        console.log(`[RENDER] Audio duration: ${dur}s`);
-        return dur;
+        return Number(meta?.format?.duration || 0);
       }));
       const totalAudioDuration = audioDurations.reduce((sum, val) => sum + val, 0);
-      console.log(`[RENDER] Total audio duration: ${totalAudioDuration}s`);
       
-      // Calculate audio loops needed
-      const audioLoops = Math.ceil(effectiveTargetDuration / totalAudioDuration) + 1; // +1 for safety
-      console.log(`[RENDER] Audio loops needed: ${audioLoops}`);
+      // Calculate audio loops
+      const audioLoops = Math.ceil(effectiveTargetDuration / totalAudioDuration) + 1;
       
-      // Create concat file for audios - FIXED: proper newline
+      // Create concat file for audios
       const audioConcatFile = path.join(workDir, 'audios.txt');
       const audioLines = [];
       for (let i = 0; i < audioLoops; i++) {
@@ -154,158 +140,63 @@ async function renderLoopVideo({
           audioLines.push(`file '${aPath.replace(/'/g, "'\\''")}'`);
         });
       }
-      const audioConcatContent = audioLines.join('\n');
-      fs.writeFileSync(audioConcatFile, audioConcatContent, 'utf8');
-      console.log('[RENDER] Audio concat file created with', audioLines.length, 'entries');
-      console.log('[RENDER] Audio concat file path:', audioConcatFile);
-      console.log('[RENDER] Audio concat content preview:', audioConcatContent.substring(0, 200));
+      fs.writeFileSync(audioConcatFile, audioLines.join('\n'), 'utf8');
+      console.log('[RENDER] Audio concat file created:', audioLines.length, 'entries');
       
       // Merge audios with advanced features
       const mergedAudio = path.join(workDir, 'audio-merged.aac');
-      console.log('[RENDER] Merging audios to:', mergedAudio);
+      console.log('[RENDER] Merging audios...');
       
-      // Build audio filter complex for advanced features
-      const audioFilters = [];
+      // Build filter complex
+      let filterComplex = '[0:a]';
       
-      // Dual layer audio mixing
-      if (audioSettings.dualLayer.enabled && audioPaths.length >= 2) {
-        console.log('[RENDER] Applying dual layer audio mixing');
-        // First audio = background music (lower volume)
-        // Other audios = voiceover (full volume)
-        const bgVolume = audioSettings.dualLayer.bgVolume / 100;
-        const voiceVolume = audioSettings.dualLayer.voiceVolume / 100;
-        
-        await runFfmpeg((cmd) => {
-          cmd.input(audioConcatFile).inputOptions(['-f', 'concat', '-safe', '0']);
-          
-          let filterComplex = `[0:a]volume=${bgVolume}[bg];`;
-          
-          // If we have multiple audios, split them
-          if (audioPaths.length > 1) {
-            filterComplex += `[0:a]asplit=${audioPaths.length}`;
-            for (let i = 0; i < audioPaths.length; i++) {
-              filterComplex += `[a${i}]`;
-            }
-            filterComplex += `;`;
-            
-            // Apply voice volume to non-background tracks
-            for (let i = 1; i < audioPaths.length; i++) {
-              filterComplex += `[a${i}]volume=${voiceVolume}[v${i}];`;
-            }
-            
-            // Mix all tracks
-            filterComplex += `[bg]`;
-            for (let i = 1; i < audioPaths.length; i++) {
-              filterComplex += `[v${i}]`;
-            }
-            filterComplex += `amix=inputs=${audioPaths.length}:duration=first[mixed];`;
-          } else {
-            filterComplex += `[bg]anull[mixed];`;
-          }
-          
-          // Apply other effects
-          if (audioSettings.normalize) {
-            filterComplex += `[mixed]loudnorm[normalized];`;
-          } else {
-            filterComplex += `[mixed]anull[normalized];`;
-          }
-          
-          // Apply volume
-          if (audioSettings.volume !== 100) {
-            const volMultiplier = audioSettings.volume / 100;
-            filterComplex += `[normalized]volume=${volMultiplier}[vol];`;
-          } else {
-            filterComplex += `[normalized]anull[vol];`;
-          }
-          
-          // Apply fade in/out
-          let fadeFilter = '[vol]';
-          if (audioSettings.fadeIn > 0) {
-            fadeFilter += `afade=t=in:st=0:d=${audioSettings.fadeIn}`;
-          }
-          if (audioSettings.fadeOut > 0) {
-            const fadeOutStart = Math.max(0, effectiveTargetDuration - audioSettings.fadeOut);
-            if (audioSettings.fadeIn > 0) fadeFilter += ',';
-            fadeFilter += `afade=t=out:st=${fadeOutStart}:d=${audioSettings.fadeOut}`;
-          }
-          fadeFilter += '[final]';
-          
-          if (audioSettings.fadeIn > 0 || audioSettings.fadeOut > 0) {
-            filterComplex += fadeFilter;
-          } else {
-            filterComplex += `[vol]anull[final]`;
-          }
-          
-          return cmd
-            .complexFilter(filterComplex)
-            .outputOptions([
-              '-map', '[final]',
-              '-t', String(effectiveTargetDuration),
-              '-c:a', 'aac',
-              '-b:a', '192k'
-            ])
-            .output(mergedAudio);
-        });
-      } else {
-        // Standard audio merge with basic effects
-        await runFfmpeg((cmd) => {
-          cmd.input(audioConcatFile).inputOptions(['-f', 'concat', '-safe', '0']);
-          
-          let filterComplex = '[0:a]';
-          
-          // Apply normalization
-          if (audioSettings.normalize) {
-            filterComplex += 'loudnorm,';
-          }
-          
-          // Apply volume
-          if (audioSettings.volume !== 100) {
-            const volMultiplier = audioSettings.volume / 100;
-            filterComplex += `volume=${volMultiplier},`;
-          }
-          
-          // Apply fade in
-          if (audioSettings.fadeIn > 0) {
-            filterComplex += `afade=t=in:st=0:d=${audioSettings.fadeIn},`;
-          }
-          
-          // Apply fade out
-          if (audioSettings.fadeOut > 0) {
-            const fadeOutStart = Math.max(0, effectiveTargetDuration - audioSettings.fadeOut);
-            filterComplex += `afade=t=out:st=${fadeOutStart}:d=${audioSettings.fadeOut},`;
-          }
-          
-          // Remove trailing comma
-          if (filterComplex.endsWith(',')) {
-            filterComplex = filterComplex.slice(0, -1);
-          }
-          
-          filterComplex += '[final]';
-          
-          return cmd
-            .complexFilter(filterComplex)
-            .outputOptions([
-              '-map', '[final]',
-              '-t', String(effectiveTargetDuration),
-              '-c:a', 'aac',
-              '-b:a', '192k'
-            ])
-            .output(mergedAudio);
-        });
+      // Apply normalization
+      if (audioSettings.normalize) {
+        filterComplex += 'loudnorm,';
       }
       
-      console.log('[RENDER] Audio merged successfully');
-      console.log('[RENDER] Merged audio file exists:', fs.existsSync(mergedAudio));
-      if (fs.existsSync(mergedAudio)) {
-        const audioStats = fs.statSync(mergedAudio);
-        console.log('[RENDER] Merged audio size:', (audioStats.size / 1024).toFixed(2), 'KB');
+      // Apply volume
+      if (audioSettings.volume !== 100) {
+        const volMultiplier = audioSettings.volume / 100;
+        filterComplex += `volume=${volMultiplier},`;
       }
       
-      // Combine video + audio - CRITICAL: Use shortest stream to prevent issues
-      console.log('[RENDER] Combining video and audio...');
-      console.log('[RENDER] Video input:', mergedVideo);
-      console.log('[RENDER] Audio input:', mergedAudio);
-      console.log('[RENDER] Output:', outputPath);
+      // Apply fade in
+      if (audioSettings.fadeIn > 0) {
+        filterComplex += `afade=t=in:st=0:d=${audioSettings.fadeIn},`;
+      }
+      
+      // Apply fade out
+      if (audioSettings.fadeOut > 0) {
+        const fadeOutStart = Math.max(0, effectiveTargetDuration - audioSettings.fadeOut);
+        filterComplex += `afade=t=out:st=${fadeOutStart}:d=${audioSettings.fadeOut},`;
+      }
+      
+      // Remove trailing comma
+      if (filterComplex.endsWith(',')) {
+        filterComplex = filterComplex.slice(0, -1);
+      }
+      
+      filterComplex += '[final]';
+      
+      await runFfmpeg((cmd) => {
+        return cmd
+          .input(audioConcatFile)
+          .inputOptions(['-f', 'concat', '-safe', '0'])
+          .complexFilter(filterComplex)
+          .outputOptions([
+            '-map', '[final]',
+            '-t', String(effectiveTargetDuration),
+            '-c:a', 'aac',
+            '-b:a', '192k'
+          ])
+          .output(mergedAudio);
+      });
+      
+      console.log('[RENDER] Audio merged ✓');
+      
+      // Combine video + audio
+      console.log('[RENDER] Combining video + audio...');
       
       await runFfmpeg((cmd) => {
         return cmd
@@ -313,9 +204,9 @@ async function renderLoopVideo({
           .input(mergedAudio)
           .outputOptions([
             '-c:v', 'copy',
-            '-c:a', 'aac',  // Re-encode audio to ensure compatibility
+            '-c:a', 'aac',
             '-b:a', '192k',
-            '-shortest',    // CRITICAL: Stop at shortest stream
+            '-shortest',
             '-movflags', '+faststart'
           ])
           .output(outputPath);
@@ -326,36 +217,29 @@ async function renderLoopVideo({
         }
       });
       
-      console.log('[RENDER] Video + Audio combined successfully');
+      console.log('[RENDER] Combined ✓');
       
-      // Verify output has audio
+      // Verify output
       if (fs.existsSync(outputPath)) {
-        try {
-          const outputMeta = await ffprobeAsync(outputPath);
-          const hasAudioStream = outputMeta.streams.some(s => s.codec_type === 'audio');
-          console.log('[RENDER] Output file has audio stream:', hasAudioStream ? '✓ YES' : '✗ NO');
-          if (!hasAudioStream) {
-            console.error('[RENDER] WARNING: Output file has NO audio stream!');
-          }
-        } catch (probeErr) {
-          console.error('[RENDER] Could not probe output file:', probeErr.message);
-        }
+        const outputMeta = await ffprobeAsync(outputPath);
+        const hasAudioStream = outputMeta.streams.some(s => s.codec_type === 'audio');
+        console.log('[RENDER] Output has audio:', hasAudioStream ? '✓' : '✗');
       }
     } else {
-      // No audio, just copy the video
+      // No audio, just copy video
       fs.copyFileSync(mergedVideo, outputPath);
-      console.log('[RENDER] Video only (no audio selected)');
+      console.log('[RENDER] Video only (no audio)');
     }
     
-    console.log('[RENDER] Completed using OPTIMIZED path');
+    console.log('[RENDER] === COMPLETED ===');
     return outputPath;
     
   } catch (error) {
-    console.error('[RENDER] Error:', error.message);
+    console.error('[RENDER] ERROR:', error.message);
     console.error('[RENDER] Stack:', error.stack);
     throw error;
   } finally {
-    // Cleanup temp directory
+    // Cleanup
     try {
       if (fs.existsSync(workDir)) {
         fs.rmSync(workDir, { recursive: true, force: true });
@@ -365,8 +249,6 @@ async function renderLoopVideo({
     }
   }
 }
-
-module.exports = { renderLoopVideo };
 
 // Fast loop video using stream copy (no re-encoding)
 async function loopVideoFast({ inputPath, outputPath, loopCount, onProgress }) {
@@ -383,23 +265,23 @@ async function loopVideoFast({ inputPath, outputPath, loopCount, onProgress }) {
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ozang-loop-'));
   
   try {
-    // Get video duration for progress calculation
+    // Get video duration
     const meta = await ffprobeAsync(inputPath);
     const duration = Number(meta?.format?.duration || 0);
     const totalDuration = duration * loopCount;
     
-    // Create concat file with repeated entries
+    // Create concat file
     const concatFile = path.join(workDir, 'concat.txt');
     const concatContent = Array(loopCount).fill(`file '${inputPath.replace(/'/g, "'\\''")}'`).join('\n');
     fs.writeFileSync(concatFile, concatContent, 'utf8');
     
-    // Use concat demuxer with stream copy (FAST!)
+    // Use concat demuxer with stream copy
     await runFfmpeg((cmd) => {
       return cmd
         .input(concatFile)
         .inputOptions(['-f', 'concat', '-safe', '0'])
         .outputOptions([
-          '-c', 'copy',  // Stream copy - NO RE-ENCODING!
+          '-c', 'copy',
           '-movflags', '+faststart'
         ])
         .output(outputPath);
@@ -410,14 +292,13 @@ async function loopVideoFast({ inputPath, outputPath, loopCount, onProgress }) {
       }
     });
     
-    console.log('[LOOP] Completed fast loop');
+    console.log('[LOOP] Completed');
     return outputPath;
     
   } catch (error) {
     console.error('[LOOP] Error:', error.message);
     throw error;
   } finally {
-    // Cleanup
     try {
       if (fs.existsSync(workDir)) {
         fs.rmSync(workDir, { recursive: true, force: true });
