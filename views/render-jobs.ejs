@@ -1,18 +1,15 @@
 <% layout('layout') -%>
 
 <style>
-<style>
-/* Step-by-Step Flow Styling - SIMPLE & CLEAN */
+/* Step-by-Step Flow Styling - ULTRA CLEAN */
 .step-section {
-  background: rgba(31, 41, 55, 0.4);
-  border-radius: 0.5rem;
-  padding: 1rem;
-  margin-bottom: 0.75rem;
+  padding: 0.75rem 0;
+  margin-bottom: 0.5rem;
   transition: all 0.2s ease;
 }
 
 .step-section:hover {
-  background: rgba(139, 92, 246, 0.08);
+  background: rgba(139, 92, 246, 0.03);
 }
 
 .step-header {
@@ -57,7 +54,7 @@
 
 @media (max-width: 768px) {
   .step-section {
-    padding: 0.75rem;
+    padding: 0.5rem 0;
     margin-bottom: 0.5rem;
   }
   
@@ -343,24 +340,24 @@
         </div>
       </div>
       <div class="step-content">
-        <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+        <div class="grid grid-cols-3 gap-2">
           <div>
             <label class="text-xs font-medium text-gray-300 block mb-1.5">
               <i class="ti ti-clock-hour-4 text-xs mr-1"></i>Hours
             </label>
-            <input type="number" id="durationHours" min="0" value="0" class="w-full bg-dark-700 text-white px-3 py-2 border border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary text-center font-semibold">
+            <input type="number" id="durationHours" min="0" value="0" class="w-full bg-dark-700 text-white px-2 py-2 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary text-center font-semibold">
           </div>
           <div>
             <label class="text-xs font-medium text-gray-300 block mb-1.5">
               <i class="ti ti-clock text-xs mr-1"></i>Minutes
             </label>
-            <input type="number" id="durationMinutes" min="0" max="59" value="0" class="w-full bg-dark-700 text-white px-3 py-2 border border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary text-center font-semibold">
+            <input type="number" id="durationMinutes" min="0" max="59" value="0" class="w-full bg-dark-700 text-white px-2 py-2 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary text-center font-semibold">
           </div>
-          <div class="col-span-2 md:col-span-1">
-            <label class="text-xs font-medium text-gray-300 block mb-1.5">Options</label>
-            <div class="flex items-center gap-2 bg-dark-700 px-3 py-2 rounded-lg border border-gray-600 h-[38px]">
-              <input type="checkbox" id="followAudioDuration" class="w-3.5 h-3.5 rounded border-gray-500 bg-dark-700 text-primary focus:ring-primary">
-              <label for="followAudioDuration" class="text-xs text-gray-300 cursor-pointer whitespace-nowrap">Follow audio</label>
+          <div>
+            <label class="text-xs font-medium text-gray-300 block mb-1.5">Follow</label>
+            <div class="flex items-center justify-center bg-dark-700 px-2 py-2 rounded-lg h-[38px]">
+              <input type="checkbox" id="followAudioDuration" class="w-4 h-4 rounded border-gray-500 bg-dark-700 text-primary focus:ring-primary">
+              <label for="followAudioDuration" class="text-xs text-gray-300 cursor-pointer ml-1.5 hidden md:inline">Audio</label>
             </div>
           </div>
         </div>
@@ -379,7 +376,7 @@
       </div>
       <div class="step-content">
         <!-- Video & Audio Selection Combined -->
-        <div class="bg-gray-800/30 rounded-lg p-3">
+        <div class="p-0">
           <!-- Tabs -->
           <div class="flex items-center justify-between mb-3">
             <div class="flex gap-1">
@@ -409,14 +406,14 @@
           
           <!-- Video Content -->
           <div id="videoMediaContent">
-            <div id="videoList" class="max-h-64 overflow-y-auto bg-gray-700/50 rounded-lg p-2">
+            <div id="videoList" class="max-h-64 overflow-y-auto bg-gray-700/30 rounded-lg p-2">
               <div class="text-xs text-gray-400 text-center py-3">Loading...</div>
             </div>
           </div>
           
           <!-- Audio Content -->
           <div id="audioMediaContent" class="hidden">
-            <div id="audioList" class="max-h-64 overflow-y-auto bg-gray-700/50 rounded-lg p-2">
+            <div id="audioList" class="max-h-64 overflow-y-auto bg-gray-700/30 rounded-lg p-2">
               <div class="text-xs text-gray-400 text-center py-3">Loading...</div>
             </div>
             
@@ -537,21 +534,16 @@
       <div class="step-header">
         <div class="step-number">4</div>
         <div class="step-title">
-          <h4>Advanced Options <span class="text-xs text-gray-500">(Optional)</span></h4>
+          <h4>Advanced <span class="text-xs text-gray-500">(Optional)</span></h4>
           <p>Extra features</p>
         </div>
       </div>
       <div class="step-content">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-3">
+        <div class="flex items-center gap-3">
           <!-- Auto Upload Toggle -->
-          <div class="flex items-center justify-between p-2.5 md:p-3 rounded-lg">
-            <div class="flex items-center gap-2">
-              <i class="ti ti-upload text-primary text-sm"></i>
-              <div>
-                <div class="text-xs font-medium text-white">Auto Upload</div>
-                <p class="text-xs text-gray-500 hidden md:block">To YouTube</p>
-              </div>
-            </div>
+          <div class="flex items-center gap-2">
+            <i class="ti ti-upload text-primary text-sm"></i>
+            <span class="text-xs text-white">Auto Upload</span>
             <label class="relative inline-flex items-center cursor-pointer">
               <input type="checkbox" id="autoUploadToYoutube" class="sr-only peer">
               <div class="w-9 h-5 bg-gray-600 rounded-full peer peer-checked:bg-primary transition-colors"></div>
@@ -560,37 +552,18 @@
           </div>
           
           <!-- Overlay Video -->
-          <div class="p-2.5 md:p-3 rounded-lg">
-            <label class="text-xs font-medium text-white block mb-2 flex items-center gap-1.5">
-              <i class="ti ti-layers-intersect text-sm"></i>
-              Overlay Video
-            </label>
+          <div class="flex items-center gap-2 flex-1">
+            <i class="ti ti-layers-intersect text-blue-400 text-sm"></i>
             <input type="file" id="overlayVideoFile" accept="video/mp4" class="hidden" onchange="handleOverlayVideoUpload(event)">
-            <button onclick="document.getElementById('overlayVideoFile').click()" class="w-full bg-gray-700 hover:bg-gray-600 text-gray-200 px-2 py-1.5 rounded transition-colors flex items-center justify-center gap-1.5 text-xs">
+            <button onclick="document.getElementById('overlayVideoFile').click()" class="flex-1 bg-gray-700 hover:bg-gray-600 text-gray-200 px-2 py-1.5 rounded transition-colors flex items-center justify-center gap-1.5 text-xs">
               <i class="ti ti-upload text-sm"></i>
-              <span id="overlayFileName" class="truncate">Upload MP4</span>
+              <span id="overlayFileName" class="truncate">Overlay</span>
             </button>
             
             <!-- Overlay Options -->
-            <div id="overlayOptions" class="hidden mt-2 space-y-2">
-              <div class="grid grid-cols-2 gap-2">
-                <div>
-                  <label class="text-xs text-gray-400 block mb-1">Blend</label>
-                  <select id="overlayBlendMode" class="w-full bg-gray-700 text-white px-2 py-1 rounded text-xs focus:outline-none focus:ring-1 focus:ring-primary">
-                    <option value="normal">Normal</option>
-                    <option value="screen">Screen</option>
-                    <option value="chromakey">Chroma</option>
-                  </select>
-                </div>
-                <div>
-                  <label class="text-xs text-gray-400 block mb-1">Opacity</label>
-                  <input type="range" id="overlayOpacity" min="0" max="100" value="100" class="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-primary">
-                  <div class="text-xs text-gray-500 text-center" id="overlayOpacityValue">100%</div>
-                </div>
-              </div>
-              <button onclick="removeOverlayVideo()" class="w-full bg-red-500/20 hover:bg-red-500/30 text-red-400 px-2 py-1 rounded text-xs transition-colors flex items-center justify-center gap-1">
+            <div id="overlayOptions" class="hidden">
+              <button onclick="removeOverlayVideo()" class="bg-red-500/20 hover:bg-red-500/30 text-red-400 px-2 py-1.5 rounded text-xs transition-colors">
                 <i class="ti ti-x text-sm"></i>
-                <span>Remove</span>
               </button>
             </div>
           </div>
