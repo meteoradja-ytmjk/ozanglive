@@ -648,6 +648,75 @@
   </div>
 </div>
 
+<!-- Upload to YouTube Modal -->
+<div id="uploadModal" class="fixed inset-0 bg-black/60 modal-backdrop z-50 hidden">
+  <div class="flex items-center justify-center min-h-screen p-4">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-2xl border border-gray-600/50">
+      <div class="flex items-center justify-between p-4 border-b border-gray-600/50">
+        <h3 class="text-lg font-medium">Upload to YouTube</h3>
+        <button onclick="closeUploadModal()" class="text-gray-400 hover:text-white">
+          <i class="ti ti-x text-xl"></i>
+        </button>
+      </div>
+      <div class="p-6">
+        <!-- Video Title (Rename) -->
+        <div class="mb-4">
+          <label class="text-sm font-medium text-white block mb-2">
+            <i class="ti ti-text-size mr-1"></i>Video Title
+          </label>
+          <input type="text" id="uploadTitle" class="w-full bg-dark-700 text-white px-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" placeholder="Enter video title">
+          <p class="text-xs text-gray-400 mt-1">Rename your video before uploading</p>
+        </div>
+        
+        <!-- Target Channel -->
+        <div class="mb-4">
+          <label class="text-sm font-medium text-white block mb-2">
+            <i class="ti ti-brand-youtube mr-1"></i>Target Channel
+          </label>
+          <select id="uploadTargetChannel" class="w-full bg-dark-700 text-white px-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" onchange="loadChannelDefaults()">
+            <option value="">-- Select Channel --</option>
+          </select>
+          <p class="text-xs text-gray-400 mt-1">Channel defaults will be loaded automatically</p>
+        </div>
+        
+        <!-- Channel Defaults Info -->
+        <div id="channelDefaultsInfo" class="hidden mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+          <div class="flex items-start gap-2">
+            <i class="ti ti-info-circle text-blue-400 mt-0.5"></i>
+            <div class="flex-1 text-xs text-blue-300">
+              <strong>Channel Defaults Loaded:</strong>
+              <div id="defaultsPreview" class="mt-2 space-y-1"></div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Upload Progress -->
+        <div id="uploadProgress" class="hidden mb-4">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-sm text-gray-400">Uploading...</span>
+            <span class="text-sm text-primary font-semibold" id="uploadProgressText">0%</span>
+          </div>
+          <div class="w-full bg-gray-600 rounded-full h-3 overflow-hidden">
+            <div class="bg-gradient-to-r from-primary to-secondary h-3 rounded-full transition-all duration-300 ease-out" id="uploadProgressBar" style="width:0%"></div>
+          </div>
+          <p class="text-xs text-gray-400 mt-2" id="uploadStatus">Preparing upload...</p>
+        </div>
+        
+        <!-- Buttons -->
+        <div class="flex gap-2">
+          <button onclick="closeUploadModal()" class="flex-1 px-4 py-2.5 bg-gray-600 hover:bg-gray-500 text-white rounded-lg transition-colors">
+            Cancel
+          </button>
+          <button onclick="processUpload()" id="uploadProcessBtn" class="flex-1 px-4 py-2.5 bg-primary hover:bg-secondary text-white rounded-lg transition-colors">
+            <i class="ti ti-upload mr-1"></i>
+            Upload to YouTube
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 const toArray=(d,k)=>Array.isArray(d)?d:((d && Array.isArray(d[k])) ? d[k] : []);
 const el = {
@@ -723,10 +792,8 @@ async function loadMedia(){
 }
 
 async function uploadJob(id){
-  const r=await fetch(`/api/render/jobs/${id}/upload`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({targetAccountId:el.targetAccountId.value})});
-  const d=await r.json();
-  if(!d.success)return alert(d.message||'Upload gagal');
-  loadJobs();
+  // Open upload modal instead of direct upload
+  openUploadModal(id);
 }
 
 async function deleteJob(id){
@@ -1108,6 +1175,202 @@ async function processLoop() {
     // Re-enable button
     btn.disabled = false;
     btn.innerHTML = '<i class="ti ti-repeat mr-1"></i>Process Loop';
+    progressDiv.classList.add('hidden');
+  }
+}
+
+// ===== UPLOAD TO YOUTUBE FEATURE =====
+let currentUploadJobId = null;
+let currentUploadJob = null;
+let channelDefaults = null;
+
+async function openUploadModal(jobId) {
+  currentUploadJobId = jobId;
+  
+  // Get job details
+  try {
+    const response = await fetch(`/api/render/jobs`);
+    const data = await response.json();
+    const job = toArray(data, 'jobs').find(j => j.id === jobId);
+    
+    if (!job) {
+      alert('Job not found');
+      return;
+    }
+    
+    currentUploadJob = job;
+    
+    // Set default title
+    document.getElementById('uploadTitle').value = job.title || `Render ${jobId}`;
+    
+    // Load accounts
+    await loadAccountsForUpload();
+    
+    // Reset progress
+    document.getElementById('uploadProgress').classList.add('hidden');
+    document.getElementById('channelDefaultsInfo').classList.add('hidden');
+    document.getElementById('uploadProcessBtn').disabled = false;
+    
+    // Show modal
+    document.getElementById('uploadModal').classList.remove('hidden');
+  } catch (err) {
+    console.error('Failed to open upload modal:', err);
+    alert('Failed to load job details');
+  }
+}
+
+function closeUploadModal() {
+  document.getElementById('uploadModal').classList.add('hidden');
+  currentUploadJobId = null;
+  currentUploadJob = null;
+  channelDefaults = null;
+}
+
+async function loadAccountsForUpload() {
+  try {
+    const r = await fetch('/api/youtube/accounts');
+    const d = await r.json();
+    const select = document.getElementById('uploadTargetChannel');
+    select.innerHTML = '<option value="">-- Select Channel --</option>' + 
+      toArray(d, 'accounts').map(a => `<option value="${a.id}">${a.channelName || ('Channel ' + a.id)}</option>`).join('');
+  } catch (err) {
+    console.error('Failed to load accounts:', err);
+  }
+}
+
+async function loadChannelDefaults() {
+  const channelId = document.getElementById('uploadTargetChannel').value;
+  
+  if (!channelId) {
+    document.getElementById('channelDefaultsInfo').classList.add('hidden');
+    channelDefaults = null;
+    return;
+  }
+  
+  try {
+    // Show loading
+    const infoDiv = document.getElementById('channelDefaultsInfo');
+    const previewDiv = document.getElementById('defaultsPreview');
+    infoDiv.classList.remove('hidden');
+    previewDiv.innerHTML = '<div class="text-xs text-gray-400">Loading channel defaults...</div>';
+    
+    // Fetch defaults
+    const response = await fetch(`/api/youtube/channel/${channelId}/defaults`);
+    const data = await response.json();
+    
+    if (!response.ok || !data.success) {
+      throw new Error(data.message || 'Failed to load defaults');
+    }
+    
+    channelDefaults = data.defaults;
+    
+    // Display defaults
+    previewDiv.innerHTML = `
+      <div class="text-gray-300"><strong>Description:</strong> ${channelDefaults.description || 'None'}</div>
+      <div class="text-gray-300"><strong>Tags:</strong> ${channelDefaults.tags?.join(', ') || 'None'}</div>
+      <div class="text-gray-300"><strong>Category:</strong> ${channelDefaults.categoryId || 'Default'}</div>
+      <div class="text-gray-300"><strong>Privacy:</strong> Unlisted (default)</div>
+    `;
+    
+    showToast('✓ Channel defaults loaded');
+  } catch (err) {
+    console.error('Failed to load channel defaults:', err);
+    document.getElementById('channelDefaultsInfo').classList.add('hidden');
+    showToast('⚠ Failed to load channel defaults');
+  }
+}
+
+async function processUpload() {
+  if (!currentUploadJobId || !currentUploadJob) return;
+  
+  const title = document.getElementById('uploadTitle').value.trim();
+  const channelId = document.getElementById('uploadTargetChannel').value;
+  
+  if (!title) {
+    alert('Please enter a video title');
+    return;
+  }
+  
+  if (!channelId) {
+    alert('Please select a target channel');
+    return;
+  }
+  
+  // Disable button and show progress
+  const btn = document.getElementById('uploadProcessBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ti ti-loader animate-spin mr-1"></i>Uploading...';
+  
+  const progressDiv = document.getElementById('uploadProgress');
+  const progressBar = document.getElementById('uploadProgressBar');
+  const progressText = document.getElementById('uploadProgressText');
+  const statusText = document.getElementById('uploadStatus');
+  
+  progressDiv.classList.remove('hidden');
+  progressBar.style.width = '0%';
+  progressText.textContent = '0%';
+  statusText.textContent = 'Preparing upload...';
+  
+  try {
+    // Simulate smooth progress (since actual upload progress is hard to track)
+    let simulatedProgress = 0;
+    const progressInterval = setInterval(() => {
+      if (simulatedProgress < 90) {
+        simulatedProgress += Math.random() * 5;
+        simulatedProgress = Math.min(90, simulatedProgress);
+        progressBar.style.width = simulatedProgress + '%';
+        progressText.textContent = Math.round(simulatedProgress) + '%';
+        
+        if (simulatedProgress < 30) {
+          statusText.textContent = 'Uploading video file...';
+        } else if (simulatedProgress < 60) {
+          statusText.textContent = 'Processing video...';
+        } else {
+          statusText.textContent = 'Finalizing upload...';
+        }
+      }
+    }, 500);
+    
+    // Actual upload request
+    const response = await fetch(`/api/render/jobs/${currentUploadJobId}/upload`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        targetAccountId: channelId,
+        title: title,
+        useChannelDefaults: true
+      })
+    });
+    
+    clearInterval(progressInterval);
+    
+    const data = await response.json();
+    
+    if (!response.ok || !data.success) {
+      throw new Error(data.message || 'Upload failed');
+    }
+    
+    // Complete progress
+    progressBar.style.width = '100%';
+    progressText.textContent = '100%';
+    statusText.textContent = 'Upload completed successfully!';
+    
+    showToast('✓ Video uploaded to YouTube!');
+    showNotification('Upload Complete', `"${title}" has been uploaded to YouTube`);
+    
+    // Close modal and reload jobs
+    setTimeout(() => {
+      closeUploadModal();
+      loadJobs();
+    }, 1500);
+    
+  } catch (error) {
+    console.error('Upload error:', error);
+    alert(error.message || 'Failed to upload video');
+    
+    // Re-enable button
+    btn.disabled = false;
+    btn.innerHTML = '<i class="ti ti-upload mr-1"></i>Upload to YouTube';
     progressDiv.classList.add('hidden');
   }
 }

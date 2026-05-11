@@ -1,23 +1,31 @@
 const { google } = require('googleapis');
 
 class YouTubeService {
-  async uploadRegularVideo(accessToken, { title, description, filePath, privacyStatus = 'unlisted' }) {
+  async uploadRegularVideo(accessToken, { title, description, filePath, privacyStatus = 'unlisted', tags = [], categoryId = '22' }) {
     const oauth2Client = new google.auth.OAuth2();
     oauth2Client.setCredentials({ access_token: accessToken });
     const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
     const fs = require('fs');
 
+    const requestBody = {
+      snippet: {
+        title: title || 'Rendered Video',
+        description: description || '',
+        categoryId: categoryId || '22' // Default: People & Blogs
+      },
+      status: {
+        privacyStatus
+      }
+    };
+    
+    // Add tags if provided
+    if (tags && tags.length > 0) {
+      requestBody.snippet.tags = tags;
+    }
+
     const response = await youtube.videos.insert({
       part: 'snippet,status',
-      requestBody: {
-        snippet: {
-          title: title || 'Rendered Video',
-          description: description || ''
-        },
-        status: {
-          privacyStatus
-        }
-      },
+      requestBody,
       media: {
         body: fs.createReadStream(filePath)
       }

@@ -3822,7 +3822,7 @@ app.post('/api/render/jobs/:id/upload', isAuthenticated, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Output render belum tersedia' });
     }
 
-    const { targetAccountId } = req.body;
+    const { targetAccountId, title, useChannelDefaults } = req.body;
     const accountId = targetAccountId || job.target_account_id;
     if (!accountId) {
       return res.status(400).json({ success: false, message: 'Pilih channel target terlebih dahulu' });
@@ -3834,13 +3834,28 @@ app.post('/api/render/jobs/:id/upload', isAuthenticated, async (req, res) => {
     }
 
     const accessToken = await youtubeService.getAccessToken(account.clientId, account.clientSecret, account.refreshToken);
-    const filePath = path.join(__dirname, 'public', job.output_path);
-    const uploadResult = await youtubeService.uploadRegularVideo(accessToken, {
-      title: job.title || `Render ${job.id}`,
+    
+    // Get channel defaults if requested
+    let uploadOptions = {
+      title: title || job.title || `Render ${job.id}`,
       description: 'Uploaded from Render Jobs',
-      filePath,
+      filePath: path.join(__dirname, 'public', job.output_path),
       privacyStatus: 'unlisted'
-    });
+    };
+    
+    if (useChannelDefaults) {
+      try {
+        const defaults = await youtubeService.getChannelDefaults(accessToken);
+        uploadOptions.description = defaults.description || uploadOptions.description;
+        uploadOptions.tags = defaults.tags || [];
+        uploadOptions.categoryId = defaults.categoryId || '22'; // Default to People & Blogs
+      } catch (err) {
+        console.error('Failed to get channel defaults:', err.message);
+        // Continue with default values
+      }
+    }
+    
+    const uploadResult = await youtubeService.uploadRegularVideo(accessToken, uploadOptions);
 
     await RenderJob.update(job.id, { youtube_video_id: uploadResult?.id || null, target_account_id: accountId, auto_upload: 0 });
     return res.json({ success: true, youtubeVideoId: uploadResult?.id || null });
@@ -6218,6 +6233,47 @@ app.get('/api/youtube/credentials/:id', isAuthenticated, async (req, res) => {
   } catch (error) {
     console.error('Error fetching YouTube credential detail:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch account detail' });
+  }
+});
+
+// Get channel defaults for a specific account
+app.get('/api/youtube/channel/:id/defaults', isAuthenticated, async (req, res) => {
+  try {
+    const accountId = parseInt(req.params.id);
+    const account = await YouTubeCredentials.findById(accountId);
+    
+    if (!account || account.userId !== req.session.userId) {
+      return res.status(404).json({ success: false, message: 'Account not found' });
+    }
+    
+    // Get access token
+    const accessToken = await youtubeService.getAccessToken(
+      account.clientId,
+      account.clientSecret,
+      account.refreshToken
+    );
+    
+    // Get channel defaults
+    const defaults = await youtubeService.getChannelDefaults(accessToken);
+    
+    res.json({
+      success: true,
+      defaults: {
+        title: defaults.title || '',
+        description: defaults.description || '',
+        tags: defaults.tags || [],
+        categoryId: defaults.categoryId || '22',
+        monetizationEnabled: defaults.monetizationEnabled || false,
+        alteredContent: defaults.alteredContent || false
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching channel defaults:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to fetch channel defaults',
+      error: error.message 
+    });
   }
 });
 
