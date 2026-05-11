@@ -459,20 +459,6 @@
                   <span>200%</span>
                 </div>
               </div>
-              
-              <!-- Normalization -->
-              <div class="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg">
-                <div>
-                  <label class="text-xs text-gray-300 font-medium">
-                    <i class="ti ti-waveform text-xs"></i> Audio Normalization
-                  </label>
-                  <p class="text-xs text-gray-500 mt-1">Balance volume across all tracks</p>
-                </div>
-                <label class="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" id="audioNormalize" class="sr-only peer">
-                  <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-violet-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-violet-600"></div>
-                </label>
-              </div>
             </div>
           </div>
         </div>
@@ -540,7 +526,13 @@
 
 <!-- Jobs List -->
 <div class="bg-gray-800 rounded-lg p-4 md:p-6">
-  <h3 class="text-lg font-semibold mb-4">Daftar Render Jobs</h3>
+  <div class="flex items-center justify-between mb-4">
+    <h3 class="text-lg font-semibold">Daftar Render Jobs</h3>
+    <button onclick="loadJobs()" class="flex items-center gap-2 px-3 py-2 bg-primary/20 hover:bg-primary/30 text-primary rounded-lg text-sm font-medium transition-colors">
+      <i class="ti ti-refresh"></i>
+      <span>Refresh</span>
+    </button>
+  </div>
   <div id="jobs">
     <div class="text-sm text-gray-400 text-center py-8">Belum ada job</div>
   </div>
@@ -2688,7 +2680,6 @@ function resetAudioSettings() {
   document.getElementById('audioFadeOut').value = 0;
   document.getElementById('audioVolume').value = 100;
   document.getElementById('volumeValue').textContent = '100%';
-  document.getElementById('audioNormalize').checked = false;
   
   showToast('Audio settings reset');
 }
@@ -2705,8 +2696,7 @@ function getAdvancedAudioSettings() {
   return {
     fadeIn: parseFloat(document.getElementById('audioFadeIn')?.value || 0),
     fadeOut: parseFloat(document.getElementById('audioFadeOut')?.value || 0),
-    volume: parseInt(document.getElementById('audioVolume')?.value || 100),
-    normalize: document.getElementById('audioNormalize')?.checked || false
+    volume: parseInt(document.getElementById('audioVolume')?.value || 100)
   };
 }
 
