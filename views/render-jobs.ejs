@@ -740,6 +740,7 @@ async function loadJobs(){
   const cards=toArray(d,'jobs').map(j=>{
     const progress = Math.max(0,Math.min(100,Number(j.progress||0)));
     const isActive = j.status === 'processing' || j.status === 'pending';
+    const isLooped = !j.output_path && j.error_message && j.error_message.includes('looped');
     
     // Calculate ETA
     let etaText = '';
@@ -766,7 +767,7 @@ async function loadJobs(){
     const offset = circumference - (progress / 100) * circumference;
     
     return `
-    <div class="bg-dark-700 rounded-lg p-4 border border-gray-600 hover:border-primary transition-colors mb-3" data-job-id="${j.id}">
+    <div class="bg-dark-700 rounded-lg p-4 border ${isLooped ? 'border-yellow-500/30' : 'border-gray-600'} hover:border-primary transition-colors mb-3" data-job-id="${j.id}">
       <div class="flex items-start justify-between mb-3">
         <div class="flex items-start gap-3 flex-1">
           <!-- Circular Progress -->
@@ -805,6 +806,18 @@ async function loadJobs(){
         <span class="text-gray-400">${progress}% complete</span>
         <span class="text-gray-400">Target: ${j.target_duration_seconds||0}s</span>
       </div>
+      
+      ${isLooped ? `
+        <div class="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 mb-3">
+          <div class="flex items-start gap-2">
+            <i class="ti ti-repeat text-yellow-400 mt-0.5"></i>
+            <div class="flex-1">
+              <p class="text-xs text-yellow-400 font-medium mb-1">Video Looped</p>
+              <p class="text-xs text-gray-400">${j.error_message}</p>
+            </div>
+          </div>
+        </div>
+      ` : ''}
       
       ${j.output_path?`<video controls preload="metadata" src="${j.output_path}" class="w-full rounded-lg mb-3 bg-black" data-video-id="${j.id}"></video>`:''}
       
