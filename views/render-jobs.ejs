@@ -421,7 +421,7 @@
             <div id="advancedAudioSettings" class="hidden mt-3 p-3 bg-violet-500/10 rounded-lg space-y-3">
               <div class="flex items-center justify-between mb-3">
                 <h4 class="text-sm font-semibold text-violet-400">
-                  <i class="ti ti-adjustments-horizontal mr-2"></i>Advanced Audio Settings
+                  <i class="ti ti-adjustments-horizontal mr-2"></i>Audio Settings
                 </h4>
                 <button type="button" onclick="resetAudioSettings()" class="text-xs text-gray-400 hover:text-white transition-colors">
                   <i class="ti ti-refresh text-xs"></i> Reset
@@ -460,16 +460,6 @@
                 </div>
               </div>
               
-              <!-- Crossfade -->
-              <div>
-                <label class="block text-xs text-gray-400 mb-2">
-                  <i class="ti ti-arrows-shuffle text-xs"></i> Crossfade Between Tracks (seconds)
-                </label>
-                <input type="number" id="audioCrossfade" min="0" max="5" step="0.5" value="0" 
-                  class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-violet-500">
-                <p class="text-xs text-gray-500 mt-1">Smooth transition between audio tracks</p>
-              </div>
-              
               <!-- Normalization -->
               <div class="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg">
                 <div>
@@ -483,98 +473,16 @@
                   <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-violet-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-violet-600"></div>
                 </label>
               </div>
-              
-              <!-- Dual Layer Audio -->
-              <div class="border-t border-gray-700 pt-4">
-                <div class="flex items-center justify-between mb-3">
-                  <label class="text-xs text-gray-300 font-medium">
-                    <i class="ti ti-layers-linked text-xs"></i> Dual Audio Layer
-                  </label>
-                  <label class="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" id="enableDualAudio" class="sr-only peer">
-                    <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-violet-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-violet-600"></div>
-                  </label>
-                </div>
-                
-                <div id="dualAudioControls" class="hidden space-y-3">
-                  <p class="text-xs text-gray-500">Mix background music with voiceover/narration</p>
-                  
-                  <div>
-                    <label class="block text-xs text-gray-400 mb-2">Background Music Volume: <span id="bgVolumeValue" class="text-violet-400">30%</span></label>
-                    <input type="range" id="bgMusicVolume" min="0" max="100" value="30" 
-                      class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-violet-500">
-                  </div>
-                  
-                  <div>
-                    <label class="block text-xs text-gray-400 mb-2">Voiceover Volume: <span id="voiceVolumeValue" class="text-violet-400">100%</span></label>
-                    <input type="range" id="voiceoverVolume" min="0" max="100" value="100" 
-                      class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-violet-500">
-                  </div>
-                  
-                  <div class="bg-gray-700/50 rounded-lg p-3">
-                    <p class="text-xs text-gray-400 mb-2">
-                      <i class="ti ti-info-circle text-xs"></i> How it works:
-                    </p>
-                    <ul class="text-xs text-gray-500 space-y-1 ml-4">
-                      <li>• First audio = Background music (lower volume)</li>
-                      <li>• Other audios = Voiceover/narration (full volume)</li>
-                      <li>• Both layers mixed together</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
         </div>
       </div>
     </div>
     
-    <!-- STEP 4: Advanced Options (Optional) -->
+    <!-- STEP 4: Start Render -->
     <div class="step-section">
       <div class="step-header">
         <div class="step-number">4</div>
-        <div class="step-title">
-          <h4>Advanced <span class="text-xs text-gray-500">(Optional)</span></h4>
-          <p>Extra features</p>
-        </div>
-      </div>
-      <div class="step-content">
-        <div class="flex items-center gap-3">
-          <!-- Auto Upload Toggle -->
-          <div class="flex items-center gap-2">
-            <i class="ti ti-upload text-primary text-sm"></i>
-            <span class="text-xs text-white">Auto Upload</span>
-            <label class="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" id="autoUploadToYoutube" class="sr-only peer">
-              <div class="w-9 h-5 bg-gray-600 rounded-full peer peer-checked:bg-primary transition-colors"></div>
-              <div class="absolute left-[2px] top-[2px] w-4 h-4 bg-white rounded-full transition-all peer-checked:translate-x-4"></div>
-            </label>
-          </div>
-          
-          <!-- Overlay Video -->
-          <div class="flex items-center gap-2 flex-1">
-            <i class="ti ti-layers-intersect text-blue-400 text-sm"></i>
-            <input type="file" id="overlayVideoFile" accept="video/mp4" class="hidden" onchange="handleOverlayVideoUpload(event)">
-            <button onclick="document.getElementById('overlayVideoFile').click()" class="flex-1 bg-gray-700 hover:bg-gray-600 text-gray-200 px-2 py-1.5 rounded transition-colors flex items-center justify-center gap-1.5 text-xs">
-              <i class="ti ti-upload text-sm"></i>
-              <span id="overlayFileName" class="truncate">Overlay</span>
-            </button>
-            
-            <!-- Overlay Options -->
-            <div id="overlayOptions" class="hidden">
-              <button onclick="removeOverlayVideo()" class="bg-red-500/20 hover:bg-red-500/30 text-red-400 px-2 py-1.5 rounded text-xs transition-colors">
-                <i class="ti ti-x text-sm"></i>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    
-    <!-- STEP 5: Start Render -->
-    <div class="step-section">
-      <div class="step-header">
-        <div class="step-number">5</div>
         <div class="step-title">
           <h4>Ready to Render!</h4>
           <p>Start your job</p>
@@ -602,14 +510,14 @@
 </div>
 
 <!-- Advanced Features Grid -->
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+<div class="grid grid-cols-1 gap-4 mb-6">
   
   <!-- Mini Live Preview -->
   <div class="bg-gray-800 rounded-lg p-4">
     <div class="flex items-center justify-between mb-3">
       <h3 class="text-sm font-semibold text-white flex items-center gap-2">
         <i class="ti ti-eye text-primary"></i>
-        Realtime Preview
+        Video Preview
       </h3>
       <button onclick="refreshMiniPreview()" class="text-xs text-gray-400 hover:text-primary transition-colors">
         <i class="ti ti-refresh"></i> Refresh
@@ -620,284 +528,11 @@
         <i class="ti ti-video text-4xl mb-2"></i>
         <span class="text-xs">Select videos to preview</span>
       </div>
-      
-      <!-- Overlay Preview Layer -->
-      <div id="overlayPreviewLayer" class="absolute inset-0 pointer-events-none hidden">
-        <video id="overlayPreviewVideo" class="w-full h-full object-cover" muted loop></video>
-      </div>
-      
-      <!-- Watermark Preview Layer -->
-      <div id="watermarkPreviewLayer" class="absolute inset-0 pointer-events-none hidden">
-        <img id="watermarkPreviewImage" class="watermark-overlay bottom-right" src="" alt="Watermark">
-      </div>
-      
-      <!-- Visualizer Preview Layer -->
-      <canvas id="visualizerPreviewCanvas" class="absolute bottom-0 left-0 right-0 h-16 pointer-events-none hidden"></canvas>
     </div>
     <div class="mt-2 text-xs text-gray-400" id="previewInfo">
       <div class="flex items-center justify-between">
         <span>No preview available</span>
-        <div class="flex gap-2">
-          <span id="previewFeatures" class="text-primary"></span>
-        </div>
       </div>
-    </div>
-  </div>
-  
-  <!-- Advanced Visualizer -->
-  <div class="bg-gray-800 rounded-lg p-4">
-    <div class="flex items-center justify-between mb-3">
-      <h3 class="text-sm font-semibold text-white flex items-center gap-2">
-        <i class="ti ti-waveform text-primary"></i>
-        Advanced Visualizer
-      </h3>
-      <button onclick="toggleVisualizerSettings()" class="text-xs text-gray-400 hover:text-primary">
-        <i class="ti ti-settings"></i>
-      </button>
-    </div>
-    
-    <div class="space-y-3">
-      <!-- Preset Selection -->
-      <div>
-        <label class="text-xs font-medium text-gray-300 block mb-2">Visualizer Type</label>
-        <select id="visualizerType" class="w-full bg-dark-700 text-white px-3 py-2 border border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary" onchange="updateVisualizerType()">
-          <option value="none">No Visualizer</option>
-          <option value="spectrum">Audio Spectrum</option>
-          <option value="bars">Frequency Bars</option>
-          <option value="wave">Waveform</option>
-          <option value="circular">Circular Spectrum</option>
-          <option value="particles">Audio Particles</option>
-          <option value="custom">Custom JSON</option>
-        </select>
-      </div>
-      
-      <!-- Custom JSON Upload Section -->
-      <div id="customJsonSection" class="hidden">
-        <label class="text-xs font-medium text-gray-300 block mb-2">
-          Custom Spectrum Files (.json)
-          <span class="text-gray-500 ml-1">(Multiple files supported)</span>
-        </label>
-        <input type="file" id="spectrumJsonFiles" accept=".json" multiple class="hidden" onchange="handleSpectrumJsonUpload(event)">
-        <button onclick="document.getElementById('spectrumJsonFiles').click()" class="w-full bg-dark-700 hover:bg-dark-600 border border-gray-600 text-gray-300 px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-center gap-2">
-          <i class="ti ti-upload"></i>
-          <span>Upload JSON Spectrum Files</span>
-        </button>
-        
-        <!-- Uploaded Files List -->
-        <div id="spectrumFilesList" class="mt-2 space-y-1 max-h-32 overflow-y-auto">
-          <!-- Files will be listed here -->
-        </div>
-        
-        <!-- JSON Format Guide -->
-        <div class="mt-2 p-2 bg-blue-500/10 border border-blue-500/30 rounded text-xs text-blue-300">
-          <div class="flex items-start gap-2">
-            <i class="ti ti-info-circle mt-0.5"></i>
-            <div>
-              <strong>JSON Format:</strong>
-              <pre class="mt-1 text-xs bg-black/30 p-2 rounded overflow-x-auto">{
-  "name": "My Spectrum",
-  "type": "bars|wave|circular",
-  "bars": 64,
-  "smoothing": 0.8,
-  "colors": ["#8B5CF6", "#EC4899"],
-  "sensitivity": 1.5,
-  "mirror": true
-}</pre>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <!-- Advanced Settings (Collapsible) -->
-      <div id="visualizerAdvancedSettings" class="collapsible-content">
-        <div class="space-y-3 pt-2 border-t border-gray-700">
-          <!-- Intensity -->
-          <div>
-            <label class="text-xs font-medium text-gray-300 block mb-2 flex items-center justify-between">
-              <span>Intensity</span>
-              <span id="intensityValue" class="text-primary">50%</span>
-            </label>
-            <input type="range" id="visualizerIntensity" min="0" max="100" value="50" class="w-full h-2 bg-dark-700 rounded-lg appearance-none cursor-pointer accent-primary">
-          </div>
-          
-          <!-- Sensitivity -->
-          <div>
-            <label class="text-xs font-medium text-gray-300 block mb-2 flex items-center justify-between">
-              <span>Audio Sensitivity</span>
-              <span id="sensitivityValue" class="text-primary">1.0x</span>
-            </label>
-            <input type="range" id="visualizerSensitivity" min="0.5" max="3" step="0.1" value="1.0" class="w-full h-2 bg-dark-700 rounded-lg appearance-none cursor-pointer accent-primary">
-          </div>
-          
-          <!-- Smoothing -->
-          <div>
-            <label class="text-xs font-medium text-gray-300 block mb-2 flex items-center justify-between">
-              <span>Smoothing</span>
-              <span id="smoothingValue" class="text-primary">0.8</span>
-            </label>
-            <input type="range" id="visualizerSmoothing" min="0" max="1" step="0.1" value="0.8" class="w-full h-2 bg-dark-700 rounded-lg appearance-none cursor-pointer accent-primary">
-          </div>
-          
-          <!-- Bar Count -->
-          <div>
-            <label class="text-xs font-medium text-gray-300 block mb-2 flex items-center justify-between">
-              <span>Bar Count</span>
-              <span id="barCountValue" class="text-primary">64</span>
-            </label>
-            <input type="range" id="visualizerBarCount" min="16" max="128" step="8" value="64" class="w-full h-2 bg-dark-700 rounded-lg appearance-none cursor-pointer accent-primary">
-          </div>
-          
-          <!-- Color Scheme -->
-          <div>
-            <label class="text-xs font-medium text-gray-300 block mb-2">Color Scheme</label>
-            <select id="visualizerColor" class="w-full bg-dark-700 text-white px-3 py-2 border border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary">
-              <option value="purple">Purple Gradient</option>
-              <option value="blue">Blue Wave</option>
-              <option value="green">Green Pulse</option>
-              <option value="rainbow">Rainbow</option>
-              <option value="fire">Fire</option>
-              <option value="neon">Neon Glow</option>
-              <option value="ocean">Ocean Deep</option>
-              <option value="sunset">Sunset</option>
-            </select>
-          </div>
-          
-          <!-- Mirror Effect -->
-          <div class="flex items-center justify-between p-2 bg-dark-700 rounded-lg border border-gray-600">
-            <span class="text-xs font-medium text-gray-300">Mirror Effect</span>
-            <label class="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" id="visualizerMirror" class="sr-only peer">
-              <div class="w-9 h-5 bg-gray-600 rounded-full peer peer-checked:bg-primary transition-colors"></div>
-              <div class="absolute left-[2px] top-[2px] w-4 h-4 bg-white rounded-full transition-all peer-checked:translate-x-4"></div>
-            </label>
-          </div>
-          
-          <!-- Glow Effect -->
-          <div class="flex items-center justify-between p-2 bg-dark-700 rounded-lg border border-gray-600">
-            <span class="text-xs font-medium text-gray-300">Glow Effect</span>
-            <label class="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" id="visualizerGlow" class="sr-only peer" checked>
-              <div class="w-9 h-5 bg-gray-600 rounded-full peer peer-checked:bg-primary transition-colors"></div>
-              <div class="absolute left-[2px] top-[2px] w-4 h-4 bg-white rounded-full transition-all peer-checked:translate-x-4"></div>
-            </label>
-          </div>
-        </div>
-      </div>
-      
-      <!-- Live Preview -->
-      <div class="visualizer-preview" id="visualizerPreviewBox">
-        <div class="visualizer-bars" id="visualizerBars">
-          <!-- Bars will be generated dynamically -->
-        </div>
-      </div>
-      
-      <!-- Preset Actions -->
-      <div class="grid grid-cols-2 gap-2">
-        <button onclick="saveVisualizerPreset()" class="bg-primary/20 hover:bg-primary/30 border border-primary/50 text-primary px-3 py-2 rounded-lg text-xs transition-colors flex items-center justify-center gap-1">
-          <i class="ti ti-device-floppy"></i>
-          <span>Save Preset</span>
-        </button>
-        <button onclick="loadVisualizerPreset()" class="bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-400 px-3 py-2 rounded-lg text-xs transition-colors flex items-center justify-center gap-1">
-          <i class="ti ti-folder-open"></i>
-          <span>Load Preset</span>
-        </button>
-      </div>
-    </div>
-  </div>
-  
-  <!-- Watermark & Batch Queue Combined -->
-  <div class="bg-gray-800 rounded-lg p-4">
-    <!-- Tabs -->
-    <div class="flex border-b border-gray-700 mb-4">
-      <button onclick="switchWatermarkBatchTab('watermark')" id="watermarkTabBtn" class="flex-1 px-4 py-2 text-sm font-medium transition-colors border-b-2 border-primary text-primary">
-        <i class="ti ti-photo mr-1"></i>Watermark
-      </button>
-      <button onclick="switchWatermarkBatchTab('batch')" id="batchTabBtn" class="flex-1 px-4 py-2 text-sm font-medium transition-colors border-b-2 border-transparent text-gray-400 hover:text-white">
-        <i class="ti ti-list-check mr-1"></i>Batch Queue
-        <span class="ml-1 bg-primary/20 text-primary px-1.5 py-0.5 rounded-full text-xs" id="batchCountTab">0</span>
-      </button>
-    </div>
-    
-    <!-- Watermark Content -->
-    <div id="watermarkContent" class="space-y-3">
-      <div>
-        <label class="text-xs font-medium text-gray-300 block mb-2 flex items-center justify-between">
-          <span>
-            Upload Watermark Image
-            <span class="text-gray-500 ml-1">(PNG/JPG supported)</span>
-          </span>
-          <span class="text-xs text-primary" id="watermarkCount">0 files</span>
-        </label>
-        <input type="file" id="watermarkFile" accept="image/png,image/jpeg,image/jpg" class="hidden" onchange="handleWatermarkUpload(event)">
-        <button onclick="document.getElementById('watermarkFile').click()" class="w-full bg-dark-700 hover:bg-dark-600 border border-gray-600 text-gray-300 px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-center gap-2">
-          <i class="ti ti-upload"></i>
-          <span>Upload Image</span>
-        </button>
-      </div>
-      
-      <!-- Uploaded Watermarks List -->
-      <div id="watermarkFilesList" class="space-y-2 max-h-48 overflow-y-auto">
-        <!-- Watermark files will be listed here -->
-        <div class="text-xs text-gray-400 text-center py-4">
-          <i class="ti ti-photo-off text-2xl mb-2 block"></i>
-          No watermarks uploaded yet
-        </div>
-      </div>
-      
-      <!-- Bulk Actions -->
-      <div id="watermarkBulkActions" class="hidden">
-        <button onclick="clearAllWatermarks()" class="w-full bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-400 px-3 py-2 rounded-lg text-xs transition-colors flex items-center justify-center gap-2">
-          <i class="ti ti-trash"></i>
-          <span>Clear All Watermarks</span>
-        </button>
-      </div>
-      
-      <div class="grid grid-cols-2 gap-3">
-        <div>
-          <label class="text-xs font-medium text-gray-300 block mb-2">Position</label>
-          <select id="watermarkPosition" class="w-full bg-dark-700 text-white px-3 py-2 border border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary" onchange="updateWatermarkPreview()">
-            <option value="top-left">Top Left</option>
-            <option value="top-right">Top Right</option>
-            <option value="bottom-left">Bottom Left</option>
-            <option value="bottom-right" selected>Bottom Right</option>
-            <option value="center">Center</option>
-          </select>
-        </div>
-        <div>
-          <label class="text-xs font-medium text-gray-300 block mb-2">Opacity</label>
-          <input type="range" id="watermarkOpacity" min="0" max="100" value="70" class="w-full h-2 bg-dark-700 rounded-lg appearance-none cursor-pointer accent-primary" onchange="updateWatermarkPreview()">
-          <div class="text-xs text-gray-500 text-center mt-1" id="opacityValue">70%</div>
-        </div>
-      </div>
-      <div class="watermark-preview" id="watermarkPreviewBox">
-        <div class="flex items-center justify-center h-full text-gray-500 text-xs">
-          <span>Watermark preview</span>
-        </div>
-        <img id="watermarkOverlay" class="watermark-overlay bottom-right hidden" src="" alt="Watermark">
-      </div>
-    </div>
-    
-    <!-- Batch Queue Content -->
-    <div id="batchContent" class="hidden space-y-3">
-      <div class="space-y-2 max-h-64 overflow-y-auto" id="batchQueueList">
-        <div class="text-xs text-gray-400 text-center py-4">
-          No items in queue
-        </div>
-      </div>
-      <div class="grid grid-cols-2 gap-2">
-        <button onclick="addToBatchQueue()" class="bg-primary/20 hover:bg-primary/30 border border-primary/50 text-primary px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-center gap-2">
-          <i class="ti ti-plus"></i>
-          <span>Add to Queue</span>
-        </button>
-        <button onclick="clearBatchQueue()" class="bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-400 px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-center gap-2">
-          <i class="ti ti-trash"></i>
-          <span>Clear All</span>
-        </button>
-      </div>
-      <button onclick="processBatchQueue()" class="w-full bg-green-500/20 hover:bg-green-500/30 border border-green-500/50 text-green-400 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2">
-        <i class="ti ti-player-play"></i>
-        <span>Process Queue</span>
-      </button>
     </div>
   </div>
   
@@ -1247,46 +882,17 @@ if (el.createBtn) {
       const audioIds=[...document.querySelectorAll("input[name='audio']:checked")].map(i=>i.value);
       if(videoIds.length===0)return alert('Pilih minimal 1 video');
       
-      // Get visualizer settings
-      const visualizerSettings = {
-        type: visualizerType?.value || 'none',
-        intensity: visualizerIntensity?.value || 50,
-        sensitivity: visualizerSensitivity?.value || 1.0,
-        smoothing: visualizerSmoothing?.value || 0.8,
-        barCount: visualizerBarCount?.value || 64,
-        color: visualizerColor?.value || 'purple',
-        mirror: visualizerMirror?.checked || false,
-        glow: visualizerGlow?.checked || false,
-        customConfig: currentVisualizerConfig || null
-      };
-      
-      // Get watermark settings
-      const watermarkSettings = (activeWatermarkIndex !== null && uploadedWatermarks[activeWatermarkIndex]) ? {
-        image: uploadedWatermarks[activeWatermarkIndex].data,
-        fileName: uploadedWatermarks[activeWatermarkIndex].name,
-        position: document.getElementById('watermarkPosition')?.value || 'bottom-right',
-        opacity: document.getElementById('watermarkOpacity')?.value || 70
-      } : null;
-      
       const renderData = {
         title:titleV,
         targetDurationSeconds,
         durationHours:h,
         durationMinutes:m,
         targetAccountId:el.targetAccountId.value,
-        autoUploadToYoutube:el.autoUploadToYoutube.checked,
+        autoUploadToYoutube:false,
         followAudioDuration:el.followAudioDuration.checked,
         videoIds,
         audioIds,
-        advancedAudio: getAdvancedAudioSettings(),
-        visualizerSettings: visualizerSettings,
-        watermark: watermarkSettings,
-        overlayVideo: overlayVideoData ? {
-          data: overlayVideoData,
-          fileName: overlayVideoFile?.name || 'overlay.mp4',
-          blendMode: document.getElementById('overlayBlendMode')?.value || 'normal',
-          opacity: document.getElementById('overlayOpacity')?.value || 100
-        } : null
+        advancedAudio: getAdvancedAudioSettings()
       };
       
       const resp=await fetch('/api/render/jobs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(renderData)});
@@ -3082,14 +2688,7 @@ function resetAudioSettings() {
   document.getElementById('audioFadeOut').value = 0;
   document.getElementById('audioVolume').value = 100;
   document.getElementById('volumeValue').textContent = '100%';
-  document.getElementById('audioCrossfade').value = 0;
   document.getElementById('audioNormalize').checked = false;
-  document.getElementById('enableDualAudio').checked = false;
-  document.getElementById('dualAudioControls')?.classList.add('hidden');
-  document.getElementById('bgMusicVolume').value = 30;
-  document.getElementById('bgVolumeValue').textContent = '30%';
-  document.getElementById('voiceoverVolume').value = 100;
-  document.getElementById('voiceVolumeValue').textContent = '100%';
   
   showToast('Audio settings reset');
 }
@@ -3107,13 +2706,7 @@ function getAdvancedAudioSettings() {
     fadeIn: parseFloat(document.getElementById('audioFadeIn')?.value || 0),
     fadeOut: parseFloat(document.getElementById('audioFadeOut')?.value || 0),
     volume: parseInt(document.getElementById('audioVolume')?.value || 100),
-    crossfade: parseFloat(document.getElementById('audioCrossfade')?.value || 0),
-    normalize: document.getElementById('audioNormalize')?.checked || false,
-    dualLayer: {
-      enabled: document.getElementById('enableDualAudio')?.checked || false,
-      bgVolume: parseInt(document.getElementById('bgMusicVolume')?.value || 30),
-      voiceVolume: parseInt(document.getElementById('voiceoverVolume')?.value || 100)
-    }
+    normalize: document.getElementById('audioNormalize')?.checked || false
   };
 }
 
