@@ -2797,6 +2797,20 @@ app.get('/api/videos', isAuthenticated, async (req, res) => {
     res.status(500).json({ success: false, error: 'Failed to fetch videos' });
   }
 });
+
+app.get('/api/videos/:id', isAuthenticated, async (req, res) => {
+  try {
+    const video = await Video.findById(req.params.id);
+    if (!video || video.user_id !== req.session.userId) {
+      return res.status(404).json({ success: false, error: 'Video not found' });
+    }
+    res.json({ success: true, video });
+  } catch (error) {
+    console.error('Error fetching video:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch video' });
+  }
+});
+
 app.post('/api/videos/delete-folder', isAuthenticated, canDeleteVideos, async (req, res) => {
   try {
     const videoIds = Array.isArray(req.body?.videoIds) ? req.body.videoIds : [];
@@ -3585,7 +3599,24 @@ app.get('/api/stream/content', isAuthenticated, async (req, res) => {
 
 app.post('/api/render/jobs', isAuthenticated, async (req, res) => {
   try {
-    const { title, videoIds, audioIds, targetDurationSeconds, durationHours, durationMinutes, targetAccountId, autoUploadToYoutube, scheduledUploadAt, visualizerPreset, followAudioDuration } = req.body;
+    const { 
+      title, 
+      videoIds, 
+      audioIds, 
+      targetDurationSeconds, 
+      durationHours, 
+      durationMinutes, 
+      targetAccountId, 
+      autoUploadToYoutube, 
+      scheduledUploadAt, 
+      visualizerPreset, 
+      followAudioDuration,
+      advancedAudio,
+      watermark,
+      overlayVideo,
+      visualizerSettings
+    } = req.body;
+    
     if (!Array.isArray(videoIds) || videoIds.length === 0) {
       return res.status(400).json({ success: false, message: 'videoIds wajib diisi minimal 1' });
     }
@@ -3637,7 +3668,10 @@ app.post('/api/render/jobs', isAuthenticated, async (req, res) => {
           targetDurationSeconds: target,
           visualizerPreset: visualizerPreset || 'none',
           followAudioDuration: !!followAudioDuration,
-          advancedAudio: req.body.advancedAudio || {}, // Pass advanced audio settings
+          advancedAudio: advancedAudio || {},
+          watermark: watermark || null,
+          overlayVideo: overlayVideo || null,
+          visualizerSettings: visualizerSettings || null,
           onProgress: async (progressPercent) => {
             if (Number.isFinite(progressPercent) && progressPercent > 10) {
               await RenderJob.update(job.id, { progress: progressPercent });

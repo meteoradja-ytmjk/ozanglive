@@ -1229,6 +1229,27 @@ if (el.createBtn) {
       const audioIds=[...document.querySelectorAll("input[name='audio']:checked")].map(i=>i.value);
       if(videoIds.length===0)return alert('Pilih minimal 1 video');
       
+      // Get visualizer settings
+      const visualizerSettings = {
+        type: visualizerType?.value || 'none',
+        intensity: visualizerIntensity?.value || 50,
+        sensitivity: visualizerSensitivity?.value || 1.0,
+        smoothing: visualizerSmoothing?.value || 0.8,
+        barCount: visualizerBarCount?.value || 64,
+        color: visualizerColor?.value || 'purple',
+        mirror: visualizerMirror?.checked || false,
+        glow: visualizerGlow?.checked || false,
+        customConfig: currentVisualizerConfig || null
+      };
+      
+      // Get watermark settings
+      const watermarkSettings = (activeWatermarkIndex !== null && uploadedWatermarks[activeWatermarkIndex]) ? {
+        image: uploadedWatermarks[activeWatermarkIndex].data,
+        fileName: uploadedWatermarks[activeWatermarkIndex].name,
+        position: document.getElementById('watermarkPosition')?.value || 'bottom-right',
+        opacity: document.getElementById('watermarkOpacity')?.value || 70
+      } : null;
+      
       const renderData = {
         title:titleV,
         targetDurationSeconds,
@@ -1239,7 +1260,9 @@ if (el.createBtn) {
         followAudioDuration:el.followAudioDuration.checked,
         videoIds,
         audioIds,
-        advancedAudio: getAdvancedAudioSettings(), // Advanced audio features
+        advancedAudio: getAdvancedAudioSettings(),
+        visualizerSettings: visualizerSettings,
+        watermark: watermarkSettings,
         overlayVideo: overlayVideoData ? {
           data: overlayVideoData,
           fileName: overlayVideoFile?.name || 'overlay.mp4',
@@ -1871,14 +1894,26 @@ function refreshMiniPreview() {
   fetch(`/api/videos/${videoIds[0]}`)
     .then(r => r.json())
     .then(data => {
-      if (data.video && data.video.file_path) {
-        miniPreview.innerHTML = `<video src="${data.video.file_path}" controls muted loop class="w-full h-full object-cover"></video>`;
-        previewInfo.textContent = `Previewing: ${data.video.title} (${videoIds.length} video${videoIds.length > 1 ? 's' : ''} selected)`;
+      if (data.video && data.video.filepath) {
+        const videoPath = data.video.filepath.startsWith('/') ? data.video.filepath : '/' + data.video.filepath;
+        miniPreview.innerHTML = `<video src="${videoPath}" controls muted loop class="w-full h-full object-cover"></video>`;
+        previewInfo.innerHTML = `
+          <div class="flex items-center justify-between">
+            <span>Previewing: ${data.video.title}</span>
+            <span class="text-primary">${videoIds.length} video${videoIds.length > 1 ? 's' : ''} selected</span>
+          </div>
+        `;
       }
     })
     .catch(err => {
       console.error('Preview error:', err);
-      previewInfo.textContent = 'Preview unavailable';
+      miniPreview.innerHTML = `
+        <div class="mini-preview-placeholder">
+          <i class="ti ti-alert-circle text-4xl mb-2 text-red-400"></i>
+          <span class="text-xs text-red-400">Preview unavailable</span>
+        </div>
+      `;
+      previewInfo.textContent = 'Error loading preview';
     });
 }
 
@@ -2542,6 +2577,27 @@ function addToBatchQueue() {
     return;
   }
   
+  // Get visualizer settings
+  const visualizerSettings = {
+    type: visualizerType?.value || 'none',
+    intensity: visualizerIntensity?.value || 50,
+    sensitivity: visualizerSensitivity?.value || 1.0,
+    smoothing: visualizerSmoothing?.value || 0.8,
+    barCount: visualizerBarCount?.value || 64,
+    color: visualizerColor?.value || 'purple',
+    mirror: visualizerMirror?.checked || false,
+    glow: visualizerGlow?.checked || false,
+    customConfig: currentVisualizerConfig || null
+  };
+  
+  // Get watermark settings
+  const watermarkSettings = (activeWatermarkIndex !== null && uploadedWatermarks[activeWatermarkIndex]) ? {
+    image: uploadedWatermarks[activeWatermarkIndex].data,
+    fileName: uploadedWatermarks[activeWatermarkIndex].name,
+    position: document.getElementById('watermarkPosition')?.value || 'bottom-right',
+    opacity: document.getElementById('watermarkOpacity')?.value || 70
+  } : null;
+  
   const queueItem = {
     id: Date.now(),
     title: titleV || `Render ${batchQueue.length + 1}`,
@@ -2550,37 +2606,30 @@ function addToBatchQueue() {
     targetDurationSeconds: (h * 3600) + (m * 60),
     targetAccountId: el.targetAccountId.value,
     autoUploadToYoutube: el.autoUploadToYoutube.checked,
-    visualizerPreset: 'none', // Deprecated, kept for compatibility
-    visualizerIntensity: visualizerIntensity?.value || 50,
-    visualizerColor: visualizerColor?.value || 'purple',
     followAudioDuration: el.followAudioDuration.checked,
     videoIds: videoIds,
     audioIds: audioIds,
+    advancedAudio: getAdvancedAudioSettings(),
+    visualizerSettings: visualizerSettings,
+    watermark: watermarkSettings,
     overlayVideo: overlayVideoData ? {
       data: overlayVideoData,
       fileName: overlayVideoFile?.name || 'overlay.mp4',
       blendMode: document.getElementById('overlayBlendMode')?.value || 'normal',
       opacity: document.getElementById('overlayOpacity')?.value || 100
     } : null,
-    watermark: watermarkImageData ? {
-      image: watermarkImageData,
-      position: document.getElementById('watermarkPosition')?.value || 'bottom-right',
-      opacity: document.getElementById('watermarkOpacity')?.value || 70
-    } : null,
     status: 'pending'
   };
   
   batchQueue.push(queueItem);
   updateBatchQueueUI();
-  showToast(`Added "${queueItem.title}" to queue`);
+  showToast(`✓ Added "${queueItem.title}" to queue`);
 }
 
 function updateBatchQueueUI() {
-  const batchCount = document.getElementById('batchCount');
   const batchCountTab = document.getElementById('batchCountTab');
   const batchQueueList = document.getElementById('batchQueueList');
   
-  if (batchCount) batchCount.textContent = batchQueue.length;
   if (batchCountTab) batchCountTab.textContent = batchQueue.length;
   
   if (batchQueue.length === 0) {
@@ -2588,22 +2637,46 @@ function updateBatchQueueUI() {
     return;
   }
   
-  batchQueueList.innerHTML = batchQueue.map((item, idx) => `
-    <div class="batch-queue-item bg-dark-700 p-2 rounded-lg border border-gray-600 ${item.status === 'processing' ? 'processing' : ''}">
-      <div class="flex items-center justify-between">
+  batchQueueList.innerHTML = batchQueue.map((item, idx) => {
+    const hasWatermark = item.watermark ? '💧' : '';
+    const hasOverlay = item.overlayVideo ? '🎬' : '';
+    const hasVisualizer = item.visualizerSettings?.type !== 'none' ? '🎵' : '';
+    const hasAdvancedAudio = item.advancedAudio?.normalize || item.advancedAudio?.dualLayer?.enabled ? '🎚️' : '';
+    const features = [hasWatermark, hasOverlay, hasVisualizer, hasAdvancedAudio].filter(f => f).join(' ');
+    
+    return `
+    <div class="batch-queue-item bg-dark-700 p-3 rounded-lg border border-gray-600 ${item.status === 'processing' ? 'processing' : ''}">
+      <div class="flex items-start justify-between mb-2">
         <div class="flex-1 min-w-0">
-          <div class="text-xs font-medium text-white truncate">${item.title}</div>
-          <div class="text-xs text-gray-400">${item.videoIds.length} videos • ${item.durationHours}h ${item.durationMinutes}m</div>
+          <div class="text-sm font-medium text-white truncate">${item.title}</div>
+          <div class="text-xs text-gray-400 mt-1">
+            ${item.videoIds.length} video${item.videoIds.length > 1 ? 's' : ''} • 
+            ${item.audioIds?.length || 0} audio${(item.audioIds?.length || 0) !== 1 ? 's' : ''} • 
+            ${item.durationHours}h ${item.durationMinutes}m
+          </div>
+          ${features ? `<div class="text-xs text-primary mt-1">Features: ${features}</div>` : ''}
         </div>
         <div class="flex items-center gap-1">
           ${item.status === 'processing' ? '<i class="ti ti-loader animate-spin text-green-400"></i>' : ''}
-          <button onclick="removeBatchItem(${idx})" class="text-red-400 hover:text-red-300 p-1">
+          <button onclick="removeBatchItem(${idx})" class="text-red-400 hover:text-red-300 p-1 rounded hover:bg-red-500/10 transition-colors" title="Remove from queue">
             <i class="ti ti-x text-sm"></i>
           </button>
         </div>
       </div>
+      
+      <!-- Feature Details -->
+      ${item.watermark || item.overlayVideo || item.visualizerSettings?.type !== 'none' || item.advancedAudio ? `
+        <div class="mt-2 pt-2 border-t border-gray-600 space-y-1">
+          ${item.watermark ? `<div class="text-xs text-gray-400"><i class="ti ti-droplet text-blue-400"></i> Watermark: ${item.watermark.position}</div>` : ''}
+          ${item.overlayVideo ? `<div class="text-xs text-gray-400"><i class="ti ti-layers-intersect text-purple-400"></i> Overlay: ${item.overlayVideo.fileName}</div>` : ''}
+          ${item.visualizerSettings?.type !== 'none' ? `<div class="text-xs text-gray-400"><i class="ti ti-waveform text-primary"></i> Visualizer: ${item.visualizerSettings.type}</div>` : ''}
+          ${item.advancedAudio?.normalize ? `<div class="text-xs text-gray-400"><i class="ti ti-adjustments text-green-400"></i> Audio: Normalized</div>` : ''}
+          ${item.advancedAudio?.dualLayer?.enabled ? `<div class="text-xs text-gray-400"><i class="ti ti-layers-linked text-yellow-400"></i> Dual Audio Layer</div>` : ''}
+        </div>
+      ` : ''}
     </div>
-  `).join('');
+  `;
+  }).join('');
 }
 
 function removeBatchItem(index) {
@@ -2625,7 +2698,10 @@ async function processBatchQueue() {
   
   if (!confirm(`Process ${batchQueue.length} render job(s)?`)) return;
   
-  showToast(`Processing ${batchQueue.length} jobs...`);
+  showToast(`🚀 Processing ${batchQueue.length} jobs...`);
+  
+  let successCount = 0;
+  let failCount = 0;
   
   for (let i = 0; i < batchQueue.length; i++) {
     const item = batchQueue[i];
@@ -2642,12 +2718,15 @@ async function processBatchQueue() {
       const data = await resp.json();
       
       if (resp.ok && data.success) {
-        showToast(`✓ ${item.title} queued`);
+        successCount++;
+        showToast(`✓ ${item.title} queued (${i + 1}/${batchQueue.length})`);
       } else {
+        failCount++;
         showToast(`✗ ${item.title} failed: ${data.message}`);
       }
     } catch (err) {
       console.error('Batch render error:', err);
+      failCount++;
       showToast(`✗ ${item.title} error`);
     }
     
@@ -2660,7 +2739,11 @@ async function processBatchQueue() {
   updateBatchQueueUI();
   loadJobs();
   startSmartRefresh(); // Start auto-refresh for batch jobs
-  showNotification('Batch Processing Complete', `All ${batchQueue.length} jobs have been queued`);
+  
+  // Show summary notification
+  const summary = `Batch Complete: ${successCount} success, ${failCount} failed`;
+  showNotification('Batch Processing Complete', summary);
+  showToast(`🎉 ${summary}`);
 }
 
 // FEATURE 5: ENHANCED REAL-TIME PROGRESS (already implemented, adding circular progress)
