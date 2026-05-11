@@ -39,41 +39,99 @@ async function renderLoopVideo({
   if (!videoPaths?.length) throw new Error('Minimal 1 video diperlukan');
   
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ozang-render-'));
+  const startTime = Date.now();
   
   try {
-    console.log('[RENDER] START');
-    
-    // Parse audio settings - REMOVE SLOW FEATURES
-    const audioSettings = {
-      fadeIn: advancedAudio?.fadeIn || 0,
-      fadeOut: advancedAudio?.fadeOut || 0,
-      volume: advancedAudio?.volume || 100,
-      normalize: false // DISABLED - too slow!
-    };
+    console.log('[RENDER] ========================================');
+    console.log('[RENDER] START - Render Job');
+    console.log('[RENDER] Videos:', videoPaths.length);
+    console.log('[RENDER] Audios:', audioPaths?.length || 0);
+    console.log('[RENDER] Target Duration:', targetDurationSeconds, 's');
+    console.log('[RENDER] Work Dir:', workDir);
+    console.log('[RENDER] ========================================');
     
     // Calculate effective target duration
     let effectiveTargetDuration = targetDurationSeconds;
     
     if (followAudioDuration && audioPaths?.length > 0) {
+      console.log('[RENDER] Calculating audio duration...');
       const audioDurations = await Promise.all(audioPaths.map(async (audioPath) => {
         const meta = await ffprobeAsync(audioPath);
         return Number(meta?.format?.duration || 0);
       }));
       const totalAudioDuration = audioDurations.reduce((sum, val) => sum + val, 0);
       effectiveTargetDuration = totalAudioDuration > 0 ? Math.ceil(totalAudioDuration) : targetDurationSeconds;
+      console.log('[RENDER] Audio duration:', totalAudioDuration, 's');
     }
     
-    console.log('[RENDER] Duration:', effectiveTargetDuration, 's');
+    console.log('[RENDER] Effective Duration:', effectiveTargetDuration, 's');
+    
+    // SPECIAL CASE: Single video + single audio = DIRECT COMBINE (SUPER FAST!)
+    if (videoPaths.length === 1 && audioPaths?.length === 1) {
+      console.log('[RENDER] ⚡ FAST MODE: Single video + audio - Direct combine!');
+      const videoPath = videoPaths[0];
+      const audioPath = audioPaths[0];
+      
+      // Check if files exist
+      if (!fs.existsSync(videoPath)) throw new Error(`Video not found: ${videoPath}`);
+      if (!fs.existsSync(audioPath)) throw new Error(`Audio not found: ${audioPath}`);
+      
+      console.log('[RENDER] Video:', videoPath);
+      console.log('[RENDER] Audio:', audioPath);
+      
+      // Get durations
+      const videoMeta = await ffprobeAsync(videoPath);
+      const audioMeta = await ffprobeAsync(audioPath);
+      const videoDuration = Number(videoMeta?.format?.duration || 0);
+      const audioDuration = Number(audioMeta?.format?.duration || 0);
+      
+      console.log('[RENDER] Video duration:', videoDuration, 's');
+      console.log('[RENDER] Audio duration:', audioDuration, 's');
+      
+      // If video and audio are already long enough, just combine!
+      if (videoDuration >= effectiveTargetDuration && audioDuration >= effectiveTargetDuration) {
+        console.log('[RENDER] ⚡⚡⚡ ULTRA FAST: Direct stream copy!');
+        
+        await runFfmpeg((cmd) => {
+          return cmd
+            .input(videoPath)
+            .input(audioPath)
+            .outputOptions([
+              '-t', String(effectiveTargetDuration),
+              '-c:v', 'copy',
+              '-c:a', 'copy',
+              '-map', '0:v:0',
+              '-map', '1:a:0',
+              '-shortest'
+            ])
+            .output(outputPath);
+        }, {
+          onProgress: (p) => {
+            const progress = Math.min(99, Math.round((parseTimeToSeconds(p.timemark) / effectiveTargetDuration) * 100));
+            onProgress?.(progress);
+          }
+        });
+        
+        const elapsedSeconds = Math.round((Date.now() - startTime) / 1000);
+        console.log('[RENDER] ========================================');
+        console.log('[RENDER] ⚡ COMPLETED IN', elapsedSeconds, 'SECONDS!');
+        console.log('[RENDER] ========================================');
+        return outputPath;
+      }
+    }
     
     // Get video durations
+    console.log('[RENDER] Analyzing video durations...');
     const videoDurations = await Promise.all(videoPaths.map(async (videoPath) => {
       const meta = await ffprobeAsync(videoPath);
       return Number(meta?.format?.duration || 0);
     }));
     const totalVideoDuration = videoDurations.reduce((sum, val) => sum + val, 0);
+    console.log('[RENDER] Total video duration:', totalVideoDuration, 's');
     
     // Calculate loops needed
     const videoLoops = Math.ceil(effectiveTargetDuration / totalVideoDuration) + 1;
+    console.log('[RENDER] Video loops needed:', videoLoops);
     
     // Create concat file for videos
     const videoConcatFile = path.join(workDir, 'videos.txt');
@@ -83,11 +141,17 @@ async function renderLoopVideo({
         videoLines.push(`file '${vPath.replace(/'/g, "'\\''")}'`);
       });
     }
-    fs.writeFileSync(videoConcatFile, videoLines.join('\n'), 'utf8');
+    const videoConcatContent = videoLines.join('\n');
+    fs.writeFileSync(videoConcatFile, videoConcatContent, 'utf8');
+    console.log('[RENDER] Video concat file created:', videoConcatFile);
+    console.log('[RENDER] Concat content:\n', videoConcatContent);
     
     // Merge videos - ULTRA FAST
     const mergedVideo = path.join(workDir, 'video-merged.mp4');
-    console.log('[RENDER] Merging videos...');
+    const videoMergeStart = Date.now();
+    console.log('[RENDER] Step 1/3: Merging videos...');
+    console.log('[RENDER] Input:', videoConcatFile);
+    console.log('[RENDER] Output:', mergedVideo);
     
     await runFfmpeg((cmd) => {
       return cmd
@@ -95,16 +159,20 @@ async function renderLoopVideo({
         .inputOptions(['-f', 'concat', '-safe', '0'])
         .outputOptions([
           '-t', String(effectiveTargetDuration),
-          '-c:v', 'libx264',
-          '-preset', 'ultrafast', // CHANGED: ultrafast instead of veryfast
-          '-crf', '28', // CHANGED: 28 instead of 23 (faster, slightly lower quality)
-          '-pix_fmt', 'yuv420p',
+          '-c:v', 'copy', // CHANGED: Try stream copy first!
           '-an'
         ])
         .output(mergedVideo);
+    }, {
+      onProgress: (p) => {
+        const progress = Math.min(40, Math.round((parseTimeToSeconds(p.timemark) / effectiveTargetDuration) * 40));
+        console.log(`[RENDER] Video progress: ${progress}% (${p.timemark})`);
+        onProgress?.(progress);
+      }
     });
     
-    console.log('[RENDER] Video merged ✓');
+    const videoMergeTime = Math.round((Date.now() - videoMergeStart) / 1000);
+    console.log(`[RENDER] Video merged ✓ (${videoMergeTime}s)`);
     
     // Handle audio if present
     const hasAudio = audioPaths?.length > 0;
@@ -120,9 +188,11 @@ async function renderLoopVideo({
         return Number(meta?.format?.duration || 0);
       }));
       const totalAudioDuration = audioDurations.reduce((sum, val) => sum + val, 0);
+      console.log('[RENDER] Total audio duration:', totalAudioDuration, 's');
       
       // Calculate audio loops
       const audioLoops = Math.ceil(effectiveTargetDuration / totalAudioDuration) + 1;
+      console.log('[RENDER] Audio loops needed:', audioLoops);
       
       // Create concat file for audios
       const audioConcatFile = path.join(workDir, 'audios.txt');
@@ -132,77 +202,65 @@ async function renderLoopVideo({
           audioLines.push(`file '${aPath.replace(/'/g, "'\\''")}'`);
         });
       }
-      fs.writeFileSync(audioConcatFile, audioLines.join('\n'), 'utf8');
+      const audioConcatContent = audioLines.join('\n');
+      fs.writeFileSync(audioConcatFile, audioConcatContent, 'utf8');
+      console.log('[RENDER] Audio concat file created:', audioConcatFile);
+      console.log('[RENDER] Concat content:\n', audioConcatContent);
       
-      // Merge audios - SIMPLE & FAST
+      // Merge audios - SIMPLE & FAST (NO FILTERS!)
       const mergedAudio = path.join(workDir, 'audio-merged.aac');
-      console.log('[RENDER] Merging audios...');
-      
-      // Build SIMPLE filter - NO LOUDNORM (too slow!)
-      let filterComplex = '[0:a]';
-      
-      // Apply volume (fast)
-      if (audioSettings.volume !== 100) {
-        const volMultiplier = audioSettings.volume / 100;
-        filterComplex += `volume=${volMultiplier},`;
-      }
-      
-      // Apply fade in (fast)
-      if (audioSettings.fadeIn > 0) {
-        filterComplex += `afade=t=in:st=0:d=${audioSettings.fadeIn},`;
-      }
-      
-      // Apply fade out (fast)
-      if (audioSettings.fadeOut > 0) {
-        const fadeOutStart = Math.max(0, effectiveTargetDuration - audioSettings.fadeOut);
-        filterComplex += `afade=t=out:st=${fadeOutStart}:d=${audioSettings.fadeOut},`;
-      }
-      
-      // Remove trailing comma
-      if (filterComplex.endsWith(',')) {
-        filterComplex = filterComplex.slice(0, -1);
-      }
-      
-      filterComplex += '[final]';
+      const audioMergeStart = Date.now();
+      console.log('[RENDER] Step 2/3: Merging audios...');
+      console.log('[RENDER] Input:', audioConcatFile);
+      console.log('[RENDER] Output:', mergedAudio);
       
       await runFfmpeg((cmd) => {
         return cmd
           .input(audioConcatFile)
           .inputOptions(['-f', 'concat', '-safe', '0'])
-          .complexFilter(filterComplex)
           .outputOptions([
-            '-map', '[final]',
             '-t', String(effectiveTargetDuration),
-            '-c:a', 'aac',
-            '-b:a', '128k' // CHANGED: 128k instead of 192k (faster)
+            '-c:a', 'copy', // CHANGED: Try stream copy first!
           ])
           .output(mergedAudio);
+      }, {
+        onProgress: (p) => {
+          const progress = 40 + Math.min(30, Math.round((parseTimeToSeconds(p.timemark) / effectiveTargetDuration) * 30));
+          console.log(`[RENDER] Audio progress: ${progress}% (${p.timemark})`);
+          onProgress?.(progress);
+        }
       });
       
-      console.log('[RENDER] Audio merged ✓');
+      const audioMergeTime = Math.round((Date.now() - audioMergeStart) / 1000);
+      console.log(`[RENDER] Audio merged ✓ (${audioMergeTime}s)`);
       
       // Combine video + audio - ULTRA FAST
-      console.log('[RENDER] Combining...');
+      const combineStart = Date.now();
+      console.log('[RENDER] Step 3/3: Combining video + audio...');
+      console.log('[RENDER] Video input:', mergedVideo);
+      console.log('[RENDER] Audio input:', mergedAudio);
+      console.log('[RENDER] Final output:', outputPath);
       
       await runFfmpeg((cmd) => {
         return cmd
           .input(mergedVideo)
           .input(mergedAudio)
           .outputOptions([
-            '-c:v', 'copy', // Stream copy - NO RE-ENCODE!
-            '-c:a', 'copy', // Stream copy - NO RE-ENCODE!
-            '-shortest',
-            '-movflags', '+faststart'
+            '-c:v', 'copy',
+            '-c:a', 'copy',
+            '-shortest'
           ])
           .output(outputPath);
       }, { 
         onProgress: (p) => {
-          const progress = Math.min(99, Math.round((parseTimeToSeconds(p.timemark) / effectiveTargetDuration) * 100));
+          const progress = 70 + Math.min(29, Math.round((parseTimeToSeconds(p.timemark) / effectiveTargetDuration) * 29));
+          console.log(`[RENDER] Combine progress: ${progress}% (${p.timemark})`);
           onProgress?.(progress);
         }
       });
       
-      console.log('[RENDER] Combined ✓');
+      const combineTime = Math.round((Date.now() - combineStart) / 1000);
+      console.log(`[RENDER] Combined ✓ (${combineTime}s)`);
     } else {
       // No audio, just copy video
       fs.copyFileSync(mergedVideo, outputPath);
@@ -210,6 +268,11 @@ async function renderLoopVideo({
     }
     
     console.log('[RENDER] COMPLETED');
+    const elapsedSeconds = Math.round((Date.now() - startTime) / 1000);
+    console.log('[RENDER] ========================================');
+    console.log('[RENDER] Total Time:', elapsedSeconds, 'seconds');
+    console.log('[RENDER] Output:', outputPath);
+    console.log('[RENDER] ========================================');
     return outputPath;
     
   } catch (error) {
