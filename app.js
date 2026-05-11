@@ -3637,6 +3637,7 @@ app.post('/api/render/jobs', isAuthenticated, async (req, res) => {
           targetDurationSeconds: target,
           visualizerPreset: visualizerPreset || 'none',
           followAudioDuration: !!followAudioDuration,
+          advancedAudio: req.body.advancedAudio || {}, // Pass advanced audio settings
           onProgress: async (progressPercent) => {
             if (Number.isFinite(progressPercent) && progressPercent > 10) {
               await RenderJob.update(job.id, { progress: progressPercent });

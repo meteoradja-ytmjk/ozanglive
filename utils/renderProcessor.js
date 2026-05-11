@@ -23,12 +23,23 @@ const parseTimeToSeconds = (timemark = '') => {
   return (parseFloat(h) * 3600) + (parseFloat(m) * 60) + parseFloat(s);
 };
 
-async function renderLoopVideo({ videoPaths, audioPaths, outputPath, targetDurationSeconds, visualizerPreset = 'none', followAudioDuration = false, onProgress }) {
+async function renderLoopVideo({ videoPaths, audioPaths, outputPath, targetDurationSeconds, visualizerPreset = 'none', followAudioDuration = false, advancedAudio = {}, onProgress }) {
   if (!videoPaths?.length) throw new Error('Minimal 1 video diperlukan');
   
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ozang-render-'));
   
   try {
+    // Parse advanced audio settings
+    const audioSettings = {
+      fadeIn: advancedAudio?.fadeIn || 0,
+      fadeOut: advancedAudio?.fadeOut || 0,
+      volume: advancedAudio?.volume || 100,
+      crossfade: advancedAudio?.crossfade || 0,
+      normalize: advancedAudio?.normalize || false,
+      dualLayer: advancedAudio?.dualLayer || { enabled: false, bgVolume: 30, voiceVolume: 100 }
+    };
+    
+    console.log('[RENDER] Advanced audio settings:', audioSettings);
     // Calculate effective target duration
     let effectiveTargetDuration = targetDurationSeconds;
     
@@ -128,21 +139,139 @@ async function renderLoopVideo({ videoPaths, audioPaths, outputPath, targetDurat
       console.log('[RENDER] Audio concat file path:', audioConcatFile);
       console.log('[RENDER] Audio concat content preview:', audioConcatContent.substring(0, 200));
       
-      // Merge audios
+      // Merge audios with advanced features
       const mergedAudio = path.join(workDir, 'audio-merged.aac');
       console.log('[RENDER] Merging audios to:', mergedAudio);
-      await runFfmpeg((cmd) => {
-        return cmd
-          .input(audioConcatFile)
-          .inputOptions(['-f', 'concat', '-safe', '0'])
-          .outputOptions([
-            '-t', String(effectiveTargetDuration),
-            '-vn',
-            '-c:a', 'aac',
-            '-b:a', '192k'
-          ])
-          .output(mergedAudio);
-      });
+      
+      // Build audio filter complex for advanced features
+      const audioFilters = [];
+      
+      // Dual layer audio mixing
+      if (audioSettings.dualLayer.enabled && audioPaths.length >= 2) {
+        console.log('[RENDER] Applying dual layer audio mixing');
+        // First audio = background music (lower volume)
+        // Other audios = voiceover (full volume)
+        const bgVolume = audioSettings.dualLayer.bgVolume / 100;
+        const voiceVolume = audioSettings.dualLayer.voiceVolume / 100;
+        
+        await runFfmpeg((cmd) => {
+          cmd.input(audioConcatFile).inputOptions(['-f', 'concat', '-safe', '0']);
+          
+          let filterComplex = `[0:a]volume=${bgVolume}[bg];`;
+          
+          // If we have multiple audios, split them
+          if (audioPaths.length > 1) {
+            filterComplex += `[0:a]asplit=${audioPaths.length}`;
+            for (let i = 0; i < audioPaths.length; i++) {
+              filterComplex += `[a${i}]`;
+            }
+            filterComplex += `;`;
+            
+            // Apply voice volume to non-background tracks
+            for (let i = 1; i < audioPaths.length; i++) {
+              filterComplex += `[a${i}]volume=${voiceVolume}[v${i}];`;
+            }
+            
+            // Mix all tracks
+            filterComplex += `[bg]`;
+            for (let i = 1; i < audioPaths.length; i++) {
+              filterComplex += `[v${i}]`;
+            }
+            filterComplex += `amix=inputs=${audioPaths.length}:duration=first[mixed];`;
+          } else {
+            filterComplex += `[bg]anull[mixed];`;
+          }
+          
+          // Apply other effects
+          if (audioSettings.normalize) {
+            filterComplex += `[mixed]loudnorm[normalized];`;
+          } else {
+            filterComplex += `[mixed]anull[normalized];`;
+          }
+          
+          // Apply volume
+          if (audioSettings.volume !== 100) {
+            const volMultiplier = audioSettings.volume / 100;
+            filterComplex += `[normalized]volume=${volMultiplier}[vol];`;
+          } else {
+            filterComplex += `[normalized]anull[vol];`;
+          }
+          
+          // Apply fade in/out
+          let fadeFilter = '[vol]';
+          if (audioSettings.fadeIn > 0) {
+            fadeFilter += `afade=t=in:st=0:d=${audioSettings.fadeIn}`;
+          }
+          if (audioSettings.fadeOut > 0) {
+            const fadeOutStart = Math.max(0, effectiveTargetDuration - audioSettings.fadeOut);
+            if (audioSettings.fadeIn > 0) fadeFilter += ',';
+            fadeFilter += `afade=t=out:st=${fadeOutStart}:d=${audioSettings.fadeOut}`;
+          }
+          fadeFilter += '[final]';
+          
+          if (audioSettings.fadeIn > 0 || audioSettings.fadeOut > 0) {
+            filterComplex += fadeFilter;
+          } else {
+            filterComplex += `[vol]anull[final]`;
+          }
+          
+          return cmd
+            .complexFilter(filterComplex)
+            .outputOptions([
+              '-map', '[final]',
+              '-t', String(effectiveTargetDuration),
+              '-c:a', 'aac',
+              '-b:a', '192k'
+            ])
+            .output(mergedAudio);
+        });
+      } else {
+        // Standard audio merge with basic effects
+        await runFfmpeg((cmd) => {
+          cmd.input(audioConcatFile).inputOptions(['-f', 'concat', '-safe', '0']);
+          
+          let filterComplex = '[0:a]';
+          
+          // Apply normalization
+          if (audioSettings.normalize) {
+            filterComplex += 'loudnorm,';
+          }
+          
+          // Apply volume
+          if (audioSettings.volume !== 100) {
+            const volMultiplier = audioSettings.volume / 100;
+            filterComplex += `volume=${volMultiplier},`;
+          }
+          
+          // Apply fade in
+          if (audioSettings.fadeIn > 0) {
+            filterComplex += `afade=t=in:st=0:d=${audioSettings.fadeIn},`;
+          }
+          
+          // Apply fade out
+          if (audioSettings.fadeOut > 0) {
+            const fadeOutStart = Math.max(0, effectiveTargetDuration - audioSettings.fadeOut);
+            filterComplex += `afade=t=out:st=${fadeOutStart}:d=${audioSettings.fadeOut},`;
+          }
+          
+          // Remove trailing comma
+          if (filterComplex.endsWith(',')) {
+            filterComplex = filterComplex.slice(0, -1);
+          }
+          
+          filterComplex += '[final]';
+          
+          return cmd
+            .complexFilter(filterComplex)
+            .outputOptions([
+              '-map', '[final]',
+              '-t', String(effectiveTargetDuration),
+              '-c:a', 'aac',
+              '-b:a', '192k'
+            ])
+            .output(mergedAudio);
+        });
+      }
       
       console.log('[RENDER] Audio merged successfully');
       console.log('[RENDER] Merged audio file exists:', fs.existsSync(mergedAudio));

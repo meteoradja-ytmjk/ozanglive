@@ -540,6 +540,114 @@
       <div id="audioList" class="max-h-80 overflow-y-auto bg-dark-700 rounded-lg p-2 border border-gray-600">
         <div class="text-sm text-gray-400 text-center py-4">Loading...</div>
       </div>
+      
+      <!-- Advanced Audio Settings -->
+      <div id="advancedAudioSettings" class="hidden mt-4 p-4 bg-gray-800/70 rounded-lg border border-violet-500/30 space-y-4">
+        <div class="flex items-center justify-between mb-3">
+          <h4 class="text-sm font-semibold text-violet-400">
+            <i class="ti ti-adjustments-horizontal mr-2"></i>Advanced Audio Settings
+          </h4>
+          <button type="button" onclick="resetAudioSettings()" class="text-xs text-gray-400 hover:text-white transition-colors">
+            <i class="ti ti-refresh text-xs"></i> Reset
+          </button>
+        </div>
+        
+        <!-- Fade In/Out -->
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs text-gray-400 mb-2">
+              <i class="ti ti-volume-3 text-xs"></i> Fade In (seconds)
+            </label>
+            <input type="number" id="audioFadeIn" min="0" max="10" step="0.5" value="0" 
+              class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-violet-500">
+          </div>
+          <div>
+            <label class="block text-xs text-gray-400 mb-2">
+              <i class="ti ti-volume text-xs"></i> Fade Out (seconds)
+            </label>
+            <input type="number" id="audioFadeOut" min="0" max="10" step="0.5" value="0" 
+              class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-violet-500">
+          </div>
+        </div>
+        
+        <!-- Volume Control -->
+        <div>
+          <label class="block text-xs text-gray-400 mb-2">
+            <i class="ti ti-volume-2 text-xs"></i> Volume: <span id="volumeValue" class="text-violet-400 font-semibold">100%</span>
+          </label>
+          <input type="range" id="audioVolume" min="0" max="200" value="100" 
+            class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-violet-500">
+          <div class="flex justify-between text-xs text-gray-500 mt-1">
+            <span>0%</span>
+            <span>100%</span>
+            <span>200%</span>
+          </div>
+        </div>
+        
+        <!-- Crossfade -->
+        <div>
+          <label class="block text-xs text-gray-400 mb-2">
+            <i class="ti ti-arrows-shuffle text-xs"></i> Crossfade Between Tracks (seconds)
+          </label>
+          <input type="number" id="audioCrossfade" min="0" max="5" step="0.5" value="0" 
+            class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-violet-500">
+          <p class="text-xs text-gray-500 mt-1">Smooth transition between audio tracks</p>
+        </div>
+        
+        <!-- Normalization -->
+        <div class="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg">
+          <div>
+            <label class="text-xs text-gray-300 font-medium">
+              <i class="ti ti-waveform text-xs"></i> Audio Normalization
+            </label>
+            <p class="text-xs text-gray-500 mt-1">Balance volume across all tracks</p>
+          </div>
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input type="checkbox" id="audioNormalize" class="sr-only peer">
+            <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-violet-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-violet-600"></div>
+          </label>
+        </div>
+        
+        <!-- Dual Layer Audio -->
+        <div class="border-t border-gray-700 pt-4">
+          <div class="flex items-center justify-between mb-3">
+            <label class="text-xs text-gray-300 font-medium">
+              <i class="ti ti-layers-linked text-xs"></i> Dual Audio Layer
+            </label>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="enableDualAudio" class="sr-only peer">
+              <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-violet-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-violet-600"></div>
+            </label>
+          </div>
+          
+          <div id="dualAudioControls" class="hidden space-y-3">
+            <p class="text-xs text-gray-500">Mix background music with voiceover/narration</p>
+            
+            <div>
+              <label class="block text-xs text-gray-400 mb-2">Background Music Volume: <span id="bgVolumeValue" class="text-violet-400">30%</span></label>
+              <input type="range" id="bgMusicVolume" min="0" max="100" value="30" 
+                class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-violet-500">
+            </div>
+            
+            <div>
+              <label class="block text-xs text-gray-400 mb-2">Voiceover Volume: <span id="voiceVolumeValue" class="text-violet-400">100%</span></label>
+              <input type="range" id="voiceoverVolume" min="0" max="100" value="100" 
+                class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-violet-500">
+            </div>
+            
+            <div class="bg-gray-700/50 rounded-lg p-3">
+              <p class="text-xs text-gray-400 mb-2">
+                <i class="ti ti-info-circle text-xs"></i> How it works:
+              </p>
+              <ul class="text-xs text-gray-500 space-y-1 ml-4">
+                <li>• First audio = Background music (lower volume)</li>
+                <li>• Other audios = Voiceover/narration (full volume)</li>
+                <li>• Both layers mixed together</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
   
@@ -995,6 +1103,7 @@ if (el.createBtn) {
         followAudioDuration:el.followAudioDuration.checked,
         videoIds,
         audioIds,
+        advancedAudio: getAdvancedAudioSettings(), // Advanced audio features
         overlayVideo: overlayVideoData ? {
           data: overlayVideoData,
           fileName: overlayVideoFile?.name || 'overlay.mp4',
@@ -2477,4 +2586,87 @@ function startSmartRefresh() {
 
 // Start smart refresh
 startSmartRefresh();
+
+// ============================================
+// ADVANCED AUDIO FEATURES
+// ============================================
+
+// Show/hide advanced audio settings when audio is selected
+function updateAdvancedAudioVisibility() {
+  const audioChecked = document.querySelectorAll("input[name='audio']:checked").length;
+  const advancedSettings = document.getElementById('advancedAudioSettings');
+  
+  if (audioChecked > 0) {
+    advancedSettings?.classList.remove('hidden');
+  } else {
+    advancedSettings?.classList.add('hidden');
+  }
+}
+
+// Update volume value display
+document.getElementById('audioVolume')?.addEventListener('input', (e) => {
+  document.getElementById('volumeValue').textContent = e.target.value + '%';
+});
+
+// Update background music volume display
+document.getElementById('bgMusicVolume')?.addEventListener('input', (e) => {
+  document.getElementById('bgVolumeValue').textContent = e.target.value + '%';
+});
+
+// Update voiceover volume display
+document.getElementById('voiceoverVolume')?.addEventListener('input', (e) => {
+  document.getElementById('voiceVolumeValue').textContent = e.target.value + '%';
+});
+
+// Toggle dual audio controls
+document.getElementById('enableDualAudio')?.addEventListener('change', (e) => {
+  const controls = document.getElementById('dualAudioControls');
+  if (e.target.checked) {
+    controls?.classList.remove('hidden');
+  } else {
+    controls?.classList.add('hidden');
+  }
+});
+
+// Reset audio settings
+function resetAudioSettings() {
+  document.getElementById('audioFadeIn').value = 0;
+  document.getElementById('audioFadeOut').value = 0;
+  document.getElementById('audioVolume').value = 100;
+  document.getElementById('volumeValue').textContent = '100%';
+  document.getElementById('audioCrossfade').value = 0;
+  document.getElementById('audioNormalize').checked = false;
+  document.getElementById('enableDualAudio').checked = false;
+  document.getElementById('dualAudioControls')?.classList.add('hidden');
+  document.getElementById('bgMusicVolume').value = 30;
+  document.getElementById('bgVolumeValue').textContent = '30%';
+  document.getElementById('voiceoverVolume').value = 100;
+  document.getElementById('voiceVolumeValue').textContent = '100%';
+  
+  showToast('Audio settings reset');
+}
+
+// Listen to audio checkbox changes
+document.addEventListener('change', (e) => {
+  if (e.target.name === 'audio') {
+    updateAdvancedAudioVisibility();
+  }
+});
+
+// Get advanced audio settings
+function getAdvancedAudioSettings() {
+  return {
+    fadeIn: parseFloat(document.getElementById('audioFadeIn')?.value || 0),
+    fadeOut: parseFloat(document.getElementById('audioFadeOut')?.value || 0),
+    volume: parseInt(document.getElementById('audioVolume')?.value || 100),
+    crossfade: parseFloat(document.getElementById('audioCrossfade')?.value || 0),
+    normalize: document.getElementById('audioNormalize')?.checked || false,
+    dualLayer: {
+      enabled: document.getElementById('enableDualAudio')?.checked || false,
+      bgVolume: parseInt(document.getElementById('bgMusicVolume')?.value || 30),
+      voiceVolume: parseInt(document.getElementById('voiceoverVolume')?.value || 100)
+    }
+  };
+}
+
 </script>
