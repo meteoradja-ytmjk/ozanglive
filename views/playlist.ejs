@@ -189,6 +189,7 @@
                       <span class="w-6 text-xs text-gray-500 flex-shrink-0" style="text-align: center;"><%= index + 1 %></span>
                       <div class="w-16 h-12 bg-dark-800 rounded flex-shrink-0 overflow-hidden">
                         <img src="<%= video.thumbnail_path %>" alt="<%= video.title %>" 
+                             loading="lazy"
                              class="w-full h-full object-cover rounded" 
                              onerror="this.src='/images/default-thumbnail.jpg'">
                       </div>
@@ -431,7 +432,7 @@ function updateSelectedVideosDisplay() {
           <i class="ti ti-grip-vertical text-gray-400"></i>
         </div>
         <span class="text-xs text-gray-400 w-5 text-center flex-shrink-0">${index + 1}</span>
-        <img src="${video.thumbnail_path}" alt="${video.title}" class="w-12 h-8 object-cover rounded flex-shrink-0" onerror="this.src='/images/default-thumbnail.jpg'">
+        <img src="${video.thumbnail_path}" alt="${video.title}" class="w-12 h-8 object-cover rounded flex-shrink-0" loading="lazy" onerror="this.src='/images/default-thumbnail.jpg'">
         <div class="flex-1 min-w-0">
           <p class="text-sm font-medium truncate">${video.title}</p>
           <p class="text-xs text-gray-400">
@@ -473,6 +474,7 @@ function updateAvailableVideosDisplay() {
         <span class="w-6 text-xs text-gray-500 flex-shrink-0" style="text-align: center;">${index + 1}</span>
         <div class="w-16 h-12 bg-dark-800 rounded flex-shrink-0 overflow-hidden">
           <img src="${video.thumbnail_path}" alt="${video.title}" 
+               loading="lazy"
                class="w-full h-full object-cover rounded" 
                onerror="this.src='/images/default-thumbnail.jpg'">
         </div>
@@ -659,7 +661,7 @@ function viewPlaylist(playlistId) {
           contentHtml += playlist.videos.map((video, index) => `
             <div class="flex items-center gap-3 p-3 bg-gray-700 rounded mb-2">
               <span class="text-gray-400 text-sm w-6">${index + 1}</span>
-              <img src="${video.thumbnail_path}" alt="${video.title}" class="w-16 h-10 object-cover rounded">
+              <img src="${video.thumbnail_path}" alt="${video.title}" class="w-16 h-10 object-cover rounded" loading="lazy">
               <div class="flex-1 min-w-0">
                 <p class="font-medium truncate">${video.title}</p>
                 <p class="text-xs text-gray-400">
@@ -792,6 +794,7 @@ document.getElementById('searchVideos').addEventListener('input', function(e) {
         <span class="w-6 text-xs text-gray-500 flex-shrink-0" style="text-align: center;">${index + 1}</span>
         <div class="w-16 h-12 bg-dark-800 rounded flex-shrink-0 overflow-hidden">
           <img src="${video.thumbnail_path}" alt="${video.title}" 
+               loading="lazy"
                class="w-full h-full object-cover rounded" 
                onerror="this.src='/images/default-thumbnail.jpg'">
         </div>

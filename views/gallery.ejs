@@ -262,7 +262,7 @@ function formatDuration(seconds) {
             <div class="video-card bg-gray-800 rounded-lg p-3 flex items-center gap-3 hover:bg-gray-700/50 transition-colors ml-4 border-l-2 border-primary/30" data-title="<%= video.title.toLowerCase() %>" data-date="<%= video.upload_date %>" data-id="<%= video.id %>" data-current-folder="<%= group.displayName %>" data-media-type="video" draggable="true" ondragstart="handleMediaDragStart(event)" ondragend="handleMediaDragEnd(event)">
               <!-- Thumbnail -->
               <div class="relative w-20 h-14 md:w-24 md:h-16 flex-shrink-0 rounded-md overflow-hidden group cursor-pointer" onclick="playVideo('<%= video.id %>', '<%= video.title %>')">
-                <img src="<%= video.thumbnail_path %>" alt="<%= video.title %>" class="w-full h-full object-cover">
+                <img src="<%= video.thumbnail_path %>" alt="<%= video.title %>" class="w-full h-full object-cover" loading="lazy">
                 <div class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                   <i class="ti ti-player-play-filled text-white text-lg"></i>
                 </div>

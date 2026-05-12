@@ -14,6 +14,7 @@ const SQLiteStore = require('connect-sqlite3')(session);
 const bcrypt = require('bcrypt');
 const { body, validationResult } = require('express-validator');
 const rateLimit = require('express-rate-limit');
+const compression = require('compression'); // Performance: Gzip compression
 const User = require('./models/User');
 const { db, checkIfUsersExist, checkIfAdminExists, waitForDbInit, verifyTables, checkConnectivity, closeDatabase } = require('./db/database');
 const systemMonitor = require('./services/systemMonitor');
@@ -744,10 +745,46 @@ app.use(function (req, res, next) {
   res.locals.csrfToken = tokens.create(req.session.csrfSecret);
   next();
 });
+
+// ============================================
+// PERFORMANCE OPTIMIZATION
+// ============================================
+
+// 1. Gzip Compression - Compress all responses (5x smaller files)
+app.use(compression({
+  filter: (req, res) => {
+    if (req.headers['x-no-compression']) {
+      return false;
+    }
+    return compression.filter(req, res);
+  },
+  level: 6 // Compression level (0-9, 6 is balanced)
+}));
+
 app.engine('ejs', engine);
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
-app.use(express.static(path.join(__dirname, 'public')));
+
+// 2. Static Asset Caching - Cache CSS, JS, Images in browser
+app.use('/css', express.static(path.join(__dirname, 'public/css'), {
+  maxAge: '7d', // Cache CSS for 7 days
+  immutable: true
+}));
+
+app.use('/js', express.static(path.join(__dirname, 'public/js'), {
+  maxAge: '7d', // Cache JS for 7 days
+  immutable: true
+}));
+
+app.use('/images', express.static(path.join(__dirname, 'public/images'), {
+  maxAge: '30d', // Cache images for 30 days
+  immutable: true
+}));
+
+// Other static files (fonts, etc)
+app.use(express.static(path.join(__dirname, 'public'), {
+  maxAge: '1d' // Cache other files for 1 day
+}));
 
 app.get('/sw.js', (req, res) => {
   res.setHeader('Content-Type', 'application/javascript');

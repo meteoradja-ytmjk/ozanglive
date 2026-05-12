@@ -976,7 +976,7 @@
       if (item.type === 'playlist') {
         btn.innerHTML = `
       <div class="w-16 h-12 bg-gradient-to-br from-blue-600 to-purple-600 rounded flex-shrink-0 overflow-hidden relative">
-        <img src="${item.thumbnail}" alt="" class="w-full h-full object-cover rounded" onerror="this.src='/images/playlist-thumbnail.svg'">
+        <img src="${item.thumbnail}" alt="" class="w-full h-full object-cover rounded" loading="lazy" onerror="this.src='/images/playlist-thumbnail.svg'">
         <div class="absolute top-0 right-0 bg-green-500 text-white text-xs px-1 rounded-bl text-[8px] font-bold">PL</div>
       </div>
       <div class="flex-1 min-w-0 ml-3 text-left">
@@ -990,7 +990,7 @@
       } else {
         btn.innerHTML = `
       <div class="w-16 h-12 bg-dark-800 rounded flex-shrink-0 overflow-hidden">
-        <img src="${item.thumbnail || '/images/default-thumbnail.jpg'}" alt="" class="w-full h-full object-cover rounded" onerror="this.src='/images/default-thumbnail.jpg'">
+        <img src="${item.thumbnail || '/images/default-thumbnail.jpg'}" alt="" class="w-full h-full object-cover rounded" loading="lazy" onerror="this.src='/images/default-thumbnail.jpg'">
       </div>
       <div class="flex-1 min-w-0 ml-3 text-left">
         <p class="text-sm font-medium text-white truncate">${item.name}</p>
