@@ -66,12 +66,18 @@ async function lazyLoadBroadcasts() {
   }
   
   console.log('[Performance] Starting lazy load of broadcasts...');
+  console.log('[Performance] User agent:', navigator.userAgent);
+  console.log('[Performance] Is mobile:', /Mobile|Android|iPhone/i.test(navigator.userAgent));
   
   // Add timeout to prevent infinite loading
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 second timeout (increased)
+  const timeoutId = setTimeout(() => {
+    console.error('[Performance] Request timeout after 20 seconds');
+    controller.abort();
+  }, 20000); // 20 second timeout (increased)
   
   try {
+    console.log('[Performance] Fetching broadcasts from API...');
     const response = await fetch('/api/youtube/broadcasts', {
       headers: {
         'X-CSRF-Token': getCsrfToken()
@@ -80,6 +86,7 @@ async function lazyLoadBroadcasts() {
     });
     
     clearTimeout(timeoutId);
+    console.log('[Performance] API response received, status:', response.status);
     
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -87,6 +94,20 @@ async function lazyLoadBroadcasts() {
     
     const data = await response.json();
     console.log('[Performance] API Response:', data);
+    console.log('[Performance] Broadcasts count:', data.broadcasts ? data.broadcasts.length : 0);
+    console.log('[Performance] Accounts count:', data.accounts ? data.accounts.length : 0);
+    
+    // CRITICAL: Hide loading and show container FIRST (before any rendering)
+    console.log('[Performance] Hiding loading container...');
+    if (loadingContainer) {
+      loadingContainer.style.display = 'none';
+      loadingContainer.remove();
+    }
+    console.log('[Performance] Showing broadcasts container...');
+    if (broadcastsContainer) {
+      broadcastsContainer.style.display = 'block';
+      broadcastsContainer.classList.remove('hidden');
+    }
     
     if (data.success && data.broadcasts !== undefined) {
       console.log(`[Performance] Loaded ${data.broadcasts.length} broadcasts`);
@@ -94,10 +115,6 @@ async function lazyLoadBroadcasts() {
       // Update cache
       broadcastsCache.data = data.broadcasts;
       broadcastsCache.timestamp = Date.now();
-      
-      // Hide loading, show container FIRST
-      if (loadingContainer) loadingContainer.remove();
-      if (broadcastsContainer) broadcastsContainer.classList.remove('hidden');
       
       // Then render broadcasts
       if (data.broadcasts.length > 0) {
@@ -110,17 +127,26 @@ async function lazyLoadBroadcasts() {
       }
     } else {
       console.error('[Performance] Failed to load broadcasts:', data.error || 'Unknown error');
-      if (loadingContainer) loadingContainer.remove();
-      if (broadcastsContainer) broadcastsContainer.classList.remove('hidden');
       renderEmptyState();
     }
   } catch (error) {
     clearTimeout(timeoutId);
     console.error('[Performance] Error loading broadcasts:', error);
+    console.error('[Performance] Error name:', error.name);
+    console.error('[Performance] Error message:', error.message);
+    console.error('[Performance] Error stack:', error.stack);
     
-    // Hide loading, show container
-    if (loadingContainer) loadingContainer.remove();
-    if (broadcastsContainer) broadcastsContainer.classList.remove('hidden');
+    // CRITICAL: Always hide loading and show container on error
+    console.log('[Performance] Error occurred, hiding loading container...');
+    if (loadingContainer) {
+      loadingContainer.style.display = 'none';
+      loadingContainer.remove();
+    }
+    console.log('[Performance] Showing broadcasts container...');
+    if (broadcastsContainer) {
+      broadcastsContainer.style.display = 'block';
+      broadcastsContainer.classList.remove('hidden');
+    }
     
     if (error.name === 'AbortError') {
       console.error('[Performance] Request timeout - taking too long to load broadcasts');
@@ -138,15 +164,14 @@ function showErrorState(errorMessage) {
   
   container.innerHTML = `
     <div class="bg-gray-800 rounded-lg p-10 text-center border-2 border-red-500/30">
-      <div class="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-        <i class="ti ti-alert-circle text-red-500 text-2xl"></i>
+      <div class="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
+        ⚠️
       </div>
       <p class="text-red-400 font-medium mb-2">Failed to load broadcasts</p>
       <p class="text-gray-400 text-sm mb-4">${escapeHtml(errorMessage || 'An error occurred')}</p>
       <button onclick="window.location.reload()"
         class="bg-primary hover:bg-primary/80 text-white px-4 py-2 rounded-lg transition-colors inline-flex items-center gap-2">
-        <i class="ti ti-refresh"></i>
-        <span>Retry</span>
+        <span>🔄 Retry</span>
       </button>
     </div>
   `;
@@ -197,23 +222,36 @@ function renderEmptyState() {
 // Render broadcasts grouped by channel
 function renderBroadcastsGrouped(broadcasts, accounts) {
   console.log('[renderBroadcastsGrouped] Starting render with', broadcasts.length, 'broadcasts');
+  console.log('[renderBroadcastsGrouped] Accounts:', accounts);
+  console.log('[renderBroadcastsGrouped] Sample broadcast:', broadcasts[0]);
+  
   const container = document.getElementById('broadcastsContainer');
   if (!container) {
     console.error('[renderBroadcastsGrouped] Container not found!');
     return;
   }
   
-  // Create account map
+  // Create account map for fallback
   const accountMap = {};
-  accounts.forEach(acc => {
-    accountMap[acc.id] = acc.channelName || 'Unknown Channel';
-  });
+  if (accounts && accounts.length > 0) {
+    accounts.forEach(acc => {
+      accountMap[acc.id] = acc.channelName || null;
+    });
+  }
   console.log('[renderBroadcastsGrouped] Account map:', accountMap);
   
   // Group broadcasts by channel
   const groupedBroadcasts = {};
   broadcasts.forEach(broadcast => {
-    const channelName = accountMap[broadcast.accountId] || 'Unknown Channel';
+    // PRIORITY: Use channelName from broadcast first, then fallback to accountMap
+    let channelName = broadcast.channelName || accountMap[broadcast.accountId];
+    
+    // If still no channel name, use a descriptive fallback
+    if (!channelName) {
+      channelName = `YouTube Account #${broadcast.accountId}`;
+      console.warn('[renderBroadcastsGrouped] No channel name found for broadcast:', broadcast.id, 'accountId:', broadcast.accountId);
+    }
+    
     if (!groupedBroadcasts[channelName]) {
       groupedBroadcasts[channelName] = {
         accountId: broadcast.accountId,
@@ -228,11 +266,21 @@ function renderBroadcastsGrouped(broadcasts, accounts) {
   container.innerHTML = '';
   const channelNames = Object.keys(groupedBroadcasts);
   
+  if (channelNames.length === 0) {
+    console.warn('[renderBroadcastsGrouped] No channels to render');
+    renderEmptyState();
+    return;
+  }
+  
   channelNames.forEach((channelName, channelIndex) => {
     const group = groupedBroadcasts[channelName];
     console.log(`[renderBroadcastsGrouped] Rendering channel ${channelIndex}: ${channelName} with ${group.broadcasts.length} broadcasts`);
-    const channelDiv = createChannelGroup(channelName, group, channelIndex);
-    container.appendChild(channelDiv);
+    try {
+      const channelDiv = createChannelGroup(channelName, group, channelIndex);
+      container.appendChild(channelDiv);
+    } catch (error) {
+      console.error(`[renderBroadcastsGrouped] Error rendering channel ${channelName}:`, error);
+    }
   });
   
   console.log('[renderBroadcastsGrouped] Render complete');
