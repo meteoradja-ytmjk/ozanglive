@@ -102,61 +102,177 @@
         </div>
       </div>
 
-      <!-- Color Scheme -->
-      <div class="bg-dark-700 rounded-lg p-5">
-        <h4 class="text-md font-medium mb-4 flex items-center">
-          <i class="ti ti-color-swatch mr-2 text-purple-400"></i>
-          Color Scheme
+      <!-- Color Scheme - Modern Design -->
+      <div class="bg-gradient-to-br from-dark-700 to-dark-800 rounded-xl p-6 border border-gray-600/50 shadow-xl">
+        <h4 class="text-lg font-semibold mb-6 flex items-center">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center mr-3 shadow-lg">
+            <i class="ti ti-palette text-white text-xl"></i>
+          </div>
+          <span>Color Palette</span>
         </h4>
 
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <!-- Primary Color -->
-          <div>
-            <label for="primary-color" class="block text-sm font-medium text-gray-300 mb-2">Primary Color</label>
-            <div class="flex items-center gap-2">
+        <!-- Color Pickers - Modern Card Style -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+          
+          <!-- Primary Color Card -->
+          <div class="group relative bg-dark-900/50 backdrop-blur-sm rounded-xl p-4 border border-gray-600/30 hover:border-primary/50 transition-all duration-300 hover:shadow-lg hover:shadow-primary/20">
+            <label class="block text-sm font-semibold text-gray-200 mb-3 flex items-center gap-2">
+              <div class="w-2 h-2 rounded-full bg-primary animate-pulse"></div>
+              Primary Color
+            </label>
+            
+            <!-- Color Picker Circle -->
+            <div class="relative mb-3">
               <input type="color" id="primary-color" name="primary_color" value="<%= branding.primary_color %>"
-                class="w-14 h-14 rounded-lg cursor-pointer border-2 border-gray-600">
-              <input type="text" id="primary-color-text" value="<%= branding.primary_color %>"
-                class="flex-1 bg-dark-900 text-white px-3 py-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary font-mono text-sm uppercase">
+                class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+              <div class="w-full h-24 rounded-xl cursor-pointer overflow-hidden border-4 border-gray-700 group-hover:border-primary/50 transition-all duration-300 shadow-lg"
+                style="background-color: <%= branding.primary_color %>">
+                <div class="w-full h-full flex items-center justify-center bg-black/0 group-hover:bg-black/20 transition-all duration-300">
+                  <i class="ti ti-color-picker text-white text-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></i>
+                </div>
+              </div>
             </div>
-            <p class="text-xs text-gray-500 mt-1.5">Buttons, links, highlights</p>
+            
+            <!-- Hex Input -->
+            <input type="text" id="primary-color-text" value="<%= branding.primary_color %>"
+              class="w-full bg-dark-800 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary font-mono text-xs uppercase text-center tracking-wider border border-gray-700">
+            
+            <p class="text-xs text-gray-500 mt-2 text-center">Buttons & Links</p>
           </div>
 
-          <!-- Secondary Color -->
-          <div>
-            <label for="secondary-color" class="block text-sm font-medium text-gray-300 mb-2">Secondary Color</label>
-            <div class="flex items-center gap-2">
+          <!-- Secondary Color Card -->
+          <div class="group relative bg-dark-900/50 backdrop-blur-sm rounded-xl p-4 border border-gray-600/30 hover:border-secondary/50 transition-all duration-300 hover:shadow-lg hover:shadow-secondary/20">
+            <label class="block text-sm font-semibold text-gray-200 mb-3 flex items-center gap-2">
+              <div class="w-2 h-2 rounded-full bg-secondary animate-pulse"></div>
+              Secondary Color
+            </label>
+            
+            <!-- Color Picker Circle -->
+            <div class="relative mb-3">
               <input type="color" id="secondary-color" name="secondary_color" value="<%= branding.secondary_color %>"
-                class="w-14 h-14 rounded-lg cursor-pointer border-2 border-gray-600">
-              <input type="text" id="secondary-color-text" value="<%= branding.secondary_color %>"
-                class="flex-1 bg-dark-900 text-white px-3 py-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary font-mono text-sm uppercase">
+                class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+              <div class="w-full h-24 rounded-xl cursor-pointer overflow-hidden border-4 border-gray-700 group-hover:border-secondary/50 transition-all duration-300 shadow-lg"
+                style="background-color: <%= branding.secondary_color %>">
+                <div class="w-full h-full flex items-center justify-center bg-black/0 group-hover:bg-black/20 transition-all duration-300">
+                  <i class="ti ti-color-picker text-white text-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></i>
+                </div>
+              </div>
             </div>
-            <p class="text-xs text-gray-500 mt-1.5">Hover states, accents</p>
+            
+            <!-- Hex Input -->
+            <input type="text" id="secondary-color-text" value="<%= branding.secondary_color %>"
+              class="w-full bg-dark-800 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary font-mono text-xs uppercase text-center tracking-wider border border-gray-700">
+            
+            <p class="text-xs text-gray-500 mt-2 text-center">Hover States</p>
           </div>
 
-          <!-- Accent Color -->
-          <div>
-            <label for="accent-color" class="block text-sm font-medium text-gray-300 mb-2">Accent Color</label>
-            <div class="flex items-center gap-2">
+          <!-- Accent Color Card -->
+          <div class="group relative bg-dark-900/50 backdrop-blur-sm rounded-xl p-4 border border-gray-600/30 hover:border-accent/50 transition-all duration-300 hover:shadow-lg hover:shadow-accent/20 sm:col-span-2 lg:col-span-1">
+            <label class="block text-sm font-semibold text-gray-200 mb-3 flex items-center gap-2">
+              <div class="w-2 h-2 rounded-full bg-accent animate-pulse"></div>
+              Accent Color
+            </label>
+            
+            <!-- Color Picker Circle -->
+            <div class="relative mb-3">
               <input type="color" id="accent-color" name="accent_color" value="<%= branding.accent_color %>"
-                class="w-14 h-14 rounded-lg cursor-pointer border-2 border-gray-600">
-              <input type="text" id="accent-color-text" value="<%= branding.accent_color %>"
-                class="flex-1 bg-dark-900 text-white px-3 py-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary font-mono text-sm uppercase">
+                class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+              <div class="w-full h-24 rounded-xl cursor-pointer overflow-hidden border-4 border-gray-700 group-hover:border-accent/50 transition-all duration-300 shadow-lg"
+                style="background-color: <%= branding.accent_color %>">
+                <div class="w-full h-full flex items-center justify-center bg-black/0 group-hover:bg-black/20 transition-all duration-300">
+                  <i class="ti ti-color-picker text-white text-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></i>
+                </div>
+              </div>
             </div>
-            <p class="text-xs text-gray-500 mt-1.5">Badges, notifications</p>
+            
+            <!-- Hex Input -->
+            <input type="text" id="accent-color-text" value="<%= branding.accent_color %>"
+              class="w-full bg-dark-800 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent font-mono text-xs uppercase text-center tracking-wider border border-gray-700">
+            
+            <p class="text-xs text-gray-500 mt-2 text-center">Badges & Alerts</p>
           </div>
         </div>
 
-        <!-- Color Preview -->
-        <div class="mt-5 p-4 bg-dark-900 rounded-lg border border-gray-600">
-          <p class="text-xs text-gray-400 mb-3 font-medium">Preview:</p>
-          <div class="flex flex-wrap gap-2">
-            <button type="button" id="color-preview-primary" style="background-color: <%= branding.primary_color %>"
-              class="px-5 py-2.5 text-white rounded-lg font-medium shadow-lg">Primary Button</button>
-            <button type="button" id="color-preview-secondary" style="background-color: <%= branding.secondary_color %>"
-              class="px-5 py-2.5 text-white rounded-lg font-medium shadow-lg">Secondary Button</button>
-            <span id="color-preview-accent" style="background-color: <%= branding.accent_color %>"
-              class="px-4 py-2 text-white rounded-full text-sm font-medium shadow-lg">Accent Badge</span>
+        <!-- Live Preview - Modern Interactive -->
+        <div class="bg-gradient-to-br from-dark-900 to-dark-800 rounded-xl p-6 border border-gray-700/50 shadow-inner">
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-2">
+              <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center shadow-lg">
+                <i class="ti ti-eye text-white"></i>
+              </div>
+              <span class="text-sm font-semibold text-gray-200">Live Preview</span>
+            </div>
+            <span class="text-xs text-gray-500 bg-dark-700 px-3 py-1 rounded-full">Real-time</span>
+          </div>
+          
+          <!-- Preview Components -->
+          <div class="space-y-4">
+            <!-- Buttons Row -->
+            <div class="flex flex-wrap gap-3">
+              <button type="button" id="color-preview-primary" 
+                style="background-color: <%= branding.primary_color %>"
+                class="px-6 py-3 text-white rounded-xl font-semibold shadow-lg hover:scale-105 transition-transform duration-200 flex items-center gap-2">
+                <i class="ti ti-check"></i>
+                <span class="hidden sm:inline">Primary</span>
+              </button>
+              
+              <button type="button" id="color-preview-secondary" 
+                style="background-color: <%= branding.secondary_color %>"
+                class="px-6 py-3 text-white rounded-xl font-semibold shadow-lg hover:scale-105 transition-transform duration-200 flex items-center gap-2">
+                <i class="ti ti-star"></i>
+                <span class="hidden sm:inline">Secondary</span>
+              </button>
+              
+              <span id="color-preview-accent" 
+                style="background-color: <%= branding.accent_color %>"
+                class="px-5 py-3 text-white rounded-full text-sm font-bold shadow-lg flex items-center gap-2">
+                <i class="ti ti-bell"></i>
+                <span>Badge</span>
+              </span>
+            </div>
+
+            <!-- UI Elements Preview -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <!-- Card with Primary -->
+              <div class="bg-dark-700/50 rounded-lg p-4 border border-gray-600/30">
+                <div class="flex items-center gap-3 mb-2">
+                  <div id="preview-icon-primary" style="background-color: <%= branding.primary_color %>" 
+                    class="w-10 h-10 rounded-lg flex items-center justify-center shadow-lg">
+                    <i class="ti ti-rocket text-white"></i>
+                  </div>
+                  <div>
+                    <p class="text-sm font-semibold text-white">Primary Action</p>
+                    <p class="text-xs text-gray-400">Main features</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Card with Accent -->
+              <div class="bg-dark-700/50 rounded-lg p-4 border border-gray-600/30">
+                <div class="flex items-center gap-3 mb-2">
+                  <div id="preview-icon-accent" style="background-color: <%= branding.accent_color %>" 
+                    class="w-10 h-10 rounded-lg flex items-center justify-center shadow-lg">
+                    <i class="ti ti-sparkles text-white"></i>
+                  </div>
+                  <div>
+                    <p class="text-sm font-semibold text-white">Accent Highlight</p>
+                    <p class="text-xs text-gray-400">Notifications</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Progress Bar Preview -->
+            <div class="space-y-2">
+              <div class="flex items-center justify-between text-xs text-gray-400">
+                <span>Color Application</span>
+                <span>100%</span>
+              </div>
+              <div class="h-2 bg-dark-700 rounded-full overflow-hidden">
+                <div id="preview-progress" style="background: linear-gradient(90deg, <%= branding.primary_color %> 0%, <%= branding.secondary_color %> 50%, <%= branding.accent_color %> 100%)" 
+                  class="h-full w-full rounded-full shadow-lg"></div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -248,34 +364,109 @@
 <script>
 // Branding Settings JavaScript
 (function() {
-  // Color picker sync
+  // Color picker sync with enhanced preview
   const colorInputs = [
-    { picker: 'primary-color', text: 'primary-color-text', preview: 'color-preview-primary' },
-    { picker: 'secondary-color', text: 'secondary-color-text', preview: 'color-preview-secondary' },
-    { picker: 'accent-color', text: 'accent-color-text', preview: 'color-preview-accent' }
+    { 
+      picker: 'primary-color', 
+      text: 'primary-color-text', 
+      preview: 'color-preview-primary',
+      icon: 'preview-icon-primary',
+      card: null
+    },
+    { 
+      picker: 'secondary-color', 
+      text: 'secondary-color-text', 
+      preview: 'color-preview-secondary',
+      icon: null,
+      card: null
+    },
+    { 
+      picker: 'accent-color', 
+      text: 'accent-color-text', 
+      preview: 'color-preview-accent',
+      icon: 'preview-icon-accent',
+      card: null
+    }
   ];
 
-  colorInputs.forEach(({ picker, text, preview }) => {
+  // Update all preview elements
+  function updateColorPreview(color, elements) {
+    const { preview, icon, text, picker } = elements;
+    
+    // Update preview button
+    if (preview) preview.style.backgroundColor = color;
+    
+    // Update icon background
+    if (icon) icon.style.backgroundColor = color;
+    
+    // Update text input
+    if (text) text.value = color.toUpperCase();
+    
+    // Update color picker
+    if (picker) picker.value = color;
+    
+    // Update color picker card background
+    const pickerCard = picker?.parentElement?.querySelector('div[style*="background-color"]');
+    if (pickerCard) pickerCard.style.backgroundColor = color;
+    
+    // Update progress bar gradient
+    updateProgressGradient();
+  }
+
+  // Update progress bar with gradient
+  function updateProgressGradient() {
+    const progressBar = document.getElementById('preview-progress');
+    if (progressBar) {
+      const primary = document.getElementById('primary-color')?.value || '#8B5CF6';
+      const secondary = document.getElementById('secondary-color')?.value || '#7C3AED';
+      const accent = document.getElementById('accent-color')?.value || '#6D28D9';
+      
+      progressBar.style.background = `linear-gradient(90deg, ${primary} 0%, ${secondary} 50%, ${accent} 100%)`;
+    }
+  }
+
+  colorInputs.forEach(({ picker, text, preview, icon }) => {
     const pickerEl = document.getElementById(picker);
     const textEl = document.getElementById(text);
     const previewEl = document.getElementById(preview);
+    const iconEl = icon ? document.getElementById(icon) : null;
 
     if (pickerEl && textEl && previewEl) {
+      // Color picker change
       pickerEl.addEventListener('input', (e) => {
-        textEl.value = e.target.value.toUpperCase();
-        previewEl.style.backgroundColor = e.target.value;
+        const color = e.target.value;
+        updateColorPreview(color, {
+          preview: previewEl,
+          icon: iconEl,
+          text: textEl,
+          picker: pickerEl
+        });
       });
 
+      // Text input change
       textEl.addEventListener('input', (e) => {
         const value = e.target.value.toUpperCase();
         textEl.value = value;
         if (/^#[0-9A-F]{6}$/i.test(value)) {
-          pickerEl.value = value;
-          previewEl.style.backgroundColor = value;
+          updateColorPreview(value, {
+            preview: previewEl,
+            icon: iconEl,
+            text: textEl,
+            picker: pickerEl
+          });
         }
       });
+
+      // Update color picker card background on load
+      const pickerCard = pickerEl.parentElement?.querySelector('div[style*="background-color"]');
+      if (pickerCard) {
+        pickerCard.style.backgroundColor = pickerEl.value;
+      }
     }
   });
+
+  // Initialize progress gradient
+  updateProgressGradient();
 
   // Logo upload with API
   const logoUpload = document.getElementById('logo-upload');
