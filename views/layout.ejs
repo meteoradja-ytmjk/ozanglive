@@ -139,7 +139,7 @@
   <div
     class="lg:hidden fixed top-0 left-0 right-0 h-16 bg-dark-800 shadow-lg flex items-center justify-between px-4 z-30">
     <div class="flex items-center">
-      <img src="<%= typeof branding !== 'undefined' ? branding.logo_path : '/images/logo_mobile.svg' %>" alt="<%= typeof branding !== 'undefined' ? branding.app_name : 'StreamFlow' %> Logo" class="h-8">
+      <img src="<%= typeof branding !== 'undefined' ? branding.logo_path : '/images/logo_mobile.svg' %>" alt="<%= typeof branding !== 'undefined' ? branding.app_name : 'StreamFlow' %> Logo" class="h-12 w-auto object-contain">
     </div>
     <div class="flex items-center gap-2">
       <a href="https://wa.me/6289621453431" target="_blank"
@@ -163,7 +163,7 @@
         <img src="<%= typeof branding !== 'undefined' ? branding.logo_path : '/images/logo_mobile.svg' %>" alt="<%= typeof branding !== 'undefined' ? branding.app_name : 'StreamFlow' %> Logo" class="desktop-logo">
       </div>
       <!-- Spacer untuk logo -->
-      <div class="h-12 mb-4"></div>
+      <div class="h-16 mb-4"></div>
       <div class="flex-1 overflow-hidden">
         <a href="/dashboard" class="sidebar-icon group <%= active === 'dashboard' ? 'bg-primary' : '' %>">
           <i class="ti ti-live-photo text-xl"></i>
