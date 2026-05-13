@@ -248,8 +248,8 @@ function createChannelGroup(channelName, group, channelIndex) {
       <div class="flex items-center justify-between px-4 py-3 bg-dark-700 cursor-pointer hover:bg-dark-600 transition-colors"
         onclick="toggleBroadcastChannel('${channelIndex}')">
         <div class="flex items-center gap-3">
-          <div class="w-8 h-8 bg-red-500/20 rounded-lg flex items-center justify-center">
-            <i class="ti ti-brand-youtube text-red-400"></i>
+          <div class="w-8 h-8 bg-red-500/20 rounded-lg flex items-center justify-center text-xl">
+            📺
           </div>
           <div>
             <span class="font-medium text-white">${escapeHtml(channelName)}</span>
@@ -260,7 +260,7 @@ function createChannelGroup(channelName, group, channelIndex) {
           <input type="checkbox" class="channel-select-all w-4 h-4 rounded border-gray-600 bg-dark-700 text-primary focus:ring-primary cursor-pointer"
             onclick="event.stopPropagation(); toggleChannelSelectAll(this, ${group.accountId})"
             title="Select all in this channel">
-          <i class="ti ti-chevron-down text-gray-400 transition-transform" id="channelChevron_${channelIndex}"></i>
+          <span class="text-gray-400 text-xl transition-transform" id="channelChevron_${channelIndex}" style="display: inline-block;">▶</span>
         </div>
       </div>
     `;
@@ -274,9 +274,10 @@ function createChannelGroup(channelName, group, channelIndex) {
       }
     }).join('');
     
+    // AUTO-COLLAPSE: Start with display:none and chevron pointing right (▶)
     div.innerHTML = `
       ${headerHtml}
-      <div id="channelBroadcasts_${channelIndex}" class="divide-y divide-gray-700/50">
+      <div id="channelBroadcasts_${channelIndex}" class="divide-y divide-gray-700/50" style="display: none;">
         ${broadcastsHtml}
       </div>
     `;
@@ -346,18 +347,18 @@ function createBroadcastRowHtml(broadcast, index) {
               ${streamKeyDisplay}
             </span>
           </div>
-          <div class="w-24 flex items-center justify-center gap-1">
+          <div class="w-32 flex items-center justify-center gap-2">
             <button onclick="editBroadcast('${broadcast.id}', ${broadcast.accountId})"
-              class="w-7 h-7 flex items-center justify-center text-blue-400 hover:bg-blue-500/20 rounded transition-colors" title="Edit">
-              <i class="ti ti-edit text-sm"></i>
+              class="px-2 py-1 text-xs bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded transition-colors" title="Edit">
+              ✏️ Edit
             </button>
             <button onclick="reuseBroadcast('${broadcast.id}', ${broadcast.accountId})"
-              class="w-7 h-7 flex items-center justify-center text-green-400 hover:bg-green-500/20 rounded transition-colors" title="Sync">
-              <i class="ti ti-refresh text-sm"></i>
+              class="px-2 py-1 text-xs bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded transition-colors" title="Sync">
+              🔄 Sync
             </button>
             <button onclick="deleteBroadcast('${broadcast.id}', '${safeTitleJs}', ${broadcast.accountId})"
-              class="w-7 h-7 flex items-center justify-center text-red-400 hover:bg-red-500/20 rounded transition-colors" title="Delete">
-              <i class="ti ti-trash text-sm"></i>
+              class="px-2 py-1 text-xs bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded transition-colors" title="Delete">
+              🗑️ Del
             </button>
           </div>
         </div>
@@ -374,18 +375,18 @@ function createBroadcastRowHtml(broadcast, index) {
           <span class="px-1.5 py-0.5 rounded text-[10px] font-medium uppercase flex-shrink-0 ${privacyClass}">
             ${(broadcast.privacyStatus || 'pri').substring(0, 3)}
           </span>
-          <div class="flex items-center gap-0.5 flex-shrink-0">
+          <div class="flex items-center gap-1 flex-shrink-0">
             <button onclick="editBroadcast('${broadcast.id}', ${broadcast.accountId})"
-              class="w-8 h-8 flex items-center justify-center text-blue-400 hover:bg-blue-500/20 rounded transition-colors" title="Edit">
-              <i class="ti ti-edit text-sm"></i>
+              class="px-1.5 py-1 text-xs bg-blue-500/20 text-blue-400 rounded" title="Edit">
+              ✏️
             </button>
             <button onclick="reuseBroadcast('${broadcast.id}', ${broadcast.accountId})"
-              class="w-8 h-8 flex items-center justify-center text-green-400 hover:bg-green-500/20 rounded transition-colors" title="Sync">
-              <i class="ti ti-refresh text-sm"></i>
+              class="px-1.5 py-1 text-xs bg-green-500/20 text-green-400 rounded" title="Sync">
+              🔄
             </button>
             <button onclick="deleteBroadcast('${broadcast.id}', '${safeTitleJs}', ${broadcast.accountId})"
-              class="w-8 h-8 flex items-center justify-center text-red-400 hover:bg-red-500/20 rounded transition-colors" title="Delete">
-              <i class="ti ti-trash text-sm"></i>
+              class="px-1.5 py-1 text-xs bg-red-500/20 text-red-400 rounded" title="Delete">
+              🗑️
             </button>
           </div>
         </div>
@@ -458,11 +459,15 @@ function toggleBroadcastChannel(channelIndex) {
   
   if (broadcastsDiv && chevron) {
     if (broadcastsDiv.style.display === 'none') {
+      // EXPAND
       broadcastsDiv.style.display = 'block';
+      chevron.textContent = '▼';
       chevron.style.transform = 'rotate(0deg)';
     } else {
+      // COLLAPSE
       broadcastsDiv.style.display = 'none';
-      chevron.style.transform = 'rotate(-90deg)';
+      chevron.textContent = '▶';
+      chevron.style.transform = 'rotate(0deg)';
     }
   }
 }
