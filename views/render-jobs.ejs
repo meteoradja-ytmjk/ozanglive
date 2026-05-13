@@ -291,6 +291,28 @@
 #uploadWidgetExpanded {
   animation: slideInUp 0.2s ease-out;
 }
+
+/* Search Box Styling */
+#videoSearchInput:focus,
+#audioSearchInput:focus {
+  border-color: #8B5CF6;
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+}
+
+.no-results-message {
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 </style>
 </style>
 
@@ -445,6 +467,15 @@
           
           <!-- Video Content -->
           <div id="videoMediaContent">
+            <!-- Search Box for Videos -->
+            <div class="mb-2">
+              <div class="relative">
+                <input type="text" id="videoSearchInput" placeholder="Search videos or folders..." 
+                  class="w-full bg-dark-700 text-white px-3 py-2 pl-9 border border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                  oninput="filterMedia('video')">
+                <i class="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+              </div>
+            </div>
             <div id="videoList" class="max-h-64 overflow-y-auto bg-gray-700/30 rounded-lg p-2">
               <div class="text-xs text-gray-400 text-center py-3">Loading...</div>
             </div>
@@ -452,6 +483,15 @@
           
           <!-- Audio Content -->
           <div id="audioMediaContent" class="hidden">
+            <!-- Search Box for Audio -->
+            <div class="mb-2">
+              <div class="relative">
+                <input type="text" id="audioSearchInput" placeholder="Search audio or folders..." 
+                  class="w-full bg-dark-700 text-white px-3 py-2 pl-9 border border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                  oninput="filterMedia('audio')">
+                <i class="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+              </div>
+            </div>
             <div id="audioList" class="max-h-64 overflow-y-auto bg-gray-700/30 rounded-lg p-2">
               <div class="text-xs text-gray-400 text-center py-3">Loading...</div>
             </div>
@@ -1998,6 +2038,74 @@ function togglePin(event, id, type) {
 
 function updateSelectedCount() {
   updateMediaSelectionCount();
+}
+
+// FILTER/SEARCH MEDIA FUNCTION
+function filterMedia(type) {
+  const searchInput = type === 'video' 
+    ? document.getElementById('videoSearchInput')
+    : document.getElementById('audioSearchInput');
+  
+  const container = type === 'video'
+    ? document.getElementById('videoList')
+    : document.getElementById('audioList');
+  
+  if (!searchInput || !container) return;
+  
+  const searchTerm = searchInput.value.toLowerCase().trim();
+  const allGroups = container.querySelectorAll('details');
+  
+  let visibleCount = 0;
+  
+  allGroups.forEach(group => {
+    // Get folder/group name
+    const groupNameElement = group.querySelector('summary .text-sm.font-medium');
+    const groupName = groupNameElement ? groupNameElement.textContent.toLowerCase() : '';
+    
+    // Check if search term matches folder name
+    const folderMatches = searchTerm === '' || groupName.includes(searchTerm);
+    
+    const items = group.querySelectorAll('.media-item');
+    let groupHasVisibleItems = false;
+    
+    items.forEach(item => {
+      const titleElement = item.querySelector('.text-sm.text-white');
+      const title = titleElement ? titleElement.textContent.toLowerCase() : '';
+      
+      // Show item if: no search term, OR folder matches, OR file name matches
+      if (searchTerm === '' || folderMatches || title.includes(searchTerm)) {
+        item.style.display = '';
+        groupHasVisibleItems = true;
+        visibleCount++;
+      } else {
+        item.style.display = 'none';
+      }
+    });
+    
+    // Show group if folder name matches OR has visible items
+    if (folderMatches || groupHasVisibleItems) {
+      group.style.display = '';
+      // Auto-open group if folder name matches
+      if (folderMatches && searchTerm !== '') {
+        group.setAttribute('open', '');
+      }
+    } else {
+      group.style.display = 'none';
+    }
+  });
+  
+  // Show message if no results
+  const existingNoResults = container.querySelector('.no-results-message');
+  if (existingNoResults) {
+    existingNoResults.remove();
+  }
+  
+  if (visibleCount === 0 && searchTerm !== '') {
+    const noResultsMsg = document.createElement('div');
+    noResultsMsg.className = 'no-results-message text-xs text-gray-400 text-center py-4';
+    noResultsMsg.innerHTML = `<i class="ti ti-search-off text-2xl mb-2 block"></i>No ${type}s found for "${searchTerm}"`;
+    container.appendChild(noResultsMsg);
+  }
 }
 
 function updateMediaSelectionCount() {
