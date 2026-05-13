@@ -220,11 +220,76 @@ const uploadBackup = multer({
   fileFilter: jsonFilter
 });
 
+// Branding assets storage (logo, favicon)
+const brandingStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const brandingPath = path.join(__dirname, '../public/uploads/branding');
+    // Ensure directory exists
+    if (!fs.existsSync(brandingPath)) {
+      fs.mkdirSync(brandingPath, { recursive: true });
+    }
+    cb(null, brandingPath);
+  },
+  filename: (req, file, cb) => {
+    const timestamp = Date.now();
+    const ext = path.extname(file.originalname);
+    const basename = path.basename(file.originalname, ext);
+    const sanitized = basename.replace(/[^a-z0-9]/gi, '-').toLowerCase();
+    cb(null, `${sanitized}-${timestamp}${ext}`);
+  }
+});
+
+// Logo filter (PNG, SVG, JPG)
+const logoFilter = (req, file, cb) => {
+  const allowedFormats = ['image/png', 'image/svg+xml', 'image/jpeg', 'image/jpg'];
+  const fileExt = path.extname(file.originalname).toLowerCase();
+  const allowedExts = ['.png', '.svg', '.jpg', '.jpeg'];
+  
+  if (allowedFormats.includes(file.mimetype) || allowedExts.includes(fileExt)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Logo must be PNG, SVG, or JPG format'), false);
+  }
+};
+
+// Favicon filter (ICO, PNG)
+const faviconFilter = (req, file, cb) => {
+  const allowedFormats = ['image/x-icon', 'image/vnd.microsoft.icon', 'image/png'];
+  const fileExt = path.extname(file.originalname).toLowerCase();
+  const allowedExts = ['.ico', '.png'];
+  
+  if (allowedFormats.includes(file.mimetype) || allowedExts.includes(fileExt)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Favicon must be ICO or PNG format'), false);
+  }
+};
+
+// Upload logo
+const uploadLogo = multer({
+  storage: brandingStorage,
+  fileFilter: logoFilter,
+  limits: {
+    fileSize: 2 * 1024 * 1024 // 2MB max
+  }
+});
+
+// Upload favicon
+const uploadFavicon = multer({
+  storage: brandingStorage,
+  fileFilter: faviconFilter,
+  limits: {
+    fileSize: 500 * 1024 // 500KB max
+  }
+});
+
 module.exports = {
   uploadVideo,
   upload,
   uploadAudio,
   uploadChunk,
   uploadBackup,
+  uploadLogo,
+  uploadFavicon,
   checkStorageLimit
 };
