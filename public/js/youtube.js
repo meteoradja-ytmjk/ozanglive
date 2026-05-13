@@ -2,6 +2,25 @@
  * YouTube Sync Client-Side JavaScript
  */
 
+// Escape HTML to prevent XSS
+function escapeHtml(text) {
+  if (!text) return '';
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// Escape string for use in JavaScript string literals (single quotes)
+function escapeJsString(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r');
+}
+
 // Get CSRF token from meta tag or form
 function getCsrfToken() {
   const metaTag = document.querySelector('meta[name="csrf-token"]');
@@ -50,7 +69,7 @@ async function lazyLoadBroadcasts() {
   
   // Add timeout to prevent infinite loading
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+  const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 second timeout (increased)
   
   try {
     const response = await fetch('/api/youtube/broadcasts', {
@@ -62,39 +81,75 @@ async function lazyLoadBroadcasts() {
     
     clearTimeout(timeoutId);
     
-    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
     
-    if (data.success && data.broadcasts) {
+    const data = await response.json();
+    console.log('[Performance] API Response:', data);
+    
+    if (data.success && data.broadcasts !== undefined) {
       console.log(`[Performance] Loaded ${data.broadcasts.length} broadcasts`);
       
       // Update cache
       broadcastsCache.data = data.broadcasts;
       broadcastsCache.timestamp = Date.now();
       
-      // Render broadcasts
+      // Hide loading, show container FIRST
+      if (loadingContainer) loadingContainer.remove();
+      if (broadcastsContainer) broadcastsContainer.classList.remove('hidden');
+      
+      // Then render broadcasts
       if (data.broadcasts.length > 0) {
+        console.log('[Performance] Rendering broadcasts...');
         renderBroadcastsGrouped(data.broadcasts, data.accounts || []);
+        console.log('[Performance] Broadcasts rendered successfully');
       } else {
+        console.log('[Performance] No broadcasts, showing empty state');
         renderEmptyState();
       }
     } else {
-      console.error('[Performance] Failed to load broadcasts:', data.error);
+      console.error('[Performance] Failed to load broadcasts:', data.error || 'Unknown error');
+      if (loadingContainer) loadingContainer.remove();
+      if (broadcastsContainer) broadcastsContainer.classList.remove('hidden');
       renderEmptyState();
     }
   } catch (error) {
     clearTimeout(timeoutId);
+    console.error('[Performance] Error loading broadcasts:', error);
+    
+    // Hide loading, show container
+    if (loadingContainer) loadingContainer.remove();
+    if (broadcastsContainer) broadcastsContainer.classList.remove('hidden');
+    
     if (error.name === 'AbortError') {
       console.error('[Performance] Request timeout - taking too long to load broadcasts');
       showTimeoutError();
     } else {
-      console.error('[Performance] Error loading broadcasts:', error);
-      renderEmptyState();
+      showErrorState(error.message);
     }
-  } finally {
-    // Hide loading, show container
-    if (loadingContainer) loadingContainer.remove();
-    if (broadcastsContainer) broadcastsContainer.classList.remove('hidden');
   }
+}
+
+// Show error state
+function showErrorState(errorMessage) {
+  const container = document.getElementById('broadcastsContainer');
+  if (!container) return;
+  
+  container.innerHTML = `
+    <div class="bg-gray-800 rounded-lg p-10 text-center border-2 border-red-500/30">
+      <div class="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+        <i class="ti ti-alert-circle text-red-500 text-2xl"></i>
+      </div>
+      <p class="text-red-400 font-medium mb-2">Failed to load broadcasts</p>
+      <p class="text-gray-400 text-sm mb-4">${escapeHtml(errorMessage || 'An error occurred')}</p>
+      <button onclick="window.location.reload()"
+        class="bg-primary hover:bg-primary/80 text-white px-4 py-2 rounded-lg transition-colors inline-flex items-center gap-2">
+        <i class="ti ti-refresh"></i>
+        <span>Retry</span>
+      </button>
+    </div>
+  `;
 }
 
 // Show timeout error message
@@ -141,14 +196,19 @@ function renderEmptyState() {
 
 // Render broadcasts grouped by channel
 function renderBroadcastsGrouped(broadcasts, accounts) {
+  console.log('[renderBroadcastsGrouped] Starting render with', broadcasts.length, 'broadcasts');
   const container = document.getElementById('broadcastsContainer');
-  if (!container) return;
+  if (!container) {
+    console.error('[renderBroadcastsGrouped] Container not found!');
+    return;
+  }
   
   // Create account map
   const accountMap = {};
   accounts.forEach(acc => {
     accountMap[acc.id] = acc.channelName || 'Unknown Channel';
   });
+  console.log('[renderBroadcastsGrouped] Account map:', accountMap);
   
   // Group broadcasts by channel
   const groupedBroadcasts = {};
@@ -162,6 +222,7 @@ function renderBroadcastsGrouped(broadcasts, accounts) {
     }
     groupedBroadcasts[channelName].broadcasts.push(broadcast);
   });
+  console.log('[renderBroadcastsGrouped] Grouped broadcasts:', Object.keys(groupedBroadcasts));
   
   // Render each channel group
   container.innerHTML = '';
@@ -169,146 +230,171 @@ function renderBroadcastsGrouped(broadcasts, accounts) {
   
   channelNames.forEach((channelName, channelIndex) => {
     const group = groupedBroadcasts[channelName];
+    console.log(`[renderBroadcastsGrouped] Rendering channel ${channelIndex}: ${channelName} with ${group.broadcasts.length} broadcasts`);
     const channelDiv = createChannelGroup(channelName, group, channelIndex);
     container.appendChild(channelDiv);
   });
+  
+  console.log('[renderBroadcastsGrouped] Render complete');
 }
 
 // Create channel group element
 function createChannelGroup(channelName, group, channelIndex) {
-  const div = document.createElement('div');
-  div.className = 'channel-broadcast-group bg-gray-800 rounded-lg shadow-md overflow-hidden';
-  
-  const headerHtml = `
-    <div class="flex items-center justify-between px-4 py-3 bg-dark-700 cursor-pointer hover:bg-dark-600 transition-colors"
-      onclick="toggleBroadcastChannel('${channelIndex}')">
-      <div class="flex items-center gap-3">
-        <div class="w-8 h-8 bg-red-500/20 rounded-lg flex items-center justify-center">
-          <i class="ti ti-brand-youtube text-red-400"></i>
+  try {
+    const div = document.createElement('div');
+    div.className = 'channel-broadcast-group bg-gray-800 rounded-lg shadow-md overflow-hidden';
+    
+    const headerHtml = `
+      <div class="flex items-center justify-between px-4 py-3 bg-dark-700 cursor-pointer hover:bg-dark-600 transition-colors"
+        onclick="toggleBroadcastChannel('${channelIndex}')">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 bg-red-500/20 rounded-lg flex items-center justify-center">
+            <i class="ti ti-brand-youtube text-red-400"></i>
+          </div>
+          <div>
+            <span class="font-medium text-white">${escapeHtml(channelName)}</span>
+            <span class="ml-2 text-xs text-gray-400">(${group.broadcasts.length} broadcasts)</span>
+          </div>
         </div>
-        <div>
-          <span class="font-medium text-white">${escapeHtml(channelName)}</span>
-          <span class="ml-2 text-xs text-gray-400">(${group.broadcasts.length} broadcasts)</span>
+        <div class="flex items-center gap-2">
+          <input type="checkbox" class="channel-select-all w-4 h-4 rounded border-gray-600 bg-dark-700 text-primary focus:ring-primary cursor-pointer"
+            onclick="event.stopPropagation(); toggleChannelSelectAll(this, ${group.accountId})"
+            title="Select all in this channel">
+          <i class="ti ti-chevron-down text-gray-400 transition-transform" id="channelChevron_${channelIndex}"></i>
         </div>
       </div>
-      <div class="flex items-center gap-2">
-        <input type="checkbox" class="channel-select-all w-4 h-4 rounded border-gray-600 bg-dark-700 text-primary focus:ring-primary cursor-pointer"
-          onclick="event.stopPropagation(); toggleChannelSelectAll(this, ${group.accountId})"
-          title="Select all in this channel">
-        <i class="ti ti-chevron-down text-gray-400 transition-transform" id="channelChevron_${channelIndex}"></i>
+    `;
+    
+    const broadcastsHtml = group.broadcasts.map((broadcast, index) => {
+      try {
+        return createBroadcastRowHtml(broadcast, index);
+      } catch (err) {
+        console.error(`[createChannelGroup] Error rendering broadcast ${index}:`, err, broadcast);
+        return `<div class="p-4 text-red-400">Error rendering broadcast: ${escapeHtml(broadcast.title || 'Unknown')}</div>`;
+      }
+    }).join('');
+    
+    div.innerHTML = `
+      ${headerHtml}
+      <div id="channelBroadcasts_${channelIndex}" class="divide-y divide-gray-700/50">
+        ${broadcastsHtml}
       </div>
-    </div>
-  `;
-  
-  const broadcastsHtml = group.broadcasts.map((broadcast, index) => 
-    createBroadcastRowHtml(broadcast, index)
-  ).join('');
-  
-  div.innerHTML = `
-    ${headerHtml}
-    <div id="channelBroadcasts_${channelIndex}" class="divide-y divide-gray-700/50">
-      ${broadcastsHtml}
-    </div>
-  `;
-  
-  return div;
+    `;
+    
+    return div;
+  } catch (error) {
+    console.error('[createChannelGroup] Error:', error);
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'bg-red-500/20 p-4 rounded-lg';
+    errorDiv.innerHTML = `<p class="text-red-400">Error rendering channel: ${escapeHtml(channelName)}</p>`;
+    return errorDiv;
+  }
 }
 
 // Create broadcast row HTML
 function createBroadcastRowHtml(broadcast, index) {
-  const broadcastData = JSON.stringify({
-    id: broadcast.id,
-    accountId: broadcast.accountId,
-    title: broadcast.title,
-    description: broadcast.description || "",
-    privacyStatus: broadcast.privacyStatus,
-    streamId: broadcast.streamId || null,
-    streamKey: broadcast.streamKey || "",
-    categoryId: broadcast.categoryId || "22",
-    tags: broadcast.tags || [],
-    thumbnailPath: broadcast.thumbnailPath || null
-  }).replace(/"/g, '&quot;');
-  
-  const privacyClass = 
-    broadcast.privacyStatus === 'public' ? 'bg-green-500/20 text-green-400' :
-    broadcast.privacyStatus === 'unlisted' ? 'bg-yellow-500/20 text-yellow-400' :
-    'bg-gray-500/20 text-gray-400';
-  
-  const streamKeyDisplay = broadcast.streamKey ? 
-    broadcast.streamKey.substring(0, 16) + '...' : '-';
-  
-  return `
-    <div class="broadcast-list-item broadcast-row hover:bg-dark-700/30 transition-colors" 
-      data-broadcast-id="${broadcast.id}" data-account-id="${broadcast.accountId}">
-      <!-- Desktop Row -->
-      <div class="hidden md:flex items-center gap-2 px-4 py-2">
-        <div class="w-8 text-center">
-          <input type="checkbox" class="broadcast-checkbox w-4 h-4 rounded border-gray-600 bg-dark-700 text-primary focus:ring-primary cursor-pointer"
+  try {
+    // Safely stringify broadcast data
+    const broadcastData = JSON.stringify({
+      id: broadcast.id,
+      accountId: broadcast.accountId,
+      title: broadcast.title || '',
+      description: broadcast.description || "",
+      privacyStatus: broadcast.privacyStatus || 'private',
+      streamId: broadcast.streamId || null,
+      streamKey: broadcast.streamKey || "",
+      categoryId: broadcast.categoryId || "22",
+      tags: broadcast.tags || [],
+      thumbnailPath: broadcast.thumbnailPath || null
+    }).replace(/"/g, '&quot;');
+    
+    const privacyClass = 
+      broadcast.privacyStatus === 'public' ? 'bg-green-500/20 text-green-400' :
+      broadcast.privacyStatus === 'unlisted' ? 'bg-yellow-500/20 text-yellow-400' :
+      'bg-gray-500/20 text-gray-400';
+    
+    const streamKeyDisplay = broadcast.streamKey ? 
+      broadcast.streamKey.substring(0, 16) + '...' : '-';
+    
+    const safeTitle = escapeHtml(broadcast.title || 'Untitled');
+    const safeTitleJs = escapeJsString(broadcast.title || 'Untitled');
+    
+    return `
+      <div class="broadcast-list-item broadcast-row hover:bg-dark-700/30 transition-colors" 
+        data-broadcast-id="${broadcast.id}" data-account-id="${broadcast.accountId}">
+        <!-- Desktop Row -->
+        <div class="hidden md:flex items-center gap-2 px-4 py-2">
+          <div class="w-8 text-center">
+            <input type="checkbox" class="broadcast-checkbox w-4 h-4 rounded border-gray-600 bg-dark-700 text-primary focus:ring-primary cursor-pointer"
+              data-broadcast-id="${broadcast.id}"
+              data-account-id="${broadcast.accountId}"
+              data-broadcast="${broadcastData}"
+              onchange="syncCheckboxes(this); updateSelectionCount()">
+          </div>
+          <div class="w-8 text-center text-xs text-gray-500">${index + 1}</div>
+          <div class="flex-1 min-w-0">
+            <span class="text-sm text-white truncate block">${safeTitle}</span>
+          </div>
+          <div class="w-20 text-center">
+            <span class="px-2 py-0.5 rounded text-xs font-medium uppercase ${privacyClass}">
+              ${broadcast.privacyStatus || 'private'}
+            </span>
+          </div>
+          <div class="w-36">
+            <span class="font-mono text-xs text-gray-400 truncate block cursor-pointer hover:text-primary" 
+              onclick="copyStreamKey('${escapeJsString(broadcast.streamKey || '')}')" title="Click to copy">
+              ${streamKeyDisplay}
+            </span>
+          </div>
+          <div class="w-24 flex items-center justify-center gap-1">
+            <button onclick="editBroadcast('${broadcast.id}', ${broadcast.accountId})"
+              class="w-7 h-7 flex items-center justify-center text-blue-400 hover:bg-blue-500/20 rounded transition-colors" title="Edit">
+              <i class="ti ti-edit text-sm"></i>
+            </button>
+            <button onclick="reuseBroadcast('${broadcast.id}', ${broadcast.accountId})"
+              class="w-7 h-7 flex items-center justify-center text-green-400 hover:bg-green-500/20 rounded transition-colors" title="Sync">
+              <i class="ti ti-refresh text-sm"></i>
+            </button>
+            <button onclick="deleteBroadcast('${broadcast.id}', '${safeTitleJs}', ${broadcast.accountId})"
+              class="w-7 h-7 flex items-center justify-center text-red-400 hover:bg-red-500/20 rounded transition-colors" title="Delete">
+              <i class="ti ti-trash text-sm"></i>
+            </button>
+          </div>
+        </div>
+        
+        <!-- Mobile Row -->
+        <div class="md:hidden flex items-center gap-2 px-3 py-2">
+          <input type="checkbox" class="broadcast-checkbox w-4 h-4 rounded border-gray-600 bg-dark-700 text-primary focus:ring-primary cursor-pointer flex-shrink-0"
             data-broadcast-id="${broadcast.id}"
             data-account-id="${broadcast.accountId}"
             data-broadcast="${broadcastData}"
             onchange="syncCheckboxes(this); updateSelectionCount()">
-        </div>
-        <div class="w-8 text-center text-xs text-gray-500">${index + 1}</div>
-        <div class="flex-1 min-w-0">
-          <span class="text-sm text-white truncate block">${escapeHtml(broadcast.title)}</span>
-        </div>
-        <div class="w-20 text-center">
-          <span class="px-2 py-0.5 rounded text-xs font-medium uppercase ${privacyClass}">
-            ${broadcast.privacyStatus}
+          <span class="text-gray-500 text-xs w-4 flex-shrink-0">${index + 1}</span>
+          <span class="flex-1 text-xs text-white truncate min-w-0">${safeTitle}</span>
+          <span class="px-1.5 py-0.5 rounded text-[10px] font-medium uppercase flex-shrink-0 ${privacyClass}">
+            ${(broadcast.privacyStatus || 'pri').substring(0, 3)}
           </span>
-        </div>
-        <div class="w-36">
-          <span class="font-mono text-xs text-gray-400 truncate block cursor-pointer hover:text-primary" 
-            onclick="copyStreamKey('${broadcast.streamKey || ''}')" title="Click to copy">
-            ${streamKeyDisplay}
-          </span>
-        </div>
-        <div class="w-24 flex items-center justify-center gap-1">
-          <button onclick="editBroadcast('${broadcast.id}', ${broadcast.accountId})"
-            class="w-7 h-7 flex items-center justify-center text-blue-400 hover:bg-blue-500/20 rounded transition-colors" title="Edit">
-            <i class="ti ti-edit text-sm"></i>
-          </button>
-          <button onclick="reuseBroadcast('${broadcast.id}', ${broadcast.accountId})"
-            class="w-7 h-7 flex items-center justify-center text-green-400 hover:bg-green-500/20 rounded transition-colors" title="Sync">
-            <i class="ti ti-refresh text-sm"></i>
-          </button>
-          <button onclick="deleteBroadcast('${broadcast.id}', '${escapeJsString(broadcast.title)}', ${broadcast.accountId})"
-            class="w-7 h-7 flex items-center justify-center text-red-400 hover:bg-red-500/20 rounded transition-colors" title="Delete">
-            <i class="ti ti-trash text-sm"></i>
-          </button>
+          <div class="flex items-center gap-0.5 flex-shrink-0">
+            <button onclick="editBroadcast('${broadcast.id}', ${broadcast.accountId})"
+              class="w-8 h-8 flex items-center justify-center text-blue-400 hover:bg-blue-500/20 rounded transition-colors" title="Edit">
+              <i class="ti ti-edit text-sm"></i>
+            </button>
+            <button onclick="reuseBroadcast('${broadcast.id}', ${broadcast.accountId})"
+              class="w-8 h-8 flex items-center justify-center text-green-400 hover:bg-green-500/20 rounded transition-colors" title="Sync">
+              <i class="ti ti-refresh text-sm"></i>
+            </button>
+            <button onclick="deleteBroadcast('${broadcast.id}', '${safeTitleJs}', ${broadcast.accountId})"
+              class="w-8 h-8 flex items-center justify-center text-red-400 hover:bg-red-500/20 rounded transition-colors" title="Delete">
+              <i class="ti ti-trash text-sm"></i>
+            </button>
+          </div>
         </div>
       </div>
-      
-      <!-- Mobile Row -->
-      <div class="md:hidden flex items-center gap-2 px-3 py-2">
-        <input type="checkbox" class="broadcast-checkbox w-4 h-4 rounded border-gray-600 bg-dark-700 text-primary focus:ring-primary cursor-pointer flex-shrink-0"
-          data-broadcast-id="${broadcast.id}"
-          data-account-id="${broadcast.accountId}"
-          data-broadcast="${broadcastData}"
-          onchange="syncCheckboxes(this); updateSelectionCount()">
-        <span class="text-gray-500 text-xs w-4 flex-shrink-0">${index + 1}</span>
-        <span class="flex-1 text-xs text-white truncate min-w-0">${escapeHtml(broadcast.title)}</span>
-        <span class="px-1.5 py-0.5 rounded text-[10px] font-medium uppercase flex-shrink-0 ${privacyClass}">
-          ${broadcast.privacyStatus.substring(0, 3)}
-        </span>
-        <div class="flex items-center gap-0.5 flex-shrink-0">
-          <button onclick="editBroadcast('${broadcast.id}', ${broadcast.accountId})"
-            class="w-8 h-8 flex items-center justify-center text-blue-400 hover:bg-blue-500/20 rounded transition-colors" title="Edit">
-            <i class="ti ti-edit text-sm"></i>
-          </button>
-          <button onclick="reuseBroadcast('${broadcast.id}', ${broadcast.accountId})"
-            class="w-8 h-8 flex items-center justify-center text-green-400 hover:bg-green-500/20 rounded transition-colors" title="Sync">
-            <i class="ti ti-refresh text-sm"></i>
-          </button>
-          <button onclick="deleteBroadcast('${broadcast.id}', '${escapeJsString(broadcast.title)}', ${broadcast.accountId})"
-            class="w-8 h-8 flex items-center justify-center text-red-400 hover:bg-red-500/20 rounded transition-colors" title="Delete">
-            <i class="ti ti-trash text-sm"></i>
-          </button>
-        </div>
-      </div>
-    </div>
-  `;
+    `;
+  } catch (error) {
+    console.error('[createBroadcastRowHtml] Error:', error, broadcast);
+    return `<div class="p-4 text-red-400">Error rendering broadcast row</div>`;
+  }
 }
 
 // Manual refresh broadcasts (called by user action)
