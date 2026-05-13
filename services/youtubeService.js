@@ -361,27 +361,50 @@ class YouTubeService {
     
     const broadcasts = response.data.items || [];
     
-    // Get stream info for each broadcast
-    const result = await Promise.all(broadcasts.map(async (broadcast) => {
+    // OPTIMIZATION: Collect all unique stream IDs first
+    const streamIds = broadcasts
+      .map(b => b.contentDetails?.boundStreamId)
+      .filter(id => id); // Remove null/undefined
+    
+    // OPTIMIZATION: Fetch all streams in ONE batch request (max 50 IDs)
+    let streamsMap = {};
+    if (streamIds.length > 0) {
+      try {
+        // YouTube API allows comma-separated IDs (up to 50)
+        const uniqueStreamIds = [...new Set(streamIds)]; // Remove duplicates
+        const streamResponse = await youtube.liveStreams.list({
+          part: 'cdn',
+          id: uniqueStreamIds.join(','),
+          maxResults: 50
+        });
+        
+        // Create a map for quick lookup
+        if (streamResponse.data.items) {
+          streamResponse.data.items.forEach(stream => {
+            streamsMap[stream.id] = {
+              streamKey: stream.cdn?.ingestionInfo?.streamName || '',
+              rtmpUrl: stream.cdn?.ingestionInfo?.ingestionAddress || 'rtmp://a.rtmp.youtube.com/live2'
+            };
+          });
+        }
+      } catch (err) {
+        console.error('Error fetching streams in batch:', err.message);
+        // Continue without stream info if batch fetch fails
+      }
+    }
+    
+    // Map broadcasts with stream info from the batch result
+    const result = broadcasts.map(broadcast => {
       let streamKey = '';
       let streamId = null;
       let rtmpUrl = 'rtmp://a.rtmp.youtube.com/live2';
       
       if (broadcast.contentDetails?.boundStreamId) {
         streamId = broadcast.contentDetails.boundStreamId;
-        try {
-          const streamResponse = await youtube.liveStreams.list({
-            part: 'cdn',
-            id: broadcast.contentDetails.boundStreamId
-          });
-          
-          if (streamResponse.data.items && streamResponse.data.items.length > 0) {
-            const stream = streamResponse.data.items[0];
-            streamKey = stream.cdn.ingestionInfo.streamName;
-            rtmpUrl = stream.cdn.ingestionInfo.ingestionAddress;
-          }
-        } catch (err) {
-          console.error('Error fetching stream info:', err.message);
+        const streamInfo = streamsMap[streamId];
+        if (streamInfo) {
+          streamKey = streamInfo.streamKey;
+          rtmpUrl = streamInfo.rtmpUrl;
         }
       }
       
@@ -399,7 +422,7 @@ class YouTubeService {
         streamKey,
         rtmpUrl
       };
-    }));
+    });
     
     return result;
   }

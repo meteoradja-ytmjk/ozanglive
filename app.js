@@ -6578,37 +6578,18 @@ app.get('/youtube', isAuthenticated, async (req, res) => {
   try {
     // Get all connected YouTube accounts for this user
     const accounts = await YouTubeCredentials.findAllByUserId(req.session.userId);
-    let allBroadcasts = [];
-
-    // Fetch broadcasts from all connected accounts
-    for (const account of accounts) {
-      try {
-        const accessToken = await youtubeService.getAccessToken(
-          account.clientId,
-          account.clientSecret,
-          account.refreshToken
-        );
-        const broadcasts = await youtubeService.listBroadcasts(accessToken);
-        // Add account info to each broadcast
-        allBroadcasts = allBroadcasts.concat(broadcasts.map(b => ({
-          ...b,
-          accountId: account.id,
-          channelName: account.channelName
-        })));
-      } catch (err) {
-        console.error(`Error fetching broadcasts for account ${account.channelName}:`, err.message);
-      }
-    }
-
-    // Sort broadcasts by scheduled time
-    allBroadcasts.sort((a, b) => new Date(a.scheduledStartTime) - new Date(b.scheduledStartTime));
-
+    
+    // PERFORMANCE OPTIMIZATION: Don't render broadcasts on initial page load
+    // Page loads instantly, broadcasts will be fetched via AJAX after page renders
+    // This prevents slow HTML rendering when there are hundreds/thousands of broadcasts
+    
     res.render('youtube', {
       title: 'YouTube Sync',
       active: 'youtube',
       accounts,
       credentials: accounts.length > 0 ? accounts[0] : null, // For backward compatibility
-      broadcasts: allBroadcasts
+      broadcasts: null, // null = will be loaded via AJAX (different from empty array)
+      lazyLoad: true // Flag to enable lazy loading
     });
   } catch (error) {
     console.error('YouTube page error:', error);
@@ -7917,9 +7898,26 @@ app.get('/api/youtube/channel-defaults', isAuthenticated, async (req, res) => {
 });
 
 // List YouTube broadcasts - supports accountId parameter
+// Cache for YouTube broadcasts API calls (in-memory cache)
+const broadcastsApiCache = new Map();
+const BROADCASTS_CACHE_TTL = 60000; // 60 seconds (increased from 30s for better performance)
+
 app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
   try {
     const accountId = req.query.accountId ? parseInt(req.query.accountId) : null;
+    const userId = req.session.userId;
+    
+    // Create cache key
+    const cacheKey = accountId ? `user_${userId}_account_${accountId}` : `user_${userId}_all`;
+    
+    // Check cache first
+    const cached = broadcastsApiCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp < BROADCASTS_CACHE_TTL)) {
+      console.log(`[Cache HIT] Returning cached broadcasts for ${cacheKey}`);
+      return res.json({ success: true, broadcasts: cached.data, cached: true });
+    }
+    
+    console.log(`[Cache MISS] Fetching fresh broadcasts for ${cacheKey}`);
 
     if (accountId) {
       // Get broadcasts for specific account
@@ -7935,12 +7933,19 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
       );
 
       const broadcasts = await youtubeService.listBroadcasts(accessToken);
-      res.json({
-        success: true,
-        broadcasts: broadcasts.map(b => ({ ...b, accountId: credentials.id, channelName: credentials.channelName }))
+      const result = broadcasts.map(b => ({ ...b, accountId: credentials.id, channelName: credentials.channelName }));
+      
+      // Cache the result
+      broadcastsApiCache.set(cacheKey, { data: result, timestamp: Date.now() });
+      
+      // Return with accounts info for rendering
+      res.json({ 
+        success: true, 
+        broadcasts: result,
+        accounts: [{ id: credentials.id, channelName: credentials.channelName }]
       });
     } else {
-      // Get broadcasts from all accounts
+      // OPTIMIZATION: Get broadcasts from all accounts in PARALLEL with timeout
       const accounts = await YouTubeCredentials.findAllByUserId(req.session.userId);
 
       if (accounts.length === 0) {
@@ -7950,26 +7955,50 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
         });
       }
 
-      let allBroadcasts = [];
-      for (const account of accounts) {
+      // Fetch all broadcasts in parallel with timeout (10 seconds per account - increased for reliability)
+      const broadcastPromises = accounts.map(async (account) => {
         try {
-          const accessToken = await youtubeService.getAccessToken(
-            account.clientId,
-            account.clientSecret,
-            account.refreshToken
+          // Add timeout to prevent hanging
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Timeout')), 10000)
           );
-          const broadcasts = await youtubeService.listBroadcasts(accessToken);
-          allBroadcasts = allBroadcasts.concat(broadcasts.map(b => ({
-            ...b,
-            accountId: account.id,
-            channelName: account.channelName
-          })));
+          
+          const fetchPromise = (async () => {
+            const accessToken = await youtubeService.getAccessToken(
+              account.clientId,
+              account.clientSecret,
+              account.refreshToken
+            );
+            const broadcasts = await youtubeService.listBroadcasts(accessToken);
+            return broadcasts.map(b => ({
+              ...b,
+              accountId: account.id,
+              channelName: account.channelName
+            }));
+          })();
+          
+          return await Promise.race([fetchPromise, timeoutPromise]);
         } catch (err) {
           console.error(`Error fetching broadcasts for ${account.channelName}:`, err.message);
+          return []; // Return empty array on error
         }
-      }
+      });
 
-      res.json({ success: true, broadcasts: allBroadcasts });
+      // Wait for all promises to resolve
+      const broadcastArrays = await Promise.all(broadcastPromises);
+      
+      // Flatten array of arrays into single array
+      const allBroadcasts = broadcastArrays.flat();
+      
+      // Cache the result
+      broadcastsApiCache.set(cacheKey, { data: allBroadcasts, timestamp: Date.now() });
+
+      // Return with accounts info for rendering
+      res.json({ 
+        success: true, 
+        broadcasts: allBroadcasts,
+        accounts: accounts.map(a => ({ id: a.id, channelName: a.channelName }))
+      });
     }
   } catch (error) {
     console.error('Error listing broadcasts:', error);

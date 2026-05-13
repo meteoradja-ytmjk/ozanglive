@@ -28,17 +28,558 @@ function showToast(message, type = 'success') {
   }, 3000);
 }
 
+// Cache for broadcasts to avoid repeated API calls
+let broadcastsCache = {
+  data: null,
+  timestamp: null,
+  ttl: 60000 // 60 seconds cache (increased for better performance)
+};
+
+// Lazy load broadcasts after page loads (for performance optimization)
+async function lazyLoadBroadcasts() {
+  const loadingContainer = document.getElementById('broadcastsLoadingContainer');
+  const broadcastsContainer = document.getElementById('broadcastsContainer');
+  
+  // Check if we need to lazy load (loading container exists)
+  if (!loadingContainer) {
+    console.log('[Performance] Broadcasts already rendered server-side, skipping lazy load');
+    return;
+  }
+  
+  console.log('[Performance] Starting lazy load of broadcasts...');
+  
+  // Add timeout to prevent infinite loading
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+  
+  try {
+    const response = await fetch('/api/youtube/broadcasts', {
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      },
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeoutId);
+    
+    const data = await response.json();
+    
+    if (data.success && data.broadcasts) {
+      console.log(`[Performance] Loaded ${data.broadcasts.length} broadcasts`);
+      
+      // Update cache
+      broadcastsCache.data = data.broadcasts;
+      broadcastsCache.timestamp = Date.now();
+      
+      // Render broadcasts
+      if (data.broadcasts.length > 0) {
+        renderBroadcastsGrouped(data.broadcasts, data.accounts || []);
+      } else {
+        renderEmptyState();
+      }
+    } else {
+      console.error('[Performance] Failed to load broadcasts:', data.error);
+      renderEmptyState();
+    }
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      console.error('[Performance] Request timeout - taking too long to load broadcasts');
+      showTimeoutError();
+    } else {
+      console.error('[Performance] Error loading broadcasts:', error);
+      renderEmptyState();
+    }
+  } finally {
+    // Hide loading, show container
+    if (loadingContainer) loadingContainer.remove();
+    if (broadcastsContainer) broadcastsContainer.classList.remove('hidden');
+  }
+}
+
+// Show timeout error message
+function showTimeoutError() {
+  const container = document.getElementById('broadcastsContainer');
+  if (!container) return;
+  
+  container.innerHTML = `
+    <div class="bg-gray-800 rounded-lg p-10 text-center border-2 border-yellow-500/30">
+      <div class="w-16 h-16 bg-yellow-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+        <i class="ti ti-clock-exclamation text-yellow-500 text-2xl"></i>
+      </div>
+      <p class="text-yellow-400 font-medium mb-2">Loading took too long</p>
+      <p class="text-gray-400 text-sm mb-4">The request timed out. This might be due to slow network or too many broadcasts.</p>
+      <button onclick="window.location.reload()"
+        class="bg-primary hover:bg-primary/80 text-white px-4 py-2 rounded-lg transition-colors inline-flex items-center gap-2">
+        <i class="ti ti-refresh"></i>
+        <span>Retry</span>
+      </button>
+    </div>
+  `;
+}
+
+// Render empty state
+function renderEmptyState() {
+  const container = document.getElementById('broadcastsContainer');
+  if (!container) return;
+  
+  container.innerHTML = `
+    <div class="bg-gray-800 rounded-lg p-10 text-center">
+      <div class="w-16 h-16 bg-dark-700 rounded-full flex items-center justify-center mx-auto mb-4">
+        <i class="ti ti-broadcast text-gray-500 text-2xl"></i>
+      </div>
+      <p class="text-gray-400 font-medium mb-2">No scheduled broadcasts</p>
+      <p class="text-gray-500 text-sm mb-4">Create your first broadcast to get started</p>
+      <button onclick="openCreateBroadcastModal()"
+        class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors inline-flex items-center gap-2">
+        <i class="ti ti-plus"></i>
+        <span>Create Broadcast</span>
+      </button>
+    </div>
+  `;
+}
+
+// Render broadcasts grouped by channel
+function renderBroadcastsGrouped(broadcasts, accounts) {
+  const container = document.getElementById('broadcastsContainer');
+  if (!container) return;
+  
+  // Create account map
+  const accountMap = {};
+  accounts.forEach(acc => {
+    accountMap[acc.id] = acc.channelName || 'Unknown Channel';
+  });
+  
+  // Group broadcasts by channel
+  const groupedBroadcasts = {};
+  broadcasts.forEach(broadcast => {
+    const channelName = accountMap[broadcast.accountId] || 'Unknown Channel';
+    if (!groupedBroadcasts[channelName]) {
+      groupedBroadcasts[channelName] = {
+        accountId: broadcast.accountId,
+        broadcasts: []
+      };
+    }
+    groupedBroadcasts[channelName].broadcasts.push(broadcast);
+  });
+  
+  // Render each channel group
+  container.innerHTML = '';
+  const channelNames = Object.keys(groupedBroadcasts);
+  
+  channelNames.forEach((channelName, channelIndex) => {
+    const group = groupedBroadcasts[channelName];
+    const channelDiv = createChannelGroup(channelName, group, channelIndex);
+    container.appendChild(channelDiv);
+  });
+}
+
+// Create channel group element
+function createChannelGroup(channelName, group, channelIndex) {
+  const div = document.createElement('div');
+  div.className = 'channel-broadcast-group bg-gray-800 rounded-lg shadow-md overflow-hidden';
+  
+  const headerHtml = `
+    <div class="flex items-center justify-between px-4 py-3 bg-dark-700 cursor-pointer hover:bg-dark-600 transition-colors"
+      onclick="toggleBroadcastChannel('${channelIndex}')">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 bg-red-500/20 rounded-lg flex items-center justify-center">
+          <i class="ti ti-brand-youtube text-red-400"></i>
+        </div>
+        <div>
+          <span class="font-medium text-white">${escapeHtml(channelName)}</span>
+          <span class="ml-2 text-xs text-gray-400">(${group.broadcasts.length} broadcasts)</span>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <input type="checkbox" class="channel-select-all w-4 h-4 rounded border-gray-600 bg-dark-700 text-primary focus:ring-primary cursor-pointer"
+          onclick="event.stopPropagation(); toggleChannelSelectAll(this, ${group.accountId})"
+          title="Select all in this channel">
+        <i class="ti ti-chevron-down text-gray-400 transition-transform" id="channelChevron_${channelIndex}"></i>
+      </div>
+    </div>
+  `;
+  
+  const broadcastsHtml = group.broadcasts.map((broadcast, index) => 
+    createBroadcastRowHtml(broadcast, index)
+  ).join('');
+  
+  div.innerHTML = `
+    ${headerHtml}
+    <div id="channelBroadcasts_${channelIndex}" class="divide-y divide-gray-700/50">
+      ${broadcastsHtml}
+    </div>
+  `;
+  
+  return div;
+}
+
+// Create broadcast row HTML
+function createBroadcastRowHtml(broadcast, index) {
+  const broadcastData = JSON.stringify({
+    id: broadcast.id,
+    accountId: broadcast.accountId,
+    title: broadcast.title,
+    description: broadcast.description || "",
+    privacyStatus: broadcast.privacyStatus,
+    streamId: broadcast.streamId || null,
+    streamKey: broadcast.streamKey || "",
+    categoryId: broadcast.categoryId || "22",
+    tags: broadcast.tags || [],
+    thumbnailPath: broadcast.thumbnailPath || null
+  }).replace(/"/g, '&quot;');
+  
+  const privacyClass = 
+    broadcast.privacyStatus === 'public' ? 'bg-green-500/20 text-green-400' :
+    broadcast.privacyStatus === 'unlisted' ? 'bg-yellow-500/20 text-yellow-400' :
+    'bg-gray-500/20 text-gray-400';
+  
+  const streamKeyDisplay = broadcast.streamKey ? 
+    broadcast.streamKey.substring(0, 16) + '...' : '-';
+  
+  return `
+    <div class="broadcast-list-item broadcast-row hover:bg-dark-700/30 transition-colors" 
+      data-broadcast-id="${broadcast.id}" data-account-id="${broadcast.accountId}">
+      <!-- Desktop Row -->
+      <div class="hidden md:flex items-center gap-2 px-4 py-2">
+        <div class="w-8 text-center">
+          <input type="checkbox" class="broadcast-checkbox w-4 h-4 rounded border-gray-600 bg-dark-700 text-primary focus:ring-primary cursor-pointer"
+            data-broadcast-id="${broadcast.id}"
+            data-account-id="${broadcast.accountId}"
+            data-broadcast="${broadcastData}"
+            onchange="syncCheckboxes(this); updateSelectionCount()">
+        </div>
+        <div class="w-8 text-center text-xs text-gray-500">${index + 1}</div>
+        <div class="flex-1 min-w-0">
+          <span class="text-sm text-white truncate block">${escapeHtml(broadcast.title)}</span>
+        </div>
+        <div class="w-20 text-center">
+          <span class="px-2 py-0.5 rounded text-xs font-medium uppercase ${privacyClass}">
+            ${broadcast.privacyStatus}
+          </span>
+        </div>
+        <div class="w-36">
+          <span class="font-mono text-xs text-gray-400 truncate block cursor-pointer hover:text-primary" 
+            onclick="copyStreamKey('${broadcast.streamKey || ''}')" title="Click to copy">
+            ${streamKeyDisplay}
+          </span>
+        </div>
+        <div class="w-24 flex items-center justify-center gap-1">
+          <button onclick="editBroadcast('${broadcast.id}', ${broadcast.accountId})"
+            class="w-7 h-7 flex items-center justify-center text-blue-400 hover:bg-blue-500/20 rounded transition-colors" title="Edit">
+            <i class="ti ti-edit text-sm"></i>
+          </button>
+          <button onclick="reuseBroadcast('${broadcast.id}', ${broadcast.accountId})"
+            class="w-7 h-7 flex items-center justify-center text-green-400 hover:bg-green-500/20 rounded transition-colors" title="Sync">
+            <i class="ti ti-refresh text-sm"></i>
+          </button>
+          <button onclick="deleteBroadcast('${broadcast.id}', '${escapeJsString(broadcast.title)}', ${broadcast.accountId})"
+            class="w-7 h-7 flex items-center justify-center text-red-400 hover:bg-red-500/20 rounded transition-colors" title="Delete">
+            <i class="ti ti-trash text-sm"></i>
+          </button>
+        </div>
+      </div>
+      
+      <!-- Mobile Row -->
+      <div class="md:hidden flex items-center gap-2 px-3 py-2">
+        <input type="checkbox" class="broadcast-checkbox w-4 h-4 rounded border-gray-600 bg-dark-700 text-primary focus:ring-primary cursor-pointer flex-shrink-0"
+          data-broadcast-id="${broadcast.id}"
+          data-account-id="${broadcast.accountId}"
+          data-broadcast="${broadcastData}"
+          onchange="syncCheckboxes(this); updateSelectionCount()">
+        <span class="text-gray-500 text-xs w-4 flex-shrink-0">${index + 1}</span>
+        <span class="flex-1 text-xs text-white truncate min-w-0">${escapeHtml(broadcast.title)}</span>
+        <span class="px-1.5 py-0.5 rounded text-[10px] font-medium uppercase flex-shrink-0 ${privacyClass}">
+          ${broadcast.privacyStatus.substring(0, 3)}
+        </span>
+        <div class="flex items-center gap-0.5 flex-shrink-0">
+          <button onclick="editBroadcast('${broadcast.id}', ${broadcast.accountId})"
+            class="w-8 h-8 flex items-center justify-center text-blue-400 hover:bg-blue-500/20 rounded transition-colors" title="Edit">
+            <i class="ti ti-edit text-sm"></i>
+          </button>
+          <button onclick="reuseBroadcast('${broadcast.id}', ${broadcast.accountId})"
+            class="w-8 h-8 flex items-center justify-center text-green-400 hover:bg-green-500/20 rounded transition-colors" title="Sync">
+            <i class="ti ti-refresh text-sm"></i>
+          </button>
+          <button onclick="deleteBroadcast('${broadcast.id}', '${escapeJsString(broadcast.title)}', ${broadcast.accountId})"
+            class="w-8 h-8 flex items-center justify-center text-red-400 hover:bg-red-500/20 rounded transition-colors" title="Delete">
+            <i class="ti ti-trash text-sm"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// Manual refresh broadcasts (called by user action)
+async function refreshBroadcasts() {
+  const broadcastsContainer = document.querySelector('.space-y-4');
+  
+  if (!broadcastsContainer) {
+    console.log('[Refresh] No broadcasts container found');
+    return;
+  }
+  
+  // Show loading indicator
+  const loadingDiv = document.createElement('div');
+  loadingDiv.id = 'broadcastsRefreshLoading';
+  loadingDiv.className = 'fixed top-20 right-4 bg-dark-800 border border-primary/50 rounded-lg px-4 py-3 shadow-lg z-50 flex items-center gap-3';
+  loadingDiv.innerHTML = `
+    <i class="ti ti-loader animate-spin text-primary text-xl"></i>
+    <span class="text-sm text-white">Refreshing broadcasts...</span>
+  `;
+  document.body.appendChild(loadingDiv);
+  
+  try {
+    // Clear cache
+    broadcastsCache.data = null;
+    broadcastsCache.timestamp = null;
+    
+    const response = await fetch('/api/youtube/broadcasts', {
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (data.success && data.broadcasts) {
+      // Update cache
+      broadcastsCache.data = data.broadcasts;
+      broadcastsCache.timestamp = Date.now();
+      
+      showToast(`Refreshed ${data.broadcasts.length} broadcasts`);
+      
+      // Reload page to show updated data
+      setTimeout(() => window.location.reload(), 500);
+    } else {
+      showToast(data.error || 'Failed to refresh broadcasts', 'error');
+    }
+  } catch (error) {
+    console.error('Error refreshing broadcasts:', error);
+    showToast('Failed to refresh broadcasts', 'error');
+  } finally {
+    // Remove loading indicator
+    const loading = document.getElementById('broadcastsRefreshLoading');
+    if (loading) loading.remove();
+  }
+}
+
+// Toggle broadcast channel collapse
+function toggleBroadcastChannel(channelIndex) {
+  const broadcastsDiv = document.getElementById(`channelBroadcasts_${channelIndex}`);
+  const chevron = document.getElementById(`channelChevron_${channelIndex}`);
+  
+  if (broadcastsDiv && chevron) {
+    if (broadcastsDiv.style.display === 'none') {
+      broadcastsDiv.style.display = 'block';
+      chevron.style.transform = 'rotate(0deg)';
+    } else {
+      broadcastsDiv.style.display = 'none';
+      chevron.style.transform = 'rotate(-90deg)';
+    }
+  }
+}
+
+// Toggle select all checkboxes in a channel
+function toggleChannelSelectAll(checkbox, accountId) {
+  const checkboxes = document.querySelectorAll(`.broadcast-checkbox[data-account-id="${accountId}"]`);
+  checkboxes.forEach(cb => {
+    cb.checked = checkbox.checked;
+    syncCheckboxes(cb);
+  });
+  updateSelectionCount();
+}
+
+// Sync checkboxes (desktop and mobile)
+function syncCheckboxes(checkbox) {
+  const broadcastId = checkbox.getAttribute('data-broadcast-id');
+  const accountId = checkbox.getAttribute('data-account-id');
+  
+  // Find all checkboxes with same broadcast ID and account ID
+  const allCheckboxes = document.querySelectorAll(
+    `.broadcast-checkbox[data-broadcast-id="${broadcastId}"][data-account-id="${accountId}"]`
+  );
+  
+  // Sync all checkboxes
+  allCheckboxes.forEach(cb => {
+    cb.checked = checkbox.checked;
+  });
+}
+
+// Update selection count
+function updateSelectionCount() {
+  const checkboxes = document.querySelectorAll('.broadcast-checkbox:checked');
+  const count = checkboxes.length;
+  const selectionActions = document.getElementById('selectionActions');
+  const selectedCount = document.getElementById('selectedCount');
+  
+  if (count > 0) {
+    if (selectionActions) selectionActions.classList.remove('hidden');
+    if (selectedCount) selectedCount.textContent = `${count} selected`;
+  } else {
+    if (selectionActions) selectionActions.classList.add('hidden');
+  }
+}
+
+// Clear selection
+function clearSelection() {
+  const checkboxes = document.querySelectorAll('.broadcast-checkbox:checked');
+  checkboxes.forEach(cb => cb.checked = false);
+  
+  // Also clear channel select all checkboxes
+  const channelCheckboxes = document.querySelectorAll('.channel-select-all');
+  channelCheckboxes.forEach(cb => cb.checked = false);
+  
+  updateSelectionCount();
+}
+
+// Copy stream key to clipboard
+function copyStreamKey(streamKey) {
+  if (!streamKey) {
+    showToast('No stream key available', 'error');
+    return;
+  }
+  
+  navigator.clipboard.writeText(streamKey).then(() => {
+    showToast('Stream key copied to clipboard');
+  }).catch(err => {
+    console.error('Failed to copy:', err);
+    showToast('Failed to copy stream key', 'error');
+  });
+}
+
+// Render broadcasts in the UI
+function renderBroadcasts(broadcasts) {
+  const container = document.getElementById('broadcastsContainer');
+  if (!container) return;
+  
+  container.innerHTML = '';
+  
+  broadcasts.forEach(broadcast => {
+    const broadcastCard = createBroadcastCard(broadcast);
+    container.appendChild(broadcastCard);
+  });
+}
+
+// Create broadcast card element
+function createBroadcastCard(broadcast) {
+  const div = document.createElement('div');
+  div.className = 'bg-dark-700 rounded-xl p-4 border border-gray-600/30 hover:border-primary/50 transition-all';
+  
+  const scheduledDate = new Date(broadcast.scheduledStartTime);
+  const formattedDate = scheduledDate.toLocaleString('id-ID', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+  
+  const statusBadge = getStatusBadge(broadcast.lifeCycleStatus);
+  const privacyBadge = getPrivacyBadge(broadcast.privacyStatus);
+  
+  div.innerHTML = `
+    <div class="flex items-start gap-3">
+      <input type="checkbox" class="broadcast-checkbox mt-1" value="${broadcast.id}" data-account-id="${broadcast.accountId}">
+      <div class="flex-1 min-w-0">
+        <div class="flex items-start justify-between gap-2 mb-2">
+          <div class="flex-1 min-w-0">
+            <h3 class="font-semibold text-white truncate">${escapeHtml(broadcast.title)}</h3>
+            <p class="text-xs text-gray-400 mt-0.5">${escapeHtml(broadcast.channelName || 'YouTube Channel')}</p>
+          </div>
+          <div class="flex items-center gap-1 flex-shrink-0">
+            ${statusBadge}
+            ${privacyBadge}
+          </div>
+        </div>
+        
+        <div class="flex items-center gap-2 text-xs text-gray-400 mb-3">
+          <i class="ti ti-calendar text-sm"></i>
+          <span>${formattedDate}</span>
+        </div>
+        
+        <div class="flex items-center gap-1 flex-wrap">
+          <button onclick="editBroadcast('${broadcast.id}', ${broadcast.accountId})" 
+            class="px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg text-xs transition-colors flex items-center gap-1">
+            <i class="ti ti-edit text-sm"></i>
+            <span>Edit</span>
+          </button>
+          <button onclick="reuseBroadcast('${broadcast.id}', ${broadcast.accountId})" 
+            class="px-3 py-1.5 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg text-xs transition-colors flex items-center gap-1">
+            <i class="ti ti-copy text-sm"></i>
+            <span>Reuse</span>
+          </button>
+          <button onclick="changeThumbnail('${broadcast.id}')" 
+            class="px-3 py-1.5 bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 rounded-lg text-xs transition-colors flex items-center gap-1">
+            <i class="ti ti-photo text-sm"></i>
+            <span>Thumbnail</span>
+          </button>
+          <button onclick="addSaveAsTemplateButton('${broadcast.id}', ${broadcast.accountId}, '${escapeJsString(broadcast.title)}', '${broadcast.privacyStatus}')" 
+            class="px-3 py-1.5 bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 rounded-lg text-xs transition-colors flex items-center gap-1">
+            <i class="ti ti-bookmark text-sm"></i>
+            <span>Template</span>
+          </button>
+          <button onclick="deleteBroadcast('${broadcast.id}', '${escapeJsString(broadcast.title)}', ${broadcast.accountId})" 
+            class="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg text-xs transition-colors flex items-center gap-1">
+            <i class="ti ti-trash text-sm"></i>
+            <span>Delete</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  return div;
+}
+
+// Get status badge HTML
+function getStatusBadge(status) {
+  const statusMap = {
+    'ready': { color: 'green', icon: 'ti-check', text: 'Ready' },
+    'live': { color: 'red', icon: 'ti-broadcast', text: 'Live' },
+    'complete': { color: 'gray', icon: 'ti-check-circle', text: 'Complete' },
+    'testing': { color: 'yellow', icon: 'ti-flask', text: 'Testing' }
+  };
+  
+  const badge = statusMap[status] || { color: 'gray', icon: 'ti-circle', text: status };
+  
+  return `<span class="px-2 py-0.5 bg-${badge.color}-500/20 text-${badge.color}-400 text-xs rounded-full font-medium flex items-center gap-1">
+    <i class="ti ${badge.icon} text-xs"></i>
+    ${badge.text}
+  </span>`;
+}
+
+// Get privacy badge HTML
+function getPrivacyBadge(privacy) {
+  const privacyMap = {
+    'public': { color: 'blue', icon: 'ti-world', text: 'Public' },
+    'unlisted': { color: 'yellow', icon: 'ti-link', text: 'Unlisted' },
+    'private': { color: 'red', icon: 'ti-lock', text: 'Private' }
+  };
+  
+  const badge = privacyMap[privacy] || { color: 'gray', icon: 'ti-eye-off', text: privacy };
+  
+  return `<span class="px-2 py-0.5 bg-${badge.color}-500/20 text-${badge.color}-400 text-xs rounded-full font-medium flex items-center gap-1">
+    <i class="ti ${badge.icon} text-xs"></i>
+    ${badge.text}
+  </span>`;
+}
+
 // Restore preferred account selectors on page load
 document.addEventListener('DOMContentLoaded', () => {
+  // PERFORMANCE OPTIMIZATION: Only restore account selection, don't fetch data
+  // Data will be fetched lazily when modals are opened
   const accountId = restorePreferredAccount('accountSelect');
-  if (accountId) {
-    onAccountChange(accountId);
-  }
-
   const templateAccountId = restorePreferredAccount('templateAccountSelect');
-  if (templateAccountId) {
-    onTemplateAccountChange(templateAccountId);
-  }
+  
+  console.log('[Performance] Page loaded - account selections restored without API calls');
+  console.log('[Performance] Streams and defaults will be fetched when create modal opens');
+  
+  // Lazy load broadcasts after a short delay to let page render first
+  setTimeout(() => {
+    lazyLoadBroadcasts();
+  }, 100);
 });
 
 // Credentials Form Handler
