@@ -20,7 +20,7 @@ const { loadBrandingSettings, clearBrandingCache } = require('./middleware/brand
 const User = require('./models/User');
 const { db, checkIfUsersExist, checkIfAdminExists, waitForDbInit, verifyTables, checkConnectivity, closeDatabase } = require('./db/database');
 const systemMonitor = require('./services/systemMonitor');
-const { uploadVideo, upload, uploadAudio, uploadBackup, uploadChunk, checkStorageLimit } = require('./middleware/uploadMiddleware');
+const { uploadVideo, upload, uploadAudio, uploadBackup, uploadChunk, uploadLogo, uploadFavicon, checkStorageLimit } = require('./middleware/uploadMiddleware');
 const { ensureDirectories, getUniqueFilename, paths } = require('./utils/storage');
 const { getVideoInfo, generateThumbnail } = require('./utils/videoProcessor');
 const ProcessingQueue = require('./utils/processingQueue');
@@ -1659,7 +1659,7 @@ app.post('/api/branding', isAdmin, async (req, res) => {
 });
 
 // Upload custom logo
-app.post('/api/branding/logo', isAdmin, upload.single('logo'), async (req, res) => {
+app.post('/api/branding/logo', isAdmin, uploadLogo.single('logo'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, error: 'No file uploaded' });
@@ -1667,6 +1667,18 @@ app.post('/api/branding/logo', isAdmin, upload.single('logo'), async (req, res) 
 
     const logoPath = `/uploads/branding/${req.file.filename}`;
     const current = await BrandingSettings.get();
+
+    // Delete old logo if it's not default
+    if (current.logo_path && current.logo_path !== '/images/logo.png') {
+      const oldLogoPath = path.join(__dirname, 'public', current.logo_path);
+      if (fs.existsSync(oldLogoPath)) {
+        try {
+          fs.unlinkSync(oldLogoPath);
+        } catch (err) {
+          console.error('[Branding] Error deleting old logo:', err);
+        }
+      }
+    }
 
     await BrandingSettings.update({
       ...current,
@@ -1679,12 +1691,12 @@ app.post('/api/branding/logo', isAdmin, upload.single('logo'), async (req, res) 
     res.json({ success: true, logo_path: logoPath, message: 'Logo uploaded successfully' });
   } catch (error) {
     console.error('[Branding API] Error uploading logo:', error);
-    res.status(500).json({ success: false, error: 'Failed to upload logo' });
+    res.status(500).json({ success: false, error: error.message || 'Failed to upload logo' });
   }
 });
 
 // Upload custom favicon
-app.post('/api/branding/favicon', isAdmin, upload.single('favicon'), async (req, res) => {
+app.post('/api/branding/favicon', isAdmin, uploadFavicon.single('favicon'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, error: 'No file uploaded' });
@@ -1692,6 +1704,18 @@ app.post('/api/branding/favicon', isAdmin, upload.single('favicon'), async (req,
 
     const faviconPath = `/uploads/branding/${req.file.filename}`;
     const current = await BrandingSettings.get();
+
+    // Delete old favicon if it's not default
+    if (current.favicon_path && current.favicon_path !== '/images/favicon.ico') {
+      const oldFaviconPath = path.join(__dirname, 'public', current.favicon_path);
+      if (fs.existsSync(oldFaviconPath)) {
+        try {
+          fs.unlinkSync(oldFaviconPath);
+        } catch (err) {
+          console.error('[Branding] Error deleting old favicon:', err);
+        }
+      }
+    }
 
     await BrandingSettings.update({
       ...current,
@@ -1704,7 +1728,7 @@ app.post('/api/branding/favicon', isAdmin, upload.single('favicon'), async (req,
     res.json({ success: true, favicon_path: faviconPath, message: 'Favicon uploaded successfully' });
   } catch (error) {
     console.error('[Branding API] Error uploading favicon:', error);
-    res.status(500).json({ success: false, error: 'Failed to upload favicon' });
+    res.status(500).json({ success: false, error: error.message || 'Failed to upload favicon' });
   }
 });
 
