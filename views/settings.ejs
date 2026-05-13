@@ -32,6 +32,11 @@
         </button>
         <button
           class="settings-tab mr-2 py-2 px-4 text-gray-400 hover:text-white border-b-2 border-transparent hover:border-gray-700 font-medium"
+          data-tab="branding">
+          <i class="ti ti-palette mr-2"></i>Branding
+        </button>
+        <button
+          class="settings-tab mr-2 py-2 px-4 text-gray-400 hover:text-white border-b-2 border-transparent hover:border-gray-700 font-medium"
           data-tab="update">
           <i class="ti ti-refresh mr-2"></i>Update
         </button>
@@ -40,7 +45,7 @@
 
     <!-- Mobile tabs - grid rata kanan kiri -->
     <% if (userRole === 'admin') { %>
-      <div class="sm:hidden grid grid-cols-5 -mb-px">
+      <div class="sm:hidden grid grid-cols-6 -mb-px">
         <% } else { %>
           <div class="sm:hidden grid grid-cols-3 -mb-px">
             <% } %>
@@ -68,6 +73,12 @@
                   data-tab="system">
                   <i class="ti ti-settings text-lg mb-1"></i>
                   <span class="text-xs font-medium">System</span>
+                </button>
+                <button
+                  class="settings-tab py-3 flex flex-col items-center justify-center text-gray-400 border-b-2 border-transparent"
+                  data-tab="branding">
+                  <i class="ti ti-palette text-lg mb-1"></i>
+                  <span class="text-xs font-medium">Brand</span>
                 </button>
                 <button
                   class="settings-tab py-3 flex flex-col items-center justify-center text-gray-400 border-b-2 border-transparent"
@@ -489,6 +500,8 @@
               </div>
             </div>
           </div>
+
+          <%- include('partials/branding-settings') %>
 
           <!-- Update Tab -->
           <div id="update-tab" class="settings-content hidden">

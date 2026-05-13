@@ -17,7 +17,7 @@ const REQUIRED_TABLES = [
   'users', 'videos', 'streams', 'stream_history',
   'playlists', 'playlist_videos', 'playlist_audios', 'audios',
   'system_settings', 'stream_templates', 'youtube_credentials',
-  'broadcast_templates', 'recurring_schedules'
+  'broadcast_templates', 'recurring_schedules', 'branding_settings'
 ];
 
 const db = new sqlite3.Database(dbPath, (err) => {
@@ -604,6 +604,25 @@ async function createCoreTablesAsync() {
 
   await runTableQuery(`CREATE INDEX IF NOT EXISTS idx_user_title_rotation_settings_user 
           ON user_title_rotation_settings(user_id)`, 'user_title_rotation_settings.user_index');
+
+  // Create branding_settings table for white label customization
+  await runTableQuery(`CREATE TABLE IF NOT EXISTS branding_settings (
+    id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+    app_name TEXT DEFAULT 'OzangLive',
+    company_name TEXT DEFAULT 'OzangLive Team',
+    logo_path TEXT DEFAULT '/images/logo.png',
+    favicon_path TEXT DEFAULT '/images/favicon.ico',
+    primary_color TEXT DEFAULT '#8B5CF6',
+    secondary_color TEXT DEFAULT '#7C3AED',
+    accent_color TEXT DEFAULT '#6D28D9',
+    login_background TEXT,
+    custom_css TEXT,
+    footer_text TEXT DEFAULT '© 2024 OzangLive. All rights reserved.',
+    support_email TEXT DEFAULT 'support@ozanglive.com',
+    support_url TEXT,
+    show_powered_by INTEGER DEFAULT 1,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`, 'branding_settings');
 }
 
 // Old createCoreTables function removed - replaced with createCoreTablesAsync above

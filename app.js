@@ -15,6 +15,8 @@ const bcrypt = require('bcrypt');
 const { body, validationResult } = require('express-validator');
 const rateLimit = require('express-rate-limit');
 const compression = require('compression'); // Performance: Gzip compression
+const BrandingSettings = require('./models/BrandingSettings'); // White Label
+const { loadBrandingSettings, clearBrandingCache } = require('./middleware/brandingMiddleware'); // White Label
 const User = require('./models/User');
 const { db, checkIfUsersExist, checkIfAdminExists, waitForDbInit, verifyTables, checkConnectivity, closeDatabase } = require('./db/database');
 const systemMonitor = require('./services/systemMonitor');
@@ -738,6 +740,10 @@ app.use(async (req, res, next) => {
   res.locals.req = req;
   next();
 });
+
+// White Label: Load branding settings for all views
+app.use(loadBrandingSettings);
+
 app.use(function (req, res, next) {
   if (!req.session.csrfSecret) {
     req.session.csrfSecret = uuidv4();
@@ -1593,6 +1599,132 @@ app.get('/galery', isAuthenticated, (req, res) => {
   res.redirect('/gallery');
 });
 
+// ============================================
+// WHITE LABEL / BRANDING API ENDPOINTS
+// ============================================
+
+// Get current branding settings
+app.get('/api/branding', isAdmin, async (req, res) => {
+  try {
+    const branding = await BrandingSettings.get();
+    res.json({ success: true, branding });
+  } catch (error) {
+    console.error('[Branding API] Error getting settings:', error);
+    res.status(500).json({ success: false, error: 'Failed to load branding settings' });
+  }
+});
+
+// Update branding settings
+app.post('/api/branding', isAdmin, async (req, res) => {
+  try {
+    const {
+      app_name,
+      company_name,
+      primary_color,
+      secondary_color,
+      accent_color,
+      footer_text,
+      support_email,
+      support_url,
+      show_powered_by
+    } = req.body;
+
+    // Get current settings to preserve logo paths
+    const current = await BrandingSettings.get();
+
+    await BrandingSettings.update({
+      app_name: app_name || current.app_name,
+      company_name: company_name || current.company_name,
+      logo_path: current.logo_path,
+      favicon_path: current.favicon_path,
+      primary_color: primary_color || current.primary_color,
+      secondary_color: secondary_color || current.secondary_color,
+      accent_color: accent_color || current.accent_color,
+      login_background: current.login_background,
+      custom_css: current.custom_css,
+      footer_text: footer_text || current.footer_text,
+      support_email: support_email || current.support_email,
+      support_url: support_url || null,
+      show_powered_by: show_powered_by !== undefined ? show_powered_by : current.show_powered_by
+    });
+
+    // Clear cache to force reload
+    clearBrandingCache();
+
+    res.json({ success: true, message: 'Branding settings updated successfully' });
+  } catch (error) {
+    console.error('[Branding API] Error updating settings:', error);
+    res.status(500).json({ success: false, error: 'Failed to update branding settings' });
+  }
+});
+
+// Upload custom logo
+app.post('/api/branding/logo', isAdmin, upload.single('logo'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'No file uploaded' });
+    }
+
+    const logoPath = `/uploads/branding/${req.file.filename}`;
+    const current = await BrandingSettings.get();
+
+    await BrandingSettings.update({
+      ...current,
+      logo_path: logoPath
+    });
+
+    // Clear cache
+    clearBrandingCache();
+
+    res.json({ success: true, logo_path: logoPath, message: 'Logo uploaded successfully' });
+  } catch (error) {
+    console.error('[Branding API] Error uploading logo:', error);
+    res.status(500).json({ success: false, error: 'Failed to upload logo' });
+  }
+});
+
+// Upload custom favicon
+app.post('/api/branding/favicon', isAdmin, upload.single('favicon'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'No file uploaded' });
+    }
+
+    const faviconPath = `/uploads/branding/${req.file.filename}`;
+    const current = await BrandingSettings.get();
+
+    await BrandingSettings.update({
+      ...current,
+      favicon_path: faviconPath
+    });
+
+    // Clear cache
+    clearBrandingCache();
+
+    res.json({ success: true, favicon_path: faviconPath, message: 'Favicon uploaded successfully' });
+  } catch (error) {
+    console.error('[Branding API] Error uploading favicon:', error);
+    res.status(500).json({ success: false, error: 'Failed to upload favicon' });
+  }
+});
+
+// Reset branding to default
+app.post('/api/branding/reset', isAdmin, async (req, res) => {
+  try {
+    await BrandingSettings.reset();
+    clearBrandingCache();
+    res.json({ success: true, message: 'Branding reset to default successfully' });
+  } catch (error) {
+    console.error('[Branding API] Error resetting branding:', error);
+    res.status(500).json({ success: false, error: 'Failed to reset branding' });
+  }
+});
+
+// ============================================
+// END WHITE LABEL API ENDPOINTS
+// ============================================
+
+
 app.get('/plalist', isAuthenticated, (req, res) => {
   res.redirect('/playlist');
 });
@@ -2316,8 +2448,302 @@ app.post('/api/settings/default-live-limit-registration', isAdmin, async (req, r
       isUnlimited: parsedLimit === 0
     });
   } catch (error) {
+
+// ============================================
+// BRANDING API ENDPOINTS (White Label)
+// ============================================
+
+// Get current branding settings
+app.get('/api/branding', isAdmin, async (req, res) => {
+  try {
+    const branding = await BrandingSettings.get();
+    res.json({ success: true, branding });
+  } catch (error) {
+    console.error('[Branding API] Error getting branding:', error);
+    res.status(500).json({ success: false, error: 'Failed to get branding settings' });
+  }
+});
+
+// Update branding settings
+app.post('/api/branding/update', isAdmin, upload.fields([
+  { name: 'logo', maxCount: 1 },
+  { name: 'favicon', maxCount: 1 }
+]), async (req, res) => {
+  try {
+    const {
+      app_name,
+      company_name,
+      primary_color,
+      secondary_color,
+      accent_color,
+      footer_text,
+      support_email,
+      support_url,
+      show_powered_by,
+      custom_css
+    } = req.body;
+
+    // Get current branding for logo paths
+    const currentBranding = await BrandingSettings.get();
+    let logo_path = currentBranding.logo_path;
+    let favicon_path = currentBranding.favicon_path;
+
+    // Handle logo upload
+    if (req.files && req.files.logo && req.files.logo[0]) {
+      const logoFile = req.files.logo[0];
+      const logoFilename = `logo-${Date.now()}${path.extname(logoFile.originalname)}`;
+      const logoPath = path.join(__dirname, 'public', 'uploads', 'branding', logoFilename);
+      
+      await fs.promises.rename(logoFile.path, logoPath);
+      logo_path = `/uploads/branding/${logoFilename}`;
+
+      // Delete old logo if it's not the default
+      if (currentBranding.logo_path && currentBranding.logo_path !== '/images/logo.png') {
+        const oldLogoPath = path.join(__dirname, 'public', currentBranding.logo_path);
+        try {
+          await fs.promises.unlink(oldLogoPath);
+        } catch (err) {
+          console.log('[Branding] Could not delete old logo:', err.message);
+        }
+      }
+    }
+
+    // Handle favicon upload
+    if (req.files && req.files.favicon && req.files.favicon[0]) {
+      const faviconFile = req.files.favicon[0];
+      const faviconFilename = `favicon-${Date.now()}${path.extname(faviconFile.originalname)}`;
+      const faviconPath = path.join(__dirname, 'public', 'uploads', 'branding', faviconFilename);
+      
+      await fs.promises.rename(faviconFile.path, faviconPath);
+      favicon_path = `/uploads/branding/${faviconFilename}`;
+
+      // Delete old favicon if it's not the default
+      if (currentBranding.favicon_path && currentBranding.favicon_path !== '/images/favicon.ico') {
+        const oldFaviconPath = path.join(__dirname, 'public', currentBranding.favicon_path);
+        try {
+          await fs.promises.unlink(oldFaviconPath);
+        } catch (err) {
+          console.log('[Branding] Could not delete old favicon:', err.message);
+        }
+      }
+    }
+
+    // Update branding settings
+    await BrandingSettings.update({
+      app_name: app_name || 'OzangLive',
+      company_name: company_name || 'OzangLive Team',
+      logo_path,
+      favicon_path,
+      primary_color: primary_color || '#8B5CF6',
+      secondary_color: secondary_color || '#7C3AED',
+      accent_color: accent_color || '#6D28D9',
+      login_background: null,
+      custom_css: custom_css || null,
+      footer_text: footer_text || '© 2024 OzangLive. All rights reserved.',
+      support_email: support_email || 'support@ozanglive.com',
+      support_url: support_url || null,
+      show_powered_by: show_powered_by === 'on' || show_powered_by === '1' || show_powered_by === 'true' ? 1 : 0
+    });
+
+    // Clear branding cache
+    clearBrandingCache();
+
+    res.json({ success: true, message: 'Branding updated successfully' });
+  } catch (error) {
+    console.error('[Branding API] Error updating branding:', error);
+    res.status(500).json({ success: false, error: 'Failed to update branding settings' });
+  }
+});
+
+// Reset branding to default
+app.post('/api/branding/reset', isAdmin, async (req, res) => {
+  try {
+    // Get current branding to delete uploaded files
+    const currentBranding = await BrandingSettings.get();
+
+    // Delete uploaded logo if exists
+    if (currentBranding.logo_path && currentBranding.logo_path !== '/images/logo.png') {
+      const logoPath = path.join(__dirname, 'public', currentBranding.logo_path);
+      try {
+        await fs.promises.unlink(logoPath);
+      } catch (err) {
+        console.log('[Branding] Could not delete logo:', err.message);
+      }
+    }
+
+    // Delete uploaded favicon if exists
+    if (currentBranding.favicon_path && currentBranding.favicon_path !== '/images/favicon.ico') {
+      const faviconPath = path.join(__dirname, 'public', currentBranding.favicon_path);
+      try {
+        await fs.promises.unlink(faviconPath);
+      } catch (err) {
+        console.log('[Branding] Could not delete favicon:', err.message);
+      }
+    }
+
+    // Reset to default
+    await BrandingSettings.reset();
+
+    // Clear branding cache
+    clearBrandingCache();
+
+    res.json({ success: true, message: 'Branding reset to default' });
+  } catch (error) {
+    console.error('[Branding API] Error resetting branding:', error);
+    res.status(500).json({ success: false, error: 'Failed to reset branding' });
+  }
+});
+
     console.error('Set default live limit registration error:', error);
     res.status(500).json({ success: false, message: 'Failed to update default live limit' });
+  }
+});
+
+// ============================================
+// BRANDING API ENDPOINTS (White Label)
+// ============================================
+
+// Get current branding settings
+app.get('/api/branding', isAdmin, async (req, res) => {
+  try {
+    const branding = await BrandingSettings.get();
+    res.json({ success: true, branding });
+  } catch (error) {
+    console.error('[Branding API] Get error:', error);
+    res.status(500).json({ success: false, error: 'Failed to get branding settings' });
+  }
+});
+
+// Update branding settings
+app.post('/api/branding/update', isAdmin, upload.fields([
+  { name: 'logo', maxCount: 1 },
+  { name: 'favicon', maxCount: 1 }
+]), async (req, res) => {
+  try {
+    const {
+      app_name,
+      company_name,
+      primary_color,
+      secondary_color,
+      accent_color,
+      footer_text,
+      support_email,
+      support_url,
+      show_powered_by,
+      custom_css
+    } = req.body;
+
+    // Get current branding for logo paths
+    const currentBranding = await BrandingSettings.get();
+    let logo_path = currentBranding.logo_path;
+    let favicon_path = currentBranding.favicon_path;
+
+    // Handle logo upload
+    if (req.files && req.files.logo && req.files.logo[0]) {
+      const logoFile = req.files.logo[0];
+      const logoFilename = `logo-${Date.now()}${path.extname(logoFile.originalname)}`;
+      const logoPath = path.join(__dirname, 'public', 'uploads', 'branding', logoFilename);
+      
+      // Move file to branding folder
+      await fs.promises.rename(logoFile.path, logoPath);
+      logo_path = `/uploads/branding/${logoFilename}`;
+
+      // Delete old logo if it's not the default
+      if (currentBranding.logo_path && currentBranding.logo_path !== '/images/logo.png') {
+        const oldLogoPath = path.join(__dirname, 'public', currentBranding.logo_path);
+        try {
+          await fs.promises.unlink(oldLogoPath);
+        } catch (err) {
+          console.log('[Branding] Old logo not found or already deleted');
+        }
+      }
+    }
+
+    // Handle favicon upload
+    if (req.files && req.files.favicon && req.files.favicon[0]) {
+      const faviconFile = req.files.favicon[0];
+      const faviconFilename = `favicon-${Date.now()}${path.extname(faviconFile.originalname)}`;
+      const faviconPath = path.join(__dirname, 'public', 'uploads', 'branding', faviconFilename);
+      
+      // Move file to branding folder
+      await fs.promises.rename(faviconFile.path, faviconPath);
+      favicon_path = `/uploads/branding/${faviconFilename}`;
+
+      // Delete old favicon if it's not the default
+      if (currentBranding.favicon_path && currentBranding.favicon_path !== '/images/favicon.ico') {
+        const oldFaviconPath = path.join(__dirname, 'public', currentBranding.favicon_path);
+        try {
+          await fs.promises.unlink(oldFaviconPath);
+        } catch (err) {
+          console.log('[Branding] Old favicon not found or already deleted');
+        }
+      }
+    }
+
+    // Update branding settings
+    await BrandingSettings.update({
+      app_name: app_name || 'OzangLive',
+      company_name: company_name || 'OzangLive Team',
+      logo_path,
+      favicon_path,
+      primary_color: primary_color || '#8B5CF6',
+      secondary_color: secondary_color || '#7C3AED',
+      accent_color: accent_color || '#6D28D9',
+      footer_text: footer_text || '© 2024 OzangLive. All rights reserved.',
+      support_email: support_email || 'support@ozanglive.com',
+      support_url: support_url || null,
+      show_powered_by: show_powered_by === 'on' || show_powered_by === '1' || show_powered_by === true ? 1 : 0,
+      custom_css: custom_css || null
+    });
+
+    // Clear branding cache
+    clearBrandingCache();
+
+    console.log('[Branding] Settings updated successfully');
+    res.json({ success: true, message: 'Branding updated successfully' });
+  } catch (error) {
+    console.error('[Branding API] Update error:', error);
+    res.status(500).json({ success: false, error: 'Failed to update branding settings' });
+  }
+});
+
+// Reset branding to default
+app.post('/api/branding/reset', isAdmin, async (req, res) => {
+  try {
+    // Get current branding to delete uploaded files
+    const currentBranding = await BrandingSettings.get();
+
+    // Delete uploaded logo if exists
+    if (currentBranding.logo_path && currentBranding.logo_path !== '/images/logo.png') {
+      const logoPath = path.join(__dirname, 'public', currentBranding.logo_path);
+      try {
+        await fs.promises.unlink(logoPath);
+      } catch (err) {
+        console.log('[Branding] Logo file not found or already deleted');
+      }
+    }
+
+    // Delete uploaded favicon if exists
+    if (currentBranding.favicon_path && currentBranding.favicon_path !== '/images/favicon.ico') {
+      const faviconPath = path.join(__dirname, 'public', currentBranding.favicon_path);
+      try {
+        await fs.promises.unlink(faviconPath);
+      } catch (err) {
+        console.log('[Branding] Favicon file not found or already deleted');
+      }
+    }
+
+    // Reset to default
+    await BrandingSettings.reset();
+
+    // Clear branding cache
+    clearBrandingCache();
+
+    console.log('[Branding] Settings reset to default');
+    res.json({ success: true, message: 'Branding reset to default' });
+  } catch (error) {
+    console.error('[Branding API] Reset error:', error);
+    res.status(500).json({ success: false, error: 'Failed to reset branding' });
   }
 });
 

@@ -1,0 +1,417 @@
+<!-- Branding Tab -->
+<div id="branding-tab" class="settings-content hidden">
+  <div class="p-6">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h3 class="text-lg font-semibold flex items-center">
+          <i class="ti ti-palette mr-2 text-primary"></i>
+          White Label Branding
+        </h3>
+        <p class="text-sm text-gray-400 mt-1">Customize the application appearance with your brand</p>
+      </div>
+      <button type="button" id="reset-branding-btn"
+        class="px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded-lg transition-colors text-sm">
+        <i class="ti ti-refresh mr-1"></i>Reset to Default
+      </button>
+    </div>
+
+    <form id="branding-form" class="space-y-6">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+      <!-- App Identity -->
+      <div class="bg-dark-700 rounded-lg p-4">
+        <h4 class="text-md font-medium mb-4 flex items-center">
+          <i class="ti ti-id mr-2 text-blue-400"></i>
+          Application Identity
+        </h4>
+
+        <div class="space-y-4">
+          <!-- App Name -->
+          <div>
+            <label for="app-name" class="block text-sm font-medium text-gray-300 mb-2">
+              Application Name
+            </label>
+            <input type="text" id="app-name" name="app_name" value="<%= branding.app_name %>"
+              class="w-full bg-dark-900 text-white px-4 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+              placeholder="OzangLive">
+            <p class="text-xs text-gray-500 mt-1">Displayed in browser title and throughout the app</p>
+          </div>
+
+          <!-- Company Name -->
+          <div>
+            <label for="company-name" class="block text-sm font-medium text-gray-300 mb-2">
+              Company Name
+            </label>
+            <input type="text" id="company-name" name="company_name" value="<%= branding.company_name %>"
+              class="w-full bg-dark-900 text-white px-4 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+              placeholder="OzangLive Team">
+            <p class="text-xs text-gray-500 mt-1">Used in footer and legal text</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Logo & Visual Assets -->
+      <div class="bg-dark-700 rounded-lg p-4">
+        <h4 class="text-md font-medium mb-4 flex items-center">
+          <i class="ti ti-photo mr-2 text-green-400"></i>
+          Logo & Visual Assets
+        </h4>
+
+        <div class="space-y-4">
+          <!-- Logo Upload -->
+          <div>
+            <label class="block text-sm font-medium text-gray-300 mb-2">
+              Application Logo
+            </label>
+            <div class="flex items-center gap-4">
+              <div class="w-32 h-32 bg-dark-900 rounded-lg flex items-center justify-center overflow-hidden">
+                <img id="logo-preview" src="<%= branding.logo_path %>" alt="Logo" class="max-w-full max-h-full object-contain">
+              </div>
+              <div class="flex-1">
+                <input type="file" id="logo-upload" name="logo" accept="image/*" class="hidden">
+                <button type="button" onclick="document.getElementById('logo-upload').click()"
+                  class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-lg transition-colors mb-2">
+                  <i class="ti ti-upload mr-1"></i>Upload Logo
+                </button>
+                <p class="text-xs text-gray-500">Recommended: PNG with transparent background, 200x60px</p>
+                <p class="text-xs text-gray-500">Max size: 2MB</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Favicon Upload -->
+          <div>
+            <label class="block text-sm font-medium text-gray-300 mb-2">
+              Favicon (Browser Icon)
+            </label>
+            <div class="flex items-center gap-4">
+              <div class="w-16 h-16 bg-dark-900 rounded-lg flex items-center justify-center overflow-hidden">
+                <img id="favicon-preview" src="<%= branding.favicon_path %>" alt="Favicon" class="max-w-full max-h-full object-contain">
+              </div>
+              <div class="flex-1">
+                <input type="file" id="favicon-upload" name="favicon" accept="image/x-icon,image/png" class="hidden">
+                <button type="button" onclick="document.getElementById('favicon-upload').click()"
+                  class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-lg transition-colors mb-2">
+                  <i class="ti ti-upload mr-1"></i>Upload Favicon
+                </button>
+                <p class="text-xs text-gray-500">Recommended: ICO or PNG, 32x32px or 64x64px</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Color Scheme -->
+      <div class="bg-dark-700 rounded-lg p-4">
+        <h4 class="text-md font-medium mb-4 flex items-center">
+          <i class="ti ti-color-swatch mr-2 text-purple-400"></i>
+          Color Scheme
+        </h4>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <!-- Primary Color -->
+          <div>
+            <label for="primary-color" class="block text-sm font-medium text-gray-300 mb-2">
+              Primary Color
+            </label>
+            <div class="flex items-center gap-2">
+              <input type="color" id="primary-color" name="primary_color" value="<%= branding.primary_color %>"
+                class="w-12 h-12 rounded-lg cursor-pointer">
+              <input type="text" id="primary-color-text" value="<%= branding.primary_color %>"
+                class="flex-1 bg-dark-900 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary font-mono text-sm">
+            </div>
+            <p class="text-xs text-gray-500 mt-1">Main brand color (buttons, links)</p>
+          </div>
+
+          <!-- Secondary Color -->
+          <div>
+            <label for="secondary-color" class="block text-sm font-medium text-gray-300 mb-2">
+              Secondary Color
+            </label>
+            <div class="flex items-center gap-2">
+              <input type="color" id="secondary-color" name="secondary_color" value="<%= branding.secondary_color %>"
+                class="w-12 h-12 rounded-lg cursor-pointer">
+              <input type="text" id="secondary-color-text" value="<%= branding.secondary_color %>"
+                class="flex-1 bg-dark-900 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary font-mono text-sm">
+            </div>
+            <p class="text-xs text-gray-500 mt-1">Hover states and accents</p>
+          </div>
+
+          <!-- Accent Color -->
+          <div>
+            <label for="accent-color" class="block text-sm font-medium text-gray-300 mb-2">
+              Accent Color
+            </label>
+            <div class="flex items-center gap-2">
+              <input type="color" id="accent-color" name="accent_color" value="<%= branding.accent_color %>"
+                class="w-12 h-12 rounded-lg cursor-pointer">
+              <input type="text" id="accent-color-text" value="<%= branding.accent_color %>"
+                class="flex-1 bg-dark-900 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary font-mono text-sm">
+            </div>
+            <p class="text-xs text-gray-500 mt-1">Highlights and badges</p>
+          </div>
+        </div>
+
+        <!-- Color Preview -->
+        <div class="mt-4 p-4 bg-dark-900 rounded-lg">
+          <p class="text-xs text-gray-400 mb-2">Preview:</p>
+          <div class="flex gap-2">
+            <button type="button" id="color-preview-primary" style="background-color: <%= branding.primary_color %>"
+              class="px-4 py-2 text-white rounded-lg">Primary Button</button>
+            <button type="button" id="color-preview-secondary" style="background-color: <%= branding.secondary_color %>"
+              class="px-4 py-2 text-white rounded-lg">Secondary Button</button>
+            <span id="color-preview-accent" style="background-color: <%= branding.accent_color %>"
+              class="px-3 py-1 text-white rounded-full text-sm">Accent Badge</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer & Contact -->
+      <div class="bg-dark-700 rounded-lg p-4">
+        <h4 class="text-md font-medium mb-4 flex items-center">
+          <i class="ti ti-mail mr-2 text-yellow-400"></i>
+          Footer & Contact Information
+        </h4>
+
+        <div class="space-y-4">
+          <!-- Footer Text -->
+          <div>
+            <label for="footer-text" class="block text-sm font-medium text-gray-300 mb-2">
+              Footer Text
+            </label>
+            <input type="text" id="footer-text" name="footer_text" value="<%= branding.footer_text %>"
+              class="w-full bg-dark-900 text-white px-4 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+              placeholder="© 2024 Your Company. All rights reserved.">
+            <p class="text-xs text-gray-500 mt-1">Displayed at the bottom of every page</p>
+          </div>
+
+          <!-- Support Email -->
+          <div>
+            <label for="support-email" class="block text-sm font-medium text-gray-300 mb-2">
+              Support Email
+            </label>
+            <input type="email" id="support-email" name="support_email" value="<%= branding.support_email %>"
+              class="w-full bg-dark-900 text-white px-4 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+              placeholder="support@yourcompany.com">
+            <p class="text-xs text-gray-500 mt-1">Contact email for support inquiries</p>
+          </div>
+
+          <!-- Support URL -->
+          <div>
+            <label for="support-url" class="block text-sm font-medium text-gray-300 mb-2">
+              Support URL (Optional)
+            </label>
+            <input type="url" id="support-url" name="support_url" value="<%= branding.support_url || '' %>"
+              class="w-full bg-dark-900 text-white px-4 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+              placeholder="https://support.yourcompany.com">
+            <p class="text-xs text-gray-500 mt-1">Link to your support/help center</p>
+          </div>
+
+          <!-- Show Powered By -->
+          <div class="flex items-center justify-between py-2">
+            <div>
+              <label class="text-sm font-medium text-gray-300">Show "Powered by OzangLive"</label>
+              <p class="text-xs text-gray-500">Display attribution in footer</p>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="show-powered-by" name="show_powered_by" <%= branding.show_powered_by ? 'checked' : '' %> class="sr-only peer">
+              <div
+                class="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary">
+              </div>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Advanced Customization -->
+      <div class="bg-dark-700 rounded-lg p-4">
+        <h4 class="text-md font-medium mb-4 flex items-center">
+          <i class="ti ti-code mr-2 text-red-400"></i>
+          Advanced Customization
+        </h4>
+
+        <div>
+          <label for="custom-css" class="block text-sm font-medium text-gray-300 mb-2">
+            Custom CSS (Optional)
+          </label>
+          <textarea id="custom-css" name="custom_css" rows="6"
+            class="w-full bg-dark-900 text-white px-4 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary font-mono text-sm"
+            placeholder="/* Add your custom CSS here */
+.custom-class {
+  color: #fff;
+}"><%= branding.custom_css || '' %></textarea>
+          <p class="text-xs text-gray-500 mt-1">Advanced users: Add custom CSS to override default styles</p>
+          <p class="text-xs text-yellow-500 mt-1">⚠️ Use with caution - invalid CSS may break the layout</p>
+        </div>
+      </div>
+
+      <!-- Save Button -->
+      <div class="flex justify-end gap-3">
+        <button type="button" id="preview-branding-btn"
+          class="px-6 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded-lg transition-colors">
+          <i class="ti ti-eye mr-1"></i>Preview Changes
+        </button>
+        <button type="submit" id="save-branding-btn"
+          class="px-6 py-2 bg-primary hover:bg-secondary text-white rounded-lg transition-colors">
+          <i class="ti ti-device-floppy mr-1"></i>Save Branding
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+// Branding Settings JavaScript
+(function() {
+  // Color picker sync
+  const colorInputs = [
+    { picker: 'primary-color', text: 'primary-color-text', preview: 'color-preview-primary' },
+    { picker: 'secondary-color', text: 'secondary-color-text', preview: 'color-preview-secondary' },
+    { picker: 'accent-color', text: 'accent-color-text', preview: 'color-preview-accent' }
+  ];
+
+  colorInputs.forEach(({ picker, text, preview }) => {
+    const pickerEl = document.getElementById(picker);
+    const textEl = document.getElementById(text);
+    const previewEl = document.getElementById(preview);
+
+    if (pickerEl && textEl && previewEl) {
+      pickerEl.addEventListener('input', (e) => {
+        textEl.value = e.target.value;
+        previewEl.style.backgroundColor = e.target.value;
+      });
+
+      textEl.addEventListener('input', (e) => {
+        if (/^#[0-9A-F]{6}$/i.test(e.target.value)) {
+          pickerEl.value = e.target.value;
+          previewEl.style.backgroundColor = e.target.value;
+        }
+      });
+    }
+  });
+
+  // Logo preview
+  const logoUpload = document.getElementById('logo-upload');
+  const logoPreview = document.getElementById('logo-preview');
+  if (logoUpload && logoPreview) {
+    logoUpload.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          logoPreview.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+  }
+
+  // Favicon preview
+  const faviconUpload = document.getElementById('favicon-upload');
+  const faviconPreview = document.getElementById('favicon-preview');
+  if (faviconUpload && faviconPreview) {
+    faviconUpload.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          faviconPreview.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+  }
+
+  // Save branding
+  const brandingForm = document.getElementById('branding-form');
+  if (brandingForm) {
+    brandingForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const saveBtn = document.getElementById('save-branding-btn');
+      const originalText = saveBtn.innerHTML;
+      saveBtn.disabled = true;
+      saveBtn.innerHTML = '<i class="ti ti-loader animate-spin mr-1"></i>Saving...';
+
+      try {
+        const formData = new FormData(brandingForm);
+        
+        const response = await fetch('/api/branding/update', {
+          method: 'POST',
+          body: formData
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          showNotification('Branding updated successfully! Reloading...', 'success');
+          setTimeout(() => {
+            window.location.reload();
+          }, 1500);
+        } else {
+          throw new Error(result.error || 'Failed to update branding');
+        }
+      } catch (error) {
+        console.error('Error saving branding:', error);
+        showNotification(error.message || 'Failed to save branding settings', 'error');
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = originalText;
+      }
+    });
+  }
+
+  // Reset branding
+  const resetBtn = document.getElementById('reset-branding-btn');
+  if (resetBtn) {
+    resetBtn.addEventListener('click', async () => {
+      if (!confirm('Are you sure you want to reset all branding to default? This cannot be undone.')) {
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/branding/reset', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            _csrf: document.querySelector('input[name="_csrf"]').value
+          })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          showNotification('Branding reset to default! Reloading...', 'success');
+          setTimeout(() => {
+            window.location.reload();
+          }, 1500);
+        } else {
+          throw new Error(result.error || 'Failed to reset branding');
+        }
+      } catch (error) {
+        console.error('Error resetting branding:', error);
+        showNotification(error.message || 'Failed to reset branding', 'error');
+      }
+    });
+  }
+
+  // Preview branding (simple alert for now)
+  const previewBtn = document.getElementById('preview-branding-btn');
+  if (previewBtn) {
+    previewBtn.addEventListener('click', () => {
+      showNotification('Preview feature coming soon! Save to see changes.', 'info');
+    });
+  }
+
+  // Notification helper
+  function showNotification(message, type = 'info') {
+    // Reuse existing notification system if available
+    if (typeof window.showNotification === 'function') {
+      window.showNotification(message, type);
+    } else {
+      alert(message);
+    }
+  }
+})();
+</script>
