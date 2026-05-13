@@ -353,6 +353,8 @@ class YouTubeService {
     
     const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
     
+    console.log('[YouTubeService.listBroadcasts] Fetching broadcasts...');
+    
     const response = await youtube.liveBroadcasts.list({
       part: 'snippet,status,contentDetails',
       broadcastStatus: 'upcoming',
@@ -360,11 +362,14 @@ class YouTubeService {
     });
     
     const broadcasts = response.data.items || [];
+    console.log(`[YouTubeService.listBroadcasts] Found ${broadcasts.length} broadcasts`);
     
     // OPTIMIZATION: Collect all unique stream IDs first
     const streamIds = broadcasts
       .map(b => b.contentDetails?.boundStreamId)
       .filter(id => id); // Remove null/undefined
+    
+    console.log(`[YouTubeService.listBroadcasts] Found ${streamIds.length} stream IDs to fetch`);
     
     // OPTIMIZATION: Fetch all streams in ONE batch request (max 50 IDs)
     let streamsMap = {};
@@ -372,11 +377,15 @@ class YouTubeService {
       try {
         // YouTube API allows comma-separated IDs (up to 50)
         const uniqueStreamIds = [...new Set(streamIds)]; // Remove duplicates
+        console.log(`[YouTubeService.listBroadcasts] Fetching ${uniqueStreamIds.length} unique streams in batch...`);
+        
         const streamResponse = await youtube.liveStreams.list({
           part: 'cdn',
           id: uniqueStreamIds.join(','),
           maxResults: 50
         });
+        
+        console.log(`[YouTubeService.listBroadcasts] Batch fetch returned ${streamResponse.data.items?.length || 0} streams`);
         
         // Create a map for quick lookup
         if (streamResponse.data.items) {
@@ -388,7 +397,7 @@ class YouTubeService {
           });
         }
       } catch (err) {
-        console.error('Error fetching streams in batch:', err.message);
+        console.error('[YouTubeService.listBroadcasts] Error fetching streams in batch:', err.message);
         // Continue without stream info if batch fetch fails
       }
     }
@@ -424,6 +433,7 @@ class YouTubeService {
       };
     });
     
+    console.log(`[YouTubeService.listBroadcasts] Returning ${result.length} broadcasts with stream info`);
     return result;
   }
 
