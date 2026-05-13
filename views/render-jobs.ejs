@@ -309,10 +309,10 @@
     <i class="ti ti-video mr-2"></i>Active Jobs
   </button>
   <div class="w-px bg-gray-600"></div>
-  <button onclick="switchRenderTab('history')" id="historyTab"
-    class="flex-1 px-4 md:px-6 py-3 font-medium transition-colors text-center text-gray-400 hover:text-white hover:bg-gray-700/50">
-    <i class="ti ti-history mr-2"></i>History
-  </button>
+  <a href="/gallery" 
+    class="flex-1 px-4 md:px-6 py-3 font-medium transition-colors text-center text-gray-400 hover:text-white hover:bg-gray-700/50 flex items-center justify-center">
+    <i class="ti ti-folder mr-2"></i>Media Library
+  </a>
 </div>
 
 <!-- Jobs Container (Active Tab) -->
@@ -537,38 +537,8 @@
 
 </div>
 
-<!-- History Container (Hidden by default) -->
-<div id="historyContainer" class="tab-content hidden">
-  <div class="bg-gray-800 rounded-lg p-4 md:p-6 mb-6">
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
-      <h3 class="text-lg font-semibold">Render History</h3>
-      <div class="flex gap-2">
-        <button onclick="clearHistory()" class="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg text-sm transition-colors">
-          <i class="ti ti-trash mr-1"></i>Clear History
-        </button>
-      </div>
-    </div>
-    
-    <!-- Filters -->
-    <div class="flex flex-wrap gap-2 mb-4">
-      <button onclick="filterHistory('all')" class="filter-chip active px-3 py-1.5 bg-dark-700 border border-gray-600 rounded-lg text-xs">
-        All
-      </button>
-      <button onclick="filterHistory('success')" class="filter-chip px-3 py-1.5 bg-dark-700 border border-gray-600 rounded-lg text-xs">
-        <i class="ti ti-check text-green-400"></i> Success
-      </button>
-      <button onclick="filterHistory('failed')" class="filter-chip px-3 py-1.5 bg-dark-700 border border-gray-600 rounded-lg text-xs">
-        <i class="ti ti-x text-red-400"></i> Failed
-      </button>
-      <input type="text" id="historySearch" placeholder="Search by title..." class="flex-1 min-w-[200px] px-3 py-1.5 bg-dark-700 border border-gray-600 rounded-lg text-sm" oninput="searchHistory(this.value)">
-    </div>
-    
-    <!-- History List -->
-    <div id="historyList">
-      <div class="text-sm text-gray-400 text-center py-8">No history yet</div>
-    </div>
-  </div>
-</div>
+<!-- History Container (Hidden by default) - REMOVED -->
+<!-- Media Library now redirects to Gallery page -->
 
 <!-- Template Modal -->
 <div id="templateModal" class="fixed inset-0 bg-black/60 modal-backdrop z-50 hidden">
@@ -1848,22 +1818,9 @@ function clearHistory() {
 
 // ===== TAB SWITCHING =====
 function switchRenderTab(tab) {
-  const jobsTab = document.getElementById('jobsTab');
-  const historyTab = document.getElementById('historyTab');
-  const jobsContainer = document.getElementById('jobsContainer');
-  const historyContainer = document.getElementById('historyContainer');
-  
+  // Only handle jobs tab, library redirects to gallery
   if (tab === 'jobs') {
-    jobsTab.className = 'flex-1 px-4 md:px-6 py-3 font-medium transition-colors text-center bg-primary/20 text-primary border-b-2 border-primary';
-    historyTab.className = 'flex-1 px-4 md:px-6 py-3 font-medium transition-colors text-center text-gray-400 hover:text-white hover:bg-gray-700/50';
-    jobsContainer.classList.remove('hidden');
-    historyContainer.classList.add('hidden');
-  } else {
-    historyTab.className = 'flex-1 px-4 md:px-6 py-3 font-medium transition-colors text-center bg-primary/20 text-primary border-b-2 border-primary';
-    jobsTab.className = 'flex-1 px-4 md:px-6 py-3 font-medium transition-colors text-center text-gray-400 hover:text-white hover:bg-gray-700/50';
-    historyContainer.classList.remove('hidden');
-    jobsContainer.classList.add('hidden');
-    loadHistory();
+    // Already on jobs tab, do nothing
   }
 }
 
