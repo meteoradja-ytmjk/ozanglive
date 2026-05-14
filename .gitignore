@@ -1,6 +1,10 @@
 Nothing should be ignored based on the provided file changes. The only modified file is 'views/render-jobs.ejs', which is a source code file and should not be added to .gitignore.
 node_modules
 
+# Logs
+logs/
+*.log
+
 # White Label: Uploaded branding assets
 public/uploads/branding/*
 !public/uploads/branding/.gitkeep
