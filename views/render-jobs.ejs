@@ -406,21 +406,29 @@
             <label class="text-xs font-medium text-gray-300 block mb-1.5">
               <i class="ti ti-clock-hour-4 text-xs mr-1"></i>Hours
             </label>
-            <input type="number" id="durationHours" min="0" value="0" class="w-full bg-dark-700 text-white px-2 py-2 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary text-center font-semibold">
+            <input type="number" id="durationHours" min="0" value="0" class="w-full bg-dark-700 text-white px-2 py-2 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary text-center font-semibold transition-opacity">
           </div>
           <div>
             <label class="text-xs font-medium text-gray-300 block mb-1.5">
               <i class="ti ti-clock text-xs mr-1"></i>Minutes
             </label>
-            <input type="number" id="durationMinutes" min="0" max="59" value="0" class="w-full bg-dark-700 text-white px-2 py-2 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary text-center font-semibold">
+            <input type="number" id="durationMinutes" min="0" max="59" value="1" class="w-full bg-dark-700 text-white px-2 py-2 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary text-center font-semibold transition-opacity">
           </div>
           <div>
-            <label class="text-xs font-medium text-gray-300 block mb-1.5">Follow</label>
-            <div class="flex items-center justify-center bg-dark-700 px-2 py-2 rounded-lg h-[38px]">
-              <input type="checkbox" id="followAudioDuration" class="w-4 h-4 rounded border-gray-500 bg-dark-700 text-primary focus:ring-primary">
-              <label for="followAudioDuration" class="text-xs text-gray-300 cursor-pointer ml-1.5 hidden md:inline">Audio</label>
+            <label class="text-xs font-medium text-gray-300 block mb-1.5">
+              <i class="ti ti-music text-xs mr-1"></i>Follow Audio
+            </label>
+            <div class="flex items-center justify-center bg-dark-700 px-2 py-2 rounded-lg h-[38px] cursor-pointer hover:bg-dark-600 transition-colors" onclick="document.getElementById('followAudioDuration').click()">
+              <input type="checkbox" id="followAudioDuration" class="w-4 h-4 rounded border-gray-500 bg-dark-700 text-primary focus:ring-primary cursor-pointer">
+              <label for="followAudioDuration" class="text-xs text-gray-300 cursor-pointer ml-1.5">Auto</label>
             </div>
           </div>
+        </div>
+        
+        <!-- Duration Info -->
+        <div id="durationInfo" class="mt-2 text-xs text-gray-400 hidden">
+          <i class="ti ti-info-circle text-xs mr-1"></i>
+          <span id="durationInfoText">Duration will follow total audio length</span>
         </div>
       </div>
     </div>
@@ -1230,7 +1238,18 @@ if (el.createBtn) {
       const targetDurationSeconds=(h*3600)+(m*60);
       const videoIds=[...document.querySelectorAll("input[name='video']:checked")].map(i=>i.value);
       const audioIds=[...document.querySelectorAll("input[name='audio']:checked")].map(i=>i.value);
+      const followAudio=el.followAudioDuration.checked;
+      
+      // Validation
       if(videoIds.length===0)return alert('Pilih minimal 1 video');
+      
+      if(followAudio && audioIds.length===0){
+        return alert('Pilih minimal 1 audio jika menggunakan "Follow Audio Duration"');
+      }
+      
+      if(!followAudio && targetDurationSeconds===0){
+        return alert('Set durasi minimal 1 menit atau aktifkan "Follow Audio Duration"');
+      }
       
       const renderData = {
         title:titleV,
@@ -1239,7 +1258,7 @@ if (el.createBtn) {
         durationMinutes:m,
         targetAccountId:el.targetAccountId.value,
         autoUploadToYoutube:false,
-        followAudioDuration:el.followAudioDuration.checked,
+        followAudioDuration:followAudio,
         videoIds,
         audioIds
       };
@@ -1249,7 +1268,7 @@ if (el.createBtn) {
       if(!resp.ok||!data.success)return alert(data.message||'Gagal');
       
       // Show notification
-      showNotification('Render Started', 'Your render job has been queued');
+      showNotification('Render Started', followAudio ? 'Render will follow audio duration' : `Render duration: ${h}h ${m}m`);
       
       loadJobs();
       startSmartRefresh(); // Start auto-refresh for new job
@@ -1422,9 +1441,21 @@ async function confirmSchedule() {
     const targetDurationSeconds = (h * 3600) + (m * 60);
     const videoIds = [...document.querySelectorAll("input[name='video']:checked")].map(i => i.value);
     const audioIds = [...document.querySelectorAll("input[name='audio']:checked")].map(i => i.value);
+    const followAudio = el.followAudioDuration.checked;
     
+    // Validation
     if (videoIds.length === 0) {
       alert('Please select at least 1 video');
+      return;
+    }
+    
+    if (followAudio && audioIds.length === 0) {
+      alert('Please select at least 1 audio when using "Follow Audio Duration"');
+      return;
+    }
+    
+    if (!followAudio && targetDurationSeconds === 0) {
+      alert('Set duration to at least 1 minute or enable "Follow Audio Duration"');
       return;
     }
     
@@ -1435,7 +1466,7 @@ async function confirmSchedule() {
       durationMinutes: m,
       targetAccountId: el.targetAccountId.value,
       autoUploadToYoutube: false,
-      followAudioDuration: el.followAudioDuration.checked,
+      followAudioDuration: followAudio,
       videoIds,
       audioIds,
       scheduledAt: scheduledTime.toISOString()
@@ -2481,10 +2512,36 @@ if (el.resetBtn) {
 
 const toggleDurationInputs = () => {
   const follow = el.followAudioDuration.checked;
+  const durationInfo = document.getElementById('durationInfo');
+  const durationInfoText = document.getElementById('durationInfoText');
+  
+  // Disable/enable inputs
   el.durationHours.disabled = follow;
   el.durationMinutes.disabled = follow;
+  
+  // Visual feedback
   el.durationHours.style.opacity = follow ? '0.5' : '1';
   el.durationMinutes.style.opacity = follow ? '0.5' : '1';
+  el.durationHours.style.cursor = follow ? 'not-allowed' : 'text';
+  el.durationMinutes.style.cursor = follow ? 'not-allowed' : 'text';
+  
+  // Show/hide info message
+  if (follow) {
+    durationInfo.classList.remove('hidden');
+    durationInfoText.textContent = 'Duration will automatically match total audio length';
+    durationInfoText.className = 'text-primary';
+    
+    // Set values to 0 when following audio
+    el.durationHours.value = 0;
+    el.durationMinutes.value = 0;
+  } else {
+    durationInfo.classList.add('hidden');
+    
+    // Set default value if both are 0
+    if (parseInt(el.durationHours.value) === 0 && parseInt(el.durationMinutes.value) === 0) {
+      el.durationMinutes.value = 1;
+    }
+  }
 };
 
 if (el.followAudioDuration) {
