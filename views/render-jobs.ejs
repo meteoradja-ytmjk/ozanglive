@@ -517,9 +517,9 @@
             <i class="ti ti-player-play text-base md:text-xl"></i>
             <span class="text-xs">Render</span>
           </button>
-          <button onclick="saveAsTemplate()" class="bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 px-2 py-2.5 md:px-4 md:py-3 rounded-lg font-semibold transition-all flex flex-col items-center justify-center gap-1">
-            <i class="ti ti-device-floppy text-base md:text-xl"></i>
-            <span class="text-xs">Template</span>
+          <button onclick="openScheduleModal()" class="bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 px-2 py-2.5 md:px-4 md:py-3 rounded-lg font-semibold transition-all flex flex-col items-center justify-center gap-1">
+            <i class="ti ti-clock text-base md:text-xl"></i>
+            <span class="text-xs">Schedule</span>
           </button>
           <button id="resetBtn" class="bg-gray-700 hover:bg-gray-600 text-gray-300 px-2 py-2.5 md:px-4 md:py-3 rounded-lg font-semibold transition-all flex flex-col items-center justify-center gap-1">
             <i class="ti ti-eraser text-base md:text-xl"></i>
@@ -774,6 +774,100 @@
               <strong>Tip:</strong> You can upload multiple files at once. Files will be saved to the gallery and available immediately for rendering.
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Schedule Render Modal -->
+<div id="scheduleModal" class="fixed inset-0 bg-black/60 modal-backdrop z-50 hidden">
+  <div class="flex items-center justify-center min-h-screen p-4">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-md border border-gray-600/50">
+      <div class="flex items-center justify-between p-4 border-b border-gray-600/50">
+        <div class="flex items-center gap-2">
+          <i class="ti ti-clock text-purple-400 text-xl"></i>
+          <h3 class="text-lg font-medium">Schedule Render</h3>
+        </div>
+        <button onclick="closeScheduleModal()" class="text-gray-400 hover:text-white">
+          <i class="ti ti-x text-xl"></i>
+        </button>
+      </div>
+      <div class="p-6">
+        <!-- Schedule Type -->
+        <div class="mb-4">
+          <label class="text-sm font-medium text-white block mb-2">Schedule Type</label>
+          <div class="grid grid-cols-2 gap-2">
+            <button onclick="setScheduleType('datetime')" id="scheduleTypeDateTime" class="px-4 py-2.5 bg-purple-500/20 text-purple-400 rounded-lg font-medium transition-colors border border-purple-500/50">
+              <i class="ti ti-calendar mr-1"></i>Date & Time
+            </button>
+            <button onclick="setScheduleType('delay')" id="scheduleTypeDelay" class="px-4 py-2.5 bg-gray-700 text-gray-300 rounded-lg font-medium transition-colors hover:bg-gray-600">
+              <i class="ti ti-clock-hour-4 mr-1"></i>Delay
+            </button>
+          </div>
+        </div>
+
+        <!-- DateTime Picker -->
+        <div id="dateTimeSection">
+          <div class="mb-4">
+            <label class="text-sm font-medium text-white block mb-2">
+              <i class="ti ti-calendar mr-1"></i>Date
+            </label>
+            <input type="date" id="scheduleDate" class="w-full bg-dark-700 text-white px-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500">
+          </div>
+          <div class="mb-4">
+            <label class="text-sm font-medium text-white block mb-2">
+              <i class="ti ti-clock mr-1"></i>Time
+            </label>
+            <input type="time" id="scheduleTime" class="w-full bg-dark-700 text-white px-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500">
+          </div>
+        </div>
+
+        <!-- Delay Section -->
+        <div id="delaySection" class="hidden">
+          <div class="mb-4">
+            <label class="text-sm font-medium text-white block mb-2">Delay Duration</label>
+            <div class="grid grid-cols-3 gap-2">
+              <div>
+                <label class="text-xs text-gray-400 block mb-1">Hours</label>
+                <input type="number" id="delayHours" min="0" max="24" value="0" class="w-full bg-dark-700 text-white px-2 py-2 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 text-center">
+              </div>
+              <div>
+                <label class="text-xs text-gray-400 block mb-1">Minutes</label>
+                <input type="number" id="delayMinutes" min="0" max="59" value="30" class="w-full bg-dark-700 text-white px-2 py-2 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 text-center">
+              </div>
+              <div>
+                <label class="text-xs text-gray-400 block mb-1">Seconds</label>
+                <input type="number" id="delaySeconds" min="0" max="59" value="0" class="w-full bg-dark-700 text-white px-2 py-2 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 text-center">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Schedule Info -->
+        <div class="bg-purple-500/10 border border-purple-500/30 rounded-lg p-3 mb-4">
+          <div class="flex items-start gap-2">
+            <i class="ti ti-info-circle text-purple-400 mt-0.5 text-sm"></i>
+            <div class="text-xs text-purple-300">
+              <strong>Scheduled Render:</strong> Your render job will be created and queued at the specified time. Make sure your server is running!
+            </div>
+          </div>
+        </div>
+
+        <!-- Scheduled Time Preview -->
+        <div id="schedulePreview" class="bg-gray-700/50 rounded-lg p-3 mb-4 hidden">
+          <div class="text-xs text-gray-400 mb-1">Will start at:</div>
+          <div class="text-sm text-white font-semibold" id="schedulePreviewText">-</div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex gap-2">
+          <button onclick="closeScheduleModal()" class="flex-1 px-4 py-2.5 bg-gray-600 hover:bg-gray-500 text-white rounded-lg transition-colors">
+            <i class="ti ti-x mr-1"></i>Cancel
+          </button>
+          <button onclick="confirmSchedule()" id="confirmScheduleBtn" class="flex-1 px-4 py-2.5 bg-purple-500 hover:bg-purple-600 text-white rounded-lg transition-colors">
+            <i class="ti ti-clock-check mr-1"></i>Schedule
+          </button>
         </div>
       </div>
     </div>
@@ -1191,6 +1285,195 @@ function saveAsTemplate() {
   alert('Template saved successfully!');
 }
 
+// ===== SCHEDULE RENDER FUNCTIONS =====
+let scheduleType = 'datetime'; // 'datetime' or 'delay'
+
+function openScheduleModal() {
+  // Validate form first
+  const videoIds = [...document.querySelectorAll("input[name='video']:checked")].map(i => i.value);
+  if (videoIds.length === 0) {
+    alert('Please select at least 1 video before scheduling');
+    return;
+  }
+  
+  // Set default date and time (1 hour from now)
+  const now = new Date();
+  now.setHours(now.getHours() + 1);
+  
+  const dateStr = now.toISOString().split('T')[0];
+  const timeStr = now.toTimeString().slice(0, 5);
+  
+  document.getElementById('scheduleDate').value = dateStr;
+  document.getElementById('scheduleTime').value = timeStr;
+  document.getElementById('scheduleDate').min = new Date().toISOString().split('T')[0];
+  
+  // Show modal
+  document.getElementById('scheduleModal').classList.remove('hidden');
+  updateSchedulePreview();
+}
+
+function closeScheduleModal() {
+  document.getElementById('scheduleModal').classList.add('hidden');
+}
+
+function setScheduleType(type) {
+  scheduleType = type;
+  
+  const dateTimeBtn = document.getElementById('scheduleTypeDateTime');
+  const delayBtn = document.getElementById('scheduleTypeDelay');
+  const dateTimeSection = document.getElementById('dateTimeSection');
+  const delaySection = document.getElementById('delaySection');
+  
+  if (type === 'datetime') {
+    dateTimeBtn.className = 'px-4 py-2.5 bg-purple-500/20 text-purple-400 rounded-lg font-medium transition-colors border border-purple-500/50';
+    delayBtn.className = 'px-4 py-2.5 bg-gray-700 text-gray-300 rounded-lg font-medium transition-colors hover:bg-gray-600';
+    dateTimeSection.classList.remove('hidden');
+    delaySection.classList.add('hidden');
+  } else {
+    delayBtn.className = 'px-4 py-2.5 bg-purple-500/20 text-purple-400 rounded-lg font-medium transition-colors border border-purple-500/50';
+    dateTimeBtn.className = 'px-4 py-2.5 bg-gray-700 text-gray-300 rounded-lg font-medium transition-colors hover:bg-gray-600';
+    dateTimeSection.classList.add('hidden');
+    delaySection.classList.remove('hidden');
+  }
+  
+  updateSchedulePreview();
+}
+
+function updateSchedulePreview() {
+  const preview = document.getElementById('schedulePreview');
+  const previewText = document.getElementById('schedulePreviewText');
+  
+  let scheduledTime;
+  
+  if (scheduleType === 'datetime') {
+    const date = document.getElementById('scheduleDate').value;
+    const time = document.getElementById('scheduleTime').value;
+    
+    if (date && time) {
+      scheduledTime = new Date(`${date}T${time}`);
+    }
+  } else {
+    const hours = parseInt(document.getElementById('delayHours').value || 0);
+    const minutes = parseInt(document.getElementById('delayMinutes').value || 0);
+    const seconds = parseInt(document.getElementById('delaySeconds').value || 0);
+    
+    scheduledTime = new Date();
+    scheduledTime.setHours(scheduledTime.getHours() + hours);
+    scheduledTime.setMinutes(scheduledTime.getMinutes() + minutes);
+    scheduledTime.setSeconds(scheduledTime.getSeconds() + seconds);
+  }
+  
+  if (scheduledTime) {
+    preview.classList.remove('hidden');
+    previewText.textContent = scheduledTime.toLocaleString('id-ID', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  } else {
+    preview.classList.add('hidden');
+  }
+}
+
+async function confirmSchedule() {
+  try {
+    // Calculate scheduled time
+    let scheduledTime;
+    
+    if (scheduleType === 'datetime') {
+      const date = document.getElementById('scheduleDate').value;
+      const time = document.getElementById('scheduleTime').value;
+      
+      if (!date || !time) {
+        alert('Please select date and time');
+        return;
+      }
+      
+      scheduledTime = new Date(`${date}T${time}`);
+    } else {
+      const hours = parseInt(document.getElementById('delayHours').value || 0);
+      const minutes = parseInt(document.getElementById('delayMinutes').value || 0);
+      const seconds = parseInt(document.getElementById('delaySeconds').value || 0);
+      
+      if (hours === 0 && minutes === 0 && seconds === 0) {
+        alert('Please set a delay duration');
+        return;
+      }
+      
+      scheduledTime = new Date();
+      scheduledTime.setHours(scheduledTime.getHours() + hours);
+      scheduledTime.setMinutes(scheduledTime.getMinutes() + minutes);
+      scheduledTime.setSeconds(scheduledTime.getSeconds() + seconds);
+    }
+    
+    // Check if scheduled time is in the past
+    if (scheduledTime <= new Date()) {
+      alert('Scheduled time must be in the future');
+      return;
+    }
+    
+    // Prepare render data
+    const titleV = el.title.value;
+    const h = parseInt(el.durationHours.value || 0, 10);
+    const m = parseInt(el.durationMinutes.value || 0, 10);
+    const targetDurationSeconds = (h * 3600) + (m * 60);
+    const videoIds = [...document.querySelectorAll("input[name='video']:checked")].map(i => i.value);
+    const audioIds = [...document.querySelectorAll("input[name='audio']:checked")].map(i => i.value);
+    
+    if (videoIds.length === 0) {
+      alert('Please select at least 1 video');
+      return;
+    }
+    
+    const renderData = {
+      title: titleV,
+      targetDurationSeconds,
+      durationHours: h,
+      durationMinutes: m,
+      targetAccountId: el.targetAccountId.value,
+      autoUploadToYoutube: false,
+      followAudioDuration: el.followAudioDuration.checked,
+      videoIds,
+      audioIds,
+      scheduledAt: scheduledTime.toISOString()
+    };
+    
+    // Disable button
+    const btn = document.getElementById('confirmScheduleBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ti ti-loader animate-spin mr-1"></i>Scheduling...';
+    
+    // Create scheduled job
+    const resp = await fetch('/api/render/jobs/schedule', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(renderData)
+    });
+    
+    const data = await resp.json();
+    
+    if (!resp.ok || !data.success) {
+      throw new Error(data.message || 'Failed to schedule render');
+    }
+    
+    showToast(`✓ Render scheduled for ${scheduledTime.toLocaleString('id-ID')}`);
+    closeScheduleModal();
+    loadJobs();
+    
+  } catch (error) {
+    console.error('Schedule error:', error);
+    alert(error.message || 'Failed to schedule render');
+    
+    // Re-enable button
+    const btn = document.getElementById('confirmScheduleBtn');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="ti ti-clock-check mr-1"></i>Schedule';
+  }
+}
+
 // ===== UPLOAD MEDIA MODAL FUNCTIONS =====
 let uploadMediaType = 'video'; // 'video' or 'audio'
 let selectedFiles = [];
@@ -1416,6 +1699,19 @@ document.addEventListener('DOMContentLoaded', () => {
       addFilesToList(files);
     });
   }
+  
+  // Schedule modal event listeners
+  const scheduleDate = document.getElementById('scheduleDate');
+  const scheduleTime = document.getElementById('scheduleTime');
+  const delayHours = document.getElementById('delayHours');
+  const delayMinutes = document.getElementById('delayMinutes');
+  const delaySeconds = document.getElementById('delaySeconds');
+  
+  if (scheduleDate) scheduleDate.addEventListener('change', updateSchedulePreview);
+  if (scheduleTime) scheduleTime.addEventListener('change', updateSchedulePreview);
+  if (delayHours) delayHours.addEventListener('input', updateSchedulePreview);
+  if (delayMinutes) delayMinutes.addEventListener('input', updateSchedulePreview);
+  if (delaySeconds) delaySeconds.addEventListener('input', updateSchedulePreview);
 });
 
 function openTemplateModal() {

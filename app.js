@@ -4201,6 +4201,141 @@ app.post('/api/render/jobs', isAuthenticated, async (req, res) => {
   }
 });
 
+// Schedule render job endpoint
+app.post('/api/render/jobs/schedule', isAuthenticated, async (req, res) => {
+  try {
+    const { scheduledAt, ...renderData } = req.body;
+    
+    if (!scheduledAt) {
+      return res.status(400).json({ success: false, message: 'scheduledAt is required' });
+    }
+    
+    const scheduledTime = new Date(scheduledAt);
+    const now = new Date();
+    
+    if (scheduledTime <= now) {
+      return res.status(400).json({ success: false, message: 'Scheduled time must be in the future' });
+    }
+    
+    // Validate render data
+    if (!Array.isArray(renderData.videoIds) || renderData.videoIds.length === 0) {
+      return res.status(400).json({ success: false, message: 'videoIds wajib diisi minimal 1' });
+    }
+    
+    // Calculate delay in milliseconds
+    const delayMs = scheduledTime.getTime() - now.getTime();
+    
+    // Store scheduled job info
+    const jobInfo = {
+      ...renderData,
+      scheduledAt: scheduledAt,
+      userId: req.session.userId
+    };
+    
+    // Schedule the render job
+    setTimeout(async () => {
+      try {
+        console.log(`[Schedule] Executing scheduled render job at ${new Date().toISOString()}`);
+        
+        // Create the render job
+        const { 
+          title, 
+          videoIds, 
+          audioIds, 
+          targetDurationSeconds, 
+          durationHours, 
+          durationMinutes, 
+          targetAccountId, 
+          autoUploadToYoutube, 
+          followAudioDuration
+        } = jobInfo;
+        
+        const computedSeconds = (parseInt(durationHours || 0, 10) * 3600) + (parseInt(durationMinutes || 0, 10) * 60);
+        const target = parseInt(targetDurationSeconds, 10) || computedSeconds;
+        
+        const videos = await Promise.all(videoIds.map((id) => Video.findById(id)));
+        const audios = await Promise.all((audioIds || []).map((id) => Audio.findById(id)));
+        
+        const currentUserId = jobInfo.userId;
+        const safeVideos = videos.filter((v) => v && (!currentUserId || v.user_id === currentUserId));
+        const safeAudios = audios.filter((a) => a && (!currentUserId || a.user_id === currentUserId));
+        
+        if (safeVideos.length === 0) {
+          console.error('[Schedule] No valid videos found for scheduled job');
+          return;
+        }
+        
+        const job = await RenderJob.create({
+          user_id: currentUserId,
+          title: title || `Scheduled Render ${new Date().toISOString()}`,
+          target_duration_seconds: target,
+          video_ids: safeVideos.map((v) => v.id),
+          audio_ids: safeAudios.map((a) => a.id),
+          target_account_id: targetAccountId || null,
+          auto_upload: autoUploadToYoutube ? 1 : 0,
+          follow_audio_duration: !!followAudioDuration,
+          status: 'queued',
+          progress: 0
+        });
+        
+        console.log(`[Schedule] Created render job ${job.id} from scheduled task`);
+        
+        // Process the job immediately
+        setImmediate(async () => {
+          try {
+            await RenderJob.update(job.id, { status: 'processing', progress: 10 });
+            const outputName = `render-${job.id}.mp4`;
+            const outputPath = path.join(__dirname, 'public', 'uploads', 'videos', outputName);
+            const videoPaths = safeVideos.map((v) => path.join(__dirname, 'public', v.filepath));
+            const audioPaths = safeAudios.map((a) => path.join(__dirname, 'public', a.filepath));
+            
+            await renderLoopVideo({
+              videoPaths,
+              audioPaths,
+              outputPath,
+              targetDurationSeconds: target,
+              visualizerPreset: 'none',
+              followAudioDuration: !!followAudioDuration,
+              onProgress: async (progressPercent) => {
+                if (Number.isFinite(progressPercent) && progressPercent > 10) {
+                  await RenderJob.update(job.id, { progress: progressPercent });
+                }
+              }
+            });
+            
+            await RenderJob.update(job.id, { 
+              status: 'completed', 
+              progress: 100, 
+              output_path: `/uploads/videos/${outputName}` 
+            });
+            
+            console.log(`[Schedule] Completed scheduled render job ${job.id}`);
+          } catch (e) {
+            console.error(`[Schedule] Failed to process job ${job.id}:`, e.message);
+            await RenderJob.update(job.id, { status: 'failed', error_message: e.message });
+          }
+        });
+        
+      } catch (error) {
+        console.error('[Schedule] Error executing scheduled job:', error);
+      }
+    }, delayMs);
+    
+    console.log(`[Schedule] Scheduled render job for ${scheduledTime.toISOString()} (in ${Math.round(delayMs / 1000)}s)`);
+    
+    return res.json({ 
+      success: true, 
+      message: 'Render job scheduled successfully',
+      scheduledAt: scheduledAt,
+      delaySeconds: Math.round(delayMs / 1000)
+    });
+    
+  } catch (error) {
+    console.error('Error scheduling render job:', error);
+    return res.status(500).json({ success: false, message: 'Failed to schedule render job' });
+  }
+});
+
 app.get('/api/render/jobs', isAuthenticated, async (req, res) => {
   try {
     const jobs = await RenderJob.findAllByUser(req.session.userId);
