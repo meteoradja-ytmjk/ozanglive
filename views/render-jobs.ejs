@@ -418,17 +418,17 @@
             <label class="text-xs font-medium text-gray-300 block mb-1.5">
               <i class="ti ti-music text-xs mr-1"></i>Follow Audio
             </label>
-            <div class="flex items-center justify-center bg-dark-700 px-2 py-2 rounded-lg h-[38px] cursor-pointer hover:bg-dark-600 transition-colors" onclick="document.getElementById('followAudioDuration').click()">
+            <label for="followAudioDuration" class="flex items-center justify-center bg-dark-700 px-2 py-2 rounded-lg h-[38px] cursor-pointer hover:bg-dark-600 transition-colors">
               <input type="checkbox" id="followAudioDuration" class="w-4 h-4 rounded border-gray-500 bg-dark-700 text-primary focus:ring-primary cursor-pointer">
-              <label for="followAudioDuration" class="text-xs text-gray-300 cursor-pointer ml-1.5">Auto</label>
-            </div>
+              <span class="text-xs text-gray-300 ml-1.5">Auto</span>
+            </label>
           </div>
         </div>
         
         <!-- Duration Info -->
-        <div id="durationInfo" class="mt-2 text-xs text-gray-400 hidden">
+        <div id="durationInfo" class="mt-2 text-xs text-primary hidden">
           <i class="ti ti-info-circle text-xs mr-1"></i>
-          <span id="durationInfoText">Duration will follow total audio length</span>
+          <span>Duration will follow total audio length</span>
         </div>
       </div>
     </div>
@@ -2511,9 +2511,10 @@ if (el.resetBtn) {
 }
 
 const toggleDurationInputs = () => {
-  const follow = el.followAudioDuration.checked;
+  const follow = el.followAudioDuration ? el.followAudioDuration.checked : false;
   const durationInfo = document.getElementById('durationInfo');
-  const durationInfoText = document.getElementById('durationInfoText');
+  
+  if (!el.durationHours || !el.durationMinutes) return;
   
   // Disable/enable inputs
   el.durationHours.disabled = follow;
@@ -2526,28 +2527,22 @@ const toggleDurationInputs = () => {
   el.durationMinutes.style.cursor = follow ? 'not-allowed' : 'text';
   
   // Show/hide info message
-  if (follow) {
-    durationInfo.classList.remove('hidden');
-    durationInfoText.textContent = 'Duration will automatically match total audio length';
-    durationInfoText.className = 'text-primary';
-    
-    // Set values to 0 when following audio
-    el.durationHours.value = 0;
-    el.durationMinutes.value = 0;
-  } else {
-    durationInfo.classList.add('hidden');
-    
-    // Set default value if both are 0
-    if (parseInt(el.durationHours.value) === 0 && parseInt(el.durationMinutes.value) === 0) {
-      el.durationMinutes.value = 1;
+  if (durationInfo) {
+    if (follow) {
+      durationInfo.classList.remove('hidden');
+    } else {
+      durationInfo.classList.add('hidden');
     }
   }
+  
+  // DO NOT change user input values - let them keep their values
 };
 
 if (el.followAudioDuration) {
   el.followAudioDuration.addEventListener('change', toggleDurationInputs);
 }
-toggleDurationInputs();
+// Initialize on page load
+setTimeout(() => toggleDurationInputs(), 100);
 
 // ===== NEW ADVANCED FEATURES =====
 
