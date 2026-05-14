@@ -1307,55 +1307,87 @@ async function startUpload() {
   
   let successCount = 0;
   let failCount = 0;
+  let completedCount = 0;
+  const totalFiles = selectedFiles.length;
   
-  for (let i = 0; i < selectedFiles.length; i++) {
-    const file = selectedFiles[i];
-    const progress = ((i / selectedFiles.length) * 100).toFixed(0);
-    
-    progressBar.style.width = progress + '%';
-    progressText.textContent = progress + '%';
-    statusText.textContent = `Uploading ${i + 1} of ${selectedFiles.length}: ${file.name}`;
-    
-    try {
+  // Function to upload single file with progress tracking
+  const uploadFile = (file, index) => {
+    return new Promise((resolve, reject) => {
       const formData = new FormData();
       formData.append(uploadMediaType === 'video' ? 'video' : 'audio', file);
       
       const endpoint = uploadMediaType === 'video' ? '/api/videos/upload' : '/api/audios/upload';
       
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        body: formData
+      const xhr = new XMLHttpRequest();
+      
+      // Track upload progress
+      xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable) {
+          const fileProgress = (e.loaded / e.total) * 100;
+          const totalProgress = ((completedCount + (fileProgress / 100)) / totalFiles) * 100;
+          progressBar.style.width = totalProgress.toFixed(0) + '%';
+          progressText.textContent = totalProgress.toFixed(0) + '%';
+          statusText.textContent = `Uploading ${index + 1}/${totalFiles}: ${file.name} (${fileProgress.toFixed(0)}%)`;
+        }
       });
       
-      const data = await response.json();
+      xhr.addEventListener('load', () => {
+        completedCount++;
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            const data = JSON.parse(xhr.responseText);
+            if (data.success) {
+              successCount++;
+              resolve({ success: true, file: file.name });
+            } else {
+              failCount++;
+              resolve({ success: false, file: file.name, error: data.message });
+            }
+          } catch (e) {
+            failCount++;
+            resolve({ success: false, file: file.name, error: 'Invalid response' });
+          }
+        } else {
+          failCount++;
+          resolve({ success: false, file: file.name, error: `HTTP ${xhr.status}` });
+        }
+      });
       
-      if (response.ok && data.success) {
-        successCount++;
-      } else {
+      xhr.addEventListener('error', () => {
+        completedCount++;
         failCount++;
-        console.error(`Failed to upload ${file.name}:`, data.message);
-      }
-    } catch (error) {
-      failCount++;
-      console.error(`Error uploading ${file.name}:`, error);
-    }
-  }
+        resolve({ success: false, file: file.name, error: 'Network error' });
+      });
+      
+      xhr.open('POST', endpoint);
+      xhr.send(formData);
+    });
+  };
   
-  // Complete
+  // Upload all files in parallel for maximum speed
+  const uploadPromises = selectedFiles.map((file, index) => uploadFile(file, index));
+  await Promise.all(uploadPromises);
+  
+  // Update progress to 100%
   progressBar.style.width = '100%';
   progressText.textContent = '100%';
-  statusText.textContent = `Upload complete! ${successCount} succeeded, ${failCount} failed`;
+  statusText.textContent = `Upload complete! ${successCount} succeeded${failCount > 0 ? `, ${failCount} failed` : ''}`;
   
   // Show success message
-  showToast(`✓ Uploaded ${successCount} file(s) successfully!`);
+  if (successCount > 0) {
+    showToast(`✓ Uploaded ${successCount} file(s) successfully!`);
+  }
+  if (failCount > 0) {
+    showToast(`⚠ ${failCount} file(s) failed to upload`, 'warning');
+  }
   
-  // Reload media lists
-  await loadMedia();
+  // Reload media lists immediately (non-blocking)
+  loadMedia();
   
-  // Close modal after delay
+  // Close modal quickly
   setTimeout(() => {
     closeUploadMediaModal();
-  }, 2000);
+  }, 800); // Reduced to 800ms for faster UX
 }
 
 // Drag and Drop functionality
