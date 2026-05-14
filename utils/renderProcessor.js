@@ -315,6 +315,152 @@ async function renderLoopVideo({
     }
     
     // ========================================
+    // OPTIMIZATION 2: 1 video + multiple audios = FAST MODE
+    // ========================================
+    if (videoPaths.length === 1 && audioPaths?.length > 1) {
+      console.log('[RENDER] ⚡⚡ FAST MODE: Single video + multiple audios');
+      const videoPath = videoPaths[0];
+      
+      // Validate video exists
+      if (!fs.existsSync(videoPath)) throw new Error(`Video not found: ${videoPath}`);
+      
+      console.log('[RENDER] Video:', videoPath);
+      console.log('[RENDER] Audios:', audioPaths.length);
+      
+      // Get video duration
+      const videoMeta = await ffprobeAsync(videoPath);
+      const videoDuration = Number(videoMeta?.format?.duration || 0);
+      console.log('[RENDER] Video duration:', videoDuration, 's');
+      console.log('[RENDER] Target duration:', effectiveTargetDuration, 's');
+      
+      // Get audio durations
+      const audioDurations = await Promise.all(audioPaths.map(async (audioPath) => {
+        const meta = await ffprobeAsync(audioPath);
+        return Number(meta?.format?.duration || 0);
+      }));
+      const totalAudioDuration = audioDurations.reduce((sum, val) => sum + val, 0);
+      console.log('[RENDER] Total audio duration:', totalAudioDuration, 's');
+      
+      // Calculate loops needed
+      const audioLoops = Math.ceil(effectiveTargetDuration / totalAudioDuration) + 1;
+      console.log('[RENDER] Audio loops needed:', audioLoops);
+      
+      // Create audio concat file
+      const audioConcatFile = path.join(workDir, 'audios.txt');
+      const audioLines = [];
+      for (let i = 0; i < audioLoops; i++) {
+        audioPaths.forEach(aPath => {
+          audioLines.push(`file '${aPath.replace(/'/g, "'\\''")}'`);
+        });
+      }
+      fs.writeFileSync(audioConcatFile, audioLines.join('\n'), 'utf8');
+      console.log('[RENDER] Audio concat file created');
+      
+      // Merge audios with stream copy (FAST!)
+      const mergedAudio = path.join(workDir, 'audio-merged.aac');
+      console.log('[RENDER] Step 1/2: Merging audios (stream copy)...');
+      
+      await runFfmpeg((cmd) => {
+        return cmd
+          .input(audioConcatFile)
+          .inputOptions(['-f', 'concat', '-safe', '0'])
+          .outputOptions([
+            '-t', String(effectiveTargetDuration),
+            '-c:a', 'copy'
+          ])
+          .output(mergedAudio);
+      }, {
+        onProgress: (p) => {
+          const progress = Math.min(50, Math.round((parseTimeToSeconds(p.timemark) / effectiveTargetDuration) * 50));
+          console.log(`[RENDER] Audio merge: ${progress}%`);
+          onProgress?.(progress);
+        }
+      });
+      
+      console.log('[RENDER] Audios merged ✓');
+      
+      // Check if video needs looping
+      const needVideoLoop = videoDuration < effectiveTargetDuration;
+      
+      if (needVideoLoop) {
+        // Loop video then combine
+        console.log('[RENDER] Step 2/2: Loop video + combine (stream copy)...');
+        
+        const videoLoops = Math.ceil(effectiveTargetDuration / videoDuration) + 1;
+        console.log('[RENDER] Video loops needed:', videoLoops);
+        
+        const videoConcatFile = path.join(workDir, 'video-loop.txt');
+        const videoLines = Array(videoLoops).fill(`file '${videoPath.replace(/'/g, "'\\''")}'`);
+        fs.writeFileSync(videoConcatFile, videoLines.join('\n'), 'utf8');
+        
+        // Loop video
+        const loopedVideo = path.join(workDir, 'video-looped.mp4');
+        await runFfmpeg((cmd) => {
+          return cmd
+            .input(videoConcatFile)
+            .inputOptions(['-f', 'concat', '-safe', '0'])
+            .outputOptions([
+              '-t', String(effectiveTargetDuration),
+              '-c:v', 'copy'
+            ])
+            .output(loopedVideo);
+        }, {
+          onProgress: (p) => {
+            const progress = 50 + Math.min(25, Math.round((parseTimeToSeconds(p.timemark) / effectiveTargetDuration) * 25));
+            onProgress?.(progress);
+          }
+        });
+        
+        // Combine
+        await runFfmpeg((cmd) => {
+          return cmd
+            .input(loopedVideo)
+            .input(mergedAudio)
+            .outputOptions([
+              '-c:v', 'copy',
+              '-c:a', 'copy',
+              '-shortest'
+            ])
+            .output(outputPath);
+        }, {
+          onProgress: (p) => {
+            const progress = 75 + Math.min(24, Math.round((parseTimeToSeconds(p.timemark) / effectiveTargetDuration) * 24));
+            onProgress?.(progress);
+          }
+        });
+        
+      } else {
+        // Video long enough, just trim and combine
+        console.log('[RENDER] Step 2/2: Trim video + combine (stream copy)...');
+        
+        await runFfmpeg((cmd) => {
+          return cmd
+            .input(videoPath)
+            .input(mergedAudio)
+            .outputOptions([
+              '-t', String(effectiveTargetDuration),
+              '-c:v', 'copy',
+              '-c:a', 'copy',
+              '-map', '0:v:0',
+              '-map', '1:a:0'
+            ])
+            .output(outputPath);
+        }, {
+          onProgress: (p) => {
+            const progress = 50 + Math.min(49, Math.round((parseTimeToSeconds(p.timemark) / effectiveTargetDuration) * 49));
+            onProgress?.(progress);
+          }
+        });
+      }
+      
+      const elapsedSeconds = Math.round((Date.now() - startTime) / 1000);
+      console.log('[RENDER] ========================================');
+      console.log('[RENDER] ⚡ COMPLETED IN', elapsedSeconds, 'SECONDS (FAST MODE)');
+      console.log('[RENDER] ========================================');
+      return outputPath;
+    }
+    
+    // ========================================
     // STANDARD MODE: Multiple videos/audios (need re-encode for compatibility)
     // ========================================
     console.log('[RENDER] 📦 STANDARD MODE: Multiple files (re-encode for compatibility)');
