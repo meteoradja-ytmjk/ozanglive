@@ -456,8 +456,8 @@
               <button onclick="selectAllMedia()" class="text-xs px-2 py-1 bg-primary/20 hover:bg-primary/30 text-primary rounded transition-colors" title="Select All">
                 <i class="ti ti-checkbox text-sm"></i>
               </button>
-              <button onclick="deselectAllMedia()" class="text-xs px-2 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition-colors" title="Deselect All">
-                <i class="ti ti-square text-sm"></i>
+              <button onclick="openUploadMediaModal()" class="text-xs px-2 py-1 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded transition-colors" title="Upload Video/Audio">
+                <i class="ti ti-upload text-sm"></i>
               </button>
               <button onclick="shuffleMedia()" class="text-xs px-2 py-1 bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 rounded transition-colors" title="Shuffle">
                 <i class="ti ti-arrows-shuffle text-sm"></i>
@@ -691,6 +691,89 @@
             <i class="ti ti-repeat mr-1"></i>
             Process Loop
           </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Upload Media Modal (Multiple Upload) -->
+<div id="uploadMediaModal" class="fixed inset-0 bg-black/60 modal-backdrop z-50 hidden">
+  <div class="flex items-center justify-center min-h-screen p-4">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-2xl border border-gray-600/50">
+      <div class="flex items-center justify-between p-4 border-b border-gray-600/50">
+        <div class="flex items-center gap-2">
+          <i class="ti ti-upload text-green-400 text-xl"></i>
+          <h3 class="text-lg font-medium">Upload Video/Audio</h3>
+        </div>
+        <button onclick="closeUploadMediaModal()" class="text-gray-400 hover:text-white">
+          <i class="ti ti-x text-xl"></i>
+        </button>
+      </div>
+      <div class="p-6">
+        <!-- Upload Type Selection -->
+        <div class="flex gap-2 mb-4">
+          <button onclick="setUploadType('video')" id="uploadTypeVideo" class="flex-1 px-4 py-2.5 bg-primary/20 text-primary rounded-lg font-medium transition-colors border border-primary/50">
+            <i class="ti ti-video mr-2"></i>Video Files
+          </button>
+          <button onclick="setUploadType('audio')" id="uploadTypeAudio" class="flex-1 px-4 py-2.5 bg-gray-700 text-gray-300 rounded-lg font-medium transition-colors hover:bg-gray-600">
+            <i class="ti ti-music mr-2"></i>Audio Files
+          </button>
+        </div>
+
+        <!-- Drag & Drop Area -->
+        <div id="dropZone" class="border-2 border-dashed border-gray-600 rounded-lg p-8 text-center transition-all hover:border-primary hover:bg-primary/5 cursor-pointer">
+          <input type="file" id="mediaFileInput" multiple accept="video/*,audio/*" class="hidden" onchange="handleFileSelect(event)">
+          <div class="flex flex-col items-center gap-3">
+            <div class="w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center">
+              <i class="ti ti-cloud-upload text-3xl text-primary"></i>
+            </div>
+            <div>
+              <p class="text-white font-medium mb-1">Drag & Drop files here</p>
+              <p class="text-sm text-gray-400">or click to browse</p>
+            </div>
+            <button onclick="document.getElementById('mediaFileInput').click()" class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-lg text-sm font-medium transition-colors">
+              <i class="ti ti-folder-open mr-1"></i>Browse Files
+            </button>
+            <p class="text-xs text-gray-500" id="acceptedFormats">Accepted: MP4, AVI, MOV, MKV, WebM</p>
+          </div>
+        </div>
+
+        <!-- File List -->
+        <div id="uploadFileList" class="mt-4 space-y-2 max-h-64 overflow-y-auto hidden">
+          <!-- Files will be added here dynamically -->
+        </div>
+
+        <!-- Upload Progress -->
+        <div id="uploadProgressSection" class="mt-4 hidden">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-sm text-gray-400">Uploading files...</span>
+            <span class="text-sm text-primary font-semibold" id="uploadProgressText">0%</span>
+          </div>
+          <div class="w-full bg-gray-600 rounded-full h-2.5">
+            <div class="bg-gradient-to-r from-green-500 to-primary h-2.5 rounded-full transition-all" id="uploadProgressBar" style="width:0%"></div>
+          </div>
+          <p class="text-xs text-gray-500 mt-2" id="uploadStatusText">Preparing upload...</p>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex gap-2 mt-6">
+          <button onclick="closeUploadMediaModal()" class="flex-1 px-4 py-2.5 bg-gray-600 hover:bg-gray-500 text-white rounded-lg transition-colors">
+            <i class="ti ti-x mr-1"></i>Cancel
+          </button>
+          <button onclick="startUpload()" id="startUploadBtn" class="flex-1 px-4 py-2.5 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+            <i class="ti ti-upload mr-1"></i>Upload Files
+          </button>
+        </div>
+
+        <!-- Info Box -->
+        <div class="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 mt-4">
+          <div class="flex items-start gap-2">
+            <i class="ti ti-info-circle text-blue-400 mt-0.5 text-sm"></i>
+            <div class="text-xs text-blue-300">
+              <strong>Tip:</strong> You can upload multiple files at once. Files will be saved to the gallery and available immediately for rendering.
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -1107,6 +1190,202 @@ function saveAsTemplate() {
   
   alert('Template saved successfully!');
 }
+
+// ===== UPLOAD MEDIA MODAL FUNCTIONS =====
+let uploadMediaType = 'video'; // 'video' or 'audio'
+let selectedFiles = [];
+
+function openUploadMediaModal() {
+  document.getElementById('uploadMediaModal').classList.remove('hidden');
+  resetUploadModal();
+}
+
+function closeUploadMediaModal() {
+  document.getElementById('uploadMediaModal').classList.add('hidden');
+  resetUploadModal();
+}
+
+function resetUploadModal() {
+  selectedFiles = [];
+  uploadMediaType = 'video';
+  document.getElementById('mediaFileInput').value = '';
+  document.getElementById('uploadFileList').classList.add('hidden');
+  document.getElementById('uploadFileList').innerHTML = '';
+  document.getElementById('uploadProgressSection').classList.add('hidden');
+  document.getElementById('startUploadBtn').disabled = true;
+  updateUploadTypeUI();
+}
+
+function setUploadType(type) {
+  uploadMediaType = type;
+  updateUploadTypeUI();
+  
+  // Update file input accept attribute
+  const fileInput = document.getElementById('mediaFileInput');
+  if (type === 'video') {
+    fileInput.accept = 'video/*';
+    document.getElementById('acceptedFormats').textContent = 'Accepted: MP4, AVI, MOV, MKV, WebM';
+  } else {
+    fileInput.accept = 'audio/*';
+    document.getElementById('acceptedFormats').textContent = 'Accepted: MP3, WAV, OGG, M4A, FLAC';
+  }
+}
+
+function updateUploadTypeUI() {
+  const videoBtn = document.getElementById('uploadTypeVideo');
+  const audioBtn = document.getElementById('uploadTypeAudio');
+  
+  if (uploadMediaType === 'video') {
+    videoBtn.className = 'flex-1 px-4 py-2.5 bg-primary/20 text-primary rounded-lg font-medium transition-colors border border-primary/50';
+    audioBtn.className = 'flex-1 px-4 py-2.5 bg-gray-700 text-gray-300 rounded-lg font-medium transition-colors hover:bg-gray-600';
+  } else {
+    audioBtn.className = 'flex-1 px-4 py-2.5 bg-primary/20 text-primary rounded-lg font-medium transition-colors border border-primary/50';
+    videoBtn.className = 'flex-1 px-4 py-2.5 bg-gray-700 text-gray-300 rounded-lg font-medium transition-colors hover:bg-gray-600';
+  }
+}
+
+function handleFileSelect(event) {
+  const files = Array.from(event.target.files);
+  addFilesToList(files);
+}
+
+function addFilesToList(files) {
+  selectedFiles = [...selectedFiles, ...files];
+  renderFileList();
+  document.getElementById('startUploadBtn').disabled = selectedFiles.length === 0;
+}
+
+function removeFile(index) {
+  selectedFiles.splice(index, 1);
+  renderFileList();
+  document.getElementById('startUploadBtn').disabled = selectedFiles.length === 0;
+}
+
+function renderFileList() {
+  const fileList = document.getElementById('uploadFileList');
+  
+  if (selectedFiles.length === 0) {
+    fileList.classList.add('hidden');
+    return;
+  }
+  
+  fileList.classList.remove('hidden');
+  fileList.innerHTML = selectedFiles.map((file, index) => {
+    const sizeInMB = (file.size / 1024 / 1024).toFixed(2);
+    const icon = uploadMediaType === 'video' ? 'ti-video' : 'ti-music';
+    
+    return `
+      <div class="flex items-center gap-3 p-3 bg-gray-700/50 rounded-lg border border-gray-600">
+        <div class="w-10 h-10 bg-primary/20 rounded-lg flex items-center justify-center flex-shrink-0">
+          <i class="ti ${icon} text-primary text-xl"></i>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="text-sm text-white truncate">${file.name}</div>
+          <div class="text-xs text-gray-400">${sizeInMB} MB</div>
+        </div>
+        <button onclick="removeFile(${index})" class="w-8 h-8 flex items-center justify-center rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400 transition-colors flex-shrink-0">
+          <i class="ti ti-x text-lg"></i>
+        </button>
+      </div>
+    `;
+  }).join('');
+}
+
+async function startUpload() {
+  if (selectedFiles.length === 0) return;
+  
+  const progressSection = document.getElementById('uploadProgressSection');
+  const progressBar = document.getElementById('uploadProgressBar');
+  const progressText = document.getElementById('uploadProgressText');
+  const statusText = document.getElementById('uploadStatusText');
+  const startBtn = document.getElementById('startUploadBtn');
+  
+  // Show progress section
+  progressSection.classList.remove('hidden');
+  startBtn.disabled = true;
+  startBtn.innerHTML = '<i class="ti ti-loader animate-spin mr-1"></i>Uploading...';
+  
+  let successCount = 0;
+  let failCount = 0;
+  
+  for (let i = 0; i < selectedFiles.length; i++) {
+    const file = selectedFiles[i];
+    const progress = ((i / selectedFiles.length) * 100).toFixed(0);
+    
+    progressBar.style.width = progress + '%';
+    progressText.textContent = progress + '%';
+    statusText.textContent = `Uploading ${i + 1} of ${selectedFiles.length}: ${file.name}`;
+    
+    try {
+      const formData = new FormData();
+      formData.append(uploadMediaType === 'video' ? 'video' : 'audio', file);
+      
+      const endpoint = uploadMediaType === 'video' ? '/api/videos/upload' : '/api/audios/upload';
+      
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        body: formData
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok && data.success) {
+        successCount++;
+      } else {
+        failCount++;
+        console.error(`Failed to upload ${file.name}:`, data.message);
+      }
+    } catch (error) {
+      failCount++;
+      console.error(`Error uploading ${file.name}:`, error);
+    }
+  }
+  
+  // Complete
+  progressBar.style.width = '100%';
+  progressText.textContent = '100%';
+  statusText.textContent = `Upload complete! ${successCount} succeeded, ${failCount} failed`;
+  
+  // Show success message
+  showToast(`✓ Uploaded ${successCount} file(s) successfully!`);
+  
+  // Reload media lists
+  await loadMedia();
+  
+  // Close modal after delay
+  setTimeout(() => {
+    closeUploadMediaModal();
+  }, 2000);
+}
+
+// Drag and Drop functionality
+document.addEventListener('DOMContentLoaded', () => {
+  const dropZone = document.getElementById('dropZone');
+  
+  if (dropZone) {
+    dropZone.addEventListener('click', () => {
+      document.getElementById('mediaFileInput').click();
+    });
+    
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('border-primary', 'bg-primary/10');
+    });
+    
+    dropZone.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('border-primary', 'bg-primary/10');
+    });
+    
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('border-primary', 'bg-primary/10');
+      
+      const files = Array.from(e.dataTransfer.files);
+      addFilesToList(files);
+    });
+  }
+});
 
 function openTemplateModal() {
   const modal = document.getElementById('templateModal');
