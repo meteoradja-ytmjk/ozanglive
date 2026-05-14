@@ -39,31 +39,31 @@
   cursor: pointer;
 }
 
-/* Desktop Logo Styling - EXTRA BESAR & PROPORSIONAL */
+/* Desktop Logo Styling - POJOK KIRI ATAS, MELUAP KELUAR */
 .desktop-logo-container {
   position: absolute;
   top: 0.5rem;
-  left: 0;
-  right: 0;
+  left: 0.5rem;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10;
-  padding: 0 0.5rem;
+  align-items: flex-start;
+  justify-content: flex-start;
+  z-index: 50;
   overflow: visible;
 }
 
 .desktop-logo {
   height: 120px;
   width: auto;
-  max-width: 350px;
+  max-width: none;
   object-fit: contain;
+  object-position: left top;
   filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.3));
   transition: transform 0.3s ease;
 }
 
 .desktop-logo:hover {
   transform: scale(1.05);
+  transform-origin: left top;
 }
 
 .sidebar-icon:hover {

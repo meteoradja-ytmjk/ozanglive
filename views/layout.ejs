@@ -354,27 +354,27 @@
     left: 15px;
   }
 
-  /* Desktop logo overflow styling - EXTRA BESAR & PROPORSIONAL */
+  /* Desktop logo overflow styling - POJOK KIRI ATAS, MELUAP KELUAR */
   .desktop-logo-container {
     position: absolute !important;
     top: 8px;
-    left: 0;
-    right: 0;
+    left: 8px;
     overflow: visible !important;
     width: auto !important;
     height: auto !important;
     z-index: 50;
     display: flex;
-    align-items: center;
-    justify-content: center;
+    align-items: flex-start;
+    justify-content: flex-start;
   }
 
   .desktop-logo {
     position: relative;
     width: auto !important;
     height: 120px !important;
-    max-width: 350px !important;
+    max-width: none !important;
     object-fit: contain !important;
+    object-position: left top !important;
     filter: drop-shadow(2px 2px 4px rgba(0, 0, 0, 0.3));
   }
 
