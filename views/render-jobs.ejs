@@ -722,7 +722,7 @@
         </div>
 
         <!-- Drag & Drop Area -->
-        <div id="dropZone" class="border-2 border-dashed border-gray-600 rounded-lg p-8 text-center transition-all hover:border-primary hover:bg-primary/5 cursor-pointer">
+        <div id="dropZone" class="border-2 border-dashed border-gray-600 rounded-lg p-8 text-center transition-all hover:border-primary hover:bg-primary/5">
           <input type="file" id="mediaFileInput" multiple accept="video/*,audio/*" class="hidden" onchange="handleFileSelect(event)">
           <div class="flex flex-col items-center gap-3">
             <div class="w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center">
@@ -730,9 +730,9 @@
             </div>
             <div>
               <p class="text-white font-medium mb-1">Drag & Drop files here</p>
-              <p class="text-sm text-gray-400">or click to browse</p>
+              <p class="text-sm text-gray-400">or click the button below</p>
             </div>
-            <button onclick="document.getElementById('mediaFileInput').click()" class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-lg text-sm font-medium transition-colors">
+            <button onclick="event.stopPropagation(); document.getElementById('mediaFileInput').click();" class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-lg text-sm font-medium transition-colors">
               <i class="ti ti-folder-open mr-1"></i>Browse Files
             </button>
             <p class="text-xs text-gray-500" id="acceptedFormats">Accepted: MP4, AVI, MOV, MKV, WebM</p>
@@ -1363,9 +1363,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const dropZone = document.getElementById('dropZone');
   
   if (dropZone) {
-    dropZone.addEventListener('click', () => {
-      document.getElementById('mediaFileInput').click();
-    });
+    // Remove click event on dropZone to prevent double-click issue
+    // Only button will trigger file input
     
     dropZone.addEventListener('dragover', (e) => {
       e.preventDefault();
