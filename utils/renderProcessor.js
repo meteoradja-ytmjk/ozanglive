@@ -146,12 +146,13 @@ async function renderLoopVideo({
     console.log('[RENDER] Video concat file created:', videoConcatFile);
     console.log('[RENDER] Concat content:\n', videoConcatContent);
     
-    // Merge videos - ULTRA FAST
+    // Merge videos - FAST with re-encode for compatibility
     const mergedVideo = path.join(workDir, 'video-merged.mp4');
     const videoMergeStart = Date.now();
     console.log('[RENDER] Step 1/3: Merging videos...');
     console.log('[RENDER] Input:', videoConcatFile);
     console.log('[RENDER] Output:', mergedVideo);
+    console.log('[RENDER] Target duration:', effectiveTargetDuration, 's');
     
     await runFfmpeg((cmd) => {
       return cmd
@@ -159,14 +160,16 @@ async function renderLoopVideo({
         .inputOptions(['-f', 'concat', '-safe', '0'])
         .outputOptions([
           '-t', String(effectiveTargetDuration),
-          '-c:v', 'copy', // CHANGED: Try stream copy first!
+          '-c:v', 'libx264',
+          '-preset', 'veryfast',
+          '-crf', '23',
           '-an'
         ])
         .output(mergedVideo);
     }, {
       onProgress: (p) => {
         const progress = Math.min(40, Math.round((parseTimeToSeconds(p.timemark) / effectiveTargetDuration) * 40));
-        console.log(`[RENDER] Video progress: ${progress}% (${p.timemark})`);
+        console.log(`[RENDER] Video progress: ${progress}% (${p.timemark}/${effectiveTargetDuration}s)`);
         onProgress?.(progress);
       }
     });
@@ -220,13 +223,14 @@ async function renderLoopVideo({
           .inputOptions(['-f', 'concat', '-safe', '0'])
           .outputOptions([
             '-t', String(effectiveTargetDuration),
-            '-c:a', 'copy', // CHANGED: Try stream copy first!
+            '-c:a', 'aac',
+            '-b:a', '192k'
           ])
           .output(mergedAudio);
       }, {
         onProgress: (p) => {
           const progress = 40 + Math.min(30, Math.round((parseTimeToSeconds(p.timemark) / effectiveTargetDuration) * 30));
-          console.log(`[RENDER] Audio progress: ${progress}% (${p.timemark})`);
+          console.log(`[RENDER] Audio progress: ${progress}% (${p.timemark}/${effectiveTargetDuration}s)`);
           onProgress?.(progress);
         }
       });
