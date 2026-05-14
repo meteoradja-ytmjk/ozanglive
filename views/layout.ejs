@@ -162,8 +162,8 @@
       <div class="desktop-logo-container">
         <img src="<%= typeof branding !== 'undefined' ? branding.logo_path : '/images/logo_mobile.svg' %>" alt="<%= typeof branding !== 'undefined' ? branding.app_name : 'StreamFlow' %> Logo" class="desktop-logo">
       </div>
-      <!-- Spacer untuk logo -->
-      <div class="h-16 mb-4"></div>
+      <!-- Spacer untuk logo - EXTRA BESAR -->
+      <div class="h-32 mb-4"></div>
       <div class="flex-1 overflow-hidden">
         <a href="/dashboard" class="sidebar-icon group <%= active === 'dashboard' ? 'bg-primary' : '' %>">
           <i class="ti ti-live-photo text-xl"></i>
@@ -354,22 +354,27 @@
     left: 15px;
   }
 
-  /* Desktop logo overflow styling - CANGGIH! */
+  /* Desktop logo overflow styling - EXTRA BESAR & PROPORSIONAL */
   .desktop-logo-container {
     position: absolute !important;
-    top: 10px;
-    left: 8px;
+    top: 8px;
+    left: 0;
+    right: 0;
     overflow: visible !important;
     width: auto !important;
     height: auto !important;
     z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .desktop-logo {
     position: relative;
     width: auto !important;
-    height: 32px !important;
-    max-width: none !important;
+    height: 120px !important;
+    max-width: 350px !important;
+    object-fit: contain !important;
     filter: drop-shadow(2px 2px 4px rgba(0, 0, 0, 0.3));
   }
 

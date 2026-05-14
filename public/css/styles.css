@@ -39,7 +39,7 @@
   cursor: pointer;
 }
 
-/* Desktop Logo Styling */
+/* Desktop Logo Styling - EXTRA BESAR & PROPORSIONAL */
 .desktop-logo-container {
   position: absolute;
   top: 0.5rem;
@@ -50,12 +50,13 @@
   justify-content: center;
   z-index: 10;
   padding: 0 0.5rem;
+  overflow: visible;
 }
 
 .desktop-logo {
-  height: 60px;
+  height: 120px;
   width: auto;
-  max-width: 180px;
+  max-width: 350px;
   object-fit: contain;
   filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.3));
   transition: transform 0.3s ease;
