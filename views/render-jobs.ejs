@@ -1240,6 +1240,16 @@ if (el.createBtn) {
       const audioIds=[...document.querySelectorAll("input[name='audio']:checked")].map(i=>i.value);
       const followAudio=el.followAudioDuration.checked;
       
+      // Debug logging
+      console.log('=== RENDER JOB DEBUG ===');
+      console.log('Hours:', h);
+      console.log('Minutes:', m);
+      console.log('Target Duration (seconds):', targetDurationSeconds);
+      console.log('Follow Audio:', followAudio);
+      console.log('Video IDs:', videoIds);
+      console.log('Audio IDs:', audioIds);
+      console.log('=======================');
+      
       // Validation
       if(videoIds.length===0)return alert('Pilih minimal 1 video');
       
@@ -1263,8 +1273,13 @@ if (el.createBtn) {
         audioIds
       };
       
+      console.log('Sending render data:', renderData);
+      
       const resp=await fetch('/api/render/jobs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(renderData)});
       const data=await resp.json();
+      
+      console.log('Server response:', data);
+      
       if(!resp.ok||!data.success)return alert(data.message||'Gagal');
       
       // Show notification
