@@ -39,10 +39,10 @@
   cursor: pointer;
 }
 
-/* Desktop Logo Styling - POJOK KIRI ATAS, MELUAP KELUAR */
+/* Desktop Logo Styling - POJOK KIRI ATAS, UKURAN PAS */
 .desktop-logo-container {
   position: absolute;
-  top: 0.5rem;
+  top: 0.25rem;
   left: 0.5rem;
   display: flex;
   align-items: flex-start;
@@ -52,7 +52,7 @@
 }
 
 .desktop-logo {
-  height: 120px;
+  height: 90px;
   width: auto;
   max-width: none;
   object-fit: contain;
