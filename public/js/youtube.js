@@ -500,6 +500,39 @@ async function refreshBroadcasts() {
   }
 }
 
+// Toggle connected accounts collapse
+// Toggle connected accounts collapse with smooth animation
+function toggleConnectedAccounts() {
+  const accountsList = document.getElementById('connectedAccountsList');
+  const chevron = document.getElementById('accountsChevron');
+  const toggleText = document.getElementById('accountsToggleText');
+  
+  if (!accountsList || !chevron) return;
+  
+  const isCollapsed = accountsList.style.maxHeight === '0px' || !accountsList.style.maxHeight;
+  
+  if (isCollapsed) {
+    // EXPAND - Calculate full height
+    accountsList.style.maxHeight = accountsList.scrollHeight + 'px';
+    accountsList.style.opacity = '1';
+    chevron.style.transform = 'rotate(90deg)';
+    chevron.textContent = '▼';
+    if (toggleText) toggleText.textContent = 'collapse';
+    
+    console.log('[Connected Accounts] Expanded');
+  } else {
+    // COLLAPSE
+    accountsList.style.maxHeight = '0px';
+    accountsList.style.opacity = '0';
+    chevron.style.transform = 'rotate(0deg)';
+    chevron.textContent = '▶';
+    if (toggleText) toggleText.textContent = 'expand';
+    
+    console.log('[Connected Accounts] Collapsed');
+  }
+}
+}
+
 // Toggle broadcast channel collapse
 function toggleBroadcastChannel(channelIndex) {
   const broadcastsDiv = document.getElementById(`channelBroadcasts_${channelIndex}`);
