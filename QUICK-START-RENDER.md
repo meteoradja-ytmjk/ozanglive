@@ -42,9 +42,18 @@
 - Duration will automatically match total audio length
 - Perfect for music videos!
 
+**Option C: Mute Video Audio** 🆕
+- Check the **Mute Video** checkbox
+- Removes original audio from video
+- Use cases:
+  - Replace video audio with your own music
+  - Create silent videos
+  - Remove unwanted background noise
+
 **Tips:**
 - ✅ Duration is now accurate
 - ✅ Follow Audio works perfectly
+- ✅ Mute Video removes original audio
 - ✅ No more 1:21 bug!
 
 ---
@@ -132,12 +141,14 @@ The system automatically chooses the fastest method:
 2. Let system choose optimization mode
 3. Check preview before rendering
 4. Use Follow Audio for music videos
+5. Use Mute Video to remove unwanted audio 🆕
 
 ### For Efficiency:
 1. Upload multiple files at once
 2. Schedule renders in advance
 3. Use templates for repeated jobs
 4. Organize files in folders
+5. Use Mute Video for silent videos 🆕
 
 ---
 
@@ -177,9 +188,10 @@ The system automatically chooses the fastest method:
 
 1. **Upload in Bulk**: Upload all your files at once, not one by one
 2. **Use Follow Audio**: Perfect for music videos and podcasts
-3. **Schedule Overnight**: Let renders run while you sleep
-4. **Single Video + Audio**: Fastest render mode (10 seconds!)
-5. **Check Preview**: Always preview before rendering
+3. **Use Mute Video**: Remove unwanted video audio easily 🆕
+4. **Schedule Overnight**: Let renders run while you sleep
+5. **Single Video + Audio**: Fastest render mode (10 seconds!)
+6. **Check Preview**: Always preview before rendering
 
 ---
 
