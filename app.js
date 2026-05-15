@@ -4098,6 +4098,7 @@ app.post('/api/render/jobs', isAuthenticated, async (req, res) => {
       scheduledUploadAt, 
       visualizerPreset, 
       followAudioDuration,
+      muteVideoAudio,
       advancedAudio,
       watermark,
       overlayVideo,
@@ -4155,6 +4156,7 @@ app.post('/api/render/jobs', isAuthenticated, async (req, res) => {
           targetDurationSeconds: target,
           visualizerPreset: visualizerPreset || 'none',
           followAudioDuration: !!followAudioDuration,
+          muteVideoAudio: !!muteVideoAudio,
           advancedAudio: advancedAudio || {},
           watermark: watermark || null,
           overlayVideo: overlayVideo || null,
@@ -4247,7 +4249,8 @@ app.post('/api/render/jobs/schedule', isAuthenticated, async (req, res) => {
           durationMinutes, 
           targetAccountId, 
           autoUploadToYoutube, 
-          followAudioDuration
+          followAudioDuration,
+          muteVideoAudio
         } = jobInfo;
         
         const computedSeconds = (parseInt(durationHours || 0, 10) * 3600) + (parseInt(durationMinutes || 0, 10) * 60);
@@ -4296,6 +4299,7 @@ app.post('/api/render/jobs/schedule', isAuthenticated, async (req, res) => {
               targetDurationSeconds: target,
               visualizerPreset: 'none',
               followAudioDuration: !!followAudioDuration,
+              muteVideoAudio: !!muteVideoAudio,
               onProgress: async (progressPercent) => {
                 if (Number.isFinite(progressPercent) && progressPercent > 10) {
                   await RenderJob.update(job.id, { progress: progressPercent });

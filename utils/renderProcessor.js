@@ -29,7 +29,8 @@ async function renderLoopVideo({
   outputPath, 
   targetDurationSeconds, 
   visualizerPreset = 'none', 
-  followAudioDuration = false, 
+  followAudioDuration = false,
+  muteVideoAudio = false,
   advancedAudio = {}, 
   watermark = null,
   overlayVideo = null,
@@ -47,6 +48,7 @@ async function renderLoopVideo({
     console.log('[RENDER] Videos:', videoPaths.length);
     console.log('[RENDER] Audios:', audioPaths?.length || 0);
     console.log('[RENDER] Target Duration:', targetDurationSeconds, 's');
+    console.log('[RENDER] Mute Video Audio:', muteVideoAudio);
     console.log('[RENDER] Work Dir:', workDir);
     console.log('[RENDER] ========================================');
     
@@ -65,6 +67,72 @@ async function renderLoopVideo({
     }
     
     console.log('[RENDER] Effective Duration:', effectiveTargetDuration, 's');
+    
+    // ========================================
+    // SPECIAL CASE: Mute video without audio (video only, no audio)
+    // ========================================
+    if (muteVideoAudio && (!audioPaths || audioPaths.length === 0)) {
+      console.log('[RENDER] 🔇 MUTE MODE: Video only (no audio)');
+      
+      if (videoPaths.length === 1) {
+        // Single video - just trim and remove audio
+        const videoPath = videoPaths[0];
+        if (!fs.existsSync(videoPath)) throw new Error(`Video not found: ${videoPath}`);
+        
+        const videoMeta = await ffprobeAsync(videoPath);
+        const videoDuration = Number(videoMeta?.format?.duration || 0);
+        
+        if (videoDuration >= effectiveTargetDuration) {
+          // Video long enough - just trim and remove audio
+          console.log('[RENDER] Trimming video and removing audio');
+          await runFfmpeg((cmd) => {
+            return cmd
+              .input(videoPath)
+              .outputOptions([
+                '-t', String(effectiveTargetDuration),
+                '-c:v', 'copy',
+                '-an' // Remove audio
+              ])
+              .output(outputPath);
+          }, {
+            onProgress: (p) => {
+              const progress = Math.min(99, Math.round((parseTimeToSeconds(p.timemark) / effectiveTargetDuration) * 100));
+              onProgress?.(progress);
+            }
+          });
+        } else {
+          // Need to loop video
+          console.log('[RENDER] Looping video and removing audio');
+          const videoLoops = Math.ceil(effectiveTargetDuration / videoDuration) + 1;
+          const videoConcatFile = path.join(workDir, 'video-loop.txt');
+          const videoLines = Array(videoLoops).fill(`file '${videoPath.replace(/'/g, "'\\''")}'`);
+          fs.writeFileSync(videoConcatFile, videoLines.join('\n'), 'utf8');
+          
+          await runFfmpeg((cmd) => {
+            return cmd
+              .input(videoConcatFile)
+              .inputOptions(['-f', 'concat', '-safe', '0'])
+              .outputOptions([
+                '-t', String(effectiveTargetDuration),
+                '-c:v', 'copy',
+                '-an' // Remove audio
+              ])
+              .output(outputPath);
+          }, {
+            onProgress: (p) => {
+              const progress = Math.min(99, Math.round((parseTimeToSeconds(p.timemark) / effectiveTargetDuration) * 100));
+              onProgress?.(progress);
+            }
+          });
+        }
+        
+        const elapsedSeconds = Math.round((Date.now() - startTime) / 1000);
+        console.log('[RENDER] ========================================');
+        console.log('[RENDER] 🔇 COMPLETED IN', elapsedSeconds, 'SECONDS (MUTE MODE)');
+        console.log('[RENDER] ========================================');
+        return outputPath;
+      }
+    }
     
     // ========================================
     // OPTIMIZATION: 1 video + 1 audio = ULTRA FAST MODE
@@ -99,17 +167,24 @@ async function renderLoopVideo({
         // CASE 1: Both long enough - Direct trim with stream copy
         console.log('[RENDER] ⚡ CASE 1: Direct trim (stream copy)');
         
+        const outputOptions = [
+          '-t', String(effectiveTargetDuration),
+          '-c:v', 'copy',
+          '-c:a', 'copy',
+          '-map', '0:v:0',
+          '-map', '1:a:0'
+        ];
+        
+        // If mute video audio, only use audio from audio file
+        if (muteVideoAudio) {
+          console.log('[RENDER] Muting video original audio');
+        }
+        
         await runFfmpeg((cmd) => {
           return cmd
             .input(videoPath)
             .input(audioPath)
-            .outputOptions([
-              '-t', String(effectiveTargetDuration),
-              '-c:v', 'copy',
-              '-c:a', 'copy',
-              '-map', '0:v:0',
-              '-map', '1:a:0'
-            ])
+            .outputOptions(outputOptions)
             .output(outputPath);
         }, {
           onProgress: (p) => {

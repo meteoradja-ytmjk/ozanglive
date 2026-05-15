@@ -401,7 +401,7 @@
         </div>
       </div>
       <div class="step-content">
-        <div class="grid grid-cols-3 gap-2">
+        <div class="grid grid-cols-4 gap-2">
           <div>
             <label class="text-xs font-medium text-gray-300 block mb-1.5">
               <i class="ti ti-clock-hour-4 text-xs mr-1"></i>Hours
@@ -423,12 +423,27 @@
               <span class="text-xs text-gray-300 ml-1.5">Auto</span>
             </label>
           </div>
+          <div>
+            <label class="text-xs font-medium text-gray-300 block mb-1.5">
+              <i class="ti ti-volume-off text-xs mr-1"></i>Mute Video
+            </label>
+            <label for="muteVideoAudio" class="flex items-center justify-center bg-dark-700 px-2 py-2 rounded-lg h-[38px] cursor-pointer hover:bg-dark-600 transition-colors">
+              <input type="checkbox" id="muteVideoAudio" class="w-4 h-4 rounded border-gray-500 bg-dark-700 text-red-500 focus:ring-red-500 cursor-pointer">
+              <span class="text-xs text-gray-300 ml-1.5">Mute</span>
+            </label>
+          </div>
         </div>
         
         <!-- Duration Info -->
         <div id="durationInfo" class="mt-2 text-xs text-primary hidden">
           <i class="ti ti-info-circle text-xs mr-1"></i>
           <span>Duration will follow total audio length</span>
+        </div>
+        
+        <!-- Mute Video Info -->
+        <div id="muteVideoInfo" class="mt-2 text-xs text-red-400 hidden">
+          <i class="ti ti-volume-off text-xs mr-1"></i>
+          <span>Video original audio will be muted (replaced with selected audio)</span>
         </div>
       </div>
     </div>
@@ -1269,6 +1284,7 @@ if (el.createBtn) {
         targetAccountId:el.targetAccountId.value,
         autoUploadToYoutube:false,
         followAudioDuration:followAudio,
+        muteVideoAudio:el.muteVideoAudio.checked,
         videoIds,
         audioIds
       };
@@ -1306,6 +1322,7 @@ function saveAsTemplate() {
     durationMinutes: el.durationMinutes.value,
     visualizerPreset: el.visualizerPreset.value,
     followAudioDuration: el.followAudioDuration.checked,
+    muteVideoAudio: el.muteVideoAudio.checked,
     autoUploadToYoutube: el.autoUploadToYoutube.checked,
     videoIds: [...document.querySelectorAll("input[name='video']:checked")].map(i=>i.value),
     audioIds: [...document.querySelectorAll("input[name='audio']:checked")].map(i=>i.value),
@@ -1482,6 +1499,7 @@ async function confirmSchedule() {
       targetAccountId: el.targetAccountId.value,
       autoUploadToYoutube: false,
       followAudioDuration: followAudio,
+      muteVideoAudio: el.muteVideoAudio.checked,
       videoIds,
       audioIds,
       scheduledAt: scheduledTime.toISOString()
@@ -2556,6 +2574,21 @@ const toggleDurationInputs = () => {
 if (el.followAudioDuration) {
   el.followAudioDuration.addEventListener('change', toggleDurationInputs);
 }
+
+// Mute Video Audio checkbox handler
+if (el.muteVideoAudio) {
+  el.muteVideoAudio.addEventListener('change', function() {
+    const muteVideoInfo = document.getElementById('muteVideoInfo');
+    if (muteVideoInfo) {
+      if (this.checked) {
+        muteVideoInfo.classList.remove('hidden');
+      } else {
+        muteVideoInfo.classList.add('hidden');
+      }
+    }
+  });
+}
+
 // Initialize on page load
 setTimeout(() => toggleDurationInputs(), 100);
 
@@ -3746,6 +3779,7 @@ function addToBatchQueue() {
     targetAccountId: el.targetAccountId.value,
     autoUploadToYoutube: el.autoUploadToYoutube.checked,
     followAudioDuration: el.followAudioDuration.checked,
+    muteVideoAudio: el.muteVideoAudio.checked,
     videoIds: videoIds,
     audioIds: audioIds,
     visualizerSettings: visualizerSettings,
