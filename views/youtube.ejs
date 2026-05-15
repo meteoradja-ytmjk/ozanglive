@@ -32,50 +32,6 @@
     border-radius: 12px;
     transition: box-shadow 0.3s ease, background 0.3s ease;
   }
-
-  /* Smooth collapse animation for connected accounts */
-  #connectedAccountsList {
-    transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), 
-                opacity 0.3s ease,
-                padding 0.3s ease;
-  }
-
-  /* Slide in animation for account items */
-  @keyframes slideIn {
-    from {
-      opacity: 0;
-      transform: translateY(-10px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  .account-item {
-    animation: slideIn 0.3s ease-out both;
-  }
-
-  /* Chevron rotation animation */
-  #accountsChevron,
-  #accountsChevronIcon {
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-
-  /* Touch optimization for mobile */
-  @media (hover: none) and (pointer: coarse) {
-    /* Mobile touch targets should be at least 44x44px */
-    button {
-      min-height: 44px;
-      min-width: 44px;
-    }
-    
-    /* Increase tap area for toggle button */
-    .touch-manipulation {
-      -webkit-tap-highlight-color: rgba(59, 130, 246, 0.1);
-      touch-action: manipulation;
-    }
-  }
 </style>
 
 <div class="max-w-6xl mx-auto">
@@ -148,98 +104,62 @@
   </div>
   
   <% } else { %>
-  <!-- Connected Accounts Section - COLLAPSIBLE (DEFAULT COLLAPSED) -->
-  <div class="bg-gradient-to-br from-gray-800 to-gray-800/90 rounded-xl shadow-lg border border-gray-700/50 mb-6 overflow-hidden">
-    <!-- Header Section -->
-    <div class="flex flex-col gap-3 p-4 sm:p-6">
-      <!-- Top Row: Title + Add Button (Mobile: Stacked) -->
-      <div class="flex items-center justify-between gap-3">
-        <div class="flex items-center gap-3 flex-1 min-w-0">
-          <div class="w-10 h-10 bg-red-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
-            <i class="ti ti-users text-red-400 text-xl"></i>
-          </div>
-          <div class="min-w-0 flex-1">
-            <h2 class="text-lg font-semibold flex items-center gap-2 flex-wrap">
-              <span>Connected Accounts</span>
-              <span class="bg-primary/20 text-primary text-sm px-2.5 py-0.5 rounded-full font-medium"><%= accounts.length %></span>
-            </h2>
-          </div>
-        </div>
-        <!-- Add Account Button (Always visible, not blocking toggle) -->
+  <!-- Connected Accounts Section -->
+  <div class="bg-gradient-to-br from-gray-800 to-gray-800/90 rounded-xl p-4 sm:p-6 shadow-lg border border-gray-700/50 mb-6">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+      <h2 class="text-lg font-semibold flex items-center gap-2">
+        <span>Connected Accounts</span>
+        <span class="bg-primary/20 text-primary text-sm px-2 py-0.5 rounded-full"><%= accounts.length %></span>
+      </h2>
+      <div class="flex items-center gap-2">
         <button onclick="openAddAccountModal()" 
-          class="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-4 py-2 rounded-xl text-sm transition-all duration-200 flex items-center justify-center gap-2 font-medium shadow-lg shadow-red-500/25 hover:shadow-red-500/40 flex-shrink-0">
+          class="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-4 py-2 rounded-xl text-sm transition-all duration-200 flex items-center justify-center gap-2 font-medium shadow-lg shadow-red-500/25">
           <i class="ti ti-plus"></i>
-          <span class="hidden sm:inline">Add Account</span>
-          <span class="sm:hidden">Add</span>
+          <span>Add Account</span>
+        </button>
+        <button onclick="toggleConnectedAccounts()" 
+          class="w-10 h-10 flex items-center justify-center bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors" title="Toggle list">
+          <i class="ti ti-chevron-down text-gray-400 transition-transform duration-300" id="accountsChevron"></i>
         </button>
       </div>
-      
-      <!-- Toggle Button (Full width, touch-friendly) -->
-      <button onclick="toggleConnectedAccounts()" 
-        class="w-full flex items-center justify-between gap-3 px-4 py-3 bg-dark-700/50 hover:bg-dark-700 rounded-xl transition-all duration-200 group touch-manipulation active:scale-[0.98]">
-        <div class="flex items-center gap-2 text-left">
-          <i class="ti ti-chevron-right text-gray-400 text-lg transition-transform duration-300 group-hover:text-primary" id="accountsChevronIcon"></i>
-          <span class="text-sm text-gray-400 group-hover:text-white transition-colors">
-            <span id="accountsToggleText">Show</span> accounts list
-          </span>
-        </div>
-        <div class="flex items-center gap-2">
-          <span class="text-xs text-gray-500 hidden sm:inline">Click to toggle</span>
-          <div class="w-8 h-8 bg-dark-800/80 rounded-lg flex items-center justify-center">
-            <span class="text-gray-400 text-lg transition-transform duration-300" id="accountsChevron" style="display: inline-block; transform: rotate(0deg);">▶</span>
-          </div>
-        </div>
-      </button>
     </div>
     
-    <!-- Accounts List - START COLLAPSED (with smooth animation) -->
-    <div id="connectedAccountsList" class="overflow-hidden transition-all duration-300" style="max-height: 0; opacity: 0;">
-      <div class="space-y-3 px-4 sm:px-6 pb-4 sm:pb-6 pt-2">
-        <% accounts.forEach(function(account, index) { %>
-        <div class="flex items-center justify-between p-3 sm:p-4 bg-dark-700/80 rounded-xl border border-gray-600/30 hover:border-primary/50 transition-all hover:shadow-lg hover:shadow-primary/10 account-item" 
-          style="animation: slideIn 0.3s ease-out <%= index * 0.05 %>s both;">
-          <div class="flex items-center gap-3 min-w-0 flex-1">
-            <div class="w-11 h-11 bg-gradient-to-br from-red-500/30 to-red-600/20 rounded-xl flex items-center justify-center flex-shrink-0 relative">
-              <i class="ti ti-brand-youtube text-red-400 text-xl"></i>
+    <div id="connectedAccountsList" class="space-y-3">
+      <% accounts.forEach(function(account) { %>
+      <div class="flex items-center justify-between p-3 sm:p-4 bg-dark-700/80 rounded-xl border border-gray-600/30">
+        <div class="flex items-center gap-3">
+          <div class="w-11 h-11 bg-gradient-to-br from-red-500/30 to-red-600/20 rounded-xl flex items-center justify-center">
+            <i class="ti ti-brand-youtube text-red-400 text-xl"></i>
+          </div>
+          <div>
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="font-semibold text-white"><%= account.channelName || 'YouTube Channel' %></span>
               <% if (account.isPrimary) { %>
-              <div class="absolute -top-1 -right-1 w-4 h-4 bg-yellow-500 rounded-full flex items-center justify-center">
-                <i class="ti ti-star-filled text-white text-[10px]"></i>
-              </div>
+              <span class="px-2 py-0.5 bg-primary/20 text-primary text-xs rounded-full font-medium">Primary</span>
               <% } %>
             </div>
-            <div class="min-w-0 flex-1">
-              <div class="flex flex-wrap items-center gap-2">
-                <span class="font-semibold text-white truncate"><%= account.channelName || 'YouTube Channel' %></span>
-                <% if (account.isPrimary) { %>
-                <span class="px-2 py-0.5 bg-yellow-500/20 text-yellow-400 text-xs rounded-full font-medium flex-shrink-0 flex items-center gap-1">
-                  <i class="ti ti-star-filled text-[10px]"></i>
-                  <span>Primary</span>
-                </span>
-                <% } %>
-              </div>
-              <p class="text-xs text-green-400 flex items-center gap-1 mt-0.5">
-                <i class="ti ti-circle-check text-xs"></i>
-                <span>Connected & Active</span>
-              </p>
-            </div>
-          </div>
-          <div class="flex items-center gap-1 flex-shrink-0">
-            <button onclick="openEditAccountModal(<%= account.id %>, '<%= (account.channelName || 'YouTube Channel').replace(/'/g, "\\'") %>')" 
-              class="w-9 h-9 flex items-center justify-center text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors" title="Edit Credentials">
-              <i class="ti ti-edit text-lg"></i>
-            </button>
-            <button onclick="setPrimaryAccount(<%= account.id %>)" 
-              class="w-9 h-9 flex items-center justify-center rounded-lg transition-colors <%= account.isPrimary ? 'text-yellow-400 bg-yellow-500/10' : 'text-gray-400 hover:text-yellow-400 hover:bg-yellow-500/10' %>" title="<%= account.isPrimary ? 'Primary Account' : 'Set as Primary' %>">
-              <i class="ti <%= account.isPrimary ? 'ti-star-filled' : 'ti-star' %> text-lg"></i>
-            </button>
-            <button onclick="disconnectAccount(<%= account.id %>, '<%= (account.channelName || 'this account').replace(/'/g, "\\'") %>')" 
-              class="w-9 h-9 flex items-center justify-center text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors" title="Disconnect">
-              <i class="ti ti-unlink text-lg"></i>
-            </button>
+            <p class="text-xs text-green-400 flex items-center gap-1 mt-0.5">
+              <i class="ti ti-circle-check text-xs"></i>
+              Connected
+            </p>
           </div>
         </div>
-        <% }); %>
+        <div class="flex items-center gap-1">
+          <button onclick="openEditAccountModal(<%= account.id %>, '<%= (account.channelName || 'YouTube Channel').replace(/'/g, "\\'") %>')" 
+            class="w-9 h-9 flex items-center justify-center text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors" title="Edit Credentials">
+            <i class="ti ti-edit text-lg"></i>
+          </button>
+          <button onclick="setPrimaryAccount(<%= account.id %>)" 
+            class="w-9 h-9 flex items-center justify-center rounded-lg transition-colors <%= account.isPrimary ? 'text-yellow-400 bg-yellow-500/10' : 'text-gray-400 hover:text-yellow-400 hover:bg-yellow-500/10' %>" title="<%= account.isPrimary ? 'Primary Account' : 'Set as Primary' %>">
+            <i class="ti <%= account.isPrimary ? 'ti-star-filled' : 'ti-star' %> text-lg"></i>
+          </button>
+          <button onclick="disconnectAccount(<%= account.id %>, '<%= (account.channelName || 'this account').replace(/'/g, "\\'") %>')" 
+            class="w-9 h-9 flex items-center justify-center text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors" title="Disconnect">
+            <i class="ti ti-unlink text-lg"></i>
+          </button>
+        </div>
       </div>
+      <% }); %>
     </div>
   </div>
 

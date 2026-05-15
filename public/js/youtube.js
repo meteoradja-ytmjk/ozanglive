@@ -501,37 +501,19 @@ async function refreshBroadcasts() {
 }
 
 // Toggle connected accounts collapse
-// Toggle connected accounts collapse with smooth animation
+// Toggle connected accounts list
 function toggleConnectedAccounts() {
-  const accountsList = document.getElementById('connectedAccountsList');
+  const list = document.getElementById('connectedAccountsList');
   const chevron = document.getElementById('accountsChevron');
-  const chevronIcon = document.getElementById('accountsChevronIcon');
-  const toggleText = document.getElementById('accountsToggleText');
   
-  if (!accountsList || !chevron) return;
+  if (!list || !chevron) return;
   
-  const isCollapsed = accountsList.style.maxHeight === '0px' || !accountsList.style.maxHeight;
-  
-  if (isCollapsed) {
-    // EXPAND - Calculate full height
-    accountsList.style.maxHeight = accountsList.scrollHeight + 'px';
-    accountsList.style.opacity = '1';
-    chevron.style.transform = 'rotate(90deg)';
-    chevron.textContent = '▼';
-    if (chevronIcon) chevronIcon.style.transform = 'rotate(90deg)';
-    if (toggleText) toggleText.textContent = 'Hide';
-    
-    console.log('[Connected Accounts] Expanded');
-  } else {
-    // COLLAPSE
-    accountsList.style.maxHeight = '0px';
-    accountsList.style.opacity = '0';
+  if (list.style.display === 'none') {
+    list.style.display = 'block';
     chevron.style.transform = 'rotate(0deg)';
-    chevron.textContent = '▶';
-    if (chevronIcon) chevronIcon.style.transform = 'rotate(0deg)';
-    if (toggleText) toggleText.textContent = 'Show';
-    
-    console.log('[Connected Accounts] Collapsed');
+  } else {
+    list.style.display = 'none';
+    chevron.style.transform = 'rotate(-90deg)';
   }
 }
 }
