@@ -472,92 +472,91 @@
         </div>
       </div>
       <div class="step-content">
-        <!-- Duration Input Section -->
-        <div class="bg-gray-700/30 rounded-lg p-4 mb-3">
-          <div class="flex items-center gap-2 mb-3">
-            <i class="ti ti-clock text-primary text-lg"></i>
-            <span class="text-sm font-semibold text-white">Video Duration</span>
-          </div>
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label class="text-xs font-medium text-gray-400 block mb-2">
-                <i class="ti ti-clock-hour-4 text-xs mr-1"></i>Hours
-              </label>
-              <input type="number" id="durationHours" min="0" value="0" 
-                class="w-full bg-dark-800 text-white px-4 py-2.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary text-center font-bold text-lg border border-gray-600 hover:border-primary transition-all">
-            </div>
-            <div>
-              <label class="text-xs font-medium text-gray-400 block mb-2">
-                <i class="ti ti-clock text-xs mr-1"></i>Minutes
-              </label>
-              <input type="number" id="durationMinutes" min="0" max="59" value="1" 
-                class="w-full bg-dark-800 text-white px-4 py-2.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary text-center font-bold text-lg border border-gray-600 hover:border-primary transition-all">
-            </div>
-          </div>
-        </div>
-        
-        <!-- Audio Options Section -->
-        <div class="bg-gray-700/30 rounded-lg p-4">
-          <div class="flex items-center gap-2 mb-3">
-            <i class="ti ti-settings text-primary text-lg"></i>
-            <span class="text-sm font-semibold text-white">Audio Options</span>
-          </div>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <!-- Follow Audio Duration -->
-            <div class="bg-dark-800 rounded-lg p-3 border border-gray-600 hover:border-primary transition-all cursor-pointer" onclick="document.getElementById('followAudioDuration').click()">
-              <label for="followAudioDuration" class="flex items-start gap-3 cursor-pointer">
-                <div class="flex-shrink-0 mt-0.5">
-                  <input type="checkbox" id="followAudioDuration" 
-                    class="w-5 h-5 rounded border-gray-500 bg-dark-700 text-primary focus:ring-primary cursor-pointer">
-                </div>
-                <div class="flex-1">
-                  <div class="flex items-center gap-2 mb-1">
-                    <i class="ti ti-music text-primary"></i>
-                    <span class="text-sm font-semibold text-white">Follow Audio Duration</span>
-                  </div>
-                  <p class="text-xs text-gray-400">Automatically match total audio length</p>
-                </div>
-              </label>
+        <!-- Grid 2 Columns Layout -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          
+          <!-- Left Column: Duration Inputs -->
+          <div class="space-y-3">
+            <div class="flex items-center gap-2 mb-2">
+              <i class="ti ti-clock text-primary"></i>
+              <span class="text-sm font-semibold text-white">Video Duration</span>
             </div>
             
-            <!-- Mute Video Audio -->
-            <div class="bg-dark-800 rounded-lg p-3 border border-gray-600 hover:border-red-500 transition-all cursor-pointer" onclick="document.getElementById('muteVideoAudio').click()">
-              <label for="muteVideoAudio" class="flex items-start gap-3 cursor-pointer">
-                <div class="flex-shrink-0 mt-0.5">
-                  <input type="checkbox" id="muteVideoAudio" 
-                    class="w-5 h-5 rounded border-gray-500 bg-dark-700 text-red-500 focus:ring-red-500 cursor-pointer">
-                </div>
-                <div class="flex-1">
-                  <div class="flex items-center gap-2 mb-1">
-                    <i class="ti ti-volume-off text-red-400"></i>
-                    <span class="text-sm font-semibold text-white">Mute Video Audio</span>
-                  </div>
-                  <p class="text-xs text-gray-400">Remove original video audio</p>
-                </div>
-              </label>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="text-xs font-medium text-gray-400 block mb-2">
+                  <i class="ti ti-clock-hour-4 text-xs mr-1"></i>Hours
+                </label>
+                <input type="number" id="durationHours" min="0" value="0" 
+                  class="w-full bg-dark-700 text-white px-3 py-2.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary text-center font-bold border border-gray-600">
+              </div>
+              <div>
+                <label class="text-xs font-medium text-gray-400 block mb-2">
+                  <i class="ti ti-clock text-xs mr-1"></i>Minutes
+                </label>
+                <input type="number" id="durationMinutes" min="0" max="59" value="1" 
+                  class="w-full bg-dark-700 text-white px-3 py-2.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary text-center font-bold border border-gray-600">
+              </div>
             </div>
           </div>
+          
+          <!-- Right Column: Audio Options -->
+          <div class="space-y-3">
+            <div class="flex items-center gap-2 mb-2">
+              <i class="ti ti-settings text-primary"></i>
+              <span class="text-sm font-semibold text-white">Audio Options</span>
+            </div>
+            
+            <div class="space-y-2">
+              <!-- Follow Audio Duration -->
+              <div class="bg-dark-700 rounded-lg p-3 border border-gray-600">
+                <label class="flex items-center gap-3 cursor-pointer">
+                  <input type="checkbox" id="followAudioDuration" 
+                    class="w-5 h-5 rounded border-gray-500 text-primary focus:ring-2 focus:ring-primary cursor-pointer flex-shrink-0">
+                  <div class="flex-1">
+                    <div class="flex items-center gap-2">
+                      <i class="ti ti-music text-primary text-sm"></i>
+                      <span class="text-sm font-medium text-white">Follow Audio Duration</span>
+                    </div>
+                    <p class="text-xs text-gray-400 mt-0.5">Auto-match total audio length</p>
+                  </div>
+                </label>
+              </div>
+              
+              <!-- Mute Video Audio -->
+              <div class="bg-dark-700 rounded-lg p-3 border border-gray-600">
+                <label class="flex items-center gap-3 cursor-pointer">
+                  <input type="checkbox" id="muteVideoAudio" 
+                    class="w-5 h-5 rounded border-gray-500 text-red-500 focus:ring-2 focus:ring-red-500 cursor-pointer flex-shrink-0">
+                  <div class="flex-1">
+                    <div class="flex items-center gap-2">
+                      <i class="ti ti-volume-off text-red-400 text-sm"></i>
+                      <span class="text-sm font-medium text-white">Mute Video Audio</span>
+                    </div>
+                    <p class="text-xs text-gray-400 mt-0.5">Remove original video audio</p>
+                  </div>
+                </label>
+              </div>
+            </div>
+          </div>
+          
         </div>
         
         <!-- Info Messages -->
         <div class="mt-3 space-y-2">
           <!-- Duration Info -->
-          <div id="durationInfo" class="bg-primary/10 border border-primary/30 rounded-lg p-3 text-xs text-primary hidden">
-            <div class="flex items-start gap-2">
-              <i class="ti ti-info-circle text-sm mt-0.5"></i>
-              <div>
-                <strong>Follow Audio Mode Active:</strong> Video duration will automatically match the total length of all selected audio files.
-              </div>
+          <div id="durationInfo" class="bg-primary/10 border border-primary/30 rounded-lg p-2.5 text-xs hidden">
+            <div class="flex items-center gap-2 text-primary">
+              <i class="ti ti-info-circle"></i>
+              <span><strong>Follow Audio:</strong> Duration will match total audio length</span>
             </div>
           </div>
           
           <!-- Mute Video Info -->
-          <div id="muteVideoInfo" class="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-xs text-red-400 hidden">
-            <div class="flex items-start gap-2">
-              <i class="ti ti-volume-off text-sm mt-0.5"></i>
-              <div>
-                <strong>Mute Mode Active:</strong> Original video audio will be removed and replaced with your selected audio files (or silent if no audio selected).
-              </div>
+          <div id="muteVideoInfo" class="bg-red-500/10 border border-red-500/30 rounded-lg p-2.5 text-xs hidden">
+            <div class="flex items-center gap-2 text-red-400">
+              <i class="ti ti-volume-off"></i>
+              <span><strong>Mute Mode:</strong> Original video audio will be removed</span>
             </div>
           </div>
         </div>
@@ -1370,6 +1369,7 @@ if (el.createBtn) {
       const videoIds=[...document.querySelectorAll("input[name='video']:checked")].map(i=>i.value);
       const audioIds=[...document.querySelectorAll("input[name='audio']:checked")].map(i=>i.value);
       const followAudio=el.followAudioDuration.checked;
+      const muteVideo=el.muteVideoAudio.checked;
       
       // Debug logging
       console.log('=== RENDER JOB DEBUG ===');
@@ -1377,6 +1377,7 @@ if (el.createBtn) {
       console.log('Minutes:', m);
       console.log('Target Duration (seconds):', targetDurationSeconds);
       console.log('Follow Audio:', followAudio);
+      console.log('Mute Video Audio:', muteVideo);
       console.log('Video IDs:', videoIds);
       console.log('Audio IDs:', audioIds);
       console.log('=======================');
