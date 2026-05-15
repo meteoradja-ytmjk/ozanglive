@@ -575,16 +575,26 @@ async function renderLoopVideo({
     console.log('[RENDER] Target duration:', effectiveTargetDuration, 's');
     
     await runFfmpeg((cmd) => {
+      const outputOptions = [
+        '-t', String(effectiveTargetDuration),
+        '-c:v', 'libx264',
+        '-preset', 'veryfast',
+        '-crf', '23'
+      ];
+      
+      // Only remove audio if muteVideoAudio is true
+      if (muteVideoAudio) {
+        console.log('[RENDER] Removing video audio (mute mode)');
+        outputOptions.push('-an');
+      } else {
+        console.log('[RENDER] Keeping video audio');
+        outputOptions.push('-c:a', 'aac', '-b:a', '192k');
+      }
+      
       return cmd
         .input(videoConcatFile)
         .inputOptions(['-f', 'concat', '-safe', '0'])
-        .outputOptions([
-          '-t', String(effectiveTargetDuration),
-          '-c:v', 'libx264',
-          '-preset', 'veryfast',
-          '-crf', '23',
-          '-an'
-        ])
+        .outputOptions(outputOptions)
         .output(mergedVideo);
     }, {
       onProgress: (p) => {
