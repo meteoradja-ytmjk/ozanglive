@@ -696,9 +696,12 @@ async function renderLoopVideo({
       const combineTime = Math.round((Date.now() - combineStart) / 1000);
       console.log(`[RENDER] Combined ✓ (${combineTime}s)`);
     } else {
-      // No audio, just copy video
+      // No audio selected, just copy video (with its original audio if not muted)
+      console.log('[RENDER] No audio files selected');
+      console.log('[RENDER] Copying merged video to output');
+      console.log('[RENDER] Video has audio:', !muteVideoAudio);
       fs.copyFileSync(mergedVideo, outputPath);
-      console.log('[RENDER] Video only');
+      console.log('[RENDER] Video only (audio preserved:', !muteVideoAudio, ')');
     }
     
     console.log('[RENDER] COMPLETED');
