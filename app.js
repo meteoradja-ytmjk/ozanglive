@@ -1530,6 +1530,21 @@ app.get('/render-jobs', isAuthenticated, async (req, res) => {
   }
 });
 
+// Video Editor - Coming Soon Page
+app.get('/video-editor', isAuthenticated, async (req, res) => {
+  try {
+    const user = await User.findById(req.session.userId);
+    res.render('video-editor', {
+      title: 'Video Editor - Coming Soon',
+      active: 'video-editor',
+      user
+    });
+  } catch (error) {
+    console.error('Video editor page error:', error);
+    res.redirect('/dashboard');
+  }
+});
+
 app.get('/settings', isAuthenticated, async (req, res) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
   res.set('Pragma', 'no-cache');
