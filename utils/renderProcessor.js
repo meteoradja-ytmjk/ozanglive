@@ -164,31 +164,31 @@ async function renderLoopVideo({
       const needAudioLoop = audioDuration < effectiveTargetDuration;
       
       if (!needVideoLoop && !needAudioLoop) {
-        // CASE 1: Both long enough - Direct trim with stream copy
-        console.log('[RENDER] ⚡ CASE 1: Direct trim (stream copy)');
-        
-        const outputOptions = [
-          '-t', String(effectiveTargetDuration),
-          '-c:v', 'copy',
-          '-c:a', 'copy',
-          '-map', '0:v:0',
-          '-map', '1:a:0'
-        ];
-        
-        // If mute video audio, only use audio from audio file
-        if (muteVideoAudio) {
-          console.log('[RENDER] Muting video original audio');
-        }
+        // CASE 1: Both long enough - Direct trim
+        console.log('[RENDER] ⚡ CASE 1: Direct trim');
+        console.log('[RENDER] Mute Video Audio:', muteVideoAudio);
+        console.log('[RENDER] Using audio file - GUARANTEED AUDIO OUTPUT');
         
         await runFfmpeg((cmd) => {
           return cmd
             .input(videoPath)
             .input(audioPath)
-            .outputOptions(outputOptions)
+            .outputOptions([
+              '-t', String(effectiveTargetDuration),
+              '-c:v', 'copy',
+              '-c:a', 'aac',
+              '-b:a', '192k',
+              '-ar', '44100',
+              '-ac', '2',
+              '-map', '0:v:0',
+              '-map', '1:a:0',
+              '-shortest'
+            ])
             .output(outputPath);
         }, {
           onProgress: (p) => {
             const progress = Math.min(99, Math.round((parseTimeToSeconds(p.timemark) / effectiveTargetDuration) * 100));
+            console.log(`[RENDER] Progress: ${progress}% - ${p.timemark}`);
             onProgress?.(progress);
           }
         });
@@ -230,6 +230,10 @@ async function renderLoopVideo({
         });
         
         // Combine with audio
+        console.log('[RENDER] Combining looped video with audio');
+        console.log('[RENDER] Mute Video Audio:', muteVideoAudio);
+        console.log('[RENDER] Using audio file - GUARANTEED AUDIO OUTPUT');
+        
         await runFfmpeg((cmd) => {
           return cmd
             .input(loopedVideo)
@@ -237,14 +241,19 @@ async function renderLoopVideo({
             .outputOptions([
               '-t', String(effectiveTargetDuration),
               '-c:v', 'copy',
-              '-c:a', 'copy',
+              '-c:a', 'aac',
+              '-b:a', '192k',
+              '-ar', '44100',
+              '-ac', '2',
               '-map', '0:v:0',
-              '-map', '1:a:0'
+              '-map', '1:a:0',
+              '-shortest'
             ])
             .output(outputPath);
         }, {
           onProgress: (p) => {
             const progress = 50 + Math.min(49, Math.round((parseTimeToSeconds(p.timemark) / effectiveTargetDuration) * 49));
+            console.log(`[RENDER] Progress: ${progress}% - ${p.timemark}`);
             onProgress?.(progress);
           }
         });
@@ -286,6 +295,10 @@ async function renderLoopVideo({
         });
         
         // Combine with video
+        console.log('[RENDER] Combining video with looped audio');
+        console.log('[RENDER] Mute Video Audio:', muteVideoAudio);
+        console.log('[RENDER] Using audio file - GUARANTEED AUDIO OUTPUT');
+        
         await runFfmpeg((cmd) => {
           return cmd
             .input(videoPath)
@@ -293,14 +306,19 @@ async function renderLoopVideo({
             .outputOptions([
               '-t', String(effectiveTargetDuration),
               '-c:v', 'copy',
-              '-c:a', 'copy',
+              '-c:a', 'aac',
+              '-b:a', '192k',
+              '-ar', '44100',
+              '-ac', '2',
               '-map', '0:v:0',
-              '-map', '1:a:0'
+              '-map', '1:a:0',
+              '-shortest'
             ])
             .output(outputPath);
         }, {
           onProgress: (p) => {
             const progress = 50 + Math.min(49, Math.round((parseTimeToSeconds(p.timemark) / effectiveTargetDuration) * 49));
+            console.log(`[RENDER] Progress: ${progress}% - ${p.timemark}`);
             onProgress?.(progress);
           }
         });
@@ -364,19 +382,29 @@ async function renderLoopVideo({
         });
         
         // Combine
+        console.log('[RENDER] Combining looped video with looped audio');
+        console.log('[RENDER] Mute Video Audio:', muteVideoAudio);
+        console.log('[RENDER] Using audio file - GUARANTEED AUDIO OUTPUT');
+        
         await runFfmpeg((cmd) => {
           return cmd
             .input(loopedVideo)
             .input(loopedAudio)
             .outputOptions([
               '-c:v', 'copy',
-              '-c:a', 'copy',
+              '-c:a', 'aac',
+              '-b:a', '192k',
+              '-ar', '44100',
+              '-ac', '2',
+              '-map', '0:v:0',
+              '-map', '1:a:0',
               '-shortest'
             ])
             .output(outputPath);
         }, {
           onProgress: (p) => {
             const progress = 66 + Math.min(33, Math.round((parseTimeToSeconds(p.timemark) / effectiveTargetDuration) * 33));
+            console.log(`[RENDER] Progress: ${progress}% - ${p.timemark}`);
             onProgress?.(progress);
           }
         });
@@ -487,26 +515,38 @@ async function renderLoopVideo({
         });
         
         // Combine
+        console.log('[RENDER] Combining looped video with merged audio');
+        console.log('[RENDER] Mute Video Audio:', muteVideoAudio);
+        console.log('[RENDER] Using audio file - GUARANTEED AUDIO OUTPUT');
+        
         await runFfmpeg((cmd) => {
           return cmd
             .input(loopedVideo)
             .input(mergedAudio)
             .outputOptions([
               '-c:v', 'copy',
-              '-c:a', 'copy',
+              '-c:a', 'aac',
+              '-b:a', '192k',
+              '-ar', '44100',
+              '-ac', '2',
+              '-map', '0:v:0',
+              '-map', '1:a:0',
               '-shortest'
             ])
             .output(outputPath);
         }, {
           onProgress: (p) => {
             const progress = 75 + Math.min(24, Math.round((parseTimeToSeconds(p.timemark) / effectiveTargetDuration) * 24));
+            console.log(`[RENDER] Progress: ${progress}% - ${p.timemark}`);
             onProgress?.(progress);
           }
         });
         
       } else {
         // Video long enough, just trim and combine
-        console.log('[RENDER] Step 2/2: Trim video + combine (stream copy)...');
+        console.log('[RENDER] Step 2/2: Trim video + combine...');
+        console.log('[RENDER] Mute Video Audio:', muteVideoAudio);
+        console.log('[RENDER] Using audio file - GUARANTEED AUDIO OUTPUT');
         
         await runFfmpeg((cmd) => {
           return cmd
@@ -515,14 +555,19 @@ async function renderLoopVideo({
             .outputOptions([
               '-t', String(effectiveTargetDuration),
               '-c:v', 'copy',
-              '-c:a', 'copy',
+              '-c:a', 'aac',
+              '-b:a', '192k',
+              '-ar', '44100',
+              '-ac', '2',
               '-map', '0:v:0',
-              '-map', '1:a:0'
+              '-map', '1:a:0',
+              '-shortest'
             ])
             .output(outputPath);
         }, {
           onProgress: (p) => {
             const progress = 50 + Math.min(49, Math.round((parseTimeToSeconds(p.timemark) / effectiveTargetDuration) * 49));
+            console.log(`[RENDER] Progress: ${progress}% - ${p.timemark}`);
             onProgress?.(progress);
           }
         });
@@ -674,6 +719,7 @@ async function renderLoopVideo({
       console.log('[RENDER] Video input:', mergedVideo);
       console.log('[RENDER] Audio input:', mergedAudio);
       console.log('[RENDER] Final output:', outputPath);
+      console.log('[RENDER] GUARANTEED AUDIO OUTPUT');
       
       await runFfmpeg((cmd) => {
         return cmd
@@ -681,7 +727,12 @@ async function renderLoopVideo({
           .input(mergedAudio)
           .outputOptions([
             '-c:v', 'copy',
-            '-c:a', 'copy',
+            '-c:a', 'aac',
+            '-b:a', '192k',
+            '-ar', '44100',
+            '-ac', '2',
+            '-map', '0:v:0',
+            '-map', '1:a:0',
             '-shortest'
           ])
           .output(outputPath);
