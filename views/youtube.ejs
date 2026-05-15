@@ -57,8 +57,24 @@
   }
 
   /* Chevron rotation animation */
-  #accountsChevron {
+  #accountsChevron,
+  #accountsChevronIcon {
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Touch optimization for mobile */
+  @media (hover: none) and (pointer: coarse) {
+    /* Mobile touch targets should be at least 44x44px */
+    button {
+      min-height: 44px;
+      min-width: 44px;
+    }
+    
+    /* Increase tap area for toggle button */
+    .touch-manipulation {
+      -webkit-tap-highlight-color: rgba(59, 130, 246, 0.1);
+      touch-action: manipulation;
+    }
   }
 </style>
 
@@ -134,35 +150,46 @@
   <% } else { %>
   <!-- Connected Accounts Section - COLLAPSIBLE (DEFAULT COLLAPSED) -->
   <div class="bg-gradient-to-br from-gray-800 to-gray-800/90 rounded-xl shadow-lg border border-gray-700/50 mb-6 overflow-hidden">
-    <!-- Header - Clickable to toggle -->
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 sm:p-6 cursor-pointer hover:bg-gray-800/50 transition-colors group"
-      onclick="toggleConnectedAccounts()">
-      <div class="flex items-center gap-3 flex-1 min-w-0">
-        <div class="w-10 h-10 bg-red-500/20 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-red-500/30 transition-colors">
-          <i class="ti ti-users text-red-400 text-xl"></i>
+    <!-- Header Section -->
+    <div class="flex flex-col gap-3 p-4 sm:p-6">
+      <!-- Top Row: Title + Add Button (Mobile: Stacked) -->
+      <div class="flex items-center justify-between gap-3">
+        <div class="flex items-center gap-3 flex-1 min-w-0">
+          <div class="w-10 h-10 bg-red-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+            <i class="ti ti-users text-red-400 text-xl"></i>
+          </div>
+          <div class="min-w-0 flex-1">
+            <h2 class="text-lg font-semibold flex items-center gap-2 flex-wrap">
+              <span>Connected Accounts</span>
+              <span class="bg-primary/20 text-primary text-sm px-2.5 py-0.5 rounded-full font-medium"><%= accounts.length %></span>
+            </h2>
+          </div>
         </div>
-        <div class="min-w-0 flex-1">
-          <h2 class="text-lg font-semibold flex items-center gap-2 flex-wrap">
-            <span>Connected Accounts</span>
-            <span class="bg-primary/20 text-primary text-sm px-2.5 py-0.5 rounded-full font-medium"><%= accounts.length %></span>
-          </h2>
-          <p class="text-xs text-gray-400 mt-0.5 flex items-center gap-1.5">
-            <i class="ti ti-click text-xs"></i>
-            <span>Click to <span id="accountsToggleText">expand</span></span>
-          </p>
-        </div>
-      </div>
-      <div class="flex items-center gap-3 flex-shrink-0">
-        <button onclick="event.stopPropagation(); openAddAccountModal()" 
-          class="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-4 py-2 rounded-xl text-sm transition-all duration-200 flex items-center justify-center gap-2 font-medium shadow-lg shadow-red-500/25 hover:shadow-red-500/40">
+        <!-- Add Account Button (Always visible, not blocking toggle) -->
+        <button onclick="openAddAccountModal()" 
+          class="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-4 py-2 rounded-xl text-sm transition-all duration-200 flex items-center justify-center gap-2 font-medium shadow-lg shadow-red-500/25 hover:shadow-red-500/40 flex-shrink-0">
           <i class="ti ti-plus"></i>
           <span class="hidden sm:inline">Add Account</span>
           <span class="sm:hidden">Add</span>
         </button>
-        <div class="w-8 h-8 bg-dark-700/50 rounded-lg flex items-center justify-center">
-          <span class="text-gray-400 text-xl transition-transform duration-300" id="accountsChevron" style="display: inline-block; transform: rotate(0deg);">▶</span>
-        </div>
       </div>
+      
+      <!-- Toggle Button (Full width, touch-friendly) -->
+      <button onclick="toggleConnectedAccounts()" 
+        class="w-full flex items-center justify-between gap-3 px-4 py-3 bg-dark-700/50 hover:bg-dark-700 rounded-xl transition-all duration-200 group touch-manipulation active:scale-[0.98]">
+        <div class="flex items-center gap-2 text-left">
+          <i class="ti ti-chevron-right text-gray-400 text-lg transition-transform duration-300 group-hover:text-primary" id="accountsChevronIcon"></i>
+          <span class="text-sm text-gray-400 group-hover:text-white transition-colors">
+            <span id="accountsToggleText">Show</span> accounts list
+          </span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-gray-500 hidden sm:inline">Click to toggle</span>
+          <div class="w-8 h-8 bg-dark-800/80 rounded-lg flex items-center justify-center">
+            <span class="text-gray-400 text-lg transition-transform duration-300" id="accountsChevron" style="display: inline-block; transform: rotate(0deg);">▶</span>
+          </div>
+        </div>
+      </button>
     </div>
     
     <!-- Accounts List - START COLLAPSED (with smooth animation) -->
