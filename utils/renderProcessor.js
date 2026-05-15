@@ -168,6 +168,7 @@ async function renderLoopVideo({
         console.log('[RENDER] ⚡ CASE 1: Direct trim');
         console.log('[RENDER] Mute Video Audio:', muteVideoAudio);
         console.log('[RENDER] Using audio file - GUARANTEED AUDIO OUTPUT');
+        console.log('[RENDER] Target duration:', effectiveTargetDuration, 's');
         
         await runFfmpeg((cmd) => {
           return cmd
@@ -181,8 +182,7 @@ async function renderLoopVideo({
               '-ar', '44100',
               '-ac', '2',
               '-map', '0:v:0',
-              '-map', '1:a:0',
-              '-shortest'
+              '-map', '1:a:0'
             ])
             .output(outputPath);
         }, {
@@ -233,6 +233,7 @@ async function renderLoopVideo({
         console.log('[RENDER] Combining looped video with audio');
         console.log('[RENDER] Mute Video Audio:', muteVideoAudio);
         console.log('[RENDER] Using audio file - GUARANTEED AUDIO OUTPUT');
+        console.log('[RENDER] Target duration:', effectiveTargetDuration, 's');
         
         await runFfmpeg((cmd) => {
           return cmd
@@ -246,8 +247,7 @@ async function renderLoopVideo({
               '-ar', '44100',
               '-ac', '2',
               '-map', '0:v:0',
-              '-map', '1:a:0',
-              '-shortest'
+              '-map', '1:a:0'
             ])
             .output(outputPath);
         }, {
@@ -294,10 +294,10 @@ async function renderLoopVideo({
           }
         });
         
-        // Combine with video
         console.log('[RENDER] Combining video with looped audio');
         console.log('[RENDER] Mute Video Audio:', muteVideoAudio);
         console.log('[RENDER] Using audio file - GUARANTEED AUDIO OUTPUT');
+        console.log('[RENDER] Target duration:', effectiveTargetDuration, 's');
         
         await runFfmpeg((cmd) => {
           return cmd
@@ -311,8 +311,7 @@ async function renderLoopVideo({
               '-ar', '44100',
               '-ac', '2',
               '-map', '0:v:0',
-              '-map', '1:a:0',
-              '-shortest'
+              '-map', '1:a:0'
             ])
             .output(outputPath);
         }, {
@@ -385,20 +384,21 @@ async function renderLoopVideo({
         console.log('[RENDER] Combining looped video with looped audio');
         console.log('[RENDER] Mute Video Audio:', muteVideoAudio);
         console.log('[RENDER] Using audio file - GUARANTEED AUDIO OUTPUT');
+        console.log('[RENDER] Target duration:', effectiveTargetDuration, 's');
         
         await runFfmpeg((cmd) => {
           return cmd
             .input(loopedVideo)
             .input(loopedAudio)
             .outputOptions([
+              '-t', String(effectiveTargetDuration),
               '-c:v', 'copy',
               '-c:a', 'aac',
               '-b:a', '192k',
               '-ar', '44100',
               '-ac', '2',
               '-map', '0:v:0',
-              '-map', '1:a:0',
-              '-shortest'
+              '-map', '1:a:0'
             ])
             .output(outputPath);
         }, {
@@ -518,20 +518,21 @@ async function renderLoopVideo({
         console.log('[RENDER] Combining looped video with merged audio');
         console.log('[RENDER] Mute Video Audio:', muteVideoAudio);
         console.log('[RENDER] Using audio file - GUARANTEED AUDIO OUTPUT');
+        console.log('[RENDER] Target duration:', effectiveTargetDuration, 's');
         
         await runFfmpeg((cmd) => {
           return cmd
             .input(loopedVideo)
             .input(mergedAudio)
             .outputOptions([
+              '-t', String(effectiveTargetDuration),
               '-c:v', 'copy',
               '-c:a', 'aac',
               '-b:a', '192k',
               '-ar', '44100',
               '-ac', '2',
               '-map', '0:v:0',
-              '-map', '1:a:0',
-              '-shortest'
+              '-map', '1:a:0'
             ])
             .output(outputPath);
         }, {
@@ -547,6 +548,7 @@ async function renderLoopVideo({
         console.log('[RENDER] Step 2/2: Trim video + combine...');
         console.log('[RENDER] Mute Video Audio:', muteVideoAudio);
         console.log('[RENDER] Using audio file - GUARANTEED AUDIO OUTPUT');
+        console.log('[RENDER] Target duration:', effectiveTargetDuration, 's');
         
         await runFfmpeg((cmd) => {
           return cmd
@@ -560,8 +562,7 @@ async function renderLoopVideo({
               '-ar', '44100',
               '-ac', '2',
               '-map', '0:v:0',
-              '-map', '1:a:0',
-              '-shortest'
+              '-map', '1:a:0'
             ])
             .output(outputPath);
         }, {
@@ -719,6 +720,7 @@ async function renderLoopVideo({
       console.log('[RENDER] Video input:', mergedVideo);
       console.log('[RENDER] Audio input:', mergedAudio);
       console.log('[RENDER] Final output:', outputPath);
+      console.log('[RENDER] Target duration:', effectiveTargetDuration, 's');
       console.log('[RENDER] GUARANTEED AUDIO OUTPUT');
       
       await runFfmpeg((cmd) => {
@@ -726,14 +728,14 @@ async function renderLoopVideo({
           .input(mergedVideo)
           .input(mergedAudio)
           .outputOptions([
+            '-t', String(effectiveTargetDuration),
             '-c:v', 'copy',
             '-c:a', 'aac',
             '-b:a', '192k',
             '-ar', '44100',
             '-ac', '2',
             '-map', '0:v:0',
-            '-map', '1:a:0',
-            '-shortest'
+            '-map', '1:a:0'
           ])
           .output(outputPath);
       }, { 
