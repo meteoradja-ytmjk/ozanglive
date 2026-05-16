@@ -1,43 +1,64 @@
 @echo off
+color 0A
+echo.
 echo ========================================
 echo   RESTART APLIKASI OZANGLIVE
+echo ========================================
+echo.
+echo PERBAIKAN YOUTUBE TAB - VERSI STABIL
+echo.
 echo ========================================
 echo.
 
 echo [1/3] Menghentikan aplikasi yang sedang berjalan...
 taskkill /F /IM node.exe >nul 2>&1
 if %errorlevel% equ 0 (
-    echo      ^> Aplikasi berhasil dihentikan
+    echo      [OK] Aplikasi berhasil dihentikan
 ) else (
-    echo      ^> Tidak ada aplikasi yang berjalan
+    echo      [INFO] Tidak ada aplikasi yang berjalan
 )
 echo.
 
-echo [2/3] Menunggu 2 detik...
-timeout /t 2 /nobreak >nul
-echo      ^> Siap untuk start ulang
+echo [2/3] Menunggu 3 detik...
+timeout /t 3 /nobreak >nul
+echo      [OK] Siap untuk start ulang
 echo.
 
 echo [3/3] Memulai aplikasi...
-echo      ^> Aplikasi akan berjalan di window baru
-echo      ^> Jangan tutup window tersebut!
+echo      [INFO] Aplikasi akan berjalan di window baru
+echo      [PENTING] Jangan tutup window tersebut!
 echo.
 
-start "OzangLive Server" cmd /k "node app.js"
+start "OzangLive Server - JANGAN TUTUP WINDOW INI!" cmd /k "echo APLIKASI SEDANG BERJALAN - JANGAN TUTUP WINDOW INI! & echo. & node app.js"
+
+timeout /t 2 /nobreak >nul
 
 echo.
 echo ========================================
 echo   APLIKASI BERHASIL DI-RESTART!
 echo ========================================
 echo.
-echo LANGKAH SELANJUTNYA:
-echo 1. Buka browser
-echo 2. Tekan Ctrl + Shift + Delete
-echo 3. Clear "Cached images and files"
-echo 4. Buka http://localhost:3000/youtube
-echo 5. Tekan Ctrl + F5 untuk hard refresh
+color 0E
+echo LANGKAH SELANJUTNYA (WAJIB!):
 echo.
-echo Jika masih rusak, buka YOUTUBE-FIX-ENCODING.md
-echo untuk panduan troubleshooting lengkap.
+echo 1. CLEAR BROWSER CACHE:
+echo    - Tekan Ctrl + Shift + Delete
+echo    - Pilih "Cached images and files"
+echo    - Pilih "All time"
+echo    - Klik "Clear data"
+echo.
+echo 2. HARD REFRESH:
+echo    - Buka http://localhost:3000/youtube
+echo    - Tekan Ctrl + F5 (BUKAN F5 biasa!)
+echo.
+echo 3. JIKA MASIH RUSAK:
+echo    - Coba buka di Incognito mode (Ctrl + Shift + N)
+echo    - Baca file: PERBAIKAN-FINAL-YOUTUBE.md
+echo.
+color 0A
+echo ========================================
+echo   File sudah diperbaiki ke versi stabil!
+echo   Tinggal clear cache browser saja!
+echo ========================================
 echo.
 pause
