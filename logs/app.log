@@ -2304,3 +2304,125 @@
 2026-05-16T04:42:50.385Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-16T04:32:50.267Z to 2026-05-16T04:43:50.267Z
 2026-05-16T04:42:50.395Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-16T04:42:50.267Z
 2026-05-16T04:42:50.674Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-16T04:44:50.512Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-16T04:34:50.280Z to 2026-05-16T04:45:50.280Z
+2026-05-16T04:44:50.528Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-16T04:44:50.280Z
+2026-05-16T04:44:51.943Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-16T04:46:50.351Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-16T04:36:50.273Z to 2026-05-16T04:47:50.273Z
+2026-05-16T04:46:50.356Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-16T04:46:50.273Z
+2026-05-16T04:46:50.423Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-16T04:48:50.314Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-16T04:38:50.281Z to 2026-05-16T04:49:50.281Z
+2026-05-16T04:48:50.319Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-16T04:48:50.281Z
+2026-05-16T04:48:50.337Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-16T04:50:50.340Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-16T04:40:50.282Z to 2026-05-16T04:51:50.282Z
+2026-05-16T04:50:50.346Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-16T04:50:50.282Z
+2026-05-16T04:50:50.384Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-16T04:52:50.298Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-16T04:42:50.290Z to 2026-05-16T04:53:50.290Z
+2026-05-16T04:52:50.301Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-16T04:52:50.290Z
+2026-05-16T04:52:50.304Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-16T05:06:28.831Z [LOG] Logger initialized (async mode). Output will be written to console and logs/app.log
+2026-05-16T05:06:57.539Z [LOG] Using bundled FFmpeg at: C:\Users\KANTIN\OneDrive\Dokumen\OZANG\ozanglive-main\ozanglive\node_modules\@ffmpeg-installer\win32-x64\ffmpeg.exe
+2026-05-16T05:06:57.623Z [WARN] [Session] WARNING: SESSION_SECRET is not set in .env file!
+2026-05-16T05:06:57.623Z [WARN] [Session] Generating a temporary secret - DO NOT USE IN PRODUCTION!
+2026-05-16T05:06:57.624Z [WARN] [Session] Generate a permanent secret using: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+2026-05-16T05:06:57.662Z [LOG] [Session] Session store initialized
+2026-05-16T05:06:57.672Z [LOG] [Session] Session middleware initialized
+2026-05-16T05:06:57.785Z [LOG] [Startup] Waiting for database initialization...
+2026-05-16T05:06:57.843Z [LOG] [Database] All required tables verified
+2026-05-16T05:06:57.844Z [LOG] [Startup] Database ready, starting server...
+2026-05-16T05:06:57.855Z [LOG] [Startup] TitleFolder table initialized
+2026-05-16T05:06:57.857Z [LOG] [Startup] Running database optimization...
+2026-05-16T05:06:57.868Z [LOG] [DB Optimize] Starting database optimization...
+2026-05-16T05:06:57.871Z [LOG] [DB Optimize] Setting pragmas...
+2026-05-16T05:06:57.873Z [LOG] [DB Optimize] All pragmas set successfully
+2026-05-16T05:06:57.877Z [LOG] [DB Optimize] Creating indexes...
+2026-05-16T05:06:57.890Z [LOG] [DB Optimize] All indexes created successfully
+2026-05-16T05:06:57.891Z [LOG] [DB Optimize] Running VACUUM...
+2026-05-16T05:06:57.944Z [LOG] [DB Optimize] ✓ VACUUM completed
+2026-05-16T05:06:57.952Z [LOG] [DB Optimize] Running ANALYZE...
+2026-05-16T05:06:57.955Z [LOG] [DB Optimize] ✓ ANALYZE completed
+2026-05-16T05:06:57.957Z [LOG] [DB Optimize] ✅ Database optimization completed successfully
+2026-05-16T05:06:57.958Z [LOG] [Startup] ✅ Database optimization completed
+2026-05-16T05:06:58.193Z [LOG] OzangLive running at:
+2026-05-16T05:06:58.193Z [LOG]   http://192.168.1.247:7575
+2026-05-16T05:06:58.202Z [LOG] [Scheduler] Stream scheduler initialized
+2026-05-16T05:06:58.203Z [LOG] [Scheduler] Intervals set: once-schedules=2min, recurring=2min, duration=60sec, cleanup=6hr
+2026-05-16T05:06:58.205Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-16T04:56:58.204Z to 2026-05-16T05:07:58.204Z
+2026-05-16T05:06:58.206Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-16T05:06:58.204Z
+2026-05-16T05:06:58.543Z [LOG] [Startup] Initializing recurring schedule service...
+2026-05-16T05:06:58.547Z [LOG] [ScheduleService] Initializing...
+2026-05-16T05:06:58.553Z [LOG] [ScheduleService] Schedule checker started (2 min interval - CPU optimized)
+2026-05-16T05:06:58.560Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-16T05:06:58.571Z [LOG] [ScheduleService] Found 0 templates with recurring enabled
+2026-05-16T05:06:58.572Z [LOG] [ScheduleService] Initialized successfully
+2026-05-16T05:06:58.573Z [LOG] [Startup] YouTube task scheduler DISABLED (enable in code if needed)
+2026-05-16T05:06:58.575Z [LOG] [Startup] Skipping initial sync - status will be managed by events
+2026-05-16T05:06:58.584Z [LOG] OzangLive startup complete
+2026-05-16T05:06:58.652Z [LOG] [DB Optimize] ✓ journal_mode = WAL
+2026-05-16T05:06:58.744Z [LOG] [DB Optimize] ✓ synchronous = NORMAL
+2026-05-16T05:06:58.751Z [LOG] [DB Optimize] ✓ cache_size = 10MB
+2026-05-16T05:06:58.759Z [LOG] [DB Optimize] ✓ temp_store = MEMORY
+2026-05-16T05:06:58.761Z [LOG] [DB Optimize] ✓ mmap_size = 30MB
+2026-05-16T05:06:58.768Z [LOG] [DB Optimize] ✓ idx_users_username created
+2026-05-16T05:06:58.770Z [LOG] [DB Optimize] ✓ idx_users_status created
+2026-05-16T05:06:58.771Z [LOG] [DB Optimize] ✓ idx_users_role created
+2026-05-16T05:06:58.772Z [LOG] [DB Optimize] ✓ idx_videos_user_id created
+2026-05-16T05:06:58.773Z [LOG] [DB Optimize] ✓ idx_videos_created_at created
+2026-05-16T05:06:58.774Z [LOG] [DB Optimize] ✓ idx_audios_user_id created
+2026-05-16T05:06:58.775Z [LOG] [DB Optimize] ✓ idx_streams_user_id created
+2026-05-16T05:06:58.777Z [LOG] [DB Optimize] ✓ idx_streams_status created
+2026-05-16T05:06:58.784Z [LOG] [DB Optimize] ✓ idx_streams_schedule_type created
+2026-05-16T05:06:58.786Z [LOG] [DB Optimize] ✓ idx_history_user_id created
+2026-05-16T05:06:58.787Z [LOG] [DB Optimize] ✓ idx_history_start_time created
+2026-05-16T05:06:58.788Z [LOG] [DB Optimize] ✓ idx_playlists_user_id created
+2026-05-16T05:06:58.789Z [LOG] [DB Optimize] ✓ idx_youtube_creds_user_id created
+2026-05-16T05:06:58.838Z [LOG] [Database] All required tables verified
+2026-05-16T05:06:58.839Z [LOG] [Database] Database tables initialized successfully
+2026-05-16T05:08:40.271Z [LOG] [Session Debug] {
+  path: '/youtube',
+  method: 'GET',
+  sessionID: 'UyZ9PUHY0MP674bN0IVp7uRmBfHgoIMa',
+  userId: undefined,
+  username: undefined,
+  hasSession: true
+}
+2026-05-16T05:08:40.459Z [LOG] [Session Debug] {
+  path: '/login',
+  method: 'GET',
+  sessionID: 'UyZ9PUHY0MP674bN0IVp7uRmBfHgoIMa',
+  userId: undefined,
+  username: undefined,
+  hasSession: true
+}
+2026-05-16T05:08:58.204Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-16T04:58:58.201Z to 2026-05-16T05:09:58.201Z
+2026-05-16T05:08:58.205Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-16T05:08:58.201Z
+2026-05-16T05:08:58.269Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-16T05:11:01.613Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-16T05:01:00.986Z to 2026-05-16T05:12:00.986Z
+2026-05-16T05:11:01.695Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-16T05:11:00.986Z
+2026-05-16T05:11:11.578Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-16T05:13:01.440Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-16T05:03:01.064Z to 2026-05-16T05:14:01.064Z
+2026-05-16T05:13:01.493Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-16T05:13:01.064Z
+2026-05-16T05:13:02.025Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-16T05:15:01.079Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-16T05:05:00.948Z to 2026-05-16T05:16:00.948Z
+2026-05-16T05:15:01.087Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-16T05:15:00.948Z
+2026-05-16T05:15:01.221Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-16T05:17:00.966Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-16T05:07:00.961Z to 2026-05-16T05:18:00.961Z
+2026-05-16T05:17:00.966Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-16T05:17:00.961Z
+2026-05-16T05:17:00.977Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-16T05:19:01.079Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-16T05:09:00.977Z to 2026-05-16T05:20:00.977Z
+2026-05-16T05:19:01.082Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-16T05:19:00.977Z
+2026-05-16T05:19:01.110Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-16T05:21:00.988Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-16T05:11:00.986Z to 2026-05-16T05:22:00.986Z
+2026-05-16T05:21:00.988Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-16T05:21:00.986Z
+2026-05-16T05:21:01.007Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-16T05:23:00.994Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-16T05:13:00.991Z to 2026-05-16T05:24:00.991Z
+2026-05-16T05:23:00.994Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-16T05:23:00.991Z
+2026-05-16T05:23:01.000Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-16T05:25:01.006Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-16T05:15:00.998Z to 2026-05-16T05:26:00.998Z
+2026-05-16T05:25:01.007Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-16T05:25:00.998Z
+2026-05-16T05:25:01.022Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-16T05:27:01.013Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-16T05:17:01.011Z to 2026-05-16T05:28:01.011Z
+2026-05-16T05:27:01.013Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-16T05:27:01.011Z
+2026-05-16T05:27:01.018Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-16T06:53:55.824Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-16T06:43:55.823Z to 2026-05-16T06:54:55.823Z
+2026-05-16T06:53:55.824Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-16T06:53:55.823Z
+2026-05-16T06:54:08.463Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
