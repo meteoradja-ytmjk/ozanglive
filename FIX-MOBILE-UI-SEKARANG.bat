@@ -38,7 +38,7 @@ echo.
 
 echo [STEP 4/4] Membuka browser...
 timeout /t 2 /nobreak >nul
-start http://localhost:3000/youtube
+start http://localhost:7575/youtube
 echo      [OK] Browser dibuka
 echo.
 
