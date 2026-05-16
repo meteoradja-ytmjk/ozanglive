@@ -4,20 +4,40 @@
 
 // Toggle Connected Accounts collapsible
 function toggleConnectedAccounts() {
+  console.log('[Collapsible] Toggle function called');
+  
   const accountsList = document.getElementById('connectedAccountsList');
   const chevron = document.getElementById('accountsChevron');
   
-  if (!accountsList || !chevron) return;
+  console.log('[Collapsible] accountsList:', accountsList);
+  console.log('[Collapsible] chevron:', chevron);
   
-  if (accountsList.style.display === 'none') {
+  if (!accountsList || !chevron) {
+    console.error('[Collapsible] Elements not found!');
+    return;
+  }
+  
+  const isHidden = accountsList.style.display === 'none' || !accountsList.style.display;
+  
+  console.log('[Collapsible] Current state - isHidden:', isHidden);
+  
+  if (isHidden) {
     // Expand
+    console.log('[Collapsible] Expanding...');
     accountsList.style.display = 'block';
     chevron.style.transform = 'rotate(180deg)';
+    chevron.classList.remove('ti-chevron-down');
+    chevron.classList.add('ti-chevron-up');
   } else {
     // Collapse
+    console.log('[Collapsible] Collapsing...');
     accountsList.style.display = 'none';
     chevron.style.transform = 'rotate(0deg)';
+    chevron.classList.remove('ti-chevron-up');
+    chevron.classList.add('ti-chevron-down');
   }
+  
+  console.log('[Collapsible] Toggle complete');
 }
 
 // Escape HTML to prevent XSS

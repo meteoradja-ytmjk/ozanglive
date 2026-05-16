@@ -106,24 +106,26 @@
   <% } else { %>
   <!-- Connected Accounts Section - Collapsible -->
   <div class="bg-gradient-to-br from-gray-800 to-gray-800/90 rounded-xl shadow-lg border border-gray-700/50 mb-6 overflow-hidden">
-    <!-- Header - Clickable -->
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 sm:p-6 cursor-pointer hover:bg-gray-700/30 transition-colors" onclick="toggleConnectedAccounts()">
-      <div class="flex items-center gap-3">
+    <!-- Header - Clickable (Full Width) -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 sm:p-6 cursor-pointer hover:bg-gray-700/30 active:bg-gray-700/50 transition-all duration-200 select-none" 
+         onclick="toggleConnectedAccounts()"
+         id="connectedAccountsHeader">
+      <div class="flex items-center gap-3 pointer-events-none">
         <h2 class="text-lg font-semibold flex items-center gap-2">
+          <i class="ti ti-chevron-down text-gray-400 text-xl transition-transform duration-300" id="accountsChevron"></i>
           <span>Connected Accounts</span>
           <span class="bg-primary/20 text-primary text-sm px-2 py-0.5 rounded-full"><%= accounts.length %></span>
         </h2>
-        <i id="accountsChevron" class="ti ti-chevron-down text-gray-400 text-xl transition-transform duration-300"></i>
       </div>
       <button onclick="event.stopPropagation(); openAddAccountModal()" 
-        class="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-4 py-2 rounded-xl text-sm transition-all duration-200 flex items-center justify-center gap-2 font-medium shadow-lg shadow-red-500/25">
+        class="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-4 py-2 rounded-xl text-sm transition-all duration-200 flex items-center justify-center gap-2 font-medium shadow-lg shadow-red-500/25 pointer-events-auto">
         <i class="ti ti-plus"></i>
         <span>Add Account</span>
       </button>
     </div>
     
     <!-- Accounts List - Collapsible Content -->
-    <div id="connectedAccountsList" class="px-4 sm:px-6 pb-4 sm:pb-6 space-y-3" style="display: none;">
+    <div id="connectedAccountsList" class="px-4 sm:px-6 pb-4 sm:pb-6 space-y-3 transition-all duration-300" style="display: none;">
       <% accounts.forEach(function(account) { %>
       <div class="flex items-center justify-between p-3 sm:p-4 bg-dark-700/80 rounded-xl border border-gray-600/30">
         <div class="flex items-center gap-3">
