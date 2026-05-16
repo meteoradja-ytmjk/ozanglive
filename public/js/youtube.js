@@ -2,6 +2,24 @@
  * YouTube Sync Client-Side JavaScript
  */
 
+// Toggle Connected Accounts collapsible
+function toggleConnectedAccounts() {
+  const accountsList = document.getElementById('connectedAccountsList');
+  const chevron = document.getElementById('accountsChevron');
+  
+  if (!accountsList || !chevron) return;
+  
+  if (accountsList.style.display === 'none') {
+    // Expand
+    accountsList.style.display = 'block';
+    chevron.style.transform = 'rotate(180deg)';
+  } else {
+    // Collapse
+    accountsList.style.display = 'none';
+    chevron.style.transform = 'rotate(0deg)';
+  }
+}
+
 // Escape HTML to prevent XSS
 function escapeHtml(text) {
   if (!text) return '';
