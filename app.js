@@ -8064,10 +8064,6 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
     // Create cache key
     const cacheKey = accountId ? `user_${userId}_account_${accountId}` : `user_${userId}_all`;
     
-    // FORCE CACHE CLEAR for debugging (remove after fix confirmed)
-    broadcastsApiCache.delete(cacheKey);
-    console.log(`[DEBUG] Cache cleared for ${cacheKey}`);
-    
     // Check cache first
     const cached = broadcastsApiCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp < BROADCASTS_CACHE_TTL)) {

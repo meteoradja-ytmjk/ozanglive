@@ -1023,3 +1023,1099 @@
 2026-05-13T04:32:07.485Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T04:22:07.284Z to 2026-05-13T04:33:07.284Z
 2026-05-13T04:32:07.606Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T04:32:07.284Z
 2026-05-13T04:32:08.343Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T04:34:07.345Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T04:24:07.289Z to 2026-05-13T04:35:07.289Z
+2026-05-13T04:34:07.348Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T04:34:07.289Z
+2026-05-13T04:34:07.379Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T04:36:07.329Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T04:26:07.298Z to 2026-05-13T04:37:07.298Z
+2026-05-13T04:36:07.330Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T04:36:07.298Z
+2026-05-13T04:36:07.339Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T04:38:08.502Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T04:28:07.301Z to 2026-05-13T04:39:07.301Z
+2026-05-13T04:38:08.515Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T04:38:07.301Z
+2026-05-13T04:38:08.520Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T04:40:07.317Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T04:30:07.313Z to 2026-05-13T04:41:07.313Z
+2026-05-13T04:40:07.317Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T04:40:07.313Z
+2026-05-13T04:40:07.320Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T04:42:07.317Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T04:32:07.316Z to 2026-05-13T04:43:07.316Z
+2026-05-13T04:42:07.318Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T04:42:07.316Z
+2026-05-13T04:42:07.320Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T04:44:07.330Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T04:34:07.328Z to 2026-05-13T04:45:07.328Z
+2026-05-13T04:44:07.331Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T04:44:07.328Z
+2026-05-13T04:44:07.334Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T04:46:07.332Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T04:36:07.331Z to 2026-05-13T04:47:07.331Z
+2026-05-13T04:46:07.334Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T04:46:07.331Z
+2026-05-13T04:46:07.339Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T04:48:07.334Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T04:38:07.333Z to 2026-05-13T04:49:07.333Z
+2026-05-13T04:48:07.338Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T04:48:07.333Z
+2026-05-13T04:48:07.344Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T04:50:07.347Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T04:40:07.346Z to 2026-05-13T04:51:07.346Z
+2026-05-13T04:50:07.348Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T04:50:07.346Z
+2026-05-13T04:50:08.092Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T04:52:07.359Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T04:42:07.358Z to 2026-05-13T04:53:07.358Z
+2026-05-13T04:52:07.360Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T04:52:07.358Z
+2026-05-13T04:52:07.364Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T04:54:07.434Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T04:44:07.369Z to 2026-05-13T04:55:07.369Z
+2026-05-13T04:54:07.435Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T04:54:07.369Z
+2026-05-13T04:54:07.661Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T04:56:07.804Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T04:46:07.547Z to 2026-05-13T04:57:07.547Z
+2026-05-13T04:56:07.805Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T04:56:07.547Z
+2026-05-13T04:56:07.856Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T04:58:07.593Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T04:48:07.545Z to 2026-05-13T04:59:07.545Z
+2026-05-13T04:58:07.594Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T04:58:07.545Z
+2026-05-13T04:58:07.615Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T05:00:07.547Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T04:50:07.544Z to 2026-05-13T05:01:07.544Z
+2026-05-13T05:00:07.547Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T05:00:07.544Z
+2026-05-13T05:00:07.552Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T05:02:07.613Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T04:52:07.549Z to 2026-05-13T05:03:07.549Z
+2026-05-13T05:02:07.615Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T05:02:07.549Z
+2026-05-13T05:02:07.656Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T05:04:08.390Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T04:54:07.814Z to 2026-05-13T05:05:07.814Z
+2026-05-13T05:04:08.478Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T05:04:07.814Z
+2026-05-13T05:04:09.600Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T05:06:07.997Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T04:56:07.813Z to 2026-05-13T05:07:07.813Z
+2026-05-13T05:06:07.998Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T05:06:07.813Z
+2026-05-13T05:06:08.026Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T05:08:07.809Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T04:58:07.806Z to 2026-05-13T05:09:07.806Z
+2026-05-13T05:08:07.810Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T05:08:07.806Z
+2026-05-13T05:08:07.945Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T05:10:07.804Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T05:00:07.803Z to 2026-05-13T05:11:07.803Z
+2026-05-13T05:10:07.804Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T05:10:07.803Z
+2026-05-13T05:10:07.809Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T05:12:07.911Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T05:02:07.816Z to 2026-05-13T05:13:07.816Z
+2026-05-13T05:12:07.911Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T05:12:07.816Z
+2026-05-13T05:12:07.938Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T05:14:07.821Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T05:04:07.819Z to 2026-05-13T05:15:07.819Z
+2026-05-13T05:14:07.821Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T05:14:07.819Z
+2026-05-13T05:14:07.823Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T05:16:08.254Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T05:06:07.953Z to 2026-05-13T05:17:07.953Z
+2026-05-13T05:16:08.258Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T05:16:07.953Z
+2026-05-13T05:16:08.302Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T05:18:07.952Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T05:08:07.907Z to 2026-05-13T05:19:07.907Z
+2026-05-13T05:18:07.958Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T05:18:07.907Z
+2026-05-13T05:18:07.974Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T05:20:07.911Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T05:10:07.907Z to 2026-05-13T05:21:07.907Z
+2026-05-13T05:20:07.911Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T05:20:07.907Z
+2026-05-13T05:20:07.915Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T05:22:15.342Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T05:12:15.275Z to 2026-05-13T05:23:15.275Z
+2026-05-13T05:22:15.358Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T05:22:15.275Z
+2026-05-13T05:22:15.603Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T05:24:15.443Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T05:14:15.282Z to 2026-05-13T05:25:15.282Z
+2026-05-13T05:24:15.454Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T05:24:15.282Z
+2026-05-13T05:24:15.527Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T05:26:15.280Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T05:16:15.277Z to 2026-05-13T05:27:15.277Z
+2026-05-13T05:26:15.280Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T05:26:15.277Z
+2026-05-13T05:26:15.286Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T05:28:15.514Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T05:18:15.307Z to 2026-05-13T05:29:15.307Z
+2026-05-13T05:28:15.549Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T05:28:15.307Z
+2026-05-13T05:28:15.789Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T05:30:15.312Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T05:20:15.308Z to 2026-05-13T05:31:15.308Z
+2026-05-13T05:30:15.312Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T05:30:15.308Z
+2026-05-13T05:30:15.316Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T05:32:15.318Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T05:22:15.313Z to 2026-05-13T05:33:15.313Z
+2026-05-13T05:32:15.318Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T05:32:15.313Z
+2026-05-13T05:32:15.320Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T05:34:15.451Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T05:24:15.323Z to 2026-05-13T05:35:15.323Z
+2026-05-13T05:34:15.458Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T05:34:15.323Z
+2026-05-13T05:34:15.510Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T05:36:15.387Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T05:26:15.328Z to 2026-05-13T05:37:15.328Z
+2026-05-13T05:36:15.389Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T05:36:15.328Z
+2026-05-13T05:36:15.406Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T05:38:15.340Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T05:28:15.339Z to 2026-05-13T05:39:15.339Z
+2026-05-13T05:38:15.341Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T05:38:15.339Z
+2026-05-13T05:38:15.349Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T05:40:15.339Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T05:30:15.338Z to 2026-05-13T05:41:15.338Z
+2026-05-13T05:40:15.340Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T05:40:15.338Z
+2026-05-13T05:40:15.354Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T05:42:16.008Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T05:32:15.396Z to 2026-05-13T05:43:15.396Z
+2026-05-13T05:42:16.017Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T05:42:15.396Z
+2026-05-13T05:42:16.065Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T05:44:15.448Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T05:34:15.382Z to 2026-05-13T05:45:15.382Z
+2026-05-13T05:44:15.451Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T05:44:15.382Z
+2026-05-13T05:44:15.471Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T05:46:15.436Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T05:36:15.395Z to 2026-05-13T05:47:15.395Z
+2026-05-13T05:46:15.437Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T05:46:15.395Z
+2026-05-13T05:46:15.444Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T05:48:15.401Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T05:38:15.397Z to 2026-05-13T05:49:15.397Z
+2026-05-13T05:48:15.401Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T05:48:15.397Z
+2026-05-13T05:48:15.403Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T05:50:16.061Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T05:40:15.536Z to 2026-05-13T05:51:15.536Z
+2026-05-13T05:50:16.099Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T05:50:15.536Z
+2026-05-13T05:50:16.268Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T05:52:16.683Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T05:42:15.586Z to 2026-05-13T05:53:15.586Z
+2026-05-13T05:52:16.744Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T05:52:15.586Z
+2026-05-13T05:52:17.089Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T05:54:16.335Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T05:44:15.568Z to 2026-05-13T05:55:15.568Z
+2026-05-13T05:54:16.433Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T05:54:15.568Z
+2026-05-13T05:54:16.597Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T05:56:15.911Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T05:46:15.596Z to 2026-05-13T05:57:15.596Z
+2026-05-13T05:56:15.984Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T05:56:15.596Z
+2026-05-13T05:56:16.022Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T05:58:16.999Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T05:48:15.661Z to 2026-05-13T05:59:15.661Z
+2026-05-13T05:58:17.080Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T05:58:15.661Z
+2026-05-13T05:58:17.510Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T06:00:15.661Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T05:50:15.592Z to 2026-05-13T06:01:15.592Z
+2026-05-13T06:00:15.664Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T06:00:15.592Z
+2026-05-13T06:00:15.694Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T06:02:15.868Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T05:52:15.608Z to 2026-05-13T06:03:15.608Z
+2026-05-13T06:02:16.030Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T06:02:15.608Z
+2026-05-13T06:02:16.096Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T06:04:16.170Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T05:54:16.067Z to 2026-05-13T06:05:16.067Z
+2026-05-13T06:04:16.174Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T06:04:16.067Z
+2026-05-13T06:04:16.233Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T06:06:16.229Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T05:56:16.083Z to 2026-05-13T06:07:16.083Z
+2026-05-13T06:06:16.236Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T06:06:16.083Z
+2026-05-13T06:06:16.304Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T06:08:16.185Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T05:58:16.087Z to 2026-05-13T06:09:16.087Z
+2026-05-13T06:08:16.192Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T06:08:16.087Z
+2026-05-13T06:08:16.234Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T06:10:16.149Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T06:00:16.109Z to 2026-05-13T06:11:16.109Z
+2026-05-13T06:10:16.166Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T06:10:16.109Z
+2026-05-13T06:10:16.205Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T06:12:16.294Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T06:02:16.206Z to 2026-05-13T06:13:16.206Z
+2026-05-13T06:12:16.308Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T06:12:16.206Z
+2026-05-13T06:12:16.343Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T06:14:17.044Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T06:04:16.246Z to 2026-05-13T06:15:16.246Z
+2026-05-13T06:14:17.065Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T06:14:16.246Z
+2026-05-13T06:14:17.169Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T06:16:16.319Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T06:06:16.247Z to 2026-05-13T06:17:16.247Z
+2026-05-13T06:16:16.322Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T06:16:16.247Z
+2026-05-13T06:16:16.355Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T06:18:16.279Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T06:08:16.253Z to 2026-05-13T06:19:16.253Z
+2026-05-13T06:18:16.280Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T06:18:16.253Z
+2026-05-13T06:18:16.291Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T06:20:16.255Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T06:10:16.252Z to 2026-05-13T06:21:16.252Z
+2026-05-13T06:20:16.255Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T06:20:16.252Z
+2026-05-13T06:20:16.259Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T06:22:16.271Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T06:12:16.270Z to 2026-05-13T06:23:16.270Z
+2026-05-13T06:22:16.272Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T06:22:16.270Z
+2026-05-13T06:22:16.274Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T06:24:16.286Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T06:14:16.281Z to 2026-05-13T06:25:16.281Z
+2026-05-13T06:24:16.286Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T06:24:16.281Z
+2026-05-13T06:24:16.303Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T06:26:16.294Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T06:16:16.293Z to 2026-05-13T06:27:16.293Z
+2026-05-13T06:26:16.294Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T06:26:16.293Z
+2026-05-13T06:26:16.298Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T06:28:16.308Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T06:18:16.308Z to 2026-05-13T06:29:16.308Z
+2026-05-13T06:28:16.308Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T06:28:16.308Z
+2026-05-13T06:28:16.315Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T06:30:16.308Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T06:20:16.307Z to 2026-05-13T06:31:16.307Z
+2026-05-13T06:30:16.308Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T06:30:16.307Z
+2026-05-13T06:30:16.315Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T06:39:59.332Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T06:29:59.331Z to 2026-05-13T06:40:59.331Z
+2026-05-13T06:39:59.332Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T06:39:59.331Z
+2026-05-13T06:39:59.621Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T06:41:59.467Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T06:31:59.429Z to 2026-05-13T06:42:59.429Z
+2026-05-13T06:41:59.468Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T06:41:59.429Z
+2026-05-13T06:41:59.510Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T06:44:02.647Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T06:34:02.647Z to 2026-05-13T06:45:02.647Z
+2026-05-13T06:44:02.648Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T06:44:02.647Z
+2026-05-13T06:44:02.653Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T06:46:02.659Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T06:36:02.658Z to 2026-05-13T06:47:02.658Z
+2026-05-13T06:46:02.659Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T06:46:02.658Z
+2026-05-13T06:46:02.668Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T06:48:02.667Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T06:38:02.667Z to 2026-05-13T06:49:02.667Z
+2026-05-13T06:48:02.669Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T06:48:02.667Z
+2026-05-13T06:48:02.676Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T06:50:02.677Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T06:40:02.677Z to 2026-05-13T06:51:02.677Z
+2026-05-13T06:50:02.678Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T06:50:02.677Z
+2026-05-13T06:50:02.681Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T06:52:02.683Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T06:42:02.683Z to 2026-05-13T06:53:02.683Z
+2026-05-13T06:52:02.683Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T06:52:02.683Z
+2026-05-13T06:52:02.820Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T06:54:02.688Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T06:44:02.688Z to 2026-05-13T06:55:02.688Z
+2026-05-13T06:54:02.689Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T06:54:02.688Z
+2026-05-13T06:54:02.692Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T06:56:02.695Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T06:46:02.694Z to 2026-05-13T06:57:02.694Z
+2026-05-13T06:56:02.695Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T06:56:02.694Z
+2026-05-13T06:56:02.700Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T06:58:02.700Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T06:48:02.699Z to 2026-05-13T06:59:02.699Z
+2026-05-13T06:58:02.701Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T06:58:02.699Z
+2026-05-13T06:58:02.707Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T07:00:02.714Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T06:50:02.713Z to 2026-05-13T07:01:02.713Z
+2026-05-13T07:00:02.714Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T07:00:02.713Z
+2026-05-13T07:00:02.720Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T07:02:02.715Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T06:52:02.715Z to 2026-05-13T07:03:02.715Z
+2026-05-13T07:02:02.716Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T07:02:02.715Z
+2026-05-13T07:02:02.725Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T07:04:02.722Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T06:54:02.722Z to 2026-05-13T07:05:02.722Z
+2026-05-13T07:04:02.723Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T07:04:02.722Z
+2026-05-13T07:04:02.728Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T07:06:02.735Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T06:56:02.735Z to 2026-05-13T07:07:02.735Z
+2026-05-13T07:06:02.735Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T07:06:02.735Z
+2026-05-13T07:06:02.839Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T07:08:02.778Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T06:58:02.744Z to 2026-05-13T07:09:02.744Z
+2026-05-13T07:08:02.778Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T07:08:02.744Z
+2026-05-13T07:08:02.797Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T07:10:02.748Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T07:00:02.745Z to 2026-05-13T07:11:02.745Z
+2026-05-13T07:10:02.748Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T07:10:02.745Z
+2026-05-13T07:10:02.751Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T07:12:02.857Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T07:02:02.800Z to 2026-05-13T07:13:02.800Z
+2026-05-13T07:12:02.858Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T07:12:02.800Z
+2026-05-13T07:12:02.902Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T07:14:02.803Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T07:04:02.799Z to 2026-05-13T07:15:02.799Z
+2026-05-13T07:14:02.804Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T07:14:02.799Z
+2026-05-13T07:14:02.805Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T07:16:02.806Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T07:06:02.804Z to 2026-05-13T07:17:02.804Z
+2026-05-13T07:16:02.807Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T07:16:02.804Z
+2026-05-13T07:16:02.814Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T07:18:02.809Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T07:08:02.809Z to 2026-05-13T07:19:02.809Z
+2026-05-13T07:18:02.809Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T07:18:02.809Z
+2026-05-13T07:18:02.817Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T07:20:02.842Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T07:10:02.840Z to 2026-05-13T07:21:02.840Z
+2026-05-13T07:20:02.843Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T07:20:02.840Z
+2026-05-13T07:20:03.029Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T07:21:57.782Z [LOG] [Memory] Heap: 72MB, RSS: 4MB
+2026-05-13T07:22:03.080Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T07:12:03.070Z to 2026-05-13T07:23:03.070Z
+2026-05-13T07:22:03.092Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T07:22:03.070Z
+2026-05-13T07:22:03.208Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T07:24:03.169Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T07:14:03.083Z to 2026-05-13T07:25:03.083Z
+2026-05-13T07:24:03.170Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T07:24:03.083Z
+2026-05-13T07:24:03.196Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T07:26:03.090Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T07:16:03.088Z to 2026-05-13T07:27:03.088Z
+2026-05-13T07:26:03.091Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T07:26:03.088Z
+2026-05-13T07:26:03.094Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T07:28:03.095Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T07:18:03.094Z to 2026-05-13T07:29:03.094Z
+2026-05-13T07:28:03.097Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T07:28:03.094Z
+2026-05-13T07:28:03.100Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T07:30:03.133Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T07:20:03.096Z to 2026-05-13T07:31:03.096Z
+2026-05-13T07:30:03.134Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T07:30:03.096Z
+2026-05-13T07:30:03.147Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T07:32:03.113Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T07:22:03.106Z to 2026-05-13T07:33:03.106Z
+2026-05-13T07:32:03.114Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T07:32:03.106Z
+2026-05-13T07:32:03.115Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T07:34:03.103Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T07:24:03.099Z to 2026-05-13T07:35:03.099Z
+2026-05-13T07:34:03.104Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T07:34:03.099Z
+2026-05-13T07:34:03.240Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T07:36:03.166Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T07:26:03.111Z to 2026-05-13T07:37:03.111Z
+2026-05-13T07:36:03.167Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T07:36:03.111Z
+2026-05-13T07:36:03.190Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T07:38:03.121Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T07:28:03.120Z to 2026-05-13T07:39:03.120Z
+2026-05-13T07:38:03.121Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T07:38:03.120Z
+2026-05-13T07:38:03.125Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T07:40:03.134Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T07:30:03.128Z to 2026-05-13T07:41:03.128Z
+2026-05-13T07:40:03.135Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T07:40:03.128Z
+2026-05-13T07:40:03.140Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T07:42:03.179Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T07:32:03.131Z to 2026-05-13T07:43:03.131Z
+2026-05-13T07:42:03.180Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T07:42:03.131Z
+2026-05-13T07:42:03.203Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T07:44:03.144Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T07:34:03.143Z to 2026-05-13T07:45:03.143Z
+2026-05-13T07:44:03.145Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T07:44:03.143Z
+2026-05-13T07:44:03.146Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T07:46:03.507Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T07:36:03.359Z to 2026-05-13T07:47:03.359Z
+2026-05-13T07:46:03.510Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T07:46:03.359Z
+2026-05-13T07:46:03.699Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T07:48:14.162Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T07:38:13.286Z to 2026-05-13T07:49:13.286Z
+2026-05-13T07:48:14.187Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T07:48:13.286Z
+2026-05-13T07:48:20.504Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T07:50:17.857Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T07:40:13.574Z to 2026-05-13T07:51:13.574Z
+2026-05-13T07:50:18.513Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T07:50:13.574Z
+2026-05-13T07:50:35.893Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T07:52:28.701Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T07:42:25.566Z to 2026-05-13T07:53:25.566Z
+2026-05-13T07:52:28.815Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T07:52:25.566Z
+2026-05-13T07:52:36.413Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T07:54:25.301Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T07:44:25.225Z to 2026-05-13T07:55:25.225Z
+2026-05-13T07:54:25.305Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T07:54:25.225Z
+2026-05-13T07:54:25.336Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T07:56:33.987Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T07:46:25.625Z to 2026-05-13T07:57:25.625Z
+2026-05-13T07:56:34.995Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T07:56:25.625Z
+2026-05-13T07:56:40.533Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T07:58:29.525Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T07:48:29.361Z to 2026-05-13T07:59:29.361Z
+2026-05-13T07:58:29.531Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T07:58:29.361Z
+2026-05-13T07:58:29.595Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T08:00:29.375Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T07:50:29.355Z to 2026-05-13T08:01:29.355Z
+2026-05-13T08:00:29.375Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T08:00:29.355Z
+2026-05-13T08:00:29.389Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T08:02:29.368Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T07:52:29.367Z to 2026-05-13T08:03:29.367Z
+2026-05-13T08:02:29.368Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T08:02:29.367Z
+2026-05-13T08:02:29.371Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T08:04:29.369Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T07:54:29.368Z to 2026-05-13T08:05:29.368Z
+2026-05-13T08:04:29.369Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T08:04:29.368Z
+2026-05-13T08:04:29.370Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T08:06:29.381Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T07:56:29.379Z to 2026-05-13T08:07:29.379Z
+2026-05-13T08:06:29.381Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T08:06:29.379Z
+2026-05-13T08:06:29.385Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T08:08:29.395Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T07:58:29.395Z to 2026-05-13T08:09:29.395Z
+2026-05-13T08:08:29.395Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T08:08:29.395Z
+2026-05-13T08:08:29.398Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T08:10:29.401Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T08:00:29.399Z to 2026-05-13T08:11:29.399Z
+2026-05-13T08:10:29.402Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T08:10:29.399Z
+2026-05-13T08:10:29.446Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T08:12:29.410Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T08:02:29.408Z to 2026-05-13T08:13:29.408Z
+2026-05-13T08:12:29.410Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T08:12:29.408Z
+2026-05-13T08:12:29.414Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T08:14:29.411Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T08:04:29.410Z to 2026-05-13T08:15:29.410Z
+2026-05-13T08:14:29.412Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T08:14:29.410Z
+2026-05-13T08:14:29.414Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T08:16:29.430Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T08:06:29.426Z to 2026-05-13T08:17:29.426Z
+2026-05-13T08:16:29.430Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T08:16:29.426Z
+2026-05-13T08:16:29.432Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T08:18:29.427Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T08:08:29.426Z to 2026-05-13T08:19:29.426Z
+2026-05-13T08:18:29.427Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T08:18:29.426Z
+2026-05-13T08:18:29.434Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T08:20:29.430Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T08:10:29.430Z to 2026-05-13T08:21:29.430Z
+2026-05-13T08:20:29.431Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T08:20:29.430Z
+2026-05-13T08:20:29.437Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T08:22:29.441Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T08:12:29.440Z to 2026-05-13T08:23:29.440Z
+2026-05-13T08:22:29.441Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T08:22:29.440Z
+2026-05-13T08:22:29.446Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T08:24:29.446Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T08:14:29.444Z to 2026-05-13T08:25:29.444Z
+2026-05-13T08:24:29.448Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T08:24:29.444Z
+2026-05-13T08:24:29.450Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T08:26:29.446Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T08:16:29.445Z to 2026-05-13T08:27:29.445Z
+2026-05-13T08:26:29.446Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T08:26:29.445Z
+2026-05-13T08:26:29.461Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T08:28:29.456Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T08:18:29.453Z to 2026-05-13T08:29:29.453Z
+2026-05-13T08:28:29.456Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T08:28:29.453Z
+2026-05-13T08:28:29.460Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T08:30:29.463Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T08:20:29.461Z to 2026-05-13T08:31:29.461Z
+2026-05-13T08:30:29.463Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T08:30:29.461Z
+2026-05-13T08:30:29.465Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T08:32:29.472Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T08:22:29.472Z to 2026-05-13T08:33:29.472Z
+2026-05-13T08:32:29.473Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T08:32:29.472Z
+2026-05-13T08:32:29.480Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T08:34:29.478Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T08:24:29.477Z to 2026-05-13T08:35:29.477Z
+2026-05-13T08:34:29.480Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T08:34:29.477Z
+2026-05-13T08:34:29.488Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T08:36:29.482Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T08:26:29.482Z to 2026-05-13T08:37:29.482Z
+2026-05-13T08:36:29.483Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T08:36:29.482Z
+2026-05-13T08:36:29.486Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T08:38:29.498Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T08:28:29.497Z to 2026-05-13T08:39:29.497Z
+2026-05-13T08:38:29.498Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T08:38:29.497Z
+2026-05-13T08:38:29.506Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T08:40:29.502Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T08:30:29.501Z to 2026-05-13T08:41:29.501Z
+2026-05-13T08:40:29.502Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T08:40:29.501Z
+2026-05-13T08:40:29.505Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T08:42:29.515Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T08:32:29.514Z to 2026-05-13T08:43:29.514Z
+2026-05-13T08:42:29.515Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T08:42:29.514Z
+2026-05-13T08:42:29.517Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T08:44:29.525Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T08:34:29.525Z to 2026-05-13T08:45:29.525Z
+2026-05-13T08:44:29.525Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T08:44:29.525Z
+2026-05-13T08:44:29.530Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T08:46:29.531Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T08:36:29.531Z to 2026-05-13T08:47:29.531Z
+2026-05-13T08:46:29.532Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T08:46:29.531Z
+2026-05-13T08:46:29.540Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T08:48:29.547Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T08:38:29.546Z to 2026-05-13T08:49:29.546Z
+2026-05-13T08:48:29.547Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T08:48:29.546Z
+2026-05-13T08:48:29.552Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T08:50:29.550Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T08:40:29.549Z to 2026-05-13T08:51:29.549Z
+2026-05-13T08:50:29.550Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T08:50:29.549Z
+2026-05-13T08:50:29.552Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T08:52:29.569Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T08:42:29.563Z to 2026-05-13T08:53:29.563Z
+2026-05-13T08:52:29.569Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T08:52:29.563Z
+2026-05-13T08:52:29.570Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T08:54:29.570Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T08:44:29.568Z to 2026-05-13T08:55:29.568Z
+2026-05-13T08:54:29.570Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T08:54:29.568Z
+2026-05-13T08:54:29.573Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T08:56:29.582Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T08:46:29.580Z to 2026-05-13T08:57:29.580Z
+2026-05-13T08:56:29.583Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T08:56:29.580Z
+2026-05-13T08:56:29.585Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T08:58:29.600Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T08:48:29.597Z to 2026-05-13T08:59:29.597Z
+2026-05-13T08:58:29.601Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T08:58:29.597Z
+2026-05-13T08:58:29.606Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T09:00:29.605Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T08:50:29.604Z to 2026-05-13T09:01:29.604Z
+2026-05-13T09:00:29.606Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T09:00:29.604Z
+2026-05-13T09:00:29.613Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T09:02:29.615Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T08:52:29.614Z to 2026-05-13T09:03:29.614Z
+2026-05-13T09:02:29.616Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T09:02:29.614Z
+2026-05-13T09:02:29.618Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T09:04:29.626Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T08:54:29.624Z to 2026-05-13T09:05:29.624Z
+2026-05-13T09:04:29.626Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T09:04:29.624Z
+2026-05-13T09:04:29.636Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T09:06:29.626Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T08:56:29.625Z to 2026-05-13T09:07:29.625Z
+2026-05-13T09:06:29.626Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T09:06:29.625Z
+2026-05-13T09:06:29.635Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T09:08:29.626Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T08:58:29.626Z to 2026-05-13T09:09:29.626Z
+2026-05-13T09:08:29.626Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T09:08:29.626Z
+2026-05-13T09:08:29.632Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T13:01:24.234Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T12:51:22.585Z to 2026-05-13T13:02:22.585Z
+2026-05-13T13:01:24.304Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T13:01:22.585Z
+2026-05-13T13:01:29.085Z [LOG] [Memory] Heap: 74MB, RSS: 9MB
+2026-05-13T13:01:31.126Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T13:03:22.498Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T12:53:22.431Z to 2026-05-13T13:04:22.431Z
+2026-05-13T13:03:22.500Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T13:03:22.431Z
+2026-05-13T13:03:22.526Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T13:05:22.592Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T12:55:22.446Z to 2026-05-13T13:06:22.446Z
+2026-05-13T13:05:22.595Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T13:05:22.446Z
+2026-05-13T13:05:22.661Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T13:07:22.511Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T12:57:22.453Z to 2026-05-13T13:08:22.453Z
+2026-05-13T13:07:22.512Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T13:07:22.453Z
+2026-05-13T13:07:22.534Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T13:09:22.703Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T12:59:22.474Z to 2026-05-13T13:10:22.474Z
+2026-05-13T13:09:22.711Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T13:09:22.474Z
+2026-05-13T13:09:22.823Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T13:11:22.679Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T13:01:22.475Z to 2026-05-13T13:12:22.475Z
+2026-05-13T13:11:22.685Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T13:11:22.475Z
+2026-05-13T13:11:22.746Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T13:13:22.557Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T13:03:22.488Z to 2026-05-13T13:14:22.488Z
+2026-05-13T13:13:22.557Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T13:13:22.488Z
+2026-05-13T13:13:22.585Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T13:15:22.644Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T13:05:22.496Z to 2026-05-13T13:16:22.496Z
+2026-05-13T13:15:22.645Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T13:15:22.496Z
+2026-05-13T13:15:22.695Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T13:17:22.952Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T13:07:22.516Z to 2026-05-13T13:18:22.516Z
+2026-05-13T13:17:22.963Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T13:17:22.516Z
+2026-05-13T13:17:23.187Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T13:19:22.996Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T13:09:22.534Z to 2026-05-13T13:20:22.534Z
+2026-05-13T13:19:23.018Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T13:19:22.534Z
+2026-05-13T13:19:23.178Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T13:21:23.232Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T13:11:22.532Z to 2026-05-13T13:22:22.532Z
+2026-05-13T13:21:23.290Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T13:21:22.532Z
+2026-05-13T13:21:23.609Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T13:23:22.715Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T13:13:22.545Z to 2026-05-13T13:24:22.545Z
+2026-05-13T13:23:22.729Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T13:23:22.545Z
+2026-05-13T13:23:22.801Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T13:25:23.537Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T13:15:23.257Z to 2026-05-13T13:26:23.257Z
+2026-05-13T13:25:23.541Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T13:25:23.257Z
+2026-05-13T13:25:23.611Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T13:27:24.501Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T13:17:23.342Z to 2026-05-13T13:28:23.342Z
+2026-05-13T13:27:24.567Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T13:27:23.342Z
+2026-05-13T13:27:24.918Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T13:29:24.970Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T13:19:23.460Z to 2026-05-13T13:30:23.460Z
+2026-05-13T13:29:24.977Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T13:29:23.460Z
+2026-05-13T13:29:25.661Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T13:31:26.380Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T13:21:25.216Z to 2026-05-13T13:32:25.216Z
+2026-05-13T13:31:26.533Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T13:31:25.216Z
+2026-05-13T13:31:26.988Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T13:33:25.283Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T13:23:25.206Z to 2026-05-13T13:34:25.206Z
+2026-05-13T13:33:25.284Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T13:33:25.206Z
+2026-05-13T13:33:25.315Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T13:35:25.298Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T13:25:25.211Z to 2026-05-13T13:36:25.211Z
+2026-05-13T13:35:25.301Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T13:35:25.211Z
+2026-05-13T13:35:25.440Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T13:37:26.024Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T13:27:25.412Z to 2026-05-13T13:38:25.412Z
+2026-05-13T13:37:26.039Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T13:37:25.412Z
+2026-05-13T13:37:26.126Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T13:39:26.762Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T13:29:25.539Z to 2026-05-13T13:40:25.539Z
+2026-05-13T13:39:26.796Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T13:39:25.539Z
+2026-05-13T13:39:28.325Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T13:41:26.600Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T13:31:26.237Z to 2026-05-13T13:42:26.237Z
+2026-05-13T13:41:26.614Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T13:41:26.237Z
+2026-05-13T13:41:26.768Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T13:43:30.377Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T13:33:29.909Z to 2026-05-13T13:44:29.909Z
+2026-05-13T13:43:30.401Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T13:43:29.909Z
+2026-05-13T13:43:32.400Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T13:45:30.202Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T13:35:29.921Z to 2026-05-13T13:46:29.921Z
+2026-05-13T13:45:30.216Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T13:45:29.921Z
+2026-05-13T13:45:30.295Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T13:47:30.310Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T13:37:29.940Z to 2026-05-13T13:48:29.940Z
+2026-05-13T13:47:30.314Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T13:47:29.940Z
+2026-05-13T13:47:30.407Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T13:49:32.319Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T13:39:31.963Z to 2026-05-13T13:50:31.963Z
+2026-05-13T13:49:32.468Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T13:49:31.963Z
+2026-05-13T13:49:33.040Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T13:51:32.807Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T13:41:31.984Z to 2026-05-13T13:52:31.984Z
+2026-05-13T13:51:32.830Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T13:51:31.984Z
+2026-05-13T13:51:33.360Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T13:53:36.272Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T13:43:35.863Z to 2026-05-13T13:54:35.863Z
+2026-05-13T13:53:36.278Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T13:53:35.863Z
+2026-05-13T13:53:36.545Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T13:55:35.937Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T13:45:35.858Z to 2026-05-13T13:56:35.858Z
+2026-05-13T13:55:35.940Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T13:55:35.858Z
+2026-05-13T13:55:35.975Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T13:57:43.107Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T13:47:42.407Z to 2026-05-13T13:58:42.407Z
+2026-05-13T13:57:43.131Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T13:57:42.407Z
+2026-05-13T13:57:43.382Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T13:59:36.113Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T13:49:35.881Z to 2026-05-13T14:00:35.881Z
+2026-05-13T13:59:36.141Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T13:59:35.881Z
+2026-05-13T13:59:36.226Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T14:01:36.557Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T13:51:35.908Z to 2026-05-13T14:02:35.908Z
+2026-05-13T14:01:36.760Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T14:01:35.908Z
+2026-05-13T14:01:37.228Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T14:03:35.977Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T13:53:35.893Z to 2026-05-13T14:04:35.893Z
+2026-05-13T14:03:35.979Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T14:03:35.893Z
+2026-05-13T14:03:36.007Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T14:05:37.573Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T13:55:35.939Z to 2026-05-13T14:06:35.939Z
+2026-05-13T14:05:37.650Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T14:05:35.939Z
+2026-05-13T14:05:37.797Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T14:07:36.368Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T13:57:35.965Z to 2026-05-13T14:08:35.965Z
+2026-05-13T14:07:36.452Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T14:07:35.965Z
+2026-05-13T14:07:44.601Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T14:09:41.743Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T13:59:40.485Z to 2026-05-13T14:10:40.485Z
+2026-05-13T14:09:41.774Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T14:09:40.485Z
+2026-05-13T14:09:45.210Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T14:11:41.242Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T14:01:40.690Z to 2026-05-13T14:12:40.690Z
+2026-05-13T14:11:41.289Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T14:11:40.690Z
+2026-05-13T14:11:41.435Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T14:13:43.731Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T14:03:43.544Z to 2026-05-13T14:14:43.544Z
+2026-05-13T14:13:43.737Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T14:13:43.544Z
+2026-05-13T14:13:44.166Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T14:15:43.550Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T14:05:43.548Z to 2026-05-13T14:16:43.548Z
+2026-05-13T14:15:43.551Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T14:15:43.548Z
+2026-05-13T14:15:43.554Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T14:17:43.539Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T14:07:43.538Z to 2026-05-13T14:18:43.538Z
+2026-05-13T14:17:43.539Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T14:17:43.538Z
+2026-05-13T14:17:43.548Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T14:19:43.585Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T14:09:43.560Z to 2026-05-13T14:20:43.560Z
+2026-05-13T14:19:43.587Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T14:19:43.560Z
+2026-05-13T14:19:43.601Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T14:21:43.566Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T14:11:43.559Z to 2026-05-13T14:22:43.559Z
+2026-05-13T14:21:43.566Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T14:21:43.559Z
+2026-05-13T14:21:43.572Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T14:23:43.571Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T14:13:43.570Z to 2026-05-13T14:24:43.570Z
+2026-05-13T14:23:43.573Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T14:23:43.570Z
+2026-05-13T14:23:43.575Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T14:25:43.570Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T14:15:43.567Z to 2026-05-13T14:26:43.567Z
+2026-05-13T14:25:43.570Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T14:25:43.567Z
+2026-05-13T14:25:43.574Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T14:27:43.582Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T14:17:43.580Z to 2026-05-13T14:28:43.580Z
+2026-05-13T14:27:43.587Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T14:27:43.580Z
+2026-05-13T14:27:43.591Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T14:29:43.653Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T14:19:43.600Z to 2026-05-13T14:30:43.600Z
+2026-05-13T14:29:43.657Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T14:29:43.600Z
+2026-05-13T14:29:43.684Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T14:31:44.965Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T14:21:44.928Z to 2026-05-13T14:32:44.928Z
+2026-05-13T14:31:44.966Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T14:31:44.928Z
+2026-05-13T14:31:44.988Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T14:33:44.124Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T14:23:43.628Z to 2026-05-13T14:34:43.628Z
+2026-05-13T14:33:44.136Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T14:33:43.628Z
+2026-05-13T14:33:44.355Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T14:35:43.674Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T14:25:43.625Z to 2026-05-13T14:36:43.625Z
+2026-05-13T14:35:43.675Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T14:35:43.625Z
+2026-05-13T14:35:43.720Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T14:37:43.635Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T14:27:43.632Z to 2026-05-13T14:38:43.632Z
+2026-05-13T14:37:43.636Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T14:37:43.632Z
+2026-05-13T14:37:43.641Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T14:39:43.646Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T14:29:43.643Z to 2026-05-13T14:40:43.643Z
+2026-05-13T14:39:43.646Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T14:39:43.643Z
+2026-05-13T14:39:43.651Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T14:41:43.655Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T14:31:43.654Z to 2026-05-13T14:42:43.654Z
+2026-05-13T14:41:43.655Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T14:41:43.654Z
+2026-05-13T14:41:43.666Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-13T14:43:43.668Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-13T14:33:43.667Z to 2026-05-13T14:44:43.667Z
+2026-05-13T14:43:43.671Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-13T14:43:43.667Z
+2026-05-13T14:43:43.674Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T11:02:46.364Z [LOG] Logger initialized (async mode). Output will be written to console and logs/app.log
+2026-05-15T11:02:52.731Z [LOG] Using bundled FFmpeg at: C:\Users\KANTIN\OneDrive\Dokumen\OZANG\ozanglive-main\ozanglive\node_modules\@ffmpeg-installer\win32-x64\ffmpeg.exe
+2026-05-15T11:02:52.768Z [WARN] [Session] WARNING: SESSION_SECRET is not set in .env file!
+2026-05-15T11:02:52.768Z [WARN] [Session] Generating a temporary secret - DO NOT USE IN PRODUCTION!
+2026-05-15T11:02:52.768Z [WARN] [Session] Generate a permanent secret using: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+2026-05-15T11:02:52.788Z [LOG] [Session] Session store initialized
+2026-05-15T11:02:52.791Z [LOG] [Session] Session middleware initialized
+2026-05-15T11:02:52.839Z [LOG] [Startup] Waiting for database initialization...
+2026-05-15T11:02:52.936Z [WARN] [Database] Missing tables: branding_settings
+2026-05-15T11:02:52.938Z [WARN] [Startup] Warning: Missing tables: branding_settings
+2026-05-15T11:02:52.939Z [LOG] [Startup] Database ready, starting server...
+2026-05-15T11:02:52.944Z [LOG] [Startup] TitleFolder table initialized
+2026-05-15T11:02:52.948Z [LOG] [Startup] Running database optimization...
+2026-05-15T11:02:52.952Z [LOG] [DB Optimize] Starting database optimization...
+2026-05-15T11:02:52.953Z [LOG] [DB Optimize] Setting pragmas...
+2026-05-15T11:02:52.954Z [LOG] [DB Optimize] All pragmas set successfully
+2026-05-15T11:02:52.955Z [LOG] [DB Optimize] Creating indexes...
+2026-05-15T11:02:52.957Z [LOG] [DB Optimize] All indexes created successfully
+2026-05-15T11:02:52.957Z [LOG] [DB Optimize] Running VACUUM...
+2026-05-15T11:02:52.972Z [LOG] [DB Optimize] ✓ VACUUM completed
+2026-05-15T11:02:52.972Z [LOG] [DB Optimize] Running ANALYZE...
+2026-05-15T11:02:52.973Z [LOG] [DB Optimize] ✓ ANALYZE completed
+2026-05-15T11:02:52.973Z [LOG] [DB Optimize] ✅ Database optimization completed successfully
+2026-05-15T11:02:52.973Z [LOG] [Startup] ✅ Database optimization completed
+2026-05-15T11:02:53.045Z [LOG] OzangLive running at:
+2026-05-15T11:02:53.045Z [LOG]   http://192.168.1.247:7575
+2026-05-15T11:02:53.047Z [LOG] [Scheduler] Stream scheduler initialized
+2026-05-15T11:02:53.047Z [LOG] [Scheduler] Intervals set: once-schedules=2min, recurring=2min, duration=60sec, cleanup=6hr
+2026-05-15T11:02:53.047Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T10:52:53.047Z to 2026-05-15T11:03:53.047Z
+2026-05-15T11:02:53.047Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T11:02:53.047Z
+2026-05-15T11:02:53.376Z [LOG] [Startup] Initializing recurring schedule service...
+2026-05-15T11:02:53.377Z [LOG] [ScheduleService] Initializing...
+2026-05-15T11:02:53.378Z [LOG] [ScheduleService] Schedule checker started (2 min interval - CPU optimized)
+2026-05-15T11:02:53.381Z [LOG] [ScheduleService] Found 0 templates with recurring enabled
+2026-05-15T11:02:53.382Z [LOG] [ScheduleService] Initialized successfully
+2026-05-15T11:02:53.383Z [LOG] [Startup] YouTube task scheduler DISABLED (enable in code if needed)
+2026-05-15T11:02:53.384Z [LOG] [Startup] Skipping initial sync - status will be managed by events
+2026-05-15T11:02:53.384Z [LOG] OzangLive startup complete
+2026-05-15T11:02:53.385Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T11:02:53.386Z [LOG] [DB Optimize] ✓ journal_mode = WAL
+2026-05-15T11:02:53.387Z [LOG] [DB Optimize] ✓ synchronous = NORMAL
+2026-05-15T11:02:53.387Z [LOG] [DB Optimize] ✓ cache_size = 10MB
+2026-05-15T11:02:53.387Z [LOG] [DB Optimize] ✓ temp_store = MEMORY
+2026-05-15T11:02:53.388Z [LOG] [DB Optimize] ✓ mmap_size = 30MB
+2026-05-15T11:02:53.388Z [LOG] [DB Optimize] ✓ idx_users_username created
+2026-05-15T11:02:53.388Z [LOG] [DB Optimize] ✓ idx_users_status created
+2026-05-15T11:02:53.388Z [LOG] [DB Optimize] ✓ idx_users_role created
+2026-05-15T11:02:53.389Z [LOG] [DB Optimize] ✓ idx_videos_user_id created
+2026-05-15T11:02:53.391Z [LOG] [DB Optimize] ✓ idx_videos_created_at created
+2026-05-15T11:02:53.392Z [LOG] [DB Optimize] ✓ idx_audios_user_id created
+2026-05-15T11:02:53.393Z [LOG] [DB Optimize] ✓ idx_streams_user_id created
+2026-05-15T11:02:53.394Z [LOG] [DB Optimize] ✓ idx_streams_status created
+2026-05-15T11:02:53.394Z [LOG] [DB Optimize] ✓ idx_streams_schedule_type created
+2026-05-15T11:02:53.401Z [LOG] [DB Optimize] ✓ idx_history_user_id created
+2026-05-15T11:02:53.402Z [LOG] [DB Optimize] ✓ idx_history_start_time created
+2026-05-15T11:02:53.403Z [LOG] [DB Optimize] ✓ idx_playlists_user_id created
+2026-05-15T11:02:53.404Z [LOG] [DB Optimize] ✓ idx_youtube_creds_user_id created
+2026-05-15T11:02:53.432Z [LOG] [Database] All required tables verified
+2026-05-15T11:02:53.432Z [LOG] [Database] Database tables initialized successfully
+2026-05-15T11:04:53.056Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T10:54:53.055Z to 2026-05-15T11:05:53.055Z
+2026-05-15T11:04:53.056Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T11:04:53.055Z
+2026-05-15T11:04:53.058Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T11:06:53.062Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T10:56:53.061Z to 2026-05-15T11:07:53.061Z
+2026-05-15T11:06:53.063Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T11:06:53.061Z
+2026-05-15T11:06:53.067Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T11:08:53.069Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T10:58:53.067Z to 2026-05-15T11:09:53.067Z
+2026-05-15T11:08:53.069Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T11:08:53.067Z
+2026-05-15T11:08:53.072Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T11:10:53.075Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T11:00:53.074Z to 2026-05-15T11:11:53.074Z
+2026-05-15T11:10:53.075Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T11:10:53.074Z
+2026-05-15T11:10:53.091Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T11:12:53.083Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T11:02:53.082Z to 2026-05-15T11:13:53.082Z
+2026-05-15T11:12:53.084Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T11:12:53.082Z
+2026-05-15T11:12:53.103Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T11:14:53.083Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T11:04:53.082Z to 2026-05-15T11:15:53.082Z
+2026-05-15T11:14:53.084Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T11:14:53.082Z
+2026-05-15T11:14:53.086Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T11:16:53.095Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T11:06:53.094Z to 2026-05-15T11:17:53.094Z
+2026-05-15T11:16:53.096Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T11:16:53.094Z
+2026-05-15T11:16:53.100Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T11:18:53.100Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T11:08:53.084Z to 2026-05-15T11:19:53.084Z
+2026-05-15T11:18:53.101Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T11:18:53.084Z
+2026-05-15T11:18:53.132Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T11:20:53.106Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T11:10:53.106Z to 2026-05-15T11:21:53.106Z
+2026-05-15T11:20:53.107Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T11:20:53.106Z
+2026-05-15T11:20:53.113Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T11:22:53.122Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T11:12:53.122Z to 2026-05-15T11:23:53.122Z
+2026-05-15T11:22:53.123Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T11:22:53.122Z
+2026-05-15T11:22:53.125Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T11:24:53.131Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T11:14:53.130Z to 2026-05-15T11:25:53.130Z
+2026-05-15T11:24:53.132Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T11:24:53.130Z
+2026-05-15T11:24:53.138Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T11:26:53.145Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T11:16:53.145Z to 2026-05-15T11:27:53.145Z
+2026-05-15T11:26:53.146Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T11:26:53.145Z
+2026-05-15T11:26:53.153Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T11:28:53.150Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T11:18:53.150Z to 2026-05-15T11:29:53.150Z
+2026-05-15T11:28:53.151Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T11:28:53.150Z
+2026-05-15T11:28:53.159Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T11:30:53.163Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T11:20:53.159Z to 2026-05-15T11:31:53.159Z
+2026-05-15T11:30:53.163Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T11:30:53.159Z
+2026-05-15T11:30:53.168Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T11:32:53.166Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T11:22:53.163Z to 2026-05-15T11:33:53.163Z
+2026-05-15T11:32:53.167Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T11:32:53.163Z
+2026-05-15T11:32:53.286Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T11:34:53.175Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T11:24:53.170Z to 2026-05-15T11:35:53.170Z
+2026-05-15T11:34:53.175Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T11:34:53.170Z
+2026-05-15T11:34:53.180Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T11:36:53.184Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T11:26:53.183Z to 2026-05-15T11:37:53.183Z
+2026-05-15T11:36:53.184Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T11:36:53.183Z
+2026-05-15T11:36:53.189Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T11:38:53.190Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T11:28:53.186Z to 2026-05-15T11:39:53.186Z
+2026-05-15T11:38:53.191Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T11:38:53.186Z
+2026-05-15T11:38:53.196Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T11:40:53.185Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T11:30:53.184Z to 2026-05-15T11:41:53.184Z
+2026-05-15T11:40:53.185Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T11:40:53.184Z
+2026-05-15T11:40:53.196Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T11:42:22.661Z [LOG] Logger initialized (async mode). Output will be written to console and logs/app.log
+2026-05-15T11:42:27.069Z [LOG] Using bundled FFmpeg at: C:\Users\KANTIN\OneDrive\Dokumen\OZANG\ozanglive-main\ozanglive\node_modules\@ffmpeg-installer\win32-x64\ffmpeg.exe
+2026-05-15T11:42:27.092Z [WARN] [Session] WARNING: SESSION_SECRET is not set in .env file!
+2026-05-15T11:42:27.093Z [WARN] [Session] Generating a temporary secret - DO NOT USE IN PRODUCTION!
+2026-05-15T11:42:27.094Z [WARN] [Session] Generate a permanent secret using: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+2026-05-15T11:42:27.100Z [LOG] [Session] Session store initialized
+2026-05-15T11:42:27.102Z [LOG] [Session] Session middleware initialized
+2026-05-15T11:42:27.137Z [LOG] [Startup] Waiting for database initialization...
+2026-05-15T11:42:27.149Z [LOG] [Database] All required tables verified
+2026-05-15T11:42:27.151Z [LOG] [Startup] Database ready, starting server...
+2026-05-15T11:42:27.153Z [LOG] [Startup] TitleFolder table initialized
+2026-05-15T11:42:27.153Z [LOG] [Startup] Running database optimization...
+2026-05-15T11:42:27.155Z [LOG] [DB Optimize] Starting database optimization...
+2026-05-15T11:42:27.155Z [LOG] [DB Optimize] Setting pragmas...
+2026-05-15T11:42:27.156Z [LOG] [DB Optimize] All pragmas set successfully
+2026-05-15T11:42:27.159Z [LOG] [DB Optimize] Creating indexes...
+2026-05-15T11:42:27.160Z [LOG] [DB Optimize] All indexes created successfully
+2026-05-15T11:42:27.161Z [LOG] [DB Optimize] Running VACUUM...
+2026-05-15T11:42:27.181Z [LOG] [DB Optimize] ✓ VACUUM completed
+2026-05-15T11:42:27.181Z [LOG] [DB Optimize] Running ANALYZE...
+2026-05-15T11:42:27.184Z [LOG] [DB Optimize] ✓ ANALYZE completed
+2026-05-15T11:42:27.184Z [LOG] [DB Optimize] ✅ Database optimization completed successfully
+2026-05-15T11:42:27.184Z [LOG] [Startup] ✅ Database optimization completed
+2026-05-15T11:42:27.337Z [ERROR] [Startup] Port 7575 is already in use. Please close the other application or use a different port.
+2026-05-15T11:42:27.338Z [LOG] [DB Optimize] ✓ journal_mode = WAL
+2026-05-15T11:42:27.338Z [LOG] [DB Optimize] ✓ synchronous = NORMAL
+2026-05-15T11:42:27.339Z [LOG] [DB Optimize] ✓ cache_size = 10MB
+2026-05-15T11:42:27.339Z [LOG] [DB Optimize] ✓ temp_store = MEMORY
+2026-05-15T11:42:27.343Z [LOG] [DB Optimize] ✓ mmap_size = 30MB
+2026-05-15T11:42:27.344Z [LOG] [DB Optimize] ✓ idx_users_username created
+2026-05-15T11:42:27.345Z [LOG] [DB Optimize] ✓ idx_users_status created
+2026-05-15T11:42:27.346Z [LOG] [DB Optimize] ✓ idx_users_role created
+2026-05-15T11:42:27.346Z [LOG] [DB Optimize] ✓ idx_videos_user_id created
+2026-05-15T11:42:27.347Z [LOG] [DB Optimize] ✓ idx_videos_created_at created
+2026-05-15T11:42:27.347Z [LOG] [DB Optimize] ✓ idx_audios_user_id created
+2026-05-15T11:42:27.349Z [LOG] [DB Optimize] ✓ idx_streams_user_id created
+2026-05-15T11:42:27.349Z [LOG] [DB Optimize] ✓ idx_streams_status created
+2026-05-15T11:42:27.350Z [LOG] [DB Optimize] ✓ idx_streams_schedule_type created
+2026-05-15T11:42:27.351Z [LOG] [DB Optimize] ✓ idx_history_user_id created
+2026-05-15T11:42:27.352Z [LOG] [DB Optimize] ✓ idx_history_start_time created
+2026-05-15T11:42:27.353Z [LOG] [DB Optimize] ✓ idx_playlists_user_id created
+2026-05-15T11:42:27.353Z [LOG] [DB Optimize] ✓ idx_youtube_creds_user_id created
+2026-05-15T11:42:27.382Z [LOG] [Database] All required tables verified
+2026-05-15T11:42:27.382Z [LOG] [Database] Database tables initialized successfully
+2026-05-15T11:44:09.149Z [LOG] Logger initialized (async mode). Output will be written to console and logs/app.log
+2026-05-15T11:44:12.896Z [LOG] Using bundled FFmpeg at: C:\Users\KANTIN\OneDrive\Dokumen\OZANG\ozanglive-main\ozanglive\node_modules\@ffmpeg-installer\win32-x64\ffmpeg.exe
+2026-05-15T11:44:12.916Z [WARN] [Session] WARNING: SESSION_SECRET is not set in .env file!
+2026-05-15T11:44:12.916Z [WARN] [Session] Generating a temporary secret - DO NOT USE IN PRODUCTION!
+2026-05-15T11:44:12.916Z [WARN] [Session] Generate a permanent secret using: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+2026-05-15T11:44:12.917Z [LOG] [Session] Session store initialized
+2026-05-15T11:44:12.919Z [LOG] [Session] Session middleware initialized
+2026-05-15T11:44:12.944Z [LOG] [Startup] Waiting for database initialization...
+2026-05-15T11:44:12.948Z [LOG] [Database] All required tables verified
+2026-05-15T11:44:12.948Z [LOG] [Startup] Database ready, starting server...
+2026-05-15T11:44:12.950Z [LOG] [Startup] TitleFolder table initialized
+2026-05-15T11:44:12.950Z [LOG] [Startup] Running database optimization...
+2026-05-15T11:44:12.952Z [LOG] [DB Optimize] Starting database optimization...
+2026-05-15T11:44:12.952Z [LOG] [DB Optimize] Setting pragmas...
+2026-05-15T11:44:12.953Z [LOG] [DB Optimize] All pragmas set successfully
+2026-05-15T11:44:12.953Z [LOG] [DB Optimize] Creating indexes...
+2026-05-15T11:44:12.954Z [LOG] [DB Optimize] All indexes created successfully
+2026-05-15T11:44:12.954Z [LOG] [DB Optimize] Running VACUUM...
+2026-05-15T11:44:12.967Z [LOG] [DB Optimize] ✓ VACUUM completed
+2026-05-15T11:44:12.968Z [LOG] [DB Optimize] Running ANALYZE...
+2026-05-15T11:44:12.969Z [LOG] [DB Optimize] ✓ ANALYZE completed
+2026-05-15T11:44:12.969Z [LOG] [DB Optimize] ✅ Database optimization completed successfully
+2026-05-15T11:44:12.970Z [LOG] [Startup] ✅ Database optimization completed
+2026-05-15T11:44:13.001Z [LOG] OzangLive running at:
+2026-05-15T11:44:13.002Z [LOG]   http://192.168.1.247:7575
+2026-05-15T11:44:13.003Z [LOG] [Scheduler] Stream scheduler initialized
+2026-05-15T11:44:13.003Z [LOG] [Scheduler] Intervals set: once-schedules=2min, recurring=2min, duration=60sec, cleanup=6hr
+2026-05-15T11:44:13.004Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T11:34:13.004Z to 2026-05-15T11:45:13.004Z
+2026-05-15T11:44:13.004Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T11:44:13.004Z
+2026-05-15T11:44:13.158Z [LOG] [Startup] Initializing recurring schedule service...
+2026-05-15T11:44:13.159Z [LOG] [ScheduleService] Initializing...
+2026-05-15T11:44:13.160Z [LOG] [ScheduleService] Schedule checker started (2 min interval - CPU optimized)
+2026-05-15T11:44:13.162Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T11:44:13.165Z [LOG] [ScheduleService] Found 0 templates with recurring enabled
+2026-05-15T11:44:13.165Z [LOG] [ScheduleService] Initialized successfully
+2026-05-15T11:44:13.166Z [LOG] [Startup] YouTube task scheduler DISABLED (enable in code if needed)
+2026-05-15T11:44:13.166Z [LOG] [Startup] Skipping initial sync - status will be managed by events
+2026-05-15T11:44:13.166Z [LOG] OzangLive startup complete
+2026-05-15T11:44:13.167Z [LOG] [DB Optimize] ✓ journal_mode = WAL
+2026-05-15T11:44:13.167Z [LOG] [DB Optimize] ✓ synchronous = NORMAL
+2026-05-15T11:44:13.168Z [LOG] [DB Optimize] ✓ cache_size = 10MB
+2026-05-15T11:44:13.168Z [LOG] [DB Optimize] ✓ temp_store = MEMORY
+2026-05-15T11:44:13.169Z [LOG] [DB Optimize] ✓ mmap_size = 30MB
+2026-05-15T11:44:13.169Z [LOG] [DB Optimize] ✓ idx_users_username created
+2026-05-15T11:44:13.170Z [LOG] [DB Optimize] ✓ idx_users_status created
+2026-05-15T11:44:13.170Z [LOG] [DB Optimize] ✓ idx_users_role created
+2026-05-15T11:44:13.170Z [LOG] [DB Optimize] ✓ idx_videos_user_id created
+2026-05-15T11:44:13.170Z [LOG] [DB Optimize] ✓ idx_videos_created_at created
+2026-05-15T11:44:13.172Z [LOG] [DB Optimize] ✓ idx_audios_user_id created
+2026-05-15T11:44:13.173Z [LOG] [DB Optimize] ✓ idx_streams_user_id created
+2026-05-15T11:44:13.173Z [LOG] [DB Optimize] ✓ idx_streams_status created
+2026-05-15T11:44:13.173Z [LOG] [DB Optimize] ✓ idx_streams_schedule_type created
+2026-05-15T11:44:13.174Z [LOG] [DB Optimize] ✓ idx_history_user_id created
+2026-05-15T11:44:13.174Z [LOG] [DB Optimize] ✓ idx_history_start_time created
+2026-05-15T11:44:13.174Z [LOG] [DB Optimize] ✓ idx_playlists_user_id created
+2026-05-15T11:44:13.175Z [LOG] [DB Optimize] ✓ idx_youtube_creds_user_id created
+2026-05-15T11:44:13.206Z [LOG] [Database] All required tables verified
+2026-05-15T11:44:13.206Z [LOG] [Database] Database tables initialized successfully
+2026-05-15T11:46:13.116Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T11:36:13.020Z to 2026-05-15T11:47:13.020Z
+2026-05-15T11:46:13.122Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T11:46:13.020Z
+2026-05-15T11:46:13.606Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T11:48:13.032Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T11:38:13.027Z to 2026-05-15T11:49:13.027Z
+2026-05-15T11:48:13.033Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T11:48:13.027Z
+2026-05-15T11:48:13.035Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T11:50:13.040Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T11:40:13.028Z to 2026-05-15T11:51:13.028Z
+2026-05-15T11:50:13.040Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T11:50:13.028Z
+2026-05-15T11:50:13.052Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T11:52:13.047Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T11:42:13.045Z to 2026-05-15T11:53:13.045Z
+2026-05-15T11:52:13.047Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T11:52:13.045Z
+2026-05-15T11:52:13.049Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T11:54:13.059Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T11:44:13.047Z to 2026-05-15T11:55:13.047Z
+2026-05-15T11:54:13.059Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T11:54:13.047Z
+2026-05-15T11:54:13.161Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T11:56:15.977Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T11:46:15.659Z to 2026-05-15T11:57:15.659Z
+2026-05-15T11:56:15.989Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T11:56:15.659Z
+2026-05-15T11:56:16.398Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T11:58:13.208Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T11:48:13.068Z to 2026-05-15T11:59:13.068Z
+2026-05-15T11:58:13.224Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T11:58:13.068Z
+2026-05-15T11:58:13.335Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T12:00:18.740Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T11:50:18.151Z to 2026-05-15T12:01:18.151Z
+2026-05-15T12:00:18.760Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T12:00:18.151Z
+2026-05-15T12:00:19.778Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T12:02:14.099Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T11:52:13.972Z to 2026-05-15T12:03:13.972Z
+2026-05-15T12:02:14.113Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T12:02:13.972Z
+2026-05-15T12:02:14.315Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T12:04:13.075Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T11:54:13.074Z to 2026-05-15T12:05:13.074Z
+2026-05-15T12:04:13.075Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T12:04:13.074Z
+2026-05-15T12:04:13.079Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T12:06:13.091Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T11:56:13.089Z to 2026-05-15T12:07:13.089Z
+2026-05-15T12:06:13.092Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T12:06:13.089Z
+2026-05-15T12:06:13.094Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T12:08:13.108Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T11:58:13.105Z to 2026-05-15T12:09:13.105Z
+2026-05-15T12:08:13.108Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T12:08:13.105Z
+2026-05-15T12:08:13.121Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T12:10:13.120Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T12:00:13.118Z to 2026-05-15T12:11:13.118Z
+2026-05-15T12:10:13.121Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T12:10:13.118Z
+2026-05-15T12:10:13.123Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T12:12:13.154Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T12:02:13.123Z to 2026-05-15T12:13:13.123Z
+2026-05-15T12:12:13.222Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T12:12:13.123Z
+2026-05-15T12:12:13.256Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T12:14:13.149Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T12:04:13.128Z to 2026-05-15T12:15:13.128Z
+2026-05-15T12:14:13.150Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T12:14:13.128Z
+2026-05-15T12:14:13.293Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T12:16:13.138Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T12:06:13.137Z to 2026-05-15T12:17:13.137Z
+2026-05-15T12:16:13.139Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T12:16:13.137Z
+2026-05-15T12:16:13.144Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T12:18:13.146Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T12:08:13.145Z to 2026-05-15T12:19:13.145Z
+2026-05-15T12:18:13.146Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T12:18:13.145Z
+2026-05-15T12:18:13.148Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T12:20:13.150Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T12:10:13.148Z to 2026-05-15T12:21:13.148Z
+2026-05-15T12:20:13.151Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T12:20:13.148Z
+2026-05-15T12:20:13.153Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T12:22:13.166Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T12:12:13.159Z to 2026-05-15T12:23:13.159Z
+2026-05-15T12:22:13.166Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T12:22:13.159Z
+2026-05-15T12:22:13.168Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T12:24:13.164Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T12:14:13.164Z to 2026-05-15T12:25:13.164Z
+2026-05-15T12:24:13.164Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T12:24:13.164Z
+2026-05-15T12:24:13.166Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T12:26:13.178Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T12:16:13.177Z to 2026-05-15T12:27:13.177Z
+2026-05-15T12:26:13.178Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T12:26:13.177Z
+2026-05-15T12:26:13.184Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T12:28:13.816Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T12:18:13.179Z to 2026-05-15T12:29:13.179Z
+2026-05-15T12:28:13.895Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T12:28:13.179Z
+2026-05-15T12:28:14.358Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T12:30:16.462Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T12:20:14.457Z to 2026-05-15T12:31:14.457Z
+2026-05-15T12:30:16.784Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T12:30:14.457Z
+2026-05-15T12:30:18.035Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T12:32:13.272Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T12:22:13.191Z to 2026-05-15T12:33:13.191Z
+2026-05-15T12:32:13.282Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T12:32:13.191Z
+2026-05-15T12:32:13.522Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T12:34:13.193Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T12:24:13.189Z to 2026-05-15T12:35:13.189Z
+2026-05-15T12:34:13.193Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T12:34:13.189Z
+2026-05-15T12:34:13.197Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T12:36:13.206Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T12:26:13.203Z to 2026-05-15T12:37:13.203Z
+2026-05-15T12:36:13.206Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T12:36:13.203Z
+2026-05-15T12:36:13.210Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T12:38:15.429Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T12:28:15.426Z to 2026-05-15T12:39:15.426Z
+2026-05-15T12:38:15.429Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T12:38:15.426Z
+2026-05-15T12:38:15.677Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T12:40:13.224Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T12:30:13.223Z to 2026-05-15T12:41:13.223Z
+2026-05-15T12:40:13.225Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T12:40:13.223Z
+2026-05-15T12:40:13.238Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T12:42:13.247Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T12:32:13.245Z to 2026-05-15T12:43:13.245Z
+2026-05-15T12:42:13.248Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T12:42:13.245Z
+2026-05-15T12:42:13.402Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T12:44:13.247Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T12:34:13.243Z to 2026-05-15T12:45:13.243Z
+2026-05-15T12:44:13.248Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T12:44:13.243Z
+2026-05-15T12:44:13.250Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T12:46:13.743Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T12:36:13.440Z to 2026-05-15T12:47:13.440Z
+2026-05-15T12:46:13.762Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T12:46:13.440Z
+2026-05-15T12:46:13.845Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T12:48:13.552Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T12:38:13.348Z to 2026-05-15T12:49:13.348Z
+2026-05-15T12:48:13.621Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T12:48:13.348Z
+2026-05-15T12:48:13.729Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T12:50:13.387Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T12:40:13.356Z to 2026-05-15T12:51:13.356Z
+2026-05-15T12:50:13.390Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T12:50:13.356Z
+2026-05-15T12:50:13.408Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T12:52:13.450Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T12:42:13.378Z to 2026-05-15T12:53:13.378Z
+2026-05-15T12:52:13.455Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T12:52:13.378Z
+2026-05-15T12:52:13.464Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T12:54:13.388Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T12:44:13.379Z to 2026-05-15T12:55:13.379Z
+2026-05-15T12:54:13.389Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T12:54:13.379Z
+2026-05-15T12:54:13.423Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T12:56:13.447Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T12:46:13.390Z to 2026-05-15T12:57:13.390Z
+2026-05-15T12:56:13.456Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T12:56:13.390Z
+2026-05-15T12:56:13.480Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T12:58:13.393Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T12:48:13.392Z to 2026-05-15T12:59:13.392Z
+2026-05-15T12:58:13.394Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T12:58:13.392Z
+2026-05-15T12:58:13.399Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T13:00:13.400Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T12:50:13.396Z to 2026-05-15T13:01:13.396Z
+2026-05-15T13:00:13.402Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T13:00:13.396Z
+2026-05-15T13:00:13.416Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T13:02:13.405Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T12:52:13.402Z to 2026-05-15T13:03:13.402Z
+2026-05-15T13:02:13.406Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T13:02:13.402Z
+2026-05-15T13:02:13.408Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T13:04:14.522Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T12:54:13.569Z to 2026-05-15T13:05:13.569Z
+2026-05-15T13:04:14.738Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T13:04:13.569Z
+2026-05-15T13:04:15.017Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T13:06:13.519Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T12:56:13.517Z to 2026-05-15T13:07:13.517Z
+2026-05-15T13:06:13.520Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T13:06:13.517Z
+2026-05-15T13:06:13.523Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T13:08:13.526Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T12:58:13.523Z to 2026-05-15T13:09:13.523Z
+2026-05-15T13:08:13.526Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T13:08:13.523Z
+2026-05-15T13:08:13.531Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T13:10:13.524Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T13:00:13.524Z to 2026-05-15T13:11:13.524Z
+2026-05-15T13:10:13.525Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T13:10:13.524Z
+2026-05-15T13:10:13.526Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T13:12:13.528Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T13:02:13.528Z to 2026-05-15T13:13:13.528Z
+2026-05-15T13:12:13.528Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T13:12:13.528Z
+2026-05-15T13:12:13.535Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T13:14:13.538Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T13:04:13.537Z to 2026-05-15T13:15:13.537Z
+2026-05-15T13:14:13.538Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T13:14:13.537Z
+2026-05-15T13:14:13.540Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T13:16:13.546Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T13:06:13.543Z to 2026-05-15T13:17:13.543Z
+2026-05-15T13:16:13.547Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T13:16:13.543Z
+2026-05-15T13:16:13.553Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T13:18:13.550Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T13:08:13.549Z to 2026-05-15T13:19:13.549Z
+2026-05-15T13:18:13.551Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T13:18:13.549Z
+2026-05-15T13:18:13.552Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T20:23:11.034Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T20:13:07.683Z to 2026-05-15T20:24:07.683Z
+2026-05-15T20:23:11.146Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T20:23:07.683Z
+2026-05-15T20:23:18.141Z [LOG] [Memory] Heap: 67MB, RSS: 5MB
+2026-05-15T20:23:18.284Z [LOG] [Memory] Heap: 68MB, RSS: 12MB
+2026-05-15T20:23:19.574Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T20:25:08.695Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T20:15:07.809Z to 2026-05-15T20:26:07.809Z
+2026-05-15T20:25:08.798Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T20:25:07.809Z
+2026-05-15T20:25:09.893Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T20:27:07.796Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T20:17:07.692Z to 2026-05-15T20:28:07.692Z
+2026-05-15T20:27:07.800Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T20:27:07.692Z
+2026-05-15T20:27:08.057Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T20:29:13.221Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T20:19:12.039Z to 2026-05-15T20:30:12.039Z
+2026-05-15T20:29:13.255Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T20:29:12.039Z
+2026-05-15T20:29:13.935Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T20:31:08.151Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T20:21:07.740Z to 2026-05-15T20:32:07.740Z
+2026-05-15T20:31:08.161Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T20:31:07.740Z
+2026-05-15T20:31:08.287Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T20:33:07.866Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T20:23:07.718Z to 2026-05-15T20:34:07.718Z
+2026-05-15T20:33:07.873Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T20:33:07.718Z
+2026-05-15T20:33:07.940Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T20:35:08.386Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T20:25:07.744Z to 2026-05-15T20:36:07.744Z
+2026-05-15T20:35:08.407Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T20:35:07.744Z
+2026-05-15T20:35:08.582Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T20:37:07.796Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T20:27:07.731Z to 2026-05-15T20:38:07.731Z
+2026-05-15T20:37:07.799Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T20:37:07.731Z
+2026-05-15T20:37:07.825Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T20:39:07.984Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T20:29:07.751Z to 2026-05-15T20:40:07.751Z
+2026-05-15T20:39:07.986Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T20:39:07.751Z
+2026-05-15T20:39:08.083Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T20:41:11.381Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T20:31:09.437Z to 2026-05-15T20:42:09.437Z
+2026-05-15T20:41:11.389Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T20:41:09.437Z
+2026-05-15T20:41:11.493Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T20:43:07.977Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T20:33:07.908Z to 2026-05-15T20:44:07.908Z
+2026-05-15T20:43:07.981Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T20:43:07.908Z
+2026-05-15T20:43:08.007Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T20:45:07.954Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T20:35:07.912Z to 2026-05-15T20:46:07.912Z
+2026-05-15T20:45:07.954Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T20:45:07.912Z
+2026-05-15T20:45:07.964Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T20:47:07.925Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T20:37:07.923Z to 2026-05-15T20:48:07.923Z
+2026-05-15T20:47:07.926Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T20:47:07.923Z
+2026-05-15T20:47:07.929Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T20:49:07.972Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T20:39:07.922Z to 2026-05-15T20:50:07.922Z
+2026-05-15T20:49:07.973Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T20:49:07.922Z
+2026-05-15T20:49:07.981Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T20:51:07.932Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T20:41:07.929Z to 2026-05-15T20:52:07.929Z
+2026-05-15T20:51:07.934Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T20:51:07.929Z
+2026-05-15T20:51:07.947Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T20:53:07.947Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T20:43:07.939Z to 2026-05-15T20:54:07.939Z
+2026-05-15T20:53:07.948Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T20:53:07.939Z
+2026-05-15T20:53:07.953Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T20:55:07.952Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T20:45:07.947Z to 2026-05-15T20:56:07.947Z
+2026-05-15T20:55:07.952Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T20:55:07.947Z
+2026-05-15T20:55:07.955Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T20:57:08.214Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T20:47:07.960Z to 2026-05-15T20:58:07.960Z
+2026-05-15T20:57:08.220Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T20:57:07.960Z
+2026-05-15T20:57:08.307Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T20:59:07.967Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T20:49:07.961Z to 2026-05-15T21:00:07.961Z
+2026-05-15T20:59:07.970Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T20:59:07.961Z
+2026-05-15T20:59:07.973Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T21:01:08.006Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T20:51:08.003Z to 2026-05-15T21:02:08.003Z
+2026-05-15T21:01:08.007Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T21:01:08.003Z
+2026-05-15T21:01:08.014Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T21:03:08.017Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T20:53:08.016Z to 2026-05-15T21:04:08.016Z
+2026-05-15T21:03:08.017Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T21:03:08.016Z
+2026-05-15T21:03:08.018Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T21:05:08.026Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T20:55:08.024Z to 2026-05-15T21:06:08.024Z
+2026-05-15T21:05:08.027Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T21:05:08.024Z
+2026-05-15T21:05:08.030Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T21:07:08.031Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T20:57:08.027Z to 2026-05-15T21:08:08.027Z
+2026-05-15T21:07:08.031Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T21:07:08.027Z
+2026-05-15T21:07:08.032Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T21:09:18.079Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T20:59:15.156Z to 2026-05-15T21:10:15.156Z
+2026-05-15T21:09:18.096Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T21:09:15.156Z
+2026-05-15T21:09:18.808Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T21:11:08.045Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T21:01:08.041Z to 2026-05-15T21:12:08.041Z
+2026-05-15T21:11:08.046Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T21:11:08.041Z
+2026-05-15T21:11:08.082Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T21:13:08.050Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T21:03:08.044Z to 2026-05-15T21:14:08.044Z
+2026-05-15T21:13:08.052Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T21:13:08.044Z
+2026-05-15T21:13:08.055Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T21:15:08.048Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T21:05:08.047Z to 2026-05-15T21:16:08.047Z
+2026-05-15T21:15:08.048Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T21:15:08.047Z
+2026-05-15T21:15:08.055Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T21:17:08.062Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T21:07:08.057Z to 2026-05-15T21:18:08.057Z
+2026-05-15T21:17:08.062Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T21:17:08.057Z
+2026-05-15T21:17:08.067Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T21:19:08.069Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T21:09:08.064Z to 2026-05-15T21:20:08.064Z
+2026-05-15T21:19:08.070Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T21:19:08.064Z
+2026-05-15T21:19:08.194Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T21:21:08.075Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T21:11:08.070Z to 2026-05-15T21:22:08.070Z
+2026-05-15T21:21:08.076Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T21:21:08.070Z
+2026-05-15T21:21:08.079Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T21:23:08.078Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T21:13:08.076Z to 2026-05-15T21:24:08.076Z
+2026-05-15T21:23:08.078Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T21:23:08.076Z
+2026-05-15T21:23:08.080Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T21:25:08.209Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T21:15:08.096Z to 2026-05-15T21:26:08.096Z
+2026-05-15T21:25:08.214Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T21:25:08.096Z
+2026-05-15T21:25:08.298Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T21:27:08.097Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T21:17:08.093Z to 2026-05-15T21:28:08.093Z
+2026-05-15T21:27:08.098Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T21:27:08.093Z
+2026-05-15T21:27:08.103Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T21:29:08.103Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T21:19:08.098Z to 2026-05-15T21:30:08.098Z
+2026-05-15T21:29:08.103Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T21:29:08.098Z
+2026-05-15T21:29:08.105Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T21:31:08.104Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T21:21:08.099Z to 2026-05-15T21:32:08.099Z
+2026-05-15T21:31:08.104Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T21:31:08.099Z
+2026-05-15T21:31:08.110Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T21:33:08.117Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T21:23:08.113Z to 2026-05-15T21:34:08.113Z
+2026-05-15T21:33:08.118Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T21:33:08.113Z
+2026-05-15T21:33:08.546Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T21:35:08.128Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T21:25:08.126Z to 2026-05-15T21:36:08.126Z
+2026-05-15T21:35:08.128Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T21:35:08.126Z
+2026-05-15T21:35:08.132Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T21:37:08.137Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T21:27:08.136Z to 2026-05-15T21:38:08.136Z
+2026-05-15T21:37:08.137Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T21:37:08.136Z
+2026-05-15T21:37:08.139Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T21:39:08.151Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T21:29:08.147Z to 2026-05-15T21:40:08.147Z
+2026-05-15T21:39:08.151Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T21:39:08.147Z
+2026-05-15T21:39:08.155Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T21:41:08.234Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T21:31:08.154Z to 2026-05-15T21:42:08.154Z
+2026-05-15T21:41:08.238Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T21:41:08.154Z
+2026-05-15T21:41:08.272Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T21:43:08.173Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T21:33:08.167Z to 2026-05-15T21:44:08.167Z
+2026-05-15T21:43:08.173Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T21:43:08.167Z
+2026-05-15T21:43:08.177Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T21:45:08.217Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T21:35:08.174Z to 2026-05-15T21:46:08.174Z
+2026-05-15T21:45:08.218Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T21:45:08.174Z
+2026-05-15T21:45:08.239Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T21:47:08.185Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T21:37:08.184Z to 2026-05-15T21:48:08.184Z
+2026-05-15T21:47:08.185Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T21:47:08.184Z
+2026-05-15T21:47:08.189Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T21:49:08.196Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T21:39:08.186Z to 2026-05-15T21:50:08.186Z
+2026-05-15T21:49:08.197Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T21:49:08.186Z
+2026-05-15T21:49:08.202Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T21:51:08.191Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T21:41:08.190Z to 2026-05-15T21:52:08.190Z
+2026-05-15T21:51:08.191Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T21:51:08.190Z
+2026-05-15T21:51:08.196Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T21:53:08.193Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T21:43:08.193Z to 2026-05-15T21:54:08.193Z
+2026-05-15T21:53:08.194Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T21:53:08.193Z
+2026-05-15T21:53:08.199Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T21:55:08.287Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T21:45:08.200Z to 2026-05-15T21:56:08.200Z
+2026-05-15T21:55:08.289Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T21:55:08.200Z
+2026-05-15T21:55:08.313Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T21:57:08.220Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T21:47:08.214Z to 2026-05-15T21:58:08.214Z
+2026-05-15T21:57:08.220Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T21:57:08.214Z
+2026-05-15T21:57:08.226Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T21:59:08.283Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T21:49:08.214Z to 2026-05-15T22:00:08.214Z
+2026-05-15T21:59:08.287Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T21:59:08.214Z
+2026-05-15T21:59:08.333Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T22:01:08.380Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T21:51:08.214Z to 2026-05-15T22:02:08.214Z
+2026-05-15T22:01:08.392Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T22:01:08.214Z
+2026-05-15T22:01:08.465Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T22:03:08.227Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T21:53:08.225Z to 2026-05-15T22:04:08.225Z
+2026-05-15T22:03:08.227Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T22:03:08.225Z
+2026-05-15T22:03:08.239Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T22:05:08.234Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T21:55:08.234Z to 2026-05-15T22:06:08.234Z
+2026-05-15T22:05:08.235Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T22:05:08.234Z
+2026-05-15T22:05:08.238Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T22:07:08.236Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T21:57:08.236Z to 2026-05-15T22:08:08.236Z
+2026-05-15T22:07:08.237Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T22:07:08.236Z
+2026-05-15T22:07:08.241Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T22:09:08.247Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T21:59:08.241Z to 2026-05-15T22:10:08.241Z
+2026-05-15T22:09:08.247Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T22:09:08.241Z
+2026-05-15T22:09:08.267Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T22:11:08.358Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T22:01:08.248Z to 2026-05-15T22:12:08.248Z
+2026-05-15T22:11:08.361Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T22:11:08.248Z
+2026-05-15T22:11:08.375Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T22:13:09.805Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T22:03:08.256Z to 2026-05-15T22:14:08.256Z
+2026-05-15T22:13:09.811Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T22:13:08.256Z
+2026-05-15T22:13:09.848Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T22:15:08.442Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T22:05:08.323Z to 2026-05-15T22:16:08.323Z
+2026-05-15T22:15:08.445Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T22:15:08.323Z
+2026-05-15T22:15:08.485Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-15T22:17:10.582Z [LOG] [Stream.findScheduledInRange] Searching from 2026-05-15T22:07:08.259Z to 2026-05-15T22:18:08.259Z
+2026-05-15T22:17:10.596Z [LOG] [Stream.findScheduledInRange] Current time: 2026-05-15T22:17:08.259Z
+2026-05-15T22:17:10.620Z [LOG] [Stream.findScheduledInRange] Found 0 scheduled streams
+2026-05-16T00:23:14.582Z [LOG] [Memory] Heap: 67MB, RSS: 2MB
