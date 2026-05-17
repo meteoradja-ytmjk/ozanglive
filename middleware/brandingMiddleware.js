@@ -34,15 +34,15 @@ async function loadBrandingSettings(req, res, next) {
     
     // Fallback to default branding on error
     res.locals.branding = {
-      app_name: 'OzangLive',
-      company_name: 'OzangLive Team',
-      logo_path: '/images/logo.png',
-      favicon_path: '/images/favicon.ico',
+      app_name: 'MonsterLive',
+      company_name: 'MonsterLive Team',
+      logo_path: '/images/logo-default.png',
+      favicon_path: '/images/logo-default.png',
       primary_color: '#8B5CF6',
       secondary_color: '#7C3AED',
       accent_color: '#6D28D9',
-      footer_text: '© 2024 OzangLive. All rights reserved.',
-      support_email: 'support@ozanglive.com',
+      footer_text: '© 2024 MonsterLive. All rights reserved.',
+      support_email: 'support@monsterlive.com',
       show_powered_by: 1
     };
     

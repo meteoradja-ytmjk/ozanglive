@@ -1690,8 +1690,8 @@ app.post('/api/branding/logo', isAdmin, uploadLogo.single('logo'), async (req, r
     const logoPath = `/uploads/branding/${req.file.filename}`;
     const current = await BrandingSettings.get();
 
-    // Delete old logo if it's not default
-    if (current.logo_path && current.logo_path !== '/images/logo.png') {
+    // Delete old logo only if it's an uploaded file (don't touch bundled defaults in /images)
+    if (current.logo_path && current.logo_path.startsWith('/uploads/')) {
       const oldLogoPath = path.join(__dirname, 'public', current.logo_path);
       if (fs.existsSync(oldLogoPath)) {
         try {
@@ -2543,8 +2543,8 @@ app.post('/api/branding/update', isAdmin, upload.fields([
       await fs.promises.rename(logoFile.path, logoPath);
       logo_path = `/uploads/branding/${logoFilename}`;
 
-      // Delete old logo if it's not the default
-      if (currentBranding.logo_path && currentBranding.logo_path !== '/images/logo.png') {
+      // Delete old logo only if it's an uploaded file (don't touch bundled defaults in /images)
+      if (currentBranding.logo_path && currentBranding.logo_path.startsWith('/uploads/')) {
         const oldLogoPath = path.join(__dirname, 'public', currentBranding.logo_path);
         try {
           await fs.promises.unlink(oldLogoPath);
@@ -2563,8 +2563,8 @@ app.post('/api/branding/update', isAdmin, upload.fields([
       await fs.promises.rename(faviconFile.path, faviconPath);
       favicon_path = `/uploads/branding/${faviconFilename}`;
 
-      // Delete old favicon if it's not the default
-      if (currentBranding.favicon_path && currentBranding.favicon_path !== '/images/favicon.ico') {
+      // Delete old favicon only if it's an uploaded file (don't touch bundled defaults in /images)
+      if (currentBranding.favicon_path && currentBranding.favicon_path.startsWith('/uploads/')) {
         const oldFaviconPath = path.join(__dirname, 'public', currentBranding.favicon_path);
         try {
           await fs.promises.unlink(oldFaviconPath);
@@ -2608,7 +2608,7 @@ app.post('/api/branding/reset', isAdmin, async (req, res) => {
     const currentBranding = await BrandingSettings.get();
 
     // Delete uploaded logo if exists
-    if (currentBranding.logo_path && currentBranding.logo_path !== '/images/logo.png') {
+    if (currentBranding.logo_path && currentBranding.logo_path.startsWith('/uploads/')) {
       const logoPath = path.join(__dirname, 'public', currentBranding.logo_path);
       try {
         await fs.promises.unlink(logoPath);
@@ -2618,7 +2618,7 @@ app.post('/api/branding/reset', isAdmin, async (req, res) => {
     }
 
     // Delete uploaded favicon if exists
-    if (currentBranding.favicon_path && currentBranding.favicon_path !== '/images/favicon.ico') {
+    if (currentBranding.favicon_path && currentBranding.favicon_path.startsWith('/uploads/')) {
       const faviconPath = path.join(__dirname, 'public', currentBranding.favicon_path);
       try {
         await fs.promises.unlink(faviconPath);
@@ -2694,8 +2694,8 @@ app.post('/api/branding/update', isAdmin, upload.fields([
       await fs.promises.rename(logoFile.path, logoPath);
       logo_path = `/uploads/branding/${logoFilename}`;
 
-      // Delete old logo if it's not the default
-      if (currentBranding.logo_path && currentBranding.logo_path !== '/images/logo.png') {
+      // Delete old logo only if it's an uploaded file (don't touch bundled defaults in /images)
+      if (currentBranding.logo_path && currentBranding.logo_path.startsWith('/uploads/')) {
         const oldLogoPath = path.join(__dirname, 'public', currentBranding.logo_path);
         try {
           await fs.promises.unlink(oldLogoPath);
@@ -2715,8 +2715,8 @@ app.post('/api/branding/update', isAdmin, upload.fields([
       await fs.promises.rename(faviconFile.path, faviconPath);
       favicon_path = `/uploads/branding/${faviconFilename}`;
 
-      // Delete old favicon if it's not the default
-      if (currentBranding.favicon_path && currentBranding.favicon_path !== '/images/favicon.ico') {
+      // Delete old favicon only if it's an uploaded file (don't touch bundled defaults in /images)
+      if (currentBranding.favicon_path && currentBranding.favicon_path.startsWith('/uploads/')) {
         const oldFaviconPath = path.join(__dirname, 'public', currentBranding.favicon_path);
         try {
           await fs.promises.unlink(oldFaviconPath);
@@ -2760,7 +2760,7 @@ app.post('/api/branding/reset', isAdmin, async (req, res) => {
     const currentBranding = await BrandingSettings.get();
 
     // Delete uploaded logo if exists
-    if (currentBranding.logo_path && currentBranding.logo_path !== '/images/logo.png') {
+    if (currentBranding.logo_path && currentBranding.logo_path.startsWith('/uploads/')) {
       const logoPath = path.join(__dirname, 'public', currentBranding.logo_path);
       try {
         await fs.promises.unlink(logoPath);
@@ -2770,7 +2770,7 @@ app.post('/api/branding/reset', isAdmin, async (req, res) => {
     }
 
     // Delete uploaded favicon if exists
-    if (currentBranding.favicon_path && currentBranding.favicon_path !== '/images/favicon.ico') {
+    if (currentBranding.favicon_path && currentBranding.favicon_path.startsWith('/uploads/')) {
       const faviconPath = path.join(__dirname, 'public', currentBranding.favicon_path);
       try {
         await fs.promises.unlink(faviconPath);
