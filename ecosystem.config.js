@@ -50,6 +50,9 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         PORT: 7575,
+        // CRITICAL: Force application timezone to WIB (Asia/Jakarta)
+        // ensuring schedule comparisons match user input regardless of host TZ.
+        TZ: 'Asia/Jakarta',
         // CRITICAL: Pass SESSION_SECRET from .env to PM2
         SESSION_SECRET: process.env.SESSION_SECRET,
         // CRITICAL: Disable Node.js memory warnings that can cause issues
@@ -58,7 +61,8 @@ module.exports = {
 
       env_development: {
         NODE_ENV: 'development',
-        PORT: 7575
+        PORT: 7575,
+        TZ: 'Asia/Jakarta'
       },
 
       // Logging - OPTIMIZED to prevent disk space issues

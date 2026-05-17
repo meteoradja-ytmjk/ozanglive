@@ -1,4 +1,10 @@
 require('dotenv').config();
+// CRITICAL: Force application timezone to WIB (Asia/Jakarta) before any Date is created.
+// Ini wajib agar penjadwalan stream selalu mengikuti input user di WIB,
+// terlepas dari timezone host/VPS. Set hanya bila belum di-override secara eksplisit.
+if (!process.env.TZ) {
+  process.env.TZ = 'Asia/Jakarta';
+}
 require('./services/logger.js');
 const express = require('express');
 const path = require('path');
@@ -42,6 +48,7 @@ const SystemSettings = require('./models/SystemSettings');
 const YouTubeBroadcastSettings = require('./models/YouTubeBroadcastSettings');
 const scheduleService = require('./services/scheduleService');
 const { renderLoopVideo, loopVideoFast } = require('./utils/renderProcessor');
+const { parseWIBDateTimeLocal } = require('./utils/wibTime');
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 const uploadProcessingConcurrency = Math.max(1, parseInt(process.env.UPLOAD_PROCESSING_CONCURRENCY || '1', 10));
 const videoProcessingQueue = new ProcessingQueue({ concurrency: uploadProcessingConcurrency, name: 'video-processing' });
@@ -4846,24 +4853,37 @@ app.post('/api/streams', isAuthenticated, [
     // Calculate if user has set explicit duration
     const hasExplicitDuration = streamData.stream_duration_minutes && streamData.stream_duration_minutes > 0;
 
-    const serverTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-    function parseLocalDateTime(dateTimeString) {
-      const [datePart, timePart] = dateTimeString.split('T');
-      const [year, month, day] = datePart.split('-').map(Number);
-      const [hours, minutes] = timePart.split(':').map(Number);
-
-      return new Date(year, month - 1, day, hours, minutes);
-    }
-
     if (req.body.scheduleStartTime) {
-      const scheduleStartDate = parseLocalDateTime(req.body.scheduleStartTime);
+      const scheduleStartDate = parseWIBDateTimeLocal(req.body.scheduleStartTime);
+      if (!scheduleStartDate) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid scheduleStartTime format'
+        });
+      }
+
+      // Validasi: schedule_time tidak boleh di masa lalu (toleransi 60 detik)
+      // Mencegah stream langsung trigger karena window "missed schedule"
+      const TOLERANCE_MS = 60 * 1000;
+      if (scheduleStartDate.getTime() < Date.now() - TOLERANCE_MS) {
+        return res.status(400).json({
+          success: false,
+          error: 'Schedule start time must be in the future (WIB)'
+        });
+      }
+
       streamData.schedule_time = scheduleStartDate.toISOString();
       streamData.status = 'scheduled';
 
       // Only use end_time for duration calculation if user hasn't set explicit duration
       if (req.body.scheduleEndTime && !hasExplicitDuration) {
-        const scheduleEndDate = parseLocalDateTime(req.body.scheduleEndTime);
+        const scheduleEndDate = parseWIBDateTimeLocal(req.body.scheduleEndTime);
+        if (!scheduleEndDate) {
+          return res.status(400).json({
+            success: false,
+            error: 'Invalid scheduleEndTime format'
+          });
+        }
 
         if (scheduleEndDate <= scheduleStartDate) {
           return res.status(400).json({
@@ -4881,14 +4901,18 @@ app.post('/api/streams', isAuthenticated, [
         console.log(`[API] Duration from end_time: ${durationMinutes} minutes`);
       } else if (req.body.scheduleEndTime && hasExplicitDuration) {
         // User set both duration and end_time - use duration, but still store end_time for reference
-        const scheduleEndDate = parseLocalDateTime(req.body.scheduleEndTime);
-        streamData.end_time = scheduleEndDate.toISOString();
+        const scheduleEndDate = parseWIBDateTimeLocal(req.body.scheduleEndTime);
+        if (scheduleEndDate) {
+          streamData.end_time = scheduleEndDate.toISOString();
+        }
         console.log(`[API] Using explicit duration (${streamData.stream_duration_minutes} min), end_time stored for reference only`);
       }
       // If no end_time and no duration, stream will be unlimited
     } else if (req.body.scheduleEndTime) {
-      const scheduleEndDate = parseLocalDateTime(req.body.scheduleEndTime);
-      streamData.end_time = scheduleEndDate.toISOString();
+      const scheduleEndDate = parseWIBDateTimeLocal(req.body.scheduleEndTime);
+      if (scheduleEndDate) {
+        streamData.end_time = scheduleEndDate.toISOString();
+      }
     }
 
     // Set status based on schedule type
@@ -5289,24 +5313,47 @@ app.put('/api/streams/:id', isAuthenticated, async (req, res) => {
       // If scheduleStartTime is not set, status will be 'offline'
     }
 
-    const serverTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-    function parseLocalDateTime(dateTimeString) {
-      const [datePart, timePart] = dateTimeString.split('T');
-      const [year, month, day] = datePart.split('-').map(Number);
-      const [hours, minutes] = timePart.split(':').map(Number);
-
-      return new Date(year, month - 1, day, hours, minutes);
-    }
-
     if (req.body.scheduleStartTime) {
-      const scheduleStartDate = parseLocalDateTime(req.body.scheduleStartTime);
-      updateData.schedule_time = scheduleStartDate.toISOString();
+      const scheduleStartDate = parseWIBDateTimeLocal(req.body.scheduleStartTime);
+      if (!scheduleStartDate) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid scheduleStartTime format'
+        });
+      }
+
+      // Validasi: jika user MENGUBAH waktu jadwal, waktu baru tidak boleh di masa lalu
+      // Skip validasi bila waktu sama persis dengan yang sudah tersimpan (mis. user hanya edit field lain)
+      const TOLERANCE_MS = 60 * 1000;
+      const existingScheduleIso = stream.schedule_time || null;
+      const newIso = scheduleStartDate.toISOString();
+      const isUnchanged = existingScheduleIso === newIso;
+      if (!isUnchanged && scheduleStartDate.getTime() < Date.now() - TOLERANCE_MS) {
+        return res.status(400).json({
+          success: false,
+          error: 'Schedule start time must be in the future (WIB)'
+        });
+      }
+
+      updateData.schedule_time = newIso;
       updateData.status = 'scheduled';
+
+      // FIXED: Reset start_time when rescheduling to a new time so the scheduler
+      // can trigger the stream again. Without this, findScheduledInRange will skip
+      // streams that already ran once.
+      if (!isUnchanged) {
+        updateData.start_time = null;
+      }
 
       // FIXED: Only use end_time for duration if user hasn't set explicit duration
       if (req.body.scheduleEndTime && !hasExplicitDuration) {
-        const scheduleEndDate = parseLocalDateTime(req.body.scheduleEndTime);
+        const scheduleEndDate = parseWIBDateTimeLocal(req.body.scheduleEndTime);
+        if (!scheduleEndDate) {
+          return res.status(400).json({
+            success: false,
+            error: 'Invalid scheduleEndTime format'
+          });
+        }
 
         if (scheduleEndDate <= scheduleStartDate) {
           return res.status(400).json({
@@ -5324,8 +5371,10 @@ app.put('/api/streams/:id', isAuthenticated, async (req, res) => {
         console.log(`[API Update] Duration from end_time: ${durationMinutes} minutes`);
       } else if (req.body.scheduleEndTime && hasExplicitDuration) {
         // User set both duration and end_time - use duration, store end_time for reference only
-        const scheduleEndDate = parseLocalDateTime(req.body.scheduleEndTime);
-        updateData.end_time = scheduleEndDate.toISOString();
+        const scheduleEndDate = parseWIBDateTimeLocal(req.body.scheduleEndTime);
+        if (scheduleEndDate) {
+          updateData.end_time = scheduleEndDate.toISOString();
+        }
         console.log(`[API Update] Using explicit duration (${updateData.stream_duration_minutes} min), end_time stored for reference only`);
       } else if (hasExplicitDuration) {
         // Duration is set, clear end_time (mutual exclusion)
@@ -5351,8 +5400,10 @@ app.put('/api/streams/:id', isAuthenticated, async (req, res) => {
       }
 
       if (req.body.scheduleEndTime) {
-        const scheduleEndDate = parseLocalDateTime(req.body.scheduleEndTime);
-        updateData.end_time = scheduleEndDate.toISOString();
+        const scheduleEndDate = parseWIBDateTimeLocal(req.body.scheduleEndTime);
+        if (scheduleEndDate) {
+          updateData.end_time = scheduleEndDate.toISOString();
+        }
       } else if ('scheduleEndTime' in req.body && req.body.scheduleEndTime === '') {
         updateData.end_time = null;
         if (!hasExplicitDuration) {
@@ -5360,8 +5411,10 @@ app.put('/api/streams/:id', isAuthenticated, async (req, res) => {
         }
       }
     } else if (req.body.scheduleEndTime) {
-      const scheduleEndDate = parseLocalDateTime(req.body.scheduleEndTime);
-      updateData.end_time = scheduleEndDate.toISOString();
+      const scheduleEndDate = parseWIBDateTimeLocal(req.body.scheduleEndTime);
+      if (scheduleEndDate) {
+        updateData.end_time = scheduleEndDate.toISOString();
+      }
     } else if ('scheduleEndTime' in req.body && req.body.scheduleEndTime === '') {
       updateData.end_time = null;
       if (!hasExplicitDuration) {

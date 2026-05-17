@@ -1,16 +1,17 @@
 const Stream = require('../models/Stream');
 const { parseScheduleDays } = require('../utils/scheduleValidator');
 const { calculateDurationSeconds, formatDuration } = require('../utils/durationCalculator');
+const { getWIBTime } = require('../utils/wibTime');
 
 const scheduledTerminations = new Map();
 const recentlyTriggeredStreams = new Map(); // Track recently triggered recurring streams
-const SCHEDULE_LOOKAHEAD_SECONDS = 60; // Increased to 60 seconds for less frequent checks
-const RECURRING_CHECK_INTERVAL = 2 * 60 * 1000; // Check recurring schedules every 2 minutes (was 1 min)
-const ONCE_SCHEDULE_CHECK_INTERVAL = 2 * 60 * 1000; // Check one-time schedules every 2 minutes (was 1 min)
-const TRIGGER_COOLDOWN_MS = 10 * 60 * 1000; // 10 minute cooldown to prevent double triggers
-const DURATION_CHECK_INTERVAL = 60 * 1000; // Check durations every 60 seconds (balanced accuracy vs CPU)
-const FORCE_STOP_BUFFER_MS = 30 * 1000; // 30 seconds buffer for force stop (reduced from 60s for accuracy)
-const CLEANUP_INTERVAL = 6 * 60 * 60 * 1000; // Clean up stale entries every 6 hours (was 4 hours)
+const SCHEDULE_LOOKAHEAD_SECONDS = 30; // Look ahead 30 seconds for upcoming starts
+const RECURRING_CHECK_INTERVAL = 30 * 1000; // Check recurring schedules every 30 seconds (per-minute precision)
+const ONCE_SCHEDULE_CHECK_INTERVAL = 30 * 1000; // Check one-time schedules every 30 seconds
+const TRIGGER_COOLDOWN_MS = 5 * 60 * 1000; // 5 minute cooldown to prevent double triggers within same window
+const DURATION_CHECK_INTERVAL = 30 * 1000; // Check durations every 30 seconds for accurate stop
+const FORCE_STOP_BUFFER_MS = 30 * 1000; // 30 seconds buffer for force stop
+const CLEANUP_INTERVAL = 6 * 60 * 60 * 1000; // Clean up stale entries every 6 hours
 
 let streamingService = null;
 let initialized = false;
@@ -26,7 +27,7 @@ function init(streamingServiceInstance) {
   }
   streamingService = streamingServiceInstance;
   initialized = true;
-  console.log('[Scheduler] Stream scheduler initialized');
+  console.log('[Scheduler] Stream scheduler initialized (WIB-based, 30s check interval)');
   
   // Wrap interval callbacks with error handling to prevent crashes
   const safeCheckScheduledStreams = async () => {
@@ -53,20 +54,37 @@ function init(streamingServiceInstance) {
     }
   };
   
-  // Schedule checks - more frequent for better accuracy
-  scheduleIntervalId = setInterval(safeCheckScheduledStreams, ONCE_SCHEDULE_CHECK_INTERVAL); // Every 30 seconds for one-time schedules
-  durationIntervalId = setInterval(safeCheckStreamDurations, DURATION_CHECK_INTERVAL); // Every 30 seconds for duration checks
-  recurringIntervalId = setInterval(safeCheckRecurringSchedules, RECURRING_CHECK_INTERVAL); // Every 1 minute for recurring schedules
+  // Schedule checks - balanced for accuracy and RAM
+  scheduleIntervalId = setInterval(safeCheckScheduledStreams, ONCE_SCHEDULE_CHECK_INTERVAL);
+  durationIntervalId = setInterval(safeCheckStreamDurations, DURATION_CHECK_INTERVAL);
+  recurringIntervalId = setInterval(safeCheckRecurringSchedules, RECURRING_CHECK_INTERVAL);
   
   // MEMORY MANAGEMENT: Cleanup stale entries from Maps
   cleanupIntervalId = setInterval(cleanupStaleMaps, CLEANUP_INTERVAL);
-  
-  console.log('[Scheduler] Intervals set: once-schedules=2min, recurring=2min, duration=60sec, cleanup=6hr');
   
   // Initial checks with error handling (run immediately on startup)
   safeCheckScheduledStreams();
   safeCheckStreamDurations();
   safeCheckRecurringSchedules();
+}
+
+/**
+ * Stop all interval timers and free resources.
+ * Useful for graceful shutdown / unit tests.
+ */
+function shutdown() {
+  if (scheduleIntervalId) clearInterval(scheduleIntervalId);
+  if (durationIntervalId) clearInterval(durationIntervalId);
+  if (recurringIntervalId) clearInterval(recurringIntervalId);
+  if (cleanupIntervalId) clearInterval(cleanupIntervalId);
+  scheduleIntervalId = durationIntervalId = recurringIntervalId = cleanupIntervalId = null;
+  // Clear pending termination timeouts
+  for (const timeoutId of scheduledTerminations.values()) {
+    try { clearTimeout(timeoutId); } catch (_) { /* noop */ }
+  }
+  scheduledTerminations.clear();
+  recentlyTriggeredStreams.clear();
+  initialized = false;
 }
 
 /**
@@ -102,11 +120,6 @@ async function checkScheduledStreams() {
     const now = new Date();
     const lookAheadTime = new Date(now.getTime() + SCHEDULE_LOOKAHEAD_SECONDS * 1000);
     
-    // Log every check to help debugging - DISABLED to save CPU
-    // const currentHours = now.getHours();
-    // const currentMinutes = now.getMinutes();
-    // console.log(`[Scheduler] Checking ONCE schedules at ${currentHours}:${String(currentMinutes).padStart(2, '0')} local (${now.toISOString()}), lookAhead=${SCHEDULE_LOOKAHEAD_SECONDS}s`);
-    
     let streams = [];
     try {
       streams = await Stream.findScheduledInRange(now, lookAheadTime);
@@ -115,57 +128,58 @@ async function checkScheduledStreams() {
       return; // Don't crash, just skip this check
     }
     
-    if (streams.length > 0) {
-      console.log(`[Scheduler] Found ${streams.length} 'once' streams to start`);
-      for (const stream of streams) {
-        try {
-          // Check if stream was recently triggered to prevent double starts
-          if (wasRecentlyTriggered(stream.id)) {
-            console.log(`[Scheduler] SKIP: stream ${stream.id} - recently triggered (cooldown active)`);
-            continue;
-          }
-          
-          const scheduleTime = new Date(stream.schedule_time);
-          const timeDiffMs = now.getTime() - scheduleTime.getTime();
-          const timeDiffMinutes = timeDiffMs / 60000;
-          
-          // FIXED: Only start if schedule time has PASSED (timeDiffMs >= 0)
-          // This ensures stream starts AT or AFTER the scheduled time, never before
-          // Allow up to 30 seconds early to account for check interval timing
-          if (timeDiffMs < -30000) {
-            console.log(`[Scheduler] SKIP: stream ${stream.id} - scheduled for ${scheduleTime.toISOString()}, still ${Math.abs(timeDiffMinutes).toFixed(2)} minutes away`);
-            continue;
-          }
-          
-          console.log(`[Scheduler] >>> STARTING scheduled ONCE stream: ${stream.id} - ${stream.title}`);
-          console.log(`[Scheduler]   Scheduled: ${stream.schedule_time}, Diff: ${timeDiffMinutes.toFixed(2)} minutes`);
-          console.log(`[Scheduler]   Duration: ${stream.stream_duration_minutes || 'unlimited'} minutes`);
-          
-          // Mark as triggered before starting
-          markAsTriggered(stream.id);
-          
-          const result = await streamingService.startStream(stream.id);
-          if (result.success) {
-            console.log(`[Scheduler] >>> Successfully started scheduled ONCE stream: ${stream.id}`);
-          } else {
-            console.error(`[Scheduler] >>> Failed to start scheduled ONCE stream ${stream.id}: ${result.error}`);
-            // Remove from triggered list if failed so it can retry
-            recentlyTriggeredStreams.delete(stream.id);
-          }
-          
-          // Small delay between starting multiple streams
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        } catch (streamError) {
-          console.error(`[Scheduler] Error processing stream ${stream.id}:`, streamError.message);
-          // Continue with next stream, don't crash
+    if (streams.length === 0) return; // Hot path: no work, exit silently
+
+    console.log(`[Scheduler] Found ${streams.length} 'once' streams in trigger window`);
+    for (const stream of streams) {
+      try {
+        // Skip if recently triggered to prevent double starts
+        if (wasRecentlyTriggered(stream.id)) {
+          continue;
         }
+
+        // Defensive: skip if already live (race protection)
+        if (stream.status === 'live') {
+          continue;
+        }
+
+        // Defensive: skip if already started before (start_time set)
+        if (stream.start_time) {
+          continue;
+        }
+
+        const scheduleTime = new Date(stream.schedule_time);
+        const timeDiffMs = now.getTime() - scheduleTime.getTime();
+
+        // CRITICAL: Only start AT or AFTER the scheduled time.
+        // Allow at most 30 seconds early to compensate for the 30s polling interval.
+        if (timeDiffMs < -30000) {
+          continue; // not yet
+        }
+
+        const timeDiffMinutes = (timeDiffMs / 60000).toFixed(2);
+        console.log(`[Scheduler] >>> START ONCE: ${stream.id} "${stream.title}" (scheduled=${stream.schedule_time}, diff=${timeDiffMinutes}min)`);
+
+        // Mark as triggered BEFORE starting to be safe against re-entry
+        markAsTriggered(stream.id);
+
+        const result = await streamingService.startStream(stream.id);
+        if (result.success) {
+          console.log(`[Scheduler] >>> Started ONCE stream ${stream.id}`);
+        } else {
+          console.error(`[Scheduler] >>> Failed to start ONCE stream ${stream.id}: ${result.error}`);
+          // Allow retry on next tick
+          recentlyTriggeredStreams.delete(stream.id);
+        }
+
+        // Small delay between starts to avoid burst CPU
+        await new Promise(resolve => setTimeout(resolve, 500));
+      } catch (streamError) {
+        console.error(`[Scheduler] Error processing stream ${stream.id}:`, streamError.message);
       }
-    } else {
-      // No streams found - skip logging to save CPU
     }
   } catch (error) {
     console.error('[Scheduler] Error checking scheduled streams:', error.message);
-    // Don't rethrow - let the scheduler continue running
   }
 }
 async function checkStreamDurations() {
@@ -302,59 +316,6 @@ function handleStreamStopped(streamId) {
 }
 
 /**
- * Get current time in Asia/Jakarta timezone (WIB)
- * Uses Intl.DateTimeFormat for accurate timezone conversion
- * @param {Date} date - Date object to convert
- * @returns {Object} Object with hours, minutes, day
- */
-function getWIBTime(date = new Date()) {
-  try {
-    // Use Intl.DateTimeFormat for accurate timezone conversion
-    const formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'Asia/Jakarta',
-      hour: 'numeric',
-      minute: 'numeric',
-      weekday: 'short',
-      hour12: false
-    });
-    
-    const parts = formatter.formatToParts(date);
-    let hours = 0, minutes = 0, dayName = '';
-    
-    for (const part of parts) {
-      if (part.type === 'hour') hours = parseInt(part.value, 10);
-      if (part.type === 'minute') minutes = parseInt(part.value, 10);
-      if (part.type === 'weekday') dayName = part.value;
-    }
-    
-    // Convert day name to number (0=Sun, 1=Mon, etc.)
-    const dayMap = { 'Sun': 0, 'Mon': 1, 'Tue': 2, 'Wed': 3, 'Thu': 4, 'Fri': 5, 'Sat': 6 };
-    const day = dayMap[dayName] ?? date.getDay();
-    
-    return { hours, minutes, day };
-  } catch (e) {
-    // Fallback to manual calculation if Intl fails
-    console.warn('[Scheduler] Intl.DateTimeFormat failed, using manual WIB calculation');
-    const wibOffset = 7 * 60; // 7 hours in minutes
-    const utcMinutes = date.getUTCHours() * 60 + date.getUTCMinutes();
-    const wibMinutes = (utcMinutes + wibOffset) % (24 * 60);
-    
-    const hours = Math.floor(wibMinutes / 60);
-    const minutes = wibMinutes % 60;
-    
-    // Calculate day in WIB
-    const utcDay = date.getUTCDay();
-    const utcHours = date.getUTCHours();
-    let day = utcDay;
-    if (utcHours + 7 >= 24) {
-      day = (utcDay + 1) % 7;
-    }
-    
-    return { hours, minutes, day };
-  }
-}
-
-/**
  * Check if a daily schedule should trigger now
  * @param {Object} stream - Stream object with recurring_time
  * @param {Date} currentTime - Current time to check against
@@ -372,15 +333,14 @@ function shouldTriggerDaily(stream, currentTime = new Date()) {
   const wibTime = getWIBTime(currentTime);
   const currentTotalMinutes = wibTime.hours * 60 + wibTime.minutes;
 
-  // Calculate time difference (positive = current time is after scheduled time)
   const timeDiff = currentTotalMinutes - scheduleMinutes;
   
-  // Trigger if within 0-1 minute of scheduled time (1-min interval)
+  // Trigger window: 0 to 1 minute after the scheduled time.
+  // 30s polling means we will catch the minute boundary reliably without firing early.
   const shouldTrigger = timeDiff >= 0 && timeDiff <= 1;
   
-  // Only log when triggering to save CPU
   if (shouldTrigger) {
-    console.log(`[Scheduler] Daily trigger: ${schedHours}:${String(schedMinutes).padStart(2,'0')} WIB`);
+    console.log(`[Scheduler] Daily trigger window matched: ${schedHours}:${String(schedMinutes).padStart(2,'0')} WIB`);
   }
   
   return shouldTrigger;
@@ -393,49 +353,31 @@ function shouldTriggerDaily(stream, currentTime = new Date()) {
  * @returns {boolean} True if should trigger
  */
 function shouldTriggerWeekly(stream, currentTime = new Date()) {
-  // Use WIB time for comparison since user inputs time in WIB
-  const wibTime = getWIBTime(currentTime);
-  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  
-  if (!stream.recurring_enabled) {
-    console.log(`[Scheduler] Weekly time check: stream=${stream.id} - SKIP (recurring_enabled=false)`);
-    return false;
-  }
-  if (stream.schedule_type !== 'weekly') {
-    return false;
-  }
-  if (!stream.recurring_time) {
-    console.log(`[Scheduler] Weekly time check: stream=${stream.id} - SKIP (no recurring_time)`);
-    return false;
-  }
+  if (!stream.recurring_enabled) return false;
+  if (stream.schedule_type !== 'weekly') return false;
+  if (!stream.recurring_time) return false;
   
   const scheduleDays = Array.isArray(stream.schedule_days) 
     ? stream.schedule_days 
     : parseScheduleDays(stream.schedule_days);
   
-  if (scheduleDays.length === 0) {
-    console.log(`[Scheduler] Weekly time check: stream=${stream.id} - SKIP (no schedule_days)`);
-    return false;
-  }
+  if (!scheduleDays || scheduleDays.length === 0) return false;
+
+  const wibTime = getWIBTime(currentTime);
+
+  // Check if current day (in WIB) is in schedule
+  if (!scheduleDays.includes(wibTime.day)) return false;
 
   const [schedHours, schedMinutes] = stream.recurring_time.split(':').map(Number);
   const scheduleMinutes = schedHours * 60 + schedMinutes;
   const currentTotalMinutes = wibTime.hours * 60 + wibTime.minutes;
   const timeDiff = currentTotalMinutes - scheduleMinutes;
-  
-  // Check if current day (in WIB) is in schedule
-  const isDayMatch = scheduleDays.includes(wibTime.day);
-  
-  if (!isDayMatch) {
-    return false;
-  }
 
-  // Trigger if within 0-1 minute of scheduled time (1-min interval)
   const shouldTrigger = timeDiff >= 0 && timeDiff <= 1;
   
-  // Only log when triggering to save CPU
   if (shouldTrigger) {
-    console.log(`[Scheduler] Weekly trigger: ${schedHours}:${String(schedMinutes).padStart(2,'0')} WIB (${dayNames[wibTime.day]})`);
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    console.log(`[Scheduler] Weekly trigger window matched: ${schedHours}:${String(schedMinutes).padStart(2,'0')} WIB (${dayNames[wibTime.day]})`);
   }
   
   return shouldTrigger;
@@ -478,86 +420,56 @@ async function checkRecurringSchedules() {
       return;
     }
 
-    const now = new Date();
-    const wibTime = getWIBTime(now);
-    const currentHours = wibTime.hours;
-    const currentMinutes = wibTime.minutes;
-    const currentDay = wibTime.day;
-    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    
     let recurringStreams = [];
     try {
       recurringStreams = await Stream.findRecurringSchedules();
     } catch (dbError) {
       console.error('[Scheduler] Database error finding recurring schedules:', dbError.message);
-      return; // Don't crash, just skip this check
-    }
-    
-    if (recurringStreams.length === 0) {
-      // No recurring schedules - skip logging to save CPU
       return;
     }
+    
+    if (recurringStreams.length === 0) return; // Hot path
 
-    // Only log when there are streams to trigger (save CPU)
-    // console.log(`[Scheduler] Checking ${recurringStreams.length} recurring schedules`);
+    const now = new Date();
 
     for (const stream of recurringStreams) {
       try {
-        // Skip logging individual stream checks to save CPU
-        
-        // Skip if not enabled
-        if (!stream.recurring_enabled) {
-          continue;
-        }
-
-        // Skip if recently triggered
-        if (wasRecentlyTriggered(stream.id)) {
-          continue;
-        }
-
-        // Check if stream is already live
-        if (stream.status === 'live') {
-          continue;
-        }
+        if (!stream.recurring_enabled) continue;
+        if (wasRecentlyTriggered(stream.id)) continue;
+        if (stream.status === 'live') continue;
 
         let shouldTrigger = false;
-
         if (stream.schedule_type === 'daily') {
           shouldTrigger = shouldTriggerDaily(stream, now);
-          // Log is already done in shouldTriggerDaily function
         } else if (stream.schedule_type === 'weekly') {
           shouldTrigger = shouldTriggerWeekly(stream, now);
-          // Log is already done in shouldTriggerWeekly function
         }
 
-        if (shouldTrigger) {
-          console.log(`[Scheduler] >>> TRIGGERING recurring stream: ${stream.id} - ${stream.title} (${stream.schedule_type})`);
-          
-          // Mark as triggered to prevent double triggers
-          markAsTriggered(stream.id);
-          
-          try {
-            const result = await streamingService.startStream(stream.id);
-            if (result.success) {
-              console.log(`[Scheduler] >>> Successfully started recurring stream: ${stream.id}`);
-            } else {
-              console.error(`[Scheduler] >>> Failed to start recurring stream ${stream.id}: ${result.error}`);
-            }
-          } catch (startError) {
-            console.error(`[Scheduler] >>> Error starting recurring stream ${stream.id}:`, startError.message);
+        if (!shouldTrigger) continue;
+
+        console.log(`[Scheduler] >>> TRIGGERING recurring: ${stream.id} "${stream.title}" (${stream.schedule_type})`);
+        // Mark as triggered to prevent double triggers within cooldown window
+        markAsTriggered(stream.id);
+
+        try {
+          const result = await streamingService.startStream(stream.id);
+          if (result.success) {
+            console.log(`[Scheduler] >>> Started recurring stream ${stream.id}`);
+          } else {
+            console.error(`[Scheduler] >>> Failed to start recurring stream ${stream.id}: ${result.error}`);
           }
-
-          // Small delay between starting multiple streams
-          await new Promise(resolve => setTimeout(resolve, 1000));
+        } catch (startError) {
+          console.error(`[Scheduler] >>> Error starting recurring stream ${stream.id}:`, startError.message);
         }
+
+        // Small delay between starts
+        await new Promise(resolve => setTimeout(resolve, 500));
       } catch (streamError) {
         console.error(`[Scheduler] Error processing recurring stream ${stream.id}:`, streamError.message);
-        // Continue with next stream, don't crash
       }
     }
   } catch (error) {
     console.error('[Scheduler] Error checking recurring schedules:', error.message);
-    // Don't rethrow - let the scheduler continue running
   }
 }
 
@@ -573,6 +485,7 @@ function calculateNextRun(stream, fromTime = new Date()) {
 
 module.exports = {
   init,
+  shutdown,
   scheduleStreamTermination,
   cancelStreamTermination,
   handleStreamStopped,

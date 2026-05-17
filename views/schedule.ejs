@@ -553,21 +553,32 @@
   let editSelectedDays = [];
 
   /**
-   * Convert ISO UTC string to datetime-local input format (local time)
-   * This fixes the timezone issue where toISOString() returns UTC time
+   * Convert ISO UTC string to datetime-local input format (WIB time)
+   * Selalu render dalam Asia/Jakarta agar konsisten dengan input user.
    * @param {string} isoString - ISO 8601 UTC string from database
-   * @returns {string} - Format YYYY-MM-DDTHH:MM in local timezone
+   * @returns {string} - Format YYYY-MM-DDTHH:MM in WIB
    */
   function formatDateTimeLocal(isoString) {
     if (!isoString) return '';
     const date = new Date(isoString);
     if (isNaN(date.getTime())) return '';
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    return `${year}-${month}-${day}T${hours}:${minutes}`;
+    try {
+      const fmt = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Jakarta',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', hour12: false
+      });
+      const parts = fmt.formatToParts(date);
+      const get = (t) => (parts.find(p => p.type === t) || {}).value || '00';
+      let hours = get('hour');
+      if (hours === '24') hours = '00';
+      return `${get('year')}-${get('month')}-${get('day')}T${hours}:${get('minute')}`;
+    } catch (e) {
+      // Fallback: manual UTC+7
+      const wib = new Date(date.getTime() + 7 * 60 * 60 * 1000);
+      const pad = n => String(n).padStart(2, '0');
+      return `${wib.getUTCFullYear()}-${pad(wib.getUTCMonth() + 1)}-${pad(wib.getUTCDate())}T${pad(wib.getUTCHours())}:${pad(wib.getUTCMinutes())}`;
+    }
   }
 
   // Filter functionality
