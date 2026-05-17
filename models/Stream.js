@@ -320,17 +320,17 @@ class Stream {
   static findScheduledInRange(startTime, endTime) {
     return new Promise((resolve, reject) => {
       const endTimeStr = endTime.toISOString();
-      // FIXED: Include streams that are scheduled but may have been missed
-      // Look for streams scheduled up to 10 minutes in the past to catch any that were missed
-      const missedWindowMs = 10 * 60 * 1000; // 10 minutes (increased from 5)
+      // FIXED: Reduced missed window from 10 minutes to 2 minutes to prevent
+      // unintended re-triggers (e.g., stream that just stopped being re-triggered)
+      const missedWindowMs = 2 * 60 * 1000; // 2 minutes
       const missedStartTime = new Date(startTime.getTime() - missedWindowMs);
       const missedStartTimeStr = missedStartTime.toISOString();
 
-      // FIXED: Use simple string comparison for ISO 8601 format
-      // ISO 8601 strings are lexicographically sortable
-      // FIXED: Include both 'scheduled' and 'offline' status for once schedules
-      // Streams may be in 'offline' status if they were stopped manually or due to error
-      // but should still be triggered if schedule_time is in range
+      // FIXED: Use simple string comparison for ISO 8601 format (lexicographically sortable)
+      // FIXED: Only trigger streams that have NEVER run yet (start_time IS NULL).
+      // This prevents re-triggering one-time schedules that already played and ended
+      // (status reverts to 'offline' after natural end which previously matched this query).
+      // FIXED: Status 'live' is excluded so we never re-trigger an already running stream.
       const query = `
         SELECT s.*,
                COALESCE(v.title, p.name) AS video_title,
@@ -344,26 +344,25 @@ class Stream {
         FROM streams s
         LEFT JOIN videos v ON s.video_id = v.id
         LEFT JOIN playlists p ON s.video_id = p.id
-        WHERE s.status IN ('scheduled', 'offline')
+        WHERE s.status = 'scheduled'
         AND s.schedule_type = 'once'
         AND s.schedule_time IS NOT NULL
         AND s.schedule_time >= ?
         AND s.schedule_time <= ?
+        AND (s.start_time IS NULL OR s.start_time = '')
       `;
-      console.log(`[Stream.findScheduledInRange] Searching from ${missedStartTimeStr} to ${endTimeStr}`);
-      console.log(`[Stream.findScheduledInRange] Current time: ${startTime.toISOString()}`);
+      // OPTIMIZED: Removed verbose per-call logging to reduce CPU/memory pressure on intervals
       db.all(query, [missedStartTimeStr, endTimeStr], (err, rows) => {
         if (err) {
           console.error('Error finding scheduled streams:', err.message);
           return reject(err);
         }
-        if (rows) {
+        if (rows && rows.length > 0) {
           rows.forEach(row => {
             row.loop_video = row.loop_video === 1;
             row.use_advanced_settings = row.use_advanced_settings === 1;
-            console.log(`[Stream.findScheduledInRange] Found stream: id=${row.id}, schedule_time=${row.schedule_time}, status=${row.status}`);
           });
-          console.log(`[Stream.findScheduledInRange] Found ${rows.length} scheduled streams`);
+          console.log(`[Stream.findScheduledInRange] Found ${rows.length} scheduled streams in window ${missedStartTimeStr}..${endTimeStr}`);
         }
         resolve(rows || []);
       });

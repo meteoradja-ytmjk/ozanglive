@@ -14,5 +14,4 @@ services:
       - ./public/uploads:/app/public/uploads
     environment:
       - NODE_ENV=production
-    # Uncomment jika ingin mengatur timezone container
-    # - TZ=Asia/Jakarta 
+      - TZ=Asia/Jakarta

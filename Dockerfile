@@ -1,8 +1,13 @@
 # Gunakan image Node.js versi 18 (atau 16+)
 FROM node:18-slim
 
-# Install ffmpeg
-RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/*
+# Set timezone WIB (Asia/Jakarta) - CRITICAL agar penjadwalan stream sesuai input user
+ENV TZ=Asia/Jakarta
+
+# Install ffmpeg + tzdata
+RUN apt-get update && apt-get install -y ffmpeg tzdata && \
+    ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone && \
+    rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
