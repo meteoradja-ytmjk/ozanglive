@@ -536,8 +536,34 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
   if (videoPaths.length === 0) {
     throw new Error('All playlist video files are missing on disk. Please re-upload or remove missing videos from this playlist.');
   }
+
+  // Resolve audio files attached to the playlist (optional)
+  const playlistAudios = Array.isArray(playlist.audios)
+    ? (playlist.is_shuffle || playlist.shuffle
+        ? [...playlist.audios].sort(() => Math.random() - 0.5)
+        : playlist.audios)
+    : [];
+  const audioPaths = [];
+  const missingAudios = [];
+
+  playlistAudios.forEach((audio) => {
+    const audioPath = resolvePublicMediaPath(audio.filepath);
+    if (fs.existsSync(audioPath)) {
+      audioPaths.push(audioPath);
+      return;
+    }
+    missingAudios.push({ title: audio.title || audio.id || 'unknown', filepath: audio.filepath, checkedPath: audioPath });
+  });
+
+  if (missingAudios.length > 0) {
+    console.error(`[StreamingService] Playlist ${stream.video_id}: ${missingAudios.length} audio file(s) missing on disk; they will be skipped.`);
+    missingAudios.slice(0, 5).forEach((audio) => {
+      console.error(`[StreamingService] Missing playlist audio: title=${audio.title}, filepath=${audio.filepath}, checked=${audio.checkedPath}`);
+    });
+  }
   
   const concatFile = path.join(projectRoot, 'temp', `playlist_${stream.id}.txt`);
+  const audioConcatFile = path.join(projectRoot, 'temp', `playlist_${stream.id}_audio.txt`);
   
   const tempDir = path.dirname(concatFile);
   if (!fs.existsSync(tempDir)) {
@@ -558,6 +584,21 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
   }
   
   fs.writeFileSync(concatFile, concatContent);
+
+  // Build audio concat list when the playlist has audio files
+  const usePlaylistAudio = audioPaths.length > 0;
+  if (usePlaylistAudio) {
+    let audioConcatContent = '';
+    audioPaths.forEach(audioPath => {
+      audioConcatContent += `file '${formatConcatFilePath(audioPath)}'\n`;
+    });
+    fs.writeFileSync(audioConcatFile, audioConcatContent);
+  } else {
+    // Make sure no stale audio concat file from a previous run lingers
+    try {
+      if (fs.existsSync(audioConcatFile)) fs.unlinkSync(audioConcatFile);
+    } catch (_) { /* noop */ }
+  }
   
   // Playlist streams are always normalized before RTMP output.
   // Copy mode is fragile for playlists because files can have different codecs,
@@ -572,8 +613,26 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
     '-f', 'concat',
     '-safe', '0',
     '-i', concatFile,
-    '-map', '0:v:0',
-    '-map', '0:a?',
+  ];
+
+  if (usePlaylistAudio) {
+    // Add audio concat as second input and loop it for the duration of the stream
+    args.push(
+      '-stream_loop', '-1',
+      '-f', 'concat',
+      '-safe', '0',
+      '-i', audioConcatFile,
+      '-map', '0:v:0',
+      '-map', '1:a:0'
+    );
+  } else {
+    args.push(
+      '-map', '0:v:0',
+      '-map', '0:a?'
+    );
+  }
+
+  args.push(
     '-c:v', 'libx264',
     '-preset', 'ultrafast',
     '-tune', 'zerolatency',
@@ -588,7 +647,7 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
     '-b:a', '128k',
     '-ar', '44100',
     '-ac', '2'
-  ];
+  );
 
   // CRITICAL: -t must be placed BEFORE -f flv and output URL
   if (durationSeconds && durationSeconds > 0) {
@@ -597,7 +656,9 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
 
   args.push('-f', 'flv');
   args.push(rtmpUrl);
-  console.log('[StreamingService] Playlist: normalized encoding mode');
+  console.log(
+    `[StreamingService] Playlist: normalized encoding mode${usePlaylistAudio ? ` with playlist audio (${audioPaths.length} track(s))` : ''}`
+  );
   return args;
 }
 
@@ -606,7 +667,7 @@ async function buildFFmpegArgs(stream) {
   
   if (streamWithVideo && streamWithVideo.video_type === 'playlist') {
     const Playlist = require('../models/Playlist');
-    const playlist = await Playlist.findByIdWithVideos(stream.video_id);
+    const playlist = await Playlist.findByIdWithMedia(stream.video_id);
     
     if (!playlist) {
       throw new Error(`Playlist not found for playlist_id: ${stream.video_id}`);
@@ -1284,10 +1345,15 @@ async function stopStream(streamId) {
     clearDurationInfo(streamId);
     
     const tempConcatFile = path.join(__dirname, '..', 'temp', `playlist_${streamId}.txt`);
+    const tempAudioConcatFile = path.join(__dirname, '..', 'temp', `playlist_${streamId}_audio.txt`);
     try {
       if (fs.existsSync(tempConcatFile)) {
         fs.unlinkSync(tempConcatFile);
         console.log(`[StreamingService] Cleaned up temporary playlist file: ${tempConcatFile}`);
+      }
+      if (fs.existsSync(tempAudioConcatFile)) {
+        fs.unlinkSync(tempAudioConcatFile);
+        console.log(`[StreamingService] Cleaned up temporary playlist audio file: ${tempAudioConcatFile}`);
       }
     } catch (cleanupError) {
       console.error(`[StreamingService] Error cleaning up temporary file: ${cleanupError.message}`);

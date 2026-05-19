@@ -88,19 +88,11 @@
 <div class="mt-6 flex items-center justify-between">
   <p class="text-sm text-gray-400" id="paginationInfo">Showing 1-<%= Math.min(8, playlists ? playlists.length : 0) %> of <%= playlists ? playlists.length : 0 %> playlists</p>
   <div class="flex items-center gap-2" id="paginationControls">
-    <button class="w-9 h-9 flex items-center justify-center rounded-lg bg-dark-700 text-gray-400" id="prevPage" onclick="changePage(-1)">
+    <button type="button" class="w-9 h-9 flex items-center justify-center rounded-lg bg-dark-700 hover:bg-dark-600 text-gray-400 hover:text-white transition-colors" id="prevPage" onclick="changePage(-1)">
       <i class="ti ti-chevron-left"></i>
     </button>
-    <button class="w-9 h-9 flex items-center justify-center rounded-lg bg-primary text-white" id="page1" onclick="goToPage(1)">
-      1
-    </button>
-    <button class="w-9 h-9 flex items-center justify-center rounded-lg bg-dark-700 hover:bg-dark-600 text-gray-400 hover:text-white transition-colors" id="page2" onclick="goToPage(2)" style="display: none;">
-      2
-    </button>
-    <button class="w-9 h-9 flex items-center justify-center rounded-lg bg-dark-700 hover:bg-dark-600 text-gray-400 hover:text-white transition-colors" id="page3" onclick="goToPage(3)" style="display: none;">
-      3
-    </button>
-    <button class="w-9 h-9 flex items-center justify-center rounded-lg bg-dark-700 hover:bg-dark-600 text-gray-400 hover:text-white transition-colors" id="nextPage" onclick="changePage(1)">
+    <div id="pageNumbers" class="flex items-center gap-2"></div>
+    <button type="button" class="w-9 h-9 flex items-center justify-center rounded-lg bg-dark-700 hover:bg-dark-600 text-gray-400 hover:text-white transition-colors" id="nextPage" onclick="changePage(1)">
       <i class="ti ti-chevron-right"></i>
     </button>
   </div>
@@ -314,6 +306,20 @@
         </button>
       </div>
     </div>
+
+    <!-- Shared preview player (single instance to keep CPU/memory low) -->
+    <div id="previewPlayerWrapper" class="hidden mb-4 bg-dark-800 rounded-lg border border-gray-700 overflow-hidden">
+      <div class="flex items-center justify-between px-3 py-2 border-b border-gray-700 bg-dark-700">
+        <div class="flex items-center gap-2 min-w-0">
+          <i id="previewPlayerIcon" class="ti ti-player-play text-primary flex-shrink-0"></i>
+          <span id="previewPlayerTitle" class="text-sm font-medium truncate"></span>
+        </div>
+        <button type="button" onclick="closePreviewPlayer()" class="text-gray-400 hover:text-white flex-shrink-0" title="Close preview">
+          <i class="ti ti-x"></i>
+        </button>
+      </div>
+      <div id="previewPlayerSlot" class="bg-black"></div>
+    </div>
     
     <div id="playlistVideos" class="space-y-2">
       <!-- Videos will be loaded here -->
@@ -400,6 +406,7 @@ function closePlaylistModal() {
 }
 
 function closeViewPlaylistModal() {
+  closePreviewPlayer();
   document.getElementById('viewPlaylistModal').classList.add('hidden');
   document.getElementById('viewPlaylistModal').classList.remove('flex');
 }
@@ -639,13 +646,17 @@ function viewPlaylist(playlistId) {
     .then(data => {
       if (data.success) {
         const playlist = data.playlist;
+
+        // Always start with a clean slate so previous preview never lingers
+        closePreviewPlayer();
         
         document.getElementById('viewPlaylistTitle').textContent = playlist.name;
         document.getElementById('viewPlaylistDescription').textContent = playlist.description || 'No description';
         
         const videoCount = playlist.videos?.length || 0;
         const audioCount = playlist.audios?.length || 0;
-        document.getElementById('viewVideoCount').textContent = `${videoCount} videos, ${audioCount} audios`;
+        document.getElementById('viewVideoCount').textContent =
+          `${videoCount} ${videoCount === 1 ? 'video' : 'videos'}, ${audioCount} ${audioCount === 1 ? 'audio' : 'audios'}`;
         
         const playbackModeEl = document.getElementById('viewPlaybackMode');
         playbackModeEl.innerHTML = (playlist.shuffle || playlist.is_shuffle)
@@ -658,37 +669,53 @@ function viewPlaylist(playlistId) {
         // Videos section
         if (playlist.videos && playlist.videos.length > 0) {
           contentHtml += '<h4 class="text-sm font-medium text-gray-300 mb-2"><i class="ti ti-video mr-1"></i>Videos</h4>';
-          contentHtml += playlist.videos.map((video, index) => `
+          contentHtml += playlist.videos.map((video, index) => {
+            const safeTitle = escapeHtml(video.title || '');
+            return `
             <div class="flex items-center gap-3 p-3 bg-gray-700 rounded mb-2">
               <span class="text-gray-400 text-sm w-6">${index + 1}</span>
-              <img src="${video.thumbnail_path}" alt="${video.title}" class="w-16 h-10 object-cover rounded" loading="lazy">
+              <img src="${video.thumbnail_path || '/images/default-thumbnail.jpg'}" alt="${safeTitle}" class="w-16 h-10 object-cover rounded" loading="lazy" onerror="this.src='/images/default-thumbnail.jpg'">
               <div class="flex-1 min-w-0">
-                <p class="font-medium truncate">${video.title}</p>
+                <p class="font-medium truncate">${safeTitle}</p>
                 <p class="text-xs text-gray-400">
                   ${video.duration ? Math.floor(video.duration / 60) + ':' + String(Math.floor(video.duration % 60)).padStart(2, '0') : '0:00'}
                 </p>
               </div>
+              <button type="button" onclick="previewMedia('video', '${video.id}')"
+                class="bg-primary hover:bg-secondary text-white w-8 h-8 flex items-center justify-center rounded-lg transition-colors flex-shrink-0"
+                title="Preview">
+                <i class="ti ti-player-play text-sm"></i>
+              </button>
             </div>
-          `).join('');
+          `;
+          }).join('');
         }
         
         // Audios section
         if (playlist.audios && playlist.audios.length > 0) {
           contentHtml += '<h4 class="text-sm font-medium text-gray-300 mb-2 mt-4"><i class="ti ti-music mr-1"></i>Audios</h4>';
-          contentHtml += playlist.audios.map((audio, index) => `
+          contentHtml += playlist.audios.map((audio, index) => {
+            const safeTitle = escapeHtml(audio.title || '');
+            return `
             <div class="flex items-center gap-3 p-3 bg-gray-700 rounded mb-2">
               <span class="text-gray-400 text-sm w-6">${index + 1}</span>
               <div class="w-10 h-10 bg-dark-800 rounded flex items-center justify-center flex-shrink-0">
                 <i class="ti ti-music text-primary"></i>
               </div>
               <div class="flex-1 min-w-0">
-                <p class="font-medium truncate">${audio.title}</p>
+                <p class="font-medium truncate">${safeTitle}</p>
                 <p class="text-xs text-gray-400">
                   ${audio.duration ? Math.floor(audio.duration / 60) + ':' + String(Math.floor(audio.duration % 60)).padStart(2, '0') : '0:00'}
                 </p>
               </div>
+              <button type="button" onclick="previewMedia('audio', '${audio.id}')"
+                class="bg-primary hover:bg-secondary text-white w-8 h-8 flex items-center justify-center rounded-lg transition-colors flex-shrink-0"
+                title="Preview">
+                <i class="ti ti-player-play text-sm"></i>
+              </button>
             </div>
-          `).join('');
+          `;
+          }).join('');
         }
         
         if (!contentHtml) {
@@ -696,6 +723,12 @@ function viewPlaylist(playlistId) {
         }
         
         videosContainer.innerHTML = contentHtml;
+
+        // Cache media on the modal so previewMedia() can resolve filepath without refetching
+        currentViewPlaylistMedia = {
+          videos: Array.isArray(playlist.videos) ? playlist.videos : [],
+          audios: Array.isArray(playlist.audios) ? playlist.audios : []
+        };
         
         document.getElementById('editPlaylistBtn').onclick = () => {
           closeViewPlaylistModal();
@@ -710,6 +743,91 @@ function viewPlaylist(playlistId) {
       console.error('Error loading playlist:', error);
       showToast('Error loading playlist', 'error');
     });
+}
+
+// Track which media is currently displayed in the View modal so preview can find filepath
+let currentViewPlaylistMedia = { videos: [], audios: [] };
+
+// Lightweight HTML escaper for titles inserted via innerHTML
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * Single shared media element for previewing playlist items.
+ * - Only one preview plays at a time (CPU-friendly).
+ * - The element is created lazily on first use, then reused (no DOM churn).
+ * - preload="none" so nothing is fetched until the user actually presses play.
+ */
+function previewMedia(kind, id) {
+  const list = kind === 'video' ? currentViewPlaylistMedia.videos : currentViewPlaylistMedia.audios;
+  const item = list.find(m => String(m.id) === String(id));
+  if (!item || !item.filepath) {
+    showToast('Media file not found', 'error');
+    return;
+  }
+
+  const wrapper = document.getElementById('previewPlayerWrapper');
+  const slot = document.getElementById('previewPlayerSlot');
+  const titleEl = document.getElementById('previewPlayerTitle');
+  const iconEl = document.getElementById('previewPlayerIcon');
+
+  // Stop any current playback before swapping element type
+  stopCurrentPreview();
+
+  let el;
+  if (kind === 'video') {
+    el = document.createElement('video');
+    el.controls = true;
+    el.preload = 'none';
+    el.playsInline = true;
+    el.className = 'w-full max-h-[360px] bg-black';
+    iconEl.className = 'ti ti-video text-primary flex-shrink-0';
+  } else {
+    el = document.createElement('audio');
+    el.controls = true;
+    el.preload = 'none';
+    el.className = 'w-full';
+    iconEl.className = 'ti ti-music text-primary flex-shrink-0';
+  }
+  el.src = item.filepath;
+
+  slot.innerHTML = '';
+  slot.appendChild(el);
+  titleEl.textContent = item.title || (kind === 'video' ? 'Video preview' : 'Audio preview');
+  wrapper.classList.remove('hidden');
+
+  // Auto-play once user explicitly requested preview; muted-by-default not needed for audio
+  el.play().catch(() => { /* ignore autoplay rejection; user can press play */ });
+
+  // Bring preview into view
+  wrapper.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function stopCurrentPreview() {
+  const slot = document.getElementById('previewPlayerSlot');
+  if (!slot) return;
+  const media = slot.querySelector('video, audio');
+  if (media) {
+    try {
+      media.pause();
+    } catch (_) { /* noop */ }
+    // Detaching the source frees the network/decoder buffers immediately
+    media.removeAttribute('src');
+    media.load();
+  }
+  slot.innerHTML = '';
+}
+
+function closePreviewPlayer() {
+  stopCurrentPreview();
+  const wrapper = document.getElementById('previewPlayerWrapper');
+  if (wrapper) wrapper.classList.add('hidden');
 }
 
 function deletePlaylist(playlistId, playlistName) {
@@ -914,71 +1032,82 @@ function moveAudioDown(index) {
 }
 
 function filterPlaylists() {
-  const searchTerm = document.getElementById('searchPlaylists').value.toLowerCase();
+  const searchTerm = document.getElementById('searchPlaylists').value.toLowerCase().trim();
   const sortBy = document.getElementById('sortPlaylists').value;
-  const playlistCards = document.querySelectorAll('.playlist-card');
-  
-  let visibleCards = [];
-  
-  playlistCards.forEach(card => {
-    const playlistName = card.querySelector('h3').textContent.toLowerCase();
-    const playlistDescription = card.querySelector('p').textContent.toLowerCase();
-    
-    const matchesSearch = playlistName.includes(searchTerm) || playlistDescription.includes(searchTerm);
-    
-    if (matchesSearch) {
-      visibleCards.push(card);
+  const container = document.getElementById('playlistsContainer');
+  const allCards = Array.from(container.querySelectorAll('.playlist-card'));
+
+  // Hapus empty state lama (baik dari EJS maupun yang dibuat JS sebelumnya)
+  container.querySelectorAll('.col-span-full').forEach(el => el.remove());
+
+  // Tentukan kartu yang cocok
+  const visibleCards = allCards.filter(card => {
+    const playlistName = (card.querySelector('h3')?.textContent || '').toLowerCase();
+    const playlistDescription = (card.querySelector('p')?.textContent || '').toLowerCase();
+    return !searchTerm || playlistName.includes(searchTerm) || playlistDescription.includes(searchTerm);
+  });
+
+  // Sembunyikan kartu yang tidak cocok agar tidak ikut tampil
+  const visibleSet = new Set(visibleCards);
+  allCards.forEach(card => {
+    if (!visibleSet.has(card)) {
+      card.style.display = 'none';
     }
   });
-  
-  if (visibleCards.length > 0) {
-    const container = document.getElementById('playlistsContainer');
-    const sortedCards = [...visibleCards].sort((a, b) => {
-      const aName = a.querySelector('h3').textContent;
-      const bName = b.querySelector('h3').textContent;
-      
-      switch(sortBy) {
-        case 'name':
-          return aName.localeCompare(bName);
-        case 'oldest':
-          const aCreated = new Date(a.dataset.createdAt);
-          const bCreated = new Date(b.dataset.createdAt);
-          return aCreated - bCreated;
-        case 'newest':
-        default:
-          const aUpdated = new Date(a.dataset.updatedAt);
-          const bUpdated = new Date(b.dataset.updatedAt);
-          return bUpdated - aUpdated;
+
+  // Sort kartu yang cocok
+  visibleCards.sort((a, b) => {
+    const aName = a.querySelector('h3')?.textContent || '';
+    const bName = b.querySelector('h3')?.textContent || '';
+
+    switch (sortBy) {
+      case 'name':
+        return aName.localeCompare(bName);
+      case 'oldest': {
+        const aCreated = new Date(a.dataset.createdAt);
+        const bCreated = new Date(b.dataset.createdAt);
+        return aCreated - bCreated;
       }
-    });
-    
-    sortedCards.forEach(card => {
-      container.appendChild(card);
-    });
-    
-    allPlaylistCards = sortedCards;
-  } else {
-    allPlaylistCards = [];
-  }
-  
+      case 'newest':
+      default: {
+        const aUpdated = new Date(a.dataset.updatedAt);
+        const bUpdated = new Date(b.dataset.updatedAt);
+        return bUpdated - aUpdated;
+      }
+    }
+  });
+
+  visibleCards.forEach(card => container.appendChild(card));
+
+  allPlaylistCards = visibleCards;
   currentPage = 1;
   updatePagination();
-  
-  const emptyState = document.querySelector('.col-span-full');
-  if (visibleCards.length === 0 && searchTerm) {
-    if (!emptyState) {
-      const container = document.getElementById('playlistsContainer');
-      const emptyDiv = document.createElement('div');
-      emptyDiv.className = 'col-span-full text-center py-12';
+
+  // Tampilkan empty state hanya bila tidak ada kartu yang match
+  if (visibleCards.length === 0) {
+    const emptyDiv = document.createElement('div');
+    emptyDiv.className = 'col-span-full text-center py-12';
+
+    if (searchTerm) {
       emptyDiv.innerHTML = `
         <i class="ti ti-search text-6xl text-gray-600 mb-4"></i>
         <h3 class="text-xl font-semibold mb-2">No playlists found</h3>
         <p class="text-gray-400">Try adjusting your search terms</p>
       `;
-      container.appendChild(emptyDiv);
+    } else {
+      emptyDiv.innerHTML = `
+        <i class="ti ti-playlist text-6xl text-gray-600 mb-4"></i>
+        <h3 class="text-xl font-semibold mb-2">No playlists yet</h3>
+        <p class="text-gray-400 mb-4">Create your first playlist to get started</p>
+        <button onclick="openCreatePlaylistModal()"
+          class="bg-primary hover:bg-secondary text-white px-6 py-3 rounded-lg transition-colors">
+          <i class="ti ti-plus mr-2"></i>
+          Create Playlist
+        </button>
+      `;
     }
-  } else if (emptyState && visibleCards.length > 0) {
-    emptyState.remove();
+
+    container.appendChild(emptyDiv);
   }
 }
 
@@ -996,32 +1125,70 @@ function initializePagination() {
 
 function updatePagination() {
   const totalItems = allPlaylistCards.length;
-  const totalPages = Math.ceil(totalItems / itemsPerPage);
-  
-  const start = (currentPage - 1) * itemsPerPage + 1;
+  const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
+
+  if (currentPage > totalPages) currentPage = totalPages;
+
+  const start = totalItems === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
   const end = Math.min(currentPage * itemsPerPage, totalItems);
-  document.getElementById('paginationInfo').textContent = `Showing ${start}-${end} of ${totalItems} playlists`;
-  
+  document.getElementById('paginationInfo').textContent =
+    `Showing ${start}-${end} of ${totalItems} playlists`;
+
+  // Tampilkan kartu sesuai halaman aktif
   allPlaylistCards.forEach((card, index) => {
     const shouldShow = index >= (currentPage - 1) * itemsPerPage && index < currentPage * itemsPerPage;
-    card.style.display = shouldShow ? 'block' : 'none';
+    card.style.display = shouldShow ? '' : 'none';
   });
-  
-  document.getElementById('prevPage').disabled = currentPage === 1;
-  document.getElementById('nextPage').disabled = currentPage === totalPages;
-  
-  for (let i = 1; i <= 3; i++) {
-    const pageBtn = document.getElementById(`page${i}`);
-    if (i <= totalPages) {
-      pageBtn.style.display = 'flex';
-      pageBtn.textContent = i;
-      pageBtn.className = i === currentPage 
-        ? 'w-9 h-9 flex items-center justify-center rounded-lg bg-primary text-white'
-        : 'w-9 h-9 flex items-center justify-center rounded-lg bg-dark-700 hover:bg-dark-600 text-gray-400 hover:text-white transition-colors';
-    } else {
-      pageBtn.style.display = 'none';
-    }
+
+  const controls = document.getElementById('paginationControls');
+  if (totalItems <= itemsPerPage) {
+    controls.style.display = 'none';
+    return;
   }
+  controls.style.display = 'flex';
+
+  const prevBtn = document.getElementById('prevPage');
+  const nextBtn = document.getElementById('nextPage');
+  prevBtn.disabled = currentPage === 1;
+  nextBtn.disabled = currentPage === totalPages;
+  prevBtn.classList.toggle('opacity-50', currentPage === 1);
+  prevBtn.classList.toggle('cursor-not-allowed', currentPage === 1);
+  nextBtn.classList.toggle('opacity-50', currentPage === totalPages);
+  nextBtn.classList.toggle('cursor-not-allowed', currentPage === totalPages);
+
+  renderPageNumbers(currentPage, totalPages);
+}
+
+function renderPageNumbers(current, total) {
+  const wrap = document.getElementById('pageNumbers');
+  wrap.innerHTML = '';
+
+  // Tentukan halaman yang ditampilkan: selalu 1, total, dan tetangga current
+  const pages = new Set([1, total, current, current - 1, current + 1]);
+  const sorted = [...pages]
+    .filter(p => p >= 1 && p <= total)
+    .sort((a, b) => a - b);
+
+  let lastShown = 0;
+  sorted.forEach(p => {
+    if (p - lastShown > 1) {
+      const ellipsis = document.createElement('span');
+      ellipsis.className = 'w-9 h-9 flex items-center justify-center text-gray-500';
+      ellipsis.textContent = '…';
+      wrap.appendChild(ellipsis);
+    }
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = p;
+    btn.onclick = () => goToPage(p);
+    btn.className = p === current
+      ? 'w-9 h-9 flex items-center justify-center rounded-lg bg-primary text-white'
+      : 'w-9 h-9 flex items-center justify-center rounded-lg bg-dark-700 hover:bg-dark-600 text-gray-400 hover:text-white transition-colors';
+    wrap.appendChild(btn);
+
+    lastShown = p;
+  });
 }
 
 function changePage(direction) {
