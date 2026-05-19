@@ -480,6 +480,71 @@ function addStreamLog(streamId, message) {
     logs.shift();
   }
 }
+
+/**
+ * Pre-render every audio file in a playlist into a single seamless AAC file.
+ *
+ * Why pre-render instead of relying on the concat demuxer at runtime?
+ * MP3/AAC files have encoder delay/padding at file boundaries. The concat
+ * demuxer just stitches packets, so listeners hear a small silence between
+ * tracks. By decoding all inputs to PCM and re-encoding once, the track
+ * boundaries become sample-accurate (gapless) and the resulting file can
+ * then be looped cleanly during the live stream.
+ *
+ * Returns the path to the merged audio on success, or null on failure so the
+ * caller can fall back to concat-demuxer mode without breaking the stream.
+ */
+function prerenderGaplessAudio(audioPaths, outputFile) {
+  return new Promise((resolve) => {
+    if (!Array.isArray(audioPaths) || audioPaths.length === 0) {
+      return resolve(null);
+    }
+
+    const args = [];
+    audioPaths.forEach((p) => {
+      args.push('-i', p);
+    });
+
+    // concat filter joins decoded PCM streams sample-accurately
+    const filter = audioPaths.map((_, i) => `[${i}:a:0]`).join('') +
+      `concat=n=${audioPaths.length}:v=0:a=1[aout]`;
+
+    args.push(
+      '-filter_complex', filter,
+      '-map', '[aout]',
+      '-c:a', 'aac',
+      '-b:a', '192k',
+      '-ar', '44100',
+      '-ac', '2',
+      '-movflags', '+faststart',
+      '-y',
+      outputFile
+    );
+
+    const proc = spawn(ffmpegPath, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+
+    let stderrTail = '';
+    proc.stderr.on('data', (chunk) => {
+      stderrTail = (stderrTail + chunk.toString()).slice(-4096);
+    });
+
+    proc.on('error', (err) => {
+      console.error('[StreamingService] prerenderGaplessAudio spawn error:', err.message);
+      resolve(null);
+    });
+
+    proc.on('close', (code) => {
+      if (code === 0 && fs.existsSync(outputFile) && fs.statSync(outputFile).size > 0) {
+        resolve(outputFile);
+      } else {
+        console.error(`[StreamingService] prerenderGaplessAudio failed (exit=${code}). Last stderr:\n${stderrTail}`);
+        try { if (fs.existsSync(outputFile)) fs.unlinkSync(outputFile); } catch (_) { /* noop */ }
+        resolve(null);
+      }
+    });
+  });
+}
+
 async function buildFFmpegArgsForPlaylist(stream, playlist) {
   if (!playlist.videos || playlist.videos.length === 0) {
     throw new Error(`Playlist is empty for playlist_id: ${stream.video_id}`);
@@ -585,16 +650,48 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
   
   fs.writeFileSync(concatFile, concatContent);
 
-  // Build audio concat list when the playlist has audio files
-  const usePlaylistAudio = audioPaths.length > 0;
-  if (usePlaylistAudio) {
-    let audioConcatContent = '';
-    audioPaths.forEach(audioPath => {
-      audioConcatContent += `file '${formatConcatFilePath(audioPath)}'\n`;
-    });
-    fs.writeFileSync(audioConcatFile, audioConcatContent);
-  } else {
-    // Make sure no stale audio concat file from a previous run lingers
+  // Build a single seamless audio file when the playlist has audios.
+  // We try pre-rendering with the concat filter first (sample-accurate, truly
+  // gapless). If that fails for any reason, we fall back to the older concat
+  // demuxer list so the live stream still gets audio.
+  let usePlaylistAudio = false;
+  let useGaplessAudio = false;
+  let gaplessAudioFile = null;
+
+  if (audioPaths.length > 0) {
+    if (audioPaths.length === 1) {
+      // Single track: nothing to "join" — use it directly, no pre-render needed.
+      gaplessAudioFile = audioPaths[0];
+      useGaplessAudio = true;
+      usePlaylistAudio = true;
+    } else {
+      const mergedAudioFile = path.join(projectRoot, 'temp', `playlist_${stream.id}_audio_merged.m4a`);
+      // Remove any stale merge output from a previous run before re-rendering
+      try { if (fs.existsSync(mergedAudioFile)) fs.unlinkSync(mergedAudioFile); } catch (_) { /* noop */ }
+
+      console.log(`[StreamingService] Pre-rendering ${audioPaths.length} playlist audio file(s) into a gapless track...`);
+      const merged = await prerenderGaplessAudio(audioPaths, mergedAudioFile);
+      if (merged) {
+        gaplessAudioFile = merged;
+        useGaplessAudio = true;
+        usePlaylistAudio = true;
+        console.log(`[StreamingService] Gapless audio ready: ${merged}`);
+      } else {
+        console.warn('[StreamingService] Gapless pre-render failed, falling back to concat-demuxer (may have small gaps between tracks).');
+
+        let audioConcatContent = '';
+        audioPaths.forEach(audioPath => {
+          audioConcatContent += `file '${formatConcatFilePath(audioPath)}'\n`;
+        });
+        fs.writeFileSync(audioConcatFile, audioConcatContent);
+        usePlaylistAudio = true;
+      }
+    }
+  }
+
+  // Make sure no stale audio concat file from a previous run lingers when we
+  // are not using the demuxer fallback this time.
+  if (!usePlaylistAudio || useGaplessAudio) {
     try {
       if (fs.existsSync(audioConcatFile)) fs.unlinkSync(audioConcatFile);
     } catch (_) { /* noop */ }
@@ -616,15 +713,27 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
   ];
 
   if (usePlaylistAudio) {
-    // Add audio concat as second input and loop it for the duration of the stream
-    args.push(
-      '-stream_loop', '-1',
-      '-f', 'concat',
-      '-safe', '0',
-      '-i', audioConcatFile,
-      '-map', '0:v:0',
-      '-map', '1:a:0'
-    );
+    if (useGaplessAudio) {
+      // Single pre-rendered seamless track. No concat demuxer here — just loop
+      // the file. Because boundaries inside the merged file are sample-
+      // accurate, looping back to the start is also gapless.
+      args.push(
+        '-stream_loop', '-1',
+        '-i', gaplessAudioFile,
+        '-map', '0:v:0',
+        '-map', '1:a:0'
+      );
+    } else {
+      // Fallback: concat demuxer (per-file, may show tiny gaps between tracks)
+      args.push(
+        '-stream_loop', '-1',
+        '-f', 'concat',
+        '-safe', '0',
+        '-i', audioConcatFile,
+        '-map', '0:v:0',
+        '-map', '1:a:0'
+      );
+    }
   } else {
     args.push(
       '-map', '0:v:0',
@@ -657,7 +766,13 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
   args.push('-f', 'flv');
   args.push(rtmpUrl);
   console.log(
-    `[StreamingService] Playlist: normalized encoding mode${usePlaylistAudio ? ` with playlist audio (${audioPaths.length} track(s))` : ''}`
+    `[StreamingService] Playlist: normalized encoding mode${
+      usePlaylistAudio
+        ? useGaplessAudio
+          ? ' with playlist audio (gapless pre-rendered)'
+          : ` with playlist audio (${audioPaths.length} track(s), concat demuxer fallback)`
+        : ''
+    }`
   );
   return args;
 }
@@ -1346,6 +1461,7 @@ async function stopStream(streamId) {
     
     const tempConcatFile = path.join(__dirname, '..', 'temp', `playlist_${streamId}.txt`);
     const tempAudioConcatFile = path.join(__dirname, '..', 'temp', `playlist_${streamId}_audio.txt`);
+    const tempMergedAudioFile = path.join(__dirname, '..', 'temp', `playlist_${streamId}_audio_merged.m4a`);
     try {
       if (fs.existsSync(tempConcatFile)) {
         fs.unlinkSync(tempConcatFile);
@@ -1354,6 +1470,10 @@ async function stopStream(streamId) {
       if (fs.existsSync(tempAudioConcatFile)) {
         fs.unlinkSync(tempAudioConcatFile);
         console.log(`[StreamingService] Cleaned up temporary playlist audio file: ${tempAudioConcatFile}`);
+      }
+      if (fs.existsSync(tempMergedAudioFile)) {
+        fs.unlinkSync(tempMergedAudioFile);
+        console.log(`[StreamingService] Cleaned up merged playlist audio file: ${tempMergedAudioFile}`);
       }
     } catch (cleanupError) {
       console.error(`[StreamingService] Error cleaning up temporary file: ${cleanupError.message}`);
