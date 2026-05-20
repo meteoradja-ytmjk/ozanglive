@@ -6128,29 +6128,114 @@ app.post('/api/audios/joiner', isAuthenticated, [
     const outputFilename = `playlist-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.m4a`;
     const outputPath = path.join(audiosDir, outputFilename);
 
-    // Sample-accurate gapless join via concat filter
-    await new Promise((resolve, reject) => {
-      const filter = audioPaths.map((_, i) => `[${i}:a:0]`).join('') +
-        `concat=n=${audioPaths.length}:v=0:a=1[aout]`;
+    // Robust audio join using intermediate normalized files + concat demuxer.
+    //
+    // The complex filter approach (concat filter) fails frequently because:
+    // 1. Mixed formats (MP3 vs M4A vs WAV) cause stream mismatch errors
+    // 2. Windows paths with spaces break filter graph parsing
+    // 3. Variable bitrate / channel layout differences crash the filter
+    //
+    // Instead, we normalize each audio to a common format first, then use
+    // the concat demuxer which is much more reliable.
+    const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'audio-joiner-'));
+    
+    try {
+      const TARGET_RATE = 44100;
+      console.log('[audio-joiner] Work dir:', workDir);
+      console.log('[audio-joiner] Input files:', audioPaths.length);
 
-      const cmd = ffmpeg();
-      audioPaths.forEach(p => cmd.input(p));
+      // Step 1: Normalize each audio to the same format (AAC, 44100Hz, stereo)
+      const normalizedPaths = [];
+      for (let i = 0; i < audioPaths.length; i++) {
+        const inputPath = audioPaths[i];
+        const normalizedPath = path.join(workDir, `normalized-${i}.m4a`);
+        
+        console.log(`[audio-joiner] Normalizing ${i + 1}/${audioPaths.length}: ${path.basename(inputPath)}`);
+        
+        await new Promise((resolve, reject) => {
+          let stderrBuffer = '';
+          ffmpeg()
+            .input(inputPath)
+            .outputOptions([
+              '-c:a', 'aac',
+              '-b:a', '192k',
+              '-ar', String(TARGET_RATE),
+              '-ac', '2',
+              '-vn',
+              '-y'
+            ])
+            .on('start', (cmd) => console.log(`[audio-joiner] normalize cmd: ${cmd}`))
+            .on('stderr', (line) => { stderrBuffer = (stderrBuffer + '\n' + line).slice(-2000); })
+            .on('error', (err) => {
+              console.error(`[audio-joiner] normalize error for file ${i}:`, err.message, stderrBuffer);
+              reject(new Error(`Failed to normalize audio ${i + 1} (${path.basename(inputPath)}): ${err.message}`));
+            })
+            .on('end', () => {
+              console.log(`[audio-joiner] Normalized ${i + 1}/${audioPaths.length} ✓`);
+              resolve();
+            })
+            .save(normalizedPath);
+        });
+        
+        normalizedPaths.push(normalizedPath);
+      }
 
-      cmd
-        .complexFilter(filter, ['aout'])
-        .outputOptions([
-          '-map', '[aout]',
-          '-c:a', 'aac',
-          '-b:a', '192k',
-          '-ar', '44100',
-          '-ac', '2',
-          '-movflags', '+faststart',
-          '-y'
-        ])
-        .on('error', (err) => reject(err))
-        .on('end', () => resolve())
-        .save(outputPath);
-    });
+      // Step 2: Create concat demuxer file
+      const concatFilePath = path.join(workDir, 'concat-list.txt');
+      const concatContent = normalizedPaths.map(p => {
+        // ffmpeg concat demuxer requires forward slashes or escaped backslashes
+        const safePath = p.replace(/\\/g, '/');
+        return `file '${safePath}'`;
+      }).join('\n');
+      fs.writeFileSync(concatFilePath, concatContent, 'utf8');
+      console.log('[audio-joiner] Concat file created:', concatFilePath);
+
+      // Step 3: Join using concat demuxer (stream copy — fast since all files are same format now)
+      await new Promise((resolve, reject) => {
+        let stderrBuffer = '';
+        let runCommand = '';
+        
+        ffmpeg()
+          .input(concatFilePath)
+          .inputOptions(['-f', 'concat', '-safe', '0'])
+          .outputOptions([
+            '-c:a', 'copy',
+            '-movflags', '+faststart',
+            '-y'
+          ])
+          .on('start', (commandLine) => {
+            runCommand = commandLine;
+            console.log('[audio-joiner] concat cmd:', commandLine);
+          })
+          .on('stderr', (line) => {
+            stderrBuffer = (stderrBuffer + '\n' + line).slice(-4000);
+          })
+          .on('error', (err) => {
+            const detail = stderrBuffer ? `\nffmpeg stderr (tail):\n${stderrBuffer}` : '';
+            const cmdInfo = runCommand ? `\nffmpeg cmd: ${runCommand}` : '';
+            const wrapped = new Error(`${err.message}${cmdInfo}${detail}`);
+            wrapped.cause = err;
+            console.error('[audio-joiner] concat error:', wrapped.message);
+            reject(wrapped);
+          })
+          .on('end', () => {
+            console.log('[audio-joiner] Concat join completed ✓');
+            resolve();
+          })
+          .save(outputPath);
+      });
+
+    } finally {
+      // Cleanup temp normalized files
+      try {
+        const tempFiles = fs.readdirSync(workDir);
+        tempFiles.forEach(f => {
+          try { fs.unlinkSync(path.join(workDir, f)); } catch (_) {}
+        });
+        fs.rmdirSync(workDir);
+        console.log('[audio-joiner] Cleanup done');
+      } catch (_) { /* noop */ }
+    }
 
     // Probe duration of the rendered file
     const metadata = await new Promise((resolve, reject) => {
@@ -6187,7 +6272,15 @@ app.post('/api/audios/joiner', isAuthenticated, [
     });
   } catch (error) {
     console.error('Error in audio joiner:', error);
-    res.status(500).json({ success: false, error: 'Failed to join audio' });
+    // Surface ffmpeg's first useful line so the UI no longer just says
+    // "Failed to join audio" when sample rates / channel layouts mismatch
+    const root = (error && error.message) ? String(error.message) : 'Failed to join audio';
+    const firstLine = root.split('\n').find(l => l.trim().length > 0) || 'Failed to join audio';
+    res.status(500).json({
+      success: false,
+      error: 'Failed to join audio',
+      message: firstLine.slice(0, 500)
+    });
   }
 });
 
