@@ -142,71 +142,59 @@
       
       <div>
         <label class="block text-sm font-medium mb-3">Select Media</label>
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <!-- Available Media (Left Column) -->
-          <div>
-            <!-- Tab Buttons for Available Media -->
-            <div class="flex w-full mb-3 border border-gray-600 rounded-lg overflow-hidden bg-gray-800/50">
-              <button type="button" id="availableVideosTab" onclick="switchAvailableTab('videos')" 
-                class="flex-1 px-4 py-2 text-sm font-medium text-center border-b-2 border-primary text-primary bg-primary/20">
-                <i class="ti ti-video mr-1"></i>Videos
+        <!-- Single panel: Select Media with checkboxes, shuffle & pin -->
+        <div>
+          <!-- Tab Buttons -->
+          <div class="flex w-full mb-3 border border-gray-600 rounded-lg overflow-hidden bg-gray-800/50">
+            <button type="button" id="availableVideosTab" onclick="switchAvailableTab('videos')" 
+              class="flex-1 px-4 py-2 text-sm font-medium text-center border-b-2 border-primary text-primary bg-primary/20">
+              <i class="ti ti-video mr-1"></i>Videos
+            </button>
+            <div class="w-px bg-gray-600"></div>
+            <button type="button" id="availableAudiosTab" onclick="switchAvailableTab('audios')" 
+              class="flex-1 px-4 py-2 text-sm font-medium text-center border-b-2 border-transparent text-gray-400 hover:text-white hover:bg-gray-700/50">
+              <i class="ti ti-music mr-1"></i>Audios
+            </button>
+          </div>
+
+          <!-- Action bar: shuffle, pin info, count -->
+          <div class="flex items-center justify-between mb-2 px-1">
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="shuffleSelectedVideos()" class="h-7 px-2 flex items-center gap-1 rounded bg-primary/20 hover:bg-primary/30 text-primary text-xs transition-colors" title="Shuffle video order">
+                <span>&#x1F500;</span><span class="hidden sm:inline">Shuffle Video</span>
               </button>
-              <div class="w-px bg-gray-600"></div>
-              <button type="button" id="availableAudiosTab" onclick="switchAvailableTab('audios')" 
-                class="flex-1 px-4 py-2 text-sm font-medium text-center border-b-2 border-transparent text-gray-400 hover:text-white hover:bg-gray-700/50">
-                <i class="ti ti-music mr-1"></i>Audios
+              <button type="button" onclick="shuffleSelectedAudios()" class="h-7 px-2 flex items-center gap-1 rounded bg-green-500/20 hover:bg-green-500/30 text-green-400 text-xs transition-colors" title="Shuffle audio order">
+                <span>&#x1F500;</span><span class="hidden sm:inline">Shuffle Audio</span>
               </button>
             </div>
-            
-            <!-- Available Videos Panel -->
-            <div id="availableVideosPanel" class="bg-dark-700 rounded-lg border border-gray-600 shadow-lg">
-              <div class="p-2 border-b border-gray-600/50">
-                <div class="relative">
-                  <input type="text" id="searchVideos" placeholder="Search videos..."
-                    class="w-full bg-dark-800 text-white pl-8 pr-4 py-2 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary border border-gray-700">
-                  <i class="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
-                </div>
-              </div>
-              <div id="availableVideos" class="p-2 space-y-1 min-h-[220px] max-h-60 overflow-y-auto custom-scrollbar">
-                <!-- Rendered dynamically by JS with folder grouping -->
+            <span class="text-xs text-gray-500" id="selectedMediaCount">0 selected</span>
+          </div>
+          
+          <!-- Videos Panel -->
+          <div id="availableVideosPanel" class="bg-dark-700 rounded-lg border border-gray-600 shadow-lg">
+            <div class="p-2 border-b border-gray-600/50">
+              <div class="relative">
+                <input type="text" id="searchVideos" placeholder="Search videos..."
+                  class="w-full bg-dark-800 text-white pl-8 pr-4 py-2 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary border border-gray-700">
+                <i class="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
               </div>
             </div>
-            
-            <!-- Available Audios Panel -->
-            <div id="availableAudiosPanel" class="bg-dark-700 rounded-lg border border-gray-600 shadow-lg hidden">
-              <div class="p-2 border-b border-gray-600/50">
-                <div class="relative">
-                  <input type="text" id="searchAudios" placeholder="Search audios..."
-                    class="w-full bg-dark-800 text-white pl-8 pr-4 py-2 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary border border-gray-700">
-                  <i class="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
-                </div>
-              </div>
-              <div id="availableAudios" class="p-2 space-y-1 min-h-[220px] max-h-60 overflow-y-auto custom-scrollbar">
-                <!-- Rendered dynamically by JS with folder grouping -->
-              </div>
+            <div id="availableVideos" class="p-2 space-y-1 min-h-[220px] max-h-72 overflow-y-auto custom-scrollbar">
+              <!-- Rendered dynamically by JS with folder grouping + checkboxes -->
             </div>
           </div>
           
-          <!-- Selected Media (Right Column) -->
-          <div>
-            <div class="flex items-center justify-between mb-3">
-              <span class="text-sm font-medium text-gray-300"><i class="ti ti-playlist mr-1"></i>Selected Media</span>
-              <div class="flex items-center gap-2">
-                <button type="button" onclick="shuffleSelectedVideos()" class="w-7 h-7 flex items-center justify-center rounded bg-primary/20 hover:bg-primary/30 text-primary transition-colors" title="Shuffle Videos">
-                  <span class="text-sm">&#x1F500;</span>
-                </button>
-                <button type="button" onclick="shuffleSelectedAudios()" class="w-7 h-7 flex items-center justify-center rounded bg-green-500/20 hover:bg-green-500/30 text-green-400 transition-colors" title="Shuffle Audios">
-                  <span class="text-sm">&#x1F500;</span>
-                </button>
-                <span class="text-xs text-gray-500" id="selectedMediaCount">0 items</span>
+          <!-- Audios Panel -->
+          <div id="availableAudiosPanel" class="bg-dark-700 rounded-lg border border-gray-600 shadow-lg hidden">
+            <div class="p-2 border-b border-gray-600/50">
+              <div class="relative">
+                <input type="text" id="searchAudios" placeholder="Search audios..."
+                  class="w-full bg-dark-800 text-white pl-8 pr-4 py-2 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary border border-gray-700">
+                <i class="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
               </div>
             </div>
-            
-            <!-- Single combined panel for selected videos + audios -->
-            <div class="bg-dark-700 rounded-lg border border-gray-600 p-3 min-h-[280px] max-h-80 overflow-y-auto custom-scrollbar">
-              <div id="selectedMedia" class="space-y-2 min-h-[100px]">
-                <p id="noMediaMessage" class="text-gray-400 text-sm text-center py-8">No media selected</p>
-              </div>
+            <div id="availableAudios" class="p-2 space-y-1 min-h-[220px] max-h-72 overflow-y-auto custom-scrollbar">
+              <!-- Rendered dynamically by JS with folder grouping + checkboxes -->
             </div>
           </div>
         </div>
@@ -320,7 +308,6 @@ function openCreatePlaylistModal() {
   document.getElementById('playlistId').value = '';
   // Reset tabs to default (videos)
   switchAvailableTab('videos');
-  updateSelectedMediaDisplay();
   updateAvailableVideosDisplay();
   updateAvailableAudiosDisplay();
   document.getElementById('playlistModal').classList.remove('hidden');
@@ -342,14 +329,12 @@ function addVideoToPlaylist(videoId) {
   const video = allVideos.find(v => v.id == videoId);
   if (video && !selectedVideos.find(v => v.id == videoId)) {
     selectedVideos.push(video);
-    updateSelectedMediaDisplay();
     updateAvailableVideosDisplay();
   }
 }
 
 function removeVideoFromPlaylist(videoId) {
   selectedVideos = selectedVideos.filter(v => v.id != videoId);
-  updateSelectedMediaDisplay();
   updateAvailableVideosDisplay();
 }
 
@@ -386,7 +371,9 @@ function pinMediaItem(type, id) {
       selectedAudios.unshift(item);
     }
   }
-  updateSelectedMediaDisplay();
+  // Re-render current tab to reflect new order
+  updateAvailableVideosDisplay();
+  updateAvailableAudiosDisplay();
 }
 
 // Shuffle selected videos randomly
@@ -396,7 +383,7 @@ function shuffleSelectedVideos() {
     const j = Math.floor(Math.random() * (i + 1));
     [selectedVideos[i], selectedVideos[j]] = [selectedVideos[j], selectedVideos[i]];
   }
-  updateSelectedMediaDisplay();
+  updateAvailableVideosDisplay();
 }
 
 // Shuffle selected audios randomly
@@ -406,86 +393,29 @@ function shuffleSelectedAudios() {
     const j = Math.floor(Math.random() * (i + 1));
     [selectedAudios[i], selectedAudios[j]] = [selectedAudios[j], selectedAudios[i]];
   }
-  updateSelectedMediaDisplay();
+  updateAvailableAudiosDisplay();
 }
 
-// Combined selected media display (videos + audios in one list)
-function updateSelectedMediaDisplay() {
-  const container = document.getElementById('selectedMedia');
+// Update the selected count badge
+function updateSelectedCount() {
   const countEl = document.getElementById('selectedMediaCount');
-  if (!container) return;
-  
-  const totalCount = selectedVideos.length + selectedAudios.length;
-  if (countEl) countEl.textContent = `${totalCount} item${totalCount !== 1 ? 's' : ''}`;
-  
-  if (totalCount === 0) {
-    container.innerHTML = '<p class="text-gray-400 text-sm text-center py-8">No media selected</p>';
-    return;
+  if (countEl) {
+    const total = selectedVideos.length + selectedAudios.length;
+    countEl.textContent = `${total} selected`;
   }
-  
-  let html = '';
-  
-  // Videos section
-  if (selectedVideos.length > 0) {
-    html += `<div class="text-[10px] uppercase tracking-wide text-gray-500 font-semibold mb-1 flex items-center gap-1"><i class="ti ti-video text-primary"></i>Videos (${selectedVideos.length})</div>`;
-    html += selectedVideos.map((video, index) => `
-      <div class="flex items-center gap-2 p-1.5 bg-gray-600/50 rounded" data-video-id="${video.id}">
-        <div class="cursor-move flex-shrink-0">
-          <i class="ti ti-grip-vertical text-gray-400 text-xs"></i>
-        </div>
-        <span class="text-[10px] text-gray-400 w-4 text-center flex-shrink-0">${index + 1}</span>
-        <img src="${video.thumbnail_path}" alt="${escapeHtmlAttr(video.title)}" class="w-10 h-7 object-cover rounded flex-shrink-0" loading="lazy" onerror="this.src='/images/default-thumbnail.jpg'">
-        <div class="flex-1 min-w-0">
-          <p class="text-xs font-medium truncate">${escapeHtmlAttr(video.title)}</p>
-        </div>
-        <button type="button" onclick="pinMediaItem('video', '${video.id}')" class="w-6 h-6 flex items-center justify-center rounded ${index === 0 ? 'bg-primary/30 text-primary' : 'hover:bg-primary/20 text-gray-500 hover:text-primary'} transition-colors" title="Pin to top">
-          <span class="text-xs">📌</span>
-        </button>
-        <button type="button" onclick="removeVideoFromPlaylist('${video.id}')" class="w-5 h-5 flex items-center justify-center text-red-400 hover:text-red-300 flex-shrink-0" title="Remove">
-          <i class="ti ti-x text-xs"></i>
-        </button>
-      </div>
-    `).join('');
-  }
-  
-  // Audios section
-  if (selectedAudios.length > 0) {
-    if (selectedVideos.length > 0) html += '<div class="border-t border-gray-600/30 my-2"></div>';
-    html += `<div class="text-[10px] uppercase tracking-wide text-gray-500 font-semibold mb-1 flex items-center gap-1"><i class="ti ti-music text-green-400"></i>Audios (${selectedAudios.length})</div>`;
-    html += selectedAudios.map((audio, index) => `
-      <div class="flex items-center gap-2 p-1.5 bg-gray-600/50 rounded" data-audio-id="${audio.id}">
-        <div class="cursor-move flex-shrink-0">
-          <i class="ti ti-grip-vertical text-gray-400 text-xs"></i>
-        </div>
-        <span class="text-[10px] text-gray-400 w-4 text-center flex-shrink-0">${index + 1}</span>
-        <div class="w-7 h-7 bg-dark-800 rounded flex items-center justify-center flex-shrink-0">
-          <i class="ti ti-music text-green-400 text-xs"></i>
-        </div>
-        <div class="flex-1 min-w-0">
-          <p class="text-xs font-medium truncate">${escapeHtmlAttr(audio.title)}</p>
-        </div>
-        <button type="button" onclick="pinMediaItem('audio', '${audio.id}')" class="w-6 h-6 flex items-center justify-center rounded ${index === 0 ? 'bg-green-500/30 text-green-400' : 'hover:bg-green-500/20 text-gray-500 hover:text-green-400'} transition-colors" title="Pin to top">
-          <span class="text-xs">📌</span>
-        </button>
-        <button type="button" onclick="removeAudioFromPlaylist('${audio.id}')" class="w-5 h-5 flex items-center justify-center text-red-400 hover:text-red-300 flex-shrink-0" title="Remove">
-          <i class="ti ti-x text-xs"></i>
-        </button>
-      </div>
-    `).join('');
-  }
-  
-  container.innerHTML = html;
-  
-  // Initialize drag and drop for both sections
-  setTimeout(() => {
-    initializeDragAndDrop();
-    initializeAudioDragAndDrop();
-  }, 100);
+}
+
+// updateSelectedMediaDisplay is no longer needed (single panel design)
+// Keep as no-op for any remaining calls
+function updateSelectedMediaDisplay() {
+  updateSelectedCount();
+  updateAvailableVideosDisplay();
+  updateAvailableAudiosDisplay();
 }
 
 // Legacy wrappers for compatibility
-function updateSelectedVideosDisplay() { updateSelectedMediaDisplay(); }
-function updateSelectedAudiosDisplay() { updateSelectedMediaDisplay(); }
+function updateSelectedVideosDisplay() { updateSelectedCount(); updateAvailableVideosDisplay(); }
+function updateSelectedAudiosDisplay() { updateSelectedCount(); updateAvailableAudiosDisplay(); }
 
 // Helper: extract base name for grouping (same logic as Gallery)
 function getVideoBaseName(title) {
@@ -548,8 +478,8 @@ function updateAvailableVideosDisplay() {
       const dur = video.duration ? Math.floor(video.duration / 60) + ':' + String(Math.floor(video.duration % 60)).padStart(2, '0') : '0:00';
       const isChecked = selectedVideoIds.includes(video.id);
       html += `
-        <label class="w-full flex items-center gap-2 p-1.5 rounded hover:bg-dark-600 transition-colors cursor-pointer">
-          <input type="checkbox" class="w-3.5 h-3.5 rounded border-gray-500 bg-dark-700 text-primary focus:ring-primary flex-shrink-0"
+        <div class="w-full flex items-center gap-2 p-1.5 rounded hover:bg-dark-600 transition-colors">
+          <input type="checkbox" class="w-3.5 h-3.5 rounded border-gray-500 bg-dark-700 text-primary focus:ring-primary flex-shrink-0 cursor-pointer"
             ${isChecked ? 'checked' : ''} onchange="toggleVideoSelection('${video.id}')">
           <div class="w-12 h-8 bg-dark-800 rounded flex-shrink-0 overflow-hidden">
             <img src="${video.thumbnail_path}" alt="${escapeHtmlAttr(video.title)}" 
@@ -560,13 +490,15 @@ function updateAvailableVideosDisplay() {
             <p class="text-xs font-medium text-white truncate">${escapeHtmlAttr(video.title)}</p>
             <p class="text-[10px] text-gray-400">${dur}</p>
           </div>
-        </label>
+          ${isChecked ? `<button type="button" onclick="pinMediaItem('video', '${video.id}')" class="w-6 h-6 flex items-center justify-center rounded hover:bg-primary/20 text-gray-400 hover:text-primary transition-colors flex-shrink-0" title="Pin to top"><span class="text-xs">📌</span></button>` : ''}
+        </div>
       `;
     });
     html += '</div></div>';
   });
   
   container.innerHTML = html;
+  updateSelectedCount();
 }
 
 function toggleAvailVideoGroup(idx) {
@@ -588,14 +520,12 @@ function addAudioToPlaylist(audioId) {
   const audio = allAudios.find(a => a.id == audioId);
   if (audio && !selectedAudios.find(a => a.id == audioId)) {
     selectedAudios.push(audio);
-    updateSelectedMediaDisplay();
     updateAvailableAudiosDisplay();
   }
 }
 
 function removeAudioFromPlaylist(audioId) {
   selectedAudios = selectedAudios.filter(a => a.id != audioId);
-  updateSelectedMediaDisplay();
   updateAvailableAudiosDisplay();
 }
 
@@ -630,8 +560,8 @@ function updateAvailableAudiosDisplay() {
       const dur = audio.duration ? Math.floor(audio.duration / 60) + ':' + String(Math.floor(audio.duration % 60)).padStart(2, '0') : '0:00';
       const isChecked = selectedAudioIds.includes(audio.id);
       html += `
-        <label class="w-full flex items-center gap-2 p-1.5 rounded hover:bg-dark-600 transition-colors cursor-pointer">
-          <input type="checkbox" class="w-3.5 h-3.5 rounded border-gray-500 bg-dark-700 text-green-500 focus:ring-green-500 flex-shrink-0"
+        <div class="w-full flex items-center gap-2 p-1.5 rounded hover:bg-dark-600 transition-colors">
+          <input type="checkbox" class="w-3.5 h-3.5 rounded border-gray-500 bg-dark-700 text-green-500 focus:ring-green-500 flex-shrink-0 cursor-pointer"
             ${isChecked ? 'checked' : ''} onchange="toggleAudioSelection('${audio.id}')">
           <div class="w-8 h-8 bg-dark-800 rounded flex-shrink-0 flex items-center justify-center">
             <i class="ti ti-music text-sm text-green-400"></i>
@@ -640,13 +570,15 @@ function updateAvailableAudiosDisplay() {
             <p class="text-xs font-medium text-white truncate">${escapeHtmlAttr(audio.title)}</p>
             <p class="text-[10px] text-gray-400">${dur}</p>
           </div>
-        </label>
+          ${isChecked ? `<button type="button" onclick="pinMediaItem('audio', '${audio.id}')" class="w-6 h-6 flex items-center justify-center rounded hover:bg-green-500/20 text-gray-400 hover:text-green-400 transition-colors flex-shrink-0" title="Pin to top"><span class="text-xs">📌</span></button>` : ''}
+        </div>
       `;
     });
     html += '</div></div>';
   });
   
   container.innerHTML = html;
+  updateSelectedCount();
 }
 
 function toggleAvailAudioGroup(idx) {
@@ -704,7 +636,6 @@ function editPlaylist(playlistId) {
         // Reset tabs to default (videos)
         switchAvailableTab('videos');
         
-        updateSelectedMediaDisplay();
         updateAvailableVideosDisplay();
         updateAvailableAudiosDisplay();
         document.getElementById('playlistModal').classList.remove('hidden');
