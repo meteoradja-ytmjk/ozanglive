@@ -174,28 +174,7 @@
                 </div>
               </div>
               <div id="availableVideos" class="p-2 space-y-1 min-h-[220px] max-h-60 overflow-y-auto custom-scrollbar">
-                <% if (videos && videos.length > 0) { %>
-                  <% videos.forEach(function(video, index) { %>
-                    <button type="button" class="w-full flex items-center gap-3 p-2 rounded hover:bg-dark-600 transition-colors" 
-                            data-video-id="<%= video.id %>" onclick="addVideoToPlaylist('<%= video.id %>')" style="text-align: left;">
-                      <span class="w-6 text-xs text-gray-500 flex-shrink-0" style="text-align: center;"><%= index + 1 %></span>
-                      <div class="w-16 h-12 bg-dark-800 rounded flex-shrink-0 overflow-hidden">
-                        <img src="<%= video.thumbnail_path %>" alt="<%= video.title %>" 
-                             loading="lazy"
-                             class="w-full h-full object-cover rounded" 
-                             onerror="this.src='/images/default-thumbnail.jpg'">
-                      </div>
-                      <div class="flex-1 min-w-0" style="text-align: left;">
-                        <p class="text-sm font-medium text-white truncate" style="text-align: left;"><%= video.title %></p>
-                        <p class="text-xs text-gray-400" style="text-align: left;">
-                          <%= video.duration ? Math.floor(video.duration / 60) + ':' + String(Math.floor(video.duration % 60)).padStart(2, '0') : '0:00' %>
-                        </p>
-                      </div>
-                    </button>
-                  <% }); %>
-                <% } else { %>
-                  <div class="text-center py-5 text-gray-400"><p>No videos available</p></div>
-                <% } %>
+                <!-- Rendered dynamically by JS with folder grouping -->
               </div>
             </div>
             
@@ -209,25 +188,7 @@
                 </div>
               </div>
               <div id="availableAudios" class="p-2 space-y-1 min-h-[220px] max-h-60 overflow-y-auto custom-scrollbar">
-                <% if (typeof audios !== 'undefined' && audios && audios.length > 0) { %>
-                  <% audios.forEach(function(audio, index) { %>
-                    <button type="button" class="w-full flex items-center gap-3 p-2 rounded hover:bg-dark-600 transition-colors" 
-                            data-audio-id="<%= audio.id %>" onclick="addAudioToPlaylist('<%= audio.id %>')" style="text-align: left;">
-                      <span class="w-6 text-xs text-gray-500 flex-shrink-0" style="text-align: center;"><%= index + 1 %></span>
-                      <div class="w-12 h-12 bg-dark-800 rounded flex-shrink-0 flex items-center justify-center">
-                        <i class="ti ti-music text-xl text-primary"></i>
-                      </div>
-                      <div class="flex-1 min-w-0" style="text-align: left;">
-                        <p class="text-sm font-medium text-white truncate" style="text-align: left;"><%= audio.title %></p>
-                        <p class="text-xs text-gray-400" style="text-align: left;">
-                          <%= audio.duration ? Math.floor(audio.duration / 60) + ':' + String(Math.floor(audio.duration % 60)).padStart(2, '0') : '0:00' %>
-                        </p>
-                      </div>
-                    </button>
-                  <% }); %>
-                <% } else { %>
-                  <div class="text-center py-5 text-gray-400"><p>No audios available</p></div>
-                <% } %>
+                <!-- Rendered dynamically by JS with folder grouping -->
               </div>
             </div>
           </div>
@@ -466,33 +427,98 @@ function updateSelectedVideosDisplay() {
   }
 }
 
+// Helper: extract base name for grouping (same logic as Gallery)
+function getVideoBaseName(title) {
+  let name = title.replace(/\.(mp4|avi|mov|mkv)$/i, '');
+  name = name.replace(/[-_\s]*\d+\s*$/g, '');
+  name = name.replace(/\s*[\(\[\{]\d+[\)\]\}]\s*$/g, '');
+  return name.trim().toLowerCase() || title.toLowerCase();
+}
+
+function getAudioBaseName(title) {
+  let name = title.replace(/\.(mp3|wav|aac|m4a|flac)$/i, '');
+  name = name.replace(/[-_\s]*\d+\s*$/g, '');
+  name = name.replace(/\s*[\(\[\{]\d+[\)\]\}]\s*$/g, '');
+  return name.trim().toLowerCase() || title.toLowerCase();
+}
+
+// Group items by folder_name (or fallback to base name extraction)
+function groupByFolder(items, getBaseName) {
+  const groups = {};
+  items.forEach(item => {
+    const explicitFolder = (item.folder_name || '').trim();
+    const key = explicitFolder ? explicitFolder.toLowerCase() : getBaseName(item.title);
+    if (!groups[key]) {
+      groups[key] = {
+        displayName: explicitFolder || item.title.replace(/[-_\s]*\d+\s*$/g, '').replace(/\s*[\(\[\{]\d+[\)\]\}]\s*$/g, '').trim(),
+        items: []
+      };
+    }
+    groups[key].items.push(item);
+  });
+  return groups;
+}
+
 function updateAvailableVideosDisplay() {
   const container = document.getElementById('availableVideos');
   const selectedVideoIds = selectedVideos.map(v => v.id);
-  
   const availableVideos = allVideos.filter(video => !selectedVideoIds.includes(video.id));
   
   if (availableVideos.length === 0) {
     container.innerHTML = '<div class="text-center py-5 text-gray-400"><p>All videos have been added to playlist</p></div>';
-  } else {
-    container.innerHTML = availableVideos.map((video, index) => `
-      <button type="button" class="w-full flex items-center gap-3 p-2 rounded hover:bg-dark-600 transition-colors" 
-              data-video-id="${video.id}" onclick="addVideoToPlaylist('${video.id}')" style="text-align: left;">
-        <span class="w-6 text-xs text-gray-500 flex-shrink-0" style="text-align: center;">${index + 1}</span>
-        <div class="w-16 h-12 bg-dark-800 rounded flex-shrink-0 overflow-hidden">
-          <img src="${video.thumbnail_path}" alt="${video.title}" 
-               loading="lazy"
-               class="w-full h-full object-cover rounded" 
-               onerror="this.src='/images/default-thumbnail.jpg'">
+    return;
+  }
+
+  const groups = groupByFolder(availableVideos, getVideoBaseName);
+  const groupKeys = Object.keys(groups).sort((a, b) => a.localeCompare(b));
+  
+  let html = '';
+  groupKeys.forEach((key, gIdx) => {
+    const group = groups[key];
+    html += `
+      <div class="playlist-avail-group mb-1">
+        <div class="flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer hover:bg-dark-600/50 select-none" onclick="toggleAvailVideoGroup(${gIdx})">
+          <i class="ti ti-chevron-down text-gray-400 text-xs transition-transform" id="availVideoGroupIcon${gIdx}"></i>
+          <i class="ti ti-folder text-primary text-sm"></i>
+          <span class="text-xs font-medium text-gray-300 truncate">${escapeHtmlAttr(group.displayName)}</span>
+          <span class="text-[10px] text-gray-500 ml-auto">${group.items.length}</span>
         </div>
-        <div class="flex-1 min-w-0" style="text-align: left;">
-          <p class="text-sm font-medium text-white truncate" style="text-align: left;">${video.title}</p>
-          <p class="text-xs text-gray-400" style="text-align: left;">
-            ${video.duration ? Math.floor(video.duration / 60) + ':' + String(Math.floor(video.duration % 60)).padStart(2, '0') : '0:00'}
-          </p>
-        </div>
-      </button>
-    `).join('');
+        <div class="pl-4 space-y-0.5" id="availVideoGroupContent${gIdx}">
+    `;
+    group.items.forEach(video => {
+      const dur = video.duration ? Math.floor(video.duration / 60) + ':' + String(Math.floor(video.duration % 60)).padStart(2, '0') : '0:00';
+      html += `
+        <button type="button" class="w-full flex items-center gap-2 p-1.5 rounded hover:bg-dark-600 transition-colors" 
+                data-video-id="${video.id}" onclick="addVideoToPlaylist('${video.id}')" style="text-align: left;">
+          <div class="w-12 h-8 bg-dark-800 rounded flex-shrink-0 overflow-hidden">
+            <img src="${video.thumbnail_path}" alt="${escapeHtmlAttr(video.title)}" 
+                 loading="lazy" class="w-full h-full object-cover rounded" 
+                 onerror="this.src='/images/default-thumbnail.jpg'">
+          </div>
+          <div class="flex-1 min-w-0" style="text-align: left;">
+            <p class="text-xs font-medium text-white truncate">${escapeHtmlAttr(video.title)}</p>
+            <p class="text-[10px] text-gray-400">${dur}</p>
+          </div>
+        </button>
+      `;
+    });
+    html += '</div></div>';
+  });
+  
+  container.innerHTML = html;
+}
+
+function toggleAvailVideoGroup(idx) {
+  const content = document.getElementById('availVideoGroupContent' + idx);
+  const icon = document.getElementById('availVideoGroupIcon' + idx);
+  if (content && icon) {
+    if (content.style.display === 'none') {
+      content.style.display = 'block';
+      icon.style.transform = 'rotate(0deg)';
+    } else {
+      content.style.display = 'none';
+      icon.style.transform = 'rotate(-90deg)';
+    }
   }
 }
 
@@ -563,23 +589,69 @@ function updateAvailableAudiosDisplay() {
   
   if (availableAudios.length === 0) {
     container.innerHTML = '<div class="text-center py-5 text-gray-400"><p>All audios have been added to playlist</p></div>';
-  } else {
-    container.innerHTML = availableAudios.map((audio, index) => `
-      <button type="button" class="w-full flex items-center gap-3 p-2 rounded hover:bg-dark-600 transition-colors" 
-              data-audio-id="${audio.id}" onclick="addAudioToPlaylist('${audio.id}')" style="text-align: left;">
-        <span class="w-6 text-xs text-gray-500 flex-shrink-0" style="text-align: center;">${index + 1}</span>
-        <div class="w-12 h-12 bg-dark-800 rounded flex-shrink-0 flex items-center justify-center">
-          <i class="ti ti-music text-xl text-primary"></i>
-        </div>
-        <div class="flex-1 min-w-0" style="text-align: left;">
-          <p class="text-sm font-medium text-white truncate" style="text-align: left;">${audio.title}</p>
-          <p class="text-xs text-gray-400" style="text-align: left;">
-            ${audio.duration ? Math.floor(audio.duration / 60) + ':' + String(Math.floor(audio.duration % 60)).padStart(2, '0') : '0:00'}
-          </p>
-        </div>
-      </button>
-    `).join('');
+    return;
   }
+
+  const groups = groupByFolder(availableAudios, getAudioBaseName);
+  const groupKeys = Object.keys(groups).sort((a, b) => a.localeCompare(b));
+  
+  let html = '';
+  groupKeys.forEach((key, gIdx) => {
+    const group = groups[key];
+    html += `
+      <div class="playlist-avail-group mb-1">
+        <div class="flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer hover:bg-dark-600/50 select-none" onclick="toggleAvailAudioGroup(${gIdx})">
+          <i class="ti ti-chevron-down text-gray-400 text-xs transition-transform" id="availAudioGroupIcon${gIdx}"></i>
+          <i class="ti ti-folder text-green-400 text-sm"></i>
+          <span class="text-xs font-medium text-gray-300 truncate">${escapeHtmlAttr(group.displayName)}</span>
+          <span class="text-[10px] text-gray-500 ml-auto">${group.items.length}</span>
+        </div>
+        <div class="pl-4 space-y-0.5" id="availAudioGroupContent${gIdx}">
+    `;
+    group.items.forEach(audio => {
+      const dur = audio.duration ? Math.floor(audio.duration / 60) + ':' + String(Math.floor(audio.duration % 60)).padStart(2, '0') : '0:00';
+      html += `
+        <button type="button" class="w-full flex items-center gap-2 p-1.5 rounded hover:bg-dark-600 transition-colors" 
+                data-audio-id="${audio.id}" onclick="addAudioToPlaylist('${audio.id}')" style="text-align: left;">
+          <div class="w-8 h-8 bg-dark-800 rounded flex-shrink-0 flex items-center justify-center">
+            <i class="ti ti-music text-sm text-green-400"></i>
+          </div>
+          <div class="flex-1 min-w-0" style="text-align: left;">
+            <p class="text-xs font-medium text-white truncate">${escapeHtmlAttr(audio.title)}</p>
+            <p class="text-[10px] text-gray-400">${dur}</p>
+          </div>
+        </button>
+      `;
+    });
+    html += '</div></div>';
+  });
+  
+  container.innerHTML = html;
+}
+
+function toggleAvailAudioGroup(idx) {
+  const content = document.getElementById('availAudioGroupContent' + idx);
+  const icon = document.getElementById('availAudioGroupIcon' + idx);
+  if (content && icon) {
+    if (content.style.display === 'none') {
+      content.style.display = 'block';
+      icon.style.transform = 'rotate(0deg)';
+    } else {
+      content.style.display = 'none';
+      icon.style.transform = 'rotate(-90deg)';
+    }
+  }
+}
+
+// HTML attribute safe escape
+function escapeHtmlAttr(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function initializeAudioDragAndDrop() {
@@ -917,25 +989,34 @@ document.getElementById('searchVideos').addEventListener('input', function(e) {
   
   if (filteredVideos.length === 0) {
     container.innerHTML = '<div class="text-center py-5 text-gray-400"><p>No videos found</p></div>';
+    return;
+  }
+
+  // If searching, show flat list for easier scanning
+  if (searchTerm) {
+    let html = '';
+    filteredVideos.forEach(video => {
+      const dur = video.duration ? Math.floor(video.duration / 60) + ':' + String(Math.floor(video.duration % 60)).padStart(2, '0') : '0:00';
+      const folderLabel = (video.folder_name || '').trim();
+      html += `
+        <button type="button" class="w-full flex items-center gap-2 p-1.5 rounded hover:bg-dark-600 transition-colors" 
+                data-video-id="${video.id}" onclick="addVideoToPlaylist('${video.id}')" style="text-align: left;">
+          <div class="w-12 h-8 bg-dark-800 rounded flex-shrink-0 overflow-hidden">
+            <img src="${video.thumbnail_path}" alt="${escapeHtmlAttr(video.title)}" 
+                 loading="lazy" class="w-full h-full object-cover rounded" 
+                 onerror="this.src='/images/default-thumbnail.jpg'">
+          </div>
+          <div class="flex-1 min-w-0" style="text-align: left;">
+            <p class="text-xs font-medium text-white truncate">${escapeHtmlAttr(video.title)}</p>
+            <p class="text-[10px] text-gray-400">${dur}${folderLabel ? ' • ' + escapeHtmlAttr(folderLabel) : ''}</p>
+          </div>
+        </button>
+      `;
+    });
+    container.innerHTML = html;
   } else {
-    container.innerHTML = filteredVideos.map((video, index) => `
-      <button type="button" class="w-full flex items-center gap-3 p-2 rounded hover:bg-dark-600 transition-colors" 
-              data-video-id="${video.id}" onclick="addVideoToPlaylist('${video.id}')" style="text-align: left;">
-        <span class="w-6 text-xs text-gray-500 flex-shrink-0" style="text-align: center;">${index + 1}</span>
-        <div class="w-16 h-12 bg-dark-800 rounded flex-shrink-0 overflow-hidden">
-          <img src="${video.thumbnail_path}" alt="${video.title}" 
-               loading="lazy"
-               class="w-full h-full object-cover rounded" 
-               onerror="this.src='/images/default-thumbnail.jpg'">
-        </div>
-        <div class="flex-1 min-w-0" style="text-align: left;">
-          <p class="text-sm font-medium text-white truncate" style="text-align: left;">${video.title}</p>
-          <p class="text-xs text-gray-400" style="text-align: left;">
-            ${video.duration ? Math.floor(video.duration / 60) + ':' + String(Math.floor(video.duration % 60)).padStart(2, '0') : '0:00'}
-          </p>
-        </div>
-      </button>
-    `).join('');
+    // No search, show grouped
+    updateAvailableVideosDisplay();
   }
 });
 
@@ -951,22 +1032,32 @@ document.getElementById('searchAudios').addEventListener('input', function(e) {
   
   if (filteredAudios.length === 0) {
     container.innerHTML = '<div class="text-center py-5 text-gray-400"><p>No audios found</p></div>';
+    return;
+  }
+
+  // If searching, show flat list for easier scanning
+  if (searchTerm) {
+    let html = '';
+    filteredAudios.forEach(audio => {
+      const dur = audio.duration ? Math.floor(audio.duration / 60) + ':' + String(Math.floor(audio.duration % 60)).padStart(2, '0') : '0:00';
+      const folderLabel = (audio.folder_name || '').trim();
+      html += `
+        <button type="button" class="w-full flex items-center gap-2 p-1.5 rounded hover:bg-dark-600 transition-colors" 
+                data-audio-id="${audio.id}" onclick="addAudioToPlaylist('${audio.id}')" style="text-align: left;">
+          <div class="w-8 h-8 bg-dark-800 rounded flex-shrink-0 flex items-center justify-center">
+            <i class="ti ti-music text-sm text-green-400"></i>
+          </div>
+          <div class="flex-1 min-w-0" style="text-align: left;">
+            <p class="text-xs font-medium text-white truncate">${escapeHtmlAttr(audio.title)}</p>
+            <p class="text-[10px] text-gray-400">${dur}${folderLabel ? ' • ' + escapeHtmlAttr(folderLabel) : ''}</p>
+          </div>
+        </button>
+      `;
+    });
+    container.innerHTML = html;
   } else {
-    container.innerHTML = filteredAudios.map((audio, index) => `
-      <button type="button" class="w-full flex items-center gap-3 p-2 rounded hover:bg-dark-600 transition-colors" 
-              data-audio-id="${audio.id}" onclick="addAudioToPlaylist('${audio.id}')" style="text-align: left;">
-        <span class="w-6 text-xs text-gray-500 flex-shrink-0" style="text-align: center;">${index + 1}</span>
-        <div class="w-12 h-12 bg-dark-800 rounded flex-shrink-0 flex items-center justify-center">
-          <i class="ti ti-music text-xl text-primary"></i>
-        </div>
-        <div class="flex-1 min-w-0" style="text-align: left;">
-          <p class="text-sm font-medium text-white truncate" style="text-align: left;">${audio.title}</p>
-          <p class="text-xs text-gray-400" style="text-align: left;">
-            ${audio.duration ? Math.floor(audio.duration / 60) + ':' + String(Math.floor(audio.duration % 60)).padStart(2, '0') : '0:00'}
-          </p>
-        </div>
-      </button>
-    `).join('');
+    // No search, show grouped
+    updateAvailableAudiosDisplay();
   }
 });
 
