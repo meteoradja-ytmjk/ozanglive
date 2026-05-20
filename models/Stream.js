@@ -219,13 +219,18 @@ class Stream {
   }
   static updateStatus(id, status, userId, options = {}) {
     const status_updated_at = new Date().toISOString();
-    const { startTimeOverride = null, endTimeOverride = null } = options;
+    const { startTimeOverride = null, endTimeOverride = null, preserveStartTime = false } = options;
     let start_time = null;
     let end_time = null;
     let clear_start_time = false;
 
     if (status === 'live') {
-      start_time = startTimeOverride || new Date().toISOString();
+      if (preserveStartTime) {
+        // Don't update start_time - keep existing value (used for reconnect)
+        start_time = null;
+      } else {
+        start_time = startTimeOverride || new Date().toISOString();
+      }
     } else if (status === 'offline') {
       end_time = endTimeOverride || new Date().toISOString();
     } else if (status === 'scheduled') {

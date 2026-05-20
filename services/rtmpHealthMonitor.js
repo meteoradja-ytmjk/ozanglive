@@ -225,15 +225,11 @@ class RTMPHealthMonitor {
 
       // Attempt to restart the stream
       if (this.streamingService) {
-        // Update the stream's duration to remaining time if applicable
+        // Log remaining time but DO NOT modify stream_duration_minutes in DB
+        // The startStream function will use streamOriginalTiming to calculate remaining duration
         if (remainingMs !== null && remainingMs > 0) {
           const remainingMinutes = Math.ceil(remainingMs / 60000);
           console.log(`[RTMPHealthMonitor] Stream ${streamId}: Reconnecting with ${remainingMinutes} minutes remaining`);
-          
-          // Update stream_duration_minutes to remaining time
-          await Stream.update(streamId, {
-            stream_duration_minutes: remainingMinutes
-          });
         }
 
         const result = await this.streamingService.startStream(streamId);
