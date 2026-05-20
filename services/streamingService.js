@@ -32,6 +32,12 @@ const MAX_LOG_LINES = 50; // OPTIMIZED: Reduced from 100 to 50 to save memory
 // Structure: { streamId: { startTime: Date, durationMs: number, expectedEndTime: Date } }
 const streamDurationInfo = new Map();
 
+// Original start time tracking for reconnect duration calculation
+// When a stream is started for the FIRST time, we store its start time here.
+// On reconnect, we use this to calculate remaining duration instead of resetting.
+// Structure: { streamId: { originalStartTime: Date, originalDurationMs: number } }
+const streamOriginalTiming = new Map();
+
 // PID tracking for FFmpeg process verification
 // Structure: { streamId: pid }
 const streamPids = new Map();
@@ -93,6 +99,14 @@ function cleanupStaleMaps() {
     for (const [id] of streamDurationInfo) {
       if (!activeIds.has(id)) {
         streamDurationInfo.delete(id);
+        cleaned++;
+      }
+    }
+    
+    // Clean streamOriginalTiming for inactive streams
+    for (const [id] of streamOriginalTiming) {
+      if (!activeIds.has(id)) {
+        streamOriginalTiming.delete(id);
         cleaned++;
       }
     }
@@ -436,6 +450,56 @@ function calculateStreamRemainingDuration(streamId) {
   return calculateRemainingDuration(info.startTime, info.originalDurationMs);
 }
 
+/**
+ * Set original timing for a stream (called only on FIRST start, not on reconnect)
+ * This preserves the user's intended start time and total duration across reconnects.
+ * @param {string} streamId - Stream ID
+ * @param {Date} originalStartTime - The first time the stream started
+ * @param {number} originalDurationMs - The total duration the user configured (in ms)
+ */
+function setOriginalTiming(streamId, originalStartTime, originalDurationMs) {
+  if (!originalDurationMs || originalDurationMs <= 0) return;
+  streamOriginalTiming.set(streamId, {
+    originalStartTime,
+    originalDurationMs
+  });
+  console.log(`[StreamingService] Original timing saved for stream ${streamId}: start=${originalStartTime.toISOString()}, duration=${(originalDurationMs / 60000).toFixed(1)} min`);
+}
+
+/**
+ * Get the remaining duration for a stream based on original start time.
+ * Used during reconnect to calculate how much time the stream should still run.
+ * @param {string} streamId - Stream ID
+ * @returns {number|null} Remaining duration in ms, or null if no original timing
+ */
+function getOriginalRemainingMs(streamId) {
+  const timing = streamOriginalTiming.get(streamId);
+  if (!timing) return null;
+  const elapsed = Date.now() - timing.originalStartTime.getTime();
+  const remaining = Math.max(0, timing.originalDurationMs - elapsed);
+  return remaining;
+}
+
+/**
+ * Clear original timing for a stream (called when stream fully ends - not on reconnect)
+ * @param {string} streamId - Stream ID
+ */
+function clearOriginalTiming(streamId) {
+  if (streamOriginalTiming.has(streamId)) {
+    streamOriginalTiming.delete(streamId);
+    console.log(`[StreamingService] Original timing cleared for stream ${streamId}`);
+  }
+}
+
+/**
+ * Check if this is a reconnect (original timing exists)
+ * @param {string} streamId - Stream ID
+ * @returns {boolean}
+ */
+function isReconnect(streamId) {
+  return streamOriginalTiming.has(streamId);
+}
+
 function resolvePublicMediaPath(mediaFilePath) {
   if (!mediaFilePath || typeof mediaFilePath !== 'string') {
     throw new Error('Media filepath is missing');
@@ -545,7 +609,7 @@ function prerenderGaplessAudio(audioPaths, outputFile) {
   });
 }
 
-async function buildFFmpegArgsForPlaylist(stream, playlist) {
+async function buildFFmpegArgsForPlaylist(stream, playlist, durationOverrideSeconds = null) {
   if (!playlist.videos || playlist.videos.length === 0) {
     throw new Error(`Playlist is empty for playlist_id: ${stream.video_id}`);
   }
@@ -553,12 +617,15 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
   const projectRoot = path.resolve(__dirname, '..');
   const rtmpUrl = `${stream.rtmp_url.replace(/\/$/, '')}/${stream.stream_key}`;
   
-  // Calculate duration - prioritize stream_duration_minutes directly
-  // This is critical for recurring streams where schedule_time/end_time may be stale
+  // Calculate duration - prioritize override (used for reconnect with remaining time)
+  // Then fall back to stream_duration_minutes directly
   let durationSeconds = null;
   
-  // Priority 1: stream_duration_minutes (most reliable)
-  if (stream.stream_duration_minutes && stream.stream_duration_minutes > 0) {
+  if (durationOverrideSeconds && durationOverrideSeconds > 0) {
+    durationSeconds = durationOverrideSeconds;
+    console.log(`[StreamingService] Playlist using duration override (reconnect): ${durationSeconds} seconds (${(durationSeconds / 60).toFixed(1)} minutes)`);
+  } else if (stream.stream_duration_minutes && stream.stream_duration_minutes > 0) {
+    // Priority 1: stream_duration_minutes (most reliable)
     durationSeconds = stream.stream_duration_minutes * 60;
     console.log(`[StreamingService] Playlist using stream_duration_minutes: ${stream.stream_duration_minutes} minutes (${durationSeconds} seconds)`);
   } else {
@@ -777,7 +844,7 @@ async function buildFFmpegArgsForPlaylist(stream, playlist) {
   return args;
 }
 
-async function buildFFmpegArgs(stream) {
+async function buildFFmpegArgs(stream, durationOverrideSeconds = null) {
   const streamWithVideo = await Stream.getStreamWithVideo(stream.id);
   
   if (streamWithVideo && streamWithVideo.video_type === 'playlist') {
@@ -788,7 +855,7 @@ async function buildFFmpegArgs(stream) {
       throw new Error(`Playlist not found for playlist_id: ${stream.video_id}`);
     }
     
-    return await buildFFmpegArgsForPlaylist(stream, playlist);
+    return await buildFFmpegArgsForPlaylist(stream, playlist, durationOverrideSeconds);
   }
   
   const video = await Video.findById(stream.video_id);
@@ -824,12 +891,16 @@ async function buildFFmpegArgs(stream) {
   
   const rtmpUrl = `${stream.rtmp_url.replace(/\/$/, '')}/${stream.stream_key}`;
   
-  // Calculate duration - prioritize stream_duration_minutes directly
+  // Calculate duration - prioritize override (used for reconnect with remaining time)
+  // Then fall back to stream_duration_minutes directly
   // This is critical for recurring streams where schedule_time/end_time may be stale
   let durationSeconds = null;
   
-  // Priority 1: stream_duration_minutes (most reliable)
-  if (stream.stream_duration_minutes && stream.stream_duration_minutes > 0) {
+  if (durationOverrideSeconds && durationOverrideSeconds > 0) {
+    durationSeconds = durationOverrideSeconds;
+    console.log(`[StreamingService] FFmpeg using duration override (reconnect): ${durationSeconds} seconds (${(durationSeconds / 60).toFixed(1)} minutes)`);
+  } else if (stream.stream_duration_minutes && stream.stream_duration_minutes > 0) {
+    // Priority 1: stream_duration_minutes (most reliable)
     durationSeconds = stream.stream_duration_minutes * 60;
     console.log(`[StreamingService] FFmpeg using stream_duration_minutes: ${stream.stream_duration_minutes} minutes (${durationSeconds} seconds)`);
   } else {
@@ -949,7 +1020,24 @@ async function startStream(streamId) {
     
     const startTimeIso = new Date().toISOString();
     const streamStartTime = new Date(startTimeIso);
-    const ffmpegArgs = await buildFFmpegArgs(stream);
+    
+    // If this is a reconnect, calculate remaining duration for FFmpeg -t parameter
+    let durationOverrideSeconds = null;
+    const reconnecting = isReconnect(streamId);
+    if (reconnecting) {
+      const remainingMs = getOriginalRemainingMs(streamId);
+      if (remainingMs !== null && remainingMs > 0) {
+        durationOverrideSeconds = Math.ceil(remainingMs / 1000);
+        console.log(`[StreamingService] RECONNECT: FFmpeg will use remaining duration: ${(remainingMs / 60000).toFixed(1)} minutes`);
+      } else if (remainingMs !== null && remainingMs <= 0) {
+        // Duration already exceeded - don't start
+        console.log(`[StreamingService] RECONNECT: Duration already exceeded for stream ${streamId}, not starting`);
+        clearOriginalTiming(streamId);
+        return { success: false, error: 'Stream duration already exceeded' };
+      }
+    }
+    
+    const ffmpegArgs = await buildFFmpegArgs(stream, durationOverrideSeconds);
     const fullCommand = `${ffmpegPath} ${ffmpegArgs.join(' ')}`;
     addStreamLog(streamId, `Starting stream with command: ${fullCommand}`);
     console.log(`Starting stream: ${fullCommand}`);
@@ -1013,27 +1101,52 @@ async function startStream(streamId) {
       streamPids.set(streamId, ffmpegProcess.pid);
       console.log(`[StreamingService] Stream ${streamId} PID: ${ffmpegProcess.pid}`);
     }
-    await Stream.updateStatus(streamId, 'live', stream.user_id, { startTimeOverride: startTimeIso });
-    console.log(`[StreamingService] Stream ${streamId} confirmed running, status updated to live`);
+    await Stream.updateStatus(streamId, 'live', stream.user_id, { 
+      startTimeOverride: reconnecting ? null : startTimeIso,
+      preserveStartTime: reconnecting
+    });
+    console.log(`[StreamingService] Stream ${streamId} confirmed running, status updated to live${reconnecting ? ' (reconnect - preserving original start_time)' : ''}`);
     
     // CRITICAL: Set duration tracking for automatic termination
-    // Use stream_duration_minutes as the primary source (most reliable for recurring streams)
-    if (stream.stream_duration_minutes && stream.stream_duration_minutes > 0) {
-      const durationMs = stream.stream_duration_minutes * 60 * 1000;
-      setDurationInfo(streamId, streamStartTime, durationMs);
-      console.log(`[StreamingService] Duration tracking set for stream ${streamId}: ${stream.stream_duration_minutes} minutes (${durationMs}ms)`);
-      addStreamLog(streamId, `Duration tracking set: ${stream.stream_duration_minutes} minutes`);
-    } else {
-      // Fallback to calculated duration from durationCalculator
-      const durationSeconds = calculateDurationSeconds(stream);
-      if (durationSeconds && durationSeconds > 0) {
-        const durationMs = durationSeconds * 1000;
-        setDurationInfo(streamId, streamStartTime, durationMs);
-        console.log(`[StreamingService] Duration tracking set for stream ${streamId}: ${durationSeconds / 60} minutes (${durationMs}ms) [calculated]`);
-        addStreamLog(streamId, `Duration tracking set: ${durationSeconds / 60} minutes (calculated)`);
+    // Check if this is a RECONNECT (original timing preserved from first start)
+    
+    if (reconnecting) {
+      // RECONNECT: Use remaining duration based on original start time
+      const remainingMs = getOriginalRemainingMs(streamId);
+      if (remainingMs !== null && remainingMs > 0) {
+        setDurationInfo(streamId, streamStartTime, remainingMs);
+        console.log(`[StreamingService] RECONNECT: Duration tracking set for stream ${streamId}: ${(remainingMs / 60000).toFixed(1)} minutes remaining`);
+        addStreamLog(streamId, `Reconnect: ${(remainingMs / 60000).toFixed(1)} minutes remaining from original duration`);
+      } else if (remainingMs !== null && remainingMs <= 0) {
+        // Duration already exceeded during reconnect delay - stop immediately
+        console.log(`[StreamingService] RECONNECT: Stream ${streamId} duration already exceeded, will stop`);
+        addStreamLog(streamId, `Reconnect: duration already exceeded, stopping`);
+        clearOriginalTiming(streamId);
       } else {
-        console.log(`[StreamingService] No duration set for stream ${streamId} - will run indefinitely`);
-        addStreamLog(streamId, `No duration set - stream will run indefinitely`);
+        console.log(`[StreamingService] RECONNECT: No duration limit for stream ${streamId} - will run indefinitely`);
+        addStreamLog(streamId, `Reconnect: no duration set - stream will run indefinitely`);
+      }
+    } else {
+      // FIRST START: Use full configured duration and save original timing
+      if (stream.stream_duration_minutes && stream.stream_duration_minutes > 0) {
+        const durationMs = stream.stream_duration_minutes * 60 * 1000;
+        setDurationInfo(streamId, streamStartTime, durationMs);
+        setOriginalTiming(streamId, streamStartTime, durationMs);
+        console.log(`[StreamingService] Duration tracking set for stream ${streamId}: ${stream.stream_duration_minutes} minutes (${durationMs}ms)`);
+        addStreamLog(streamId, `Duration tracking set: ${stream.stream_duration_minutes} minutes`);
+      } else {
+        // Fallback to calculated duration from durationCalculator
+        const durationSeconds = calculateDurationSeconds(stream);
+        if (durationSeconds && durationSeconds > 0) {
+          const durationMs = durationSeconds * 1000;
+          setDurationInfo(streamId, streamStartTime, durationMs);
+          setOriginalTiming(streamId, streamStartTime, durationMs);
+          console.log(`[StreamingService] Duration tracking set for stream ${streamId}: ${durationSeconds / 60} minutes (${durationMs}ms) [calculated]`);
+          addStreamLog(streamId, `Duration tracking set: ${durationSeconds / 60} minutes (calculated)`);
+        } else {
+          console.log(`[StreamingService] No duration set for stream ${streamId} - will run indefinitely`);
+          addStreamLog(streamId, `No duration set - stream will run indefinitely`);
+        }
       }
     }
     
@@ -1053,9 +1166,16 @@ async function startStream(streamId) {
     // This ensures the stream stays connected for the full duration
     try {
       rtmpHealthMonitor.setStreamingService(module.exports);
-      const durationForMonitor = stream.stream_duration_minutes 
-        ? stream.stream_duration_minutes * 60 * 1000 
-        : (calculateDurationSeconds(stream) ? calculateDurationSeconds(stream) * 1000 : null);
+      // For reconnect, use remaining duration; for first start, use full duration
+      let durationForMonitor;
+      if (reconnecting) {
+        const remainingMs = getOriginalRemainingMs(streamId);
+        durationForMonitor = remainingMs;
+      } else {
+        durationForMonitor = stream.stream_duration_minutes 
+          ? stream.stream_duration_minutes * 60 * 1000 
+          : (calculateDurationSeconds(stream) ? calculateDurationSeconds(stream) * 1000 : null);
+      }
       rtmpHealthMonitor.startMonitoring(streamId, streamStartTime, durationForMonitor);
       console.log(`[StreamingService] RTMP health monitoring started for stream ${streamId}`);
     } catch (healthErr) {
@@ -1117,6 +1237,7 @@ async function startStream(streamId) {
         console.log(`[StreamingService] Stream ${streamId} stop reason: duration reached`);
         addStreamLog(streamId, `Stream stop reason: duration reached`);
         clearDurationInfo(streamId);
+        clearOriginalTiming(streamId);
         if (wasActive) {
           try {
             const streamData = await Stream.findById(streamId);
@@ -1142,6 +1263,7 @@ async function startStream(streamId) {
         addStreamLog(streamId, `Stream stop reason: manual stop`);
         manuallyStoppingStreams.delete(streamId);
         clearDurationInfo(streamId);
+        clearOriginalTiming(streamId);
         if (wasActive) {
           try {
             // FIXED: Use correct status based on schedule type
@@ -1168,6 +1290,7 @@ async function startStream(streamId) {
           console.log(`[StreamingService] Stream ${streamId} crashed but duration almost reached (${remainingTime}ms remaining) - NOT restarting`);
           addStreamLog(streamId, `Stream crashed but duration almost reached - not restarting`);
           clearDurationInfo(streamId);
+          clearOriginalTiming(streamId);
           if (wasActive) {
             try {
               const streamData = await Stream.findById(streamId);
@@ -1222,6 +1345,7 @@ async function startStream(streamId) {
           console.error(`[StreamingService] Maximum retry attempts (${MAX_RETRY_ATTEMPTS}) reached for stream ${streamId}`);
           addStreamLog(streamId, `Maximum retry attempts (${MAX_RETRY_ATTEMPTS}) reached, stopping stream`);
           clearDurationInfo(streamId);
+          clearOriginalTiming(streamId);
         }
       }
       else {
@@ -1232,6 +1356,7 @@ async function startStream(streamId) {
             console.log(`[StreamingService] Stream ${streamId} exited with error but duration almost reached - NOT restarting`);
             addStreamLog(streamId, `Stream exited with error but duration almost reached - not restarting`);
             clearDurationInfo(streamId);
+            clearOriginalTiming(streamId);
             if (wasActive) {
               try {
                 const streamData = await Stream.findById(streamId);
@@ -1287,6 +1412,7 @@ async function startStream(streamId) {
         }
         
         clearDurationInfo(streamId);
+        clearOriginalTiming(streamId);
         if (wasActive) {
           try {
             const streamData = await Stream.findById(streamId);
@@ -1313,6 +1439,7 @@ async function startStream(streamId) {
       activeStreams.delete(streamId);
       streamPids.delete(streamId); // Clean up PID tracking
       clearDurationInfo(streamId); // Clean up duration tracking
+      clearOriginalTiming(streamId); // Clean up original timing
       try {
         // FIXED: Try to get stream data to determine correct status
         const streamData = await Stream.findById(streamId);
@@ -1325,37 +1452,34 @@ async function startStream(streamId) {
     ffmpegProcess.unref();
     
     // Calculate and track stream duration
-    // IMPORTANT: For recurring streams, prioritize stream_duration_minutes directly
-    // because schedule_time/end_time may contain old values from previous runs
+    // Duration tracking was already set up above (reconnect-aware).
+    // This section handles the scheduler termination backup.
     const now = Date.now();
     let durationSeconds = null;
+    let durationMs = null;
     
-    // Priority 1: stream_duration_minutes (most reliable)
-    if (stream.stream_duration_minutes && stream.stream_duration_minutes > 0) {
-      durationSeconds = stream.stream_duration_minutes * 60;
-      console.log(`[StreamingService] Using stream_duration_minutes: ${stream.stream_duration_minutes} minutes (${durationSeconds} seconds)`);
+    if (reconnecting) {
+      // For reconnect, use remaining time
+      const remainingMs = getOriginalRemainingMs(streamId);
+      if (remainingMs !== null && remainingMs > 0) {
+        durationMs = remainingMs;
+        durationSeconds = Math.ceil(remainingMs / 1000);
+        console.log(`[StreamingService] Stream ${streamId} reconnect duration: ${(remainingMs / 60000).toFixed(1)} minutes remaining`);
+      }
     } else {
-      // Fallback to centralized calculator
-      durationSeconds = calculateDurationSeconds(stream);
+      // For first start, use configured duration
+      if (stream.stream_duration_minutes && stream.stream_duration_minutes > 0) {
+        durationSeconds = stream.stream_duration_minutes * 60;
+        console.log(`[StreamingService] Using stream_duration_minutes: ${stream.stream_duration_minutes} minutes (${durationSeconds} seconds)`);
+      } else {
+        durationSeconds = calculateDurationSeconds(stream);
+      }
+      durationMs = durationSeconds ? durationSeconds * 1000 : null;
     }
-    
-    const durationMs = durationSeconds ? durationSeconds * 1000 : null;
     
     // Log all duration-related fields for debugging
     console.log(`[StreamingService] Stream ${streamId} duration fields: stream_duration_minutes=${stream.stream_duration_minutes}, schedule_time=${stream.schedule_time}, end_time=${stream.end_time}, duration=${stream.duration}`);
-    console.log(`[StreamingService] Stream ${streamId} calculated duration: ${durationSeconds ? formatDuration(durationSeconds) : 'not set'}`);
-    
-    // Set duration tracking if duration is specified
-    if (durationMs && durationMs > 0) {
-      const trackingSet = setDurationInfo(streamId, streamStartTime, durationMs);
-      if (trackingSet) {
-        addStreamLog(streamId, `Duration tracking enabled: ${formatDuration(durationSeconds)}`);
-        console.log(`[StreamingService] Duration tracking set: stream will end at ${new Date(streamStartTime.getTime() + durationMs).toISOString()}`);
-      }
-    } else {
-      addStreamLog(streamId, `No duration set - stream will run indefinitely`);
-      console.log(`[StreamingService] WARNING: No duration set for stream ${streamId} - will run indefinitely`);
-    }
+    console.log(`[StreamingService] Stream ${streamId} effective duration: ${durationSeconds ? formatDuration(durationSeconds) : 'not set (unlimited)'}`);
     
     // Schedule stream termination based on duration
     // FIXED: No buffer added - FFmpeg -t parameter handles exact duration
@@ -1363,9 +1487,6 @@ async function startStream(streamId) {
     if (typeof schedulerService !== 'undefined' && durationMs && durationMs > 0) {
       const shouldEndAt = new Date(streamStartTime.getTime() + durationMs);
       const remainingMs = Math.max(0, shouldEndAt.getTime() - now);
-      // FIXED: No buffer - use exact remaining time
-      // FFmpeg -t parameter is the primary duration control
-      // This scheduled termination is only a safety backup
       const remainingMinutes = remainingMs / 60000;
       
       console.log(`[StreamingService] Scheduling termination for stream ${streamId} at ${shouldEndAt.toISOString()} (${remainingMinutes.toFixed(2)} minutes exact)`);
@@ -1417,6 +1538,7 @@ async function stopStream(streamId) {
         await Stream.updateStatus(streamId, newStatus, stream.user_id);
         // Clean up duration tracking
         clearDurationInfo(streamId);
+        clearOriginalTiming(streamId);
         if (typeof schedulerService !== 'undefined' && schedulerService.cancelStreamTermination) {
           schedulerService.handleStreamStopped(streamId);
         }
@@ -1458,6 +1580,7 @@ async function stopStream(streamId) {
     
     // Clean up duration tracking
     clearDurationInfo(streamId);
+    clearOriginalTiming(streamId);
     
     const tempConcatFile = path.join(__dirname, '..', 'temp', `playlist_${streamId}.txt`);
     const tempAudioConcatFile = path.join(__dirname, '..', 'temp', `playlist_${streamId}_audio.txt`);
