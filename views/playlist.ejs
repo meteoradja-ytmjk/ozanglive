@@ -478,10 +478,35 @@ function updateAvailableVideosDisplay() {
     return;
   }
 
+  let html = '';
+  
+  // Show pinned item (first in selection order) at the very top
+  if (selectedVideos.length > 0) {
+    const pinned = selectedVideos[0];
+    const dur = pinned.duration ? Math.floor(pinned.duration / 60) + ':' + String(Math.floor(pinned.duration % 60)).padStart(2, '0') : '0:00';
+    html += `
+      <div class="mb-2 p-2 rounded-lg bg-primary/10 border border-primary/30">
+        <div class="text-[10px] uppercase tracking-wide text-primary font-semibold mb-1">📌 Pinned (plays first)</div>
+        <div class="flex items-center gap-2">
+          <input type="checkbox" class="w-3.5 h-3.5 rounded border-gray-500 bg-dark-700 text-primary focus:ring-primary flex-shrink-0 cursor-pointer"
+            checked onchange="toggleVideoSelection('${pinned.id}')">
+          <span class="w-5 h-5 flex items-center justify-center rounded-full bg-primary text-white text-[10px] font-bold flex-shrink-0">1</span>
+          <div class="w-12 h-8 bg-dark-800 rounded flex-shrink-0 overflow-hidden">
+            <img src="${pinned.thumbnail_path}" alt="${escapeHtmlAttr(pinned.title)}" loading="lazy" class="w-full h-full object-cover rounded" onerror="this.src='/images/default-thumbnail.jpg'">
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-xs font-medium text-white truncate">${escapeHtmlAttr(pinned.title)}</p>
+            <p class="text-[10px] text-gray-400">${dur}</p>
+          </div>
+          <span class="w-6 h-6 flex items-center justify-center text-sm">📌</span>
+        </div>
+      </div>
+    `;
+  }
+
   const groups = groupByFolder(allVideos, getVideoBaseName);
   const groupKeys = Object.keys(groups).sort((a, b) => a.localeCompare(b));
   
-  let html = '';
   groupKeys.forEach((key, gIdx) => {
     const group = groups[key];
     html += `
@@ -512,7 +537,7 @@ function updateAvailableVideosDisplay() {
             <p class="text-xs font-medium text-white truncate">${escapeHtmlAttr(video.title)}</p>
             <p class="text-[10px] text-gray-400">${dur}</p>
           </div>
-          ${isChecked ? `<button type="button" onclick="pinMediaItem('video', '${video.id}')" class="w-6 h-6 flex items-center justify-center rounded hover:bg-primary/20 text-gray-400 hover:text-primary transition-colors flex-shrink-0" title="Pin to top"><span class="text-xs">📌</span></button>` : ''}
+          ${isChecked ? `<button type="button" onclick="pinMediaItem('video', '${video.id}')" class="w-6 h-6 flex items-center justify-center rounded ${orderNum === 1 ? 'bg-primary/30 scale-110' : 'opacity-30 hover:opacity-100 hover:bg-primary/20'} transition-all flex-shrink-0" title="Pin to top"><span class="text-sm">📌</span></button>` : ''}
         </div>
       `;
     });
@@ -562,6 +587,32 @@ function updateAvailableAudiosDisplay() {
     return;
   }
 
+  let html = '';
+  
+  // Show pinned audio item at the top
+  if (selectedAudios.length > 0) {
+    const pinned = selectedAudios[0];
+    const dur = pinned.duration ? Math.floor(pinned.duration / 60) + ':' + String(Math.floor(pinned.duration % 60)).padStart(2, '0') : '0:00';
+    html += `
+      <div class="mb-2 p-2 rounded-lg bg-green-500/10 border border-green-500/30">
+        <div class="text-[10px] uppercase tracking-wide text-green-400 font-semibold mb-1">📌 Pinned (plays first)</div>
+        <div class="flex items-center gap-2">
+          <input type="checkbox" class="w-3.5 h-3.5 rounded border-gray-500 bg-dark-700 text-green-500 focus:ring-green-500 flex-shrink-0 cursor-pointer"
+            checked onchange="toggleAudioSelection('${pinned.id}')">
+          <span class="w-5 h-5 flex items-center justify-center rounded-full bg-green-500 text-white text-[10px] font-bold flex-shrink-0">1</span>
+          <div class="w-8 h-8 bg-dark-800 rounded flex-shrink-0 flex items-center justify-center">
+            <i class="ti ti-music text-sm text-green-400"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-xs font-medium text-white truncate">${escapeHtmlAttr(pinned.title)}</p>
+            <p class="text-[10px] text-gray-400">${dur}</p>
+          </div>
+          <span class="w-6 h-6 flex items-center justify-center text-sm">📌</span>
+        </div>
+      </div>
+    `;
+  }
+
   const groups = groupByFolder(allAudios, getAudioBaseName);
   const groupKeys = Object.keys(groups).sort((a, b) => a.localeCompare(b));
   
@@ -594,7 +645,7 @@ function updateAvailableAudiosDisplay() {
             <p class="text-xs font-medium text-white truncate">${escapeHtmlAttr(audio.title)}</p>
             <p class="text-[10px] text-gray-400">${dur}</p>
           </div>
-          ${isChecked ? `<button type="button" onclick="pinMediaItem('audio', '${audio.id}')" class="w-6 h-6 flex items-center justify-center rounded hover:bg-green-500/20 text-gray-400 hover:text-green-400 transition-colors flex-shrink-0" title="Pin to top"><span class="text-xs">📌</span></button>` : ''}
+          ${isChecked ? `<button type="button" onclick="pinMediaItem('audio', '${audio.id}')" class="w-6 h-6 flex items-center justify-center rounded ${orderNum === 1 ? 'bg-green-500/30 scale-110' : 'opacity-30 hover:opacity-100 hover:bg-green-500/20'} transition-all flex-shrink-0" title="Pin to top"><span class="text-sm">📌</span></button>` : ''}
         </div>
       `;
     });
