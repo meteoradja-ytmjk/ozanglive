@@ -122,7 +122,7 @@
             <div class="flex items-center mb-2">
               <label for="playlistShuffle" class="text-sm font-medium">Playback Mode</label>
               <div class="relative ml-2 group">
-                <i class="ti ti-help text-gray-400 hover:text-primary cursor-help"></i>
+                <i class="ti ti-help-circle text-gray-400 hover:text-primary cursor-help"></i>
                 <div class="absolute left-full top-1/2 -translate-y-1/2 ml-2 hidden group-hover:block w-64 p-3 bg-dark-600 text-xs text-gray-200 rounded-md shadow-lg z-10">
                   <div class="space-y-2">
                     <div><strong>Sequential:</strong> Video berurutan sesuai urutan dalam playlist</div>
@@ -301,7 +301,7 @@
       </div>
       <div class="flex gap-2">
         <button id="joinAudiosBtn" class="hidden bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm transition-colors" title="Render all playlist audio into a single seamless track in the audio gallery">
-          <i class="ti ti-music-plus mr-1"></i>
+          <i class="ti ti-music mr-1"></i>
           Save as Audio
         </button>
         <button id="editPlaylistBtn" class="bg-primary hover:bg-secondary text-white px-4 py-2 rounded-lg text-sm transition-colors">
@@ -871,7 +871,7 @@ function joinPlaylistAudios(playlistId, btn) {
   const originalHtml = btn ? btn.innerHTML : null;
   if (btn) {
     btn.disabled = true;
-    btn.innerHTML = '<i class="ti ti-loader-2 animate-spin mr-1"></i>Processing...';
+    btn.innerHTML = '<i class="ti ti-loader animate-spin mr-1"></i>Processing...';
   }
 
   fetch(`/api/playlists/${playlistId}/audio-joiner`, {
