@@ -300,6 +300,10 @@
         </span>
       </div>
       <div class="flex gap-2">
+        <button id="joinAudiosBtn" class="hidden bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm transition-colors" title="Render all playlist audio into a single seamless track in the audio gallery">
+          <i class="ti ti-music-plus mr-1"></i>
+          Save as Audio
+        </button>
         <button id="editPlaylistBtn" class="bg-primary hover:bg-secondary text-white px-4 py-2 rounded-lg text-sm transition-colors">
           <i class="ti ti-pencil mr-1"></i>
           Edit
@@ -746,6 +750,19 @@ function viewPlaylist(playlistId) {
           closeViewPlaylistModal();
           editPlaylist(playlistId);
         };
+
+        // Show/hide "Save as Audio" depending on whether the playlist has audios
+        const joinBtn = document.getElementById('joinAudiosBtn');
+        if (joinBtn) {
+          if (audioCount > 0) {
+            joinBtn.classList.remove('hidden');
+            joinBtn.disabled = false;
+            joinBtn.onclick = () => joinPlaylistAudios(playlistId, joinBtn);
+          } else {
+            joinBtn.classList.add('hidden');
+            joinBtn.onclick = null;
+          }
+        }
         
         document.getElementById('viewPlaylistModal').classList.remove('hidden');
         document.getElementById('viewPlaylistModal').classList.add('flex');
@@ -840,6 +857,48 @@ function closePreviewPlayer() {
   stopCurrentPreview();
   const wrapper = document.getElementById('previewPlayerWrapper');
   if (wrapper) wrapper.classList.add('hidden');
+}
+
+/**
+ * Render every audio in this playlist into a single seamless audio file and
+ * register it in the audio gallery so the user can use it as a streaming
+ * source. The default title is prefixed with "playlist - " to keep it
+ * distinguishable from regular uploaded audios.
+ */
+function joinPlaylistAudios(playlistId, btn) {
+  if (!playlistId) return;
+
+  const originalHtml = btn ? btn.innerHTML : null;
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ti ti-loader-2 animate-spin mr-1"></i>Processing...';
+  }
+
+  fetch(`/api/playlists/${playlistId}/audio-joiner`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' }
+  })
+    .then(async (res) => {
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || data.message || 'Failed to join audio');
+      }
+      return data;
+    })
+    .then((data) => {
+      const title = data.audio && data.audio.title ? data.audio.title : 'Joined audio';
+      showToast(`Saved to audio gallery: ${title}`, 'success');
+    })
+    .catch((err) => {
+      console.error('joinPlaylistAudios error:', err);
+      showToast(err.message || 'Error joining audio', 'error');
+    })
+    .finally(() => {
+      if (btn) {
+        btn.disabled = false;
+        if (originalHtml) btn.innerHTML = originalHtml;
+      }
+    });
 }
 
 function deletePlaylist(playlistId, playlistName) {

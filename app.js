@@ -5887,6 +5887,128 @@ app.delete('/api/playlists/:id', isAuthenticated, async (req, res) => {
   }
 });
 
+/**
+ * Render every audio in a playlist into a single seamless AAC file in the
+ * audios gallery. The result behaves like an uploaded audio so the user
+ * can immediately use it as a background track for live streams.
+ *
+ * Source files are joined with FFmpeg's concat filter, which works in the
+ * PCM domain so the boundaries between tracks are sample-accurate (no MP3/AAC
+ * encoder padding gap).
+ */
+app.post('/api/playlists/:id/audio-joiner', isAuthenticated, async (req, res) => {
+  try {
+    const playlist = await Playlist.findByIdWithMedia(req.params.id);
+    if (!playlist) {
+      return res.status(404).json({ success: false, error: 'Playlist not found' });
+    }
+    if (playlist.user_id !== req.session.userId) {
+      return res.status(403).json({ success: false, error: 'Not authorized' });
+    }
+    if (!Array.isArray(playlist.audios) || playlist.audios.length === 0) {
+      return res.status(400).json({ success: false, error: 'Playlist has no audio to join' });
+    }
+
+    // Resolve disk paths and skip missing files
+    const audioPaths = [];
+    for (const a of playlist.audios) {
+      if (!a || !a.filepath) continue;
+      const onDisk = path.join(__dirname, 'public', a.filepath.replace(/^\/+/, ''));
+      if (fs.existsSync(onDisk)) {
+        audioPaths.push(onDisk);
+      } else {
+        console.warn('[audio-joiner] Skipping missing audio file:', onDisk);
+      }
+    }
+
+    if (audioPaths.length === 0) {
+      return res.status(400).json({ success: false, error: 'All playlist audio files are missing on disk' });
+    }
+
+    // Storage limit guard (best-effort estimate based on combined input size)
+    let estimatedSize = 0;
+    audioPaths.forEach(p => {
+      try { estimatedSize += fs.statSync(p).size; } catch (_) { /* noop */ }
+    });
+    const limit = await StorageService.getUserStorageLimit(req.session.userId);
+    if (limit && limit > 0) {
+      const result = await StorageService.canUpload(req.session.userId, estimatedSize);
+      if (!result.allowed) {
+        return res.status(413).json({
+          success: false,
+          error: 'Storage limit exceeded',
+          message: `Storage limit exceeded. Current usage: ${StorageService.formatBytes(result.currentUsage)}, Limit: ${StorageService.formatBytes(result.limit)}`
+        });
+      }
+    }
+
+    // Output path under the audios gallery folder
+    const audiosDir = path.join(__dirname, 'public', 'uploads', 'audios');
+    if (!fs.existsSync(audiosDir)) {
+      fs.mkdirSync(audiosDir, { recursive: true });
+    }
+    const outputFilename = `playlist-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.m4a`;
+    const outputPath = path.join(audiosDir, outputFilename);
+
+    // Build a sample-accurate gapless join via concat filter
+    await new Promise((resolve, reject) => {
+      const filter = audioPaths.map((_, i) => `[${i}:a:0]`).join('') +
+        `concat=n=${audioPaths.length}:v=0:a=1[aout]`;
+
+      const cmd = ffmpeg();
+      audioPaths.forEach(p => cmd.input(p));
+
+      cmd
+        .complexFilter(filter, ['aout'])
+        .outputOptions([
+          '-map', '[aout]',
+          '-c:a', 'aac',
+          '-b:a', '192k',
+          '-ar', '44100',
+          '-ac', '2',
+          '-movflags', '+faststart',
+          '-y'
+        ])
+        .on('error', (err) => reject(err))
+        .on('end', () => resolve())
+        .save(outputPath);
+    });
+
+    // Read duration from the rendered file
+    const metadata = await new Promise((resolve, reject) => {
+      ffmpeg.ffprobe(outputPath, (err, data) => err ? reject(err) : resolve(data));
+    }).catch(() => null);
+
+    const duration = metadata && metadata.format && metadata.format.duration
+      ? Math.round(parseFloat(metadata.format.duration))
+      : 0;
+    const fileSize = fs.statSync(outputPath).size;
+
+    // Default name distinguishes joined playlist audios from regular uploads
+    const defaultTitle = `playlist - ${playlist.name || 'untitled'}`;
+
+    const audioData = {
+      title: defaultTitle,
+      filepath: `/uploads/audios/${outputFilename}`,
+      file_size: fileSize,
+      duration,
+      format: 'M4A',
+      user_id: req.session.userId
+    };
+
+    const audio = await Audio.create(audioData);
+
+    res.json({
+      success: true,
+      message: 'Playlist audio joined into the audio gallery',
+      audio
+    });
+  } catch (error) {
+    console.error('Error joining playlist audio:', error);
+    res.status(500).json({ success: false, error: 'Failed to join playlist audio' });
+  }
+});
+
 app.post('/api/playlists/:id/videos', isAuthenticated, [
   body('videoId').notEmpty().withMessage('Video ID is required')
 ], async (req, res) => {
