@@ -650,7 +650,7 @@
         </div>
       </div>
       <div class="step-content">
-        <div class="grid grid-cols-3 gap-2">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
           <button id="createBtn" class="bg-gradient-to-r from-primary to-secondary hover:from-secondary hover:to-primary text-white px-2 py-2.5 md:px-4 md:py-3 rounded-lg font-semibold transition-all flex flex-col items-center justify-center gap-1 shadow-lg shadow-primary/30">
             <i class="ti ti-player-play text-base md:text-xl"></i>
             <span class="text-xs">Render</span>
@@ -662,6 +662,10 @@
           <button id="resetBtn" class="bg-gray-700 hover:bg-gray-600 text-gray-300 px-2 py-2.5 md:px-4 md:py-3 rounded-lg font-semibold transition-all flex flex-col items-center justify-center gap-1">
             <i class="ti ti-eraser text-base md:text-xl"></i>
             <span class="text-xs">Reset</span>
+          </button>
+          <button id="audioJoinerBtn" type="button" onclick="runAudioJoinerFromRender(this)" class="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 px-2 py-2.5 md:px-4 md:py-3 rounded-lg font-semibold transition-all flex flex-col items-center justify-center gap-1" title="Gabungkan audio yang dipilih jadi 1 file di gallery">
+            <i class="ti ti-music text-base md:text-xl"></i>
+            <span class="text-xs">Audio Joiner</span>
           </button>
         </div>
       </div>
@@ -2524,6 +2528,64 @@ function showBadge(message, type = 'info') {
   setTimeout(() => {
     badge.remove();
   }, 3000);
+}
+
+/**
+ * Audio Joiner button handler (Step 4 of the render flow).
+ * Reads the currently checked audios from the media list, sends them to the
+ * server which joins them sample-accurately into one AAC file, and inserts
+ * the result into the audio gallery.
+ *
+ * The button shows a spinner during processing and refreshes the audio list
+ * (via loadMedia) so the new joined audio appears right away.
+ */
+async function runAudioJoinerFromRender(btn) {
+  const audioIds = [...document.querySelectorAll("input[name='audio']:checked")].map(i => i.value);
+
+  if (audioIds.length < 2) {
+    showToast('⚠ Pilih minimal 2 audio untuk digabung');
+    return;
+  }
+
+  // Optional title — keeps default "playlist - <timestamp>" prefix on cancel/empty
+  const userTitle = (window.prompt(
+    'Judul audio gabungan (opsional):',
+    `playlist - ${new Date().toLocaleString('id-ID', { hour12: false }).replace(/[\/,: ]/g, '-')}`
+  ) || '').trim();
+
+  const originalHtml = btn ? btn.innerHTML : null;
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ti ti-loader animate-spin text-base md:text-xl"></i><span class="text-xs">Processing...</span>';
+  }
+
+  try {
+    const res = await fetch('/api/audios/joiner', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ audioIds, title: userTitle })
+    });
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || data.message || 'Gagal menggabungkan audio');
+    }
+
+    showToast(`✓ Audio joined: ${data.audio?.title || 'saved to gallery'}`);
+
+    // Refresh audio list so the new file is selectable immediately
+    if (typeof loadMedia === 'function') {
+      try { await loadMedia(); } catch (_) { /* noop */ }
+    }
+  } catch (err) {
+    console.error('Audio joiner error:', err);
+    showToast(`✗ ${err.message || 'Audio joiner gagal'}`);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      if (originalHtml) btn.innerHTML = originalHtml;
+    }
+  }
 }
 
 // Monitor job completion for notifications
