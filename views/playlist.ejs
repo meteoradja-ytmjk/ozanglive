@@ -157,27 +157,22 @@
             </button>
           </div>
 
-          <!-- Action bar: shuffle, pin info, count -->
-          <div class="flex items-center justify-between mb-2 px-1">
-            <div class="flex items-center gap-2">
-              <button type="button" onclick="shuffleSelectedVideos()" class="h-7 px-2 flex items-center gap-1 rounded bg-primary/20 hover:bg-primary/30 text-primary text-xs transition-colors" title="Shuffle video order">
-                <span>&#x1F500;</span><span class="hidden sm:inline">Shuffle Video</span>
-              </button>
-              <button type="button" onclick="shuffleSelectedAudios()" class="h-7 px-2 flex items-center gap-1 rounded bg-green-500/20 hover:bg-green-500/30 text-green-400 text-xs transition-colors" title="Shuffle audio order">
-                <span>&#x1F500;</span><span class="hidden sm:inline">Shuffle Audio</span>
-              </button>
-            </div>
+          <!-- Selected count -->
+          <div class="flex items-center justify-end mb-2 px-1">
             <span class="text-xs text-gray-500" id="selectedMediaCount">0 selected</span>
           </div>
           
           <!-- Videos Panel -->
           <div id="availableVideosPanel" class="bg-dark-700 rounded-lg border border-gray-600 shadow-lg">
-            <div class="p-2 border-b border-gray-600/50">
+            <div class="p-2 border-b border-gray-600/50 space-y-2">
               <div class="relative">
                 <input type="text" id="searchVideos" placeholder="Search videos..."
                   class="w-full bg-dark-800 text-white pl-8 pr-4 py-2 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary border border-gray-700">
                 <i class="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
               </div>
+              <button type="button" onclick="shuffleSelectedVideos()" class="w-full h-8 flex items-center justify-center gap-2 rounded-lg bg-primary/10 border border-primary/30 hover:bg-primary/20 text-primary text-xs font-medium transition-colors">
+                <span>&#x1F500;</span> Shuffle Video Order
+              </button>
             </div>
             <div id="availableVideos" class="p-2 space-y-1 min-h-[220px] max-h-72 overflow-y-auto custom-scrollbar">
               <!-- Rendered dynamically by JS with folder grouping + checkboxes -->
@@ -186,12 +181,15 @@
           
           <!-- Audios Panel -->
           <div id="availableAudiosPanel" class="bg-dark-700 rounded-lg border border-gray-600 shadow-lg hidden">
-            <div class="p-2 border-b border-gray-600/50">
+            <div class="p-2 border-b border-gray-600/50 space-y-2">
               <div class="relative">
                 <input type="text" id="searchAudios" placeholder="Search audios..."
                   class="w-full bg-dark-800 text-white pl-8 pr-4 py-2 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary border border-gray-700">
                 <i class="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
               </div>
+              <button type="button" onclick="shuffleSelectedAudios()" class="w-full h-8 flex items-center justify-center gap-2 rounded-lg bg-green-500/10 border border-green-500/30 hover:bg-green-500/20 text-green-400 text-xs font-medium transition-colors">
+                <span>&#x1F500;</span> Shuffle Audio Order
+              </button>
             </div>
             <div id="availableAudios" class="p-2 space-y-1 min-h-[220px] max-h-72 overflow-y-auto custom-scrollbar">
               <!-- Rendered dynamically by JS with folder grouping + checkboxes -->
@@ -376,24 +374,46 @@ function pinMediaItem(type, id) {
   updateAvailableAudiosDisplay();
 }
 
-// Shuffle selected videos randomly
+// Shuffle selected videos randomly and re-render immediately
 function shuffleSelectedVideos() {
   if (selectedVideos.length < 2) return;
   for (let i = selectedVideos.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [selectedVideos[i], selectedVideos[j]] = [selectedVideos[j], selectedVideos[i]];
   }
+  // Re-render to show new order with visual feedback
   updateAvailableVideosDisplay();
+  // Flash effect on checked items to show order changed
+  setTimeout(() => {
+    document.querySelectorAll('#availableVideos input[type="checkbox"]:checked').forEach(cb => {
+      const row = cb.closest('div');
+      if (row) {
+        row.classList.add('ring-1', 'ring-primary/50');
+        setTimeout(() => row.classList.remove('ring-1', 'ring-primary/50'), 600);
+      }
+    });
+  }, 50);
 }
 
-// Shuffle selected audios randomly
+// Shuffle selected audios randomly and re-render immediately
 function shuffleSelectedAudios() {
   if (selectedAudios.length < 2) return;
   for (let i = selectedAudios.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [selectedAudios[i], selectedAudios[j]] = [selectedAudios[j], selectedAudios[i]];
   }
+  // Re-render to show new order with visual feedback
   updateAvailableAudiosDisplay();
+  // Flash effect on checked items
+  setTimeout(() => {
+    document.querySelectorAll('#availableAudios input[type="checkbox"]:checked').forEach(cb => {
+      const row = cb.closest('div');
+      if (row) {
+        row.classList.add('ring-1', 'ring-green-500/50');
+        setTimeout(() => row.classList.remove('ring-1', 'ring-green-500/50'), 600);
+      }
+    });
+  }, 50);
 }
 
 // Update the selected count badge
@@ -477,10 +497,12 @@ function updateAvailableVideosDisplay() {
     group.items.forEach(video => {
       const dur = video.duration ? Math.floor(video.duration / 60) + ':' + String(Math.floor(video.duration % 60)).padStart(2, '0') : '0:00';
       const isChecked = selectedVideoIds.includes(video.id);
+      const orderNum = isChecked ? selectedVideos.findIndex(v => v.id == video.id) + 1 : 0;
       html += `
-        <div class="w-full flex items-center gap-2 p-1.5 rounded hover:bg-dark-600 transition-colors">
+        <div class="w-full flex items-center gap-2 p-1.5 rounded hover:bg-dark-600 transition-colors ${isChecked ? 'bg-primary/5 border border-primary/20' : ''}">
           <input type="checkbox" class="w-3.5 h-3.5 rounded border-gray-500 bg-dark-700 text-primary focus:ring-primary flex-shrink-0 cursor-pointer"
             ${isChecked ? 'checked' : ''} onchange="toggleVideoSelection('${video.id}')">
+          ${isChecked ? `<span class="w-5 h-5 flex items-center justify-center rounded-full bg-primary/20 text-primary text-[10px] font-bold flex-shrink-0">${orderNum}</span>` : ''}
           <div class="w-12 h-8 bg-dark-800 rounded flex-shrink-0 overflow-hidden">
             <img src="${video.thumbnail_path}" alt="${escapeHtmlAttr(video.title)}" 
                  loading="lazy" class="w-full h-full object-cover rounded" 
@@ -559,10 +581,12 @@ function updateAvailableAudiosDisplay() {
     group.items.forEach(audio => {
       const dur = audio.duration ? Math.floor(audio.duration / 60) + ':' + String(Math.floor(audio.duration % 60)).padStart(2, '0') : '0:00';
       const isChecked = selectedAudioIds.includes(audio.id);
+      const orderNum = isChecked ? selectedAudios.findIndex(a => a.id == audio.id) + 1 : 0;
       html += `
-        <div class="w-full flex items-center gap-2 p-1.5 rounded hover:bg-dark-600 transition-colors">
+        <div class="w-full flex items-center gap-2 p-1.5 rounded hover:bg-dark-600 transition-colors ${isChecked ? 'bg-green-500/5 border border-green-500/20' : ''}">
           <input type="checkbox" class="w-3.5 h-3.5 rounded border-gray-500 bg-dark-700 text-green-500 focus:ring-green-500 flex-shrink-0 cursor-pointer"
             ${isChecked ? 'checked' : ''} onchange="toggleAudioSelection('${audio.id}')">
+          ${isChecked ? `<span class="w-5 h-5 flex items-center justify-center rounded-full bg-green-500/20 text-green-400 text-[10px] font-bold flex-shrink-0">${orderNum}</span>` : ''}
           <div class="w-8 h-8 bg-dark-800 rounded flex-shrink-0 flex items-center justify-center">
             <i class="ti ti-music text-sm text-green-400"></i>
           </div>
