@@ -191,7 +191,15 @@
           <div>
             <div class="flex items-center justify-between mb-3">
               <span class="text-sm font-medium text-gray-300"><i class="ti ti-playlist mr-1"></i>Selected Media</span>
-              <span class="text-xs text-gray-500" id="selectedMediaCount">0 items</span>
+              <div class="flex items-center gap-2">
+                <button type="button" onclick="shuffleSelectedVideos()" class="w-7 h-7 flex items-center justify-center rounded bg-primary/20 hover:bg-primary/30 text-primary transition-colors" title="Shuffle Videos">
+                  <span class="text-sm">&#x1F500;</span>
+                </button>
+                <button type="button" onclick="shuffleSelectedAudios()" class="w-7 h-7 flex items-center justify-center rounded bg-green-500/20 hover:bg-green-500/30 text-green-400 transition-colors" title="Shuffle Audios">
+                  <span class="text-sm">&#x1F500;</span>
+                </button>
+                <span class="text-xs text-gray-500" id="selectedMediaCount">0 items</span>
+              </div>
             </div>
             
             <!-- Single combined panel for selected videos + audios -->
@@ -381,6 +389,26 @@ function pinMediaItem(type, id) {
   updateSelectedMediaDisplay();
 }
 
+// Shuffle selected videos randomly
+function shuffleSelectedVideos() {
+  if (selectedVideos.length < 2) return;
+  for (let i = selectedVideos.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [selectedVideos[i], selectedVideos[j]] = [selectedVideos[j], selectedVideos[i]];
+  }
+  updateSelectedMediaDisplay();
+}
+
+// Shuffle selected audios randomly
+function shuffleSelectedAudios() {
+  if (selectedAudios.length < 2) return;
+  for (let i = selectedAudios.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [selectedAudios[i], selectedAudios[j]] = [selectedAudios[j], selectedAudios[i]];
+  }
+  updateSelectedMediaDisplay();
+}
+
 // Combined selected media display (videos + audios in one list)
 function updateSelectedMediaDisplay() {
   const container = document.getElementById('selectedMedia');
@@ -410,8 +438,8 @@ function updateSelectedMediaDisplay() {
         <div class="flex-1 min-w-0">
           <p class="text-xs font-medium truncate">${escapeHtmlAttr(video.title)}</p>
         </div>
-        <button type="button" onclick="pinMediaItem('video', '${video.id}')" class="w-5 h-5 flex items-center justify-center rounded ${index === 0 ? 'text-primary' : 'text-gray-500 hover:text-primary'}" title="Pin to top">
-          <i class="ti ti-pin text-xs"></i>
+        <button type="button" onclick="pinMediaItem('video', '${video.id}')" class="w-6 h-6 flex items-center justify-center rounded ${index === 0 ? 'bg-primary/30 text-primary' : 'hover:bg-primary/20 text-gray-500 hover:text-primary'} transition-colors" title="Pin to top">
+          <span class="text-xs">📌</span>
         </button>
         <button type="button" onclick="removeVideoFromPlaylist('${video.id}')" class="w-5 h-5 flex items-center justify-center text-red-400 hover:text-red-300 flex-shrink-0" title="Remove">
           <i class="ti ti-x text-xs"></i>
@@ -436,8 +464,8 @@ function updateSelectedMediaDisplay() {
         <div class="flex-1 min-w-0">
           <p class="text-xs font-medium truncate">${escapeHtmlAttr(audio.title)}</p>
         </div>
-        <button type="button" onclick="pinMediaItem('audio', '${audio.id}')" class="w-5 h-5 flex items-center justify-center rounded ${index === 0 ? 'text-green-400' : 'text-gray-500 hover:text-green-400'}" title="Pin to top">
-          <i class="ti ti-pin text-xs"></i>
+        <button type="button" onclick="pinMediaItem('audio', '${audio.id}')" class="w-6 h-6 flex items-center justify-center rounded ${index === 0 ? 'bg-green-500/30 text-green-400' : 'hover:bg-green-500/20 text-gray-500 hover:text-green-400'} transition-colors" title="Pin to top">
+          <span class="text-xs">📌</span>
         </button>
         <button type="button" onclick="removeAudioFromPlaylist('${audio.id}')" class="w-5 h-5 flex items-center justify-center text-red-400 hover:text-red-300 flex-shrink-0" title="Remove">
           <i class="ti ti-x text-xs"></i>
