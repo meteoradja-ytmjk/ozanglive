@@ -1,6 +1,57 @@
 const { google } = require('googleapis');
 
+// YouTube OAuth scopes needed for broadcast management
+const YOUTUBE_SCOPES = [
+  'https://www.googleapis.com/auth/youtube',
+  'https://www.googleapis.com/auth/youtube.force-ssl',
+  'https://www.googleapis.com/auth/youtube.upload'
+];
+
 class YouTubeService {
+  /**
+   * Generate OAuth2 authorization URL for browser-based consent flow
+   * @param {string} clientId - Google Client ID
+   * @param {string} clientSecret - Google Client Secret
+   * @param {string} redirectUri - Callback URL (e.g., http://localhost:7575/api/youtube/oauth/callback)
+   * @param {string} state - CSRF state token
+   * @returns {string} Authorization URL to redirect user to
+   */
+  generateAuthUrl(clientId, clientSecret, redirectUri, state) {
+    const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+    
+    return oauth2Client.generateAuthUrl({
+      access_type: 'offline', // IMPORTANT: This gets us a refresh_token
+      prompt: 'consent',       // IMPORTANT: Force consent to always get refresh_token
+      scope: YOUTUBE_SCOPES,
+      state: state,
+      include_granted_scopes: true
+    });
+  }
+
+  /**
+   * Exchange authorization code for tokens (access_token + refresh_token)
+   * @param {string} clientId - Google Client ID
+   * @param {string} clientSecret - Google Client Secret
+   * @param {string} redirectUri - Same redirect URI used in authorization
+   * @param {string} code - Authorization code from Google callback
+   * @returns {Promise<{access_token: string, refresh_token: string, expiry_date: number}>}
+   */
+  async exchangeCodeForTokens(clientId, clientSecret, redirectUri, code) {
+    const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+    
+    const { tokens } = await oauth2Client.getToken(code);
+    
+    if (!tokens.refresh_token) {
+      throw new Error('No refresh token received. Make sure to use access_type=offline and prompt=consent');
+    }
+    
+    return {
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token,
+      expiry_date: tokens.expiry_date
+    };
+  }
+
   async uploadRegularVideo(accessToken, { title, description, filePath, privacyStatus = 'unlisted', tags = [], categoryId = '22' }) {
     const oauth2Client = new google.auth.OAuth2();
     oauth2Client.setCredentials({ access_token: accessToken });

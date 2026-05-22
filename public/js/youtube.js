@@ -745,6 +745,9 @@ function getPrivacyBadge(privacy) {
 
 // Restore preferred account selectors on page load
 document.addEventListener('DOMContentLoaded', () => {
+  // Check OAuth result from redirect
+  checkOAuthResult();
+  
   // PERFORMANCE OPTIMIZATION: Only restore account selection, don't fetch data
   // Data will be fetched lazily when modals are opened
   const accountId = restorePreferredAccount('accountSelect');
@@ -960,6 +963,153 @@ function closeAddAccountModal() {
   document.getElementById('addAccountForm').reset();
   selectedReconnectTarget = null;
 }
+
+// ==========================================
+// OAuth Browser Flow Functions
+// ==========================================
+
+/**
+ * Start OAuth flow from the initial connect form (no accounts yet)
+ */
+async function startOAuthFlow() {
+  const clientId = document.getElementById('clientId').value.trim();
+  const clientSecret = document.getElementById('clientSecret').value.trim();
+  
+  if (!clientId || !clientSecret) {
+    showToast('Please enter Client ID and Client Secret first', 'error');
+    return;
+  }
+  
+  await initiateOAuth(clientId, clientSecret);
+}
+
+/**
+ * Start OAuth flow from the Add Account modal
+ */
+async function startOAuthFlowFromModal() {
+  const clientId = document.getElementById('newClientId').value.trim();
+  const clientSecret = document.getElementById('newClientSecret').value.trim();
+  
+  if (!clientId || !clientSecret) {
+    showToast('Please enter Client ID and Client Secret first', 'error');
+    return;
+  }
+  
+  await initiateOAuth(clientId, clientSecret);
+}
+
+/**
+ * Reconnect existing account via OAuth (from Edit modal)
+ */
+async function reconnectOAuth() {
+  const credentialId = document.getElementById('editAccountId').value;
+  const clientId = document.getElementById('editClientId').value.trim();
+  const clientSecret = document.getElementById('editClientSecret').value.trim();
+  
+  if (!clientId || !clientSecret) {
+    showToast('Client ID dan Client Secret harus diisi', 'error');
+    return;
+  }
+  
+  await initiateOAuth(clientId, clientSecret, credentialId);
+}
+
+/**
+ * Core function: Call the backend to get auth URL and redirect user to Google
+ */
+async function initiateOAuth(clientId, clientSecret, credentialId = null) {
+  try {
+    showToast('Redirecting to Google...', 'info');
+    
+    const body = { clientId, clientSecret };
+    if (credentialId) {
+      body.credentialId = credentialId;
+    }
+    
+    const response = await fetch('/api/youtube/oauth/authorize', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getCsrfToken()
+      },
+      body: JSON.stringify(body)
+    });
+    
+    const data = await response.json();
+    
+    if (data.success && data.authUrl) {
+      // Redirect to Google OAuth consent screen
+      window.location.href = data.authUrl;
+    } else {
+      showToast(data.error || 'Failed to start OAuth flow', 'error');
+    }
+  } catch (error) {
+    console.error('[OAuth] Error:', error);
+    showToast('Failed to connect to server', 'error');
+  }
+}
+
+/**
+ * Check URL parameters for OAuth result (called on page load)
+ */
+function checkOAuthResult() {
+  const params = new URLSearchParams(window.location.search);
+  
+  if (params.get('oauth_success') === '1') {
+    const channel = params.get('channel') || 'YouTube';
+    showToast(`✅ Successfully connected: ${channel}`, 'success');
+    // Clean URL
+    window.history.replaceState({}, '', window.location.pathname);
+  }
+  
+  if (params.get('oauth_error')) {
+    const error = params.get('oauth_error');
+    let message = 'OAuth connection failed';
+    
+    if (error === 'access_denied') message = 'You denied access. Please try again.';
+    else if (error === 'invalid_state') message = 'Session expired. Please try again.';
+    else if (error === 'session_expired') message = 'Session expired. Please login again.';
+    else if (error === 'no_code') message = 'No authorization code received.';
+    else message = decodeURIComponent(error);
+    
+    showToast(`❌ ${message}`, 'error');
+    // Clean URL
+    window.history.replaceState({}, '', window.location.pathname);
+  }
+}
+
+// Quick reconnect from account list - fetches credentials then starts OAuth
+async function reconnectAccountOAuth(accountId, channelName) {
+  try {
+    showToast(`Reconnecting ${channelName}...`, 'info');
+    
+    // Fetch current credentials for this account
+    const response = await fetch(`/api/youtube/credentials/${accountId}`, {
+      headers: { 'X-CSRF-Token': getCsrfToken() }
+    });
+    const data = await response.json();
+    
+    if (!data.success || !data.account) {
+      showToast('Failed to load account details', 'error');
+      return;
+    }
+    
+    const { clientId, clientSecret } = data.account;
+    
+    if (!clientId || !clientSecret) {
+      showToast('Client ID or Secret missing. Please edit the account first.', 'error');
+      return;
+    }
+    
+    // Start OAuth with credentialId to update existing account
+    await initiateOAuth(clientId, clientSecret, accountId);
+  } catch (error) {
+    console.error('[Reconnect] Error:', error);
+    showToast('Failed to reconnect', 'error');
+  }
+}
+
+// ==========================================
 
 // Edit Account Modal
 async function openEditAccountModal(accountId, channelName) {
