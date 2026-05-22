@@ -80,25 +80,46 @@
           placeholder="Enter your Google Client Secret">
       </div>
       
+      <!-- OAuth Auto-Connect Button -->
+      <div class="bg-gradient-to-r from-blue-500/10 to-green-500/10 rounded-lg p-4 border border-blue-500/30">
+        <p class="text-sm text-blue-300 mb-3 flex items-center gap-2">
+          <i class="ti ti-sparkles text-lg"></i>
+          <strong>Recommended:</strong> Auto-connect via Google (Refresh Token otomatis)
+        </p>
+        <button type="button" onclick="startOAuthFlow()"
+          class="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25">
+          <i class="ti ti-brand-google"></i>
+          <span>Connect with Google (Auto Refresh Token)</span>
+        </button>
+        <p class="text-xs text-gray-400 mt-2 text-center">Token akan di-refresh otomatis tanpa expired</p>
+      </div>
+      
+      <!-- Divider -->
+      <div class="flex items-center gap-3">
+        <div class="flex-1 border-t border-gray-600"></div>
+        <span class="text-xs text-gray-500">ATAU manual</span>
+        <div class="flex-1 border-t border-gray-600"></div>
+      </div>
+      
       <div>
-        <label class="text-sm font-medium text-white block mb-2">Refresh Token <span class="text-red-400">*</span></label>
-        <textarea id="refreshToken" name="refreshToken" required rows="3"
+        <label class="text-sm font-medium text-white block mb-2">Refresh Token <span class="text-gray-400 text-xs">(optional jika pakai OAuth di atas)</span></label>
+        <textarea id="refreshToken" name="refreshToken" rows="3"
           class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none resize-none"
-          placeholder="Enter your Refresh Token"></textarea>
+          placeholder="Atau paste manual Refresh Token dari OAuth Playground"></textarea>
       </div>
       
       <div class="bg-dark-700 rounded-lg p-4 border border-gray-600">
         <p class="text-sm text-gray-400">
           <i class="ti ti-info-circle text-primary mr-1"></i>
           Get your credentials from <a href="https://console.cloud.google.com/apis/credentials" target="_blank" class="text-primary hover:underline">Google Cloud Console</a>. 
-          Make sure to enable YouTube Data API v3.
+          Make sure to enable YouTube Data API v3 and add <code class="bg-dark-600 px-1 rounded text-primary text-xs"><%= typeof baseUrl !== 'undefined' ? baseUrl : 'http://localhost:7575' %>/api/youtube/oauth/callback</code> as Authorized Redirect URI.
         </p>
       </div>
       
       <button type="submit" id="connectBtn"
         class="w-full bg-red-500 hover:bg-red-600 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2">
         <i class="ti ti-brand-youtube"></i>
-        <span>Connect YouTube Account</span>
+        <span>Connect Manual (dengan Refresh Token)</span>
       </button>
     </form>
   </div>
@@ -146,6 +167,10 @@
           </div>
         </div>
         <div class="flex items-center gap-1">
+          <button onclick="reconnectAccountOAuth(<%= account.id %>, '<%= (account.channelName || 'YouTube Channel').replace(/'/g, "\\'") %>')" 
+            class="w-9 h-9 flex items-center justify-center text-gray-400 hover:text-green-400 hover:bg-green-500/10 rounded-lg transition-colors" title="Reconnect Token (OAuth)">
+            <i class="ti ti-refresh text-lg"></i>
+          </button>
           <button onclick="openEditAccountModal(<%= account.id %>, '<%= (account.channelName || 'YouTube Channel').replace(/'/g, "\\'") %>')" 
             class="w-9 h-9 flex items-center justify-center text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors" title="Edit Credentials">
             <i class="ti ti-edit text-lg"></i>
@@ -938,19 +963,40 @@
             class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none"
             placeholder="Enter your Google Client Secret">
         </div>
+
+        <!-- OAuth Auto-Connect Button -->
+        <div class="bg-gradient-to-r from-blue-500/10 to-green-500/10 rounded-lg p-4 border border-blue-500/30">
+          <p class="text-sm text-blue-300 mb-3 flex items-center gap-2">
+            <i class="ti ti-sparkles text-lg"></i>
+            <strong>Recommended:</strong> Auto-connect via Google
+          </p>
+          <button type="button" onclick="startOAuthFlowFromModal()"
+            class="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-4 py-2.5 rounded-lg font-medium transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25">
+            <i class="ti ti-brand-google"></i>
+            <span>Connect with Google (Auto Token)</span>
+          </button>
+          <p class="text-xs text-gray-400 mt-2 text-center">Refresh token otomatis, tidak perlu paste manual</p>
+        </div>
+
+        <!-- Divider -->
+        <div class="flex items-center gap-3">
+          <div class="flex-1 border-t border-gray-600"></div>
+          <span class="text-xs text-gray-500">ATAU manual</span>
+          <div class="flex-1 border-t border-gray-600"></div>
+        </div>
         
         <div>
-          <label class="text-sm font-medium text-white block mb-2">Refresh Token <span class="text-red-400">*</span></label>
-          <textarea id="newRefreshToken" name="refreshToken" required rows="3"
+          <label class="text-sm font-medium text-white block mb-2">Refresh Token <span class="text-gray-400 text-xs">(manual)</span></label>
+          <textarea id="newRefreshToken" name="refreshToken" rows="3"
             class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none resize-none"
-            placeholder="Enter your Refresh Token"></textarea>
+            placeholder="Atau paste manual Refresh Token dari OAuth Playground"></textarea>
         </div>
         
         <div class="bg-dark-700 rounded-lg p-4 border border-gray-600">
           <p class="text-sm text-gray-400">
             <i class="ti ti-info-circle text-primary mr-1"></i>
             Get your credentials from <a href="https://console.cloud.google.com/apis/credentials" target="_blank" class="text-primary hover:underline">Google Cloud Console</a>. 
-            Make sure to enable YouTube Data API v3.
+            Add <code class="bg-dark-600 px-1 rounded text-primary text-xs"><%= typeof baseUrl !== 'undefined' ? baseUrl : 'http://localhost:7575' %>/api/youtube/oauth/callback</code> as Redirect URI.
           </p>
         </div>
         
@@ -962,7 +1008,7 @@
           <button type="submit" id="addAccountBtn"
             class="flex-1 bg-red-500 hover:bg-red-600 text-white px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
             <i class="ti ti-brand-youtube"></i>
-            <span>Add Account</span>
+            <span>Add Manual</span>
           </button>
         </div>
       </form>
@@ -1001,14 +1047,35 @@
             placeholder="Masukkan Client Secret baru">
         </div>
 
-        <div>
-          <label class="text-sm font-medium text-white block mb-2">Refresh Token <span class="text-red-400">*</span></label>
-          <textarea id="editRefreshToken" name="refreshToken" required rows="3"
-            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none resize-none"
-            placeholder="Masukkan Refresh Token baru"></textarea>
+        <!-- OAuth Reconnect Button -->
+        <div class="bg-gradient-to-r from-green-500/10 to-blue-500/10 rounded-lg p-4 border border-green-500/30">
+          <p class="text-sm text-green-300 mb-3 flex items-center gap-2">
+            <i class="ti ti-refresh text-lg"></i>
+            <strong>Token Expired?</strong> Reconnect otomatis via Google
+          </p>
+          <button type="button" onclick="reconnectOAuth()"
+            class="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white px-4 py-2.5 rounded-lg font-medium transition-all flex items-center justify-center gap-2 shadow-lg shadow-green-500/25">
+            <i class="ti ti-brand-google"></i>
+            <span>🔄 Reconnect (Refresh Token Baru Otomatis)</span>
+          </button>
+          <p class="text-xs text-gray-400 mt-2 text-center">Buka Google consent → token baru langsung tersimpan</p>
         </div>
 
-        <p class="text-xs text-gray-500">Gunakan kredensial baru untuk memperbarui token tanpa perlu disconnect akun.</p>
+        <!-- Divider -->
+        <div class="flex items-center gap-3">
+          <div class="flex-1 border-t border-gray-600"></div>
+          <span class="text-xs text-gray-500">ATAU update manual</span>
+          <div class="flex-1 border-t border-gray-600"></div>
+        </div>
+
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Refresh Token <span class="text-gray-400 text-xs">(manual)</span></label>
+          <textarea id="editRefreshToken" name="refreshToken" rows="3"
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none resize-none"
+            placeholder="Atau paste manual Refresh Token baru"></textarea>
+        </div>
+
+        <p class="text-xs text-gray-500">Gunakan OAuth reconnect di atas untuk auto-refresh, atau paste manual refresh token.</p>
 
         <div class="pt-4 flex gap-3">
           <button type="button" onclick="closeEditAccountModal()"

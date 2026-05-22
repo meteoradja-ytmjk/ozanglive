@@ -7028,7 +7028,8 @@ app.get('/youtube', isAuthenticated, async (req, res) => {
       accounts,
       credentials: accounts.length > 0 ? accounts[0] : null, // For backward compatibility
       broadcasts: null, // null = will be loaded via AJAX (different from empty array)
-      lazyLoad: true // Flag to enable lazy loading
+      lazyLoad: true, // Flag to enable lazy loading
+      baseUrl: process.env.BASE_URL || `${req.protocol}://${req.get('host')}`
     });
   } catch (error) {
     console.error('YouTube page error:', error);
@@ -7036,6 +7037,164 @@ app.get('/youtube', isAuthenticated, async (req, res) => {
       title: 'Error',
       message: 'Failed to load YouTube Sync page'
     });
+  }
+});
+
+// ==========================================
+// YouTube OAuth2 Browser Flow Routes
+// ==========================================
+
+// Step 1: Start OAuth flow - generate auth URL and redirect user to Google
+app.post('/api/youtube/oauth/authorize', isAuthenticated, async (req, res) => {
+  try {
+    const { clientId, clientSecret } = req.body;
+    
+    if (!clientId || !clientSecret) {
+      return res.status(400).json({
+        success: false,
+        error: 'Client ID and Client Secret are required'
+      });
+    }
+    
+    // Determine base URL for redirect
+    const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
+    const redirectUri = `${baseUrl}/api/youtube/oauth/callback`;
+    
+    // Generate CSRF state token to prevent attacks
+    const state = crypto.randomBytes(32).toString('hex');
+    
+    // Store OAuth state in session
+    req.session.oauthState = state;
+    req.session.oauthClientId = clientId;
+    req.session.oauthClientSecret = clientSecret;
+    req.session.oauthRedirectUri = redirectUri;
+    
+    // If reconnecting an existing account, store the credential ID
+    if (req.body.credentialId) {
+      req.session.oauthCredentialId = parseInt(req.body.credentialId);
+    } else {
+      delete req.session.oauthCredentialId;
+    }
+    
+    // Generate Google OAuth authorization URL
+    const authUrl = youtubeService.generateAuthUrl(clientId, clientSecret, redirectUri, state);
+    
+    res.json({
+      success: true,
+      authUrl: authUrl
+    });
+  } catch (error) {
+    console.error('[OAuth] Error generating auth URL:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to start OAuth flow'
+    });
+  }
+});
+
+// Step 2: OAuth callback - Google redirects here after user consents
+app.get('/api/youtube/oauth/callback', isAuthenticated, async (req, res) => {
+  try {
+    const { code, state, error: oauthError } = req.query;
+    
+    // Handle user denying access
+    if (oauthError) {
+      console.warn('[OAuth] User denied access:', oauthError);
+      return res.redirect('/youtube?oauth_error=access_denied');
+    }
+    
+    // Validate state to prevent CSRF
+    if (!state || state !== req.session.oauthState) {
+      console.error('[OAuth] State mismatch - possible CSRF attack');
+      return res.redirect('/youtube?oauth_error=invalid_state');
+    }
+    
+    if (!code) {
+      return res.redirect('/youtube?oauth_error=no_code');
+    }
+    
+    // Retrieve stored OAuth data from session
+    const clientId = req.session.oauthClientId;
+    const clientSecret = req.session.oauthClientSecret;
+    const redirectUri = req.session.oauthRedirectUri;
+    const credentialId = req.session.oauthCredentialId; // If reconnecting
+    
+    if (!clientId || !clientSecret || !redirectUri) {
+      console.error('[OAuth] Missing OAuth session data');
+      return res.redirect('/youtube?oauth_error=session_expired');
+    }
+    
+    // Exchange authorization code for tokens
+    const tokens = await youtubeService.exchangeCodeForTokens(clientId, clientSecret, redirectUri, code);
+    
+    // Validate the tokens by getting channel info
+    const channelInfo = await youtubeService.getChannelInfo(tokens.access_token);
+    
+    if (credentialId) {
+      // RECONNECT: Update existing credential with new refresh token
+      const existing = await YouTubeCredentials.findById(credentialId);
+      if (existing && existing.userId === req.session.userId) {
+        await YouTubeCredentials.update(credentialId, {
+          clientId,
+          clientSecret,
+          refreshToken: tokens.refresh_token,
+          channelName: channelInfo.title,
+          channelId: channelInfo.id
+        });
+        console.log(`[OAuth] Reconnected account ${credentialId} - channel: ${channelInfo.title}`);
+      }
+    } else {
+      // NEW CONNECTION: Check if channel already exists
+      const channelExists = await YouTubeCredentials.existsByChannel(req.session.userId, channelInfo.id);
+      
+      if (channelExists) {
+        // Update existing channel's refresh token instead of creating duplicate
+        const allAccounts = await YouTubeCredentials.findAllByUserId(req.session.userId);
+        const existingAccount = allAccounts.find(a => a.channelId === channelInfo.id);
+        if (existingAccount) {
+          await YouTubeCredentials.update(existingAccount.id, {
+            clientId,
+            clientSecret,
+            refreshToken: tokens.refresh_token,
+            channelName: channelInfo.title
+          });
+          console.log(`[OAuth] Updated existing account for channel: ${channelInfo.title}`);
+        }
+      } else {
+        // Create new credential
+        await YouTubeCredentials.create(req.session.userId, {
+          clientId,
+          clientSecret,
+          refreshToken: tokens.refresh_token,
+          channelName: channelInfo.title,
+          channelId: channelInfo.id
+        });
+        console.log(`[OAuth] Connected new account - channel: ${channelInfo.title}`);
+      }
+    }
+    
+    // Clean up session OAuth data
+    delete req.session.oauthState;
+    delete req.session.oauthClientId;
+    delete req.session.oauthClientSecret;
+    delete req.session.oauthRedirectUri;
+    delete req.session.oauthCredentialId;
+    
+    // Redirect back to YouTube page with success
+    res.redirect('/youtube?oauth_success=1&channel=' + encodeURIComponent(channelInfo.title));
+    
+  } catch (error) {
+    console.error('[OAuth] Callback error:', error);
+    
+    // Clean up session
+    delete req.session.oauthState;
+    delete req.session.oauthClientId;
+    delete req.session.oauthClientSecret;
+    delete req.session.oauthRedirectUri;
+    delete req.session.oauthCredentialId;
+    
+    const errorMsg = encodeURIComponent(error.message || 'OAuth failed');
+    res.redirect(`/youtube?oauth_error=${errorMsg}`);
   }
 });
 
