@@ -1182,21 +1182,29 @@ app.post('/signup', upload.single('avatar'), async (req, res) => {
       avatarPath = `/uploads/avatars/${req.file.filename}`;
     }
 
-    // FIXED: Auto-approve all signups with live limit = 3
+    // Read auto-approve setting and default live limit from SystemSettings
+    const autoApproveEnabled = await SystemSettings.getAutoApproveRegistration();
+    const defaultLiveLimit = await SystemSettings.getDefaultLiveLimit();
+
+    const userStatus = autoApproveEnabled ? 'active' : 'inactive';
+
     const newUser = await User.create({
       username,
       password,
       avatar_path: avatarPath,
       user_role: user_role || 'member',
-      status: 'active', // Always active (auto-approve)
-      live_limit: 3 // Default limit = 3
+      status: userStatus,
+      live_limit: defaultLiveLimit
     });
 
     if (newUser) {
+      const successMsg = autoApproveEnabled
+        ? `Account created successfully! You can now login with live limit ${defaultLiveLimit}.`
+        : 'Account created successfully! Please wait for admin approval before logging in.';
       return res.render('signup', {
         title: 'Sign Up',
         error: null,
-        success: 'Account created successfully! You can now login with live limit 3.'
+        success: successMsg
       });
     } else {
       return res.render('signup', {
