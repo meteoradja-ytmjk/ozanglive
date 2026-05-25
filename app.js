@@ -2547,7 +2547,8 @@ app.get('/api/branding', isAdmin, async (req, res) => {
 // Update branding settings
 app.post('/api/branding/update', isAdmin, upload.fields([
   { name: 'logo', maxCount: 1 },
-  { name: 'favicon', maxCount: 1 }
+  { name: 'favicon', maxCount: 1 },
+  { name: 'qris_image', maxCount: 1 }
 ]), async (req, res) => {
   try {
     const {
@@ -2560,13 +2561,16 @@ app.post('/api/branding/update', isAdmin, upload.fields([
       support_email,
       support_url,
       show_powered_by,
-      custom_css
+      custom_css,
+      whatsapp_number,
+      remove_qris
     } = req.body;
 
     // Get current branding for logo paths
     const currentBranding = await BrandingSettings.get();
     let logo_path = currentBranding.logo_path;
     let favicon_path = currentBranding.favicon_path;
+    let qris_image_path = currentBranding.qris_image_path;
 
     // Handle logo upload
     if (req.files && req.files.logo && req.files.logo[0]) {
@@ -2608,6 +2612,39 @@ app.post('/api/branding/update', isAdmin, upload.fields([
       }
     }
 
+    // Handle QRIS image upload
+    if (req.files && req.files.qris_image && req.files.qris_image[0]) {
+      const qrisFile = req.files.qris_image[0];
+      const qrisFilename = `qris-${Date.now()}${path.extname(qrisFile.originalname)}`;
+      const qrisPath = path.join(__dirname, 'public', 'uploads', 'branding', qrisFilename);
+      
+      await fs.promises.rename(qrisFile.path, qrisPath);
+      qris_image_path = `/uploads/branding/${qrisFilename}`;
+
+      // Delete old QRIS image
+      if (currentBranding.qris_image_path && currentBranding.qris_image_path.startsWith('/uploads/')) {
+        const oldQrisPath = path.join(__dirname, 'public', currentBranding.qris_image_path);
+        try {
+          await fs.promises.unlink(oldQrisPath);
+        } catch (err) {
+          console.log('[Branding] Could not delete old QRIS image:', err.message);
+        }
+      }
+    }
+
+    // Handle QRIS removal
+    if (remove_qris === '1' || remove_qris === 'true') {
+      if (qris_image_path && qris_image_path.startsWith('/uploads/')) {
+        const oldQrisPath = path.join(__dirname, 'public', qris_image_path);
+        try {
+          await fs.promises.unlink(oldQrisPath);
+        } catch (err) {
+          console.log('[Branding] Could not delete QRIS image:', err.message);
+        }
+      }
+      qris_image_path = null;
+    }
+
     // Update branding settings
     await BrandingSettings.update({
       app_name: app_name || 'OzangLive',
@@ -2622,7 +2659,9 @@ app.post('/api/branding/update', isAdmin, upload.fields([
       footer_text: footer_text || '© 2024 OzangLive. All rights reserved.',
       support_email: support_email || 'support@ozanglive.com',
       support_url: support_url || null,
-      show_powered_by: show_powered_by === 'on' || show_powered_by === '1' || show_powered_by === 'true' ? 1 : 0
+      show_powered_by: show_powered_by === 'on' || show_powered_by === '1' || show_powered_by === 'true' ? 1 : 0,
+      whatsapp_number: whatsapp_number || '',
+      qris_image_path
     });
 
     // Clear branding cache
@@ -2697,7 +2736,8 @@ app.get('/api/branding', isAdmin, async (req, res) => {
 // Update branding settings
 app.post('/api/branding/update', isAdmin, upload.fields([
   { name: 'logo', maxCount: 1 },
-  { name: 'favicon', maxCount: 1 }
+  { name: 'favicon', maxCount: 1 },
+  { name: 'qris_image', maxCount: 1 }
 ]), async (req, res) => {
   try {
     const {
@@ -2710,13 +2750,16 @@ app.post('/api/branding/update', isAdmin, upload.fields([
       support_email,
       support_url,
       show_powered_by,
-      custom_css
+      custom_css,
+      whatsapp_number,
+      remove_qris
     } = req.body;
 
     // Get current branding for logo paths
     const currentBranding = await BrandingSettings.get();
     let logo_path = currentBranding.logo_path;
     let favicon_path = currentBranding.favicon_path;
+    let qris_image_path = currentBranding.qris_image_path;
 
     // Handle logo upload
     if (req.files && req.files.logo && req.files.logo[0]) {
@@ -2760,6 +2803,38 @@ app.post('/api/branding/update', isAdmin, upload.fields([
       }
     }
 
+    // Handle QRIS image upload
+    if (req.files && req.files.qris_image && req.files.qris_image[0]) {
+      const qrisFile = req.files.qris_image[0];
+      const qrisFilename = `qris-${Date.now()}${path.extname(qrisFile.originalname)}`;
+      const qrisPath = path.join(__dirname, 'public', 'uploads', 'branding', qrisFilename);
+      
+      await fs.promises.rename(qrisFile.path, qrisPath);
+      qris_image_path = `/uploads/branding/${qrisFilename}`;
+
+      if (currentBranding.qris_image_path && currentBranding.qris_image_path.startsWith('/uploads/')) {
+        const oldQrisPath = path.join(__dirname, 'public', currentBranding.qris_image_path);
+        try {
+          await fs.promises.unlink(oldQrisPath);
+        } catch (err) {
+          console.log('[Branding] Old QRIS not found or already deleted');
+        }
+      }
+    }
+
+    // Handle QRIS removal
+    if (remove_qris === '1' || remove_qris === 'true') {
+      if (qris_image_path && qris_image_path.startsWith('/uploads/')) {
+        const oldQrisPath = path.join(__dirname, 'public', qris_image_path);
+        try {
+          await fs.promises.unlink(oldQrisPath);
+        } catch (err) {
+          console.log('[Branding] Could not delete QRIS image:', err.message);
+        }
+      }
+      qris_image_path = null;
+    }
+
     // Update branding settings
     await BrandingSettings.update({
       app_name: app_name || 'OzangLive',
@@ -2773,7 +2848,9 @@ app.post('/api/branding/update', isAdmin, upload.fields([
       support_email: support_email || 'support@ozanglive.com',
       support_url: support_url || null,
       show_powered_by: show_powered_by === 'on' || show_powered_by === '1' || show_powered_by === true ? 1 : 0,
-      custom_css: custom_css || null
+      custom_css: custom_css || null,
+      whatsapp_number: whatsapp_number || '',
+      qris_image_path
     });
 
     // Clear branding cache
@@ -2830,7 +2907,10 @@ app.post('/api/branding/reset', isAdmin, async (req, res) => {
 app.get('/api/streams/limit-info', isAuthenticated, async (req, res) => {
   try {
     const limitInfo = await LiveLimitService.validateAndGetInfo(req.session.userId);
-    res.json({ success: true, ...limitInfo });
+    // Include WhatsApp number from branding for limit warning
+    const branding = await BrandingSettings.get();
+    const whatsappNumber = branding.whatsapp_number || null;
+    res.json({ success: true, ...limitInfo, whatsappNumber });
   } catch (error) {
     console.error('Get limit info error:', error);
     res.status(500).json({ success: false, message: 'Failed to get limit info' });

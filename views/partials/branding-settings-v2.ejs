@@ -242,15 +242,57 @@
                 placeholder="https://support.yourcompany.com">
               <p class="text-xs text-gray-500 mt-1.5">Link to help center</p>
             </div>
+
+            <div>
+              <label for="whatsapp-number" class="block text-sm font-medium text-gray-300 mb-2">
+                <i class="ti ti-brand-whatsapp text-green-400 mr-1"></i>Nomor WhatsApp Admin
+              </label>
+              <input type="text" id="whatsapp-number" name="whatsapp_number" value="<%= branding.whatsapp_number || '' %>"
+                class="w-full bg-dark-900 text-white px-4 py-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                placeholder="6281234567890">
+              <p class="text-xs text-gray-500 mt-1.5">Format internasional tanpa + (contoh: 6281234567890). Tombol WA akan muncul di header jika diisi.</p>
+            </div>
           </div>
         </div>
 
-        <!-- Right: Attribution -->
+        <!-- Right: QRIS Payment & Attribution -->
         <div class="bg-dark-700 rounded-lg p-5">
           <h4 class="text-md font-medium mb-4 flex items-center">
-            <i class="ti ti-info-circle mr-2 text-cyan-400"></i>
-            Attribution
+            <i class="ti ti-qrcode mr-2 text-blue-400"></i>
+            Pembayaran QRIS
           </h4>
+
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-300 mb-2">Upload QRIS / Barcode Pembayaran</label>
+              <div class="flex items-start gap-4">
+                <div class="flex-1">
+                  <input type="file" id="qris-image-input" name="qris_image" accept="image/jpeg,image/png,image/jpg"
+                    class="w-full bg-dark-900 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary file:text-white hover:file:bg-secondary file:cursor-pointer">
+                  <p class="text-xs text-gray-500 mt-1.5">Format: JPG/PNG. Gambar QRIS akan ditampilkan sebagai popup saat user klik icon pembayaran di header.</p>
+                </div>
+                <% if (branding.qris_image_path) { %>
+                <div class="flex-shrink-0">
+                  <img src="<%= branding.qris_image_path %>" alt="Current QRIS" class="w-16 h-16 object-contain rounded-lg border border-gray-600 bg-white p-1">
+                </div>
+                <% } %>
+              </div>
+              <% if (branding.qris_image_path) { %>
+              <div class="mt-2 flex items-center gap-2">
+                <span class="text-xs text-green-400"><i class="ti ti-check mr-1"></i>QRIS aktif</span>
+                <button type="button" id="remove-qris-btn" class="text-xs text-red-400 hover:text-red-300 transition-colors">
+                  <i class="ti ti-trash mr-1"></i>Hapus QRIS
+                </button>
+              </div>
+              <% } %>
+            </div>
+          </div>
+
+          <div class="mt-6 pt-4 border-t border-gray-600">
+            <h4 class="text-md font-medium mb-4 flex items-center">
+              <i class="ti ti-info-circle mr-2 text-cyan-400"></i>
+              Attribution
+            </h4>
 
           <div class="space-y-4">
             <div class="flex items-start justify-between py-3 px-4 bg-dark-900 rounded-lg border border-gray-600">
@@ -277,6 +319,7 @@
                 </div>
               </div>
             </div>
+          </div>
           </div>
         </div>
       </div>
@@ -514,25 +557,32 @@
 
       try {
         const formData = new FormData(brandingForm);
-        const data = {
-          _csrf: formData.get('_csrf'),
-          app_name: formData.get('app_name'),
-          company_name: formData.get('company_name'),
-          primary_color: formData.get('primary_color'),
-          secondary_color: formData.get('secondary_color'),
-          accent_color: formData.get('accent_color'),
-          footer_text: formData.get('footer_text'),
-          support_email: formData.get('support_email'),
-          support_url: formData.get('support_url'),
-          show_powered_by: formData.get('show_powered_by') === 'on' ? 1 : 0
-        };
         
-        const response = await fetch('/api/branding', {
+        // Add whatsapp_number explicitly
+        const whatsappInput = document.getElementById('whatsapp-number');
+        if (whatsappInput) {
+          formData.set('whatsapp_number', whatsappInput.value);
+        }
+
+        // Add QRIS image if selected
+        const qrisInput = document.getElementById('qris-image-input');
+        if (qrisInput && qrisInput.files[0]) {
+          formData.set('qris_image', qrisInput.files[0]);
+        }
+
+        // Add show_powered_by as proper value
+        const poweredByCheckbox = document.getElementById('show-powered-by');
+        formData.set('show_powered_by', poweredByCheckbox && poweredByCheckbox.checked ? '1' : '0');
+
+        // Check if remove QRIS was requested
+        if (window._removeQris) {
+          formData.set('remove_qris', '1');
+          window._removeQris = false;
+        }
+        
+        const response = await fetch('/api/branding/update', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(data)
+          body: formData
         });
 
         const result = await response.json();
@@ -550,6 +600,20 @@
         showNotification(error.message || 'Failed to save branding settings', 'error');
         saveBtn.disabled = false;
         saveBtn.innerHTML = originalText;
+      }
+    });
+  }
+
+  // Remove QRIS button handler
+  window._removeQris = false;
+  const removeQrisBtn = document.getElementById('remove-qris-btn');
+  if (removeQrisBtn) {
+    removeQrisBtn.addEventListener('click', () => {
+      if (confirm('Hapus gambar QRIS? Perubahan akan disimpan saat klik Save Branding.')) {
+        window._removeQris = true;
+        removeQrisBtn.textContent = '✓ QRIS akan dihapus saat save';
+        removeQrisBtn.classList.remove('text-red-400');
+        removeQrisBtn.classList.add('text-yellow-400');
       }
     });
   }
