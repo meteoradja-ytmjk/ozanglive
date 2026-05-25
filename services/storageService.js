@@ -7,12 +7,13 @@ const CACHE_TTL = 60000; // 1 minute cache
 class StorageService {
   /**
    * Normalize storage limit values from DB/API.
-   * Supports legacy/string values and treats invalid/non-positive values as unlimited.
+   * Treats invalid/non-positive values as unlimited (null).
+   * Values are always stored and read in bytes.
    * @param {unknown} rawLimit
    * @returns {number|null}
    */
   static normalizeLimit(rawLimit) {
-    if (rawLimit === null || rawLimit === undefined || rawLimit === '') {
+    if (rawLimit === null || rawLimit === undefined || rawLimit === '' || rawLimit === 'null') {
       return null;
     }
 
@@ -21,19 +22,7 @@ class StorageService {
       return null;
     }
 
-    // Backward compatibility for legacy limits that were saved without byte conversion.
-    // Newer versions store bytes, while older deployments may have raw unit numbers.
-    if (parsedLimit < 1024) {
-      // Typical historical values were plain numbers like 5/10/20 (GB) or 256/512 (MB).
-      if (parsedLimit <= 100) {
-        return Math.floor(parsedLimit * 1024 * 1024 * 1024); // legacy GB value
-      }
-      return Math.floor(parsedLimit * 1024 * 1024); // legacy MB value
-    }
-    if (parsedLimit < 1024 * 1024) {
-      return Math.floor(parsedLimit * 1024 * 1024); // legacy MB value
-    }
-
+    // All values are stored in bytes. Return as-is.
     return Math.floor(parsedLimit);
   }
 
@@ -96,7 +85,7 @@ class StorageService {
    */
   static async canUpload(userId, fileSize) {
     const usage = await this.calculateUsage(userId);
-    const limit = this.normalizeLimit(await this.getUserStorageLimit(userId));
+    const limit = await this.getUserStorageLimit(userId);
     const normalizedFileSize = Number(fileSize);
 
     if (!Number.isFinite(normalizedFileSize) || normalizedFileSize <= 0) {
@@ -176,7 +165,7 @@ class StorageService {
    */
   static async getStorageInfo(userId) {
     const usage = await this.calculateUsage(userId);
-    const limit = this.normalizeLimit(await this.getUserStorageLimit(userId));
+    const limit = await this.getUserStorageLimit(userId);
 
     let percentage = null;
     let status = 'normal';

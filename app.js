@@ -2142,6 +2142,11 @@ app.post('/api/users/update', isAdmin, upload.single('avatar'), async (req, res)
 
     await User.updateProfile(userId, updateData);
 
+    // Clear storage limit cache if storage was updated
+    if (storage_limit !== undefined) {
+      StorageService.clearCache(userId);
+    }
+
     res.json({
       success: true,
       message: 'User updated successfully'
@@ -2384,6 +2389,7 @@ app.put('/api/users/:id/storage-limit', isAdmin, async (req, res) => {
     const { limit } = req.body;
 
     const result = await User.updateStorageLimit(userId, limit);
+    StorageService.clearCache(userId);
     res.json({ success: true, ...result });
   } catch (error) {
     console.error('Update storage limit error:', error);
