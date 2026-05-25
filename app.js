@@ -1913,6 +1913,17 @@ app.get('/users', isAdmin, async (req, res) => {
         );
       });
 
+      const audioStats = await new Promise((resolve, reject) => {
+        db.get(
+          `SELECT COALESCE(SUM(file_size), 0) as totalSize FROM audios WHERE user_id = ?`,
+          [user.id],
+          (err, row) => {
+            if (err) reject(err);
+            else resolve(row);
+          }
+        );
+      });
+
       const streamStats = await new Promise((resolve, reject) => {
         db.get(
           `SELECT COUNT(*) as count FROM streams WHERE user_id = ?`,
@@ -1943,13 +1954,22 @@ app.get('/users', isAdmin, async (req, res) => {
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
       };
 
+      const totalStorageUsed = (videoStats.totalSize || 0) + (audioStats.totalSize || 0);
+
       return {
         ...user,
         videoCount: videoStats.count,
         totalVideoSize: videoStats.totalSize > 0 ? formatFileSize(videoStats.totalSize) : null,
         streamCount: streamStats.count,
         activeStreamCount: activeStreamStats.count,
-        defaultLiveLimit: defaultLiveLimit
+        defaultLiveLimit: defaultLiveLimit,
+        storageUsed: totalStorageUsed,
+        storageLimit: user.storage_limit || null,
+        storageFormatted: {
+          used: formatFileSize(totalStorageUsed),
+          limit: user.storage_limit ? formatFileSize(user.storage_limit) : 'Unlimited'
+        },
+        storagePercentage: user.storage_limit ? Math.min(100, Math.round((totalStorageUsed / user.storage_limit) * 100)) : null
       };
     }));
 
@@ -2820,6 +2840,31 @@ app.get('/api/streams/limit-info', isAuthenticated, async (req, res) => {
 app.get('/api/system-stats', isAuthenticated, async (req, res) => {
   try {
     const stats = await systemMonitor.getSystemStats();
+    
+    // For non-admin users, replace disk info with their personal storage usage vs limit
+    const userRole = req.session?.user?.user_role || req.user?.user_role;
+    if (userRole !== 'admin') {
+      const userId = req.session?.userId || req.user?.id;
+      if (userId) {
+        const storageInfo = await StorageService.getStorageInfo(userId);
+        if (storageInfo.limit) {
+          // User has a storage limit set by admin
+          stats.disk = {
+            used: storageInfo.formatted.usage,
+            total: storageInfo.formatted.limit,
+            usagePercent: storageInfo.percentage || 0
+          };
+        } else {
+          // No limit set (unlimited) - show user's actual usage vs server disk
+          stats.disk = {
+            used: storageInfo.formatted.usage,
+            total: 'Unlimited',
+            usagePercent: 0
+          };
+        }
+      }
+    }
+    
     res.json(stats);
   } catch (error) {
     res.status(500).json({ error: error.message });
