@@ -30,6 +30,8 @@ class BrandingSettings {
                 support_email: 'support@monsterlive.com',
                 support_url: null,
                 show_powered_by: 1,
+                whatsapp_number: '',
+                qris_image_path: null,
                 updated_at: new Date().toISOString()
               });
             } else {
@@ -59,7 +61,9 @@ class BrandingSettings {
         footer_text,
         support_email,
         support_url,
-        show_powered_by
+        show_powered_by,
+        whatsapp_number,
+        qris_image_path
       } = settings;
 
       db.run(
@@ -67,8 +71,9 @@ class BrandingSettings {
           id, app_name, company_name, logo_path, favicon_path,
           primary_color, secondary_color, accent_color,
           login_background, custom_css, footer_text,
-          support_email, support_url, show_powered_by, updated_at
-        ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+          support_email, support_url, show_powered_by,
+          whatsapp_number, qris_image_path, updated_at
+        ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
         [
           app_name,
           company_name,
@@ -82,7 +87,9 @@ class BrandingSettings {
           footer_text,
           support_email,
           support_url,
-          show_powered_by ? 1 : 0
+          show_powered_by ? 1 : 0,
+          whatsapp_number || '',
+          qris_image_path || null
         ],
         function (err) {
           if (err) {
@@ -138,6 +145,8 @@ class BrandingSettings {
           support_email TEXT DEFAULT 'support@monsterlive.com',
           support_url TEXT,
           show_powered_by INTEGER DEFAULT 1,
+          whatsapp_number TEXT DEFAULT '',
+          qris_image_path TEXT,
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           CHECK (id = 1)
         )`,
@@ -147,10 +156,33 @@ class BrandingSettings {
             reject(err);
           } else {
             console.log('[BrandingSettings] Table initialized');
+            // Run migration for existing tables
+            BrandingSettings.migrateColumns();
             resolve();
           }
         }
       );
+    });
+  }
+
+  /**
+   * Add new columns to existing table (migration for existing installations)
+   */
+  static migrateColumns() {
+    const columns = [
+      { name: 'whatsapp_number', sql: "ALTER TABLE branding_settings ADD COLUMN whatsapp_number TEXT DEFAULT ''" },
+      { name: 'qris_image_path', sql: "ALTER TABLE branding_settings ADD COLUMN qris_image_path TEXT" }
+    ];
+
+    columns.forEach(col => {
+      db.run(col.sql, (err) => {
+        if (err && !err.message.includes('duplicate column')) {
+          // Ignore "duplicate column" errors - means column already exists
+          if (!err.message.includes('duplicate')) {
+            console.error(`[BrandingSettings] Migration error for ${col.name}:`, err.message);
+          }
+        }
+      });
     });
   }
 }
