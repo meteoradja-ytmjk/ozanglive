@@ -6,6 +6,7 @@ const ensureDirectories = () => {
     path.join(__dirname, '../public/uploads/thumbnails'),
     path.join(__dirname, '../public/uploads/avatars'),
     path.join(__dirname, '../public/uploads/audios'),
+    path.join(__dirname, '../public/uploads/branding'),
     path.join(__dirname, '../tmp/upload-chunks')
   ];
   dirs.forEach(dir => {

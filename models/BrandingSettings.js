@@ -14,28 +14,31 @@ class BrandingSettings {
             reject(err);
           } else {
             // Return default values if no settings exist
+            const defaults = {
+              id: 1,
+              app_name: 'MonsterLive',
+              company_name: 'MonsterLive Team',
+              logo_path: '/images/logo-default.png',
+              favicon_path: '/images/favicon-default.png',
+              primary_color: '#8B5CF6',
+              secondary_color: '#7C3AED',
+              accent_color: '#6D28D9',
+              login_background: null,
+              custom_css: null,
+              footer_text: '© 2024 MonsterLive. All rights reserved.',
+              support_email: 'support@monsterlive.com',
+              support_url: null,
+              show_powered_by: 1,
+              whatsapp_number: '',
+              qris_image_path: null,
+              updated_at: new Date().toISOString()
+            };
+
             if (!row) {
-              resolve({
-                id: 1,
-                app_name: 'MonsterLive',
-                company_name: 'MonsterLive Team',
-                logo_path: '/images/logo-default.png',
-                favicon_path: '/images/favicon-default.png',
-                primary_color: '#8B5CF6',
-                secondary_color: '#7C3AED',
-                accent_color: '#6D28D9',
-                login_background: null,
-                custom_css: null,
-                footer_text: '© 2024 MonsterLive. All rights reserved.',
-                support_email: 'support@monsterlive.com',
-                support_url: null,
-                show_powered_by: 1,
-                whatsapp_number: '',
-                qris_image_path: null,
-                updated_at: new Date().toISOString()
-              });
+              resolve(defaults);
             } else {
-              resolve(row);
+              // Merge with defaults to ensure new fields always exist
+              resolve({ ...defaults, ...row });
             }
           }
         }
@@ -47,6 +50,9 @@ class BrandingSettings {
    * Update branding settings
    */
   static async update(settings) {
+    // Ensure columns exist before updating
+    await BrandingSettings.ensureColumnsExist();
+
     return new Promise((resolve, reject) => {
       const {
         app_name,
@@ -125,6 +131,34 @@ class BrandingSettings {
   }
 
   /**
+   * Ensure new columns exist (migration for existing databases)
+   * This is called before every update to guarantee columns are present
+   */
+  static async ensureColumnsExist() {
+    const columns = [
+      { name: 'whatsapp_number', sql: "ALTER TABLE branding_settings ADD COLUMN whatsapp_number TEXT DEFAULT ''" },
+      { name: 'qris_image_path', sql: "ALTER TABLE branding_settings ADD COLUMN qris_image_path TEXT" }
+    ];
+
+    for (const col of columns) {
+      await new Promise((resolve) => {
+        db.run(col.sql, (err) => {
+          // Ignore errors - column likely already exists
+          if (err) {
+            // This is expected if column already exists
+            if (!err.message.includes('duplicate') && !err.message.includes('already exists')) {
+              console.log(`[BrandingSettings] Column ${col.name} migration note:`, err.message);
+            }
+          } else {
+            console.log(`[BrandingSettings] Added column: ${col.name}`);
+          }
+          resolve();
+        });
+      });
+    }
+  }
+
+  /**
    * Initialize branding_settings table
    */
   static async initTable() {
@@ -150,39 +184,22 @@ class BrandingSettings {
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           CHECK (id = 1)
         )`,
-        (err) => {
+        async (err) => {
           if (err) {
             console.error('[BrandingSettings] Error creating table:', err);
             reject(err);
           } else {
             console.log('[BrandingSettings] Table initialized');
-            // Run migration for existing tables
-            BrandingSettings.migrateColumns();
+            // Run migration for existing tables that lack new columns
+            try {
+              await BrandingSettings.ensureColumnsExist();
+            } catch (migErr) {
+              console.log('[BrandingSettings] Migration warning:', migErr.message);
+            }
             resolve();
           }
         }
       );
-    });
-  }
-
-  /**
-   * Add new columns to existing table (migration for existing installations)
-   */
-  static migrateColumns() {
-    const columns = [
-      { name: 'whatsapp_number', sql: "ALTER TABLE branding_settings ADD COLUMN whatsapp_number TEXT DEFAULT ''" },
-      { name: 'qris_image_path', sql: "ALTER TABLE branding_settings ADD COLUMN qris_image_path TEXT" }
-    ];
-
-    columns.forEach(col => {
-      db.run(col.sql, (err) => {
-        if (err && !err.message.includes('duplicate column')) {
-          // Ignore "duplicate column" errors - means column already exists
-          if (!err.message.includes('duplicate')) {
-            console.error(`[BrandingSettings] Migration error for ${col.name}:`, err.message);
-          }
-        }
-      });
     });
   }
 }

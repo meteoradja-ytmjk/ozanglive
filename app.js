@@ -1656,10 +1656,11 @@ app.post('/api/branding', isAdmin, async (req, res) => {
       footer_text,
       support_email,
       support_url,
-      show_powered_by
+      show_powered_by,
+      whatsapp_number
     } = req.body;
 
-    // Get current settings to preserve logo paths
+    // Get current settings to preserve logo paths and new fields
     const current = await BrandingSettings.get();
 
     await BrandingSettings.update({
@@ -1675,7 +1676,9 @@ app.post('/api/branding', isAdmin, async (req, res) => {
       footer_text: footer_text || current.footer_text,
       support_email: support_email || current.support_email,
       support_url: support_url || null,
-      show_powered_by: show_powered_by !== undefined ? show_powered_by : current.show_powered_by
+      show_powered_by: show_powered_by !== undefined ? show_powered_by : current.show_powered_by,
+      whatsapp_number: whatsapp_number !== undefined ? whatsapp_number : (current.whatsapp_number || ''),
+      qris_image_path: current.qris_image_path || null
     });
 
     // Clear cache to force reload
@@ -12210,6 +12213,14 @@ async function startServer() {
       console.log('[Startup] TitleFolder table initialized');
     } catch (err) {
       console.log('[Startup] TitleFolder table may already exist');
+    }
+
+    // Initialize BrandingSettings table and migrate columns
+    try {
+      await BrandingSettings.initTable();
+      console.log('[Startup] BrandingSettings table initialized');
+    } catch (err) {
+      console.log('[Startup] BrandingSettings table may already exist');
     }
 
     // OPTIMIZATION: Run database optimization
