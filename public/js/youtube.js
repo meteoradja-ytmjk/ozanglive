@@ -8193,3 +8193,228 @@ async function deleteThumbnailInManager(filename, folder) {
     showToast('An error occurred', 'error');
   }
 }
+
+// ============================================
+// Token Health Check & Auto-Reconnect
+// ============================================
+
+// Check token health on page load (after broadcasts loaded)
+async function checkTokenHealth() {
+  try {
+    const response = await fetch('/api/youtube/token-health', {
+      headers: { 'X-CSRF-Token': getCsrfToken() }
+    });
+    
+    if (!response.ok) return;
+    
+    const data = await response.json();
+    if (!data.success || !data.accounts) return;
+    
+    let hasExpired = false;
+    
+    data.accounts.forEach(account => {
+      const badge = document.getElementById(`tokenStatus_${account.id}`);
+      const statusText = document.getElementById(`accountStatusText_${account.id}`);
+      const card = document.getElementById(`accountCard_${account.id}`);
+      
+      if (badge) {
+        if (account.status === 'active') {
+          badge.innerHTML = '<i class="ti ti-circle-check text-xs"></i> Active';
+          badge.className = 'token-status-badge px-2 py-0.5 text-xs rounded-full font-medium bg-green-500/20 text-green-400';
+        } else if (account.status === 'expired') {
+          badge.innerHTML = '<i class="ti ti-alert-triangle text-xs"></i> Expired';
+          badge.className = 'token-status-badge px-2 py-0.5 text-xs rounded-full font-medium bg-red-500/20 text-red-400 animate-pulse';
+          hasExpired = true;
+        } else {
+          badge.innerHTML = '<i class="ti ti-alert-circle text-xs"></i> Error';
+          badge.className = 'token-status-badge px-2 py-0.5 text-xs rounded-full font-medium bg-yellow-500/20 text-yellow-400';
+          hasExpired = true;
+        }
+      }
+      
+      if (statusText && account.status !== 'active') {
+        statusText.innerHTML = `<i class="ti ti-alert-triangle text-xs text-red-400"></i> <span class="text-red-400">Token expired - reconnect needed</span>`;
+      }
+      
+      if (card && account.status !== 'active') {
+        card.classList.add('border-red-500/50');
+        card.classList.remove('border-gray-600/30');
+      }
+    });
+    
+    // Show warning banner if any token is expired
+    if (hasExpired) {
+      showTokenExpiredBanner();
+    }
+  } catch (error) {
+    console.error('[TokenHealth] Error checking token health:', error);
+  }
+}
+
+// Show banner when tokens are expired
+function showTokenExpiredBanner() {
+  // Don't show if already visible
+  if (document.getElementById('tokenExpiredBanner')) return;
+  
+  const banner = document.createElement('div');
+  banner.id = 'tokenExpiredBanner';
+  banner.className = 'fixed top-4 left-1/2 transform -translate-x-1/2 bg-red-500/90 backdrop-blur-sm text-white px-6 py-3 rounded-xl shadow-lg z-50 flex items-center gap-3 max-w-lg';
+  banner.innerHTML = `
+    <i class="ti ti-alert-triangle text-xl flex-shrink-0"></i>
+    <div class="flex-1">
+      <p class="font-medium text-sm">YouTube Token Expired</p>
+      <p class="text-xs text-red-100">One or more accounts need reconnection. Use OAuth reconnect for permanent fix.</p>
+    </div>
+    <button onclick="this.parentElement.remove()" class="text-red-200 hover:text-white flex-shrink-0">
+      <i class="ti ti-x text-lg"></i>
+    </button>
+  `;
+  document.body.appendChild(banner);
+  
+  // Auto-dismiss after 10 seconds
+  setTimeout(() => {
+    if (banner.parentElement) {
+      banner.style.opacity = '0';
+      banner.style.transition = 'opacity 0.3s';
+      setTimeout(() => banner.remove(), 300);
+    }
+  }, 10000);
+}
+
+// Open Update Token Modal (for manual token paste)
+function openUpdateTokenModal(accountId, channelName) {
+  // Remove existing modal
+  const existingModal = document.getElementById('updateTokenModal');
+  if (existingModal) existingModal.remove();
+  
+  const modal = document.createElement('div');
+  modal.id = 'updateTokenModal';
+  modal.className = 'fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4';
+  modal.innerHTML = `
+    <div class="bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg border border-gray-700/50">
+      <div class="p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-semibold text-white flex items-center gap-2">
+            <i class="ti ti-key text-orange-400"></i>
+            Update Refresh Token
+          </h3>
+          <button onclick="document.getElementById('updateTokenModal').remove()" 
+            class="text-gray-400 hover:text-white transition-colors">
+            <i class="ti ti-x text-xl"></i>
+          </button>
+        </div>
+        
+        <p class="text-sm text-gray-400 mb-4">
+          Update token for <strong class="text-white">${escapeHtml(channelName)}</strong>
+        </p>
+        
+        <!-- Recommendation Banner -->
+        <div class="bg-gradient-to-r from-blue-500/10 to-green-500/10 rounded-lg p-3 border border-blue-500/30 mb-4">
+          <p class="text-xs text-blue-300 flex items-center gap-2 mb-2">
+            <i class="ti ti-sparkles"></i>
+            <strong>Recommended:</strong> Use OAuth reconnect for permanent fix
+          </p>
+          <button onclick="document.getElementById('updateTokenModal').remove(); reconnectAccountOAuth(${accountId}, '${escapeJsString(channelName)}')"
+            class="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2">
+            <i class="ti ti-brand-google"></i>
+            Reconnect via OAuth (Auto Refresh)
+          </button>
+        </div>
+        
+        <!-- Divider -->
+        <div class="flex items-center gap-3 mb-4">
+          <div class="flex-1 border-t border-gray-600"></div>
+          <span class="text-xs text-gray-500">ATAU manual paste token</span>
+          <div class="flex-1 border-t border-gray-600"></div>
+        </div>
+        
+        <!-- Manual Token Input -->
+        <div class="mb-4">
+          <label class="text-sm font-medium text-white block mb-2">New Refresh Token</label>
+          <textarea id="newRefreshToken" rows="3"
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none resize-none text-sm"
+            placeholder="Paste refresh token baru dari OAuth Playground..."></textarea>
+          <p class="text-xs text-gray-500 mt-1">
+            <i class="ti ti-info-circle"></i>
+            Token dari OAuth Playground biasanya expired dalam 7 hari jika app status "Testing".
+            Untuk permanent, publish app di Google Cloud Console atau gunakan OAuth reconnect di atas.
+          </p>
+        </div>
+        
+        <div class="flex gap-3">
+          <button onclick="document.getElementById('updateTokenModal').remove()"
+            class="flex-1 bg-gray-700 hover:bg-gray-600 text-white px-4 py-2.5 rounded-lg text-sm transition-colors">
+            Cancel
+          </button>
+          <button onclick="submitUpdateToken(${accountId})" id="updateTokenBtn"
+            class="flex-1 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2">
+            <i class="ti ti-key"></i>
+            Update Token
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  
+  // Close on backdrop click
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) modal.remove();
+  });
+}
+
+// Submit update token
+async function submitUpdateToken(accountId) {
+  const refreshToken = document.getElementById('newRefreshToken').value.trim();
+  
+  if (!refreshToken) {
+    showToast('Please enter a refresh token', 'error');
+    return;
+  }
+  
+  const btn = document.getElementById('updateTokenBtn');
+  const originalText = btn.innerHTML;
+  btn.innerHTML = '<i class="ti ti-loader animate-spin"></i> Validating...';
+  btn.disabled = true;
+  
+  try {
+    const response = await fetch(`/api/youtube/credentials/${accountId}/token`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getCsrfToken()
+      },
+      body: JSON.stringify({ refreshToken })
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      showToast(`Token updated successfully for ${data.channelName || 'account'}`);
+      document.getElementById('updateTokenModal').remove();
+      
+      // Refresh token status
+      setTimeout(() => checkTokenHealth(), 500);
+    } else {
+      showToast(data.error || 'Failed to update token', 'error');
+      if (data.hint) {
+        setTimeout(() => showToast(data.hint, 'info'), 1500);
+      }
+    }
+  } catch (error) {
+    console.error('[UpdateToken] Error:', error);
+    showToast('An error occurred', 'error');
+  } finally {
+    btn.innerHTML = originalText;
+    btn.disabled = false;
+  }
+}
+
+// Run token health check after page loads (delayed to not block initial load)
+document.addEventListener('DOMContentLoaded', function() {
+  // Check token health 3 seconds after page load
+  setTimeout(() => {
+    checkTokenHealth();
+  }, 3000);
+});

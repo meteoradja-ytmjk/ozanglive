@@ -452,6 +452,109 @@ class YouTubeCredentials {
   }
 
   /**
+   * Update cached access token and expiry for a credential
+   * @param {number} id - Credential ID
+   * @param {string} accessToken - New access token
+   * @param {number} expiryDate - Token expiry timestamp (ms)
+   * @returns {Promise<boolean>} True if updated
+   */
+  static async updateAccessToken(id, accessToken, expiryDate) {
+    return new Promise((resolve, reject) => {
+      db.run(
+        `UPDATE youtube_credentials SET access_token = ?, token_expiry = ?, token_status = 'active' WHERE id = ?`,
+        [accessToken, expiryDate, id],
+        function(err) {
+          if (err) {
+            reject(err);
+            return;
+          }
+          resolve(this.changes > 0);
+        }
+      );
+    });
+  }
+
+  /**
+   * Mark token as expired/invalid for a credential
+   * @param {number} id - Credential ID
+   * @param {string} status - Token status ('expired', 'revoked', 'active')
+   * @returns {Promise<boolean>} True if updated
+   */
+  static async updateTokenStatus(id, status) {
+    return new Promise((resolve, reject) => {
+      db.run(
+        `UPDATE youtube_credentials SET token_status = ?, access_token = NULL, token_expiry = NULL WHERE id = ?`,
+        [status, id],
+        function(err) {
+          if (err) {
+            reject(err);
+            return;
+          }
+          resolve(this.changes > 0);
+        }
+      );
+    });
+  }
+
+  /**
+   * Get cached access token if still valid (with 5-minute buffer)
+   * @param {number} id - Credential ID
+   * @returns {Promise<string|null>} Access token or null if expired
+   */
+  static async getCachedAccessToken(id) {
+    return new Promise((resolve, reject) => {
+      db.get(
+        `SELECT access_token, token_expiry, token_status FROM youtube_credentials WHERE id = ?`,
+        [id],
+        (err, row) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          if (!row || !row.access_token || !row.token_expiry) {
+            resolve(null);
+            return;
+          }
+          if (row.token_status !== 'active') {
+            resolve(null);
+            return;
+          }
+          // Check if token is still valid (5-minute buffer before expiry)
+          const now = Date.now();
+          const bufferMs = 5 * 60 * 1000; // 5 minutes
+          if (row.token_expiry - bufferMs > now) {
+            resolve(row.access_token);
+          } else {
+            resolve(null);
+          }
+        }
+      );
+    });
+  }
+
+  /**
+   * Find all credentials with expired/revoked token status
+   * @param {string} userId - User ID
+   * @returns {Promise<Array>} Array of credentials with bad tokens
+   */
+  static async findExpiredTokens(userId) {
+    return new Promise((resolve, reject) => {
+      db.all(
+        `SELECT id, channel_name, channel_id, token_status FROM youtube_credentials 
+         WHERE user_id = ? AND token_status != 'active'`,
+        [userId],
+        (err, rows) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          resolve(rows || []);
+        }
+      );
+    });
+  }
+
+  /**
    * Update channel name for a credential
    * @param {number} id - Credential ID
    * @param {string} channelName - New channel name
