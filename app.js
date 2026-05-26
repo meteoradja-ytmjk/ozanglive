@@ -7416,137 +7416,6 @@ app.get('/api/youtube/accounts', isAuthenticated, async (req, res) => {
   }
 });
 
-// Token health check - validates all accounts' tokens and returns status
-app.get('/api/youtube/token-health', isAuthenticated, async (req, res) => {
-  try {
-    const accounts = await YouTubeCredentials.findAllByUserId(req.session.userId);
-    const results = [];
-    
-    for (const account of accounts) {
-      try {
-        // Try to get access token (will use cache if available)
-        await youtubeService.getAccessToken(
-          account.clientId,
-          account.clientSecret,
-          account.refreshToken,
-          { credentialId: account.id }
-        );
-        results.push({
-          id: account.id,
-          channelName: account.channelName,
-          status: 'active',
-          message: 'Token is valid'
-        });
-      } catch (error) {
-        const isExpired = error.message.includes('TOKEN_EXPIRED');
-        const isInvalid = error.message.includes('INVALID_CLIENT');
-        results.push({
-          id: account.id,
-          channelName: account.channelName,
-          status: isExpired ? 'expired' : isInvalid ? 'invalid' : 'error',
-          message: isExpired ? 'Token expired - reconnect needed' : 
-                   isInvalid ? 'Client credentials invalid' : 
-                   error.message
-        });
-      }
-    }
-    
-    res.json({ success: true, accounts: results });
-  } catch (error) {
-    console.error('Error checking token health:', error);
-    res.status(500).json({ success: false, error: 'Failed to check token health' });
-  }
-});
-
-// Reconnect account via OAuth (when manual token expires)
-app.post('/api/youtube/reconnect/:id', isAuthenticated, async (req, res) => {
-  try {
-    const accountId = parseInt(req.params.id);
-    const account = await YouTubeCredentials.findById(accountId);
-    
-    if (!account || account.userId !== req.session.userId) {
-      return res.status(404).json({ success: false, error: 'Account not found' });
-    }
-    
-    // Generate OAuth URL for reconnection using existing client credentials
-    const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
-    const redirectUri = `${baseUrl}/api/youtube/oauth/callback`;
-    
-    // Store reconnect info in session
-    const stateToken = require('crypto').randomBytes(32).toString('hex');
-    req.session.oauthState = stateToken;
-    req.session.oauthClientId = account.clientId;
-    req.session.oauthClientSecret = account.clientSecret;
-    req.session.oauthCredentialId = accountId; // reconnect existing credential
-    
-    const authUrl = youtubeService.generateAuthUrl(
-      account.clientId,
-      account.clientSecret,
-      redirectUri,
-      stateToken
-    );
-    
-    res.json({ success: true, authUrl });
-  } catch (error) {
-    console.error('Error starting reconnect flow:', error);
-    res.status(500).json({ success: false, error: 'Failed to start reconnect' });
-  }
-});
-
-// Update refresh token manually (paste new token)
-app.put('/api/youtube/credentials/:id/token', isAuthenticated, async (req, res) => {
-  try {
-    const credentialId = parseInt(req.params.id);
-    const { refreshToken } = req.body;
-    
-    if (!refreshToken) {
-      return res.status(400).json({ success: false, error: 'Refresh Token is required' });
-    }
-    
-    const credential = await YouTubeCredentials.findById(credentialId);
-    if (!credential || credential.userId !== req.session.userId) {
-      return res.status(404).json({ success: false, error: 'Account not found' });
-    }
-    
-    // Validate the new refresh token
-    const validation = await youtubeService.validateCredentials(
-      credential.clientId, credential.clientSecret, refreshToken
-    );
-    
-    if (!validation.valid) {
-      return res.status(400).json({ 
-        success: false, 
-        error: validation.error || 'Invalid refresh token. Make sure the token is fresh and not expired.',
-        hint: 'Tip: Use OAuth reconnect instead of manual token for automatic refresh.'
-      });
-    }
-    
-    // Update the refresh token and reset token status
-    await YouTubeCredentials.update(credentialId, { refreshToken });
-    await YouTubeCredentials.updateAccessToken(credentialId, null, null); // clear cached token
-    
-    // Update token status back to active by getting fresh access token
-    try {
-      const accessToken = await youtubeService.getAccessToken(
-        credential.clientId, credential.clientSecret, refreshToken,
-        { credentialId, skipCache: true }
-      );
-      // Token works - status will be set to 'active' by getAccessToken
-    } catch (e) {
-      // Shouldn't happen since we just validated, but handle gracefully
-    }
-    
-    res.json({ 
-      success: true, 
-      message: 'Refresh token updated successfully',
-      channelName: validation.channelName
-    });
-  } catch (error) {
-    console.error('Error updating refresh token:', error);
-    res.status(500).json({ success: false, error: error.message || 'Failed to update token' });
-  }
-});
-
 // Get one YouTube account detail for edit form
 app.get('/api/youtube/credentials/:id', isAuthenticated, async (req, res) => {
   try {
@@ -7587,8 +7456,7 @@ app.get('/api/youtube/channel/:id/defaults', isAuthenticated, async (req, res) =
     const accessToken = await youtubeService.getAccessToken(
       account.clientId,
       account.clientSecret,
-      account.refreshToken,
-      { credentialId: account.id }
+      account.refreshToken
     );
     
     // Get channel defaults
@@ -8808,8 +8676,7 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
       const accessToken = await youtubeService.getAccessToken(
         credentials.clientId,
         credentials.clientSecret,
-        credentials.refreshToken,
-        { credentialId: credentials.id }
+        credentials.refreshToken
       );
 
       const broadcasts = await youtubeService.listBroadcasts(accessToken);
@@ -8867,8 +8734,7 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
             const accessToken = await youtubeService.getAccessToken(
               account.clientId,
               account.clientSecret,
-              account.refreshToken,
-              { credentialId: account.id }
+              account.refreshToken
             );
             const broadcasts = await youtubeService.listBroadcasts(accessToken);
             return broadcasts.map(b => ({

@@ -148,7 +148,7 @@
     <!-- Accounts List - Collapsible Content -->
     <div id="connectedAccountsList" class="px-4 sm:px-6 pb-4 sm:pb-6 space-y-3 transition-all duration-300" style="display: none;">
       <% accounts.forEach(function(account) { %>
-      <div class="flex items-center justify-between p-3 sm:p-4 bg-dark-700/80 rounded-xl border border-gray-600/30" id="accountCard_<%= account.id %>">
+      <div class="flex items-center justify-between p-3 sm:p-4 bg-dark-700/80 rounded-xl border border-gray-600/30">
         <div class="flex items-center gap-3">
           <div class="w-11 h-11 bg-gradient-to-br from-red-500/30 to-red-600/20 rounded-xl flex items-center justify-center">
             <i class="ti ti-brand-youtube text-red-400 text-xl"></i>
@@ -159,29 +159,17 @@
               <% if (account.isPrimary) { %>
               <span class="px-2 py-0.5 bg-primary/20 text-primary text-xs rounded-full font-medium">Primary</span>
               <% } %>
-              <!-- Token Status Badge -->
-              <span class="token-status-badge px-2 py-0.5 text-xs rounded-full font-medium" 
-                    id="tokenStatus_<%= account.id %>"
-                    data-account-id="<%= account.id %>">
-                <i class="ti ti-loader animate-spin text-xs"></i>
-              </span>
             </div>
-            <p class="text-xs text-green-400 flex items-center gap-1 mt-0.5" id="accountStatusText_<%= account.id %>">
+            <p class="text-xs text-green-400 flex items-center gap-1 mt-0.5">
               <i class="ti ti-circle-check text-xs"></i>
               Connected
             </p>
           </div>
         </div>
         <div class="flex items-center gap-1">
-          <!-- Reconnect OAuth Button (shown when token expired) -->
           <button onclick="reconnectAccountOAuth(<%= account.id %>, '<%= (account.channelName || 'YouTube Channel').replace(/'/g, "\\'") %>')" 
             class="w-9 h-9 flex items-center justify-center text-gray-400 hover:text-green-400 hover:bg-green-500/10 rounded-lg transition-colors" title="Reconnect Token (OAuth)">
             <i class="ti ti-refresh text-lg"></i>
-          </button>
-          <!-- Update Token Manually -->
-          <button onclick="openUpdateTokenModal(<%= account.id %>, '<%= (account.channelName || 'YouTube Channel').replace(/'/g, "\\'") %>')" 
-            class="w-9 h-9 flex items-center justify-center text-gray-400 hover:text-orange-400 hover:bg-orange-500/10 rounded-lg transition-colors" title="Update Refresh Token">
-            <i class="ti ti-key text-lg"></i>
           </button>
           <button onclick="openEditAccountModal(<%= account.id %>, '<%= (account.channelName || 'YouTube Channel').replace(/'/g, "\\'") %>')" 
             class="w-9 h-9 flex items-center justify-center text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors" title="Edit Credentials">

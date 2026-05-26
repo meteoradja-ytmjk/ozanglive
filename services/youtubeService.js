@@ -85,28 +85,14 @@ class YouTubeService {
     return response.data;
   }
   /**
-   * Get access token from refresh token with caching and retry logic.
-   * Uses cached access token if available and not expired.
+   * Get access token from refresh token with retry logic
    * @param {string} clientId - Google Client ID
    * @param {string} clientSecret - Google Client Secret
    * @param {string} refreshToken - Refresh Token
-   * @param {Object} options - Options: { credentialId, skipCache }
+   * @param {number} retryCount - Current retry count (internal use)
    * @returns {Promise<string>} Access token
    */
-  async getAccessToken(clientId, clientSecret, refreshToken, options = {}) {
-    // Support old signature: getAccessToken(clientId, clientSecret, refreshToken, retryCount)
-    let retryCount = 0;
-    let credentialId = null;
-    let skipCache = false;
-    
-    if (typeof options === 'number') {
-      retryCount = options;
-    } else if (typeof options === 'object' && options !== null) {
-      retryCount = options.retryCount || 0;
-      credentialId = options.credentialId || null;
-      skipCache = options.skipCache || false;
-    }
-    
+  async getAccessToken(clientId, clientSecret, refreshToken, retryCount = 0) {
     const maxRetries = 3;
     const retryDelay = 2000; // 2 seconds
     
@@ -114,20 +100,6 @@ class YouTubeService {
       // Validate inputs
       if (!clientId || !clientSecret || !refreshToken) {
         throw new Error('Missing credentials: clientId, clientSecret, or refreshToken is empty');
-      }
-
-      // Try cached token first (if credentialId available and not skipping cache)
-      if (credentialId && !skipCache) {
-        try {
-          const YouTubeCredentials = require('../models/YouTubeCredentials');
-          const cachedToken = await YouTubeCredentials.getCachedAccessToken(credentialId);
-          if (cachedToken) {
-            return cachedToken;
-          }
-        } catch (cacheError) {
-          // Ignore cache errors, proceed to refresh
-          console.warn('[YouTubeService.getAccessToken] Cache lookup failed:', cacheError.message);
-        }
       }
       
       const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
@@ -137,16 +109,6 @@ class YouTubeService {
       
       if (!credentials || !credentials.access_token) {
         throw new Error('Failed to obtain access token from refresh token');
-      }
-
-      // Cache the new access token if credentialId is available
-      if (credentialId && credentials.expiry_date) {
-        try {
-          const YouTubeCredentials = require('../models/YouTubeCredentials');
-          await YouTubeCredentials.updateAccessToken(credentialId, credentials.access_token, credentials.expiry_date);
-        } catch (cacheError) {
-          console.warn('[YouTubeService.getAccessToken] Failed to cache token:', cacheError.message);
-        }
       }
       
       return credentials.access_token;
@@ -166,38 +128,17 @@ class YouTubeService {
       if (isRetryable && retryCount < maxRetries) {
         console.warn(`[YouTubeService.getAccessToken] Retryable error (attempt ${retryCount + 1}/${maxRetries}): ${errorMessage}`);
         await new Promise(resolve => setTimeout(resolve, retryDelay * (retryCount + 1)));
-        return this.getAccessToken(clientId, clientSecret, refreshToken, { retryCount: retryCount + 1, credentialId, skipCache: true });
+        return this.getAccessToken(clientId, clientSecret, refreshToken, retryCount + 1);
       }
       
-      // Check for specific OAuth errors - mark token as expired/revoked
+      // Check for specific OAuth errors
       if (errorMessage.includes('invalid_grant') || errorMessage.includes('Token has been expired or revoked')) {
         console.error('[YouTubeService.getAccessToken] Token expired or revoked - user needs to re-authenticate');
-        
-        // Mark token as expired in database
-        if (credentialId) {
-          try {
-            const YouTubeCredentials = require('../models/YouTubeCredentials');
-            await YouTubeCredentials.updateTokenStatus(credentialId, 'expired');
-          } catch (dbError) {
-            console.warn('[YouTubeService.getAccessToken] Failed to update token status:', dbError.message);
-          }
-        }
-        
-        throw new Error('TOKEN_EXPIRED: YouTube token has expired or been revoked. Please reconnect your YouTube account using OAuth (recommended) or paste a new Refresh Token.');
+        throw new Error('TOKEN_EXPIRED: YouTube token has expired or been revoked. Please reconnect your YouTube account.');
       }
       
       if (errorMessage.includes('invalid_client')) {
         console.error('[YouTubeService.getAccessToken] Invalid client credentials');
-        
-        if (credentialId) {
-          try {
-            const YouTubeCredentials = require('../models/YouTubeCredentials');
-            await YouTubeCredentials.updateTokenStatus(credentialId, 'revoked');
-          } catch (dbError) {
-            console.warn('[YouTubeService.getAccessToken] Failed to update token status:', dbError.message);
-          }
-        }
-        
         throw new Error('INVALID_CLIENT: YouTube client credentials are invalid. Please check your API settings.');
       }
       
