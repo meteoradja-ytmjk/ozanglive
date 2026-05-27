@@ -1124,6 +1124,12 @@ async function openEditAccountModal(accountId, channelName) {
   document.getElementById('editAccountChannelName').textContent = channelName || 'YouTube Channel';
   document.getElementById('editAccountModal').classList.remove('hidden');
 
+  // Set token status to "checking" initially
+  const tokenDot = document.getElementById('editTokenDot');
+  const tokenLabel = document.getElementById('editTokenLabel');
+  if (tokenDot) tokenDot.className = 'w-2 h-2 rounded-full bg-gray-400 animate-pulse';
+  if (tokenLabel) tokenLabel.textContent = 'Checking token...';
+
   try {
     const response = await fetch(`/api/youtube/credentials/${accountId}`, {
       headers: {
@@ -1140,9 +1146,59 @@ async function openEditAccountModal(accountId, channelName) {
     document.getElementById('editClientId').value = data.account.clientId || '';
     document.getElementById('editClientSecret').value = data.account.clientSecret || '';
     document.getElementById('editRefreshToken').value = data.account.refreshToken || '';
+
+    // Fetch and display token status
+    updateEditModalTokenStatus(accountId);
   } catch (error) {
     console.error('Error:', error);
     showToast('An error occurred while loading account', 'error');
+  }
+}
+
+// Update token status indicator in edit modal
+async function updateEditModalTokenStatus(accountId) {
+  const tokenDot = document.getElementById('editTokenDot');
+  const tokenLabel = document.getElementById('editTokenLabel');
+  if (!tokenDot || !tokenLabel) return;
+
+  try {
+    const response = await fetch('/api/youtube/token-status', {
+      headers: { 'X-CSRF-Token': getCsrfToken() }
+    });
+    const data = await response.json();
+
+    if (data.success) {
+      const account = data.accounts.find(a => a.id === parseInt(accountId));
+      if (account) {
+        switch (account.tokenStatus) {
+          case 'active':
+            tokenDot.className = 'w-2 h-2 rounded-full bg-green-400';
+            const lastRefresh = account.lastRefreshedAt 
+              ? new Date(account.lastRefreshedAt).toLocaleString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+              : '';
+            tokenLabel.textContent = `Token active${lastRefresh ? ' • Last: ' + lastRefresh : ''}`;
+            tokenLabel.className = 'text-xs text-green-400';
+            break;
+          case 'expired':
+            tokenDot.className = 'w-2 h-2 rounded-full bg-red-400';
+            tokenLabel.textContent = 'Token expired — klik Reconnect';
+            tokenLabel.className = 'text-xs text-red-400';
+            break;
+          default:
+            tokenDot.className = 'w-2 h-2 rounded-full bg-yellow-400';
+            tokenLabel.textContent = 'Token status unknown — will auto-refresh';
+            tokenLabel.className = 'text-xs text-yellow-400';
+        }
+      } else {
+        tokenDot.className = 'w-2 h-2 rounded-full bg-yellow-400';
+        tokenLabel.textContent = 'Will be auto-refreshed on next cycle';
+        tokenLabel.className = 'text-xs text-gray-400';
+      }
+    }
+  } catch (e) {
+    tokenDot.className = 'w-2 h-2 rounded-full bg-gray-400';
+    tokenLabel.textContent = 'Auto-refresh active';
+    tokenLabel.className = 'text-xs text-gray-400';
   }
 }
 

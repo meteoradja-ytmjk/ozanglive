@@ -1043,73 +1043,68 @@
 <!-- Edit Account Modal -->
 <div id="editAccountModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto">
   <div class="flex min-h-screen items-center justify-center p-4">
-    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-lg">
-      <div class="flex items-center justify-between p-6 border-b border-gray-700">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-md">
+      <div class="flex items-center justify-between px-5 py-4 border-b border-gray-700">
         <div>
-          <h3 class="text-lg font-semibold">Edit YouTube Account</h3>
-          <p id="editAccountChannelName" class="text-sm text-gray-400 mt-1"></p>
+          <h3 class="text-base font-semibold">Edit YouTube Account</h3>
+          <p id="editAccountChannelName" class="text-xs text-gray-400 mt-0.5"></p>
         </div>
         <button onclick="closeEditAccountModal()" class="text-gray-400 hover:text-white">
-          <i class="ti ti-x text-xl"></i>
+          <i class="ti ti-x text-lg"></i>
         </button>
       </div>
 
-      <form id="editAccountForm" class="p-6 space-y-4">
+      <form id="editAccountForm" class="p-5 space-y-4">
         <input type="hidden" id="editAccountId" name="accountId">
 
-        <div>
-          <label class="text-sm font-medium text-white block mb-2">Client ID <span class="text-red-400">*</span></label>
-          <input type="text" id="editClientId" name="clientId" required
-            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none"
-            placeholder="Masukkan Client ID baru">
-        </div>
-
-        <div>
-          <label class="text-sm font-medium text-white block mb-2">Client Secret <span class="text-red-400">*</span></label>
-          <input type="text" id="editClientSecret" name="clientSecret" required
-            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none"
-            placeholder="Masukkan Client Secret baru">
-        </div>
-
-        <!-- OAuth Reconnect Button -->
-        <div class="bg-gradient-to-r from-green-500/10 to-blue-500/10 rounded-lg p-4 border border-green-500/30">
-          <p class="text-sm text-green-300 mb-3 flex items-center gap-2">
-            <i class="ti ti-refresh text-lg"></i>
-            <strong>Token Expired?</strong> Reconnect otomatis via Google
-          </p>
-          <button type="button" onclick="reconnectOAuth()"
-            class="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white px-4 py-2.5 rounded-lg font-medium transition-all flex items-center justify-center gap-2 shadow-lg shadow-green-500/25">
-            <i class="ti ti-brand-google"></i>
-            <span>🔄 Reconnect (Refresh Token Baru Otomatis)</span>
+        <!-- Token Status Indicator (auto-populated by JS) -->
+        <div id="editAccountTokenStatus" class="flex items-center justify-between px-3 py-2 bg-dark-700 rounded-lg border border-gray-600/50">
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-gray-400" id="editTokenDot"></span>
+            <span class="text-xs text-gray-400" id="editTokenLabel">Token status: checking...</span>
+          </div>
+          <button type="button" onclick="reconnectOAuth()" 
+            class="text-xs text-green-400 hover:text-green-300 flex items-center gap-1 transition-colors" title="Reconnect via Google OAuth">
+            <i class="ti ti-refresh text-sm"></i>
+            <span>Reconnect</span>
           </button>
-          <p class="text-xs text-gray-400 mt-2 text-center">Buka Google consent → token baru langsung tersimpan</p>
-        </div>
-
-        <!-- Divider -->
-        <div class="flex items-center gap-3">
-          <div class="flex-1 border-t border-gray-600"></div>
-          <span class="text-xs text-gray-500">ATAU update manual</span>
-          <div class="flex-1 border-t border-gray-600"></div>
         </div>
 
         <div>
-          <label class="text-sm font-medium text-white block mb-2">Refresh Token <span class="text-gray-400 text-xs">(manual)</span></label>
-          <textarea id="editRefreshToken" name="refreshToken" rows="3"
-            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none resize-none"
-            placeholder="Atau paste manual Refresh Token baru"></textarea>
+          <label class="text-xs font-medium text-gray-300 block mb-1.5">Client ID <span class="text-red-400">*</span></label>
+          <input type="text" id="editClientId" name="clientId" required
+            class="w-full px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg text-sm focus:border-primary focus:outline-none"
+            placeholder="Google Client ID">
         </div>
 
-        <p class="text-xs text-gray-500">Gunakan OAuth reconnect di atas untuk auto-refresh, atau paste manual refresh token.</p>
+        <div>
+          <label class="text-xs font-medium text-gray-300 block mb-1.5">Client Secret <span class="text-red-400">*</span></label>
+          <input type="text" id="editClientSecret" name="clientSecret" required
+            class="w-full px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg text-sm focus:border-primary focus:outline-none"
+            placeholder="Google Client Secret">
+        </div>
 
-        <div class="pt-4 flex gap-3">
+        <div>
+          <label class="text-xs font-medium text-gray-300 block mb-1.5">Refresh Token <span class="text-gray-500 text-[10px]">(opsional - auto-managed)</span></label>
+          <textarea id="editRefreshToken" name="refreshToken" rows="2"
+            class="w-full px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg text-sm focus:border-primary focus:outline-none resize-none font-mono text-[11px]"
+            placeholder="Auto-managed oleh scheduler. Isi manual hanya jika perlu."></textarea>
+        </div>
+
+        <p class="text-[10px] text-gray-500 flex items-center gap-1">
+          <i class="ti ti-info-circle text-xs"></i>
+          Token di-refresh otomatis setiap 3 hari. Reconnect hanya diperlukan jika token revoked.
+        </p>
+
+        <div class="pt-2 flex gap-3">
           <button type="button" onclick="closeEditAccountModal()"
-            class="flex-1 bg-dark-700 hover:bg-dark-600 text-white px-4 py-2.5 rounded-lg transition-colors">
+            class="flex-1 bg-dark-700 hover:bg-dark-600 text-white px-4 py-2 rounded-lg text-sm transition-colors">
             Cancel
           </button>
           <button type="submit" id="editAccountBtn"
-            class="flex-1 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
-            <i class="ti ti-device-floppy"></i>
-            <span>Update Account</span>
+            class="flex-1 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm transition-colors flex items-center justify-center gap-2">
+            <i class="ti ti-device-floppy text-sm"></i>
+            <span>Save</span>
           </button>
         </div>
       </form>
