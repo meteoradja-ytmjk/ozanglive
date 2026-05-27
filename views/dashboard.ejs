@@ -3102,8 +3102,16 @@
 
       // ULTRA OPTIMIZED: Refresh stats every 2 minutes (was 60s) - CPU usage is cached
       setInterval(loadSystemStats, 120000);
-      // ULTRA OPTIMIZED: Refresh streams every 90 seconds (was 60s)
-      setInterval(loadStreams, 90000);
+      // SMART POLLING: Faster refresh when streams are live (30s), slower when idle (90s)
+      let streamPollInterval = null;
+      function startSmartPolling() {
+        if (streamPollInterval) clearInterval(streamPollInterval);
+        const hasLiveStreams = document.querySelectorAll('.bg-green-500').length > 0;
+        const interval = hasLiveStreams ? 30000 : 90000;
+        streamPollInterval = setInterval(loadStreams, interval);
+      }
+      setInterval(startSmartPolling, 60000); // Re-evaluate polling speed every minute
+      startSmartPolling();
       // ULTRA OPTIMIZED: Refresh live limit info every 3 minutes (was 2 min)
       setInterval(loadLiveLimitInfo, 180000);
       // Update clock every second (minimal CPU impact)

@@ -48,7 +48,7 @@ const CLEANUP_INTERVAL = 4 * 60 * 60 * 1000; // Every 4 hours (was 2 hours)
 
 // PROCESS HEALTH CHECK: Verify FFmpeg processes are still running
 // This catches cases where FFmpeg dies without triggering exit event
-const PROCESS_CHECK_INTERVAL = 60 * 60 * 1000; // Every 60 minutes (was 30 minutes) - FFmpeg exit event handles normal cases
+const PROCESS_CHECK_INTERVAL = 5 * 60 * 1000; // Every 5 minutes - faster detection for auto-reconnect
 
 /**
  * Handle unlist replay on stream end
@@ -74,7 +74,7 @@ async function handleUnlistReplayOnEnd(stream) {
  * Clean up stale entries from Maps to prevent memory leaks
  * Only removes entries for streams that are no longer active
  */
-function cleanupStaleMaps() {
+async function cleanupStaleMaps() {
   try {
     const activeIds = new Set(activeStreams.keys());
     let cleaned = 0;
@@ -104,10 +104,19 @@ function cleanupStaleMaps() {
     }
     
     // Clean streamOriginalTiming for inactive streams
+    // IMPORTANT: Only clean if stream is also NOT in 'live' status in DB
+    // During reconnect, stream is removed from activeStreams but originalTiming must persist
     for (const [id] of streamOriginalTiming) {
       if (!activeIds.has(id)) {
-        streamOriginalTiming.delete(id);
-        cleaned++;
+        try {
+          const stream = await Stream.findById(id);
+          if (!stream || stream.status !== 'live') {
+            streamOriginalTiming.delete(id);
+            cleaned++;
+          }
+        } catch (e) {
+          // If we can't check DB, leave it alone to be safe
+        }
       }
     }
     
@@ -199,28 +208,79 @@ async function checkStreamProcessHealth() {
         }
         
         if (!processAlive) {
-          console.log(`[ProcessHealthCheck] Stream ${streamId}: FFmpeg process NOT running, updating status`);
+          console.log(`[ProcessHealthCheck] Stream ${streamId}: FFmpeg process NOT running, checking if should reconnect`);
           
-          // Clean up
-          activeStreams.delete(streamId);
-          streamPids.delete(streamId);
-          clearDurationInfo(streamId);
+          // Check if stream still has remaining duration - if so, attempt reconnect
+          const remainingMs = getOriginalRemainingMs(streamId);
+          const shouldReconnect = remainingMs === null || remainingMs > 60000; // null = unlimited, or > 1 min remaining
           
-          // Update database status
-          const stream = await Stream.findById(streamId);
-          if (stream && stream.status === 'live') {
-            const newStatus = getStatusAfterStreamEnd(stream);
-            await Stream.updateStatus(streamId, newStatus, stream.user_id);
-            console.log(`[ProcessHealthCheck] Updated stream ${streamId} status to '${newStatus}'`);
-            addStreamLog(streamId, `Process health check: FFmpeg not running, status updated to '${newStatus}'`);
+          if (shouldReconnect && !manuallyStoppingStreams.has(streamId)) {
+            console.log(`[ProcessHealthCheck] Stream ${streamId}: Attempting auto-reconnect (remaining: ${remainingMs ? (remainingMs / 60000).toFixed(1) + ' min' : 'unlimited'})`);
+            addStreamLog(streamId, `[AUTO-RECONNECT] Process health check detected FFmpeg stopped, reconnecting...`);
             
-            // Save history
-            const updatedStream = await Stream.findById(streamId);
-            await saveStreamHistory(updatedStream);
+            // Clean up current state but preserve original timing for reconnect
+            activeStreams.delete(streamId);
+            streamPids.delete(streamId);
+            clearDurationInfo(streamId);
+            // DO NOT clear originalTiming - needed for reconnect duration calculation
             
-            // Cancel any scheduled termination
-            if (typeof schedulerService !== 'undefined' && schedulerService.handleStreamStopped) {
-              schedulerService.handleStreamStopped(streamId);
+            // Attempt reconnect
+            try {
+              const stream = await Stream.findById(streamId);
+              if (stream && stream.status === 'live') {
+                const retryCount = streamRetryCount.get(streamId) || 0;
+                if (retryCount < MAX_RETRY_ATTEMPTS) {
+                  streamRetryCount.set(streamId, retryCount + 1);
+                  const result = await startStream(streamId);
+                  if (result.success) {
+                    console.log(`[ProcessHealthCheck] Stream ${streamId}: Auto-reconnect successful`);
+                    addStreamLog(streamId, `[AUTO-RECONNECT] Reconnect successful`);
+                    streamRetryCount.set(streamId, 0); // Reset retry count on success
+                  } else {
+                    console.error(`[ProcessHealthCheck] Stream ${streamId}: Auto-reconnect failed - ${result.error}`);
+                    addStreamLog(streamId, `[AUTO-RECONNECT] Failed: ${result.error}`);
+                  }
+                } else {
+                  console.log(`[ProcessHealthCheck] Stream ${streamId}: Max retry attempts reached, marking offline`);
+                  addStreamLog(streamId, `[AUTO-RECONNECT] Max retries reached, stopping`);
+                  clearOriginalTiming(streamId);
+                  const newStatus = getStatusAfterStreamEnd(stream);
+                  await Stream.updateStatus(streamId, newStatus, stream.user_id);
+                  const updatedStream = await Stream.findById(streamId);
+                  await saveStreamHistory(updatedStream);
+                }
+              } else {
+                // Stream not found or not live - clean up
+                clearOriginalTiming(streamId);
+              }
+            } catch (reconnectError) {
+              console.error(`[ProcessHealthCheck] Stream ${streamId}: Reconnect error - ${reconnectError.message}`);
+              clearOriginalTiming(streamId);
+            }
+          } else {
+            // Duration expired or manual stop - just clean up
+            console.log(`[ProcessHealthCheck] Stream ${streamId}: FFmpeg not running, duration expired or manual stop`);
+            activeStreams.delete(streamId);
+            streamPids.delete(streamId);
+            clearDurationInfo(streamId);
+            clearOriginalTiming(streamId);
+            
+            // Update database status
+            const stream = await Stream.findById(streamId);
+            if (stream && stream.status === 'live') {
+              const newStatus = getStatusAfterStreamEnd(stream);
+              await Stream.updateStatus(streamId, newStatus, stream.user_id);
+              console.log(`[ProcessHealthCheck] Updated stream ${streamId} status to '${newStatus}'`);
+              addStreamLog(streamId, `Process health check: duration expired, status updated to '${newStatus}'`);
+              
+              // Save history
+              const updatedStream = await Stream.findById(streamId);
+              await saveStreamHistory(updatedStream);
+              
+              // Cancel any scheduled termination
+              if (typeof schedulerService !== 'undefined' && schedulerService.handleStreamStopped) {
+                schedulerService.handleStreamStopped(streamId);
+              }
             }
           }
         } else {
