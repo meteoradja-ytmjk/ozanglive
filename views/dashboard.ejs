@@ -1706,6 +1706,7 @@
       });
 
       let activeGroup = null;
+      let mobileActiveGroup = null;
       let index = 0;
       sortedStreams.forEach((stream) => {
         const groupKey = getStreamCollabKey(stream);
@@ -1729,6 +1730,27 @@
             </td>
           `;
           tbody.appendChild(headerRow);
+        }
+
+        // Mobile group header
+        if (mobileContainer && groupKey !== mobileActiveGroup) {
+          mobileActiveGroup = groupKey;
+          const groupStreams = sortedStreams.filter(item => getStreamCollabKey(item) === groupKey);
+          const isCollapsed = collapsedStreamGroups.has(groupKey);
+          const mobileHeader = document.createElement('div');
+          mobileHeader.className = 'bg-dark-700/60 rounded-lg px-3 py-2 cursor-pointer active:bg-dark-700 transition-colors select-none';
+          mobileHeader.setAttribute('onclick', `toggleStreamGroup('${groupKey.replace(/'/g, "\\'")}')`);
+          mobileHeader.innerHTML = `
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <i class="ti ${isCollapsed ? 'ti-chevron-right' : 'ti-chevron-down'} text-gray-300 text-sm"></i>
+                <span class="text-sm font-semibold text-white">${escapeHtml(groupKey)}</span>
+                <span class="text-xs text-gray-400">(${groupStreams.length})</span>
+              </div>
+              <span class="text-xs px-2 py-0.5 rounded bg-primary/20 text-primary">Collabs</span>
+            </div>
+          `;
+          mobileContainer.appendChild(mobileHeader);
         }
 
         if (collapsedStreamGroups.has(groupKey)) return;
