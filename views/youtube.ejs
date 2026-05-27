@@ -189,6 +189,32 @@
     </div>
   </div>
 
+  <!-- Token Auto-Refresh Status Section -->
+  <div class="bg-gradient-to-br from-gray-800 to-gray-800/90 rounded-xl shadow-lg border border-gray-700/50 mb-6 overflow-hidden">
+    <!-- Header - Clickable -->
+    <div class="flex items-center justify-between p-4 sm:p-5 cursor-pointer hover:bg-gray-700/30 transition-all duration-200 select-none"
+         onclick="toggleTokenStatus()" id="tokenStatusHeader">
+      <div class="flex items-center gap-3 pointer-events-none">
+        <h2 class="text-base font-semibold flex items-center gap-2">
+          <i class="ti ti-chevron-right text-gray-400 text-lg transition-transform duration-300" id="tokenChevron"></i>
+          <i class="ti ti-shield-check text-green-400"></i>
+          <span>Token Auto-Refresh</span>
+          <span class="bg-green-500/20 text-green-400 text-xs px-2 py-0.5 rounded-full">Auto</span>
+        </h2>
+      </div>
+      <span class="text-xs text-gray-500 pointer-events-none">Token di-refresh otomatis setiap 3 hari</span>
+    </div>
+    <!-- Token Status Content - Collapsible -->
+    <div id="tokenStatusContent" class="px-4 sm:px-5 pb-4 sm:pb-5" style="display: none;">
+      <div id="tokenStatusContainer">
+        <div class="flex items-center justify-center py-4">
+          <i class="ti ti-loader animate-spin text-gray-400 mr-2"></i>
+          <span class="text-sm text-gray-400">Loading token status...</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Live Stats Dashboard - Horizontal Bar -->
   <div id="liveStatsDashboard" class="bg-gray-800 rounded-xl p-3 shadow-lg border border-gray-700/50 mb-6 live-stats-dashboard">
     <!-- Stats Bar - Desktop -->

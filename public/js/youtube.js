@@ -760,6 +760,13 @@ document.addEventListener('DOMContentLoaded', () => {
   setTimeout(() => {
     lazyLoadBroadcasts();
   }, 100);
+
+  // Load token refresh status (only if accounts section exists)
+  setTimeout(() => {
+    if (document.getElementById('tokenStatusContainer')) {
+      loadTokenStatus();
+    }
+  }, 500);
 });
 
 // Credentials Form Handler
@@ -8191,5 +8198,223 @@ async function deleteThumbnailInManager(filename, folder) {
   } catch (error) {
     console.error('[ThumbnailManager] Delete error:', error);
     showToast('An error occurred', 'error');
+  }
+}
+
+
+// ==========================================
+// YouTube Token Auto-Refresh Functions
+// ==========================================
+
+/**
+ * Load and display token refresh status for all connected accounts
+ */
+async function loadTokenStatus() {
+  const container = document.getElementById('tokenStatusContainer');
+  if (!container) return;
+
+  try {
+    const response = await fetch('/api/youtube/token-status', {
+      headers: { 'X-CSRF-Token': getCsrfToken() }
+    });
+    const data = await response.json();
+
+    if (!data.success) {
+      container.innerHTML = '<p class="text-red-400 text-sm">Failed to load token status</p>';
+      return;
+    }
+
+    if (data.accounts.length === 0) {
+      container.innerHTML = '<p class="text-gray-400 text-sm">No accounts connected</p>';
+      return;
+    }
+
+    let html = '';
+    data.accounts.forEach(account => {
+      const statusColor = getTokenStatusColor(account.tokenStatus);
+      const statusIcon = getTokenStatusIcon(account.tokenStatus);
+      const lastRefresh = account.lastRefreshedAt 
+        ? new Date(account.lastRefreshedAt).toLocaleString('id-ID')
+        : 'Belum pernah';
+      const expiresAt = account.tokenExpiresAt
+        ? new Date(account.tokenExpiresAt).toLocaleString('id-ID')
+        : '-';
+
+      html += `
+        <div class="flex items-center justify-between p-3 bg-dark-700/80 rounded-xl border border-gray-600/30 mb-2">
+          <div class="flex items-center gap-3">
+            <div class="w-9 h-9 bg-gradient-to-br ${statusColor.bg} rounded-lg flex items-center justify-center">
+              <i class="ti ${statusIcon} ${statusColor.text} text-lg"></i>
+            </div>
+            <div>
+              <span class="font-medium text-white text-sm">${escapeHtml(account.channelName || 'YouTube Channel')}</span>
+              <div class="flex items-center gap-2 mt-0.5">
+                <span class="px-1.5 py-0.5 rounded text-[10px] font-medium ${statusColor.badge}">
+                  ${getTokenStatusLabel(account.tokenStatus)}
+                </span>
+                <span class="text-[10px] text-gray-500">Refresh: ${lastRefresh}</span>
+              </div>
+              ${account.lastRefreshError ? `<p class="text-[10px] text-red-400 mt-0.5">${escapeHtml(account.lastRefreshError)}</p>` : ''}
+            </div>
+          </div>
+          <button onclick="forceRefreshToken(${account.id}, '${escapeJsString(account.channelName)}')"
+            class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-green-400 hover:bg-green-500/10 rounded-lg transition-colors"
+            title="Force Refresh Token" id="refreshBtn_${account.id}">
+            <i class="ti ti-refresh text-lg"></i>
+          </button>
+        </div>
+      `;
+    });
+
+    // Add scheduler info
+    const schedulerStatus = data.schedulerRunning ? 
+      '<span class="text-green-400">● Active</span>' : 
+      '<span class="text-red-400">● Stopped</span>';
+    
+    const lastRun = data.lastRunTime 
+      ? new Date(data.lastRunTime).toLocaleString('id-ID')
+      : 'Belum pernah';
+
+    html += `
+      <div class="mt-3 pt-3 border-t border-gray-700/50">
+        <div class="flex items-center justify-between text-xs text-gray-400">
+          <span>Auto-Refresh: ${schedulerStatus} (setiap ${data.checkIntervalHours} jam)</span>
+          <span>Last run: ${lastRun}</span>
+        </div>
+        <button onclick="forceRefreshAllTokens()"
+          class="mt-2 w-full bg-gradient-to-r from-green-500/20 to-blue-500/20 hover:from-green-500/30 hover:to-blue-500/30 border border-green-500/30 text-green-400 px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-center gap-2">
+          <i class="ti ti-refresh"></i>
+          <span>Refresh All Tokens Now</span>
+        </button>
+      </div>
+    `;
+
+    container.innerHTML = html;
+  } catch (error) {
+    console.error('[TokenStatus] Error:', error);
+    container.innerHTML = '<p class="text-red-400 text-sm">Error loading token status</p>';
+  }
+}
+
+/**
+ * Force refresh token for a specific account
+ */
+async function forceRefreshToken(accountId, channelName) {
+  const btn = document.getElementById(`refreshBtn_${accountId}`);
+  if (btn) {
+    btn.innerHTML = '<i class="ti ti-loader animate-spin text-lg"></i>';
+    btn.disabled = true;
+  }
+
+  try {
+    const response = await fetch(`/api/youtube/token-refresh/${accountId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+    const data = await response.json();
+
+    if (data.success) {
+      showToast(`Token ${channelName || 'account'} berhasil di-refresh!`, 'success');
+    } else {
+      showToast(`Gagal refresh token: ${data.error || 'Unknown error'}`, 'error');
+    }
+  } catch (error) {
+    console.error('[TokenRefresh] Error:', error);
+    showToast('Gagal refresh token', 'error');
+  } finally {
+    if (btn) {
+      btn.innerHTML = '<i class="ti ti-refresh text-lg"></i>';
+      btn.disabled = false;
+    }
+    // Reload status
+    loadTokenStatus();
+  }
+}
+
+/**
+ * Force refresh all tokens
+ */
+async function forceRefreshAllTokens() {
+  try {
+    showToast('Refreshing all tokens...', 'info');
+
+    const response = await fetch('/api/youtube/token-refresh-all', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+    const data = await response.json();
+
+    if (data.success) {
+      const r = data.results;
+      showToast(`Done! ${r.refreshed} refreshed, ${r.skipped} skipped, ${r.failed} failed`, 
+        r.failed > 0 ? 'error' : 'success');
+    } else {
+      showToast('Failed to refresh tokens', 'error');
+    }
+  } catch (error) {
+    console.error('[TokenRefreshAll] Error:', error);
+    showToast('Error refreshing tokens', 'error');
+  } finally {
+    loadTokenStatus();
+  }
+}
+
+// Helper functions for token status display
+function getTokenStatusColor(status) {
+  switch (status) {
+    case 'active':
+      return { bg: 'from-green-500/30 to-green-600/20', text: 'text-green-400', badge: 'bg-green-500/20 text-green-400' };
+    case 'expired':
+      return { bg: 'from-red-500/30 to-red-600/20', text: 'text-red-400', badge: 'bg-red-500/20 text-red-400' };
+    case 'error':
+      return { bg: 'from-orange-500/30 to-orange-600/20', text: 'text-orange-400', badge: 'bg-orange-500/20 text-orange-400' };
+    default:
+      return { bg: 'from-gray-500/30 to-gray-600/20', text: 'text-gray-400', badge: 'bg-gray-500/20 text-gray-400' };
+  }
+}
+
+function getTokenStatusIcon(status) {
+  switch (status) {
+    case 'active': return 'ti-circle-check';
+    case 'expired': return 'ti-circle-x';
+    case 'error': return 'ti-alert-triangle';
+    default: return 'ti-circle-dot';
+  }
+}
+
+function getTokenStatusLabel(status) {
+  switch (status) {
+    case 'active': return 'Active';
+    case 'expired': return 'Expired - Reconnect Required';
+    case 'error': return 'Error';
+    default: return 'Unknown';
+  }
+}
+
+// Toggle Token Status collapsible section
+function toggleTokenStatus() {
+  const content = document.getElementById('tokenStatusContent');
+  const chevron = document.getElementById('tokenChevron');
+  
+  if (!content || !chevron) return;
+  
+  const isHidden = content.style.display === 'none';
+  
+  if (isHidden) {
+    content.style.display = 'block';
+    chevron.classList.remove('ti-chevron-right');
+    chevron.classList.add('ti-chevron-down');
+    // Load status when expanded
+    loadTokenStatus();
+  } else {
+    content.style.display = 'none';
+    chevron.classList.remove('ti-chevron-down');
+    chevron.classList.add('ti-chevron-right');
   }
 }

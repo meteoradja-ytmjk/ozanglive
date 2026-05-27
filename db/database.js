@@ -382,6 +382,13 @@ async function createCoreTablesAsync() {
 
   await runTableQuery(`ALTER TABLE youtube_credentials ADD COLUMN is_primary INTEGER DEFAULT 0`, 'youtube_credentials.is_primary');
 
+  // Auto token refresh columns
+  await runTableQuery(`ALTER TABLE youtube_credentials ADD COLUMN access_token TEXT`, 'youtube_credentials.access_token');
+  await runTableQuery(`ALTER TABLE youtube_credentials ADD COLUMN token_expires_at TEXT`, 'youtube_credentials.token_expires_at');
+  await runTableQuery(`ALTER TABLE youtube_credentials ADD COLUMN last_refreshed_at TEXT`, 'youtube_credentials.last_refreshed_at');
+  await runTableQuery(`ALTER TABLE youtube_credentials ADD COLUMN token_status TEXT DEFAULT 'unknown'`, 'youtube_credentials.token_status');
+  await runTableQuery(`ALTER TABLE youtube_credentials ADD COLUMN last_refresh_error TEXT`, 'youtube_credentials.last_refresh_error');
+
   // Set existing single accounts as primary
   await runTableQuery(`UPDATE youtube_credentials SET is_primary = 1 WHERE is_primary = 0 AND id IN (
     SELECT MIN(id) FROM youtube_credentials GROUP BY user_id

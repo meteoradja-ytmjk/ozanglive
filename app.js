@@ -41,6 +41,7 @@ const streamingService = require('./services/streamingService');
 const schedulerService = require('./services/schedulerService');
 const YouTubeCredentials = require('./models/YouTubeCredentials');
 const youtubeService = require('./services/youtubeService');
+const tokenRefreshScheduler = require('./services/tokenRefreshScheduler');
 const BroadcastTemplate = require('./models/BroadcastTemplate');
 const TitleSuggestion = require('./models/TitleSuggestion');
 const TitleFolder = require('./models/TitleFolder');
@@ -158,6 +159,13 @@ async function gracefulShutdown(signal, exitCode = 0) {
     activeTimeouts.forEach(id => originalClearTimeout(id));
     activeIntervals.length = 0;
     activeTimeouts.length = 0;
+
+    // 3.5 Stop token refresh scheduler
+    try {
+      tokenRefreshScheduler.stop();
+    } catch (e) {
+      // Ignore - scheduler might not be started
+    }
 
     // 4. Close database connection
     try {
@@ -7501,6 +7509,65 @@ app.get('/api/youtube/credentials', isAuthenticated, async (req, res) => {
   }
 });
 
+// ==========================================
+// YouTube Token Auto-Refresh API
+// ==========================================
+
+// Get token refresh status for all accounts
+app.get('/api/youtube/token-status', isAuthenticated, async (req, res) => {
+  try {
+    const status = await tokenRefreshScheduler.getStatus();
+    // Filter to only show this user's accounts
+    const userAccounts = await YouTubeCredentials.findAllByUserId(req.session.userId);
+    const userAccountIds = userAccounts.map(a => a.id);
+    
+    status.accounts = status.accounts.filter(a => userAccountIds.includes(a.id));
+    
+    res.json({ success: true, ...status });
+  } catch (error) {
+    console.error('Error getting token status:', error);
+    res.status(500).json({ success: false, error: 'Failed to get token status' });
+  }
+});
+
+// Force refresh token for a specific account
+app.post('/api/youtube/token-refresh/:id', isAuthenticated, async (req, res) => {
+  try {
+    const accountId = parseInt(req.params.id);
+    
+    // Verify the account belongs to this user
+    const credential = await YouTubeCredentials.findById(accountId);
+    if (!credential || credential.userId !== req.session.userId) {
+      return res.status(404).json({ success: false, error: 'Account not found' });
+    }
+    
+    const result = await tokenRefreshScheduler.forceRefreshAccount(accountId);
+    
+    res.json({
+      success: result.success,
+      channelName: result.channelName,
+      message: result.success 
+        ? 'Token refreshed successfully' 
+        : `Token refresh failed: ${result.error}`,
+      error: result.success ? undefined : result.error
+    });
+  } catch (error) {
+    console.error('Error forcing token refresh:', error);
+    res.status(500).json({ success: false, error: error.message || 'Failed to refresh token' });
+  }
+});
+
+// Force refresh all tokens (admin/manual trigger)
+app.post('/api/youtube/token-refresh-all', isAuthenticated, async (req, res) => {
+  try {
+    const results = await tokenRefreshScheduler.refreshAllTokens();
+    res.json({ success: true, results });
+  } catch (error) {
+    console.error('Error refreshing all tokens:', error);
+    res.status(500).json({ success: false, error: 'Failed to refresh tokens' });
+  }
+});
+
 // Remove specific YouTube account by ID
 app.delete('/api/youtube/credentials/:id', isAuthenticated, async (req, res) => {
   try {
@@ -12277,6 +12344,20 @@ async function startServer() {
     } catch (error) {
       console.error('[Startup] Error initializing recurring schedule service:', error.message);
       // Don't crash - schedule service can be retried
+    }
+
+    // Initialize YouTube Token Auto-Refresh Scheduler
+    // Automatically refreshes OAuth tokens every 4 hours to prevent 7-day expiry
+    try {
+      console.log('[Startup] Starting YouTube token auto-refresh scheduler...');
+      const tokenRefreshInterval = tokenRefreshScheduler.start();
+      if (tokenRefreshInterval) {
+        activeIntervals.push(tokenRefreshInterval);
+      }
+      console.log('[Startup] YouTube token auto-refresh scheduler started');
+    } catch (error) {
+      console.error('[Startup] Error starting token refresh scheduler:', error.message);
+      // Don't crash - scheduler can be retried
     }
 
     // Initialize YouTube task scheduler
