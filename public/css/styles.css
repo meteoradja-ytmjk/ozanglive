@@ -1170,3 +1170,210 @@ a[href]:hover::after {
     letter-spacing: 0.05em;
   }
 }
+
+/* ============================================
+   LANDSCAPE MODE OPTIMIZATIONS
+   ============================================ */
+
+/* Mobile Landscape: Show desktop-like layout for live stats */
+@media (max-width: 767px) and (orientation: landscape) {
+  /* YouTube Tab - Live Stats: use horizontal chip layout like desktop */
+  .live-stats-dashboard .md\:hidden {
+    display: none !important;
+  }
+  
+  .live-stats-dashboard .hidden.md\:flex {
+    display: flex !important;
+  }
+  
+  .live-stat-chip {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.65rem;
+    border-radius: 0.7rem;
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(30, 41, 59, 0.6));
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+    position: relative;
+    overflow: hidden;
+    min-width: auto;
+  }
+
+  .live-stat-compact {
+    min-width: auto;
+  }
+
+  .live-stat-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    line-height: 1.1;
+  }
+
+  .live-stat-label {
+    font-size: 0.55rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #94a3b8;
+  }
+
+  .live-stat-value {
+    display: flex;
+    align-items: baseline;
+    gap: 0.25rem;
+    font-size: 0.8rem;
+  }
+
+  .live-stats-actions {
+    padding: 0.25rem;
+    border-radius: 0.7rem;
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.85), rgba(30, 41, 59, 0.7));
+    border: 1px solid rgba(148, 163, 184, 0.18);
+  }
+
+  .live-stat-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.4rem 0.6rem;
+    border-radius: 0.5rem;
+    background: rgba(15, 23, 42, 0.6);
+    color: #dbeafe;
+    font-size: 0.7rem;
+    font-weight: 600;
+    transition: all 0.2s ease;
+  }
+
+  .live-stat-action i {
+    font-size: 0.85rem;
+    color: #a5b4fc;
+  }
+
+  .live-stat-toggle-label {
+    padding: 0.1rem 0.35rem;
+    border-radius: 999px;
+    background: rgba(56, 189, 248, 0.2);
+    color: #bae6fd;
+    font-size: 0.55rem;
+    letter-spacing: 0.05em;
+  }
+
+  .live-stats-desktop {
+    gap: 1rem;
+  }
+
+  .live-stats-group {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+}
+
+/* ============================================
+   STREAM TAB - LANDSCAPE BUTTON LAYOUT
+   ============================================ */
+
+/* Mobile landscape: stream controls in a single row */
+@media (max-width: 767px) and (orientation: landscape) {
+  .mobile-stream-controls {
+    flex-direction: row !important;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .mobile-stream-controls > .relative {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .mobile-stream-buttons {
+    display: flex !important;
+    gap: 0.5rem;
+    width: auto !important;
+  }
+
+  .mobile-stream-buttons > * {
+    flex: none;
+  }
+
+  /* Stream list items in 2-column grid for landscape */
+  #mobile-stream-list {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+  }
+
+  /* Group headers span full width */
+  #mobile-stream-list > .bg-dark-700\/60 {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Tablet/small desktop landscape optimization */
+@media (min-width: 768px) and (max-height: 500px) {
+  /* Compact the desktop stats cards in landscape */
+  .md\:grid.md\:grid-cols-2.lg\:grid-cols-4 {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.75rem;
+  }
+
+  .md\:grid.md\:grid-cols-2.lg\:grid-cols-4 > div {
+    padding: 0.75rem;
+  }
+
+  .md\:grid.md\:grid-cols-2.lg\:grid-cols-4 h3 {
+    font-size: 0.85rem;
+  }
+
+  .md\:grid.md\:grid-cols-2.lg\:grid-cols-4 .text-3xl {
+    font-size: 1.5rem;
+  }
+}
+
+/* ============================================
+   RENDER TAB - STEP 2 DURATION LANDSCAPE
+   ============================================ */
+
+/* Mobile landscape: make step 2 use 2-column layout */
+@media (max-width: 767px) and (orientation: landscape) {
+  .step-section .step-content .grid.grid-cols-1 {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .step-section {
+    padding: 0.5rem 0;
+    margin-bottom: 0.25rem;
+  }
+
+  .step-content {
+    padding-left: 2rem;
+  }
+
+  .step-header {
+    margin-bottom: 0.5rem;
+  }
+}
+
+/* ============================================
+   YOUTUBE TAB - LANDSCAPE HEADER & BROADCASTS
+   ============================================ */
+
+/* Mobile landscape: YouTube header buttons in a row */
+@media (max-width: 767px) and (orientation: landscape) {
+  .header-buttons {
+    display: flex !important;
+    gap: 0.5rem;
+    width: auto !important;
+  }
+
+  .header-buttons > * {
+    flex: none;
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
+  /* Connected accounts action buttons - tighter spacing */
+  .channel-broadcast-group .md\:hidden {
+    padding: 0.375rem 0.75rem;
+  }
+}

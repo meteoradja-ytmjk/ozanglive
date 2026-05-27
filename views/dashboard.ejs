@@ -281,41 +281,43 @@
 
       <!-- Mobile: Stacked layout -->
       <div class="w-full md:hidden">
-        <div class="relative w-full mb-3">
-          <select id="streamFilterMobile" onchange="applyStreamFilter(this.value)"
-            class="w-full bg-dark-700 border border-gray-600 text-white pl-9 pr-4 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary appearance-none cursor-pointer">
-            <option value="all">All Streams</option>
-          </select>
-          <i class="ti ti-filter absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
-          <i class="ti ti-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
-        </div>
-        <div class="grid grid-cols-3 gap-2">
-          <button type="button" onclick="openNewStreamModal()"
-            class="flex items-center justify-center gap-1 bg-primary hover:bg-secondary text-white px-3 py-2 rounded-lg transition-colors text-sm">
-            <i class="ti ti-plus"></i>
-            <span>New</span>
-          </button>
-          <div class="relative" id="scheduleDropdownMobile">
-            <button onclick="toggleScheduleDropdown()"
-              class="w-full flex items-center justify-center gap-1 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white px-3 py-2 rounded-lg transition-colors text-sm">
-              <i class="ti ti-calendar-event"></i>
-              <span>Schedule</span>
+        <div class="mobile-stream-controls flex flex-col gap-2 mb-3">
+          <div class="relative w-full">
+            <select id="streamFilterMobile" onchange="applyStreamFilter(this.value)"
+              class="w-full bg-dark-700 border border-gray-600 text-white pl-9 pr-4 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary appearance-none cursor-pointer">
+              <option value="all">All Streams</option>
+            </select>
+            <i class="ti ti-filter absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+            <i class="ti ti-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+          </div>
+          <div class="mobile-stream-buttons grid grid-cols-4 gap-2 w-full">
+            <button type="button" onclick="openNewStreamModal()"
+              class="flex items-center justify-center gap-1.5 bg-primary hover:bg-secondary text-white px-3 py-2 rounded-lg transition-colors text-sm font-medium whitespace-nowrap">
+              <i class="ti ti-plus"></i>
+              <span>New</span>
+            </button>
+            <div class="relative" id="scheduleDropdownMobile">
+              <button onclick="toggleScheduleDropdown()"
+                class="w-full flex items-center justify-center gap-1.5 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white px-3 py-2 rounded-lg transition-colors text-sm whitespace-nowrap">
+                <i class="ti ti-calendar-event"></i>
+                <span>Schedule</span>
+              </button>
+            </div>
+            <div class="relative" id="backupDropdownMobile">
+              <button onclick="toggleBackupDropdown()"
+                class="w-full flex items-center justify-center gap-1.5 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white px-3 py-2 rounded-lg transition-colors text-sm whitespace-nowrap">
+                <i class="ti ti-settings-2"></i>
+                <span>Backup</span>
+              </button>
+            </div>
+            <button type="button" id="toggleAllGroupsBtnMobile" onclick="toggleAllStreamGroups()"
+              class="flex items-center justify-center gap-1.5 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white px-3 py-2 rounded-lg transition-colors text-sm whitespace-nowrap"
+              title="Expand/Collapse All Group">
+              <i class="ti ti-fold-down"></i>
+              <span id="toggleAllGroupsLabelMobile">Expand</span>
             </button>
           </div>
-          <div class="relative" id="backupDropdownMobile">
-            <button onclick="toggleBackupDropdown()"
-              class="w-full flex items-center justify-center gap-1 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white px-3 py-2 rounded-lg transition-colors text-sm">
-              <i class="ti ti-settings-2"></i>
-              <span>Backup</span>
-            </button>
-          </div>
         </div>
-        <button type="button" id="toggleAllGroupsBtnMobile" onclick="toggleAllStreamGroups()"
-          class="w-full mt-2 flex items-center justify-center gap-2 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white px-3 py-2 rounded-lg transition-colors text-sm"
-          title="Expand/Collapse All Group">
-          <i class="ti ti-fold-down"></i>
-          <span id="toggleAllGroupsLabelMobile">Expand All</span>
-        </button>
         <!-- Mobile Schedule Dropdown Menu -->
         <div id="scheduleDropdownMenuMobile"
           class="hidden absolute left-4 right-4 mt-2 bg-dark-700 border border-gray-600 rounded-lg shadow-lg z-20 overflow-hidden">
