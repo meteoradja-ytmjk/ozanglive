@@ -2,12 +2,12 @@
  * YouTube Token Auto-Refresh Scheduler
  * 
  * Masalah: Google OAuth refresh token untuk app "Testing" expired setelah 7 hari.
- * Solusi: Scheduler yang secara proaktif me-refresh token setiap 3 hari,
+ * Solusi: Scheduler yang secara proaktif me-refresh token setiap 5 hari,
  *         sehingga token selalu fresh dan tidak pernah expired.
  * 
  * Cara kerja:
- * 1. Setiap interval (default 4 jam), cek semua akun YouTube
- * 2. Jika token sudah mendekati expired (> 3 hari sejak last refresh), lakukan refresh
+ * 1. Setiap interval (default 12 jam), cek semua akun YouTube
+ * 2. Jika token sudah mendekati expired (> 5 hari sejak last refresh), lakukan refresh
  * 3. Simpan access_token baru + timestamp di database
  * 4. Jika refresh gagal (token revoked), tandai akun sebagai "needs_reconnect"
  * 
@@ -24,10 +24,11 @@ class TokenRefreshScheduler {
   constructor() {
     this.intervalId = null;
     this.isRunning = false;
-    // Check every 4 hours
-    this.checkInterval = 4 * 60 * 60 * 1000; // 4 hours in ms
-    // Refresh if token is older than 3 days (well before 7-day expiry)
-    this.refreshThresholdDays = 3;
+    // Check every 12 hours (2x per day is more than enough)
+    // Token only needs refresh every 5 days, so checking 2x/day gives plenty of margin
+    this.checkInterval = 12 * 60 * 60 * 1000; // 12 hours in ms
+    // Refresh if token is older than 5 days (safe margin before 7-day expiry)
+    this.refreshThresholdDays = 5;
     // Track refresh results for UI display
     this.lastRunResults = null;
     this.lastRunTime = null;
@@ -48,10 +49,12 @@ class TokenRefreshScheduler {
 
     this.isRunning = true;
 
-    // Run immediately on start
-    this.refreshAllTokens().catch(err => {
-      console.error('[TokenRefreshScheduler] Initial refresh error:', err.message);
-    });
+    // Delay initial run by 30 seconds to not slow down server startup
+    setTimeout(() => {
+      this.refreshAllTokens().catch(err => {
+        console.error('[TokenRefreshScheduler] Initial refresh error:', err.message);
+      });
+    }, 30 * 1000);
 
     // Then run periodically
     this.intervalId = setInterval(() => {
