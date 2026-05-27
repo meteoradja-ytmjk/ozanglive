@@ -8220,71 +8220,71 @@ async function loadTokenStatus() {
     const data = await response.json();
 
     if (!data.success) {
-      container.innerHTML = '<p class="text-red-400 text-sm">Failed to load token status</p>';
+      container.innerHTML = '<p class="text-red-400 text-xs">Failed to load token status</p>';
       return;
     }
 
     if (data.accounts.length === 0) {
-      container.innerHTML = '<p class="text-gray-400 text-sm">No accounts connected</p>';
+      container.innerHTML = '<p class="text-gray-400 text-xs">No accounts connected</p>';
       return;
     }
 
     let html = '';
-    data.accounts.forEach(account => {
+    data.accounts.forEach((account, index) => {
       const statusColor = getTokenStatusColor(account.tokenStatus);
       const statusIcon = getTokenStatusIcon(account.tokenStatus);
       const lastRefresh = account.lastRefreshedAt 
-        ? new Date(account.lastRefreshedAt).toLocaleString('id-ID')
+        ? new Date(account.lastRefreshedAt).toLocaleString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
         : 'Belum pernah';
-      const expiresAt = account.tokenExpiresAt
-        ? new Date(account.tokenExpiresAt).toLocaleString('id-ID')
-        : '-';
+
+      const borderClass = index < data.accounts.length - 1 ? 'border-b border-gray-700/30' : '';
 
       html += `
-        <div class="flex items-center justify-between p-3 bg-dark-700/80 rounded-xl border border-gray-600/30 mb-2">
-          <div class="flex items-center gap-3">
-            <div class="w-9 h-9 bg-gradient-to-br ${statusColor.bg} rounded-lg flex items-center justify-center">
-              <i class="ti ${statusIcon} ${statusColor.text} text-lg"></i>
+        <div class="flex items-center justify-between py-2.5 ${borderClass}">
+          <div class="flex items-center gap-2.5 min-w-0 flex-1">
+            <div class="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 ${statusColor.bg}">
+              <i class="ti ${statusIcon} ${statusColor.text} text-xs"></i>
             </div>
-            <div>
-              <span class="font-medium text-white text-sm">${escapeHtml(account.channelName || 'YouTube Channel')}</span>
-              <div class="flex items-center gap-2 mt-0.5">
-                <span class="px-1.5 py-0.5 rounded text-[10px] font-medium ${statusColor.badge}">
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-medium text-white truncate">${escapeHtml(account.channelName || 'YouTube Channel')}</span>
+                <span class="px-1.5 py-0.5 rounded text-[9px] font-medium ${statusColor.badge}">
                   ${getTokenStatusLabel(account.tokenStatus)}
                 </span>
-                <span class="text-[10px] text-gray-500">Refresh: ${lastRefresh}</span>
               </div>
-              ${account.lastRefreshError ? `<p class="text-[10px] text-red-400 mt-0.5">${escapeHtml(account.lastRefreshError)}</p>` : ''}
+              <span class="text-[10px] text-gray-500">Last refresh: ${lastRefresh}</span>
+              ${account.lastRefreshError ? `<p class="text-[10px] text-red-400/80 truncate">${escapeHtml(account.lastRefreshError)}</p>` : ''}
             </div>
           </div>
           <button onclick="forceRefreshToken(${account.id}, '${escapeJsString(account.channelName)}')"
-            class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-green-400 hover:bg-green-500/10 rounded-lg transition-colors"
-            title="Force Refresh Token" id="refreshBtn_${account.id}">
-            <i class="ti ti-refresh text-lg"></i>
+            class="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-green-400 hover:bg-green-500/10 rounded-md transition-colors flex-shrink-0"
+            title="Force Refresh" id="refreshBtn_${account.id}">
+            <i class="ti ti-refresh text-sm"></i>
           </button>
         </div>
       `;
     });
 
-    // Add scheduler info
-    const schedulerStatus = data.schedulerRunning ? 
-      '<span class="text-green-400">● Active</span>' : 
-      '<span class="text-red-400">● Stopped</span>';
+    // Scheduler info footer
+    const schedulerDot = data.schedulerRunning ? 
+      '<span class="w-1.5 h-1.5 rounded-full bg-green-400 inline-block"></span>' : 
+      '<span class="w-1.5 h-1.5 rounded-full bg-red-400 inline-block"></span>';
     
     const lastRun = data.lastRunTime 
-      ? new Date(data.lastRunTime).toLocaleString('id-ID')
-      : 'Belum pernah';
+      ? new Date(data.lastRunTime).toLocaleString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+      : '-';
 
     html += `
-      <div class="mt-3 pt-3 border-t border-gray-700/50">
-        <div class="flex items-center justify-between text-xs text-gray-400">
-          <span>Auto-Refresh: ${schedulerStatus} (setiap ${data.checkIntervalHours} jam)</span>
-          <span>Last run: ${lastRun}</span>
+      <div class="flex items-center justify-between pt-2.5 mt-1 border-t border-gray-700/40">
+        <div class="flex items-center gap-3 text-[10px] text-gray-500">
+          <span class="flex items-center gap-1">${schedulerDot} Scheduler ${data.schedulerRunning ? 'active' : 'stopped'}</span>
+          <span>Every ${data.checkIntervalHours}h</span>
+          <span>Last: ${lastRun}</span>
         </div>
         <button onclick="forceRefreshAllTokens()"
-          class="mt-2 w-full bg-gradient-to-r from-green-500/20 to-blue-500/20 hover:from-green-500/30 hover:to-blue-500/30 border border-green-500/30 text-green-400 px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-center gap-2">
-          <i class="ti ti-refresh"></i>
-          <span>Refresh All Tokens Now</span>
+          class="text-[10px] text-green-400/80 hover:text-green-400 transition-colors flex items-center gap-1">
+          <i class="ti ti-refresh text-xs"></i>
+          Refresh All
         </button>
       </div>
     `;
@@ -8292,7 +8292,7 @@ async function loadTokenStatus() {
     container.innerHTML = html;
   } catch (error) {
     console.error('[TokenStatus] Error:', error);
-    container.innerHTML = '<p class="text-red-400 text-sm">Error loading token status</p>';
+    container.innerHTML = '<p class="text-red-400 text-xs">Error loading token status</p>';
   }
 }
 
@@ -8369,13 +8369,13 @@ async function forceRefreshAllTokens() {
 function getTokenStatusColor(status) {
   switch (status) {
     case 'active':
-      return { bg: 'from-green-500/30 to-green-600/20', text: 'text-green-400', badge: 'bg-green-500/20 text-green-400' };
+      return { bg: 'bg-green-500/15', text: 'text-green-400', badge: 'bg-green-500/15 text-green-400' };
     case 'expired':
-      return { bg: 'from-red-500/30 to-red-600/20', text: 'text-red-400', badge: 'bg-red-500/20 text-red-400' };
+      return { bg: 'bg-red-500/15', text: 'text-red-400', badge: 'bg-red-500/15 text-red-400' };
     case 'error':
-      return { bg: 'from-orange-500/30 to-orange-600/20', text: 'text-orange-400', badge: 'bg-orange-500/20 text-orange-400' };
+      return { bg: 'bg-orange-500/15', text: 'text-orange-400', badge: 'bg-orange-500/15 text-orange-400' };
     default:
-      return { bg: 'from-gray-500/30 to-gray-600/20', text: 'text-gray-400', badge: 'bg-gray-500/20 text-gray-400' };
+      return { bg: 'bg-gray-500/15', text: 'text-gray-400', badge: 'bg-gray-500/15 text-gray-400' };
   }
 }
 
