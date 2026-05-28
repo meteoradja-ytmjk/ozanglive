@@ -186,23 +186,21 @@
       </div>
     </div>
 
-    <div class="stream-toolbar hidden md:flex flex-col gap-3 mb-6">
-      <!-- Title stacked -->
-      <div class="flex items-start justify-between">
-        <div class="flex flex-col">
-          <h2 class="text-xl font-bold leading-tight">Streaming Status</h2>
-          <div class="flex items-center gap-2 text-xs text-gray-400 mt-1">
-            <i class="ti ti-clock text-primary font-loaded"></i>
-            <span id="realtime-clock">--:--:--</span>
-            <span class="text-gray-600">|</span>
-            <i class="ti ti-calendar text-primary font-loaded"></i>
-            <span id="realtime-date">--/--/----</span>
-          </div>
+    <div class="stream-toolbar hidden md:flex items-start justify-between gap-6 mb-6">
+      <!-- Left: Title + Clock stacked -->
+      <div class="flex flex-col justify-center shrink-0">
+        <h2 class="text-2xl font-bold leading-tight">Streaming Status</h2>
+        <div class="flex items-center gap-2.5 text-sm text-gray-400 mt-1.5">
+          <i class="ti ti-clock text-primary font-loaded"></i>
+          <span id="realtime-clock" class="font-medium text-white">--:--:--</span>
+          <span class="text-gray-600">|</span>
+          <i class="ti ti-calendar text-primary font-loaded"></i>
+          <span id="realtime-date" class="font-medium text-white">--/--/----</span>
         </div>
       </div>
-      <!-- Buttons: 2-column grid, equal width -->
-      <div class="grid grid-cols-2 gap-2">
-        <!-- Row 1: Filter + small buttons -->
+      <!-- Right: Buttons 2-col grid -->
+      <div class="grid grid-cols-2 gap-2 w-[340px] shrink-0">
+        <!-- Row 1: Filter + Toggle/Backup (full width each col) -->
         <div class="relative">
           <select id="streamFilter" onchange="applyStreamFilter(this.value)"
             class="w-full bg-dark-700 border border-gray-600 text-white pl-9 pr-4 py-2.5 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary appearance-none cursor-pointer text-sm h-[42px]">
@@ -213,14 +211,14 @@
         </div>
         <div class="flex items-center gap-2">
           <button type="button" id="toggleAllGroupsBtn" onclick="toggleAllStreamGroups()"
-            class="flex items-center justify-center bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white w-[42px] h-[42px] rounded-lg transition-colors flex-shrink-0"
+            class="flex-1 flex items-center justify-center bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white h-[42px] rounded-lg transition-colors"
             title="Expand/Collapse All Group">
             <i class="ti ti-fold-down text-sm"></i>
             <span id="toggleAllGroupsLabel" class="sr-only">Expand All</span>
           </button>
-          <div class="relative flex-shrink-0" id="backupDropdown">
+          <div class="relative flex-1" id="backupDropdown">
             <button onclick="toggleBackupDropdown()"
-              class="flex items-center justify-center gap-1 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white w-[42px] h-[42px] rounded-lg transition-colors"
+              class="w-full flex items-center justify-center gap-1 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white h-[42px] rounded-lg transition-colors"
               title="Backup Menu">
               <i class="ti ti-settings-2"></i>
               <i class="ti ti-chevron-down text-[10px]"></i>
