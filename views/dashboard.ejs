@@ -35,8 +35,8 @@
     }
   </style>
 
-  <!-- Mobile Stats Bar - Minimalist Design -->
-  <div class="md:hidden mb-4 mobile-stats-bar-wrapper">
+  <!-- Mobile Stats Bar - Portrait (FIXED - DO NOT CHANGE) -->
+  <div class="md:hidden mb-4 mobile-stats-portrait">
     <div class="bg-gray-800/90 backdrop-blur-md rounded-2xl px-4 py-3 shadow-lg">
       <div class="flex items-center justify-between">
         <!-- Live Streams -->
@@ -56,13 +56,7 @@
         <!-- RAM/Memory -->
         <div class="flex items-center gap-1.5">
           <i class="ti ti-server-2 text-lg text-emerald-400"></i>
-          <span id="memory-usage-mobile" class="text-emerald-400 font-semibold text-xs">0MB</span>
-        </div>
-
-        <!-- Disk Usage -->
-        <div class="flex items-center gap-1.5">
-          <i class="ti ti-database text-lg text-orange-400"></i>
-          <span id="disk-usage-mobile-bar" class="text-orange-400 font-semibold text-xs">0GB</span>
+          <span id="memory-usage-mobile" class="text-emerald-400 font-semibold">0MB</span>
         </div>
 
         <!-- Network -->
@@ -90,6 +84,36 @@
         <span id="disk-used-mobile"></span>
         <span id="disk-total-mobile"></span>
         <div id="disk-bar-mobile"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mobile Stats Bar - Landscape Only (same concept as portrait but with disk info) -->
+  <div class="hidden mobile-stats-landscape mb-3">
+    <div class="bg-gray-800/90 backdrop-blur-md rounded-2xl px-4 py-2.5 shadow-lg">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-1.5">
+          <i class="ti ti-broadcast text-lg text-violet-400"></i>
+          <span id="active-streams-landscape" class="text-violet-400 font-semibold">0</span>
+          <span class="text-gray-500 text-xs">live</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <i class="ti ti-cpu text-lg text-sky-400"></i>
+          <span id="cpu-usage-landscape" class="text-sky-400 font-semibold">0</span><span class="text-gray-500 text-xs">%</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <i class="ti ti-server-2 text-lg text-emerald-400"></i>
+          <span id="memory-usage-landscape" class="text-emerald-400 font-semibold text-xs">0MB</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <i class="ti ti-database text-lg text-orange-400"></i>
+          <span id="disk-usage-landscape" class="text-orange-400 font-semibold text-xs">0GB</span>
+        </div>
+        <div class="flex items-center gap-1">
+          <i class="ti ti-wifi text-lg text-amber-400"></i>
+          <span class="text-emerald-400 animate-bounce-up">↑</span>
+          <span class="text-sky-400 animate-bounce-down">↓</span>
+        </div>
       </div>
     </div>
   </div>
@@ -1560,6 +1584,9 @@
         document.getElementById('cpu-usage-mobile').textContent = cpuUsage;
         document.getElementById('cpu-bar').style.width = cpuUsage + '%';
         document.getElementById('cpu-bar-mobile').style.width = cpuUsage + '%';
+        // Landscape
+        const cpuLand = document.getElementById('cpu-usage-landscape');
+        if (cpuLand) cpuLand.textContent = cpuUsage;
 
         // Memory - stats.memory has formatted strings
         const memUsed = stats.memory?.used || '0 MB';
@@ -1574,6 +1601,9 @@
         const memTotalCompact = memTotal.replace(' ', '');
         document.getElementById('memory-usage-mobile').textContent = memTotalCompact;
         document.getElementById('memory-total-mobile').textContent = memTotalCompact;
+        // Landscape memory
+        const memLand = document.getElementById('memory-usage-landscape');
+        if (memLand) memLand.textContent = memUsed.replace(' ', '');
 
         // Network - use formatted strings
         const uploadSpeed = stats.network?.uploadFormatted || '0 Mbps';
@@ -1598,9 +1628,9 @@
           document.getElementById('disk-total-mobile').textContent = ' / ' + diskTotal;
           document.getElementById('disk-bar').style.width = diskPercent + '%';
           document.getElementById('disk-bar-mobile').style.width = diskPercent + '%';
-          // Update compact mobile stats bar disk info
-          const diskBarEl = document.getElementById('disk-usage-mobile-bar');
-          if (diskBarEl) diskBarEl.textContent = diskUsed + '/' + diskTotal;
+          // Landscape disk info
+          const diskLandEl = document.getElementById('disk-usage-landscape');
+          if (diskLandEl) diskLandEl.textContent = diskUsed + '/' + diskTotal;
         }
       } catch (error) {
         console.error('Error loading system stats:', error);
@@ -1684,6 +1714,9 @@
       // Update mobile active streams count
       const mobileActiveEl = document.getElementById('active-streams-mobile');
       if (mobileActiveEl) mobileActiveEl.textContent = activeCount;
+      // Update landscape active streams count
+      const landActiveEl = document.getElementById('active-streams-landscape');
+      if (landActiveEl) landActiveEl.textContent = activeCount;
     }
 
     function renderStreams(streams) {
