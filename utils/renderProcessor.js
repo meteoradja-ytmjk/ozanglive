@@ -3,6 +3,7 @@ const path = require('path');
 const os = require('os');
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
+const { buildVisualizerFilter, validateSettings: validateVisualizerSettings } = require('./visualizerEngine');
 
 ffmpeg.setFfmpegPath(ffmpegPath);
 
@@ -23,6 +24,76 @@ const parseTimeToSeconds = (timemark = '') => {
   return (parseFloat(h) * 3600) + (parseFloat(m) * 60) + parseFloat(s);
 };
 
+/**
+ * Apply audio visualizer overlay to a video+audio combination.
+ * This re-encodes the video with FFmpeg filter_complex to overlay the visualizer.
+ * 
+ * @param {Object} params
+ * @param {string} params.videoPath - Path to the video file (already looped/trimmed)
+ * @param {string} params.audioPath - Path to the audio file (already looped/trimmed)
+ * @param {string} params.outputPath - Final output path
+ * @param {number} params.duration - Target duration in seconds
+ * @param {Object} params.visualizerSettings - Visualizer configuration from frontend
+ * @param {Function} params.onProgress - Progress callback (0-100)
+ * @param {number} params.progressOffset - Starting progress percentage
+ * @param {number} params.progressRange - Range of progress for this step
+ * @returns {Promise<string>} Output path
+ */
+async function applyVisualizerOverlay({ videoPath, audioPath, outputPath, duration, visualizerSettings, onProgress, progressOffset = 0, progressRange = 100 }) {
+  // Get video dimensions for proper sizing
+  const videoMeta = await ffprobeAsync(videoPath);
+  const videoStream = videoMeta.streams?.find(s => s.codec_type === 'video');
+  const width = videoStream?.width || 1920;
+  const height = videoStream?.height || 1080;
+
+  console.log('[VISUALIZER] Applying visualizer overlay');
+  console.log('[VISUALIZER] Type:', visualizerSettings.type);
+  console.log('[VISUALIZER] Color:', visualizerSettings.color);
+  console.log('[VISUALIZER] Video dimensions:', width, 'x', height);
+  console.log('[VISUALIZER] Intensity:', visualizerSettings.intensity);
+  console.log('[VISUALIZER] Glow:', visualizerSettings.glow);
+  console.log('[VISUALIZER] Mirror:', visualizerSettings.mirror);
+
+  // Build the FFmpeg filter complex
+  const { filterComplex, outputMap } = buildVisualizerFilter(visualizerSettings, {
+    width,
+    height,
+    position: 'bottom' // Default position
+  });
+
+  console.log('[VISUALIZER] Filter complex:', filterComplex);
+
+  await runFfmpeg((cmd) => {
+    return cmd
+      .input(videoPath)    // Input 0: video
+      .input(audioPath)    // Input 1: audio
+      .complexFilter(filterComplex)
+      .outputOptions([
+        '-map', outputMap,
+        '-map', '1:a',
+        '-t', String(duration),
+        '-c:v', 'libx264',
+        '-preset', 'fast',
+        '-crf', '20',
+        '-c:a', 'aac',
+        '-b:a', '192k',
+        '-ar', '44100',
+        '-ac', '2',
+        '-movflags', '+faststart'
+      ])
+      .output(outputPath);
+  }, {
+    onProgress: (p) => {
+      const progress = progressOffset + Math.min(progressRange - 1, Math.round((parseTimeToSeconds(p.timemark) / duration) * progressRange));
+      console.log(`[VISUALIZER] Progress: ${progress}%`);
+      onProgress?.(progress);
+    }
+  });
+
+  console.log('[VISUALIZER] Overlay applied successfully');
+  return outputPath;
+}
+
 async function renderLoopVideo({ 
   videoPaths, 
   audioPaths, 
@@ -42,6 +113,19 @@ async function renderLoopVideo({
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ozang-render-'));
   const startTime = Date.now();
   
+  // Determine if visualizer should be applied
+  const shouldApplyVisualizer = visualizerSettings && 
+    visualizerSettings.type && 
+    visualizerSettings.type !== 'none' && 
+    audioPaths?.length > 0;
+  
+  if (shouldApplyVisualizer) {
+    const validation = validateVisualizerSettings(visualizerSettings);
+    if (!validation.valid) {
+      console.warn('[RENDER] Visualizer settings invalid, skipping:', validation.errors);
+    }
+  }
+  
   try {
     console.log('[RENDER] ========================================');
     console.log('[RENDER] START - Render Job');
@@ -49,6 +133,7 @@ async function renderLoopVideo({
     console.log('[RENDER] Audios:', audioPaths?.length || 0);
     console.log('[RENDER] Target Duration:', targetDurationSeconds, 's');
     console.log('[RENDER] Mute Video Audio:', muteVideoAudio);
+    console.log('[RENDER] Visualizer:', shouldApplyVisualizer ? visualizerSettings.type : 'none');
     console.log('[RENDER] Work Dir:', workDir);
     console.log('[RENDER] ========================================');
     
@@ -67,6 +152,68 @@ async function renderLoopVideo({
     }
     
     console.log('[RENDER] Effective Duration:', effectiveTargetDuration, 's');
+    
+    // When visualizer is enabled, we render video+audio to a temp file first,
+    // then apply the visualizer overlay as a post-processing step.
+    const actualOutputPath = shouldApplyVisualizer 
+      ? path.join(workDir, 'pre-visualizer-output.mp4') 
+      : outputPath;
+    
+    /**
+     * Helper: Apply visualizer post-processing if enabled.
+     * Call this before returning from any render path that produces video+audio output.
+     * @param {string} renderedPath - Path to the rendered file (may be actualOutputPath or outputPath)
+     * @returns {Promise<string>} Final output path
+     */
+    async function finalizeWithVisualizer(renderedPath) {
+      if (!shouldApplyVisualizer) return renderedPath;
+      
+      // If rendered to actualOutputPath (temp), we need to apply visualizer to produce outputPath
+      // If rendered directly to outputPath, we need to move it first
+      const sourceFile = renderedPath === outputPath ? renderedPath : actualOutputPath;
+      
+      let preVizPath;
+      if (sourceFile === outputPath) {
+        preVizPath = path.join(workDir, 'pre-viz-final.mp4');
+        fs.renameSync(outputPath, preVizPath);
+      } else {
+        preVizPath = sourceFile;
+      }
+      
+      console.log('[RENDER] 🎵 Applying Audio Visualizer...');
+      console.log('[RENDER] Visualizer Type:', visualizerSettings.type);
+      console.log('[RENDER] Visualizer Color:', visualizerSettings.color);
+      
+      // Extract audio for visualizer filter input
+      const vizAudioPath = path.join(workDir, 'viz-audio.aac');
+      await runFfmpeg((cmd) => {
+        return cmd
+          .input(preVizPath)
+          .outputOptions(['-vn', '-c:a', 'copy'])
+          .output(vizAudioPath);
+      });
+      
+      try {
+        await applyVisualizerOverlay({
+          videoPath: preVizPath,
+          audioPath: vizAudioPath,
+          outputPath: outputPath,
+          duration: effectiveTargetDuration,
+          visualizerSettings,
+          onProgress,
+          progressOffset: 0,
+          progressRange: 100
+        });
+        console.log('[RENDER] 🎵 Visualizer applied successfully!');
+      } catch (vizError) {
+        console.error('[RENDER] ⚠️ Visualizer failed, using original output:', vizError.message);
+        if (fs.existsSync(preVizPath) && !fs.existsSync(outputPath)) {
+          fs.copyFileSync(preVizPath, outputPath);
+        }
+      }
+      
+      return outputPath;
+    }
     
     // ========================================
     // SPECIAL CASE: Mute video without audio (video only, no audio)
@@ -197,7 +344,7 @@ async function renderLoopVideo({
         console.log('[RENDER] ========================================');
         console.log('[RENDER] ⚡ COMPLETED IN', elapsedSeconds, 'SECONDS (ULTRA FAST)');
         console.log('[RENDER] ========================================');
-        return outputPath;
+        return await finalizeWithVisualizer(outputPath);
         
       } else if (needVideoLoop && !needAudioLoop) {
         // CASE 2: Loop video, trim audio
@@ -262,7 +409,7 @@ async function renderLoopVideo({
         console.log('[RENDER] ========================================');
         console.log('[RENDER] ⚡ COMPLETED IN', elapsedSeconds, 'SECONDS (FAST)');
         console.log('[RENDER] ========================================');
-        return outputPath;
+        return await finalizeWithVisualizer(outputPath);
         
       } else if (!needVideoLoop && needAudioLoop) {
         // CASE 3: Trim video, loop audio
@@ -326,7 +473,7 @@ async function renderLoopVideo({
         console.log('[RENDER] ========================================');
         console.log('[RENDER] ⚡ COMPLETED IN', elapsedSeconds, 'SECONDS (FAST)');
         console.log('[RENDER] ========================================');
-        return outputPath;
+        return await finalizeWithVisualizer(outputPath);
         
       } else {
         // CASE 4: Both need looping
@@ -413,7 +560,7 @@ async function renderLoopVideo({
         console.log('[RENDER] ========================================');
         console.log('[RENDER] ⚡ COMPLETED IN', elapsedSeconds, 'SECONDS (FAST)');
         console.log('[RENDER] ========================================');
-        return outputPath;
+        return await finalizeWithVisualizer(outputPath);
       }
     }
     
@@ -578,7 +725,7 @@ async function renderLoopVideo({
       console.log('[RENDER] ========================================');
       console.log('[RENDER] ⚡ COMPLETED IN', elapsedSeconds, 'SECONDS (FAST MODE)');
       console.log('[RENDER] ========================================');
-      return outputPath;
+      return await finalizeWithVisualizer(outputPath);
     }
     
     // ========================================
@@ -763,7 +910,8 @@ async function renderLoopVideo({
     console.log('[RENDER] Total Time:', elapsedSeconds, 'seconds');
     console.log('[RENDER] Output:', outputPath);
     console.log('[RENDER] ========================================');
-    return outputPath;
+    
+    return await finalizeWithVisualizer(outputPath);
     
   } catch (error) {
     console.error('[RENDER] ERROR:', error.message);
@@ -839,4 +987,4 @@ async function loopVideoFast({ inputPath, outputPath, loopCount, onProgress }) {
   }
 }
 
-module.exports = { renderLoopVideo, loopVideoFast };
+module.exports = { renderLoopVideo, loopVideoFast, applyVisualizerOverlay };

@@ -1,162 +1,792 @@
 <% layout('layout') -%>
 
 <style>
-.coming-soon-container {
-  min-height: 80vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2rem;
-}
-
-.coming-soon-card {
-  background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(251, 191, 36, 0.1));
-  border: 2px solid rgba(239, 68, 68, 0.3);
-  border-radius: 1.5rem;
-  padding: 3rem 2rem;
-  max-width: 600px;
-  text-align: center;
+/* Video Editor Styles */
+.editor-panel {
+  background: rgba(17, 24, 39, 0.95);
+  border: 1px solid rgba(75, 85, 99, 0.5);
+  border-radius: 0.75rem;
   backdrop-filter: blur(10px);
 }
 
-.coming-soon-icon {
-  font-size: 5rem;
-  background: linear-gradient(135deg, #EF4444, #FBBF24);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  margin-bottom: 1.5rem;
-  animation: pulse 2s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.05); opacity: 0.8; }
-}
-
-.coming-soon-title {
-  font-size: 2.5rem;
-  font-weight: 700;
-  background: linear-gradient(135deg, #EF4444, #FBBF24);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  margin-bottom: 1rem;
-}
-
-.coming-soon-subtitle {
-  font-size: 1.25rem;
-  color: #9CA3AF;
-  margin-bottom: 2rem;
-  line-height: 1.6;
-}
-
-.feature-list {
-  text-align: left;
-  margin: 2rem auto;
-  max-width: 400px;
-}
-
-.feature-item {
+.editor-panel-header {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgba(75, 85, 99, 0.3);
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem;
-  margin-bottom: 0.5rem;
-  background: rgba(239, 68, 68, 0.05);
-  border-radius: 0.5rem;
-  color: #D1D5DB;
-  transition: all 0.3s ease;
+  justify-content: space-between;
 }
 
-.feature-item:hover {
-  background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(251, 191, 36, 0.1));
-  transform: translateX(5px);
-}
-
-.feature-icon {
-  background: linear-gradient(135deg, #EF4444, #FBBF24);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  font-size: 1.5rem;
-}
-
-.back-button {
-  display: inline-flex;
+.editor-panel-header h3 {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #F3F4F6;
+  display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.75rem 1.5rem;
-  background: linear-gradient(135deg, #EF4444, #FBBF24);
-  color: white;
+}
+
+.editor-panel-body {
+  padding: 1rem;
+}
+
+.preview-canvas {
+  background: #000;
   border-radius: 0.5rem;
-  text-decoration: none;
-  font-weight: 600;
-  transition: all 0.3s ease;
-  margin-top: 1rem;
+  aspect-ratio: 16/9;
+  width: 100%;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(75, 85, 99, 0.5);
 }
 
-.back-button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 25px rgba(239, 68, 68, 0.4);
+.preview-canvas .placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #6B7280;
 }
 
-@media (max-width: 768px) {
-  .coming-soon-title {
-    font-size: 2rem;
-  }
-  
-  .coming-soon-subtitle {
-    font-size: 1rem;
-  }
-  
-  .coming-soon-card {
-    padding: 2rem 1.5rem;
-  }
+.viz-type-card {
+  padding: 0.625rem;
+  border-radius: 0.5rem;
+  border: 2px solid transparent;
+  background: rgba(31, 41, 55, 0.8);
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
 }
+
+.viz-type-card:hover {
+  border-color: rgba(139, 92, 246, 0.5);
+  background: rgba(139, 92, 246, 0.1);
+}
+
+.viz-type-card.active {
+  border-color: #8B5CF6;
+  background: rgba(139, 92, 246, 0.15);
+  box-shadow: 0 0 12px rgba(139, 92, 246, 0.2);
+}
+
+.viz-type-card .icon {
+  font-size: 1.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.color-swatch {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: all 0.2s;
+}
+
+.color-swatch:hover { transform: scale(1.15); }
+.color-swatch.active { border-color: #fff; box-shadow: 0 0 8px rgba(255,255,255,0.4); }
+
+.visualizer-live-preview {
+  height: 80px;
+  background: rgba(0,0,0,0.6);
+  border-radius: 0.5rem;
+  overflow: hidden;
+  position: relative;
+}
+
+.editor-tab {
+  padding: 0.5rem 1rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  border-bottom: 2px solid transparent;
+  color: #9CA3AF;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.editor-tab:hover { color: #E5E7EB; }
+.editor-tab.active { color: #8B5CF6; border-color: #8B5CF6; }
 </style>
 
-<div class="coming-soon-container">
-  <div class="coming-soon-card">
-    <div class="coming-soon-icon">
-      <i class="ti ti-video"></i>
-    </div>
-    
-    <h1 class="coming-soon-title">Video Editor</h1>
-    <p class="coming-soon-subtitle">
-      Fitur canggih untuk mengedit video Anda sedang dalam pengembangan!
-    </p>
-    
-    <div class="feature-list">
-      <div class="feature-item">
-        <i class="ti ti-cut feature-icon"></i>
-        <span>Video Trimming & Cutting</span>
-      </div>
-      <div class="feature-item">
-        <i class="ti ti-text-plus feature-icon"></i>
-        <span>Text Overlay & Effects</span>
-      </div>
-      <div class="feature-item">
-        <i class="ti ti-music feature-icon"></i>
-        <span>Advanced Audio Mixing</span>
-      </div>
-      <div class="feature-item">
-        <i class="ti ti-transition-right feature-icon"></i>
-        <span>Transitions & Filters</span>
-      </div>
-      <div class="feature-item">
-        <i class="ti ti-aspect-ratio feature-icon"></i>
-        <span>Aspect Ratio Converter</span>
-      </div>
-      <div class="feature-item">
-        <i class="ti ti-sparkles feature-icon"></i>
-        <span>Dan masih banyak lagi!</span>
-      </div>
-    </div>
-    
-    <a href="/render-jobs" class="back-button">
-      <i class="ti ti-arrow-left"></i>
-      Kembali ke Render Jobs
+<!-- Page Header -->
+<div class="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-3">
+  <div>
+    <h2 class="text-xl md:text-2xl font-bold flex items-center gap-2">
+      <i class="ti ti-movie text-primary"></i>Video Editor
+    </h2>
+    <p class="text-gray-400 text-xs mt-1">Advanced editing with audio visualizer, watermark & overlay</p>
+  </div>
+  <div class="flex items-center gap-2">
+    <a href="/render-jobs" class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5">
+      <i class="ti ti-arrow-left text-sm"></i>
+      <span>Active Jobs</span>
     </a>
   </div>
 </div>
+
+<!-- Main Editor Layout: 2-column on desktop -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+  <!-- LEFT COLUMN: Preview + Media Selection (2/3 width) -->
+  <div class="lg:col-span-2 space-y-4">
+    
+    <!-- Video Preview Panel -->
+    <div class="editor-panel">
+      <div class="editor-panel-header">
+        <h3><i class="ti ti-eye text-primary"></i> Preview</h3>
+        <div class="flex items-center gap-2">
+          <span id="editorPreviewInfo" class="text-xs text-gray-400">No media selected</span>
+          <button onclick="refreshEditorPreview()" class="text-xs text-gray-400 hover:text-primary transition-colors">
+            <i class="ti ti-refresh"></i>
+          </button>
+        </div>
+      </div>
+      <div class="editor-panel-body p-2">
+        <div class="preview-canvas" id="editorPreviewCanvas">
+          <div class="placeholder" id="editorPlaceholder">
+            <i class="ti ti-video text-4xl mb-2"></i>
+            <span class="text-sm">Select video & audio to preview</span>
+            <span class="text-xs mt-1 text-gray-500">Visualizer will appear here</span>
+          </div>
+          <video id="editorVideoPlayer" class="w-full h-full object-contain hidden" muted loop></video>
+          <canvas id="editorVizCanvas" class="absolute bottom-0 left-0 right-0 h-20 pointer-events-none hidden"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Media Selection Panel -->
+    <div class="editor-panel">
+      <div class="editor-panel-header">
+        <h3><i class="ti ti-folders text-emerald-400"></i> Media Library</h3>
+        <div class="flex gap-1">
+          <button onclick="switchEditorMedia('video')" id="editorVideoTab" class="editor-tab active">
+            <i class="ti ti-video mr-1"></i>Videos
+          </button>
+          <button onclick="switchEditorMedia('audio')" id="editorAudioTab" class="editor-tab">
+            <i class="ti ti-music mr-1"></i>Audio
+          </button>
+        </div>
+      </div>
+      <div class="editor-panel-body">
+        <!-- Search -->
+        <div class="relative mb-3">
+          <input type="text" id="editorMediaSearch" placeholder="Search media..." 
+            class="w-full bg-dark-700 text-white px-3 py-2 pl-9 border border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+            oninput="filterEditorMedia()">
+          <i class="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+        </div>
+        <!-- Video List -->
+        <div id="editorVideoList" class="max-h-48 overflow-y-auto space-y-1">
+          <div class="text-xs text-gray-400 text-center py-4">Loading videos...</div>
+        </div>
+        <!-- Audio List -->
+        <div id="editorAudioList" class="max-h-48 overflow-y-auto space-y-1 hidden">
+          <div class="text-xs text-gray-400 text-center py-4">Loading audio...</div>
+        </div>
+        <!-- Selected Summary -->
+        <div class="mt-3 pt-3 border-t border-gray-700 flex items-center justify-between">
+          <div class="text-xs text-gray-400">
+            <span id="editorSelectedVideos">0</span> videos, <span id="editorSelectedAudios">0</span> audio selected
+          </div>
+          <button onclick="clearEditorSelection()" class="text-xs text-red-400 hover:text-red-300 transition-colors">
+            <i class="ti ti-x mr-1"></i>Clear
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT COLUMN: Editor Controls (1/3 width) -->
+  <div class="space-y-4">
+    
+    <!-- Audio Visualizer Panel -->
+    <div class="editor-panel">
+      <div class="editor-panel-header">
+        <h3><i class="ti ti-waveform text-violet-400"></i> Audio Visualizer</h3>
+        <label class="relative inline-flex items-center cursor-pointer">
+          <input type="checkbox" id="vizEnabled" class="sr-only peer" onchange="toggleVisualizer()">
+          <div class="w-9 h-5 bg-gray-600 peer-focus:ring-2 peer-focus:ring-primary rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+        </label>
+      </div>
+      <div class="editor-panel-body" id="vizControls">
+        <!-- Visualizer Type Grid -->
+        <div class="mb-4">
+          <label class="text-xs font-medium text-gray-400 block mb-2">Type</label>
+          <div class="grid grid-cols-4 gap-1.5" id="vizTypeGrid">
+            <div class="viz-type-card active" data-type="spectrum" onclick="selectVizType(this)">
+              <div class="icon">📊</div>
+              <div class="text-[10px] text-gray-300">Spectrum</div>
+            </div>
+            <div class="viz-type-card" data-type="waveform" onclick="selectVizType(this)">
+              <div class="icon">🌊</div>
+              <div class="text-[10px] text-gray-300">Wave</div>
+            </div>
+            <div class="viz-type-card" data-type="circular" onclick="selectVizType(this)">
+              <div class="icon">🔵</div>
+              <div class="text-[10px] text-gray-300">Circular</div>
+            </div>
+            <div class="viz-type-card" data-type="particles" onclick="selectVizType(this)">
+              <div class="icon">✨</div>
+              <div class="text-[10px] text-gray-300">Particles</div>
+            </div>
+            <div class="viz-type-card" data-type="bars_bottom" onclick="selectVizType(this)">
+              <div class="icon">📈</div>
+              <div class="text-[10px] text-gray-300">Bottom</div>
+            </div>
+            <div class="viz-type-card" data-type="bars_center" onclick="selectVizType(this)">
+              <div class="icon">📊</div>
+              <div class="text-[10px] text-gray-300">Mirror</div>
+            </div>
+            <div class="viz-type-card" data-type="wave_line" onclick="selectVizType(this)">
+              <div class="icon">〰️</div>
+              <div class="text-[10px] text-gray-300">Line</div>
+            </div>
+            <div class="viz-type-card" data-type="frequency_dots" onclick="selectVizType(this)">
+              <div class="icon">⚡</div>
+              <div class="text-[10px] text-gray-300">Dots</div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Color Scheme -->
+        <div class="mb-4">
+          <label class="text-xs font-medium text-gray-400 block mb-2">Color Scheme</label>
+          <div class="flex flex-wrap gap-2" id="vizColorGrid">
+            <div class="color-swatch active" data-color="purple" onclick="selectVizColor(this)" style="background: linear-gradient(135deg, #8B5CF6, #EC4899);" title="Purple & Pink"></div>
+            <div class="color-swatch" data-color="blue" onclick="selectVizColor(this)" style="background: linear-gradient(135deg, #3B82F6, #06B6D4);" title="Blue & Cyan"></div>
+            <div class="color-swatch" data-color="green" onclick="selectVizColor(this)" style="background: linear-gradient(135deg, #10B981, #34D399);" title="Green"></div>
+            <div class="color-swatch" data-color="rainbow" onclick="selectVizColor(this)" style="background: linear-gradient(135deg, #EF4444, #F59E0B, #10B981, #3B82F6, #8B5CF6);" title="Rainbow"></div>
+            <div class="color-swatch" data-color="fire" onclick="selectVizColor(this)" style="background: linear-gradient(135deg, #DC2626, #F59E0B);" title="Fire"></div>
+            <div class="color-swatch" data-color="neon" onclick="selectVizColor(this)" style="background: linear-gradient(135deg, #FF00FF, #00FFFF);" title="Neon"></div>
+            <div class="color-swatch" data-color="ocean" onclick="selectVizColor(this)" style="background: linear-gradient(135deg, #0EA5E9, #22D3EE);" title="Ocean"></div>
+            <div class="color-swatch" data-color="sunset" onclick="selectVizColor(this)" style="background: linear-gradient(135deg, #F97316, #FBBF24);" title="Sunset"></div>
+          </div>
+        </div>
+
+        <!-- Intensity & Sensitivity -->
+        <div class="space-y-3 mb-4">
+          <div>
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-gray-400">Intensity</span>
+              <span class="text-white font-medium" id="vizIntensityVal">50%</span>
+            </div>
+            <input type="range" id="vizIntensity" min="10" max="100" value="50" class="w-full accent-primary h-1.5" oninput="updateVizSlider('intensity')">
+          </div>
+          <div>
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-gray-400">Sensitivity</span>
+              <span class="text-white font-medium" id="vizSensitivityVal">1.0x</span>
+            </div>
+            <input type="range" id="vizSensitivity" min="5" max="30" value="10" class="w-full accent-primary h-1.5" oninput="updateVizSlider('sensitivity')">
+          </div>
+          <div>
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-gray-400">Bar Count</span>
+              <span class="text-white font-medium" id="vizBarCountVal">64</span>
+            </div>
+            <input type="range" id="vizBarCount" min="16" max="256" step="8" value="64" class="w-full accent-primary h-1.5" oninput="updateVizSlider('barCount')">
+          </div>
+        </div>
+        
+        <!-- Effects Toggles -->
+        <div class="flex gap-3 mb-4">
+          <label class="flex items-center gap-2 cursor-pointer bg-dark-700 px-3 py-2 rounded-lg border border-gray-600 flex-1">
+            <input type="checkbox" id="vizMirror" class="w-3.5 h-3.5 rounded border-gray-500 text-primary focus:ring-primary cursor-pointer" onchange="updateVizPreview()">
+            <span class="text-xs text-gray-300">Mirror</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer bg-dark-700 px-3 py-2 rounded-lg border border-gray-600 flex-1">
+            <input type="checkbox" id="vizGlow" class="w-3.5 h-3.5 rounded border-gray-500 text-primary focus:ring-primary cursor-pointer" onchange="updateVizPreview()">
+            <span class="text-xs text-gray-300">Glow</span>
+          </label>
+        </div>
+        
+        <!-- Live Preview Bar -->
+        <div class="visualizer-live-preview" id="vizLivePreview">
+          <canvas id="vizPreviewCanvas" class="w-full h-full"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Render Settings Panel -->
+    <div class="editor-panel">
+      <div class="editor-panel-header">
+        <h3><i class="ti ti-settings text-amber-400"></i> Render Settings</h3>
+      </div>
+      <div class="editor-panel-body space-y-3">
+        <!-- Title -->
+        <div>
+          <label class="text-xs font-medium text-gray-400 block mb-1">Title</label>
+          <input type="text" id="editorTitle" placeholder="Video title" value="1" class="w-full bg-dark-700 text-white px-3 py-2 border border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary">
+        </div>
+        
+        <!-- Duration -->
+        <div>
+          <label class="text-xs font-medium text-gray-400 block mb-1">Duration</label>
+          <div class="grid grid-cols-2 gap-2">
+            <div class="relative">
+              <input type="number" id="editorHours" min="0" value="0" class="w-full bg-dark-700 text-white px-3 py-2 border border-gray-600 rounded-lg text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary">
+              <span class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500">hrs</span>
+            </div>
+            <div class="relative">
+              <input type="number" id="editorMinutes" min="0" max="59" value="0" class="w-full bg-dark-700 text-white px-3 py-2 border border-gray-600 rounded-lg text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary">
+              <span class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500">min</span>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Options -->
+        <div class="space-y-2">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" id="editorFollowAudio" class="w-4 h-4 rounded border-gray-500 text-primary focus:ring-primary cursor-pointer">
+            <span class="text-xs text-gray-300">Follow audio duration</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" id="editorMuteVideo" class="w-4 h-4 rounded border-gray-500 text-red-500 focus:ring-red-500 cursor-pointer">
+            <span class="text-xs text-gray-300">Mute original video audio</span>
+          </label>
+        </div>
+
+        <!-- Target Channel -->
+        <div>
+          <label class="text-xs font-medium text-gray-400 block mb-1">Upload to Channel (Optional)</label>
+          <select id="editorTargetAccount" class="w-full bg-dark-700 text-white px-3 py-2 border border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary">
+            <option value="">-- No auto-upload --</option>
+          </select>
+        </div>
+        
+        <!-- Render Button -->
+        <button onclick="startEditorRender()" id="editorRenderBtn" class="w-full mt-2 bg-gradient-to-r from-primary to-secondary hover:from-secondary hover:to-primary text-white px-4 py-3 rounded-lg font-semibold transition-all flex items-center justify-center gap-2 shadow-lg shadow-primary/20">
+          <i class="ti ti-player-play text-lg"></i>
+          <span>Start Render</span>
+        </button>
+        
+        <!-- Status -->
+        <div id="editorRenderStatus" class="hidden mt-3 bg-dark-700 rounded-lg p-3 border border-gray-600">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs text-gray-400">Rendering...</span>
+            <span class="text-xs text-primary font-medium" id="editorRenderProgress">0%</span>
+          </div>
+          <div class="w-full bg-gray-700 rounded-full h-1.5">
+            <div class="bg-primary h-1.5 rounded-full transition-all" id="editorRenderBar" style="width: 0%"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+  </div>
+</div>
+
+<script>
+// ===== VIDEO EDITOR STATE =====
+const editorState = {
+  selectedVideos: [],
+  selectedAudios: [],
+  vizType: 'spectrum',
+  vizColor: 'purple',
+  vizEnabled: false,
+  vizIntensity: 50,
+  vizSensitivity: 1.0,
+  vizBarCount: 64,
+  vizMirror: false,
+  vizGlow: false,
+  videos: [],
+  audios: [],
+  accounts: [],
+  animFrame: null
+};
+
+// ===== INITIALIZATION =====
+document.addEventListener('DOMContentLoaded', () => {
+  loadEditorMedia();
+  loadEditorAccounts();
+  initVizPreview();
+});
+
+// ===== MEDIA LOADING =====
+async function loadEditorMedia() {
+  try {
+    const [vRes, aRes] = await Promise.all([
+      fetch('/api/videos').then(r => r.json()),
+      fetch('/api/audios').then(r => r.json())
+    ]);
+    editorState.videos = Array.isArray(vRes) ? vRes : (vRes.videos || []);
+    editorState.audios = Array.isArray(aRes) ? aRes : (aRes.audios || []);
+    renderEditorVideoList();
+    renderEditorAudioList();
+  } catch (err) {
+    console.error('Failed to load media:', err);
+  }
+}
+
+async function loadEditorAccounts() {
+  try {
+    const res = await fetch('/api/youtube/accounts');
+    const data = await res.json();
+    const accounts = data.accounts || data || [];
+    const select = document.getElementById('editorTargetAccount');
+    accounts.forEach(acc => {
+      const opt = document.createElement('option');
+      opt.value = acc.id;
+      opt.textContent = acc.channel_name || acc.email || 'Account ' + acc.id;
+      select.appendChild(opt);
+    });
+  } catch (err) { /* ignore */ }
+}
+
+function renderEditorVideoList() {
+  const container = document.getElementById('editorVideoList');
+  if (!editorState.videos.length) {
+    container.innerHTML = '<div class="text-xs text-gray-400 text-center py-4">No videos found</div>';
+    return;
+  }
+  container.innerHTML = editorState.videos.map(v => `
+    <label class="flex items-center gap-2 p-2 rounded-lg hover:bg-dark-700 cursor-pointer transition-colors border border-transparent hover:border-gray-600">
+      <input type="checkbox" name="editor-video" value="${v.id}" class="w-4 h-4 rounded border-gray-500 text-primary focus:ring-primary cursor-pointer" onchange="updateEditorSelection()">
+      <div class="w-8 h-6 bg-dark-700 rounded overflow-hidden flex-shrink-0">
+        ${v.thumbnail_path ? `<img src="${v.thumbnail_path}" class="w-full h-full object-cover">` : '<div class="w-full h-full flex items-center justify-center"><i class="ti ti-video text-xs text-gray-500"></i></div>'}
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="text-xs text-white truncate">${escapeHtml(v.title || v.filename || 'Untitled')}</div>
+        <div class="text-[10px] text-gray-500">${v.duration ? formatDuration(v.duration) : ''} ${v.resolution || ''}</div>
+      </div>
+    </label>
+  `).join('');
+}
+
+function renderEditorAudioList() {
+  const container = document.getElementById('editorAudioList');
+  if (!editorState.audios.length) {
+    container.innerHTML = '<div class="text-xs text-gray-400 text-center py-4">No audio found</div>';
+    return;
+  }
+  container.innerHTML = editorState.audios.map(a => `
+    <label class="flex items-center gap-2 p-2 rounded-lg hover:bg-dark-700 cursor-pointer transition-colors border border-transparent hover:border-gray-600">
+      <input type="checkbox" name="editor-audio" value="${a.id}" class="w-4 h-4 rounded border-gray-500 text-emerald-500 focus:ring-emerald-500 cursor-pointer" onchange="updateEditorSelection()">
+      <i class="ti ti-music text-emerald-400 flex-shrink-0"></i>
+      <div class="flex-1 min-w-0">
+        <div class="text-xs text-white truncate">${escapeHtml(a.title || a.filename || 'Untitled')}</div>
+        <div class="text-[10px] text-gray-500">${a.duration ? formatDuration(a.duration) : ''}</div>
+      </div>
+    </label>
+  `).join('');
+}
+
+// ===== MEDIA SELECTION =====
+function switchEditorMedia(type) {
+  const videoList = document.getElementById('editorVideoList');
+  const audioList = document.getElementById('editorAudioList');
+  const videoTab = document.getElementById('editorVideoTab');
+  const audioTab = document.getElementById('editorAudioTab');
+  
+  if (type === 'video') {
+    videoList.classList.remove('hidden');
+    audioList.classList.add('hidden');
+    videoTab.classList.add('active');
+    audioTab.classList.remove('active');
+  } else {
+    videoList.classList.add('hidden');
+    audioList.classList.remove('hidden');
+    videoTab.classList.remove('active');
+    audioTab.classList.add('active');
+  }
+}
+
+function updateEditorSelection() {
+  editorState.selectedVideos = [...document.querySelectorAll("input[name='editor-video']:checked")].map(i => i.value);
+  editorState.selectedAudios = [...document.querySelectorAll("input[name='editor-audio']:checked")].map(i => i.value);
+  document.getElementById('editorSelectedVideos').textContent = editorState.selectedVideos.length;
+  document.getElementById('editorSelectedAudios').textContent = editorState.selectedAudios.length;
+  
+  const info = document.getElementById('editorPreviewInfo');
+  info.textContent = `${editorState.selectedVideos.length}V / ${editorState.selectedAudios.length}A`;
+  refreshEditorPreview();
+}
+
+function clearEditorSelection() {
+  document.querySelectorAll("input[name='editor-video'], input[name='editor-audio']").forEach(el => el.checked = false);
+  updateEditorSelection();
+}
+
+function filterEditorMedia() {
+  const query = document.getElementById('editorMediaSearch').value.toLowerCase();
+  const videoItems = document.querySelectorAll('#editorVideoList label');
+  const audioItems = document.querySelectorAll('#editorAudioList label');
+  [...videoItems, ...audioItems].forEach(item => {
+    const text = item.textContent.toLowerCase();
+    item.style.display = text.includes(query) ? '' : 'none';
+  });
+}
+
+// ===== VISUALIZER CONTROLS =====
+function toggleVisualizer() {
+  editorState.vizEnabled = document.getElementById('vizEnabled').checked;
+  const controls = document.getElementById('vizControls');
+  controls.style.opacity = editorState.vizEnabled ? '1' : '0.4';
+  controls.style.pointerEvents = editorState.vizEnabled ? 'auto' : 'none';
+  updateVizPreview();
+}
+
+function selectVizType(el) {
+  document.querySelectorAll('#vizTypeGrid .viz-type-card').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  editorState.vizType = el.dataset.type;
+  updateVizPreview();
+}
+
+function selectVizColor(el) {
+  document.querySelectorAll('#vizColorGrid .color-swatch').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  editorState.vizColor = el.dataset.color;
+  updateVizPreview();
+}
+
+function updateVizSlider(type) {
+  if (type === 'intensity') {
+    const val = document.getElementById('vizIntensity').value;
+    document.getElementById('vizIntensityVal').textContent = val + '%';
+    editorState.vizIntensity = parseInt(val);
+  } else if (type === 'sensitivity') {
+    const val = document.getElementById('vizSensitivity').value;
+    const sens = (val / 10).toFixed(1);
+    document.getElementById('vizSensitivityVal').textContent = sens + 'x';
+    editorState.vizSensitivity = parseFloat(sens);
+  } else if (type === 'barCount') {
+    const val = document.getElementById('vizBarCount').value;
+    document.getElementById('vizBarCountVal').textContent = val;
+    editorState.vizBarCount = parseInt(val);
+  }
+  updateVizPreview();
+}
+
+// ===== VISUALIZER PREVIEW ANIMATION =====
+function initVizPreview() {
+  // Start disabled
+  const controls = document.getElementById('vizControls');
+  controls.style.opacity = '0.4';
+  controls.style.pointerEvents = 'none';
+  updateVizPreview();
+}
+
+function updateVizPreview() {
+  if (editorState.animFrame) cancelAnimationFrame(editorState.animFrame);
+  
+  const canvas = document.getElementById('vizPreviewCanvas');
+  if (!canvas) return;
+  
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.offsetWidth * 2;
+  canvas.height = canvas.offsetHeight * 2;
+  ctx.scale(2, 2);
+  
+  const w = canvas.offsetWidth;
+  const h = canvas.offsetHeight;
+  
+  if (!editorState.vizEnabled) {
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = '#374151';
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Enable visualizer to preview', w/2, h/2 + 4);
+    return;
+  }
+  
+  const colorSchemes = {
+    purple: ['#8B5CF6', '#EC4899'],
+    blue: ['#3B82F6', '#06B6D4'],
+    green: ['#10B981', '#34D399'],
+    rainbow: ['#EF4444', '#F59E0B', '#10B981', '#3B82F6', '#8B5CF6'],
+    fire: ['#DC2626', '#F59E0B', '#FCD34D'],
+    neon: ['#FF00FF', '#00FFFF'],
+    ocean: ['#0EA5E9', '#06B6D4', '#22D3EE'],
+    sunset: ['#F97316', '#FB923C', '#FBBF24']
+  };
+  
+  const colors = colorSchemes[editorState.vizColor] || colorSchemes.purple;
+  const barCount = editorState.vizBarCount;
+  let time = 0;
+
+  function animate() {
+    ctx.clearRect(0, 0, w, h);
+    const barWidth = w / barCount;
+    const intensity = editorState.vizIntensity / 100;
+    
+    for (let i = 0; i < barCount; i++) {
+      const freq = (i / barCount) * Math.PI * 2;
+      let barH = (Math.sin(time * 2 + freq) * 0.3 + Math.sin(time * 3.7 + freq * 1.5) * 0.2 + 0.5) * h * intensity;
+      
+      if (editorState.vizMirror) {
+        barH = Math.abs(Math.sin(time * 2 + freq)) * h * intensity * 0.8;
+      }
+      
+      const x = i * barWidth;
+      const gradient = ctx.createLinearGradient(x, h, x, h - barH);
+      colors.forEach((c, idx) => gradient.addColorStop(idx / Math.max(1, colors.length - 1), c));
+      
+      if (editorState.vizGlow) {
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = colors[0];
+      } else {
+        ctx.shadowBlur = 0;
+      }
+      
+      ctx.fillStyle = gradient;
+      
+      if (editorState.vizType === 'circular' || editorState.vizType === 'frequency_dots' || editorState.vizType === 'particles') {
+        ctx.beginPath();
+        ctx.arc(x + barWidth/2, h - barH/2, Math.max(2, barWidth/3), 0, Math.PI * 2);
+        ctx.fill();
+      } else if (editorState.vizType === 'waveform' || editorState.vizType === 'wave_line') {
+        if (i === 0) ctx.beginPath();
+        ctx.lineTo(x + barWidth/2, h - barH);
+        if (i === barCount - 1) { ctx.strokeStyle = colors[0]; ctx.lineWidth = 2; ctx.stroke(); }
+      } else {
+        ctx.fillRect(x + 1, h - barH, barWidth - 2, barH);
+      }
+    }
+    
+    time += 0.04;
+    editorState.animFrame = requestAnimationFrame(animate);
+  }
+  
+  animate();
+}
+
+// ===== PREVIEW =====
+function refreshEditorPreview() {
+  const player = document.getElementById('editorVideoPlayer');
+  const placeholder = document.getElementById('editorPlaceholder');
+  
+  if (editorState.selectedVideos.length > 0) {
+    const video = editorState.videos.find(v => String(v.id) === editorState.selectedVideos[0]);
+    if (video && video.filepath) {
+      player.src = video.filepath;
+      player.classList.remove('hidden');
+      placeholder.classList.add('hidden');
+      player.play().catch(() => {});
+    }
+  } else {
+    player.classList.add('hidden');
+    placeholder.classList.remove('hidden');
+    player.src = '';
+  }
+}
+
+// ===== RENDER =====
+async function startEditorRender() {
+  const videoIds = editorState.selectedVideos;
+  const audioIds = editorState.selectedAudios;
+  
+  if (videoIds.length === 0) {
+    alert('Please select at least one video');
+    return;
+  }
+  
+  const h = parseInt(document.getElementById('editorHours').value || 0);
+  const m = parseInt(document.getElementById('editorMinutes').value || 0);
+  const targetDuration = (h * 3600) + (m * 60);
+  
+  if (targetDuration <= 0 && !document.getElementById('editorFollowAudio').checked) {
+    alert('Please set duration or enable "Follow audio duration"');
+    return;
+  }
+
+  // Build visualizer settings
+  const visualizerSettings = editorState.vizEnabled ? {
+    type: editorState.vizType,
+    intensity: editorState.vizIntensity,
+    sensitivity: editorState.vizSensitivity,
+    smoothing: 0.8,
+    barCount: editorState.vizBarCount,
+    color: editorState.vizColor,
+    mirror: document.getElementById('vizMirror').checked,
+    glow: document.getElementById('vizGlow').checked
+  } : { type: 'none' };
+  
+  const body = {
+    title: document.getElementById('editorTitle').value || 'Editor Render',
+    targetDurationSeconds: targetDuration,
+    videoIds,
+    audioIds,
+    followAudioDuration: document.getElementById('editorFollowAudio').checked,
+    muteVideoAudio: document.getElementById('editorMuteVideo').checked,
+    targetAccountId: document.getElementById('editorTargetAccount').value || null,
+    autoUploadToYoutube: !!document.getElementById('editorTargetAccount').value,
+    visualizerPreset: editorState.vizEnabled ? editorState.vizType : 'none',
+    visualizerSettings
+  };
+  
+  const btn = document.getElementById('editorRenderBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ti ti-loader animate-spin"></i> Starting...';
+  
+  try {
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+    const res = await fetch('/api/render/jobs', {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': csrfToken || ''
+      },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    
+    if (data.success) {
+      showEditorStatus(data.jobId || data.id);
+    } else {
+      alert(data.message || data.error || 'Render failed');
+    }
+  } catch (err) {
+    alert('Error: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="ti ti-player-play text-lg"></i><span>Start Render</span>';
+  }
+}
+
+function showEditorStatus(jobId) {
+  const status = document.getElementById('editorRenderStatus');
+  status.classList.remove('hidden');
+  
+  const pollInterval = setInterval(async () => {
+    try {
+      const res = await fetch('/api/render/jobs/' + jobId);
+      const job = await res.json();
+      
+      const progress = job.progress || 0;
+      document.getElementById('editorRenderProgress').textContent = progress + '%';
+      document.getElementById('editorRenderBar').style.width = progress + '%';
+      
+      if (job.status === 'completed') {
+        clearInterval(pollInterval);
+        document.getElementById('editorRenderProgress').textContent = 'Done!';
+        document.getElementById('editorRenderBar').style.width = '100%';
+        setTimeout(() => status.classList.add('hidden'), 5000);
+      } else if (job.status === 'failed') {
+        clearInterval(pollInterval);
+        document.getElementById('editorRenderProgress').textContent = 'Failed';
+        document.getElementById('editorRenderBar').classList.add('bg-red-500');
+      }
+    } catch (e) { /* ignore */ }
+  }, 2000);
+}
+
+// ===== UTILITIES =====
+function escapeHtml(text) {
+  if (!text) return '';
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function formatDuration(seconds) {
+  if (!seconds) return '';
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  if (h > 0) return h + ':' + String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+  return m + ':' + String(s).padStart(2,'0');
+}
+</script>

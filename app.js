@@ -1553,12 +1553,12 @@ app.get('/render-jobs', isAuthenticated, async (req, res) => {
   }
 });
 
-// Video Editor - Coming Soon Page
+// Video Editor - Advanced Editor with Visualizer
 app.get('/video-editor', isAuthenticated, async (req, res) => {
   try {
     const user = await User.findById(req.session.userId);
     res.render('video-editor', {
-      title: 'Video Editor - Coming Soon',
+      title: 'Video Editor',
       active: 'video-editor',
       user
     });
@@ -4249,6 +4249,20 @@ app.get('/api/stream/content', isAuthenticated, async (req, res) => {
 });
 
 // API endpoint for fetching audio list for stream modal
+
+// API endpoint for available visualizer types and color schemes
+app.get('/api/render/visualizer-types', isAuthenticated, (req, res) => {
+  try {
+    const { getVisualizerTypes, getColorSchemes } = require('./utils/visualizerEngine');
+    res.json({
+      success: true,
+      types: getVisualizerTypes(),
+      colors: getColorSchemes()
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 app.post('/api/render/jobs', isAuthenticated, async (req, res) => {
   try {

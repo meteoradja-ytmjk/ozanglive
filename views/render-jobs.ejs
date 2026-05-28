@@ -399,12 +399,12 @@
 <div class="flex w-full border border-gray-600 rounded-lg mb-6 overflow-hidden bg-gray-800/50">
   <button onclick="switchRenderTab('jobs')" id="jobsTab"
     class="flex-1 px-4 md:px-6 py-3 font-medium transition-colors text-center bg-primary/20 text-primary border-b-2 border-primary">
-    <i class="ti ti-video mr-2"></i>Active Jobs
+    <i class="ti ti-player-play mr-2"></i>Active Jobs
   </button>
   <div class="w-px bg-gray-600"></div>
   <a href="/video-editor" 
     class="flex-1 px-4 md:px-6 py-3 font-medium transition-colors text-center text-gray-400 hover:text-white hover:bg-gray-700/50 flex items-center justify-center">
-    <i class="ti ti-video mr-2"></i>Video Editor
+    <i class="ti ti-waveform mr-2"></i>Advanced Editor
   </a>
 </div>
 
@@ -1198,6 +1198,7 @@ const el = {
   followAudioDuration: document.getElementById('followAudioDuration'),
   muteVideoAudio: document.getElementById('muteVideoAudio'),
   autoUploadToYoutube: document.getElementById('autoUploadToYoutube'),
+  visualizerPreset: { value: 'none' },
   createBtn: document.getElementById('createBtn'),
   resetBtn: document.getElementById('resetBtn'),
   videoList: document.getElementById('videoList'),
