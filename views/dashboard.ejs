@@ -186,37 +186,42 @@
       </div>
     </div>
 
-    <div class="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between mb-6">
-      <!-- Desktop: Title with clock -->
-      <div class="hidden md:flex items-center gap-3 shrink-0">
-        <h2 class="text-xl font-bold leading-none whitespace-nowrap">Streaming Status</h2>
-        <div class="flex items-center gap-2 text-sm text-gray-400 whitespace-nowrap">
-          <i class="ti ti-clock text-primary font-loaded"></i>
-          <span id="realtime-clock">--:--:--</span>
-          <span class="text-gray-600">|</span>
-          <i class="ti ti-calendar text-primary font-loaded"></i>
-          <span id="realtime-date">--/--/----</span>
+    <div class="stream-toolbar flex flex-col gap-3 mb-6">
+      <!-- Row 1: Title (stacked) + Filter & Toggle -->
+      <div class="flex items-center justify-between">
+        <!-- Left: Title stacked -->
+        <div class="hidden md:flex flex-col shrink-0">
+          <h2 class="text-xl font-bold leading-tight">Streaming Status</h2>
+          <div class="flex items-center gap-2 text-xs text-gray-400 mt-0.5">
+            <i class="ti ti-clock text-primary font-loaded"></i>
+            <span id="realtime-clock">--:--:--</span>
+            <span class="text-gray-600">|</span>
+            <i class="ti ti-calendar text-primary font-loaded"></i>
+            <span id="realtime-date">--/--/----</span>
+          </div>
+        </div>
+        <!-- Right: Filter + Toggle -->
+        <div class="hidden md:flex items-center gap-2">
+          <div class="relative w-52">
+            <select id="streamFilter" onchange="applyStreamFilter(this.value)"
+              class="w-full bg-dark-700 border border-gray-600 text-white pl-9 pr-4 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary appearance-none cursor-pointer text-sm">
+              <option value="all">All Streams</option>
+            </select>
+            <i class="ti ti-filter absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+            <i class="ti ti-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+          </div>
+          <button type="button" id="toggleAllGroupsBtn" onclick="toggleAllStreamGroups()"
+            class="flex items-center justify-center bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white w-10 h-10 rounded-lg transition-colors"
+            title="Expand/Collapse All Group">
+            <i class="ti ti-fold-down text-sm"></i>
+            <span id="toggleAllGroupsLabel" class="sr-only">Expand All</span>
+          </button>
         </div>
       </div>
-
-      <!-- Desktop: All in one row -->
-      <div class="hidden md:flex items-center gap-2.5 flex-wrap justify-end flex-1">
-        <div class="relative w-64">
-          <select id="streamFilter" onchange="applyStreamFilter(this.value)"
-            class="w-full bg-dark-700 border border-gray-600 text-white pl-9 pr-4 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary appearance-none cursor-pointer">
-            <option value="all">All Streams</option>
-          </select>
-          <i class="ti ti-filter absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
-          <i class="ti ti-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
-        </div>
-        <button type="button" id="toggleAllGroupsBtn" onclick="toggleAllStreamGroups()"
-          class="flex items-center justify-center bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white w-10 h-10 rounded-lg transition-colors"
-          title="Expand/Collapse All Group">
-          <i class="ti ti-fold-down text-sm"></i>
-          <span id="toggleAllGroupsLabel" class="sr-only">Expand All</span>
-        </button>
+      <!-- Row 2: Action Buttons (aligned under filter) -->
+      <div class="hidden md:flex items-center justify-end gap-2.5">
         <button type="button" onclick="openNewStreamModal()"
-          class="flex items-center justify-center gap-2 bg-primary hover:bg-secondary text-white px-4 py-2 rounded-lg transition-colors whitespace-nowrap min-w-[132px]">
+          class="flex items-center justify-center gap-2 bg-primary hover:bg-secondary text-white px-4 py-2 rounded-lg transition-colors whitespace-nowrap w-52">
           <i class="ti ti-plus"></i>
           <span>New Stream</span>
         </button>
@@ -278,7 +283,7 @@
           </div>
         </div>
       </div>
-
+    </div>
       <!-- Mobile: Stacked layout -->
       <div class="w-full md:hidden">
         <div class="mobile-stream-controls flex flex-col gap-2 mb-3">

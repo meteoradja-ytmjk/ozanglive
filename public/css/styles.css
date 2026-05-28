@@ -1224,9 +1224,9 @@ a[href]:hover::after {
   .mb-6 { margin-bottom: 1rem !important; }
   .gap-6 { gap: 0.75rem !important; }
 
-  /* Flex direction: force row for md:flex-row elements */
-  .flex-col.md\:flex-row { flex-direction: row !important; }
-  .items-start.md\:items-center { align-items: center !important; }
+  /* Stream toolbar: show desktop layout */
+  .stream-toolbar .hidden.md\:flex { display: flex !important; }
+  .stream-toolbar .hidden.md\:block { display: block !important; }
 
   /* --- YOUTUBE TAB: Show desktop stats bar --- */
 
