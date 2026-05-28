@@ -187,20 +187,20 @@
     </div>
 
     <div class="stream-toolbar hidden md:flex items-start justify-between gap-6 mb-6">
-      <!-- Left: Title + Clock stacked -->
+      <!-- Left: Title + Clock stacked, same width -->
       <div class="flex flex-col justify-center shrink-0">
-        <h2 class="text-2xl font-bold leading-tight">Streaming Status</h2>
-        <div class="flex items-center gap-2.5 text-sm text-gray-400 mt-1.5">
-          <i class="ti ti-clock text-primary font-loaded"></i>
-          <span id="realtime-clock" class="font-medium text-white">--:--:--</span>
+        <h2 class="text-3xl font-bold leading-tight tracking-tight">Streaming Status</h2>
+        <div class="flex items-center gap-3 text-base text-gray-300 mt-2">
+          <i class="ti ti-clock text-primary font-loaded text-lg"></i>
+          <span id="realtime-clock" class="font-semibold text-white">--:--:--</span>
           <span class="text-gray-600">|</span>
-          <i class="ti ti-calendar text-primary font-loaded"></i>
-          <span id="realtime-date" class="font-medium text-white">--/--/----</span>
+          <i class="ti ti-calendar text-primary font-loaded text-lg"></i>
+          <span id="realtime-date" class="font-semibold text-white">--/--/----</span>
         </div>
       </div>
-      <!-- Right: Buttons 2-col grid -->
+      <!-- Right: Buttons 2x2 grid -->
       <div class="grid grid-cols-2 gap-2 w-[340px] shrink-0">
-        <!-- Row 1: Filter + Toggle/Backup (full width each col) -->
+        <!-- Row 1: All Streams + New Stream -->
         <div class="relative">
           <select id="streamFilter" onchange="applyStreamFilter(this.value)"
             class="w-full bg-dark-700 border border-gray-600 text-white pl-9 pr-4 py-2.5 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary appearance-none cursor-pointer text-sm h-[42px]">
@@ -209,6 +209,12 @@
           <i class="ti ti-filter absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
           <i class="ti ti-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
         </div>
+        <button type="button" onclick="openNewStreamModal()"
+          class="flex items-center justify-center gap-2 bg-primary hover:bg-secondary text-white py-2.5 rounded-lg transition-colors whitespace-nowrap font-medium h-[42px]">
+          <i class="ti ti-plus"></i>
+          <span>New Stream</span>
+        </button>
+        <!-- Row 2: Toggle+Backup (split) + Schedule -->
         <div class="flex items-center gap-2">
           <button type="button" id="toggleAllGroupsBtn" onclick="toggleAllStreamGroups()"
             class="flex-1 flex items-center justify-center bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white h-[42px] rounded-lg transition-colors"
@@ -248,12 +254,6 @@
             </div>
           </div>
         </div>
-        <!-- Row 2: New Stream + Schedule (same width as above) -->
-        <button type="button" onclick="openNewStreamModal()"
-          class="flex items-center justify-center gap-2 bg-primary hover:bg-secondary text-white py-2.5 rounded-lg transition-colors whitespace-nowrap font-medium h-[42px]">
-          <i class="ti ti-plus"></i>
-          <span>New Stream</span>
-        </button>
         <div class="relative" id="scheduleDropdown">
           <button onclick="toggleScheduleDropdown()"
             class="w-full flex items-center justify-center gap-2 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white py-2.5 rounded-lg transition-colors whitespace-nowrap h-[42px]">
