@@ -2945,14 +2945,8 @@ app.get('/api/system-stats', isAuthenticated, async (req, res) => {
             total: storageInfo.formatted.limit,
             usagePercent: storageInfo.percentage || 0
           };
-        } else {
-          // No limit set (unlimited) - show user's actual usage vs server disk
-          stats.disk = {
-            used: storageInfo.formatted.usage,
-            total: 'Unlimited',
-            usagePercent: 0
-          };
         }
+        // No limit set - keep real VPS disk info from systemMonitor (don't show "Unlimited")
       }
     }
     
