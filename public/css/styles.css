@@ -1225,8 +1225,7 @@ a[href]:hover::after {
   .gap-6 { gap: 0.75rem !important; }
 
   /* Stream toolbar: show desktop layout */
-  .stream-toolbar .hidden.md\:flex { display: flex !important; }
-  .stream-toolbar .hidden.md\:block { display: block !important; }
+  .stream-toolbar { display: flex !important; }
 
   /* --- YOUTUBE TAB: Show desktop stats bar --- */
 
