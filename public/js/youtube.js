@@ -8358,8 +8358,9 @@ async function loadTokenStatus() {
 async function forceRefreshToken(accountId, channelName) {
   const btn = document.getElementById(`refreshBtn_${accountId}`);
   if (btn) {
-    btn.innerHTML = '<i class="ti ti-loader animate-spin text-lg"></i>';
+    btn.innerHTML = '<i class="ti ti-loader animate-spin text-sm"></i>';
     btn.disabled = true;
+    btn.classList.add('opacity-50');
   }
 
   try {
@@ -8382,8 +8383,9 @@ async function forceRefreshToken(accountId, channelName) {
     showToast('Gagal refresh token', 'error');
   } finally {
     if (btn) {
-      btn.innerHTML = '<i class="ti ti-refresh text-lg"></i>';
+      btn.innerHTML = '<i class="ti ti-refresh text-sm"></i>';
       btn.disabled = false;
+      btn.classList.remove('opacity-50');
     }
     // Reload status
     loadTokenStatus();
@@ -8394,9 +8396,15 @@ async function forceRefreshToken(accountId, channelName) {
  * Force refresh all tokens
  */
 async function forceRefreshAllTokens() {
-  try {
-    showToast('Refreshing all tokens...', 'info');
+  // Find the refresh all button and show loading state
+  const allBtns = document.querySelectorAll('[onclick="forceRefreshAllTokens()"]');
+  allBtns.forEach(btn => {
+    btn.disabled = true;
+    btn.classList.add('opacity-50');
+    btn.innerHTML = '<i class="ti ti-loader animate-spin text-xs"></i> Refreshing...';
+  });
 
+  try {
     const response = await fetch('/api/youtube/token-refresh-all', {
       method: 'POST',
       headers: {
@@ -8464,13 +8472,26 @@ function toggleTokenStatus() {
   
   if (isHidden) {
     content.style.display = 'block';
+    chevron.style.transform = 'rotate(90deg)';
     chevron.classList.remove('ti-chevron-right');
     chevron.classList.add('ti-chevron-down');
     // Load status when expanded
     loadTokenStatus();
   } else {
     content.style.display = 'none';
+    chevron.style.transform = 'rotate(0deg)';
     chevron.classList.remove('ti-chevron-down');
     chevron.classList.add('ti-chevron-right');
   }
 }
+
+// Allow keyboard activation for collapsible headers
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ' ') {
+    const el = document.activeElement;
+    if (el && el.getAttribute('role') === 'button' && (el.id === 'tokenStatusHeader' || el.id === 'connectedAccountsHeader')) {
+      e.preventDefault();
+      el.click();
+    }
+  }
+});
