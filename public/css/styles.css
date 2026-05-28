@@ -1181,34 +1181,18 @@ a[href]:hover::after {
   /* Hide mobile-only elements */
   .md\:hidden { display: none !important; }
 
+  /* EXCEPTION: Keep mobile stats bar visible (compact 1-row) */
+  .mobile-stats-bar-wrapper { display: block !important; }
+
+  /* Hide desktop stats cards (too bulky for landscape mobile) */
+  .hidden.md\:grid.md\:grid-cols-2.lg\:grid-cols-4 {
+    display: none !important;
+  }
+
   /* Show desktop-only elements */
   .hidden.md\:flex { display: flex !important; }
-  .hidden.md\:grid { display: grid !important; }
+  .hidden.md\:grid:not(.md\:grid-cols-2) { display: grid !important; }
   .hidden.md\:block { display: block !important; }
-
-  /* Desktop stats cards: force 4-col */
-  .hidden.md\:grid.md\:grid-cols-2.lg\:grid-cols-4 {
-    display: grid !important;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 0.75rem;
-  }
-
-  /* Compact stats cards for landscape */
-  .hidden.md\:grid.md\:grid-cols-2.lg\:grid-cols-4 > div {
-    padding: 0.75rem;
-  }
-  .hidden.md\:grid.md\:grid-cols-2.lg\:grid-cols-4 h3 {
-    font-size: 0.8rem;
-  }
-  .hidden.md\:grid.md\:grid-cols-2.lg\:grid-cols-4 .text-3xl {
-    font-size: 1.25rem;
-  }
-  .hidden.md\:grid.md\:grid-cols-2.lg\:grid-cols-4 .w-10.h-10 {
-    width: 2rem; height: 2rem;
-  }
-  .hidden.md\:grid.md\:grid-cols-2.lg\:grid-cols-4 .w-10.h-10 i {
-    font-size: 0.9rem;
-  }
 
   /* Desktop table visible */
   .hidden.md\:block.bg-gray-800.rounded-lg {

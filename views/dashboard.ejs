@@ -36,7 +36,7 @@
   </style>
 
   <!-- Mobile Stats Bar - Minimalist Design -->
-  <div class="md:hidden mb-4">
+  <div class="md:hidden mb-4 mobile-stats-bar-wrapper">
     <div class="bg-gray-800/90 backdrop-blur-md rounded-2xl px-4 py-3 shadow-lg">
       <div class="flex items-center justify-between">
         <!-- Live Streams -->
@@ -56,7 +56,13 @@
         <!-- RAM/Memory -->
         <div class="flex items-center gap-1.5">
           <i class="ti ti-server-2 text-lg text-emerald-400"></i>
-          <span id="memory-usage-mobile" class="text-emerald-400 font-semibold">0MB</span>
+          <span id="memory-usage-mobile" class="text-emerald-400 font-semibold text-xs">0MB</span>
+        </div>
+
+        <!-- Disk Usage -->
+        <div class="flex items-center gap-1.5">
+          <i class="ti ti-database text-lg text-orange-400"></i>
+          <span id="disk-usage-mobile-bar" class="text-orange-400 font-semibold text-xs">0GB</span>
         </div>
 
         <!-- Network -->
@@ -1592,6 +1598,9 @@
           document.getElementById('disk-total-mobile').textContent = ' / ' + diskTotal;
           document.getElementById('disk-bar').style.width = diskPercent + '%';
           document.getElementById('disk-bar-mobile').style.width = diskPercent + '%';
+          // Update compact mobile stats bar disk info
+          const diskBarEl = document.getElementById('disk-usage-mobile-bar');
+          if (diskBarEl) diskBarEl.textContent = diskUsed + '/' + diskTotal;
         }
       } catch (error) {
         console.error('Error loading system stats:', error);
