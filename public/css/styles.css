@@ -1286,11 +1286,6 @@ a[href]:hover::after {
   /* Reduce neon panel padding */
   .neon-panel { padding: 0.75rem !important; }
 
-  /* Bottom nav hidden in landscape (more space) */
-  .lg\:hidden.fixed.bottom-0 {
-    display: none !important;
-  }
-
   /* Give content full height */
   .min-h-screen {
     padding-bottom: 0 !important;
