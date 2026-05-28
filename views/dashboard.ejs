@@ -214,40 +214,34 @@
           <i class="ti ti-plus"></i>
           <span>New Stream</span>
         </button>
-        <!-- Row 2: Schedule + Expand/Backup -->
-        <div class="relative" id="scheduleDropdown">
-          <button onclick="toggleScheduleDropdown()"
-            class="w-full flex items-center justify-center gap-2 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white py-2.5 rounded-lg transition-colors whitespace-nowrap h-[42px]">
-            <i class="ti ti-calendar-event"></i>
-            <span>Schedule</span>
-            <i class="ti ti-chevron-down text-xs"></i>
-          </button>
-          <div id="scheduleDropdownMenu"
-            class="hidden absolute right-0 mt-2 w-40 bg-dark-700 border border-gray-600 rounded-lg shadow-lg z-20 overflow-hidden">
-            <button onclick="openScheduleModal('once')"
-              class="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-white bg-primary hover:bg-secondary transition-colors">
-              <i class="ti ti-calendar"></i>
-              <span>Once</span>
-            </button>
-            <button onclick="openScheduleModal('daily')"
-              class="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-300 hover:bg-dark-600 transition-colors">
-              <i class="ti ti-repeat"></i>
-              <span>Daily</span>
-            </button>
-            <button onclick="openScheduleModal('weekly')"
-              class="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-300 hover:bg-dark-600 transition-colors">
-              <i class="ti ti-calendar-week"></i>
-              <span>Weekly</span>
-            </button>
-          </div>
-        </div>
+        <!-- Row 2: Schedule+Backup (small, split) + Expand (full width) -->
         <div class="flex items-center gap-2">
-          <button type="button" id="toggleAllGroupsBtn" onclick="toggleAllStreamGroups()"
-            class="flex-1 flex items-center justify-center bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white h-[42px] rounded-lg transition-colors"
-            title="Expand/Collapse All Group">
-            <i class="ti ti-fold-down text-sm"></i>
-            <span id="toggleAllGroupsLabel" class="sr-only">Expand All</span>
-          </button>
+          <div class="relative flex-1" id="scheduleDropdown">
+            <button onclick="toggleScheduleDropdown()"
+              class="w-full flex items-center justify-center gap-1 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white h-[42px] rounded-lg transition-colors"
+              title="Schedule">
+              <i class="ti ti-calendar-event"></i>
+              <i class="ti ti-chevron-down text-[10px]"></i>
+            </button>
+            <div id="scheduleDropdownMenu"
+              class="hidden absolute left-0 mt-2 w-40 bg-dark-700 border border-gray-600 rounded-lg shadow-lg z-20 overflow-hidden">
+              <button onclick="openScheduleModal('once')"
+                class="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-white bg-primary hover:bg-secondary transition-colors">
+                <i class="ti ti-calendar"></i>
+                <span>Once</span>
+              </button>
+              <button onclick="openScheduleModal('daily')"
+                class="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-300 hover:bg-dark-600 transition-colors">
+                <i class="ti ti-repeat"></i>
+                <span>Daily</span>
+              </button>
+              <button onclick="openScheduleModal('weekly')"
+                class="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-300 hover:bg-dark-600 transition-colors">
+                <i class="ti ti-calendar-week"></i>
+                <span>Weekly</span>
+              </button>
+            </div>
+          </div>
           <div class="relative flex-1" id="backupDropdown">
             <button onclick="toggleBackupDropdown()"
               class="w-full flex items-center justify-center gap-1 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white h-[42px] rounded-lg transition-colors"
@@ -280,6 +274,12 @@
             </div>
           </div>
         </div>
+        <button type="button" id="toggleAllGroupsBtn" onclick="toggleAllStreamGroups()"
+          class="flex items-center justify-center gap-2 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white h-[42px] rounded-lg transition-colors font-medium"
+          title="Expand/Collapse All Group">
+          <i class="ti ti-fold-down"></i>
+          <span id="toggleAllGroupsLabel">Expand All</span>
+        </button>
       </div>
     </div>
       <!-- Mobile: Stacked layout -->
