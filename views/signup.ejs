@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
-  <title>Sign Up - StreamFlow Lite</title>
-  <link rel="icon" href="/images/logo_mobile.svg" type="image/svg+xml">
-  <link rel="preload" href="/images/logo_mobile.svg" as="image" type="image/svg+xml">
-  <link rel="alternate icon" href="/images/favicon.ico" type="image/x-icon">
+  <title>Sign Up - <%= typeof branding !== 'undefined' && branding.app_name ? branding.app_name : 'MonsterLive' %></title>
+  <link rel="icon" href="<%= typeof branding !== 'undefined' && branding.favicon_path ? branding.favicon_path : '/images/logo_mobile.svg' %>" type="image/png">
+  <link rel="preload" href="<%= typeof branding !== 'undefined' && branding.logo_path ? branding.logo_path : '/images/logo_mobile.svg' %>" as="image">
+  <link rel="alternate icon" href="<%= typeof branding !== 'undefined' && branding.favicon_path ? branding.favicon_path : '/images/favicon.ico' %>" type="image/x-icon">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -36,9 +36,9 @@
         },
         extend: {
           colors: {
-            'primary': '#8B5CF6',
-            'secondary': '#7C3AED',
-            'accent': '#A78BFA',
+            'primary': '<%= typeof branding !== "undefined" && branding.primary_color ? branding.primary_color : "#8B5CF6" %>',
+            'secondary': '<%= typeof branding !== "undefined" && branding.secondary_color ? branding.secondary_color : "#7C3AED" %>',
+            'accent': '<%= typeof branding !== "undefined" && branding.accent_color ? branding.accent_color : "#A78BFA" %>',
             'dark': {
               '900': '#0F172A',
               '800': '#1E293B',
@@ -60,6 +60,11 @@
       <div class="w-full max-w-lg bg-dark-800 rounded-xl shadow-xl p-6 sm:p-8">
       
         <div class="text-center mb-8">
+          <div class="flex justify-center mb-4">
+            <img src="<%= typeof branding !== 'undefined' && branding.logo_path ? branding.logo_path : '/images/logo_mobile.svg' %>" 
+                 alt="<%= typeof branding !== 'undefined' && branding.app_name ? branding.app_name : 'MonsterLive' %> Logo" 
+                 class="h-12 max-w-[200px] object-contain">
+          </div>
           <h1 class="text-2xl font-bold">Create Account</h1>
           <p class="text-gray-400 mt-1">Join streaming membership</p>
         </div>
