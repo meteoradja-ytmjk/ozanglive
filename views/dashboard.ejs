@@ -90,29 +90,29 @@
 
   <!-- Mobile Stats Bar - Landscape Only (same concept as portrait but with disk info) -->
   <div class="hidden mobile-stats-landscape mb-3">
-    <div class="bg-gray-800/90 backdrop-blur-md rounded-2xl px-4 py-2.5 shadow-lg">
+    <div class="bg-gray-800/90 backdrop-blur-md rounded-2xl px-4 py-3 shadow-lg">
       <div class="flex items-center justify-between">
-        <div class="flex items-center gap-1.5">
-          <i class="ti ti-broadcast text-lg text-violet-400"></i>
-          <span id="active-streams-landscape" class="text-violet-400 font-semibold">0</span>
-          <span class="text-gray-500 text-xs">live</span>
+        <div class="flex items-center gap-2">
+          <i class="ti ti-broadcast text-xl text-violet-400"></i>
+          <span id="active-streams-landscape" class="text-violet-400 font-bold text-base">0</span>
+          <span class="text-gray-400 text-sm">live</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <i class="ti ti-cpu text-xl text-sky-400"></i>
+          <span id="cpu-usage-landscape" class="text-sky-400 font-bold text-base">0</span><span class="text-gray-400 text-sm">%</span>
+        </div>
+        <div class="flex items-center gap-2 cursor-pointer select-none" onclick="toggleLandscapeRam()" title="Tap to toggle usage/capacity">
+          <i class="ti ti-server-2 text-xl text-emerald-400"></i>
+          <span id="memory-display-landscape" class="text-emerald-400 font-bold text-sm">0MB</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <i class="ti ti-database text-xl text-orange-400"></i>
+          <span id="disk-usage-landscape" class="text-orange-400 font-bold text-sm">0GB</span>
         </div>
         <div class="flex items-center gap-1.5">
-          <i class="ti ti-cpu text-lg text-sky-400"></i>
-          <span id="cpu-usage-landscape" class="text-sky-400 font-semibold">0</span><span class="text-gray-500 text-xs">%</span>
-        </div>
-        <div class="flex items-center gap-1.5">
-          <i class="ti ti-server-2 text-lg text-emerald-400"></i>
-          <span id="memory-usage-landscape" class="text-emerald-400 font-semibold text-xs">0MB</span>
-        </div>
-        <div class="flex items-center gap-1.5">
-          <i class="ti ti-database text-lg text-orange-400"></i>
-          <span id="disk-usage-landscape" class="text-orange-400 font-semibold text-xs">0GB</span>
-        </div>
-        <div class="flex items-center gap-1">
-          <i class="ti ti-wifi text-lg text-amber-400"></i>
-          <span class="text-emerald-400 animate-bounce-up">↑</span>
-          <span class="text-sky-400 animate-bounce-down">↓</span>
+          <i class="ti ti-wifi text-xl text-amber-400"></i>
+          <span class="text-emerald-400 text-sm animate-bounce-up">↑</span>
+          <span class="text-sky-400 text-sm animate-bounce-down">↓</span>
         </div>
       </div>
     </div>
@@ -1602,8 +1602,19 @@
         document.getElementById('memory-usage-mobile').textContent = memTotalCompact;
         document.getElementById('memory-total-mobile').textContent = memTotalCompact;
         // Landscape memory
-        const memLand = document.getElementById('memory-usage-landscape');
-        if (memLand) memLand.textContent = memUsed.replace(' ', '');
+        const memLand = document.getElementById('memory-display-landscape');
+        if (memLand) {
+          // Store both values for toggle
+          window._landscapeMemUsed = memUsed.replace(' ', '');
+          window._landscapeMemTotal = memTotal.replace(' ', '');
+          window._landscapeMemPercent = memPercent;
+          // Show based on current toggle state
+          if (window._landscapeRamShowUsage) {
+            memLand.textContent = window._landscapeMemUsed + '/' + window._landscapeMemTotal;
+          } else {
+            memLand.textContent = window._landscapeMemTotal;
+          }
+        }
 
         // Network - use formatted strings
         const uploadSpeed = stats.network?.uploadFormatted || '0 Mbps';
@@ -2323,6 +2334,24 @@
       } catch (error) {
         console.error('Error loading stream for edit:', error);
         if (typeof showToast === 'function') showToast('error', 'Failed to load stream');
+      }
+    }
+
+    // Landscape RAM toggle - click to show usage/capacity
+    window._landscapeRamShowUsage = false;
+    function toggleLandscapeRam() {
+      window._landscapeRamShowUsage = !window._landscapeRamShowUsage;
+      const memLand = document.getElementById('memory-display-landscape');
+      if (memLand && window._landscapeMemUsed && window._landscapeMemTotal) {
+        if (window._landscapeRamShowUsage) {
+          memLand.textContent = window._landscapeMemUsed + '/' + window._landscapeMemTotal;
+          memLand.classList.add('text-white');
+          memLand.classList.remove('text-emerald-400');
+        } else {
+          memLand.textContent = window._landscapeMemTotal;
+          memLand.classList.remove('text-white');
+          memLand.classList.add('text-emerald-400');
+        }
       }
     }
 
