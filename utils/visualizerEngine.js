@@ -22,7 +22,9 @@ const VISUALIZER_TYPES = {
   histogram: 'Audio Histogram',
   showcqt: 'Musical Scale (CQT)',
   vector_lissajous: 'Lissajous Pattern',
-  vector_polar: 'Polar Scope'
+  vector_polar: 'Polar Scope',
+  nebula: 'Nebula Effect',
+  dna_helix: 'DNA Helix'
 };
 
 // Color scheme definitions (FFmpeg hex format without #)
@@ -38,8 +40,20 @@ const COLOR_SCHEMES = {
   gold: { primary: '0xF59E0B', secondary: '0xD97706', gradient: 'yellow|orange' },
   ice: { primary: '0x93C5FD', secondary: '0xF0F9FF', gradient: 'white|cyan|blue' },
   cherry: { primary: '0xE11D48', secondary: '0xFB7185', gradient: 'red|pink|magenta' },
-  forest: { primary: '0x166534', secondary: '0x4ADE80', gradient: 'green|lime|yellow' }
+  forest: { primary: '0x166534', secondary: '0x4ADE80', gradient: 'green|lime|yellow' },
+  aurora: { primary: '0x06B6D4', secondary: '0xEC4899', gradient: 'cyan|violet|magenta' },
+  midnight: { primary: '0x1E1B4B', secondary: '0x7C3AED', gradient: 'blue|violet|purple' }
 };
+
+/**
+ * Convert hex color string (#RRGGBB) to FFmpeg-compatible color name or hex
+ */
+function hexToFfmpegColor(hex) {
+  if (!hex) return 'white';
+  // Remove # prefix
+  const clean = hex.replace('#', '');
+  return `0x${clean}`;
+}
 
 /**
  * Build FFmpeg filter complex string for audio visualization
@@ -67,78 +81,106 @@ function buildVisualizerFilter(settings, options = {}) {
     smoothing = 0.8,
     barCount = 64,
     color = 'purple',
+    customColors = null,
     mirror = false,
-    glow = false
+    glow = false,
+    shadow = false,
+    roundBars = false,
+    gradient = true,
+    reflection = false,
+    speed = 1.0,
+    opacity = 1.0,
+    position: settingsPosition = null,
+    height: settingsHeight = null
   } = settings || {};
 
   const {
     width = 1920,
     height = 1080,
-    position = 'bottom'
+    position: optionsPosition = 'bottom'
   } = options;
 
-  const colorScheme = COLOR_SCHEMES[color] || COLOR_SCHEMES.purple;
-  const vizHeight = Math.round(height * (intensity / 100) * 0.4); // Max 40% of video height
+  // Settings position takes priority over options position
+  const position = settingsPosition || optionsPosition;
+
+  // Resolve color scheme - support custom colors from frontend
+  let colorScheme;
+  if (color === 'custom' && customColors && customColors.length >= 2) {
+    const primary = hexToFfmpegColor(customColors[0]);
+    const secondary = hexToFfmpegColor(customColors[1]);
+    colorScheme = { primary, secondary, gradient: `${customColors[0].replace('#','')}|${customColors[1].replace('#','')}` };
+  } else {
+    colorScheme = COLOR_SCHEMES[color] || COLOR_SCHEMES.purple;
+  }
+
+  // Calculate visualizer height based on settingsHeight or intensity
+  const heightPercent = settingsHeight || Math.round(intensity * 0.4 + 10); // 10-50% range
+  const vizHeight = Math.round(height * (heightPercent / 100));
   const vizWidth = width;
+
+  // Effective opacity for alpha channel
+  const effectiveOpacity = Math.max(0.2, Math.min(1.0, opacity));
 
   switch (type) {
     case 'spectrum':
     case 'bars_bottom':
       return buildSpectrumBars(colorScheme, {
-        width: vizWidth, height: vizHeight, barCount, sensitivity, smoothing, mirror, glow, position, videoHeight: height
+        width: vizWidth, height: vizHeight, barCount, sensitivity, smoothing, mirror, glow, shadow, opacity: effectiveOpacity, position, videoHeight: height
       });
 
     case 'bars_center':
       return buildCenterBars(colorScheme, {
-        width: vizWidth, height: vizHeight, barCount, sensitivity, smoothing, glow, videoHeight: height
+        width: vizWidth, height: vizHeight, barCount, sensitivity, smoothing, glow, shadow, opacity: effectiveOpacity, videoHeight: height
       });
 
     case 'waveform':
     case 'wave_line':
       return buildWaveform(colorScheme, {
-        width: vizWidth, height: vizHeight, sensitivity, smoothing, glow, position, videoHeight: height
+        width: vizWidth, height: vizHeight, sensitivity, smoothing, glow, shadow, opacity: effectiveOpacity, position, videoHeight: height
       });
 
     case 'circular':
+    case 'nebula':
       return buildCircularSpectrum(colorScheme, {
-        width, height, barCount, sensitivity, smoothing, glow
+        width, height, barCount, sensitivity, smoothing, glow, shadow, opacity: effectiveOpacity
       });
 
     case 'particles':
     case 'frequency_dots':
       return buildParticleWave(colorScheme, {
-        width: vizWidth, height: vizHeight, barCount, sensitivity, smoothing, glow, position, videoHeight: height
+        width: vizWidth, height: vizHeight, barCount, sensitivity, smoothing, glow, shadow, opacity: effectiveOpacity, position, videoHeight: height
       });
 
     case 'spectrogram':
       return buildSpectrogram(colorScheme, {
-        width: vizWidth, height: vizHeight, sensitivity, glow, position, videoHeight: height
+        width: vizWidth, height: vizHeight, sensitivity, glow, shadow, opacity: effectiveOpacity, position, videoHeight: height
       });
 
     case 'phase':
     case 'vector_lissajous':
+    case 'dna_helix':
       return buildCircularSpectrum(colorScheme, {
-        width, height, barCount, sensitivity, smoothing, glow
+        width, height, barCount, sensitivity, smoothing, glow, shadow, opacity: effectiveOpacity
       });
 
     case 'vector_polar':
       return buildVectorPolar(colorScheme, {
-        width, height, sensitivity, glow
+        width, height, sensitivity, glow, shadow, opacity: effectiveOpacity
       });
 
     case 'histogram':
       return buildHistogram(colorScheme, {
-        width: vizWidth, height: vizHeight, sensitivity, glow, position, videoHeight: height
+        width: vizWidth, height: vizHeight, sensitivity, glow, shadow, opacity: effectiveOpacity, position, videoHeight: height
       });
 
     case 'showcqt':
       return buildShowCQT(colorScheme, {
-        width: vizWidth, height: vizHeight, sensitivity, glow, position, videoHeight: height
+        width: vizWidth, height: vizHeight, sensitivity, glow, shadow, opacity: effectiveOpacity, position, videoHeight: height
       });
 
     default:
       return buildSpectrumBars(colorScheme, {
-        width: vizWidth, height: vizHeight, barCount, sensitivity, smoothing, mirror, glow, position, videoHeight: height
+        width: vizWidth, height: vizHeight, barCount, sensitivity, smoothing, mirror, glow, shadow, opacity: effectiveOpacity, position, videoHeight: height
       });
   }
 }
@@ -148,7 +190,7 @@ function buildVisualizerFilter(settings, options = {}) {
  * Uses showfreqs or showspectrum filter
  */
 function buildSpectrumBars(colorScheme, opts) {
-  const { width, height, barCount, sensitivity, smoothing, mirror, glow, position, videoHeight } = opts;
+  const { width, height, barCount, sensitivity, smoothing, mirror, glow, shadow, opacity = 0.75, position, videoHeight } = opts;
   const mode = mirror ? 'combined' : 'separate';
   const vizH = Math.max(60, Math.min(height, 400));
   
@@ -157,45 +199,39 @@ function buildSpectrumBars(colorScheme, opts) {
   switch (position) {
     case 'top': overlayY = '0'; break;
     case 'center': overlayY = `(H-h)/2`; break;
+    case 'full': overlayY = '0'; break;
     case 'bottom': default: overlayY = `H-h`; break;
   }
 
-  // showspectrum produces a spectrogram-style visualization
-  // We use showfreqs for bar-style display
+  const effectiveHeight = position === 'full' ? videoHeight : vizH;
   const gain = Math.max(0.5, sensitivity * 2);
-  const fscale = 'log'; // logarithmic frequency scale (more musical)
+  const fscale = 'log';
+  const alpha = glow ? Math.min(0.95, opacity) : Math.min(0.85, opacity * 0.9);
   
-  const filterComplex = [
-    // Generate spectrum visualization from audio
-    `[1:a]showfreqs=s=${width}x${vizH}:mode=bar:fscale=${fscale}:ascale=${gain > 1.5 ? 'log' : 'lin'}:colors=${colorScheme.gradient}:win_size=${barCount * 8}[viz]`,
-    // Add fade/transparency at edges
-    `[viz]format=rgba,colorchannelmixer=aa=${glow ? '0.9' : '0.75'}[vizalpha]`,
-    // Overlay on video
+  const filters = [
+    `[1:a]showfreqs=s=${width}x${effectiveHeight}:mode=bar:fscale=${fscale}:ascale=${gain > 1.5 ? 'log' : 'lin'}:colors=${colorScheme.gradient}:win_size=${barCount * 8}[viz]`,
+    `[viz]format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}[vizalpha]`,
     `[0:v][vizalpha]overlay=0:${overlayY}:format=auto[outv]`
-  ].join(';');
+  ];
 
-  return { filterComplex, outputMap: '[outv]' };
+  return { filterComplex: filters.join(';'), outputMap: '[outv]' };
 }
 
 /**
  * Center Bars - Mirrored bars from center
  */
 function buildCenterBars(colorScheme, opts) {
-  const { width, height, barCount, sensitivity, smoothing, glow, videoHeight } = opts;
+  const { width, height, barCount, sensitivity, smoothing, glow, shadow, opacity = 0.7, videoHeight } = opts;
   const vizH = Math.max(60, Math.min(height, 300));
   const gain = Math.max(0.5, sensitivity * 2);
+  const alpha = glow ? Math.min(0.9, opacity) : Math.min(0.8, opacity * 0.9);
 
   const filterComplex = [
-    // Generate spectrum
     `[1:a]showfreqs=s=${width}x${vizH}:mode=bar:fscale=log:colors=${colorScheme.gradient}:win_size=${barCount * 8}[viz_top]`,
-    // Create mirrored copy
     `[viz_top]split[viz_a][viz_b]`,
     `[viz_b]vflip[viz_flip]`,
-    // Stack vertically (original + flipped = mirror effect)
     `[viz_a][viz_flip]vstack[viz_mirror]`,
-    // Add transparency
-    `[viz_mirror]format=rgba,colorchannelmixer=aa=${glow ? '0.85' : '0.7'}[vizalpha]`,
-    // Overlay centered on video
+    `[viz_mirror]format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}[vizalpha]`,
     `[0:v][vizalpha]overlay=0:(H-h)/2:format=auto[outv]`
   ].join(';');
 
@@ -207,24 +243,25 @@ function buildCenterBars(colorScheme, opts) {
  * Uses showwaves filter
  */
 function buildWaveform(colorScheme, opts) {
-  const { width, height, sensitivity, smoothing, glow, position, videoHeight } = opts;
+  const { width, height, sensitivity, smoothing, glow, shadow, opacity = 0.7, position, videoHeight } = opts;
   const vizH = Math.max(60, Math.min(height, 300));
-  const rate = 25; // frames per second for waveform
+  const rate = 25;
   const scale = sensitivity > 1.5 ? 'log' : 'lin';
+  const alpha = glow ? Math.min(0.95, opacity) : Math.min(0.8, opacity * 0.9);
 
   let overlayY;
   switch (position) {
     case 'top': overlayY = '0'; break;
     case 'center': overlayY = `(H-h)/2`; break;
+    case 'full': overlayY = '0'; break;
     case 'bottom': default: overlayY = `H-h`; break;
   }
 
+  const effectiveHeight = position === 'full' ? videoHeight : vizH;
+
   const filterComplex = [
-    // Generate waveform visualization
-    `[1:a]showwaves=s=${width}x${vizH}:mode=cline:rate=${rate}:scale=${scale}:colors=${colorScheme.gradient}[viz]`,
-    // Add transparency
-    `[viz]format=rgba,colorchannelmixer=aa=${glow ? '0.9' : '0.7'}[vizalpha]`,
-    // Overlay on video
+    `[1:a]showwaves=s=${width}x${effectiveHeight}:mode=cline:rate=${rate}:scale=${scale}:colors=${colorScheme.gradient}[viz]`,
+    `[viz]format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}[vizalpha]`,
     `[0:v][vizalpha]overlay=0:${overlayY}:format=auto[outv]`
   ].join(';');
 
@@ -236,20 +273,17 @@ function buildWaveform(colorScheme, opts) {
  * Uses avectorscope for circular audio display
  */
 function buildCircularSpectrum(colorScheme, opts) {
-  const { width, height, barCount, sensitivity, smoothing, glow } = opts;
-  // avectorscope creates a circular Lissajous-style display
+  const { width, height, barCount, sensitivity, smoothing, glow, shadow, opacity = 0.75 } = opts;
   const size = Math.min(width, height);
-  const vizSize = Math.round(size * 0.5); // 50% of smallest dimension
-  const mode = 'lissajous_xy'; // circular pattern
+  const vizSize = Math.round(size * 0.5);
+  const mode = 'lissajous_xy';
+  const alpha = glow ? Math.min(0.9, opacity) : Math.min(0.8, opacity * 0.9);
 
   const filterComplex = [
-    // Generate circular visualization
     `[1:a]avectorscope=s=${vizSize}x${vizSize}:mode=${mode}:rate=25:scale=log:draw=dot:zoom=${sensitivity}[viz]`,
-    // Add glow effect via blur if enabled
     glow
-      ? `[viz]gblur=sigma=3,format=rgba,colorchannelmixer=aa=0.85[vizglow]`
-      : `[viz]format=rgba,colorchannelmixer=aa=0.75[vizglow]`,
-    // Overlay centered on video
+      ? `[viz]gblur=sigma=3,format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}[vizglow]`
+      : `[viz]format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}[vizglow]`,
     `[0:v][vizglow]overlay=(W-w)/2:(H-h)/2:format=auto[outv]`
   ].join(';');
 
@@ -261,26 +295,27 @@ function buildCircularSpectrum(colorScheme, opts) {
  * Uses showwaves with point mode
  */
 function buildParticleWave(colorScheme, opts) {
-  const { width, height, barCount, sensitivity, smoothing, glow, position, videoHeight } = opts;
+  const { width, height, barCount, sensitivity, smoothing, glow, shadow, opacity = 0.7, position, videoHeight } = opts;
   const vizH = Math.max(60, Math.min(height, 300));
   const rate = 25;
   const scale = sensitivity > 1.5 ? 'log' : 'lin';
+  const alpha = glow ? Math.min(0.9, opacity) : Math.min(0.8, opacity * 0.9);
 
   let overlayY;
   switch (position) {
     case 'top': overlayY = '0'; break;
     case 'center': overlayY = `(H-h)/2`; break;
+    case 'full': overlayY = '0'; break;
     case 'bottom': default: overlayY = `H-h`; break;
   }
 
+  const effectiveHeight = position === 'full' ? videoHeight : vizH;
+
   const filterComplex = [
-    // Generate particle/dot waveform
-    `[1:a]showwaves=s=${width}x${vizH}:mode=p2p:rate=${rate}:scale=${scale}:colors=${colorScheme.gradient}[viz]`,
-    // Add glow via blur if enabled
+    `[1:a]showwaves=s=${width}x${effectiveHeight}:mode=p2p:rate=${rate}:scale=${scale}:colors=${colorScheme.gradient}[viz]`,
     glow
-      ? `[viz]gblur=sigma=2,format=rgba,colorchannelmixer=aa=0.85[vizalpha]`
-      : `[viz]format=rgba,colorchannelmixer=aa=0.7[vizalpha]`,
-    // Overlay on video
+      ? `[viz]gblur=sigma=2,format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}[vizalpha]`
+      : `[viz]format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}[vizalpha]`,
     `[0:v][vizalpha]overlay=0:${overlayY}:format=auto[outv]`
   ].join(';');
 
@@ -292,20 +327,24 @@ function buildParticleWave(colorScheme, opts) {
  * Uses showspectrum filter
  */
 function buildSpectrogram(colorScheme, opts) {
-  const { width, height, sensitivity, glow, position, videoHeight } = opts;
+  const { width, height, sensitivity, glow, shadow, opacity = 0.75, position, videoHeight } = opts;
   const vizH = Math.max(80, Math.min(height, 300));
   const gain = Math.max(1, sensitivity * 3);
+  const alpha = glow ? Math.min(0.95, opacity) : Math.min(0.85, opacity * 0.9);
 
   let overlayY;
   switch (position) {
     case 'top': overlayY = '0'; break;
     case 'center': overlayY = `(H-h)/2`; break;
+    case 'full': overlayY = '0'; break;
     case 'bottom': default: overlayY = `H-h`; break;
   }
 
+  const effectiveHeight = position === 'full' ? videoHeight : vizH;
+
   const filterComplex = [
-    `[1:a]showspectrum=s=${width}x${vizH}:mode=combined:color=intensity:scale=log:gain=${gain}:slide=scroll[viz]`,
-    `[viz]format=rgba,colorchannelmixer=aa=${glow ? '0.9' : '0.75'}[vizalpha]`,
+    `[1:a]showspectrum=s=${width}x${effectiveHeight}:mode=combined:color=intensity:scale=log:gain=${gain}:slide=scroll[viz]`,
+    `[viz]format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}[vizalpha]`,
     `[0:v][vizalpha]overlay=0:${overlayY}:format=auto[outv]`
   ].join(';');
 
@@ -317,15 +356,16 @@ function buildSpectrogram(colorScheme, opts) {
  * Uses avectorscope with polar mode
  */
 function buildVectorPolar(colorScheme, opts) {
-  const { width, height, sensitivity, glow } = opts;
+  const { width, height, sensitivity, glow, shadow, opacity = 0.75 } = opts;
   const size = Math.min(width, height);
   const vizSize = Math.round(size * 0.5);
+  const alpha = glow ? Math.min(0.9, opacity) : Math.min(0.8, opacity * 0.9);
 
   const filterComplex = [
     `[1:a]avectorscope=s=${vizSize}x${vizSize}:mode=polar:rate=25:scale=log:draw=line:zoom=${sensitivity}[viz]`,
     glow
-      ? `[viz]gblur=sigma=2,format=rgba,colorchannelmixer=aa=0.85[vizglow]`
-      : `[viz]format=rgba,colorchannelmixer=aa=0.75[vizglow]`,
+      ? `[viz]gblur=sigma=2,format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}[vizglow]`
+      : `[viz]format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}[vizglow]`,
     `[0:v][vizglow]overlay=(W-w)/2:(H-h)/2:format=auto[outv]`
   ].join(';');
 
@@ -337,19 +377,23 @@ function buildVectorPolar(colorScheme, opts) {
  * Uses ahistogram filter
  */
 function buildHistogram(colorScheme, opts) {
-  const { width, height, sensitivity, glow, position, videoHeight } = opts;
+  const { width, height, sensitivity, glow, shadow, opacity = 0.7, position, videoHeight } = opts;
   const vizH = Math.max(60, Math.min(height, 250));
+  const alpha = glow ? Math.min(0.95, opacity) : Math.min(0.8, opacity * 0.9);
 
   let overlayY;
   switch (position) {
     case 'top': overlayY = '0'; break;
     case 'center': overlayY = `(H-h)/2`; break;
+    case 'full': overlayY = '0'; break;
     case 'bottom': default: overlayY = `H-h`; break;
   }
 
+  const effectiveHeight = position === 'full' ? videoHeight : vizH;
+
   const filterComplex = [
-    `[1:a]ahistogram=s=${width}x${vizH}:scale=log:slide=scroll:rate=25[viz]`,
-    `[viz]format=rgba,colorchannelmixer=aa=${glow ? '0.9' : '0.7'}[vizalpha]`,
+    `[1:a]ahistogram=s=${width}x${effectiveHeight}:scale=log:slide=scroll:rate=25[viz]`,
+    `[viz]format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}[vizalpha]`,
     `[0:v][vizalpha]overlay=0:${overlayY}:format=auto[outv]`
   ].join(';');
 
@@ -361,20 +405,24 @@ function buildHistogram(colorScheme, opts) {
  * Uses showcqt filter for piano-like frequency display
  */
 function buildShowCQT(colorScheme, opts) {
-  const { width, height, sensitivity, glow, position, videoHeight } = opts;
+  const { width, height, sensitivity, glow, shadow, opacity = 0.8, position, videoHeight } = opts;
   const vizH = Math.max(80, Math.min(height, 300));
   const volume = Math.max(1, Math.round(sensitivity * 10));
+  const alpha = glow ? Math.min(0.95, opacity) : Math.min(0.85, opacity * 0.9);
 
   let overlayY;
   switch (position) {
     case 'top': overlayY = '0'; break;
     case 'center': overlayY = `(H-h)/2`; break;
+    case 'full': overlayY = '0'; break;
     case 'bottom': default: overlayY = `H-h`; break;
   }
 
+  const effectiveHeight = position === 'full' ? videoHeight : vizH;
+
   const filterComplex = [
-    `[1:a]showcqt=s=${width}x${vizH}:count=1:bar_g=2:sono_g=4:volume=${volume}[viz]`,
-    `[viz]format=rgba,colorchannelmixer=aa=${glow ? '0.9' : '0.8'}[vizalpha]`,
+    `[1:a]showcqt=s=${width}x${effectiveHeight}:count=1:bar_g=2:sono_g=4:volume=${volume}[viz]`,
+    `[viz]format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}[vizalpha]`,
     `[0:v][vizalpha]overlay=0:${overlayY}:format=auto[outv]`
   ].join(';');
 
@@ -437,8 +485,34 @@ function validateSettings(settings) {
     }
   }
 
-  if (settings.color && !COLOR_SCHEMES[settings.color]) {
+  // Allow 'custom' color with customColors array
+  if (settings.color && settings.color !== 'custom' && !COLOR_SCHEMES[settings.color]) {
     errors.push(`Unknown color scheme: ${settings.color}`);
+  }
+
+  if (settings.color === 'custom' && (!settings.customColors || settings.customColors.length < 2)) {
+    errors.push('Custom color requires at least 2 colors in customColors array');
+  }
+
+  if (settings.opacity !== undefined) {
+    const opacity = Number(settings.opacity);
+    if (isNaN(opacity) || opacity < 0 || opacity > 1) {
+      errors.push('Opacity must be between 0 and 1');
+    }
+  }
+
+  if (settings.speed !== undefined) {
+    const speed = Number(settings.speed);
+    if (isNaN(speed) || speed < 0.1 || speed > 5.0) {
+      errors.push('Speed must be between 0.1 and 5.0');
+    }
+  }
+
+  if (settings.height !== undefined) {
+    const height = Number(settings.height);
+    if (isNaN(height) || height < 5 || height > 100) {
+      errors.push('Height must be between 5 and 100 (percent)');
+    }
   }
 
   return { valid: errors.length === 0, errors };

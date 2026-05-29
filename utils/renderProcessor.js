@@ -53,12 +53,15 @@ async function applyVisualizerOverlay({ videoPath, audioPath, outputPath, durati
   console.log('[VISUALIZER] Intensity:', visualizerSettings.intensity);
   console.log('[VISUALIZER] Glow:', visualizerSettings.glow);
   console.log('[VISUALIZER] Mirror:', visualizerSettings.mirror);
+  console.log('[VISUALIZER] Position:', visualizerSettings.position || 'bottom');
+  console.log('[VISUALIZER] Opacity:', visualizerSettings.opacity || 1.0);
+  console.log('[VISUALIZER] Height:', visualizerSettings.height || 'auto');
 
   // Build the FFmpeg filter complex
   const { filterComplex, outputMap } = buildVisualizerFilter(visualizerSettings, {
     width,
     height,
-    position: 'bottom' // Default position
+    position: visualizerSettings.position || 'bottom'
   });
 
   console.log('[VISUALIZER] Filter complex:', filterComplex);
