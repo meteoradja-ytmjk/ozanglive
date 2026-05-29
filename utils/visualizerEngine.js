@@ -16,7 +16,13 @@ const VISUALIZER_TYPES = {
   bars_bottom: 'Bottom Bars',
   bars_center: 'Center Bars (Mirror)',
   wave_line: 'Wave Line',
-  frequency_dots: 'Frequency Dots'
+  frequency_dots: 'Frequency Dots',
+  spectrogram: 'Spectrogram (Heatmap)',
+  phase: 'Phase Scope',
+  histogram: 'Audio Histogram',
+  showcqt: 'Musical Scale (CQT)',
+  vector_lissajous: 'Lissajous Pattern',
+  vector_polar: 'Polar Scope'
 };
 
 // Color scheme definitions (FFmpeg hex format without #)
@@ -28,7 +34,11 @@ const COLOR_SCHEMES = {
   fire: { primary: '0xDC2626', secondary: '0xFCD34D', gradient: 'red|orange|yellow' },
   neon: { primary: '0xFF00FF', secondary: '0x00FFFF', gradient: 'magenta|cyan' },
   ocean: { primary: '0x0EA5E9', secondary: '0x22D3EE', gradient: 'blue|cyan|white' },
-  sunset: { primary: '0xF97316', secondary: '0xFBBF24', gradient: 'orange|yellow|red' }
+  sunset: { primary: '0xF97316', secondary: '0xFBBF24', gradient: 'orange|yellow|red' },
+  gold: { primary: '0xF59E0B', secondary: '0xD97706', gradient: 'yellow|orange' },
+  ice: { primary: '0x93C5FD', secondary: '0xF0F9FF', gradient: 'white|cyan|blue' },
+  cherry: { primary: '0xE11D48', secondary: '0xFB7185', gradient: 'red|pink|magenta' },
+  forest: { primary: '0x166534', secondary: '0x4ADE80', gradient: 'green|lime|yellow' }
 };
 
 /**
@@ -98,6 +108,32 @@ function buildVisualizerFilter(settings, options = {}) {
     case 'frequency_dots':
       return buildParticleWave(colorScheme, {
         width: vizWidth, height: vizHeight, barCount, sensitivity, smoothing, glow, position, videoHeight: height
+      });
+
+    case 'spectrogram':
+      return buildSpectrogram(colorScheme, {
+        width: vizWidth, height: vizHeight, sensitivity, glow, position, videoHeight: height
+      });
+
+    case 'phase':
+    case 'vector_lissajous':
+      return buildCircularSpectrum(colorScheme, {
+        width, height, barCount, sensitivity, smoothing, glow
+      });
+
+    case 'vector_polar':
+      return buildVectorPolar(colorScheme, {
+        width, height, sensitivity, glow
+      });
+
+    case 'histogram':
+      return buildHistogram(colorScheme, {
+        width: vizWidth, height: vizHeight, sensitivity, glow, position, videoHeight: height
+      });
+
+    case 'showcqt':
+      return buildShowCQT(colorScheme, {
+        width: vizWidth, height: vizHeight, sensitivity, glow, position, videoHeight: height
       });
 
     default:
@@ -245,6 +281,100 @@ function buildParticleWave(colorScheme, opts) {
       ? `[viz]gblur=sigma=2,format=rgba,colorchannelmixer=aa=0.85[vizalpha]`
       : `[viz]format=rgba,colorchannelmixer=aa=0.7[vizalpha]`,
     // Overlay on video
+    `[0:v][vizalpha]overlay=0:${overlayY}:format=auto[outv]`
+  ].join(';');
+
+  return { filterComplex, outputMap: '[outv]' };
+}
+
+/**
+ * Spectrogram - Heatmap-style frequency display
+ * Uses showspectrum filter
+ */
+function buildSpectrogram(colorScheme, opts) {
+  const { width, height, sensitivity, glow, position, videoHeight } = opts;
+  const vizH = Math.max(80, Math.min(height, 300));
+  const gain = Math.max(1, sensitivity * 3);
+
+  let overlayY;
+  switch (position) {
+    case 'top': overlayY = '0'; break;
+    case 'center': overlayY = `(H-h)/2`; break;
+    case 'bottom': default: overlayY = `H-h`; break;
+  }
+
+  const filterComplex = [
+    `[1:a]showspectrum=s=${width}x${vizH}:mode=combined:color=intensity:scale=log:gain=${gain}:slide=scroll[viz]`,
+    `[viz]format=rgba,colorchannelmixer=aa=${glow ? '0.9' : '0.75'}[vizalpha]`,
+    `[0:v][vizalpha]overlay=0:${overlayY}:format=auto[outv]`
+  ].join(';');
+
+  return { filterComplex, outputMap: '[outv]' };
+}
+
+/**
+ * Vector Polar - Polar/radial scope
+ * Uses avectorscope with polar mode
+ */
+function buildVectorPolar(colorScheme, opts) {
+  const { width, height, sensitivity, glow } = opts;
+  const size = Math.min(width, height);
+  const vizSize = Math.round(size * 0.5);
+
+  const filterComplex = [
+    `[1:a]avectorscope=s=${vizSize}x${vizSize}:mode=polar:rate=25:scale=log:draw=line:zoom=${sensitivity}[viz]`,
+    glow
+      ? `[viz]gblur=sigma=2,format=rgba,colorchannelmixer=aa=0.85[vizglow]`
+      : `[viz]format=rgba,colorchannelmixer=aa=0.75[vizglow]`,
+    `[0:v][vizglow]overlay=(W-w)/2:(H-h)/2:format=auto[outv]`
+  ].join(';');
+
+  return { filterComplex, outputMap: '[outv]' };
+}
+
+/**
+ * Histogram - Audio level histogram
+ * Uses ahistogram filter
+ */
+function buildHistogram(colorScheme, opts) {
+  const { width, height, sensitivity, glow, position, videoHeight } = opts;
+  const vizH = Math.max(60, Math.min(height, 250));
+
+  let overlayY;
+  switch (position) {
+    case 'top': overlayY = '0'; break;
+    case 'center': overlayY = `(H-h)/2`; break;
+    case 'bottom': default: overlayY = `H-h`; break;
+  }
+
+  const filterComplex = [
+    `[1:a]ahistogram=s=${width}x${vizH}:scale=log:slide=scroll:rate=25[viz]`,
+    `[viz]format=rgba,colorchannelmixer=aa=${glow ? '0.9' : '0.7'}[vizalpha]`,
+    `[0:v][vizalpha]overlay=0:${overlayY}:format=auto[outv]`
+  ].join(';');
+
+  return { filterComplex, outputMap: '[outv]' };
+}
+
+/**
+ * ShowCQT - Constant-Q Transform (musical scale visualization)
+ * Uses showcqt filter for piano-like frequency display
+ */
+function buildShowCQT(colorScheme, opts) {
+  const { width, height, sensitivity, glow, position, videoHeight } = opts;
+  const vizH = Math.max(80, Math.min(height, 300));
+  const volume = Math.max(1, Math.round(sensitivity * 10));
+
+  let overlayY;
+  switch (position) {
+    case 'top': overlayY = '0'; break;
+    case 'center': overlayY = `(H-h)/2`; break;
+    case 'bottom': default: overlayY = `H-h`; break;
+  }
+
+  const filterComplex = [
+    `[1:a]showcqt=s=${width}x${vizH}:count=1:bar_g=2:sono_g=4:volume=${volume}[viz]`,
+    `[viz]format=rgba,colorchannelmixer=aa=${glow ? '0.9' : '0.8'}[vizalpha]`,
     `[0:v][vizalpha]overlay=0:${overlayY}:format=auto[outv]`
   ].join(';');
 
