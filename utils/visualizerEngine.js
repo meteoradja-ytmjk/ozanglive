@@ -187,11 +187,10 @@ function buildVisualizerFilter(settings, options = {}) {
 
 /**
  * Spectrum Bars - Classic bar chart visualizer
- * Uses showfreqs or showspectrum filter
+ * Uses showfreqs filter
  */
 function buildSpectrumBars(colorScheme, opts) {
   const { width, height, barCount, sensitivity, smoothing, mirror, glow, shadow, opacity = 0.75, position, videoHeight } = opts;
-  const mode = mirror ? 'combined' : 'separate';
   const vizH = Math.max(60, Math.min(height, 400));
   
   // Calculate Y position for overlay
@@ -205,13 +204,13 @@ function buildSpectrumBars(colorScheme, opts) {
 
   const effectiveHeight = position === 'full' ? videoHeight : vizH;
   const gain = Math.max(0.5, sensitivity * 2);
-  const fscale = 'log';
   const alpha = glow ? Math.min(0.95, opacity) : Math.min(0.85, opacity * 0.9);
   
+  // Use showwaves as fallback-safe alternative to showfreqs (better compatibility)
   const filters = [
-    `[1:a]showfreqs=s=${width}x${effectiveHeight}:mode=bar:fscale=${fscale}:ascale=${gain > 1.5 ? 'log' : 'lin'}:colors=${colorScheme.gradient}:win_size=${barCount * 8}[viz]`,
+    `[1:a]showwaves=s=${width}x${effectiveHeight}:mode=cline:rate=25:scale=${gain > 1.5 ? 'log' : 'lin'}:colors=${colorScheme.primary.replace('0x', '#')}|${colorScheme.secondary.replace('0x', '#')}[viz]`,
     `[viz]format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}[vizalpha]`,
-    `[0:v][vizalpha]overlay=0:${overlayY}:format=auto[outv]`
+    `[0:v][vizalpha]overlay=0:${overlayY}:format=auto:shortest=1[outv]`
   ];
 
   return { filterComplex: filters.join(';'), outputMap: '[outv]' };
@@ -227,12 +226,12 @@ function buildCenterBars(colorScheme, opts) {
   const alpha = glow ? Math.min(0.9, opacity) : Math.min(0.8, opacity * 0.9);
 
   const filterComplex = [
-    `[1:a]showfreqs=s=${width}x${vizH}:mode=bar:fscale=log:colors=${colorScheme.gradient}:win_size=${barCount * 8}[viz_top]`,
+    `[1:a]showwaves=s=${width}x${vizH}:mode=cline:rate=25:scale=${gain > 1.5 ? 'log' : 'lin'}:colors=${colorScheme.primary.replace('0x', '#')}|${colorScheme.secondary.replace('0x', '#')}[viz_top]`,
     `[viz_top]split[viz_a][viz_b]`,
     `[viz_b]vflip[viz_flip]`,
     `[viz_a][viz_flip]vstack[viz_mirror]`,
     `[viz_mirror]format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}[vizalpha]`,
-    `[0:v][vizalpha]overlay=0:(H-h)/2:format=auto[outv]`
+    `[0:v][vizalpha]overlay=0:(H-h)/2:format=auto:shortest=1[outv]`
   ].join(';');
 
   return { filterComplex, outputMap: '[outv]' };
@@ -260,9 +259,9 @@ function buildWaveform(colorScheme, opts) {
   const effectiveHeight = position === 'full' ? videoHeight : vizH;
 
   const filterComplex = [
-    `[1:a]showwaves=s=${width}x${effectiveHeight}:mode=cline:rate=${rate}:scale=${scale}:colors=${colorScheme.gradient}[viz]`,
+    `[1:a]showwaves=s=${width}x${effectiveHeight}:mode=cline:rate=${rate}:scale=${scale}:colors=${colorScheme.primary.replace('0x', '#')}|${colorScheme.secondary.replace('0x', '#')}[viz]`,
     `[viz]format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}[vizalpha]`,
-    `[0:v][vizalpha]overlay=0:${overlayY}:format=auto[outv]`
+    `[0:v][vizalpha]overlay=0:${overlayY}:format=auto:shortest=1[outv]`
   ].join(';');
 
   return { filterComplex, outputMap: '[outv]' };
@@ -284,7 +283,7 @@ function buildCircularSpectrum(colorScheme, opts) {
     glow
       ? `[viz]gblur=sigma=3,format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}[vizglow]`
       : `[viz]format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}[vizglow]`,
-    `[0:v][vizglow]overlay=(W-w)/2:(H-h)/2:format=auto[outv]`
+    `[0:v][vizglow]overlay=(W-w)/2:(H-h)/2:format=auto:shortest=1[outv]`
   ].join(';');
 
   return { filterComplex, outputMap: '[outv]' };
@@ -312,11 +311,11 @@ function buildParticleWave(colorScheme, opts) {
   const effectiveHeight = position === 'full' ? videoHeight : vizH;
 
   const filterComplex = [
-    `[1:a]showwaves=s=${width}x${effectiveHeight}:mode=p2p:rate=${rate}:scale=${scale}:colors=${colorScheme.gradient}[viz]`,
+    `[1:a]showwaves=s=${width}x${effectiveHeight}:mode=p2p:rate=${rate}:scale=${scale}:colors=${colorScheme.primary.replace('0x', '#')}|${colorScheme.secondary.replace('0x', '#')}[viz]`,
     glow
       ? `[viz]gblur=sigma=2,format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}[vizalpha]`
       : `[viz]format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}[vizalpha]`,
-    `[0:v][vizalpha]overlay=0:${overlayY}:format=auto[outv]`
+    `[0:v][vizalpha]overlay=0:${overlayY}:format=auto:shortest=1[outv]`
   ].join(';');
 
   return { filterComplex, outputMap: '[outv]' };
@@ -345,7 +344,7 @@ function buildSpectrogram(colorScheme, opts) {
   const filterComplex = [
     `[1:a]showspectrum=s=${width}x${effectiveHeight}:mode=combined:color=intensity:scale=log:gain=${gain}:slide=scroll[viz]`,
     `[viz]format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}[vizalpha]`,
-    `[0:v][vizalpha]overlay=0:${overlayY}:format=auto[outv]`
+    `[0:v][vizalpha]overlay=0:${overlayY}:format=auto:shortest=1[outv]`
   ].join(';');
 
   return { filterComplex, outputMap: '[outv]' };
@@ -366,7 +365,7 @@ function buildVectorPolar(colorScheme, opts) {
     glow
       ? `[viz]gblur=sigma=2,format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}[vizglow]`
       : `[viz]format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}[vizglow]`,
-    `[0:v][vizglow]overlay=(W-w)/2:(H-h)/2:format=auto[outv]`
+    `[0:v][vizglow]overlay=(W-w)/2:(H-h)/2:format=auto:shortest=1[outv]`
   ].join(';');
 
   return { filterComplex, outputMap: '[outv]' };
@@ -394,7 +393,7 @@ function buildHistogram(colorScheme, opts) {
   const filterComplex = [
     `[1:a]ahistogram=s=${width}x${effectiveHeight}:scale=log:slide=scroll:rate=25[viz]`,
     `[viz]format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}[vizalpha]`,
-    `[0:v][vizalpha]overlay=0:${overlayY}:format=auto[outv]`
+    `[0:v][vizalpha]overlay=0:${overlayY}:format=auto:shortest=1[outv]`
   ].join(';');
 
   return { filterComplex, outputMap: '[outv]' };
@@ -423,7 +422,7 @@ function buildShowCQT(colorScheme, opts) {
   const filterComplex = [
     `[1:a]showcqt=s=${width}x${effectiveHeight}:count=1:bar_g=2:sono_g=4:volume=${volume}[viz]`,
     `[viz]format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}[vizalpha]`,
-    `[0:v][vizalpha]overlay=0:${overlayY}:format=auto[outv]`
+    `[0:v][vizalpha]overlay=0:${overlayY}:format=auto:shortest=1[outv]`
   ].join(';');
 
   return { filterComplex, outputMap: '[outv]' };

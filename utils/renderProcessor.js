@@ -55,7 +55,7 @@ const calcProgress = (timemark, totalDuration, minPct = 5, maxPct = 99) => {
 
 /**
  * Apply audio visualizer overlay to a video+audio combination.
- * This re-encodes the video with FFmpeg filter_complex to overlay the visualizer.
+ * OPTIMIZED: Uses single-pass encoding with hardware-friendly settings.
  * 
  * @param {Object} params
  * @param {string} params.videoPath - Path to the video file (already looped/trimmed)
@@ -74,17 +74,12 @@ async function applyVisualizerOverlay({ videoPath, audioPath, outputPath, durati
   const videoStream = videoMeta.streams?.find(s => s.codec_type === 'video');
   const width = videoStream?.width || 1920;
   const height = videoStream?.height || 1080;
+  const fps = eval(videoStream?.r_frame_rate || '30') || 30;
 
   console.log('[VISUALIZER] Applying visualizer overlay');
   console.log('[VISUALIZER] Type:', visualizerSettings.type);
   console.log('[VISUALIZER] Color:', visualizerSettings.color);
-  console.log('[VISUALIZER] Video dimensions:', width, 'x', height);
-  console.log('[VISUALIZER] Intensity:', visualizerSettings.intensity);
-  console.log('[VISUALIZER] Glow:', visualizerSettings.glow);
-  console.log('[VISUALIZER] Mirror:', visualizerSettings.mirror);
-  console.log('[VISUALIZER] Position:', visualizerSettings.position || 'bottom');
-  console.log('[VISUALIZER] Opacity:', visualizerSettings.opacity || 1.0);
-  console.log('[VISUALIZER] Height:', visualizerSettings.height || 'auto');
+  console.log('[VISUALIZER] Video:', width, 'x', height, '@', Math.round(fps), 'fps');
 
   // Build the FFmpeg filter complex
   const { filterComplex, outputMap } = buildVisualizerFilter(visualizerSettings, {
@@ -105,19 +100,21 @@ async function applyVisualizerOverlay({ videoPath, audioPath, outputPath, durati
         '-map', '1:a',
         '-t', String(duration),
         '-c:v', 'libx264',
-        '-preset', 'fast',
-        '-crf', '20',
+        '-preset', 'veryfast',
+        '-crf', '23',
+        '-tune', 'fastdecode',
+        '-r', String(Math.min(Math.round(fps), 30)),
         '-c:a', 'aac',
         '-b:a', '192k',
         '-ar', '44100',
         '-ac', '2',
-        '-movflags', '+faststart'
+        '-movflags', '+faststart',
+        '-max_muxing_queue_size', '1024'
       ])
       .output(outputPath);
   }, {
     onProgress: (p) => {
       const progress = progressOffset + Math.min(progressRange - 1, Math.round((parseTimeToSeconds(p.timemark) / duration) * progressRange));
-      console.log(`[VISUALIZER] Progress: ${progress}%`);
       onProgress?.(progress);
     }
   });
@@ -193,30 +190,30 @@ async function renderLoopVideo({
     
     /**
      * Helper: Apply visualizer post-processing if enabled.
-     * Call this before returning from any render path that produces video+audio output.
-     * @param {string} renderedPath - Path to the rendered file (may be actualOutputPath or outputPath)
+     * Uses single-pass approach: takes the pre-rendered video and applies visualizer overlay.
+     * @param {string} renderedPath - Path to the rendered file (actualOutputPath or outputPath)
      * @returns {Promise<string>} Final output path
      */
     async function finalizeWithVisualizer(renderedPath) {
       if (!shouldApplyVisualizer) return renderedPath;
       
-      // If rendered to actualOutputPath (temp), we need to apply visualizer to produce outputPath
-      // If rendered directly to outputPath, we need to move it first
-      const sourceFile = renderedPath === outputPath ? renderedPath : actualOutputPath;
-      
+      // Determine source file - it should be actualOutputPath (temp file)
       let preVizPath;
-      if (sourceFile === outputPath) {
+      if (renderedPath === outputPath && fs.existsSync(outputPath)) {
+        // Was written directly to outputPath, move it to temp
         preVizPath = path.join(workDir, 'pre-viz-final.mp4');
         fs.renameSync(outputPath, preVizPath);
+      } else if (fs.existsSync(actualOutputPath)) {
+        preVizPath = actualOutputPath;
       } else {
-        preVizPath = sourceFile;
+        console.error('[RENDER] ⚠️ No source file found for visualizer');
+        return renderedPath;
       }
       
       console.log('[RENDER] 🎵 Applying Audio Visualizer...');
-      console.log('[RENDER] Visualizer Type:', visualizerSettings.type);
-      console.log('[RENDER] Visualizer Color:', visualizerSettings.color);
+      console.log('[RENDER] Source:', preVizPath);
       
-      // Extract audio for visualizer filter input
+      // Extract audio from the rendered file for visualizer filter input
       const vizAudioPath = path.join(workDir, 'viz-audio.aac');
       await runFfmpeg((cmd) => {
         return cmd
