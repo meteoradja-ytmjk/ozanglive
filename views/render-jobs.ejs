@@ -470,10 +470,66 @@
     <i class="ti ti-player-play mr-2"></i>Active Jobs
   </button>
   <div class="w-px bg-gray-600"></div>
-  <a href="/video-editor" 
+  <button onclick="switchRenderTab('lyrics')" id="lyricsTab"
     class="flex-1 px-4 md:px-6 py-3 font-medium transition-colors text-center text-gray-400 hover:text-white hover:bg-gray-700/50 flex items-center justify-center">
-    <i class="ti ti-waveform mr-2"></i>Advanced Editor
-  </a>
+    <i class="ti ti-music mr-2"></i>Lyrics / Karaoke
+  </button>
+</div>
+
+<!-- Lyrics/Karaoke Tab Content -->
+<div id="lyricsContainer" class="tab-content hidden">
+  <div class="bg-gray-800 rounded-xl p-6 md:p-8">
+    <!-- Header -->
+    <div class="text-center mb-8">
+      <div class="inline-flex items-center justify-center w-20 h-20 rounded-full bg-primary/20 mb-4">
+        <i class="ti ti-microphone-2 text-4xl text-primary"></i>
+      </div>
+      <h3 class="text-2xl font-bold text-white mb-2">Lyrics / Karaoke</h3>
+      <p class="text-gray-400 max-w-md mx-auto">Tambahkan lirik sinkron ke video render kamu untuk membuat konten karaoke yang menarik</p>
+    </div>
+
+    <!-- Feature Preview Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+      <div class="bg-gray-700/50 rounded-xl p-5 border border-gray-600/50">
+        <div class="flex items-center gap-3 mb-3">
+          <div class="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
+            <i class="ti ti-file-text text-xl text-blue-400"></i>
+          </div>
+          <h4 class="font-semibold text-white">Import Lirik</h4>
+        </div>
+        <p class="text-sm text-gray-400">Upload file .lrc, .srt, atau ketik manual lirik dengan timestamp</p>
+      </div>
+
+      <div class="bg-gray-700/50 rounded-xl p-5 border border-gray-600/50">
+        <div class="flex items-center gap-3 mb-3">
+          <div class="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
+            <i class="ti ti-palette text-xl text-purple-400"></i>
+          </div>
+          <h4 class="font-semibold text-white">Style Karaoke</h4>
+        </div>
+        <p class="text-sm text-gray-400">Pilih font, warna, animasi highlight, dan posisi teks di video</p>
+      </div>
+
+      <div class="bg-gray-700/50 rounded-xl p-5 border border-gray-600/50">
+        <div class="flex items-center gap-3 mb-3">
+          <div class="w-10 h-10 rounded-lg bg-green-500/20 flex items-center justify-center">
+            <i class="ti ti-player-play text-xl text-green-400"></i>
+          </div>
+          <h4 class="font-semibold text-white">Preview & Render</h4>
+        </div>
+        <p class="text-sm text-gray-400">Preview real-time sinkronisasi lirik sebelum render final</p>
+      </div>
+    </div>
+
+    <!-- Coming Soon Badge -->
+    <div class="text-center">
+      <div class="inline-flex items-center gap-2 px-5 py-3 bg-yellow-500/10 border border-yellow-500/30 rounded-full">
+        <i class="ti ti-clock text-yellow-400"></i>
+        <span class="text-yellow-300 font-medium text-sm">Fitur ini sedang dalam pengembangan — Coming Soon</span>
+      </div>
+      <p class="text-gray-500 text-xs mt-3">Akan tersedia di update berikutnya</p>
+    </div>
+  </div>
 </div>
 
 <!-- Jobs Container (Active Tab) -->
@@ -3200,9 +3256,21 @@ function clearHistory() {
 
 // ===== TAB SWITCHING =====
 function switchRenderTab(tab) {
-  // Only handle jobs tab, library redirects to gallery
+  const jobsContainer = document.getElementById('jobsContainer');
+  const lyricsContainer = document.getElementById('lyricsContainer');
+  const jobsTab = document.getElementById('jobsTab');
+  const lyricsTab = document.getElementById('lyricsTab');
+
   if (tab === 'jobs') {
-    // Already on jobs tab, do nothing
+    jobsContainer.classList.remove('hidden');
+    lyricsContainer.classList.add('hidden');
+    jobsTab.className = 'flex-1 px-4 md:px-6 py-3 font-medium transition-colors text-center bg-primary/20 text-primary border-b-2 border-primary';
+    lyricsTab.className = 'flex-1 px-4 md:px-6 py-3 font-medium transition-colors text-center text-gray-400 hover:text-white hover:bg-gray-700/50 flex items-center justify-center';
+  } else if (tab === 'lyrics') {
+    jobsContainer.classList.add('hidden');
+    lyricsContainer.classList.remove('hidden');
+    lyricsTab.className = 'flex-1 px-4 md:px-6 py-3 font-medium transition-colors text-center bg-primary/20 text-primary border-b-2 border-primary flex items-center justify-center';
+    jobsTab.className = 'flex-1 px-4 md:px-6 py-3 font-medium transition-colors text-center text-gray-400 hover:text-white hover:bg-gray-700/50';
   }
 }
 
