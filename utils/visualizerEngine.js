@@ -11,7 +11,7 @@
 const VISUALIZER_TYPES = {
   spectrum: 'Spectrum Bars',
   waveform: 'Waveform',
-  circular: 'Circular Spectrum',
+  circular: 'Circular Scope',
   particles: 'Particle Wave',
   bars_bottom: 'Bottom Bars',
   bars_center: 'Center Bars (Mirror)',
@@ -22,9 +22,11 @@ const VISUALIZER_TYPES = {
   histogram: 'Audio Histogram',
   showcqt: 'Musical Scale (CQT)',
   vector_lissajous: 'Lissajous Pattern',
-  vector_polar: 'Polar Scope',
-  nebula: 'Nebula Effect',
-  dna_helix: 'DNA Helix'
+  vector_polar: 'Polar Radar',
+  nebula: 'Nebula Cloud',
+  dna_helix: 'DNA Helix',
+  pulse_ring: 'Pulse Ring',
+  frequency_terrain: 'Frequency Terrain'
 };
 
 // Color scheme definitions (FFmpeg hex format without #)
@@ -42,7 +44,9 @@ const COLOR_SCHEMES = {
   cherry: { primary: '0xE11D48', secondary: '0xFB7185', gradient: 'red|pink|magenta' },
   forest: { primary: '0x166534', secondary: '0x4ADE80', gradient: 'green|lime|yellow' },
   aurora: { primary: '0x06B6D4', secondary: '0xEC4899', gradient: 'cyan|violet|magenta' },
-  midnight: { primary: '0x1E1B4B', secondary: '0x7C3AED', gradient: 'blue|violet|purple' }
+  midnight: { primary: '0x1E1B4B', secondary: '0x7C3AED', gradient: 'blue|violet|purple' },
+  white: { primary: '0xFFFFFF', secondary: '0xE2E8F0', gradient: 'white|gray' },
+  lemon: { primary: '0xFDE047', secondary: '0xF59E0B', gradient: 'yellow|orange' }
 };
 
 /**
@@ -140,9 +144,13 @@ function buildVisualizerFilter(settings, options = {}) {
       });
 
     case 'circular':
-    case 'nebula':
       return buildCircularSpectrum(colorScheme, {
         width, height, barCount, sensitivity, smoothing, glow, shadow, opacity: effectiveOpacity
+      });
+
+    case 'nebula':
+      return buildNebula(colorScheme, {
+        width, height, sensitivity, glow, shadow, opacity: effectiveOpacity
       });
 
     case 'particles':
@@ -175,6 +183,16 @@ function buildVisualizerFilter(settings, options = {}) {
 
     case 'showcqt':
       return buildShowCQT(colorScheme, {
+        width: vizWidth, height: vizHeight, sensitivity, glow, shadow, opacity: effectiveOpacity, position, videoHeight: height
+      });
+
+    case 'pulse_ring':
+      return buildPulseRing(colorScheme, {
+        width, height, sensitivity, glow, shadow, opacity: effectiveOpacity
+      });
+
+    case 'frequency_terrain':
+      return buildFrequencyTerrain(colorScheme, {
         width: vizWidth, height: vizHeight, sensitivity, glow, shadow, opacity: effectiveOpacity, position, videoHeight: height
       });
 
@@ -269,20 +287,38 @@ function buildWaveform(colorScheme, opts) {
 
 /**
  * Circular Spectrum - Radial/circular visualization
- * Uses avectorscope for circular audio display
+ * Uses avectorscope with lissajous_xy mode (dot pattern, tight circular)
  */
 function buildCircularSpectrum(colorScheme, opts) {
   const { width, height, barCount, sensitivity, smoothing, glow, shadow, opacity = 0.75 } = opts;
   const size = Math.min(width, height);
   const vizSize = Math.round(size * 0.5);
-  const mode = 'lissajous_xy';
   const alpha = glow ? Math.min(0.9, opacity) : Math.min(0.8, opacity * 0.9);
 
   const filterComplex = [
-    `[1:a]avectorscope=s=${vizSize}x${vizSize}:mode=${mode}:rate=25:scale=log:draw=dot:zoom=${sensitivity}[viz]`,
+    `[1:a]avectorscope=s=${vizSize}x${vizSize}:mode=lissajous_xy:rate=25:scale=log:draw=dot:zoom=${sensitivity}[viz]`,
     glow
       ? `[viz]gblur=sigma=3,format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}[vizglow]`
       : `[viz]format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}[vizglow]`,
+    `[0:v][vizglow]overlay=(W-w)/2:(H-h)/2:format=auto:shortest=1[outv]`
+  ].join(';');
+
+  return { filterComplex, outputMap: '[outv]' };
+}
+
+/**
+ * Nebula - Dreamy expanding cloud effect
+ * Uses avectorscope with lissajous mode + heavy blur for nebula look
+ */
+function buildNebula(colorScheme, opts) {
+  const { width, height, sensitivity, glow, shadow, opacity = 0.75 } = opts;
+  const size = Math.min(width, height);
+  const vizSize = Math.round(size * 0.6);
+  const alpha = Math.min(0.85, opacity);
+
+  const filterComplex = [
+    `[1:a]avectorscope=s=${vizSize}x${vizSize}:mode=lissajous:rate=25:scale=sqrt:draw=line:zoom=${sensitivity * 1.5}[viz]`,
+    `[viz]gblur=sigma=8,format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}:rr=1.2:gg=0.8:bb=1.3[vizglow]`,
     `[0:v][vizglow]overlay=(W-w)/2:(H-h)/2:format=auto:shortest=1[outv]`
   ].join(';');
 
@@ -351,19 +387,19 @@ function buildSpectrogram(colorScheme, opts) {
 }
 
 /**
- * Vector Polar - Polar/radial scope
- * Uses avectorscope with polar mode
+ * Vector Polar - Radar/polar scope (distinct from circular)
+ * Uses avectorscope with polar mode + line draw for radar sweep look
  */
 function buildVectorPolar(colorScheme, opts) {
   const { width, height, sensitivity, glow, shadow, opacity = 0.75 } = opts;
   const size = Math.min(width, height);
-  const vizSize = Math.round(size * 0.5);
+  const vizSize = Math.round(size * 0.45);
   const alpha = glow ? Math.min(0.9, opacity) : Math.min(0.8, opacity * 0.9);
 
   const filterComplex = [
-    `[1:a]avectorscope=s=${vizSize}x${vizSize}:mode=polar:rate=25:scale=log:draw=line:zoom=${sensitivity}[viz]`,
+    `[1:a]avectorscope=s=${vizSize}x${vizSize}:mode=polar:rate=25:scale=lin:draw=line:zoom=${sensitivity * 0.8}[viz]`,
     glow
-      ? `[viz]gblur=sigma=2,format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}[vizglow]`
+      ? `[viz]gblur=sigma=2,format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}:rr=0.8:gg=1.2:bb=0.9[vizglow]`
       : `[viz]format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}[vizglow]`,
     `[0:v][vizglow]overlay=(W-w)/2:(H-h)/2:format=auto:shortest=1[outv]`
   ].join(';');
@@ -421,6 +457,54 @@ function buildShowCQT(colorScheme, opts) {
 
   const filterComplex = [
     `[1:a]showcqt=s=${width}x${effectiveHeight}:count=1:bar_g=2:sono_g=4:volume=${volume}[viz]`,
+    `[viz]format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}[vizalpha]`,
+    `[0:v][vizalpha]overlay=0:${overlayY}:format=auto:shortest=1[outv]`
+  ].join(';');
+
+  return { filterComplex, outputMap: '[outv]' };
+}
+
+/**
+ * Pulse Ring - Pulsating ring/circle that reacts to bass
+ * Uses avectorscope with lissajous mode at large size + color tint
+ */
+function buildPulseRing(colorScheme, opts) {
+  const { width, height, sensitivity, glow, shadow, opacity = 0.8 } = opts;
+  const size = Math.min(width, height);
+  const vizSize = Math.round(size * 0.7);
+  const alpha = Math.min(0.9, opacity);
+
+  const filterComplex = [
+    `[1:a]avectorscope=s=${vizSize}x${vizSize}:mode=lissajous_xy:rate=30:scale=sqrt:draw=line:zoom=${sensitivity * 2}[viz]`,
+    `[viz]gblur=sigma=5,format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}:rr=1.1:bb=1.3[vizglow]`,
+    `[0:v][vizglow]overlay=(W-w)/2:(H-h)/2:format=auto:shortest=1[outv]`
+  ].join(';');
+
+  return { filterComplex, outputMap: '[outv]' };
+}
+
+/**
+ * Frequency Terrain - Scrolling frequency landscape
+ * Uses showspectrum with scroll mode for terrain-like effect
+ */
+function buildFrequencyTerrain(colorScheme, opts) {
+  const { width, height, sensitivity, glow, shadow, opacity = 0.8, position, videoHeight } = opts;
+  const vizH = Math.max(100, Math.min(height, 400));
+  const gain = Math.max(2, sensitivity * 4);
+  const alpha = glow ? Math.min(0.95, opacity) : Math.min(0.85, opacity * 0.9);
+
+  let overlayY;
+  switch (position) {
+    case 'top': overlayY = '0'; break;
+    case 'center': overlayY = `(H-h)/2`; break;
+    case 'full': overlayY = '0'; break;
+    case 'bottom': default: overlayY = `H-h`; break;
+  }
+
+  const effectiveHeight = position === 'full' ? videoHeight : vizH;
+
+  const filterComplex = [
+    `[1:a]showspectrum=s=${width}x${effectiveHeight}:mode=combined:color=channel:scale=sqrt:gain=${gain}:slide=scroll:orientation=vertical[viz]`,
     `[viz]format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}[vizalpha]`,
     `[0:v][vizalpha]overlay=0:${overlayY}:format=auto:shortest=1[outv]`
   ].join(';');

@@ -904,14 +904,14 @@
       <label class="text-xs font-medium text-gray-300 block mb-2">
         <i class="ti ti-category text-violet-400 mr-1"></i>Type
       </label>
-      <div class="grid grid-cols-4 md:grid-cols-10 gap-1.5" id="vizTypeGrid">
+      <div class="grid grid-cols-4 md:grid-cols-12 gap-1.5" id="vizTypeGrid">
         <button onclick="pickVizType('spectrum')" data-type="spectrum" class="viz-type-btn active" title="Spectrum Bars">
           <span class="text-base">📊</span><span class="text-[9px] block mt-0.5">Bars</span>
         </button>
         <button onclick="pickVizType('waveform')" data-type="waveform" class="viz-type-btn" title="Waveform">
           <span class="text-base">🌊</span><span class="text-[9px] block mt-0.5">Wave</span>
         </button>
-        <button onclick="pickVizType('circular')" data-type="circular" class="viz-type-btn" title="Circular">
+        <button onclick="pickVizType('circular')" data-type="circular" class="viz-type-btn" title="Circular Scope">
           <span class="text-base">🔵</span><span class="text-[9px] block mt-0.5">Circle</span>
         </button>
         <button onclick="pickVizType('particles')" data-type="particles" class="viz-type-btn" title="Particles">
@@ -926,7 +926,7 @@
         <button onclick="pickVizType('showcqt')" data-type="showcqt" class="viz-type-btn" title="Piano CQT">
           <span class="text-base">🎹</span><span class="text-[9px] block mt-0.5">Piano</span>
         </button>
-        <button onclick="pickVizType('nebula')" data-type="nebula" class="viz-type-btn" title="Nebula Scope">
+        <button onclick="pickVizType('nebula')" data-type="nebula" class="viz-type-btn" title="Nebula Cloud">
           <span class="text-base">🌌</span><span class="text-[9px] block mt-0.5">Nebula</span>
         </button>
         <button onclick="pickVizType('vector_polar')" data-type="vector_polar" class="viz-type-btn" title="Polar Radar">
@@ -934,6 +934,12 @@
         </button>
         <button onclick="pickVizType('histogram')" data-type="histogram" class="viz-type-btn" title="Audio Histogram">
           <span class="text-base">📈</span><span class="text-[9px] block mt-0.5">Histo</span>
+        </button>
+        <button onclick="pickVizType('pulse_ring')" data-type="pulse_ring" class="viz-type-btn" title="Pulse Ring">
+          <span class="text-base">💫</span><span class="text-[9px] block mt-0.5">Pulse</span>
+        </button>
+        <button onclick="pickVizType('frequency_terrain')" data-type="frequency_terrain" class="viz-type-btn" title="Frequency Terrain">
+          <span class="text-base">🏔️</span><span class="text-[9px] block mt-0.5">Terrain</span>
         </button>
       </div>
     </div>
@@ -954,6 +960,8 @@
         <button onclick="pickVizColor('sunset')" data-color="sunset" class="viz-color-btn" style="background:linear-gradient(135deg,#F97316,#FBBF24)"></button>
         <button onclick="pickVizColor('gold')" data-color="gold" class="viz-color-btn" style="background:linear-gradient(135deg,#F59E0B,#D97706)"></button>
         <button onclick="pickVizColor('aurora')" data-color="aurora" class="viz-color-btn" style="background:linear-gradient(135deg,#06B6D4,#8B5CF6,#EC4899)"></button>
+        <button onclick="pickVizColor('white')" data-color="white" class="viz-color-btn" style="background:linear-gradient(135deg,#FFFFFF,#E2E8F0); border:1px solid #4B5563;"></button>
+        <button onclick="pickVizColor('lemon')" data-color="lemon" class="viz-color-btn" style="background:linear-gradient(135deg,#FDE047,#F59E0B)"></button>
       </div>
     </div>
 
@@ -969,8 +977,8 @@
         <button onclick="setVizPosition('bottom')" data-pos="bottom" class="viz-pos-btn active text-[10px] px-2 py-1.5 rounded border border-primary bg-primary/10 text-primary text-center"><i class="ti ti-arrow-bar-down text-xs"></i> Bottom</button>
         <button onclick="setVizPosition('full')" data-pos="full" class="viz-pos-btn text-[10px] px-2 py-1.5 rounded border border-gray-600 bg-dark-700 text-gray-300 hover:border-primary/50 text-center"><i class="ti ti-maximize text-xs"></i> Full</button>
       </div>
-      <!-- Height & Horizontal Offset sliders -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <!-- Height, Scale & Horizontal Offset sliders -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div>
           <div class="flex justify-between text-[10px] mb-1">
             <span class="text-gray-400">Height</span>
@@ -980,7 +988,14 @@
         </div>
         <div>
           <div class="flex justify-between text-[10px] mb-1">
-            <span class="text-gray-400">Horizontal Offset</span>
+            <span class="text-gray-400">Scale (Resize)</span>
+            <span class="text-white" id="vizScaleVal">100%</span>
+          </div>
+          <input type="range" id="vizScale" min="30" max="200" value="100" class="w-full h-1 accent-primary cursor-pointer" oninput="setVizScale(this.value)">
+        </div>
+        <div>
+          <div class="flex justify-between text-[10px] mb-1">
+            <span class="text-gray-400">H-Offset</span>
             <span class="text-white" id="vizOffsetXVal">0%</span>
           </div>
           <input type="range" id="vizOffsetX" min="-50" max="50" value="0" class="w-full h-1 accent-primary cursor-pointer" oninput="setVizOffsetX(this.value)">
@@ -1013,7 +1028,7 @@
     </div>
 
     <!-- Effects - equal width grid -->
-    <div class="grid grid-cols-2 md:grid-cols-5 gap-2">
+    <div class="grid grid-cols-2 md:grid-cols-6 gap-2">
       <label class="flex items-center justify-center gap-1.5 cursor-pointer text-xs text-gray-300 bg-dark-700 px-2 py-2 rounded-lg border border-gray-600 hover:border-primary/50 transition-colors">
         <input type="checkbox" id="vizMirror" class="w-3.5 h-3.5 rounded text-primary" onchange="updateVizEffect('mirror', this.checked)">
         <span>Mirror</span>
@@ -1034,6 +1049,10 @@
         <input type="checkbox" id="vizReflection" class="w-3.5 h-3.5 rounded text-primary" onchange="updateVizEffect('reflection', this.checked)">
         <span>Reflection</span>
       </label>
+      <label class="flex items-center justify-center gap-1.5 cursor-pointer text-xs text-gray-300 bg-dark-700 px-2 py-2 rounded-lg border border-gray-600 hover:border-primary/50 transition-colors">
+        <input type="checkbox" id="vizShadow" class="w-3.5 h-3.5 rounded text-primary" onchange="updateVizEffect('shadow', this.checked)">
+        <span>Shadow</span>
+      </label>
     </div>
 
     <!-- Quick Presets - equal width grid -->
@@ -1041,12 +1060,13 @@
       <label class="text-xs font-medium text-gray-300 block mb-2">
         <i class="ti ti-sparkles text-yellow-400 mr-1"></i>Quick Presets
       </label>
-      <div class="grid grid-cols-2 md:grid-cols-5 gap-2">
+      <div class="grid grid-cols-2 md:grid-cols-6 gap-2">
         <button onclick="applyVizPreset('lofi')" class="text-[11px] px-3 py-2 bg-dark-700 text-gray-300 rounded-lg border border-gray-600 hover:border-primary/50 hover:text-white transition-colors text-center">🎵 Lo-Fi</button>
         <button onclick="applyVizPreset('edm')" class="text-[11px] px-3 py-2 bg-dark-700 text-gray-300 rounded-lg border border-gray-600 hover:border-primary/50 hover:text-white transition-colors text-center">🎧 EDM</button>
         <button onclick="applyVizPreset('cinematic')" class="text-[11px] px-3 py-2 bg-dark-700 text-gray-300 rounded-lg border border-gray-600 hover:border-primary/50 hover:text-white transition-colors text-center">🎬 Cinema</button>
         <button onclick="applyVizPreset('minimal')" class="text-[11px] px-3 py-2 bg-dark-700 text-gray-300 rounded-lg border border-gray-600 hover:border-primary/50 hover:text-white transition-colors text-center">⚪ Minimal</button>
         <button onclick="applyVizPreset('retro')" class="text-[11px] px-3 py-2 bg-dark-700 text-gray-300 rounded-lg border border-gray-600 hover:border-primary/50 hover:text-white transition-colors text-center">👾 Retro</button>
+        <button onclick="applyVizPreset('ambient')" class="text-[11px] px-3 py-2 bg-dark-700 text-gray-300 rounded-lg border border-gray-600 hover:border-primary/50 hover:text-white transition-colors text-center">🌙 Ambient</button>
       </div>
     </div>
   </div>
@@ -1903,10 +1923,17 @@ function setVizHeight(val) {
 }
 
 let vizOffsetX = 0;
+let vizScale = 100;
 
 function setVizOffsetX(val) {
   vizOffsetX = parseInt(val);
   document.getElementById('vizOffsetXVal').textContent = val + '%';
+  applyVizCanvasPosition();
+}
+
+function setVizScale(val) {
+  vizScale = parseInt(val);
+  document.getElementById('vizScaleVal').textContent = val + '%';
   applyVizCanvasPosition();
 }
 
@@ -1941,10 +1968,11 @@ function applyVizCanvasPosition() {
     canvas.style.height = vizHeightPercent + '%';
   }
   
-  // Apply horizontal offset
-  if (vizOffsetX !== 0) {
-    canvas.style.transform = `translateX(${vizOffsetX}%)`;
-  }
+  // Apply horizontal offset and scale
+  const transforms = [];
+  if (vizOffsetX !== 0) transforms.push(`translateX(${vizOffsetX}%)`);
+  if (vizScale !== 100) transforms.push(`scale(${vizScale / 100})`);
+  canvas.style.transform = transforms.length > 0 ? transforms.join(' ') : '';
   
   // Resize canvas internal resolution after position change
   setTimeout(() => {
@@ -1982,8 +2010,9 @@ function applyVizPreset(name) {
     lofi: { type:'waveform', color:'ocean', intensity:35, sensitivity:0.8, barCount:32, smoothing:0.9, mirror:false, glow:true, roundBars:true, gradient:true, reflection:false },
     edm: { type:'spectrum', color:'neon', intensity:90, sensitivity:2.0, barCount:128, smoothing:0.5, mirror:true, glow:true, roundBars:false, gradient:true, reflection:true },
     cinematic: { type:'bars_center', color:'gold', intensity:60, sensitivity:1.2, barCount:48, smoothing:0.85, mirror:true, glow:true, roundBars:true, gradient:true, reflection:true },
-    minimal: { type:'waveform', color:'ice', intensity:30, sensitivity:1.0, barCount:24, smoothing:0.9, mirror:false, glow:false, roundBars:false, gradient:false, reflection:false },
-    retro: { type:'spectrum', color:'fire', intensity:75, sensitivity:1.5, barCount:32, smoothing:0.6, mirror:false, glow:true, roundBars:false, gradient:true, reflection:false }
+    minimal: { type:'waveform', color:'white', intensity:30, sensitivity:1.0, barCount:24, smoothing:0.9, mirror:false, glow:false, roundBars:false, gradient:false, reflection:false },
+    retro: { type:'spectrum', color:'fire', intensity:75, sensitivity:1.5, barCount:32, smoothing:0.6, mirror:false, glow:true, roundBars:false, gradient:true, reflection:false },
+    ambient: { type:'nebula', color:'aurora', intensity:45, sensitivity:0.7, barCount:48, smoothing:0.95, mirror:false, glow:true, roundBars:false, gradient:true, reflection:false }
   };
   const p = presets[name];
   if (!p) return;
