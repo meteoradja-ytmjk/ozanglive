@@ -738,10 +738,11 @@ async function loadAccounts() {
     const d = await r.json();
     const accs = d.accounts || d || [];
     const sel = document.getElementById('edChannel');
+    sel.innerHTML = '<option value="">-- Select Channel --</option>';
     accs.forEach(a => {
       const o = document.createElement('option');
       o.value = a.id;
-      o.textContent = a.channel_name||a.email||'Account '+a.id;
+      o.textContent = a.channelName || a.channel_name || 'Channel ' + a.id;
       sel.appendChild(o);
     });
   } catch(e) {}

@@ -1449,7 +1449,7 @@ async function loadAccounts(){
   const target=ensureEl('targetAccountId');
   const r=await fetch('/api/youtube/accounts');
   const d=await r.json();
-  target.innerHTML=`<option value="">-- Pilih Channel --</option>`+toArray(d,'accounts').map(a=>`<option value="${a.id}">${a.channelName||('Channel '+a.id)}</option>`).join('');
+  target.innerHTML=`<option value="">-- Pilih Channel --</option>`+toArray(d,'accounts').map(a=>`<option value="${a.id}">${a.channelName||a.channel_name||('Channel '+a.id)}</option>`).join('');
 }
 
 async function loadMedia(){
