@@ -205,13 +205,11 @@ function buildVisualizerFilter(settings, options = {}) {
 
 /**
  * Spectrum Bars - Classic bar chart visualizer
- * Uses showfreqs filter
  */
 function buildSpectrumBars(colorScheme, opts) {
   const { width, height, barCount, sensitivity, smoothing, mirror, glow, shadow, opacity = 0.75, position, videoHeight } = opts;
   const vizH = Math.max(60, Math.min(height, 400));
   
-  // Calculate Y position for overlay
   let overlayY;
   switch (position) {
     case 'top': overlayY = '0'; break;
@@ -221,12 +219,11 @@ function buildSpectrumBars(colorScheme, opts) {
   }
 
   const effectiveHeight = position === 'full' ? videoHeight : vizH;
-  const gain = Math.max(0.5, sensitivity * 2);
+  const scale = sensitivity > 1.5 ? 'log' : 'lin';
   const alpha = glow ? Math.min(0.95, opacity) : Math.min(0.85, opacity * 0.9);
   
-  // Use showwaves as fallback-safe alternative to showfreqs (better compatibility)
   const filters = [
-    `[1:a]showwaves=s=${width}x${effectiveHeight}:mode=cline:rate=25:scale=${gain > 1.5 ? 'log' : 'lin'}:colors=${colorScheme.primary.replace('0x', '#')}|${colorScheme.secondary.replace('0x', '#')}[viz]`,
+    `[1:a]showwaves=s=${width}x${effectiveHeight}:mode=cline:rate=25:scale=${scale}[viz]`,
     `[viz]format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}[vizalpha]`,
     `[0:v][vizalpha]overlay=0:${overlayY}:format=auto:shortest=1[outv]`
   ];
@@ -240,11 +237,11 @@ function buildSpectrumBars(colorScheme, opts) {
 function buildCenterBars(colorScheme, opts) {
   const { width, height, barCount, sensitivity, smoothing, glow, shadow, opacity = 0.7, videoHeight } = opts;
   const vizH = Math.max(60, Math.min(height, 300));
-  const gain = Math.max(0.5, sensitivity * 2);
+  const scale = sensitivity > 1.5 ? 'log' : 'lin';
   const alpha = glow ? Math.min(0.9, opacity) : Math.min(0.8, opacity * 0.9);
 
   const filterComplex = [
-    `[1:a]showwaves=s=${width}x${vizH}:mode=cline:rate=25:scale=${gain > 1.5 ? 'log' : 'lin'}:colors=${colorScheme.primary.replace('0x', '#')}|${colorScheme.secondary.replace('0x', '#')}[viz_top]`,
+    `[1:a]showwaves=s=${width}x${vizH}:mode=cline:rate=25:scale=${scale}[viz_top]`,
     `[viz_top]split[viz_a][viz_b]`,
     `[viz_b]vflip[viz_flip]`,
     `[viz_a][viz_flip]vstack[viz_mirror]`,
@@ -257,12 +254,10 @@ function buildCenterBars(colorScheme, opts) {
 
 /**
  * Waveform - Audio waveform display
- * Uses showwaves filter
  */
 function buildWaveform(colorScheme, opts) {
   const { width, height, sensitivity, smoothing, glow, shadow, opacity = 0.7, position, videoHeight } = opts;
   const vizH = Math.max(60, Math.min(height, 300));
-  const rate = 25;
   const scale = sensitivity > 1.5 ? 'log' : 'lin';
   const alpha = glow ? Math.min(0.95, opacity) : Math.min(0.8, opacity * 0.9);
 
@@ -277,7 +272,7 @@ function buildWaveform(colorScheme, opts) {
   const effectiveHeight = position === 'full' ? videoHeight : vizH;
 
   const filterComplex = [
-    `[1:a]showwaves=s=${width}x${effectiveHeight}:mode=cline:rate=${rate}:scale=${scale}:colors=${colorScheme.primary.replace('0x', '#')}|${colorScheme.secondary.replace('0x', '#')}[viz]`,
+    `[1:a]showwaves=s=${width}x${effectiveHeight}:mode=line:rate=25:scale=${scale}[viz]`,
     `[viz]format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}[vizalpha]`,
     `[0:v][vizalpha]overlay=0:${overlayY}:format=auto:shortest=1[outv]`
   ].join(';');
@@ -327,12 +322,10 @@ function buildNebula(colorScheme, opts) {
 
 /**
  * Particle Wave - Dot/particle style visualization
- * Uses showwaves with point mode
  */
 function buildParticleWave(colorScheme, opts) {
   const { width, height, barCount, sensitivity, smoothing, glow, shadow, opacity = 0.7, position, videoHeight } = opts;
   const vizH = Math.max(60, Math.min(height, 300));
-  const rate = 25;
   const scale = sensitivity > 1.5 ? 'log' : 'lin';
   const alpha = glow ? Math.min(0.9, opacity) : Math.min(0.8, opacity * 0.9);
 
@@ -347,7 +340,7 @@ function buildParticleWave(colorScheme, opts) {
   const effectiveHeight = position === 'full' ? videoHeight : vizH;
 
   const filterComplex = [
-    `[1:a]showwaves=s=${width}x${effectiveHeight}:mode=p2p:rate=${rate}:scale=${scale}:colors=${colorScheme.primary.replace('0x', '#')}|${colorScheme.secondary.replace('0x', '#')}[viz]`,
+    `[1:a]showwaves=s=${width}x${effectiveHeight}:mode=p2p:rate=25:scale=${scale}[viz]`,
     glow
       ? `[viz]gblur=sigma=2,format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}[vizalpha]`
       : `[viz]format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}[vizalpha]`,

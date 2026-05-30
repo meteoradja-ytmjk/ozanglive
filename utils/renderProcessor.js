@@ -74,12 +74,18 @@ async function applyVisualizerOverlay({ videoPath, audioPath, outputPath, durati
   const videoStream = videoMeta.streams?.find(s => s.codec_type === 'video');
   const width = videoStream?.width || 1920;
   const height = videoStream?.height || 1080;
-  const fps = eval(videoStream?.r_frame_rate || '30') || 30;
+  const fpsStr = videoStream?.r_frame_rate || '30/1';
+  let fps = 30;
+  try { 
+    const parts = fpsStr.split('/');
+    fps = parts.length === 2 ? Math.round(parseInt(parts[0]) / parseInt(parts[1])) : parseInt(fpsStr);
+  } catch(e) { fps = 30; }
+  fps = Math.min(fps || 30, 30);
 
   console.log('[VISUALIZER] Applying visualizer overlay');
   console.log('[VISUALIZER] Type:', visualizerSettings.type);
-  console.log('[VISUALIZER] Color:', visualizerSettings.color);
-  console.log('[VISUALIZER] Video:', width, 'x', height, '@', Math.round(fps), 'fps');
+  console.log('[VISUALIZER] Video:', width, 'x', height, '@', fps, 'fps');
+  console.log('[VISUALIZER] Duration:', duration, 's');
 
   // Build the FFmpeg filter complex
   const { filterComplex, outputMap } = buildVisualizerFilter(visualizerSettings, {
@@ -88,28 +94,31 @@ async function applyVisualizerOverlay({ videoPath, audioPath, outputPath, durati
     position: visualizerSettings.position || 'bottom'
   });
 
-  console.log('[VISUALIZER] Filter complex:', filterComplex);
+  console.log('[VISUALIZER] Filter:', filterComplex);
 
+  // Use raw ffmpeg command for maximum reliability
+  // The issue with fluent-ffmpeg complexFilter + map is that it can produce corrupt output
   await runFfmpeg((cmd) => {
     return cmd
-      .input(videoPath)    // Input 0: video
-      .input(audioPath)    // Input 1: audio
-      .complexFilter(filterComplex)
+      .input(videoPath)
+      .input(audioPath)
       .outputOptions([
+        '-filter_complex', filterComplex,
         '-map', outputMap,
         '-map', '1:a',
-        '-t', String(duration),
         '-c:v', 'libx264',
-        '-preset', 'veryfast',
+        '-preset', 'ultrafast',
         '-crf', '23',
-        '-tune', 'fastdecode',
-        '-r', String(Math.min(Math.round(fps), 30)),
+        '-pix_fmt', 'yuv420p',
+        '-r', String(fps),
         '-c:a', 'aac',
         '-b:a', '192k',
         '-ar', '44100',
         '-ac', '2',
+        '-t', String(duration),
         '-movflags', '+faststart',
-        '-max_muxing_queue_size', '1024'
+        '-max_muxing_queue_size', '4096',
+        '-y'
       ])
       .output(outputPath);
   }, {
@@ -119,7 +128,16 @@ async function applyVisualizerOverlay({ videoPath, audioPath, outputPath, durati
     }
   });
 
-  console.log('[VISUALIZER] Overlay applied successfully');
+  // Verify output file exists and has size > 0
+  if (!fs.existsSync(outputPath)) {
+    throw new Error('Visualizer output file was not created');
+  }
+  const stat = fs.statSync(outputPath);
+  if (stat.size < 1000) {
+    throw new Error(`Visualizer output file too small (${stat.size} bytes), likely corrupt`);
+  }
+
+  console.log('[VISUALIZER] ✓ Output:', (stat.size / 1024 / 1024).toFixed(1), 'MB');
   return outputPath;
 }
 
@@ -197,10 +215,9 @@ async function renderLoopVideo({
     async function finalizeWithVisualizer(renderedPath) {
       if (!shouldApplyVisualizer) return renderedPath;
       
-      // Determine source file - it should be actualOutputPath (temp file)
+      // Determine source file
       let preVizPath;
       if (renderedPath === outputPath && fs.existsSync(outputPath)) {
-        // Was written directly to outputPath, move it to temp
         preVizPath = path.join(workDir, 'pre-viz-final.mp4');
         fs.renameSync(outputPath, preVizPath);
       } else if (fs.existsSync(actualOutputPath)) {
@@ -210,17 +227,45 @@ async function renderLoopVideo({
         return renderedPath;
       }
       
-      console.log('[RENDER] 🎵 Applying Audio Visualizer...');
-      console.log('[RENDER] Source:', preVizPath);
+      // Verify source file is valid
+      const srcStat = fs.statSync(preVizPath);
+      if (srcStat.size < 1000) {
+        console.error('[RENDER] ⚠️ Source file too small, skipping visualizer');
+        fs.copyFileSync(preVizPath, outputPath);
+        return outputPath;
+      }
       
-      // Extract audio from the rendered file for visualizer filter input
+      console.log('[RENDER] 🎵 Applying Audio Visualizer...');
+      console.log('[RENDER] Source:', preVizPath, '(' + (srcStat.size / 1024 / 1024).toFixed(1) + ' MB)');
+      
+      // Extract audio - re-encode to AAC to ensure compatibility with filter
       const vizAudioPath = path.join(workDir, 'viz-audio.aac');
-      await runFfmpeg((cmd) => {
-        return cmd
-          .input(preVizPath)
-          .outputOptions(['-vn', '-c:a', 'copy'])
-          .output(vizAudioPath);
-      });
+      try {
+        await runFfmpeg((cmd) => {
+          return cmd
+            .input(preVizPath)
+            .outputOptions([
+              '-vn',
+              '-c:a', 'aac',
+              '-b:a', '192k',
+              '-ar', '44100',
+              '-ac', '2',
+              '-t', String(effectiveTargetDuration)
+            ])
+            .output(vizAudioPath);
+        });
+      } catch (audioErr) {
+        console.error('[RENDER] ⚠️ Audio extraction failed:', audioErr.message);
+        fs.copyFileSync(preVizPath, outputPath);
+        return outputPath;
+      }
+      
+      // Verify audio was extracted
+      if (!fs.existsSync(vizAudioPath) || fs.statSync(vizAudioPath).size < 100) {
+        console.error('[RENDER] ⚠️ Audio extraction produced empty file');
+        fs.copyFileSync(preVizPath, outputPath);
+        return outputPath;
+      }
       
       try {
         await applyVisualizerOverlay({
@@ -235,9 +280,11 @@ async function renderLoopVideo({
         });
         console.log('[RENDER] 🎵 Visualizer applied successfully!');
       } catch (vizError) {
-        console.error('[RENDER] ⚠️ Visualizer failed, using original output:', vizError.message);
-        if (fs.existsSync(preVizPath) && !fs.existsSync(outputPath)) {
+        console.error('[RENDER] ⚠️ Visualizer failed:', vizError.message);
+        // Fallback: copy the pre-visualizer output as final
+        if (fs.existsSync(preVizPath)) {
           fs.copyFileSync(preVizPath, outputPath);
+          console.log('[RENDER] Using pre-visualizer output as fallback');
         }
       }
       
