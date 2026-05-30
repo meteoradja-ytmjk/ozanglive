@@ -4323,11 +4323,15 @@ app.post('/api/render/jobs', isAuthenticated, async (req, res) => {
 
     setImmediate(async () => {
       try {
-        await RenderJob.update(job.id, { status: 'processing', progress: 10 });
+        await RenderJob.update(job.id, { status: 'processing', progress: 5 });
         const outputName = `render-${job.id}.mp4`;
         const outputPath = path.join(__dirname, 'public', 'uploads', 'videos', outputName);
         const videoPaths = safeVideos.map((v) => path.join(__dirname, 'public', v.filepath));
         const audioPaths = safeAudios.map((a) => path.join(__dirname, 'public', a.filepath));
+
+        // Track progress with timestamps for ETA calculation
+        const renderStartTime = Date.now();
+        let lastProgressUpdate = 0;
 
         await renderLoopVideo({
           videoPaths,
@@ -4342,8 +4346,13 @@ app.post('/api/render/jobs', isAuthenticated, async (req, res) => {
           overlayVideo: overlayVideo || null,
           visualizerSettings: visualizerSettings || null,
           onProgress: async (progressPercent) => {
-            if (Number.isFinite(progressPercent) && progressPercent > 10) {
-              await RenderJob.update(job.id, { progress: progressPercent });
+            const now = Date.now();
+            const pct = Number.isFinite(progressPercent) ? Math.max(5, Math.min(99, progressPercent)) : 5;
+            // Throttle DB updates to max once per second and only if progress changed
+            if (pct > lastProgressUpdate && (now - renderStartTime > 500)) {
+              lastProgressUpdate = pct;
+              const elapsedSeconds = Math.round((now - renderStartTime) / 1000);
+              await RenderJob.update(job.id, { progress: pct, elapsed_seconds: elapsedSeconds }).catch(() => {});
             }
           }
         });

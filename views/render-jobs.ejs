@@ -425,6 +425,13 @@
   transform: scale(1.15);
 }
 
+/* Visualizer Position Buttons */
+.viz-pos-btn.active {
+  border-color: #8B5CF6 !important;
+  background: rgba(139, 92, 246, 0.1) !important;
+  color: #8B5CF6 !important;
+}
+
 /* Enhanced Render Progress */
 .render-progress-card {
   background: linear-gradient(135deg, rgba(17, 24, 39, 0.95), rgba(31, 41, 55, 0.9));
@@ -735,7 +742,7 @@
   </div>
 </div>
 
-<!-- Audio Visualizer Settings + Live Preview -->
+<!-- Audio Visualizer Settings + Live Preview (overlaid on video) -->
 <div class="bg-gray-800 rounded-lg p-4 mb-4">
   <div class="flex items-center justify-between mb-3">
     <h3 class="text-sm font-semibold text-white flex items-center gap-2">
@@ -749,15 +756,19 @@
     </label>
   </div>
 
-  <!-- Live Preview Canvas (audio-reactive) -->
-  <div id="vizLivePreview" class="relative w-full rounded-lg overflow-hidden mb-3 border border-gray-700" style="aspect-ratio:16/5; background:#000;">
-    <canvas id="vizPreviewCanvas" class="w-full h-full"></canvas>
+  <!-- Live Preview: Video + Visualizer Overlay -->
+  <div id="vizLivePreview" class="relative w-full rounded-lg overflow-hidden mb-3 border border-gray-700" style="aspect-ratio:16/9; background:#000;">
+    <!-- Video layer -->
+    <video id="vizVideoPlayer" class="w-full h-full object-cover" muted loop></video>
+    <!-- Visualizer canvas overlay (positioned based on user settings) -->
+    <canvas id="vizPreviewCanvas" class="absolute left-0 right-0 pointer-events-none" style="bottom:0; height:30%;"></canvas>
+    <!-- Placeholder -->
     <div id="vizPlaceholder" class="absolute inset-0 flex flex-col items-center justify-center text-gray-500">
-      <i class="ti ti-waveform text-3xl mb-1"></i>
-      <span class="text-xs">Enable visualizer & select audio to preview</span>
+      <i class="ti ti-video text-3xl mb-1"></i>
+      <span class="text-xs">Select video & audio, enable visualizer</span>
     </div>
     <!-- Audio controls overlay -->
-    <div id="vizAudioControls" class="absolute bottom-2 left-2 right-2 hidden">
+    <div id="vizAudioControls" class="absolute bottom-2 left-2 right-2 hidden z-10">
       <div class="flex items-center gap-2 bg-black/70 rounded-lg px-3 py-1.5">
         <button onclick="toggleVizAudioPlayback()" id="vizPlayBtn" class="text-white hover:text-primary transition-colors">
           <i class="ti ti-player-play text-sm"></i>
@@ -772,7 +783,7 @@
   </div>
 
   <!-- Visualizer Panel (hidden when disabled) -->
-  <div id="vizSettingsPanel" class="hidden space-y-3" style="opacity:0.5; pointer-events:none;">
+  <div id="vizSettingsPanel" class="hidden space-y-3">
     
     <!-- Visualizer Type -->
     <div>
@@ -810,7 +821,27 @@
       </div>
     </div>
 
-    <!-- Controls Row -->
+    <!-- Position & Size Controls -->
+    <div>
+      <label class="text-xs font-medium text-gray-300 block mb-2">
+        <i class="ti ti-dimensions text-teal-400 mr-1"></i>Position & Size
+      </label>
+      <div class="grid grid-cols-4 gap-1.5 mb-2">
+        <button onclick="setVizPosition('top')" data-pos="top" class="viz-pos-btn text-[10px] px-2 py-1.5 rounded border border-gray-600 bg-dark-700 text-gray-300 hover:border-primary/50"><i class="ti ti-arrow-bar-up text-xs"></i> Top</button>
+        <button onclick="setVizPosition('center')" data-pos="center" class="viz-pos-btn text-[10px] px-2 py-1.5 rounded border border-gray-600 bg-dark-700 text-gray-300 hover:border-primary/50"><i class="ti ti-arrows-vertical text-xs"></i> Center</button>
+        <button onclick="setVizPosition('bottom')" data-pos="bottom" class="viz-pos-btn active text-[10px] px-2 py-1.5 rounded border border-primary bg-primary/10 text-primary"><i class="ti ti-arrow-bar-down text-xs"></i> Bottom</button>
+        <button onclick="setVizPosition('full')" data-pos="full" class="viz-pos-btn text-[10px] px-2 py-1.5 rounded border border-gray-600 bg-dark-700 text-gray-300 hover:border-primary/50"><i class="ti ti-maximize text-xs"></i> Full</button>
+      </div>
+      <div>
+        <div class="flex justify-between text-[10px] mb-1">
+          <span class="text-gray-400">Height</span>
+          <span class="text-white" id="vizHeightVal">30%</span>
+        </div>
+        <input type="range" id="vizHeight" min="10" max="100" value="30" class="w-full h-1 accent-primary cursor-pointer" oninput="setVizHeight(this.value)">
+      </div>
+    </div>
+
+    <!-- Fine-Tuning Controls -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
       <div>
         <label class="text-[10px] text-gray-400 block mb-1">Intensity</label>
@@ -1440,23 +1471,28 @@ async function uploadJob(id){
 let vizPreview = null;
 let vizEnabled = false;
 let vizCurrentAudioUrl = null;
+let vizPosition = 'bottom';
+let vizHeightPercent = 30;
 
 function toggleVisualizerPanel() {
   vizEnabled = document.getElementById('vizEnabled').checked;
   const panel = document.getElementById('vizSettingsPanel');
   const placeholder = document.getElementById('vizPlaceholder');
+  const canvas = document.getElementById('vizPreviewCanvas');
   
   panel.classList.toggle('hidden', !vizEnabled);
   
   if (vizEnabled) {
-    panel.style.opacity = '1';
-    panel.style.pointerEvents = 'auto';
     placeholder.classList.add('hidden');
+    canvas.style.display = 'block';
     
     // Initialize visualizer preview
     if (!vizPreview) {
       vizPreview = new AudioVisualizerPreview('vizPreviewCanvas');
     }
+    
+    // Load selected video into preview
+    loadVizVideoPreview();
     
     // Try to load selected audio for real preview
     const audioIds = [...document.querySelectorAll("input[name='audio']:checked")].map(i => i.value);
@@ -1467,15 +1503,45 @@ function toggleVisualizerPanel() {
     }
     
     document.getElementById('vizAudioControls').classList.remove('hidden');
+    applyVizCanvasPosition();
   } else {
-    panel.style.opacity = '0.5';
-    panel.style.pointerEvents = 'none';
     placeholder.classList.remove('hidden');
+    canvas.style.display = 'none';
     document.getElementById('vizAudioControls').classList.add('hidden');
     
     if (vizPreview) {
       vizPreview.stop();
     }
+  }
+}
+
+async function loadVizVideoPreview() {
+  const videoCheckboxes = document.querySelectorAll("input[name='video']:checked");
+  const videoPlayer = document.getElementById('vizVideoPlayer');
+  const placeholder = document.getElementById('vizPlaceholder');
+  
+  if (videoCheckboxes.length === 0) {
+    videoPlayer.src = '';
+    videoPlayer.style.display = 'none';
+    if (!vizEnabled) placeholder.classList.remove('hidden');
+    return;
+  }
+  
+  const videoId = videoCheckboxes[0].value;
+  try {
+    const resp = await fetch('/api/videos/' + videoId);
+    const data = await resp.json();
+    const video = data.video || data;
+    
+    if (video && video.filepath) {
+      const videoPath = video.filepath.startsWith('/') ? video.filepath : '/' + video.filepath;
+      videoPlayer.src = videoPath;
+      videoPlayer.style.display = 'block';
+      videoPlayer.play().catch(() => {});
+      placeholder.classList.add('hidden');
+    }
+  } catch (err) {
+    console.error('[Viz] Failed to load video:', err);
   }
 }
 
@@ -1518,7 +1584,7 @@ function toggleVizAudioPlayback() {
   if (vizPreview.audioElement && !vizPreview.audioElement.paused) {
     vizPreview.audioElement.pause();
     document.getElementById('vizPlayBtn').innerHTML = '<i class="ti ti-player-play text-sm"></i>';
-  } else if (vizPreview.audioElement) {
+  } else if (vizPreview.audioElement && vizPreview.audioElement.src) {
     vizPreview.audioElement.play();
     document.getElementById('vizPlayBtn').innerHTML = '<i class="ti ti-player-pause text-sm"></i>';
   } else {
@@ -1529,6 +1595,63 @@ function toggleVizAudioPlayback() {
 function setVizVolume(val) {
   if (vizPreview) {
     vizPreview.setVolume(val / 100);
+  }
+}
+
+function setVizPosition(pos) {
+  vizPosition = pos;
+  document.querySelectorAll('.viz-pos-btn').forEach(b => {
+    const isActive = b.dataset.pos === pos;
+    b.classList.toggle('active', isActive);
+    b.classList.toggle('border-primary', isActive);
+    b.classList.toggle('bg-primary/10', isActive);
+    b.classList.toggle('text-primary', isActive);
+    b.classList.toggle('border-gray-600', !isActive);
+    b.classList.toggle('text-gray-300', !isActive);
+  });
+  applyVizCanvasPosition();
+  if (vizPreview) vizPreview.updateSettings({ position: pos });
+}
+
+function setVizHeight(val) {
+  vizHeightPercent = parseInt(val);
+  document.getElementById('vizHeightVal').textContent = val + '%';
+  applyVizCanvasPosition();
+  if (vizPreview) vizPreview.updateSettings({ height: vizHeightPercent });
+}
+
+function applyVizCanvasPosition() {
+  const canvas = document.getElementById('vizPreviewCanvas');
+  if (!canvas) return;
+  
+  // Reset all positioning
+  canvas.style.top = '';
+  canvas.style.bottom = '';
+  canvas.style.left = '0';
+  canvas.style.right = '0';
+  
+  if (vizPosition === 'full') {
+    canvas.style.top = '0';
+    canvas.style.bottom = '0';
+    canvas.style.height = '100%';
+  } else if (vizPosition === 'top') {
+    canvas.style.top = '0';
+    canvas.style.bottom = '';
+    canvas.style.height = vizHeightPercent + '%';
+  } else if (vizPosition === 'center') {
+    canvas.style.top = ((100 - vizHeightPercent) / 2) + '%';
+    canvas.style.bottom = '';
+    canvas.style.height = vizHeightPercent + '%';
+  } else {
+    // bottom (default)
+    canvas.style.top = '';
+    canvas.style.bottom = '0';
+    canvas.style.height = vizHeightPercent + '%';
+  }
+  
+  // Resize canvas internal resolution
+  if (vizPreview) {
+    vizPreview._resizeCanvas();
   }
 }
 
@@ -1608,8 +1731,8 @@ function getVisualizerSettings() {
     gradient: document.getElementById('vizGradient').checked,
     reflection: document.getElementById('vizReflection').checked,
     opacity: 0.85,
-    position: 'bottom',
-    height: 30
+    position: vizPosition,
+    height: vizHeightPercent
   };
 }
 
@@ -3285,8 +3408,9 @@ function togglePin(event, id, type) {
 function updateSelectedCount() {
   updateMediaSelectionCount();
   
-  // Update visualizer preview when audio selection changes
+  // Update visualizer preview when selection changes
   if (vizEnabled && vizPreview) {
+    loadVizVideoPreview();
     loadVizAudioPreview();
   }
 }
@@ -4533,7 +4657,7 @@ function startSmartRefresh() {
     } catch (err) {
       console.error('Smart refresh error:', err);
     }
-  }, 5000); // 5 seconds instead of 3
+  }, 3000); // Poll every 3 seconds for responsive progress
 }
 
 // Start smart refresh

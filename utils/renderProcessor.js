@@ -7,12 +7,22 @@ const { buildVisualizerFilter, validateSettings: validateVisualizerSettings } = 
 
 ffmpeg.setFfmpegPath(ffmpegPath);
 
-const runFfmpeg = (configure, { onProgress } = {}) => new Promise((resolve, reject) => {
+const runFfmpeg = (configure, { onProgress, estimatedDurationSec } = {}) => new Promise((resolve, reject) => {
   const cmd = configure(ffmpeg());
+  let progressEmitted = false;
   if (typeof onProgress === 'function') {
-    cmd.on('progress', (p) => onProgress(p));
+    cmd.on('progress', (p) => {
+      progressEmitted = true;
+      onProgress(p);
+    });
   }
-  cmd.on('end', resolve).on('error', reject).run();
+  cmd.on('end', () => {
+    // If no progress was emitted (stream-copy), emit 100% at end
+    if (!progressEmitted && typeof onProgress === 'function') {
+      onProgress({ timemark: '99:99:99', percent: 100 });
+    }
+    resolve();
+  }).on('error', reject).run();
 });
 
 const ffprobeAsync = (filePath) => new Promise((resolve, reject) => {
