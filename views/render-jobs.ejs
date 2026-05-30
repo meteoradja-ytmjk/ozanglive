@@ -798,8 +798,45 @@
   </div>
 </div>
 
-<!-- Audio Visualizer Settings + Live Preview (overlaid on video) -->
+<!-- Preview + Audio Visualizer -->
 <div class="bg-gray-800 rounded-lg p-4 mb-4">
+  <!-- Preview Section (Always Visible) -->
+  <div class="mb-3">
+    <h3 class="text-sm font-semibold text-white flex items-center gap-2 mb-3">
+      <i class="ti ti-eye text-blue-400"></i>
+      Preview
+    </h3>
+    <!-- Live Preview: Video + Visualizer Overlay -->
+    <div id="vizLivePreview" class="relative w-full rounded-lg overflow-hidden border border-gray-700" style="aspect-ratio:16/9; background:#000;">
+      <!-- Video layer -->
+      <video id="vizVideoPlayer" class="w-full h-full object-cover" muted loop style="display:none;"></video>
+      <!-- Visualizer canvas overlay (positioned based on user settings) -->
+      <canvas id="vizPreviewCanvas" class="absolute left-0 right-0 pointer-events-none" style="display:none; bottom:0; height:30%; width:100%;"></canvas>
+      <!-- Placeholder -->
+      <div id="vizPlaceholder" class="absolute inset-0 flex flex-col items-center justify-center text-gray-500">
+        <i class="ti ti-video text-3xl mb-1"></i>
+        <span class="text-xs">Pilih video & audio untuk melihat preview</span>
+      </div>
+      <!-- Audio controls overlay -->
+      <div id="vizAudioControls" class="absolute bottom-2 left-2 right-2 hidden z-10">
+        <div class="flex items-center gap-2 bg-black/70 rounded-lg px-3 py-1.5">
+          <button onclick="toggleVizAudioPlayback()" id="vizPlayBtn" class="text-white hover:text-primary transition-colors">
+            <i class="ti ti-player-play text-sm"></i>
+          </button>
+          <div class="flex-1 h-1 bg-gray-600 rounded-full overflow-hidden">
+            <div id="vizAudioProgress" class="h-full bg-primary rounded-full transition-all" style="width:0%"></div>
+          </div>
+          <input type="range" id="vizVolume" min="0" max="100" value="50" class="w-16 h-1 accent-primary cursor-pointer" oninput="setVizVolume(this.value)">
+          <i class="ti ti-volume text-gray-400 text-xs"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Divider -->
+  <div class="border-t border-gray-700 my-3"></div>
+
+  <!-- Audio Visualizer Toggle -->
   <div class="flex items-center justify-between mb-3">
     <h3 class="text-sm font-semibold text-white flex items-center gap-2">
       <i class="ti ti-waveform text-violet-400"></i>
@@ -810,32 +847,6 @@
       <div class="w-9 h-5 bg-gray-600 peer-focus:ring-2 peer-focus:ring-primary rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-violet-500 peer-checked:to-pink-500"></div>
       <span class="ml-2 text-xs text-gray-400">Enable</span>
     </label>
-  </div>
-
-  <!-- Live Preview: Video + Visualizer Overlay -->
-  <div id="vizLivePreview" class="relative w-full rounded-lg overflow-hidden mb-3 border border-gray-700" style="aspect-ratio:16/9; background:#000;">
-    <!-- Video layer -->
-    <video id="vizVideoPlayer" class="w-full h-full object-cover" muted loop style="display:none;"></video>
-    <!-- Visualizer canvas overlay (positioned based on user settings) -->
-    <canvas id="vizPreviewCanvas" class="absolute left-0 right-0 pointer-events-none" style="display:none; bottom:0; height:30%; width:100%;"></canvas>
-    <!-- Placeholder -->
-    <div id="vizPlaceholder" class="absolute inset-0 flex flex-col items-center justify-center text-gray-500">
-      <i class="ti ti-video text-3xl mb-1"></i>
-      <span class="text-xs">Select video & audio, enable visualizer</span>
-    </div>
-    <!-- Audio controls overlay -->
-    <div id="vizAudioControls" class="absolute bottom-2 left-2 right-2 hidden z-10">
-      <div class="flex items-center gap-2 bg-black/70 rounded-lg px-3 py-1.5">
-        <button onclick="toggleVizAudioPlayback()" id="vizPlayBtn" class="text-white hover:text-primary transition-colors">
-          <i class="ti ti-player-play text-sm"></i>
-        </button>
-        <div class="flex-1 h-1 bg-gray-600 rounded-full overflow-hidden">
-          <div id="vizAudioProgress" class="h-full bg-primary rounded-full transition-all" style="width:0%"></div>
-        </div>
-        <input type="range" id="vizVolume" min="0" max="100" value="50" class="w-16 h-1 accent-primary cursor-pointer" oninput="setVizVolume(this.value)">
-        <i class="ti ti-volume text-gray-400 text-xs"></i>
-      </div>
-    </div>
   </div>
 
   <!-- Visualizer Panel (hidden when disabled) -->
@@ -1533,14 +1544,11 @@ let vizHeightPercent = 30;
 function toggleVisualizerPanel() {
   vizEnabled = document.getElementById('vizEnabled').checked;
   const panel = document.getElementById('vizSettingsPanel');
-  const placeholder = document.getElementById('vizPlaceholder');
   const canvas = document.getElementById('vizPreviewCanvas');
-  const videoPlayer = document.getElementById('vizVideoPlayer');
   
   panel.classList.toggle('hidden', !vizEnabled);
   
   if (vizEnabled) {
-    placeholder.classList.add('hidden');
     canvas.style.display = 'block';
     
     // Initialize visualizer preview after canvas is visible
@@ -1551,9 +1559,6 @@ function toggleVisualizerPanel() {
       // Force resize now that canvas is visible
       vizPreview._resizeCanvas();
       
-      // Load selected video into preview
-      loadVizVideoPreview();
-      
       // Try to load selected audio for real preview
       const audioIds = [...document.querySelectorAll("input[name='audio']:checked")].map(i => i.value);
       if (audioIds.length > 0) {
@@ -1563,19 +1568,31 @@ function toggleVisualizerPanel() {
       }
       
       applyVizCanvasPosition();
-    }, 50); // Small delay to ensure DOM is rendered
+    }, 50);
     
     document.getElementById('vizAudioControls').classList.remove('hidden');
   } else {
     canvas.style.display = 'none';
-    videoPlayer.style.display = 'none';
-    videoPlayer.src = '';
-    placeholder.classList.remove('hidden');
     document.getElementById('vizAudioControls').classList.add('hidden');
     
     if (vizPreview) {
       vizPreview.stop();
     }
+  }
+}
+
+// Auto-load preview when video/audio is selected (independent of visualizer)
+function loadPreviewOnSelection() {
+  const videoPlayer = document.getElementById('vizVideoPlayer');
+  const placeholder = document.getElementById('vizPlaceholder');
+  const videoCheckboxes = document.querySelectorAll("input[name='video']:checked");
+  
+  if (videoCheckboxes.length > 0) {
+    loadVizVideoPreview();
+  } else {
+    videoPlayer.src = '';
+    videoPlayer.style.display = 'none';
+    placeholder.classList.remove('hidden');
   }
 }
 
@@ -1587,7 +1604,7 @@ async function loadVizVideoPreview() {
   if (videoCheckboxes.length === 0) {
     videoPlayer.src = '';
     videoPlayer.style.display = 'none';
-    if (!vizEnabled) placeholder.classList.remove('hidden');
+    placeholder.classList.remove('hidden');
     return;
   }
   
@@ -3485,9 +3502,11 @@ function togglePin(event, id, type) {
 function updateSelectedCount() {
   updateMediaSelectionCount();
   
-  // Update visualizer preview when selection changes
+  // Always update video preview when selection changes
+  loadVizVideoPreview();
+  
+  // Update visualizer audio preview when enabled
   if (vizEnabled && vizPreview) {
-    loadVizVideoPreview();
     loadVizAudioPreview();
   }
 }
