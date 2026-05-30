@@ -225,7 +225,7 @@ function buildSpectrumBars(colorScheme, opts) {
   const filters = [
     `[1:a]showwaves=s=${width}x${effectiveHeight}:mode=cline:rate=25:scale=${scale}[viz]`,
     `[viz]format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}[vizalpha]`,
-    `[0:v][vizalpha]overlay=0:${overlayY}:format=auto:shortest=1[outv]`
+    `[0:v][vizalpha]overlay=0:${overlayY}:shortest=1[outv]`
   ];
 
   return { filterComplex: filters.join(';'), outputMap: '[outv]' };
@@ -246,7 +246,7 @@ function buildCenterBars(colorScheme, opts) {
     `[viz_b]vflip[viz_flip]`,
     `[viz_a][viz_flip]vstack[viz_mirror]`,
     `[viz_mirror]format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}[vizalpha]`,
-    `[0:v][vizalpha]overlay=0:(H-h)/2:format=auto:shortest=1[outv]`
+    `[0:v][vizalpha]overlay=0:(H-h)/2:shortest=1[outv]`
   ].join(';');
 
   return { filterComplex, outputMap: '[outv]' };
@@ -274,7 +274,7 @@ function buildWaveform(colorScheme, opts) {
   const filterComplex = [
     `[1:a]showwaves=s=${width}x${effectiveHeight}:mode=line:rate=25:scale=${scale}[viz]`,
     `[viz]format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}[vizalpha]`,
-    `[0:v][vizalpha]overlay=0:${overlayY}:format=auto:shortest=1[outv]`
+    `[0:v][vizalpha]overlay=0:${overlayY}:shortest=1[outv]`
   ].join(';');
 
   return { filterComplex, outputMap: '[outv]' };
@@ -295,7 +295,7 @@ function buildCircularSpectrum(colorScheme, opts) {
     glow
       ? `[viz]gblur=sigma=3,format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}[vizglow]`
       : `[viz]format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}[vizglow]`,
-    `[0:v][vizglow]overlay=(W-w)/2:(H-h)/2:format=auto:shortest=1[outv]`
+    `[0:v][vizglow]overlay=(W-w)/2:(H-h)/2:shortest=1[outv]`
   ].join(';');
 
   return { filterComplex, outputMap: '[outv]' };
@@ -314,7 +314,7 @@ function buildNebula(colorScheme, opts) {
   const filterComplex = [
     `[1:a]avectorscope=s=${vizSize}x${vizSize}:mode=lissajous:rate=25:scale=sqrt:draw=line:zoom=${sensitivity * 1.5}[viz]`,
     `[viz]gblur=sigma=8,format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}:rr=1.2:gg=0.8:bb=1.3[vizglow]`,
-    `[0:v][vizglow]overlay=(W-w)/2:(H-h)/2:format=auto:shortest=1[outv]`
+    `[0:v][vizglow]overlay=(W-w)/2:(H-h)/2:shortest=1[outv]`
   ].join(';');
 
   return { filterComplex, outputMap: '[outv]' };
@@ -344,7 +344,7 @@ function buildParticleWave(colorScheme, opts) {
     glow
       ? `[viz]gblur=sigma=2,format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}[vizalpha]`
       : `[viz]format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}[vizalpha]`,
-    `[0:v][vizalpha]overlay=0:${overlayY}:format=auto:shortest=1[outv]`
+    `[0:v][vizalpha]overlay=0:${overlayY}:shortest=1[outv]`
   ].join(';');
 
   return { filterComplex, outputMap: '[outv]' };
@@ -373,7 +373,7 @@ function buildSpectrogram(colorScheme, opts) {
   const filterComplex = [
     `[1:a]showspectrum=s=${width}x${effectiveHeight}:mode=combined:color=intensity:scale=log:gain=${gain}:slide=scroll[viz]`,
     `[viz]format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}[vizalpha]`,
-    `[0:v][vizalpha]overlay=0:${overlayY}:format=auto:shortest=1[outv]`
+    `[0:v][vizalpha]overlay=0:${overlayY}:shortest=1[outv]`
   ].join(';');
 
   return { filterComplex, outputMap: '[outv]' };
@@ -394,7 +394,7 @@ function buildVectorPolar(colorScheme, opts) {
     glow
       ? `[viz]gblur=sigma=2,format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}:rr=0.8:gg=1.2:bb=0.9[vizglow]`
       : `[viz]format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}[vizglow]`,
-    `[0:v][vizglow]overlay=(W-w)/2:(H-h)/2:format=auto:shortest=1[outv]`
+    `[0:v][vizglow]overlay=(W-w)/2:(H-h)/2:shortest=1[outv]`
   ].join(';');
 
   return { filterComplex, outputMap: '[outv]' };
@@ -422,7 +422,7 @@ function buildHistogram(colorScheme, opts) {
   const filterComplex = [
     `[1:a]ahistogram=s=${width}x${effectiveHeight}:scale=log:slide=scroll:rate=25[viz]`,
     `[viz]format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}[vizalpha]`,
-    `[0:v][vizalpha]overlay=0:${overlayY}:format=auto:shortest=1[outv]`
+    `[0:v][vizalpha]overlay=0:${overlayY}:shortest=1[outv]`
   ].join(';');
 
   return { filterComplex, outputMap: '[outv]' };
@@ -451,7 +451,7 @@ function buildShowCQT(colorScheme, opts) {
   const filterComplex = [
     `[1:a]showcqt=s=${width}x${effectiveHeight}:count=1:bar_g=2:sono_g=4:volume=${volume}[viz]`,
     `[viz]format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}[vizalpha]`,
-    `[0:v][vizalpha]overlay=0:${overlayY}:format=auto:shortest=1[outv]`
+    `[0:v][vizalpha]overlay=0:${overlayY}:shortest=1[outv]`
   ].join(';');
 
   return { filterComplex, outputMap: '[outv]' };
@@ -470,7 +470,7 @@ function buildPulseRing(colorScheme, opts) {
   const filterComplex = [
     `[1:a]avectorscope=s=${vizSize}x${vizSize}:mode=lissajous_xy:rate=30:scale=sqrt:draw=line:zoom=${sensitivity * 2}[viz]`,
     `[viz]gblur=sigma=5,format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}:rr=1.1:bb=1.3[vizglow]`,
-    `[0:v][vizglow]overlay=(W-w)/2:(H-h)/2:format=auto:shortest=1[outv]`
+    `[0:v][vizglow]overlay=(W-w)/2:(H-h)/2:shortest=1[outv]`
   ].join(';');
 
   return { filterComplex, outputMap: '[outv]' };
@@ -499,7 +499,7 @@ function buildFrequencyTerrain(colorScheme, opts) {
   const filterComplex = [
     `[1:a]showspectrum=s=${width}x${effectiveHeight}:mode=combined:color=channel:scale=sqrt:gain=${gain}:slide=scroll:orientation=vertical[viz]`,
     `[viz]format=rgba,colorchannelmixer=aa=${alpha.toFixed(2)}[vizalpha]`,
-    `[0:v][vizalpha]overlay=0:${overlayY}:format=auto:shortest=1[outv]`
+    `[0:v][vizalpha]overlay=0:${overlayY}:shortest=1[outv]`
   ].join(';');
 
   return { filterComplex, outputMap: '[outv]' };
