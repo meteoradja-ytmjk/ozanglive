@@ -16,7 +16,7 @@ if (fs.existsSync('/usr/bin/ffmpeg')) {
   ffmpegPath = '/usr/bin/ffmpeg';
   console.log('Using system FFmpeg at:', ffmpegPath);
 } else {
-  ffmpegPath = ffmpegInstaller.path;
+  try { ffmpegPath = require('ffmpeg-static'); } catch(e) { ffmpegPath = ffmpegInstaller.path; }
   console.log('Using bundled FFmpeg at:', ffmpegPath);
 }
 const Video = require('../models/Video');

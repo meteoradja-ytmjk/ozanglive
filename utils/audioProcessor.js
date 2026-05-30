@@ -15,12 +15,12 @@ const fs = require('fs');
 const path = require('path');
 const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
 
-// Use system FFmpeg if available, otherwise use bundled
+// Use system FFmpeg if available, otherwise use ffmpeg-static, then bundled
 let ffmpegPath;
 if (fs.existsSync('/usr/bin/ffmpeg')) {
   ffmpegPath = '/usr/bin/ffmpeg';
 } else {
-  ffmpegPath = ffmpegInstaller.path;
+  try { ffmpegPath = require('ffmpeg-static'); } catch(e) { ffmpegPath = ffmpegInstaller.path; }
 }
 
 /**

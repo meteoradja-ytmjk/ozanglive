@@ -36,7 +36,8 @@ const RenderJob = require('./models/RenderJob');
 const Playlist = require('./models/Playlist');
 const StorageService = require('./services/storageService');
 const ffmpeg = require('fluent-ffmpeg');
-const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
+let ffmpegPath;
+try { ffmpegPath = require('ffmpeg-static'); } catch(e) { ffmpegPath = require('@ffmpeg-installer/ffmpeg').path; }
 const streamingService = require('./services/streamingService');
 const schedulerService = require('./services/schedulerService');
 const YouTubeCredentials = require('./models/YouTubeCredentials');
@@ -50,7 +51,7 @@ const YouTubeBroadcastSettings = require('./models/YouTubeBroadcastSettings');
 const scheduleService = require('./services/scheduleService');
 const { renderLoopVideo, loopVideoFast } = require('./utils/renderProcessor');
 const { parseWIBDateTimeLocal } = require('./utils/wibTime');
-ffmpeg.setFfmpegPath(ffmpegInstaller.path);
+ffmpeg.setFfmpegPath(ffmpegPath);
 const uploadProcessingConcurrency = Math.max(1, parseInt(process.env.UPLOAD_PROCESSING_CONCURRENCY || '1', 10));
 const videoProcessingQueue = new ProcessingQueue({ concurrency: uploadProcessingConcurrency, name: 'video-processing' });
 const audioProcessingQueue = new ProcessingQueue({ concurrency: uploadProcessingConcurrency, name: 'audio-processing' });
