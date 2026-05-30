@@ -64,8 +64,11 @@ class AudioVisualizerPreview {
     if (!this.canvas) return;
     const dpr = window.devicePixelRatio || 1;
     const rect = this.canvas.getBoundingClientRect();
+    // Skip if canvas is not visible (width/height = 0)
+    if (rect.width === 0 || rect.height === 0) return;
     this.canvas.width = rect.width * dpr;
     this.canvas.height = rect.height * dpr;
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform before scaling
     this.ctx.scale(dpr, dpr);
     this.width = rect.width;
     this.height = rect.height;

@@ -759,9 +759,9 @@
   <!-- Live Preview: Video + Visualizer Overlay -->
   <div id="vizLivePreview" class="relative w-full rounded-lg overflow-hidden mb-3 border border-gray-700" style="aspect-ratio:16/9; background:#000;">
     <!-- Video layer -->
-    <video id="vizVideoPlayer" class="w-full h-full object-cover" muted loop></video>
+    <video id="vizVideoPlayer" class="w-full h-full object-cover" muted loop style="display:none;"></video>
     <!-- Visualizer canvas overlay (positioned based on user settings) -->
-    <canvas id="vizPreviewCanvas" class="absolute left-0 right-0 pointer-events-none" style="bottom:0; height:30%;"></canvas>
+    <canvas id="vizPreviewCanvas" class="absolute left-0 right-0 pointer-events-none" style="display:none; bottom:0; height:30%; width:100%;"></canvas>
     <!-- Placeholder -->
     <div id="vizPlaceholder" class="absolute inset-0 flex flex-col items-center justify-center text-gray-500">
       <i class="ti ti-video text-3xl mb-1"></i>
@@ -1479,6 +1479,7 @@ function toggleVisualizerPanel() {
   const panel = document.getElementById('vizSettingsPanel');
   const placeholder = document.getElementById('vizPlaceholder');
   const canvas = document.getElementById('vizPreviewCanvas');
+  const videoPlayer = document.getElementById('vizVideoPlayer');
   
   panel.classList.toggle('hidden', !vizEnabled);
   
@@ -1486,27 +1487,34 @@ function toggleVisualizerPanel() {
     placeholder.classList.add('hidden');
     canvas.style.display = 'block';
     
-    // Initialize visualizer preview
-    if (!vizPreview) {
-      vizPreview = new AudioVisualizerPreview('vizPreviewCanvas');
-    }
-    
-    // Load selected video into preview
-    loadVizVideoPreview();
-    
-    // Try to load selected audio for real preview
-    const audioIds = [...document.querySelectorAll("input[name='audio']:checked")].map(i => i.value);
-    if (audioIds.length > 0) {
-      loadVizAudioPreview();
-    } else {
-      vizPreview.startSimulated();
-    }
+    // Initialize visualizer preview after canvas is visible
+    setTimeout(() => {
+      if (!vizPreview) {
+        vizPreview = new AudioVisualizerPreview('vizPreviewCanvas');
+      }
+      // Force resize now that canvas is visible
+      vizPreview._resizeCanvas();
+      
+      // Load selected video into preview
+      loadVizVideoPreview();
+      
+      // Try to load selected audio for real preview
+      const audioIds = [...document.querySelectorAll("input[name='audio']:checked")].map(i => i.value);
+      if (audioIds.length > 0) {
+        loadVizAudioPreview();
+      } else {
+        vizPreview.startSimulated();
+      }
+      
+      applyVizCanvasPosition();
+    }, 50); // Small delay to ensure DOM is rendered
     
     document.getElementById('vizAudioControls').classList.remove('hidden');
-    applyVizCanvasPosition();
   } else {
-    placeholder.classList.remove('hidden');
     canvas.style.display = 'none';
+    videoPlayer.style.display = 'none';
+    videoPlayer.src = '';
+    placeholder.classList.remove('hidden');
     document.getElementById('vizAudioControls').classList.add('hidden');
     
     if (vizPreview) {
@@ -1629,6 +1637,7 @@ function applyVizCanvasPosition() {
   canvas.style.bottom = '';
   canvas.style.left = '0';
   canvas.style.right = '0';
+  canvas.style.width = '100%';
   
   if (vizPosition === 'full') {
     canvas.style.top = '0';
@@ -1649,10 +1658,10 @@ function applyVizCanvasPosition() {
     canvas.style.height = vizHeightPercent + '%';
   }
   
-  // Resize canvas internal resolution
-  if (vizPreview) {
-    vizPreview._resizeCanvas();
-  }
+  // Resize canvas internal resolution after position change
+  setTimeout(() => {
+    if (vizPreview) vizPreview._resizeCanvas();
+  }, 20);
 }
 
 function pickVizType(type) {

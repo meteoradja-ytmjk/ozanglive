@@ -330,6 +330,9 @@ async function renderLoopVideo({
         console.log('[RENDER] Using audio file - GUARANTEED AUDIO OUTPUT');
         console.log('[RENDER] Target duration:', effectiveTargetDuration, 's');
         
+        // Emit initial progress
+        onProgress?.(15);
+        
         await runFfmpeg((cmd) => {
           return cmd
             .input(videoPath)
@@ -344,10 +347,11 @@ async function renderLoopVideo({
               '-map', '0:v:0',
               '-map', '1:a:0'
             ])
-            .output(outputPath);
+            .output(actualOutputPath);
         }, {
           onProgress: (p) => {
-            const progress = Math.min(99, Math.round((parseTimeToSeconds(p.timemark) / effectiveTargetDuration) * 100));
+            const progress = Math.min(99, Math.max(15, Math.round((parseTimeToSeconds(p.timemark) / effectiveTargetDuration) * 100)));
+
             console.log(`[RENDER] Progress: ${progress}% - ${p.timemark}`);
             onProgress?.(progress);
           }
