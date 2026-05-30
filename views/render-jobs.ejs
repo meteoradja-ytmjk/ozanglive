@@ -418,8 +418,8 @@
 
 /* Visualizer Type Buttons */
 .viz-type-btn {
-  padding: 0.375rem;
-  border-radius: 0.375rem;
+  padding: 0.5rem 0.25rem;
+  border-radius: 0.5rem;
   border: 2px solid transparent;
   background: rgba(31, 41, 55, 0.8);
   cursor: pointer;
@@ -427,10 +427,16 @@
   text-align: center;
   font-size: 1rem;
   line-height: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 3rem;
 }
 .viz-type-btn:hover {
   border-color: rgba(139, 92, 246, 0.5);
   transform: translateY(-1px);
+  background: rgba(139, 92, 246, 0.08);
 }
 .viz-type-btn.active {
   border-color: #8B5CF6;
@@ -891,22 +897,44 @@
   </div>
 
   <!-- Visualizer Panel (hidden when disabled) -->
-  <div id="vizSettingsPanel" class="hidden space-y-3">
+  <div id="vizSettingsPanel" class="hidden space-y-4">
     
     <!-- Visualizer Type -->
     <div>
       <label class="text-xs font-medium text-gray-300 block mb-2">
         <i class="ti ti-category text-violet-400 mr-1"></i>Type
       </label>
-      <div class="grid grid-cols-4 md:grid-cols-8 gap-1" id="vizTypeGrid">
-        <button onclick="pickVizType('spectrum')" data-type="spectrum" class="viz-type-btn active" title="Spectrum Bars">📊</button>
-        <button onclick="pickVizType('waveform')" data-type="waveform" class="viz-type-btn" title="Waveform">🌊</button>
-        <button onclick="pickVizType('circular')" data-type="circular" class="viz-type-btn" title="Circular">🔵</button>
-        <button onclick="pickVizType('particles')" data-type="particles" class="viz-type-btn" title="Particles">✨</button>
-        <button onclick="pickVizType('bars_center')" data-type="bars_center" class="viz-type-btn" title="Center Bars">📶</button>
-        <button onclick="pickVizType('spectrogram')" data-type="spectrogram" class="viz-type-btn" title="Spectrogram">🌡️</button>
-        <button onclick="pickVizType('showcqt')" data-type="showcqt" class="viz-type-btn" title="Piano CQT">🎹</button>
-        <button onclick="pickVizType('dna_helix')" data-type="dna_helix" class="viz-type-btn" title="DNA Helix">🧬</button>
+      <div class="grid grid-cols-4 md:grid-cols-10 gap-1.5" id="vizTypeGrid">
+        <button onclick="pickVizType('spectrum')" data-type="spectrum" class="viz-type-btn active" title="Spectrum Bars">
+          <span class="text-base">📊</span><span class="text-[9px] block mt-0.5">Bars</span>
+        </button>
+        <button onclick="pickVizType('waveform')" data-type="waveform" class="viz-type-btn" title="Waveform">
+          <span class="text-base">🌊</span><span class="text-[9px] block mt-0.5">Wave</span>
+        </button>
+        <button onclick="pickVizType('circular')" data-type="circular" class="viz-type-btn" title="Circular">
+          <span class="text-base">🔵</span><span class="text-[9px] block mt-0.5">Circle</span>
+        </button>
+        <button onclick="pickVizType('particles')" data-type="particles" class="viz-type-btn" title="Particles">
+          <span class="text-base">✨</span><span class="text-[9px] block mt-0.5">Particle</span>
+        </button>
+        <button onclick="pickVizType('bars_center')" data-type="bars_center" class="viz-type-btn" title="Center Mirror Bars">
+          <span class="text-base">📶</span><span class="text-[9px] block mt-0.5">Mirror</span>
+        </button>
+        <button onclick="pickVizType('spectrogram')" data-type="spectrogram" class="viz-type-btn" title="Spectrogram Heatmap">
+          <span class="text-base">🌡️</span><span class="text-[9px] block mt-0.5">Heat</span>
+        </button>
+        <button onclick="pickVizType('showcqt')" data-type="showcqt" class="viz-type-btn" title="Piano CQT">
+          <span class="text-base">🎹</span><span class="text-[9px] block mt-0.5">Piano</span>
+        </button>
+        <button onclick="pickVizType('nebula')" data-type="nebula" class="viz-type-btn" title="Nebula Scope">
+          <span class="text-base">🌌</span><span class="text-[9px] block mt-0.5">Nebula</span>
+        </button>
+        <button onclick="pickVizType('vector_polar')" data-type="vector_polar" class="viz-type-btn" title="Polar Radar">
+          <span class="text-base">📡</span><span class="text-[9px] block mt-0.5">Polar</span>
+        </button>
+        <button onclick="pickVizType('histogram')" data-type="histogram" class="viz-type-btn" title="Audio Histogram">
+          <span class="text-base">📈</span><span class="text-[9px] block mt-0.5">Histo</span>
+        </button>
       </div>
     </div>
 
@@ -929,23 +957,34 @@
       </div>
     </div>
 
-    <!-- Position & Size Controls -->
+    <!-- Position, Size & Offset -->
     <div>
       <label class="text-xs font-medium text-gray-300 block mb-2">
         <i class="ti ti-dimensions text-teal-400 mr-1"></i>Position & Size
       </label>
-      <div class="grid grid-cols-4 gap-1.5 mb-2">
-        <button onclick="setVizPosition('top')" data-pos="top" class="viz-pos-btn text-[10px] px-2 py-1.5 rounded border border-gray-600 bg-dark-700 text-gray-300 hover:border-primary/50"><i class="ti ti-arrow-bar-up text-xs"></i> Top</button>
-        <button onclick="setVizPosition('center')" data-pos="center" class="viz-pos-btn text-[10px] px-2 py-1.5 rounded border border-gray-600 bg-dark-700 text-gray-300 hover:border-primary/50"><i class="ti ti-arrows-vertical text-xs"></i> Center</button>
-        <button onclick="setVizPosition('bottom')" data-pos="bottom" class="viz-pos-btn active text-[10px] px-2 py-1.5 rounded border border-primary bg-primary/10 text-primary"><i class="ti ti-arrow-bar-down text-xs"></i> Bottom</button>
-        <button onclick="setVizPosition('full')" data-pos="full" class="viz-pos-btn text-[10px] px-2 py-1.5 rounded border border-gray-600 bg-dark-700 text-gray-300 hover:border-primary/50"><i class="ti ti-maximize text-xs"></i> Full</button>
+      <!-- Position buttons -->
+      <div class="grid grid-cols-4 gap-1.5 mb-3">
+        <button onclick="setVizPosition('top')" data-pos="top" class="viz-pos-btn text-[10px] px-2 py-1.5 rounded border border-gray-600 bg-dark-700 text-gray-300 hover:border-primary/50 text-center"><i class="ti ti-arrow-bar-up text-xs"></i> Top</button>
+        <button onclick="setVizPosition('center')" data-pos="center" class="viz-pos-btn text-[10px] px-2 py-1.5 rounded border border-gray-600 bg-dark-700 text-gray-300 hover:border-primary/50 text-center"><i class="ti ti-arrows-vertical text-xs"></i> Center</button>
+        <button onclick="setVizPosition('bottom')" data-pos="bottom" class="viz-pos-btn active text-[10px] px-2 py-1.5 rounded border border-primary bg-primary/10 text-primary text-center"><i class="ti ti-arrow-bar-down text-xs"></i> Bottom</button>
+        <button onclick="setVizPosition('full')" data-pos="full" class="viz-pos-btn text-[10px] px-2 py-1.5 rounded border border-gray-600 bg-dark-700 text-gray-300 hover:border-primary/50 text-center"><i class="ti ti-maximize text-xs"></i> Full</button>
       </div>
-      <div>
-        <div class="flex justify-between text-[10px] mb-1">
-          <span class="text-gray-400">Height</span>
-          <span class="text-white" id="vizHeightVal">30%</span>
+      <!-- Height & Horizontal Offset sliders -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <div class="flex justify-between text-[10px] mb-1">
+            <span class="text-gray-400">Height</span>
+            <span class="text-white" id="vizHeightVal">30%</span>
+          </div>
+          <input type="range" id="vizHeight" min="10" max="100" value="30" class="w-full h-1 accent-primary cursor-pointer" oninput="setVizHeight(this.value)">
         </div>
-        <input type="range" id="vizHeight" min="10" max="100" value="30" class="w-full h-1 accent-primary cursor-pointer" oninput="setVizHeight(this.value)">
+        <div>
+          <div class="flex justify-between text-[10px] mb-1">
+            <span class="text-gray-400">Horizontal Offset</span>
+            <span class="text-white" id="vizOffsetXVal">0%</span>
+          </div>
+          <input type="range" id="vizOffsetX" min="-50" max="50" value="0" class="w-full h-1 accent-primary cursor-pointer" oninput="setVizOffsetX(this.value)">
+        </div>
       </div>
     </div>
 
@@ -973,37 +1012,42 @@
       </div>
     </div>
 
-    <!-- Effects -->
-    <div class="flex flex-wrap gap-2">
-      <label class="flex items-center gap-1.5 cursor-pointer text-xs text-gray-300 bg-dark-700 px-2.5 py-1.5 rounded-lg border border-gray-600 hover:border-primary/50">
+    <!-- Effects - equal width grid -->
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-2">
+      <label class="flex items-center justify-center gap-1.5 cursor-pointer text-xs text-gray-300 bg-dark-700 px-2 py-2 rounded-lg border border-gray-600 hover:border-primary/50 transition-colors">
         <input type="checkbox" id="vizMirror" class="w-3.5 h-3.5 rounded text-primary" onchange="updateVizEffect('mirror', this.checked)">
         <span>Mirror</span>
       </label>
-      <label class="flex items-center gap-1.5 cursor-pointer text-xs text-gray-300 bg-dark-700 px-2.5 py-1.5 rounded-lg border border-gray-600 hover:border-primary/50">
+      <label class="flex items-center justify-center gap-1.5 cursor-pointer text-xs text-gray-300 bg-dark-700 px-2 py-2 rounded-lg border border-gray-600 hover:border-primary/50 transition-colors">
         <input type="checkbox" id="vizGlow" class="w-3.5 h-3.5 rounded text-primary" onchange="updateVizEffect('glow', this.checked)">
         <span>Glow</span>
       </label>
-      <label class="flex items-center gap-1.5 cursor-pointer text-xs text-gray-300 bg-dark-700 px-2.5 py-1.5 rounded-lg border border-gray-600 hover:border-primary/50">
+      <label class="flex items-center justify-center gap-1.5 cursor-pointer text-xs text-gray-300 bg-dark-700 px-2 py-2 rounded-lg border border-gray-600 hover:border-primary/50 transition-colors">
         <input type="checkbox" id="vizRoundBars" class="w-3.5 h-3.5 rounded text-primary" onchange="updateVizEffect('roundBars', this.checked)">
         <span>Rounded</span>
       </label>
-      <label class="flex items-center gap-1.5 cursor-pointer text-xs text-gray-300 bg-dark-700 px-2.5 py-1.5 rounded-lg border border-gray-600 hover:border-primary/50">
+      <label class="flex items-center justify-center gap-1.5 cursor-pointer text-xs text-gray-300 bg-dark-700 px-2 py-2 rounded-lg border border-gray-600 hover:border-primary/50 transition-colors">
         <input type="checkbox" id="vizGradient" class="w-3.5 h-3.5 rounded text-primary" checked onchange="updateVizEffect('gradient', this.checked)">
         <span>Gradient</span>
       </label>
-      <label class="flex items-center gap-1.5 cursor-pointer text-xs text-gray-300 bg-dark-700 px-2.5 py-1.5 rounded-lg border border-gray-600 hover:border-primary/50">
+      <label class="flex items-center justify-center gap-1.5 cursor-pointer text-xs text-gray-300 bg-dark-700 px-2 py-2 rounded-lg border border-gray-600 hover:border-primary/50 transition-colors">
         <input type="checkbox" id="vizReflection" class="w-3.5 h-3.5 rounded text-primary" onchange="updateVizEffect('reflection', this.checked)">
         <span>Reflection</span>
       </label>
     </div>
 
-    <!-- Quick Presets -->
-    <div class="flex gap-1.5 flex-wrap">
-      <button onclick="applyVizPreset('lofi')" class="text-[10px] px-2 py-1 bg-dark-700 text-gray-300 rounded border border-gray-600 hover:border-primary/50 hover:text-white transition-colors">🎵 Lo-Fi</button>
-      <button onclick="applyVizPreset('edm')" class="text-[10px] px-2 py-1 bg-dark-700 text-gray-300 rounded border border-gray-600 hover:border-primary/50 hover:text-white transition-colors">🎧 EDM</button>
-      <button onclick="applyVizPreset('cinematic')" class="text-[10px] px-2 py-1 bg-dark-700 text-gray-300 rounded border border-gray-600 hover:border-primary/50 hover:text-white transition-colors">🎬 Cinematic</button>
-      <button onclick="applyVizPreset('minimal')" class="text-[10px] px-2 py-1 bg-dark-700 text-gray-300 rounded border border-gray-600 hover:border-primary/50 hover:text-white transition-colors">⚪ Minimal</button>
-      <button onclick="applyVizPreset('retro')" class="text-[10px] px-2 py-1 bg-dark-700 text-gray-300 rounded border border-gray-600 hover:border-primary/50 hover:text-white transition-colors">👾 Retro</button>
+    <!-- Quick Presets - equal width grid -->
+    <div>
+      <label class="text-xs font-medium text-gray-300 block mb-2">
+        <i class="ti ti-sparkles text-yellow-400 mr-1"></i>Quick Presets
+      </label>
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-2">
+        <button onclick="applyVizPreset('lofi')" class="text-[11px] px-3 py-2 bg-dark-700 text-gray-300 rounded-lg border border-gray-600 hover:border-primary/50 hover:text-white transition-colors text-center">🎵 Lo-Fi</button>
+        <button onclick="applyVizPreset('edm')" class="text-[11px] px-3 py-2 bg-dark-700 text-gray-300 rounded-lg border border-gray-600 hover:border-primary/50 hover:text-white transition-colors text-center">🎧 EDM</button>
+        <button onclick="applyVizPreset('cinematic')" class="text-[11px] px-3 py-2 bg-dark-700 text-gray-300 rounded-lg border border-gray-600 hover:border-primary/50 hover:text-white transition-colors text-center">🎬 Cinema</button>
+        <button onclick="applyVizPreset('minimal')" class="text-[11px] px-3 py-2 bg-dark-700 text-gray-300 rounded-lg border border-gray-600 hover:border-primary/50 hover:text-white transition-colors text-center">⚪ Minimal</button>
+        <button onclick="applyVizPreset('retro')" class="text-[11px] px-3 py-2 bg-dark-700 text-gray-300 rounded-lg border border-gray-600 hover:border-primary/50 hover:text-white transition-colors text-center">👾 Retro</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1858,6 +1902,14 @@ function setVizHeight(val) {
   if (vizPreview) vizPreview.updateSettings({ height: vizHeightPercent });
 }
 
+let vizOffsetX = 0;
+
+function setVizOffsetX(val) {
+  vizOffsetX = parseInt(val);
+  document.getElementById('vizOffsetXVal').textContent = val + '%';
+  applyVizCanvasPosition();
+}
+
 function applyVizCanvasPosition() {
   const canvas = document.getElementById('vizPreviewCanvas');
   if (!canvas) return;
@@ -1868,6 +1920,7 @@ function applyVizCanvasPosition() {
   canvas.style.left = '0';
   canvas.style.right = '0';
   canvas.style.width = '100%';
+  canvas.style.transform = '';
   
   if (vizPosition === 'full') {
     canvas.style.top = '0';
@@ -1886,6 +1939,11 @@ function applyVizCanvasPosition() {
     canvas.style.top = '';
     canvas.style.bottom = '0';
     canvas.style.height = vizHeightPercent + '%';
+  }
+  
+  // Apply horizontal offset
+  if (vizOffsetX !== 0) {
+    canvas.style.transform = `translateX(${vizOffsetX}%)`;
   }
   
   // Resize canvas internal resolution after position change
@@ -1971,7 +2029,8 @@ function getVisualizerSettings() {
     reflection: document.getElementById('vizReflection').checked,
     opacity: 0.85,
     position: vizPosition,
-    height: vizHeightPercent
+    height: vizHeightPercent,
+    offsetX: vizOffsetX
   };
 }
 
