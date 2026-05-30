@@ -10,16 +10,23 @@ ffmpeg.setFfmpegPath(ffmpegPath);
 const runFfmpeg = (configure, { onProgress, estimatedDurationSec } = {}) => new Promise((resolve, reject) => {
   const cmd = configure(ffmpeg());
   let progressEmitted = false;
+  let lastProgress = 0;
   if (typeof onProgress === 'function') {
     cmd.on('progress', (p) => {
       progressEmitted = true;
-      onProgress(p);
+      // Ensure we always pass a valid progress object
+      if (p && p.timemark) {
+        onProgress(p);
+      } else if (p && p.percent) {
+        // Some FFmpeg versions report percent directly
+        onProgress({ timemark: '00:00:00', percent: p.percent });
+      }
     });
   }
   cmd.on('end', () => {
-    // If no progress was emitted (stream-copy), emit 100% at end
+    // If no progress was emitted (stream-copy), emit completion
     if (!progressEmitted && typeof onProgress === 'function') {
-      onProgress({ timemark: '99:99:99', percent: 100 });
+      onProgress({ timemark: '99:99:99', percent: 100, _synthetic: true });
     }
     resolve();
   }).on('error', reject).run();
@@ -32,6 +39,18 @@ const ffprobeAsync = (filePath) => new Promise((resolve, reject) => {
 const parseTimeToSeconds = (timemark = '') => {
   const [h = 0, m = 0, s = 0] = String(timemark).split(':');
   return (parseFloat(h) * 3600) + (parseFloat(m) * 60) + parseFloat(s);
+};
+
+/**
+ * Safely calculate progress percentage from FFmpeg timemark
+ * Handles division by zero and NaN cases
+ */
+const calcProgress = (timemark, totalDuration, minPct = 5, maxPct = 99) => {
+  if (!totalDuration || totalDuration <= 0) return minPct;
+  const elapsed = parseTimeToSeconds(timemark);
+  if (!Number.isFinite(elapsed) || elapsed <= 0) return minPct;
+  const pct = Math.round((elapsed / totalDuration) * 100);
+  return Math.min(maxPct, Math.max(minPct, pct));
 };
 
 /**
@@ -256,7 +275,7 @@ async function renderLoopVideo({
               .output(outputPath);
           }, {
             onProgress: (p) => {
-              const progress = Math.min(99, Math.round((parseTimeToSeconds(p.timemark) / effectiveTargetDuration) * 100));
+              const progress = calcProgress(p.timemark, effectiveTargetDuration, 5, 99);
               onProgress?.(progress);
             }
           });
@@ -280,7 +299,7 @@ async function renderLoopVideo({
               .output(outputPath);
           }, {
             onProgress: (p) => {
-              const progress = Math.min(99, Math.round((parseTimeToSeconds(p.timemark) / effectiveTargetDuration) * 100));
+              const progress = calcProgress(p.timemark, effectiveTargetDuration, 5, 99);
               onProgress?.(progress);
             }
           });
@@ -350,8 +369,7 @@ async function renderLoopVideo({
             .output(actualOutputPath);
         }, {
           onProgress: (p) => {
-            const progress = Math.min(99, Math.max(15, Math.round((parseTimeToSeconds(p.timemark) / effectiveTargetDuration) * 100)));
-
+            const progress = calcProgress(p.timemark, effectiveTargetDuration, 15, 99);
             console.log(`[RENDER] Progress: ${progress}% - ${p.timemark}`);
             onProgress?.(progress);
           }
@@ -388,7 +406,7 @@ async function renderLoopVideo({
             .output(loopedVideo);
         }, {
           onProgress: (p) => {
-            const progress = Math.min(50, Math.round((parseTimeToSeconds(p.timemark) / effectiveTargetDuration) * 50));
+            const progress = calcProgress(p.timemark, effectiveTargetDuration, 5, 50);
             onProgress?.(progress);
           }
         });
@@ -416,7 +434,7 @@ async function renderLoopVideo({
             .output(outputPath);
         }, {
           onProgress: (p) => {
-            const progress = 50 + Math.min(49, Math.round((parseTimeToSeconds(p.timemark) / effectiveTargetDuration) * 49));
+            const progress = calcProgress(p.timemark, effectiveTargetDuration, 50, 99);
             console.log(`[RENDER] Progress: ${progress}% - ${p.timemark}`);
             onProgress?.(progress);
           }
@@ -453,7 +471,7 @@ async function renderLoopVideo({
             .output(loopedAudio);
         }, {
           onProgress: (p) => {
-            const progress = Math.min(50, Math.round((parseTimeToSeconds(p.timemark) / effectiveTargetDuration) * 50));
+            const progress = calcProgress(p.timemark, effectiveTargetDuration, 5, 50);
             onProgress?.(progress);
           }
         });
@@ -480,7 +498,7 @@ async function renderLoopVideo({
             .output(outputPath);
         }, {
           onProgress: (p) => {
-            const progress = 50 + Math.min(49, Math.round((parseTimeToSeconds(p.timemark) / effectiveTargetDuration) * 49));
+            const progress = calcProgress(p.timemark, effectiveTargetDuration, 50, 99);
             console.log(`[RENDER] Progress: ${progress}% - ${p.timemark}`);
             onProgress?.(progress);
           }
@@ -521,7 +539,7 @@ async function renderLoopVideo({
             .output(loopedVideo);
         }, {
           onProgress: (p) => {
-            const progress = Math.min(33, Math.round((parseTimeToSeconds(p.timemark) / effectiveTargetDuration) * 33));
+            const progress = calcProgress(p.timemark, effectiveTargetDuration, 5, 33);
             onProgress?.(progress);
           }
         });
@@ -539,7 +557,7 @@ async function renderLoopVideo({
             .output(loopedAudio);
         }, {
           onProgress: (p) => {
-            const progress = 33 + Math.min(33, Math.round((parseTimeToSeconds(p.timemark) / effectiveTargetDuration) * 33));
+            const progress = 33 + calcProgress(p.timemark, effectiveTargetDuration, 5, 33);
             onProgress?.(progress);
           }
         });
@@ -567,7 +585,7 @@ async function renderLoopVideo({
             .output(outputPath);
         }, {
           onProgress: (p) => {
-            const progress = 66 + Math.min(33, Math.round((parseTimeToSeconds(p.timemark) / effectiveTargetDuration) * 33));
+            const progress = 66 + calcProgress(p.timemark, effectiveTargetDuration, 5, 33);
             console.log(`[RENDER] Progress: ${progress}% - ${p.timemark}`);
             onProgress?.(progress);
           }
@@ -638,7 +656,7 @@ async function renderLoopVideo({
           .output(mergedAudio);
       }, {
         onProgress: (p) => {
-          const progress = Math.min(50, Math.round((parseTimeToSeconds(p.timemark) / effectiveTargetDuration) * 50));
+          const progress = calcProgress(p.timemark, effectiveTargetDuration, 5, 50);
           console.log(`[RENDER] Audio merge: ${progress}%`);
           onProgress?.(progress);
         }
@@ -673,7 +691,7 @@ async function renderLoopVideo({
             .output(loopedVideo);
         }, {
           onProgress: (p) => {
-            const progress = 50 + Math.min(25, Math.round((parseTimeToSeconds(p.timemark) / effectiveTargetDuration) * 25));
+            const progress = calcProgress(p.timemark, effectiveTargetDuration, 50, 75);
             onProgress?.(progress);
           }
         });
@@ -701,7 +719,7 @@ async function renderLoopVideo({
             .output(outputPath);
         }, {
           onProgress: (p) => {
-            const progress = 75 + Math.min(24, Math.round((parseTimeToSeconds(p.timemark) / effectiveTargetDuration) * 24));
+            const progress = calcProgress(p.timemark, effectiveTargetDuration, 75, 99);
             console.log(`[RENDER] Progress: ${progress}% - ${p.timemark}`);
             onProgress?.(progress);
           }
@@ -731,7 +749,7 @@ async function renderLoopVideo({
             .output(outputPath);
         }, {
           onProgress: (p) => {
-            const progress = 50 + Math.min(49, Math.round((parseTimeToSeconds(p.timemark) / effectiveTargetDuration) * 49));
+            const progress = calcProgress(p.timemark, effectiveTargetDuration, 50, 99);
             console.log(`[RENDER] Progress: ${progress}% - ${p.timemark}`);
             onProgress?.(progress);
           }
@@ -808,7 +826,7 @@ async function renderLoopVideo({
         .output(mergedVideo);
     }, {
       onProgress: (p) => {
-        const progress = Math.min(40, Math.round((parseTimeToSeconds(p.timemark) / effectiveTargetDuration) * 40));
+        const progress = calcProgress(p.timemark, effectiveTargetDuration, 5, 40);
         console.log(`[RENDER] Video progress: ${progress}% (${p.timemark}/${effectiveTargetDuration}s)`);
         onProgress?.(progress);
       }
@@ -869,7 +887,7 @@ async function renderLoopVideo({
           .output(mergedAudio);
       }, {
         onProgress: (p) => {
-          const progress = 40 + Math.min(30, Math.round((parseTimeToSeconds(p.timemark) / effectiveTargetDuration) * 30));
+          const progress = calcProgress(p.timemark, effectiveTargetDuration, 40, 70);
           console.log(`[RENDER] Audio progress: ${progress}% (${p.timemark}/${effectiveTargetDuration}s)`);
           onProgress?.(progress);
         }
@@ -904,7 +922,7 @@ async function renderLoopVideo({
           .output(outputPath);
       }, { 
         onProgress: (p) => {
-          const progress = 70 + Math.min(29, Math.round((parseTimeToSeconds(p.timemark) / effectiveTargetDuration) * 29));
+          const progress = calcProgress(p.timemark, effectiveTargetDuration, 70, 99);
           console.log(`[RENDER] Combine progress: ${progress}% (${p.timemark})`);
           onProgress?.(progress);
         }
