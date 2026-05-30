@@ -299,6 +299,34 @@
   border-color: #8B5CF6;
 }
 
+/* Floating Preview */
+#vizLivePreview.floating-preview {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 360px;
+  height: 203px;
+  z-index: 9999;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(139,92,246,0.3);
+  aspect-ratio: auto;
+  transition: all 0.3s ease;
+}
+
+#vizLivePreview.floating-preview:hover {
+  box-shadow: 0 10px 40px rgba(0,0,0,0.8), 0 0 0 1px rgba(139,92,246,0.5);
+  transform: scale(1.02);
+}
+
+@media (max-width: 640px) {
+  #vizLivePreview.floating-preview {
+    width: 280px;
+    height: 158px;
+    bottom: 10px;
+    right: 10px;
+  }
+}
+
 .batch-queue-item.processing {
   border-color: #10B981;
   background: rgba(16, 185, 129, 0.05);
@@ -799,13 +827,19 @@
 </div>
 
 <!-- Preview + Audio Visualizer -->
-<div class="bg-gray-800 rounded-lg p-4 mb-4">
+<div class="bg-gray-800 rounded-lg p-4 mb-4" id="previewSection">
   <!-- Preview Section (Always Visible) -->
   <div class="mb-3">
-    <h3 class="text-sm font-semibold text-white flex items-center gap-2 mb-3">
-      <i class="ti ti-eye text-blue-400"></i>
-      Preview
-    </h3>
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+        <i class="ti ti-eye text-blue-400"></i>
+        Preview
+      </h3>
+      <button onclick="toggleFloatingPreview()" id="floatPreviewBtn" class="flex items-center gap-1 px-2 py-1 text-[10px] text-gray-400 hover:text-white bg-gray-700 hover:bg-gray-600 rounded-md transition-colors" title="Pop-up preview (tetap terlihat saat scroll)">
+        <i class="ti ti-picture-in-picture text-xs"></i>
+        <span>Float</span>
+      </button>
+    </div>
     <!-- Live Preview: Video + Visualizer Overlay -->
     <div id="vizLivePreview" class="relative w-full rounded-lg overflow-hidden border border-gray-700" style="aspect-ratio:16/9; background:#000;">
       <!-- Video layer -->
@@ -818,7 +852,7 @@
         <span class="text-xs">Pilih video & audio untuk melihat preview</span>
       </div>
       <!-- Audio controls overlay -->
-      <div id="vizAudioControls" class="absolute bottom-2 left-2 right-2 hidden z-10">
+      <div id="vizAudioControls" class="absolute bottom-2 left-2 right-2 z-10 hidden">
         <div class="flex items-center gap-2 bg-black/70 rounded-lg px-3 py-1.5">
           <button onclick="toggleVizAudioPlayback()" id="vizPlayBtn" class="text-white hover:text-primary transition-colors">
             <i class="ti ti-player-play text-sm"></i>
@@ -830,6 +864,10 @@
           <i class="ti ti-volume text-gray-400 text-xs"></i>
         </div>
       </div>
+      <!-- Float close button (only visible in floating mode) -->
+      <button onclick="toggleFloatingPreview()" id="floatCloseBtn" class="absolute top-2 right-2 z-20 hidden w-6 h-6 flex items-center justify-center bg-black/70 hover:bg-red-500/80 text-white rounded-full transition-colors text-xs">
+        <i class="ti ti-x"></i>
+      </button>
     </div>
   </div>
 
@@ -1596,6 +1634,102 @@ function loadPreviewOnSelection() {
   }
 }
 
+// ===== AUTO-PLAY AUDIO ON SELECTION =====
+let previewAudioElement = null;
+
+function autoPlayAudioPreview() {
+  const audioCheckboxes = document.querySelectorAll("input[name='audio']:checked");
+  const audioControls = document.getElementById('vizAudioControls');
+  
+  if (audioCheckboxes.length > 0) {
+    // Show audio controls and auto-play
+    audioControls.classList.remove('hidden');
+    
+    // If visualizer is enabled, use vizPreview's audio
+    if (vizEnabled && vizPreview) {
+      loadVizAudioPreview();
+    } else {
+      // Play audio directly without visualizer
+      loadDirectAudioPreview();
+    }
+  } else {
+    audioControls.classList.add('hidden');
+    stopDirectAudio();
+    if (vizPreview) vizPreview.stop();
+  }
+}
+
+async function loadDirectAudioPreview() {
+  const audioCheckboxes = document.querySelectorAll("input[name='audio']:checked");
+  if (audioCheckboxes.length === 0) return;
+  
+  const audioId = audioCheckboxes[0].value;
+  try {
+    const resp = await fetch('/api/audios/' + audioId);
+    const data = await resp.json();
+    const audio = data.audio || data;
+    
+    if (audio && audio.filepath) {
+      if (!previewAudioElement) {
+        previewAudioElement = new Audio();
+        previewAudioElement.volume = 0.5;
+        previewAudioElement.loop = true;
+        
+        // Update progress bar
+        previewAudioElement.addEventListener('timeupdate', () => {
+          if (previewAudioElement.duration) {
+            const pct = (previewAudioElement.currentTime / previewAudioElement.duration) * 100;
+            const bar = document.getElementById('vizAudioProgress');
+            if (bar) bar.style.width = pct + '%';
+          }
+        });
+      }
+      
+      const audioPath = audio.filepath.startsWith('/') ? audio.filepath : '/' + audio.filepath;
+      if (previewAudioElement.src !== location.origin + audioPath) {
+        previewAudioElement.src = audioPath;
+        previewAudioElement.play().catch(() => {});
+        document.getElementById('vizPlayBtn').innerHTML = '<i class="ti ti-player-pause text-sm"></i>';
+      }
+    }
+  } catch (err) {
+    console.error('[Preview] Failed to load audio:', err);
+  }
+}
+
+function stopDirectAudio() {
+  if (previewAudioElement) {
+    previewAudioElement.pause();
+    previewAudioElement.src = '';
+    document.getElementById('vizPlayBtn').innerHTML = '<i class="ti ti-player-play text-sm"></i>';
+  }
+}
+
+// ===== FLOATING PREVIEW =====
+let isFloatingPreview = false;
+
+function toggleFloatingPreview() {
+  const preview = document.getElementById('vizLivePreview');
+  const floatBtn = document.getElementById('floatPreviewBtn');
+  const closeBtn = document.getElementById('floatCloseBtn');
+  
+  isFloatingPreview = !isFloatingPreview;
+  
+  if (isFloatingPreview) {
+    preview.classList.add('floating-preview');
+    floatBtn.innerHTML = '<i class="ti ti-picture-in-picture-off text-xs"></i><span>Dock</span>';
+    floatBtn.title = 'Kembalikan preview ke posisi semula';
+    closeBtn.classList.remove('hidden');
+    closeBtn.classList.add('flex');
+  } else {
+    preview.classList.remove('floating-preview');
+    floatBtn.innerHTML = '<i class="ti ti-picture-in-picture text-xs"></i><span>Float</span>';
+    floatBtn.title = 'Pop-up preview (tetap terlihat saat scroll)';
+    closeBtn.classList.add('hidden');
+    closeBtn.classList.remove('flex');
+  }
+}
+
 async function loadVizVideoPreview() {
   const videoCheckboxes = document.querySelectorAll("input[name='video']:checked");
   const videoPlayer = document.getElementById('vizVideoPlayer');
@@ -1660,22 +1794,42 @@ async function loadVizAudioPreview() {
 }
 
 function toggleVizAudioPlayback() {
-  if (!vizPreview) return;
+  // Handle visualizer audio
+  if (vizEnabled && vizPreview && vizPreview.audioElement) {
+    if (!vizPreview.audioElement.paused) {
+      vizPreview.audioElement.pause();
+      document.getElementById('vizPlayBtn').innerHTML = '<i class="ti ti-player-play text-sm"></i>';
+    } else if (vizPreview.audioElement.src) {
+      vizPreview.audioElement.play();
+      document.getElementById('vizPlayBtn').innerHTML = '<i class="ti ti-player-pause text-sm"></i>';
+    } else {
+      loadVizAudioPreview();
+    }
+    return;
+  }
   
-  if (vizPreview.audioElement && !vizPreview.audioElement.paused) {
-    vizPreview.audioElement.pause();
-    document.getElementById('vizPlayBtn').innerHTML = '<i class="ti ti-player-play text-sm"></i>';
-  } else if (vizPreview.audioElement && vizPreview.audioElement.src) {
-    vizPreview.audioElement.play();
-    document.getElementById('vizPlayBtn').innerHTML = '<i class="ti ti-player-pause text-sm"></i>';
+  // Handle direct audio preview
+  if (previewAudioElement) {
+    if (!previewAudioElement.paused) {
+      previewAudioElement.pause();
+      document.getElementById('vizPlayBtn').innerHTML = '<i class="ti ti-player-play text-sm"></i>';
+    } else if (previewAudioElement.src) {
+      previewAudioElement.play();
+      document.getElementById('vizPlayBtn').innerHTML = '<i class="ti ti-player-pause text-sm"></i>';
+    } else {
+      loadDirectAudioPreview();
+    }
   } else {
-    loadVizAudioPreview();
+    loadDirectAudioPreview();
   }
 }
 
 function setVizVolume(val) {
-  if (vizPreview) {
+  if (vizEnabled && vizPreview) {
     vizPreview.setVolume(val / 100);
+  }
+  if (previewAudioElement) {
+    previewAudioElement.volume = val / 100;
   }
 }
 
@@ -1829,7 +1983,9 @@ async function deleteJob(id){
 async function loadJobs(){
   const r=await fetch('/api/render/jobs');
   const d=await r.json();
-  const cards=toArray(d,'jobs').map(j=>{
+  const jobsArray = toArray(d,'jobs');
+  const cards=jobsArray.map((j, index)=>{
+    const jobNumber = jobsArray.length - index;
     const progress = Math.max(0,Math.min(100,Number(j.progress||0)));
     const isActive = j.status === 'processing' || j.status === 'pending' || j.status === 'queued';
     
@@ -1881,6 +2037,7 @@ async function loadJobs(){
       <div class="flex items-start justify-between mb-2">
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-2 mb-1">
+            <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary/20 text-primary text-[10px] font-bold flex-shrink-0">${jobNumber}</span>
             <h4 class="text-sm font-semibold text-white truncate">${j.title||'Untitled'}</h4>
             ${statusBadge}
           </div>
@@ -3504,6 +3661,9 @@ function updateSelectedCount() {
   
   // Always update video preview when selection changes
   loadVizVideoPreview();
+  
+  // Auto-play audio when selected (independent of visualizer)
+  autoPlayAudioPreview();
   
   // Update visualizer audio preview when enabled
   if (vizEnabled && vizPreview) {
