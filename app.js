@@ -3043,40 +3043,55 @@ app.post('/settings/password', isAuthenticated, [
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      const currentUser = await User.findById(req.session.userId);
       return res.render('settings', {
         title: 'Settings',
         active: 'settings',
-        user: await User.findById(req.session.userId),
+        user: currentUser,
+        userRole: currentUser.user_role,
+        req: req,
         error: errors.array()[0].msg,
         activeTab: 'security'
       });
     }
-    const user = await User.findById(req.session.userId);
+    const user = await User.findByIdWithPassword(req.session.userId);
+    if (!user) {
+      req.session.destroy();
+      return res.redirect('/login');
+    }
     const passwordMatch = await User.verifyPassword(req.body.currentPassword, user.password);
     if (!passwordMatch) {
       return res.render('settings', {
         title: 'Settings',
         active: 'settings',
         user: user,
+        userRole: user.user_role,
+        req: req,
         error: 'Current password is incorrect',
         activeTab: 'security'
       });
     }
     const hashedPassword = await bcrypt.hash(req.body.newPassword, 10);
     await User.update(req.session.userId, { password: hashedPassword });
+    const updatedUser = await User.findById(req.session.userId);
     return res.render('settings', {
       title: 'Settings',
       active: 'settings',
-      user: await User.findById(req.session.userId),
+      user: updatedUser,
+      userRole: updatedUser.user_role,
+      req: req,
       success: 'Password changed successfully',
       activeTab: 'security'
     });
   } catch (error) {
     console.error('Error changing password:', error);
+    const fallbackUser = await User.findById(req.session.userId);
     res.render('settings', {
       title: 'Settings',
       active: 'settings',
-      user: await User.findById(req.session.userId),
+      user: fallbackUser,
+      userRole: fallbackUser ? fallbackUser.user_role : 'user',
+      req: req,
       error: 'An error occurred while changing your password',
       activeTab: 'security'
     });

@@ -36,6 +36,17 @@ class User {
       });
     });
   }
+  static findByIdWithPassword(id) {
+    return new Promise((resolve, reject) => {
+      db.get('SELECT id, username, password, avatar_path, user_role, live_limit, storage_limit, storage_used FROM users WHERE id = ? LIMIT 1', [id], (err, row) => {
+        if (err) {
+          console.error('Database error in findByIdWithPassword:', err);
+          return reject(err);
+        }
+        resolve(row);
+      });
+    });
+  }
   static async create(userData) {
     try {
       // Validate username before creating user

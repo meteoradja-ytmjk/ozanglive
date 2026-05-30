@@ -1845,7 +1845,7 @@ async function loadJobs(){
           <button onclick="uploadJob('${j.id}')" class="flex-1 px-3 py-1.5 bg-primary/20 hover:bg-primary/30 text-primary text-xs rounded-lg transition-colors font-medium"><i class="ti ti-upload mr-1"></i>Upload</button>
           <button onclick="openLoopModal('${j.id}')" class="px-3 py-1.5 bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 text-xs rounded-lg transition-colors"><i class="ti ti-repeat mr-1"></i>Loop</button>
         ` : ''}
-        <button onclick="deleteJob('${j.id}')" class="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs rounded-lg transition-colors"><i class="ti ti-trash"></i></button>
+        <button onclick="deleteJob('${j.id}')" class="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-300 text-xs rounded-lg transition-colors border border-red-500/30 hover:border-red-500/50" title="Hapus project"><i class="ti ti-trash text-sm"></i></button>
       </div>
     </div>
   `;
