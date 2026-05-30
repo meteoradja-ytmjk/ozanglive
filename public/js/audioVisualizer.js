@@ -53,7 +53,9 @@ class AudioVisualizerPreview {
       cherry: ['#E11D48', '#FB7185', '#FDA4AF'],
       forest: ['#166534', '#4ADE80', '#86EFAC'],
       aurora: ['#06B6D4', '#8B5CF6', '#EC4899', '#F43F5E'],
-      midnight: ['#1E1B4B', '#4338CA', '#7C3AED', '#A78BFA']
+      midnight: ['#1E1B4B', '#4338CA', '#7C3AED', '#A78BFA'],
+      white: ['#FFFFFF', '#E2E8F0', '#CBD5E1'],
+      lemon: ['#FDE047', '#F59E0B', '#FBBF24']
     };
 
     this._resizeCanvas();
@@ -238,10 +240,18 @@ class AudioVisualizerPreview {
         this._drawWaveform(frequencyData, barCount, colors, intensity, sensitivity);
         break;
       case 'circular':
-      case 'nebula':
       case 'vector_lissajous':
       case 'phase':
         this._drawCircular(frequencyData, barCount, colors, intensity, sensitivity);
+        break;
+      case 'nebula':
+        this._drawNebula(frequencyData, barCount, colors, intensity, sensitivity);
+        break;
+      case 'vector_polar':
+        this._drawPolar(frequencyData, barCount, colors, intensity, sensitivity);
+        break;
+      case 'pulse_ring':
+        this._drawPulseRing(frequencyData, barCount, colors, intensity, sensitivity);
         break;
       case 'particles':
       case 'frequency_dots':
@@ -254,8 +264,8 @@ class AudioVisualizerPreview {
       case 'histogram':
         this._drawBars(frequencyData, barCount, colors, intensity, sensitivity, 'center');
         break;
-      case 'vector_polar':
-        this._drawCircular(frequencyData, barCount, colors, intensity, sensitivity);
+      case 'frequency_terrain':
+        this._drawTerrain(frequencyData, barCount, colors, intensity, sensitivity);
         break;
       case 'dna_helix':
         this._drawDNA(frequencyData, barCount, colors, intensity, sensitivity);
@@ -494,6 +504,167 @@ class AudioVisualizerPreview {
       const y = h / 2 - Math.sin((i / barCount) * Math.PI * 4 + Date.now() * 0.002) * value * h * 0.35;
       if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
     }
+    ctx.stroke();
+  }
+
+  // Nebula - soft glowing blobs that float and pulse (distinct from circular dots)
+  _drawNebula(data, barCount, colors, intensity, sensitivity) {
+    const { ctx, width: w, height: h } = this;
+    const cx = w / 2, cy = h / 2;
+    const step = Math.floor(data.length / barCount);
+    const time = Date.now() * 0.001;
+    const count = Math.min(barCount, 20);
+
+    for (let i = 0; i < count; i++) {
+      let sum = 0;
+      for (let j = 0; j < step; j++) sum += data[i * step + j] || 0;
+      const value = ((sum / step) / 255) * intensity * sensitivity;
+
+      const angle = (i / count) * Math.PI * 2 + time * 0.3;
+      const dist = value * Math.min(w, h) * 0.3 + 20;
+      const x = cx + Math.cos(angle) * dist;
+      const y = cy + Math.sin(angle) * dist;
+      const radius = value * 40 + 10;
+
+      const grad = ctx.createRadialGradient(x, y, 0, x, y, radius);
+      grad.addColorStop(0, colors[i % colors.length]);
+      grad.addColorStop(1, 'transparent');
+      ctx.globalAlpha = Math.max(0.2, value * 0.8);
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = this.settings.opacity;
+  }
+
+  // Polar - radar sweep with concentric rings (distinct from circular)
+  _drawPolar(data, barCount, colors, intensity, sensitivity) {
+    const { ctx, width: w, height: h } = this;
+    const cx = w / 2, cy = h / 2;
+    const maxR = Math.min(w, h) * 0.4;
+    const step = Math.floor(data.length / barCount);
+    const time = Date.now() * 0.002;
+
+    // Draw concentric guide rings
+    ctx.globalAlpha = 0.15;
+    for (let r = 1; r <= 3; r++) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, maxR * (r / 3), 0, Math.PI * 2);
+      ctx.strokeStyle = colors[0];
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    // Draw radar lines from center
+    ctx.globalAlpha = this.settings.opacity;
+    ctx.lineWidth = 2;
+    const count = Math.min(barCount, 36);
+    for (let i = 0; i < count; i++) {
+      let sum = 0;
+      for (let j = 0; j < step; j++) sum += data[i * step + j] || 0;
+      const value = ((sum / step) / 255) * intensity * sensitivity;
+
+      const angle = (i / count) * Math.PI * 2 + time;
+      const len = value * maxR;
+      const x2 = cx + Math.cos(angle) * len;
+      const y2 = cy + Math.sin(angle) * len;
+
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(x2, y2);
+      ctx.strokeStyle = colors[i % colors.length];
+      ctx.stroke();
+
+      // Dot at end
+      ctx.beginPath();
+      ctx.arc(x2, y2, 3, 0, Math.PI * 2);
+      ctx.fillStyle = colors[i % colors.length];
+      ctx.fill();
+    }
+  }
+
+  // Pulse Ring - expanding/contracting ring that pulses with bass
+  _drawPulseRing(data, barCount, colors, intensity, sensitivity) {
+    const { ctx, width: w, height: h } = this;
+    const cx = w / 2, cy = h / 2;
+    const step = Math.floor(data.length / barCount);
+    const time = Date.now() * 0.003;
+
+    // Get bass energy (low frequencies)
+    let bassSum = 0;
+    const bassCount = Math.min(8, data.length);
+    for (let i = 0; i < bassCount; i++) bassSum += data[i] || 0;
+    const bassValue = ((bassSum / bassCount) / 255) * intensity * sensitivity;
+
+    // Draw multiple expanding rings
+    for (let ring = 0; ring < 4; ring++) {
+      const baseR = Math.min(w, h) * (0.1 + ring * 0.1);
+      const pulseR = baseR + bassValue * 60;
+      const phase = time + ring * 0.5;
+
+      ctx.beginPath();
+      ctx.lineWidth = 3 - ring * 0.5;
+      ctx.globalAlpha = Math.max(0.2, (1 - ring * 0.2) * bassValue);
+      ctx.strokeStyle = colors[ring % colors.length];
+
+      // Draw deformed circle
+      for (let i = 0; i <= 64; i++) {
+        const angle = (i / 64) * Math.PI * 2;
+        const freqIdx = Math.floor((i / 64) * Math.min(barCount, data.length));
+        const freqValue = ((data[freqIdx] || 0) / 255) * intensity * sensitivity;
+        const r = pulseR + freqValue * 20 * Math.sin(angle * 3 + phase);
+        const x = cx + Math.cos(angle) * r;
+        const y = cy + Math.sin(angle) * r;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.stroke();
+    }
+    ctx.globalAlpha = this.settings.opacity;
+  }
+
+  // Terrain - vertical frequency bars that look like mountain terrain
+  _drawTerrain(data, barCount, colors, intensity, sensitivity) {
+    const { ctx, width: w, height: h } = this;
+    const step = Math.floor(data.length / barCount);
+    const count = Math.min(barCount, 80);
+    const sliceW = w / count;
+
+    // Draw filled terrain shape
+    ctx.beginPath();
+    ctx.moveTo(0, h);
+    for (let i = 0; i < count; i++) {
+      let sum = 0;
+      for (let j = 0; j < step; j++) sum += data[i * step + j] || 0;
+      const value = ((sum / step) / 255) * intensity * sensitivity;
+      const x = i * sliceW + sliceW / 2;
+      const peakY = h - value * h * 0.85;
+      ctx.lineTo(x, peakY);
+    }
+    ctx.lineTo(w, h);
+    ctx.closePath();
+
+    // Gradient fill
+    const grad = ctx.createLinearGradient(0, 0, 0, h);
+    colors.forEach((c, idx) => grad.addColorStop(idx / Math.max(1, colors.length - 1), c));
+    ctx.fillStyle = grad;
+    ctx.globalAlpha = 0.7;
+    ctx.fill();
+
+    // Top line
+    ctx.beginPath();
+    for (let i = 0; i < count; i++) {
+      let sum = 0;
+      for (let j = 0; j < step; j++) sum += data[i * step + j] || 0;
+      const value = ((sum / step) / 255) * intensity * sensitivity;
+      const x = i * sliceW + sliceW / 2;
+      const peakY = h - value * h * 0.85;
+      if (i === 0) ctx.moveTo(x, peakY); else ctx.lineTo(x, peakY);
+    }
+    ctx.strokeStyle = colors[0];
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = this.settings.opacity;
     ctx.stroke();
   }
 
