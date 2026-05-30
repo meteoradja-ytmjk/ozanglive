@@ -6210,6 +6210,20 @@ app.get('/api/audios', isAuthenticated, async (req, res) => {
   }
 });
 
+// Get single audio by ID (used by visualizer preview)
+app.get('/api/audios/:id', isAuthenticated, async (req, res) => {
+  try {
+    const audio = await Audio.findById(req.params.id);
+    if (!audio || audio.user_id !== req.session.userId) {
+      return res.status(404).json({ success: false, error: 'Audio not found' });
+    }
+    res.json({ success: true, audio });
+  } catch (error) {
+    console.error('Error fetching audio:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch audio' });
+  }
+});
+
 /**
  * Audio Joiner — merge an arbitrary list of audio IDs into a single seamless
  * AAC file in the audio gallery. Used by the Render tab so users can prepare

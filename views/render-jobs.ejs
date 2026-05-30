@@ -384,6 +384,67 @@
     transform: translateY(0);
   }
 }
+
+/* Visualizer Type Buttons */
+.viz-type-btn {
+  padding: 0.375rem;
+  border-radius: 0.375rem;
+  border: 2px solid transparent;
+  background: rgba(31, 41, 55, 0.8);
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+  font-size: 1rem;
+  line-height: 1;
+}
+.viz-type-btn:hover {
+  border-color: rgba(139, 92, 246, 0.5);
+  transform: translateY(-1px);
+}
+.viz-type-btn.active {
+  border-color: #8B5CF6;
+  background: rgba(139, 92, 246, 0.15);
+  box-shadow: 0 0 8px rgba(139, 92, 246, 0.3);
+}
+
+/* Visualizer Color Buttons */
+.viz-color-btn {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: all 0.2s;
+}
+.viz-color-btn:hover {
+  transform: scale(1.2);
+}
+.viz-color-btn.active {
+  border-color: #fff;
+  box-shadow: 0 0 8px rgba(255,255,255,0.4);
+  transform: scale(1.15);
+}
+
+/* Enhanced Render Progress */
+.render-progress-card {
+  background: linear-gradient(135deg, rgba(17, 24, 39, 0.95), rgba(31, 41, 55, 0.9));
+  border: 1px solid rgba(75, 85, 99, 0.5);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  transition: all 0.3s;
+}
+.render-progress-card.active {
+  border-color: rgba(139, 92, 246, 0.4);
+  box-shadow: 0 0 20px rgba(139, 92, 246, 0.1);
+}
+
+@keyframes renderPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(139, 92, 246, 0); }
+}
+.render-active-dot {
+  animation: renderPulse 2s ease-in-out infinite;
+}
 </style>
 </style>
 
@@ -674,33 +735,138 @@
   </div>
 </div>
 
-<!-- Advanced Features Grid -->
-<div class="grid grid-cols-1 gap-4 mb-6">
-  
-  <!-- Mini Live Preview -->
-  <div class="bg-gray-800 rounded-lg p-4">
-    <div class="flex items-center justify-between mb-3">
-      <h3 class="text-sm font-semibold text-white flex items-center gap-2">
-        <i class="ti ti-eye text-primary"></i>
-        Video Preview
-      </h3>
-      <button onclick="refreshMiniPreview()" class="text-xs text-gray-400 hover:text-primary transition-colors">
-        <i class="ti ti-refresh"></i> Refresh
-      </button>
+<!-- Audio Visualizer Settings + Live Preview -->
+<div class="bg-gray-800 rounded-lg p-4 mb-4">
+  <div class="flex items-center justify-between mb-3">
+    <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+      <i class="ti ti-waveform text-violet-400"></i>
+      Audio Visualizer
+    </h3>
+    <label class="relative inline-flex items-center cursor-pointer">
+      <input type="checkbox" id="vizEnabled" class="sr-only peer" onchange="toggleVisualizerPanel()">
+      <div class="w-9 h-5 bg-gray-600 peer-focus:ring-2 peer-focus:ring-primary rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-violet-500 peer-checked:to-pink-500"></div>
+      <span class="ml-2 text-xs text-gray-400">Enable</span>
+    </label>
+  </div>
+
+  <!-- Live Preview Canvas (audio-reactive) -->
+  <div id="vizLivePreview" class="relative w-full rounded-lg overflow-hidden mb-3 border border-gray-700" style="aspect-ratio:16/5; background:#000;">
+    <canvas id="vizPreviewCanvas" class="w-full h-full"></canvas>
+    <div id="vizPlaceholder" class="absolute inset-0 flex flex-col items-center justify-center text-gray-500">
+      <i class="ti ti-waveform text-3xl mb-1"></i>
+      <span class="text-xs">Enable visualizer & select audio to preview</span>
     </div>
-    <div class="mini-preview relative" id="miniPreview">
-      <div class="mini-preview-placeholder">
-        <i class="ti ti-video text-4xl mb-2"></i>
-        <span class="text-xs">Select videos to preview</span>
-      </div>
-    </div>
-    <div class="mt-2 text-xs text-gray-400" id="previewInfo">
-      <div class="flex items-center justify-between">
-        <span>No preview available</span>
+    <!-- Audio controls overlay -->
+    <div id="vizAudioControls" class="absolute bottom-2 left-2 right-2 hidden">
+      <div class="flex items-center gap-2 bg-black/70 rounded-lg px-3 py-1.5">
+        <button onclick="toggleVizAudioPlayback()" id="vizPlayBtn" class="text-white hover:text-primary transition-colors">
+          <i class="ti ti-player-play text-sm"></i>
+        </button>
+        <div class="flex-1 h-1 bg-gray-600 rounded-full overflow-hidden">
+          <div id="vizAudioProgress" class="h-full bg-primary rounded-full transition-all" style="width:0%"></div>
+        </div>
+        <input type="range" id="vizVolume" min="0" max="100" value="50" class="w-16 h-1 accent-primary cursor-pointer" oninput="setVizVolume(this.value)">
+        <i class="ti ti-volume text-gray-400 text-xs"></i>
       </div>
     </div>
   </div>
-  
+
+  <!-- Visualizer Panel (hidden when disabled) -->
+  <div id="vizSettingsPanel" class="hidden space-y-3" style="opacity:0.5; pointer-events:none;">
+    
+    <!-- Visualizer Type -->
+    <div>
+      <label class="text-xs font-medium text-gray-300 block mb-2">
+        <i class="ti ti-category text-violet-400 mr-1"></i>Type
+      </label>
+      <div class="grid grid-cols-4 md:grid-cols-8 gap-1" id="vizTypeGrid">
+        <button onclick="pickVizType('spectrum')" data-type="spectrum" class="viz-type-btn active" title="Spectrum Bars">📊</button>
+        <button onclick="pickVizType('waveform')" data-type="waveform" class="viz-type-btn" title="Waveform">🌊</button>
+        <button onclick="pickVizType('circular')" data-type="circular" class="viz-type-btn" title="Circular">🔵</button>
+        <button onclick="pickVizType('particles')" data-type="particles" class="viz-type-btn" title="Particles">✨</button>
+        <button onclick="pickVizType('bars_center')" data-type="bars_center" class="viz-type-btn" title="Center Bars">📶</button>
+        <button onclick="pickVizType('spectrogram')" data-type="spectrogram" class="viz-type-btn" title="Spectrogram">🌡️</button>
+        <button onclick="pickVizType('showcqt')" data-type="showcqt" class="viz-type-btn" title="Piano CQT">🎹</button>
+        <button onclick="pickVizType('dna_helix')" data-type="dna_helix" class="viz-type-btn" title="DNA Helix">🧬</button>
+      </div>
+    </div>
+
+    <!-- Color Scheme -->
+    <div>
+      <label class="text-xs font-medium text-gray-300 block mb-2">
+        <i class="ti ti-palette text-pink-400 mr-1"></i>Color
+      </label>
+      <div class="flex flex-wrap gap-1.5" id="vizColorGrid">
+        <button onclick="pickVizColor('purple')" data-color="purple" class="viz-color-btn active" style="background:linear-gradient(135deg,#8B5CF6,#EC4899)"></button>
+        <button onclick="pickVizColor('blue')" data-color="blue" class="viz-color-btn" style="background:linear-gradient(135deg,#3B82F6,#06B6D4)"></button>
+        <button onclick="pickVizColor('green')" data-color="green" class="viz-color-btn" style="background:linear-gradient(135deg,#10B981,#34D399)"></button>
+        <button onclick="pickVizColor('rainbow')" data-color="rainbow" class="viz-color-btn" style="background:conic-gradient(#EF4444,#F59E0B,#10B981,#3B82F6,#8B5CF6,#EF4444)"></button>
+        <button onclick="pickVizColor('fire')" data-color="fire" class="viz-color-btn" style="background:linear-gradient(135deg,#DC2626,#F59E0B)"></button>
+        <button onclick="pickVizColor('neon')" data-color="neon" class="viz-color-btn" style="background:linear-gradient(135deg,#FF00FF,#00FFFF)"></button>
+        <button onclick="pickVizColor('ocean')" data-color="ocean" class="viz-color-btn" style="background:linear-gradient(135deg,#0EA5E9,#22D3EE)"></button>
+        <button onclick="pickVizColor('sunset')" data-color="sunset" class="viz-color-btn" style="background:linear-gradient(135deg,#F97316,#FBBF24)"></button>
+        <button onclick="pickVizColor('gold')" data-color="gold" class="viz-color-btn" style="background:linear-gradient(135deg,#F59E0B,#D97706)"></button>
+        <button onclick="pickVizColor('aurora')" data-color="aurora" class="viz-color-btn" style="background:linear-gradient(135deg,#06B6D4,#8B5CF6,#EC4899)"></button>
+      </div>
+    </div>
+
+    <!-- Controls Row -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div>
+        <label class="text-[10px] text-gray-400 block mb-1">Intensity</label>
+        <input type="range" id="vizIntensity" min="10" max="100" value="50" class="w-full h-1 accent-primary cursor-pointer" oninput="updateVizSetting('intensity', this.value)">
+        <span class="text-[10px] text-gray-500" id="vizIntensityVal">50%</span>
+      </div>
+      <div>
+        <label class="text-[10px] text-gray-400 block mb-1">Sensitivity</label>
+        <input type="range" id="vizSensitivity" min="5" max="30" value="10" class="w-full h-1 accent-primary cursor-pointer" oninput="updateVizSetting('sensitivity', this.value/10)">
+        <span class="text-[10px] text-gray-500" id="vizSensitivityVal">1.0x</span>
+      </div>
+      <div>
+        <label class="text-[10px] text-gray-400 block mb-1">Bars</label>
+        <input type="range" id="vizBarCount" min="16" max="128" step="8" value="64" class="w-full h-1 accent-primary cursor-pointer" oninput="updateVizSetting('barCount', this.value)">
+        <span class="text-[10px] text-gray-500" id="vizBarCountVal">64</span>
+      </div>
+      <div>
+        <label class="text-[10px] text-gray-400 block mb-1">Smoothing</label>
+        <input type="range" id="vizSmoothing" min="0" max="95" value="80" class="w-full h-1 accent-primary cursor-pointer" oninput="updateVizSetting('smoothing', this.value/100)">
+        <span class="text-[10px] text-gray-500" id="vizSmoothingVal">0.80</span>
+      </div>
+    </div>
+
+    <!-- Effects -->
+    <div class="flex flex-wrap gap-2">
+      <label class="flex items-center gap-1.5 cursor-pointer text-xs text-gray-300 bg-dark-700 px-2.5 py-1.5 rounded-lg border border-gray-600 hover:border-primary/50">
+        <input type="checkbox" id="vizMirror" class="w-3.5 h-3.5 rounded text-primary" onchange="updateVizEffect('mirror', this.checked)">
+        <span>Mirror</span>
+      </label>
+      <label class="flex items-center gap-1.5 cursor-pointer text-xs text-gray-300 bg-dark-700 px-2.5 py-1.5 rounded-lg border border-gray-600 hover:border-primary/50">
+        <input type="checkbox" id="vizGlow" class="w-3.5 h-3.5 rounded text-primary" onchange="updateVizEffect('glow', this.checked)">
+        <span>Glow</span>
+      </label>
+      <label class="flex items-center gap-1.5 cursor-pointer text-xs text-gray-300 bg-dark-700 px-2.5 py-1.5 rounded-lg border border-gray-600 hover:border-primary/50">
+        <input type="checkbox" id="vizRoundBars" class="w-3.5 h-3.5 rounded text-primary" onchange="updateVizEffect('roundBars', this.checked)">
+        <span>Rounded</span>
+      </label>
+      <label class="flex items-center gap-1.5 cursor-pointer text-xs text-gray-300 bg-dark-700 px-2.5 py-1.5 rounded-lg border border-gray-600 hover:border-primary/50">
+        <input type="checkbox" id="vizGradient" class="w-3.5 h-3.5 rounded text-primary" checked onchange="updateVizEffect('gradient', this.checked)">
+        <span>Gradient</span>
+      </label>
+      <label class="flex items-center gap-1.5 cursor-pointer text-xs text-gray-300 bg-dark-700 px-2.5 py-1.5 rounded-lg border border-gray-600 hover:border-primary/50">
+        <input type="checkbox" id="vizReflection" class="w-3.5 h-3.5 rounded text-primary" onchange="updateVizEffect('reflection', this.checked)">
+        <span>Reflection</span>
+      </label>
+    </div>
+
+    <!-- Quick Presets -->
+    <div class="flex gap-1.5 flex-wrap">
+      <button onclick="applyVizPreset('lofi')" class="text-[10px] px-2 py-1 bg-dark-700 text-gray-300 rounded border border-gray-600 hover:border-primary/50 hover:text-white transition-colors">🎵 Lo-Fi</button>
+      <button onclick="applyVizPreset('edm')" class="text-[10px] px-2 py-1 bg-dark-700 text-gray-300 rounded border border-gray-600 hover:border-primary/50 hover:text-white transition-colors">🎧 EDM</button>
+      <button onclick="applyVizPreset('cinematic')" class="text-[10px] px-2 py-1 bg-dark-700 text-gray-300 rounded border border-gray-600 hover:border-primary/50 hover:text-white transition-colors">🎬 Cinematic</button>
+      <button onclick="applyVizPreset('minimal')" class="text-[10px] px-2 py-1 bg-dark-700 text-gray-300 rounded border border-gray-600 hover:border-primary/50 hover:text-white transition-colors">⚪ Minimal</button>
+      <button onclick="applyVizPreset('retro')" class="text-[10px] px-2 py-1 bg-dark-700 text-gray-300 rounded border border-gray-600 hover:border-primary/50 hover:text-white transition-colors">👾 Retro</button>
+    </div>
+  </div>
 </div>
 
 <!-- Jobs List -->
@@ -1188,6 +1354,7 @@
   </div>
 </div>
 
+<script src="/js/audioVisualizer.js"></script>
 <script>
 const toArray=(d,k)=>Array.isArray(d)?d:((d && Array.isArray(d[k])) ? d[k] : []);
 const el = {
@@ -1269,6 +1436,183 @@ async function uploadJob(id){
   openUploadModal(id);
 }
 
+// ===== AUDIO VISUALIZER LIVE PREVIEW =====
+let vizPreview = null;
+let vizEnabled = false;
+let vizCurrentAudioUrl = null;
+
+function toggleVisualizerPanel() {
+  vizEnabled = document.getElementById('vizEnabled').checked;
+  const panel = document.getElementById('vizSettingsPanel');
+  const placeholder = document.getElementById('vizPlaceholder');
+  
+  panel.classList.toggle('hidden', !vizEnabled);
+  
+  if (vizEnabled) {
+    panel.style.opacity = '1';
+    panel.style.pointerEvents = 'auto';
+    placeholder.classList.add('hidden');
+    
+    // Initialize visualizer preview
+    if (!vizPreview) {
+      vizPreview = new AudioVisualizerPreview('vizPreviewCanvas');
+    }
+    
+    // Try to load selected audio for real preview
+    const audioIds = [...document.querySelectorAll("input[name='audio']:checked")].map(i => i.value);
+    if (audioIds.length > 0) {
+      loadVizAudioPreview();
+    } else {
+      vizPreview.startSimulated();
+    }
+    
+    document.getElementById('vizAudioControls').classList.remove('hidden');
+  } else {
+    panel.style.opacity = '0.5';
+    panel.style.pointerEvents = 'none';
+    placeholder.classList.remove('hidden');
+    document.getElementById('vizAudioControls').classList.add('hidden');
+    
+    if (vizPreview) {
+      vizPreview.stop();
+    }
+  }
+}
+
+async function loadVizAudioPreview() {
+  if (!vizPreview || !vizEnabled) return;
+  
+  const audioCheckboxes = document.querySelectorAll("input[name='audio']:checked");
+  if (audioCheckboxes.length === 0) {
+    vizPreview.startSimulated();
+    return;
+  }
+  
+  // Get first selected audio's filepath
+  const audioId = audioCheckboxes[0].value;
+  try {
+    const resp = await fetch('/api/audios/' + audioId);
+    const data = await resp.json();
+    const audio = data.audio || data;
+    
+    if (audio && audio.filepath) {
+      vizCurrentAudioUrl = audio.filepath;
+      const success = await vizPreview.loadAudio(audio.filepath);
+      if (success) {
+        document.getElementById('vizPlayBtn').innerHTML = '<i class="ti ti-player-pause text-sm"></i>';
+      } else {
+        vizPreview.startSimulated();
+      }
+    } else {
+      vizPreview.startSimulated();
+    }
+  } catch (err) {
+    console.error('[Viz] Failed to load audio:', err);
+    vizPreview.startSimulated();
+  }
+}
+
+function toggleVizAudioPlayback() {
+  if (!vizPreview) return;
+  
+  if (vizPreview.audioElement && !vizPreview.audioElement.paused) {
+    vizPreview.audioElement.pause();
+    document.getElementById('vizPlayBtn').innerHTML = '<i class="ti ti-player-play text-sm"></i>';
+  } else if (vizPreview.audioElement) {
+    vizPreview.audioElement.play();
+    document.getElementById('vizPlayBtn').innerHTML = '<i class="ti ti-player-pause text-sm"></i>';
+  } else {
+    loadVizAudioPreview();
+  }
+}
+
+function setVizVolume(val) {
+  if (vizPreview) {
+    vizPreview.setVolume(val / 100);
+  }
+}
+
+function pickVizType(type) {
+  document.querySelectorAll('#vizTypeGrid .viz-type-btn').forEach(b => b.classList.toggle('active', b.dataset.type === type));
+  if (vizPreview) vizPreview.updateSettings({ type });
+}
+
+function pickVizColor(color) {
+  document.querySelectorAll('#vizColorGrid .viz-color-btn').forEach(b => b.classList.toggle('active', b.dataset.color === color));
+  if (vizPreview) vizPreview.updateSettings({ color, customColors: null });
+}
+
+function updateVizSetting(key, value) {
+  const numVal = parseFloat(value);
+  if (vizPreview) vizPreview.updateSettings({ [key]: numVal });
+  
+  // Update display labels
+  if (key === 'intensity') document.getElementById('vizIntensityVal').textContent = value + '%';
+  if (key === 'sensitivity') document.getElementById('vizSensitivityVal').textContent = numVal.toFixed(1) + 'x';
+  if (key === 'barCount') document.getElementById('vizBarCountVal').textContent = value;
+  if (key === 'smoothing') document.getElementById('vizSmoothingVal').textContent = numVal.toFixed(2);
+}
+
+function updateVizEffect(key, value) {
+  if (vizPreview) vizPreview.updateSettings({ [key]: value });
+}
+
+function applyVizPreset(name) {
+  const presets = {
+    lofi: { type:'waveform', color:'ocean', intensity:35, sensitivity:0.8, barCount:32, smoothing:0.9, mirror:false, glow:true, roundBars:true, gradient:true, reflection:false },
+    edm: { type:'spectrum', color:'neon', intensity:90, sensitivity:2.0, barCount:128, smoothing:0.5, mirror:true, glow:true, roundBars:false, gradient:true, reflection:true },
+    cinematic: { type:'bars_center', color:'gold', intensity:60, sensitivity:1.2, barCount:48, smoothing:0.85, mirror:true, glow:true, roundBars:true, gradient:true, reflection:true },
+    minimal: { type:'waveform', color:'ice', intensity:30, sensitivity:1.0, barCount:24, smoothing:0.9, mirror:false, glow:false, roundBars:false, gradient:false, reflection:false },
+    retro: { type:'spectrum', color:'fire', intensity:75, sensitivity:1.5, barCount:32, smoothing:0.6, mirror:false, glow:true, roundBars:false, gradient:true, reflection:false }
+  };
+  const p = presets[name];
+  if (!p) return;
+
+  // Update UI
+  document.querySelectorAll('#vizTypeGrid .viz-type-btn').forEach(b => b.classList.toggle('active', b.dataset.type === p.type));
+  document.querySelectorAll('#vizColorGrid .viz-color-btn').forEach(b => b.classList.toggle('active', b.dataset.color === p.color));
+  document.getElementById('vizIntensity').value = p.intensity;
+  document.getElementById('vizSensitivity').value = p.sensitivity * 10;
+  document.getElementById('vizBarCount').value = p.barCount;
+  document.getElementById('vizSmoothing').value = p.smoothing * 100;
+  document.getElementById('vizIntensityVal').textContent = p.intensity + '%';
+  document.getElementById('vizSensitivityVal').textContent = p.sensitivity.toFixed(1) + 'x';
+  document.getElementById('vizBarCountVal').textContent = p.barCount;
+  document.getElementById('vizSmoothingVal').textContent = p.smoothing.toFixed(2);
+  document.getElementById('vizMirror').checked = p.mirror;
+  document.getElementById('vizGlow').checked = p.glow;
+  document.getElementById('vizRoundBars').checked = p.roundBars;
+  document.getElementById('vizGradient').checked = p.gradient;
+  document.getElementById('vizReflection').checked = p.reflection;
+
+  // Apply to preview
+  if (vizPreview) vizPreview.updateSettings(p);
+}
+
+function getVisualizerSettings() {
+  if (!vizEnabled) return { type: 'none' };
+  
+  const activeType = document.querySelector('#vizTypeGrid .viz-type-btn.active');
+  const activeColor = document.querySelector('#vizColorGrid .viz-color-btn.active');
+  
+  return {
+    type: activeType?.dataset.type || 'spectrum',
+    color: activeColor?.dataset.color || 'purple',
+    intensity: parseInt(document.getElementById('vizIntensity').value),
+    sensitivity: parseFloat(document.getElementById('vizSensitivity').value) / 10,
+    barCount: parseInt(document.getElementById('vizBarCount').value),
+    smoothing: parseFloat(document.getElementById('vizSmoothing').value) / 100,
+    mirror: document.getElementById('vizMirror').checked,
+    glow: document.getElementById('vizGlow').checked,
+    roundBars: document.getElementById('vizRoundBars').checked,
+    gradient: document.getElementById('vizGradient').checked,
+    reflection: document.getElementById('vizReflection').checked,
+    opacity: 0.85,
+    position: 'bottom',
+    height: 30
+  };
+}
+
 async function deleteJob(id){
   if(!confirm('Hapus project ini?'))return;
   const r=await fetch(`/api/render/jobs/${id}`,{method:'DELETE'});
@@ -1282,81 +1626,94 @@ async function loadJobs(){
   const d=await r.json();
   const cards=toArray(d,'jobs').map(j=>{
     const progress = Math.max(0,Math.min(100,Number(j.progress||0)));
-    const isActive = j.status === 'processing' || j.status === 'pending';
+    const isActive = j.status === 'processing' || j.status === 'pending' || j.status === 'queued';
     
-    // Calculate ETA
+    // Calculate ETA and speed
     let etaText = '';
     let speedText = '';
-    if (isActive && j.progress > 0) {
+    let phaseText = '';
+    if (isActive && progress > 0) {
       const elapsed = j.elapsed_seconds || 0;
-      const remaining = elapsed > 0 ? (elapsed / j.progress) * (100 - j.progress) : 0;
-      const fps = j.render_speed || 0;
+      const remaining = elapsed > 0 ? (elapsed / progress) * (100 - progress) : 0;
       
       if (remaining > 0) {
-        const mins = Math.floor(remaining / 60);
-        const secs = Math.floor(remaining % 60);
-        etaText = `${mins}m ${secs}s tersisa`;
+        if (remaining > 3600) {
+          const hrs = Math.floor(remaining / 3600);
+          const mins = Math.floor((remaining % 3600) / 60);
+          etaText = `~${hrs}h ${mins}m left`;
+        } else if (remaining > 60) {
+          const mins = Math.floor(remaining / 60);
+          const secs = Math.floor(remaining % 60);
+          etaText = `~${mins}m ${secs}s left`;
+        } else {
+          etaText = `~${Math.floor(remaining)}s left`;
+        }
       }
       
-      if (fps > 0) {
-        speedText = `${fps.toFixed(1)} fps`;
-      }
+      // Phase detection
+      if (progress < 20) phaseText = 'Preparing...';
+      else if (progress < 50) phaseText = 'Processing video...';
+      else if (progress < 80) phaseText = 'Encoding...';
+      else if (progress < 95) phaseText = 'Finalizing...';
+      else phaseText = 'Almost done!';
     }
     
-    // Create circular progress
-    const radius = 18;
-    const circumference = 2 * Math.PI * radius;
-    const offset = circumference - (progress / 100) * circumference;
+    // Status badge
+    let statusBadge = '';
+    switch(j.status) {
+      case 'processing': statusBadge = '<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-blue-500/20 text-blue-400"><span class="w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse"></span>Rendering</span>'; break;
+      case 'queued': case 'pending': statusBadge = '<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-yellow-500/20 text-yellow-400"><i class="ti ti-clock text-[10px]"></i>Queued</span>'; break;
+      case 'completed': statusBadge = '<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-green-500/20 text-green-400"><i class="ti ti-check text-[10px]"></i>Done</span>'; break;
+      case 'failed': statusBadge = '<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-red-500/20 text-red-400"><i class="ti ti-x text-[10px]"></i>Failed</span>'; break;
+      default: statusBadge = `<span class="text-[10px] text-gray-400">${j.status}</span>`;
+    }
+    
+    // Progress bar color
+    const barColor = j.status === 'failed' ? 'bg-red-500' : j.status === 'completed' ? 'bg-green-500' : 'bg-primary';
     
     return `
-    <div class="bg-dark-700 rounded-lg p-4 border border-gray-600 hover:border-primary transition-colors mb-3" data-job-id="${j.id}">
-      <div class="flex items-start justify-between mb-3">
-        <div class="flex items-start gap-3 flex-1">
-          <!-- Circular Progress -->
-          <div class="relative flex-shrink-0">
-            <svg class="progress-ring" width="40" height="40">
-              <circle class="text-gray-600" stroke-width="3" stroke="currentColor" fill="transparent" r="${radius}" cx="20" cy="20"/>
-              <circle class="progress-ring-circle text-primary" stroke-width="3" stroke-dasharray="${circumference}" stroke-dashoffset="${offset}" stroke-linecap="round" stroke="currentColor" fill="transparent" r="${radius}" cx="20" cy="20"/>
-            </svg>
-            <div class="absolute inset-0 flex items-center justify-center">
-              <span class="text-xs font-bold text-white">${Math.round(progress)}</span>
-            </div>
+    <div class="render-progress-card ${isActive ? 'active' : ''} mb-3" data-job-id="${j.id}">
+      <div class="flex items-start justify-between mb-2">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 mb-1">
+            <h4 class="text-sm font-semibold text-white truncate">${j.title||'Untitled'}</h4>
+            ${statusBadge}
           </div>
-          
-          <!-- Job Info -->
-          <div class="flex-1 min-w-0">
-            <h4 class="text-sm font-semibold text-white mb-1 truncate">${j.title||'Tanpa judul'}</h4>
-            <div class="flex flex-wrap gap-2 text-xs">
-              <span class="flex items-center gap-1 text-gray-400">
-                <i class="ti ti-clock"></i>
-                ${j.status}
-              </span>
-              ${speedText ? `<span class="flex items-center gap-1 text-primary"><i class="ti ti-activity"></i>${speedText}</span>` : ''}
-              ${etaText ? `<span class="flex items-center gap-1 text-green-400"><i class="ti ti-hourglass"></i>${etaText}</span>` : ''}
-            </div>
+          <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-400">
+            ${phaseText ? `<span class="text-primary font-medium">${phaseText}</span>` : ''}
+            ${etaText ? `<span class="flex items-center gap-1"><i class="ti ti-hourglass-low"></i>${etaText}</span>` : ''}
+            <span class="flex items-center gap-1"><i class="ti ti-clock"></i>${j.target_duration_seconds ? Math.round(j.target_duration_seconds/60)+'min' : '-'}</span>
           </div>
         </div>
-        ${isActive ? '<div class="w-2 h-2 bg-green-400 rounded-full animate-pulse flex-shrink-0"></div>' : ''}
+        <!-- Circular progress -->
+        <div class="relative flex-shrink-0 ml-3">
+          <svg class="progress-ring" width="44" height="44">
+            <circle class="text-gray-700" stroke-width="3.5" stroke="currentColor" fill="transparent" r="18" cx="22" cy="22"/>
+            <circle class="text-primary progress-ring-circle" stroke-width="3.5" stroke-dasharray="${2*Math.PI*18}" stroke-dashoffset="${2*Math.PI*18 - (progress/100)*2*Math.PI*18}" stroke-linecap="round" stroke="currentColor" fill="transparent" r="18" cx="22" cy="22"/>
+          </svg>
+          <div class="absolute inset-0 flex items-center justify-center">
+            <span class="text-[11px] font-bold text-white">${Math.round(progress)}%</span>
+          </div>
+        </div>
       </div>
       
-      <!-- Linear Progress Bar -->
-      <div class="w-full bg-gray-600 rounded-full h-2 mb-3">
-        <div class="bg-primary h-2 rounded-full transition-all ${isActive ? 'progress-active' : ''}" style="width:${progress}%"></div>
+      <!-- Progress bar -->
+      <div class="w-full bg-gray-700 rounded-full h-1.5 mb-3 overflow-hidden">
+        <div class="${barColor} h-1.5 rounded-full transition-all duration-500 ${isActive ? 'progress-active' : ''}" style="width:${progress}%"></div>
       </div>
       
-      <div class="flex items-center justify-between text-xs mb-3">
-        <span class="text-gray-400">${progress}% complete</span>
-        <span class="text-gray-400">Target: ${j.target_duration_seconds||0}s</span>
-      </div>
+      ${j.output_path ? `
+        <video controls preload="metadata" src="${j.output_path}" class="w-full rounded-lg mb-3 bg-black max-h-48"></video>
+      ` : ''}
       
-      ${j.output_path?`<video controls preload="metadata" src="${j.output_path}" class="w-full rounded-lg mb-3 bg-black" data-video-id="${j.id}"></video>`:''}
+      ${j.error_message ? `<div class="text-xs text-red-400 bg-red-500/10 rounded-lg p-2 mb-3"><i class="ti ti-alert-circle mr-1"></i>${j.error_message}</div>` : ''}
       
       <div class="flex gap-2">
-        ${j.output_path?`
-          <button onclick="uploadJob('${j.id}')" class="flex-1 px-3 py-2 bg-primary hover:bg-secondary text-white text-sm rounded-lg transition-colors">Upload</button>
-          <button onclick="openLoopModal('${j.id}')" class="flex-1 px-3 py-2 bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-500/50 text-yellow-400 text-sm rounded-lg transition-colors">Loop</button>
-        `:''}
-        <button onclick="deleteJob('${j.id}')" class="px-3 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 text-sm rounded-lg transition-colors">Hapus</button>
+        ${j.output_path ? `
+          <button onclick="uploadJob('${j.id}')" class="flex-1 px-3 py-1.5 bg-primary/20 hover:bg-primary/30 text-primary text-xs rounded-lg transition-colors font-medium"><i class="ti ti-upload mr-1"></i>Upload</button>
+          <button onclick="openLoopModal('${j.id}')" class="px-3 py-1.5 bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 text-xs rounded-lg transition-colors"><i class="ti ti-repeat mr-1"></i>Loop</button>
+        ` : ''}
+        <button onclick="deleteJob('${j.id}')" class="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs rounded-lg transition-colors"><i class="ti ti-trash"></i></button>
       </div>
     </div>
   `;
@@ -1409,7 +1766,9 @@ if (el.createBtn) {
         followAudioDuration:followAudio,
         muteVideoAudio:el.muteVideoAudio.checked,
         videoIds,
-        audioIds
+        audioIds,
+        visualizerSettings: getVisualizerSettings(),
+        visualizerPreset: vizEnabled ? (document.querySelector('#vizTypeGrid .viz-type-btn.active')?.dataset.type || 'none') : 'none'
       };
       
       console.log('Sending render data:', renderData);
@@ -2925,6 +3284,11 @@ function togglePin(event, id, type) {
 
 function updateSelectedCount() {
   updateMediaSelectionCount();
+  
+  // Update visualizer preview when audio selection changes
+  if (vizEnabled && vizPreview) {
+    loadVizAudioPreview();
+  }
 }
 
 // FILTER/SEARCH MEDIA FUNCTION
