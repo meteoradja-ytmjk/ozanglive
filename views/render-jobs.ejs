@@ -1663,6 +1663,9 @@ function toggleVisualizerPanel() {
   panel.classList.toggle('hidden', !vizEnabled);
   
   if (vizEnabled) {
+    // Stop direct audio to prevent double playback
+    stopDirectAudio();
+    
     canvas.style.display = 'block';
     
     // Initialize visualizer preview after canvas is visible
@@ -1670,10 +1673,8 @@ function toggleVisualizerPanel() {
       if (!vizPreview) {
         vizPreview = new AudioVisualizerPreview('vizPreviewCanvas');
       }
-      // Force resize now that canvas is visible
       vizPreview._resizeCanvas();
       
-      // Try to load selected audio for real preview
       const audioIds = [...document.querySelectorAll("input[name='audio']:checked")].map(i => i.value);
       if (audioIds.length > 0) {
         loadVizAudioPreview();
@@ -1686,11 +1687,19 @@ function toggleVisualizerPanel() {
     
     document.getElementById('vizAudioControls').classList.remove('hidden');
   } else {
-    canvas.style.display = 'none';
-    document.getElementById('vizAudioControls').classList.add('hidden');
-    
+    // Stop visualizer audio
     if (vizPreview) {
       vizPreview.stop();
+    }
+    canvas.style.display = 'none';
+    
+    // Resume direct audio if audio is selected
+    const audioCheckboxes = document.querySelectorAll("input[name='audio']:checked");
+    if (audioCheckboxes.length > 0) {
+      document.getElementById('vizAudioControls').classList.remove('hidden');
+      loadDirectAudioPreview();
+    } else {
+      document.getElementById('vizAudioControls').classList.add('hidden');
     }
   }
 }
@@ -1718,14 +1727,18 @@ function autoPlayAudioPreview() {
   const audioControls = document.getElementById('vizAudioControls');
   
   if (audioCheckboxes.length > 0) {
-    // Show audio controls and auto-play
+    // Show audio controls
     audioControls.classList.remove('hidden');
     
-    // If visualizer is enabled, use vizPreview's audio
     if (vizEnabled && vizPreview) {
+      // Stop direct audio first to prevent double playback
+      stopDirectAudio();
       loadVizAudioPreview();
     } else {
-      // Play audio directly without visualizer
+      // Stop visualizer audio first to prevent double playback
+      if (vizPreview && vizPreview.audioElement) {
+        vizPreview.audioElement.pause();
+      }
       loadDirectAudioPreview();
     }
   } else {
@@ -3762,13 +3775,8 @@ function updateSelectedCount() {
   // Always update video preview when selection changes
   loadVizVideoPreview();
   
-  // Auto-play audio when selected (independent of visualizer)
+  // Auto-play audio when selected (handles both visualizer and direct modes)
   autoPlayAudioPreview();
-  
-  // Update visualizer audio preview when enabled
-  if (vizEnabled && vizPreview) {
-    loadVizAudioPreview();
-  }
 }
 
 // FILTER/SEARCH MEDIA FUNCTION
