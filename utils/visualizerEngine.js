@@ -1,11 +1,11 @@
 /**
  * Audio Visualizer Engine for OzangLive
  * 
- * Generates FFmpeg filter chains for real audio-reactive visualizations.
- * Each visualizer type has a distinct visual character.
+ * KEY APPROACH: Uses `blend=all_mode=screen` to overlay visualizer on video.
+ * Screen blend mode treats black as transparent automatically (math: 1-(1-a)*(1-b)),
+ * so black background of visualizer disappears and only bright pattern shows.
  * 
- * KEY FIX: Uses `colorkey=black` to make visualizer's black background transparent
- * so only the bright visualizer pattern is overlaid on video (not a black box).
+ * This is the industry-standard reliable way to composite glowing visualizers.
  */
 
 const VISUALIZER_TYPES = {
@@ -49,7 +49,7 @@ const COLOR_SCHEMES = {
 };
 
 /**
- * Build colorchannelmixer string for color tinting (only RGB, no alpha modification)
+ * Build colorchannelmixer string for color tinting
  */
 function buildTint(scheme) {
   const t = scheme.tint || { rr: 1, gg: 1, bb: 1 };
@@ -57,28 +57,38 @@ function buildTint(scheme) {
 }
 
 /**
- * Build the alpha-keying chain that makes visualizer's black background transparent.
- * This is the KEY to making visualizer overlay properly on video.
+ * Build a full-size composite filter that:
+ * 1. Creates the visualizer at its natural size
+ * 2. Pads it to full video dimensions with black background, positioned correctly
+ * 3. Blends with the main video using SCREEN mode
+ *    -> Black pixels become transparent (screen blend math: 1-(1-a)*(1-b))
+ *    -> Bright pixels show through brightly
+ * 
+ * @param {string} vizFilter - The visualizer generation filter (e.g., showfreqs=...)
+ * @param {Object} opts - { videoWidth, videoHeight, vizWidth, vizHeight, padX, padY, glow, opacity, colorScheme }
+ * @returns {Object} { filterComplex, outputMap }
  */
-function buildAlphaKey(opacity = 1.0) {
-  const alpha = Math.max(0.3, Math.min(1.0, opacity));
-  // colorkey=black:similarity:blend - removes black background
-  // similarity=0.3 = 30% color similarity threshold
-  // blend=0.1 = small soft edge for smooth transition
-  return `colorkey=0x000000:0.3:0.1,format=yuva420p,colorchannelmixer=aa=${alpha.toFixed(2)}`;
-}
+function compositeWithScreenBlend(vizFilter, opts) {
+  const { videoWidth, videoHeight, vizWidth, vizHeight, padX, padY, glow, opacity, colorScheme } = opts;
+  
+  // Apply opacity by darkening the visualizer (since screen blend additive,
+  // less bright = less effect on output)
+  const opacityFilter = opacity < 1.0 
+    ? `,colorchannelmixer=rr=${(opacity).toFixed(2)}:gg=${(opacity).toFixed(2)}:bb=${(opacity).toFixed(2)}`
+    : '';
+  
+  const blurFilter = glow ? ',gblur=sigma=2' : '';
+  
+  const filters = [
+    // Generate visualizer at its natural size, apply color tinting and effects
+    `[1:a]${vizFilter},${buildTint(colorScheme)}${blurFilter}${opacityFilter}[vizraw]`,
+    // Pad to full video size with black background at desired position
+    `[vizraw]pad=${videoWidth}:${videoHeight}:${padX}:${padY}:black[vizpad]`,
+    // Blend with video using SCREEN mode (black becomes transparent)
+    `[0:v][vizpad]blend=all_mode=screen[outv]`
+  ];
 
-/**
- * Get overlay Y position based on position string
- */
-function getOverlayY(position) {
-  switch (position) {
-    case 'top': return '0';
-    case 'center': return '(H-h)/2';
-    case 'full': return '0';
-    case 'bottom':
-    default: return 'H-h';
-  }
+  return { filterComplex: filters.join(';'), outputMap: '[outv]' };
 }
 
 function buildVisualizerFilter(settings, options = {}) {
@@ -111,254 +121,163 @@ function buildVisualizerFilter(settings, options = {}) {
   }
 
   const heightPercent = settingsHeight || Math.round(intensity * 0.4 + 10);
-  const vizHeight = Math.round(height * (heightPercent / 100));
-  const vizHeightEven = vizHeight % 2 === 0 ? vizHeight : vizHeight + 1;
+  const vizHeightCalc = Math.round(height * (heightPercent / 100));
+  const vizHeightEven = vizHeightCalc % 2 === 0 ? vizHeightCalc : vizHeightCalc + 1;
   const widthEven = width % 2 === 0 ? width : width - 1;
+  const heightEven = height % 2 === 0 ? height : height - 1;
   const effectiveOpacity = Math.max(0.3, Math.min(1.0, opacity));
 
+  // Position calculation for pad
+  // padX, padY = where to place the visualizer in the full-size frame
+  let padX = 0, padY = 0;
+  let usedHeight = vizHeightEven;
+  let usedWidth = widthEven;
+
+  switch (position) {
+    case 'top':
+      padX = 0; padY = 0; break;
+    case 'center':
+      padX = 0; padY = Math.round((heightEven - vizHeightEven) / 2);
+      if (padY % 2 !== 0) padY++;
+      break;
+    case 'full':
+      padX = 0; padY = 0;
+      usedHeight = heightEven;
+      break;
+    case 'bottom':
+    default:
+      padX = 0; padY = heightEven - vizHeightEven; break;
+  }
+
   const opts = {
-    width: widthEven,
-    height: vizHeightEven,
-    barCount,
-    sensitivity,
-    glow,
-    opacity: effectiveOpacity,
-    position,
-    videoHeight: height,
-    videoWidth: widthEven,
-    fps,
-    colorScheme
+    type, sensitivity, barCount, glow, opacity: effectiveOpacity, fps, colorScheme,
+    videoWidth: widthEven, videoHeight: heightEven,
+    vizWidth: usedWidth, vizHeight: usedHeight,
+    padX, padY
   };
 
+  // Build visualizer filter string based on type
+  let vizFilter;
   switch (type) {
     case 'spectrum':
-    case 'bars_bottom':
-      return buildSpectrumBars(opts);
-    case 'bars_center':
-      return buildCenterBars(opts);
+    case 'bars_bottom': {
+      const winSize = Math.min(2048, Math.max(512, barCount * 16));
+      vizFilter = `showfreqs=s=${usedWidth}x${usedHeight}:mode=bar:fscale=log:ascale=log:win_size=${winSize},fps=${fps}`;
+      break;
+    }
+    case 'bars_center': {
+      const halfH = Math.round(usedHeight / 2);
+      const halfHE = halfH % 2 === 0 ? halfH : halfH + 1;
+      const winSize = Math.min(2048, Math.max(512, barCount * 16));
+      // Build mirror as a separate label chain
+      return buildCenterBarsComposite({ ...opts, halfHE, winSize });
+    }
     case 'waveform':
-    case 'wave_line':
-      return buildWaveform(opts);
-    case 'circular':
-      return buildCircular(opts);
-    case 'nebula':
-      return buildNebula(opts);
-    case 'particles':
-    case 'frequency_dots':
-      return buildParticles(opts);
-    case 'spectrogram':
-      return buildSpectrogram(opts);
+    case 'wave_line': {
+      const scale = sensitivity > 1.5 ? 'log' : 'lin';
+      vizFilter = `showwaves=s=${usedWidth}x${usedHeight}:mode=line:rate=${fps}:scale=${scale}:n=80`;
+      break;
+    }
+    case 'circular': {
+      // Circular: square in center, override sizes
+      const size = Math.min(widthEven, heightEven);
+      const vizSize = Math.round(size * 0.5);
+      const vizSizeE = vizSize % 2 === 0 ? vizSize : vizSize + 1;
+      const cPadX = Math.round((widthEven - vizSizeE) / 2);
+      const cPadY = Math.round((heightEven - vizSizeE) / 2);
+      vizFilter = `avectorscope=s=${vizSizeE}x${vizSizeE}:mode=lissajous_xy:rate=${fps}:scale=log:draw=dot:zoom=${(sensitivity * 1.5).toFixed(2)}`;
+      return compositeWithScreenBlend(vizFilter, { ...opts, vizWidth: vizSizeE, vizHeight: vizSizeE, padX: cPadX % 2 === 0 ? cPadX : cPadX + 1, padY: cPadY % 2 === 0 ? cPadY : cPadY + 1, glow: glow || false });
+    }
     case 'phase':
     case 'vector_lissajous':
-    case 'dna_helix':
-      return buildLissajous(opts);
-    case 'vector_polar':
-      return buildPolarRadar(opts);
-    case 'histogram':
-      return buildHistogram(opts);
-    case 'showcqt':
-      return buildShowCQT(opts);
-    case 'pulse_ring':
-      return buildPulseRing(opts);
-    case 'frequency_terrain':
-      return buildFrequencyTerrain(opts);
-    default:
-      return buildSpectrumBars(opts);
+    case 'dna_helix': {
+      const size = Math.min(widthEven, heightEven);
+      const vizSize = Math.round(size * 0.55);
+      const vizSizeE = vizSize % 2 === 0 ? vizSize : vizSize + 1;
+      const cPadX = Math.round((widthEven - vizSizeE) / 2);
+      const cPadY = Math.round((heightEven - vizSizeE) / 2);
+      vizFilter = `avectorscope=s=${vizSizeE}x${vizSizeE}:mode=lissajous:rate=${fps}:scale=log:draw=line:zoom=${sensitivity.toFixed(2)}`;
+      return compositeWithScreenBlend(vizFilter, { ...opts, vizWidth: vizSizeE, vizHeight: vizSizeE, padX: cPadX % 2 === 0 ? cPadX : cPadX + 1, padY: cPadY % 2 === 0 ? cPadY : cPadY + 1 });
+    }
+    case 'nebula': {
+      const size = Math.min(widthEven, heightEven);
+      const vizSize = Math.round(size * 0.6);
+      const vizSizeE = vizSize % 2 === 0 ? vizSize : vizSize + 1;
+      const cPadX = Math.round((widthEven - vizSizeE) / 2);
+      const cPadY = Math.round((heightEven - vizSizeE) / 2);
+      vizFilter = `avectorscope=s=${vizSizeE}x${vizSizeE}:mode=lissajous:rate=${fps}:scale=sqrt:draw=line:zoom=${(sensitivity * 1.8).toFixed(2)},gblur=sigma=10`;
+      return compositeWithScreenBlend(vizFilter, { ...opts, vizWidth: vizSizeE, vizHeight: vizSizeE, padX: cPadX % 2 === 0 ? cPadX : cPadX + 1, padY: cPadY % 2 === 0 ? cPadY : cPadY + 1, glow: false });
+    }
+    case 'particles':
+    case 'frequency_dots': {
+      const scale = sensitivity > 1.5 ? 'log' : 'lin';
+      vizFilter = `showwaves=s=${usedWidth}x${usedHeight}:mode=p2p:rate=${fps}:scale=${scale}:n=120,gblur=sigma=${glow ? 3 : 1.5}`;
+      break;
+    }
+    case 'spectrogram': {
+      const gain = Math.max(1, sensitivity * 3);
+      vizFilter = `showspectrum=s=${usedWidth}x${usedHeight}:mode=combined:color=intensity:scale=log:gain=${gain.toFixed(1)}:slide=scroll,fps=${fps}`;
+      break;
+    }
+    case 'vector_polar': {
+      const size = Math.min(widthEven, heightEven);
+      const vizSize = Math.round(size * 0.5);
+      const vizSizeE = vizSize % 2 === 0 ? vizSize : vizSize + 1;
+      const cPadX = Math.round((widthEven - vizSizeE) / 2);
+      const cPadY = Math.round((heightEven - vizSizeE) / 2);
+      vizFilter = `avectorscope=s=${vizSizeE}x${vizSizeE}:mode=polar:rate=${fps}:scale=lin:draw=line:zoom=${(sensitivity * 0.9).toFixed(2)}`;
+      return compositeWithScreenBlend(vizFilter, { ...opts, vizWidth: vizSizeE, vizHeight: vizSizeE, padX: cPadX % 2 === 0 ? cPadX : cPadX + 1, padY: cPadY % 2 === 0 ? cPadY : cPadY + 1 });
+    }
+    case 'histogram': {
+      vizFilter = `ahistogram=s=${usedWidth}x${usedHeight}:scale=log:slide=scroll:rate=${fps}`;
+      break;
+    }
+    case 'showcqt': {
+      const volume = Math.max(1, Math.round(sensitivity * 10));
+      vizFilter = `showcqt=s=${usedWidth}x${usedHeight}:fps=${fps}:count=1:bar_g=2:sono_g=4:volume=${volume}`;
+      break;
+    }
+    case 'pulse_ring': {
+      const size = Math.min(widthEven, heightEven);
+      const vizSize = Math.round(size * 0.7);
+      const vizSizeE = vizSize % 2 === 0 ? vizSize : vizSize + 1;
+      const cPadX = Math.round((widthEven - vizSizeE) / 2);
+      const cPadY = Math.round((heightEven - vizSizeE) / 2);
+      vizFilter = `avectorscope=s=${vizSizeE}x${vizSizeE}:mode=lissajous_xy:rate=${fps}:scale=sqrt:draw=line:zoom=${(sensitivity * 2.5).toFixed(2)},gblur=sigma=6`;
+      return compositeWithScreenBlend(vizFilter, { ...opts, vizWidth: vizSizeE, vizHeight: vizSizeE, padX: cPadX % 2 === 0 ? cPadX : cPadX + 1, padY: cPadY % 2 === 0 ? cPadY : cPadY + 1, glow: false });
+    }
+    case 'frequency_terrain': {
+      const gain = Math.max(2, sensitivity * 4);
+      vizFilter = `showspectrum=s=${usedWidth}x${usedHeight}:mode=combined:color=channel:scale=sqrt:gain=${gain.toFixed(1)}:slide=scroll:orientation=vertical,fps=${fps}`;
+      break;
+    }
+    default: {
+      const winSize = Math.min(2048, Math.max(512, barCount * 16));
+      vizFilter = `showfreqs=s=${usedWidth}x${usedHeight}:mode=bar:fscale=log:ascale=log:win_size=${winSize},fps=${fps}`;
+    }
   }
+
+  return compositeWithScreenBlend(vizFilter, opts);
 }
 
-// SPECTRUM - Frequency bars
-function buildSpectrumBars(opts) {
-  const { width, height, barCount, glow, opacity, position, videoHeight, fps, colorScheme } = opts;
-  const overlayY = getOverlayY(position);
-  const effectiveHeight = position === 'full' ? (videoHeight % 2 === 0 ? videoHeight : videoHeight - 1) : height;
-  const winSize = Math.min(2048, Math.max(512, barCount * 16));
+/**
+ * Center bars needs special handling: build mirror from top half then vstack
+ */
+function buildCenterBarsComposite(opts) {
+  const { videoWidth, videoHeight, vizWidth, vizHeight, padX, padY, halfHE, winSize, glow, opacity, colorScheme, fps } = opts;
+  
+  const opacityFilter = opacity < 1.0 
+    ? `,colorchannelmixer=rr=${(opacity).toFixed(2)}:gg=${(opacity).toFixed(2)}:bb=${(opacity).toFixed(2)}`
+    : '';
+  const blurFilter = glow ? ',gblur=sigma=2' : '';
 
   const filters = [
-    `[1:a]showfreqs=s=${width}x${effectiveHeight}:mode=bar:fscale=log:ascale=log:win_size=${winSize},fps=${fps},${buildTint(colorScheme)},${buildAlphaKey(opacity)}${glow ? ',gblur=sigma=2' : ''}[viz]`,
-    `[0:v][viz]overlay=0:${overlayY}:shortest=1[outv]`
-  ];
-
-  return { filterComplex: filters.join(';'), outputMap: '[outv]' };
-}
-
-// CENTER BARS - Mirrored
-function buildCenterBars(opts) {
-  const { width, height, barCount, glow, opacity, fps, colorScheme } = opts;
-  const halfH = Math.round(height / 2);
-  const halfHEven = halfH % 2 === 0 ? halfH : halfH + 1;
-  const winSize = Math.min(2048, Math.max(512, barCount * 16));
-
-  const filters = [
-    `[1:a]showfreqs=s=${width}x${halfHEven}:mode=bar:fscale=log:ascale=log:win_size=${winSize},fps=${fps}[viz_top]`,
+    `[1:a]showfreqs=s=${vizWidth}x${halfHE}:mode=bar:fscale=log:ascale=log:win_size=${winSize},fps=${fps}[viz_top]`,
     `[viz_top]split[viz_a][viz_b]`,
     `[viz_b]vflip[viz_flip]`,
-    `[viz_a][viz_flip]vstack,${buildTint(colorScheme)},${buildAlphaKey(opacity)}${glow ? ',gblur=sigma=2' : ''}[vizmix]`,
-    `[0:v][vizmix]overlay=0:(H-h)/2:shortest=1[outv]`
-  ];
-
-  return { filterComplex: filters.join(';'), outputMap: '[outv]' };
-}
-
-// WAVEFORM - Audio wave line
-function buildWaveform(opts) {
-  const { width, height, sensitivity, glow, opacity, position, videoHeight, fps, colorScheme } = opts;
-  const overlayY = getOverlayY(position);
-  const effectiveHeight = position === 'full' ? (videoHeight % 2 === 0 ? videoHeight : videoHeight - 1) : height;
-  const scale = sensitivity > 1.5 ? 'log' : 'lin';
-
-  const filters = [
-    `[1:a]showwaves=s=${width}x${effectiveHeight}:mode=line:rate=${fps}:scale=${scale}:n=80,${buildTint(colorScheme)},${buildAlphaKey(opacity)}${glow ? ',gblur=sigma=2' : ''}[viz]`,
-    `[0:v][viz]overlay=0:${overlayY}:shortest=1[outv]`
-  ];
-
-  return { filterComplex: filters.join(';'), outputMap: '[outv]' };
-}
-
-// CIRCULAR - avectorscope lissajous_xy with dots
-function buildCircular(opts) {
-  const { videoWidth, videoHeight, sensitivity, glow, opacity, fps, colorScheme } = opts;
-  const size = Math.min(videoWidth, videoHeight);
-  const vizSize = Math.round(size * 0.5);
-  const vizSizeEven = vizSize % 2 === 0 ? vizSize : vizSize + 1;
-
-  const filters = [
-    `[1:a]avectorscope=s=${vizSizeEven}x${vizSizeEven}:mode=lissajous_xy:rate=${fps}:scale=log:draw=dot:zoom=${(sensitivity * 1.5).toFixed(2)},${buildTint(colorScheme)},${buildAlphaKey(opacity)}${glow ? ',gblur=sigma=4' : ''}[viz]`,
-    `[0:v][viz]overlay=(W-w)/2:(H-h)/2:shortest=1[outv]`
-  ];
-
-  return { filterComplex: filters.join(';'), outputMap: '[outv]' };
-}
-
-// LISSAJOUS - line pattern
-function buildLissajous(opts) {
-  const { videoWidth, videoHeight, sensitivity, glow, opacity, fps, colorScheme } = opts;
-  const size = Math.min(videoWidth, videoHeight);
-  const vizSize = Math.round(size * 0.55);
-  const vizSizeEven = vizSize % 2 === 0 ? vizSize : vizSize + 1;
-
-  const filters = [
-    `[1:a]avectorscope=s=${vizSizeEven}x${vizSizeEven}:mode=lissajous:rate=${fps}:scale=log:draw=line:zoom=${sensitivity.toFixed(2)},${buildTint(colorScheme)},${buildAlphaKey(opacity)}${glow ? ',gblur=sigma=3' : ''}[viz]`,
-    `[0:v][viz]overlay=(W-w)/2:(H-h)/2:shortest=1[outv]`
-  ];
-
-  return { filterComplex: filters.join(';'), outputMap: '[outv]' };
-}
-
-// NEBULA - heavy blur cloud effect
-function buildNebula(opts) {
-  const { videoWidth, videoHeight, sensitivity, opacity, fps, colorScheme } = opts;
-  const size = Math.min(videoWidth, videoHeight);
-  const vizSize = Math.round(size * 0.6);
-  const vizSizeEven = vizSize % 2 === 0 ? vizSize : vizSize + 1;
-
-  const filters = [
-    `[1:a]avectorscope=s=${vizSizeEven}x${vizSizeEven}:mode=lissajous:rate=${fps}:scale=sqrt:draw=line:zoom=${(sensitivity * 1.8).toFixed(2)},gblur=sigma=10,${buildTint(colorScheme)},${buildAlphaKey(opacity)}[viz]`,
-    `[0:v][viz]overlay=(W-w)/2:(H-h)/2:shortest=1[outv]`
-  ];
-
-  return { filterComplex: filters.join(';'), outputMap: '[outv]' };
-}
-
-// PARTICLES
-function buildParticles(opts) {
-  const { width, height, sensitivity, glow, opacity, position, videoHeight, fps, colorScheme } = opts;
-  const overlayY = getOverlayY(position);
-  const effectiveHeight = position === 'full' ? (videoHeight % 2 === 0 ? videoHeight : videoHeight - 1) : height;
-  const scale = sensitivity > 1.5 ? 'log' : 'lin';
-
-  const filters = [
-    `[1:a]showwaves=s=${width}x${effectiveHeight}:mode=p2p:rate=${fps}:scale=${scale}:n=120,${buildTint(colorScheme)},${buildAlphaKey(opacity)},gblur=sigma=${glow ? 3 : 1.5}[viz]`,
-    `[0:v][viz]overlay=0:${overlayY}:shortest=1[outv]`
-  ];
-
-  return { filterComplex: filters.join(';'), outputMap: '[outv]' };
-}
-
-// SPECTROGRAM - Heatmap
-function buildSpectrogram(opts) {
-  const { width, height, sensitivity, opacity, position, videoHeight, fps, colorScheme } = opts;
-  const overlayY = getOverlayY(position);
-  const effectiveHeight = position === 'full' ? (videoHeight % 2 === 0 ? videoHeight : videoHeight - 1) : height;
-  const gain = Math.max(1, sensitivity * 3);
-
-  const filters = [
-    `[1:a]showspectrum=s=${width}x${effectiveHeight}:mode=combined:color=intensity:scale=log:gain=${gain.toFixed(1)}:slide=scroll,fps=${fps},${buildTint(colorScheme)},${buildAlphaKey(opacity)}[viz]`,
-    `[0:v][viz]overlay=0:${overlayY}:shortest=1[outv]`
-  ];
-
-  return { filterComplex: filters.join(';'), outputMap: '[outv]' };
-}
-
-// POLAR RADAR
-function buildPolarRadar(opts) {
-  const { videoWidth, videoHeight, sensitivity, glow, opacity, fps, colorScheme } = opts;
-  const size = Math.min(videoWidth, videoHeight);
-  const vizSize = Math.round(size * 0.5);
-  const vizSizeEven = vizSize % 2 === 0 ? vizSize : vizSize + 1;
-
-  const filters = [
-    `[1:a]avectorscope=s=${vizSizeEven}x${vizSizeEven}:mode=polar:rate=${fps}:scale=lin:draw=line:zoom=${(sensitivity * 0.9).toFixed(2)},${buildTint(colorScheme)},${buildAlphaKey(opacity)}${glow ? ',gblur=sigma=2' : ''}[viz]`,
-    `[0:v][viz]overlay=(W-w)/2:(H-h)/2:shortest=1[outv]`
-  ];
-
-  return { filterComplex: filters.join(';'), outputMap: '[outv]' };
-}
-
-// HISTOGRAM
-function buildHistogram(opts) {
-  const { width, height, opacity, position, videoHeight, fps, colorScheme } = opts;
-  const overlayY = getOverlayY(position);
-  const effectiveHeight = position === 'full' ? (videoHeight % 2 === 0 ? videoHeight : videoHeight - 1) : height;
-
-  const filters = [
-    `[1:a]ahistogram=s=${width}x${effectiveHeight}:scale=log:slide=scroll:rate=${fps},${buildTint(colorScheme)},${buildAlphaKey(opacity)}[viz]`,
-    `[0:v][viz]overlay=0:${overlayY}:shortest=1[outv]`
-  ];
-
-  return { filterComplex: filters.join(';'), outputMap: '[outv]' };
-}
-
-// SHOWCQT - Musical scale
-function buildShowCQT(opts) {
-  const { width, height, sensitivity, opacity, position, videoHeight, fps, colorScheme } = opts;
-  const overlayY = getOverlayY(position);
-  const effectiveHeight = position === 'full' ? (videoHeight % 2 === 0 ? videoHeight : videoHeight - 1) : height;
-  const volume = Math.max(1, Math.round(sensitivity * 10));
-
-  const filters = [
-    `[1:a]showcqt=s=${width}x${effectiveHeight}:fps=${fps}:count=1:bar_g=2:sono_g=4:volume=${volume},${buildTint(colorScheme)},${buildAlphaKey(opacity)}[viz]`,
-    `[0:v][viz]overlay=0:${overlayY}:shortest=1[outv]`
-  ];
-
-  return { filterComplex: filters.join(';'), outputMap: '[outv]' };
-}
-
-// PULSE RING - Large lissajous with heavy zoom
-function buildPulseRing(opts) {
-  const { videoWidth, videoHeight, sensitivity, opacity, fps, colorScheme } = opts;
-  const size = Math.min(videoWidth, videoHeight);
-  const vizSize = Math.round(size * 0.7);
-  const vizSizeEven = vizSize % 2 === 0 ? vizSize : vizSize + 1;
-
-  const filters = [
-    `[1:a]avectorscope=s=${vizSizeEven}x${vizSizeEven}:mode=lissajous_xy:rate=${fps}:scale=sqrt:draw=line:zoom=${(sensitivity * 2.5).toFixed(2)},gblur=sigma=6,${buildTint(colorScheme)},${buildAlphaKey(opacity)}[viz]`,
-    `[0:v][viz]overlay=(W-w)/2:(H-h)/2:shortest=1[outv]`
-  ];
-
-  return { filterComplex: filters.join(';'), outputMap: '[outv]' };
-}
-
-// FREQUENCY TERRAIN - vertical orientation
-function buildFrequencyTerrain(opts) {
-  const { width, height, sensitivity, opacity, position, videoHeight, fps, colorScheme } = opts;
-  const overlayY = getOverlayY(position);
-  const effectiveHeight = position === 'full' ? (videoHeight % 2 === 0 ? videoHeight : videoHeight - 1) : height;
-  const gain = Math.max(2, sensitivity * 4);
-
-  const filters = [
-    `[1:a]showspectrum=s=${width}x${effectiveHeight}:mode=combined:color=channel:scale=sqrt:gain=${gain.toFixed(1)}:slide=scroll:orientation=vertical,fps=${fps},${buildTint(colorScheme)},${buildAlphaKey(opacity)}[viz]`,
-    `[0:v][viz]overlay=0:${overlayY}:shortest=1[outv]`
+    `[viz_a][viz_flip]vstack,${buildTint(colorScheme)}${blurFilter}${opacityFilter}[vizraw]`,
+    `[vizraw]pad=${videoWidth}:${videoHeight}:${padX}:${padY}:black[vizpad]`,
+    `[0:v][vizpad]blend=all_mode=screen[outv]`
   ];
 
   return { filterComplex: filters.join(';'), outputMap: '[outv]' };
