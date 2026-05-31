@@ -89,24 +89,23 @@ async function applyVisualizerOverlay({ videoPath, audioPath, outputPath, durati
     const parts = fpsStr.split('/');
     fps = parts.length === 2 ? Math.round(parseInt(parts[0]) / parseInt(parts[1])) : parseInt(fpsStr);
   } catch(e) { fps = 30; }
-  fps = Math.min(fps || 30, 30);
+  fps = Math.min(Math.max(fps || 30, 24), 30);
 
   console.log('[VISUALIZER] Applying visualizer overlay');
   console.log('[VISUALIZER] Type:', visualizerSettings.type);
   console.log('[VISUALIZER] Video:', width, 'x', height, '@', fps, 'fps');
   console.log('[VISUALIZER] Duration:', duration, 's');
 
-  // Build the FFmpeg filter complex
+  // Build the FFmpeg filter complex (pass fps so filters render at correct rate)
   const { filterComplex, outputMap } = buildVisualizerFilter(visualizerSettings, {
     width,
     height,
-    position: visualizerSettings.position || 'bottom'
+    position: visualizerSettings.position || 'bottom',
+    fps
   });
 
   console.log('[VISUALIZER] Filter:', filterComplex);
 
-  // Use raw ffmpeg command for maximum reliability
-  // The issue with fluent-ffmpeg complexFilter + map is that it can produce corrupt output
   await runFfmpeg((cmd) => {
     return cmd
       .input(videoPath)
@@ -116,10 +115,13 @@ async function applyVisualizerOverlay({ videoPath, audioPath, outputPath, durati
         '-map', outputMap,
         '-map', '1:a',
         '-c:v', 'libx264',
-        '-preset', 'ultrafast',
-        '-crf', '23',
+        '-preset', 'veryfast',
+        '-crf', '22',
         '-pix_fmt', 'yuv420p',
         '-r', String(fps),
+        '-g', String(fps * 2),
+        '-keyint_min', String(fps),
+        '-sc_threshold', '0',
         '-c:a', 'aac',
         '-b:a', '192k',
         '-ar', '44100',
@@ -127,6 +129,7 @@ async function applyVisualizerOverlay({ videoPath, audioPath, outputPath, durati
         '-t', String(duration),
         '-movflags', '+faststart',
         '-max_muxing_queue_size', '4096',
+        '-vsync', 'cfr',
         '-y'
       ])
       .output(outputPath);
