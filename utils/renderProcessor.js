@@ -153,6 +153,148 @@ async function applyVisualizerOverlay({ videoPath, audioPath, outputPath, durati
   return outputPath;
 }
 
+/**
+ * Render video with visualizer in a SINGLE PASS.
+ * Takes raw video paths and audio paths, prepares them (loop/concat if needed),
+ * then renders final output with visualizer overlay applied directly.
+ * This avoids the 2-pass problem where visualizer might not be applied.
+ * 
+ * @param {Object} params
+ * @param {string[]} params.videoPaths - Array of video file paths
+ * @param {string[]} params.audioPaths - Array of audio file paths  
+ * @param {string} params.outputPath - Final output file path
+ * @param {number} params.duration - Target duration in seconds
+ * @param {Object} params.visualizerSettings - Visualizer configuration
+ * @param {string} params.workDir - Temp working directory
+ * @param {Function} params.onProgress - Progress callback
+ * @returns {Promise<string>} Output path
+ */
+async function renderWithVisualizerSinglePass({ videoPaths, audioPaths, outputPath, duration, visualizerSettings, workDir, onProgress }) {
+  if (!videoPaths?.length) throw new Error('Video diperlukan');
+  if (!audioPaths?.length) throw new Error('Audio diperlukan untuk visualizer');
+
+  console.log('[VIZ-RENDER] ========================================');
+  console.log('[VIZ-RENDER] Single-pass visualizer render');
+  console.log('[VIZ-RENDER] Videos:', videoPaths.length, '| Audios:', audioPaths.length);
+  console.log('[VIZ-RENDER] Duration:', duration, 's');
+  console.log('[VIZ-RENDER] Visualizer type:', visualizerSettings.type);
+  console.log('[VIZ-RENDER] ========================================');
+
+  onProgress?.(5);
+
+  // Step 1: Prepare looped/concat video if needed
+  let preparedVideoPath;
+  if (videoPaths.length === 1) {
+    const videoMeta = await ffprobeAsync(videoPaths[0]);
+    const videoDuration = Number(videoMeta?.format?.duration || 0);
+    if (videoDuration >= duration) {
+      // Use directly
+      preparedVideoPath = videoPaths[0];
+    } else {
+      // Loop video
+      const loops = Math.ceil(duration / videoDuration) + 1;
+      const concatFile = path.join(workDir, 'video-concat.txt');
+      const lines = Array(loops).fill(`file '${videoPaths[0].replace(/'/g, "'\\''")}'`);
+      fs.writeFileSync(concatFile, lines.join('\n'), 'utf8');
+      preparedVideoPath = path.join(workDir, 'video-prepared.mp4');
+      console.log('[VIZ-RENDER] Looping video', loops, 'times');
+      await runFfmpeg((cmd) => cmd
+        .input(concatFile)
+        .inputOptions(['-f', 'concat', '-safe', '0'])
+        .outputOptions(['-t', String(duration), '-c:v', 'copy'])
+        .output(preparedVideoPath));
+    }
+  } else {
+    // Multiple videos - concat
+    const concatFile = path.join(workDir, 'video-concat.txt');
+    const totalDur = (await Promise.all(videoPaths.map(p => ffprobeAsync(p))))
+      .reduce((s, m) => s + Number(m?.format?.duration || 0), 0);
+    const loops = Math.ceil(duration / totalDur) + 1;
+    const lines = [];
+    for (let i = 0; i < loops; i++) {
+      videoPaths.forEach(p => lines.push(`file '${p.replace(/'/g, "'\\''")}'`));
+    }
+    fs.writeFileSync(concatFile, lines.join('\n'), 'utf8');
+    preparedVideoPath = path.join(workDir, 'video-prepared.mp4');
+    console.log('[VIZ-RENDER] Concatenating', videoPaths.length, 'videos x', loops, 'loops');
+    await runFfmpeg((cmd) => cmd
+      .input(concatFile)
+      .inputOptions(['-f', 'concat', '-safe', '0'])
+      .outputOptions(['-t', String(duration), '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23'])
+      .output(preparedVideoPath));
+  }
+
+  onProgress?.(25);
+
+  // Step 2: Prepare looped/concat audio
+  let preparedAudioPath;
+  if (audioPaths.length === 1) {
+    const audioMeta = await ffprobeAsync(audioPaths[0]);
+    const audioDuration = Number(audioMeta?.format?.duration || 0);
+    if (audioDuration >= duration) {
+      preparedAudioPath = audioPaths[0];
+    } else {
+      const loops = Math.ceil(duration / audioDuration) + 1;
+      const concatFile = path.join(workDir, 'audio-concat.txt');
+      const lines = Array(loops).fill(`file '${audioPaths[0].replace(/'/g, "'\\''")}'`);
+      fs.writeFileSync(concatFile, lines.join('\n'), 'utf8');
+      preparedAudioPath = path.join(workDir, 'audio-prepared.aac');
+      console.log('[VIZ-RENDER] Looping audio', loops, 'times');
+      await runFfmpeg((cmd) => cmd
+        .input(concatFile)
+        .inputOptions(['-f', 'concat', '-safe', '0'])
+        .outputOptions(['-t', String(duration), '-c:a', 'aac', '-b:a', '192k', '-ar', '44100', '-ac', '2'])
+        .output(preparedAudioPath));
+    }
+  } else {
+    // Multiple audios
+    const concatFile = path.join(workDir, 'audio-concat.txt');
+    const totalDur = (await Promise.all(audioPaths.map(p => ffprobeAsync(p))))
+      .reduce((s, m) => s + Number(m?.format?.duration || 0), 0);
+    const loops = Math.ceil(duration / totalDur) + 1;
+    const lines = [];
+    for (let i = 0; i < loops; i++) {
+      audioPaths.forEach(p => lines.push(`file '${p.replace(/'/g, "'\\''")}'`));
+    }
+    fs.writeFileSync(concatFile, lines.join('\n'), 'utf8');
+    preparedAudioPath = path.join(workDir, 'audio-prepared.aac');
+    console.log('[VIZ-RENDER] Concatenating', audioPaths.length, 'audios x', loops, 'loops');
+    await runFfmpeg((cmd) => cmd
+      .input(concatFile)
+      .inputOptions(['-f', 'concat', '-safe', '0'])
+      .outputOptions(['-t', String(duration), '-c:a', 'aac', '-b:a', '192k', '-ar', '44100', '-ac', '2'])
+      .output(preparedAudioPath));
+  }
+
+  onProgress?.(40);
+
+  // Step 3: Apply visualizer overlay - this is the FINAL render
+  console.log('[VIZ-RENDER] Applying visualizer overlay - FINAL render');
+  await applyVisualizerOverlay({
+    videoPath: preparedVideoPath,
+    audioPath: preparedAudioPath,
+    outputPath,
+    duration,
+    visualizerSettings,
+    onProgress: (pct) => onProgress?.(40 + Math.round((pct / 100) * 59)),
+    progressOffset: 0,
+    progressRange: 100
+  });
+
+  // Verify final output
+  if (!fs.existsSync(outputPath)) {
+    throw new Error('Visualizer render did not produce output file');
+  }
+  const stat = fs.statSync(outputPath);
+  if (stat.size < 10000) {
+    throw new Error(`Visualizer output too small (${stat.size} bytes), likely corrupt`);
+  }
+
+  console.log('[VIZ-RENDER] ✓ Final output:', (stat.size / 1024 / 1024).toFixed(1), 'MB');
+  onProgress?.(99);
+  return outputPath;
+}
+
 async function renderLoopVideo({ 
   videoPaths, 
   audioPaths, 
@@ -211,6 +353,34 @@ async function renderLoopVideo({
     }
     
     console.log('[RENDER] Effective Duration:', effectiveTargetDuration, 's');
+    
+    // ========================================
+    // VISUALIZER PATH: When visualizer is enabled, use single-pass render
+    // This guarantees visualizer is applied to output (avoids the 2-pass issue)
+    // ========================================
+    if (shouldApplyVisualizer) {
+      console.log('[RENDER] 🎵 VISUALIZER MODE: Single-pass render with overlay');
+      try {
+        await renderWithVisualizerSinglePass({
+          videoPaths,
+          audioPaths,
+          outputPath,
+          duration: effectiveTargetDuration,
+          visualizerSettings,
+          workDir,
+          onProgress
+        });
+        const elapsedSeconds = Math.round((Date.now() - startTime) / 1000);
+        console.log('[RENDER] ========================================');
+        console.log('[RENDER] 🎵 COMPLETED IN', elapsedSeconds, 'SECONDS (VISUALIZER MODE)');
+        console.log('[RENDER] ========================================');
+        return outputPath;
+      } catch (vizError) {
+        console.error('[RENDER] ⚠️ Visualizer render failed:', vizError.message);
+        console.error('[RENDER] Falling back to standard render without visualizer');
+        // Fall through to standard render
+      }
+    }
     
     // When visualizer is enabled, we render video+audio to a temp file first,
     // then apply the visualizer overlay as a post-processing step.

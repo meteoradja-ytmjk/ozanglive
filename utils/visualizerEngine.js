@@ -159,7 +159,7 @@ function buildSpectrumBars(opts) {
   const { width, height, barCount, sensitivity, glow, opacity, position, videoHeight, fps, colorScheme } = opts;
   const overlayY = getOverlayY(position);
   const effectiveHeight = position === 'full' ? (videoHeight % 2 === 0 ? videoHeight : videoHeight - 1) : height;
-  const alpha = glow ? Math.min(0.95, opacity) : Math.min(0.85, opacity * 0.9);
+  const alpha = Math.min(1.0, opacity);
   const winSize = Math.min(2048, Math.max(512, barCount * 16));
 
   const filters = [
@@ -175,7 +175,7 @@ function buildCenterBars(opts) {
   const { width, height, barCount, sensitivity, glow, opacity, fps, colorScheme } = opts;
   const halfH = Math.round(height / 2);
   const halfHEven = halfH % 2 === 0 ? halfH : halfH + 1;
-  const alpha = glow ? Math.min(0.9, opacity) : Math.min(0.8, opacity * 0.9);
+  const alpha = Math.min(1.0, opacity);
   const winSize = Math.min(2048, Math.max(512, barCount * 16));
 
   const filters = [
@@ -194,7 +194,7 @@ function buildWaveform(opts) {
   const { width, height, sensitivity, glow, opacity, position, videoHeight, fps, colorScheme } = opts;
   const overlayY = getOverlayY(position);
   const effectiveHeight = position === 'full' ? (videoHeight % 2 === 0 ? videoHeight : videoHeight - 1) : height;
-  const alpha = glow ? Math.min(0.95, opacity) : Math.min(0.85, opacity * 0.9);
+  const alpha = Math.min(1.0, opacity);
   const scale = sensitivity > 1.5 ? 'log' : 'lin';
 
   const filters = [
