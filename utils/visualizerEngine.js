@@ -3,7 +3,9 @@
  * 
  * Generates FFmpeg filter chains for real audio-reactive visualizations.
  * Each visualizer type has a distinct visual character.
- * All filters output at 30fps to match standard video framerate (fix choppy playback).
+ * 
+ * KEY FIX: Uses `colorkey=black` to make visualizer's black background transparent
+ * so only the bright visualizer pattern is overlaid on video (not a black box).
  */
 
 const VISUALIZER_TYPES = {
@@ -28,30 +30,42 @@ const VISUALIZER_TYPES = {
 };
 
 const COLOR_SCHEMES = {
-  purple: { primary: '0x8B5CF6', secondary: '0xEC4899', tint: { rr: 0.9, gg: 0.4, bb: 1.1 } },
-  blue: { primary: '0x3B82F6', secondary: '0x06B6D4', tint: { rr: 0.4, gg: 0.7, bb: 1.2 } },
-  green: { primary: '0x10B981', secondary: '0x34D399', tint: { rr: 0.3, gg: 1.2, bb: 0.5 } },
-  rainbow: { primary: '0xEF4444', secondary: '0x8B5CF6', tint: { rr: 1.0, gg: 1.0, bb: 1.0 } },
-  fire: { primary: '0xDC2626', secondary: '0xFCD34D', tint: { rr: 1.3, gg: 0.7, bb: 0.3 } },
-  neon: { primary: '0xFF00FF', secondary: '0x00FFFF', tint: { rr: 1.2, gg: 0.5, bb: 1.3 } },
-  ocean: { primary: '0x0EA5E9', secondary: '0x22D3EE', tint: { rr: 0.4, gg: 0.9, bb: 1.3 } },
-  sunset: { primary: '0xF97316', secondary: '0xFBBF24', tint: { rr: 1.3, gg: 0.8, bb: 0.4 } },
-  gold: { primary: '0xF59E0B', secondary: '0xD97706', tint: { rr: 1.2, gg: 1.0, bb: 0.3 } },
-  ice: { primary: '0x93C5FD', secondary: '0xF0F9FF', tint: { rr: 0.8, gg: 1.0, bb: 1.2 } },
-  cherry: { primary: '0xE11D48', secondary: '0xFB7185', tint: { rr: 1.3, gg: 0.4, bb: 0.6 } },
-  forest: { primary: '0x166534', secondary: '0x4ADE80', tint: { rr: 0.4, gg: 1.1, bb: 0.5 } },
-  aurora: { primary: '0x06B6D4', secondary: '0xEC4899', tint: { rr: 0.9, gg: 0.7, bb: 1.2 } },
-  midnight: { primary: '0x1E1B4B', secondary: '0x7C3AED', tint: { rr: 0.6, gg: 0.4, bb: 1.1 } },
-  white: { primary: '0xFFFFFF', secondary: '0xE2E8F0', tint: { rr: 1.0, gg: 1.0, bb: 1.0 } },
-  lemon: { primary: '0xFDE047', secondary: '0xF59E0B', tint: { rr: 1.2, gg: 1.1, bb: 0.3 } }
+  purple: { tint: { rr: 1.2, gg: 0.5, bb: 1.4 } },
+  blue: { tint: { rr: 0.5, gg: 0.9, bb: 1.5 } },
+  green: { tint: { rr: 0.4, gg: 1.4, bb: 0.6 } },
+  rainbow: { tint: { rr: 1.0, gg: 1.0, bb: 1.0 } },
+  fire: { tint: { rr: 1.6, gg: 0.8, bb: 0.3 } },
+  neon: { tint: { rr: 1.4, gg: 0.6, bb: 1.5 } },
+  ocean: { tint: { rr: 0.4, gg: 1.0, bb: 1.5 } },
+  sunset: { tint: { rr: 1.5, gg: 0.9, bb: 0.4 } },
+  gold: { tint: { rr: 1.4, gg: 1.1, bb: 0.3 } },
+  ice: { tint: { rr: 0.9, gg: 1.1, bb: 1.4 } },
+  cherry: { tint: { rr: 1.5, gg: 0.4, bb: 0.7 } },
+  forest: { tint: { rr: 0.5, gg: 1.3, bb: 0.6 } },
+  aurora: { tint: { rr: 1.0, gg: 0.8, bb: 1.4 } },
+  midnight: { tint: { rr: 0.7, gg: 0.5, bb: 1.3 } },
+  white: { tint: { rr: 1.0, gg: 1.0, bb: 1.0 } },
+  lemon: { tint: { rr: 1.4, gg: 1.3, bb: 0.4 } }
 };
 
 /**
- * Build colorchannelmixer string for color tinting
+ * Build colorchannelmixer string for color tinting (only RGB, no alpha modification)
  */
-function buildTint(scheme, alpha) {
+function buildTint(scheme) {
   const t = scheme.tint || { rr: 1, gg: 1, bb: 1 };
-  return `colorchannelmixer=aa=${alpha.toFixed(2)}:rr=${t.rr}:gg=${t.gg}:bb=${t.bb}`;
+  return `colorchannelmixer=rr=${t.rr}:gg=${t.gg}:bb=${t.bb}`;
+}
+
+/**
+ * Build the alpha-keying chain that makes visualizer's black background transparent.
+ * This is the KEY to making visualizer overlay properly on video.
+ */
+function buildAlphaKey(opacity = 1.0) {
+  const alpha = Math.max(0.3, Math.min(1.0, opacity));
+  // colorkey=black:similarity:blend - removes black background
+  // similarity=0.3 = 30% color similarity threshold
+  // blend=0.1 = small soft edge for smooth transition
+  return `colorkey=0x000000:0.3:0.1,format=yuva420p,colorchannelmixer=aa=${alpha.toFixed(2)}`;
 }
 
 /**
@@ -91,17 +105,16 @@ function buildVisualizerFilter(settings, options = {}) {
   const position = settingsPosition || optionsPosition;
   let colorScheme;
   if (color === 'custom' && customColors && customColors.length >= 2) {
-    colorScheme = { primary: '0x' + customColors[0].replace('#', ''), secondary: '0x' + customColors[1].replace('#', ''), tint: { rr: 1, gg: 1, bb: 1 } };
+    colorScheme = { tint: { rr: 1.2, gg: 0.5, bb: 1.4 } };
   } else {
     colorScheme = COLOR_SCHEMES[color] || COLOR_SCHEMES.purple;
   }
 
   const heightPercent = settingsHeight || Math.round(intensity * 0.4 + 10);
   const vizHeight = Math.round(height * (heightPercent / 100));
-  // Ensure even dimensions for h264 compatibility
   const vizHeightEven = vizHeight % 2 === 0 ? vizHeight : vizHeight + 1;
   const widthEven = width % 2 === 0 ? width : width - 1;
-  const effectiveOpacity = Math.max(0.2, Math.min(1.0, opacity));
+  const effectiveOpacity = Math.max(0.3, Math.min(1.0, opacity));
 
   const opts = {
     width: widthEven,
@@ -154,210 +167,197 @@ function buildVisualizerFilter(settings, options = {}) {
   }
 }
 
-// SPECTRUM - Frequency bars (showfreqs)
+// SPECTRUM - Frequency bars
 function buildSpectrumBars(opts) {
-  const { width, height, barCount, sensitivity, glow, opacity, position, videoHeight, fps, colorScheme } = opts;
+  const { width, height, barCount, glow, opacity, position, videoHeight, fps, colorScheme } = opts;
   const overlayY = getOverlayY(position);
   const effectiveHeight = position === 'full' ? (videoHeight % 2 === 0 ? videoHeight : videoHeight - 1) : height;
-  const alpha = Math.min(1.0, opacity);
   const winSize = Math.min(2048, Math.max(512, barCount * 16));
 
   const filters = [
-    `[1:a]showfreqs=s=${width}x${effectiveHeight}:mode=bar:fscale=log:ascale=log:win_size=${winSize},fps=${fps},format=rgba,${buildTint(colorScheme, alpha)}${glow ? ',gblur=sigma=2' : ''}[viz]`,
+    `[1:a]showfreqs=s=${width}x${effectiveHeight}:mode=bar:fscale=log:ascale=log:win_size=${winSize},fps=${fps},${buildTint(colorScheme)},${buildAlphaKey(opacity)}${glow ? ',gblur=sigma=2' : ''}[viz]`,
     `[0:v][viz]overlay=0:${overlayY}:shortest=1[outv]`
   ];
 
   return { filterComplex: filters.join(';'), outputMap: '[outv]' };
 }
 
-// CENTER BARS - Mirrored frequency bars from middle
+// CENTER BARS - Mirrored
 function buildCenterBars(opts) {
-  const { width, height, barCount, sensitivity, glow, opacity, fps, colorScheme } = opts;
+  const { width, height, barCount, glow, opacity, fps, colorScheme } = opts;
   const halfH = Math.round(height / 2);
   const halfHEven = halfH % 2 === 0 ? halfH : halfH + 1;
-  const alpha = Math.min(1.0, opacity);
   const winSize = Math.min(2048, Math.max(512, barCount * 16));
 
   const filters = [
     `[1:a]showfreqs=s=${width}x${halfHEven}:mode=bar:fscale=log:ascale=log:win_size=${winSize},fps=${fps}[viz_top]`,
     `[viz_top]split[viz_a][viz_b]`,
     `[viz_b]vflip[viz_flip]`,
-    `[viz_a][viz_flip]vstack,format=rgba,${buildTint(colorScheme, alpha)}${glow ? ',gblur=sigma=2' : ''}[vizmix]`,
+    `[viz_a][viz_flip]vstack,${buildTint(colorScheme)},${buildAlphaKey(opacity)}${glow ? ',gblur=sigma=2' : ''}[vizmix]`,
     `[0:v][vizmix]overlay=0:(H-h)/2:shortest=1[outv]`
   ];
 
   return { filterComplex: filters.join(';'), outputMap: '[outv]' };
 }
 
-// WAVEFORM - Audio wave line (showwaves line mode)
+// WAVEFORM - Audio wave line
 function buildWaveform(opts) {
   const { width, height, sensitivity, glow, opacity, position, videoHeight, fps, colorScheme } = opts;
   const overlayY = getOverlayY(position);
   const effectiveHeight = position === 'full' ? (videoHeight % 2 === 0 ? videoHeight : videoHeight - 1) : height;
-  const alpha = Math.min(1.0, opacity);
   const scale = sensitivity > 1.5 ? 'log' : 'lin';
 
   const filters = [
-    `[1:a]showwaves=s=${width}x${effectiveHeight}:mode=line:rate=${fps}:scale=${scale}:n=80,format=rgba,${buildTint(colorScheme, alpha)}${glow ? ',gblur=sigma=2' : ''}[viz]`,
+    `[1:a]showwaves=s=${width}x${effectiveHeight}:mode=line:rate=${fps}:scale=${scale}:n=80,${buildTint(colorScheme)},${buildAlphaKey(opacity)}${glow ? ',gblur=sigma=2' : ''}[viz]`,
     `[0:v][viz]overlay=0:${overlayY}:shortest=1[outv]`
   ];
 
   return { filterComplex: filters.join(';'), outputMap: '[outv]' };
 }
 
-// CIRCULAR - avectorscope lissajous_xy with dots (compact circular pattern)
+// CIRCULAR - avectorscope lissajous_xy with dots
 function buildCircular(opts) {
   const { videoWidth, videoHeight, sensitivity, glow, opacity, fps, colorScheme } = opts;
   const size = Math.min(videoWidth, videoHeight);
   const vizSize = Math.round(size * 0.5);
   const vizSizeEven = vizSize % 2 === 0 ? vizSize : vizSize + 1;
-  const alpha = glow ? Math.min(0.9, opacity) : Math.min(0.8, opacity * 0.9);
 
   const filters = [
-    `[1:a]avectorscope=s=${vizSizeEven}x${vizSizeEven}:mode=lissajous_xy:rate=${fps}:scale=log:draw=dot:zoom=${(sensitivity * 1.5).toFixed(2)},format=rgba,${buildTint(colorScheme, alpha)}${glow ? ',gblur=sigma=4' : ''}[viz]`,
+    `[1:a]avectorscope=s=${vizSizeEven}x${vizSizeEven}:mode=lissajous_xy:rate=${fps}:scale=log:draw=dot:zoom=${(sensitivity * 1.5).toFixed(2)},${buildTint(colorScheme)},${buildAlphaKey(opacity)}${glow ? ',gblur=sigma=4' : ''}[viz]`,
     `[0:v][viz]overlay=(W-w)/2:(H-h)/2:shortest=1[outv]`
   ];
 
   return { filterComplex: filters.join(';'), outputMap: '[outv]' };
 }
 
-// LISSAJOUS - avectorscope lissajous mode (different pattern from circular)
+// LISSAJOUS - line pattern
 function buildLissajous(opts) {
   const { videoWidth, videoHeight, sensitivity, glow, opacity, fps, colorScheme } = opts;
   const size = Math.min(videoWidth, videoHeight);
   const vizSize = Math.round(size * 0.55);
   const vizSizeEven = vizSize % 2 === 0 ? vizSize : vizSize + 1;
-  const alpha = Math.min(0.85, opacity);
 
   const filters = [
-    `[1:a]avectorscope=s=${vizSizeEven}x${vizSizeEven}:mode=lissajous:rate=${fps}:scale=log:draw=line:zoom=${sensitivity.toFixed(2)},format=rgba,${buildTint(colorScheme, alpha)}${glow ? ',gblur=sigma=3' : ''}[viz]`,
+    `[1:a]avectorscope=s=${vizSizeEven}x${vizSizeEven}:mode=lissajous:rate=${fps}:scale=log:draw=line:zoom=${sensitivity.toFixed(2)},${buildTint(colorScheme)},${buildAlphaKey(opacity)}${glow ? ',gblur=sigma=3' : ''}[viz]`,
     `[0:v][viz]overlay=(W-w)/2:(H-h)/2:shortest=1[outv]`
   ];
 
   return { filterComplex: filters.join(';'), outputMap: '[outv]' };
 }
 
-// NEBULA - Heavy blur cloud effect
+// NEBULA - heavy blur cloud effect
 function buildNebula(opts) {
   const { videoWidth, videoHeight, sensitivity, opacity, fps, colorScheme } = opts;
   const size = Math.min(videoWidth, videoHeight);
   const vizSize = Math.round(size * 0.6);
   const vizSizeEven = vizSize % 2 === 0 ? vizSize : vizSize + 1;
-  const alpha = Math.min(0.85, opacity);
 
   const filters = [
-    `[1:a]avectorscope=s=${vizSizeEven}x${vizSizeEven}:mode=lissajous:rate=${fps}:scale=sqrt:draw=line:zoom=${(sensitivity * 1.8).toFixed(2)},gblur=sigma=10,format=rgba,${buildTint(colorScheme, alpha)}[viz]`,
+    `[1:a]avectorscope=s=${vizSizeEven}x${vizSizeEven}:mode=lissajous:rate=${fps}:scale=sqrt:draw=line:zoom=${(sensitivity * 1.8).toFixed(2)},gblur=sigma=10,${buildTint(colorScheme)},${buildAlphaKey(opacity)}[viz]`,
     `[0:v][viz]overlay=(W-w)/2:(H-h)/2:shortest=1[outv]`
   ];
 
   return { filterComplex: filters.join(';'), outputMap: '[outv]' };
 }
 
-// PARTICLES - showwaves p2p mode (point-to-point particles)
+// PARTICLES
 function buildParticles(opts) {
   const { width, height, sensitivity, glow, opacity, position, videoHeight, fps, colorScheme } = opts;
   const overlayY = getOverlayY(position);
   const effectiveHeight = position === 'full' ? (videoHeight % 2 === 0 ? videoHeight : videoHeight - 1) : height;
-  const alpha = glow ? Math.min(0.9, opacity) : Math.min(0.8, opacity * 0.9);
   const scale = sensitivity > 1.5 ? 'log' : 'lin';
 
   const filters = [
-    `[1:a]showwaves=s=${width}x${effectiveHeight}:mode=p2p:rate=${fps}:scale=${scale}:n=120,format=rgba,${buildTint(colorScheme, alpha)},gblur=sigma=${glow ? 3 : 1.5}[viz]`,
+    `[1:a]showwaves=s=${width}x${effectiveHeight}:mode=p2p:rate=${fps}:scale=${scale}:n=120,${buildTint(colorScheme)},${buildAlphaKey(opacity)},gblur=sigma=${glow ? 3 : 1.5}[viz]`,
     `[0:v][viz]overlay=0:${overlayY}:shortest=1[outv]`
   ];
 
   return { filterComplex: filters.join(';'), outputMap: '[outv]' };
 }
 
-// SPECTROGRAM - Heatmap frequency display
+// SPECTROGRAM - Heatmap
 function buildSpectrogram(opts) {
-  const { width, height, sensitivity, glow, opacity, position, videoHeight, fps, colorScheme } = opts;
+  const { width, height, sensitivity, opacity, position, videoHeight, fps, colorScheme } = opts;
   const overlayY = getOverlayY(position);
   const effectiveHeight = position === 'full' ? (videoHeight % 2 === 0 ? videoHeight : videoHeight - 1) : height;
-  const alpha = glow ? Math.min(0.95, opacity) : Math.min(0.85, opacity * 0.9);
   const gain = Math.max(1, sensitivity * 3);
 
   const filters = [
-    `[1:a]showspectrum=s=${width}x${effectiveHeight}:mode=combined:color=intensity:scale=log:gain=${gain.toFixed(1)}:slide=scroll,fps=${fps},format=rgba,${buildTint(colorScheme, alpha)}[viz]`,
+    `[1:a]showspectrum=s=${width}x${effectiveHeight}:mode=combined:color=intensity:scale=log:gain=${gain.toFixed(1)}:slide=scroll,fps=${fps},${buildTint(colorScheme)},${buildAlphaKey(opacity)}[viz]`,
     `[0:v][viz]overlay=0:${overlayY}:shortest=1[outv]`
   ];
 
   return { filterComplex: filters.join(';'), outputMap: '[outv]' };
 }
 
-// POLAR RADAR - avectorscope polar mode (radar sweep look)
+// POLAR RADAR
 function buildPolarRadar(opts) {
   const { videoWidth, videoHeight, sensitivity, glow, opacity, fps, colorScheme } = opts;
   const size = Math.min(videoWidth, videoHeight);
   const vizSize = Math.round(size * 0.5);
   const vizSizeEven = vizSize % 2 === 0 ? vizSize : vizSize + 1;
-  const alpha = glow ? Math.min(0.9, opacity) : Math.min(0.8, opacity * 0.9);
 
   const filters = [
-    `[1:a]avectorscope=s=${vizSizeEven}x${vizSizeEven}:mode=polar:rate=${fps}:scale=lin:draw=line:zoom=${(sensitivity * 0.9).toFixed(2)},format=rgba,${buildTint(colorScheme, alpha)}${glow ? ',gblur=sigma=2' : ''}[viz]`,
+    `[1:a]avectorscope=s=${vizSizeEven}x${vizSizeEven}:mode=polar:rate=${fps}:scale=lin:draw=line:zoom=${(sensitivity * 0.9).toFixed(2)},${buildTint(colorScheme)},${buildAlphaKey(opacity)}${glow ? ',gblur=sigma=2' : ''}[viz]`,
     `[0:v][viz]overlay=(W-w)/2:(H-h)/2:shortest=1[outv]`
   ];
 
   return { filterComplex: filters.join(';'), outputMap: '[outv]' };
 }
 
-// HISTOGRAM - Audio level histogram
+// HISTOGRAM
 function buildHistogram(opts) {
-  const { width, height, glow, opacity, position, videoHeight, fps, colorScheme } = opts;
+  const { width, height, opacity, position, videoHeight, fps, colorScheme } = opts;
   const overlayY = getOverlayY(position);
   const effectiveHeight = position === 'full' ? (videoHeight % 2 === 0 ? videoHeight : videoHeight - 1) : height;
-  const alpha = glow ? Math.min(0.95, opacity) : Math.min(0.8, opacity * 0.9);
 
   const filters = [
-    `[1:a]ahistogram=s=${width}x${effectiveHeight}:scale=log:slide=scroll:rate=${fps},format=rgba,${buildTint(colorScheme, alpha)}[viz]`,
+    `[1:a]ahistogram=s=${width}x${effectiveHeight}:scale=log:slide=scroll:rate=${fps},${buildTint(colorScheme)},${buildAlphaKey(opacity)}[viz]`,
     `[0:v][viz]overlay=0:${overlayY}:shortest=1[outv]`
   ];
 
   return { filterComplex: filters.join(';'), outputMap: '[outv]' };
 }
 
-// SHOWCQT - Constant-Q transform (musical scale)
+// SHOWCQT - Musical scale
 function buildShowCQT(opts) {
-  const { width, height, sensitivity, glow, opacity, position, videoHeight, fps, colorScheme } = opts;
+  const { width, height, sensitivity, opacity, position, videoHeight, fps, colorScheme } = opts;
   const overlayY = getOverlayY(position);
   const effectiveHeight = position === 'full' ? (videoHeight % 2 === 0 ? videoHeight : videoHeight - 1) : height;
-  const alpha = glow ? Math.min(0.95, opacity) : Math.min(0.85, opacity * 0.9);
   const volume = Math.max(1, Math.round(sensitivity * 10));
 
   const filters = [
-    `[1:a]showcqt=s=${width}x${effectiveHeight}:fps=${fps}:count=1:bar_g=2:sono_g=4:volume=${volume},format=rgba,${buildTint(colorScheme, alpha)}[viz]`,
+    `[1:a]showcqt=s=${width}x${effectiveHeight}:fps=${fps}:count=1:bar_g=2:sono_g=4:volume=${volume},${buildTint(colorScheme)},${buildAlphaKey(opacity)}[viz]`,
     `[0:v][viz]overlay=0:${overlayY}:shortest=1[outv]`
   ];
 
   return { filterComplex: filters.join(';'), outputMap: '[outv]' };
 }
 
-// PULSE RING - Large lissajous with heavy zoom (ring effect)
+// PULSE RING - Large lissajous with heavy zoom
 function buildPulseRing(opts) {
   const { videoWidth, videoHeight, sensitivity, opacity, fps, colorScheme } = opts;
   const size = Math.min(videoWidth, videoHeight);
   const vizSize = Math.round(size * 0.7);
   const vizSizeEven = vizSize % 2 === 0 ? vizSize : vizSize + 1;
-  const alpha = Math.min(0.9, opacity);
 
   const filters = [
-    `[1:a]avectorscope=s=${vizSizeEven}x${vizSizeEven}:mode=lissajous_xy:rate=${fps}:scale=sqrt:draw=line:zoom=${(sensitivity * 2.5).toFixed(2)},gblur=sigma=6,format=rgba,${buildTint(colorScheme, alpha)}[viz]`,
+    `[1:a]avectorscope=s=${vizSizeEven}x${vizSizeEven}:mode=lissajous_xy:rate=${fps}:scale=sqrt:draw=line:zoom=${(sensitivity * 2.5).toFixed(2)},gblur=sigma=6,${buildTint(colorScheme)},${buildAlphaKey(opacity)}[viz]`,
     `[0:v][viz]overlay=(W-w)/2:(H-h)/2:shortest=1[outv]`
   ];
 
   return { filterComplex: filters.join(';'), outputMap: '[outv]' };
 }
 
-// FREQUENCY TERRAIN - showspectrum with vertical orientation (terrain look)
+// FREQUENCY TERRAIN - vertical orientation
 function buildFrequencyTerrain(opts) {
-  const { width, height, sensitivity, glow, opacity, position, videoHeight, fps, colorScheme } = opts;
+  const { width, height, sensitivity, opacity, position, videoHeight, fps, colorScheme } = opts;
   const overlayY = getOverlayY(position);
   const effectiveHeight = position === 'full' ? (videoHeight % 2 === 0 ? videoHeight : videoHeight - 1) : height;
-  const alpha = glow ? Math.min(0.95, opacity) : Math.min(0.85, opacity * 0.9);
   const gain = Math.max(2, sensitivity * 4);
 
   const filters = [
-    `[1:a]showspectrum=s=${width}x${effectiveHeight}:mode=combined:color=channel:scale=sqrt:gain=${gain.toFixed(1)}:slide=scroll:orientation=vertical,fps=${fps},format=rgba,${buildTint(colorScheme, alpha)}[viz]`,
+    `[1:a]showspectrum=s=${width}x${effectiveHeight}:mode=combined:color=channel:scale=sqrt:gain=${gain.toFixed(1)}:slide=scroll:orientation=vertical,fps=${fps},${buildTint(colorScheme)},${buildAlphaKey(opacity)}[viz]`,
     `[0:v][viz]overlay=0:${overlayY}:shortest=1[outv]`
   ];
 
