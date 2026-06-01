@@ -990,9 +990,10 @@ async function renderLoopVideo({
     }
     
     // ========================================
-    // STANDARD MODE: Multiple videos/audios (need re-encode for compatibility)
+    // STANDARD MODE: Multiple videos/audios
+    // Try stream copy first (fast), fallback to re-encode only if needed
     // ========================================
-    console.log('[RENDER] 📦 STANDARD MODE: Multiple files (re-encode for compatibility)');
+    console.log('[RENDER] 📦 STANDARD MODE: Multiple files');
     
     // Get video durations
     console.log('[RENDER] Analyzing video durations...');
@@ -1018,45 +1019,72 @@ async function renderLoopVideo({
     const videoConcatContent = videoLines.join('\n');
     fs.writeFileSync(videoConcatFile, videoConcatContent, 'utf8');
     console.log('[RENDER] Video concat file created:', videoConcatFile);
-    console.log('[RENDER] Concat content:\n', videoConcatContent);
     
-    // Merge videos - FAST with re-encode for compatibility
+    // Merge videos - try stream copy first (FAST), fallback to re-encode
     const mergedVideo = path.join(workDir, 'video-merged.mp4');
     const videoMergeStart = Date.now();
-    console.log('[RENDER] Step 1/3: Merging videos...');
-    console.log('[RENDER] Input:', videoConcatFile);
-    console.log('[RENDER] Output:', mergedVideo);
-    console.log('[RENDER] Target duration:', effectiveTargetDuration, 's');
+    console.log('[RENDER] Step 1/3: Merging videos (stream copy)...');
     
-    await runFfmpeg((cmd) => {
-      const outputOptions = [
-        '-t', String(effectiveTargetDuration),
-        '-c:v', 'libx264',
-        '-preset', 'veryfast',
-        '-crf', '23'
-      ];
-      
-      // Only remove audio if muteVideoAudio is true
-      if (muteVideoAudio) {
-        console.log('[RENDER] Removing video audio (mute mode)');
-        outputOptions.push('-an');
-      } else {
-        console.log('[RENDER] Keeping video audio');
-        outputOptions.push('-c:a', 'aac', '-b:a', '192k');
+    let videoCopySuccess = false;
+    try {
+      await runFfmpeg((cmd) => {
+        const opts = ['-t', String(effectiveTargetDuration), '-c:v', 'copy'];
+        if (muteVideoAudio) {
+          opts.push('-an');
+        } else {
+          opts.push('-c:a', 'copy');
+        }
+        return cmd
+          .input(videoConcatFile)
+          .inputOptions(['-f', 'concat', '-safe', '0'])
+          .outputOptions(opts)
+          .output(mergedVideo);
+      }, {
+        onProgress: (p) => {
+          const progress = calcProgress(p.timemark, effectiveTargetDuration, 5, 40);
+          console.log(`[RENDER] Video progress: ${progress}% (${p.timemark}/${effectiveTargetDuration}s)`);
+          onProgress?.(progress);
+        }
+      });
+      // Verify output is valid (stream copy can silently produce bad files on mixed codecs)
+      if (fs.existsSync(mergedVideo) && fs.statSync(mergedVideo).size > 10000) {
+        videoCopySuccess = true;
+        console.log('[RENDER] Video stream copy ✓');
       }
+    } catch (copyErr) {
+      console.warn('[RENDER] Stream copy failed, falling back to re-encode:', copyErr.message);
+    }
+    
+    if (!videoCopySuccess) {
+      // Fallback: re-encode for compatibility (mixed codecs/resolutions)
+      console.log('[RENDER] Step 1/3: Merging videos (re-encode fallback)...');
+      if (fs.existsSync(mergedVideo)) fs.unlinkSync(mergedVideo);
       
-      return cmd
-        .input(videoConcatFile)
-        .inputOptions(['-f', 'concat', '-safe', '0'])
-        .outputOptions(outputOptions)
-        .output(mergedVideo);
-    }, {
-      onProgress: (p) => {
-        const progress = calcProgress(p.timemark, effectiveTargetDuration, 5, 40);
-        console.log(`[RENDER] Video progress: ${progress}% (${p.timemark}/${effectiveTargetDuration}s)`);
-        onProgress?.(progress);
-      }
-    });
+      await runFfmpeg((cmd) => {
+        const outputOptions = [
+          '-t', String(effectiveTargetDuration),
+          '-c:v', 'libx264',
+          '-preset', 'veryfast',
+          '-crf', '23'
+        ];
+        if (muteVideoAudio) {
+          outputOptions.push('-an');
+        } else {
+          outputOptions.push('-c:a', 'aac', '-b:a', '192k');
+        }
+        return cmd
+          .input(videoConcatFile)
+          .inputOptions(['-f', 'concat', '-safe', '0'])
+          .outputOptions(outputOptions)
+          .output(mergedVideo);
+      }, {
+        onProgress: (p) => {
+          const progress = calcProgress(p.timemark, effectiveTargetDuration, 5, 40);
+          console.log(`[RENDER] Video re-encode: ${progress}% (${p.timemark}/${effectiveTargetDuration}s)`);
+          onProgress?.(progress);
+        }
+      });
+    }
     
     const videoMergeTime = Math.round((Date.now() - videoMergeStart) / 1000);
     console.log(`[RENDER] Video merged ✓ (${videoMergeTime}s)`);
@@ -1094,30 +1122,58 @@ async function renderLoopVideo({
       console.log('[RENDER] Audio concat file created:', audioConcatFile);
       console.log('[RENDER] Concat content:\n', audioConcatContent);
       
-      // Merge audios - SIMPLE & FAST (NO FILTERS!)
+      // Merge audios - stream copy first (FAST), fallback to re-encode
       const mergedAudio = path.join(workDir, 'audio-merged.aac');
       const audioMergeStart = Date.now();
-      console.log('[RENDER] Step 2/3: Merging audios...');
-      console.log('[RENDER] Input:', audioConcatFile);
-      console.log('[RENDER] Output:', mergedAudio);
+      console.log('[RENDER] Step 2/3: Merging audios (stream copy)...');
       
-      await runFfmpeg((cmd) => {
-        return cmd
-          .input(audioConcatFile)
-          .inputOptions(['-f', 'concat', '-safe', '0'])
-          .outputOptions([
-            '-t', String(effectiveTargetDuration),
-            '-c:a', 'aac',
-            '-b:a', '192k'
-          ])
-          .output(mergedAudio);
-      }, {
-        onProgress: (p) => {
-          const progress = calcProgress(p.timemark, effectiveTargetDuration, 40, 70);
-          console.log(`[RENDER] Audio progress: ${progress}% (${p.timemark}/${effectiveTargetDuration}s)`);
-          onProgress?.(progress);
+      let audioCopySuccess = false;
+      try {
+        await runFfmpeg((cmd) => {
+          return cmd
+            .input(audioConcatFile)
+            .inputOptions(['-f', 'concat', '-safe', '0'])
+            .outputOptions([
+              '-t', String(effectiveTargetDuration),
+              '-c:a', 'copy'
+            ])
+            .output(mergedAudio);
+        }, {
+          onProgress: (p) => {
+            const progress = calcProgress(p.timemark, effectiveTargetDuration, 40, 70);
+            console.log(`[RENDER] Audio progress: ${progress}% (${p.timemark}/${effectiveTargetDuration}s)`);
+            onProgress?.(progress);
+          }
+        });
+        if (fs.existsSync(mergedAudio) && fs.statSync(mergedAudio).size > 1000) {
+          audioCopySuccess = true;
+          console.log('[RENDER] Audio stream copy ✓');
         }
-      });
+      } catch (copyErr) {
+        console.warn('[RENDER] Audio stream copy failed, falling back to re-encode:', copyErr.message);
+      }
+      
+      if (!audioCopySuccess) {
+        console.log('[RENDER] Step 2/3: Merging audios (re-encode fallback)...');
+        if (fs.existsSync(mergedAudio)) fs.unlinkSync(mergedAudio);
+        await runFfmpeg((cmd) => {
+          return cmd
+            .input(audioConcatFile)
+            .inputOptions(['-f', 'concat', '-safe', '0'])
+            .outputOptions([
+              '-t', String(effectiveTargetDuration),
+              '-c:a', 'aac',
+              '-b:a', '192k'
+            ])
+            .output(mergedAudio);
+        }, {
+          onProgress: (p) => {
+            const progress = calcProgress(p.timemark, effectiveTargetDuration, 40, 70);
+            console.log(`[RENDER] Audio re-encode: ${progress}% (${p.timemark}/${effectiveTargetDuration}s)`);
+            onProgress?.(progress);
+          }
+        });
+      }
       
       const audioMergeTime = Math.round((Date.now() - audioMergeStart) / 1000);
       console.log(`[RENDER] Audio merged ✓ (${audioMergeTime}s)`);
