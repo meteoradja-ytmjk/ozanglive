@@ -589,10 +589,6 @@
       <p class="text-xs text-gray-400 mt-0.5 hidden md:block">Follow the steps below</p>
     </div>
     <div class="hidden md:flex gap-2">
-      <button onclick="openTemplateModal()" class="flex items-center gap-1.5 px-3 py-1.5 bg-primary/20 hover:bg-primary/30 text-primary rounded-lg text-xs font-medium transition-colors">
-        <i class="ti ti-template text-sm"></i>
-        <span>Templates</span>
-      </button>
       <button onclick="openPreviewModal()" class="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg text-xs font-medium transition-colors">
         <i class="ti ti-eye text-sm"></i>
         <span>Preview</span>
@@ -1100,25 +1096,6 @@
 <!-- History Container (Hidden by default) - REMOVED -->
 <!-- Video Editor now redirects to Gallery page -->
 
-<!-- Template Modal -->
-<div id="templateModal" class="fixed inset-0 bg-black/60 modal-backdrop z-50 hidden">
-  <div class="flex items-center justify-center min-h-screen p-4">
-    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-2xl border border-gray-600/50">
-      <div class="flex items-center justify-between p-4 border-b border-gray-600/50">
-        <h3 class="text-lg font-medium">Render Templates</h3>
-        <button onclick="closeTemplateModal()" class="text-gray-400 hover:text-white">
-          <i class="ti ti-x text-xl"></i>
-        </button>
-      </div>
-      <div class="p-6 max-h-[70vh] overflow-y-auto">
-        <div id="templateList" class="space-y-3">
-          <div class="text-sm text-gray-400 text-center py-8">No templates saved</div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
 <!-- Preview Modal -->
 <div id="previewModal" class="fixed inset-0 bg-black/60 modal-backdrop z-50 hidden">
   <div class="flex items-center justify-center min-h-screen p-4">
@@ -1576,7 +1553,6 @@ const el = {
   durationMinutes: document.getElementById('durationMinutes'),
   followAudioDuration: document.getElementById('followAudioDuration'),
   muteVideoAudio: document.getElementById('muteVideoAudio'),
-  autoUploadToYoutube: document.getElementById('autoUploadToYoutube'),
   visualizerPreset: { value: 'none' },
   createBtn: document.getElementById('createBtn'),
   resetBtn: document.getElementById('resetBtn'),
@@ -2267,32 +2243,6 @@ if (el.createBtn) {
   });
 }
 
-// ===== FEATURE 2: TEMPLATE MANAGEMENT =====
-function saveAsTemplate() {
-  const templateName = prompt('Enter template name:');
-  if (!templateName) return;
-  
-  const template = {
-    name: templateName,
-    title: el.title.value,
-    durationHours: el.durationHours.value,
-    durationMinutes: el.durationMinutes.value,
-    visualizerPreset: el.visualizerPreset.value,
-    followAudioDuration: el.followAudioDuration.checked,
-    muteVideoAudio: el.muteVideoAudio.checked,
-    autoUploadToYoutube: el.autoUploadToYoutube.checked,
-    videoIds: [...document.querySelectorAll("input[name='video']:checked")].map(i=>i.value),
-    audioIds: [...document.querySelectorAll("input[name='audio']:checked")].map(i=>i.value),
-    createdAt: new Date().toISOString()
-  };
-  
-  const templates = JSON.parse(localStorage.getItem('renderTemplates') || '[]');
-  templates.push(template);
-  localStorage.setItem('renderTemplates', JSON.stringify(templates));
-  
-  alert('Template saved successfully!');
-}
-
 // ===== SCHEDULE RENDER FUNCTIONS =====
 let scheduleType = 'datetime'; // 'datetime' or 'delay'
 
@@ -2735,83 +2685,6 @@ document.addEventListener('DOMContentLoaded', () => {
   if (delaySeconds) delaySeconds.addEventListener('input', updateSchedulePreview);
 });
 
-function openTemplateModal() {
-  const modal = document.getElementById('templateModal');
-  const templates = JSON.parse(localStorage.getItem('renderTemplates') || '[]');
-  
-  const templateList = document.getElementById('templateList');
-  if (templates.length === 0) {
-    templateList.innerHTML = '<div class="text-sm text-gray-400 text-center py-8">No templates saved</div>';
-  } else {
-    templateList.innerHTML = templates.map((t, idx) => `
-      <div class="bg-dark-700 p-4 rounded-lg border border-gray-600">
-        <div class="flex items-start justify-between mb-2">
-          <div class="flex-1">
-            <h4 class="text-sm font-semibold text-white">${t.name}</h4>
-            <p class="text-xs text-gray-400 mt-1">${t.title || 'No title'}</p>
-            <p class="text-xs text-gray-500 mt-1">${new Date(t.createdAt).toLocaleDateString()}</p>
-          </div>
-        </div>
-        <div class="flex gap-2 mt-3">
-          <button onclick="loadTemplate(${idx})" class="flex-1 px-3 py-2 bg-primary hover:bg-secondary text-white text-sm rounded-lg transition-colors">
-            Load
-          </button>
-          <button onclick="deleteTemplate(${idx})" class="px-3 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 text-sm rounded-lg transition-colors">
-            Delete
-          </button>
-        </div>
-      </div>
-    `).join('');
-  }
-  
-  modal.classList.remove('hidden');
-}
-
-function closeTemplateModal() {
-  document.getElementById('templateModal').classList.add('hidden');
-}
-
-function loadTemplate(idx) {
-  const templates = JSON.parse(localStorage.getItem('renderTemplates') || '[]');
-  const template = templates[idx];
-  if (!template) return;
-  
-  el.title.value = template.title || '';
-  el.durationHours.value = template.durationHours || 0;
-  el.durationMinutes.value = template.durationMinutes || 0;
-  el.visualizerPreset.value = template.visualizerPreset || 'none';
-  el.followAudioDuration.checked = template.followAudioDuration || false;
-  el.autoUploadToYoutube.checked = template.autoUploadToYoutube || false;
-  
-  // Clear all checkboxes first
-  document.querySelectorAll("input[name='video'],input[name='audio']").forEach(x=>x.checked=false);
-  
-  // Check videos
-  template.videoIds.forEach(id => {
-    const checkbox = document.querySelector(`input[name='video'][value='${id}']`);
-    if (checkbox) checkbox.checked = true;
-  });
-  
-  // Check audios
-  template.audioIds.forEach(id => {
-    const checkbox = document.querySelector(`input[name='audio'][value='${id}']`);
-    if (checkbox) checkbox.checked = true;
-  });
-  
-  closeTemplateModal();
-  alert('Template loaded successfully!');
-}
-
-function deleteTemplate(idx) {
-  if (!confirm('Delete this template?')) return;
-  
-  const templates = JSON.parse(localStorage.getItem('renderTemplates') || '[]');
-  templates.splice(idx, 1);
-  localStorage.setItem('renderTemplates', JSON.stringify(templates));
-  
-  openTemplateModal(); // Refresh list
-}
-
 // ===== FEATURE 3: LIVE PREVIEW =====
 function openPreviewModal() {
   const videoIds = [...document.querySelectorAll("input[name='video']:checked")].map(i=>i.value);
@@ -2829,7 +2702,9 @@ function openPreviewModal() {
   document.getElementById('previewDuration').textContent = duration;
   document.getElementById('previewVideos').textContent = videoIds.length;
   document.getElementById('previewAudios').textContent = audioIds.length;
-  document.getElementById('previewVisualizer').textContent = el.visualizerPreset.value;
+  document.getElementById('previewVisualizer').textContent = vizEnabled
+    ? (document.querySelector('#vizTypeGrid .viz-type-btn.active')?.dataset.type || 'none')
+    : 'none';
   
   document.getElementById('previewModal').classList.remove('hidden');
 }
@@ -3632,13 +3507,13 @@ function switchMediaTab(tab) {
   const audioContent = document.getElementById('audioMediaContent');
   
   if (tab === 'video') {
-    videoTab.className = 'px-4 py-2 text-sm font-medium transition-colors border-b-2 border-primary text-primary';
-    audioTab.className = 'px-4 py-2 text-sm font-medium transition-colors border-b-2 border-transparent text-gray-400 hover:text-white';
+    videoTab.className = 'px-3 py-1.5 text-xs font-medium transition-colors rounded bg-primary/20 text-primary';
+    audioTab.className = 'px-3 py-1.5 text-xs font-medium transition-colors rounded text-gray-400 hover:text-white hover:bg-gray-700/50';
     videoContent.classList.remove('hidden');
     audioContent.classList.add('hidden');
   } else {
-    audioTab.className = 'px-4 py-2 text-sm font-medium transition-colors border-b-2 border-primary text-primary';
-    videoTab.className = 'px-4 py-2 text-sm font-medium transition-colors border-b-2 border-transparent text-gray-400 hover:text-white';
+    audioTab.className = 'px-3 py-1.5 text-xs font-medium transition-colors rounded bg-primary/20 text-primary';
+    videoTab.className = 'px-3 py-1.5 text-xs font-medium transition-colors rounded text-gray-400 hover:text-white hover:bg-gray-700/50';
     audioContent.classList.remove('hidden');
     videoContent.classList.add('hidden');
   }
@@ -4810,7 +4685,7 @@ function addToBatchQueue() {
     durationMinutes: m,
     targetDurationSeconds: (h * 3600) + (m * 60),
     targetAccountId: el.targetAccountId.value,
-    autoUploadToYoutube: el.autoUploadToYoutube.checked,
+    autoUploadToYoutube: false,
     followAudioDuration: el.followAudioDuration.checked,
     muteVideoAudio: el.muteVideoAudio.checked,
     videoIds: videoIds,
