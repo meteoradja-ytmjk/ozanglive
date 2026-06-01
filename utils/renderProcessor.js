@@ -201,7 +201,7 @@ async function renderWithVisualizerSinglePass({ videoPaths, audioPaths, outputPa
       await runFfmpeg((cmd) => cmd
         .input(concatFile)
         .inputOptions(['-f', 'concat', '-safe', '0'])
-        .outputOptions(['-t', String(duration), '-c:v', 'copy'])
+        .outputOptions(['-t', String(duration), '-c:v', 'copy', '-movflags', '+faststart'])
         .output(preparedVideoPath));
     }
   } else {
@@ -220,7 +220,7 @@ async function renderWithVisualizerSinglePass({ videoPaths, audioPaths, outputPa
     await runFfmpeg((cmd) => cmd
       .input(concatFile)
       .inputOptions(['-f', 'concat', '-safe', '0'])
-      .outputOptions(['-t', String(duration), '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23'])
+      .outputOptions(['-t', String(duration), '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-movflags', '+faststart'])
       .output(preparedVideoPath));
   }
 
@@ -496,7 +496,8 @@ async function renderLoopVideo({
               .outputOptions([
                 '-t', String(effectiveTargetDuration),
                 '-c:v', 'copy',
-                '-an' // Remove audio
+                '-an', // Remove audio
+                '-movflags', '+faststart'
               ])
               .output(outputPath);
           }, {
@@ -520,7 +521,8 @@ async function renderLoopVideo({
               .outputOptions([
                 '-t', String(effectiveTargetDuration),
                 '-c:v', 'copy',
-                '-an' // Remove audio
+                '-an', // Remove audio
+                '-movflags', '+faststart'
               ])
               .output(outputPath);
           }, {
@@ -590,7 +592,8 @@ async function renderLoopVideo({
               '-ar', '44100',
               '-ac', '2',
               '-map', '0:v:0',
-              '-map', '1:a:0'
+              '-map', '1:a:0',
+              '-movflags', '+faststart'
             ])
             .output(actualOutputPath);
         }, {
@@ -628,7 +631,7 @@ async function renderLoopVideo({
             .outputOptions([
               '-t', String(effectiveTargetDuration),
               '-c:v', 'copy'
-            ])
+            , '-movflags', '+faststart'])
             .output(loopedVideo);
         }, {
           onProgress: (p) => {
@@ -656,7 +659,7 @@ async function renderLoopVideo({
               '-ac', '2',
               '-map', '0:v:0',
               '-map', '1:a:0'
-            ])
+            , '-movflags', '+faststart'])
             .output(outputPath);
         }, {
           onProgress: (p) => {
@@ -693,7 +696,7 @@ async function renderLoopVideo({
             .outputOptions([
               '-t', String(effectiveTargetDuration),
               '-c:a', 'copy'
-            ])
+            , '-movflags', '+faststart'])
             .output(loopedAudio);
         }, {
           onProgress: (p) => {
@@ -720,7 +723,7 @@ async function renderLoopVideo({
               '-ac', '2',
               '-map', '0:v:0',
               '-map', '1:a:0'
-            ])
+            , '-movflags', '+faststart'])
             .output(outputPath);
         }, {
           onProgress: (p) => {
@@ -761,7 +764,7 @@ async function renderLoopVideo({
             .outputOptions([
               '-t', String(effectiveTargetDuration),
               '-c:v', 'copy'
-            ])
+            , '-movflags', '+faststart'])
             .output(loopedVideo);
         }, {
           onProgress: (p) => {
@@ -779,7 +782,7 @@ async function renderLoopVideo({
             .outputOptions([
               '-t', String(effectiveTargetDuration),
               '-c:a', 'copy'
-            ])
+            , '-movflags', '+faststart'])
             .output(loopedAudio);
         }, {
           onProgress: (p) => {
@@ -807,7 +810,7 @@ async function renderLoopVideo({
               '-ac', '2',
               '-map', '0:v:0',
               '-map', '1:a:0'
-            ])
+            , '-movflags', '+faststart'])
             .output(outputPath);
         }, {
           onProgress: (p) => {
@@ -878,7 +881,7 @@ async function renderLoopVideo({
           .outputOptions([
             '-t', String(effectiveTargetDuration),
             '-c:a', 'copy'
-          ])
+          , '-movflags', '+faststart'])
           .output(mergedAudio);
       }, {
         onProgress: (p) => {
@@ -913,7 +916,7 @@ async function renderLoopVideo({
             .outputOptions([
               '-t', String(effectiveTargetDuration),
               '-c:v', 'copy'
-            ])
+            , '-movflags', '+faststart'])
             .output(loopedVideo);
         }, {
           onProgress: (p) => {
@@ -941,7 +944,7 @@ async function renderLoopVideo({
               '-ac', '2',
               '-map', '0:v:0',
               '-map', '1:a:0'
-            ])
+            , '-movflags', '+faststart'])
             .output(outputPath);
         }, {
           onProgress: (p) => {
@@ -971,7 +974,7 @@ async function renderLoopVideo({
               '-ac', '2',
               '-map', '0:v:0',
               '-map', '1:a:0'
-            ])
+            , '-movflags', '+faststart'])
             .output(outputPath);
         }, {
           onProgress: (p) => {
@@ -1028,7 +1031,7 @@ async function renderLoopVideo({
     let videoCopySuccess = false;
     try {
       await runFfmpeg((cmd) => {
-        const opts = ['-t', String(effectiveTargetDuration), '-c:v', 'copy'];
+        const opts = ['-t', String(effectiveTargetDuration), '-c:v', 'copy', '-movflags', '+faststart'];
         if (muteVideoAudio) {
           opts.push('-an');
         } else {
@@ -1065,7 +1068,8 @@ async function renderLoopVideo({
           '-t', String(effectiveTargetDuration),
           '-c:v', 'libx264',
           '-preset', 'veryfast',
-          '-crf', '23'
+          '-crf', '23',
+          '-movflags', '+faststart'
         ];
         if (muteVideoAudio) {
           outputOptions.push('-an');
@@ -1136,7 +1140,7 @@ async function renderLoopVideo({
             .outputOptions([
               '-t', String(effectiveTargetDuration),
               '-c:a', 'copy'
-            ])
+            , '-movflags', '+faststart'])
             .output(mergedAudio);
         }, {
           onProgress: (p) => {
@@ -1200,7 +1204,7 @@ async function renderLoopVideo({
             '-ac', '2',
             '-map', '0:v:0',
             '-map', '1:a:0'
-          ])
+          , '-movflags', '+faststart'])
           .output(outputPath);
       }, { 
         onProgress: (p) => {
