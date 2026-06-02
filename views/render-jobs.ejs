@@ -1861,6 +1861,59 @@ function stopAllPreviews() {
   // showToast('Preview paused - playing result video');
 }
 
+/**
+ * Resume all preview videos and audios
+ * Called when user pauses/stops a result video from job list
+ */
+function resumeAllPreviews() {
+  console.log('[Preview] Resuming all previews - result video stopped');
+  
+  // Check if any other job video is still playing
+  const jobVideos = document.querySelectorAll('#jobs video');
+  const anyJobPlaying = Array.from(jobVideos).some(v => !v.paused);
+  
+  if (anyJobPlaying) {
+    console.log('[Preview] Another job video is still playing, not resuming previews');
+    return;
+  }
+  
+  // 1. Resume preview video if it has a source
+  const previewVideo = document.getElementById('vizVideoPlayer');
+  if (previewVideo && previewVideo.src && previewVideo.paused) {
+    previewVideo.play().catch(err => {
+      console.log('[Preview] Could not auto-resume preview video:', err.message);
+    });
+    console.log('[Preview] Preview video resumed');
+  }
+  
+  // 2. Resume visualizer audio if enabled and has source
+  if (vizEnabled && vizPreview && vizPreview.audioElement && vizPreview.audioElement.src && vizPreview.audioElement.paused) {
+    vizPreview.audioElement.play().catch(err => {
+      console.log('[Preview] Could not auto-resume visualizer audio:', err.message);
+    });
+    const playBtn = document.getElementById('vizPlayBtn');
+    if (playBtn) {
+      playBtn.innerHTML = '<i class="ti ti-player-pause text-sm"></i>';
+    }
+    console.log('[Preview] Visualizer audio resumed');
+  }
+  
+  // 3. Resume direct audio preview if not using visualizer
+  if (!vizEnabled && previewAudioElement && previewAudioElement.src && previewAudioElement.paused) {
+    previewAudioElement.play().catch(err => {
+      console.log('[Preview] Could not auto-resume direct audio:', err.message);
+    });
+    const playBtn = document.getElementById('vizPlayBtn');
+    if (playBtn) {
+      playBtn.innerHTML = '<i class="ti ti-player-pause text-sm"></i>';
+    }
+    console.log('[Preview] Direct audio preview resumed');
+  }
+  
+  // 4. Show notification (optional)
+  // showToast('Preview resumed');
+}
+
 async function loadVizAudioPreview() {
   if (!vizPreview || !vizEnabled) return;
   
@@ -2208,24 +2261,21 @@ async function loadJobs(){
   
   el.jobs.innerHTML=cards||'<div class="text-sm text-gray-400 text-center py-8">Belum ada job</div>';
   
-  // Add event listeners to all job videos to pause preview when they play
+  // Add event listeners to all job videos to pause/resume preview automatically
   setTimeout(() => {
     const jobVideos = document.querySelectorAll('#jobs video');
     jobVideos.forEach(jobVideo => {
       // Remove existing listeners to prevent duplicates
       jobVideo.removeEventListener('play', stopAllPreviews);
+      jobVideo.removeEventListener('pause', resumeAllPreviews);
+      jobVideo.removeEventListener('ended', resumeAllPreviews);
       
       // Add play listener to stop all previews
       jobVideo.addEventListener('play', stopAllPreviews);
       
-      // Optional: Resume preview when result video is paused/ended
-      jobVideo.addEventListener('pause', () => {
-        console.log('Result video paused');
-      });
-      
-      jobVideo.addEventListener('ended', () => {
-        console.log('Result video ended');
-      });
+      // Add pause/ended listeners to auto-resume previews
+      jobVideo.addEventListener('pause', resumeAllPreviews);
+      jobVideo.addEventListener('ended', resumeAllPreviews);
     });
   }, 100);
 }
