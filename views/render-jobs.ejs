@@ -1825,6 +1825,42 @@ async function loadVizVideoPreview() {
   }
 }
 
+/**
+ * Stop all preview videos and audios
+ * Called when user plays a result video from job list
+ */
+function stopAllPreviews() {
+  console.log('[Preview] Stopping all previews due to result video playback');
+  
+  // 1. Stop preview video
+  const previewVideo = document.getElementById('vizVideoPlayer');
+  if (previewVideo && !previewVideo.paused) {
+    previewVideo.pause();
+    console.log('[Preview] Preview video stopped');
+  }
+  
+  // 2. Stop visualizer audio
+  if (vizPreview && vizPreview.audioElement && !vizPreview.audioElement.paused) {
+    vizPreview.audioElement.pause();
+    console.log('[Preview] Visualizer audio stopped');
+  }
+  
+  // 3. Stop direct audio preview
+  if (previewAudioElement && !previewAudioElement.paused) {
+    previewAudioElement.pause();
+    console.log('[Preview] Direct audio preview stopped');
+  }
+  
+  // 4. Update play button UI
+  const playBtn = document.getElementById('vizPlayBtn');
+  if (playBtn) {
+    playBtn.innerHTML = '<i class="ti ti-player-play text-sm"></i>';
+  }
+  
+  // 5. Show notification (optional)
+  // showToast('Preview paused - playing result video');
+}
+
 async function loadVizAudioPreview() {
   if (!vizPreview || !vizEnabled) return;
   
@@ -2176,24 +2212,19 @@ async function loadJobs(){
   setTimeout(() => {
     const jobVideos = document.querySelectorAll('#jobs video');
     jobVideos.forEach(jobVideo => {
-      jobVideo.addEventListener('play', () => {
-        // Stop preview video
-        const previewVideo = document.getElementById('vizVideoPlayer');
-        if (previewVideo && !previewVideo.paused) {
-          previewVideo.pause();
-        }
-        
-        // Stop visualizer audio
-        if (vizPreview && vizPreview.audioElement && !vizPreview.audioElement.paused) {
-          vizPreview.audioElement.pause();
-          document.getElementById('vizPlayBtn').innerHTML = '<i class="ti ti-player-play text-sm"></i>';
-        }
-        
-        // Stop direct audio preview
-        if (previewAudioElement && !previewAudioElement.paused) {
-          previewAudioElement.pause();
-          document.getElementById('vizPlayBtn').innerHTML = '<i class="ti ti-player-play text-sm"></i>';
-        }
+      // Remove existing listeners to prevent duplicates
+      jobVideo.removeEventListener('play', stopAllPreviews);
+      
+      // Add play listener to stop all previews
+      jobVideo.addEventListener('play', stopAllPreviews);
+      
+      // Optional: Resume preview when result video is paused/ended
+      jobVideo.addEventListener('pause', () => {
+        console.log('Result video paused');
+      });
+      
+      jobVideo.addEventListener('ended', () => {
+        console.log('Result video ended');
       });
     });
   }, 100);
