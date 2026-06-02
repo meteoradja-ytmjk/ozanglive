@@ -1620,6 +1620,18 @@ async function loadMedia(){
 }
 
 async function uploadJob(id){
+  // Prevent double-click: check if already uploading
+  if (isUploading) {
+    showToast('⚠ Upload sedang berlangsung, mohon tunggu...');
+    return;
+  }
+  
+  // Prevent double-click: check if modal already open for this job
+  if (currentUploadJobId === id && document.getElementById('uploadModal').classList.contains('hidden') === false) {
+    console.log('[Upload] Modal already open for job:', id);
+    return;
+  }
+  
   // Open upload modal instead of direct upload
   openUploadModal(id);
 }
@@ -2250,7 +2262,7 @@ async function loadJobs(){
       
       <div class="flex gap-2">
         ${j.output_path ? `
-          <button onclick="uploadJob('${j.id}')" class="flex-1 px-3 py-1.5 bg-primary/20 hover:bg-primary/30 text-primary text-xs rounded-lg transition-colors font-medium"><i class="ti ti-upload mr-1"></i>Upload</button>
+          <button onclick="uploadJob('${j.id}')" class="flex-1 px-3 py-1.5 bg-primary/20 hover:bg-primary/30 text-primary text-xs rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed" id="uploadBtn-${j.id}"><i class="ti ti-upload mr-1"></i>Upload</button>
           <button onclick="openLoopModal('${j.id}')" class="px-3 py-1.5 bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 text-xs rounded-lg transition-colors"><i class="ti ti-repeat mr-1"></i>Loop</button>
         ` : ''}
         <button onclick="deleteJob('${j.id}')" class="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-300 text-xs rounded-lg transition-colors border border-red-500/30 hover:border-red-500/50" title="Hapus project"><i class="ti ti-trash text-sm"></i></button>
@@ -3021,6 +3033,13 @@ function handleCloseUploadModal() {
 async function openUploadModal(jobId) {
   currentUploadJobId = jobId;
   
+  // CRITICAL: Disable upload button immediately to prevent double-click
+  const uploadBtn = document.getElementById(`uploadBtn-${jobId}`);
+  if (uploadBtn) {
+    uploadBtn.disabled = true;
+    uploadBtn.innerHTML = '<i class="ti ti-loader animate-spin mr-1"></i>Loading...';
+  }
+  
   // Get job details
   try {
     const response = await fetch(`/api/render/jobs`);
@@ -3029,6 +3048,11 @@ async function openUploadModal(jobId) {
     
     if (!job) {
       alert('Job not found');
+      // Re-enable button on error
+      if (uploadBtn) {
+        uploadBtn.disabled = false;
+        uploadBtn.innerHTML = '<i class="ti ti-upload mr-1"></i>Upload';
+      }
       return;
     }
     
@@ -3060,9 +3084,20 @@ async function openUploadModal(jobId) {
     
     // Show modal
     document.getElementById('uploadModal').classList.remove('hidden');
+    
+    // Re-enable upload button after modal opens
+    if (uploadBtn) {
+      uploadBtn.disabled = false;
+      uploadBtn.innerHTML = '<i class="ti ti-upload mr-1"></i>Upload';
+    }
   } catch (err) {
     console.error('Failed to open upload modal:', err);
     alert('Failed to load job details');
+    // Re-enable button on error
+    if (uploadBtn) {
+      uploadBtn.disabled = false;
+      uploadBtn.innerHTML = '<i class="ti ti-upload mr-1"></i>Upload';
+    }
   }
 }
 
@@ -3071,6 +3106,19 @@ function closeUploadModal() {
   currentUploadJobId = null;
   currentUploadJob = null;
   channelDefaults = null;
+  
+  // CRITICAL: Reset uploading flag when modal closes (if not actually uploading)
+  if (!isUploading) {
+    // Already reset, no action needed
+  }
+  
+  // Re-enable all upload buttons
+  document.querySelectorAll('[id^="uploadBtn-"]').forEach(btn => {
+    if (btn.disabled && !isUploading) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="ti ti-upload mr-1"></i>Upload';
+    }
+  });
 }
 
 async function loadAccountsForUpload() {
@@ -3147,6 +3195,13 @@ async function loadChannelDefaults() {
 }
 
 async function processUpload() {
+  // CRITICAL FIX: Prevent double-click/double-upload
+  if (isUploading) {
+    console.warn('[Upload] Already uploading, ignoring duplicate request');
+    showToast('⚠ Upload sudah berlangsung, mohon tunggu...');
+    return;
+  }
+  
   if (!currentUploadJobId || !currentUploadJob) return;
   
   const title = document.getElementById('uploadTitle').value.trim();
@@ -3173,11 +3228,11 @@ async function processUpload() {
   const channelSelect = document.getElementById('uploadTargetChannel');
   const channelName = channelSelect.options[channelSelect.selectedIndex].text;
   
-  // Mark as uploading
+  // CRITICAL: Mark as uploading IMMEDIATELY to prevent double-click
   isUploading = true;
   uploadStartTime = Date.now();
   
-  // Disable button and show progress
+  // CRITICAL: Disable button IMMEDIATELY and show progress
   const btn = document.getElementById('uploadProcessBtn');
   btn.disabled = true;
   btn.innerHTML = '<i class="ti ti-loader animate-spin mr-1"></i>Uploading...';
