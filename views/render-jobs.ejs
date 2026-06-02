@@ -2171,6 +2171,32 @@ async function loadJobs(){
   }).join('');
   
   el.jobs.innerHTML=cards||'<div class="text-sm text-gray-400 text-center py-8">Belum ada job</div>';
+  
+  // Add event listeners to all job videos to pause preview when they play
+  setTimeout(() => {
+    const jobVideos = document.querySelectorAll('#jobs video');
+    jobVideos.forEach(jobVideo => {
+      jobVideo.addEventListener('play', () => {
+        // Stop preview video
+        const previewVideo = document.getElementById('vizVideoPlayer');
+        if (previewVideo && !previewVideo.paused) {
+          previewVideo.pause();
+        }
+        
+        // Stop visualizer audio
+        if (vizPreview && vizPreview.audioElement && !vizPreview.audioElement.paused) {
+          vizPreview.audioElement.pause();
+          document.getElementById('vizPlayBtn').innerHTML = '<i class="ti ti-player-play text-sm"></i>';
+        }
+        
+        // Stop direct audio preview
+        if (previewAudioElement && !previewAudioElement.paused) {
+          previewAudioElement.pause();
+          document.getElementById('vizPlayBtn').innerHTML = '<i class="ti ti-player-play text-sm"></i>';
+        }
+      });
+    });
+  }, 100);
 }
 
 if (el.createBtn) {
