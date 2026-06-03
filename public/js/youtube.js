@@ -8589,53 +8589,80 @@ async function reconnectAllExpired() {
 }
 
 /**
- * Dismiss expired token alert banner
- * Will show again after 1 hour or on next page load
+ * Dismiss expired token alert banner and show minimized badge
+ * Badge remains visible and can be clicked to expand alert again
  */
-function dismissExpiredAlert() {
+function dismissExpiredAlertWithBadge() {
   const alert = document.getElementById('expiredTokenAlert');
+  const badge = document.getElementById('expiredTokenBadge');
+  
   if (!alert) return;
   
-  // Animate fade out
+  // Animate fade out alert
   alert.style.transition = 'opacity 0.3s, transform 0.3s';
   alert.style.opacity = '0';
   alert.style.transform = 'translateY(-10px)';
   
   setTimeout(() => {
-    alert.remove();
+    alert.style.display = 'none';
+    alert.style.opacity = '1';
+    alert.style.transform = 'translateY(0)';
+    
+    // Show badge with fade in animation
+    if (badge) {
+      badge.classList.remove('hidden');
+      badge.style.opacity = '0';
+      badge.style.transition = 'opacity 0.3s';
+      
+      setTimeout(() => {
+        badge.style.opacity = '1';
+      }, 10);
+    }
   }, 300);
   
-  // Save dismissal timestamp to localStorage
-  // Will show again after 1 hour
-  localStorage.setItem('expiredAlertDismissed', Date.now().toString());
-  
-  console.log('[Quick Reconnect] Alert dismissed, will remind in 1 hour');
-  showToast('Reminder akan muncul 1 jam lagi', 'info');
+  console.log('[Quick Reconnect] Alert dismissed, badge indicator shown');
 }
 
 /**
- * Check if alert was recently dismissed
- * @returns {boolean} True if dismissed within last hour
+ * Show expired token alert from badge
+ * Expands the full alert and hides the badge
  */
-function wasAlertRecentlyDismissed() {
-  const dismissedTime = localStorage.getItem('expiredAlertDismissed');
-  if (!dismissedTime) return false;
+function showExpiredAlert() {
+  const alert = document.getElementById('expiredTokenAlert');
+  const badge = document.getElementById('expiredTokenBadge');
   
-  const oneHourAgo = Date.now() - (60 * 60 * 1000); // 1 hour in ms
-  return parseInt(dismissedTime) > oneHourAgo;
+  if (!alert) return;
+  
+  // Hide badge with fade out
+  if (badge) {
+    badge.style.transition = 'opacity 0.3s';
+    badge.style.opacity = '0';
+    
+    setTimeout(() => {
+      badge.classList.add('hidden');
+      badge.style.opacity = '1';
+    }, 300);
+  }
+  
+  // Show alert with fade in
+  alert.style.display = 'block';
+  alert.style.opacity = '0';
+  alert.style.transition = 'opacity 0.3s, transform 0.3s';
+  alert.style.transform = 'translateY(-10px)';
+  
+  setTimeout(() => {
+    alert.style.opacity = '1';
+    alert.style.transform = 'translateY(0)';
+  }, 10);
+  
+  console.log('[Quick Reconnect] Alert expanded from badge');
 }
 
 /**
  * Auto-detect expired tokens on page load
- * Show alert if not recently dismissed
+ * Show alert banner if expired accounts exist
  */
 function checkExpiredTokensOnLoad() {
-  // Don't auto-check if alert was dismissed within last hour
-  if (wasAlertRecentlyDismissed()) {
-    console.log('[Quick Reconnect] Alert was dismissed recently, skipping auto-check');
-    return;
-  }
-  
   // Check token status after 2 seconds (let page load first)
   setTimeout(async () => {
     try {

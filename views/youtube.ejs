@@ -197,109 +197,107 @@
   
   if (expiredAccounts.length > 0) { 
   %>
-  <!-- Expired Token Alert Banner - Mobile Optimized -->
-  <div id="expiredTokenAlert" class="bg-red-500/10 border-2 border-red-500/50 rounded-xl mb-6 shadow-lg overflow-hidden">
-    <!-- Desktop Layout -->
-    <div class="hidden md:flex items-start gap-4 p-5">
-      <div class="w-12 h-12 bg-red-500/20 rounded-full flex items-center justify-center flex-shrink-0 animate-pulse">
-        <i class="ti ti-alert-triangle text-red-400 text-2xl"></i>
-      </div>
-      <div class="flex-1 min-w-0">
-        <h3 class="text-red-400 font-bold text-lg mb-2">
-          ⚠️ <%= expiredAccounts.length %> Akun Perlu Reconnect
-        </h3>
-        <p class="text-gray-300 text-sm mb-1 leading-relaxed">
-          Token expired karena OAuth app masih status <strong class="text-red-400">"Testing"</strong>. 
-          Token pada mode Testing expired otomatis setiap 7 hari dari Google.
-        </p>
-        <p class="text-gray-400 text-xs mb-4 leading-relaxed">
-          💡 <strong>Solusi Permanent:</strong> Publish OAuth app ke Production agar token TIDAK PERNAH EXPIRED.
-          <a href="https://console.cloud.google.com/apis/credentials/consent" target="_blank" class="text-blue-400 hover:underline ml-1">
-            Buka Google Console →
-          </a>
-        </p>
-        <div class="flex flex-wrap gap-3">
-          <button onclick="reconnectAllExpired()" 
-            class="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-5 py-2.5 rounded-lg font-semibold transition-all duration-200 flex items-center gap-2 shadow-lg">
-            <i class="ti ti-refresh"></i>
-            <span>Reconnect Semua (10 detik)</span>
-          </button>
-          <button onclick="dismissExpiredAlert()" 
-            class="bg-gray-700 hover:bg-gray-600 text-gray-300 px-4 py-2.5 rounded-lg transition-colors font-medium">
-            <i class="ti ti-clock-pause text-sm"></i>
-            <span class="ml-1">Remind 1 Jam Lagi</span>
-          </button>
-        </div>
-        <!-- Expired accounts list -->
-        <div class="mt-4 pt-4 border-t border-red-500/20">
-          <p class="text-xs text-gray-500 mb-2 font-medium">Akun yang expired:</p>
-          <div class="flex flex-wrap gap-2">
-            <% expiredAccounts.forEach(function(account) { %>
-            <span class="inline-flex items-center gap-1.5 bg-red-500/10 text-red-400 px-2.5 py-1 rounded-md text-xs font-medium">
-              <i class="ti ti-circle-x text-[10px]"></i>
-              <%= account.channelName || 'Account #' + account.id %>
-            </span>
-            <% }); %>
+  <!-- Expired Token Alert Banner - Redesigned -->
+  <div id="expiredTokenAlert" class="bg-gradient-to-r from-red-500/10 via-red-500/5 to-transparent border-l-4 border-red-500 rounded-xl mb-6 shadow-xl overflow-hidden backdrop-blur-sm">
+    <!-- Desktop Layout - Modern & Clean -->
+    <div class="hidden md:block">
+      <div class="flex items-center justify-between px-6 py-4">
+        <!-- Left: Icon + Info -->
+        <div class="flex items-center gap-4 flex-1">
+          <div class="relative">
+            <div class="w-14 h-14 bg-gradient-to-br from-red-500/30 to-red-600/30 rounded-2xl flex items-center justify-center backdrop-blur-sm">
+              <i class="ti ti-alert-circle text-red-400 text-3xl"></i>
+            </div>
+            <div class="absolute -top-1 -right-1 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center text-white text-xs font-bold animate-pulse">
+              <%= expiredAccounts.length %>
+            </div>
+          </div>
+          <div class="flex-1">
+            <h3 class="text-white font-bold text-lg mb-1 flex items-center gap-2">
+              Token Expired - Perlu Reconnect
+            </h3>
+            <p class="text-gray-400 text-sm leading-relaxed">
+              OAuth app mode <span class="text-red-400 font-semibold">"Testing"</span> - token expired setiap 7 hari. 
+              <a href="https://console.cloud.google.com/apis/credentials/consent" target="_blank" class="text-blue-400 hover:text-blue-300 underline decoration-dotted underline-offset-2 ml-1 transition-colors">
+                Publish ke Production untuk solusi permanent →
+              </a>
+            </p>
+            <!-- Expired accounts badges -->
+            <div class="flex flex-wrap gap-2 mt-3">
+              <% expiredAccounts.forEach(function(account) { %>
+              <span class="inline-flex items-center gap-1.5 bg-red-500/20 text-red-300 px-3 py-1 rounded-full text-xs font-medium border border-red-500/30">
+                <i class="ti ti-circle-x text-xs"></i>
+                <%= account.channelName || 'Account #' + account.id %>
+              </span>
+              <% }); %>
+            </div>
           </div>
         </div>
+        
+        <!-- Right: Actions -->
+        <div class="flex items-center gap-3 ml-6">
+          <button onclick="reconnectAllExpired()" 
+            class="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-200 flex items-center gap-2 shadow-lg shadow-red-500/25 hover:shadow-red-500/40 hover:scale-105 active:scale-95">
+            <i class="ti ti-refresh text-lg"></i>
+            <span>Reconnect Sekarang</span>
+          </button>
+          <button onclick="dismissExpiredAlertWithBadge()" 
+            class="text-gray-400 hover:text-white hover:bg-gray-700/50 w-10 h-10 flex items-center justify-center rounded-lg transition-all">
+            <i class="ti ti-x text-xl"></i>
+          </button>
+        </div>
       </div>
-      <button onclick="dismissExpiredAlert()" 
-        class="text-gray-500 hover:text-gray-300 transition-colors flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-700/50">
-        <i class="ti ti-x text-xl"></i>
-      </button>
     </div>
 
     <!-- Mobile Layout - Minimalist & Clean -->
     <div class="md:hidden">
       <!-- Header -->
-      <div class="flex items-center justify-between px-3 py-3 bg-red-500/5">
-        <div class="flex items-center gap-2 flex-1 min-w-0">
-          <div class="w-8 h-8 bg-red-500/20 rounded-full flex items-center justify-center flex-shrink-0 animate-pulse">
-            <i class="ti ti-alert-triangle text-red-400 text-base"></i>
+      <div class="flex items-center justify-between px-4 py-3">
+        <div class="flex items-center gap-3 flex-1 min-w-0">
+          <div class="relative">
+            <div class="w-11 h-11 bg-gradient-to-br from-red-500/30 to-red-600/30 rounded-xl flex items-center justify-center">
+              <i class="ti ti-alert-circle text-red-400 text-xl"></i>
+            </div>
+            <div class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-[10px] font-bold animate-pulse">
+              <%= expiredAccounts.length %>
+            </div>
           </div>
           <div class="min-w-0 flex-1">
-            <h3 class="text-red-400 font-bold text-sm">
-              <%= expiredAccounts.length %> Akun Expired
+            <h3 class="text-white font-bold text-sm">
+              Token Expired
             </h3>
-            <p class="text-gray-500 text-[10px]">Perlu reconnect</p>
+            <p class="text-gray-500 text-xs">Perlu reconnect sekarang</p>
           </div>
         </div>
-        <button onclick="dismissExpiredAlert()" 
-          class="text-gray-500 hover:text-gray-300 transition-colors flex-shrink-0 w-7 h-7 flex items-center justify-center rounded hover:bg-gray-700/30">
-          <i class="ti ti-x text-base"></i>
+        <button onclick="dismissExpiredAlertWithBadge()" 
+          class="text-gray-500 hover:text-gray-300 transition-colors flex-shrink-0 w-8 h-8 flex items-center justify-center rounded hover:bg-gray-700/30">
+          <i class="ti ti-x text-lg"></i>
         </button>
       </div>
       
       <!-- Content -->
-      <div class="px-3 pb-3">
+      <div class="px-4 pb-4">
         <!-- Compact Info -->
         <p class="text-gray-400 text-xs leading-relaxed mb-3">
-          Token expired (OAuth mode Testing). 
-          <a href="https://console.cloud.google.com/apis/credentials/consent" target="_blank" class="text-blue-400">
+          OAuth mode Testing - expired setiap 7 hari. 
+          <a href="https://console.cloud.google.com/apis/credentials/consent" target="_blank" class="text-blue-400 underline">
             Publish ke Production →
           </a>
         </p>
         
-        <!-- Action Buttons - Stacked -->
-        <div class="space-y-2">
-          <button onclick="reconnectAllExpired()" 
-            class="w-full bg-gradient-to-r from-red-500 to-red-600 active:from-red-600 active:to-red-700 text-white px-4 py-2.5 rounded-lg font-semibold transition-all duration-200 flex items-center justify-center gap-2 shadow-lg text-sm">
-            <i class="ti ti-refresh text-base"></i>
-            <span>Reconnect Semua</span>
-          </button>
-          <button onclick="dismissExpiredAlert()" 
-            class="w-full bg-gray-700 active:bg-gray-600 text-gray-300 px-4 py-2 rounded-lg transition-colors font-medium flex items-center justify-center gap-2 text-sm">
-            <i class="ti ti-clock-pause text-sm"></i>
-            <span>Remind 1 Jam Lagi</span>
-          </button>
-        </div>
+        <!-- Action Button - Single primary action -->
+        <button onclick="reconnectAllExpired()" 
+          class="w-full bg-gradient-to-r from-red-500 to-red-600 active:from-red-600 active:to-red-700 text-white px-4 py-3 rounded-xl font-bold transition-all duration-200 flex items-center justify-center gap-2 shadow-lg text-sm">
+          <i class="ti ti-refresh text-base"></i>
+          <span>Reconnect Sekarang</span>
+        </button>
         
         <!-- Expired Accounts - Compact List -->
         <div class="mt-3 pt-3 border-t border-red-500/20">
-          <p class="text-[10px] text-gray-500 mb-1.5 font-medium uppercase tracking-wide">Akun:</p>
+          <p class="text-[10px] text-gray-500 mb-2 font-medium uppercase tracking-wide">Akun yang expired:</p>
           <div class="flex flex-wrap gap-1.5">
             <% expiredAccounts.forEach(function(account) { %>
-            <span class="inline-flex items-center gap-1 bg-red-500/10 text-red-400 px-2 py-0.5 rounded text-[10px] font-medium">
+            <span class="inline-flex items-center gap-1 bg-red-500/20 text-red-300 px-2 py-0.5 rounded-full text-[10px] font-medium border border-red-500/30">
               <i class="ti ti-circle-x" style="font-size: 8px;"></i>
               <%= account.channelName || '#' + account.id %>
             </span>
@@ -307,6 +305,22 @@
           </div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- Minimized Badge Indicator (shown after dismiss) -->
+  <div id="expiredTokenBadge" class="hidden bg-red-500/10 border border-red-500/50 rounded-lg px-4 py-2 mb-6 cursor-pointer hover:bg-red-500/20 transition-all" onclick="showExpiredAlert()">
+    <div class="flex items-center gap-3">
+      <div class="relative">
+        <i class="ti ti-alert-circle text-red-400 text-xl"></i>
+        <div class="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center text-white text-[9px] font-bold">
+          <%= expiredAccounts.length %>
+        </div>
+      </div>
+      <span class="text-sm text-gray-300">
+        <span class="font-semibold text-red-400"><%= expiredAccounts.length %> akun</span> perlu reconnect
+      </span>
+      <i class="ti ti-chevron-down text-gray-500 text-sm ml-auto"></i>
     </div>
   </div>
   <% } %>
