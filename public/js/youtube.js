@@ -1931,32 +1931,56 @@ async function submitRenameFolder(event) {
     const data = await response.json();
     
     if (data.success) {
-      showToast('Folder renamed successfully');
+      showToast('Folder renamed successfully', 'success');
       closeRenameFolderModal();
       
-      // Update current folder in main thumbnail gallery if it was renamed
+      // REALTIME UPDATE in Thumbnail Manager
+      const folderItems = document.querySelectorAll('.folder-item-manager');
+      folderItems.forEach(item => {
+        const itemName = item.querySelector('span.truncate');
+        if (itemName && itemName.textContent === oldName) {
+          // Animate rename
+          itemName.style.transition = 'all 0.3s ease';
+          itemName.style.opacity = '0';
+          setTimeout(() => {
+            itemName.textContent = data.folder.name;
+            itemName.style.opacity = '1';
+          }, 150);
+        }
+      });
+      
+      // Update current folder references
       if (currentThumbnailFolder === oldName) {
         currentThumbnailFolder = data.folder.name;
       }
-      
-      // Update current folder in thumbnail manager if it was renamed
       if (currentThumbnailFolderManager === oldName) {
         currentThumbnailFolderManager = data.folder.name;
+        
+        // Update folder info display
+        const folderNameEl = document.getElementById('currentFolderNameManager');
+        const folderNameMobile = document.getElementById('currentFolderNameMobile');
+        if (folderNameEl) {
+          folderNameEl.style.transition = 'all 0.3s ease';
+          folderNameEl.style.opacity = '0';
+          setTimeout(() => {
+            folderNameEl.textContent = data.folder.name;
+            folderNameEl.style.opacity = '1';
+          }, 150);
+        }
+        if (folderNameMobile) {
+          folderNameMobile.style.transition = 'all 0.3s ease';
+          folderNameMobile.style.opacity = '0';
+          setTimeout(() => {
+            folderNameMobile.textContent = data.folder.name;
+            folderNameMobile.style.opacity = '1';
+          }, 150);
+        }
       }
       
-      // Refresh main gallery
+      // Refresh main gallery if open
       fetchThumbnailFolders();
       if (currentThumbnailFolder === data.folder.name) {
         openThumbnailFolder(data.folder.name);
-      }
-      
-      // Refresh thumbnail manager if open
-      const managerModal = document.getElementById('thumbnailManagerModal');
-      if (managerModal && !managerModal.classList.contains('hidden')) {
-        fetchThumbnailFoldersForManager();
-        if (currentThumbnailFolderManager === data.folder.name) {
-          openThumbnailFolderInManager(data.folder.name);
-        }
       }
     } else {
       showToast(data.error || 'Failed to rename folder', 'error');
@@ -7979,9 +8003,20 @@ function openThumbnailManagerModal() {
   console.log('[ThumbnailManager] Opening modal');
   modal.classList.remove('hidden');
   
-  // Load folders and thumbnails
-  fetchThumbnailFoldersForManager();
-  openThumbnailFolderInManager(null); // Start with root folder
+  // Load folders and open first folder (or show empty state)
+  fetchThumbnailFoldersForManager().then(() => {
+    // Auto-open first folder if exists, otherwise show empty gallery
+    const firstFolder = document.querySelector('.folder-item-manager');
+    if (firstFolder) {
+      const folderName = firstFolder.querySelector('span.truncate')?.textContent;
+      if (folderName) {
+        openThumbnailFolderInManager(folderName);
+      }
+    } else {
+      // No folders, show empty state
+      showEmptyFolderState();
+    }
+  });
 }
 
 // Close Thumbnail Manager Modal
@@ -7996,6 +8031,7 @@ function closeThumbnailManagerModal() {
 // Fetch thumbnail folders for manager
 async function fetchThumbnailFoldersForManager() {
   const folderList = document.getElementById('thumbnailManagerFolderList');
+  const emptyState = document.getElementById('thumbnailManagerFolderEmpty');
   if (!folderList) return;
   
   try {
@@ -8010,119 +8046,128 @@ async function fetchThumbnailFoldersForManager() {
     if (data.success && data.folders) {
       folderList.innerHTML = '';
       
-      data.folders.forEach(folder => {
-        const div = document.createElement('button');
-        div.type = 'button';
-        div.className = `w-full folder-item-manager flex items-center justify-between gap-2 px-3 py-2.5 md:py-2 text-sm rounded-lg transition-colors hover:bg-dark-600 ${
-          currentThumbnailFolderManager === folder.name 
-            ? 'bg-primary/20 text-primary border border-primary/30' 
-            : 'text-white border border-transparent'
-        }`;
-        div.onclick = () => openThumbnailFolderInManager(folder.name);
+      // Show/hide empty state
+      if (data.folders.length === 0) {
+        if (emptyState) emptyState.classList.remove('hidden');
+        folderList.classList.add('hidden');
+      } else {
+        if (emptyState) emptyState.classList.add('hidden');
+        folderList.classList.remove('hidden');
         
-        // Create action buttons container
-        const actionsDiv = document.createElement('div');
-        actionsDiv.className = 'flex items-center gap-1.5 md:gap-1 shrink-0';
-        
-        // Count badge
-        const countBadge = document.createElement('span');
-        countBadge.className = 'text-xs bg-dark-600 px-2 py-0.5 rounded-full';
-        countBadge.textContent = folder.count || 0;
-        
-        // Rename button
-        const renameBtn = document.createElement('button');
-        renameBtn.type = 'button';
-        renameBtn.className = 'text-blue-400 hover:text-blue-300 px-3 py-2 hover:bg-blue-500/10 rounded transition-colors text-lg font-bold touch-manipulation';
-        renameBtn.title = 'Rename';
-        renameBtn.innerHTML = '✏️';
-        renameBtn.onclick = (e) => {
-          e.stopPropagation();
-          e.preventDefault();
-          openRenameFolderModalManager(folder.name);
-        };
-        
-        // Delete button
-        const deleteBtn = document.createElement('button');
-        deleteBtn.type = 'button';
-        deleteBtn.className = 'text-red-500 hover:text-red-400 px-3 py-2 hover:bg-red-500/10 rounded transition-colors text-lg font-bold touch-manipulation';
-        deleteBtn.title = 'Delete';
-        deleteBtn.innerHTML = '🗑️';
-        deleteBtn.onclick = (e) => {
-          e.stopPropagation();
-          e.preventDefault();
-          deleteThumbnailFolderManager(folder.name);
-        };
-        
-        actionsDiv.appendChild(countBadge);
-        actionsDiv.appendChild(renameBtn);
-        actionsDiv.appendChild(deleteBtn);
-        
-        div.innerHTML = `
-          <div class="flex items-center gap-2 flex-1 min-w-0">
-            <i class="ti ti-folder text-gray-400 shrink-0 text-base"></i>
-            <span class="truncate font-medium">${escapeHtml(folder.name)}</span>
-          </div>
-        `;
-        div.appendChild(actionsDiv);
-        
-        folderList.appendChild(div);
-      });
-      
-      // Update root count
-      updateRootThumbnailCount();
+        data.folders.forEach(folder => {
+          const div = document.createElement('button');
+          div.type = 'button';
+          div.className = `w-full folder-item-manager flex items-center justify-between gap-2 px-3 py-2.5 md:py-2 text-sm rounded-lg transition-colors hover:bg-dark-600 ${
+            currentThumbnailFolderManager === folder.name 
+              ? 'bg-primary/20 text-primary border border-primary/30' 
+              : 'text-white border border-transparent'
+          }`;
+          div.onclick = () => openThumbnailFolderInManager(folder.name);
+          
+          // Create action buttons container
+          const actionsDiv = document.createElement('div');
+          actionsDiv.className = 'flex items-center gap-1.5 md:gap-1 shrink-0';
+          
+          // Count badge
+          const countBadge = document.createElement('span');
+          countBadge.className = 'text-xs bg-dark-600 px-2 py-0.5 rounded-full';
+          countBadge.textContent = folder.count || 0;
+          
+          // Rename button
+          const renameBtn = document.createElement('button');
+          renameBtn.type = 'button';
+          renameBtn.className = 'text-blue-400 hover:text-blue-300 px-3 py-2 hover:bg-blue-500/10 rounded transition-colors text-lg font-bold touch-manipulation';
+          renameBtn.title = 'Rename';
+          renameBtn.innerHTML = '✏️';
+          renameBtn.onclick = (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            openRenameFolderModalManager(folder.name);
+          };
+          
+          // Delete button
+          const deleteBtn = document.createElement('button');
+          deleteBtn.type = 'button';
+          deleteBtn.className = 'text-red-500 hover:text-red-400 px-3 py-2 hover:bg-red-500/10 rounded transition-colors text-lg font-bold touch-manipulation';
+          deleteBtn.title = 'Delete';
+          deleteBtn.innerHTML = '🗑️';
+          deleteBtn.onclick = (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            deleteThumbnailFolderManager(folder.name);
+          };
+          
+          actionsDiv.appendChild(countBadge);
+          actionsDiv.appendChild(renameBtn);
+          actionsDiv.appendChild(deleteBtn);
+          
+          div.innerHTML = `
+            <div class="flex items-center gap-2 flex-1 min-w-0">
+              <i class="ti ti-folder text-gray-400 shrink-0 text-base"></i>
+              <span class="truncate font-medium">${escapeHtml(folder.name)}</span>
+            </div>
+          `;
+          div.appendChild(actionsDiv);
+          
+          folderList.appendChild(div);
+        });
+      }
     }
   } catch (error) {
     console.error('[ThumbnailManager] Error fetching folders:', error);
   }
 }
 
-// Update root thumbnail count
-async function updateRootThumbnailCount() {
-  try {
-    const response = await fetch('/api/thumbnails?folder=', {
-      headers: {
-        'X-CSRF-Token': getCsrfToken()
-      }
-    });
-    
-    const data = await response.json();
-    const rootCount = document.getElementById('rootThumbnailCount');
-    if (rootCount && data.success) {
-      rootCount.textContent = data.thumbnails?.length || 0;
-    }
-  } catch (error) {
-    console.error('[ThumbnailManager] Error fetching root count:', error);
+// Show empty folder state (no folders exist)
+function showEmptyFolderState() {
+  const gallery = document.getElementById('thumbnailManagerGallery');
+  const loading = document.getElementById('thumbnailManagerLoading');
+  const empty = document.getElementById('thumbnailManagerEmpty');
+  const countEl = document.getElementById('thumbnailManagerCount');
+  const folderCountEl = document.getElementById('currentFolderThumbnailCount');
+  const folderCountMobile = document.getElementById('currentFolderThumbnailCountMobile');
+  const folderNameEl = document.getElementById('currentFolderNameManager');
+  const folderNameMobile = document.getElementById('currentFolderNameMobile');
+  
+  if (loading) loading.classList.add('hidden');
+  if (gallery) gallery.innerHTML = '';
+  if (empty) {
+    empty.classList.remove('hidden');
+    empty.innerHTML = `
+      <i class="ti ti-folder-off text-gray-500 text-4xl"></i>
+      <p class="text-gray-500 text-sm mt-3">Belum ada folder</p>
+      <p class="text-gray-600 text-xs mt-1">Buat folder terlebih dahulu dengan klik tombol <strong>Add</strong></p>
+    `;
   }
+  if (countEl) countEl.textContent = '(0)';
+  if (folderCountEl) folderCountEl.textContent = '0';
+  if (folderCountMobile) folderCountMobile.textContent = '0';
+  if (folderNameEl) folderNameEl.textContent = '-';
+  if (folderNameMobile) folderNameMobile.textContent = '-';
+  
+  currentThumbnailFolderManager = null;
 }
 
 // Open thumbnail folder in manager
 function openThumbnailFolderInManager(folderName) {
+  if (!folderName) {
+    // No folder specified and no folders exist
+    showEmptyFolderState();
+    return;
+  }
+  
   currentThumbnailFolderManager = folderName;
   
-  console.log('[ThumbnailManager] Opening folder:', folderName || 'root');
+  console.log('[ThumbnailManager] Opening folder:', folderName);
   
   // Update folder info (Desktop)
   const folderNameEl = document.getElementById('currentFolderNameManager');
-  const rootBtn = document.getElementById('thumbnailManagerRootBtn');
   
   // Update mobile breadcrumb
   const folderNameMobile = document.getElementById('currentFolderNameMobile');
   
-  if (folderName) {
-    if (folderNameEl) folderNameEl.textContent = folderName;
-    if (folderNameMobile) folderNameMobile.textContent = folderName;
-    if (rootBtn) {
-      rootBtn.classList.remove('bg-primary/20', 'text-primary');
-      rootBtn.classList.add('bg-dark-600', 'text-gray-300');
-    }
-  } else {
-    if (folderNameEl) folderNameEl.textContent = 'Root';
-    if (folderNameMobile) folderNameMobile.textContent = 'Root';
-    if (rootBtn) {
-      rootBtn.classList.add('bg-primary/20', 'text-primary');
-      rootBtn.classList.remove('bg-dark-600', 'text-gray-300');
-    }
-  }
+  if (folderNameEl) folderNameEl.textContent = folderName;
+  if (folderNameMobile) folderNameMobile.textContent = folderName;
   
   // Update folder items
   document.querySelectorAll('.folder-item-manager').forEach(item => {
@@ -8243,12 +8288,19 @@ async function fetchThumbnailsForManager(folderName) {
   }
 }
 
-// Handle thumbnail upload in manager
+// Handle thumbnail upload in manager - REALTIME UPDATE
 async function handleThumbnailManagerUpload(event) {
   const files = event.target.files;
   if (!files || files.length === 0) return;
   
   const folder = currentThumbnailFolderManager || '';
+  
+  // Validate: must have folder selected
+  if (!folder) {
+    showToast('Pilih folder terlebih dahulu atau buat folder baru', 'warning');
+    event.target.value = '';
+    return;
+  }
   
   // Show loading toast
   showToast(`Uploading ${files.length} thumbnail(s)...`, 'info');
@@ -8271,10 +8323,102 @@ async function handleThumbnailManagerUpload(event) {
     const data = await response.json();
     
     if (data.success) {
-      showToast(`${data.uploadedCount || files.length} thumbnail(s) uploaded successfully!`);
-      // Refresh thumbnails
-      fetchThumbnailsForManager(folder);
-      fetchThumbnailFoldersForManager(); // Update counts
+      showToast(`${data.uploadedCount || files.length} thumbnail(s) uploaded!`, 'success');
+      
+      // REALTIME: Add thumbnails to gallery immediately
+      const gallery = document.getElementById('thumbnailManagerGallery');
+      const empty = document.getElementById('thumbnailManagerEmpty');
+      
+      if (empty) empty.classList.add('hidden');
+      
+      if (data.thumbnails && data.thumbnails.length > 0) {
+        data.thumbnails.forEach((thumb, index) => {
+          const div = document.createElement('div');
+          div.className = 'relative group aspect-video bg-dark-600 rounded-xl overflow-hidden border-2 border-transparent hover:border-primary transition-all cursor-pointer shadow-lg hover:shadow-xl';
+          div.style.opacity = '0';
+          div.style.transform = 'scale(0.8)';
+          
+          // Create image
+          const img = document.createElement('img');
+          img.src = thumb.url;
+          img.alt = thumb.filename;
+          img.className = 'w-full h-full object-cover';
+          
+          // Create overlay with buttons
+          const overlay = document.createElement('div');
+          overlay.className = 'absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3';
+          
+          // View button
+          const viewBtn = document.createElement('button');
+          viewBtn.className = 'w-12 h-12 bg-blue-500 hover:bg-blue-600 active:bg-blue-700 rounded-lg flex items-center justify-center text-white transition-colors shadow-lg touch-manipulation';
+          viewBtn.title = 'View';
+          viewBtn.innerHTML = '<i class="ti ti-eye text-xl"></i>';
+          viewBtn.onclick = (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            viewThumbnailInManager(thumb.url, thumb.filename);
+          };
+          
+          // Delete button
+          const deleteBtn = document.createElement('button');
+          deleteBtn.className = 'w-12 h-12 bg-red-500 hover:bg-red-600 active:bg-red-700 rounded-lg flex items-center justify-center text-white transition-colors shadow-lg touch-manipulation';
+          deleteBtn.title = 'Delete';
+          deleteBtn.innerHTML = '<i class="ti ti-trash text-xl"></i>';
+          deleteBtn.onclick = (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            deleteThumbnailInManager(thumb.filename, folder);
+          };
+          
+          overlay.appendChild(viewBtn);
+          overlay.appendChild(deleteBtn);
+          
+          // Create filename label
+          const label = document.createElement('div');
+          label.className = 'absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent p-2.5 pointer-events-none';
+          label.innerHTML = `<p class="text-xs md:text-sm text-white truncate font-medium">${escapeHtml(thumb.filename)}</p>`;
+          
+          div.appendChild(img);
+          div.appendChild(overlay);
+          div.appendChild(label);
+          gallery.appendChild(div);
+          
+          // Animate in
+          setTimeout(() => {
+            div.style.transition = 'all 0.3s ease';
+            div.style.opacity = '1';
+            div.style.transform = 'scale(1)';
+          }, index * 50);
+        });
+        
+        // Update counts
+        const countEl = document.getElementById('thumbnailManagerCount');
+        const folderCountEl = document.getElementById('currentFolderThumbnailCount');
+        const folderCountMobile = document.getElementById('currentFolderThumbnailCountMobile');
+        
+        const totalCount = gallery.querySelectorAll(':scope > div').length;
+        if (countEl) countEl.textContent = `(${totalCount})`;
+        if (folderCountEl) folderCountEl.textContent = totalCount;
+        if (folderCountMobile) folderCountMobile.textContent = totalCount;
+        
+        // Update folder badge
+        const folderItems = document.querySelectorAll('.folder-item-manager');
+        folderItems.forEach(item => {
+          const itemName = item.querySelector('span.truncate')?.textContent;
+          if (itemName === folder) {
+            const badge = item.querySelector('span.text-xs');
+            if (badge) {
+              badge.textContent = totalCount;
+              // Animate badge
+              badge.style.transition = 'all 0.3s ease';
+              badge.style.transform = 'scale(1.3)';
+              setTimeout(() => {
+                badge.style.transform = 'scale(1)';
+              }, 300);
+            }
+          }
+        });
+      }
     } else {
       showToast(data.error || 'Failed to upload thumbnails', 'error');
     }
@@ -8302,9 +8446,23 @@ function viewThumbnailInManager(url, filename) {
   document.body.appendChild(lightbox);
 }
 
-// Delete thumbnail in manager
+// Delete thumbnail in manager - REALTIME UPDATE
 async function deleteThumbnailInManager(filename, folder) {
   if (!confirm(`Delete thumbnail "${filename}"?`)) return;
+  
+  // REALTIME: Langsung hapus dari UI dulu untuk instant feedback
+  const thumbnailCards = document.querySelectorAll('#thumbnailManagerGallery > div');
+  let deletedCard = null;
+  thumbnailCards.forEach(card => {
+    const img = card.querySelector('img');
+    if (img && img.alt === filename) {
+      deletedCard = card;
+      // Animate out
+      card.style.transition = 'all 0.3s ease';
+      card.style.opacity = '0';
+      card.style.transform = 'scale(0.8)';
+    }
+  });
   
   try {
     // Use the correct endpoint format: DELETE /api/thumbnails/:filename?folder=...
@@ -8323,16 +8481,73 @@ async function deleteThumbnailInManager(filename, folder) {
     const data = await response.json();
     
     if (data.success) {
-      showToast('Thumbnail deleted');
-      fetchThumbnailsForManager(folder);
-      fetchThumbnailFoldersForManager(); // Update counts
+      // REALTIME: Remove dari DOM setelah animasi
+      setTimeout(() => {
+        if (deletedCard) deletedCard.remove();
+        
+        // Update counts
+        const countEl = document.getElementById('thumbnailManagerCount');
+        const folderCountEl = document.getElementById('currentFolderThumbnailCount');
+        const folderCountMobile = document.getElementById('currentFolderThumbnailCountMobile');
+        
+        const remaining = document.querySelectorAll('#thumbnailManagerGallery > div').length;
+        if (countEl) countEl.textContent = `(${remaining})`;
+        if (folderCountEl) folderCountEl.textContent = remaining;
+        if (folderCountMobile) folderCountMobile.textContent = remaining;
+        
+        // Show empty state if no thumbnails left
+        if (remaining === 0) {
+          const empty = document.getElementById('thumbnailManagerEmpty');
+          if (empty) empty.classList.remove('hidden');
+        }
+        
+        // Update folder count badge
+        updateFolderCountBadge(folder);
+      }, 300);
+      
+      showToast('Thumbnail deleted', 'success');
     } else {
+      // Rollback UI if failed
+      if (deletedCard) {
+        deletedCard.style.opacity = '1';
+        deletedCard.style.transform = 'scale(1)';
+      }
       showToast(data.error || 'Failed to delete thumbnail', 'error');
     }
   } catch (error) {
     console.error('[ThumbnailManager] Delete error:', error);
+    // Rollback UI
+    if (deletedCard) {
+      deletedCard.style.opacity = '1';
+      deletedCard.style.transform = 'scale(1)';
+    }
     showToast('An error occurred', 'error');
   }
+}
+
+// Update folder count badge after delete/upload
+function updateFolderCountBadge(folderName) {
+  if (!folderName) return;
+  
+  const folderItems = document.querySelectorAll('.folder-item-manager');
+  folderItems.forEach(item => {
+    const itemName = item.querySelector('span.truncate')?.textContent;
+    if (itemName === folderName) {
+      const badge = item.querySelector('span.text-xs');
+      if (badge) {
+        const currentCount = parseInt(badge.textContent) || 0;
+        const newCount = Math.max(0, currentCount - 1);
+        badge.textContent = newCount;
+        
+        // Animate badge
+        badge.style.transition = 'all 0.3s ease';
+        badge.style.transform = 'scale(1.3)';
+        setTimeout(() => {
+          badge.style.transform = 'scale(1)';
+        }, 300);
+      }
+    }
+  });
 }
 
 // Rename folder in manager (separate from main thumbnail gallery)
@@ -8350,11 +8565,25 @@ function openRenameFolderModalManager(folderName) {
   document.getElementById('renameFolderNewName').select();
 }
 
-// Delete thumbnail folder in manager
+// Delete thumbnail folder in manager - REALTIME UPDATE
 async function deleteThumbnailFolderManager(folderName) {
   if (!confirm(`Are you sure you want to delete folder "${folderName}" and all its thumbnails?`)) {
     return;
   }
+  
+  // REALTIME: Langsung hapus dari UI untuk instant feedback
+  const folderItems = document.querySelectorAll('.folder-item-manager');
+  let deletedItem = null;
+  folderItems.forEach(item => {
+    const itemName = item.querySelector('span.truncate')?.textContent;
+    if (itemName === folderName) {
+      deletedItem = item;
+      // Animate out
+      item.style.transition = 'all 0.3s ease';
+      item.style.opacity = '0';
+      item.style.transform = 'translateX(-20px)';
+    }
+  });
   
   try {
     const response = await fetch(`/api/thumbnail-folders/${encodeURIComponent(folderName)}`, {
@@ -8367,19 +8596,48 @@ async function deleteThumbnailFolderManager(folderName) {
     const data = await response.json();
     
     if (data.success) {
-      showToast('Folder deleted successfully');
+      showToast('Folder deleted successfully', 'success');
       
-      // Go back to root if current folder was deleted
-      if (currentThumbnailFolderManager === folderName) {
-        openThumbnailFolderInManager(null);
-      }
-      
-      fetchThumbnailFoldersForManager();
+      // REALTIME: Remove dari DOM setelah animasi
+      setTimeout(() => {
+        if (deletedItem) deletedItem.remove();
+        
+        // Check if there are remaining folders
+        const remainingFolders = document.querySelectorAll('.folder-item-manager').length;
+        const folderList = document.getElementById('thumbnailManagerFolderList');
+        const emptyState = document.getElementById('thumbnailManagerFolderEmpty');
+        
+        if (remainingFolders === 0) {
+          // No more folders, show empty state
+          if (folderList) folderList.classList.add('hidden');
+          if (emptyState) emptyState.classList.remove('hidden');
+          showEmptyFolderState();
+        } else {
+          // Open first remaining folder
+          const firstFolder = document.querySelector('.folder-item-manager');
+          if (firstFolder) {
+            const firstFolderName = firstFolder.querySelector('span.truncate')?.textContent;
+            if (firstFolderName) {
+              openThumbnailFolderInManager(firstFolderName);
+            }
+          }
+        }
+      }, 300);
     } else {
+      // Rollback UI if failed
+      if (deletedItem) {
+        deletedItem.style.opacity = '1';
+        deletedItem.style.transform = 'translateX(0)';
+      }
       showToast(data.error || 'Failed to delete folder', 'error');
     }
   } catch (error) {
     console.error('[ThumbnailManager] Error deleting folder:', error);
+    // Rollback UI
+    if (deletedItem) {
+      deletedItem.style.opacity = '1';
+      deletedItem.style.transform = 'translateX(0)';
+    }
     showToast('Failed to delete folder', 'error');
   }
 }

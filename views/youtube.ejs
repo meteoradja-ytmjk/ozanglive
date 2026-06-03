@@ -3064,17 +3064,25 @@ document.addEventListener('keydown', function(e) {
                 </button>
               </div>
               
-              <!-- Root Folder -->
-              <button type="button" onclick="openThumbnailFolderInManager(null)" id="thumbnailManagerRootBtn" 
-                class="w-full px-3 py-2.5 md:py-2 mb-2 text-sm rounded-lg bg-primary/20 text-primary hover:bg-primary/30 transition-colors flex items-center gap-2 font-medium">
+              <!-- Root Folder - HIDDEN (user langsung bisa add folder) -->
+              <!-- <button type="button" onclick="openThumbnailFolderInManager(null)" id="thumbnailManagerRootBtn" 
+                class="w-full px-3 py-2.5 md:py-2 mb-2 text-sm rounded-lg bg-primary/20 text-primary hover:bg-primary/30 transition-colors flex items-center gap-2 font-medium hidden">
                 <i class="ti ti-home"></i>
                 <span>Root</span>
                 <span id="rootThumbnailCount" class="ml-auto text-xs bg-primary/30 px-2 py-0.5 rounded-full">0</span>
-              </button>
+              </button> -->
               
               <!-- Folder List -->
               <div id="thumbnailManagerFolderList" class="space-y-1 max-h-96 overflow-y-auto">
                 <!-- Folders will be loaded here -->
+                <!-- Empty state will show if no folders -->
+              </div>
+              
+              <!-- Empty State for Folders -->
+              <div id="thumbnailManagerFolderEmpty" class="hidden text-center py-8 border-2 border-dashed border-gray-600 rounded-lg">
+                <i class="ti ti-folder-off text-gray-500 text-3xl"></i>
+                <p class="text-gray-500 text-sm mt-2">Belum ada folder</p>
+                <p class="text-gray-600 text-xs mt-1">Klik tombol <strong>Add</strong> untuk membuat folder</p>
               </div>
             </div>
             
@@ -3085,7 +3093,7 @@ document.addEventListener('keydown', function(e) {
               </div>
               <div class="flex items-center gap-2">
                 <i class="ti ti-folder-open text-primary"></i>
-                <span id="currentFolderNameManager" class="font-medium text-sm md:text-base">Root</span>
+                <span id="currentFolderNameManager" class="font-medium text-sm md:text-base">-</span>
               </div>
               <div class="mt-2 text-xs text-gray-500">
                 <span id="currentFolderThumbnailCount">0</span> thumbnails
