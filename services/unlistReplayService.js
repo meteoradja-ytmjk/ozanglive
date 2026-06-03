@@ -94,11 +94,7 @@ class UnlistReplayService {
       // Get access token - use correct field names (camelCase)
       let accessToken;
       try {
-        accessToken = await youtubeService.getAccessToken(
-          credentials.clientId,
-          credentials.clientSecret,
-          credentials.refreshToken
-        );
+        accessToken = await youtubeService.getAccessToken(credentials.clientId, credentials.clientSecret, credentials.refreshToken, 0, credentials.id, 0, credentials.id);
       } catch (tokenError) {
         console.error(`[UnlistReplayService] Failed to get access token: ${tokenError.message}`);
         

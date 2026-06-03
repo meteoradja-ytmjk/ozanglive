@@ -4378,7 +4378,7 @@ app.post('/api/render/jobs', isAuthenticated, async (req, res) => {
           const account = await YouTubeCredentials.findById(targetAccountId);
           if (account && account.userId === currentUserId) {
             const doUpload = async () => {
-              const accessToken = await youtubeService.getAccessToken(account.clientId, account.clientSecret, account.refreshToken);
+              const accessToken = await youtubeService.getAccessToken(account.clientId, account.clientSecret, account.refreshToken, 0, account.id, 0, account.id);
               const uploadResult = await youtubeService.uploadRegularVideo(accessToken, {
                 title: title || `Render ${new Date().toISOString()}`,
                 description: `Uploaded automatically from Render Jobs (visualizer: ${visualizerPreset || 'none'})`,
@@ -4610,7 +4610,7 @@ app.post('/api/render/jobs/:id/retry', isAuthenticated, async (req, res) => {
         if (original.auto_upload && original.target_account_id) {
           const account = await YouTubeCredentials.findById(original.target_account_id);
           if (account && account.userId === currentUserId) {
-            const accessToken = await youtubeService.getAccessToken(account.clientId, account.clientSecret, account.refreshToken);
+            const accessToken = await youtubeService.getAccessToken(account.clientId, account.clientSecret, account.refreshToken, 0, account.id, 0, account.id);
             const uploadResult = await youtubeService.uploadRegularVideo(accessToken, {
               title: `${original.title || 'Render'} (retry)`,
               description: 'Uploaded automatically from Render Jobs',
@@ -4654,7 +4654,7 @@ app.post('/api/render/jobs/:id/upload', isAuthenticated, async (req, res) => {
       return res.status(403).json({ success: false, message: 'Akun YouTube tidak valid' });
     }
 
-    const accessToken = await youtubeService.getAccessToken(account.clientId, account.clientSecret, account.refreshToken);
+    const accessToken = await youtubeService.getAccessToken(account.clientId, account.clientSecret, account.refreshToken, 0, account.id, 0, account.id);
     
     // Build upload options with custom metadata from user
     const uploadOptions = {
@@ -4750,7 +4750,7 @@ app.post('/api/render/jobs/:id/loop', isAuthenticated, async (req, res) => {
           const account = await YouTubeCredentials.findById(targetAccountId);
           if (account && account.userId === req.session.userId) {
             try {
-              const accessToken = await youtubeService.getAccessToken(account.clientId, account.clientSecret, account.refreshToken);
+              const accessToken = await youtubeService.getAccessToken(account.clientId, account.clientSecret, account.refreshToken, 0, account.id, 0, account.id);
               const uploadResult = await youtubeService.uploadRegularVideo(accessToken, {
                 title: `${originalJob.title} (${loopCount}x Loop)`,
                 description: `Looped ${loopCount}x from original render`,
@@ -7498,11 +7498,7 @@ app.get('/api/youtube/channel/:id/defaults', isAuthenticated, async (req, res) =
     }
     
     // Get access token
-    const accessToken = await youtubeService.getAccessToken(
-      account.clientId,
-      account.clientSecret,
-      account.refreshToken
-    );
+    const accessToken = await youtubeService.getAccessToken(account.clientId, account.clientSecret, account.refreshToken, 0, account.id, 0, account.id);
     
     // Get channel defaults
     const defaults = await youtubeService.getChannelDefaults(accessToken);
@@ -7602,6 +7598,36 @@ app.post('/api/youtube/token-refresh-all', isAuthenticated, async (req, res) => 
   } catch (error) {
     console.error('Error refreshing all tokens:', error);
     res.status(500).json({ success: false, error: 'Failed to refresh tokens' });
+  }
+});
+
+// Get list of expired accounts (Quick Reconnect feature)
+app.get('/api/youtube/expired-accounts', isAuthenticated, async (req, res) => {
+  try {
+    const accounts = await YouTubeCredentials.findAllByUserId(req.session.userId);
+    const status = await tokenRefreshScheduler.getStatus();
+    
+    const expiredAccounts = accounts
+      .map(acc => {
+        const accountStatus = status.accounts.find(a => a.id === acc.id);
+        return {
+          id: acc.id,
+          channelName: acc.channelName || `Account #${acc.id}`,
+          channelId: acc.channelId,
+          tokenStatus: accountStatus?.tokenStatus || acc.tokenStatus || 'unknown',
+          lastRefreshError: accountStatus?.lastRefreshError || acc.lastRefreshError
+        };
+      })
+      .filter(acc => acc.tokenStatus === 'expired' || acc.tokenStatus === 'error');
+    
+    res.json({ 
+      success: true, 
+      expiredAccounts,
+      total: expiredAccounts.length
+    });
+  } catch (error) {
+    console.error('Error getting expired accounts:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
@@ -7795,11 +7821,7 @@ app.get('/api/youtube/live-stats', isAuthenticated, async (req, res) => {
 
     for (const account of accounts) {
       try {
-        const accessToken = await youtubeService.getAccessToken(
-          account.clientId,
-          account.clientSecret,
-          account.refreshToken
-        );
+        const accessToken = await youtubeService.getAccessToken(account.clientId, account.clientSecret, account.refreshToken, 0, account.id, 0, account.id);
 
         const stats = await youtubeService.getAllLiveBroadcastsWithStats(accessToken);
 
@@ -7850,11 +7872,7 @@ app.get('/api/youtube/live-stats/:accountId/:broadcastId', isAuthenticated, asyn
       return res.status(404).json({ success: false, error: 'Account not found' });
     }
 
-    const accessToken = await youtubeService.getAccessToken(
-      account.clientId,
-      account.clientSecret,
-      account.refreshToken
-    );
+    const accessToken = await youtubeService.getAccessToken(account.clientId, account.clientSecret, account.refreshToken, 0, account.id, 0, account.id);
 
     const stats = await youtubeService.getLiveStreamStats(accessToken, broadcastId);
 
@@ -7886,11 +7904,7 @@ app.get('/api/youtube/connection-status/:accountId', isAuthenticated, async (req
       return res.status(404).json({ success: false, error: 'Account not found' });
     }
 
-    const accessToken = await youtubeService.getAccessToken(
-      account.clientId,
-      account.clientSecret,
-      account.refreshToken
-    );
+    const accessToken = await youtubeService.getAccessToken(account.clientId, account.clientSecret, account.refreshToken, 0, account.id, 0, account.id);
 
     const connectionStatus = await youtubeService.testConnection(accessToken);
     const quotaInfo = youtubeService.getQuotaInfo();
@@ -7916,11 +7930,7 @@ app.get('/api/youtube/connection-status', isAuthenticated, async (req, res) => {
 
     for (const account of accounts) {
       try {
-        const accessToken = await youtubeService.getAccessToken(
-          account.clientId,
-          account.clientSecret,
-          account.refreshToken
-        );
+        const accessToken = await youtubeService.getAccessToken(account.clientId, account.clientSecret, account.refreshToken, 0, account.id, 0, account.id);
 
         const connectionStatus = await youtubeService.testConnection(accessToken);
 
@@ -8312,11 +8322,7 @@ app.get('/api/youtube/streams', isAuthenticated, async (req, res) => {
 
     console.log('[/api/youtube/streams] Using account:', credentials.channelName);
 
-    const accessToken = await youtubeService.getAccessToken(
-      credentials.clientId,
-      credentials.clientSecret,
-      credentials.refreshToken
-    );
+    const accessToken = await youtubeService.getAccessToken(credentials.clientId, credentials.clientSecret, credentials.refreshToken, 0, credentials.id, 0, credentials.id);
 
     const streams = await youtubeService.listStreams(accessToken);
     console.log('[/api/youtube/streams] Found', streams.length, 'streams');
@@ -8727,11 +8733,7 @@ app.get('/api/youtube/channel-defaults', isAuthenticated, async (req, res) => {
       });
     }
 
-    const accessToken = await youtubeService.getAccessToken(
-      credentials.clientId,
-      credentials.clientSecret,
-      credentials.refreshToken
-    );
+    const accessToken = await youtubeService.getAccessToken(credentials.clientId, credentials.clientSecret, credentials.refreshToken, 0, credentials.id, 0, credentials.id);
 
     const defaults = await youtubeService.getChannelDefaults(accessToken);
     res.json({ success: true, defaults, accountId: credentials.id });
@@ -8777,11 +8779,7 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
         channelId: credentials.channelId
       });
 
-      const accessToken = await youtubeService.getAccessToken(
-        credentials.clientId,
-        credentials.clientSecret,
-        credentials.refreshToken
-      );
+      const accessToken = await youtubeService.getAccessToken(credentials.clientId, credentials.clientSecret, credentials.refreshToken, 0, credentials.id, 0, credentials.id);
 
       const broadcasts = await youtubeService.listBroadcasts(accessToken);
       const result = broadcasts.map(b => ({ 
@@ -8835,11 +8833,7 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
           );
           
           const fetchPromise = (async () => {
-            const accessToken = await youtubeService.getAccessToken(
-              account.clientId,
-              account.clientSecret,
-              account.refreshToken
-            );
+            const accessToken = await youtubeService.getAccessToken(account.clientId, account.clientSecret, account.refreshToken, 0, account.id, 0, account.id);
             const broadcasts = await youtubeService.listBroadcasts(accessToken);
             return broadcasts.map(b => ({
               ...b,
@@ -8944,11 +8938,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       }
     }
 
-    const accessToken = await youtubeService.getAccessToken(
-      credentials.clientId,
-      credentials.clientSecret,
-      credentials.refreshToken
-    );
+    const accessToken = await youtubeService.getAccessToken(credentials.clientId, credentials.clientSecret, credentials.refreshToken, 0, credentials.id, 0, credentials.id);
 
     const finalCategoryId = categoryId || '22';
     console.log('[API] Create broadcast - using categoryId:', finalCategoryId);
@@ -9235,11 +9225,7 @@ app.put('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
       const accounts = await YouTubeCredentials.findAllByUserId(req.session.userId);
       for (const account of accounts) {
         try {
-          const accessToken = await youtubeService.getAccessToken(
-            account.clientId,
-            account.clientSecret,
-            account.refreshToken
-          );
+          const accessToken = await youtubeService.getAccessToken(account.clientId, account.clientSecret, account.refreshToken, 0, account.id, 0, account.id);
           const result = await youtubeService.updateBroadcast(accessToken, req.params.id, {
             title,
             description,
@@ -9257,11 +9243,7 @@ app.put('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
       return res.status(404).json({ success: false, error: 'Broadcast not found' });
     }
 
-    const accessToken = await youtubeService.getAccessToken(
-      credentials.clientId,
-      credentials.clientSecret,
-      credentials.refreshToken
-    );
+    const accessToken = await youtubeService.getAccessToken(credentials.clientId, credentials.clientSecret, credentials.refreshToken, 0, credentials.id, 0, credentials.id);
 
     const result = await youtubeService.updateBroadcast(accessToken, req.params.id, {
       title,
@@ -9335,11 +9317,7 @@ app.delete('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
       const accounts = await YouTubeCredentials.findAllByUserId(req.session.userId);
       for (const account of accounts) {
         try {
-          const accessToken = await youtubeService.getAccessToken(
-            account.clientId,
-            account.clientSecret,
-            account.refreshToken
-          );
+          const accessToken = await youtubeService.getAccessToken(account.clientId, account.clientSecret, account.refreshToken, 0, account.id, 0, account.id);
           await youtubeService.deleteBroadcast(accessToken, req.params.id);
           return res.json({ success: true, message: 'Broadcast deleted' });
         } catch (err) {
@@ -9350,11 +9328,7 @@ app.delete('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
       return res.status(404).json({ success: false, error: 'Broadcast not found' });
     }
 
-    const accessToken = await youtubeService.getAccessToken(
-      credentials.clientId,
-      credentials.clientSecret,
-      credentials.refreshToken
-    );
+    const accessToken = await youtubeService.getAccessToken(credentials.clientId, credentials.clientSecret, credentials.refreshToken, 0, credentials.id, 0, credentials.id);
 
     await youtubeService.deleteBroadcast(accessToken, req.params.id);
     res.json({ success: true, message: 'Broadcast deleted' });
@@ -9422,11 +9396,7 @@ app.post('/api/youtube/broadcasts/:id/thumbnail', isAuthenticated, thumbnailUplo
       });
     }
 
-    const accessToken = await youtubeService.getAccessToken(
-      credentials.clientId,
-      credentials.clientSecret,
-      credentials.refreshToken
-    );
+    const accessToken = await youtubeService.getAccessToken(credentials.clientId, credentials.clientSecret, credentials.refreshToken, 0, credentials.id, 0, credentials.id);
 
     // Normalize mimetype for YouTube API
     const mimeType = req.file.mimetype === 'image/jpg' ? 'image/jpeg' : req.file.mimetype;
@@ -10354,11 +10324,7 @@ app.post('/api/youtube/templates/:id/create-broadcast', isAuthenticated, async (
     }
 
     // Get access token
-    const accessToken = await youtubeService.getAccessToken(
-      credentials.clientId,
-      credentials.clientSecret,
-      credentials.refreshToken
-    );
+    const accessToken = await youtubeService.getAccessToken(credentials.clientId, credentials.clientSecret, credentials.refreshToken, 0, credentials.id, 0, credentials.id);
 
     if (template.stream_id) {
       const accountStreams = await youtubeService.listStreams(accessToken);
@@ -10468,11 +10434,7 @@ app.post('/api/youtube/templates/:id/bulk-create', isAuthenticated, async (req, 
     }
 
     // Get access token
-    const accessToken = await youtubeService.getAccessToken(
-      credentials.clientId,
-      credentials.clientSecret,
-      credentials.refreshToken
-    );
+    const accessToken = await youtubeService.getAccessToken(credentials.clientId, credentials.clientSecret, credentials.refreshToken, 0, credentials.id, 0, credentials.id);
 
     if (template.stream_id) {
       const accountStreams = await youtubeService.listStreams(accessToken);
@@ -10863,11 +10825,7 @@ app.post('/api/youtube/videos/sync', isAuthenticated, csrfProtection, async (req
       return res.status(404).json({ success: false, error: 'Account not found' });
     }
 
-    const accessToken = await youtubeService.getAccessToken(
-      credentials.clientId,
-      credentials.clientSecret,
-      credentials.refreshToken
-    );
+    const accessToken = await youtubeService.getAccessToken(credentials.clientId, credentials.clientSecret, credentials.refreshToken, 0, credentials.id, 0, credentials.id);
 
     const result = await youtubeService.listChannelVideos(accessToken, { maxResults: 50 });
 
@@ -10942,11 +10900,7 @@ app.put('/api/youtube/videos/:videoId', isAuthenticated, csrfProtection, async (
       return res.status(404).json({ success: false, error: 'Account not found' });
     }
 
-    const accessToken = await youtubeService.getAccessToken(
-      credentials.clientId,
-      credentials.clientSecret,
-      credentials.refreshToken
-    );
+    const accessToken = await youtubeService.getAccessToken(credentials.clientId, credentials.clientSecret, credentials.refreshToken, 0, credentials.id, 0, credentials.id);
 
     const updates = {};
     if (title !== undefined) updates.title = title;
@@ -10985,11 +10939,7 @@ app.post('/api/youtube/videos/bulk-update', isAuthenticated, csrfProtection, asy
       return res.status(404).json({ success: false, error: 'Account not found' });
     }
 
-    const accessToken = await youtubeService.getAccessToken(
-      credentials.clientId,
-      credentials.clientSecret,
-      credentials.refreshToken
-    );
+    const accessToken = await youtubeService.getAccessToken(credentials.clientId, credentials.clientSecret, credentials.refreshToken, 0, credentials.id, 0, credentials.id);
 
     const results = await youtubeService.bulkUpdateVideos(accessToken, videoIds, updates);
 
@@ -11024,11 +10974,7 @@ app.delete('/api/youtube/videos/:videoId', isAuthenticated, csrfProtection, asyn
       return res.status(404).json({ success: false, error: 'Account not found' });
     }
 
-    const accessToken = await youtubeService.getAccessToken(
-      credentials.clientId,
-      credentials.clientSecret,
-      credentials.refreshToken
-    );
+    const accessToken = await youtubeService.getAccessToken(credentials.clientId, credentials.clientSecret, credentials.refreshToken, 0, credentials.id, 0, credentials.id);
 
     await youtubeService.deleteVideo(accessToken, videoId);
     await YouTubeVideo.delete(videoId, accountId);

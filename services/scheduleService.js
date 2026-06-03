@@ -815,11 +815,7 @@ class ScheduleService {
       // Get access token from credentials with error handling
       let accessToken;
       try {
-        accessToken = await youtubeService.getAccessToken(
-          template.client_id,
-          template.client_secret,
-          template.refresh_token
-        );
+        accessToken = await youtubeService.getAccessToken(template.client_id, template.client_secret, template.refresh_token, 0, template.account_id, 0, template.account_id);
       } catch (tokenError) {
         const errorMsg = tokenError.message || 'Unknown token error';
         console.error(`[ScheduleService] Token error for template "${template.name}": ${errorMsg}`);

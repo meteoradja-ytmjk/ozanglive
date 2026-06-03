@@ -8495,3 +8495,187 @@ document.addEventListener('keydown', (e) => {
     }
   }
 });
+
+
+// ============================================
+// Quick Reconnect Feature
+// ============================================
+
+/**
+ * Reconnect all expired accounts in sequence
+ * Provides one-click reconnect for better UX
+ */
+async function reconnectAllExpired() {
+  const btn = event?.target?.closest('button');
+  if (!btn) return;
+  
+  const originalHTML = btn.innerHTML;
+  
+  try {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ti ti-loader animate-spin"></i> <span class="ml-2">Memuat...</span>';
+    
+    // Get list of expired accounts
+    const response = await fetch('/api/youtube/expired-accounts', {
+      headers: { 'X-CSRF-Token': getCsrfToken() }
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to get expired accounts');
+    }
+    
+    const { expiredAccounts } = await response.json();
+    
+    if (expiredAccounts.length === 0) {
+      showToast('✅ Semua akun sudah active!', 'success');
+      btn.disabled = false;
+      btn.innerHTML = originalHTML;
+      return;
+    }
+    
+    console.log(`[Quick Reconnect] Found ${expiredAccounts.length} expired accounts:`, expiredAccounts);
+    
+    showToast(`🔄 Reconnecting ${expiredAccounts.length} akun...`, 'info');
+    
+    let successCount = 0;
+    let failCount = 0;
+    
+    // Reconnect each account using OAuth flow
+    for (let i = 0; i < expiredAccounts.length; i++) {
+      const account = expiredAccounts[i];
+      
+      try {
+        btn.innerHTML = `<i class="ti ti-loader animate-spin"></i> <span class="ml-2">Reconnecting ${i + 1}/${expiredAccounts.length}...</span>`;
+        
+        console.log(`[Quick Reconnect] Reconnecting account ${account.id}: ${account.channelName}`);
+        
+        // Use existing OAuth reconnect function
+        await reconnectAccountOAuth(account.id, account.channelName);
+        
+        successCount++;
+        console.log(`[Quick Reconnect] ✓ Account ${account.id} reconnected successfully`);
+        
+        // Wait 2 seconds between reconnects to avoid overwhelming the server
+        if (i < expiredAccounts.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+      } catch (err) {
+        console.error(`[Quick Reconnect] Failed to reconnect ${account.channelName}:`, err);
+        failCount++;
+      }
+    }
+    
+    // Show result
+    if (successCount > 0) {
+      showToast(`✅ ${successCount} akun berhasil reconnect!`, 'success');
+      console.log(`[Quick Reconnect] Complete: ${successCount} success, ${failCount} failed`);
+      
+      // Reload page after 1.5 seconds to refresh status
+      setTimeout(() => {
+        location.reload();
+      }, 1500);
+    } else {
+      showToast(`❌ Gagal reconnect akun. Silakan coba manual.`, 'error');
+      btn.disabled = false;
+      btn.innerHTML = originalHTML;
+    }
+    
+  } catch (error) {
+    console.error('[Quick Reconnect] Error:', error);
+    showToast('Error: ' + error.message, 'error');
+    btn.disabled = false;
+    btn.innerHTML = originalHTML;
+  }
+}
+
+/**
+ * Dismiss expired token alert banner
+ * Will show again after 1 hour or on next page load
+ */
+function dismissExpiredAlert() {
+  const alert = document.getElementById('expiredTokenAlert');
+  if (!alert) return;
+  
+  // Animate fade out
+  alert.style.transition = 'opacity 0.3s, transform 0.3s';
+  alert.style.opacity = '0';
+  alert.style.transform = 'translateY(-10px)';
+  
+  setTimeout(() => {
+    alert.remove();
+  }, 300);
+  
+  // Save dismissal timestamp to localStorage
+  // Will show again after 1 hour
+  localStorage.setItem('expiredAlertDismissed', Date.now().toString());
+  
+  console.log('[Quick Reconnect] Alert dismissed, will remind in 1 hour');
+  showToast('Reminder akan muncul 1 jam lagi', 'info');
+}
+
+/**
+ * Check if alert was recently dismissed
+ * @returns {boolean} True if dismissed within last hour
+ */
+function wasAlertRecentlyDismissed() {
+  const dismissedTime = localStorage.getItem('expiredAlertDismissed');
+  if (!dismissedTime) return false;
+  
+  const oneHourAgo = Date.now() - (60 * 60 * 1000); // 1 hour in ms
+  return parseInt(dismissedTime) > oneHourAgo;
+}
+
+/**
+ * Auto-detect expired tokens on page load
+ * Show alert if not recently dismissed
+ */
+function checkExpiredTokensOnLoad() {
+  // Don't auto-check if alert was dismissed within last hour
+  if (wasAlertRecentlyDismissed()) {
+    console.log('[Quick Reconnect] Alert was dismissed recently, skipping auto-check');
+    return;
+  }
+  
+  // Check token status after 2 seconds (let page load first)
+  setTimeout(async () => {
+    try {
+      const response = await fetch('/api/youtube/token-status', {
+        headers: { 'X-CSRF-Token': getCsrfToken() }
+      });
+      
+      if (!response.ok) {
+        console.warn('[Quick Reconnect] Failed to check token status');
+        return;
+      }
+      
+      const status = await response.json();
+      const expired = status.accounts?.filter(a => 
+        a.tokenStatus === 'expired' || a.tokenStatus === 'error'
+      ) || [];
+      
+      if (expired.length > 0) {
+        console.warn(`[Quick Reconnect] ⚠️ ${expired.length} akun expired:`, expired);
+        // Alert banner will be shown from EJS template
+        
+        // If alert banner exists but was hidden, show it
+        const alert = document.getElementById('expiredTokenAlert');
+        if (alert && alert.style.display === 'none') {
+          alert.style.display = 'block';
+        }
+      } else {
+        console.log('[Quick Reconnect] All accounts are active ✓');
+      }
+    } catch (err) {
+      console.error('[Quick Reconnect] Error checking token status:', err);
+    }
+  }, 2000);
+}
+
+// Run check on page load
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', checkExpiredTokensOnLoad);
+} else {
+  checkExpiredTokensOnLoad();
+}
+
+console.log('[Quick Reconnect] Feature loaded ✓');

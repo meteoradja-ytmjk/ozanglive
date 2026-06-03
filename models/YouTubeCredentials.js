@@ -112,7 +112,9 @@ class YouTubeCredentials {
     return new Promise((resolve, reject) => {
       db.all(
         `SELECT id, user_id, client_id, client_secret, refresh_token, 
-                channel_name, channel_id, is_primary, created_at
+                channel_name, channel_id, is_primary, created_at,
+                access_token, token_expires_at, last_refreshed_at, 
+                token_status, last_refresh_error
          FROM youtube_credentials 
          WHERE user_id = ?
          ORDER BY is_primary DESC, created_at ASC`,
@@ -131,7 +133,13 @@ class YouTubeCredentials {
             channelName: row.channel_name,
             channelId: row.channel_id,
             isPrimary: row.is_primary === 1,
-            createdAt: row.created_at
+            createdAt: row.created_at,
+            // Token status fields for Quick Reconnect
+            accessToken: row.access_token,
+            tokenExpiresAt: row.token_expires_at,
+            lastRefreshedAt: row.last_refreshed_at,
+            tokenStatus: row.token_status || 'unknown',
+            lastRefreshError: row.last_refresh_error
           })));
         }
       );

@@ -90,11 +90,13 @@ class YouTubeTaskScheduler {
         throw new Error('YouTube credentials not found for account');
       }
 
-      // Get access token
+      // Get access token (with cache support via accountId)
       const accessToken = await youtubeService.getAccessToken(
         credentials.client_id,
         credentials.client_secret,
-        credentials.refresh_token
+        credentials.refresh_token,
+        0,
+        credentials.id
       );
 
       // Execute based on task type

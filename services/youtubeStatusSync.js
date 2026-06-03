@@ -210,10 +210,7 @@ class YouTubeStatusSync {
       // Get access token
       let accessToken;
       try {
-        accessToken = await youtubeService.getAccessToken(
-          check.credentials.client_id,
-          check.credentials.client_secret,
-          check.credentials.refresh_token
+        accessToken = await youtubeService.getAccessToken(check.credentials.client_id, check.credentials.client_secret, check.credentials.refresh_token, 0, check.credentials.id
         );
       } catch (err) {
         console.error(`[YouTubeStatusSync] Failed to refresh access token:`, err.message);

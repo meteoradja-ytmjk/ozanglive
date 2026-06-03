@@ -189,6 +189,67 @@
     </div>
   </div>
 
+  <% 
+  // Check for expired tokens (Quick Reconnect feature)
+  const expiredAccounts = accounts.filter(a => {
+    return a.tokenStatus === 'expired' || a.tokenStatus === 'error';
+  });
+  
+  if (expiredAccounts.length > 0) { 
+  %>
+  <!-- Expired Token Alert Banner -->
+  <div id="expiredTokenAlert" class="bg-red-500/10 border-2 border-red-500/50 rounded-xl p-5 mb-6 shadow-lg">
+    <div class="flex items-start gap-4">
+      <div class="w-12 h-12 bg-red-500/20 rounded-full flex items-center justify-center flex-shrink-0 animate-pulse">
+        <i class="ti ti-alert-triangle text-red-400 text-2xl"></i>
+      </div>
+      <div class="flex-1 min-w-0">
+        <h3 class="text-red-400 font-bold text-lg mb-2 flex items-center gap-2">
+          <span>⚠️ <%= expiredAccounts.length %> Akun Perlu Reconnect</span>
+        </h3>
+        <p class="text-gray-300 text-sm mb-1 leading-relaxed">
+          Token expired karena OAuth app masih status <strong class="text-red-400">"Testing"</strong>. 
+          Token pada mode Testing expired otomatis setiap 7 hari dari Google.
+        </p>
+        <p class="text-gray-400 text-xs mb-4 leading-relaxed">
+          💡 <strong>Solusi Permanent:</strong> Publish OAuth app ke Production agar token TIDAK PERNAH EXPIRED.
+          <a href="https://console.cloud.google.com/apis/credentials/consent" target="_blank" class="text-blue-400 hover:underline ml-1">
+            Buka Google Console →
+          </a>
+        </p>
+        <div class="flex flex-wrap gap-3">
+          <button onclick="reconnectAllExpired()" 
+            class="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-5 py-2.5 rounded-lg font-semibold transition-all duration-200 flex items-center gap-2 shadow-lg">
+            <i class="ti ti-refresh"></i>
+            <span>Reconnect Semua (10 detik)</span>
+          </button>
+          <button onclick="dismissExpiredAlert()" 
+            class="bg-gray-700 hover:bg-gray-600 text-gray-300 px-4 py-2.5 rounded-lg transition-colors font-medium">
+            <i class="ti ti-clock-pause text-sm"></i>
+            <span class="ml-1">Remind 1 Jam Lagi</span>
+          </button>
+        </div>
+        <!-- Expired accounts list -->
+        <div class="mt-4 pt-4 border-t border-red-500/20">
+          <p class="text-xs text-gray-500 mb-2 font-medium">Akun yang expired:</p>
+          <div class="flex flex-wrap gap-2">
+            <% expiredAccounts.forEach(function(account) { %>
+            <span class="inline-flex items-center gap-1.5 bg-red-500/10 text-red-400 px-2.5 py-1 rounded-md text-xs font-medium">
+              <i class="ti ti-circle-x text-[10px]"></i>
+              <%= account.channelName || 'Account #' + account.id %>
+            </span>
+            <% }); %>
+          </div>
+        </div>
+      </div>
+      <button onclick="dismissExpiredAlert()" 
+        class="text-gray-500 hover:text-gray-300 transition-colors flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-700/50">
+        <i class="ti ti-x text-xl"></i>
+      </button>
+    </div>
+  </div>
+  <% } %>
+
   <!-- Token Auto-Refresh Status -->
   <div class="bg-gray-800 rounded-xl border border-gray-700/50 mb-6 overflow-hidden">
     <!-- Header - Full clickable area with proper touch target -->
