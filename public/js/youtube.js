@@ -1934,14 +1934,29 @@ async function submitRenameFolder(event) {
       showToast('Folder renamed successfully');
       closeRenameFolderModal();
       
-      // Update current folder if it was renamed
+      // Update current folder in main thumbnail gallery if it was renamed
       if (currentThumbnailFolder === oldName) {
         currentThumbnailFolder = data.folder.name;
       }
       
+      // Update current folder in thumbnail manager if it was renamed
+      if (currentThumbnailFolderManager === oldName) {
+        currentThumbnailFolderManager = data.folder.name;
+      }
+      
+      // Refresh main gallery
       fetchThumbnailFolders();
       if (currentThumbnailFolder === data.folder.name) {
         openThumbnailFolder(data.folder.name);
+      }
+      
+      // Refresh thumbnail manager if open
+      const managerModal = document.getElementById('thumbnailManagerModal');
+      if (managerModal && !managerModal.classList.contains('hidden')) {
+        fetchThumbnailFoldersForManager();
+        if (currentThumbnailFolderManager === data.folder.name) {
+          openThumbnailFolderInManager(data.folder.name);
+        }
       }
     } else {
       showToast(data.error || 'Failed to rename folder', 'error');
@@ -8004,21 +8019,52 @@ async function fetchThumbnailFoldersForManager() {
             : 'text-white border border-transparent'
         }`;
         div.onclick = () => openThumbnailFolderInManager(folder.name);
+        
+        // Create action buttons container
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'flex items-center gap-1.5 md:gap-1 shrink-0';
+        
+        // Count badge
+        const countBadge = document.createElement('span');
+        countBadge.className = 'text-xs bg-dark-600 px-2 py-0.5 rounded-full';
+        countBadge.textContent = folder.count || 0;
+        
+        // Rename button
+        const renameBtn = document.createElement('button');
+        renameBtn.type = 'button';
+        renameBtn.className = 'text-blue-400 hover:text-blue-300 px-3 py-2 hover:bg-blue-500/10 rounded transition-colors text-lg font-bold touch-manipulation';
+        renameBtn.title = 'Rename';
+        renameBtn.innerHTML = '✏️';
+        renameBtn.onclick = (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          openRenameFolderModalManager(folder.name);
+        };
+        
+        // Delete button
+        const deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.className = 'text-red-500 hover:text-red-400 px-3 py-2 hover:bg-red-500/10 rounded transition-colors text-lg font-bold touch-manipulation';
+        deleteBtn.title = 'Delete';
+        deleteBtn.innerHTML = '🗑️';
+        deleteBtn.onclick = (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          deleteThumbnailFolderManager(folder.name);
+        };
+        
+        actionsDiv.appendChild(countBadge);
+        actionsDiv.appendChild(renameBtn);
+        actionsDiv.appendChild(deleteBtn);
+        
         div.innerHTML = `
           <div class="flex items-center gap-2 flex-1 min-w-0">
             <i class="ti ti-folder text-gray-400 shrink-0 text-base"></i>
             <span class="truncate font-medium">${escapeHtml(folder.name)}</span>
           </div>
-          <div class="flex items-center gap-1.5 md:gap-1 shrink-0">
-            <span class="text-xs bg-dark-600 px-2 py-0.5 rounded-full">${folder.count || 0}</span>
-            <button type="button" class="text-blue-400 hover:text-blue-300 px-2.5 py-1.5 md:px-2 md:py-1 hover:bg-blue-500/10 rounded transition-colors text-base md:text-sm font-bold" onclick="event.stopPropagation(); openRenameFolderModal('${escapeJsString(folder.name)}')" title="Rename">
-              ✏️
-            </button>
-            <button type="button" class="text-red-500 hover:text-red-400 px-2.5 py-1.5 md:px-2 md:py-1 hover:bg-red-500/10 rounded transition-colors text-base md:text-sm font-bold" onclick="event.stopPropagation(); deleteThumbnailFolder('${escapeJsString(folder.name)}')" title="Delete">
-              🗑️
-            </button>
-          </div>
         `;
+        div.appendChild(actionsDiv);
+        
         folderList.appendChild(div);
       });
       
@@ -8135,22 +8181,50 @@ async function fetchThumbnailsForManager(folderName) {
       thumbnails.forEach((thumb, index) => {
         const div = document.createElement('div');
         div.className = 'relative group aspect-video bg-dark-600 rounded-xl overflow-hidden border-2 border-transparent hover:border-primary transition-all cursor-pointer shadow-lg hover:shadow-xl';
-        div.innerHTML = `
-          <img src="${thumb.url}" alt="${thumb.filename}" class="w-full h-full object-cover">
-          <div class="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
-            <button onclick="viewThumbnailInManager('${escapeJsString(thumb.url)}', '${escapeJsString(thumb.filename)}')" 
-              class="w-10 h-10 bg-blue-500 hover:bg-blue-600 rounded-lg flex items-center justify-center text-white transition-colors shadow-lg" title="View">
-              <i class="ti ti-eye text-lg"></i>
-            </button>
-            <button onclick="deleteThumbnailInManager('${escapeJsString(thumb.filename)}', '${escapeJsString(folder)}')" 
-              class="w-10 h-10 bg-red-500 hover:bg-red-600 rounded-lg flex items-center justify-center text-white transition-colors shadow-lg" title="Delete">
-              <i class="ti ti-trash text-lg"></i>
-            </button>
-          </div>
-          <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent p-2.5">
-            <p class="text-xs md:text-sm text-white truncate font-medium">${thumb.filename}</p>
-          </div>
-        `;
+        
+        // Create image
+        const img = document.createElement('img');
+        img.src = thumb.url;
+        img.alt = thumb.filename;
+        img.className = 'w-full h-full object-cover';
+        
+        // Create overlay with buttons
+        const overlay = document.createElement('div');
+        overlay.className = 'absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3';
+        
+        // View button
+        const viewBtn = document.createElement('button');
+        viewBtn.className = 'w-12 h-12 bg-blue-500 hover:bg-blue-600 active:bg-blue-700 rounded-lg flex items-center justify-center text-white transition-colors shadow-lg touch-manipulation';
+        viewBtn.title = 'View';
+        viewBtn.innerHTML = '<i class="ti ti-eye text-xl"></i>';
+        viewBtn.onclick = (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          viewThumbnailInManager(thumb.url, thumb.filename);
+        };
+        
+        // Delete button
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'w-12 h-12 bg-red-500 hover:bg-red-600 active:bg-red-700 rounded-lg flex items-center justify-center text-white transition-colors shadow-lg touch-manipulation';
+        deleteBtn.title = 'Delete';
+        deleteBtn.innerHTML = '<i class="ti ti-trash text-xl"></i>';
+        deleteBtn.onclick = (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          deleteThumbnailInManager(thumb.filename, folder);
+        };
+        
+        overlay.appendChild(viewBtn);
+        overlay.appendChild(deleteBtn);
+        
+        // Create filename label
+        const label = document.createElement('div');
+        label.className = 'absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent p-2.5 pointer-events-none';
+        label.innerHTML = `<p class="text-xs md:text-sm text-white truncate font-medium">${escapeHtml(thumb.filename)}</p>`;
+        
+        div.appendChild(img);
+        div.appendChild(overlay);
+        div.appendChild(label);
         gallery.appendChild(div);
       });
       
@@ -8233,13 +8307,17 @@ async function deleteThumbnailInManager(filename, folder) {
   if (!confirm(`Delete thumbnail "${filename}"?`)) return;
   
   try {
-    const response = await fetch('/api/thumbnails', {
+    // Use the correct endpoint format: DELETE /api/thumbnails/:filename?folder=...
+    let url = `/api/thumbnails/${encodeURIComponent(filename)}`;
+    if (folder) {
+      url += `?folder=${encodeURIComponent(folder)}`;
+    }
+    
+    const response = await fetch(url, {
       method: 'DELETE',
       headers: {
-        'Content-Type': 'application/json',
         'X-CSRF-Token': getCsrfToken()
-      },
-      body: JSON.stringify({ filename, folder: folder || '' })
+      }
     });
     
     const data = await response.json();
@@ -8254,6 +8332,55 @@ async function deleteThumbnailInManager(filename, folder) {
   } catch (error) {
     console.error('[ThumbnailManager] Delete error:', error);
     showToast('An error occurred', 'error');
+  }
+}
+
+// Rename folder in manager (separate from main thumbnail gallery)
+function openRenameFolderModalManager(folderName) {
+  const modal = document.getElementById('renameFolderModal');
+  if (!modal) {
+    console.error('[ThumbnailManager] Rename modal not found');
+    return;
+  }
+  
+  modal.classList.remove('hidden');
+  document.getElementById('renameFolderOldName').value = folderName;
+  document.getElementById('renameFolderNewName').value = folderName;
+  document.getElementById('renameFolderNewName').focus();
+  document.getElementById('renameFolderNewName').select();
+}
+
+// Delete thumbnail folder in manager
+async function deleteThumbnailFolderManager(folderName) {
+  if (!confirm(`Are you sure you want to delete folder "${folderName}" and all its thumbnails?`)) {
+    return;
+  }
+  
+  try {
+    const response = await fetch(`/api/thumbnail-folders/${encodeURIComponent(folderName)}`, {
+      method: 'DELETE',
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      showToast('Folder deleted successfully');
+      
+      // Go back to root if current folder was deleted
+      if (currentThumbnailFolderManager === folderName) {
+        openThumbnailFolderInManager(null);
+      }
+      
+      fetchThumbnailFoldersForManager();
+    } else {
+      showToast(data.error || 'Failed to delete folder', 'error');
+    }
+  } catch (error) {
+    console.error('[ThumbnailManager] Error deleting folder:', error);
+    showToast('Failed to delete folder', 'error');
   }
 }
 

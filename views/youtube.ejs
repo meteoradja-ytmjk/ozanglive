@@ -32,6 +32,20 @@
     border-radius: 12px;
     transition: box-shadow 0.3s ease, background 0.3s ease;
   }
+  
+  /* Better touch responsiveness for buttons */
+  .touch-manipulation {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  
+  /* Ensure minimum touch target size (48x48px recommended) */
+  button.touch-manipulation {
+    min-width: 44px;
+    min-height: 44px;
+  }
 </style>
 
 <div class="max-w-6xl mx-auto">
