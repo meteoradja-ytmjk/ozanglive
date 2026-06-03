@@ -8401,23 +8401,8 @@ async function handleThumbnailManagerUpload(event) {
         if (folderCountEl) folderCountEl.textContent = totalCount;
         if (folderCountMobile) folderCountMobile.textContent = totalCount;
         
-        // Update folder badge
-        const folderItems = document.querySelectorAll('.folder-item-manager');
-        folderItems.forEach(item => {
-          const itemName = item.querySelector('span.truncate')?.textContent;
-          if (itemName === folder) {
-            const badge = item.querySelector('span.text-xs');
-            if (badge) {
-              badge.textContent = totalCount;
-              // Animate badge
-              badge.style.transition = 'all 0.3s ease';
-              badge.style.transform = 'scale(1.3)';
-              setTimeout(() => {
-                badge.style.transform = 'scale(1)';
-              }, 300);
-            }
-          }
-        });
+        // Update folder badge with actual count
+        updateFolderCountBadgeRealtime(folder, totalCount);
       }
     } else {
       showToast(data.error || 'Failed to upload thumbnails', 'error');
@@ -8446,17 +8431,22 @@ function viewThumbnailInManager(url, filename) {
   document.body.appendChild(lightbox);
 }
 
-// Delete thumbnail in manager - REALTIME UPDATE
+// Delete thumbnail in manager - REALTIME UPDATE (FIXED)
 async function deleteThumbnailInManager(filename, folder) {
+  console.log('[DELETE] Attempting to delete:', filename, 'from folder:', folder);
+  
   if (!confirm(`Delete thumbnail "${filename}"?`)) return;
   
   // REALTIME: Langsung hapus dari UI dulu untuk instant feedback
   const thumbnailCards = document.querySelectorAll('#thumbnailManagerGallery > div');
   let deletedCard = null;
+  
   thumbnailCards.forEach(card => {
     const img = card.querySelector('img');
+    console.log('[DELETE] Checking card, img.alt:', img?.alt, 'vs filename:', filename);
     if (img && img.alt === filename) {
       deletedCard = card;
+      console.log('[DELETE] Found card to delete!');
       // Animate out
       card.style.transition = 'all 0.3s ease';
       card.style.opacity = '0';
@@ -8464,12 +8454,20 @@ async function deleteThumbnailInManager(filename, folder) {
     }
   });
   
+  if (!deletedCard) {
+    console.error('[DELETE] Card not found for filename:', filename);
+    showToast('Thumbnail card not found in UI', 'error');
+    return;
+  }
+  
   try {
     // Use the correct endpoint format: DELETE /api/thumbnails/:filename?folder=...
     let url = `/api/thumbnails/${encodeURIComponent(filename)}`;
     if (folder) {
       url += `?folder=${encodeURIComponent(folder)}`;
     }
+    
+    console.log('[DELETE] API URL:', url);
     
     const response = await fetch(url, {
       method: 'DELETE',
@@ -8479,11 +8477,15 @@ async function deleteThumbnailInManager(filename, folder) {
     });
     
     const data = await response.json();
+    console.log('[DELETE] API Response:', data);
     
     if (data.success) {
       // REALTIME: Remove dari DOM setelah animasi
       setTimeout(() => {
-        if (deletedCard) deletedCard.remove();
+        if (deletedCard) {
+          deletedCard.remove();
+          console.log('[DELETE] Card removed from DOM');
+        }
         
         // Update counts
         const countEl = document.getElementById('thumbnailManagerCount');
@@ -8491,6 +8493,8 @@ async function deleteThumbnailInManager(filename, folder) {
         const folderCountMobile = document.getElementById('currentFolderThumbnailCountMobile');
         
         const remaining = document.querySelectorAll('#thumbnailManagerGallery > div').length;
+        console.log('[DELETE] Remaining thumbnails:', remaining);
+        
         if (countEl) countEl.textContent = `(${remaining})`;
         if (folderCountEl) folderCountEl.textContent = remaining;
         if (folderCountMobile) folderCountMobile.textContent = remaining;
@@ -8501,13 +8505,14 @@ async function deleteThumbnailInManager(filename, folder) {
           if (empty) empty.classList.remove('hidden');
         }
         
-        // Update folder count badge
-        updateFolderCountBadge(folder);
+        // Update folder count badge with actual count
+        updateFolderCountBadgeRealtime(folder, remaining);
       }, 300);
       
       showToast('Thumbnail deleted', 'success');
     } else {
       // Rollback UI if failed
+      console.error('[DELETE] API Error:', data.error);
       if (deletedCard) {
         deletedCard.style.opacity = '1';
         deletedCard.style.transform = 'scale(1)';
@@ -8515,7 +8520,7 @@ async function deleteThumbnailInManager(filename, folder) {
       showToast(data.error || 'Failed to delete thumbnail', 'error');
     }
   } catch (error) {
-    console.error('[ThumbnailManager] Delete error:', error);
+    console.error('[DELETE] Exception:', error);
     // Rollback UI
     if (deletedCard) {
       deletedCard.style.opacity = '1';
@@ -8525,19 +8530,33 @@ async function deleteThumbnailInManager(filename, folder) {
   }
 }
 
-// Update folder count badge after delete/upload
-function updateFolderCountBadge(folderName) {
+// Update folder count badge with actual count (FIXED)
+function updateFolderCountBadgeRealtime(folderName, actualCount) {
   if (!folderName) return;
+  
+  console.log('[BADGE] Updating folder:', folderName, 'to count:', actualCount);
   
   const folderItems = document.querySelectorAll('.folder-item-manager');
   folderItems.forEach(item => {
     const itemName = item.querySelector('span.truncate')?.textContent;
     if (itemName === folderName) {
-      const badge = item.querySelector('span.text-xs');
+      const badge = item.querySelector('span.text-xs.bg-dark-600');
       if (badge) {
-        const currentCount = parseInt(badge.textContent) || 0;
-        const newCount = Math.max(0, currentCount - 1);
-        badge.textContent = newCount;
+        console.log('[BADGE] Found badge, updating to:', actualCount);
+        badge.textContent = actualCount;
+        
+        // Animate badge
+        badge.style.transition = 'all 0.3s ease';
+        badge.style.transform = 'scale(1.3)';
+        setTimeout(() => {
+          badge.style.transform = 'scale(1)';
+        }, 300);
+      } else {
+        console.log('[BADGE] Badge not found in folder item');
+      }
+    }
+  });
+}
         
         // Animate badge
         badge.style.transition = 'all 0.3s ease';
