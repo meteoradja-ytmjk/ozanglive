@@ -1785,25 +1785,25 @@ async function submitAddThumbnailFolder(event) {
   
   const folderName = document.getElementById('newThumbnailFolderName').value.trim();
   if (!folderName) {
-    showToast('Please enter folder name', 'error');
+    showToast('Masukkan nama folder', 'error');
     return;
   }
   
   const csrfToken = getCsrfToken();
-  console.log('[THUMBNAIL] CSRF Token:', csrfToken ? 'present (' + csrfToken.substring(0, 10) + '...)' : 'MISSING');
+  console.log('[ADD FOLDER] CSRF Token:', csrfToken ? 'present (' + csrfToken.substring(0, 10) + '...)' : 'MISSING');
   
   if (!csrfToken) {
-    showToast('Session expired. Please refresh the page.', 'error');
+    showToast('Sesi expired. Silakan refresh halaman.', 'error');
     return;
   }
   
   const btn = document.getElementById('addThumbnailFolderBtn2');
   const originalText = btn.innerHTML;
-  btn.innerHTML = '<i class="ti ti-loader animate-spin"></i> Creating...';
+  btn.innerHTML = '<i class="ti ti-loader animate-spin"></i> Membuat...';
   btn.disabled = true;
   
   try {
-    console.log('[THUMBNAIL] Creating folder:', folderName);
+    console.log('[ADD FOLDER] Creating folder:', folderName);
     const response = await fetch('/api/thumbnail-folders', {
       method: 'POST',
       headers: {
@@ -1813,36 +1813,136 @@ async function submitAddThumbnailFolder(event) {
       body: JSON.stringify({ name: folderName })
     });
     
-    console.log('[THUMBNAIL] Response status:', response.status);
+    console.log('[ADD FOLDER] Response status:', response.status);
     
     // Check if response is JSON
     const contentType = response.headers.get('content-type');
     if (!contentType || !contentType.includes('application/json')) {
-      console.error('[THUMBNAIL] Non-JSON response:', contentType);
+      console.error('[ADD FOLDER] Non-JSON response:', contentType);
       const text = await response.text();
-      console.error('[THUMBNAIL] Response text:', text.substring(0, 200));
-      showToast('Server error. Please refresh the page and try again.', 'error');
+      console.error('[ADD FOLDER] Response text:', text.substring(0, 200));
+      showToast('Server error. Silakan refresh halaman.', 'error');
       return;
     }
     
     const data = await response.json();
-    console.log('[THUMBNAIL] Response:', data);
+    console.log('[ADD FOLDER] Response:', data);
     
     if (data.success) {
-      showToast('Thumbnail folder created: ' + data.folder.name);
+      showToast('Folder berhasil dibuat: ' + data.folder.name, 'success');
       closeAddThumbnailFolderModal();
+      
+      // REALTIME: Add folder to UI immediately
+      console.log('[ADD FOLDER] Adding folder to UI realtime');
+      addFolderToManagerRealtime(data.folder.name, 0);
+      
+      // Also refresh main gallery
       fetchThumbnailFolders();
-      openThumbnailFolder(data.folder.name);
     } else {
-      showToast(data.error || 'Failed to create folder', 'error');
+      showToast(data.error || 'Gagal membuat folder', 'error');
     }
   } catch (error) {
-    console.error('[THUMBNAIL] Error creating folder:', error);
-    showToast('Failed to create folder', 'error');
+    console.error('[ADD FOLDER] Error creating folder:', error);
+    showToast('Gagal membuat folder', 'error');
   } finally {
     btn.innerHTML = originalText;
     btn.disabled = false;
   }
+}
+
+// REALTIME: Add newly created folder to manager UI
+function addFolderToManagerRealtime(folderName, count = 0) {
+  console.log('[ADD FOLDER REALTIME] Adding folder:', folderName);
+  
+  const folderList = document.getElementById('thumbnailManagerFolderList');
+  const emptyState = document.getElementById('thumbnailManagerFolderEmpty');
+  
+  if (!folderList) {
+    console.error('[ADD FOLDER REALTIME] Folder list not found');
+    return;
+  }
+  
+  // Hide empty state if visible
+  if (emptyState && !emptyState.classList.contains('hidden')) {
+    console.log('[ADD FOLDER REALTIME] Hiding empty state');
+    emptyState.classList.add('hidden');
+  }
+  
+  // Show folder list
+  if (folderList.classList.contains('hidden')) {
+    console.log('[ADD FOLDER REALTIME] Showing folder list');
+    folderList.classList.remove('hidden');
+  }
+  
+  // Create folder item
+  const div = document.createElement('button');
+  div.type = 'button';
+  div.className = 'w-full folder-item-manager flex items-center justify-between gap-2 px-3 py-2.5 md:py-2 text-sm rounded-lg transition-colors hover:bg-dark-600 bg-primary/20 text-primary border border-primary/30';
+  div.onclick = () => openThumbnailFolderInManager(folderName);
+  
+  // Create action buttons
+  const actionsDiv = document.createElement('div');
+  actionsDiv.className = 'flex items-center gap-1.5 md:gap-1 shrink-0';
+  
+  // Count badge
+  const countBadge = document.createElement('span');
+  countBadge.className = 'text-xs bg-dark-600 px-2 py-0.5 rounded-full';
+  countBadge.textContent = count;
+  
+  // Rename button
+  const renameBtn = document.createElement('button');
+  renameBtn.type = 'button';
+  renameBtn.className = 'text-blue-400 hover:text-blue-300 px-3 py-2 hover:bg-blue-500/10 rounded transition-colors text-lg font-bold touch-manipulation';
+  renameBtn.title = 'Rename';
+  renameBtn.innerHTML = '✏️';
+  renameBtn.onclick = (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    openRenameFolderModalManager(folderName);
+  };
+  
+  // Delete button
+  const deleteBtn = document.createElement('button');
+  deleteBtn.type = 'button';
+  deleteBtn.className = 'text-red-500 hover:text-red-400 px-3 py-2 hover:bg-red-500/10 rounded transition-colors text-lg font-bold touch-manipulation';
+  deleteBtn.title = 'Delete';
+  deleteBtn.innerHTML = '🗑️';
+  deleteBtn.onclick = (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    deleteThumbnailFolderManager(folderName);
+  };
+  
+  actionsDiv.appendChild(countBadge);
+  actionsDiv.appendChild(renameBtn);
+  actionsDiv.appendChild(deleteBtn);
+  
+  div.innerHTML = `
+    <div class="flex items-center gap-2 flex-1 min-w-0">
+      <i class="ti ti-folder text-gray-400 shrink-0 text-base"></i>
+      <span class="truncate font-medium">${escapeHtml(folderName)}</span>
+    </div>
+  `;
+  div.appendChild(actionsDiv);
+  
+  // Animate in with slide from top
+  div.style.opacity = '0';
+  div.style.transform = 'translateY(-10px)';
+  div.style.transition = 'all 0.3s ease';
+  
+  folderList.appendChild(div);
+  
+  // Trigger animation
+  setTimeout(() => {
+    div.style.opacity = '1';
+    div.style.transform = 'translateY(0)';
+  }, 10);
+  
+  // Auto-open the new folder
+  setTimeout(() => {
+    console.log('[ADD FOLDER REALTIME] Auto-opening new folder');
+    openThumbnailFolderInManager(folderName);
+  }, 350);
 }
 
 function closeCreateFolderModal() {
@@ -8622,14 +8722,15 @@ function openRenameFolderModalManager(folderName) {
 async function deleteThumbnailFolderManager(folderName) {
   console.log('[DELETE FOLDER] Attempting to delete:', folderName);
   
-  if (!confirm(`Are you sure you want to delete folder "${folderName}" and all its thumbnails?`)) {
+  if (!confirm(`Yakin ingin menghapus folder "${folderName}" dan semua thumbnailnya?`)) {
     console.log('[DELETE FOLDER] User cancelled');
     return;
   }
   
-  // REALTIME: Langsung hapus dari UI untuk instant feedback
+  // Find the delete button and give instant feedback
   const folderItems = document.querySelectorAll('.folder-item-manager');
   let deletedItem = null;
+  let deleteButton = null;
   
   console.log('[DELETE FOLDER] Found', folderItems.length, 'folder items');
   
@@ -8638,19 +8739,31 @@ async function deleteThumbnailFolderManager(folderName) {
     console.log('[DELETE FOLDER] Checking item:', itemName);
     if (itemName === folderName) {
       deletedItem = item;
+      // Find delete button in this item
+      deleteButton = item.querySelector('button[title="Delete"]');
       console.log('[DELETE FOLDER] Found folder to delete!');
-      // Animate out
-      item.style.transition = 'all 0.3s ease';
-      item.style.opacity = '0';
-      item.style.transform = 'translateX(-20px)';
     }
   });
   
   if (!deletedItem) {
     console.error('[DELETE FOLDER] Folder item not found in DOM:', folderName);
-    showToast('Folder not found in UI', 'error');
+    showToast('Folder tidak ditemukan', 'error');
     return;
   }
+  
+  // INSTANT FEEDBACK: Disable button and change appearance
+  if (deleteButton) {
+    console.log('[DELETE FOLDER] Disabling delete button');
+    deleteButton.disabled = true;
+    deleteButton.innerHTML = '<i class="ti ti-loader animate-spin text-sm"></i>';
+    deleteButton.style.opacity = '0.5';
+    deleteButton.style.pointerEvents = 'none';
+  }
+  
+  // REALTIME: Animate out for instant feedback
+  deletedItem.style.transition = 'all 0.3s ease';
+  deletedItem.style.opacity = '0';
+  deletedItem.style.transform = 'translateX(-20px)';
   
   try {
     const url = `/api/thumbnail-folders/${encodeURIComponent(folderName)}`;
@@ -8667,7 +8780,7 @@ async function deleteThumbnailFolderManager(folderName) {
     console.log('[DELETE FOLDER] API Response:', data);
     
     if (data.success) {
-      showToast('Folder deleted successfully', 'success');
+      showToast('Folder berhasil dihapus', 'success');
       
       // REALTIME: Remove dari DOM setelah animasi
       setTimeout(() => {
@@ -8709,7 +8822,13 @@ async function deleteThumbnailFolderManager(folderName) {
         deletedItem.style.opacity = '1';
         deletedItem.style.transform = 'translateX(0)';
       }
-      showToast(data.error || 'Failed to delete folder', 'error');
+      if (deleteButton) {
+        deleteButton.disabled = false;
+        deleteButton.innerHTML = '🗑️';
+        deleteButton.style.opacity = '1';
+        deleteButton.style.pointerEvents = 'auto';
+      }
+      showToast(data.error || 'Gagal menghapus folder', 'error');
     }
   } catch (error) {
     console.error('[DELETE FOLDER] Exception:', error);
@@ -8718,7 +8837,13 @@ async function deleteThumbnailFolderManager(folderName) {
       deletedItem.style.opacity = '1';
       deletedItem.style.transform = 'translateX(0)';
     }
-    showToast('Failed to delete folder', 'error');
+    if (deleteButton) {
+      deleteButton.disabled = false;
+      deleteButton.innerHTML = '🗑️';
+      deleteButton.style.opacity = '1';
+      deleteButton.style.pointerEvents = 'auto';
+    }
+    showToast('Gagal menghapus folder', 'error');
   }
 }
 
