@@ -1891,15 +1891,58 @@ async function submitCreateFolder(event) {
 
 // Rename folder modal functions
 function openRenameFolderModal(folderName) {
-  document.getElementById('renameFolderModal').classList.remove('hidden');
-  document.getElementById('renameFolderOldName').value = folderName;
-  document.getElementById('renameFolderNewName').value = folderName;
-  document.getElementById('renameFolderNewName').focus();
-  document.getElementById('renameFolderNewName').select();
+  const modal = document.getElementById('renameFolderModal');
+  const oldNameInput = document.getElementById('renameFolderOldName');
+  const newNameInput = document.getElementById('renameFolderNewName');
+  const oldNameDisplay = document.getElementById('renameFolderOldNameDisplay');
+  const newNameDisplay = document.getElementById('renameFolderNewNameDisplay');
+  const charCount = document.getElementById('renameFolderCharCount');
+  
+  if (modal && oldNameInput && newNameInput) {
+    modal.classList.remove('hidden');
+    oldNameInput.value = folderName;
+    newNameInput.value = folderName;
+    
+    // Update preview displays
+    if (oldNameDisplay) oldNameDisplay.textContent = folderName;
+    if (newNameDisplay) newNameDisplay.textContent = folderName;
+    if (charCount) charCount.textContent = folderName.length;
+    
+    newNameInput.focus();
+    newNameInput.select();
+  }
 }
 
 function closeRenameFolderModal() {
-  document.getElementById('renameFolderModal').classList.add('hidden');
+  const modal = document.getElementById('renameFolderModal');
+  if (modal) {
+    modal.classList.add('hidden');
+  }
+}
+
+// Update preview box as user types
+function updateRenameFolderPreview() {
+  const newNameInput = document.getElementById('renameFolderNewName');
+  const newNameDisplay = document.getElementById('renameFolderNewNameDisplay');
+  const charCount = document.getElementById('renameFolderCharCount');
+  
+  if (newNameInput && newNameDisplay && charCount) {
+    const newName = newNameInput.value.trim();
+    newNameDisplay.textContent = newName || '-';
+    charCount.textContent = newNameInput.value.length;
+    
+    // Change color if approaching limit
+    if (newNameInput.value.length > 40) {
+      charCount.classList.add('text-yellow-400');
+      charCount.classList.remove('text-gray-500', 'text-red-400');
+    } else if (newNameInput.value.length === 50) {
+      charCount.classList.add('text-red-400');
+      charCount.classList.remove('text-gray-500', 'text-yellow-400');
+    } else {
+      charCount.classList.add('text-gray-500');
+      charCount.classList.remove('text-yellow-400', 'text-red-400');
+    }
+  }
 }
 
 async function submitRenameFolder(event) {
@@ -8571,32 +8614,31 @@ function updateFolderCountBadgeRealtime(folderName, actualCount) {
 
 // Rename folder in manager (separate from main thumbnail gallery)
 function openRenameFolderModalManager(folderName) {
-  const modal = document.getElementById('renameFolderModal');
-  if (!modal) {
-    console.error('[ThumbnailManager] Rename modal not found');
-    return;
-  }
-  
-  modal.classList.remove('hidden');
-  document.getElementById('renameFolderOldName').value = folderName;
-  document.getElementById('renameFolderNewName').value = folderName;
-  document.getElementById('renameFolderNewName').focus();
-  document.getElementById('renameFolderNewName').select();
+  console.log('[RENAME] Opening modal for folder:', folderName);
+  openRenameFolderModal(folderName);
 }
 
-// Delete thumbnail folder in manager - REALTIME UPDATE
+// Delete thumbnail folder in manager - REALTIME UPDATE (FIXED WITH LOGGING)
 async function deleteThumbnailFolderManager(folderName) {
+  console.log('[DELETE FOLDER] Attempting to delete:', folderName);
+  
   if (!confirm(`Are you sure you want to delete folder "${folderName}" and all its thumbnails?`)) {
+    console.log('[DELETE FOLDER] User cancelled');
     return;
   }
   
   // REALTIME: Langsung hapus dari UI untuk instant feedback
   const folderItems = document.querySelectorAll('.folder-item-manager');
   let deletedItem = null;
+  
+  console.log('[DELETE FOLDER] Found', folderItems.length, 'folder items');
+  
   folderItems.forEach(item => {
     const itemName = item.querySelector('span.truncate')?.textContent;
+    console.log('[DELETE FOLDER] Checking item:', itemName);
     if (itemName === folderName) {
       deletedItem = item;
+      console.log('[DELETE FOLDER] Found folder to delete!');
       // Animate out
       item.style.transition = 'all 0.3s ease';
       item.style.opacity = '0';
@@ -8604,8 +8646,17 @@ async function deleteThumbnailFolderManager(folderName) {
     }
   });
   
+  if (!deletedItem) {
+    console.error('[DELETE FOLDER] Folder item not found in DOM:', folderName);
+    showToast('Folder not found in UI', 'error');
+    return;
+  }
+  
   try {
-    const response = await fetch(`/api/thumbnail-folders/${encodeURIComponent(folderName)}`, {
+    const url = `/api/thumbnail-folders/${encodeURIComponent(folderName)}`;
+    console.log('[DELETE FOLDER] API URL:', url);
+    
+    const response = await fetch(url, {
       method: 'DELETE',
       headers: {
         'X-CSRF-Token': getCsrfToken()
@@ -8613,30 +8664,39 @@ async function deleteThumbnailFolderManager(folderName) {
     });
     
     const data = await response.json();
+    console.log('[DELETE FOLDER] API Response:', data);
     
     if (data.success) {
       showToast('Folder deleted successfully', 'success');
       
       // REALTIME: Remove dari DOM setelah animasi
       setTimeout(() => {
-        if (deletedItem) deletedItem.remove();
+        if (deletedItem) {
+          deletedItem.remove();
+          console.log('[DELETE FOLDER] Folder removed from DOM');
+        }
         
         // Check if there are remaining folders
         const remainingFolders = document.querySelectorAll('.folder-item-manager').length;
+        console.log('[DELETE FOLDER] Remaining folders:', remainingFolders);
+        
         const folderList = document.getElementById('thumbnailManagerFolderList');
         const emptyState = document.getElementById('thumbnailManagerFolderEmpty');
         
         if (remainingFolders === 0) {
           // No more folders, show empty state
+          console.log('[DELETE FOLDER] No folders left, showing empty state');
           if (folderList) folderList.classList.add('hidden');
           if (emptyState) emptyState.classList.remove('hidden');
           showEmptyFolderState();
         } else {
           // Open first remaining folder
+          console.log('[DELETE FOLDER] Opening first remaining folder');
           const firstFolder = document.querySelector('.folder-item-manager');
           if (firstFolder) {
             const firstFolderName = firstFolder.querySelector('span.truncate')?.textContent;
             if (firstFolderName) {
+              console.log('[DELETE FOLDER] Auto-opening:', firstFolderName);
               openThumbnailFolderInManager(firstFolderName);
             }
           }
@@ -8644,6 +8704,7 @@ async function deleteThumbnailFolderManager(folderName) {
       }, 300);
     } else {
       // Rollback UI if failed
+      console.error('[DELETE FOLDER] API Error:', data.error);
       if (deletedItem) {
         deletedItem.style.opacity = '1';
         deletedItem.style.transform = 'translateX(0)';
@@ -8651,7 +8712,7 @@ async function deleteThumbnailFolderManager(folderName) {
       showToast(data.error || 'Failed to delete folder', 'error');
     }
   } catch (error) {
-    console.error('[ThumbnailManager] Error deleting folder:', error);
+    console.error('[DELETE FOLDER] Exception:', error);
     // Rollback UI
     if (deletedItem) {
       deletedItem.style.opacity = '1';
