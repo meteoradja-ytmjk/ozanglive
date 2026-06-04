@@ -8700,17 +8700,6 @@ function updateFolderCountBadgeRealtime(folderName, actualCount) {
     }
   });
 }
-        
-        // Animate badge
-        badge.style.transition = 'all 0.3s ease';
-        badge.style.transform = 'scale(1.3)';
-        setTimeout(() => {
-          badge.style.transform = 'scale(1)';
-        }, 300);
-      }
-    }
-  });
-}
 
 // Rename folder in manager (separate from main thumbnail gallery)
 function openRenameFolderModalManager(folderName) {
