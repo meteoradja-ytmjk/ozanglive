@@ -1,6 +1,59 @@
 const { db } = require('../db/database');
+const { encrypt, decrypt, isEncrypted } = require('../utils/encryption');
 
 class YouTubeCredentials {
+  /**
+   * Encrypt sensitive fields before storing
+   * @private
+   */
+  static _encryptSensitiveFields(data) {
+    const encrypted = { ...data };
+    
+    // Encrypt client_secret if provided and not already encrypted
+    if (data.clientSecret && !isEncrypted(data.clientSecret)) {
+      encrypted.clientSecret = encrypt(data.clientSecret);
+    }
+    
+    // Encrypt refresh_token if provided and not already encrypted
+    if (data.refreshToken && !isEncrypted(data.refreshToken)) {
+      encrypted.refreshToken = encrypt(data.refreshToken);
+    }
+    
+    return encrypted;
+  }
+  
+  /**
+   * Decrypt sensitive fields after retrieving
+   * @private
+   */
+  static _decryptSensitiveFields(data) {
+    if (!data) return null;
+    
+    const decrypted = { ...data };
+    
+    // Decrypt client_secret if encrypted
+    if (data.clientSecret && isEncrypted(data.clientSecret)) {
+      try {
+        decrypted.clientSecret = decrypt(data.clientSecret);
+      } catch (err) {
+        console.error('[YouTubeCredentials] Failed to decrypt client_secret:', err.message);
+        decrypted.clientSecret = null; // Mark as invalid
+      }
+    }
+    
+    // Decrypt refresh_token if encrypted
+    if (data.refreshToken && isEncrypted(data.refreshToken)) {
+      try {
+        decrypted.refreshToken = decrypt(data.refreshToken);
+      } catch (err) {
+        console.error('[YouTubeCredentials] Failed to decrypt refresh_token:', err.message);
+        decrypted.refreshToken = null; // Mark as invalid
+      }
+    }
+    
+    return decrypted;
+  }
+  
   /**
    * Create new YouTube credentials for a user (supports multiple accounts)
    * @param {string} userId - User ID
@@ -20,12 +73,15 @@ class YouTubeCredentials {
         // Check if this is the first account for the user (will be primary)
         const existingAccounts = await this.findAllByUserId(userId);
         const isPrimary = existingAccounts.length === 0 ? 1 : 0;
+        
+        // SECURITY FIX: Encrypt sensitive fields before storing
+        const encrypted = this._encryptSensitiveFields({ clientSecret, refreshToken });
 
         db.run(
           `INSERT INTO youtube_credentials 
            (user_id, client_id, client_secret, refresh_token, channel_name, channel_id, is_primary)
            VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [userId, clientId, clientSecret, refreshToken, channelName, channelId, isPrimary],
+          [userId, clientId, encrypted.clientSecret, encrypted.refreshToken, channelName, channelId, isPrimary],
           function(err) {
             if (err) {
               reject(err);
@@ -35,8 +91,8 @@ class YouTubeCredentials {
               id: this.lastID,
               userId,
               clientId,
-              clientSecret,
-              refreshToken,
+              clientSecret, // Return decrypted for immediate use
+              refreshToken, // Return decrypted for immediate use
               channelName,
               channelId,
               isPrimary
@@ -124,7 +180,8 @@ class YouTubeCredentials {
             reject(err);
             return;
           }
-          resolve((rows || []).map(row => ({
+          // SECURITY FIX: Decrypt sensitive fields before returning
+          const decryptedRows = (rows || []).map(row => this._decryptSensitiveFields({
             id: row.id,
             userId: row.user_id,
             clientId: row.client_id,
@@ -140,7 +197,8 @@ class YouTubeCredentials {
             lastRefreshedAt: row.last_refreshed_at,
             tokenStatus: row.token_status || 'unknown',
             lastRefreshError: row.last_refresh_error
-          })));
+          }));
+          resolve(decryptedRows);
         }
       );
     });
@@ -168,7 +226,8 @@ class YouTubeCredentials {
             resolve(null);
             return;
           }
-          resolve({
+          // SECURITY FIX: Decrypt sensitive fields before returning
+          resolve(this._decryptSensitiveFields({
             id: row.id,
             userId: row.user_id,
             clientId: row.client_id,
@@ -178,7 +237,7 @@ class YouTubeCredentials {
             channelId: row.channel_id,
             isPrimary: row.is_primary === 1,
             createdAt: row.created_at
-          });
+          }));
         }
       );
     });
@@ -208,7 +267,8 @@ class YouTubeCredentials {
             resolve(null);
             return;
           }
-          resolve({
+          // SECURITY FIX: Decrypt sensitive fields before returning
+          resolve(this._decryptSensitiveFields({
             id: row.id,
             userId: row.user_id,
             clientId: row.client_id,
@@ -218,7 +278,7 @@ class YouTubeCredentials {
             channelId: row.channel_id,
             isPrimary: row.is_primary === 1,
             createdAt: row.created_at
-          });
+          }));
         }
       );
     });
@@ -240,12 +300,16 @@ class YouTubeCredentials {
         values.push(clientId);
       }
       if (clientSecret !== undefined) {
+        // SECURITY FIX: Encrypt before storing
+        const encrypted = this._encryptSensitiveFields({ clientSecret });
         updates.push('client_secret = ?');
-        values.push(clientSecret);
+        values.push(encrypted.clientSecret);
       }
       if (refreshToken !== undefined) {
+        // SECURITY FIX: Encrypt before storing
+        const encrypted = this._encryptSensitiveFields({ refreshToken });
         updates.push('refresh_token = ?');
-        values.push(refreshToken);
+        values.push(encrypted.refreshToken);
       }
       if (channelName !== undefined) {
         updates.push('channel_name = ?');
@@ -257,7 +321,7 @@ class YouTubeCredentials {
       }
 
       if (updates.length === 0) {
-        resolve(this.findById(id));
+        YouTubeCredentials.findById(id).then(resolve).catch(reject);
         return;
       }
 

@@ -157,39 +157,116 @@ class User {
         const Video = require('./Video');
         const Stream = require('./Stream');
         
+        // TRANSACTION FIX: Get all data first before starting deletion
         const userVideos = await Video.findAll(userId);
         const userStreams = await Stream.findAll(userId);
         
-        for (const video of userVideos) {
-          try {
-            await Video.delete(video.id);
-          } catch (videoDeleteError) {
-            console.error(`Error deleting video ${video.id}:`, videoDeleteError);
-          }
-        }
+        console.log(`[User.delete] Starting transaction for user ${userId}`);
+        console.log(`[User.delete] Videos to delete: ${userVideos.length}`);
+        console.log(`[User.delete] Streams to delete: ${userStreams.length}`);
         
-        for (const stream of userStreams) {
-          try {
-            await Stream.delete(stream.id, userId);
-          } catch (streamDeleteError) {
-            console.error(`Error deleting stream ${stream.id}:`, streamDeleteError);
-          }
-        }
-        
-        db.run('DELETE FROM users WHERE id = ?', [userId], function (err) {
-          if (err) {
-            console.error('Database error in delete:', err);
-            return reject(err);
-          }
-          resolve({ 
-            id: userId, 
-            deleted: true, 
-            videosDeleted: userVideos.length,
-            streamsDeleted: userStreams.length 
+        // TRANSACTION FIX: Wrap all operations in a single transaction
+        db.serialize(() => {
+          db.run('BEGIN TRANSACTION', async (beginErr) => {
+            if (beginErr) {
+              console.error('[User.delete] Error beginning transaction:', beginErr);
+              return reject(beginErr);
+            }
+            
+            try {
+              // Delete all user videos
+              for (const video of userVideos) {
+                try {
+                  await new Promise((resolveVideo, rejectVideo) => {
+                    db.run('DELETE FROM videos WHERE id = ?', [video.id], function(err) {
+                      if (err) rejectVideo(err);
+                      else resolveVideo();
+                    });
+                  });
+                } catch (videoDeleteError) {
+                  console.error(`[User.delete] Error deleting video ${video.id}:`, videoDeleteError);
+                  throw videoDeleteError; // Will trigger rollback
+                }
+              }
+              
+              // Delete all user streams
+              for (const stream of userStreams) {
+                try {
+                  await new Promise((resolveStream, rejectStream) => {
+                    db.run('DELETE FROM streams WHERE id = ?', [stream.id], function(err) {
+                      if (err) rejectStream(err);
+                      else resolveStream();
+                    });
+                  });
+                } catch (streamDeleteError) {
+                  console.error(`[User.delete] Error deleting stream ${stream.id}:`, streamDeleteError);
+                  throw streamDeleteError; // Will trigger rollback
+                }
+              }
+              
+              // Delete stream history
+              await new Promise((resolveHistory, rejectHistory) => {
+                db.run('DELETE FROM stream_history WHERE user_id = ?', [userId], function(err) {
+                  if (err) rejectHistory(err);
+                  else resolveHistory();
+                });
+              });
+              
+              // Delete playlists
+              await new Promise((resolvePlaylists, rejectPlaylists) => {
+                db.run('DELETE FROM playlists WHERE user_id = ?', [userId], function(err) {
+                  if (err) rejectPlaylists(err);
+                  else resolvePlaylists();
+                });
+              });
+              
+              // Delete YouTube credentials
+              await new Promise((resolveYT, rejectYT) => {
+                db.run('DELETE FROM youtube_credentials WHERE user_id = ?', [userId], function(err) {
+                  if (err) rejectYT(err);
+                  else resolveYT();
+                });
+              });
+              
+              // Finally delete the user
+              await new Promise((resolveUser, rejectUser) => {
+                db.run('DELETE FROM users WHERE id = ?', [userId], function(err) {
+                  if (err) rejectUser(err);
+                  else resolveUser();
+                });
+              });
+              
+              // COMMIT transaction
+              db.run('COMMIT', (commitErr) => {
+                if (commitErr) {
+                  console.error('[User.delete] Error committing transaction:', commitErr);
+                  db.run('ROLLBACK');
+                  return reject(commitErr);
+                }
+                
+                console.log(`[User.delete] ✅ Transaction committed successfully for user ${userId}`);
+                resolve({ 
+                  id: userId, 
+                  deleted: true, 
+                  videosDeleted: userVideos.length,
+                  streamsDeleted: userStreams.length 
+                });
+              });
+              
+            } catch (error) {
+              // ROLLBACK on any error
+              console.error('[User.delete] ❌ Error during transaction, rolling back:', error);
+              db.run('ROLLBACK', (rollbackErr) => {
+                if (rollbackErr) {
+                  console.error('[User.delete] Error during rollback:', rollbackErr);
+                }
+                reject(error);
+              });
+            }
           });
         });
       } catch (error) {
-        console.error('Error in user deletion process:', error);
+        console.error('[User.delete] Error in user deletion process:', error);
         reject(error);
       }
     });

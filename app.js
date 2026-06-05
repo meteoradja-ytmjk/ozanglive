@@ -119,11 +119,11 @@ async function gracefulShutdown(signal, exitCode = 0) {
   isShuttingDown = true;
   console.log(`[Shutdown] Received ${signal}, starting graceful shutdown...`);
 
-  // Force exit after 30 seconds
+  // Force exit after 60 seconds (increased from 30s for large streams)
   const forceExitTimeout = setTimeout(() => {
-    console.error('[Shutdown] Force exit after 30 second timeout');
+    console.error('[Shutdown] Force exit after 60 second timeout');
     process.exit(exitCode || 1);
-  }, 30000);
+  }, 60000);
   forceExitTimeout.unref();
 
   try {
@@ -138,7 +138,7 @@ async function gracefulShutdown(signal, exitCode = 0) {
       });
     }
 
-    // 2. Stop all active streams
+    // 2. Stop all active streams (with streamingService cleanup)
     try {
       const activeStreams = streamingService.getActiveStreams();
       if (activeStreams.length > 0) {
@@ -150,6 +150,10 @@ async function gracefulShutdown(signal, exitCode = 0) {
         ));
         console.log('[Shutdown] All streams stopped');
       }
+      
+      // Cleanup streamingService resources
+      console.log('[Shutdown] Cleaning up streaming service...');
+      streamingService.shutdown();
     } catch (e) {
       console.error('[Shutdown] Error stopping streams:', e.message);
     }
@@ -164,6 +168,13 @@ async function gracefulShutdown(signal, exitCode = 0) {
     // 3.5 Stop token refresh scheduler
     try {
       tokenRefreshScheduler.stop();
+    } catch (e) {
+      // Ignore - scheduler might not be started
+    }
+    
+    // 3.6 Stop scheduler service
+    try {
+      schedulerService.shutdown();
     } catch (e) {
       // Ignore - scheduler might not be started
     }

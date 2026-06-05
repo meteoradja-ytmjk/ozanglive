@@ -28,6 +28,14 @@ const MAX_RETRY_ATTEMPTS = 3;
 const manuallyStoppingStreams = new Set();
 const MAX_LOG_LINES = 50; // OPTIMIZED: Reduced from 100 to 50 to save memory
 
+// MEMORY LEAK FIX: Hard limits for all Maps to prevent unbounded growth
+const MAX_STREAM_LOGS_SIZE = 100; // Maximum number of streams to keep logs for
+const MAX_RETRY_COUNT_SIZE = 100; // Maximum retry count entries
+const MAX_DURATION_INFO_SIZE = 200; // Maximum duration tracking entries
+const MAX_ORIGINAL_TIMING_SIZE = 200; // Maximum original timing entries
+const MAX_PIDS_SIZE = 200; // Maximum PID entries
+const MAX_MANUAL_STOPPING_SIZE = 50; // Maximum manual stopping entries
+
 // Duration tracking for automatic stream termination
 // Structure: { streamId: { startTime: Date, durationMs: number, expectedEndTime: Date } }
 const streamDurationInfo = new Map();
@@ -44,11 +52,15 @@ const streamPids = new Map();
 
 // MEMORY MANAGEMENT: Periodic cleanup of stale entries
 // This prevents memory leaks from orphaned entries
-const CLEANUP_INTERVAL = 4 * 60 * 60 * 1000; // Every 4 hours (was 2 hours)
+const CLEANUP_INTERVAL = 2 * 60 * 60 * 1000; // Every 2 hours - more aggressive cleanup
 
 // PROCESS HEALTH CHECK: Verify FFmpeg processes are still running
 // This catches cases where FFmpeg dies without triggering exit event
 const PROCESS_CHECK_INTERVAL = 5 * 60 * 1000; // Every 5 minutes - faster detection for auto-reconnect
+
+// Track cleanup and health check interval IDs for proper shutdown
+let cleanupIntervalId = null;
+let healthCheckIntervalId = null;
 
 /**
  * Handle unlist replay on stream end
@@ -73,6 +85,7 @@ async function handleUnlistReplayOnEnd(stream) {
 /**
  * Clean up stale entries from Maps to prevent memory leaks
  * Only removes entries for streams that are no longer active
+ * ENHANCED: Added hard limits to prevent unbounded growth
  */
 async function cleanupStaleMaps() {
   try {
@@ -87,6 +100,17 @@ async function cleanupStaleMaps() {
       }
     }
     
+    // HARD LIMIT: If streamLogs exceeds max size, remove oldest entries
+    if (streamLogs.size > MAX_STREAM_LOGS_SIZE) {
+      const entriesToRemove = streamLogs.size - MAX_STREAM_LOGS_SIZE;
+      const keys = Array.from(streamLogs.keys());
+      for (let i = 0; i < entriesToRemove; i++) {
+        streamLogs.delete(keys[i]);
+        cleaned++;
+      }
+      console.log(`[StreamingService] Hard limit: Removed ${entriesToRemove} old log entries`);
+    }
+    
     // Clean streamRetryCount for inactive streams
     for (const [id] of streamRetryCount) {
       if (!activeIds.has(id)) {
@@ -95,10 +119,30 @@ async function cleanupStaleMaps() {
       }
     }
     
+    // HARD LIMIT: If streamRetryCount exceeds max size
+    if (streamRetryCount.size > MAX_RETRY_COUNT_SIZE) {
+      const entriesToRemove = streamRetryCount.size - MAX_RETRY_COUNT_SIZE;
+      const keys = Array.from(streamRetryCount.keys());
+      for (let i = 0; i < entriesToRemove; i++) {
+        streamRetryCount.delete(keys[i]);
+        cleaned++;
+      }
+    }
+    
     // Clean streamDurationInfo for inactive streams
     for (const [id] of streamDurationInfo) {
       if (!activeIds.has(id)) {
         streamDurationInfo.delete(id);
+        cleaned++;
+      }
+    }
+    
+    // HARD LIMIT: If streamDurationInfo exceeds max size
+    if (streamDurationInfo.size > MAX_DURATION_INFO_SIZE) {
+      const entriesToRemove = streamDurationInfo.size - MAX_DURATION_INFO_SIZE;
+      const keys = Array.from(streamDurationInfo.keys());
+      for (let i = 0; i < entriesToRemove; i++) {
+        streamDurationInfo.delete(keys[i]);
         cleaned++;
       }
     }
@@ -120,10 +164,30 @@ async function cleanupStaleMaps() {
       }
     }
     
+    // HARD LIMIT: If streamOriginalTiming exceeds max size
+    if (streamOriginalTiming.size > MAX_ORIGINAL_TIMING_SIZE) {
+      const entriesToRemove = streamOriginalTiming.size - MAX_ORIGINAL_TIMING_SIZE;
+      const keys = Array.from(streamOriginalTiming.keys());
+      for (let i = 0; i < entriesToRemove; i++) {
+        streamOriginalTiming.delete(keys[i]);
+        cleaned++;
+      }
+    }
+    
     // Clean streamPids for inactive streams
     for (const [id] of streamPids) {
       if (!activeIds.has(id)) {
         streamPids.delete(id);
+        cleaned++;
+      }
+    }
+    
+    // HARD LIMIT: If streamPids exceeds max size
+    if (streamPids.size > MAX_PIDS_SIZE) {
+      const entriesToRemove = streamPids.size - MAX_PIDS_SIZE;
+      const keys = Array.from(streamPids.keys());
+      for (let i = 0; i < entriesToRemove; i++) {
+        streamPids.delete(keys[i]);
         cleaned++;
       }
     }
@@ -136,16 +200,31 @@ async function cleanupStaleMaps() {
       }
     }
     
+    // HARD LIMIT: If manuallyStoppingStreams exceeds max size
+    if (manuallyStoppingStreams.size > MAX_MANUAL_STOPPING_SIZE) {
+      const entriesToRemove = manuallyStoppingStreams.size - MAX_MANUAL_STOPPING_SIZE;
+      const ids = Array.from(manuallyStoppingStreams);
+      for (let i = 0; i < entriesToRemove; i++) {
+        manuallyStoppingStreams.delete(ids[i]);
+        cleaned++;
+      }
+    }
+    
     if (cleaned > 0) {
       console.log(`[StreamingService] Cleaned ${cleaned} stale entries from Maps`);
     }
+    
+    // Log memory usage after cleanup
+    const memUsage = process.memoryUsage();
+    const heapUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024);
+    console.log(`[StreamingService] Memory after cleanup: ${heapUsedMB}MB heap, ${activeStreams.size} active streams`);
   } catch (error) {
     console.error('[StreamingService] Error during cleanup:', error.message);
   }
 }
 
-// Start cleanup interval (will be tracked by app.js global override)
-setInterval(cleanupStaleMaps, CLEANUP_INTERVAL);
+// Start cleanup interval (will be tracked for proper shutdown)
+cleanupIntervalId = setInterval(cleanupStaleMaps, CLEANUP_INTERVAL);
 
 /**
  * Check if a specific process is still running by PID
@@ -306,7 +385,54 @@ async function checkStreamProcessHealth() {
 }
 
 // Start process health check interval
-setInterval(checkStreamProcessHealth, PROCESS_CHECK_INTERVAL);
+healthCheckIntervalId = setInterval(checkStreamProcessHealth, PROCESS_CHECK_INTERVAL);
+
+/**
+ * Shutdown function to clean up all resources
+ * Called during graceful shutdown from app.js
+ */
+function shutdown() {
+  console.log('[StreamingService] Starting shutdown...');
+  
+  // Clear intervals
+  if (cleanupIntervalId) {
+    clearInterval(cleanupIntervalId);
+    cleanupIntervalId = null;
+  }
+  if (healthCheckIntervalId) {
+    clearInterval(healthCheckIntervalId);
+    healthCheckIntervalId = null;
+  }
+  
+  // Kill all active FFmpeg processes
+  for (const [streamId, process] of activeStreams.entries()) {
+    try {
+      if (process && !process.killed) {
+        console.log(`[StreamingService] Killing FFmpeg process for stream ${streamId}`);
+        process.kill('SIGTERM');
+        // Force kill after 5 seconds if not responding
+        setTimeout(() => {
+          if (!process.killed) {
+            process.kill('SIGKILL');
+          }
+        }, 5000);
+      }
+    } catch (err) {
+      console.error(`[StreamingService] Error killing process for stream ${streamId}:`, err.message);
+    }
+  }
+  
+  // Clear all Maps
+  activeStreams.clear();
+  streamLogs.clear();
+  streamRetryCount.clear();
+  streamDurationInfo.clear();
+  streamOriginalTiming.clear();
+  streamPids.clear();
+  manuallyStoppingStreams.clear();
+  
+  console.log('[StreamingService] Shutdown complete');
+}
 
 /**
  * Check if any FFmpeg process is currently running
@@ -1984,6 +2110,8 @@ module.exports = {
   // RTMP health monitor exports
   getRTMPHealthStatus,
   isRTMPHealthMonitored,
+  // Shutdown function for graceful cleanup
+  shutdown,
   // Export for testing
   buildFFmpegArgsWithAudio,
   buildFFmpegArgsVideoOnly

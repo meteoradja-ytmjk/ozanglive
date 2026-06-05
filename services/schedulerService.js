@@ -13,12 +13,45 @@ const DURATION_CHECK_INTERVAL = 10 * 1000; // Check durations every 10 seconds f
 const FORCE_STOP_BUFFER_MS = 30 * 1000; // 30 seconds buffer for force stop
 const CLEANUP_INTERVAL = 6 * 60 * 60 * 1000; // Clean up stale entries every 6 hours
 
+// RACE CONDITION FIX: Mutex to prevent concurrent stream starts
+const startingStreams = new Set(); // Track streams currently being started
+
 let streamingService = null;
 let initialized = false;
 let scheduleIntervalId = null;
 let durationIntervalId = null;
 let recurringIntervalId = null;
 let cleanupIntervalId = null;
+
+/**
+ * Acquire lock for starting a stream (prevents race conditions)
+ * @param {string} streamId - Stream ID
+ * @returns {boolean} True if lock acquired, false if already locked
+ */
+function acquireStartLock(streamId) {
+  if (startingStreams.has(streamId)) {
+    return false; // Already being started
+  }
+  startingStreams.add(streamId);
+  return true;
+}
+
+/**
+ * Release lock for starting a stream
+ * @param {string} streamId - Stream ID
+ */
+function releaseStartLock(streamId) {
+  startingStreams.delete(streamId);
+}
+
+/**
+ * Check if stream is currently being started
+ * @param {string} streamId - Stream ID
+ * @returns {boolean}
+ */
+function isStarting(streamId) {
+  return startingStreams.has(streamId);
+}
 
 function init(streamingServiceInstance) {
   if (initialized) {
@@ -68,7 +101,7 @@ function init(streamingServiceInstance) {
   safeCheckRecurringSchedules();
 }
 
-/**
+ /**
  * Stop all interval timers and free resources.
  * Useful for graceful shutdown / unit tests.
  */
@@ -84,6 +117,7 @@ function shutdown() {
   }
   scheduledTerminations.clear();
   recentlyTriggeredStreams.clear();
+  startingStreams.clear(); // Clear mutex state
   initialized = false;
 }
 
@@ -133,6 +167,12 @@ async function checkScheduledStreams() {
     console.log(`[Scheduler] Found ${streams.length} 'once' streams in trigger window`);
     for (const stream of streams) {
       try {
+        // RACE CONDITION FIX: Try to acquire lock before starting
+        if (isStarting(stream.id)) {
+          console.log(`[Scheduler] Stream ${stream.id} is already being started, skipping`);
+          continue;
+        }
+        
         // Skip if recently triggered to prevent double starts
         if (wasRecentlyTriggered(stream.id)) {
           continue;
@@ -160,22 +200,35 @@ async function checkScheduledStreams() {
         const timeDiffMinutes = (timeDiffMs / 60000).toFixed(2);
         console.log(`[Scheduler] >>> START ONCE: ${stream.id} "${stream.title}" (scheduled=${stream.schedule_time}, diff=${timeDiffMinutes}min)`);
 
+        // RACE CONDITION FIX: Acquire lock before starting
+        if (!acquireStartLock(stream.id)) {
+          console.log(`[Scheduler] Failed to acquire start lock for stream ${stream.id}, skipping`);
+          continue;
+        }
+
         // Mark as triggered BEFORE starting to be safe against re-entry
         markAsTriggered(stream.id);
 
-        const result = await streamingService.startStream(stream.id);
-        if (result.success) {
-          console.log(`[Scheduler] >>> Started ONCE stream ${stream.id}`);
-        } else {
-          console.error(`[Scheduler] >>> Failed to start ONCE stream ${stream.id}: ${result.error}`);
-          // Allow retry on next tick
-          recentlyTriggeredStreams.delete(stream.id);
+        try {
+          const result = await streamingService.startStream(stream.id);
+          if (result.success) {
+            console.log(`[Scheduler] >>> Started ONCE stream ${stream.id}`);
+          } else {
+            console.error(`[Scheduler] >>> Failed to start ONCE stream ${stream.id}: ${result.error}`);
+            // Allow retry on next tick
+            recentlyTriggeredStreams.delete(stream.id);
+          }
+        } finally {
+          // RACE CONDITION FIX: Always release lock
+          releaseStartLock(stream.id);
         }
 
         // Small delay between starts to avoid burst CPU
         await new Promise(resolve => setTimeout(resolve, 500));
       } catch (streamError) {
         console.error(`[Scheduler] Error processing stream ${stream.id}:`, streamError.message);
+        // Release lock on error
+        releaseStartLock(stream.id);
       }
     }
   } catch (error) {
@@ -474,6 +527,12 @@ async function checkRecurringSchedules() {
         if (!stream.recurring_enabled) continue;
         if (wasRecentlyTriggered(stream.id)) continue;
         if (stream.status === 'live') continue;
+        
+        // RACE CONDITION FIX: Check if stream is already being started
+        if (isStarting(stream.id)) {
+          console.log(`[Scheduler] Stream ${stream.id} is already being started, skipping`);
+          continue;
+        }
 
         let shouldTrigger = false;
         if (stream.schedule_type === 'daily') {
@@ -485,6 +544,13 @@ async function checkRecurringSchedules() {
         if (!shouldTrigger) continue;
 
         console.log(`[Scheduler] >>> TRIGGERING recurring: ${stream.id} "${stream.title}" (${stream.schedule_type})`);
+        
+        // RACE CONDITION FIX: Acquire lock before starting
+        if (!acquireStartLock(stream.id)) {
+          console.log(`[Scheduler] Failed to acquire start lock for recurring stream ${stream.id}, skipping`);
+          continue;
+        }
+        
         // Mark as triggered to prevent double triggers within cooldown window
         markAsTriggered(stream.id);
 
@@ -497,12 +563,17 @@ async function checkRecurringSchedules() {
           }
         } catch (startError) {
           console.error(`[Scheduler] >>> Error starting recurring stream ${stream.id}:`, startError.message);
+        } finally {
+          // RACE CONDITION FIX: Always release lock
+          releaseStartLock(stream.id);
         }
 
         // Small delay between starts
         await new Promise(resolve => setTimeout(resolve, 500));
       } catch (streamError) {
         console.error(`[Scheduler] Error processing recurring stream ${stream.id}:`, streamError.message);
+        // Release lock on error
+        releaseStartLock(stream.id);
       }
     }
   } catch (error) {
