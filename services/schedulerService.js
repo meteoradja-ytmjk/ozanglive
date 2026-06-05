@@ -9,7 +9,7 @@ const SCHEDULE_LOOKAHEAD_SECONDS = 30; // Look ahead 30 seconds for upcoming sta
 const RECURRING_CHECK_INTERVAL = 30 * 1000; // Check recurring schedules every 30 seconds (per-minute precision)
 const ONCE_SCHEDULE_CHECK_INTERVAL = 30 * 1000; // Check one-time schedules every 30 seconds
 const TRIGGER_COOLDOWN_MS = 5 * 60 * 1000; // 5 minute cooldown to prevent double triggers within same window
-const DURATION_CHECK_INTERVAL = 30 * 1000; // Check durations every 30 seconds for accurate stop
+const DURATION_CHECK_INTERVAL = 10 * 1000; // Check durations every 10 seconds for ACCURATE stop (was 30s)
 const FORCE_STOP_BUFFER_MS = 30 * 1000; // 30 seconds buffer for force stop
 const CLEANUP_INTERVAL = 6 * 60 * 60 * 1000; // Clean up stale entries every 6 hours
 
@@ -27,7 +27,7 @@ function init(streamingServiceInstance) {
   }
   streamingService = streamingServiceInstance;
   initialized = true;
-  console.log('[Scheduler] Stream scheduler initialized (WIB-based, 30s check interval)');
+  console.log('[Scheduler] Stream scheduler initialized (WIB-based, 10s duration check for accuracy)');
   
   // Wrap interval callbacks with error handling to prevent crashes
   const safeCheckScheduledStreams = async () => {
@@ -204,16 +204,25 @@ async function checkStreamDurations() {
       return; // No live streams, skip entirely
     }
     
+    console.log(`[Scheduler] Checking durations for ${liveStreams.length} live stream(s)...`);
+    
     for (const stream of liveStreams) {
       try {
         let shouldEndAt = null;
 
         // CRITICAL: Use actual start_time, not schedule_time for end time calculation
         if (!stream.start_time) {
-          continue; // Skip silently - no start_time
+          console.log(`[Scheduler] Stream ${stream.id} "${stream.title}" has no start_time - skipping duration check`);
+          continue; // Skip - no start_time
         }
 
         const actualStartTime = new Date(stream.start_time);
+        
+        // Validate start_time is a valid date
+        if (isNaN(actualStartTime.getTime())) {
+          console.error(`[Scheduler] Stream ${stream.id} has invalid start_time: ${stream.start_time}`);
+          continue;
+        }
         
         // Use centralized duration calculator for consistent priority
         let durationSeconds = null;
@@ -221,14 +230,32 @@ async function checkStreamDurations() {
         // Priority 1: stream_duration_minutes (most reliable for recurring streams)
         if (stream.stream_duration_minutes && stream.stream_duration_minutes > 0) {
           durationSeconds = stream.stream_duration_minutes * 60;
+          console.log(`[Scheduler] Stream ${stream.id} "${stream.title}" duration: ${stream.stream_duration_minutes} minutes (${durationSeconds} seconds)`);
         } else {
           // Fallback to centralized calculator for other cases
           durationSeconds = calculateDurationSeconds(stream);
+          if (durationSeconds) {
+            console.log(`[Scheduler] Stream ${stream.id} "${stream.title}" duration (calculated): ${(durationSeconds / 60).toFixed(1)} minutes`);
+          }
         }
         
         if (durationSeconds && durationSeconds > 0) {
           const durationMs = durationSeconds * 1000;
           shouldEndAt = new Date(actualStartTime.getTime() + durationMs);
+          
+          // Log detailed timing information
+          const elapsed = now.getTime() - actualStartTime.getTime();
+          const elapsedMinutes = elapsed / 60000;
+          const remaining = shouldEndAt.getTime() - now.getTime();
+          const remainingMinutes = remaining / 60000;
+          
+          console.log(`[Scheduler] Stream ${stream.id} "${stream.title}" timing:`);
+          console.log(`  - Started: ${actualStartTime.toISOString()}`);
+          console.log(`  - Should end: ${shouldEndAt.toISOString()}`);
+          console.log(`  - Elapsed: ${elapsedMinutes.toFixed(2)} minutes`);
+          console.log(`  - Remaining: ${remainingMinutes.toFixed(2)} minutes`);
+        } else {
+          console.log(`[Scheduler] Stream ${stream.id} "${stream.title}" has no duration limit - will run indefinitely`);
         }
 
         // If we have an end time, check if we need to take action
@@ -238,24 +265,33 @@ async function checkStreamDurations() {
           
           // FORCE STOP: If stream exceeds duration by more than 30 seconds, force stop immediately
           if (timeOverdue > FORCE_STOP_BUFFER_MS) {
-            console.log(`[Scheduler] FORCE STOP: Stream ${stream.id} exceeded by ${timeOverdueMinutes.toFixed(1)} min`);
+            console.log(`[Scheduler] ⚠️ FORCE STOP: Stream ${stream.id} "${stream.title}" exceeded duration by ${timeOverdueMinutes.toFixed(1)} min`);
+            console.log(`[Scheduler]   - Configured duration: ${stream.stream_duration_minutes} minutes`);
+            console.log(`[Scheduler]   - Started: ${actualStartTime.toISOString()}`);
+            console.log(`[Scheduler]   - Should have ended: ${shouldEndAt.toISOString()}`);
+            console.log(`[Scheduler]   - Current time: ${now.toISOString()}`);
             try {
               await streamingService.stopStream(stream.id);
               cancelStreamTermination(stream.id);
+              console.log(`[Scheduler] ✅ Stream ${stream.id} force stopped successfully`);
             } catch (stopError) {
-              console.error(`[Scheduler] Error force stopping stream ${stream.id}:`, stopError.message);
+              console.error(`[Scheduler] ❌ Error force stopping stream ${stream.id}:`, stopError.message);
             }
             continue;
           }
           
-          // If stream has exceeded end time, stop it immediately
-          if (shouldEndAt <= now) {
-            console.log(`[Scheduler] Stopping stream ${stream.id} - duration reached`);
+          // If stream has exceeded end time (within buffer), stop it immediately
+          if (timeOverdue >= 0) {
+            console.log(`[Scheduler] ⏰ Stopping stream ${stream.id} "${stream.title}" - duration reached`);
+            console.log(`[Scheduler]   - Configured duration: ${stream.stream_duration_minutes} minutes`);
+            console.log(`[Scheduler]   - Started: ${actualStartTime.toISOString()}`);
+            console.log(`[Scheduler]   - Ended: ${now.toISOString()}`);
             try {
               await streamingService.stopStream(stream.id);
               cancelStreamTermination(stream.id);
+              console.log(`[Scheduler] ✅ Stream ${stream.id} stopped successfully at correct time`);
             } catch (stopError) {
-              console.error(`[Scheduler] Error stopping stream ${stream.id}:`, stopError.message);
+              console.error(`[Scheduler] ❌ Error stopping stream ${stream.id}:`, stopError.message);
             }
             continue;
           }
@@ -265,6 +301,7 @@ async function checkStreamDurations() {
             const timeUntilEnd = shouldEndAt.getTime() - now.getTime();
             const minutesUntilEnd = timeUntilEnd / 60000;
             scheduleStreamTermination(stream.id, minutesUntilEnd);
+            console.log(`[Scheduler] 📅 Scheduled termination for stream ${stream.id} in ${minutesUntilEnd.toFixed(1)} minutes`);
           }
         }
       } catch (streamError) {
