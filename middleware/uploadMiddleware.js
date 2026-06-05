@@ -4,18 +4,18 @@ const fs = require('fs');
 const { getUniqueFilename, paths } = require('../utils/storage');
 const StorageService = require('../services/storageService');
 
-const parsedBufferSizeMb = parseInt(process.env.UPLOAD_BUFFER_SIZE_MB || '32', 10);
+const parsedBufferSizeMb = parseInt(process.env.UPLOAD_BUFFER_SIZE_MB || '64', 10);
 const UPLOAD_BUFFER_SIZE = Number.isFinite(parsedBufferSizeMb) && parsedBufferSizeMb > 0
   ? parsedBufferSizeMb * 1024 * 1024
-  : 32 * 1024 * 1024; // 32MB buffer for faster disk writes
-const parsedInflightLimit = parseInt(process.env.UPLOAD_INFLIGHT_LIMIT || '0', 10);
+  : 64 * 1024 * 1024; // 64MB buffer for faster disk writes (increased from 32MB)
+const parsedInflightLimit = parseInt(process.env.UPLOAD_INFLIGHT_LIMIT || '5', 10);
 const MAX_INFLIGHT_UPLOADS = Number.isFinite(parsedInflightLimit) && parsedInflightLimit > 0
   ? parsedInflightLimit
-  : null;
-const parsedChunkSizeMb = parseFloat(process.env.UPLOAD_CHUNK_SIZE_MB || '0.5');
+  : 5; // Allow 5 concurrent uploads by default (increased from unlimited)
+const parsedChunkSizeMb = parseFloat(process.env.UPLOAD_CHUNK_SIZE_MB || '5');
 const UPLOAD_CHUNK_SIZE = Number.isFinite(parsedChunkSizeMb) && parsedChunkSizeMb > 0
   ? parsedChunkSizeMb * 1024 * 1024
-  : Math.round(0.5 * 1024 * 1024);
+  : 5 * 1024 * 1024; // 5MB chunks (increased from 0.5MB)
 // Optimized stream options for faster uploads
 const STREAM_OPTIONS = {
   highWaterMark: UPLOAD_BUFFER_SIZE,
