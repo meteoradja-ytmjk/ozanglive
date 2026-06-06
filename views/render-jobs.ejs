@@ -499,6 +499,56 @@
 .render-active-dot {
   animation: renderPulse 2s ease-in-out infinite;
 }
+
+/* Video Loading Optimization - Prevent buffering spinner */
+.render-progress-card video {
+  background: linear-gradient(135deg, #1a1a1a 0%, #0d0d0d 100%);
+}
+
+.render-progress-card video::-webkit-media-controls {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.render-progress-card video:hover::-webkit-media-controls {
+  opacity: 1;
+}
+
+/* Video loading state */
+.render-progress-card video[preload="none"] {
+  cursor: pointer;
+  position: relative;
+}
+
+.render-progress-card video[preload="none"]::before {
+  content: '▶';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 3rem;
+  color: rgba(255, 255, 255, 0.8);
+  pointer-events: none;
+}
+
+/* Delete button styling - Make it more visible */
+button[onclick*="deleteJob"] {
+  min-width: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+button[onclick*="deleteJob"]:hover {
+  transform: scale(1.05);
+  background: rgba(239, 68, 68, 0.3) !important;
+  border-color: rgba(239, 68, 68, 0.6) !important;
+}
+
+button[onclick*="deleteJob"] i {
+  color: #EF4444;
+}
 </style>
 
 <!-- Page Header -->
@@ -2255,17 +2305,27 @@ async function loadJobs(){
       </div>
       
       ${j.output_path ? `
-        <video controls preload="metadata" src="${j.output_path}" class="w-full rounded-lg mb-3 bg-black max-h-48"></video>
+        <video controls preload="none" poster="" src="${j.output_path}" class="w-full rounded-lg mb-3 bg-black max-h-48" onloadstart="this.style.cursor='pointer'" oncanplay="this.style.cursor='default'"></video>
       ` : ''}
       
       ${j.error_message ? `<div class="text-xs text-red-400 bg-red-500/10 rounded-lg p-2 mb-3"><i class="ti ti-alert-circle mr-1"></i>${j.error_message}</div>` : ''}
       
       <div class="flex gap-2">
         ${j.output_path ? `
-          <button onclick="uploadJob('${j.id}')" class="flex-1 px-3 py-1.5 bg-primary/20 hover:bg-primary/30 text-primary text-xs rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed" id="uploadBtn-${j.id}"><i class="ti ti-upload mr-1"></i>Upload</button>
-          <button onclick="openLoopModal('${j.id}')" class="px-3 py-1.5 bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 text-xs rounded-lg transition-colors"><i class="ti ti-repeat mr-1"></i>Loop</button>
-        ` : ''}
-        <button onclick="deleteJob('${j.id}')" class="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-300 text-xs rounded-lg transition-colors border border-red-500/30 hover:border-red-500/50" title="Hapus project"><i class="ti ti-trash text-sm"></i></button>
+          <button onclick="uploadJob('${j.id}')" class="flex-1 px-3 py-2 bg-primary/20 hover:bg-primary/30 text-primary text-xs rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed" id="uploadBtn-${j.id}">
+            <i class="ti ti-upload mr-1.5 text-sm"></i>Upload
+          </button>
+          <button onclick="openLoopModal('${j.id}')" class="flex-1 px-3 py-2 bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 text-xs rounded-lg transition-colors font-medium">
+            <i class="ti ti-repeat mr-1.5 text-sm"></i>Loop
+          </button>
+          <button onclick="deleteJob('${j.id}')" class="px-3 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 text-xs rounded-lg transition-colors border border-red-500/30 hover:border-red-500/50 font-medium" title="Delete">
+            <i class="ti ti-trash text-base"></i>
+          </button>
+        ` : `
+          <button onclick="deleteJob('${j.id}')" class="flex-1 px-3 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 text-xs rounded-lg transition-colors border border-red-500/30 hover:border-red-500/50 font-medium" title="Delete">
+            <i class="ti ti-trash mr-1.5 text-sm"></i>Delete
+          </button>
+        `}
       </div>
     </div>
   `;
