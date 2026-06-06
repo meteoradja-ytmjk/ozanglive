@@ -112,6 +112,46 @@ Telah dilakukan pemeriksaan menyeluruh dan perbaikan bug pada halaman **Render D
 
 ---
 
+### 5. ✅ Shadow Bottom Navigation Terlalu Besar
+**Lokasi**: `views/layout.ejs` baris ~266
+
+**Masalah**:
+```html
+<div class="... shadow-lg z-30">  <!-- ❌ Shadow terlalu besar menutupi konten -->
+```
+
+**Perbaikan**:
+```html
+<div class="... z-30" style="box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.1);">  <!-- ✅ Shadow lebih subtle -->
+```
+
+**Dampak**: Shadow yang terlalu besar terlihat menutupi konten di atas bottom navigation bar.
+
+---
+
+### 6. ✅ Border Indicator Active Tab Menutupi Konten
+**Lokasi**: `public/css/styles.css` - `.bottom-nav-active::before`
+
+**Masalah**:
+```css
+.bottom-nav-active::before {
+  top: 0;          /* ❌ Border tepat di top, menutupi konten */
+  height: 3px;     /* ❌ Terlalu tebal */
+}
+```
+
+**Perbaikan**:
+```css
+.bottom-nav-active::before {
+  top: -1px;       /* ✅ Border sedikit di bawah top edge */
+  height: 2px;     /* ✅ Lebih tipis */
+}
+```
+
+**Dampak**: Border indicator terlihat menutupi/overlap dengan konten di atasnya.
+
+---
+
 ## 📊 Hierarchy Z-Index (Setelah Perbaikan)
 
 ```
@@ -139,6 +179,9 @@ Telah dilakukan pemeriksaan menyeluruh dan perbaikan bug pada halaman **Render D
 - [x] Tidak ada CSS error di console
 - [x] Preview video berfungsi normal
 - [x] Float/Dock toggle bekerja dengan baik
+- [x] Bottom navigation shadow tidak menutupi konten
+- [x] Border indicator active tab tidak overlap konten
+- [x] Konten di atas bottom nav terlihat jelas
 
 ---
 
@@ -150,33 +193,48 @@ views/render-jobs.ejs
   - Baris 309: floating-preview z-index (9999 → 999)
   - Baris 339: mobile floating-preview z-index (added 999)
   - Baris 501: duplicate </style> tag (removed)
+
+views/layout.ejs
+  - Baris 266: bottom nav shadow (shadow-lg → custom subtle shadow)
+
+public/css/styles.css
+  - .bottom-nav-active::before top position (0 → -1px)
+  - .bottom-nav-active::before height (3px → 2px)
 ```
 
 **Total Perubahan**: 
-- 3 insertions
-- 3 deletions
-- 1 file modified
+- 3 files modified
+- 9 specific fixes applied
 
 ---
 
 ## 🚀 Deploy & Push
 
+**Commit 1: Render Tab Fixes**
 ```bash
-# Status perubahan
-git status
-
-# Add file yang dimodifikasi
 git add views/render-jobs.ejs
-
-# Commit dengan pesan deskriptif
 git commit -m "Fix: Perbaiki bug UI di tab Render - z-index & duplicate style tag"
-
-# Push ke GitHub
 git push origin main
 ```
+✅ **Commit Hash**: `03e2bed`
 
-**Status Push**: ✅ Success  
-**Commit Hash**: `03e2bed`  
+**Commit 2: Documentation**
+```bash
+git add RENDER-TAB-BUG-FIXES.md
+git commit -m "📝 Add documentation for Render tab bug fixes"
+git push origin main
+```
+✅ **Commit Hash**: `46878f5`
+
+**Commit 3: Bottom Nav Shadow Fix**
+```bash
+git add public/css/styles.css views/layout.ejs
+git commit -m "Fix: Perbaiki shadow & border di atas bottom navigation bar"
+git push origin main
+```
+✅ **Commit Hash**: `985251d`
+
+**Status Push**: ✅ All Successful  
 **Branch**: `main`
 
 ---
