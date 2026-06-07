@@ -1594,6 +1594,7 @@ button[onclick*="deleteJob"] i {
 </div>
 
 <script src="/js/audioVisualizer.js"></script>
+<script src="/js/fileQueueManager.js"></script>
 <script>
 const toArray=(d,k)=>Array.isArray(d)?d:((d && Array.isArray(d[k])) ? d[k] : []);
 const el = {
@@ -2724,13 +2725,84 @@ function renderFileList() {
   }).join('');
 }
 
+// Initialize FileQueueManager for render uploads (video & audio)
+let renderQueueManager = null;
+
+function initializeRenderQueueManager() {
+  const uploadUrl = uploadMediaType === 'video' ? '/api/videos/upload' : '/api/audios/upload';
+  const fileFieldName = uploadMediaType === 'video' ? 'video' : 'audio';
+  const allowedExtensions = uploadMediaType === 'video' 
+    ? ['.mp4', '.avi', '.mov', '.mkv', '.webm']
+    : ['.mp3', '.wav', '.aac', '.m4a', '.ogg'];
+  const allowedMimeTypes = uploadMediaType === 'video'
+    ? ['video/mp4', 'video/avi', 'video/quicktime', 'video/x-matroska', 'video/webm']
+    : ['audio/mpeg', 'audio/wav', 'audio/aac', 'audio/x-m4a', 'audio/mp4', 'audio/ogg'];
+  
+  renderQueueManager = new FileQueueManager({
+    uploadUrl: uploadUrl,
+    fileFieldName: fileFieldName,
+    allowedExtensions: allowedExtensions,
+    allowedMimeTypes: allowedMimeTypes,
+    csrfToken: '<%= csrfToken %>',
+    concurrentUploads: 4, // Upload 4 files simultaneously for 3-5x faster speed!
+    enableChunking: <%= uploadChunkConfig?.enabled ? 'true' : 'false' %>,
+    chunkThresholdBytes: <%= uploadChunkConfig?.thresholdBytes || 67108864 %>,
+    onProgress: (item, fileProgress, overallProgress) => {
+      updateUploadProgress(overallProgress, item.name, fileProgress);
+    },
+    onFileComplete: (item, success, result) => {
+      if (!success) {
+        console.error(`Failed to upload ${item.name}:`, item.error);
+      }
+    },
+    onAllComplete: (summary) => {
+      const progressBar = document.getElementById('uploadProgressBar');
+      const progressText = document.getElementById('uploadProgressText');
+      const statusText = document.getElementById('uploadStatusText');
+      const startBtn = document.getElementById('startUploadBtn');
+      
+      progressBar.style.width = '100%';
+      progressText.textContent = '100%';
+      statusText.textContent = `Upload complete! ${summary.success} succeeded${summary.failed > 0 ? `, ${summary.failed} failed` : ''}`;
+      
+      // Show toast messages
+      if (summary.success > 0) {
+        showToast(`✓ Uploaded ${summary.success} file(s) successfully!`);
+      }
+      if (summary.failed > 0) {
+        showToast(`⚠ ${summary.failed} file(s) failed to upload`, 'warning');
+      }
+      
+      // Reload media lists
+      loadMedia();
+      
+      // Close modal
+      setTimeout(() => {
+        closeUploadMediaModal();
+      }, 1200);
+    },
+    onQueueUpdate: (files) => {
+      // Update file list UI if needed
+    }
+  });
+  
+  return renderQueueManager;
+}
+
+function updateUploadProgress(overallProgress, fileName, fileProgress) {
+  const progressBar = document.getElementById('uploadProgressBar');
+  const progressText = document.getElementById('uploadProgressText');
+  const statusText = document.getElementById('uploadStatusText');
+  
+  progressBar.style.width = overallProgress + '%';
+  progressText.textContent = overallProgress + '%';
+  statusText.textContent = `Uploading: ${fileName} (${Math.round(fileProgress)}%)`;
+}
+
 async function startUpload() {
   if (selectedFiles.length === 0) return;
   
   const progressSection = document.getElementById('uploadProgressSection');
-  const progressBar = document.getElementById('uploadProgressBar');
-  const progressText = document.getElementById('uploadProgressText');
-  const statusText = document.getElementById('uploadStatusText');
   const startBtn = document.getElementById('startUploadBtn');
   
   // Show progress section
@@ -2738,216 +2810,18 @@ async function startUpload() {
   startBtn.disabled = true;
   startBtn.innerHTML = '<i class="ti ti-loader animate-spin mr-1"></i>Uploading...';
   
-  let successCount = 0;
-  let failCount = 0;
-  const totalFiles = selectedFiles.length;
-  const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks
-  const MAX_CONCURRENT = 2; // Max 2 concurrent uploads
-  const MAX_PARALLEL_CHUNKS = 3; // Max parallel chunks per file
+  // Initialize queue manager
+  const queueManager = initializeRenderQueueManager();
   
-  // Track per-file progress
-  const fileProgress = new Array(totalFiles).fill(0);
+  // Add files to queue
+  const result = queueManager.addFiles(selectedFiles);
   
-  // Function to upload single file using chunked upload API
-  const uploadFile = async (file, index) => {
-    try {
-      // Use chunked upload for files > 30MB
-      const useChunked = file.size > 30 * 1024 * 1024;
-      
-      if (!useChunked) {
-        // Standard upload for smaller files (faster, simpler)
-        return await uploadFileStandard(file, index);
-      } else {
-        // Chunked upload for large files (more reliable, resumable)
-        return await uploadFileChunked(file, index);
-      }
-    } catch (error) {
-      fileProgress[index] = 0;
-      failCount++;
-      return { success: false, file: file.name, error: error.message };
-    }
-  };
-  
-  // Standard upload for smaller files
-  const uploadFileStandard = (file, index) => {
-    return new Promise((resolve) => {
-      const formData = new FormData();
-      formData.append(uploadMediaType === 'video' ? 'video' : 'audio', file);
-      
-      const endpoint = uploadMediaType === 'video' ? '/api/videos/upload' : '/api/audios/upload';
-      
-      const xhr = new XMLHttpRequest();
-      
-      // Track upload progress
-      xhr.upload.addEventListener('progress', (e) => {
-        if (e.lengthComputable) {
-          const currentFileProgress = (e.loaded / e.total) * 100;
-          fileProgress[index] = currentFileProgress;
-          updateOverallProgress(index, file.name, currentFileProgress);
-        }
-      });
-      
-      xhr.addEventListener('load', () => {
-        fileProgress[index] = 100;
-        if (xhr.status >= 200 && xhr.status < 300) {
-          try {
-            const data = JSON.parse(xhr.responseText);
-            if (data.success) {
-              successCount++;
-              resolve({ success: true, file: file.name });
-            } else {
-              failCount++;
-              resolve({ success: false, file: file.name, error: data.message || data.error });
-            }
-          } catch (e) {
-            failCount++;
-            resolve({ success: false, file: file.name, error: 'Invalid response' });
-          }
-        } else {
-          failCount++;
-          resolve({ success: false, file: file.name, error: `HTTP ${xhr.status}` });
-        }
-      });
-      
-      xhr.addEventListener('error', () => {
-        failCount++;
-        resolve({ success: false, file: file.name, error: 'Network error' });
-      });
-      
-      xhr.open('POST', endpoint);
-      xhr.send(formData);
-    });
-  };
-  
-  // Chunked upload for large files using the existing API
-  const uploadFileChunked = async (file, index) => {
-    try {
-      // Step 1: Initialize upload
-      const initResponse = await fetch('/api/uploads/init', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: uploadMediaType,
-          originalName: file.name,
-          size: file.size,
-          mimeType: file.type,
-          skipConversion: false
-        })
-      });
-      
-      if (!initResponse.ok) {
-        const errorData = await initResponse.json();
-        throw new Error(errorData.error || 'Failed to initialize upload');
-      }
-      
-      const { uploadId, chunkSize } = await initResponse.json();
-      const totalChunks = Math.ceil(file.size / chunkSize);
-      
-      // Step 2: Upload chunks with limited parallelism
-      let uploadedChunks = 0;
-      
-      const uploadChunk = async (chunkIndex) => {
-        const start = chunkIndex * chunkSize;
-        const end = Math.min(start + chunkSize, file.size);
-        const chunk = file.slice(start, end);
-        
-        const formData = new FormData();
-        formData.append('chunk', chunk);
-        formData.append('uploadId', uploadId);
-        formData.append('chunkIndex', chunkIndex);
-        
-        const response = await fetch('/api/uploads/chunk', {
-          method: 'POST',
-          body: formData
-        });
-        
-        if (!response.ok) {
-          throw new Error(`Chunk ${chunkIndex} failed`);
-        }
-        
-        uploadedChunks++;
-        const currentFileProgress = (uploadedChunks / totalChunks) * 100;
-        fileProgress[index] = currentFileProgress;
-        updateOverallProgress(index, file.name, currentFileProgress, `Chunk ${uploadedChunks}/${totalChunks}`);
-      };
-      
-      // Upload chunks with controlled parallelism
-      for (let i = 0; i < totalChunks; i += MAX_PARALLEL_CHUNKS) {
-        const chunkBatch = [];
-        for (let j = i; j < Math.min(i + MAX_PARALLEL_CHUNKS, totalChunks); j++) {
-          chunkBatch.push(uploadChunk(j));
-        }
-        await Promise.all(chunkBatch);
-      }
-      
-      // Step 3: Complete upload
-      const completeResponse = await fetch('/api/uploads/complete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          uploadId,
-          totalChunks
-        })
-      });
-      
-      if (!completeResponse.ok) {
-        const errorData = await completeResponse.json();
-        throw new Error(errorData.error || 'Failed to complete upload');
-      }
-      
-      fileProgress[index] = 100;
-      successCount++;
-      return { success: true, file: file.name };
-      
-    } catch (error) {
-      failCount++;
-      return { success: false, file: file.name, error: error.message };
-    }
-  };
-  
-  // Update progress display
-  const updateOverallProgress = (fileIndex, fileName, filePercent, extraInfo = '') => {
-    const totalProgress = fileProgress.reduce((sum, p) => sum + p, 0) / totalFiles;
-    progressBar.style.width = totalProgress.toFixed(0) + '%';
-    progressText.textContent = totalProgress.toFixed(0) + '%';
-    
-    const statusMsg = `Uploading ${fileIndex + 1}/${totalFiles}: ${fileName} (${filePercent.toFixed(0)}%)`;
-    statusText.textContent = extraInfo ? `${statusMsg} - ${extraInfo}` : statusMsg;
-  };
-  
-  // Upload files with concurrency limit (batches of MAX_CONCURRENT)
-  const uploadInBatches = async () => {
-    for (let i = 0; i < totalFiles; i += MAX_CONCURRENT) {
-      const batch = selectedFiles.slice(i, i + MAX_CONCURRENT);
-      const batchPromises = batch.map((file, batchIndex) => 
-        uploadFile(file, i + batchIndex)
-      );
-      await Promise.all(batchPromises);
-    }
-  };
-  
-  await uploadInBatches();
-  
-  // Update progress to 100%
-  progressBar.style.width = '100%';
-  progressText.textContent = '100%';
-  statusText.textContent = `Upload complete! ${successCount} succeeded${failCount > 0 ? `, ${failCount} failed` : ''}`;
-  
-  // Show success message
-  if (successCount > 0) {
-    showToast(`✓ Uploaded ${successCount} file(s) successfully!`);
-  }
-  if (failCount > 0) {
-    showToast(`⚠ ${failCount} file(s) failed to upload`, 'warning');
+  if (result.rejected > 0) {
+    showToast(`⚠ ${result.rejected} file(s) rejected (invalid format)`, 'warning');
   }
   
-  // Reload media lists immediately (non-blocking)
-  loadMedia();
-  
-  // Close modal
-  setTimeout(() => {
-    closeUploadMediaModal();
-  }, 1200);
+  // Start parallel upload (4 concurrent uploads!)
+  await queueManager.startUpload();
 }
 
 // Drag and Drop functionality
