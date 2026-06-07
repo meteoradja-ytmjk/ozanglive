@@ -1553,20 +1553,63 @@ app.get('/gallery', isAuthenticated, canViewVideos, async (req, res) => {
 });
 app.get('/render-jobs', isAuthenticated, async (req, res) => {
   try {
+    console.log('[DEBUG] Render jobs route called');
+    console.log('[DEBUG] User ID:', req.session.userId);
+    console.log('[DEBUG] Session:', JSON.stringify(req.session, null, 2));
+    
     const user = await User.findById(req.session.userId);
-    res.render('render-jobs', {
+    console.log('[DEBUG] User found:', user ? user.username : 'null');
+    
+    if (!user) {
+      console.error('[DEBUG] User not found, redirecting to login');
+      return res.redirect('/login');
+    }
+    
+    // Prepare all variables with fallbacks
+    const renderData = {
       title: 'Render Jobs',
       active: 'render-jobs',
-      user,
-      csrfToken: req.csrfToken(),
+      user: user,
+      csrfToken: req.csrfToken ? req.csrfToken() : '',
       uploadChunkConfig: {
         enabled: true,
-        thresholdBytes: UPLOAD_CHUNK_THRESHOLD
+        thresholdBytes: UPLOAD_CHUNK_THRESHOLD || (1 * 1024 * 1024)
       }
+    };
+    
+    console.log('[DEBUG] About to render with data:', {
+      ...renderData,
+      user: user ? user.username : 'null',
+      hasCsrfToken: !!renderData.csrfToken,
+      hasUploadChunkThreshold: !!renderData.uploadChunkConfig.thresholdBytes
     });
+    
+    res.render('render-jobs', renderData);
+    
+    console.log('[DEBUG] Render completed successfully');
   } catch (error) {
-    console.error('Render jobs page error:', error);
-    res.redirect('/dashboard');
+    console.error('============================================');
+    console.error('RENDER JOBS PAGE ERROR:');
+    console.error('Error Name:', error.name);
+    console.error('Error Message:', error.message);
+    console.error('Error Stack:', error.stack);
+    console.error('============================================');
+    
+    // Instead of redirect, send error page
+    try {
+      res.status(500).render('error', {
+        title: 'Error',
+        active: '',
+        error: {
+          message: 'Failed to load Render Jobs page',
+          detail: error.message,
+          stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        }
+      });
+    } catch (renderError) {
+      console.error('[DEBUG] Error page also failed:', renderError);
+      res.status(500).send('Internal Server Error: ' + error.message);
+    }
   }
 });
 
