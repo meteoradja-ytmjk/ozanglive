@@ -1557,7 +1557,12 @@ app.get('/render-jobs', isAuthenticated, async (req, res) => {
     res.render('render-jobs', {
       title: 'Render Jobs',
       active: 'render-jobs',
-      user
+      user,
+      csrfToken: req.csrfToken(),
+      uploadChunkConfig: {
+        enabled: true,
+        thresholdBytes: UPLOAD_CHUNK_THRESHOLD
+      }
     });
   } catch (error) {
     console.error('Render jobs page error:', error);
