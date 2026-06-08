@@ -60,12 +60,23 @@
         <p class="text-xs sm:text-sm text-gray-400 hidden sm:block">Create scheduled broadcasts directly to YouTube</p>
       </div>
     </div>
-    <!-- Guide Button -->
-    <button onclick="openYouTubeGuideModal()" 
-      class="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm transition-all duration-200 flex items-center gap-1.5 sm:gap-2 font-medium shadow-lg shadow-blue-500/25 flex-shrink-0">
-      <i class="ti ti-help-circle text-base sm:text-lg"></i>
-      <span class="whitespace-nowrap">Panduan API</span>
-    </button>
+    <!-- Action Buttons -->
+    <div class="flex items-center gap-2 flex-shrink-0">
+      <!-- Enable YouTube Data API Button -->
+      <a href="https://console.cloud.google.com/apis/library/youtube.googleapis.com" target="_blank" rel="noopener noreferrer"
+        class="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm transition-all duration-200 flex items-center gap-1.5 sm:gap-2 font-medium shadow-lg shadow-red-500/25"
+        title="Enable YouTube Data API v3 di Google Cloud Console">
+        <i class="ti ti-brand-youtube text-base sm:text-lg"></i>
+        <span class="whitespace-nowrap">Enable API</span>
+        <i class="ti ti-external-link text-sm hidden sm:inline"></i>
+      </a>
+      <!-- Guide Button -->
+      <button onclick="openYouTubeGuideModal()" 
+        class="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm transition-all duration-200 flex items-center gap-1.5 sm:gap-2 font-medium shadow-lg shadow-blue-500/25">
+        <i class="ti ti-help-circle text-base sm:text-lg"></i>
+        <span class="whitespace-nowrap">Panduan API</span>
+      </button>
+    </div>
   </div>
 
   <% if (!accounts || accounts.length === 0) { %>
