@@ -62,26 +62,25 @@
     </div>
     <!-- Action Buttons -->
     <div class="flex items-center gap-2 flex-shrink-0">
-      <!-- Enable YouTube Data API Button -->
+      <!-- Enable YouTube Data API Button (icon-only on mobile) -->
       <a href="https://console.cloud.google.com/apis/library/youtube.googleapis.com" target="_blank" rel="noopener noreferrer"
-        class="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm transition-all duration-200 flex items-center gap-1.5 sm:gap-2 font-medium shadow-lg shadow-red-500/25"
+        class="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-2.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm transition-all duration-200 flex items-center gap-1.5 font-medium shadow-lg shadow-red-500/25"
         title="Enable YouTube Data API v3 di Google Cloud Console">
         <i class="ti ti-brand-youtube text-base sm:text-lg"></i>
-        <span class="whitespace-nowrap">Enable API</span>
-        <i class="ti ti-external-link text-sm hidden sm:inline"></i>
+        <span class="hidden sm:inline whitespace-nowrap">Enable API</span>
       </a>
-      <!-- Guide Button -->
-      <button onclick="openYouTubeGuideModal()" 
-        class="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm transition-all duration-200 flex items-center gap-1.5 sm:gap-2 font-medium shadow-lg shadow-blue-500/25">
+      <!-- Guide Button (icon-only on mobile) -->
+      <button onclick="openYouTubeGuideModal()" title="Panduan API"
+        class="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-2.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm transition-all duration-200 flex items-center gap-1.5 font-medium shadow-lg shadow-blue-500/25">
         <i class="ti ti-help-circle text-base sm:text-lg"></i>
-        <span class="whitespace-nowrap">Panduan API</span>
+        <span class="hidden sm:inline whitespace-nowrap">Panduan API</span>
       </button>
     </div>
   </div>
 
   <% if (!accounts || accounts.length === 0) { %>
   <!-- Credentials Form (No Accounts Connected) -->
-  <div class="bg-gray-800 rounded-lg p-6 shadow-md">
+  <div class="bg-gray-800 rounded-lg p-4 sm:p-6 shadow-md">
     <div class="flex items-center gap-3 mb-6">
       <i class="ti ti-key text-primary text-2xl"></i>
       <div>
@@ -107,16 +106,16 @@
       
       <!-- OAuth Auto-Connect Button -->
       <div class="bg-gradient-to-r from-blue-500/10 to-green-500/10 rounded-lg p-4 border border-blue-500/30">
-        <p class="text-sm text-blue-300 mb-3 flex items-center gap-2">
-          <i class="ti ti-sparkles text-lg"></i>
-          <strong>Recommended:</strong> Auto-connect via Google (Refresh Token otomatis)
+        <p class="text-sm text-blue-300 mb-3 flex items-start gap-2">
+          <i class="ti ti-sparkles text-lg flex-shrink-0"></i>
+          <span><strong>Recommended:</strong> auto-connect via Google, refresh token otomatis.</span>
         </p>
         <button type="button" onclick="startOAuthFlow()"
-          class="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25">
-          <i class="ti ti-brand-google"></i>
-          <span>Connect with Google (Auto Refresh Token)</span>
+          class="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-4 py-3 rounded-lg font-medium transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25">
+          <i class="ti ti-brand-google text-lg flex-shrink-0"></i>
+          <span class="whitespace-nowrap">Connect with Google</span>
         </button>
-        <p class="text-xs text-gray-400 mt-2 text-center">Token akan di-refresh otomatis tanpa expired</p>
+        <p class="text-xs text-gray-400 mt-2 text-center">Token di-refresh otomatis tanpa expired</p>
       </div>
       
       <!-- Divider -->
@@ -127,24 +126,24 @@
       </div>
       
       <div>
-        <label class="text-sm font-medium text-white block mb-2">Refresh Token <span class="text-gray-400 text-xs">(optional jika pakai OAuth di atas)</span></label>
+        <label class="text-sm font-medium text-white block mb-2">Refresh Token <span class="text-gray-400 text-xs">(opsional jika pakai OAuth)</span></label>
         <textarea id="refreshToken" name="refreshToken" rows="3"
           class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none resize-none"
           placeholder="Atau paste manual Refresh Token dari OAuth Playground"></textarea>
       </div>
       
       <div class="bg-dark-700 rounded-lg p-4 border border-gray-600">
-        <p class="text-sm text-gray-400">
+        <p class="text-sm text-gray-400 break-words">
           <i class="ti ti-info-circle text-primary mr-1"></i>
           Get your credentials from <a href="https://console.cloud.google.com/apis/credentials" target="_blank" class="text-primary hover:underline">Google Cloud Console</a>. 
-          Make sure to enable YouTube Data API v3 and add <code class="bg-dark-600 px-1 rounded text-primary text-xs"><%= typeof baseUrl !== 'undefined' ? baseUrl : 'http://localhost:7575' %>/api/youtube/oauth/callback</code> as Authorized Redirect URI.
+          Make sure to enable YouTube Data API v3 and add <code class="bg-dark-600 px-1 rounded text-primary text-xs break-all"><%= typeof baseUrl !== 'undefined' ? baseUrl : 'http://localhost:7575' %>/api/youtube/oauth/callback</code> as Authorized Redirect URI.
         </p>
       </div>
       
       <button type="submit" id="connectBtn"
-        class="w-full bg-red-500 hover:bg-red-600 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2">
-        <i class="ti ti-brand-youtube"></i>
-        <span>Connect Manual (dengan Refresh Token)</span>
+        class="w-full bg-red-500 hover:bg-red-600 text-white px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2">
+        <i class="ti ti-brand-youtube flex-shrink-0"></i>
+        <span class="whitespace-nowrap">Connect Manual</span>
       </button>
     </form>
   </div>
