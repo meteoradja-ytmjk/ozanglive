@@ -1092,14 +1092,14 @@
 <div id="addAccountModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto">
   <div class="flex min-h-screen items-center justify-center p-4">
     <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-lg">
-      <div class="flex items-center justify-between p-6 border-b border-gray-700">
-        <h3 class="text-lg font-semibold">Add YouTube Account</h3>
-        <button onclick="closeAddAccountModal()" class="text-gray-400 hover:text-white">
+      <div class="flex items-center justify-between p-4 sm:p-6 border-b border-gray-700">
+        <h3 class="text-base sm:text-lg font-semibold">Add YouTube Account</h3>
+        <button onclick="closeAddAccountModal()" class="text-gray-400 hover:text-white flex-shrink-0">
           <i class="ti ti-x text-xl"></i>
         </button>
       </div>
       
-      <form id="addAccountForm" class="p-6 space-y-4">
+      <form id="addAccountForm" class="p-4 sm:p-6 space-y-4">
         <div id="reconnectTargetContainer" class="hidden bg-orange-500/10 border border-orange-500/30 rounded-lg p-3">
           <div class="flex items-start gap-2">
             <i class="ti ti-plug-connected-x text-orange-400 mt-0.5"></i>
@@ -1127,16 +1127,16 @@
 
         <!-- OAuth Auto-Connect Button -->
         <div class="bg-gradient-to-r from-blue-500/10 to-green-500/10 rounded-lg p-4 border border-blue-500/30">
-          <p class="text-sm text-blue-300 mb-3 flex items-center gap-2">
-            <i class="ti ti-sparkles text-lg"></i>
-            <strong>Recommended:</strong> Auto-connect via Google
+          <p class="text-sm text-blue-300 mb-3 flex items-start gap-2">
+            <i class="ti ti-sparkles text-lg flex-shrink-0"></i>
+            <span><strong>Recommended:</strong> auto-connect via Google.</span>
           </p>
           <button type="button" onclick="startOAuthFlowFromModal()"
             class="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-4 py-2.5 rounded-lg font-medium transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25">
-            <i class="ti ti-brand-google"></i>
-            <span>Connect with Google (Auto Token)</span>
+            <i class="ti ti-brand-google text-lg flex-shrink-0"></i>
+            <span class="whitespace-nowrap">Connect with Google</span>
           </button>
-          <p class="text-xs text-gray-400 mt-2 text-center">Refresh token otomatis, tidak perlu paste manual</p>
+          <p class="text-xs text-gray-400 mt-2 text-center">Refresh token otomatis, tanpa paste manual</p>
         </div>
 
         <!-- Divider -->
@@ -1154,10 +1154,10 @@
         </div>
         
         <div class="bg-dark-700 rounded-lg p-4 border border-gray-600">
-          <p class="text-sm text-gray-400">
+          <p class="text-sm text-gray-400 break-words">
             <i class="ti ti-info-circle text-primary mr-1"></i>
             Get your credentials from <a href="https://console.cloud.google.com/apis/credentials" target="_blank" class="text-primary hover:underline">Google Cloud Console</a>. 
-            Add <code class="bg-dark-600 px-1 rounded text-primary text-xs"><%= typeof baseUrl !== 'undefined' ? baseUrl : 'http://localhost:7575' %>/api/youtube/oauth/callback</code> as Redirect URI.
+            Add <code class="bg-dark-600 px-1 rounded text-primary text-xs break-all"><%= typeof baseUrl !== 'undefined' ? baseUrl : 'http://localhost:7575' %>/api/youtube/oauth/callback</code> as Redirect URI.
           </p>
         </div>
         
