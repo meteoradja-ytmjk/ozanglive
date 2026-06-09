@@ -115,7 +115,7 @@
           <i class="ti ti-brand-google text-lg flex-shrink-0"></i>
           <span class="whitespace-nowrap">Connect with Google</span>
         </button>
-        <p class="text-xs text-gray-400 mt-2 text-center">Token di-refresh otomatis tanpa expired</p>
+        <p class="text-xs text-gray-400 mt-2 text-center">Sesi diperbarui otomatis. Publish app ke Production agar koneksi tidak terputus.</p>
       </div>
       
       <!-- Divider -->
@@ -246,6 +246,10 @@
                 Publish ke Production untuk solusi permanent →
               </a>
             </p>
+            <p class="text-gray-500 text-xs mt-1">
+              <i class="ti ti-bulb text-yellow-500/70 mr-0.5"></i>
+              Reconnect = perbaikan cepat (bertahan 7 hari). Publish ke Production = solusi permanen.
+            </p>
             <!-- Expired accounts badges -->
             <div class="flex flex-wrap gap-2 mt-3">
               <% expiredAccounts.forEach(function(account) { %>
@@ -365,6 +369,14 @@
     <!-- Token Status Content -->
     <div id="tokenStatusContent" class="px-4 pb-4" style="display: none;">
       <div class="border-t border-gray-700/30 pt-3">
+        <!-- Clarification note: what auto-refresh actually does -->
+        <div class="bg-blue-500/5 border border-blue-500/20 rounded-lg p-3 mb-3">
+          <p class="text-xs text-gray-400 leading-relaxed">
+            <i class="ti ti-info-circle text-blue-400 mr-1"></i>
+            Yang diperbarui otomatis adalah <span class="text-gray-300">sesi login (access token)</span>. Jika OAuth app masih mode <span class="text-orange-400">Testing</span>, Google tetap memutus koneksi tiap 7 hari —
+            <a href="https://console.cloud.google.com/apis/credentials/consent" target="_blank" class="text-blue-400 hover:underline">publish ke Production</a> untuk solusi permanen.
+          </p>
+        </div>
         <div id="tokenStatusContainer">
           <div class="flex items-center justify-center py-3">
             <i class="ti ti-loader animate-spin text-gray-400 mr-2 text-sm"></i>
