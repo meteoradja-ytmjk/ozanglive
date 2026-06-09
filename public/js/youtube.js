@@ -1780,6 +1780,29 @@ function closeAddThumbnailFolderModal() {
   }
 }
 
+// REALTIME: Re-render every thumbnail folder list present in the DOM from the server (source of truth).
+// Keeps the Create Broadcast folder nav and the Thumbnail Manager modal in sync after add/delete/rename.
+async function refreshThumbnailFolderLists() {
+  const tasks = [];
+  if (document.getElementById('thumbnailManagerFolderList')) {
+    tasks.push(fetchThumbnailFoldersForManager());
+  }
+  if (document.getElementById('thumbnailFolderList')) {
+    tasks.push(fetchThumbnailFolders());
+  }
+  try {
+    await Promise.all(tasks);
+  } catch (err) {
+    console.error('[refreshThumbnailFolderLists] Error refreshing lists:', err);
+  }
+}
+
+// Returns true when the dedicated Thumbnail Manager modal is currently open.
+function isThumbnailManagerOpen() {
+  const modal = document.getElementById('thumbnailManagerModal');
+  return !!(modal && !modal.classList.contains('hidden'));
+}
+
 async function submitAddThumbnailFolder(event) {
   event.preventDefault();
   
@@ -1832,12 +1855,15 @@ async function submitAddThumbnailFolder(event) {
       showToast('Folder berhasil dibuat: ' + data.folder.name, 'success');
       closeAddThumbnailFolderModal();
       
-      // REALTIME: Add folder to UI immediately
-      console.log('[ADD FOLDER] Adding folder to UI realtime');
-      addFolderToManagerRealtime(data.folder.name, 0);
+      // REALTIME: re-render all folder lists from the server (source of truth)
+      await refreshThumbnailFolderLists();
       
-      // Also refresh main gallery
-      fetchThumbnailFolders();
+      // Open the newly created folder in whichever view is active
+      if (isThumbnailManagerOpen()) {
+        openThumbnailFolderInManager(data.folder.name);
+      } else {
+        openThumbnailFolder(data.folder.name);
+      }
     } else {
       showToast(data.error || 'Gagal membuat folder', 'error');
     }
@@ -2161,7 +2187,8 @@ async function deleteThumbnailFolder(folderName) {
         openThumbnailFolder(null);
       }
       
-      fetchThumbnailFolders();
+      // REALTIME: re-render all folder lists from the server (keeps manager + nav in sync)
+      await refreshThumbnailFolderLists();
     } else {
       showToast(data.error || 'Failed to delete folder', 'error');
     }
@@ -8771,36 +8798,24 @@ async function deleteThumbnailFolderManager(folderName) {
     if (data.success) {
       showToast('Folder berhasil dihapus', 'success');
       
-      // REALTIME: Remove dari DOM setelah animasi
-      setTimeout(() => {
-        if (deletedItem) {
-          deletedItem.remove();
-          console.log('[DELETE FOLDER] Folder removed from DOM');
-        }
+      // REALTIME: after the fade-out animation, re-render all lists from the server (source of truth)
+      setTimeout(async () => {
+        await refreshThumbnailFolderLists();
         
-        // Check if there are remaining folders
+        // Decide what to show next based on remaining folders
         const remainingFolders = document.querySelectorAll('.folder-item-manager').length;
-        console.log('[DELETE FOLDER] Remaining folders:', remainingFolders);
-        
-        const folderList = document.getElementById('thumbnailManagerFolderList');
-        const emptyState = document.getElementById('thumbnailManagerFolderEmpty');
-        
         if (remainingFolders === 0) {
-          // No more folders, show empty state
-          console.log('[DELETE FOLDER] No folders left, showing empty state');
+          const folderList = document.getElementById('thumbnailManagerFolderList');
+          const emptyState = document.getElementById('thumbnailManagerFolderEmpty');
           if (folderList) folderList.classList.add('hidden');
           if (emptyState) emptyState.classList.remove('hidden');
           showEmptyFolderState();
         } else {
           // Open first remaining folder
-          console.log('[DELETE FOLDER] Opening first remaining folder');
           const firstFolder = document.querySelector('.folder-item-manager');
-          if (firstFolder) {
-            const firstFolderName = firstFolder.querySelector('span.truncate')?.textContent;
-            if (firstFolderName) {
-              console.log('[DELETE FOLDER] Auto-opening:', firstFolderName);
-              openThumbnailFolderInManager(firstFolderName);
-            }
+          const firstFolderName = firstFolder?.querySelector('span.truncate')?.textContent;
+          if (firstFolderName) {
+            openThumbnailFolderInManager(firstFolderName);
           }
         }
       }, 300);
