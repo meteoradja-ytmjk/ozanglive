@@ -339,7 +339,7 @@ function createChannelGroup(channelName, group, channelIndex) {
           </div>
           <div>
             <span class="font-medium text-white">${escapeHtml(channelName)}</span>
-            <span class="ml-2 text-xs text-gray-400">(${group.broadcasts.length} broadcasts)</span>
+            <span class="ml-2 text-xs text-gray-400 channel-broadcast-count">(${group.broadcasts.length} broadcasts)</span>
           </div>
         </div>
         <div class="flex items-center gap-2">
@@ -3078,36 +3078,107 @@ if (createBroadcastForm) {
   });
 }
 
+// Tracks in-flight single deletes to prevent double-trigger on rapid taps
+const _deletingBroadcastIds = new Set();
+
+// Remove broadcast rows from the DOM and keep channel group counts in sync (no full page reload).
+function removeBroadcastRowsFromDOM(broadcastIds) {
+  const idSet = new Set(broadcastIds.map(String));
+  const affectedGroups = new Set();
+
+  document.querySelectorAll('.broadcast-row').forEach(row => {
+    if (idSet.has(String(row.getAttribute('data-broadcast-id')))) {
+      const group = row.closest('.channel-broadcast-group');
+      if (group) affectedGroups.add(group);
+      row.remove();
+    }
+  });
+
+  // Update counts or drop empty channel groups
+  affectedGroups.forEach(group => {
+    const remaining = group.querySelectorAll('.broadcast-row').length;
+    if (remaining === 0) {
+      group.remove();
+    } else {
+      const countEl = group.querySelector('.channel-broadcast-count');
+      if (countEl) countEl.textContent = `(${remaining} broadcasts)`;
+    }
+  });
+
+  // If no channel groups remain, show the empty state
+  const container = document.getElementById('broadcastsContainer');
+  if (container && container.querySelectorAll('.channel-broadcast-group').length === 0) {
+    if (typeof renderEmptyState === 'function') renderEmptyState();
+  }
+}
+
+// Restore a set of delete buttons to their original clickable state
+function _restoreDeleteButtons(buttons) {
+  buttons.forEach(btn => {
+    btn.disabled = false;
+    if (btn.dataset._origHtml !== undefined) {
+      btn.innerHTML = btn.dataset._origHtml;
+      delete btn.dataset._origHtml;
+    }
+    btn.style.pointerEvents = '';
+    btn.style.opacity = '';
+  });
+}
+
 // Delete Broadcast
 async function deleteBroadcast(broadcastId, title, accountId = null) {
+  const key = String(broadcastId);
+
+  // Guard: ignore repeated clicks while a delete for this broadcast is in flight
+  if (_deletingBroadcastIds.has(key)) return;
+
   if (!confirm(`Are you sure you want to delete "${title}"?`)) {
     return;
   }
-  
+
+  _deletingBroadcastIds.add(key);
+
+  // Instant feedback: disable + spinner on this row's delete button(s)
+  const row = document.querySelector(`.broadcast-row[data-broadcast-id="${broadcastId}"]`);
+  const delButtons = row ? Array.from(row.querySelectorAll('button[title="Delete"]')) : [];
+  delButtons.forEach(btn => {
+    btn.dataset._origHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ti ti-loader animate-spin"></i>';
+    btn.style.pointerEvents = 'none';
+    btn.style.opacity = '0.6';
+  });
+
   try {
     let url = `/api/youtube/broadcasts/${broadcastId}`;
     if (accountId) {
       url += `?accountId=${accountId}`;
     }
-    
+
     const response = await fetch(url, {
       method: 'DELETE',
       headers: {
         'X-CSRF-Token': getCsrfToken()
       }
     });
-    
-    const data = await response.json();
-    
-    if (data.success) {
+
+    let data = {};
+    try { data = await response.json(); } catch (e) { /* ignore non-JSON */ }
+
+    // Idempotent: treat "already gone" (404) the same as a successful delete
+    if (data.success || response.status === 404) {
       showToast('Broadcast deleted');
-      setTimeout(() => window.location.reload(), 1000);
+      removeBroadcastRowsFromDOM([broadcastId]);
     } else {
       showToast(data.error || 'Failed to delete broadcast', 'error');
+      _restoreDeleteButtons(delButtons);
     }
   } catch (error) {
     console.error('Error:', error);
     showToast('An error occurred', 'error');
+    _restoreDeleteButtons(delButtons);
+  } finally {
+    _deletingBroadcastIds.delete(key);
   }
 }
 
@@ -4658,55 +4729,115 @@ function saveSelectedAsTemplate() {
 }
 
 // Delete selected broadcasts
+// Guard against concurrent bulk delete runs
+let _bulkDeleting = false;
+
+// Delete selected broadcasts (bulk / per-channel grouping)
 async function deleteSelectedBroadcasts() {
+  if (_bulkDeleting) return;
+
   const selected = getSelectedBroadcasts();
-  
+
   if (selected.length === 0) {
     showToast('Please select at least one broadcast', 'error');
     return;
   }
-  
+
   if (!confirm(`Are you sure you want to delete ${selected.length} broadcast(s)?`)) {
     return;
   }
-  
+
+  _bulkDeleting = true;
+
+  const total = selected.length;
+  let completed = 0;
   let successCount = 0;
   let failCount = 0;
-  
-  for (const broadcast of selected) {
-    try {
-      let url = `/api/youtube/broadcasts/${broadcast.id}`;
-      if (broadcast.accountId) {
-        url += `?accountId=${broadcast.accountId}`;
-      }
-      
-      const response = await fetch(url, {
-        method: 'DELETE',
-        headers: {
-          'X-CSRF-Token': getCsrfToken()
+  const deletedIds = [];
+
+  // Disable the bulk delete button + show live progress
+  const bulkBtn = document.querySelector('[onclick*="deleteSelectedBroadcasts"]');
+  const bulkBtnHtml = bulkBtn ? bulkBtn.innerHTML : null;
+  if (bulkBtn) {
+    bulkBtn.disabled = true;
+    bulkBtn.style.pointerEvents = 'none';
+    bulkBtn.style.opacity = '0.6';
+  }
+  const updateProgress = () => {
+    if (bulkBtn) bulkBtn.innerHTML = `<i class="ti ti-loader animate-spin"></i> ${completed}/${total}`;
+  };
+  updateProgress();
+
+  // Delete with limited concurrency: fast, but gentle on the YouTube API
+  const CONCURRENCY = 4;
+  let cursor = 0;
+
+  async function worker() {
+    while (cursor < selected.length) {
+      const broadcast = selected[cursor++];
+      try {
+        let url = `/api/youtube/broadcasts/${broadcast.id}`;
+        if (broadcast.accountId) {
+          url += `?accountId=${broadcast.accountId}`;
         }
-      });
-      
-      const data = await response.json();
-      
-      if (data.success) {
-        successCount++;
-      } else {
+
+        const response = await fetch(url, {
+          method: 'DELETE',
+          headers: {
+            'X-CSRF-Token': getCsrfToken()
+          }
+        });
+
+        let data = {};
+        try { data = await response.json(); } catch (e) { /* ignore non-JSON */ }
+
+        // Idempotent: 404 means it's already gone → count as success
+        if (data.success || response.status === 404) {
+          successCount++;
+          deletedIds.push(broadcast.id);
+        } else {
+          failCount++;
+        }
+      } catch (error) {
+        console.error('Error deleting broadcast:', error);
         failCount++;
+      } finally {
+        completed++;
+        updateProgress();
       }
-    } catch (error) {
-      console.error('Error deleting broadcast:', error);
-      failCount++;
     }
   }
-  
+
+  const workers = [];
+  for (let i = 0; i < Math.min(CONCURRENCY, selected.length); i++) {
+    workers.push(worker());
+  }
+  await Promise.all(workers);
+
+  // Remove successfully deleted rows from the DOM (no full reload)
+  if (deletedIds.length > 0) {
+    removeBroadcastRowsFromDOM(deletedIds);
+  }
+
+  // Reset selection state
+  if (typeof clearSelection === 'function') clearSelection();
+  if (typeof updateSelectionCount === 'function') updateSelectionCount();
+
+  // Restore the bulk button
+  if (bulkBtn) {
+    bulkBtn.disabled = false;
+    bulkBtn.style.pointerEvents = '';
+    bulkBtn.style.opacity = '';
+    if (bulkBtnHtml !== null) bulkBtn.innerHTML = bulkBtnHtml;
+  }
+
   if (failCount === 0) {
     showToast(`Successfully deleted ${successCount} broadcast(s)`);
   } else {
-    showToast(`Deleted ${successCount}/${selected.length}. ${failCount} failed.`, 'error');
+    showToast(`Deleted ${successCount}/${total}. ${failCount} failed.`, 'error');
   }
-  
-  setTimeout(() => window.location.reload(), 1000);
+
+  _bulkDeleting = false;
 }
 
 // Multi-Save Template Modal

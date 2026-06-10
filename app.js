@@ -8807,6 +8807,23 @@ app.get('/api/youtube/channel-defaults', isAuthenticated, async (req, res) => {
 const broadcastsApiCache = new Map();
 const BROADCASTS_CACHE_TTL = 60000; // 60 seconds (increased from 30s for better performance)
 
+// Invalidate all cached broadcast lists for a user (both the "all accounts" key and per-account keys).
+// Must be called after any create/update/delete so the next fetch returns fresh data.
+function invalidateBroadcastsCache(userId) {
+  if (userId === undefined || userId === null) return;
+  const prefix = `user_${userId}_`;
+  let cleared = 0;
+  for (const key of broadcastsApiCache.keys()) {
+    if (key.startsWith(prefix)) {
+      broadcastsApiCache.delete(key);
+      cleared++;
+    }
+  }
+  if (cleared > 0) {
+    console.log(`[Cache INVALIDATE] Cleared ${cleared} broadcast cache entr${cleared === 1 ? 'y' : 'ies'} for user ${userId}`);
+  }
+}
+
 app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
   try {
     const accountId = req.query.accountId ? parseInt(req.query.accountId) : null;
@@ -9243,6 +9260,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       }
     }
 
+    invalidateBroadcastsCache(req.session.userId);
     res.json({ success: true, broadcast });
   } catch (error) {
     console.error('Error creating broadcast:', error);
@@ -9293,6 +9311,7 @@ app.put('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
             categoryId
           });
           console.log('[API] Update broadcast success:', result);
+          invalidateBroadcastsCache(req.session.userId);
           return res.json({ success: true, broadcast: result });
         } catch (err) {
           // Continue to next account if this one doesn't own the broadcast
@@ -9350,6 +9369,7 @@ app.put('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
       }
     }
 
+    invalidateBroadcastsCache(req.session.userId);
     res.json({ success: true, broadcast: result });
   } catch (error) {
     console.error('Error updating broadcast:', error);
@@ -9378,6 +9398,7 @@ app.delete('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
         try {
           const accessToken = await youtubeService.getAccessToken(account.clientId, account.clientSecret, account.refreshToken, 0, account.id, 0, account.id);
           await youtubeService.deleteBroadcast(accessToken, req.params.id);
+          invalidateBroadcastsCache(req.session.userId);
           return res.json({ success: true, message: 'Broadcast deleted' });
         } catch (err) {
           // Continue to next account if this one doesn't own the broadcast
@@ -9390,6 +9411,7 @@ app.delete('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
     const accessToken = await youtubeService.getAccessToken(credentials.clientId, credentials.clientSecret, credentials.refreshToken, 0, credentials.id, 0, credentials.id);
 
     await youtubeService.deleteBroadcast(accessToken, req.params.id);
+    invalidateBroadcastsCache(req.session.userId);
     res.json({ success: true, message: 'Broadcast deleted' });
   } catch (error) {
     console.error('Error deleting broadcast:', error);
