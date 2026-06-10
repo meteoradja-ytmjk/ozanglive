@@ -427,11 +427,16 @@ function createBroadcastRowHtml(broadcast, index) {
               ${broadcast.privacyStatus || 'private'}
             </span>
           </div>
-          <div class="w-36">
-            <span class="font-mono text-xs text-gray-400 truncate block cursor-pointer hover:text-primary" 
-              onclick="copyStreamKey('${escapeJsString(broadcast.streamKey || '')}')" title="Click to copy">
+          <div class="w-48 flex items-center gap-1.5">
+            <span class="text-[10px] font-bold text-primary bg-primary/15 px-1.5 py-0.5 rounded shrink-0" title="Stream key #${index + 1}">#${index + 1}</span>
+            <span class="font-mono text-xs text-gray-400 truncate flex-1 min-w-0" title="${escapeHtml(broadcast.streamKey || '')}">
               ${streamKeyDisplay}
             </span>
+            <button type="button" onclick="copyStreamKey('${escapeJsString(broadcast.streamKey || '')}', ${index + 1})"
+              class="shrink-0 w-7 h-7 flex items-center justify-center text-gray-400 hover:text-primary hover:bg-primary/10 rounded transition-colors ${broadcast.streamKey ? '' : 'opacity-40 pointer-events-none'}"
+              title="Copy stream key #${index + 1}">
+              <i class="ti ti-copy text-sm"></i>
+            </button>
           </div>
           <div class="w-32 flex items-center justify-center gap-2">
             <button onclick="editBroadcast('${broadcast.id}', ${broadcast.accountId})"
@@ -456,12 +461,16 @@ function createBroadcastRowHtml(broadcast, index) {
             data-account-id="${broadcast.accountId}"
             data-broadcast="${broadcastData}"
             onchange="syncCheckboxes(this); updateSelectionCount()">
-          <span class="text-gray-500 text-xs w-4 flex-shrink-0">${index + 1}</span>
+          <span class="text-[10px] font-bold text-primary bg-primary/15 px-1.5 py-0.5 rounded flex-shrink-0" title="Stream key #${index + 1}">#${index + 1}</span>
           <span class="flex-1 text-xs text-white truncate min-w-0">${safeTitle}</span>
           <span class="px-1.5 py-0.5 rounded text-[10px] font-medium uppercase flex-shrink-0 ${privacyClass}">
             ${(broadcast.privacyStatus || 'pri').substring(0, 3)}
           </span>
           <div class="flex items-center gap-1 flex-shrink-0">
+            <button onclick="copyStreamKey('${escapeJsString(broadcast.streamKey || '')}', ${index + 1})"
+              class="px-1.5 py-1 text-xs bg-primary/20 text-primary rounded ${broadcast.streamKey ? '' : 'opacity-40 pointer-events-none'}" title="Copy stream key #${index + 1}">
+              📋
+            </button>
             <button onclick="editBroadcast('${broadcast.id}', ${broadcast.accountId})"
               class="px-1.5 py-1 text-xs bg-blue-500/20 text-blue-400 rounded" title="Edit">
               ✏️
@@ -612,19 +621,7 @@ function clearSelection() {
 }
 
 // Copy stream key to clipboard
-function copyStreamKey(streamKey) {
-  if (!streamKey) {
-    showToast('No stream key available', 'error');
-    return;
-  }
-  
-  navigator.clipboard.writeText(streamKey).then(() => {
-    showToast('Stream key copied to clipboard');
-  }).catch(err => {
-    console.error('Failed to copy:', err);
-    showToast('Failed to copy stream key', 'error');
-  });
-}
+// NOTE: copyStreamKey() is defined later in this file (single source of truth).
 
 // Render broadcasts in the UI
 function renderBroadcasts(broadcasts) {
@@ -3477,24 +3474,32 @@ async function reuseBroadcast(broadcastId, accountId) {
 }
 
 // Copy Stream Key
-function copyStreamKey(streamKey) {
+// Copy Stream Key (with optional number for clearer feedback)
+function copyStreamKey(streamKey, keyNumber) {
   if (!streamKey) {
     showToast('No stream key available', 'error');
     return;
   }
-  
-  navigator.clipboard.writeText(streamKey).then(() => {
-    showToast('Stream key copied to clipboard');
-  }).catch(() => {
-    // Fallback for older browsers
+
+  const label = keyNumber ? `Stream key #${keyNumber} copied` : 'Stream key copied to clipboard';
+
+  const fallbackCopy = () => {
     const textarea = document.createElement('textarea');
     textarea.value = streamKey;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
     document.body.appendChild(textarea);
     textarea.select();
-    document.execCommand('copy');
+    try { document.execCommand('copy'); } catch (e) { /* ignore */ }
     document.body.removeChild(textarea);
-    showToast('Stream key copied to clipboard');
-  });
+    showToast(label);
+  };
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(streamKey).then(() => showToast(label)).catch(fallbackCopy);
+  } else {
+    fallbackCopy();
+  }
 }
 
 // Change Thumbnail Modal

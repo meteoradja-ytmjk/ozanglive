@@ -646,11 +646,16 @@
                 <%= broadcast.privacyStatus %>
               </span>
             </div>
-            <div class="w-36">
-              <span class="font-mono text-xs text-gray-400 truncate block cursor-pointer hover:text-primary" 
-                onclick="copyStreamKey('<%= broadcast.streamKey || '' %>')" title="Click to copy">
+            <div class="w-48 flex items-center gap-1.5">
+              <span class="text-[10px] font-bold text-primary bg-primary/15 px-1.5 py-0.5 rounded shrink-0" title="Stream key #<%= index + 1 %>">#<%= index + 1 %></span>
+              <span class="font-mono text-xs text-gray-400 truncate flex-1 min-w-0" title="<%= broadcast.streamKey || '' %>">
                 <%= broadcast.streamKey ? broadcast.streamKey.substring(0, 16) + '...' : '-' %>
               </span>
+              <button type="button" onclick="copyStreamKey('<%= broadcast.streamKey || '' %>', <%= index + 1 %>)"
+                class="shrink-0 w-7 h-7 flex items-center justify-center text-gray-400 hover:text-primary hover:bg-primary/10 rounded transition-colors <%= broadcast.streamKey ? '' : 'opacity-40 pointer-events-none' %>"
+                title="Copy stream key #<%= index + 1 %>">
+                <i class="ti ti-copy text-sm"></i>
+              </button>
             </div>
             <div class="w-24 flex items-center justify-center gap-1">
               <button onclick="editBroadcast('<%= broadcast.id %>', <%= broadcast.accountId %>)"
@@ -675,7 +680,7 @@
               data-account-id="<%= broadcast.accountId %>"
               data-broadcast='<%= JSON.stringify({id: broadcast.id, accountId: broadcast.accountId, title: broadcast.title, description: broadcast.description || "", privacyStatus: broadcast.privacyStatus, streamId: broadcast.streamId || null, streamKey: broadcast.streamKey || "", categoryId: broadcast.categoryId || "22", tags: broadcast.tags || [], thumbnailPath: broadcast.thumbnailPath || null}) %>'
               onchange="syncCheckboxes(this); updateSelectionCount()">
-            <span class="text-gray-500 text-xs w-4 flex-shrink-0"><%= index + 1 %></span>
+            <span class="text-[10px] font-bold text-primary bg-primary/15 px-1.5 py-0.5 rounded flex-shrink-0" title="Stream key #<%= index + 1 %>">#<%= index + 1 %></span>
             <span class="flex-1 text-xs text-white truncate min-w-0"><%= broadcast.title %></span>
             <span class="px-1.5 py-0.5 rounded text-[10px] font-medium uppercase flex-shrink-0
               <%= broadcast.privacyStatus === 'public' ? 'bg-green-500/20 text-green-400' : 
@@ -684,6 +689,10 @@
               <%= broadcast.privacyStatus.substring(0, 3) %>
             </span>
             <div class="flex items-center gap-0.5 flex-shrink-0">
+              <button onclick="copyStreamKey('<%= broadcast.streamKey || '' %>', <%= index + 1 %>)"
+                class="w-8 h-8 flex items-center justify-center text-primary hover:bg-primary/20 rounded transition-colors <%= broadcast.streamKey ? '' : 'opacity-40 pointer-events-none' %>" title="Copy stream key #<%= index + 1 %>">
+                <i class="ti ti-copy text-sm"></i>
+              </button>
               <button onclick="editBroadcast('<%= broadcast.id %>', <%= broadcast.accountId %>)"
                 class="w-8 h-8 flex items-center justify-center text-blue-400 hover:bg-blue-500/20 rounded transition-colors" title="Edit">
                 <i class="ti ti-edit text-sm"></i>
