@@ -533,7 +533,7 @@
 
 /* Delete button styling - Make it more visible */
 button[onclick*="deleteJob"] {
-  min-width: 44px;
+  min-width: 56px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -546,7 +546,11 @@ button[onclick*="deleteJob"]:hover {
   border-color: rgba(239, 68, 68, 0.6) !important;
 }
 
-button[onclick*="deleteJob"] i {
+button[onclick*="deleteJob"]:active {
+  transform: scale(0.97);
+}
+
+button[onclick*="deleteJob"] {
   color: #EF4444;
 }
 </style>
@@ -2213,12 +2217,27 @@ function getVisualizerSettings() {
   };
 }
 
-async function deleteJob(id){
+async function deleteJob(id, btn){
   if(!confirm('Hapus project ini?'))return;
-  const r=await fetch(`/api/render/jobs/${id}`,{method:'DELETE'});
-  const d=await r.json();
-  if(!d.success)return alert(d.message||'Gagal hapus');
-  loadJobs();
+  // Immediate visual feedback so the button feels responsive
+  if(btn){
+    btn.disabled = true;
+    btn.dataset.originalText = btn.textContent;
+    btn.textContent = '...';
+  }
+  try{
+    const r=await fetch(`/api/render/jobs/${id}`,{method:'DELETE'});
+    const d=await r.json();
+    if(!d.success){
+      alert(d.message||'Gagal hapus');
+      if(btn){ btn.disabled=false; btn.textContent=btn.dataset.originalText||'DEL'; }
+      return;
+    }
+    loadJobs();
+  }catch(err){
+    alert('Gagal hapus: '+(err && err.message ? err.message : 'network error'));
+    if(btn){ btn.disabled=false; btn.textContent=btn.dataset.originalText||'DEL'; }
+  }
 }
 
 async function loadJobs(){
@@ -2319,12 +2338,12 @@ async function loadJobs(){
           <button onclick="openLoopModal('${j.id}')" class="flex-1 px-3 py-2 bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 text-xs rounded-lg transition-colors font-medium">
             <i class="ti ti-repeat mr-1.5 text-sm"></i>Loop
           </button>
-          <button onclick="deleteJob('${j.id}')" class="px-3 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 text-xs rounded-lg transition-colors border border-red-500/30 hover:border-red-500/50 font-medium" title="Delete">
-            <i class="ti ti-trash text-base"></i>
+          <button onclick="deleteJob('${j.id}', this)" class="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 text-xs font-bold tracking-wide rounded-lg transition-colors border border-red-500/30 hover:border-red-500/50 disabled:opacity-50 disabled:cursor-not-allowed" title="Delete">
+            DEL
           </button>
         ` : `
-          <button onclick="deleteJob('${j.id}')" class="flex-1 px-3 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 text-xs rounded-lg transition-colors border border-red-500/30 hover:border-red-500/50 font-medium" title="Delete">
-            <i class="ti ti-trash mr-1.5 text-sm"></i>Delete
+          <button onclick="deleteJob('${j.id}', this)" class="flex-1 px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 text-xs font-bold tracking-wide rounded-lg transition-colors border border-red-500/30 hover:border-red-500/50 disabled:opacity-50 disabled:cursor-not-allowed" title="Delete">
+            DEL
           </button>
         `}
       </div>
