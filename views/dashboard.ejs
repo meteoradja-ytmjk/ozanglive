@@ -33,6 +33,49 @@
       animation: bounceDown 1s ease-in-out infinite;
       animation-delay: 0.5s;
     }
+
+    /* Stream action buttons (Play/Stop, Edit, Delete) - responsive tap handling */
+    .stream-action-btn {
+      /* Remove the ~300ms tap delay on mobile and stop the browser tap flash */
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-user-select: none;
+      user-select: none;
+      cursor: pointer;
+    }
+
+    /* Make sure a tap always lands on the button, never on the inner SVG/path */
+    .stream-action-btn svg {
+      pointer-events: none;
+    }
+
+    /* Instant press feedback (fires immediately on touch/click, before the request) */
+    .stream-action-btn:active {
+      transform: scale(0.9);
+    }
+
+    /* Busy state while the request is in flight */
+    .stream-action-btn.is-busy {
+      opacity: 0.65;
+      cursor: wait;
+      pointer-events: none;
+    }
+
+    .stream-btn-spinner {
+      display: inline-block;
+      width: 1em;
+      height: 1em;
+      border: 2px solid currentColor;
+      border-top-color: transparent;
+      border-radius: 9999px;
+      animation: streamBtnSpin 0.6s linear infinite;
+    }
+
+    @keyframes streamBtnSpin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
   </style>
 
   <!-- Mobile Stats Bar - Portrait (FIXED - DO NOT CHANGE) -->
@@ -1893,17 +1936,17 @@
       </td>
       <td class="px-3 py-4 text-right">
         <div class="flex items-center justify-end gap-2">
-          <button onclick="${stream.status === 'live' ? `stopStream('${stream.id}')` : `startStream('${stream.id}')`}" class="w-9 h-9 flex items-center justify-center ${stream.status === 'live' ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' : 'bg-green-500/20 text-green-400 hover:bg-green-500/30'} rounded-lg transition-all duration-200 hover:scale-105" title="${stream.status === 'live' ? 'Stop' : 'Start'}">
+          <button onclick="${stream.status === 'live' ? `stopStream('${stream.id}', event)` : `startStream('${stream.id}', event)`}" class="stream-action-btn w-9 h-9 flex items-center justify-center ${stream.status === 'live' ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' : 'bg-green-500/20 text-green-400 hover:bg-green-500/30'} rounded-lg transition-colors" title="${stream.status === 'live' ? 'Stop' : 'Start'}">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
               ${stream.status === 'live' ? '<rect x="6" y="6" width="12" height="12" rx="2"/>' : '<path d="M8 5v14l11-7z"/>'}
             </svg>
           </button>
-          <button onclick="editStream('${stream.id}')" class="w-9 h-9 flex items-center justify-center bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 rounded-lg transition-all duration-200 hover:scale-105" title="Edit">
+          <button onclick="editStream('${stream.id}', event)" class="stream-action-btn w-9 h-9 flex items-center justify-center bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 rounded-lg transition-colors" title="Edit">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
             </svg>
           </button>
-          <button onclick="deleteStream('${stream.id}')" class="w-9 h-9 flex items-center justify-center bg-red-500/20 text-red-400 hover:bg-red-500/30 rounded-lg transition-all duration-200 hover:scale-105" title="Delete">
+          <button onclick="deleteStream('${stream.id}', event)" class="stream-action-btn w-9 h-9 flex items-center justify-center bg-red-500/20 text-red-400 hover:bg-red-500/30 rounded-lg transition-colors" title="Delete">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
             </svg>
@@ -1930,17 +1973,17 @@
           ${stream.schedule_type !== 'once' ? `<p class="text-xs text-accent truncate">${scheduleTypeBadge} ${scheduleInfo}</p>` : ''}
         </div>
         <div class="flex items-center gap-1 flex-shrink-0">
-          <button onclick="${stream.status === 'live' ? `stopStream('${stream.id}')` : `startStream('${stream.id}')`}" class="w-8 h-8 flex items-center justify-center ${stream.status === 'live' ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'} rounded-lg">
+          <button onclick="${stream.status === 'live' ? `stopStream('${stream.id}', event)` : `startStream('${stream.id}', event)`}" class="stream-action-btn w-9 h-9 flex items-center justify-center ${stream.status === 'live' ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'} rounded-lg">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
               ${stream.status === 'live' ? '<rect x="6" y="6" width="12" height="12" rx="2"/>' : '<path d="M8 5v14l11-7z"/>'}
             </svg>
           </button>
-          <button onclick="editStream('${stream.id}')" class="w-8 h-8 flex items-center justify-center bg-blue-500/20 text-blue-400 rounded-lg">
+          <button onclick="editStream('${stream.id}', event)" class="stream-action-btn w-9 h-9 flex items-center justify-center bg-blue-500/20 text-blue-400 rounded-lg">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
             </svg>
           </button>
-          <button onclick="deleteStream('${stream.id}')" class="w-8 h-8 flex items-center justify-center bg-red-500/20 text-red-400 rounded-lg">
+          <button onclick="deleteStream('${stream.id}', event)" class="stream-action-btn w-9 h-9 flex items-center justify-center bg-red-500/20 text-red-400 rounded-lg">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
             </svg>
@@ -1957,7 +2000,37 @@
       });
     }
 
-    async function startStream(id) {
+    // Prevent duplicate requests when a button is tapped rapidly (mobile double-tap, etc.)
+    const streamActionLocks = new Set();
+
+    // Show an instant busy/spinner state on the clicked action button.
+    // Re-rendering the list (loadStreams) will replace the button, so we only
+    // need to restore it manually when the action fails / doesn't re-render.
+    function setStreamButtonBusy(btn, busy) {
+      if (!btn) return;
+      if (busy) {
+        if (btn.dataset.busy === '1') return;
+        btn.dataset.busy = '1';
+        btn.dataset.originalHtml = btn.innerHTML;
+        btn.classList.add('is-busy');
+        btn.innerHTML = '<span class="stream-btn-spinner"></span>';
+      } else {
+        if (btn.dataset.busy !== '1') return;
+        delete btn.dataset.busy;
+        btn.classList.remove('is-busy');
+        if (btn.dataset.originalHtml !== undefined) {
+          btn.innerHTML = btn.dataset.originalHtml;
+          delete btn.dataset.originalHtml;
+        }
+      }
+    }
+
+    async function startStream(id, event) {
+      const lockKey = `start:${id}`;
+      if (streamActionLocks.has(lockKey)) return; // already starting, ignore extra taps
+      streamActionLocks.add(lockKey);
+      const btn = event && event.currentTarget ? event.currentTarget : null;
+      setStreamButtonBusy(btn, true);
       try {
         const response = await fetch(`/api/streams/${id}/start`, { method: 'POST' });
         const result = await response.json();
@@ -1965,6 +2038,7 @@
           loadStreams();
           loadLiveLimitInfo();
         } else {
+          setStreamButtonBusy(btn, false);
           // Only show toast for limit reached - this is important info
           if (result.limitReached) {
             const whatsappUrl = buildLimitWhatsappUrl(liveLimitWhatsappNumber);
@@ -1981,24 +2055,37 @@
         }
       } catch (error) {
         console.error('Error starting stream:', error);
+        setStreamButtonBusy(btn, false);
         if (typeof showCenterToast === 'function') {
           showCenterToast('error', 'Failed to start stream. Please try again.', 7000);
         }
+      } finally {
+        streamActionLocks.delete(lockKey);
       }
     }
 
-    async function stopStream(id) {
+    async function stopStream(id, event) {
+      const lockKey = `stop:${id}`;
+      if (streamActionLocks.has(lockKey)) return;
+      streamActionLocks.add(lockKey);
+      const btn = event && event.currentTarget ? event.currentTarget : null;
+      setStreamButtonBusy(btn, true);
       try {
         const response = await fetch(`/api/streams/${id}/stop`, { method: 'POST' });
         const result = await response.json();
         if (result.success) {
           loadStreams();
           loadLiveLimitInfo();
+        } else {
+          setStreamButtonBusy(btn, false);
         }
         // No toast for errors
       } catch (error) {
         console.error('Error stopping stream:', error);
+        setStreamButtonBusy(btn, false);
         // No toast for errors
+      } finally {
+        streamActionLocks.delete(lockKey);
       }
     }
 
@@ -2214,22 +2301,37 @@
     // END INLINE EDIT FUNCTIONS
     // ============================================
 
-    async function deleteStream(id) {
+    async function deleteStream(id, event) {
       // No confirmation dialog - delete immediately for faster workflow
       // No toast notifications - silent delete
+      const lockKey = `delete:${id}`;
+      if (streamActionLocks.has(lockKey)) return; // ignore rapid repeat taps
+      streamActionLocks.add(lockKey);
+      const btn = event && event.currentTarget ? event.currentTarget : null;
+      setStreamButtonBusy(btn, true);
       try {
         const response = await fetch(`/api/streams/${id}`, { method: 'DELETE' });
         const result = await response.json();
         if (result.success) {
           loadStreams();
           loadLiveLimitInfo();
+        } else {
+          setStreamButtonBusy(btn, false);
         }
       } catch (error) {
         console.error('Error deleting stream:', error);
+        setStreamButtonBusy(btn, false);
+      } finally {
+        streamActionLocks.delete(lockKey);
       }
     }
 
-    async function editStream(id) {
+    async function editStream(id, event) {
+      const lockKey = `edit:${id}`;
+      if (streamActionLocks.has(lockKey)) return;
+      streamActionLocks.add(lockKey);
+      const btn = event && event.currentTarget ? event.currentTarget : null;
+      setStreamButtonBusy(btn, true);
       try {
         const response = await fetch(`/api/streams/${id}`);
         const result = await response.json();
@@ -2334,6 +2436,10 @@
       } catch (error) {
         console.error('Error loading stream for edit:', error);
         if (typeof showToast === 'function') showToast('error', 'Failed to load stream');
+      } finally {
+        // Restore the edit button (the list is not re-rendered here, so the button persists)
+        setStreamButtonBusy(btn, false);
+        streamActionLocks.delete(lockKey);
       }
     }
 
