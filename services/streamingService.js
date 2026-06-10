@@ -888,19 +888,20 @@ async function buildFFmpegArgsForPlaylist(stream, playlist, durationOverrideSeco
     fs.mkdirSync(tempDir, { recursive: true });
   }
   
+  // Loop the playlist when the user enabled loop OR when a finite duration is set.
+  // A finite duration means the stream MUST run for the full configured time, so the
+  // playlist has to repeat to fill it. Without this, FFmpeg exits as soon as the
+  // playlist ends — the "stream stops before the configured duration" bug.
+  // We use the FFmpeg `-stream_loop -1` input flag (added to args below) for a true
+  // infinite loop instead of repeating the concat list a fixed number of times, so it
+  // works correctly for any duration (including very long ones).
+  const shouldLoopPlaylist = !!stream.loop_video || (durationSeconds && durationSeconds > 0);
+
   let concatContent = '';
-  if (stream.loop_video) {
-    for (let i = 0; i < 1000; i++) {
-      videoPaths.forEach(videoPath => {
-        concatContent += `file '${formatConcatFilePath(videoPath)}'\n`;
-      });
-    }
-  } else {
-    videoPaths.forEach(videoPath => {
-      concatContent += `file '${formatConcatFilePath(videoPath)}'\n`;
-    });
-  }
-  
+  videoPaths.forEach(videoPath => {
+    concatContent += `file '${formatConcatFilePath(videoPath)}'\n`;
+  });
+
   fs.writeFileSync(concatFile, concatContent);
 
   // Build a single seamless audio file when the playlist has audios.
@@ -959,11 +960,20 @@ async function buildFFmpegArgsForPlaylist(stream, playlist, durationOverrideSeco
 
   const args = [
     '-re',
+  ];
+
+  // Loop the concatenated playlist input when required (see shouldLoopPlaylist above).
+  // -stream_loop must be placed BEFORE the -i it applies to.
+  if (shouldLoopPlaylist) {
+    args.push('-stream_loop', '-1');
+  }
+
+  args.push(
     '-fflags', '+genpts',
     '-f', 'concat',
     '-safe', '0',
     '-i', concatFile,
-  ];
+  );
 
   if (usePlaylistAudio) {
     if (useGaplessAudio) {
@@ -1124,8 +1134,13 @@ async function buildFFmpegArgs(stream, durationOverrideSeconds = null) {
 function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds, loopVideo) {
   const args = ['-re'];
   
-  // Video input
-  if (loopVideo) {
+  // Loop the video when the user enabled loop OR when a finite duration is set.
+  // If a duration is configured, the stream must run for that full duration, so a
+  // short video has to loop to fill it. Otherwise FFmpeg (with -shortest) ends as
+  // soon as the single video playthrough finishes — the "stops before the configured
+  // duration" bug. -t still cuts the output at the exact requested duration.
+  const shouldLoopVideo = loopVideo || (durationSeconds && durationSeconds > 0);
+  if (shouldLoopVideo) {
     args.push('-stream_loop', '-1');
   }
   args.push('-i', videoPath);
@@ -1162,7 +1177,13 @@ function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds
 function buildFFmpegArgsVideoOnly(videoPath, rtmpUrl, durationSeconds, loopVideo) {
   const args = ['-re'];
   
-  if (loopVideo) {
+  // Loop the video when the user enabled loop OR when a finite duration is set.
+  // A configured duration means the stream must run for that full time, so a short
+  // video has to loop to fill it. Without this FFmpeg exits when the single video
+  // playthrough finishes — the "stops before the configured duration" bug.
+  // -t still cuts the output at the exact requested duration.
+  const shouldLoopVideo = loopVideo || (durationSeconds && durationSeconds > 0);
+  if (shouldLoopVideo) {
     args.push('-stream_loop', '-1');
   }
   args.push('-i', videoPath);
