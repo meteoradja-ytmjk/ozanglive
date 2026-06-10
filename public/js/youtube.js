@@ -5164,14 +5164,30 @@ function openRecreateFromTemplateModal(template) {
   }
   
   // Render broadcast list with schedule inputs
+  renderRecreateBroadcastList();
+  
+  document.getElementById('recreateFromTemplateModal').classList.remove('hidden');
+  
+  // Load title rotation settings and check if enabled
+  loadRecreateTitleRotationPreview();
+}
+
+// Render (or re-render) the per-broadcast schedule list for the recreate-from-template modal.
+// Pass preservedSchedules (array of datetime-local values by index) to keep user-entered times on re-render.
+function renderRecreateBroadcastList(preservedSchedules = null) {
+  const template = window.currentRecreateTemplate;
+  if (!template) return;
   const listEl = document.getElementById('recreateBroadcastList');
+  if (!listEl) return;
+
   const broadcasts = template.broadcasts || [template];
   const mapping = template.stream_key_folder_mapping || {};
-  
+  const canDelete = broadcasts.length > 1;
+
   listEl.innerHTML = broadcasts.map((b, i) => {
     const minDate = new Date(Date.now() + 11 * 60 * 1000);
     const minDateStr = minDate.toISOString().slice(0, 16);
-    
+
     // Determine folder for this broadcast
     const streamId = b.streamId || template.stream_id;
     let folder = null;
@@ -5182,30 +5198,75 @@ function openRecreateFromTemplateModal(template) {
     } else if (template.thumbnail_folder !== null && template.thumbnail_folder !== undefined) {
       folder = template.thumbnail_folder;
     }
-    
+
     const folderDisplay = folder !== null ? (folder === '' ? '📁 Root' : `📂 ${folder}`) : '⚠️ No folder';
     const folderClass = folder !== null ? 'text-green-400' : 'text-yellow-400';
-    
+
+    const preset = (preservedSchedules && preservedSchedules[i]) ? preservedSchedules[i] : '';
+    const valueAttr = preset ? ` value="${preset}"` : '';
+
+    const deleteBtn = canDelete
+      ? `<button type="button" onclick="removeRecreateBroadcast(${i})"
+           class="w-6 h-6 flex items-center justify-center text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors flex-shrink-0"
+           title="Hapus jadwal ini dari daftar">
+           <i class="ti ti-trash text-sm"></i>
+         </button>`
+      : '';
+
     return `
       <div class="bg-dark-700 rounded-lg p-3 space-y-2">
-        <div class="flex items-center justify-between">
-          <span class="font-medium text-sm text-white">${i + 1}. ${escapeHtml(b.title)}</span>
-          <span class="text-xs ${folderClass}">${folderDisplay}</span>
+        <div class="flex items-start justify-between gap-2">
+          <span class="font-medium text-sm text-white flex-1 min-w-0">${i + 1}. ${escapeHtml(b.title)}</span>
+          <div class="flex items-center gap-2 flex-shrink-0">
+            <span class="text-xs ${folderClass}">${folderDisplay}</span>
+            ${deleteBtn}
+          </div>
         </div>
         ${b.streamKey ? `<div class="text-xs text-gray-400 font-mono truncate">Key: ${escapeHtml(b.streamKey)}</div>` : ''}
         <div>
           <label class="text-xs text-gray-400 block mb-1">Schedule Time</label>
-          <input type="datetime-local" name="recreateSchedule[]" required min="${minDateStr}"
+          <input type="datetime-local" name="recreateSchedule[]" required min="${minDateStr}"${valueAttr}
             class="w-full px-3 py-2 bg-dark-600 border border-gray-600 rounded-lg focus:border-primary focus:outline-none text-sm [color-scheme:dark]">
         </div>
       </div>
     `;
   }).join('');
-  
-  document.getElementById('recreateFromTemplateModal').classList.remove('hidden');
-  
-  // Load title rotation settings and check if enabled
-  loadRecreateTitleRotationPreview();
+}
+
+// Remove a single broadcast/schedule from the recreate list (does NOT touch the saved template).
+function removeRecreateBroadcast(index) {
+  const template = window.currentRecreateTemplate;
+  if (!template) return;
+
+  const broadcasts = template.broadcasts || [template];
+  if (broadcasts.length <= 1) {
+    showToast('Minimal harus ada 1 broadcast', 'error');
+    return;
+  }
+
+  // Preserve schedule values the user already typed, then drop the removed index
+  const listEl = document.getElementById('recreateBroadcastList');
+  const preserved = Array.from(listEl.querySelectorAll('input[name="recreateSchedule[]"]')).map(inp => inp.value);
+  preserved.splice(index, 1);
+
+  // Remove from the in-memory broadcasts array (only multi-broadcast templates have the array)
+  if (Array.isArray(template.broadcasts)) {
+    template.broadcasts.splice(index, 1);
+  }
+
+  // Keep the title-rotation array aligned by index if it exists
+  if (Array.isArray(window.recreateNextTitles) && window.recreateNextTitles.length) {
+    window.recreateNextTitles.splice(index, 1);
+  }
+
+  renderRecreateBroadcastList(preserved);
+
+  // Refresh rotated-title overlay if rotation is enabled
+  if (window.recreateUseTitleRotation) {
+    updateRecreateBroadcastTitles();
+  }
+
+  showToast('Jadwal broadcast dihapus dari daftar');
 }
 
 function closeRecreateFromTemplateModal() {
