@@ -76,3 +76,19 @@ ROLLBACK-SUMMARY.md
 SYNTAX-ERROR-FIX.md
 VIDEO-LOADING-DELETE-BUTTON-FIX.md
 WINDOWS-COMPATIBILITY-FIX.md
+
+# ---------------------------------------------------------------------------
+# SECURITY: local credential / diagnostic files (contain real login info)
+# These must never be committed to a public repository.
+# ---------------------------------------------------------------------------
+test-creds.json
+test-settings-access.js
+test-real-vps.js
+test-login-flow.js
+test-login.js
+test-quick-reconnect.js
+test-duration-accuracy.js
+diagnose-vps-settings.js
+diagnose-settings.sh
+check-vps-code.sh
+fix-vps.sh
