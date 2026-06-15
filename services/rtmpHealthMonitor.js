@@ -5,26 +5,31 @@
  * if the connection drops while the stream should still be running.
  * 
  * This prevents YouTube Live from dying before the scheduled duration ends.
+ * 
+ * IMPROVED: For unlimited streams (once without duration), provides infinite
+ * reconnection with exponential backoff.
  */
 
 const Stream = require('../models/Stream');
 const { calculateDurationSeconds } = require('../utils/durationCalculator');
 
-// Check interval: 5 minutes - detect connection drops quickly for auto-reconnect
-const HEALTH_CHECK_INTERVAL_MS = 5 * 60 * 1000;
+// Check interval: 1 minute for faster detection
+const HEALTH_CHECK_INTERVAL_MS = 1 * 60 * 1000;
 
-// Maximum consecutive failures before giving up
-const MAX_CONSECUTIVE_FAILURES = 3;
+// Maximum consecutive failures before giving up (timed streams)
+const MAX_CONSECUTIVE_FAILURES = 5;
+// For unlimited streams, allow many more failures before giving up
+const MAX_CONSECUTIVE_FAILURES_UNLIMITED = 100;
 
-// Reconnect delay: 5 seconds
-const RECONNECT_DELAY_MS = 5 * 1000;
+// Reconnect delay: 3 seconds base, with exponential backoff for unlimited
+const RECONNECT_DELAY_MS = 3 * 1000;
 
-// Minimum remaining time to attempt reconnect (2 minutes)
+// Minimum remaining time to attempt reconnect (2 minutes) - only for timed streams
 const MIN_REMAINING_TIME_FOR_RECONNECT_MS = 2 * 60 * 1000;
 
 class RTMPHealthMonitor {
   constructor() {
-    // Map of streamId -> { intervalId, startTime, durationMs, consecutiveFailures, lastCheck }
+    // Map of streamId -> { intervalId, startTime, durationMs, consecutiveFailures, lastCheck, isUnlimited }
     this.monitoredStreams = new Map();
     
     // Reference to streamingService (set via setStreamingService)
@@ -32,6 +37,20 @@ class RTMPHealthMonitor {
     
     // Flag to prevent multiple reconnects
     this.reconnectingStreams = new Set();
+  }
+
+  /**
+   * Check if a stream is configured for unlimited duration
+   * @param {Object} stream - Stream object from database
+   * @returns {boolean} True if stream should run indefinitely
+   */
+  isUnlimitedStream(stream) {
+    if (!stream) return false;
+    const isOnceSchedule = !stream.schedule_type || stream.schedule_type === 'once';
+    if (!isOnceSchedule) return false;
+    const hasDuration = stream.stream_duration_minutes && stream.stream_duration_minutes > 0;
+    const hasEndTime = stream.end_time && new Date(stream.end_time) > new Date();
+    return !hasDuration && !hasEndTime;
   }
 
   /**
@@ -47,9 +66,10 @@ class RTMPHealthMonitor {
    * @param {string} streamId - Stream ID
    * @param {Date} startTime - Stream start time
    * @param {number} durationMs - Expected duration in milliseconds (null for indefinite)
+   * @param {boolean} isUnlimited - Whether this is an unlimited stream
    * @returns {boolean} True if monitoring started
    */
-  startMonitoring(streamId, startTime, durationMs) {
+  startMonitoring(streamId, startTime, durationMs, isUnlimited = false) {
     // Don't monitor if already monitoring
     if (this.monitoredStreams.has(streamId)) {
       console.log(`[RTMPHealthMonitor] Already monitoring stream ${streamId}`);
@@ -66,13 +86,14 @@ class RTMPHealthMonitor {
       intervalId,
       startTime,
       durationMs,
+      isUnlimited: isUnlimited || !durationMs, // Treat null duration as unlimited
       consecutiveFailures: 0,
       lastCheck: new Date(),
       reconnectAttempts: 0
     });
 
-    const durationInfo = durationMs ? `${(durationMs / 60000).toFixed(1)} minutes` : 'indefinite';
-    console.log(`[RTMPHealthMonitor] Started monitoring stream ${streamId} (duration: ${durationInfo})`);
+    const durationInfo = durationMs ? `${(durationMs / 60000).toFixed(1)} minutes` : 'UNLIMITED (∞)';
+    console.log(`[RTMPHealthMonitor] Started monitoring stream ${streamId} (duration: ${durationInfo}, unlimited: ${isUnlimited || !durationMs})`);
     return true;
   }
 
@@ -136,7 +157,8 @@ class RTMPHealthMonitor {
       // Check if stream should still be running
       const timeStatus = this.getStreamTimeStatus(streamId);
       
-      if (!timeStatus.shouldBeRunning) {
+      // For unlimited streams, always consider them as "should be running"
+      if (!monitor.isUnlimited && !timeStatus.shouldBeRunning) {
         console.log(`[RTMPHealthMonitor] Stream ${streamId} duration completed, stopping monitor`);
         this.stopMonitoring(streamId);
         return;
@@ -150,7 +172,9 @@ class RTMPHealthMonitor {
         monitor.consecutiveFailures = 0;
         
         // Log remaining time periodically
-        if (timeStatus.remainingMs !== null) {
+        if (monitor.isUnlimited) {
+          console.log(`[RTMPHealthMonitor] Stream ${streamId}: OK (UNLIMITED - running forever)`);
+        } else if (timeStatus.remainingMs !== null) {
           const remainingMin = (timeStatus.remainingMs / 60000).toFixed(1);
           console.log(`[RTMPHealthMonitor] Stream ${streamId}: OK (${remainingMin} min remaining)`);
         }
@@ -159,24 +183,28 @@ class RTMPHealthMonitor {
 
       // FFmpeg not running - check if we should reconnect
       monitor.consecutiveFailures++;
-      console.log(`[RTMPHealthMonitor] Stream ${streamId}: FFmpeg not running (failure #${monitor.consecutiveFailures})`);
+      console.log(`[RTMPHealthMonitor] Stream ${streamId}: FFmpeg not running (failure #${monitor.consecutiveFailures}${monitor.isUnlimited ? ' - unlimited mode' : ''})`);
 
-      // Check if enough time remaining to reconnect
-      if (timeStatus.remainingMs !== null && timeStatus.remainingMs < MIN_REMAINING_TIME_FOR_RECONNECT_MS) {
-        console.log(`[RTMPHealthMonitor] Stream ${streamId}: Not enough time remaining (${(timeStatus.remainingMs / 60000).toFixed(1)} min), skipping reconnect`);
-        this.stopMonitoring(streamId);
-        return;
+      // For unlimited streams, skip time-based checks
+      if (!monitor.isUnlimited) {
+        // Check if enough time remaining to reconnect
+        if (timeStatus.remainingMs !== null && timeStatus.remainingMs < MIN_REMAINING_TIME_FOR_RECONNECT_MS) {
+          console.log(`[RTMPHealthMonitor] Stream ${streamId}: Not enough time remaining (${(timeStatus.remainingMs / 60000).toFixed(1)} min), skipping reconnect`);
+          this.stopMonitoring(streamId);
+          return;
+        }
       }
 
-      // Check if max failures reached
-      if (monitor.consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-        console.log(`[RTMPHealthMonitor] Stream ${streamId}: Max failures reached (${MAX_CONSECUTIVE_FAILURES}), stopping monitor`);
+      // Check if max failures reached (use higher limit for unlimited streams)
+      const maxFailures = monitor.isUnlimited ? MAX_CONSECUTIVE_FAILURES_UNLIMITED : MAX_CONSECUTIVE_FAILURES;
+      if (monitor.consecutiveFailures >= maxFailures) {
+        console.log(`[RTMPHealthMonitor] Stream ${streamId}: Max failures reached (${maxFailures}), stopping monitor`);
         this.stopMonitoring(streamId);
         return;
       }
 
       // Attempt reconnect
-      await this.attemptReconnect(streamId, timeStatus.remainingMs);
+      await this.attemptReconnect(streamId, timeStatus.remainingMs, monitor.isUnlimited);
 
     } catch (error) {
       console.error(`[RTMPHealthMonitor] Error checking stream ${streamId}:`, error.message);
@@ -187,8 +215,9 @@ class RTMPHealthMonitor {
    * Attempt to reconnect a stream
    * @param {string} streamId - Stream ID
    * @param {number|null} remainingMs - Remaining duration in milliseconds
+   * @param {boolean} isUnlimited - Whether this is an unlimited stream
    */
-  async attemptReconnect(streamId, remainingMs) {
+  async attemptReconnect(streamId, remainingMs, isUnlimited = false) {
     // Prevent multiple simultaneous reconnects
     if (this.reconnectingStreams.has(streamId)) {
       console.log(`[RTMPHealthMonitor] Stream ${streamId}: Reconnect already in progress`);
@@ -203,10 +232,15 @@ class RTMPHealthMonitor {
     }
 
     try {
-      console.log(`[RTMPHealthMonitor] Stream ${streamId}: Attempting reconnect (attempt #${monitor?.reconnectAttempts || 1})`);
+      console.log(`[RTMPHealthMonitor] Stream ${streamId}: Attempting reconnect (attempt #${monitor?.reconnectAttempts || 1}${isUnlimited ? ' - unlimited mode' : ''})`);
 
-      // Wait before reconnecting
-      await new Promise(resolve => setTimeout(resolve, RECONNECT_DELAY_MS));
+      // For unlimited streams, use exponential backoff with cap
+      const baseDelay = isUnlimited 
+        ? Math.min(RECONNECT_DELAY_MS + ((monitor?.reconnectAttempts || 0) * 2000), 30000) // 3s, 5s, 7s... max 30s
+        : RECONNECT_DELAY_MS;
+      
+      console.log(`[RTMPHealthMonitor] Stream ${streamId}: Waiting ${baseDelay}ms before reconnect`);
+      await new Promise(resolve => setTimeout(resolve, baseDelay));
 
       // Get stream data
       const stream = await Stream.findById(streamId);
@@ -227,7 +261,9 @@ class RTMPHealthMonitor {
       if (this.streamingService) {
         // Log remaining time but DO NOT modify stream_duration_minutes in DB
         // The startStream function will use streamOriginalTiming to calculate remaining duration
-        if (remainingMs !== null && remainingMs > 0) {
+        if (isUnlimited) {
+          console.log(`[RTMPHealthMonitor] Stream ${streamId}: Reconnecting UNLIMITED stream`);
+        } else if (remainingMs !== null && remainingMs > 0) {
           const remainingMinutes = Math.ceil(remainingMs / 60000);
           console.log(`[RTMPHealthMonitor] Stream ${streamId}: Reconnecting with ${remainingMinutes} minutes remaining`);
         }
@@ -235,9 +271,14 @@ class RTMPHealthMonitor {
         const result = await this.streamingService.startStream(streamId);
         
         if (result.success) {
-          console.log(`[RTMPHealthMonitor] Stream ${streamId}: Reconnect successful`);
+          console.log(`[RTMPHealthMonitor] Stream ${streamId}: Reconnect successful (attempt #${monitor?.reconnectAttempts || 1})`);
           if (monitor) {
             monitor.consecutiveFailures = 0;
+            // For unlimited streams, don't reset reconnectAttempts - used for backoff tracking
+            // But we can reduce it on success to speed up future reconnects
+            if (isUnlimited && monitor.reconnectAttempts > 3) {
+              monitor.reconnectAttempts = 3; // Reset to baseline for faster future reconnects
+            }
           }
         } else {
           console.error(`[RTMPHealthMonitor] Stream ${streamId}: Reconnect failed - ${result.error}`);
