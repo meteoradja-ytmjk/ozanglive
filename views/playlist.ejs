@@ -1,0 +1,1302 @@
+<% layout('layout') -%>
+
+<div class="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+  <div>
+    <h2 class="text-2xl font-bold">Playlist Manager</h2>
+    <p class="text-gray-400 text-sm mt-1">Create and manage playlists for streaming</p>
+  </div>
+  <div class="flex flex-wrap gap-3">
+    <button onclick="openCreatePlaylistModal()"
+      class="flex items-center gap-2 bg-primary hover:bg-secondary text-white px-4 py-2 rounded-lg transition-colors">
+      <i class="ti ti-plus"></i>
+      <span>Create Playlist</span>
+    </button>
+  </div>
+</div>
+
+<div class="bg-gray-800 rounded-lg p-4 mb-6">
+  <div class="flex flex-row items-center gap-3">
+    <div class="relative w-full sm:w-80 md:w-96">
+      <input type="text" id="searchPlaylists" placeholder="Search playlists..."
+        class="w-full bg-dark-700 text-white pl-9 pr-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
+      <i class="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+    </div>
+    <div class="w-32">
+      <select id="sortPlaylists"
+        class="w-full bg-dark-700 border border-gray-600 text-white px-3 py-2.5 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
+        <option value="newest">Newest</option>
+        <option value="oldest">Oldest</option>
+        <option value="name">Name</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<div id="playlistsContainer" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+  <% if (playlists && playlists.length > 0) { %>
+    <% playlists.forEach(function(playlist) { %>
+      <div class="bg-gray-800 rounded-lg overflow-hidden shadow-md hover:shadow-lg transition-shadow playlist-card h-32" 
+           data-playlist-id="<%= playlist.id %>" 
+           data-created-at="<%= playlist.created_at %>" 
+           data-updated-at="<%= playlist.updated_at %>">
+        <div class="p-4 h-full flex flex-col justify-between">
+          <div class="flex flex-col">
+            <div class="flex items-start justify-between mb-2">
+              <h3 class="font-semibold text-lg truncate flex-1 pr-2"><%= playlist.name %></h3>
+              <div class="flex items-center gap-1 flex-shrink-0">
+                <button class="bg-primary hover:bg-secondary text-white w-8 h-8 flex items-center justify-center rounded-lg transition-colors" onclick="viewPlaylist('<%= playlist.id %>')">
+                  <i class="ti ti-eye text-sm"></i>
+                </button>
+                <button class="bg-emerald-600 hover:bg-emerald-700 text-white w-8 h-8 flex items-center justify-center rounded-lg transition-colors" onclick="editPlaylist('<%= playlist.id %>')">
+                  <i class="ti ti-pencil text-sm"></i>
+                </button>
+                <button class="bg-red-600 hover:bg-red-700 text-white w-8 h-8 flex items-center justify-center rounded-lg transition-colors" onclick="deletePlaylist('<%= playlist.id %>', '<%= playlist.name %>')">
+                  <i class="ti ti-trash text-sm"></i>
+                </button>
+              </div>
+            </div>
+            <p class="text-gray-400 text-sm line-clamp-2"><%= playlist.description || 'No description' %></p>
+          </div>
+          
+          <div class="flex items-center justify-between text-sm text-gray-400 mt-auto">
+            <span class="flex items-center gap-2">
+              <span><i class="ti ti-video mr-1"></i><%= playlist.video_count || 0 %></span>
+              <span><i class="ti ti-music mr-1"></i><%= playlist.audio_count || 0 %></span>
+            </span>
+            <span class="flex items-center gap-1">
+              <i class="ti ti-<%= (playlist.shuffle || playlist.is_shuffle) ? 'arrows-shuffle' : 'list-numbers' %>"></i>
+              <%= (playlist.shuffle || playlist.is_shuffle) ? 'Shuffle' : 'Sequential' %>
+            </span>
+          </div>
+        </div>
+      </div>
+    <% }); %>
+  <% } else { %>
+    <div class="col-span-full text-center py-12">
+      <i class="ti ti-playlist text-6xl text-gray-600 mb-4"></i>
+      <h3 class="text-xl font-semibold mb-2">No playlists yet</h3>
+      <p class="text-gray-400 mb-4">Create your first playlist to get started</p>
+      <button onclick="openCreatePlaylistModal()" 
+        class="bg-primary hover:bg-secondary text-white px-6 py-3 rounded-lg transition-colors">
+        <i class="ti ti-plus mr-2"></i>
+        Create Playlist
+      </button>
+    </div>
+  <% } %>
+</div>
+
+<div class="mt-6 flex items-center justify-between">
+  <p class="text-sm text-gray-400" id="paginationInfo">Showing 1-<%= Math.min(8, playlists ? playlists.length : 0) %> of <%= playlists ? playlists.length : 0 %> playlists</p>
+  <div class="flex items-center gap-2" id="paginationControls">
+    <button type="button" class="w-9 h-9 flex items-center justify-center rounded-lg bg-dark-700 hover:bg-dark-600 text-gray-400 hover:text-white transition-colors" id="prevPage" onclick="changePage(-1)">
+      <i class="ti ti-chevron-left"></i>
+    </button>
+    <div id="pageNumbers" class="flex items-center gap-2"></div>
+    <button type="button" class="w-9 h-9 flex items-center justify-center rounded-lg bg-dark-700 hover:bg-dark-600 text-gray-400 hover:text-white transition-colors" id="nextPage" onclick="changePage(1)">
+      <i class="ti ti-chevron-right"></i>
+    </button>
+  </div>
+</div>
+
+<!-- Create/Edit Playlist Modal -->
+<div id="playlistModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+  <div class="bg-gray-800 rounded-lg p-6 w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
+    <div class="flex items-center justify-between mb-6 pb-4 border-b border-gray-700">
+      <h3 id="modalTitle" class="text-xl font-semibold">Create New Playlist</h3>
+      <button onclick="closePlaylistModal()" class="text-gray-400 hover:text-white">
+        <i class="ti ti-x text-xl"></i>
+      </button>
+    </div>
+    
+    <form id="playlistForm" class="space-y-6">
+      <input type="hidden" id="playlistId" name="playlistId">
+      
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <label for="playlistName" class="block text-sm font-medium mb-2">Playlist Name</label>
+          <input type="text" id="playlistName" name="name" required placeholder="Enter playlist name..."
+            class="w-full bg-dark-700 text-white px-3 py-2 border border-gray-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
+        </div>
+        
+        <div>
+            <div class="flex items-center mb-2">
+              <label for="playlistShuffle" class="text-sm font-medium">Playback Mode</label>
+              <div class="relative ml-2 group">
+                <i class="ti ti-help-circle text-gray-400 hover:text-primary cursor-help"></i>
+                <div class="absolute left-full top-1/2 -translate-y-1/2 ml-2 hidden group-hover:block w-64 p-3 bg-dark-600 text-xs text-gray-200 rounded-md shadow-lg z-10">
+                  <div class="space-y-2">
+                    <div><strong>Sequential:</strong> Video berurutan sesuai urutan dalam playlist</div>
+                    <div><strong>Shuffle:</strong> Video diacak secara random</div>
+                  </div>
+                  <div class="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-dark-600"></div>
+                </div>
+              </div>
+            </div>
+          <select id="playlistShuffle" name="shuffle"
+            class="w-full bg-dark-700 border border-gray-600 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
+            <option value="false">Sequential</option>
+            <option value="true">Shuffle</option>
+          </select>
+        </div>
+      </div>
+      
+      <div>
+        <label class="block text-sm font-medium mb-3">Select Media</label>
+        <!-- Single panel: Select Media with checkboxes, shuffle & pin -->
+        <div>
+          <!-- Tab Buttons -->
+          <div class="flex w-full mb-3 border border-gray-600 rounded-lg overflow-hidden bg-gray-800/50">
+            <button type="button" id="availableVideosTab" onclick="switchAvailableTab('videos')" 
+              class="flex-1 px-4 py-2 text-sm font-medium text-center border-b-2 border-primary text-primary bg-primary/20">
+              <i class="ti ti-video mr-1"></i>Videos
+            </button>
+            <div class="w-px bg-gray-600"></div>
+            <button type="button" id="availableAudiosTab" onclick="switchAvailableTab('audios')" 
+              class="flex-1 px-4 py-2 text-sm font-medium text-center border-b-2 border-transparent text-gray-400 hover:text-white hover:bg-gray-700/50">
+              <i class="ti ti-music mr-1"></i>Audios
+            </button>
+          </div>
+
+          <!-- Selected count -->
+          <div class="flex items-center justify-end mb-2 px-1">
+            <span class="text-xs text-gray-500" id="selectedMediaCount">0 selected</span>
+          </div>
+          
+          <!-- Videos Panel -->
+          <div id="availableVideosPanel" class="bg-dark-700 rounded-lg border border-gray-600 shadow-lg">
+            <div class="p-2 border-b border-gray-600/50 space-y-2">
+              <div class="relative">
+                <input type="text" id="searchVideos" placeholder="Search videos..."
+                  class="w-full bg-dark-800 text-white pl-8 pr-4 py-2 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary border border-gray-700">
+                <i class="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+              </div>
+              <button type="button" onclick="shuffleSelectedVideos()" class="w-full h-8 flex items-center justify-center gap-2 rounded-lg bg-primary/10 border border-primary/30 hover:bg-primary/20 text-primary text-xs font-medium transition-colors">
+                <span>&#x1F500;</span> Shuffle Video Order
+              </button>
+            </div>
+            <div id="availableVideos" class="p-2 space-y-1 min-h-[220px] max-h-72 overflow-y-auto custom-scrollbar">
+              <!-- Rendered dynamically by JS with folder grouping + checkboxes -->
+            </div>
+          </div>
+          
+          <!-- Audios Panel -->
+          <div id="availableAudiosPanel" class="bg-dark-700 rounded-lg border border-gray-600 shadow-lg hidden">
+            <div class="p-2 border-b border-gray-600/50 space-y-2">
+              <div class="relative">
+                <input type="text" id="searchAudios" placeholder="Search audios..."
+                  class="w-full bg-dark-800 text-white pl-8 pr-4 py-2 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary border border-gray-700">
+                <i class="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+              </div>
+              <button type="button" onclick="shuffleSelectedAudios()" class="w-full h-8 flex items-center justify-center gap-2 rounded-lg bg-green-500/10 border border-green-500/30 hover:bg-green-500/20 text-green-400 text-xs font-medium transition-colors">
+                <span>&#x1F500;</span> Shuffle Audio Order
+              </button>
+            </div>
+            <div id="availableAudios" class="p-2 space-y-1 min-h-[220px] max-h-72 overflow-y-auto custom-scrollbar">
+              <!-- Rendered dynamically by JS with folder grouping + checkboxes -->
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="flex justify-end gap-3 pt-4 border-t border-gray-700">
+        <button type="button" onclick="closePlaylistModal()" 
+          class="px-4 py-2 text-gray-400 hover:text-white transition-colors">
+          Cancel
+        </button>
+        <button type="submit" 
+          class="bg-primary hover:bg-secondary text-white px-6 py-2 rounded-lg transition-colors">
+          <span id="submitButtonText">Create Playlist</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- View Playlist Modal -->
+<div id="viewPlaylistModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+  <div class="bg-gray-800 rounded-lg p-6 w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
+    <div class="flex items-start justify-between mb-6 pb-4 border-b border-gray-700">
+      <div>
+        <h3 id="viewPlaylistTitle" class="text-xl font-semibold">Playlist Details</h3>
+        <p id="viewPlaylistDescription" class="text-gray-400 text-sm mt-1"></p>
+      </div>
+      <button onclick="closeViewPlaylistModal()" class="text-gray-400 hover:text-white">
+        <i class="ti ti-x text-xl"></i>
+      </button>
+    </div>
+    
+    <div class="mb-4 flex items-center justify-between">
+      <div class="flex items-center gap-4 text-sm text-gray-400">
+        <span id="viewVideoCount">0 videos</span>
+        <span id="viewPlaybackMode" class="flex items-center gap-1">
+          <i class="ti ti-list-numbers"></i>
+          Sequential
+        </span>
+      </div>
+      <div class="flex gap-2">
+        <button id="editPlaylistBtn" class="bg-primary hover:bg-secondary text-white px-4 py-2 rounded-lg text-sm transition-colors">
+          <i class="ti ti-pencil mr-1"></i>
+          Edit
+        </button>
+      </div>
+    </div>
+
+    <!-- Shared preview player (single instance to keep CPU/memory low) -->
+    <div id="previewPlayerWrapper" class="hidden mb-4 bg-dark-800 rounded-lg border border-gray-700 overflow-hidden">
+      <div class="flex items-center justify-between px-3 py-2 border-b border-gray-700 bg-dark-700">
+        <div class="flex items-center gap-2 min-w-0">
+          <i id="previewPlayerIcon" class="ti ti-player-play text-primary flex-shrink-0"></i>
+          <span id="previewPlayerTitle" class="text-sm font-medium truncate"></span>
+        </div>
+        <button type="button" onclick="closePreviewPlayer()" class="text-gray-400 hover:text-white flex-shrink-0" title="Close preview">
+          <i class="ti ti-x"></i>
+        </button>
+      </div>
+      <div id="previewPlayerSlot" class="bg-black"></div>
+    </div>
+    
+    <div id="playlistVideos" class="space-y-2">
+      <!-- Videos will be loaded here -->
+    </div>
+  </div>
+</div>
+
+<script>
+let selectedVideos = [];
+let selectedAudios = [];
+let currentPlaylistId = null;
+let allVideos = <%- JSON.stringify(videos || []) %>;
+let allAudios = <%- JSON.stringify(audios || []) %>;
+
+// Tab switching functions
+function switchAvailableTab(tab) {
+  const videosTab = document.getElementById('availableVideosTab');
+  const audiosTab = document.getElementById('availableAudiosTab');
+  const videosPanel = document.getElementById('availableVideosPanel');
+  const audiosPanel = document.getElementById('availableAudiosPanel');
+  
+  if (tab === 'videos') {
+    videosTab.classList.add('border-primary', 'text-primary', 'bg-primary/20');
+    videosTab.classList.remove('border-transparent', 'text-gray-400', 'hover:bg-gray-700/50');
+    audiosTab.classList.remove('border-primary', 'text-primary', 'bg-primary/20');
+    audiosTab.classList.add('border-transparent', 'text-gray-400', 'hover:bg-gray-700/50');
+    videosPanel.classList.remove('hidden');
+    audiosPanel.classList.add('hidden');
+  } else {
+    audiosTab.classList.add('border-primary', 'text-primary', 'bg-primary/20');
+    audiosTab.classList.remove('border-transparent', 'text-gray-400', 'hover:bg-gray-700/50');
+    videosTab.classList.remove('border-primary', 'text-primary', 'bg-primary/20');
+    videosTab.classList.add('border-transparent', 'text-gray-400', 'hover:bg-gray-700/50');
+    audiosPanel.classList.remove('hidden');
+    videosPanel.classList.add('hidden');
+  }
+}
+
+function switchSelectedTab(tab) {
+  // No longer needed - single combined panel
+}
+
+function openCreatePlaylistModal() {
+  currentPlaylistId = null;
+  selectedVideos = [];
+  selectedAudios = [];
+  document.getElementById('modalTitle').textContent = 'Create New Playlist';
+  document.getElementById('submitButtonText').textContent = 'Create Playlist';
+  document.getElementById('playlistForm').reset();
+  document.getElementById('playlistId').value = '';
+  // Reset tabs to default (videos)
+  switchAvailableTab('videos');
+  updateAvailableVideosDisplay();
+  updateAvailableAudiosDisplay();
+  document.getElementById('playlistModal').classList.remove('hidden');
+  document.getElementById('playlistModal').classList.add('flex');
+}
+
+function closePlaylistModal() {
+  document.getElementById('playlistModal').classList.add('hidden');
+  document.getElementById('playlistModal').classList.remove('flex');
+}
+
+function closeViewPlaylistModal() {
+  closePreviewPlayer();
+  document.getElementById('viewPlaylistModal').classList.add('hidden');
+  document.getElementById('viewPlaylistModal').classList.remove('flex');
+}
+
+function addVideoToPlaylist(videoId) {
+  const video = allVideos.find(v => v.id == videoId);
+  if (video && !selectedVideos.find(v => v.id == videoId)) {
+    selectedVideos.push(video);
+    updateAvailableVideosDisplay();
+  }
+}
+
+function removeVideoFromPlaylist(videoId) {
+  selectedVideos = selectedVideos.filter(v => v.id != videoId);
+  updateAvailableVideosDisplay();
+}
+
+// Toggle video via checkbox
+function toggleVideoSelection(videoId) {
+  if (selectedVideos.find(v => v.id == videoId)) {
+    removeVideoFromPlaylist(videoId);
+  } else {
+    addVideoToPlaylist(videoId);
+  }
+}
+
+// Toggle audio via checkbox
+function toggleAudioSelection(audioId) {
+  if (selectedAudios.find(a => a.id == audioId)) {
+    removeAudioFromPlaylist(audioId);
+  } else {
+    addAudioToPlaylist(audioId);
+  }
+}
+
+// Pin item to top (move to position 0)
+function pinMediaItem(type, id) {
+  if (type === 'video') {
+    const idx = selectedVideos.findIndex(v => v.id == id);
+    if (idx > 0) {
+      const item = selectedVideos.splice(idx, 1)[0];
+      selectedVideos.unshift(item);
+    }
+  } else {
+    const idx = selectedAudios.findIndex(a => a.id == id);
+    if (idx > 0) {
+      const item = selectedAudios.splice(idx, 1)[0];
+      selectedAudios.unshift(item);
+    }
+  }
+  // Re-render current tab to reflect new order
+  updateAvailableVideosDisplay();
+  updateAvailableAudiosDisplay();
+}
+
+// Shuffle selected videos randomly and re-render immediately
+function shuffleSelectedVideos() {
+  if (selectedVideos.length < 2) return;
+  for (let i = selectedVideos.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [selectedVideos[i], selectedVideos[j]] = [selectedVideos[j], selectedVideos[i]];
+  }
+  // Re-render to show new order with visual feedback
+  updateAvailableVideosDisplay();
+  // Flash effect on checked items to show order changed
+  setTimeout(() => {
+    document.querySelectorAll('#availableVideos input[type="checkbox"]:checked').forEach(cb => {
+      const row = cb.closest('div');
+      if (row) {
+        row.classList.add('ring-1', 'ring-primary/50');
+        setTimeout(() => row.classList.remove('ring-1', 'ring-primary/50'), 600);
+      }
+    });
+  }, 50);
+}
+
+// Shuffle selected audios randomly and re-render immediately
+function shuffleSelectedAudios() {
+  if (selectedAudios.length < 2) return;
+  for (let i = selectedAudios.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [selectedAudios[i], selectedAudios[j]] = [selectedAudios[j], selectedAudios[i]];
+  }
+  // Re-render to show new order with visual feedback
+  updateAvailableAudiosDisplay();
+  // Flash effect on checked items
+  setTimeout(() => {
+    document.querySelectorAll('#availableAudios input[type="checkbox"]:checked').forEach(cb => {
+      const row = cb.closest('div');
+      if (row) {
+        row.classList.add('ring-1', 'ring-green-500/50');
+        setTimeout(() => row.classList.remove('ring-1', 'ring-green-500/50'), 600);
+      }
+    });
+  }, 50);
+}
+
+// Update the selected count badge
+function updateSelectedCount() {
+  const countEl = document.getElementById('selectedMediaCount');
+  if (countEl) {
+    const total = selectedVideos.length + selectedAudios.length;
+    countEl.textContent = `${total} selected`;
+  }
+}
+
+// updateSelectedMediaDisplay is no longer needed (single panel design)
+// Keep as no-op for any remaining calls
+function updateSelectedMediaDisplay() {
+  updateSelectedCount();
+  updateAvailableVideosDisplay();
+  updateAvailableAudiosDisplay();
+}
+
+// Legacy wrappers for compatibility
+function updateSelectedVideosDisplay() { updateSelectedCount(); updateAvailableVideosDisplay(); }
+function updateSelectedAudiosDisplay() { updateSelectedCount(); updateAvailableAudiosDisplay(); }
+
+// Helper: extract base name for grouping (same logic as Gallery)
+function getVideoBaseName(title) {
+  let name = title.replace(/\.(mp4|avi|mov|mkv)$/i, '');
+  name = name.replace(/[-_\s]*\d+\s*$/g, '');
+  name = name.replace(/\s*[\(\[\{]\d+[\)\]\}]\s*$/g, '');
+  return name.trim().toLowerCase() || title.toLowerCase();
+}
+
+function getAudioBaseName(title) {
+  let name = title.replace(/\.(mp3|wav|aac|m4a|flac)$/i, '');
+  name = name.replace(/[-_\s]*\d+\s*$/g, '');
+  name = name.replace(/\s*[\(\[\{]\d+[\)\]\}]\s*$/g, '');
+  return name.trim().toLowerCase() || title.toLowerCase();
+}
+
+// Group items by folder_name (or fallback to base name extraction)
+function groupByFolder(items, getBaseName) {
+  const groups = {};
+  items.forEach(item => {
+    const explicitFolder = (item.folder_name || '').trim();
+    const key = explicitFolder ? explicitFolder.toLowerCase() : getBaseName(item.title);
+    if (!groups[key]) {
+      groups[key] = {
+        displayName: explicitFolder || item.title.replace(/[-_\s]*\d+\s*$/g, '').replace(/\s*[\(\[\{]\d+[\)\]\}]\s*$/g, '').trim(),
+        items: []
+      };
+    }
+    groups[key].items.push(item);
+  });
+  return groups;
+}
+
+function updateAvailableVideosDisplay() {
+  const container = document.getElementById('availableVideos');
+  const selectedVideoIds = selectedVideos.map(v => v.id);
+  
+  if (allVideos.length === 0) {
+    container.innerHTML = '<div class="text-center py-5 text-gray-400"><p>No videos available</p></div>';
+    return;
+  }
+
+  const groups = groupByFolder(allVideos, getVideoBaseName);
+  const groupKeys = Object.keys(groups).sort((a, b) => a.localeCompare(b));
+  
+  let html = '';
+  groupKeys.forEach((key, gIdx) => {
+    const group = groups[key];
+    html += `
+      <div class="playlist-avail-group mb-1">
+        <div class="flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer hover:bg-dark-600/50 select-none" onclick="toggleAvailVideoGroup(${gIdx})">
+          <i class="ti ti-chevron-down text-gray-400 text-xs transition-transform" id="availVideoGroupIcon${gIdx}"></i>
+          <i class="ti ti-folder text-primary text-sm"></i>
+          <span class="text-xs font-medium text-gray-300 truncate">${escapeHtmlAttr(group.displayName)}</span>
+          <span class="text-[10px] text-gray-500 ml-auto">${group.items.length}</span>
+        </div>
+        <div class="pl-4 space-y-0.5" id="availVideoGroupContent${gIdx}">
+    `;
+    group.items.forEach(video => {
+      const dur = video.duration ? Math.floor(video.duration / 60) + ':' + String(Math.floor(video.duration % 60)).padStart(2, '0') : '0:00';
+      const isChecked = selectedVideoIds.includes(video.id);
+      const orderNum = isChecked ? selectedVideos.findIndex(v => v.id == video.id) + 1 : 0;
+      html += `
+        <div class="w-full flex items-center gap-2 p-1.5 rounded hover:bg-dark-600 transition-colors ${isChecked ? 'bg-primary/5 border border-primary/20' : ''}">
+          <input type="checkbox" class="w-3.5 h-3.5 rounded border-gray-500 bg-dark-700 text-primary focus:ring-primary flex-shrink-0 cursor-pointer"
+            ${isChecked ? 'checked' : ''} onchange="toggleVideoSelection('${video.id}')">
+          ${isChecked ? `<span class="w-5 h-5 flex items-center justify-center rounded-full bg-primary/20 text-primary text-[10px] font-bold flex-shrink-0">${orderNum}</span>` : ''}
+          <div class="w-12 h-8 bg-dark-800 rounded flex-shrink-0 overflow-hidden">
+            <img src="${video.thumbnail_path}" alt="${escapeHtmlAttr(video.title)}" 
+                 loading="lazy" class="w-full h-full object-cover rounded" 
+                 onerror="this.src='/images/default-thumbnail.jpg'">
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-xs font-medium text-white truncate">${escapeHtmlAttr(video.title)}</p>
+            <p class="text-[10px] text-gray-400">${dur}</p>
+          </div>
+          ${isChecked ? `<button type="button" onclick="pinMediaItem('video', '${video.id}')" class="w-6 h-6 flex items-center justify-center rounded hover:bg-primary/20 text-gray-400 hover:text-primary transition-colors flex-shrink-0" title="Pin to top"><span class="text-xs">📌</span></button>` : ''}
+        </div>
+      `;
+    });
+    html += '</div></div>';
+  });
+  
+  container.innerHTML = html;
+  updateSelectedCount();
+}
+
+function toggleAvailVideoGroup(idx) {
+  const content = document.getElementById('availVideoGroupContent' + idx);
+  const icon = document.getElementById('availVideoGroupIcon' + idx);
+  if (content && icon) {
+    if (content.style.display === 'none') {
+      content.style.display = 'block';
+      icon.style.transform = 'rotate(0deg)';
+    } else {
+      content.style.display = 'none';
+      icon.style.transform = 'rotate(-90deg)';
+    }
+  }
+}
+
+// Audio selection functions
+function addAudioToPlaylist(audioId) {
+  const audio = allAudios.find(a => a.id == audioId);
+  if (audio && !selectedAudios.find(a => a.id == audioId)) {
+    selectedAudios.push(audio);
+    updateAvailableAudiosDisplay();
+  }
+}
+
+function removeAudioFromPlaylist(audioId) {
+  selectedAudios = selectedAudios.filter(a => a.id != audioId);
+  updateAvailableAudiosDisplay();
+}
+
+function updateAvailableAudiosDisplay() {
+  const container = document.getElementById('availableAudios');
+  if (!container) return;
+  
+  const selectedAudioIds = selectedAudios.map(a => a.id);
+  
+  if (allAudios.length === 0) {
+    container.innerHTML = '<div class="text-center py-5 text-gray-400"><p>No audios available</p></div>';
+    return;
+  }
+
+  const groups = groupByFolder(allAudios, getAudioBaseName);
+  const groupKeys = Object.keys(groups).sort((a, b) => a.localeCompare(b));
+  
+  let html = '';
+  groupKeys.forEach((key, gIdx) => {
+    const group = groups[key];
+    html += `
+      <div class="playlist-avail-group mb-1">
+        <div class="flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer hover:bg-dark-600/50 select-none" onclick="toggleAvailAudioGroup(${gIdx})">
+          <i class="ti ti-chevron-down text-gray-400 text-xs transition-transform" id="availAudioGroupIcon${gIdx}"></i>
+          <i class="ti ti-folder text-green-400 text-sm"></i>
+          <span class="text-xs font-medium text-gray-300 truncate">${escapeHtmlAttr(group.displayName)}</span>
+          <span class="text-[10px] text-gray-500 ml-auto">${group.items.length}</span>
+        </div>
+        <div class="pl-4 space-y-0.5" id="availAudioGroupContent${gIdx}">
+    `;
+    group.items.forEach(audio => {
+      const dur = audio.duration ? Math.floor(audio.duration / 60) + ':' + String(Math.floor(audio.duration % 60)).padStart(2, '0') : '0:00';
+      const isChecked = selectedAudioIds.includes(audio.id);
+      const orderNum = isChecked ? selectedAudios.findIndex(a => a.id == audio.id) + 1 : 0;
+      html += `
+        <div class="w-full flex items-center gap-2 p-1.5 rounded hover:bg-dark-600 transition-colors ${isChecked ? 'bg-green-500/5 border border-green-500/20' : ''}">
+          <input type="checkbox" class="w-3.5 h-3.5 rounded border-gray-500 bg-dark-700 text-green-500 focus:ring-green-500 flex-shrink-0 cursor-pointer"
+            ${isChecked ? 'checked' : ''} onchange="toggleAudioSelection('${audio.id}')">
+          ${isChecked ? `<span class="w-5 h-5 flex items-center justify-center rounded-full bg-green-500/20 text-green-400 text-[10px] font-bold flex-shrink-0">${orderNum}</span>` : ''}
+          <div class="w-8 h-8 bg-dark-800 rounded flex-shrink-0 flex items-center justify-center">
+            <i class="ti ti-music text-sm text-green-400"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-xs font-medium text-white truncate">${escapeHtmlAttr(audio.title)}</p>
+            <p class="text-[10px] text-gray-400">${dur}</p>
+          </div>
+          ${isChecked ? `<button type="button" onclick="pinMediaItem('audio', '${audio.id}')" class="w-6 h-6 flex items-center justify-center rounded hover:bg-green-500/20 text-gray-400 hover:text-green-400 transition-colors flex-shrink-0" title="Pin to top"><span class="text-xs">📌</span></button>` : ''}
+        </div>
+      `;
+    });
+    html += '</div></div>';
+  });
+  
+  container.innerHTML = html;
+  updateSelectedCount();
+}
+
+function toggleAvailAudioGroup(idx) {
+  const content = document.getElementById('availAudioGroupContent' + idx);
+  const icon = document.getElementById('availAudioGroupIcon' + idx);
+  if (content && icon) {
+    if (content.style.display === 'none') {
+      content.style.display = 'block';
+      icon.style.transform = 'rotate(0deg)';
+    } else {
+      content.style.display = 'none';
+      icon.style.transform = 'rotate(-90deg)';
+    }
+  }
+}
+
+// HTML attribute safe escape
+function escapeHtmlAttr(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function initializeAudioDragAndDrop() {
+  const selectedMediaContainer = document.getElementById('selectedMedia');
+  if (!selectedMediaContainer) return;
+  // Audio drag handled within the combined container via individual audio items
+  const audioItems = selectedMediaContainer.querySelectorAll('[data-audio-id]');
+  if (audioItems.length > 1) {
+    // Use a wrapper approach - Sortable on container scoped to audio items
+    // Already handled by main initializeDragAndDrop below
+  }
+}
+
+function editPlaylist(playlistId) {
+  fetch(`/api/playlists/${playlistId}`)
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        const playlist = data.playlist;
+        currentPlaylistId = playlistId;
+        selectedVideos = playlist.videos || [];
+        selectedAudios = playlist.audios || [];
+        
+        document.getElementById('modalTitle').textContent = 'Edit Playlist';
+        document.getElementById('submitButtonText').textContent = 'Update Playlist';
+        document.getElementById('playlistId').value = playlistId;
+        document.getElementById('playlistName').value = playlist.name;
+        document.getElementById('playlistShuffle').value = (playlist.shuffle || playlist.is_shuffle) ? "true" : "false";
+        
+        // Reset tabs to default (videos)
+        switchAvailableTab('videos');
+        
+        updateAvailableVideosDisplay();
+        updateAvailableAudiosDisplay();
+        document.getElementById('playlistModal').classList.remove('hidden');
+        document.getElementById('playlistModal').classList.add('flex');
+      }
+    })
+    .catch(error => {
+      console.error('Error loading playlist:', error);
+      showToast('Error loading playlist', 'error');
+    });
+}
+
+function viewPlaylist(playlistId) {
+  fetch(`/api/playlists/${playlistId}`)
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        const playlist = data.playlist;
+
+        // Always start with a clean slate so previous preview never lingers
+        closePreviewPlayer();
+        
+        document.getElementById('viewPlaylistTitle').textContent = playlist.name;
+        document.getElementById('viewPlaylistDescription').textContent = playlist.description || 'No description';
+        
+        const videoCount = playlist.videos?.length || 0;
+        const audioCount = playlist.audios?.length || 0;
+        document.getElementById('viewVideoCount').textContent =
+          `${videoCount} ${videoCount === 1 ? 'video' : 'videos'}, ${audioCount} ${audioCount === 1 ? 'audio' : 'audios'}`;
+        
+        const playbackModeEl = document.getElementById('viewPlaybackMode');
+        playbackModeEl.innerHTML = (playlist.shuffle || playlist.is_shuffle)
+          ? '<i class="ti ti-arrows-shuffle"></i> Shuffle'
+          : '<i class="ti ti-list-numbers"></i> Sequential';
+        
+        const videosContainer = document.getElementById('playlistVideos');
+        let contentHtml = '';
+        
+        // Videos section — compact rows so many items fit at once
+        if (playlist.videos && playlist.videos.length > 0) {
+          contentHtml += `
+            <div class="flex items-center justify-between mb-1">
+              <h4 class="text-xs uppercase tracking-wide font-semibold text-gray-300"><i class="ti ti-video mr-1"></i>Videos</h4>
+              <span class="text-xs text-gray-500">${playlist.videos.length}</span>
+            </div>
+            <div class="bg-dark-700 rounded-lg border border-gray-600 divide-y divide-gray-600/40 mb-3 max-h-72 overflow-y-auto custom-scrollbar">
+          `;
+          contentHtml += playlist.videos.map((video, index) => {
+            const safeTitle = escapeHtml(video.title || '');
+            const dur = video.duration
+              ? Math.floor(video.duration / 60) + ':' + String(Math.floor(video.duration % 60)).padStart(2, '0')
+              : '0:00';
+            return `
+              <div class="flex items-center gap-2 px-2 py-1.5 hover:bg-dark-600/60">
+                <span class="text-xs text-gray-500 w-5 text-center flex-shrink-0">${index + 1}</span>
+                <img src="${video.thumbnail_path || '/images/default-thumbnail.jpg'}" alt="${safeTitle}" class="w-10 h-6 object-cover rounded flex-shrink-0" loading="lazy" onerror="this.src='/images/default-thumbnail.jpg'">
+                <p class="text-sm truncate flex-1 min-w-0">${safeTitle}</p>
+                <span class="text-[11px] text-gray-400 tabular-nums flex-shrink-0">${dur}</span>
+                <button type="button" onclick="previewMedia('video', '${video.id}')"
+                  class="text-gray-300 hover:text-primary hover:bg-gray-600/50 w-7 h-7 flex items-center justify-center rounded-md flex-shrink-0"
+                  title="Preview">
+                  <i class="ti ti-player-play text-sm"></i>
+                </button>
+              </div>
+            `;
+          }).join('');
+          contentHtml += '</div>';
+        }
+        
+        // Audios section — same compact layout
+        if (playlist.audios && playlist.audios.length > 0) {
+          contentHtml += `
+            <div class="flex items-center justify-between mb-1">
+              <h4 class="text-xs uppercase tracking-wide font-semibold text-gray-300"><i class="ti ti-music mr-1"></i>Audios</h4>
+              <span class="text-xs text-gray-500">${playlist.audios.length}</span>
+            </div>
+            <div class="bg-dark-700 rounded-lg border border-gray-600 divide-y divide-gray-600/40 max-h-72 overflow-y-auto custom-scrollbar">
+          `;
+          contentHtml += playlist.audios.map((audio, index) => {
+            const safeTitle = escapeHtml(audio.title || '');
+            const dur = audio.duration
+              ? Math.floor(audio.duration / 60) + ':' + String(Math.floor(audio.duration % 60)).padStart(2, '0')
+              : '0:00';
+            return `
+              <div class="flex items-center gap-2 px-2 py-1.5 hover:bg-dark-600/60">
+                <span class="text-xs text-gray-500 w-5 text-center flex-shrink-0">${index + 1}</span>
+                <div class="w-10 h-6 bg-dark-800 rounded flex items-center justify-center flex-shrink-0">
+                  <i class="ti ti-music text-primary text-sm"></i>
+                </div>
+                <p class="text-sm truncate flex-1 min-w-0">${safeTitle}</p>
+                <span class="text-[11px] text-gray-400 tabular-nums flex-shrink-0">${dur}</span>
+                <button type="button" onclick="previewMedia('audio', '${audio.id}')"
+                  class="text-gray-300 hover:text-primary hover:bg-gray-600/50 w-7 h-7 flex items-center justify-center rounded-md flex-shrink-0"
+                  title="Preview">
+                  <i class="ti ti-player-play text-sm"></i>
+                </button>
+              </div>
+            `;
+          }).join('');
+          contentHtml += '</div>';
+        }
+        
+        if (!contentHtml) {
+          contentHtml = '<p class="text-gray-400 text-center py-8">No media in this playlist</p>';
+        }
+        
+        videosContainer.innerHTML = contentHtml;
+
+        // Cache media on the modal so previewMedia() can resolve filepath without refetching
+        currentViewPlaylistMedia = {
+          videos: Array.isArray(playlist.videos) ? playlist.videos : [],
+          audios: Array.isArray(playlist.audios) ? playlist.audios : []
+        };
+        
+        document.getElementById('editPlaylistBtn').onclick = () => {
+          closeViewPlaylistModal();
+          editPlaylist(playlistId);
+        };
+        
+        document.getElementById('viewPlaylistModal').classList.remove('hidden');
+        document.getElementById('viewPlaylistModal').classList.add('flex');
+      }
+    })
+    .catch(error => {
+      console.error('Error loading playlist:', error);
+      showToast('Error loading playlist', 'error');
+    });
+}
+
+// Track which media is currently displayed in the View modal so preview can find filepath
+let currentViewPlaylistMedia = { videos: [], audios: [] };
+
+// Lightweight HTML escaper for titles inserted via innerHTML
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * Single shared media element for previewing playlist items.
+ * - Only one preview plays at a time (CPU-friendly).
+ * - The element is created lazily on first use, then reused (no DOM churn).
+ * - preload="none" so nothing is fetched until the user actually presses play.
+ */
+function previewMedia(kind, id) {
+  const list = kind === 'video' ? currentViewPlaylistMedia.videos : currentViewPlaylistMedia.audios;
+  const item = list.find(m => String(m.id) === String(id));
+  if (!item || !item.filepath) {
+    showToast('Media file not found', 'error');
+    return;
+  }
+
+  const wrapper = document.getElementById('previewPlayerWrapper');
+  const slot = document.getElementById('previewPlayerSlot');
+  const titleEl = document.getElementById('previewPlayerTitle');
+  const iconEl = document.getElementById('previewPlayerIcon');
+
+  // Stop any current playback before swapping element type
+  stopCurrentPreview();
+
+  let el;
+  if (kind === 'video') {
+    el = document.createElement('video');
+    el.controls = true;
+    el.preload = 'none';
+    el.playsInline = true;
+    el.className = 'w-full max-h-[360px] bg-black';
+    iconEl.className = 'ti ti-video text-primary flex-shrink-0';
+  } else {
+    el = document.createElement('audio');
+    el.controls = true;
+    el.preload = 'none';
+    el.className = 'w-full';
+    iconEl.className = 'ti ti-music text-primary flex-shrink-0';
+  }
+  el.src = item.filepath;
+
+  slot.innerHTML = '';
+  slot.appendChild(el);
+  titleEl.textContent = item.title || (kind === 'video' ? 'Video preview' : 'Audio preview');
+  wrapper.classList.remove('hidden');
+
+  // Auto-play once user explicitly requested preview; muted-by-default not needed for audio
+  el.play().catch(() => { /* ignore autoplay rejection; user can press play */ });
+
+  // Bring preview into view
+  wrapper.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function stopCurrentPreview() {
+  const slot = document.getElementById('previewPlayerSlot');
+  if (!slot) return;
+  const media = slot.querySelector('video, audio');
+  if (media) {
+    try {
+      media.pause();
+    } catch (_) { /* noop */ }
+    // Detaching the source frees the network/decoder buffers immediately
+    media.removeAttribute('src');
+    media.load();
+  }
+  slot.innerHTML = '';
+}
+
+function closePreviewPlayer() {
+  stopCurrentPreview();
+  const wrapper = document.getElementById('previewPlayerWrapper');
+  if (wrapper) wrapper.classList.add('hidden');
+}
+
+function deletePlaylist(playlistId, playlistName) {
+  if (confirm(`Are you sure you want to delete "${playlistName}"?`)) {
+    fetch(`/api/playlists/${playlistId}`, {
+      method: 'DELETE'
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        showToast('Playlist deleted successfully', 'success');
+        location.reload();
+      } else {
+        showToast(data.message || 'Error deleting playlist', 'error');
+      }
+    })
+    .catch(error => {
+      console.error('Error deleting playlist:', error);
+      showToast('Error deleting playlist', 'error');
+    });
+  }
+}
+
+function streamPlaylist(playlistId) {
+  window.location.href = `/dashboard?playlist=${playlistId}`;
+}
+
+document.getElementById('playlistForm').addEventListener('submit', function(e) {
+  e.preventDefault();
+  
+  const formData = new FormData(this);
+  const playlistData = {
+    name: formData.get('name'),
+    description: '',
+    shuffle: formData.get('shuffle') === 'true',
+    videos: selectedVideos.map(video => video.id),
+    audios: selectedAudios.map(audio => audio.id)
+  };
+  
+  const url = currentPlaylistId ? `/api/playlists/${currentPlaylistId}` : '/api/playlists';
+  const method = currentPlaylistId ? 'PUT' : 'POST';
+  
+  fetch(url, {
+    method: method,
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(playlistData)
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      showToast(currentPlaylistId ? 'Playlist updated successfully' : 'Playlist created successfully', 'success');
+      closePlaylistModal();
+      location.reload();
+    } else {
+      showToast(data.message || 'Error saving playlist', 'error');
+    }
+  })
+  .catch(error => {
+    console.error('Error saving playlist:', error);
+    showToast('Error saving playlist', 'error');
+  });
+});
+
+document.getElementById('searchVideos').addEventListener('input', function(e) {
+  const searchTerm = e.target.value.toLowerCase();
+  const container = document.getElementById('availableVideos');
+  const selectedVideoIds = selectedVideos.map(v => v.id);
+  
+  const filteredVideos = allVideos.filter(video => 
+    video.title.toLowerCase().includes(searchTerm)
+  );
+  
+  if (filteredVideos.length === 0) {
+    container.innerHTML = '<div class="text-center py-5 text-gray-400"><p>No videos found</p></div>';
+    return;
+  }
+
+  // If searching, show flat list with checkboxes
+  if (searchTerm) {
+    let html = '';
+    filteredVideos.forEach(video => {
+      const dur = video.duration ? Math.floor(video.duration / 60) + ':' + String(Math.floor(video.duration % 60)).padStart(2, '0') : '0:00';
+      const folderLabel = (video.folder_name || '').trim();
+      const isChecked = selectedVideoIds.includes(video.id);
+      html += `
+        <label class="w-full flex items-center gap-2 p-1.5 rounded hover:bg-dark-600 transition-colors cursor-pointer">
+          <input type="checkbox" class="w-3.5 h-3.5 rounded border-gray-500 bg-dark-700 text-primary focus:ring-primary flex-shrink-0"
+            ${isChecked ? 'checked' : ''} onchange="toggleVideoSelection('${video.id}')">
+          <div class="w-12 h-8 bg-dark-800 rounded flex-shrink-0 overflow-hidden">
+            <img src="${video.thumbnail_path}" alt="${escapeHtmlAttr(video.title)}" 
+                 loading="lazy" class="w-full h-full object-cover rounded" 
+                 onerror="this.src='/images/default-thumbnail.jpg'">
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-xs font-medium text-white truncate">${escapeHtmlAttr(video.title)}</p>
+            <p class="text-[10px] text-gray-400">${dur}${folderLabel ? ' • ' + escapeHtmlAttr(folderLabel) : ''}</p>
+          </div>
+        </label>
+      `;
+    });
+    container.innerHTML = html;
+  } else {
+    updateAvailableVideosDisplay();
+  }
+});
+
+document.getElementById('searchAudios').addEventListener('input', function(e) {
+  const searchTerm = e.target.value.toLowerCase();
+  const container = document.getElementById('availableAudios');
+  const selectedAudioIds = selectedAudios.map(a => a.id);
+  
+  const filteredAudios = allAudios.filter(audio => 
+    audio.title.toLowerCase().includes(searchTerm)
+  );
+  
+  if (filteredAudios.length === 0) {
+    container.innerHTML = '<div class="text-center py-5 text-gray-400"><p>No audios found</p></div>';
+    return;
+  }
+
+  // If searching, show flat list with checkboxes
+  if (searchTerm) {
+    let html = '';
+    filteredAudios.forEach(audio => {
+      const dur = audio.duration ? Math.floor(audio.duration / 60) + ':' + String(Math.floor(audio.duration % 60)).padStart(2, '0') : '0:00';
+      const folderLabel = (audio.folder_name || '').trim();
+      const isChecked = selectedAudioIds.includes(audio.id);
+      html += `
+        <label class="w-full flex items-center gap-2 p-1.5 rounded hover:bg-dark-600 transition-colors cursor-pointer">
+          <input type="checkbox" class="w-3.5 h-3.5 rounded border-gray-500 bg-dark-700 text-green-500 focus:ring-green-500 flex-shrink-0"
+            ${isChecked ? 'checked' : ''} onchange="toggleAudioSelection('${audio.id}')">
+          <div class="w-8 h-8 bg-dark-800 rounded flex-shrink-0 flex items-center justify-center">
+            <i class="ti ti-music text-sm text-green-400"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-xs font-medium text-white truncate">${escapeHtmlAttr(audio.title)}</p>
+            <p class="text-[10px] text-gray-400">${dur}${folderLabel ? ' • ' + escapeHtmlAttr(folderLabel) : ''}</p>
+          </div>
+        </label>
+      `;
+    });
+    container.innerHTML = html;
+  } else {
+    updateAvailableAudiosDisplay();
+  }
+});
+
+function showToast(message, type = 'info') {
+  const toast = document.createElement('div');
+  toast.className = `fixed top-4 right-4 px-6 py-3 rounded-lg text-white z-50 ${
+    type === 'success' ? 'bg-emerald-600' : 
+    type === 'error' ? 'bg-red-600' : 'bg-primary'
+  }`;
+  toast.textContent = message;
+  
+  document.body.appendChild(toast);
+  
+  setTimeout(() => {
+    toast.remove();
+  }, 3000);
+}
+function initializeDragAndDrop() {
+  const selectedMediaContainer = document.getElementById('selectedMedia');
+  if (!selectedMediaContainer) return;
+  
+  // We can't easily do cross-type drag (video<->audio ordering) so we keep them separate.
+  // Sortable handles reordering within each type by scoping to data-video-id / data-audio-id elements.
+  // For simplicity, drag is handled via the pin button and move functions instead.
+}
+
+// Move video up in playlist
+function moveVideoUp(index) {
+  if (index <= 0 || index >= selectedVideos.length) return;
+  const temp = selectedVideos[index];
+  selectedVideos[index] = selectedVideos[index - 1];
+  selectedVideos[index - 1] = temp;
+  updateSelectedMediaDisplay();
+}
+
+// Move video down in playlist
+function moveVideoDown(index) {
+  if (index < 0 || index >= selectedVideos.length - 1) return;
+  const temp = selectedVideos[index];
+  selectedVideos[index] = selectedVideos[index + 1];
+  selectedVideos[index + 1] = temp;
+  updateSelectedMediaDisplay();
+}
+
+// Move audio up in playlist
+function moveAudioUp(index) {
+  if (index <= 0 || index >= selectedAudios.length) return;
+  const temp = selectedAudios[index];
+  selectedAudios[index] = selectedAudios[index - 1];
+  selectedAudios[index - 1] = temp;
+  updateSelectedMediaDisplay();
+}
+
+// Move audio down in playlist
+function moveAudioDown(index) {
+  if (index < 0 || index >= selectedAudios.length - 1) return;
+  const temp = selectedAudios[index];
+  selectedAudios[index] = selectedAudios[index + 1];
+  selectedAudios[index + 1] = temp;
+  updateSelectedMediaDisplay();
+}
+
+function filterPlaylists() {
+  const searchTerm = document.getElementById('searchPlaylists').value.toLowerCase().trim();
+  const sortBy = document.getElementById('sortPlaylists').value;
+  const container = document.getElementById('playlistsContainer');
+  const allCards = Array.from(container.querySelectorAll('.playlist-card'));
+
+  // Hapus empty state lama (baik dari EJS maupun yang dibuat JS sebelumnya)
+  container.querySelectorAll('.col-span-full').forEach(el => el.remove());
+
+  // Tentukan kartu yang cocok
+  const visibleCards = allCards.filter(card => {
+    const playlistName = (card.querySelector('h3')?.textContent || '').toLowerCase();
+    const playlistDescription = (card.querySelector('p')?.textContent || '').toLowerCase();
+    return !searchTerm || playlistName.includes(searchTerm) || playlistDescription.includes(searchTerm);
+  });
+
+  // Sembunyikan kartu yang tidak cocok agar tidak ikut tampil
+  const visibleSet = new Set(visibleCards);
+  allCards.forEach(card => {
+    if (!visibleSet.has(card)) {
+      card.style.display = 'none';
+    }
+  });
+
+  // Sort kartu yang cocok
+  visibleCards.sort((a, b) => {
+    const aName = a.querySelector('h3')?.textContent || '';
+    const bName = b.querySelector('h3')?.textContent || '';
+
+    switch (sortBy) {
+      case 'name':
+        return aName.localeCompare(bName);
+      case 'oldest': {
+        const aCreated = new Date(a.dataset.createdAt);
+        const bCreated = new Date(b.dataset.createdAt);
+        return aCreated - bCreated;
+      }
+      case 'newest':
+      default: {
+        const aUpdated = new Date(a.dataset.updatedAt);
+        const bUpdated = new Date(b.dataset.updatedAt);
+        return bUpdated - aUpdated;
+      }
+    }
+  });
+
+  visibleCards.forEach(card => container.appendChild(card));
+
+  allPlaylistCards = visibleCards;
+  currentPage = 1;
+  updatePagination();
+
+  // Tampilkan empty state hanya bila tidak ada kartu yang match
+  if (visibleCards.length === 0) {
+    const emptyDiv = document.createElement('div');
+    emptyDiv.className = 'col-span-full text-center py-12';
+
+    if (searchTerm) {
+      emptyDiv.innerHTML = `
+        <i class="ti ti-search text-6xl text-gray-600 mb-4"></i>
+        <h3 class="text-xl font-semibold mb-2">No playlists found</h3>
+        <p class="text-gray-400">Try adjusting your search terms</p>
+      `;
+    } else {
+      emptyDiv.innerHTML = `
+        <i class="ti ti-playlist text-6xl text-gray-600 mb-4"></i>
+        <h3 class="text-xl font-semibold mb-2">No playlists yet</h3>
+        <p class="text-gray-400 mb-4">Create your first playlist to get started</p>
+        <button onclick="openCreatePlaylistModal()"
+          class="bg-primary hover:bg-secondary text-white px-6 py-3 rounded-lg transition-colors">
+          <i class="ti ti-plus mr-2"></i>
+          Create Playlist
+        </button>
+      `;
+    }
+
+    container.appendChild(emptyDiv);
+  }
+}
+
+document.getElementById('searchPlaylists').addEventListener('input', filterPlaylists);
+document.getElementById('sortPlaylists').addEventListener('change', filterPlaylists);
+
+let currentPage = 1;
+const itemsPerPage = 8;
+let allPlaylistCards = [];
+
+function initializePagination() {
+  allPlaylistCards = Array.from(document.querySelectorAll('.playlist-card'));
+  updatePagination();
+}
+
+function updatePagination() {
+  const totalItems = allPlaylistCards.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
+
+  if (currentPage > totalPages) currentPage = totalPages;
+
+  const start = totalItems === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
+  const end = Math.min(currentPage * itemsPerPage, totalItems);
+  document.getElementById('paginationInfo').textContent =
+    `Showing ${start}-${end} of ${totalItems} playlists`;
+
+  // Tampilkan kartu sesuai halaman aktif
+  allPlaylistCards.forEach((card, index) => {
+    const shouldShow = index >= (currentPage - 1) * itemsPerPage && index < currentPage * itemsPerPage;
+    card.style.display = shouldShow ? '' : 'none';
+  });
+
+  const controls = document.getElementById('paginationControls');
+  if (totalItems <= itemsPerPage) {
+    controls.style.display = 'none';
+    return;
+  }
+  controls.style.display = 'flex';
+
+  const prevBtn = document.getElementById('prevPage');
+  const nextBtn = document.getElementById('nextPage');
+  prevBtn.disabled = currentPage === 1;
+  nextBtn.disabled = currentPage === totalPages;
+  prevBtn.classList.toggle('opacity-50', currentPage === 1);
+  prevBtn.classList.toggle('cursor-not-allowed', currentPage === 1);
+  nextBtn.classList.toggle('opacity-50', currentPage === totalPages);
+  nextBtn.classList.toggle('cursor-not-allowed', currentPage === totalPages);
+
+  renderPageNumbers(currentPage, totalPages);
+}
+
+function renderPageNumbers(current, total) {
+  const wrap = document.getElementById('pageNumbers');
+  wrap.innerHTML = '';
+
+  // Tentukan halaman yang ditampilkan: selalu 1, total, dan tetangga current
+  const pages = new Set([1, total, current, current - 1, current + 1]);
+  const sorted = [...pages]
+    .filter(p => p >= 1 && p <= total)
+    .sort((a, b) => a - b);
+
+  let lastShown = 0;
+  sorted.forEach(p => {
+    if (p - lastShown > 1) {
+      const ellipsis = document.createElement('span');
+      ellipsis.className = 'w-9 h-9 flex items-center justify-center text-gray-500';
+      ellipsis.textContent = '…';
+      wrap.appendChild(ellipsis);
+    }
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = p;
+    btn.onclick = () => goToPage(p);
+    btn.className = p === current
+      ? 'w-9 h-9 flex items-center justify-center rounded-lg bg-primary text-white'
+      : 'w-9 h-9 flex items-center justify-center rounded-lg bg-dark-700 hover:bg-dark-600 text-gray-400 hover:text-white transition-colors';
+    wrap.appendChild(btn);
+
+    lastShown = p;
+  });
+}
+
+function changePage(direction) {
+  const totalPages = Math.ceil(allPlaylistCards.length / itemsPerPage);
+  const newPage = currentPage + direction;
+  
+  if (newPage >= 1 && newPage <= totalPages) {
+    currentPage = newPage;
+    updatePagination();
+  }
+}
+
+function goToPage(page) {
+  const totalPages = Math.ceil(allPlaylistCards.length / itemsPerPage);
+  
+  if (page >= 1 && page <= totalPages) {
+    currentPage = page;
+    updatePagination();
+  }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  initializePagination();
+});
+
+const dragDropStyles = `
+  .sortable-ghost {
+    opacity: 0.4;
+    background: #374151;
+  }
+  .sortable-chosen {
+    background: #4B5563;
+  }
+  .sortable-drag {
+    background: #6B7280;
+    transform: rotate(5deg);
+  }
+  .cursor-move:hover {
+    color: #60A5FA;
+  }
+  #availableVideos {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(156, 163, 175, 0.3) transparent;
+  }
+  #availableVideos::-webkit-scrollbar {
+    width: 6px;
+  }
+  #availableVideos::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  #availableVideos::-webkit-scrollbar-thumb {
+    background-color: rgba(156, 163, 175, 0.3);
+    border-radius: 20px;
+  }
+`;
+
+const styleSheet = document.createElement('style');
+styleSheet.textContent = dragDropStyles;
+document.head.appendChild(styleSheet);
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>

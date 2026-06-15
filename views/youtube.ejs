@@ -1,0 +1,3224 @@
+<% layout('layout') -%>
+
+<style>
+  /* Custom scrollbar for thumbnail folder list */
+  #thumbnailFolderList::-webkit-scrollbar,
+  #tagsContainer::-webkit-scrollbar {
+    width: 4px;
+  }
+  #thumbnailFolderList::-webkit-scrollbar-track,
+  #tagsContainer::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  #thumbnailFolderList::-webkit-scrollbar-thumb,
+  #tagsContainer::-webkit-scrollbar-thumb {
+    background: rgba(107, 114, 128, 0.4);
+    border-radius: 2px;
+  }
+  #thumbnailFolderList::-webkit-scrollbar-thumb:hover,
+  #tagsContainer::-webkit-scrollbar-thumb:hover {
+    background: rgba(107, 114, 128, 0.6);
+  }
+  /* Firefox */
+  #thumbnailFolderList,
+  #tagsContainer {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(107, 114, 128, 0.4) transparent;
+  }
+
+  .thumbnail-manager-highlight {
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.6);
+    background: rgba(30, 58, 138, 0.12);
+    border-radius: 12px;
+    transition: box-shadow 0.3s ease, background 0.3s ease;
+  }
+  
+  /* Better touch responsiveness for buttons */
+  .touch-manipulation {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  
+  /* Ensure minimum touch target size (48x48px recommended) */
+  button.touch-manipulation {
+    min-width: 44px;
+    min-height: 44px;
+  }
+</style>
+
+<div class="max-w-6xl mx-auto">
+  <!-- Page Header -->
+  <div class="flex items-center justify-between mb-6">
+    <div class="flex items-center gap-3 min-w-0">
+      <div class="w-10 h-10 bg-red-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+        <i class="ti ti-brand-youtube text-red-500 text-xl"></i>
+      </div>
+      <div class="min-w-0">
+        <h1 class="text-lg sm:text-2xl font-bold truncate">YouTube Sync</h1>
+        <p class="text-xs sm:text-sm text-gray-400 hidden sm:block">Create scheduled broadcasts directly to YouTube</p>
+      </div>
+    </div>
+    <!-- Action Buttons -->
+    <div class="flex items-center gap-2 flex-shrink-0">
+      <!-- Enable YouTube Data API Button (icon-only on mobile) -->
+      <a href="https://console.cloud.google.com/apis/library/youtube.googleapis.com" target="_blank" rel="noopener noreferrer"
+        class="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-2.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm transition-all duration-200 flex items-center gap-1.5 font-medium shadow-lg shadow-red-500/25"
+        title="Enable YouTube Data API v3 di Google Cloud Console">
+        <i class="ti ti-brand-youtube text-base sm:text-lg"></i>
+        <span class="hidden sm:inline whitespace-nowrap">Enable API</span>
+      </a>
+      <!-- Guide Button (icon-only on mobile) -->
+      <button onclick="openYouTubeGuideModal()" title="Panduan API"
+        class="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-2.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm transition-all duration-200 flex items-center gap-1.5 font-medium shadow-lg shadow-blue-500/25">
+        <i class="ti ti-help-circle text-base sm:text-lg"></i>
+        <span class="hidden sm:inline whitespace-nowrap">Panduan API</span>
+      </button>
+    </div>
+  </div>
+
+  <% if (!accounts || accounts.length === 0) { %>
+  <!-- Credentials Form (No Accounts Connected) -->
+  <div class="bg-gray-800 rounded-lg p-4 sm:p-6 shadow-md">
+    <div class="flex items-center gap-3 mb-6">
+      <i class="ti ti-key text-primary text-2xl"></i>
+      <div>
+        <h2 class="text-lg font-semibold">Connect YouTube Account</h2>
+        <p class="text-sm text-gray-400">Enter your API credentials to get started</p>
+      </div>
+    </div>
+    
+    <form id="credentialsForm" class="space-y-4">
+      <div>
+        <label class="text-sm font-medium text-white block mb-2">Client ID <span class="text-red-400">*</span></label>
+        <input type="text" id="clientId" name="clientId" required
+          class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none"
+          placeholder="Enter your Google Client ID">
+      </div>
+      
+      <div>
+        <label class="text-sm font-medium text-white block mb-2">Client Secret <span class="text-red-400">*</span></label>
+        <input type="password" id="clientSecret" name="clientSecret" required
+          class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none"
+          placeholder="Enter your Google Client Secret">
+      </div>
+      
+      <!-- OAuth Auto-Connect Button -->
+      <div class="bg-gradient-to-r from-blue-500/10 to-green-500/10 rounded-lg p-4 border border-blue-500/30">
+        <p class="text-sm text-blue-300 mb-3 flex items-start gap-2">
+          <i class="ti ti-sparkles text-lg flex-shrink-0"></i>
+          <span><strong>Recommended:</strong> auto-connect via Google, refresh token otomatis.</span>
+        </p>
+        <button type="button" onclick="startOAuthFlow()"
+          class="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-4 py-3 rounded-lg font-medium transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25">
+          <i class="ti ti-brand-google text-lg flex-shrink-0"></i>
+          <span class="whitespace-nowrap">Connect with Google</span>
+        </button>
+        <p class="text-xs text-gray-400 mt-2 text-center">Sesi diperbarui otomatis. Publish app ke Production agar koneksi tidak terputus.</p>
+      </div>
+      
+      <!-- Divider -->
+      <div class="flex items-center gap-3">
+        <div class="flex-1 border-t border-gray-600"></div>
+        <span class="text-xs text-gray-500">ATAU manual</span>
+        <div class="flex-1 border-t border-gray-600"></div>
+      </div>
+      
+      <div>
+        <label class="text-sm font-medium text-white block mb-2">Refresh Token <span class="text-gray-400 text-xs">(opsional jika pakai OAuth)</span></label>
+        <textarea id="refreshToken" name="refreshToken" rows="3"
+          class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none resize-none"
+          placeholder="Atau paste manual Refresh Token dari OAuth Playground"></textarea>
+      </div>
+      
+      <div class="bg-dark-700 rounded-lg p-4 border border-gray-600">
+        <p class="text-sm text-gray-400 break-words">
+          <i class="ti ti-info-circle text-primary mr-1"></i>
+          Get your credentials from <a href="https://console.cloud.google.com/apis/credentials" target="_blank" class="text-primary hover:underline">Google Cloud Console</a>. 
+          Make sure to enable YouTube Data API v3 and add <code class="bg-dark-600 px-1 rounded text-primary text-xs break-all"><%= typeof baseUrl !== 'undefined' ? baseUrl : 'http://localhost:7575' %>/api/youtube/oauth/callback</code> as Authorized Redirect URI.
+        </p>
+      </div>
+      
+      <button type="submit" id="connectBtn"
+        class="w-full bg-red-500 hover:bg-red-600 text-white px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2">
+        <i class="ti ti-brand-youtube flex-shrink-0"></i>
+        <span class="whitespace-nowrap">Connect Manual</span>
+      </button>
+    </form>
+  </div>
+  
+  <% } else { %>
+  <!-- Connected Accounts & Token Status - Compact Professional Layout -->
+  <div class="bg-gray-800 rounded-xl border border-gray-700/50 mb-6 overflow-hidden">
+    <!-- Header - Full clickable area with proper touch target -->
+    <div class="flex items-center justify-between px-4 py-3 min-h-[48px] border-b border-gray-700/50 cursor-pointer hover:bg-gray-700/20 active:bg-gray-700/40 transition-colors select-none"
+         onclick="toggleConnectedAccounts()" id="connectedAccountsHeader" role="button" tabindex="0">
+      <div class="flex items-center gap-2 pointer-events-none">
+        <i class="ti ti-chevron-down text-gray-400 text-base transition-transform duration-200" id="accountsChevron"></i>
+        <i class="ti ti-brand-youtube text-red-400 text-base"></i>
+        <span class="text-sm font-semibold text-white">Connected Accounts</span>
+        <span class="bg-primary/15 text-primary text-xs px-1.5 py-0.5 rounded-md font-medium"><%= accounts.length %></span>
+      </div>
+      <button onclick="event.stopPropagation(); openAddAccountModal()" 
+        class="bg-red-500 hover:bg-red-600 active:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs transition-colors flex items-center gap-1.5 font-medium pointer-events-auto min-h-[32px]">
+        <i class="ti ti-plus text-sm"></i>
+        <span>Add</span>
+      </button>
+    </div>
+    
+    <!-- Accounts List - Collapsible -->
+    <div id="connectedAccountsList" class="transition-all duration-200" style="display: none;">
+      <% accounts.forEach(function(account, index) { %>
+      <div class="flex items-center justify-between px-4 py-2.5 hover:bg-gray-700/30 transition-colors <%= index < accounts.length - 1 ? 'border-b border-gray-700/30' : '' %>">
+        <!-- Left: Icon + Info -->
+        <div class="flex items-center gap-3 min-w-0 flex-1">
+          <div class="w-8 h-8 bg-red-500/15 rounded-lg flex items-center justify-center flex-shrink-0">
+            <i class="ti ti-brand-youtube text-red-400 text-sm"></i>
+          </div>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-2">
+              <span class="text-sm font-medium text-white truncate"><%= account.channelName || 'YouTube Channel' %></span>
+              <% if (account.isPrimary) { %>
+              <span class="px-1.5 py-0.5 bg-yellow-500/15 text-yellow-400 text-[10px] rounded font-medium flex-shrink-0">★ Primary</span>
+              <% } %>
+            </div>
+            <p class="text-[11px] text-green-400/80 flex items-center gap-1 mt-0.5">
+              <i class="ti ti-circle-check text-[10px]"></i>
+              Connected
+            </p>
+          </div>
+        </div>
+        <!-- Right: Action Buttons -->
+        <div class="flex items-center gap-0.5 flex-shrink-0">
+          <button onclick="reconnectAccountOAuth(<%= account.id %>, '<%= (account.channelName || 'YouTube Channel').replace(/'/g, "\\'") %>')" 
+            class="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-green-400 hover:bg-green-500/10 rounded-md transition-colors" title="Reconnect Token">
+            <i class="ti ti-refresh text-sm"></i>
+          </button>
+          <button onclick="openEditAccountModal(<%= account.id %>, '<%= (account.channelName || 'YouTube Channel').replace(/'/g, "\\'") %>')" 
+            class="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-blue-400 hover:bg-blue-500/10 rounded-md transition-colors" title="Edit">
+            <i class="ti ti-edit text-sm"></i>
+          </button>
+          <button onclick="setPrimaryAccount(<%= account.id %>)" 
+            class="w-7 h-7 flex items-center justify-center rounded-md transition-colors <%= account.isPrimary ? 'text-yellow-400' : 'text-gray-500 hover:text-yellow-400 hover:bg-yellow-500/10' %>" title="<%= account.isPrimary ? 'Primary' : 'Set Primary' %>">
+            <i class="ti <%= account.isPrimary ? 'ti-star-filled' : 'ti-star' %> text-sm"></i>
+          </button>
+          <button onclick="disconnectAccount(<%= account.id %>, '<%= (account.channelName || 'this account').replace(/'/g, "\\'") %>')" 
+            class="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-md transition-colors" title="Disconnect">
+            <i class="ti ti-unlink text-sm"></i>
+          </button>
+        </div>
+      </div>
+      <% }); %>
+    </div>
+  </div>
+
+  <% 
+  // Check for expired tokens (Quick Reconnect feature)
+  const expiredAccounts = accounts.filter(a => {
+    return a.tokenStatus === 'expired' || a.tokenStatus === 'error';
+  });
+  
+  if (expiredAccounts.length > 0) { 
+  %>
+  <!-- Expired Token Alert Banner - Redesigned -->
+  <div id="expiredTokenAlert" class="bg-gradient-to-r from-red-500/10 via-red-500/5 to-transparent border-l-4 border-red-500 rounded-xl mb-6 shadow-xl overflow-hidden backdrop-blur-sm">
+    <!-- Desktop Layout - Modern & Clean -->
+    <div class="hidden md:block">
+      <div class="flex items-center justify-between px-6 py-4">
+        <!-- Left: Icon + Info -->
+        <div class="flex items-center gap-4 flex-1">
+          <div class="relative">
+            <div class="w-14 h-14 bg-gradient-to-br from-red-500/30 to-red-600/30 rounded-2xl flex items-center justify-center backdrop-blur-sm">
+              <i class="ti ti-alert-circle text-red-400 text-3xl"></i>
+            </div>
+            <div class="absolute -top-1 -right-1 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center text-white text-xs font-bold animate-pulse">
+              <%= expiredAccounts.length %>
+            </div>
+          </div>
+          <div class="flex-1">
+            <h3 class="text-white font-bold text-lg mb-1 flex items-center gap-2">
+              Token Expired - Perlu Reconnect
+            </h3>
+            <p class="text-gray-400 text-sm leading-relaxed">
+              OAuth app mode <span class="text-red-400 font-semibold">"Testing"</span> - token expired setiap 7 hari. 
+              <a href="https://console.cloud.google.com/apis/credentials/consent" target="_blank" class="text-blue-400 hover:text-blue-300 underline decoration-dotted underline-offset-2 ml-1 transition-colors">
+                Publish ke Production untuk solusi permanent →
+              </a>
+            </p>
+            <p class="text-gray-500 text-xs mt-1">
+              <i class="ti ti-bulb text-yellow-500/70 mr-0.5"></i>
+              Reconnect = perbaikan cepat (bertahan 7 hari). Publish ke Production = solusi permanen.
+            </p>
+            <!-- Expired accounts badges -->
+            <div class="flex flex-wrap gap-2 mt-3">
+              <% expiredAccounts.forEach(function(account) { %>
+              <span class="inline-flex items-center gap-1.5 bg-red-500/20 text-red-300 px-3 py-1 rounded-full text-xs font-medium border border-red-500/30">
+                <i class="ti ti-circle-x text-xs"></i>
+                <%= account.channelName || 'Account #' + account.id %>
+              </span>
+              <% }); %>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Right: Actions -->
+        <div class="flex items-center gap-3 ml-6">
+          <button onclick="reconnectAllExpired()" 
+            class="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-200 flex items-center gap-2 shadow-lg shadow-red-500/25 hover:shadow-red-500/40 hover:scale-105 active:scale-95">
+            <i class="ti ti-refresh text-lg"></i>
+            <span>Reconnect Sekarang</span>
+          </button>
+          <button onclick="dismissExpiredAlertWithBadge()" 
+            class="text-gray-400 hover:text-white hover:bg-gray-700/50 w-10 h-10 flex items-center justify-center rounded-lg transition-all">
+            <i class="ti ti-x text-xl"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mobile Layout - Minimalist & Clean -->
+    <div class="md:hidden">
+      <!-- Header -->
+      <div class="flex items-center justify-between px-4 py-3">
+        <div class="flex items-center gap-3 flex-1 min-w-0">
+          <div class="relative">
+            <div class="w-11 h-11 bg-gradient-to-br from-red-500/30 to-red-600/30 rounded-xl flex items-center justify-center">
+              <i class="ti ti-alert-circle text-red-400 text-xl"></i>
+            </div>
+            <div class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-[10px] font-bold animate-pulse">
+              <%= expiredAccounts.length %>
+            </div>
+          </div>
+          <div class="min-w-0 flex-1">
+            <h3 class="text-white font-bold text-sm">
+              Token Expired
+            </h3>
+            <p class="text-gray-500 text-xs">Perlu reconnect sekarang</p>
+          </div>
+        </div>
+        <button onclick="dismissExpiredAlertWithBadge()" 
+          class="text-gray-500 hover:text-gray-300 transition-colors flex-shrink-0 w-8 h-8 flex items-center justify-center rounded hover:bg-gray-700/30">
+          <i class="ti ti-x text-lg"></i>
+        </button>
+      </div>
+      
+      <!-- Content -->
+      <div class="px-4 pb-4">
+        <!-- Compact Info -->
+        <p class="text-gray-400 text-xs leading-relaxed mb-3">
+          OAuth mode Testing - expired setiap 7 hari. 
+          <a href="https://console.cloud.google.com/apis/credentials/consent" target="_blank" class="text-blue-400 underline">
+            Publish ke Production →
+          </a>
+        </p>
+        
+        <!-- Action Button - Single primary action -->
+        <button onclick="reconnectAllExpired()" 
+          class="w-full bg-gradient-to-r from-red-500 to-red-600 active:from-red-600 active:to-red-700 text-white px-4 py-3 rounded-xl font-bold transition-all duration-200 flex items-center justify-center gap-2 shadow-lg text-sm">
+          <i class="ti ti-refresh text-base"></i>
+          <span>Reconnect Sekarang</span>
+        </button>
+        
+        <!-- Expired Accounts - Compact List -->
+        <div class="mt-3 pt-3 border-t border-red-500/20">
+          <p class="text-[10px] text-gray-500 mb-2 font-medium uppercase tracking-wide">Akun yang expired:</p>
+          <div class="flex flex-wrap gap-1.5">
+            <% expiredAccounts.forEach(function(account) { %>
+            <span class="inline-flex items-center gap-1 bg-red-500/20 text-red-300 px-2 py-0.5 rounded-full text-[10px] font-medium border border-red-500/30">
+              <i class="ti ti-circle-x" style="font-size: 8px;"></i>
+              <%= account.channelName || '#' + account.id %>
+            </span>
+            <% }); %>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Minimized Badge Indicator (shown after dismiss) -->
+  <div id="expiredTokenBadge" class="hidden bg-red-500/10 border border-red-500/50 rounded-lg px-4 py-2 mb-6 cursor-pointer hover:bg-red-500/20 transition-all" onclick="showExpiredAlert()">
+    <div class="flex items-center gap-3">
+      <div class="relative">
+        <i class="ti ti-alert-circle text-red-400 text-xl"></i>
+        <div class="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center text-white text-[9px] font-bold">
+          <%= expiredAccounts.length %>
+        </div>
+      </div>
+      <span class="text-sm text-gray-300">
+        <span class="font-semibold text-red-400"><%= expiredAccounts.length %> akun</span> perlu reconnect
+      </span>
+      <i class="ti ti-chevron-down text-gray-500 text-sm ml-auto"></i>
+    </div>
+  </div>
+  <% } %>
+
+  <!-- Token Auto-Refresh Status -->
+  <div class="bg-gray-800 rounded-xl border border-gray-700/50 mb-6 overflow-hidden">
+    <!-- Header - Full clickable area with proper touch target -->
+    <div class="flex items-center justify-between px-4 py-3 min-h-[48px] cursor-pointer hover:bg-gray-700/20 active:bg-gray-700/40 transition-colors select-none"
+         onclick="toggleTokenStatus()" id="tokenStatusHeader" role="button" tabindex="0">
+      <div class="flex items-center gap-2 pointer-events-none">
+        <i class="ti ti-chevron-right text-gray-400 text-base transition-transform duration-200" id="tokenChevron"></i>
+        <i class="ti ti-shield-check text-green-400 text-base"></i>
+        <span class="text-sm font-semibold text-white">Token Auto-Refresh</span>
+        <span class="bg-green-500/15 text-green-400 text-[10px] px-1.5 py-0.5 rounded-md font-medium">AUTO</span>
+      </div>
+      <span class="text-[11px] text-gray-500 pointer-events-none hidden sm:inline">Refresh otomatis setiap 5 hari</span>
+    </div>
+    <!-- Token Status Content -->
+    <div id="tokenStatusContent" class="px-4 pb-4" style="display: none;">
+      <div class="border-t border-gray-700/30 pt-3">
+        <!-- Clarification note: what auto-refresh actually does -->
+        <div class="bg-blue-500/5 border border-blue-500/20 rounded-lg p-3 mb-3">
+          <p class="text-xs text-gray-400 leading-relaxed">
+            <i class="ti ti-info-circle text-blue-400 mr-1"></i>
+            Yang diperbarui otomatis adalah <span class="text-gray-300">sesi login (access token)</span>. Jika OAuth app masih mode <span class="text-orange-400">Testing</span>, Google tetap memutus koneksi tiap 7 hari —
+            <a href="https://console.cloud.google.com/apis/credentials/consent" target="_blank" class="text-blue-400 hover:underline">publish ke Production</a> untuk solusi permanen.
+          </p>
+        </div>
+        <div id="tokenStatusContainer">
+          <div class="flex items-center justify-center py-3">
+            <i class="ti ti-loader animate-spin text-gray-400 mr-2 text-sm"></i>
+            <span class="text-xs text-gray-400">Loading token status...</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Live Stats Dashboard - Horizontal Bar -->
+  <div id="liveStatsDashboard" class="bg-gray-800 rounded-xl px-3 py-2 shadow-lg border border-gray-700/50 mb-6 live-stats-dashboard overflow-hidden">
+    <!-- Stats Bar - Desktop: Single row, 5 equal chips + compact actions -->
+    <div class="hidden md:flex items-center gap-2 live-stats-desktop">
+      <!-- 5 stat chips - equal width -->
+      <div class="flex-1 flex items-center gap-2 live-stats-group">
+        <!-- Live Count -->
+        <div class="live-stat-chip" title="Active Broadcasts">
+          <i class="ti ti-broadcast text-purple-400"></i>
+          <span id="liveCountNum" class="text-white font-bold">0</span>
+          <span class="text-gray-400 text-xs">live</span>
+        </div>
+        <!-- API Quota -->
+        <div class="live-stat-chip" title="API Quota">
+          <i class="ti ti-api text-cyan-400"></i>
+          <span id="quotaUsed" class="text-white font-bold">10K</span>
+          <span id="quotaChannelName" class="text-gray-400 text-xs"></span>
+        </div>
+        <!-- Viewers -->
+        <div class="live-stat-chip" title="Total Viewers">
+          <i class="ti ti-users text-yellow-400"></i>
+          <span id="totalViewers" class="text-white font-bold">0</span>
+          <span class="text-gray-400 text-xs">viewers</span>
+        </div>
+        <!-- Connection -->
+        <div class="live-stat-chip" title="Connection Status">
+          <i class="ti ti-wifi text-green-400" id="connectionIcon"></i>
+          <span id="connectionLabel" class="text-green-400 font-semibold text-xs">Online</span>
+        </div>
+      </div>
+      <!-- Compact action buttons -->
+      <div class="flex items-center gap-1.5 flex-shrink-0">
+        <button onclick="refreshLiveStats()" id="refreshStatsBtn" class="live-stat-action" title="Refresh">
+          <i class="ti ti-refresh" id="refreshIcon"></i>
+        </button>
+        <button onclick="toggleAutoRefresh()" id="autoRefreshBtn" class="live-stat-action" title="Auto refresh">
+          <i class="ti ti-clock" id="autoRefreshIcon"></i>
+          <span id="autoRefreshLabel" class="live-stat-toggle-label">OFF</span>
+        </button>
+      </div>
+    </div>
+    
+    <!-- Stats Bar - Mobile -->
+    <div class="md:hidden">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-5">
+          <!-- Live -->
+          <div class="flex items-center gap-1.5" title="Active Broadcasts">
+            <i class="ti ti-broadcast text-purple-400 text-base"></i>
+            <span id="liveCountNumMobile" class="text-white font-semibold">0</span>
+            <span class="text-gray-500 text-sm">live</span>
+          </div>
+          <!-- Quota -->
+          <div class="flex items-center gap-1.5" title="API Quota">
+            <i class="ti ti-api text-cyan-400 text-base"></i>
+            <span id="quotaUsedMobile" class="text-white font-semibold">10K</span>
+          </div>
+          <!-- Viewers -->
+          <div class="flex items-center gap-1.5" title="Total Viewers">
+            <i class="ti ti-users text-yellow-400 text-base"></i>
+            <span id="totalViewersMobile" class="text-white font-semibold">0</span>
+          </div>
+          <!-- Connection - icon only -->
+          <div class="flex items-center" title="Connection Status">
+            <i class="ti ti-wifi text-green-400 text-base" id="connectionIconMobile"></i>
+          </div>
+        </div>
+        <!-- Actions -->
+        <div class="flex items-center gap-1">
+          <button onclick="refreshLiveStats()" id="refreshStatsBtnMobile" class="p-1.5 hover:bg-dark-700 rounded transition-colors" title="Refresh">
+            <i class="ti ti-refresh text-gray-400 text-base" id="refreshIconMobile"></i>
+          </button>
+          <button onclick="toggleAutoRefresh()" id="autoRefreshBtnMobile" class="p-1.5 hover:bg-dark-700 rounded transition-colors flex items-center gap-1" title="Auto">
+            <i class="ti ti-clock text-gray-400 text-base" id="autoRefreshIconMobile"></i>
+            <span id="autoRefreshLabelMobile" class="text-xs text-gray-500">OFF</span>
+          </button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Hidden elements for compatibility -->
+    <span id="liveCount" class="hidden"></span>
+    <span id="connectionStatus" class="hidden"></span>
+    <span id="connectionStatusMobile" class="hidden"></span>
+    <span id="connectionDetail" class="hidden"></span>
+    <span id="quotaChannelNameMobile" class="hidden"></span>
+    <p id="quotaResetTime" class="hidden"></p>
+    <p id="viewersDetail" class="hidden"></p>
+    <div id="quotaBar" class="hidden"></div>
+    <span id="autoRefreshText" class="hidden"></span>
+    
+    <!-- Active Broadcasts - Collapsible per Channel -->
+    <div id="activeStreamsContainer" class="mt-3 hidden">
+      <div id="activeStreamsList" class="space-y-1.5"></div>
+    </div>
+  </div>
+
+  <!-- Scheduled Broadcasts Header -->
+  <div class="yt-broadcast-header flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+    <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+      <h2 class="text-xl font-semibold">Scheduled Broadcasts</h2>
+      <!-- Selection Actions (hidden by default) -->
+      <div id="selectionActions" class="hidden">
+        <!-- Desktop: inline -->
+        <div class="hidden sm:flex items-center gap-2">
+          <span id="selectedCount" class="text-sm text-gray-400 bg-dark-700 px-2 py-1 rounded">0 selected</span>
+          <button onclick="saveSelectedAsTemplate()"
+            class="bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-1">
+            <i class="ti ti-template"></i>
+            <span>Save as Template</span>
+          </button>
+          <button onclick="deleteSelectedBroadcasts()"
+            class="bg-red-500/20 hover:bg-red-500/30 text-red-400 px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-1">
+            <i class="ti ti-trash"></i>
+            <span>Delete All</span>
+          </button>
+          <button onclick="clearSelection()"
+            class="text-gray-400 hover:text-white px-2 py-1 text-sm transition-colors">
+            <i class="ti ti-x"></i>
+          </button>
+        </div>
+        <!-- Mobile: 2 column grid -->
+        <div class="sm:hidden grid grid-cols-2 gap-3 mt-3 w-full">
+          <button onclick="saveSelectedAsTemplate()"
+            class="bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2">
+            <i class="ti ti-template"></i>
+            <span>Template</span>
+          </button>
+          <button onclick="deleteSelectedBroadcasts()"
+            class="bg-red-500/20 hover:bg-red-500/30 text-red-400 py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2">
+            <i class="ti ti-trash"></i>
+            <span>Delete</span>
+          </button>
+        </div>
+      </div>
+    </div>
+    <div class="header-buttons grid grid-cols-3 gap-2 w-full sm:w-auto sm:flex-shrink-0">
+      <button onclick="openTemplateLibraryModal()"
+        class="bg-primary/20 hover:bg-primary/30 text-primary px-4 py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2 font-medium">
+        <i class="ti ti-template text-lg"></i>
+        <span>Templates</span>
+      </button>
+      <button onclick="openThumbnailManagerModal()"
+        class="bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 px-4 py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2 font-medium">
+        <i class="ti ti-photo text-lg"></i>
+        <span>Thumbnails</span>
+      </button>
+      <button onclick="openCreateBroadcastModal()"
+        class="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-4 py-2.5 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 font-medium shadow-lg shadow-red-500/25">
+        <i class="ti ti-plus text-lg"></i>
+        <span>Create</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Broadcasts List - Grouped by Channel -->
+  <% if (broadcasts === null) { %>
+  <!-- Lazy Loading State -->
+  <div id="broadcastsLoadingContainer" class="bg-gray-800 rounded-lg p-10 text-center">
+    <div class="w-16 h-16 bg-dark-700 rounded-full flex items-center justify-center mx-auto mb-4">
+      <i class="ti ti-loader animate-spin text-primary text-2xl"></i>
+    </div>
+    <p class="text-gray-400 font-medium mb-2">Loading broadcasts...</p>
+    <p class="text-gray-500 text-sm">Fetching data from YouTube API</p>
+    <div class="mt-4">
+      <div class="w-48 h-1.5 bg-dark-700 rounded-full mx-auto overflow-hidden">
+        <div class="h-full bg-gradient-to-r from-primary to-blue-500 rounded-full animate-pulse" style="width: 60%"></div>
+      </div>
+    </div>
+    <p class="text-xs text-gray-600 mt-3">This may take a few seconds if you have many broadcasts</p>
+  </div>
+  
+  <!-- Container for dynamically loaded broadcasts -->
+  <div id="broadcastsContainer" class="space-y-4 hidden"></div>
+  
+  <% } else if (broadcasts && broadcasts.length > 0) { %>
+  <%
+    // Group broadcasts by account/channel
+    const groupedBroadcasts = {};
+    const accountMap = {};
+    
+    // Create account map for quick lookup
+    if (accounts && accounts.length > 0) {
+      accounts.forEach(acc => {
+        accountMap[acc.id] = acc.channelName || null;
+      });
+    }
+    
+    // Group broadcasts with PRIORITY channel name resolution
+    broadcasts.forEach(broadcast => {
+      // PRIORITY: Use channelName from broadcast first, then fallback to accountMap
+      let channelName = broadcast.channelName || accountMap[broadcast.accountId];
+      
+      // If still no channel name, use descriptive fallback (NEVER "Unknown Channel")
+      if (!channelName) {
+        channelName = `YouTube Account #${broadcast.accountId}`;
+      }
+      
+      if (!groupedBroadcasts[channelName]) {
+        groupedBroadcasts[channelName] = {
+          accountId: broadcast.accountId,
+          broadcasts: []
+        };
+      }
+      groupedBroadcasts[channelName].broadcasts.push(broadcast);
+    });
+    
+    const channelNames = Object.keys(groupedBroadcasts);
+  %>
+  
+  <div id="broadcastsContainer" class="space-y-4">
+    <% channelNames.forEach(function(channelName, channelIndex) { %>
+    <% const group = groupedBroadcasts[channelName]; %>
+    <div class="channel-broadcast-group bg-gray-800 rounded-lg shadow-md overflow-hidden">
+      <!-- Channel Header - Collapsible -->
+      <div class="flex items-center justify-between px-4 py-3 bg-dark-700 cursor-pointer hover:bg-dark-600 transition-colors"
+        onclick="toggleBroadcastChannel('<%= channelIndex %>')">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 bg-red-500/20 rounded-lg flex items-center justify-center text-xl">
+            📺
+          </div>
+          <div>
+            <span class="font-medium text-white"><%= channelName %></span>
+            <span class="ml-2 text-xs text-gray-400">(<%= group.broadcasts.length %> broadcasts)</span>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <input type="checkbox" class="channel-select-all w-4 h-4 rounded border-gray-600 bg-dark-700 text-primary focus:ring-primary cursor-pointer"
+            onclick="event.stopPropagation(); toggleChannelSelectAll(this, <%= group.accountId %>)"
+            title="Select all in this channel">
+          <span class="text-gray-400 text-xl transition-transform" id="channelChevron_<%= channelIndex %>" style="display: inline-block;">▶</span>
+        </div>
+      </div>
+      
+      <!-- Channel Broadcasts - START COLLAPSED -->
+      <div id="channelBroadcasts_<%= channelIndex %>" class="divide-y divide-gray-700/50" style="display: none;">
+        <% group.broadcasts.forEach(function(broadcast, index) { %>
+        <div class="broadcast-list-item broadcast-row hover:bg-dark-700/30 transition-colors" data-broadcast-id="<%= broadcast.id %>" data-account-id="<%= broadcast.accountId %>">
+          <!-- Desktop Row -->
+          <div class="hidden md:flex items-center gap-2 px-4 py-2">
+            <div class="w-8 text-center">
+              <input type="checkbox" class="broadcast-checkbox w-4 h-4 rounded border-gray-600 bg-dark-700 text-primary focus:ring-primary cursor-pointer"
+                data-broadcast-id="<%= broadcast.id %>"
+                data-account-id="<%= broadcast.accountId %>"
+                data-broadcast='<%= JSON.stringify({id: broadcast.id, accountId: broadcast.accountId, title: broadcast.title, description: broadcast.description || "", privacyStatus: broadcast.privacyStatus, streamId: broadcast.streamId || null, streamKey: broadcast.streamKey || "", categoryId: broadcast.categoryId || "22", tags: broadcast.tags || [], thumbnailPath: broadcast.thumbnailPath || null}) %>'
+                onchange="syncCheckboxes(this); updateSelectionCount()">
+            </div>
+            <div class="w-8 text-center text-xs text-gray-500"><%= index + 1 %></div>
+            <div class="flex-1 min-w-0">
+              <span class="text-sm text-white truncate block"><%= broadcast.title %></span>
+            </div>
+            <div class="w-20 text-center">
+              <span class="px-2 py-0.5 rounded text-xs font-medium uppercase
+                <%= broadcast.privacyStatus === 'public' ? 'bg-green-500/20 text-green-400' : 
+                    broadcast.privacyStatus === 'unlisted' ? 'bg-yellow-500/20 text-yellow-400' : 
+                    'bg-gray-500/20 text-gray-400' %>">
+                <%= broadcast.privacyStatus %>
+              </span>
+            </div>
+            <div class="w-48 flex items-center gap-1.5">
+              <span class="text-[10px] font-bold text-primary bg-primary/15 px-1.5 py-0.5 rounded shrink-0" title="Stream key #<%= index + 1 %>">#<%= index + 1 %></span>
+              <span class="font-mono text-xs text-gray-400 truncate flex-1 min-w-0" title="<%= broadcast.streamKey || '' %>">
+                <%= broadcast.streamKey ? broadcast.streamKey.substring(0, 16) + '...' : '-' %>
+              </span>
+              <button type="button" onclick="copyStreamKey('<%= broadcast.streamKey || '' %>', <%= index + 1 %>)"
+                class="shrink-0 w-7 h-7 flex items-center justify-center text-gray-400 hover:text-primary hover:bg-primary/10 rounded transition-colors <%= broadcast.streamKey ? '' : 'opacity-40 pointer-events-none' %>"
+                title="Copy stream key #<%= index + 1 %>">
+                <i class="ti ti-copy text-sm"></i>
+              </button>
+            </div>
+            <div class="w-24 flex items-center justify-center gap-1">
+              <button onclick="editBroadcast('<%= broadcast.id %>', <%= broadcast.accountId %>)"
+                class="w-7 h-7 flex items-center justify-center text-blue-400 hover:bg-blue-500/20 rounded transition-colors" title="Edit">
+                <i class="ti ti-edit text-sm"></i>
+              </button>
+              <button onclick="reuseBroadcast('<%= broadcast.id %>', <%= broadcast.accountId %>)"
+                class="w-7 h-7 flex items-center justify-center text-green-400 hover:bg-green-500/20 rounded transition-colors" title="Sync">
+                <i class="ti ti-refresh text-sm"></i>
+              </button>
+              <button onclick="deleteBroadcast('<%= broadcast.id %>', '<%= broadcast.title.replace(/'/g, "\\'") %>', <%= broadcast.accountId %>)"
+                class="w-7 h-7 flex items-center justify-center text-red-400 hover:bg-red-500/20 rounded transition-colors" title="Delete">
+                <i class="ti ti-trash text-sm"></i>
+              </button>
+            </div>
+          </div>
+          
+          <!-- Mobile Row -->
+          <div class="md:hidden flex items-center gap-2 px-3 py-2">
+            <input type="checkbox" class="broadcast-checkbox w-4 h-4 rounded border-gray-600 bg-dark-700 text-primary focus:ring-primary cursor-pointer flex-shrink-0"
+              data-broadcast-id="<%= broadcast.id %>"
+              data-account-id="<%= broadcast.accountId %>"
+              data-broadcast='<%= JSON.stringify({id: broadcast.id, accountId: broadcast.accountId, title: broadcast.title, description: broadcast.description || "", privacyStatus: broadcast.privacyStatus, streamId: broadcast.streamId || null, streamKey: broadcast.streamKey || "", categoryId: broadcast.categoryId || "22", tags: broadcast.tags || [], thumbnailPath: broadcast.thumbnailPath || null}) %>'
+              onchange="syncCheckboxes(this); updateSelectionCount()">
+            <span class="text-[10px] font-bold text-primary bg-primary/15 px-1.5 py-0.5 rounded flex-shrink-0" title="Stream key #<%= index + 1 %>">#<%= index + 1 %></span>
+            <span class="flex-1 text-xs text-white truncate min-w-0"><%= broadcast.title %></span>
+            <span class="px-1.5 py-0.5 rounded text-[10px] font-medium uppercase flex-shrink-0
+              <%= broadcast.privacyStatus === 'public' ? 'bg-green-500/20 text-green-400' : 
+                  broadcast.privacyStatus === 'unlisted' ? 'bg-yellow-500/20 text-yellow-400' : 
+                  'bg-gray-500/20 text-gray-400' %>">
+              <%= broadcast.privacyStatus.substring(0, 3) %>
+            </span>
+            <div class="flex items-center gap-0.5 flex-shrink-0">
+              <button onclick="copyStreamKey('<%= broadcast.streamKey || '' %>', <%= index + 1 %>)"
+                class="w-8 h-8 flex items-center justify-center text-primary hover:bg-primary/20 rounded transition-colors <%= broadcast.streamKey ? '' : 'opacity-40 pointer-events-none' %>" title="Copy stream key #<%= index + 1 %>">
+                <i class="ti ti-copy text-sm"></i>
+              </button>
+              <button onclick="editBroadcast('<%= broadcast.id %>', <%= broadcast.accountId %>)"
+                class="w-8 h-8 flex items-center justify-center text-blue-400 hover:bg-blue-500/20 rounded transition-colors" title="Edit">
+                <i class="ti ti-edit text-sm"></i>
+              </button>
+              <button onclick="reuseBroadcast('<%= broadcast.id %>', <%= broadcast.accountId %>)"
+                class="w-8 h-8 flex items-center justify-center text-green-400 hover:bg-green-500/20 rounded transition-colors" title="Sync">
+                <i class="ti ti-refresh text-sm"></i>
+              </button>
+              <button onclick="deleteBroadcast('<%= broadcast.id %>', '<%= broadcast.title.replace(/'/g, "\\'") %>', <%= broadcast.accountId %>)"
+                class="w-8 h-8 flex items-center justify-center text-red-400 hover:bg-red-500/20 rounded transition-colors" title="Delete">
+                <i class="ti ti-trash text-sm"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+        <% }); %>
+      </div>
+    </div>
+    <% }); %>
+  </div>
+  
+  <% } else { %>
+  <!-- Empty State -->
+  <div class="bg-gray-800 rounded-lg p-10 text-center">
+    <div class="w-16 h-16 bg-dark-700 rounded-full flex items-center justify-center mx-auto mb-4">
+      <i class="ti ti-broadcast text-gray-500 text-2xl"></i>
+    </div>
+    <p class="text-gray-400 font-medium mb-2">No scheduled broadcasts</p>
+    <p class="text-gray-500 text-sm mb-4">Create your first broadcast to get started</p>
+    <button onclick="openCreateBroadcastModal()"
+      class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors inline-flex items-center gap-2">
+      <i class="ti ti-plus"></i>
+      <span>Create Broadcast</span>
+    </button>
+  </div>
+  <% } %>
+  
+  <% } %>
+</div>
+
+<!-- Create Broadcast Modal -->
+<div id="createBroadcastModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto">
+  <div class="flex min-h-screen items-center justify-center p-4">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-lg">
+      <div class="flex items-center justify-between p-6 border-b border-gray-700">
+        <h3 class="text-lg font-semibold">Create Broadcast</h3>
+        <button onclick="closeCreateBroadcastModal()" class="text-gray-400 hover:text-white">
+          <i class="ti ti-x text-xl"></i>
+        </button>
+      </div>
+      
+      <form id="createBroadcastForm" class="p-6 space-y-4">
+        <!-- Account Selector -->
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">YouTube Account <span class="text-red-400">*</span></label>
+          <select id="accountSelect" name="accountId" required
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none"
+            onchange="onAccountChange(this.value)">
+            <% if (accounts && accounts.length > 0) { %>
+              <% accounts.forEach(function(account) { %>
+              <option value="<%= account.id %>"><%= account.channelName || 'YouTube Channel' %></option>
+              <% }); %>
+            <% } %>
+          </select>
+        </div>
+        
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <label class="text-sm font-medium text-white">
+              Title <span class="text-red-400">*</span>
+              <span id="titleAutoFillIndicator" class="hidden ml-2 text-xs text-green-400" title="Auto-filled from YouTube defaults">
+                <i class="ti ti-sparkles"></i> Auto-filled
+              </span>
+            </label>
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="saveCurrentTitleToManager('create')" class="text-xs text-green-400 hover:text-green-300 flex items-center gap-1" title="Save current title">
+                <i class="ti ti-bookmark"></i>
+              </button>
+              <button type="button" onclick="openTitleManagerModal('create')" class="text-xs text-primary hover:text-primary/80 flex items-center gap-1">
+                <i class="ti ti-list"></i>
+                <span>Titles</span>
+              </button>
+            </div>
+          </div>
+          <div class="relative">
+            <input type="text" id="broadcastTitle" name="title" required
+              class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none pr-10"
+              placeholder="Enter broadcast title"
+              oninput="searchTitleSuggestions(this.value, 'create')"
+              onfocus="showTitleSuggestions('create')"
+              autocomplete="off">
+            <button type="button" onclick="toggleTitleDropdown('create')" class="absolute right-8 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white p-1">
+              <i class="ti ti-chevron-down"></i>
+            </button>
+            <div id="titleLoading" class="hidden absolute right-3 top-1/2 -translate-y-1/2">
+              <i class="ti ti-loader animate-spin text-gray-400"></i>
+            </div>
+            <!-- Title Suggestions Dropdown -->
+            <div id="titleSuggestions" class="hidden absolute left-0 right-0 z-20 mt-1 bg-dark-700 border border-gray-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+              <!-- Suggestions will be populated here -->
+            </div>
+          </div>
+        </div>
+        
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">
+            Description
+            <span id="descriptionAutoFillIndicator" class="hidden ml-2 text-xs text-green-400" title="Auto-filled from YouTube defaults">
+              <i class="ti ti-sparkles"></i> Auto-filled
+            </span>
+          </label>
+          <div class="relative">
+            <textarea id="broadcastDescription" name="description" rows="3"
+              class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none resize-none"
+              placeholder="Enter broadcast description (optional)"></textarea>
+            <div id="descriptionLoading" class="hidden absolute right-3 top-3">
+              <i class="ti ti-loader animate-spin text-gray-400"></i>
+            </div>
+          </div>
+        </div>
+        
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Scheduled Start Time <span class="text-red-400">*</span></label>
+          <input type="datetime-local" id="scheduledStartTime" name="scheduledStartTime" required
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none [color-scheme:dark]">
+          <p class="text-xs text-gray-500 mt-1">Must be at least 10 minutes in the future</p>
+        </div>
+        
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Privacy Status</label>
+          <select id="privacyStatus" name="privacyStatus"
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none">
+            <option value="unlisted">Unlisted</option>
+            <option value="public">Public</option>
+            <option value="private">Private</option>
+          </select>
+        </div>
+        
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Category</label>
+          <select id="categoryId" name="categoryId"
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none">
+            <option value="22" selected>People & Blogs</option>
+            <option value="1">Film & Animation</option>
+            <option value="2">Autos & Vehicles</option>
+            <option value="10">Music</option>
+            <option value="15">Pets & Animals</option>
+            <option value="17">Sports</option>
+            <option value="18">Short Movies</option>
+            <option value="19">Travel & Events</option>
+            <option value="20">Gaming</option>
+            <option value="21">Videoblogging</option>
+            <option value="23">Comedy</option>
+            <option value="24">Entertainment</option>
+            <option value="25">News & Politics</option>
+            <option value="26">Howto & Style</option>
+            <option value="27">Education</option>
+            <option value="28">Science & Technology</option>
+            <option value="29">Nonprofits & Activism</option>
+          </select>
+          <p class="text-xs text-gray-500 mt-1">Add your stream to a category so that viewers can find it more easily</p>
+        </div>
+        
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Stream Key</label>
+          <div class="relative">
+            <select id="streamKeySelect" name="streamId"
+              class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none"
+              onchange="onStreamKeyChange(this.value)">
+              <option value="">Create new stream key</option>
+            </select>
+            <div id="streamKeyLoading" class="hidden absolute right-3 top-1/2 -translate-y-1/2">
+              <i class="ti ti-loader animate-spin text-gray-400"></i>
+            </div>
+          </div>
+          <p class="text-xs text-gray-500 mt-1">Select existing stream key or create new one</p>
+        </div>
+        
+        <!-- Tags Field - Collapsible -->
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <label class="text-sm font-medium text-white flex items-center gap-2">
+              Tags
+              <span id="tagsCount" class="text-xs text-gray-400">(0)</span>
+              <span id="tagsAutoFillIndicator" class="hidden text-xs text-green-400" title="Auto-filled from YouTube defaults">
+                <i class="ti ti-sparkles"></i> Auto-filled
+              </span>
+            </label>
+            <button type="button" id="toggleTagsBtn" onclick="toggleTagsVisibility()" class="text-xs text-primary hover:text-primary/80 flex items-center gap-1">
+              <span id="toggleTagsText">Show</span>
+              <i id="toggleTagsIcon" class="ti ti-chevron-down text-sm transition-transform"></i>
+            </button>
+          </div>
+          
+          <!-- Collapsed Preview -->
+          <div id="tagsPreview" class="px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg text-xs text-gray-400 truncate">
+            <span id="tagsPreviewText">No tags added</span>
+          </div>
+          
+          <!-- Expanded Tags Container -->
+          <div id="tagsExpandedContainer" class="hidden">
+            <div class="relative">
+              <div id="tagsContainer" class="max-h-32 overflow-y-auto px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg focus-within:border-primary flex flex-wrap gap-1.5 items-start content-start">
+                <!-- Tag chips will be rendered here -->
+                <input type="text" id="tagInput" 
+                  class="flex-1 min-w-[100px] bg-transparent border-none outline-none text-white text-sm py-1"
+                  placeholder="Add tag and press Enter">
+              </div>
+              <div id="tagsLoading" class="hidden absolute right-3 top-3">
+                <i class="ti ti-loader animate-spin text-gray-400"></i>
+              </div>
+            </div>
+            <p class="text-xs text-gray-500 mt-1">Press Enter to add tags. Max 500 characters total.</p>
+          </div>
+          <input type="hidden" id="tagsHidden" name="tags" value="">
+        </div>
+
+        <!-- Auto-start and Auto-stop (hidden, always ON) -->
+        <input type="hidden" id="enableAutoStart" name="enableAutoStart" value="true">
+        <input type="hidden" id="enableAutoStop" name="enableAutoStop" value="true">
+
+        <!-- Unlist Replay Setting (visible, default ON) -->
+        <div class="bg-dark-700/50 rounded-lg p-4">
+          <label class="flex items-center justify-between cursor-pointer group">
+            <div class="flex-1">
+              <div class="flex items-center gap-2 mb-1">
+                <i class="ti ti-eye-off text-primary"></i>
+                <span class="text-sm font-medium text-white">Unlist replay when stream ends</span>
+              </div>
+              <p class="text-xs text-gray-500">
+                Automatically change video privacy to unlisted after stream ends
+              </p>
+            </div>
+            <div class="relative ml-4 flex-shrink-0">
+              <input type="checkbox" id="unlistReplayOnEnd" name="unlistReplayOnEnd" value="true" checked
+                class="sr-only peer"
+                onchange="this.value = this.checked ? 'true' : 'false'">
+              <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+            </div>
+          </label>
+        </div>
+
+        <input type="hidden" id="pinnedThumbnail" name="pinnedThumbnail" value="">
+        <input type="hidden" id="streamKeyFolderMapping" name="streamKeyFolderMapping" value="">
+
+        <div id="thumbnailManagerSection">
+          <label class="text-sm font-medium text-white block mb-2">
+            Thumbnail
+            <span id="thumbnailCount" class="ml-2 text-xs text-gray-400">(0)</span>
+          </label>
+          
+          <!-- Thumbnail Mode Selection -->
+          <div class="flex items-center gap-4 mb-3 p-2 bg-dark-700/50 rounded-lg">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="radio" name="thumbnailMode" value="sequential" checked 
+                class="w-4 h-4 text-primary bg-dark-700 border-gray-600 focus:ring-primary"
+                onchange="updateThumbnailMode(this.value)">
+              <span class="text-sm text-gray-300">Rotasi</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="radio" name="thumbnailMode" value="pinned"
+                class="w-4 h-4 text-primary bg-dark-700 border-gray-600 focus:ring-primary"
+                onchange="updateThumbnailMode(this.value)">
+              <span class="text-sm text-gray-300">Pin Thumbnail</span>
+            </label>
+          </div>
+          
+          <!-- Thumbnail Folder Navigation -->
+          <div id="thumbnailFolderNav" class="mb-3">
+            <div class="flex items-center justify-between mb-2">
+              <p class="text-xs text-gray-400 flex items-center gap-2">
+                <i class="ti ti-folder text-primary"></i>
+                Manajemen Folder Thumbnail
+              </p>
+              <button type="button" onclick="openRenameFolderModal(currentThumbnailFolder)" id="editThumbnailFolderBtn"
+                class="px-3 py-1.5 text-xs rounded-lg bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 transition-colors flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+                disabled>
+                <i class="ti ti-pencil text-sm"></i>
+                <span>Edit</span>
+              </button>
+            </div>
+            <!-- Header Row -->
+            <div class="flex items-center justify-between gap-2 mb-2">
+              <button type="button" onclick="openThumbnailFolder(null)" id="thumbnailRootBtn" 
+                class="px-3 py-1.5 text-xs rounded-lg bg-primary/20 text-primary hover:bg-primary/30 transition-colors flex items-center gap-1.5">
+                <i class="ti ti-home text-sm"></i>
+                <span>Root</span>
+              </button>
+              <button type="button" id="addThumbnailFolderBtn" onclick="openAddThumbnailFolderModal()" 
+                class="px-3 py-1.5 text-xs rounded-lg bg-dark-600 hover:bg-dark-500 text-gray-300 transition-colors flex items-center gap-1.5">
+                <i class="ti ti-plus text-sm"></i>
+                <span>Tambah Folder</span>
+              </button>
+            </div>
+            
+            <!-- Folder List - 2 columns -->
+            <div id="thumbnailFolderList" class="grid grid-cols-2 gap-x-4 gap-y-1 max-h-32 overflow-y-auto">
+              <!-- Folders will be loaded here -->
+            </div>
+            
+            <!-- Current Folder Indicator -->
+            <div id="currentFolderIndicator" class="hidden mt-2 pt-2 border-t border-gray-700/50 flex items-center justify-between text-xs">
+              <span class="text-gray-400 flex items-center gap-1">
+                <i class="ti ti-folder-open text-primary text-sm"></i>
+                <span id="currentFolderName" class="text-white">Root</span>
+              </span>
+              <button type="button" onclick="openThumbnailFolder(null)" class="text-primary hover:text-primary/80 text-xs">
+                ← Back
+              </button>
+            </div>
+          </div>
+          
+          <!-- Thumbnail Gallery -->
+          <div id="thumbnailGallery" class="mb-3">
+            <div id="thumbnailGalleryGrid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4 mb-2">
+              <!-- Thumbnails will be loaded here -->
+            </div>
+            <div id="thumbnailGalleryLoading" class="hidden text-center py-6 bg-dark-700/30 rounded-lg">
+              <i class="ti ti-loader animate-spin text-primary text-xl"></i>
+              <p class="text-gray-400 text-sm mt-2">Loading thumbnails...</p>
+            </div>
+            <div id="thumbnailGalleryEmpty" class="hidden text-center py-6 bg-dark-700/30 rounded-lg border border-dashed border-gray-600">
+              <i class="ti ti-photo-off text-gray-500 text-2xl"></i>
+              <p class="text-gray-500 text-xs mt-2">No thumbnails in this folder</p>
+            </div>
+          </div>
+          
+          <!-- Pinned Thumbnail Indicator -->
+          <div id="pinnedThumbnailIndicator" class="hidden mb-3 p-2 bg-green-500/10 border border-green-500/30 rounded-lg flex items-center justify-between">
+            <span class="text-sm text-green-400 flex items-center gap-2">
+              <i class="ti ti-pin-filled"></i>
+              <span>Thumbnail di-pin: <span id="pinnedThumbnailName" class="font-medium"></span></span>
+            </span>
+            <button type="button" onclick="unpinThumbnail()" class="text-red-400 hover:text-red-300 text-sm">
+              <i class="ti ti-x"></i> Hapus Pin
+            </button>
+          </div>
+          
+          <!-- Upload Section -->
+          <div class="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-3 bg-dark-700/30 rounded-lg border border-gray-700">
+            <div id="thumbnailPreview" class="w-24 h-14 sm:w-28 sm:h-16 bg-dark-600 rounded-lg overflow-hidden flex items-center justify-center border border-gray-600 shrink-0">
+              <i class="ti ti-photo text-gray-500 text-xl"></i>
+            </div>
+            <div class="flex-1 w-full sm:w-auto">
+              <input type="file" id="thumbnailFile" name="thumbnail" accept="image/jpeg,image/png" multiple
+                class="hidden" onchange="previewAndUploadThumbnail(this)">
+              <input type="hidden" id="selectedThumbnailPath" name="thumbnailPath" value="">
+              <input type="hidden" id="currentThumbnailFolder" value="">
+              <button type="button" id="uploadThumbnailGalleryBtn" onclick="document.getElementById('thumbnailFile').click()"
+                class="w-full sm:w-auto bg-primary/20 hover:bg-primary/30 text-primary border border-primary/50 px-4 py-2 rounded-lg transition-colors text-sm flex items-center justify-center gap-2">
+                <i class="ti ti-upload"></i>
+                <span>Upload to Gallery</span>
+              </button>
+              <p class="text-xs text-gray-500 mt-1">JPG or PNG, max 2MB each. Multiple files supported.</p>
+            </div>
+          </div>
+        </div>
+        
+        <div class="pt-4 flex gap-3">
+          <button type="button" onclick="closeCreateBroadcastModal()"
+            class="flex-1 bg-dark-700 hover:bg-dark-600 text-white px-4 py-2.5 rounded-lg transition-colors">
+            Cancel
+          </button>
+          <button type="submit" id="createBroadcastBtn"
+            class="flex-1 bg-red-500 hover:bg-red-600 text-white px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
+            <i class="ti ti-broadcast"></i>
+            <span>Create Broadcast</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Change Thumbnail Modal -->
+<div id="changeThumbnailModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay">
+  <div class="flex min-h-screen items-center justify-center p-4">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-md">
+      <div class="flex items-center justify-between p-6 border-b border-gray-700">
+        <h3 class="text-lg font-semibold">Change Thumbnail</h3>
+        <button onclick="closeChangeThumbnailModal()" class="text-gray-400 hover:text-white">
+          <i class="ti ti-x text-xl"></i>
+        </button>
+      </div>
+      
+      <form id="changeThumbnailForm" class="p-6 space-y-4">
+        <input type="hidden" id="changeThumbnailBroadcastId">
+        
+        <div>
+          <div id="newThumbnailPreview" class="w-full h-40 bg-dark-700 rounded-lg overflow-hidden flex items-center justify-center mb-4">
+            <i class="ti ti-photo text-gray-500 text-3xl"></i>
+          </div>
+          <input type="file" id="newThumbnailFile" name="thumbnail" accept="image/jpeg,image/png" required
+            class="hidden" onchange="previewNewThumbnail(this)">
+          <button type="button" onclick="document.getElementById('newThumbnailFile').click()"
+            class="w-full bg-dark-700 hover:bg-dark-600 text-white px-4 py-2.5 rounded-lg transition-colors">
+            <i class="ti ti-upload mr-1"></i> Choose New Thumbnail
+          </button>
+          <p class="text-xs text-gray-500 mt-2 text-center">JPG or PNG, max 2MB</p>
+        </div>
+        
+        <div class="pt-2 flex gap-3">
+          <button type="button" onclick="closeChangeThumbnailModal()"
+            class="flex-1 bg-dark-700 hover:bg-dark-600 text-white px-4 py-2.5 rounded-lg transition-colors">
+            Cancel
+          </button>
+          <button type="submit" id="uploadThumbnailBtn"
+            class="flex-1 bg-red-500 hover:bg-red-600 text-white px-4 py-2.5 rounded-lg transition-colors">
+            Upload Thumbnail
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Add Account Modal -->
+<div id="addAccountModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto">
+  <div class="flex min-h-screen items-center justify-center p-4">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-lg">
+      <div class="flex items-center justify-between p-4 sm:p-6 border-b border-gray-700">
+        <h3 class="text-base sm:text-lg font-semibold">Add YouTube Account</h3>
+        <button onclick="closeAddAccountModal()" class="text-gray-400 hover:text-white flex-shrink-0">
+          <i class="ti ti-x text-xl"></i>
+        </button>
+      </div>
+      
+      <form id="addAccountForm" class="p-4 sm:p-6 space-y-4">
+        <div id="reconnectTargetContainer" class="hidden bg-orange-500/10 border border-orange-500/30 rounded-lg p-3">
+          <div class="flex items-start gap-2">
+            <i class="ti ti-plug-connected-x text-orange-400 mt-0.5"></i>
+            <div class="flex-1">
+              <p class="text-sm text-orange-300 font-medium">Reconnect disconnected channel</p>
+              <p class="text-xs text-gray-400 mt-1">Pilih channel/template yang disconnected agar setelah connect, template lama otomatis diarahkan ke akun baru ini.</p>
+            </div>
+          </div>
+          <select id="reconnectTargetSelect" class="w-full mt-3 px-3 py-2 bg-dark-600 border border-gray-600 rounded-lg focus:border-primary focus:outline-none text-sm"></select>
+        </div>
+
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Client ID <span class="text-red-400">*</span></label>
+          <input type="text" id="newClientId" name="clientId" required
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none"
+            placeholder="Enter your Google Client ID">
+        </div>
+        
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Client Secret <span class="text-red-400">*</span></label>
+          <input type="password" id="newClientSecret" name="clientSecret" required
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none"
+            placeholder="Enter your Google Client Secret">
+        </div>
+
+        <!-- OAuth Auto-Connect Button -->
+        <div class="bg-gradient-to-r from-blue-500/10 to-green-500/10 rounded-lg p-4 border border-blue-500/30">
+          <p class="text-sm text-blue-300 mb-3 flex items-start gap-2">
+            <i class="ti ti-sparkles text-lg flex-shrink-0"></i>
+            <span><strong>Recommended:</strong> auto-connect via Google.</span>
+          </p>
+          <button type="button" onclick="startOAuthFlowFromModal()"
+            class="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-4 py-2.5 rounded-lg font-medium transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25">
+            <i class="ti ti-brand-google text-lg flex-shrink-0"></i>
+            <span class="whitespace-nowrap">Connect with Google</span>
+          </button>
+          <p class="text-xs text-gray-400 mt-2 text-center">Refresh token otomatis, tanpa paste manual</p>
+        </div>
+
+        <!-- Divider -->
+        <div class="flex items-center gap-3">
+          <div class="flex-1 border-t border-gray-600"></div>
+          <span class="text-xs text-gray-500">ATAU manual</span>
+          <div class="flex-1 border-t border-gray-600"></div>
+        </div>
+        
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Refresh Token <span class="text-gray-400 text-xs">(manual)</span></label>
+          <textarea id="newRefreshToken" name="refreshToken" rows="3"
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none resize-none"
+            placeholder="Atau paste manual Refresh Token dari OAuth Playground"></textarea>
+        </div>
+        
+        <div class="bg-dark-700 rounded-lg p-4 border border-gray-600">
+          <p class="text-sm text-gray-400 break-words">
+            <i class="ti ti-info-circle text-primary mr-1"></i>
+            Get your credentials from <a href="https://console.cloud.google.com/apis/credentials" target="_blank" class="text-primary hover:underline">Google Cloud Console</a>. 
+            Add <code class="bg-dark-600 px-1 rounded text-primary text-xs break-all"><%= typeof baseUrl !== 'undefined' ? baseUrl : 'http://localhost:7575' %>/api/youtube/oauth/callback</code> as Redirect URI.
+          </p>
+        </div>
+        
+        <div class="pt-4 flex gap-3">
+          <button type="button" onclick="closeAddAccountModal()"
+            class="flex-1 bg-dark-700 hover:bg-dark-600 text-white px-4 py-2.5 rounded-lg transition-colors">
+            Cancel
+          </button>
+          <button type="submit" id="addAccountBtn"
+            class="flex-1 bg-red-500 hover:bg-red-600 text-white px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
+            <i class="ti ti-brand-youtube"></i>
+            <span>Add Manual</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Account Modal -->
+<div id="editAccountModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto">
+  <div class="flex min-h-screen items-center justify-center p-4">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-md">
+      <div class="flex items-center justify-between px-5 py-4 border-b border-gray-700">
+        <div>
+          <h3 class="text-base font-semibold">Edit YouTube Account</h3>
+          <p id="editAccountChannelName" class="text-xs text-gray-400 mt-0.5"></p>
+        </div>
+        <button onclick="closeEditAccountModal()" class="text-gray-400 hover:text-white">
+          <i class="ti ti-x text-lg"></i>
+        </button>
+      </div>
+
+      <form id="editAccountForm" class="p-5 space-y-4">
+        <input type="hidden" id="editAccountId" name="accountId">
+
+        <!-- Token Status Indicator (auto-populated by JS) -->
+        <div id="editAccountTokenStatus" class="flex items-center justify-between px-3 py-2 bg-dark-700 rounded-lg border border-gray-600/50">
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-gray-400" id="editTokenDot"></span>
+            <span class="text-xs text-gray-400" id="editTokenLabel">Token status: checking...</span>
+          </div>
+          <button type="button" onclick="reconnectOAuth()" 
+            class="text-xs text-green-400 hover:text-green-300 flex items-center gap-1 transition-colors" title="Reconnect via Google OAuth">
+            <i class="ti ti-refresh text-sm"></i>
+            <span>Reconnect</span>
+          </button>
+        </div>
+
+        <div>
+          <label class="text-xs font-medium text-gray-300 block mb-1.5">Client ID <span class="text-red-400">*</span></label>
+          <input type="text" id="editClientId" name="clientId" required
+            class="w-full px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg text-sm focus:border-primary focus:outline-none"
+            placeholder="Google Client ID">
+        </div>
+
+        <div>
+          <label class="text-xs font-medium text-gray-300 block mb-1.5">Client Secret <span class="text-red-400">*</span></label>
+          <input type="text" id="editClientSecret" name="clientSecret" required
+            class="w-full px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg text-sm focus:border-primary focus:outline-none"
+            placeholder="Google Client Secret">
+        </div>
+
+        <div>
+          <label class="text-xs font-medium text-gray-300 block mb-1.5">Refresh Token <span class="text-gray-500 text-[10px]">(opsional - auto-managed)</span></label>
+          <textarea id="editRefreshToken" name="refreshToken" rows="2"
+            class="w-full px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg text-sm focus:border-primary focus:outline-none resize-none font-mono text-[11px]"
+            placeholder="Auto-managed oleh scheduler. Isi manual hanya jika perlu."></textarea>
+        </div>
+
+        <p class="text-[10px] text-gray-500 flex items-center gap-1">
+          <i class="ti ti-info-circle text-xs"></i>
+          Token di-refresh otomatis setiap 5 hari. Reconnect hanya diperlukan jika token revoked.
+        </p>
+
+        <div class="pt-2 flex gap-3">
+          <button type="button" onclick="closeEditAccountModal()"
+            class="flex-1 bg-dark-700 hover:bg-dark-600 text-white px-4 py-2 rounded-lg text-sm transition-colors">
+            Cancel
+          </button>
+          <button type="submit" id="editAccountBtn"
+            class="flex-1 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm transition-colors flex items-center justify-center gap-2">
+            <i class="ti ti-device-floppy text-sm"></i>
+            <span>Save</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Broadcast Modal -->
+<div id="editBroadcastModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto">
+  <div class="flex min-h-screen items-center justify-center p-4">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
+      <div class="flex items-center justify-between p-6 border-b border-gray-700 flex-shrink-0">
+        <h3 class="text-lg font-semibold">Edit Broadcast</h3>
+        <button onclick="closeEditBroadcastModal()" class="text-gray-400 hover:text-white">
+          <i class="ti ti-x text-xl"></i>
+        </button>
+      </div>
+      
+      <!-- Thumbnail file input OUTSIDE form to prevent clone issues -->
+      <input type="file" id="editThumbnailFile" accept="image/jpeg,image/png,image/jpg" class="hidden" onchange="previewEditThumbnail(this)">
+      
+      <form id="editBroadcastForm" class="p-6 space-y-4 overflow-y-auto flex-grow">
+        <input type="hidden" id="editBroadcastId" name="broadcastId">
+        <input type="hidden" id="editAccountId" name="accountId">
+        <input type="hidden" id="editPinnedThumbnail" name="pinnedThumbnail" value="">
+        <input type="hidden" id="editStreamKeyFolderMapping" name="streamKeyFolderMapping" value="">
+        
+        <!-- Thumbnail Section - 2 Columns -->
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Thumbnail</label>
+          
+          <!-- Thumbnail Mode Selection -->
+          <div class="flex items-center gap-4 mb-3 p-2 bg-dark-700/50 rounded-lg">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="radio" name="editThumbnailMode" value="sequential" checked 
+                class="w-4 h-4 text-primary bg-dark-700 border-gray-600 focus:ring-primary"
+                onchange="updateEditThumbnailMode(this.value)">
+              <span class="text-sm text-gray-300">Rotasi</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="radio" name="editThumbnailMode" value="pinned"
+                class="w-4 h-4 text-primary bg-dark-700 border-gray-600 focus:ring-primary"
+                onchange="updateEditThumbnailMode(this.value)">
+              <span class="text-sm text-gray-300">Pin Thumbnail</span>
+            </label>
+          </div>
+          
+          <div class="grid grid-cols-2 gap-3">
+            <!-- Left Column: Preview + Upload Button -->
+            <div class="space-y-2">
+              <div id="editThumbnailPreview" class="w-full aspect-video bg-dark-700 rounded-lg overflow-hidden flex items-center justify-center border border-gray-600 relative">
+                <i class="ti ti-photo text-gray-500 text-2xl"></i>
+                <!-- Pin indicator -->
+                <div id="editPinnedThumbnailIndicator" class="hidden absolute top-1 right-1 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded flex items-center gap-1">
+                  <i class="ti ti-pin-filled text-xs"></i>
+                  <span>Pinned</span>
+                </div>
+              </div>
+              <button type="button" onclick="document.getElementById('editThumbnailFile').click()"
+                class="w-full bg-dark-700 hover:bg-dark-600 text-white px-3 py-2 rounded-lg transition-colors text-sm flex items-center justify-center gap-2 border border-gray-600">
+                <i class="ti ti-upload"></i>
+                <span>Upload</span>
+              </button>
+              <p class="text-xs text-gray-500 text-center">JPG/PNG, max 2MB</p>
+            </div>
+            
+            <!-- Right Column: Thumbnail Folder Browser -->
+            <div class="space-y-2">
+              <!-- Folder Selector -->
+              <div class="flex items-center gap-2">
+                <select id="editThumbnailFolderSelect" onchange="loadEditThumbnailFolder(this.value)"
+                  class="flex-1 px-2 py-1.5 bg-dark-700 border border-gray-600 rounded-lg text-xs focus:border-primary focus:outline-none">
+                  <!-- Folders will be loaded dynamically - NO ROOT -->
+                </select>
+              </div>
+              
+              <!-- Thumbnail Count -->
+              <p class="text-xs text-gray-400">Thumbnails <span id="editThumbnailCount">(0)</span></p>
+              
+              <!-- Thumbnail Grid -->
+              <div id="editThumbnailGallery" class="grid grid-cols-2 gap-1 max-h-32 overflow-y-auto">
+                <!-- Thumbnails will be loaded here -->
+              </div>
+              <div id="editThumbnailGalleryLoading" class="hidden text-center py-2">
+                <i class="ti ti-loader animate-spin text-gray-400"></i>
+              </div>
+              <div id="editThumbnailGalleryEmpty" class="hidden text-center py-4 text-gray-500 text-xs">
+                No thumbnails
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Title with Title Manager -->
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <label class="text-sm font-medium text-white">Title <span class="text-red-400">*</span></label>
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="saveCurrentTitleToManager('edit')" class="text-xs text-green-400 hover:text-green-300 flex items-center gap-1" title="Save current title">
+                <i class="ti ti-bookmark"></i>
+              </button>
+              <button type="button" onclick="openTitleManagerModal('edit')" class="text-xs text-primary hover:text-primary/80 flex items-center gap-1">
+                <i class="ti ti-list"></i>
+                <span>Manage Titles</span>
+              </button>
+            </div>
+          </div>
+          <div class="relative">
+            <input type="text" id="editBroadcastTitle" name="title" required
+              class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none pr-10"
+              placeholder="Enter broadcast title"
+              oninput="searchTitleSuggestions(this.value, 'edit')"
+              onfocus="showTitleSuggestions('edit')"
+              autocomplete="off">
+            <button type="button" onclick="toggleTitleDropdown('edit')" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white p-1">
+              <i class="ti ti-chevron-down"></i>
+            </button>
+            <!-- Title Suggestions Dropdown -->
+            <div id="editTitleSuggestions" class="hidden absolute left-0 right-0 z-20 mt-1 bg-dark-700 border border-gray-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+              <!-- Suggestions will be populated here -->
+            </div>
+          </div>
+        </div>
+        
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Description</label>
+          <textarea id="editBroadcastDescription" name="description" rows="3"
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none resize-none"
+            placeholder="Enter broadcast description (optional)"></textarea>
+        </div>
+        
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Scheduled Start Time <span class="text-red-400">*</span></label>
+          <input type="datetime-local" id="editScheduledStartTime" name="scheduledStartTime" required
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none [color-scheme:dark]">
+        </div>
+        
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Privacy Status</label>
+          <select id="editPrivacyStatus" name="privacyStatus"
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none">
+            <option value="unlisted">Unlisted</option>
+            <option value="public">Public</option>
+            <option value="private">Private</option>
+          </select>
+        </div>
+        
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Category</label>
+          <select id="editCategoryId" name="categoryId"
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none">
+            <option value="22">People & Blogs</option>
+            <option value="1">Film & Animation</option>
+            <option value="2">Autos & Vehicles</option>
+            <option value="10">Music</option>
+            <option value="15">Pets & Animals</option>
+            <option value="17">Sports</option>
+            <option value="18">Short Movies</option>
+            <option value="19">Travel & Events</option>
+            <option value="20">Gaming</option>
+            <option value="21">Videoblogging</option>
+            <option value="23">Comedy</option>
+            <option value="24">Entertainment</option>
+            <option value="25">News & Politics</option>
+            <option value="26">Howto & Style</option>
+            <option value="27">Education</option>
+            <option value="28">Science & Technology</option>
+            <option value="29">Nonprofits & Activism</option>
+          </select>
+        </div>
+        
+        <div class="pt-4 flex gap-3 flex-shrink-0">
+          <button type="button" onclick="closeEditBroadcastModal()"
+            class="flex-1 bg-dark-700 hover:bg-dark-600 text-white px-4 py-2.5 rounded-lg transition-colors">
+            Cancel
+          </button>
+          <button type="submit" id="updateBroadcastBtn"
+            class="flex-1 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
+            <i class="ti ti-check"></i>
+            <span>Update Broadcast</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Title Manager Modal -->
+<div id="titleManagerModal" class="fixed inset-0 bg-black/50 z-[60] hidden modal-overlay overflow-y-auto">
+  <div class="flex min-h-screen items-center justify-center p-2 sm:p-4">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
+      <div class="flex items-center justify-between p-3 border-b border-gray-700 flex-shrink-0">
+        <h3 class="text-base font-semibold">Title Manager</h3>
+        <button onclick="closeTitleManagerModal()" class="text-gray-400 hover:text-white text-xl">✕</button>
+      </div>
+      
+      <div class="p-3 flex-grow overflow-y-auto">
+        <!-- Auto Rotation Section -->
+        <div class="mb-3 p-2 bg-dark-700/50 rounded-lg">
+          <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center gap-2">
+              <i class="ti ti-rotate-clockwise text-primary"></i>
+              <span class="text-sm font-medium text-white">Auto Rotation</span>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="titleAutoRotationEnabled" class="sr-only peer" onchange="toggleTitleAutoRotation(this.checked)">
+              <div class="w-9 h-5 bg-dark-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+            </label>
+          </div>
+          <p class="text-xs text-gray-500 mb-2">Judul akan berganti otomatis saat broadcast dijadwalkan ulang</p>
+          
+          <!-- Rotation Folder Selection (shown when enabled) -->
+          <div id="titleRotationFolderSection" class="hidden mt-2 pt-2 border-t border-gray-700/50">
+            <label class="text-xs text-gray-400 block mb-1">Folder untuk Rotasi</label>
+            <select id="titleRotationFolderSelect" class="w-full px-2 py-1.5 bg-dark-600 border border-gray-600 rounded text-sm focus:border-primary focus:outline-none" onchange="onTitleRotationFolderChange(this.value)">
+              <!-- Folders will be loaded dynamically -->
+            </select>
+            <p class="text-xs text-gray-500 mt-1">Pilih folder untuk membatasi rotasi judul</p>
+          </div>
+          
+          <!-- Current Rotation Status -->
+          <div id="titleRotationStatus" class="hidden mt-2 pt-2 border-t border-gray-700/50">
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-gray-400">Judul berikutnya:</span>
+              <span id="nextRotationTitle" class="text-primary truncate max-w-[180px]">-</span>
+            </div>
+            <div class="flex items-center justify-between text-xs mt-1">
+              <span class="text-gray-400">Posisi:</span>
+              <div class="flex items-center gap-2">
+                <span id="rotationPosition" class="text-gray-300">0/0</span>
+                <button type="button" onclick="resetTitleRotation()" class="text-yellow-400 hover:text-yellow-300" title="Reset ke posisi 1">
+                  <i class="ti ti-refresh text-xs"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Folder Section - Always Visible -->
+        <div class="mb-3">
+          <div class="flex items-center justify-between w-full py-1">
+            <span class="text-xs font-medium text-gray-500 uppercase">Folders</span>
+            <button type="button" onclick="openCreateTitleFolderModal()" class="text-xs text-primary hover:text-primary/80">+ Folder</button>
+          </div>
+          <div id="titleFolderList" class="mt-2 pl-2 border-l border-gray-700">
+          </div>
+        </div>
+
+        <!-- Add New Title -->
+        <div class="mb-3">
+          <div class="flex gap-2">
+            <input type="text" id="newTitleInput" placeholder="Tambah judul baru..."
+              class="flex-1 min-w-0 px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg text-sm focus:border-primary focus:outline-none"
+              onkeypress="if(event.key==='Enter'){event.preventDefault();addNewTitle();}">
+            <button type="button" onclick="addNewTitle()"
+              class="px-3 py-2 bg-primary hover:bg-primary/80 text-white rounded-lg text-sm flex-shrink-0">+</button>
+          </div>
+          <div class="flex items-center justify-between gap-2 mt-2">
+            <p class="text-xs text-gray-500">Import .txt: 1 judul per baris ke folder/channel yang dipilih.</p>
+            <div class="flex items-center gap-2 flex-shrink-0">
+              <input type="file" id="titleTxtImportInput" accept=".txt,text/plain" class="hidden" onchange="importTitleTxtFile(event)">
+              <button type="button" onclick="openTitleTxtImportPicker()"
+                class="px-2.5 py-1.5 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-gray-200 rounded-lg text-xs flex items-center gap-1"
+                title="Import judul dari file .txt">
+                <i class="ti ti-file-import"></i>
+                <span>Import .txt</span>
+              </button>
+              <button type="button" onclick="deleteAllTitlesInCurrentScope()"
+                class="px-2.5 py-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/40 text-red-300 rounded-lg text-xs flex items-center gap-1"
+                title="Hapus semua judul pada folder/channel yang sedang dipilih">
+                <i class="ti ti-trash"></i>
+                <span>Hapus Semua</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Title Section - Always Visible -->
+        <div>
+          <div class="flex items-center justify-between w-full py-1 mb-2">
+            <span class="text-xs font-medium text-gray-500 uppercase">Judul <span id="titleCount" class="text-gray-600">(0)</span></span>
+            <button type="button" onclick="toggleTitleList()" class="text-gray-500 hover:text-gray-300" title="Toggle list">
+              <span id="titleToggleIcon" class="text-xs">▼</span>
+            </button>
+          </div>
+          <div id="titleManagerList">
+            <div class="text-center py-3 text-gray-500 text-sm">Loading...</div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="p-3 border-t border-gray-700 flex-shrink-0">
+        <button type="button" onclick="closeTitleManagerModal()"
+          class="w-full bg-dark-700 hover:bg-dark-600 text-white px-4 py-2 rounded-lg transition-colors text-sm">
+          Tutup
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Create/Edit Folder Modal -->
+<div id="titleFolderModal" class="fixed inset-0 bg-black/60 z-[70] modal-overlay hidden items-center justify-center">
+  <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-xs sm:max-w-sm mx-4">
+    <div class="flex items-center justify-between p-3 sm:p-4 border-b border-gray-700">
+      <h3 class="text-sm sm:text-base font-semibold" id="folderModalTitle">Buat Folder Baru</h3>
+      <button onclick="closeFolderModal()" class="text-gray-400 hover:text-white">
+        <i class="ti ti-x text-lg"></i>
+      </button>
+    </div>
+    <div class="p-3 sm:p-4">
+      <input type="hidden" id="editFolderId">
+      <div class="mb-3 sm:mb-4">
+        <label class="block text-xs sm:text-sm text-gray-400 mb-1">Nama Folder</label>
+        <input type="text" id="folderNameInput" placeholder="Contoh: Channel Gaming"
+          class="w-full px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg text-sm focus:border-primary focus:outline-none"
+          onkeypress="if(event.key==='Enter'){event.preventDefault();saveFolder();}">
+      </div>
+      <div class="mb-3 sm:mb-4">
+        <label class="block text-xs sm:text-sm text-gray-400 mb-1">Warna</label>
+        <div class="flex flex-wrap gap-2" id="folderColorPicker">
+          <button type="button" onclick="selectFolderColor('#8B5CF6')" class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#8B5CF6] folder-color-btn active" data-color="#8B5CF6"></button>
+          <button type="button" onclick="selectFolderColor('#EF4444')" class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#EF4444] folder-color-btn" data-color="#EF4444"></button>
+          <button type="button" onclick="selectFolderColor('#F59E0B')" class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#F59E0B] folder-color-btn" data-color="#F59E0B"></button>
+          <button type="button" onclick="selectFolderColor('#10B981')" class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#10B981] folder-color-btn" data-color="#10B981"></button>
+          <button type="button" onclick="selectFolderColor('#3B82F6')" class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#3B82F6] folder-color-btn" data-color="#3B82F6"></button>
+          <button type="button" onclick="selectFolderColor('#EC4899')" class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#EC4899] folder-color-btn" data-color="#EC4899"></button>
+        </div>
+      </div>
+      <div class="flex gap-2">
+        <button type="button" onclick="closeFolderModal()" class="flex-1 px-3 sm:px-4 py-2 bg-dark-700 hover:bg-dark-600 text-white rounded-lg text-xs sm:text-sm">
+          Batal
+        </button>
+        <button type="button" onclick="saveFolder()" class="flex-1 px-3 sm:px-4 py-2 bg-primary hover:bg-primary/80 text-white rounded-lg text-xs sm:text-sm">
+          Simpan
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Template Library Modal -->
+<div id="templateLibraryModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto">
+  <div class="flex min-h-screen items-center justify-center p-2 sm:p-4">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+      <!-- Compact Header with Export/Import buttons -->
+      <div class="flex items-center justify-between p-3 sm:p-4 border-b border-gray-700 flex-shrink-0">
+        <h3 class="text-base sm:text-lg font-semibold">Templates</h3>
+        <div class="flex items-center gap-2">
+          <button onclick="exportTemplates()" class="w-8 h-8 flex items-center justify-center text-green-400 hover:text-green-300 hover:bg-green-500/20 rounded-lg transition-colors" title="Export Templates">
+            <i class="ti ti-download text-lg"></i>
+          </button>
+          <button onclick="openImportTemplateModal()" class="w-8 h-8 flex items-center justify-center text-blue-400 hover:text-blue-300 hover:bg-blue-500/20 rounded-lg transition-colors" title="Import Templates">
+            <i class="ti ti-upload text-lg"></i>
+          </button>
+          <button onclick="closeTemplateLibraryModal()" class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors">
+            <i class="ti ti-x text-lg"></i>
+          </button>
+        </div>
+      </div>
+      
+      <div class="p-2 sm:p-4 overflow-y-auto flex-1">
+        <div id="templateList">
+          <div id="templateListLoading" class="text-center py-8">
+            <i class="ti ti-loader animate-spin text-gray-400 text-2xl"></i>
+            <p class="text-gray-500 text-sm mt-2">Loading...</p>
+          </div>
+          <div id="templateListEmpty" class="hidden text-center py-8">
+            <div class="w-12 h-12 bg-dark-700 rounded-full flex items-center justify-center mx-auto mb-3">
+              <i class="ti ti-template text-gray-500 text-xl"></i>
+            </div>
+            <p class="text-gray-400 text-sm mb-1">No templates</p>
+            <p class="text-gray-500 text-xs">Create your first template</p>
+          </div>
+          <div id="templateListContent" class="hidden">
+            <!-- Templates will be rendered here -->
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Save as Template Modal -->
+<div id="saveAsTemplateModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay">
+  <div class="flex min-h-screen items-center justify-center p-4">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-md">
+      <div class="flex items-center justify-between p-6 border-b border-gray-700">
+        <h3 class="text-lg font-semibold">Save as Template</h3>
+        <button onclick="closeSaveAsTemplateModal()" class="text-gray-400 hover:text-white">
+          <i class="ti ti-x text-xl"></i>
+        </button>
+      </div>
+      
+      <form id="saveAsTemplateForm" class="p-6 space-y-4">
+        <input type="hidden" id="saveTemplateBroadcastId">
+        <input type="hidden" id="saveTemplateAccountId">
+        
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Template Name <span class="text-red-400">*</span></label>
+          <input type="text" id="saveTemplateName" name="name" required
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none"
+            placeholder="Enter template name">
+        </div>
+        
+        <div id="saveTemplatePreview" class="bg-dark-700 rounded-lg p-4 border border-gray-600">
+          <p class="text-sm text-gray-400 mb-2">Settings to save:</p>
+          <div class="text-xs text-gray-500 space-y-1">
+            <p><span class="text-gray-400">Title:</span> <span id="previewTitle">-</span></p>
+            <p><span class="text-gray-400">Privacy:</span> <span id="previewPrivacy">-</span></p>
+          </div>
+        </div>
+        
+        <div class="pt-2 flex gap-3">
+          <button type="button" onclick="closeSaveAsTemplateModal()"
+            class="flex-1 bg-dark-700 hover:bg-dark-600 text-white px-4 py-2.5 rounded-lg transition-colors">
+            Cancel
+          </button>
+          <button type="submit" id="saveTemplateBtn"
+            class="flex-1 bg-primary hover:bg-primary/80 text-white px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
+            <i class="ti ti-device-floppy"></i>
+            <span>Save Template</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Create Template Modal -->
+<div id="createTemplateModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto">
+  <div class="flex min-h-screen items-center justify-center p-4">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-lg">
+      <div class="flex items-center justify-between p-6 border-b border-gray-700">
+        <h3 class="text-lg font-semibold">Create New Template</h3>
+        <button onclick="closeCreateTemplateModal()" class="text-gray-400 hover:text-white">
+          <i class="ti ti-x text-xl"></i>
+        </button>
+      </div>
+      
+      <form id="createTemplateForm" class="p-6 space-y-4">
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Template Name <span class="text-red-400">*</span></label>
+          <input type="text" id="templateName" name="name" required
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none"
+            placeholder="Enter template name">
+        </div>
+        
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">YouTube Account <span class="text-red-400">*</span></label>
+          <select id="templateAccountSelect" name="accountId" required onchange="onTemplateAccountChange(this.value)"
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none">
+            <% if (accounts && accounts.length > 0) { %>
+              <% accounts.forEach(function(account) { %>
+              <option value="<%= account.id %>"><%= account.channelName || 'YouTube Channel' %></option>
+              <% }); %>
+            <% } %>
+          </select>
+        </div>
+        
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Stream Key</label>
+          <div class="relative">
+            <select id="templateStreamKeySelect" name="streamId"
+              class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none">
+              <option value="">-- Select Stream Key (Optional) --</option>
+            </select>
+            <span id="templateStreamKeyLoading" class="absolute right-3 top-1/2 -translate-y-1/2 hidden">
+              <i class="ti ti-loader animate-spin text-gray-400"></i>
+            </span>
+          </div>
+          <p class="text-xs text-gray-500 mt-1">Select a stream key to reuse for broadcasts created from this template</p>
+        </div>
+        
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Title <span class="text-red-400">*</span></label>
+          <input type="text" id="templateTitle" name="title" required
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none"
+            placeholder="Enter broadcast title">
+        </div>
+        
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Description</label>
+          <textarea id="templateDescription" name="description" rows="3"
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none resize-none"
+            placeholder="Enter broadcast description (optional)"></textarea>
+        </div>
+        
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Privacy Status</label>
+          <select id="templatePrivacyStatus" name="privacyStatus"
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none">
+            <option value="unlisted">Unlisted</option>
+            <option value="public">Public</option>
+            <option value="private">Private</option>
+          </select>
+        </div>
+        
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Category</label>
+          <select id="templateCategoryId" name="categoryId"
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none">
+            <option value="22" selected>People & Blogs</option>
+            <option value="1">Film & Animation</option>
+            <option value="2">Autos & Vehicles</option>
+            <option value="10">Music</option>
+            <option value="15">Pets & Animals</option>
+            <option value="17">Sports</option>
+            <option value="18">Short Movies</option>
+            <option value="19">Travel & Events</option>
+            <option value="20">Gaming</option>
+            <option value="21">Videoblogging</option>
+            <option value="23">Comedy</option>
+            <option value="24">Entertainment</option>
+            <option value="25">News & Politics</option>
+            <option value="26">Howto & Style</option>
+            <option value="27">Education</option>
+            <option value="28">Science & Technology</option>
+            <option value="29">Nonprofits & Activism</option>
+          </select>
+          <p class="text-xs text-gray-500 mt-1">Add your stream to a category so that viewers can find it more easily</p>
+        </div>
+        
+        <!-- Thumbnail Folder Section -->
+        <div class="border-t border-gray-700 pt-4 mt-4">
+          <label class="text-sm font-medium text-white block mb-2 flex items-center gap-2">
+            <i class="ti ti-photo text-primary"></i>
+            Thumbnail Folder <span class="text-red-400">*</span>
+          </label>
+          <select id="templateThumbnailFolder" name="thumbnailFolder" required onchange="onTemplateThumbnailFolderChange(this.value)"
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none">
+            <option value="">-- Pilih Folder Thumbnail --</option>
+            <!-- Folders will be loaded dynamically -->
+          </select>
+          <p class="text-xs text-gray-500 mt-1">
+            <i class="ti ti-info-circle text-primary mr-1"></i>
+            Pilih folder untuk rotasi thumbnail. Thumbnail akan berganti otomatis sesuai urutan saat broadcast dijadwalkan ulang.
+          </p>
+          <div id="templateThumbnailFolderPreview" class="hidden mt-2 p-2 bg-dark-600 rounded-lg">
+            <p class="text-xs text-gray-400 mb-1">Preview folder:</p>
+            <div id="templateThumbnailFolderImages" class="flex gap-1 overflow-x-auto"></div>
+          </div>
+        </div>
+        
+        <!-- Title Folder Section -->
+        <div class="border-t border-gray-700 pt-4 mt-4">
+          <label class="text-sm font-medium text-white block mb-2 flex items-center gap-2">
+            <i class="ti ti-text-caption text-primary"></i>
+            Title Folder (Rotasi Judul)
+          </label>
+          <select id="templateTitleFolder" name="titleFolderId"
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none">
+            <option value="">-- Semua Judul (Tanpa Filter Folder) --</option>
+            <!-- Folders will be loaded dynamically -->
+          </select>
+          <p class="text-xs text-gray-500 mt-1">
+            <i class="ti ti-info-circle text-primary mr-1"></i>
+            Pilih folder untuk rotasi judul. Judul akan diambil berurutan dari folder ini saat broadcast dijadwalkan ulang.
+          </p>
+        </div>
+        
+        <!-- Recurring Schedule Section -->
+        <div class="border-t border-gray-700 pt-4 mt-4">
+          <div class="flex items-center justify-between mb-3">
+            <label class="text-sm font-medium text-white flex items-center gap-2">
+              <i class="ti ti-repeat text-primary"></i>
+              Recurring Schedule
+            </label>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="templateRecurringEnabled" name="recurringEnabled" class="sr-only peer" onchange="toggleRecurringFields()">
+              <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+            </label>
+          </div>
+          
+          <div id="recurringFieldsContainer" class="hidden space-y-3">
+            <div>
+              <label class="text-sm font-medium text-gray-400 block mb-2">Pattern</label>
+              <div class="flex gap-4">
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="radio" name="recurringPattern" value="daily" class="w-4 h-4 text-primary bg-dark-700 border-gray-600 focus:ring-primary" onchange="toggleDaysSelection()">
+                  <span class="text-sm text-white">Daily</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="radio" name="recurringPattern" value="weekly" class="w-4 h-4 text-primary bg-dark-700 border-gray-600 focus:ring-primary" onchange="toggleDaysSelection()">
+                  <span class="text-sm text-white">Weekly</span>
+                </label>
+              </div>
+            </div>
+            
+            <div>
+              <label class="text-sm font-medium text-gray-400 block mb-2">Time</label>
+              <input type="time" id="templateRecurringTime" name="recurringTime"
+                class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none [color-scheme:dark]">
+            </div>
+            
+            <div id="recurringDaysContainer" class="hidden">
+              <label class="text-sm font-medium text-gray-400 block mb-2">Days</label>
+              <div class="flex flex-wrap gap-2">
+                <label class="flex items-center gap-1.5 px-3 py-1.5 bg-dark-600 rounded-lg cursor-pointer hover:bg-dark-500 transition-colors">
+                  <input type="checkbox" name="recurringDays" value="monday" class="w-4 h-4 text-primary bg-dark-700 border-gray-600 rounded focus:ring-primary">
+                  <span class="text-xs text-white">Mon</span>
+                </label>
+                <label class="flex items-center gap-1.5 px-3 py-1.5 bg-dark-600 rounded-lg cursor-pointer hover:bg-dark-500 transition-colors">
+                  <input type="checkbox" name="recurringDays" value="tuesday" class="w-4 h-4 text-primary bg-dark-700 border-gray-600 rounded focus:ring-primary">
+                  <span class="text-xs text-white">Tue</span>
+                </label>
+                <label class="flex items-center gap-1.5 px-3 py-1.5 bg-dark-600 rounded-lg cursor-pointer hover:bg-dark-500 transition-colors">
+                  <input type="checkbox" name="recurringDays" value="wednesday" class="w-4 h-4 text-primary bg-dark-700 border-gray-600 rounded focus:ring-primary">
+                  <span class="text-xs text-white">Wed</span>
+                </label>
+                <label class="flex items-center gap-1.5 px-3 py-1.5 bg-dark-600 rounded-lg cursor-pointer hover:bg-dark-500 transition-colors">
+                  <input type="checkbox" name="recurringDays" value="thursday" class="w-4 h-4 text-primary bg-dark-700 border-gray-600 rounded focus:ring-primary">
+                  <span class="text-xs text-white">Thu</span>
+                </label>
+                <label class="flex items-center gap-1.5 px-3 py-1.5 bg-dark-600 rounded-lg cursor-pointer hover:bg-dark-500 transition-colors">
+                  <input type="checkbox" name="recurringDays" value="friday" class="w-4 h-4 text-primary bg-dark-700 border-gray-600 rounded focus:ring-primary">
+                  <span class="text-xs text-white">Fri</span>
+                </label>
+                <label class="flex items-center gap-1.5 px-3 py-1.5 bg-dark-600 rounded-lg cursor-pointer hover:bg-dark-500 transition-colors">
+                  <input type="checkbox" name="recurringDays" value="saturday" class="w-4 h-4 text-primary bg-dark-700 border-gray-600 rounded focus:ring-primary">
+                  <span class="text-xs text-white">Sat</span>
+                </label>
+                <label class="flex items-center gap-1.5 px-3 py-1.5 bg-dark-600 rounded-lg cursor-pointer hover:bg-dark-500 transition-colors">
+                  <input type="checkbox" name="recurringDays" value="sunday" class="w-4 h-4 text-primary bg-dark-700 border-gray-600 rounded focus:ring-primary">
+                  <span class="text-xs text-white">Sun</span>
+                </label>
+              </div>
+              <p id="recurringDaysError" class="hidden text-xs text-red-400 mt-1">Please select at least one day</p>
+            </div>
+            
+            <div class="bg-dark-600/50 rounded-lg p-3 border border-gray-600/50">
+              <p class="text-xs text-gray-400">
+                <i class="ti ti-info-circle text-primary mr-1"></i>
+                When enabled, broadcasts will be automatically created based on this schedule.
+              </p>
+            </div>
+          </div>
+        </div>
+        
+        <div class="pt-4 flex gap-3">
+          <button type="button" onclick="closeCreateTemplateModal()"
+            class="flex-1 bg-dark-700 hover:bg-dark-600 text-white px-4 py-2.5 rounded-lg transition-colors">
+            Cancel
+          </button>
+          <button type="submit" id="createTemplateBtn"
+            class="flex-1 bg-primary hover:bg-primary/80 text-white px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
+            <i class="ti ti-template"></i>
+            <span>Create Template</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Template Modal (Recurring Schedule Only) -->
+<div id="editTemplateModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto">
+  <div class="flex min-h-screen items-center justify-center p-4">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-md">
+      <div class="flex items-center justify-between p-6 border-b border-gray-700">
+        <h3 class="text-lg font-semibold">Edit Template</h3>
+        <button onclick="closeEditTemplateModal()" class="text-gray-400 hover:text-white">
+          <i class="ti ti-x text-xl"></i>
+        </button>
+      </div>
+      
+      <form id="editTemplateForm" class="p-6 space-y-4">
+        <input type="hidden" id="editTemplateId">
+        
+        <!-- Template Info (Read-only) -->
+        <div class="bg-dark-700 rounded-lg p-4 border border-gray-600">
+          <p class="text-sm text-gray-400 mb-1">Template</p>
+          <p class="text-white font-medium" id="editTemplateName">-</p>
+        </div>
+        
+        <!-- Title Folder Section -->
+        <div class="border-t border-gray-700 pt-4">
+          <label class="text-sm font-medium text-white block mb-2 flex items-center gap-2">
+            <i class="ti ti-text-caption text-primary"></i>
+            Title Folder (Rotasi Judul)
+          </label>
+          <select id="editTemplateTitleFolder" name="titleFolderId"
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none">
+            <option value="">-- Semua Judul (Tanpa Filter Folder) --</option>
+            <!-- Folders will be loaded dynamically -->
+          </select>
+          <p class="text-xs text-gray-500 mt-1">
+            <i class="ti ti-info-circle text-primary mr-1"></i>
+            Pilih folder untuk rotasi judul saat broadcast dijadwalkan ulang.
+          </p>
+        </div>
+        
+        <!-- Recurring Schedule Section -->
+        <div class="border-t border-gray-700 pt-4">
+          <div class="flex items-center justify-between mb-3">
+            <label class="text-sm font-medium text-white flex items-center gap-2">
+              <i class="ti ti-repeat text-primary"></i>
+              Recurring Schedule
+            </label>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="editRecurringEnabled" name="recurringEnabled" class="sr-only peer" onchange="toggleEditRecurringFields()">
+              <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+            </label>
+          </div>
+          
+          <div id="editRecurringFieldsContainer" class="hidden space-y-3">
+            <div>
+              <label class="text-sm font-medium text-gray-400 block mb-2">Pattern</label>
+              <div class="flex gap-4">
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="radio" name="editRecurringPattern" value="daily" class="w-4 h-4 text-primary bg-dark-700 border-gray-600 focus:ring-primary" onchange="toggleEditDaysSelection()">
+                  <span class="text-sm text-white">Daily</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="radio" name="editRecurringPattern" value="weekly" class="w-4 h-4 text-primary bg-dark-700 border-gray-600 focus:ring-primary" onchange="toggleEditDaysSelection()">
+                  <span class="text-sm text-white">Weekly</span>
+                </label>
+              </div>
+            </div>
+            
+            <div>
+              <label class="text-sm font-medium text-gray-400 block mb-2">Time</label>
+              <input type="time" id="editRecurringTime" name="recurringTime"
+                class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none [color-scheme:dark]">
+            </div>
+            
+            <div id="editRecurringDaysContainer" class="hidden">
+              <label class="text-sm font-medium text-gray-400 block mb-2">Days</label>
+              <div class="flex flex-wrap gap-2">
+                <label class="flex items-center gap-1.5 px-3 py-1.5 bg-dark-600 rounded-lg cursor-pointer hover:bg-dark-500 transition-colors">
+                  <input type="checkbox" name="editRecurringDays" value="monday" class="w-4 h-4 text-primary bg-dark-700 border-gray-600 rounded focus:ring-primary">
+                  <span class="text-xs text-white">Mon</span>
+                </label>
+                <label class="flex items-center gap-1.5 px-3 py-1.5 bg-dark-600 rounded-lg cursor-pointer hover:bg-dark-500 transition-colors">
+                  <input type="checkbox" name="editRecurringDays" value="tuesday" class="w-4 h-4 text-primary bg-dark-700 border-gray-600 rounded focus:ring-primary">
+                  <span class="text-xs text-white">Tue</span>
+                </label>
+                <label class="flex items-center gap-1.5 px-3 py-1.5 bg-dark-600 rounded-lg cursor-pointer hover:bg-dark-500 transition-colors">
+                  <input type="checkbox" name="editRecurringDays" value="wednesday" class="w-4 h-4 text-primary bg-dark-700 border-gray-600 rounded focus:ring-primary">
+                  <span class="text-xs text-white">Wed</span>
+                </label>
+                <label class="flex items-center gap-1.5 px-3 py-1.5 bg-dark-600 rounded-lg cursor-pointer hover:bg-dark-500 transition-colors">
+                  <input type="checkbox" name="editRecurringDays" value="thursday" class="w-4 h-4 text-primary bg-dark-700 border-gray-600 rounded focus:ring-primary">
+                  <span class="text-xs text-white">Thu</span>
+                </label>
+                <label class="flex items-center gap-1.5 px-3 py-1.5 bg-dark-600 rounded-lg cursor-pointer hover:bg-dark-500 transition-colors">
+                  <input type="checkbox" name="editRecurringDays" value="friday" class="w-4 h-4 text-primary bg-dark-700 border-gray-600 rounded focus:ring-primary">
+                  <span class="text-xs text-white">Fri</span>
+                </label>
+                <label class="flex items-center gap-1.5 px-3 py-1.5 bg-dark-600 rounded-lg cursor-pointer hover:bg-dark-500 transition-colors">
+                  <input type="checkbox" name="editRecurringDays" value="saturday" class="w-4 h-4 text-primary bg-dark-700 border-gray-600 rounded focus:ring-primary">
+                  <span class="text-xs text-white">Sat</span>
+                </label>
+                <label class="flex items-center gap-1.5 px-3 py-1.5 bg-dark-600 rounded-lg cursor-pointer hover:bg-dark-500 transition-colors">
+                  <input type="checkbox" name="editRecurringDays" value="sunday" class="w-4 h-4 text-primary bg-dark-700 border-gray-600 rounded focus:ring-primary">
+                  <span class="text-xs text-white">Sun</span>
+                </label>
+              </div>
+              <p id="editRecurringDaysError" class="hidden text-xs text-red-400 mt-1">Please select at least one day</p>
+            </div>
+            
+            <div class="bg-dark-600/50 rounded-lg p-3 border border-gray-600/50">
+              <p class="text-xs text-gray-400">
+                <i class="ti ti-info-circle text-primary mr-1"></i>
+                When enabled, broadcasts will be automatically created based on this schedule.
+              </p>
+            </div>
+          </div>
+        </div>
+        
+        <div class="pt-4 flex gap-3">
+          <button type="button" onclick="closeEditTemplateModal()"
+            class="flex-1 bg-dark-700 hover:bg-dark-600 text-white px-4 py-2.5 rounded-lg transition-colors">
+            Cancel
+          </button>
+          <button type="submit" id="updateTemplateBtn"
+            class="flex-1 bg-primary hover:bg-primary/80 text-white px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
+            <i class="ti ti-check"></i>
+            <span>Save Changes</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div id="multiSaveTemplateModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto">
+  <div class="flex min-h-screen items-center justify-center p-4">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-md">
+      <div class="flex items-center justify-between p-6 border-b border-gray-700">
+        <h3 class="text-lg font-semibold">Save Selected as Template</h3>
+        <button onclick="closeMultiSaveTemplateModal()" class="text-gray-400 hover:text-white">
+          <i class="ti ti-x text-xl"></i>
+        </button>
+      </div>
+      
+      <form id="multiSaveTemplateForm" class="p-6 space-y-4">
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Template Name <span class="text-red-400">*</span></label>
+          <input type="text" id="multiTemplateName" name="name" required
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none"
+            placeholder="Enter template name">
+        </div>
+        
+        <!-- Broadcasts Preview with auto-loaded folders -->
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">
+            <i class="ti ti-broadcast text-primary mr-1"></i>
+            Broadcasts & Folder Thumbnail
+          </label>
+          <div id="multiTemplatePreview" class="bg-dark-700 rounded-lg p-3 max-h-64 overflow-y-auto space-y-2">
+            <!-- Preview will be rendered here -->
+          </div>
+        </div>
+        
+        <div id="multiTemplateFolderWarning" class="hidden bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
+          <p class="text-xs text-yellow-400">
+            <i class="ti ti-alert-triangle mr-1"></i>
+            <span id="multiTemplateFolderWarningText"></span>
+          </p>
+        </div>
+        
+        <div class="bg-dark-700/50 rounded-lg p-3 border border-gray-600/50">
+          <p class="text-xs text-gray-400">
+            <i class="ti ti-info-circle text-primary mr-1"></i>
+            Folder thumbnail diambil otomatis dari binding stream key yang sudah Anda set sebelumnya.
+          </p>
+        </div>
+        
+        <div class="pt-2 flex gap-3">
+          <button type="button" onclick="closeMultiSaveTemplateModal()"
+            class="flex-1 bg-dark-700 hover:bg-dark-600 text-white px-4 py-2.5 rounded-lg transition-colors">
+            Cancel
+          </button>
+          <button type="submit" id="multiSaveTemplateBtn"
+            class="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
+            <i class="ti ti-template"></i>
+            <span>Save Template</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Re-create from Template Modal -->
+<div id="recreateFromTemplateModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto">
+  <div class="flex min-h-screen items-center justify-center p-4">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-lg">
+      <div class="flex items-center justify-between p-6 border-b border-gray-700">
+        <h3 class="text-lg font-semibold">Re-create Broadcasts</h3>
+        <button onclick="closeRecreateFromTemplateModal()" class="text-gray-400 hover:text-white">
+          <i class="ti ti-x text-xl"></i>
+        </button>
+      </div>
+      
+      <form id="recreateFromTemplateForm" class="p-6 space-y-4">
+        <div class="bg-dark-700 rounded-lg p-3 border border-gray-600 mb-4">
+          <p class="text-sm text-gray-400">Template: <span id="recreateTemplateName" class="text-white font-medium">-</span></p>
+        </div>
+        
+        <!-- Account Selector (shown when original account is disconnected) -->
+        <div id="recreateAccountSelector" class="hidden">
+          <!-- Will be populated by JavaScript when account is invalid -->
+        </div>
+        
+        <!-- Title Rotation Option -->
+        <div class="bg-dark-700/50 rounded-lg p-3 border border-gray-700">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <i class="ti ti-rotate-clockwise text-primary"></i>
+              <span class="text-sm font-medium text-white">Gunakan Title Rotation</span>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="recreateUseTitleRotation" class="sr-only peer" onchange="toggleRecreateTitleRotation(this.checked)">
+              <div class="w-9 h-5 bg-dark-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+            </label>
+          </div>
+          <p class="text-xs text-gray-500 mt-1">Judul akan diambil dari Title Manager secara berurutan</p>
+          
+          <!-- Title Rotation Preview (shown when enabled) -->
+          <div id="recreateTitleRotationPreview" class="hidden mt-2 pt-2 border-t border-gray-700/50">
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-gray-400">Judul berikutnya:</span>
+              <span id="recreateNextTitle" class="text-primary truncate max-w-[200px]">-</span>
+            </div>
+          </div>
+        </div>
+        
+        <div>
+          <label class="text-sm font-medium text-white block mb-3">Set schedule for each broadcast:</label>
+          <div id="recreateBroadcastList" class="space-y-3 max-h-80 overflow-y-auto">
+            <!-- Broadcast items with schedule inputs will be rendered here -->
+          </div>
+        </div>
+        
+        <div class="pt-4 flex gap-3">
+          <button type="button" onclick="closeRecreateFromTemplateModal()"
+            class="flex-1 bg-dark-700 hover:bg-dark-600 text-white px-4 py-2.5 rounded-lg transition-colors">
+            Cancel
+          </button>
+          <button type="submit" id="recreateBtn"
+            class="flex-1 bg-red-500 hover:bg-red-600 text-white px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
+            <i class="ti ti-broadcast"></i>
+            <span>Create All</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Import Template Modal -->
+<div id="importTemplateModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto">
+  <div class="flex min-h-screen items-center justify-center p-4">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-md">
+      <div class="flex items-center justify-between p-6 border-b border-gray-700">
+        <h3 class="text-lg font-semibold">Import Templates</h3>
+        <button onclick="closeImportTemplateModal()" class="text-gray-400 hover:text-white">
+          <i class="ti ti-x text-xl"></i>
+        </button>
+      </div>
+      
+      <div class="p-6 space-y-4">
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Select JSON File</label>
+          <div class="relative">
+            <input type="file" id="importTemplateFile" accept=".json,application/json"
+              class="hidden" onchange="previewImportFile(this)">
+            <button type="button" onclick="document.getElementById('importTemplateFile').click()"
+              class="w-full bg-dark-700 hover:bg-dark-600 text-white px-4 py-3 rounded-lg transition-colors flex items-center justify-center gap-2 border border-gray-600 border-dashed">
+              <i class="ti ti-file-upload text-xl"></i>
+              <span>Choose File</span>
+            </button>
+          </div>
+          <p id="importFileName" class="text-xs text-gray-500 mt-2 hidden"></p>
+        </div>
+        
+        <!-- Preview Area -->
+        <div id="importPreview" class="hidden bg-dark-700 rounded-lg p-4 border border-gray-600">
+          <div class="flex items-center gap-3 mb-3">
+            <div class="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
+              <i class="ti ti-file-check text-blue-400 text-xl"></i>
+            </div>
+            <div>
+              <p class="text-sm text-white font-medium">File Valid</p>
+              <p class="text-xs text-gray-400">Ready to import</p>
+            </div>
+          </div>
+          <div class="space-y-1 text-sm">
+            <p class="text-gray-400">Templates: <span id="importTemplateCount" class="text-white font-medium">0</span></p>
+            <p class="text-gray-400">Export Date: <span id="importExportDate" class="text-white">-</span></p>
+          </div>
+        </div>
+        
+        <!-- Error Area -->
+        <div id="importError" class="hidden bg-red-500/10 rounded-lg p-4 border border-red-500/30">
+          <div class="flex items-center gap-2 text-red-400">
+            <i class="ti ti-alert-circle"></i>
+            <span id="importErrorMessage" class="text-sm">Invalid file format</span>
+          </div>
+        </div>
+        
+        <!-- Options -->
+        <div id="importOptions" class="hidden">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" id="skipDuplicates" checked
+              class="w-4 h-4 rounded border-gray-600 bg-dark-700 text-primary focus:ring-primary">
+            <span class="text-sm text-gray-300">Skip templates with duplicate names</span>
+          </label>
+        </div>
+        
+        <div class="pt-2 flex gap-3">
+          <button type="button" onclick="closeImportTemplateModal()"
+            class="flex-1 bg-dark-700 hover:bg-dark-600 text-white px-4 py-2.5 rounded-lg transition-colors">
+            Cancel
+          </button>
+          <button type="button" id="confirmImportBtn" onclick="confirmImportTemplates()" disabled
+            class="flex-1 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
+            <i class="ti ti-upload"></i>
+            <span>Import</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Import Result Modal -->
+<div id="importResultModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto">
+  <div class="flex min-h-screen items-center justify-center p-4">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-md">
+      <div class="flex items-center justify-between p-6 border-b border-gray-700">
+        <h3 class="text-lg font-semibold">Import Results</h3>
+        <button onclick="closeImportResultModal()" class="text-gray-400 hover:text-white">
+          <i class="ti ti-x text-xl"></i>
+        </button>
+      </div>
+      
+      <div class="p-6 space-y-4">
+        <!-- Success Summary -->
+        <div class="grid grid-cols-2 gap-3">
+          <div class="bg-green-500/10 rounded-lg p-4 border border-green-500/30 text-center">
+            <p id="importedCount" class="text-2xl font-bold text-green-400">0</p>
+            <p class="text-xs text-gray-400">Imported</p>
+          </div>
+          <div class="bg-yellow-500/10 rounded-lg p-4 border border-yellow-500/30 text-center">
+            <p id="skippedCount" class="text-2xl font-bold text-yellow-400">0</p>
+            <p class="text-xs text-gray-400">Skipped</p>
+          </div>
+        </div>
+        
+        <!-- Errors List -->
+        <div id="importErrorsList" class="hidden">
+          <p class="text-sm font-medium text-gray-300 mb-2">Details:</p>
+          <div id="importErrorsContent" class="bg-dark-700 rounded-lg p-3 max-h-40 overflow-y-auto text-xs text-gray-400 space-y-1">
+            <!-- Error messages will be rendered here -->
+          </div>
+        </div>
+        
+        <div class="pt-2">
+          <button type="button" onclick="closeImportResultModal()"
+            class="w-full bg-primary hover:bg-primary/80 text-white px-4 py-2.5 rounded-lg transition-colors">
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- YouTube API Guide Modal -->
+<div id="youtubeGuideModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto">
+  <div class="flex min-h-screen items-center justify-center p-4">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
+      <div class="flex items-center justify-between p-6 border-b border-gray-700 sticky top-0 bg-dark-800 z-10">
+        <h3 class="text-lg font-semibold flex items-center gap-2">
+          <i class="ti ti-brand-youtube text-red-500"></i>
+          YouTube API Setup
+        </h3>
+        <div class="flex items-center gap-2">
+          <% if (user && user.role === 'admin') { %>
+          <button onclick="toggleGuideEditMode()" id="guideEditBtn" class="text-gray-400 hover:text-primary" title="Edit Panduan">
+            <i class="ti ti-pencil text-xl"></i>
+          </button>
+          <% } %>
+          <button onclick="closeYouTubeGuideModal()" class="text-gray-400 hover:text-white">
+            <i class="ti ti-x text-xl"></i>
+          </button>
+        </div>
+      </div>
+      
+      <!-- View Mode -->
+      <div id="guideViewMode" class="p-6 overflow-y-auto max-h-[calc(90vh-80px)] space-y-6">
+        <!-- Step 1 -->
+        <div class="bg-dark-700 rounded-lg p-4 border border-gray-600">
+          <h4 class="text-primary font-semibold mb-2 flex items-center gap-2">
+            <span class="w-6 h-6 bg-primary/20 rounded-full flex items-center justify-center text-sm">1</span>
+            Buat Project di Google Cloud
+          </h4>
+          <ol id="guideStep1" class="text-sm text-gray-300 space-y-1 ml-8 list-decimal">
+            <li>Buka <a href="https://console.cloud.google.com" target="_blank" class="text-primary hover:underline">Google Cloud Console</a></li>
+            <li><strong>Select Project</strong> → <strong>New Project</strong> → Buat project baru</li>
+          </ol>
+        </div>
+
+        <!-- Step 2 -->
+        <div class="bg-dark-700 rounded-lg p-4 border border-gray-600">
+          <h4 class="text-primary font-semibold mb-2 flex items-center gap-2">
+            <span class="w-6 h-6 bg-primary/20 rounded-full flex items-center justify-center text-sm">2</span>
+            Aktifkan YouTube Data API
+          </h4>
+          <ol id="guideStep2" class="text-sm text-gray-300 space-y-1 ml-8 list-decimal">
+            <li><strong>APIs & Services</strong> → <strong>Library</strong></li>
+            <li>Cari <strong>YouTube Data API v3</strong> → <strong>Enable</strong></li>
+          </ol>
+        </div>
+
+        <!-- Step 3 -->
+        <div class="bg-dark-700 rounded-lg p-4 border border-gray-600">
+          <h4 class="text-primary font-semibold mb-2 flex items-center gap-2">
+            <span class="w-6 h-6 bg-primary/20 rounded-full flex items-center justify-center text-sm">3</span>
+            Setup OAuth Consent Screen
+          </h4>
+          <ol id="guideStep3" class="text-sm text-gray-300 space-y-1 ml-8 list-decimal">
+            <li><strong>APIs & Services</strong> → <strong>OAuth consent screen</strong></li>
+            <li>Pilih <strong>External</strong> → Isi informasi yang diperlukan</li>
+            <li>Klik <strong>Audience</strong></li>
+            <li>Tambahkan email ke <strong>Test users</strong></li>
+          </ol>
+        </div>
+
+        <!-- Step 4 -->
+        <div class="bg-dark-700 rounded-lg p-4 border border-gray-600">
+          <h4 class="text-primary font-semibold mb-2 flex items-center gap-2">
+            <span class="w-6 h-6 bg-primary/20 rounded-full flex items-center justify-center text-sm">4</span>
+            Buat OAuth Client ID
+          </h4>
+          <ol id="guideStep4" class="text-sm text-gray-300 space-y-1 ml-8 list-decimal">
+            <li><strong>APIs & Services</strong> → <strong>Credentials</strong> → <strong>Create Credentials</strong> → <strong>OAuth Client ID</strong></li>
+            <li>Pilih <strong>Web application</strong></li>
+            <li class="break-all">Authorized redirect URIs: <code class="bg-dark-600 px-1 rounded text-xs break-all">https://developers.google.com/oauthplayground</code></li>
+            <li>Simpan <strong class="text-yellow-400">CLIENT_ID</strong> dan <strong class="text-yellow-400">CLIENT_SECRET</strong></li>
+          </ol>
+        </div>
+
+        <!-- Step 5 -->
+        <div class="bg-dark-700 rounded-lg p-4 border border-gray-600">
+          <h4 class="text-primary font-semibold mb-2 flex items-center gap-2">
+            <span class="w-6 h-6 bg-primary/20 rounded-full flex items-center justify-center text-sm">5</span>
+            Generate Refresh Token
+          </h4>
+          <ol id="guideStep5" class="text-sm text-gray-300 space-y-1 ml-8 list-decimal">
+            <li>Buka <a href="https://developers.google.com/oauthplayground" target="_blank" class="text-primary hover:underline break-all">OAuth Playground</a></li>
+            <li>⚙️ Settings → ✅ <strong>Use your own OAuth credentials</strong></li>
+            <li>Masukkan Client ID & Client Secret</li>
+            <li class="break-all">Scope: <code class="bg-dark-600 px-1 rounded text-xs break-all">https://www.googleapis.com/auth/youtube</code></li>
+            <li><strong>Authorize APIs</strong> → Login → <strong>Exchange authorization code for tokens</strong></li>
+            <li>Salin <strong class="text-green-400">Refresh Token</strong></li>
+          </ol>
+        </div>
+
+        <!-- Step 6 -->
+        <div class="bg-gradient-to-r from-red-500/20 to-red-600/10 rounded-lg p-4 border border-red-500/30">
+          <h4 class="text-red-400 font-semibold mb-2 flex items-center gap-2">
+            <span class="w-6 h-6 bg-red-500/20 rounded-full flex items-center justify-center text-sm">6</span>
+            Masukkan di OzangLive
+          </h4>
+          <p id="guideStep6" class="text-sm text-gray-300 ml-8">
+            Menu <strong>YouTube</strong> → <strong>Tambah Akun</strong> → Masukkan credentials → <strong>Simpan</strong>
+          </p>
+        </div>
+
+        <!-- Footer -->
+        <div class="text-center pt-4 border-t border-gray-700">
+          <p class="text-gray-400 text-sm">Semoga berhasil, Amiin 🤲</p>
+        </div>
+      </div>
+
+      <!-- Edit Mode (Admin Only) -->
+      <% if (user && user.role === 'admin') { %>
+      <div id="guideEditMode" class="p-6 overflow-y-auto max-h-[calc(90vh-80px)] space-y-4 hidden">
+        <div class="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 mb-4">
+          <p class="text-yellow-400 text-sm"><i class="ti ti-info-circle mr-1"></i> Gunakan format: satu instruksi per baris. Gunakan **teks** untuk bold, `kode` untuk code.</p>
+        </div>
+        
+        <div class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-300 mb-1">Step 1: Buat Project di Google Cloud</label>
+            <textarea id="editStep1" rows="3" class="w-full bg-dark-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:border-primary focus:ring-1 focus:ring-primary"></textarea>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-300 mb-1">Step 2: Aktifkan YouTube Data API</label>
+            <textarea id="editStep2" rows="3" class="w-full bg-dark-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:border-primary focus:ring-1 focus:ring-primary"></textarea>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-300 mb-1">Step 3: Setup OAuth Consent Screen</label>
+            <textarea id="editStep3" rows="4" class="w-full bg-dark-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:border-primary focus:ring-1 focus:ring-primary"></textarea>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-300 mb-1">Step 4: Buat OAuth Client ID</label>
+            <textarea id="editStep4" rows="4" class="w-full bg-dark-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:border-primary focus:ring-1 focus:ring-primary"></textarea>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-300 mb-1">Step 5: Generate Refresh Token</label>
+            <textarea id="editStep5" rows="6" class="w-full bg-dark-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:border-primary focus:ring-1 focus:ring-primary"></textarea>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-300 mb-1">Step 6: Masukkan di OzangLive</label>
+            <textarea id="editStep6" rows="2" class="w-full bg-dark-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:border-primary focus:ring-1 focus:ring-primary"></textarea>
+          </div>
+        </div>
+
+        <div class="flex gap-3 pt-4 border-t border-gray-700">
+          <button onclick="saveGuideChanges()" class="flex-1 bg-primary hover:bg-primary/80 text-white py-2 px-4 rounded-lg text-sm font-medium transition-colors">
+            <i class="ti ti-check mr-1"></i> Simpan
+          </button>
+          <button onclick="toggleGuideEditMode()" class="flex-1 bg-gray-600 hover:bg-gray-500 text-white py-2 px-4 rounded-lg text-sm font-medium transition-colors">
+            <i class="ti ti-x mr-1"></i> Batal
+          </button>
+        </div>
+      </div>
+      <% } %>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================
+// Broadcast Channel Grouping Functions
+// ============================================
+let collapsedBroadcastChannels = new Set();
+
+// Toggle broadcast channel visibility
+function toggleBroadcastChannel(channelIndex) {
+  const content = document.getElementById(`channelBroadcasts_${channelIndex}`);
+  const chevron = document.getElementById(`channelChevron_${channelIndex}`);
+  
+  if (content.classList.contains('hidden')) {
+    content.classList.remove('hidden');
+    chevron.classList.remove('rotate-[-90deg]');
+    collapsedBroadcastChannels.delete(channelIndex);
+  } else {
+    content.classList.add('hidden');
+    chevron.classList.add('rotate-[-90deg]');
+    collapsedBroadcastChannels.add(channelIndex);
+  }
+}
+
+// Toggle select all broadcasts in a channel
+function toggleChannelSelectAll(checkbox, accountId) {
+  const isChecked = checkbox.checked;
+  const channelCheckboxes = document.querySelectorAll(`.broadcast-checkbox[data-account-id="${accountId}"]`);
+  
+  channelCheckboxes.forEach(cb => {
+    cb.checked = isChecked;
+  });
+  
+  updateSelectionCount();
+}
+
+// ============================================
+// Live Stats Dashboard Functions
+// ============================================
+let autoRefreshInterval = null;
+let isAutoRefreshEnabled = false;
+
+// Initialize live stats on page load
+document.addEventListener('DOMContentLoaded', function() {
+  // Initial load
+  refreshLiveStats();
+  refreshConnectionStatus();
+});
+
+// Refresh live stats
+async function refreshLiveStats() {
+  const refreshBtn = document.getElementById('refreshStatsBtn');
+  const refreshIcon = document.getElementById('refreshIcon');
+  
+  // Show loading state
+  refreshBtn.disabled = true;
+  refreshIcon.classList.add('animate-spin');
+  
+  try {
+    const response = await fetch('/api/youtube/live-stats');
+    const data = await response.json();
+    
+    if (data.success) {
+      updateLiveStatsUI(data.stats);
+    } else {
+      console.error('Failed to fetch live stats:', data.error);
+    }
+  } catch (error) {
+    console.error('Error fetching live stats:', error);
+  } finally {
+    refreshBtn.disabled = false;
+    refreshIcon.classList.remove('animate-spin');
+  }
+}
+
+// Refresh connection status
+async function refreshConnectionStatus() {
+  try {
+    const response = await fetch('/api/youtube/connection-status');
+    const data = await response.json();
+    
+    if (data.success) {
+      updateConnectionUI(data);
+    }
+  } catch (error) {
+    console.error('Error fetching connection status:', error);
+  }
+}
+
+// Update live stats UI
+// Track collapsed channels state
+let collapsedChannels = new Set();
+
+function updateLiveStatsUI(stats) {
+  const activeStreamsContainer = document.getElementById('activeStreamsContainer');
+  const activeStreamsList = document.getElementById('activeStreamsList');
+  const liveCountNum = document.getElementById('liveCountNum');
+  const liveCountNumMobile = document.getElementById('liveCountNumMobile');
+  const totalViewers = document.getElementById('totalViewers');
+  const totalViewersMobile = document.getElementById('totalViewersMobile');
+  
+  // Filter only live broadcasts
+  const liveStreams = stats.filter(s => s.lifeCycleStatus === 'live' && !s.error);
+  
+  // Update live count (desktop & mobile)
+  const liveCount = liveStreams.length;
+  if (liveCountNum) liveCountNum.textContent = liveCount;
+  if (liveCountNumMobile) liveCountNumMobile.textContent = liveCount;
+  
+  // Calculate total viewers
+  const total = liveStreams.reduce((sum, s) => sum + (s.concurrentViewers || 0), 0);
+  if (totalViewers) totalViewers.textContent = formatNumber(total);
+  if (totalViewersMobile) totalViewersMobile.textContent = formatNumber(total);
+  
+  // Show/hide active broadcasts container
+  if (liveStreams.length === 0) {
+    activeStreamsContainer.classList.add('hidden');
+    return;
+  }
+  
+  activeStreamsContainer.classList.remove('hidden');
+  
+  // Group streams by channel
+  const channelGroups = {};
+  liveStreams.forEach(stream => {
+    const channelName = stream.channelName || 'Unknown Channel';
+    if (!channelGroups[channelName]) {
+      channelGroups[channelName] = { streams: [], totalViewers: 0 };
+    }
+    channelGroups[channelName].streams.push(stream);
+    channelGroups[channelName].totalViewers += (stream.concurrentViewers || 0);
+  });
+  
+  const channelNames = Object.keys(channelGroups);
+  
+  // Render grouped channels
+  activeStreamsList.innerHTML = channelNames.map(channelName => {
+    const group = channelGroups[channelName];
+    const isCollapsed = collapsedChannels.has(channelName);
+    const channelId = channelName.replace(/[^a-zA-Z0-9]/g, '_');
+    
+    return `
+      <div class="channel-group" data-channel="${escapeHtml(channelName)}">
+        <!-- Channel Header -->
+        <div class="flex items-center justify-between px-3 py-2 bg-dark-700/60 rounded-lg cursor-pointer hover:bg-dark-700 transition-colors"
+          onclick="toggleChannel('${escapeHtml(channelName)}')">
+          <div class="flex items-center gap-2 min-w-0 flex-1">
+            <span class="w-2 h-2 bg-red-500 rounded-full animate-pulse flex-shrink-0"></span>
+            <span class="text-sm text-white truncate">${escapeHtml(channelName)}</span>
+            <span class="text-xs text-gray-500">${group.streams.length}</span>
+          </div>
+          <div class="flex items-center gap-2 flex-shrink-0">
+            <span class="text-sm font-medium text-white">${formatNumber(group.totalViewers)}</span>
+            <span class="text-xs text-gray-500 hidden sm:inline">viewers</span>
+            <i class="ti ti-chevron-${isCollapsed ? 'right' : 'down'} text-gray-500 text-xs" id="chevron_${channelId}"></i>
+          </div>
+        </div>
+        
+        <!-- Channel Streams -->
+        <div id="streams_${channelId}" class="${isCollapsed ? 'hidden' : ''} mt-1 ml-4 space-y-1">
+          ${group.streams.map(stream => `
+            <div class="flex items-center justify-between px-2.5 py-1.5 bg-dark-700/30 rounded border-l-2 border-red-500/40 text-xs">
+              <span class="text-gray-300 truncate flex-1 mr-2">${escapeHtml(stream.title || 'Untitled')}</span>
+              <div class="flex items-center gap-2 flex-shrink-0">
+                <span class="text-white font-medium">${formatNumber(stream.concurrentViewers || 0)}</span>
+                ${getStatusBadge(stream.streamHealth, stream.healthDetails)}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// Toggle channel visibility
+function toggleChannel(channelName) {
+  const channelId = channelName.replace(/[^a-zA-Z0-9]/g, '_');
+  const streamsDiv = document.getElementById(`streams_${channelId}`);
+  const chevron = document.getElementById(`chevron_${channelId}`);
+  
+  if (collapsedChannels.has(channelName)) {
+    collapsedChannels.delete(channelName);
+    streamsDiv?.classList.remove('hidden');
+    chevron?.classList.replace('ti-chevron-right', 'ti-chevron-down');
+  } else {
+    collapsedChannels.add(channelName);
+    streamsDiv?.classList.add('hidden');
+    chevron?.classList.replace('ti-chevron-down', 'ti-chevron-right');
+  }
+}
+
+// Compact status badge
+function getStatusBadge(streamHealth, healthDetails) {
+  const status = healthDetails?.status || streamHealth || 'unknown';
+  const badges = {
+    'good': '<span class="px-1.5 py-0.5 bg-green-500/20 text-green-400 text-[10px] rounded">Good</span>',
+    'ok': '<span class="px-1.5 py-0.5 bg-yellow-500/20 text-yellow-400 text-[10px] rounded">OK</span>',
+    'bad': '<span class="px-1.5 py-0.5 bg-red-500/20 text-red-400 text-[10px] rounded">Poor</span>',
+    'active': '<span class="px-1.5 py-0.5 bg-green-500/20 text-green-400 text-[10px] rounded">Good</span>',
+    'ready': '<span class="px-1.5 py-0.5 bg-blue-500/20 text-blue-400 text-[10px] rounded">Ready</span>',
+  };
+  return badges[status] || '<span class="px-1.5 py-0.5 bg-gray-500/20 text-gray-400 text-[10px] rounded">-</span>';
+}
+
+// Update connection UI
+function updateConnectionUI(data) {
+  const connectionStatus = document.getElementById('connectionStatus');
+  const connectionStatusMobile = document.getElementById('connectionStatusMobile');
+  const connectionDetail = document.getElementById('connectionDetail');
+  const connectionIcon = document.getElementById('connectionIcon');
+  const connectionIconMobile = document.getElementById('connectionIconMobile');
+  const connectionLabel = document.getElementById('connectionLabel');
+  const quotaUsed = document.getElementById('quotaUsed');
+  const quotaUsedMobile = document.getElementById('quotaUsedMobile');
+  const quotaChannelName = document.getElementById('quotaChannelName');
+  const quotaChannelNameMobile = document.getElementById('quotaChannelNameMobile');
+  
+  // Connection status
+  const connectedCount = data.accounts.filter(a => a.connected).length;
+  const totalAccounts = data.accounts.length;
+  const allConnected = connectedCount === totalAccounts;
+  
+  // Find primary account for quota display
+  const primaryAccount = data.accounts.find(a => a.isPrimary) || data.accounts[0];
+  const quotaOk = primaryAccount ? primaryAccount.quotaOk : true;
+  
+  // Update connection icon + label
+  if (allConnected && quotaOk) {
+    if (connectionIcon) connectionIcon.className = 'ti ti-wifi text-green-400';
+    if (connectionIconMobile) connectionIconMobile.className = 'ti ti-wifi text-green-400';
+    if (connectionLabel) {
+      connectionLabel.textContent = 'Online';
+      connectionLabel.className = 'text-green-400';
+    }
+  } else if (connectedCount > 0) {
+    if (connectionIcon) connectionIcon.className = 'ti ti-wifi-1 text-yellow-400';
+    if (connectionIconMobile) connectionIconMobile.className = 'ti ti-wifi-1 text-yellow-400';
+    if (connectionLabel) {
+      connectionLabel.textContent = 'Limited';
+      connectionLabel.className = 'text-yellow-400';
+    }
+  } else {
+    if (connectionIcon) connectionIcon.className = 'ti ti-wifi-off text-red-400';
+    if (connectionIconMobile) connectionIconMobile.className = 'ti ti-wifi-off text-red-400';
+    if (connectionLabel) {
+      connectionLabel.textContent = 'Offline';
+      connectionLabel.className = 'text-red-400';
+    }
+  }
+  
+  // Quota info - show for primary channel
+  if (data.quota && primaryAccount) {
+    const dailyLimit = data.quota.dailyLimit || 10000;
+    const remaining = quotaOk ? dailyLimit : 0;
+    const remainingK = remaining >= 1000 ? `${(remaining/1000).toFixed(remaining >= 10000 ? 0 : 1)}K` : remaining;
+    
+    // Show channel name on desktop only
+    if (quotaChannelName && primaryAccount.channelName) {
+      const shortName = primaryAccount.channelName.length > 12 
+        ? primaryAccount.channelName.substring(0, 10) + '..' 
+        : primaryAccount.channelName;
+      quotaChannelName.textContent = `[${shortName}]`;
+    }
+    
+    if (!quotaOk) {
+      if (quotaUsed) {
+        quotaUsed.textContent = '0';
+        quotaUsed.className = 'text-red-400 font-semibold';
+      }
+      if (quotaUsedMobile) {
+        quotaUsedMobile.textContent = '0';
+        quotaUsedMobile.className = 'text-red-400 font-semibold';
+      }
+    } else {
+      if (quotaUsed) {
+        quotaUsed.textContent = remainingK;
+        quotaUsed.className = 'text-white font-semibold';
+      }
+      if (quotaUsedMobile) {
+        quotaUsedMobile.textContent = remainingK;
+        quotaUsedMobile.className = 'text-white font-semibold';
+      }
+    }
+  }
+}
+
+// Toggle auto refresh
+function toggleAutoRefresh() {
+  const btn = document.getElementById('autoRefreshBtn');
+  const btnMobile = document.getElementById('autoRefreshBtnMobile');
+  const icon = document.getElementById('autoRefreshIcon');
+  const iconMobile = document.getElementById('autoRefreshIconMobile');
+  const label = document.getElementById('autoRefreshLabel');
+  const labelMobile = document.getElementById('autoRefreshLabelMobile');
+  const text = document.getElementById('autoRefreshText');
+  
+  isAutoRefreshEnabled = !isAutoRefreshEnabled;
+  
+  if (isAutoRefreshEnabled) {
+    // Desktop
+    if (icon) icon.className = 'ti ti-clock text-green-400';
+    if (label) {
+      label.textContent = 'ON';
+      label.className = 'text-xs text-green-400 font-semibold';
+    }
+    // Mobile
+    if (iconMobile) iconMobile.className = 'ti ti-clock text-green-400 text-base';
+    if (labelMobile) {
+      labelMobile.textContent = 'ON';
+      labelMobile.className = 'text-xs text-green-400 font-semibold';
+    }
+    if (text) text.textContent = 'On';
+    
+    // Start auto refresh every 30 seconds
+    autoRefreshInterval = setInterval(() => {
+      refreshLiveStats();
+      refreshConnectionStatus();
+    }, 30000);
+  } else {
+    // Desktop
+    if (icon) icon.className = 'ti ti-clock text-gray-400';
+    if (label) {
+      label.textContent = 'OFF';
+      label.className = 'text-xs text-gray-500';
+    }
+    // Mobile
+    if (iconMobile) iconMobile.className = 'ti ti-clock text-gray-400 text-base';
+    if (labelMobile) {
+      labelMobile.textContent = 'OFF';
+      labelMobile.className = 'text-xs text-gray-500';
+    }
+    if (text) text.textContent = 'Auto';
+    
+    if (autoRefreshInterval) {
+      clearInterval(autoRefreshInterval);
+      autoRefreshInterval = null;
+    }
+  }
+}
+
+// Helper: Format number with K/M suffix
+function formatNumber(num) {
+  if (num >= 1000000) {
+    return (num / 1000000).toFixed(1) + 'M';
+  }
+  if (num >= 1000) {
+    return (num / 1000).toFixed(1) + 'K';
+  }
+  return num.toString();
+}
+
+// Helper: Escape HTML
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+</script>
+
+<script>
+// YouTube Guide Modal Functions
+let guideEditMode = false;
+
+function openYouTubeGuideModal() {
+  document.getElementById('youtubeGuideModal').classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+  loadGuideFromStorage();
+}
+
+function closeYouTubeGuideModal() {
+  document.getElementById('youtubeGuideModal').classList.add('hidden');
+  document.body.style.overflow = '';
+  if (guideEditMode) {
+    toggleGuideEditMode();
+  }
+}
+
+function toggleGuideEditMode() {
+  guideEditMode = !guideEditMode;
+  const viewMode = document.getElementById('guideViewMode');
+  const editMode = document.getElementById('guideEditMode');
+  const editBtn = document.getElementById('guideEditBtn');
+  
+  if (guideEditMode) {
+    viewMode.classList.add('hidden');
+    editMode.classList.remove('hidden');
+    editBtn.innerHTML = '<i class="ti ti-eye text-xl"></i>';
+    editBtn.title = 'Lihat Panduan';
+    populateEditFields();
+  } else {
+    viewMode.classList.remove('hidden');
+    editMode.classList.add('hidden');
+    editBtn.innerHTML = '<i class="ti ti-pencil text-xl"></i>';
+    editBtn.title = 'Edit Panduan';
+  }
+}
+
+function populateEditFields() {
+  const savedGuide = localStorage.getItem('youtubeApiGuide');
+  if (savedGuide) {
+    const guide = JSON.parse(savedGuide);
+    for (let i = 1; i <= 6; i++) {
+      const textarea = document.getElementById('editStep' + i);
+      if (textarea && guide['step' + i]) {
+        textarea.value = guide['step' + i];
+      }
+    }
+  } else {
+    // Load from current HTML
+    for (let i = 1; i <= 6; i++) {
+      const stepEl = document.getElementById('guideStep' + i);
+      const textarea = document.getElementById('editStep' + i);
+      if (stepEl && textarea) {
+        const items = stepEl.querySelectorAll('li');
+        if (items.length > 0) {
+          textarea.value = Array.from(items).map(li => li.textContent.trim()).join('\n');
+        } else {
+          textarea.value = stepEl.textContent.trim();
+        }
+      }
+    }
+  }
+}
+
+function parseGuideText(text) {
+  return text
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/`([^`]+)`/g, '<code class="bg-dark-600 px-1 rounded text-xs">$1</code>')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" class="text-primary hover:underline">$1</a>');
+}
+
+function saveGuideChanges() {
+  const guide = {};
+  for (let i = 1; i <= 6; i++) {
+    const textarea = document.getElementById('editStep' + i);
+    if (textarea) {
+      guide['step' + i] = textarea.value;
+    }
+  }
+  
+  localStorage.setItem('youtubeApiGuide', JSON.stringify(guide));
+  applyGuideToView(guide);
+  toggleGuideEditMode();
+  
+  if (typeof showToast === 'function') {
+    showToast('Panduan berhasil disimpan', 'success');
+  }
+}
+
+function applyGuideToView(guide) {
+  for (let i = 1; i <= 6; i++) {
+    const stepEl = document.getElementById('guideStep' + i);
+    if (stepEl && guide['step' + i]) {
+      const lines = guide['step' + i].split('\n').filter(line => line.trim());
+      if (stepEl.tagName === 'OL') {
+        stepEl.innerHTML = lines.map(line => '<li>' + parseGuideText(line) + '</li>').join('');
+      } else {
+        stepEl.innerHTML = parseGuideText(lines.join(' '));
+      }
+    }
+  }
+}
+
+function loadGuideFromStorage() {
+  const savedGuide = localStorage.getItem('youtubeApiGuide');
+  if (savedGuide) {
+    applyGuideToView(JSON.parse(savedGuide));
+  }
+}
+
+// Close modal when clicking outside
+document.getElementById('youtubeGuideModal').addEventListener('click', function(e) {
+  if (e.target === this) {
+    closeYouTubeGuideModal();
+  }
+});
+
+// Close modal with Escape key
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape' && !document.getElementById('youtubeGuideModal').classList.contains('hidden')) {
+    closeYouTubeGuideModal();
+  }
+});
+</script>
+
+<!-- Create Thumbnail Folder Modal -->
+<div id="addThumbnailFolderModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] hidden modal-overlay">
+  <div class="flex min-h-screen items-center justify-center p-4">
+    <div class="bg-dark-800 rounded-xl shadow-2xl w-full max-w-sm border border-gray-700">
+      <div class="flex items-center justify-between p-4 border-b border-gray-700">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 bg-green-500/20 rounded-lg flex items-center justify-center">
+            <i class="ti ti-photo-plus text-green-400"></i>
+          </div>
+          <h3 class="text-lg font-semibold">Add Thumbnail Folder</h3>
+        </div>
+        <button onclick="closeAddThumbnailFolderModal()" class="w-8 h-8 rounded-lg hover:bg-dark-600 flex items-center justify-center text-gray-400 hover:text-white transition-colors">
+          <i class="ti ti-x text-lg"></i>
+        </button>
+      </div>
+      <div class="p-4">
+        <form id="addThumbnailFolderForm" onsubmit="submitAddThumbnailFolder(event)">
+          <div class="mb-4">
+            <label class="text-sm font-medium text-white block mb-2">Folder Name</label>
+            <input type="text" id="newThumbnailFolderName" required maxlength="50"
+              class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-green-500 focus:ring-1 focus:ring-green-500/50 focus:outline-none transition-colors"
+              placeholder="e.g., 23, Music, Jazz">
+            <p class="text-xs text-gray-500 mt-1.5">Max 50 characters. Letters, numbers, spaces, - and _ only.</p>
+          </div>
+          <div class="flex gap-3">
+            <button type="button" onclick="closeAddThumbnailFolderModal()"
+              class="flex-1 bg-dark-700 hover:bg-dark-600 text-white px-4 py-2.5 rounded-lg transition-colors">
+              Cancel
+            </button>
+            <button type="submit" id="addThumbnailFolderBtn2"
+              class="flex-1 bg-green-500 hover:bg-green-600 text-white px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-1.5">
+              <i class="ti ti-photo-plus"></i>
+              <span>Create</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Old Create Thumbnail Folder Modal - kept for backward compatibility -->
+<div id="createFolderModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] hidden modal-overlay">
+  <div class="flex min-h-screen items-center justify-center p-4">
+    <div class="bg-dark-800 rounded-xl shadow-2xl w-full max-w-sm border border-gray-700">
+      <div class="flex items-center justify-between p-4 border-b border-gray-700">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 bg-primary/20 rounded-lg flex items-center justify-center">
+            <i class="ti ti-folder-plus text-primary"></i>
+          </div>
+          <h3 class="text-lg font-semibold">Create Folder</h3>
+        </div>
+        <button onclick="closeCreateFolderModal()" class="w-8 h-8 rounded-lg hover:bg-dark-600 flex items-center justify-center text-gray-400 hover:text-white transition-colors">
+          <i class="ti ti-x text-lg"></i>
+        </button>
+      </div>
+      <div class="p-4">
+        <form id="createFolderForm" onsubmit="submitCreateFolder(event)">
+          <div class="mb-4">
+            <label class="text-sm font-medium text-white block mb-2">Folder Name</label>
+            <input type="text" id="newFolderName" required maxlength="50"
+              class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:ring-1 focus:ring-primary/50 focus:outline-none transition-colors"
+              placeholder="e.g., Italian Music, Jazz">
+            <p class="text-xs text-gray-500 mt-1.5">Max 50 characters. Letters, numbers, spaces, - and _ only.</p>
+          </div>
+          <div class="flex gap-3">
+            <button type="button" onclick="closeCreateFolderModal()"
+              class="flex-1 bg-dark-700 hover:bg-dark-600 text-white px-4 py-2.5 rounded-lg transition-colors">
+              Cancel
+            </button>
+            <button type="submit" id="createFolderBtn"
+              class="flex-1 bg-primary hover:bg-secondary text-white px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-1.5">
+              <i class="ti ti-folder-plus"></i>
+              <span>Create</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Rename Thumbnail Folder Modal -->
+<div id="renameFolderModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] hidden modal-overlay">
+  <div class="flex min-h-screen items-center justify-center p-4">
+    <div class="bg-dark-800 rounded-xl shadow-2xl w-full max-w-sm border border-gray-700">
+      <div class="flex items-center justify-between p-4 border-b border-gray-700">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center">
+            <i class="ti ti-pencil text-blue-400"></i>
+          </div>
+          <h3 class="text-lg font-semibold">Rename Folder</h3>
+        </div>
+        <button onclick="closeRenameFolderModal()" class="w-8 h-8 rounded-lg hover:bg-dark-600 flex items-center justify-center text-gray-400 hover:text-white transition-colors">
+          <i class="ti ti-x text-lg"></i>
+        </button>
+      </div>
+      <div class="p-4">
+        <form id="renameFolderForm" onsubmit="submitRenameFolder(event)">
+          <input type="hidden" id="renameFolderOldName">
+          
+          <!-- Floating Label Input -->
+          <div class="mb-6 relative">
+            <input type="text" id="renameFolderNewName" required maxlength="50"
+              class="peer w-full px-4 pt-6 pb-2 bg-dark-700 border-2 border-gray-600 rounded-lg focus:border-blue-500 focus:ring-0 focus:outline-none transition-all placeholder-transparent"
+              placeholder="Enter new folder name"
+              onkeyup="updateRenameFolderPreview()">
+            <label for="renameFolderNewName" 
+              class="absolute left-4 top-2 text-xs font-medium text-blue-400 transition-all peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-500 peer-focus:top-2 peer-focus:text-xs peer-focus:text-blue-400">
+              New Folder Name
+            </label>
+            <!-- Character Counter -->
+            <div class="absolute right-4 top-2 text-xs text-gray-500">
+              <span id="renameFolderCharCount">0</span>/50
+            </div>
+          </div>
+          
+          <!-- Preview Box (shows old → new) -->
+          <div id="renameFolderPreview" class="mb-4 p-3 bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/30 rounded-lg">
+            <div class="flex items-center gap-2 text-sm">
+              <span class="text-gray-400">Old:</span>
+              <span id="renameFolderOldNameDisplay" class="font-medium text-gray-300">-</span>
+            </div>
+            <div class="flex items-center gap-2 my-1">
+              <i class="ti ti-arrow-down text-blue-400 text-xs"></i>
+            </div>
+            <div class="flex items-center gap-2 text-sm">
+              <span class="text-gray-400">New:</span>
+              <span id="renameFolderNewNameDisplay" class="font-medium text-blue-400">-</span>
+            </div>
+          </div>
+          
+          <div class="flex gap-3">
+            <button type="button" onclick="closeRenameFolderModal()"
+              class="flex-1 bg-dark-700 hover:bg-dark-600 text-white px-4 py-2.5 rounded-lg transition-colors">
+              Cancel
+            </button>
+            <button type="submit" id="renameFolderBtn"
+              class="flex-1 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-1.5">
+              <i class="ti ti-pencil"></i>
+              <span>Rename</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Thumbnail Manager Modal (Standalone) -->
+<div id="thumbnailManagerModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] hidden modal-overlay overflow-y-auto">
+  <div class="flex min-h-screen items-center justify-center md:p-4">
+    <div class="bg-dark-800 md:rounded-xl shadow-2xl w-full md:max-w-4xl md:border border-gray-700 md:my-8 min-h-screen md:min-h-0">
+      <!-- Header -->
+      <div class="flex items-center justify-between p-4 md:p-6 border-b border-gray-700">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center">
+            <i class="ti ti-photo text-purple-400 text-xl"></i>
+          </div>
+          <div>
+            <h3 class="text-lg md:text-xl font-semibold">Thumbnail Manager</h3>
+            <p class="text-xs md:text-sm text-gray-400">Kelola folder dan thumbnail</p>
+          </div>
+        </div>
+        <button onclick="closeThumbnailManagerModal()" class="w-10 h-10 rounded-lg hover:bg-dark-600 flex items-center justify-center text-gray-400 hover:text-white transition-colors">
+          <i class="ti ti-x text-xl"></i>
+        </button>
+      </div>
+      
+      <!-- Content -->
+      <div class="p-4 md:p-6">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
+          <!-- Left: Folder Management -->
+          <div class="lg:col-span-1">
+            <div class="bg-dark-700/50 rounded-lg p-3 md:p-4 border border-gray-700">
+              <div class="flex items-center justify-between mb-3 md:mb-4">
+                <h4 class="font-semibold flex items-center gap-2 text-sm md:text-base">
+                  <i class="ti ti-folder text-primary"></i>
+                  Folders
+                </h4>
+                <button type="button" onclick="openAddThumbnailFolderModal()" 
+                  class="px-2 md:px-3 py-1.5 text-xs rounded-lg bg-primary/20 text-primary hover:bg-primary/30 transition-colors flex items-center gap-1.5">
+                  <i class="ti ti-plus text-sm"></i>
+                  <span>Add</span>
+                </button>
+              </div>
+              
+              <!-- Root Folder - HIDDEN (user langsung bisa add folder) -->
+              <!-- <button type="button" onclick="openThumbnailFolderInManager(null)" id="thumbnailManagerRootBtn" 
+                class="w-full px-3 py-2.5 md:py-2 mb-2 text-sm rounded-lg bg-primary/20 text-primary hover:bg-primary/30 transition-colors flex items-center gap-2 font-medium hidden">
+                <i class="ti ti-home"></i>
+                <span>Root</span>
+                <span id="rootThumbnailCount" class="ml-auto text-xs bg-primary/30 px-2 py-0.5 rounded-full">0</span>
+              </button> -->
+              
+              <!-- Folder List -->
+              <div id="thumbnailManagerFolderList" class="space-y-1 max-h-96 overflow-y-auto">
+                <!-- Folders will be loaded here -->
+                <!-- Empty state will show if no folders -->
+              </div>
+              
+              <!-- Empty State for Folders -->
+              <div id="thumbnailManagerFolderEmpty" class="hidden text-center py-8 border-2 border-dashed border-gray-600 rounded-lg">
+                <i class="ti ti-folder-off text-gray-500 text-3xl"></i>
+                <p class="text-gray-500 text-sm mt-2">Belum ada folder</p>
+                <p class="text-gray-600 text-xs mt-1">Klik tombol <strong>Add</strong> untuk membuat folder</p>
+              </div>
+            </div>
+            
+            <!-- Current Folder Info - Desktop Only -->
+            <div id="currentFolderInfo" class="hidden md:block mt-3 md:mt-4 p-3 md:p-4 bg-dark-700/30 rounded-lg border border-gray-700">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-xs md:text-sm text-gray-400">Current Folder:</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <i class="ti ti-folder-open text-primary"></i>
+                <span id="currentFolderNameManager" class="font-medium text-sm md:text-base">-</span>
+              </div>
+              <div class="mt-2 text-xs text-gray-500">
+                <span id="currentFolderThumbnailCount">0</span> thumbnails
+              </div>
+            </div>
+          </div>
+          
+          <!-- Right: Thumbnail Gallery -->
+          <div class="lg:col-span-2">
+            <div class="bg-dark-700/50 rounded-lg p-3 md:p-4 border border-gray-700">
+              <!-- Mobile Breadcrumb -->
+              <div class="md:hidden mb-3 flex items-center gap-2 text-xs text-gray-400">
+                <i class="ti ti-folder-open text-primary"></i>
+                <span>Current:</span>
+                <span id="currentFolderNameMobile" class="text-white font-medium">Root</span>
+                <span class="ml-auto">
+                  (<span id="currentFolderThumbnailCountMobile">0</span> thumbnails)
+                </span>
+              </div>
+              
+              <div class="flex items-center justify-between mb-3 md:mb-4">
+                <h4 class="font-semibold flex items-center gap-2 text-sm md:text-base">
+                  <i class="ti ti-photo text-purple-400"></i>
+                  <span class="hidden md:inline">Thumbnails</span>
+                  <span id="thumbnailManagerCount" class="text-xs text-gray-400">(0)</span>
+                </h4>
+                <label class="px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm rounded-lg bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 transition-colors cursor-pointer flex items-center gap-2">
+                  <i class="ti ti-upload"></i>
+                  <span>Upload</span>
+                  <input type="file" id="thumbnailManagerUpload" accept="image/jpeg,image/png" multiple class="hidden" onchange="handleThumbnailManagerUpload(event)">
+                </label>
+              </div>
+              
+              <!-- Thumbnail Grid - FIXED: Uniform spacing for mobile -->
+              <div id="thumbnailManagerGallery" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3 min-h-[300px]">
+                <!-- Thumbnails will be loaded here -->
+              </div>
+              
+              <!-- Loading State -->
+              <div id="thumbnailManagerLoading" class="hidden text-center py-12">
+                <i class="ti ti-loader animate-spin text-primary text-3xl"></i>
+                <p class="text-gray-400 text-sm mt-3">Loading thumbnails...</p>
+              </div>
+              
+              <!-- Empty State -->
+              <div id="thumbnailManagerEmpty" class="hidden text-center py-12 border-2 border-dashed border-gray-600 rounded-lg">
+                <i class="ti ti-photo-off text-gray-500 text-4xl"></i>
+                <p class="text-gray-500 text-sm mt-3">No thumbnails in this folder</p>
+                <p class="text-gray-600 text-xs mt-1">Upload images to get started</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Footer -->
+      <div class="flex items-center justify-between p-4 md:p-6 border-t border-gray-700 bg-dark-700/30">
+        <div class="text-xs md:text-sm text-gray-400">
+          <i class="ti ti-info-circle"></i>
+          Supported: JPG, PNG (max 2MB each)
+        </div>
+        <button onclick="closeThumbnailManagerModal()"
+          class="px-4 md:px-6 py-2 md:py-2.5 bg-dark-600 hover:bg-dark-500 text-white rounded-lg transition-colors text-sm md:text-base">
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/youtube.js"></script>

@@ -1,0 +1,667 @@
+<!-- Branding Tab - Optimized & Stylish Layout -->
+<div id="branding-tab" class="settings-content hidden">
+  <div class="p-6">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h3 class="text-lg font-semibold flex items-center">
+          <i class="ti ti-palette mr-2 text-primary"></i>
+          White Label Branding
+        </h3>
+        <p class="text-sm text-gray-400 mt-1">Customize the application with your brand identity</p>
+      </div>
+      <button type="button" id="reset-branding-btn"
+        class="px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded-lg transition-colors text-sm">
+        <i class="ti ti-refresh mr-1"></i>Reset to Default
+      </button>
+    </div>
+
+    <form id="branding-form" class="space-y-6">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+      <!-- Identity & Visual Assets - 2 Column Layout -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        <!-- Left Column: Identity -->
+        <div class="bg-dark-700 rounded-lg p-5">
+          <h4 class="text-md font-medium mb-4 flex items-center">
+            <i class="ti ti-id mr-2 text-blue-400"></i>
+            Application Identity
+          </h4>
+
+          <div class="space-y-4">
+            <div>
+              <label for="app-name" class="block text-sm font-medium text-gray-300 mb-2">
+                Application Name
+              </label>
+              <input type="text" id="app-name" name="app_name" value="<%= branding.app_name %>"
+                class="w-full bg-dark-900 text-white px-4 py-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                placeholder="OzangLive">
+              <p class="text-xs text-gray-500 mt-1.5">Displayed in browser title and header</p>
+            </div>
+
+            <div>
+              <label for="company-name" class="block text-sm font-medium text-gray-300 mb-2">
+                Company Name
+              </label>
+              <input type="text" id="company-name" name="company_name" value="<%= branding.company_name %>"
+                class="w-full bg-dark-900 text-white px-4 py-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                placeholder="OzangLive Team">
+              <p class="text-xs text-gray-500 mt-1.5">Used in footer and legal text</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column: Logo & Favicon -->
+        <div class="bg-dark-700 rounded-lg p-5">
+          <h4 class="text-md font-medium mb-4 flex items-center">
+            <i class="ti ti-photo mr-2 text-green-400"></i>
+            Logo & Favicon
+          </h4>
+
+          <div class="space-y-4">
+            <!-- Logo Upload -->
+            <div>
+              <label class="block text-sm font-medium text-gray-300 mb-2">Application Logo</label>
+              <div class="flex items-start gap-4">
+                <div class="w-24 h-24 bg-dark-900 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0 border border-gray-600">
+                  <img id="logo-preview" src="<%= branding.logo_path %>" alt="Logo" class="max-w-full max-h-full object-contain">
+                </div>
+                <div class="flex-1">
+                  <input type="file" id="logo-upload" accept="image/png,image/svg+xml,image/jpeg" class="hidden">
+                  <button type="button" onclick="document.getElementById('logo-upload').click()"
+                    class="w-full px-4 py-2.5 bg-primary hover:bg-secondary text-white rounded-lg transition-colors mb-2 flex items-center justify-center gap-2">
+                    <i class="ti ti-upload"></i>
+                    <span>Upload Logo</span>
+                  </button>
+                  <p class="text-xs text-gray-500">PNG, SVG, or JPG • Max 2MB</p>
+                  <p class="text-xs text-gray-500">Recommended: 200x60px</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Favicon Upload -->
+            <div class="pt-4 border-t border-gray-600">
+              <label class="block text-sm font-medium text-gray-300 mb-2">Favicon</label>
+              <div class="flex items-start gap-4">
+                <div class="w-16 h-16 bg-dark-900 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0 border border-gray-600">
+                  <img id="favicon-preview" src="<%= branding.favicon_path %>" alt="Favicon" class="max-w-full max-h-full object-contain">
+                </div>
+                <div class="flex-1">
+                  <input type="file" id="favicon-upload" accept="image/x-icon,image/png" class="hidden">
+                  <button type="button" onclick="document.getElementById('favicon-upload').click()"
+                    class="w-full px-4 py-2.5 bg-primary hover:bg-secondary text-white rounded-lg transition-colors mb-2 flex items-center justify-center gap-2">
+                    <i class="ti ti-upload"></i>
+                    <span>Upload Favicon</span>
+                  </button>
+                  <p class="text-xs text-gray-500">ICO or PNG • Max 500KB</p>
+                  <p class="text-xs text-gray-500">Recommended: 32x32px or 64x64px</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Color Scheme - Minimalist Modern -->
+      <div class="bg-gradient-to-br from-dark-700 to-dark-800 rounded-xl p-5 border border-gray-600/50 shadow-xl">
+        <h4 class="text-base font-semibold mb-4 flex items-center">
+          <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center mr-2 shadow-lg">
+            <i class="ti ti-palette text-white text-lg"></i>
+          </div>
+          <span>Color Palette</span>
+        </h4>
+
+        <!-- Color Pickers - Compact 3 Column Grid -->
+        <div class="grid grid-cols-3 gap-3 mb-4">
+          
+          <!-- Primary Color -->
+          <div class="group relative bg-dark-900/50 backdrop-blur-sm rounded-lg p-3 border border-gray-600/30 hover:border-primary/50 transition-all duration-300">
+            <label class="block text-xs font-semibold text-gray-300 mb-2 text-center">Primary</label>
+            
+            <div class="relative mb-2">
+              <input type="color" id="primary-color" name="primary_color" value="<%= branding.primary_color %>"
+                class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+              <div class="w-full h-16 rounded-lg cursor-pointer overflow-hidden border-2 border-gray-700 group-hover:border-primary/50 transition-all duration-300"
+                style="background-color: <%= branding.primary_color %>">
+                <div class="w-full h-full flex items-center justify-center bg-black/0 group-hover:bg-black/20 transition-all">
+                  <i class="ti ti-color-picker text-white opacity-0 group-hover:opacity-100 transition-opacity"></i>
+                </div>
+              </div>
+            </div>
+            
+            <input type="text" id="primary-color-text" value="<%= branding.primary_color %>"
+              class="w-full bg-dark-800 text-white px-2 py-1.5 rounded text-xs font-mono uppercase text-center border border-gray-700 focus:outline-none focus:ring-1 focus:ring-primary">
+          </div>
+
+          <!-- Secondary Color -->
+          <div class="group relative bg-dark-900/50 backdrop-blur-sm rounded-lg p-3 border border-gray-600/30 hover:border-secondary/50 transition-all duration-300">
+            <label class="block text-xs font-semibold text-gray-300 mb-2 text-center">Secondary</label>
+            
+            <div class="relative mb-2">
+              <input type="color" id="secondary-color" name="secondary_color" value="<%= branding.secondary_color %>"
+                class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+              <div class="w-full h-16 rounded-lg cursor-pointer overflow-hidden border-2 border-gray-700 group-hover:border-secondary/50 transition-all duration-300"
+                style="background-color: <%= branding.secondary_color %>">
+                <div class="w-full h-full flex items-center justify-center bg-black/0 group-hover:bg-black/20 transition-all">
+                  <i class="ti ti-color-picker text-white opacity-0 group-hover:opacity-100 transition-opacity"></i>
+                </div>
+              </div>
+            </div>
+            
+            <input type="text" id="secondary-color-text" value="<%= branding.secondary_color %>"
+              class="w-full bg-dark-800 text-white px-2 py-1.5 rounded text-xs font-mono uppercase text-center border border-gray-700 focus:outline-none focus:ring-1 focus:ring-secondary">
+          </div>
+
+          <!-- Accent Color -->
+          <div class="group relative bg-dark-900/50 backdrop-blur-sm rounded-lg p-3 border border-gray-600/30 hover:border-accent/50 transition-all duration-300">
+            <label class="block text-xs font-semibold text-gray-300 mb-2 text-center">Accent</label>
+            
+            <div class="relative mb-2">
+              <input type="color" id="accent-color" name="accent_color" value="<%= branding.accent_color %>"
+                class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+              <div class="w-full h-16 rounded-lg cursor-pointer overflow-hidden border-2 border-gray-700 group-hover:border-accent/50 transition-all duration-300"
+                style="background-color: <%= branding.accent_color %>">
+                <div class="w-full h-full flex items-center justify-center bg-black/0 group-hover:bg-black/20 transition-all">
+                  <i class="ti ti-color-picker text-white opacity-0 group-hover:opacity-100 transition-opacity"></i>
+                </div>
+              </div>
+            </div>
+            
+            <input type="text" id="accent-color-text" value="<%= branding.accent_color %>"
+              class="w-full bg-dark-800 text-white px-2 py-1.5 rounded text-xs font-mono uppercase text-center border border-gray-700 focus:outline-none focus:ring-1 focus:ring-accent">
+          </div>
+        </div>
+
+        <!-- Live Preview - Compact 3 Column -->
+        <div class="bg-dark-900/50 rounded-lg p-4 border border-gray-700/50">
+          <div class="flex items-center gap-2 mb-3">
+            <i class="ti ti-eye text-primary text-sm"></i>
+            <span class="text-xs font-semibold text-gray-300">Live Preview</span>
+          </div>
+          
+          <div class="grid grid-cols-3 gap-2">
+            <button type="button" id="color-preview-primary" 
+              style="background-color: <%= branding.primary_color %>"
+              class="px-3 py-2 text-white rounded-lg text-xs font-semibold shadow-md hover:scale-105 transition-transform">
+              Primary
+            </button>
+            
+            <button type="button" id="color-preview-secondary" 
+              style="background-color: <%= branding.secondary_color %>"
+              class="px-3 py-2 text-white rounded-lg text-xs font-semibold shadow-md hover:scale-105 transition-transform">
+              Secondary
+            </button>
+            
+            <span id="color-preview-accent" 
+              style="background-color: <%= branding.accent_color %>"
+              class="px-3 py-2 text-white rounded-lg text-xs font-semibold shadow-md flex items-center justify-center">
+              Accent
+            </span>
+          </div>
+
+          <!-- Gradient Bar -->
+          <div class="mt-3 h-1.5 bg-dark-700 rounded-full overflow-hidden">
+            <div id="preview-progress" 
+              style="background: linear-gradient(90deg, <%= branding.primary_color %> 0%, <%= branding.secondary_color %> 50%, <%= branding.accent_color %> 100%)" 
+              class="h-full w-full"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer & Contact - 2 Column Layout -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        <!-- Left: Footer & Contact -->
+        <div class="bg-dark-700 rounded-lg p-5">
+          <h4 class="text-md font-medium mb-4 flex items-center">
+            <i class="ti ti-mail mr-2 text-yellow-400"></i>
+            Footer & Contact
+          </h4>
+
+          <div class="space-y-4">
+            <div>
+              <label for="footer-text" class="block text-sm font-medium text-gray-300 mb-2">Footer Text</label>
+              <input type="text" id="footer-text" name="footer_text" value="<%= branding.footer_text %>"
+                class="w-full bg-dark-900 text-white px-4 py-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                placeholder="© 2024 Your Company. All rights reserved.">
+              <p class="text-xs text-gray-500 mt-1.5">Displayed at bottom of pages</p>
+            </div>
+
+            <div>
+              <label for="support-email" class="block text-sm font-medium text-gray-300 mb-2">Support Email</label>
+              <input type="email" id="support-email" name="support_email" value="<%= branding.support_email %>"
+                class="w-full bg-dark-900 text-white px-4 py-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                placeholder="support@yourcompany.com">
+              <p class="text-xs text-gray-500 mt-1.5">Contact email for support</p>
+            </div>
+
+            <div>
+              <label for="support-url" class="block text-sm font-medium text-gray-300 mb-2">Support URL <span class="text-gray-500">(Optional)</span></label>
+              <input type="url" id="support-url" name="support_url" value="<%= branding.support_url || '' %>"
+                class="w-full bg-dark-900 text-white px-4 py-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                placeholder="https://support.yourcompany.com">
+              <p class="text-xs text-gray-500 mt-1.5">Link to help center</p>
+            </div>
+
+            <div>
+              <label for="whatsapp-number" class="block text-sm font-medium text-gray-300 mb-2">
+                <i class="ti ti-brand-whatsapp text-green-400 mr-1"></i>Nomor WhatsApp Admin
+              </label>
+              <input type="text" id="whatsapp-number" name="whatsapp_number" value="<%= branding.whatsapp_number || '' %>"
+                class="w-full bg-dark-900 text-white px-4 py-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                placeholder="6281234567890">
+              <p class="text-xs text-gray-500 mt-1.5">Format internasional tanpa + (contoh: 6281234567890). Tombol WA akan muncul di header jika diisi.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: QRIS Payment & Attribution -->
+        <div class="bg-dark-700 rounded-lg p-5">
+          <h4 class="text-md font-medium mb-4 flex items-center">
+            <i class="ti ti-qrcode mr-2 text-blue-400"></i>
+            Pembayaran QRIS
+          </h4>
+
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-300 mb-2">Upload QRIS / Barcode Pembayaran</label>
+              <div class="flex items-start gap-4">
+                <div class="flex-1">
+                  <input type="file" id="qris-image-input" name="qris_image" accept="image/jpeg,image/png,image/jpg"
+                    class="w-full bg-dark-900 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary file:text-white hover:file:bg-secondary file:cursor-pointer">
+                  <p class="text-xs text-gray-500 mt-1.5">Format: JPG/PNG. Gambar QRIS akan ditampilkan sebagai popup saat user klik icon pembayaran di header.</p>
+                </div>
+                <% if (branding.qris_image_path) { %>
+                <div class="flex-shrink-0">
+                  <img src="<%= branding.qris_image_path %>" alt="Current QRIS" class="w-16 h-16 object-contain rounded-lg border border-gray-600 bg-white p-1">
+                </div>
+                <% } %>
+              </div>
+              <% if (branding.qris_image_path) { %>
+              <div class="mt-2 flex items-center gap-2">
+                <span class="text-xs text-green-400"><i class="ti ti-check mr-1"></i>QRIS aktif</span>
+                <button type="button" id="remove-qris-btn" class="text-xs text-red-400 hover:text-red-300 transition-colors">
+                  <i class="ti ti-trash mr-1"></i>Hapus QRIS
+                </button>
+              </div>
+              <% } %>
+            </div>
+          </div>
+
+          <div class="mt-6 pt-4 border-t border-gray-600">
+            <h4 class="text-md font-medium mb-4 flex items-center">
+              <i class="ti ti-info-circle mr-2 text-cyan-400"></i>
+              Attribution
+            </h4>
+
+          <div class="space-y-4">
+            <div class="flex items-start justify-between py-3 px-4 bg-dark-900 rounded-lg border border-gray-600">
+              <div class="flex-1">
+                <label class="text-sm font-medium text-gray-300 block mb-1">Show "Powered by OzangLive"</label>
+                <p class="text-xs text-gray-500">Display attribution in footer</p>
+              </div>
+              <label class="relative inline-flex items-center cursor-pointer ml-4">
+                <input type="checkbox" id="show-powered-by" name="show_powered_by" <%= branding.show_powered_by ? 'checked' : '' %> class="sr-only peer">
+                <div
+                  class="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary">
+                </div>
+              </label>
+            </div>
+
+            <div class="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+              <div class="flex items-start gap-3">
+                <i class="ti ti-info-circle text-blue-400 text-xl flex-shrink-0 mt-0.5"></i>
+                <div>
+                  <p class="text-sm text-blue-300 font-medium mb-1">White Label Feature</p>
+                  <p class="text-xs text-gray-400 leading-relaxed">
+                    Customize the application with your brand identity. Perfect for resellers, agencies, and enterprises.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Save Button -->
+      <div class="flex justify-end gap-3 pt-2">
+        <button type="submit" id="save-branding-btn"
+          class="px-8 py-3 bg-primary hover:bg-secondary text-white rounded-lg transition-colors font-medium shadow-lg">
+          <i class="ti ti-device-floppy mr-2"></i>Save Branding
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+// Branding Settings JavaScript
+(function() {
+  // Color picker sync with enhanced preview
+  const colorInputs = [
+    { 
+      picker: 'primary-color', 
+      text: 'primary-color-text', 
+      preview: 'color-preview-primary',
+      icon: 'preview-icon-primary',
+      card: null
+    },
+    { 
+      picker: 'secondary-color', 
+      text: 'secondary-color-text', 
+      preview: 'color-preview-secondary',
+      icon: null,
+      card: null
+    },
+    { 
+      picker: 'accent-color', 
+      text: 'accent-color-text', 
+      preview: 'color-preview-accent',
+      icon: 'preview-icon-accent',
+      card: null
+    }
+  ];
+
+  // Update all preview elements
+  function updateColorPreview(color, elements) {
+    const { preview, icon, text, picker } = elements;
+    
+    // Update preview button
+    if (preview) preview.style.backgroundColor = color;
+    
+    // Update icon background
+    if (icon) icon.style.backgroundColor = color;
+    
+    // Update text input
+    if (text) text.value = color.toUpperCase();
+    
+    // Update color picker
+    if (picker) picker.value = color;
+    
+    // Update color picker card background
+    const pickerCard = picker?.parentElement?.querySelector('div[style*="background-color"]');
+    if (pickerCard) pickerCard.style.backgroundColor = color;
+    
+    // Update progress bar gradient
+    updateProgressGradient();
+  }
+
+  // Update progress bar with gradient
+  function updateProgressGradient() {
+    const progressBar = document.getElementById('preview-progress');
+    if (progressBar) {
+      const primary = document.getElementById('primary-color')?.value || '#8B5CF6';
+      const secondary = document.getElementById('secondary-color')?.value || '#7C3AED';
+      const accent = document.getElementById('accent-color')?.value || '#6D28D9';
+      
+      progressBar.style.background = `linear-gradient(90deg, ${primary} 0%, ${secondary} 50%, ${accent} 100%)`;
+    }
+  }
+
+  colorInputs.forEach(({ picker, text, preview, icon }) => {
+    const pickerEl = document.getElementById(picker);
+    const textEl = document.getElementById(text);
+    const previewEl = document.getElementById(preview);
+    const iconEl = icon ? document.getElementById(icon) : null;
+
+    if (pickerEl && textEl && previewEl) {
+      // Color picker change
+      pickerEl.addEventListener('input', (e) => {
+        const color = e.target.value;
+        updateColorPreview(color, {
+          preview: previewEl,
+          icon: iconEl,
+          text: textEl,
+          picker: pickerEl
+        });
+      });
+
+      // Text input change
+      textEl.addEventListener('input', (e) => {
+        const value = e.target.value.toUpperCase();
+        textEl.value = value;
+        if (/^#[0-9A-F]{6}$/i.test(value)) {
+          updateColorPreview(value, {
+            preview: previewEl,
+            icon: iconEl,
+            text: textEl,
+            picker: pickerEl
+          });
+        }
+      });
+
+      // Update color picker card background on load
+      const pickerCard = pickerEl.parentElement?.querySelector('div[style*="background-color"]');
+      if (pickerCard) {
+        pickerCard.style.backgroundColor = pickerEl.value;
+      }
+    }
+  });
+
+  // Initialize progress gradient
+  updateProgressGradient();
+
+  // Logo upload with API
+  const logoUpload = document.getElementById('logo-upload');
+  const logoPreview = document.getElementById('logo-preview');
+  if (logoUpload && logoPreview) {
+    logoUpload.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      // Validate file size
+      if (file.size > 2 * 1024 * 1024) {
+        showNotification('Logo file size must be less than 2MB', 'error');
+        logoUpload.value = '';
+        return;
+      }
+
+      // Preview
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        logoPreview.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+
+      // Upload
+      const formData = new FormData();
+      formData.append('logo', file);
+
+      try {
+        const response = await fetch('/api/branding/logo', {
+          method: 'POST',
+          body: formData
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          showNotification('Logo uploaded successfully!', 'success');
+        } else {
+          throw new Error(result.error || 'Failed to upload logo');
+        }
+      } catch (error) {
+        console.error('Error uploading logo:', error);
+        showNotification(error.message || 'Failed to upload logo', 'error');
+        // Revert preview
+        logoPreview.src = '<%= branding.logo_path %>';
+      }
+    });
+  }
+
+  // Favicon upload with API
+  const faviconUpload = document.getElementById('favicon-upload');
+  const faviconPreview = document.getElementById('favicon-preview');
+  if (faviconUpload && faviconPreview) {
+    faviconUpload.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      // Validate file size
+      if (file.size > 500 * 1024) {
+        showNotification('Favicon file size must be less than 500KB', 'error');
+        faviconUpload.value = '';
+        return;
+      }
+
+      // Preview
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        faviconPreview.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+
+      // Upload
+      const formData = new FormData();
+      formData.append('favicon', file);
+
+      try {
+        const response = await fetch('/api/branding/favicon', {
+          method: 'POST',
+          body: formData
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          showNotification('Favicon uploaded successfully!', 'success');
+          // Update favicon in browser
+          const link = document.querySelector("link[rel*='icon']") || document.createElement('link');
+          link.type = 'image/x-icon';
+          link.rel = 'shortcut icon';
+          link.href = result.favicon_path + '?v=' + Date.now();
+          document.getElementsByTagName('head')[0].appendChild(link);
+        } else {
+          throw new Error(result.error || 'Failed to upload favicon');
+        }
+      } catch (error) {
+        console.error('Error uploading favicon:', error);
+        showNotification(error.message || 'Failed to upload favicon', 'error');
+        // Revert preview
+        faviconPreview.src = '<%= branding.favicon_path %>';
+      }
+    });
+  }
+
+  // Save branding (text fields only)
+  const brandingForm = document.getElementById('branding-form');
+  if (brandingForm) {
+    brandingForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const saveBtn = document.getElementById('save-branding-btn');
+      const originalText = saveBtn.innerHTML;
+      saveBtn.disabled = true;
+      saveBtn.innerHTML = '<i class="ti ti-loader animate-spin mr-2"></i>Saving...';
+
+      try {
+        const formData = new FormData(brandingForm);
+        
+        // Add whatsapp_number explicitly
+        const whatsappInput = document.getElementById('whatsapp-number');
+        if (whatsappInput) {
+          formData.set('whatsapp_number', whatsappInput.value);
+        }
+
+        // Add QRIS image if selected
+        const qrisInput = document.getElementById('qris-image-input');
+        if (qrisInput && qrisInput.files[0]) {
+          formData.set('qris_image', qrisInput.files[0]);
+        }
+
+        // Add show_powered_by as proper value
+        const poweredByCheckbox = document.getElementById('show-powered-by');
+        formData.set('show_powered_by', poweredByCheckbox && poweredByCheckbox.checked ? '1' : '0');
+
+        // Check if remove QRIS was requested
+        if (window._removeQris) {
+          formData.set('remove_qris', '1');
+          window._removeQris = false;
+        }
+        
+        const response = await fetch('/api/branding/update', {
+          method: 'POST',
+          body: formData
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          showNotification('Branding updated successfully! Reloading...', 'success');
+          setTimeout(() => {
+            window.location.reload();
+          }, 1500);
+        } else {
+          throw new Error(result.error || 'Failed to update branding');
+        }
+      } catch (error) {
+        console.error('Error saving branding:', error);
+        showNotification(error.message || 'Failed to save branding settings', 'error');
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = originalText;
+      }
+    });
+  }
+
+  // Remove QRIS button handler
+  window._removeQris = false;
+  const removeQrisBtn = document.getElementById('remove-qris-btn');
+  if (removeQrisBtn) {
+    removeQrisBtn.addEventListener('click', () => {
+      if (confirm('Hapus gambar QRIS? Perubahan akan disimpan saat klik Save Branding.')) {
+        window._removeQris = true;
+        removeQrisBtn.textContent = '✓ QRIS akan dihapus saat save';
+        removeQrisBtn.classList.remove('text-red-400');
+        removeQrisBtn.classList.add('text-yellow-400');
+      }
+    });
+  }
+
+  // Reset branding
+  const resetBtn = document.getElementById('reset-branding-btn');
+  if (resetBtn) {
+    resetBtn.addEventListener('click', async () => {
+      if (!confirm('Are you sure you want to reset all branding to default? This cannot be undone.')) {
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/branding/reset', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            _csrf: document.querySelector('input[name="_csrf"]').value
+          })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          showNotification('Branding reset to default! Reloading...', 'success');
+          setTimeout(() => {
+            window.location.reload();
+          }, 1500);
+        } else {
+          throw new Error(result.error || 'Failed to reset branding');
+        }
+      } catch (error) {
+        console.error('Error resetting branding:', error);
+        showNotification(error.message || 'Failed to reset branding', 'error');
+      }
+    });
+  }
+
+  // Notification helper
+  function showNotification(message, type = 'info') {
+    // Reuse existing notification system if available
+    if (typeof window.showNotification === 'function') {
+      window.showNotification(message, type);
+    } else {
+      alert(message);
+    }
+  }
+})();
+</script>

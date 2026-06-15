@@ -1,0 +1,1292 @@
+<% layout('layout') -%>
+
+<style>
+/* === ADVANCED EDITOR PRO STYLES === */
+.editor-panel {
+  background: rgba(17, 24, 39, 0.95);
+  border: 1px solid rgba(75, 85, 99, 0.5);
+  border-radius: 0.75rem;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+}
+.editor-panel:hover {
+  border-color: rgba(139, 92, 246, 0.3);
+  box-shadow: 0 0 20px rgba(139, 92, 246, 0.05);
+}
+.editor-panel-header {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgba(75, 85, 99, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.editor-panel-header h3 {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #F3F4F6;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.editor-panel-body { padding: 1rem; }
+</style>
+<style>
+.preview-canvas {
+  background: #000;
+  border-radius: 0.5rem;
+  aspect-ratio: 16/9;
+  width: 100%;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(75, 85, 99, 0.5);
+}
+.preview-canvas .placeholder {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; color: #6B7280;
+}
+
+/* Visualizer Type Cards - Pro */
+.viz-type-card {
+  padding: 0.625rem 0.25rem;
+  border-radius: 0.625rem;
+  border: 2px solid transparent;
+  background: rgba(31, 41, 55, 0.8);
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.viz-type-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(236, 72, 153, 0.1));
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.viz-type-card:hover::before { opacity: 1; }
+.viz-type-card:hover {
+  border-color: rgba(139, 92, 246, 0.5);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.15);
+}
+.viz-type-card.active {
+  border-color: #8B5CF6;
+  background: rgba(139, 92, 246, 0.15);
+  box-shadow: 0 0 16px rgba(139, 92, 246, 0.25), inset 0 0 20px rgba(139, 92, 246, 0.05);
+  transform: translateY(-1px);
+}
+.viz-type-card .icon { font-size: 1.5rem; margin-bottom: 0.25rem; }
+.viz-type-card .type-name { font-size: 0.6rem; font-weight: 500; }
+
+/* Color Swatches - Pro */
+.color-swatch {
+  width: 2rem; height: 2rem; border-radius: 50%; cursor: pointer;
+  border: 2.5px solid transparent; transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+.color-swatch::after {
+  content: ''; position: absolute; inset: -4px; border-radius: 50%;
+  border: 2px solid transparent; transition: all 0.25s;
+}
+.color-swatch:hover { transform: scale(1.2); }
+.color-swatch:hover::after { border-color: rgba(255,255,255,0.3); }
+.color-swatch.active {
+  border-color: #fff;
+  box-shadow: 0 0 12px rgba(255,255,255,0.4), 0 0 24px currentColor;
+  transform: scale(1.15);
+}
+.color-swatch.active::after { border-color: rgba(255,255,255,0.6); }
+
+/* Visualizer Live Preview - Pro */
+.viz-live-preview {
+  height: 100px;
+  background: linear-gradient(180deg, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.95) 100%);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  position: relative;
+  border: 1px solid rgba(75, 85, 99, 0.4);
+}
+.viz-live-preview::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: radial-gradient(ellipse at center bottom, rgba(139, 92, 246, 0.08) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+/* Slider Pro Styling */
+.slider-pro {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #374151 0%, #374151 100%);
+  outline: none;
+  transition: all 0.2s;
+}
+.slider-pro::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #8B5CF6, #EC4899);
+  cursor: pointer;
+  box-shadow: 0 0 8px rgba(139, 92, 246, 0.5);
+  transition: all 0.2s;
+}
+.slider-pro::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+  box-shadow: 0 0 14px rgba(139, 92, 246, 0.7);
+}
+.slider-pro:focus { box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1); }
+
+/* Editor Tab */
+.editor-tab {
+  padding: 0.5rem 1rem; font-size: 0.8rem; font-weight: 500;
+  border-bottom: 2px solid transparent; color: #9CA3AF; cursor: pointer; transition: all 0.2s;
+}
+.editor-tab:hover { color: #E5E7EB; }
+.editor-tab.active { color: #8B5CF6; border-color: #8B5CF6; }
+
+/* Step Section (matching Active Jobs) */
+.step-section {
+  padding: 0.75rem 0;
+  margin-bottom: 0.5rem;
+  transition: all 0.2s ease;
+}
+.step-section:hover { background: rgba(139, 92, 246, 0.03); }
+.step-header {
+  display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem;
+}
+.step-number {
+  width: 1.75rem; height: 1.75rem;
+  background: linear-gradient(135deg, #8B5CF6, #EC4899);
+  border-radius: 0.375rem;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.875rem; font-weight: 700; color: white; flex-shrink: 0;
+}
+.step-title h4 { font-size: 0.875rem; font-weight: 600; color: white; margin: 0; }
+.step-title p { font-size: 0.7rem; color: #9CA3AF; margin: 0.125rem 0 0 0; }
+.step-content { padding-left: 2.5rem; }
+
+/* Preset Cards */
+.preset-card {
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(75, 85, 99, 0.5);
+  background: rgba(31, 41, 55, 0.6);
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+.preset-card:hover {
+  border-color: rgba(139, 92, 246, 0.5);
+  background: rgba(139, 92, 246, 0.08);
+  transform: translateY(-1px);
+}
+.preset-card.active {
+  border-color: #8B5CF6;
+  background: rgba(139, 92, 246, 0.12);
+}
+
+/* Config Section Collapsible */
+.config-section {
+  border: 1px solid rgba(75, 85, 99, 0.3);
+  border-radius: 0.5rem;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+  transition: all 0.2s;
+}
+.config-section:hover { border-color: rgba(75, 85, 99, 0.5); }
+.config-section-header {
+  padding: 0.625rem 0.75rem;
+  background: rgba(31, 41, 55, 0.5);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: space-between;
+  transition: background 0.2s;
+}
+.config-section-header:hover { background: rgba(31, 41, 55, 0.8); }
+.config-section-body {
+  padding: 0.75rem;
+  max-height: 0; overflow: hidden;
+  transition: max-height 0.3s ease, padding 0.3s ease;
+}
+.config-section-body.open { max-height: 600px; padding: 0.75rem; }
+
+/* Glow animation for active visualizer */
+@keyframes vizGlow {
+  0%, 100% { box-shadow: 0 0 10px rgba(139, 92, 246, 0.2); }
+  50% { box-shadow: 0 0 20px rgba(139, 92, 246, 0.4); }
+}
+.viz-active-glow { animation: vizGlow 2s ease-in-out infinite; }
+
+@media (max-width: 768px) {
+  .step-content { padding-left: 0; margin-top: 0.5rem; }
+  .step-number { width: 1.5rem; height: 1.5rem; font-size: 0.75rem; }
+}
+</style>
+
+<!-- Page Header -->
+<div class="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-3">
+  <div>
+    <h2 class="text-xl md:text-2xl font-bold flex items-center gap-2">
+      <i class="ti ti-movie text-primary"></i>Advanced Editor
+    </h2>
+    <p class="text-gray-400 text-xs mt-1">Audio visualizer, watermark, overlay & advanced render</p>
+  </div>
+  <a href="/render-jobs" class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5">
+    <i class="ti ti-arrow-left text-sm"></i><span>Active Jobs</span>
+  </a>
+</div>
+
+<!-- Main Layout -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+  <!-- LEFT: Preview + Media (2/3) -->
+  <div class="lg:col-span-2 space-y-4">
+    <!-- Preview -->
+    <div class="editor-panel">
+      <div class="editor-panel-header">
+        <h3><i class="ti ti-eye text-primary"></i> Preview</h3>
+        <span id="edPreviewInfo" class="text-xs text-gray-400">No media selected</span>
+      </div>
+      <div class="editor-panel-body p-2">
+        <div class="preview-canvas">
+          <div class="placeholder" id="edPlaceholder">
+            <i class="ti ti-video text-4xl mb-2"></i>
+            <span class="text-sm">Select video & audio to preview</span>
+          </div>
+          <video id="edVideoPlayer" class="w-full h-full object-contain hidden" muted loop></video>
+          <canvas id="edVizOverlay" class="absolute bottom-0 left-0 right-0 h-24 pointer-events-none hidden"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Media Library -->
+    <div class="editor-panel">
+      <div class="editor-panel-header">
+        <h3><i class="ti ti-folders text-emerald-400"></i> Media Library</h3>
+        <div class="flex gap-1">
+          <button onclick="switchMedia('video')" id="tabVideo" class="editor-tab active"><i class="ti ti-video mr-1"></i>Videos</button>
+          <button onclick="switchMedia('audio')" id="tabAudio" class="editor-tab"><i class="ti ti-music mr-1"></i>Audio</button>
+        </div>
+      </div>
+      <div class="editor-panel-body">
+        <div class="relative mb-3">
+          <input type="text" id="mediaSearch" placeholder="Search..." class="w-full bg-dark-700 text-white px-3 py-2 pl-9 border border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary" oninput="filterMedia()">
+          <i class="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+        </div>
+        <div id="videoList" class="max-h-52 overflow-y-auto space-y-1"><div class="text-xs text-gray-400 text-center py-4">Loading...</div></div>
+        <div id="audioList" class="max-h-52 overflow-y-auto space-y-1 hidden"><div class="text-xs text-gray-400 text-center py-4">Loading...</div></div>
+        <div class="mt-3 pt-3 border-t border-gray-700 flex items-center justify-between">
+          <span class="text-xs text-gray-400"><span id="cntVideos">0</span> videos, <span id="cntAudios">0</span> audio selected</span>
+          <div class="flex gap-2">
+            <button onclick="selectAllMedia()" class="text-xs text-primary hover:text-purple-300"><i class="ti ti-checkbox mr-1"></i>All</button>
+            <button onclick="clearAll()" class="text-xs text-red-400 hover:text-red-300"><i class="ti ti-x mr-1"></i>Clear</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Render Settings (MATCHING Active Jobs Step-by-Step) -->
+    <div class="editor-panel">
+      <div class="editor-panel-header">
+        <h3><i class="ti ti-settings text-amber-400"></i> Render Settings</h3>
+      </div>
+      <div class="editor-panel-body">
+        <div class="space-y-2 md:space-y-3">
+
+          <!-- STEP 1: Basic Information -->
+          <div class="step-section">
+            <div class="step-header">
+              <div class="step-number">1</div>
+              <div class="step-title">
+                <h4>Basic Information</h4>
+                <p>Title and target channel</p>
+              </div>
+            </div>
+            <div class="step-content">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label class="text-xs font-medium text-gray-300 block mb-1.5">
+                    <i class="ti ti-text-size text-xs mr-1"></i>Video Title
+                  </label>
+                  <input type="text" id="edTitle" value="1" placeholder="Enter video title" class="w-full bg-dark-700 text-white px-3 py-2 border border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary">
+                </div>
+                <div>
+                  <label class="text-xs font-medium text-gray-300 block mb-1.5">
+                    <i class="ti ti-brand-youtube text-xs mr-1"></i>Target Channel (Optional)
+                  </label>
+                  <select id="edChannel" class="w-full bg-dark-700 text-white px-3 py-2 border border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary">
+                    <option value="">-- Select Channel --</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- STEP 2: Duration Settings -->
+          <div class="step-section">
+            <div class="step-header">
+              <div class="step-number">2</div>
+              <div class="step-title">
+                <h4>Duration Settings</h4>
+                <p>Set video length and audio options</p>
+              </div>
+            </div>
+            <div class="step-content">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- Left: Duration -->
+                <div class="space-y-3">
+                  <div class="flex items-center gap-2 mb-2">
+                    <i class="ti ti-clock text-primary"></i>
+                    <span class="text-sm font-semibold text-white">Video Duration</span>
+                  </div>
+                  <div class="grid grid-cols-2 gap-3">
+                    <div>
+                      <label class="text-xs font-medium text-gray-400 block mb-2">
+                        <i class="ti ti-clock-hour-4 text-xs mr-1"></i>Hours
+                      </label>
+                      <input type="number" id="edHours" min="0" value="0" class="w-full bg-dark-700 text-white px-3 py-2.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary text-center font-bold border border-gray-600">
+                    </div>
+                    <div>
+                      <label class="text-xs font-medium text-gray-400 block mb-2">
+                        <i class="ti ti-clock text-xs mr-1"></i>Minutes
+                      </label>
+                      <input type="number" id="edMinutes" min="0" max="59" value="0" class="w-full bg-dark-700 text-white px-3 py-2.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary text-center font-bold border border-gray-600">
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Right: Audio Options -->
+                <div class="space-y-3">
+                  <div class="flex items-center gap-2 mb-2">
+                    <i class="ti ti-settings text-primary"></i>
+                    <span class="text-sm font-semibold text-white">Audio Options</span>
+                  </div>
+                  <div class="space-y-2">
+                    <div class="bg-dark-700 rounded-lg p-3 border border-gray-600">
+                      <label class="flex items-center gap-3 cursor-pointer">
+                        <input type="checkbox" id="edFollowAudio" class="w-5 h-5 rounded border-gray-500 text-primary focus:ring-2 focus:ring-primary cursor-pointer flex-shrink-0">
+                        <div class="flex-1">
+                          <div class="flex items-center gap-2">
+                            <i class="ti ti-music text-primary text-sm"></i>
+                            <span class="text-sm font-medium text-white">Follow Audio Duration</span>
+                          </div>
+                          <p class="text-xs text-gray-400 mt-0.5">Auto-match total audio length</p>
+                        </div>
+                      </label>
+                    </div>
+                    <div class="bg-dark-700 rounded-lg p-3 border border-gray-600">
+                      <label class="flex items-center gap-3 cursor-pointer">
+                        <input type="checkbox" id="edMuteVideo" class="w-5 h-5 rounded border-gray-500 text-red-500 focus:ring-2 focus:ring-red-500 cursor-pointer flex-shrink-0">
+                        <div class="flex-1">
+                          <div class="flex items-center gap-2">
+                            <i class="ti ti-volume-off text-red-400 text-sm"></i>
+                            <span class="text-sm font-medium text-white">Mute Video Audio</span>
+                          </div>
+                          <p class="text-xs text-gray-400 mt-0.5">Remove original video audio</p>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- STEP 3: Start Render -->
+          <div class="step-section">
+            <div class="step-header">
+              <div class="step-number">3</div>
+              <div class="step-title">
+                <h4>Ready to Render!</h4>
+                <p>Start your job</p>
+              </div>
+            </div>
+            <div class="step-content">
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                <button onclick="startRender()" id="renderBtn" class="bg-gradient-to-r from-primary to-secondary hover:from-secondary hover:to-primary text-white px-2 py-2.5 md:px-4 md:py-3 rounded-lg font-semibold transition-all flex flex-col items-center justify-center gap-1 shadow-lg shadow-primary/30">
+                  <i class="ti ti-player-play text-base md:text-xl"></i>
+                  <span class="text-xs">Render</span>
+                </button>
+                <button onclick="startLoop()" id="loopBtn" class="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 px-2 py-2.5 md:px-4 md:py-3 rounded-lg font-semibold transition-all flex flex-col items-center justify-center gap-1">
+                  <i class="ti ti-repeat text-base md:text-xl"></i>
+                  <span class="text-xs">Loop</span>
+                </button>
+                <button onclick="resetForm()" class="bg-gray-700 hover:bg-gray-600 text-gray-300 px-2 py-2.5 md:px-4 md:py-3 rounded-lg font-semibold transition-all flex flex-col items-center justify-center gap-1">
+                  <i class="ti ti-eraser text-base md:text-xl"></i>
+                  <span class="text-xs">Reset</span>
+                </button>
+                <button onclick="openScheduleModal()" class="bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 px-2 py-2.5 md:px-4 md:py-3 rounded-lg font-semibold transition-all flex flex-col items-center justify-center gap-1">
+                  <i class="ti ti-clock text-base md:text-xl"></i>
+                  <span class="text-xs">Schedule</span>
+                </button>
+              </div>
+              <!-- Render Status -->
+              <div id="renderStatus" class="hidden mt-3 bg-dark-700 rounded-lg p-3 border border-gray-600">
+                <div class="flex items-center justify-between mb-1.5">
+                  <span class="text-xs text-gray-400" id="renderStatusText">Rendering...</span>
+                  <span class="text-xs text-primary font-medium" id="renderPct">0%</span>
+                </div>
+                <div class="w-full bg-gray-700 rounded-full h-1.5">
+                  <div class="bg-primary h-1.5 rounded-full transition-all" id="renderBar" style="width:0%"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: Audio Visualizer Pro (1/3) -->
+  <div class="space-y-4">
+
+    <!-- Audio Visualizer Pro -->
+    <div class="editor-panel" id="vizPanelWrapper">
+      <div class="editor-panel-header">
+        <h3><i class="ti ti-waveform text-violet-400"></i> Audio Visualizer Pro</h3>
+        <label class="relative inline-flex items-center cursor-pointer">
+          <input type="checkbox" id="vizEnabled" class="sr-only peer" onchange="toggleViz()">
+          <div class="w-10 h-5 bg-gray-600 peer-focus:ring-2 peer-focus:ring-primary rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-violet-500 peer-checked:to-pink-500"></div>
+        </label>
+      </div>
+      <div class="editor-panel-body" id="vizPanel">
+
+        <!-- Live Preview (Top) -->
+        <div class="viz-live-preview mb-4" id="vizPreviewBox">
+          <canvas id="vizCanvas" class="w-full h-full"></canvas>
+        </div>
+
+        <!-- Visualizer Type Selection -->
+        <div class="config-section">
+          <div class="config-section-header" onclick="toggleConfig(this)">
+            <span class="text-xs font-medium text-gray-300 flex items-center gap-2">
+              <i class="ti ti-category text-violet-400"></i> Visualizer Type
+            </span>
+            <i class="ti ti-chevron-down text-gray-400 text-sm transition-transform"></i>
+          </div>
+          <div class="config-section-body open">
+            <div class="grid grid-cols-4 gap-1.5" id="vizTypeGrid">
+              <div class="viz-type-card active" data-type="spectrum" onclick="pickVizType(this)"><div class="icon">📊</div><div class="type-name text-gray-300">Spectrum</div></div>
+              <div class="viz-type-card" data-type="waveform" onclick="pickVizType(this)"><div class="icon">🌊</div><div class="type-name text-gray-300">Wave</div></div>
+              <div class="viz-type-card" data-type="circular" onclick="pickVizType(this)"><div class="icon">🔵</div><div class="type-name text-gray-300">Circular</div></div>
+              <div class="viz-type-card" data-type="particles" onclick="pickVizType(this)"><div class="icon">✨</div><div class="type-name text-gray-300">Particles</div></div>
+              <div class="viz-type-card" data-type="bars_center" onclick="pickVizType(this)"><div class="icon">📶</div><div class="type-name text-gray-300">Mirror</div></div>
+              <div class="viz-type-card" data-type="wave_line" onclick="pickVizType(this)"><div class="icon">〰️</div><div class="type-name text-gray-300">Line</div></div>
+              <div class="viz-type-card" data-type="frequency_dots" onclick="pickVizType(this)"><div class="icon">⚡</div><div class="type-name text-gray-300">Dots</div></div>
+              <div class="viz-type-card" data-type="spectrogram" onclick="pickVizType(this)"><div class="icon">🌡️</div><div class="type-name text-gray-300">Heatmap</div></div>
+              <div class="viz-type-card" data-type="showcqt" onclick="pickVizType(this)"><div class="icon">🎹</div><div class="type-name text-gray-300">Piano</div></div>
+              <div class="viz-type-card" data-type="histogram" onclick="pickVizType(this)"><div class="icon">📉</div><div class="type-name text-gray-300">Histogram</div></div>
+              <div class="viz-type-card" data-type="vector_lissajous" onclick="pickVizType(this)"><div class="icon">🌀</div><div class="type-name text-gray-300">Lissajous</div></div>
+              <div class="viz-type-card" data-type="vector_polar" onclick="pickVizType(this)"><div class="icon">🎯</div><div class="type-name text-gray-300">Polar</div></div>
+              <div class="viz-type-card" data-type="bars_bottom" onclick="pickVizType(this)"><div class="icon">📈</div><div class="type-name text-gray-300">Bottom</div></div>
+              <div class="viz-type-card" data-type="phase" onclick="pickVizType(this)"><div class="icon">🔄</div><div class="type-name text-gray-300">Phase</div></div>
+              <div class="viz-type-card" data-type="nebula" onclick="pickVizType(this)"><div class="icon">🌌</div><div class="type-name text-gray-300">Nebula</div></div>
+              <div class="viz-type-card" data-type="dna_helix" onclick="pickVizType(this)"><div class="icon">🧬</div><div class="type-name text-gray-300">DNA</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Color Scheme -->
+        <div class="config-section">
+          <div class="config-section-header" onclick="toggleConfig(this)">
+            <span class="text-xs font-medium text-gray-300 flex items-center gap-2">
+              <i class="ti ti-palette text-pink-400"></i> Color Scheme
+            </span>
+            <i class="ti ti-chevron-down text-gray-400 text-sm transition-transform"></i>
+          </div>
+          <div class="config-section-body open">
+            <div class="flex flex-wrap gap-2 mb-3" id="vizColorGrid">
+              <div class="color-swatch active" data-color="purple" onclick="pickColor(this)" style="background:linear-gradient(135deg,#8B5CF6,#EC4899)" title="Purple Pink"></div>
+              <div class="color-swatch" data-color="blue" onclick="pickColor(this)" style="background:linear-gradient(135deg,#3B82F6,#06B6D4)" title="Blue Cyan"></div>
+              <div class="color-swatch" data-color="green" onclick="pickColor(this)" style="background:linear-gradient(135deg,#10B981,#34D399)" title="Green"></div>
+              <div class="color-swatch" data-color="rainbow" onclick="pickColor(this)" style="background:conic-gradient(#EF4444,#F59E0B,#10B981,#3B82F6,#8B5CF6,#EF4444)" title="Rainbow"></div>
+              <div class="color-swatch" data-color="fire" onclick="pickColor(this)" style="background:linear-gradient(135deg,#DC2626,#F59E0B)" title="Fire"></div>
+              <div class="color-swatch" data-color="neon" onclick="pickColor(this)" style="background:linear-gradient(135deg,#FF00FF,#00FFFF)" title="Neon"></div>
+              <div class="color-swatch" data-color="ocean" onclick="pickColor(this)" style="background:linear-gradient(135deg,#0EA5E9,#22D3EE)" title="Ocean"></div>
+              <div class="color-swatch" data-color="sunset" onclick="pickColor(this)" style="background:linear-gradient(135deg,#F97316,#FBBF24)" title="Sunset"></div>
+              <div class="color-swatch" data-color="gold" onclick="pickColor(this)" style="background:linear-gradient(135deg,#F59E0B,#D97706)" title="Gold"></div>
+              <div class="color-swatch" data-color="ice" onclick="pickColor(this)" style="background:linear-gradient(135deg,#93C5FD,#F0F9FF)" title="Ice"></div>
+              <div class="color-swatch" data-color="cherry" onclick="pickColor(this)" style="background:linear-gradient(135deg,#E11D48,#FB7185)" title="Cherry"></div>
+              <div class="color-swatch" data-color="forest" onclick="pickColor(this)" style="background:linear-gradient(135deg,#166534,#4ADE80)" title="Forest"></div>
+              <div class="color-swatch" data-color="aurora" onclick="pickColor(this)" style="background:linear-gradient(135deg,#06B6D4,#8B5CF6,#EC4899)" title="Aurora"></div>
+              <div class="color-swatch" data-color="midnight" onclick="pickColor(this)" style="background:linear-gradient(135deg,#1E1B4B,#4338CA,#7C3AED)" title="Midnight"></div>
+            </div>
+            <!-- Custom Color -->
+            <div class="flex items-center gap-2">
+              <label class="text-[10px] text-gray-400">Custom:</label>
+              <input type="color" id="vizCustomColor1" value="#8B5CF6" class="w-6 h-6 rounded cursor-pointer border-0 bg-transparent" onchange="applyCustomColor()">
+              <input type="color" id="vizCustomColor2" value="#EC4899" class="w-6 h-6 rounded cursor-pointer border-0 bg-transparent" onchange="applyCustomColor()">
+              <button onclick="applyCustomColor()" class="text-[10px] px-2 py-1 bg-dark-700 text-gray-300 rounded border border-gray-600 hover:border-primary">Apply</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Fine-Tuning Controls -->
+        <div class="config-section">
+          <div class="config-section-header" onclick="toggleConfig(this)">
+            <span class="text-xs font-medium text-gray-300 flex items-center gap-2">
+              <i class="ti ti-adjustments text-amber-400"></i> Fine-Tuning
+            </span>
+            <i class="ti ti-chevron-down text-gray-400 text-sm transition-transform"></i>
+          </div>
+          <div class="config-section-body open">
+            <div class="space-y-3">
+              <!-- Intensity -->
+              <div>
+                <div class="flex justify-between text-xs mb-1">
+                  <span class="text-gray-400 flex items-center gap-1"><i class="ti ti-bolt text-yellow-400"></i>Intensity</span>
+                  <span class="text-white font-medium" id="sIntVal">50%</span>
+                </div>
+                <input type="range" id="sInt" min="10" max="100" value="50" class="slider-pro" oninput="updSlider()">
+              </div>
+              <!-- Sensitivity -->
+              <div>
+                <div class="flex justify-between text-xs mb-1">
+                  <span class="text-gray-400 flex items-center gap-1"><i class="ti ti-ear text-blue-400"></i>Sensitivity</span>
+                  <span class="text-white font-medium" id="sSenVal">1.0x</span>
+                </div>
+                <input type="range" id="sSen" min="5" max="30" value="10" class="slider-pro" oninput="updSlider()">
+              </div>
+              <!-- Bar Count -->
+              <div>
+                <div class="flex justify-between text-xs mb-1">
+                  <span class="text-gray-400 flex items-center gap-1"><i class="ti ti-chart-bar text-green-400"></i>Bars</span>
+                  <span class="text-white font-medium" id="sBarVal">64</span>
+                </div>
+                <input type="range" id="sBar" min="16" max="256" step="8" value="64" class="slider-pro" oninput="updSlider()">
+              </div>
+              <!-- Smoothing -->
+              <div>
+                <div class="flex justify-between text-xs mb-1">
+                  <span class="text-gray-400 flex items-center gap-1"><i class="ti ti-wave-sine text-cyan-400"></i>Smoothing</span>
+                  <span class="text-white font-medium" id="sSmoothVal">0.8</span>
+                </div>
+                <input type="range" id="sSmooth" min="0" max="95" value="80" class="slider-pro" oninput="updSlider()">
+              </div>
+              <!-- Speed -->
+              <div>
+                <div class="flex justify-between text-xs mb-1">
+                  <span class="text-gray-400 flex items-center gap-1"><i class="ti ti-run text-orange-400"></i>Speed</span>
+                  <span class="text-white font-medium" id="sSpeedVal">1.0x</span>
+                </div>
+                <input type="range" id="sSpeed" min="5" max="30" value="10" class="slider-pro" oninput="updSlider()">
+              </div>
+              <!-- Opacity -->
+              <div>
+                <div class="flex justify-between text-xs mb-1">
+                  <span class="text-gray-400 flex items-center gap-1"><i class="ti ti-droplet text-indigo-400"></i>Opacity</span>
+                  <span class="text-white font-medium" id="sOpacVal">100%</span>
+                </div>
+                <input type="range" id="sOpac" min="20" max="100" value="100" class="slider-pro" oninput="updSlider()">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Effects & Enhancements -->
+        <div class="config-section">
+          <div class="config-section-header" onclick="toggleConfig(this)">
+            <span class="text-xs font-medium text-gray-300 flex items-center gap-2">
+              <i class="ti ti-sparkles text-rose-400"></i> Effects & Enhancements
+            </span>
+            <i class="ti ti-chevron-down text-gray-400 text-sm transition-transform"></i>
+          </div>
+          <div class="config-section-body open">
+            <div class="grid grid-cols-2 gap-2">
+              <label class="flex items-center gap-2 cursor-pointer bg-dark-700 px-2.5 py-2 rounded-lg border border-gray-600 hover:border-primary/50 transition-colors">
+                <input type="checkbox" id="vizMirror" class="w-4 h-4 rounded text-primary focus:ring-primary cursor-pointer" onchange="animPreview()">
+                <div>
+                  <span class="text-[11px] text-white font-medium">Mirror</span>
+                  <p class="text-[9px] text-gray-500">Symmetric bars</p>
+                </div>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer bg-dark-700 px-2.5 py-2 rounded-lg border border-gray-600 hover:border-primary/50 transition-colors">
+                <input type="checkbox" id="vizGlow" class="w-4 h-4 rounded text-primary focus:ring-primary cursor-pointer" onchange="animPreview()">
+                <div>
+                  <span class="text-[11px] text-white font-medium">Glow</span>
+                  <p class="text-[9px] text-gray-500">Neon glow effect</p>
+                </div>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer bg-dark-700 px-2.5 py-2 rounded-lg border border-gray-600 hover:border-primary/50 transition-colors">
+                <input type="checkbox" id="vizShadow" class="w-4 h-4 rounded text-primary focus:ring-primary cursor-pointer" onchange="animPreview()">
+                <div>
+                  <span class="text-[11px] text-white font-medium">Shadow</span>
+                  <p class="text-[9px] text-gray-500">Drop shadow</p>
+                </div>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer bg-dark-700 px-2.5 py-2 rounded-lg border border-gray-600 hover:border-primary/50 transition-colors">
+                <input type="checkbox" id="vizRoundBars" class="w-4 h-4 rounded text-primary focus:ring-primary cursor-pointer" onchange="animPreview()">
+                <div>
+                  <span class="text-[11px] text-white font-medium">Rounded</span>
+                  <p class="text-[9px] text-gray-500">Round bar caps</p>
+                </div>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer bg-dark-700 px-2.5 py-2 rounded-lg border border-gray-600 hover:border-primary/50 transition-colors">
+                <input type="checkbox" id="vizGradient" class="w-4 h-4 rounded text-primary focus:ring-primary cursor-pointer" checked onchange="animPreview()">
+                <div>
+                  <span class="text-[11px] text-white font-medium">Gradient</span>
+                  <p class="text-[9px] text-gray-500">Color gradient</p>
+                </div>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer bg-dark-700 px-2.5 py-2 rounded-lg border border-gray-600 hover:border-primary/50 transition-colors">
+                <input type="checkbox" id="vizReflection" class="w-4 h-4 rounded text-primary focus:ring-primary cursor-pointer" onchange="animPreview()">
+                <div>
+                  <span class="text-[11px] text-white font-medium">Reflection</span>
+                  <p class="text-[9px] text-gray-500">Floor reflection</p>
+                </div>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Position & Size -->
+        <div class="config-section">
+          <div class="config-section-header" onclick="toggleConfig(this)">
+            <span class="text-xs font-medium text-gray-300 flex items-center gap-2">
+              <i class="ti ti-dimensions text-teal-400"></i> Position & Size
+            </span>
+            <i class="ti ti-chevron-down text-gray-400 text-sm transition-transform"></i>
+          </div>
+          <div class="config-section-body">
+            <!-- Position -->
+            <label class="text-[10px] font-medium text-gray-400 block mb-2">Position</label>
+            <div class="grid grid-cols-3 gap-1.5 mb-3">
+              <button onclick="setVizPos('top')" class="preset-card text-[10px] text-gray-300" data-pos="top"><i class="ti ti-arrow-bar-up text-xs"></i> Top</button>
+              <button onclick="setVizPos('center')" class="preset-card text-[10px] text-gray-300" data-pos="center"><i class="ti ti-arrows-vertical text-xs"></i> Center</button>
+              <button onclick="setVizPos('bottom')" class="preset-card active text-[10px] text-gray-300" data-pos="bottom"><i class="ti ti-arrow-bar-down text-xs"></i> Bottom</button>
+              <button onclick="setVizPos('full')" class="preset-card text-[10px] text-gray-300 col-span-3" data-pos="full"><i class="ti ti-maximize text-xs"></i> Full Screen</button>
+            </div>
+            <!-- Height -->
+            <div>
+              <div class="flex justify-between text-xs mb-1">
+                <span class="text-gray-400">Height</span>
+                <span class="text-white font-medium" id="sHeightVal">25%</span>
+              </div>
+              <input type="range" id="sHeight" min="10" max="100" value="25" class="slider-pro" oninput="updSlider()">
+            </div>
+          </div>
+        </div>
+
+        <!-- Presets -->
+        <div class="config-section">
+          <div class="config-section-header" onclick="toggleConfig(this)">
+            <span class="text-xs font-medium text-gray-300 flex items-center gap-2">
+              <i class="ti ti-template text-emerald-400"></i> Quick Presets
+            </span>
+            <i class="ti ti-chevron-down text-gray-400 text-sm transition-transform"></i>
+          </div>
+          <div class="config-section-body">
+            <div class="grid grid-cols-2 gap-1.5">
+              <button onclick="applyPreset('lofi')" class="preset-card"><div class="text-sm mb-0.5">🎵</div><div class="text-[10px] text-gray-300">Lo-Fi Chill</div></button>
+              <button onclick="applyPreset('edm')" class="preset-card"><div class="text-sm mb-0.5">🎧</div><div class="text-[10px] text-gray-300">EDM Party</div></button>
+              <button onclick="applyPreset('cinematic')" class="preset-card"><div class="text-sm mb-0.5">🎬</div><div class="text-[10px] text-gray-300">Cinematic</div></button>
+              <button onclick="applyPreset('minimal')" class="preset-card"><div class="text-sm mb-0.5">⚪</div><div class="text-[10px] text-gray-300">Minimal</div></button>
+              <button onclick="applyPreset('retro')" class="preset-card"><div class="text-sm mb-0.5">👾</div><div class="text-[10px] text-gray-300">Retro Wave</div></button>
+              <button onclick="applyPreset('nature')" class="preset-card"><div class="text-sm mb-0.5">🌿</div><div class="text-[10px] text-gray-300">Nature Calm</div></button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ===== STATE =====
+const S = {
+  videos: [], audios: [], selVideos: [], selAudios: [],
+  vizType: 'spectrum', vizColor: 'purple', vizOn: false,
+  vizIntensity: 50, vizSensitivity: 1.0, vizBarCount: 64,
+  vizSmoothing: 0.8, vizSpeed: 1.0, vizOpacity: 1.0,
+  vizPosition: 'bottom', vizHeight: 25,
+  vizCustomColors: null,
+  animId: null
+};
+
+// ===== INIT =====
+document.addEventListener('DOMContentLoaded', () => {
+  loadMedia();
+  loadAccounts();
+  initViz();
+});
+
+// ===== MEDIA =====
+async function loadMedia() {
+  try {
+    const [vr, ar] = await Promise.all([
+      fetch('/api/videos').then(r=>r.json()),
+      fetch('/api/audios').then(r=>r.json())
+    ]);
+    S.videos = Array.isArray(vr) ? vr : (vr.videos||[]);
+    S.audios = Array.isArray(ar) ? ar : (ar.audios||[]);
+    renderVideos();
+    renderAudios();
+  } catch(e) { console.error(e); }
+}
+
+async function loadAccounts() {
+  try {
+    const r = await fetch('/api/youtube/accounts');
+    const d = await r.json();
+    const accs = d.accounts || d || [];
+    const sel = document.getElementById('edChannel');
+    sel.innerHTML = '<option value="">-- Select Channel --</option>';
+    accs.forEach(a => {
+      const o = document.createElement('option');
+      o.value = a.id;
+      o.textContent = a.channelName || a.channel_name || 'Channel ' + a.id;
+      sel.appendChild(o);
+    });
+  } catch(e) {}
+}
+
+function renderVideos() {
+  const c = document.getElementById('videoList');
+  if (!S.videos.length) { c.innerHTML = '<div class="text-xs text-gray-400 text-center py-4">No videos</div>'; return; }
+  c.innerHTML = S.videos.map(v => `
+    <label class="flex items-center gap-2 p-1.5 rounded hover:bg-dark-700 cursor-pointer border border-transparent hover:border-gray-600 transition-colors">
+      <input type="checkbox" name="ev" value="${v.id}" class="w-3.5 h-3.5 rounded border-gray-500 text-primary focus:ring-primary cursor-pointer" onchange="updSel()">
+      <div class="w-7 h-5 bg-dark-700 rounded overflow-hidden flex-shrink-0">${v.thumbnail_path?'<img src="'+v.thumbnail_path+'" class="w-full h-full object-cover">':'<i class="ti ti-video text-[10px] text-gray-500 flex items-center justify-center w-full h-full"></i>'}</div>
+      <div class="flex-1 min-w-0"><div class="text-[11px] text-white truncate">${esc(v.title||v.filename||'Untitled')}</div><div class="text-[9px] text-gray-500">${v.duration?fmtDur(v.duration):''} ${v.resolution||''}</div></div>
+    </label>`).join('');
+}
+
+function renderAudios() {
+  const c = document.getElementById('audioList');
+  if (!S.audios.length) { c.innerHTML = '<div class="text-xs text-gray-400 text-center py-4">No audio</div>'; return; }
+  c.innerHTML = S.audios.map(a => `
+    <label class="flex items-center gap-2 p-1.5 rounded hover:bg-dark-700 cursor-pointer border border-transparent hover:border-gray-600 transition-colors">
+      <input type="checkbox" name="ea" value="${a.id}" class="w-3.5 h-3.5 rounded border-gray-500 text-emerald-500 focus:ring-emerald-500 cursor-pointer" onchange="updSel()">
+      <i class="ti ti-music text-emerald-400 text-sm flex-shrink-0"></i>
+      <div class="flex-1 min-w-0"><div class="text-[11px] text-white truncate">${esc(a.title||a.filename||'Untitled')}</div><div class="text-[9px] text-gray-500">${a.duration?fmtDur(a.duration):''}</div></div>
+    </label>`).join('');
+}
+
+// ===== MEDIA CONTROLS =====
+function switchMedia(t) {
+  document.getElementById('videoList').classList.toggle('hidden', t!=='video');
+  document.getElementById('audioList').classList.toggle('hidden', t==='video');
+  document.getElementById('tabVideo').classList.toggle('active', t==='video');
+  document.getElementById('tabAudio').classList.toggle('active', t!=='video');
+}
+
+function updSel() {
+  S.selVideos = [...document.querySelectorAll("input[name='ev']:checked")].map(i=>i.value);
+  S.selAudios = [...document.querySelectorAll("input[name='ea']:checked")].map(i=>i.value);
+  document.getElementById('cntVideos').textContent = S.selVideos.length;
+  document.getElementById('cntAudios').textContent = S.selAudios.length;
+  document.getElementById('edPreviewInfo').textContent = S.selVideos.length+'V / '+S.selAudios.length+'A';
+  refreshPreview();
+}
+
+function selectAllMedia() {
+  const isVideo = !document.getElementById('videoList').classList.contains('hidden');
+  const name = isVideo ? 'ev' : 'ea';
+  const boxes = document.querySelectorAll("input[name='"+name+"']");
+  const allChecked = [...boxes].every(b=>b.checked);
+  boxes.forEach(b => b.checked = !allChecked);
+  updSel();
+}
+
+function clearAll() {
+  document.querySelectorAll("input[name='ev'],input[name='ea']").forEach(e=>e.checked=false);
+  updSel();
+}
+
+function filterMedia() {
+  const q = document.getElementById('mediaSearch').value.toLowerCase();
+  document.querySelectorAll('#videoList label, #audioList label').forEach(el => {
+    el.style.display = el.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+
+function refreshPreview() {
+  const player = document.getElementById('edVideoPlayer');
+  const ph = document.getElementById('edPlaceholder');
+  if (S.selVideos.length > 0) {
+    const v = S.videos.find(x => String(x.id) === S.selVideos[0]);
+    if (v && v.filepath) {
+      player.src = v.filepath;
+      player.classList.remove('hidden');
+      ph.classList.add('hidden');
+      player.play().catch(()=>{});
+      return;
+    }
+  }
+  player.classList.add('hidden');
+  ph.classList.remove('hidden');
+  player.src = '';
+}
+
+function resetForm() {
+  document.getElementById('edTitle').value = '1';
+  document.getElementById('edHours').value = 0;
+  document.getElementById('edMinutes').value = 0;
+  document.getElementById('edFollowAudio').checked = false;
+  document.getElementById('edMuteVideo').checked = false;
+  document.getElementById('edChannel').value = '';
+  clearAll();
+}
+
+function openScheduleModal() {
+  alert('Schedule feature - coming soon!');
+}
+
+// ===== CONFIG SECTION TOGGLE =====
+function toggleConfig(header) {
+  const body = header.nextElementSibling;
+  const icon = header.querySelector('.ti-chevron-down');
+  body.classList.toggle('open');
+  if (icon) icon.style.transform = body.classList.contains('open') ? 'rotate(180deg)' : '';
+}
+
+// ===== VISUALIZER =====
+function toggleViz() {
+  S.vizOn = document.getElementById('vizEnabled').checked;
+  const p = document.getElementById('vizPanel');
+  const wrapper = document.getElementById('vizPanelWrapper');
+  p.style.opacity = S.vizOn ? '1' : '0.5';
+  p.style.pointerEvents = S.vizOn ? 'auto' : 'none';
+  if (S.vizOn) {
+    wrapper.classList.add('viz-active-glow');
+  } else {
+    wrapper.classList.remove('viz-active-glow');
+  }
+  animPreview();
+}
+
+function pickVizType(el) {
+  document.querySelectorAll('#vizTypeGrid .viz-type-card').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  S.vizType = el.dataset.type;
+  animPreview();
+}
+
+function pickColor(el) {
+  document.querySelectorAll('#vizColorGrid .color-swatch').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  S.vizColor = el.dataset.color;
+  S.vizCustomColors = null;
+  animPreview();
+}
+
+function applyCustomColor() {
+  const c1 = document.getElementById('vizCustomColor1').value;
+  const c2 = document.getElementById('vizCustomColor2').value;
+  document.querySelectorAll('#vizColorGrid .color-swatch').forEach(c=>c.classList.remove('active'));
+  S.vizColor = 'custom';
+  S.vizCustomColors = [c1, c2];
+  animPreview();
+}
+
+function setVizPos(pos) {
+  S.vizPosition = pos;
+  document.querySelectorAll('[data-pos]').forEach(b => b.classList.toggle('active', b.dataset.pos === pos));
+  animPreview();
+}
+
+function updSlider() {
+  const i = document.getElementById('sInt').value;
+  const s = document.getElementById('sSen').value;
+  const b = document.getElementById('sBar').value;
+  const sm = document.getElementById('sSmooth').value;
+  const sp = document.getElementById('sSpeed').value;
+  const op = document.getElementById('sOpac').value;
+  const ht = document.getElementById('sHeight').value;
+
+  document.getElementById('sIntVal').textContent = i+'%';
+  document.getElementById('sSenVal').textContent = (s/10).toFixed(1)+'x';
+  document.getElementById('sBarVal').textContent = b;
+  document.getElementById('sSmoothVal').textContent = (sm/100).toFixed(2);
+  document.getElementById('sSpeedVal').textContent = (sp/10).toFixed(1)+'x';
+  document.getElementById('sOpacVal').textContent = op+'%';
+  document.getElementById('sHeightVal').textContent = ht+'%';
+
+  S.vizIntensity = +i;
+  S.vizSensitivity = +(s/10).toFixed(1);
+  S.vizBarCount = +b;
+  S.vizSmoothing = +(sm/100).toFixed(2);
+  S.vizSpeed = +(sp/10).toFixed(1);
+  S.vizOpacity = +(op/100).toFixed(2);
+  S.vizHeight = +ht;
+  animPreview();
+}
+
+function initViz() {
+  const p = document.getElementById('vizPanel');
+  p.style.opacity = '0.5';
+  p.style.pointerEvents = 'none';
+  animPreview();
+}
+
+// ===== PRESETS =====
+function applyPreset(name) {
+  const presets = {
+    lofi: { type:'waveform', color:'ocean', intensity:35, sensitivity:8, bars:32, smooth:90, speed:6, mirror:false, glow:true, shadow:true, round:true, gradient:true, reflection:false },
+    edm: { type:'spectrum', color:'neon', intensity:90, sensitivity:20, bars:128, smooth:50, speed:20, mirror:true, glow:true, shadow:false, round:false, gradient:true, reflection:true },
+    cinematic: { type:'bars_center', color:'gold', intensity:60, sensitivity:12, bars:48, smooth:85, speed:8, mirror:true, glow:true, shadow:true, round:true, gradient:true, reflection:true },
+    minimal: { type:'wave_line', color:'ice', intensity:30, sensitivity:10, bars:24, smooth:90, speed:7, mirror:false, glow:false, shadow:false, round:false, gradient:false, reflection:false },
+    retro: { type:'spectrum', color:'fire', intensity:75, sensitivity:15, bars:32, smooth:60, speed:12, mirror:false, glow:true, shadow:true, round:false, gradient:true, reflection:false },
+    nature: { type:'circular', color:'forest', intensity:40, sensitivity:10, bars:64, smooth:85, speed:6, mirror:false, glow:true, shadow:false, round:true, gradient:true, reflection:false }
+  };
+  const p = presets[name];
+  if (!p) return;
+
+  // Apply type
+  document.querySelectorAll('#vizTypeGrid .viz-type-card').forEach(c => {
+    c.classList.toggle('active', c.dataset.type === p.type);
+  });
+  S.vizType = p.type;
+
+  // Apply color
+  document.querySelectorAll('#vizColorGrid .color-swatch').forEach(c => {
+    c.classList.toggle('active', c.dataset.color === p.color);
+  });
+  S.vizColor = p.color;
+  S.vizCustomColors = null;
+
+  // Apply sliders
+  document.getElementById('sInt').value = p.intensity;
+  document.getElementById('sSen').value = p.sensitivity;
+  document.getElementById('sBar').value = p.bars;
+  document.getElementById('sSmooth').value = p.smooth;
+  document.getElementById('sSpeed').value = p.speed;
+
+  // Apply effects
+  document.getElementById('vizMirror').checked = p.mirror;
+  document.getElementById('vizGlow').checked = p.glow;
+  document.getElementById('vizShadow').checked = p.shadow;
+  document.getElementById('vizRoundBars').checked = p.round;
+  document.getElementById('vizGradient').checked = p.gradient;
+  document.getElementById('vizReflection').checked = p.reflection;
+
+  updSlider();
+}
+
+// ===== VISUALIZER ANIMATION ENGINE =====
+function animPreview() {
+  if (S.animId) cancelAnimationFrame(S.animId);
+  const canvas = document.getElementById('vizCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = canvas.offsetWidth * dpr;
+  canvas.height = canvas.offsetHeight * dpr;
+  ctx.scale(dpr, dpr);
+  const w = canvas.offsetWidth, h = canvas.offsetHeight;
+
+  if (!S.vizOn) {
+    ctx.clearRect(0,0,w,h);
+    ctx.fillStyle = '#374151';
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Enable visualizer to preview', w/2, h/2+4);
+    return;
+  }
+
+  const schemes = {
+    purple:['#8B5CF6','#EC4899','#A855F7'],
+    blue:['#3B82F6','#06B6D4','#0EA5E9'],
+    green:['#10B981','#34D399','#6EE7B7'],
+    rainbow:['#EF4444','#F59E0B','#10B981','#3B82F6','#8B5CF6','#EC4899'],
+    fire:['#DC2626','#F59E0B','#FCD34D'],
+    neon:['#FF00FF','#00FFFF','#39FF14'],
+    ocean:['#0EA5E9','#06B6D4','#22D3EE','#67E8F9'],
+    sunset:['#F97316','#FB923C','#FBBF24','#FDE047'],
+    gold:['#F59E0B','#D97706','#FBBF24'],
+    ice:['#93C5FD','#DBEAFE','#BAE6FD','#F0F9FF'],
+    cherry:['#E11D48','#FB7185','#FDA4AF'],
+    forest:['#166534','#4ADE80','#86EFAC'],
+    aurora:['#06B6D4','#8B5CF6','#EC4899','#F43F5E'],
+    midnight:['#1E1B4B','#4338CA','#7C3AED','#A78BFA']
+  };
+  const colors = S.vizCustomColors || schemes[S.vizColor] || schemes.purple;
+  const bc = S.vizBarCount;
+  const mirror = document.getElementById('vizMirror').checked;
+  const glow = document.getElementById('vizGlow').checked;
+  const shadow = document.getElementById('vizShadow').checked;
+  const roundBars = document.getElementById('vizRoundBars').checked;
+  const useGradient = document.getElementById('vizGradient').checked;
+  const reflection = document.getElementById('vizReflection').checked;
+  let t = 0;
+
+  function draw() {
+    ctx.clearRect(0,0,w,h);
+    ctx.globalAlpha = S.vizOpacity;
+    const int = S.vizIntensity/100;
+    const speed = S.vizSpeed;
+    const bw = w/bc;
+    const tp = S.vizType;
+
+    // Shadow setup
+    if (shadow) {
+      ctx.shadowOffsetY = 3;
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = 'rgba(0,0,0,0.5)';
+    }
+    // Glow setup
+    if (glow) {
+      ctx.shadowBlur = 12;
+      ctx.shadowColor = colors[0];
+    }
+
+    for (let i=0; i<bc; i++) {
+      const f = (i/bc)*Math.PI*2;
+      const noise1 = Math.sin(t*speed*0.4+f)*0.3;
+      const noise2 = Math.sin(t*speed*0.7+f*1.5)*0.25;
+      const noise3 = Math.cos(t*speed*0.3+f*2.1)*0.15;
+      let bH = (noise1 + noise2 + noise3 + 0.5) * h * int;
+      bH = Math.max(2, bH);
+
+      if (mirror) bH = Math.abs(Math.sin(t*speed*0.4+f) + Math.cos(t*speed*0.6+f*1.3)) * h * int * 0.5;
+
+      const x = i*bw;
+
+      // Color
+      let fillStyle;
+      if (useGradient) {
+        const grad = ctx.createLinearGradient(x, h, x, h-bH);
+        colors.forEach((c,idx) => grad.addColorStop(idx/Math.max(1,colors.length-1), c));
+        fillStyle = grad;
+      } else {
+        fillStyle = colors[i % colors.length];
+      }
+      ctx.fillStyle = fillStyle;
+
+      // Draw based on type
+      if (tp==='circular'||tp==='frequency_dots'||tp==='particles'||tp==='vector_lissajous'||tp==='vector_polar'||tp==='phase'||tp==='nebula') {
+        const cx = w/2 + Math.cos(f+t*speed*0.2) * (w*0.3) * (bH/h);
+        const cy = h/2 + Math.sin(f+t*speed*0.2) * (h*0.3) * (bH/h);
+        const r = Math.max(2, bw*0.4 * (bH/h) * 2);
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI*2);
+        ctx.fill();
+        if (glow) {
+          ctx.globalAlpha = S.vizOpacity * 0.3;
+          ctx.beginPath();
+          ctx.arc(cx, cy, r*1.5, 0, Math.PI*2);
+          ctx.fill();
+          ctx.globalAlpha = S.vizOpacity;
+        }
+      } else if (tp==='waveform'||tp==='wave_line'||tp==='dna_helix') {
+        if (i===0) ctx.beginPath();
+        const yPos = tp==='dna_helix' ? h/2 + Math.sin(t*speed*0.3+f*2)*bH*0.5 : h - bH;
+        ctx.lineTo(x+bw/2, yPos);
+        if (i===bc-1) {
+          ctx.strokeStyle = colors[0];
+          ctx.lineWidth = roundBars ? 3 : 2;
+          ctx.lineCap = roundBars ? 'round' : 'butt';
+          ctx.stroke();
+          if (tp==='dna_helix') {
+            ctx.beginPath();
+            for(let j=0;j<bc;j++){
+              const fx=(j/bc)*Math.PI*2;
+              const yy=h/2-Math.sin(t*speed*0.3+fx*2)*(((Math.sin(t*speed*0.4+fx)*0.3+Math.sin(t*speed*0.7+fx*1.5)*0.25+0.5)*h*int)*0.5);
+              if(j===0)ctx.moveTo(j*(w/bc)+bw/2,yy);else ctx.lineTo(j*(w/bc)+bw/2,yy);
+            }
+            ctx.strokeStyle = colors[colors.length-1];
+            ctx.stroke();
+          }
+        }
+      } else if (tp==='spectrogram'||tp==='showcqt') {
+        const alpha = (bH/h) * S.vizOpacity;
+        ctx.globalAlpha = alpha;
+        const colIdx = Math.floor((bH/h) * (colors.length-1));
+        ctx.fillStyle = colors[Math.min(colIdx, colors.length-1)];
+        ctx.fillRect(x, 0, bw-0.5, h);
+        ctx.globalAlpha = S.vizOpacity;
+      } else if (tp==='histogram'||tp==='bars_center') {
+        const barH = bH * 0.8;
+        if (roundBars) {
+          const radius = Math.min(3, (bw-2)/2);
+          roundRect(ctx, x+1, h/2-barH/2, bw-2, barH, radius);
+          ctx.fill();
+        } else {
+          ctx.fillRect(x+1, h/2-barH/2, bw-2, barH);
+        }
+      } else {
+        // Default: bars from bottom (spectrum, bars_bottom, etc)
+        if (roundBars) {
+          const radius = Math.min(3, (bw-2)/2);
+          roundRect(ctx, x+1, h-bH, bw-2, bH, radius);
+          ctx.fill();
+        } else {
+          ctx.fillRect(x+1, h-bH, bw-2, bH);
+        }
+        // Reflection
+        if (reflection) {
+          ctx.globalAlpha = S.vizOpacity * 0.15;
+          ctx.fillRect(x+1, h, bw-2, bH*0.4);
+          ctx.globalAlpha = S.vizOpacity;
+        }
+      }
+    }
+
+    // Reset shadow
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetY = 0;
+    ctx.globalAlpha = 1;
+
+    t += 0.04;
+    S.animId = requestAnimationFrame(draw);
+  }
+  draw();
+}
+
+// Rounded rectangle helper
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.lineTo(x+w-r, y);
+  ctx.quadraticCurveTo(x+w, y, x+w, y+r);
+  ctx.lineTo(x+w, y+h-r);
+  ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
+  ctx.lineTo(x+r, y+h);
+  ctx.quadraticCurveTo(x, y+h, x, y+h-r);
+  ctx.lineTo(x, y+r);
+  ctx.quadraticCurveTo(x, y, x+r, y);
+  ctx.closePath();
+}
+
+// ===== RENDER =====
+async function startRender() {
+  if (!S.selVideos.length) { alert('Select at least one video'); return; }
+  const h = parseInt(document.getElementById('edHours').value||0);
+  const m = parseInt(document.getElementById('edMinutes').value||0);
+  const dur = h*3600 + m*60;
+  if (dur<=0 && !document.getElementById('edFollowAudio').checked) {
+    alert('Set duration or enable Follow Audio');
+    return;
+  }
+
+  const vizSettings = S.vizOn ? {
+    type: S.vizType,
+    intensity: S.vizIntensity,
+    sensitivity: S.vizSensitivity,
+    smoothing: S.vizSmoothing,
+    barCount: S.vizBarCount,
+    color: S.vizColor,
+    customColors: S.vizCustomColors,
+    speed: S.vizSpeed,
+    opacity: S.vizOpacity,
+    position: S.vizPosition,
+    height: S.vizHeight,
+    mirror: document.getElementById('vizMirror').checked,
+    glow: document.getElementById('vizGlow').checked,
+    shadow: document.getElementById('vizShadow').checked,
+    roundBars: document.getElementById('vizRoundBars').checked,
+    gradient: document.getElementById('vizGradient').checked,
+    reflection: document.getElementById('vizReflection').checked
+  } : { type: 'none' };
+
+  const body = {
+    title: document.getElementById('edTitle').value || 'Editor Render',
+    targetDurationSeconds: dur,
+    videoIds: S.selVideos,
+    audioIds: S.selAudios,
+    followAudioDuration: document.getElementById('edFollowAudio').checked,
+    muteVideoAudio: document.getElementById('edMuteVideo').checked,
+    autoUploadToYoutube: false,
+    targetAccountId: document.getElementById('edChannel').value || null,
+    visualizerPreset: S.vizOn ? S.vizType : 'none',
+    visualizerSettings: vizSettings
+  };
+
+  const btn = document.getElementById('renderBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ti ti-loader animate-spin"></i><span class="text-xs">Starting...</span>';
+  try {
+    const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
+    const res = await fetch('/api/render/jobs', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRF-Token':csrf||''},
+      body:JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (data.success) {
+      pollStatus(data.jobId||data.id);
+    } else {
+      alert(data.message||data.error||'Failed');
+    }
+  } catch(e) { alert('Error: '+e.message); }
+  finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="ti ti-player-play text-base md:text-xl"></i><span class="text-xs">Render</span>';
+  }
+}
+
+async function startLoop() {
+  if (!S.selVideos.length) { alert('Select at least one video'); return; }
+  const loopCount = prompt('How many loops? (2-100)', '3');
+  if (!loopCount || isNaN(loopCount) || +loopCount < 2) return;
+
+  const btn = document.getElementById('loopBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ti ti-loader animate-spin"></i><span class="text-xs">...</span>';
+  try {
+    const body = {
+      title: document.getElementById('edTitle').value || 'Loop Render',
+      targetDurationSeconds: 60,
+      videoIds: S.selVideos,
+      audioIds: S.selAudios,
+      followAudioDuration: true,
+      muteVideoAudio: document.getElementById('edMuteVideo').checked,
+      autoUploadToYoutube: false,
+      targetAccountId: document.getElementById('edChannel').value || null,
+      visualizerPreset: 'none',
+      visualizerSettings: { type: 'none' }
+    };
+    const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
+    const res = await fetch('/api/render/jobs', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRF-Token':csrf||''},
+      body:JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (data.success) { pollStatus(data.jobId||data.id); }
+    else { alert(data.message||'Failed'); }
+  } catch(e) { alert('Error: '+e.message); }
+  finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="ti ti-repeat text-base md:text-xl"></i><span class="text-xs">Loop</span>';
+  }
+}
+
+function pollStatus(jobId) {
+  const status = document.getElementById('renderStatus');
+  status.classList.remove('hidden');
+  const iv = setInterval(async () => {
+    try {
+      const r = await fetch('/api/render/jobs/'+jobId);
+      const j = await r.json();
+      const p = j.progress||0;
+      document.getElementById('renderPct').textContent = p+'%';
+      document.getElementById('renderBar').style.width = p+'%';
+      document.getElementById('renderStatusText').textContent = 'Rendering... '+p+'%';
+      if (j.status==='completed') {
+        clearInterval(iv);
+        document.getElementById('renderStatusText').textContent = 'Completed!';
+        document.getElementById('renderPct').textContent = '100%';
+        document.getElementById('renderBar').style.width = '100%';
+        setTimeout(()=>status.classList.add('hidden'), 5000);
+      } else if (j.status==='failed') {
+        clearInterval(iv);
+        document.getElementById('renderStatusText').textContent = 'Failed';
+        document.getElementById('renderBar').classList.replace('bg-primary','bg-red-500');
+      }
+    } catch(e){}
+  }, 2000);
+}
+
+// ===== UTILS =====
+function esc(t) { if(!t)return''; const d=document.createElement('div'); d.textContent=t; return d.innerHTML; }
+function fmtDur(s) { if(!s)return''; const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=Math.floor(s%60); return h>0?h+':'+String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0'):m+':'+String(sec).padStart(2,'0'); }
+</script>
