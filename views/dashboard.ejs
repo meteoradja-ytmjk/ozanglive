@@ -583,7 +583,7 @@
                   <div class="flex items-center justify-between w-full">
                     <label class="text-xs text-gray-300">Loop</label>
                     <label class="relative inline-flex items-center cursor-pointer">
-                      <input type="checkbox" name="loopVideo" class="sr-only peer" checked>
+                      <input type="checkbox" id="loopVideoToggle" name="loopVideo" class="sr-only peer" checked>
                       <div class="w-11 h-6 bg-dark-700 rounded-full peer peer-checked:bg-primary"></div>
                       <div
                         class="absolute left-[2px] top-[2px] w-5 h-5 bg-white rounded-full transition-all peer-checked:translate-x-5">
@@ -592,6 +592,13 @@
                   </div>
                 </div>
               </div>
+              <p class="text-xs text-gray-500">Kosongkan <span class="text-gray-300">Jam &amp; Menit</span> dan <span class="text-gray-300">End Stream</span> agar stream berjalan tanpa batas (selamanya). Aktifkan <span class="text-gray-300">Loop</span> supaya video terus berulang.</p>
+              <p id="unlimitedLoopWarning" class="hidden text-xs text-amber-400">
+                <span class="flex items-start gap-1">
+                  <i class="ti ti-alert-triangle mt-0.5 flex-shrink-0"></i>
+                  <span>Loop nonaktif dan durasi kosong: video hanya diputar sekali lalu stream berhenti. Aktifkan Loop agar streaming berjalan selamanya.</span>
+                </span>
+              </p>
             </div>
 
             <!-- Schedule Type Selector -->
@@ -942,6 +949,13 @@
       }
       if (startTime) {
         startTime.value = '';
+      }
+
+      // Restore Loop to default ON and hide the unlimited/loop warning
+      const loopReset = document.getElementById('loopVideoToggle');
+      if (loopReset) loopReset.checked = true;
+      if (typeof window.updateUnlimitedLoopWarning === 'function') {
+        window.updateUnlimitedLoopWarning();
       }
 
       // Reset video/audio selection
@@ -1350,7 +1364,53 @@
         durationHours.classList.remove('opacity-50', 'cursor-not-allowed');
         durationMinutes.classList.remove('opacity-50', 'cursor-not-allowed');
       }
+
+      // Refresh the "unlimited + loop off" warning whenever duration/end time changes
+      if (typeof window.updateUnlimitedLoopWarning === 'function') {
+        window.updateUnlimitedLoopWarning();
+      }
     };
+
+    /**
+     * Show a warning when the stream would run unlimited (no duration + no end time)
+     * but Loop is OFF, which means the video plays only once and the stream stops.
+     */
+    window.updateUnlimitedLoopWarning = function () {
+      const durationHours = document.getElementById('streamDurationHours');
+      const durationMinutes = document.getElementById('streamDurationMinutes');
+      const endTime = document.getElementById('scheduleEndTime');
+      const loop = document.getElementById('loopVideoToggle');
+      const warning = document.getElementById('unlimitedLoopWarning');
+      if (!warning) return;
+
+      const hours = durationHours ? (parseInt(durationHours.value) || 0) : 0;
+      const minutes = durationMinutes ? (parseInt(durationMinutes.value) || 0) : 0;
+      const hasDuration = hours > 0 || minutes > 0;
+      const hasEndTime = endTime && endTime.value && endTime.value.trim() !== '';
+      const isUnlimited = !hasDuration && !hasEndTime;
+      const loopOff = loop ? !loop.checked : false;
+
+      if (isUnlimited && loopOff) {
+        warning.classList.remove('hidden');
+      } else {
+        warning.classList.add('hidden');
+      }
+    };
+
+    // Wire listeners so the warning stays in sync with Loop / duration changes
+    document.addEventListener('DOMContentLoaded', function () {
+      const loop = document.getElementById('loopVideoToggle');
+      const durationHours = document.getElementById('streamDurationHours');
+      const durationMinutes = document.getElementById('streamDurationMinutes');
+      const refresh = function () {
+        if (typeof window.updateUnlimitedLoopWarning === 'function') {
+          window.updateUnlimitedLoopWarning();
+        }
+      };
+      if (loop) loop.addEventListener('change', refresh);
+      if (durationHours) durationHours.addEventListener('input', refresh);
+      if (durationMinutes) durationMinutes.addEventListener('input', refresh);
+    });
 
     // Selected days for weekly schedule
     window.selectedDays = [];
@@ -1876,6 +1936,12 @@
 
         // Format duration using utility function (supports hours + minutes)
         const duration = formatDuration(stream.stream_duration_minutes);
+        // Unlimited = no explicit duration set (stream runs until manually stopped)
+        const hasUnlimitedDuration = !stream.stream_duration_minutes || stream.stream_duration_minutes <= 0;
+        const durationCellHtml = hasUnlimitedDuration
+          ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-500/20 text-indigo-300" title="Tanpa batas durasi - berjalan sampai dihentikan manual"><i class="ti ti-infinity"></i>Tanpa Batas</span>'
+          : `<span class="text-sm">${duration}</span>`;
+        const durationMobileText = hasUnlimitedDuration ? '∞ Tanpa Batas' : duration;
 
         // Format schedule info based on schedule type
         let scheduleInfo = '-';
@@ -1924,7 +1990,7 @@
         </div>
       </td>
       <td class="px-3 py-4 duration-cell cursor-pointer hover:bg-dark-600/50 rounded" onclick="createDurationInlineEdit(this, '${stream.id}', ${stream.stream_duration_minutes || 0})">
-        <span class="text-sm">${duration}</span>
+        ${durationCellHtml}
       </td>
       <td class="px-3 py-4">
         <div class="flex items-center flex-wrap gap-1">
@@ -1969,7 +2035,7 @@
             </span>
           </div>
           <h4 class="font-medium text-white text-sm truncate">${stream.title}</h4>
-          <p class="text-xs text-gray-400 truncate">${stream.video_title || 'No video'} • ${duration}</p>
+          <p class="text-xs text-gray-400 truncate">${stream.video_title || 'No video'} • ${durationMobileText}</p>
           ${stream.schedule_type !== 'once' ? `<p class="text-xs text-accent truncate">${scheduleTypeBadge} ${scheduleInfo}</p>` : ''}
         </div>
         <div class="flex items-center gap-1 flex-shrink-0">
@@ -2417,6 +2483,11 @@
           // Load recurring schedule data
           if (typeof loadRecurringScheduleData === 'function') {
             loadRecurringScheduleData(stream);
+          }
+
+          // Refresh unlimited/loop warning to reflect the edited stream's values
+          if (typeof window.updateUnlimitedLoopWarning === 'function') {
+            window.updateUnlimitedLoopWarning();
           }
 
           // Initialize mutual exclusion after setting values
