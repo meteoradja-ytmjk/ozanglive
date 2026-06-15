@@ -69,7 +69,7 @@ function buildTint(scheme) {
  * @returns {Object} { filterComplex, outputMap }
  */
 function compositeWithScreenBlend(vizFilter, opts) {
-  const { videoWidth, videoHeight, vizWidth, vizHeight, padX, padY, glow, opacity, colorScheme } = opts;
+  const { videoWidth, videoHeight, vizWidth, vizHeight, padX, padY, glow, opacity, colorScheme, fps = 30 } = opts;
   
   // Apply opacity by darkening the visualizer (since screen blend additive,
   // less bright = less effect on output)
@@ -79,13 +79,21 @@ function compositeWithScreenBlend(vizFilter, opts) {
   
   const blurFilter = glow ? ',gblur=sigma=2' : '';
   
+  // CRITICAL FIX: screen blend math (1-(1-a)*(1-b)) is only correct in RGB.
+  // We therefore convert BOTH inputs to planar RGB (gbrp) before blending so the
+  // visualizer's black background (0,0,0) stays truly transparent and bright
+  // pixels add correctly. Doing the blend in the video's native yuv420p makes the
+  // black background's neutral chroma (128) wash out the frame and the visualizer
+  // becomes invisible. We also force matching size/SAR/fps so blend never fails
+  // (a size or SAR mismatch makes blend error out and the render silently falls
+  // back to a no-visualizer output).
   const filters = [
-    // Generate visualizer at its natural size, apply color tinting and effects
-    `[1:a]${vizFilter},${buildTint(colorScheme)}${blurFilter}${opacityFilter}[vizraw]`,
-    // Pad to full video size with black background at desired position
-    `[vizraw]pad=${videoWidth}:${videoHeight}:${padX}:${padY}:black[vizpad]`,
-    // Blend with video using SCREEN mode (black becomes transparent)
-    `[0:v][vizpad]blend=all_mode=screen[outv]`
+    // Normalize base video: exact size, square pixels, constant fps, RGB
+    `[0:v]fps=${fps},scale=${videoWidth}:${videoHeight},setsar=1,format=gbrp[base]`,
+    // Generate visualizer, tint + effects, pad to full frame (black bg), match base
+    `[1:a]${vizFilter},${buildTint(colorScheme)}${blurFilter}${opacityFilter},pad=${videoWidth}:${videoHeight}:${padX}:${padY}:black,setsar=1,format=gbrp[viz]`,
+    // Screen blend in RGB space (black transparent), then back to yuv420p for h264
+    `[base][viz]blend=all_mode=screen:shortest=1,format=yuv420p[outv]`
   ];
 
   return { filterComplex: filters.join(';'), outputMap: '[outv]' };
@@ -264,20 +272,21 @@ function buildVisualizerFilter(settings, options = {}) {
  * Center bars needs special handling: build mirror from top half then vstack
  */
 function buildCenterBarsComposite(opts) {
-  const { videoWidth, videoHeight, vizWidth, vizHeight, padX, padY, halfHE, winSize, glow, opacity, colorScheme, fps } = opts;
+  const { videoWidth, videoHeight, vizWidth, vizHeight, padX, padY, halfHE, winSize, glow, opacity, colorScheme, fps = 30 } = opts;
   
   const opacityFilter = opacity < 1.0 
     ? `,colorchannelmixer=rr=${(opacity).toFixed(2)}:gg=${(opacity).toFixed(2)}:bb=${(opacity).toFixed(2)}`
     : '';
   const blurFilter = glow ? ',gblur=sigma=2' : '';
 
+  // Same RGB-space screen blend approach as compositeWithScreenBlend (see notes there).
   const filters = [
+    `[0:v]fps=${fps},scale=${videoWidth}:${videoHeight},setsar=1,format=gbrp[base]`,
     `[1:a]showfreqs=s=${vizWidth}x${halfHE}:mode=bar:fscale=log:ascale=log:win_size=${winSize},fps=${fps}[viz_top]`,
     `[viz_top]split[viz_a][viz_b]`,
     `[viz_b]vflip[viz_flip]`,
-    `[viz_a][viz_flip]vstack,${buildTint(colorScheme)}${blurFilter}${opacityFilter}[vizraw]`,
-    `[vizraw]pad=${videoWidth}:${videoHeight}:${padX}:${padY}:black[vizpad]`,
-    `[0:v][vizpad]blend=all_mode=screen[outv]`
+    `[viz_a][viz_flip]vstack,${buildTint(colorScheme)}${blurFilter}${opacityFilter},pad=${videoWidth}:${videoHeight}:${padX}:${padY}:black,setsar=1,format=gbrp[viz]`,
+    `[base][viz]blend=all_mode=screen:shortest=1,format=yuv420p[outv]`
   ];
 
   return { filterComplex: filters.join(';'), outputMap: '[outv]' };
