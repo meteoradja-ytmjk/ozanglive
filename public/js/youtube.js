@@ -41,9 +41,19 @@ function toggleConnectedAccounts() {
 }
 
 // Toggle OAuth Section (main form) - Hidden by default
-function toggleOAuthSection() {
+function toggleOAuthSection(event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  
+  console.log('[OAuth] Toggle function called');
+  
   const oauthSection = document.getElementById('oauthSection');
   const chevron = document.getElementById('oauthSectionChevron');
+  
+  console.log('[OAuth] oauthSection:', oauthSection);
+  console.log('[OAuth] chevron:', chevron);
   
   if (!oauthSection || !chevron) {
     console.error('[OAuth] Elements not found!');
@@ -51,20 +61,30 @@ function toggleOAuthSection() {
   }
   
   const isHidden = oauthSection.classList.contains('hidden');
+  console.log('[OAuth] isHidden:', isHidden);
   
   if (isHidden) {
     // Expand
     oauthSection.classList.remove('hidden');
     chevron.style.transform = 'rotate(90deg)';
+    console.log('[OAuth] Expanded');
   } else {
     // Collapse
     oauthSection.classList.add('hidden');
     chevron.style.transform = 'rotate(0deg)';
+    console.log('[OAuth] Collapsed');
   }
 }
 
 // Toggle OAuth Section (modal)
-function toggleOAuthSectionModal() {
+function toggleOAuthSectionModal(event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  
+  console.log('[OAuth Modal] Toggle function called');
+  
   const oauthSection = document.getElementById('oauthSectionModal');
   const chevron = document.getElementById('oauthSectionModalChevron');
   
