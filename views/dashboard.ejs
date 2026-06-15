@@ -1936,12 +1936,15 @@
 
         // Format duration using utility function (supports hours + minutes)
         const duration = formatDuration(stream.stream_duration_minutes);
-        // Unlimited = no explicit duration set (stream runs until manually stopped)
-        const hasUnlimitedDuration = !stream.stream_duration_minutes || stream.stream_duration_minutes <= 0;
-        const durationCellHtml = hasUnlimitedDuration
+        // Unlimited badge only shown for 'once' schedule without explicit duration
+        // Daily/Weekly have recurring context, so no need for unlimited badge
+        const isOnceSchedule = !stream.schedule_type || stream.schedule_type === 'once';
+        const hasNoDuration = !stream.stream_duration_minutes || stream.stream_duration_minutes <= 0;
+        const showUnlimitedBadge = isOnceSchedule && hasNoDuration;
+        const durationCellHtml = showUnlimitedBadge
           ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-500/20 text-indigo-300" title="Tanpa batas durasi - berjalan sampai dihentikan manual"><i class="ti ti-infinity"></i>Tanpa Batas</span>'
           : `<span class="text-sm">${duration}</span>`;
-        const durationMobileText = hasUnlimitedDuration ? '∞ Tanpa Batas' : duration;
+        const durationMobileText = showUnlimitedBadge ? '∞ Tanpa Batas' : duration;
 
         // Format schedule info based on schedule type
         let scheduleInfo = '-';
