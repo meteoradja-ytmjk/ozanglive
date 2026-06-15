@@ -40,6 +40,52 @@ function toggleConnectedAccounts() {
   console.log('[Collapsible] Toggle complete');
 }
 
+// Toggle OAuth Section (main form) - Hidden by default
+function toggleOAuthSection() {
+  const oauthSection = document.getElementById('oauthSection');
+  const chevron = document.getElementById('oauthSectionChevron');
+  
+  if (!oauthSection || !chevron) {
+    console.error('[OAuth] Elements not found!');
+    return;
+  }
+  
+  const isHidden = oauthSection.classList.contains('hidden');
+  
+  if (isHidden) {
+    // Expand
+    oauthSection.classList.remove('hidden');
+    chevron.style.transform = 'rotate(90deg)';
+  } else {
+    // Collapse
+    oauthSection.classList.add('hidden');
+    chevron.style.transform = 'rotate(0deg)';
+  }
+}
+
+// Toggle OAuth Section (modal)
+function toggleOAuthSectionModal() {
+  const oauthSection = document.getElementById('oauthSectionModal');
+  const chevron = document.getElementById('oauthSectionModalChevron');
+  
+  if (!oauthSection || !chevron) {
+    console.error('[OAuth Modal] Elements not found!');
+    return;
+  }
+  
+  const isHidden = oauthSection.classList.contains('hidden');
+  
+  if (isHidden) {
+    // Expand
+    oauthSection.classList.remove('hidden');
+    chevron.style.transform = 'rotate(90deg)';
+  } else {
+    // Collapse
+    oauthSection.classList.add('hidden');
+    chevron.style.transform = 'rotate(0deg)';
+  }
+}
+
 // Escape HTML to prevent XSS
 function escapeHtml(text) {
   if (!text) return '';
