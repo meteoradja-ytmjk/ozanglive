@@ -20,6 +20,8 @@ const runFfmpeg = (configure, { onProgress, estimatedDurationSec } = {}) => new 
   const cmd = configure(ffmpeg());
   let progressEmitted = false;
   let lastProgress = 0;
+  let lastCommand = '';
+  const stderrLines = [];
   if (typeof onProgress === 'function') {
     cmd.on('progress', (p) => {
       progressEmitted = true;
@@ -32,13 +34,28 @@ const runFfmpeg = (configure, { onProgress, estimatedDurationSec } = {}) => new 
       }
     });
   }
+  cmd.on('start', (commandLine) => {
+    lastCommand = commandLine;
+  });
+  cmd.on('stderr', (line) => {
+    // Keep a rolling buffer of the last stderr lines for diagnostics on failure
+    stderrLines.push(line);
+    if (stderrLines.length > 40) stderrLines.shift();
+  });
   cmd.on('end', () => {
     // If no progress was emitted (stream-copy), emit completion
     if (!progressEmitted && typeof onProgress === 'function') {
       onProgress({ timemark: '99:99:99', percent: 100, _synthetic: true });
     }
     resolve();
-  }).on('error', reject).run();
+  }).on('error', (err) => {
+    // Surface the actual FFmpeg command + stderr so silent fallbacks are debuggable
+    if (lastCommand) console.error('[FFmpeg] Failed command:', lastCommand);
+    if (stderrLines.length) console.error('[FFmpeg] stderr tail:\n' + stderrLines.join('\n'));
+    err.ffmpegCommand = lastCommand;
+    err.ffmpegStderr = stderrLines.join('\n');
+    reject(err);
+  }).run();
 });
 
 const ffprobeAsync = (filePath) => new Promise((resolve, reject) => {
