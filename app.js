@@ -2185,7 +2185,7 @@ app.post('/api/users/delete', isAdmin, async (req, res) => {
 
 app.post('/api/users/update', isAdmin, upload.single('avatar'), async (req, res) => {
   try {
-    const { userId, username, role, status, password, live_limit, storage_limit, expiry_date, whatsapp_number } = req.body;
+    const { userId, username, role, status, password, live_limit, storage_limit } = req.body;
 
     if (!userId) {
       return res.status(400).json({
@@ -2226,32 +2226,6 @@ app.post('/api/users/update', isAdmin, upload.single('avatar'), async (req, res)
       updateData.storage_limit = (isNaN(parsedStorageLimit) || parsedStorageLimit <= 0) ? null : parsedStorageLimit;
     }
 
-    // Handle expiry_date - store as ISO date string or null
-    if (expiry_date !== undefined) {
-      updateData.expiry_date = expiry_date && expiry_date.trim() !== '' ? expiry_date : null;
-    }
-
-    // Handle whatsapp_number - clean and store
-    if (whatsapp_number !== undefined) {
-      // Remove non-numeric chars except + at start
-      let cleanNumber = whatsapp_number.trim();
-      if (cleanNumber) {
-        cleanNumber = cleanNumber.replace(/[^\d+]/g, '');
-        // Ensure starts with country code
-        if (cleanNumber && !cleanNumber.startsWith('+')) {
-          // Assume Indonesia if no country code
-          if (cleanNumber.startsWith('0')) {
-            cleanNumber = '+62' + cleanNumber.substring(1);
-          } else if (cleanNumber.startsWith('62')) {
-            cleanNumber = '+' + cleanNumber;
-          } else {
-            cleanNumber = '+62' + cleanNumber;
-          }
-        }
-      }
-      updateData.whatsapp_number = cleanNumber || null;
-    }
-
     if (password && password.trim() !== '') {
       const bcrypt = require('bcrypt');
       updateData.password = await bcrypt.hash(password, 10);
@@ -2279,7 +2253,7 @@ app.post('/api/users/update', isAdmin, upload.single('avatar'), async (req, res)
 
 app.post('/api/users/create', isAdmin, upload.single('avatar'), async (req, res) => {
   try {
-    const { username, role, status, password, expiry_date, whatsapp_number } = req.body;
+    const { username, role, status, password } = req.body;
 
     // Username validation regex - only allow letters, numbers, and underscores
     const VALID_USERNAME_REGEX = /^[a-zA-Z0-9_]+$/;
@@ -2320,29 +2294,12 @@ app.post('/api/users/create', isAdmin, upload.single('avatar'), async (req, res)
       avatarPath = `/uploads/avatars/${req.file.filename}`;
     }
 
-    // Handle whatsapp_number - clean and store
-    let cleanWhatsapp = null;
-    if (whatsapp_number && whatsapp_number.trim()) {
-      cleanWhatsapp = whatsapp_number.trim().replace(/[^\d+]/g, '');
-      if (cleanWhatsapp && !cleanWhatsapp.startsWith('+')) {
-        if (cleanWhatsapp.startsWith('0')) {
-          cleanWhatsapp = '+62' + cleanWhatsapp.substring(1);
-        } else if (cleanWhatsapp.startsWith('62')) {
-          cleanWhatsapp = '+' + cleanWhatsapp;
-        } else {
-          cleanWhatsapp = '+62' + cleanWhatsapp;
-        }
-      }
-    }
-
     const userData = {
       username: username,
       password: password,
       user_role: role || 'member',
       status: status || 'active',
-      avatar_path: avatarPath,
-      expiry_date: expiry_date && expiry_date.trim() !== '' ? expiry_date : null,
-      whatsapp_number: cleanWhatsapp
+      avatar_path: avatarPath
     };
 
     const result = await User.create(userData);

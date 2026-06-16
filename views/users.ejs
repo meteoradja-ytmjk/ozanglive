@@ -37,16 +37,6 @@
         <option value="inactive">Inactive</option>
       </select>
     </div>
-    <div class="w-40">
-      <select id="expiryFilter" 
-        class="w-full bg-dark-700 border border-gray-600 text-white px-3 py-2.5 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
-        <option value="">All Expiry</option>
-        <option value="expired">Expired</option>
-        <option value="soon">Expiring Soon (7 days)</option>
-        <option value="month">Within 30 days</option>
-        <option value="noexpiry">No Expiry</option>
-      </select>
-    </div>
   </div>
 </div>
 
@@ -58,8 +48,6 @@
           <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">User</th>
           <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Role</th>
           <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Status</th>
-          <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Expiry</th>
-          <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">WhatsApp</th>
           <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Video</th>
           <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Streaming</th>
           <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Actions</th>
@@ -73,8 +61,6 @@
                 data-role="<%= user.user_role %>" 
                 data-status="<%= user.status %>"
                 data-user-id="<%= user.id %>"
-                data-expiry-date="<%= user.expiry_date || '' %>"
-                data-whatsapp="<%= user.whatsapp_number || '' %>"
                 data-can-view="<%= user.can_view_videos !== undefined ? user.can_view_videos : 1 %>"
                 data-can-download="<%= user.can_download_videos !== undefined ? user.can_download_videos : 1 %>"
                 data-can-delete="<%= user.can_delete_videos !== undefined ? user.can_delete_videos : 1 %>">
@@ -110,52 +96,6 @@
                 </span>
               </td>
               <td class="px-6 py-4 whitespace-nowrap">
-                <% 
-                  let expiryClass = 'text-gray-400';
-                  let expiryText = 'No expiry';
-                  let expiryIcon = 'ti-infinity';
-                  if (user.expiry_date) {
-                    const expiry = new Date(user.expiry_date);
-                    const now = new Date();
-                    const diffDays = Math.ceil((expiry - now) / (1000 * 60 * 60 * 24));
-                    expiryText = expiry.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
-                    if (diffDays < 0) {
-                      expiryClass = 'text-red-400';
-                      expiryIcon = 'ti-alert-circle';
-                      expiryText += ' (Expired)';
-                    } else if (diffDays <= 7) {
-                      expiryClass = 'text-yellow-400';
-                      expiryIcon = 'ti-alert-triangle';
-                      expiryText += ' (' + diffDays + ' hari)';
-                    } else if (diffDays <= 30) {
-                      expiryClass = 'text-orange-400';
-                      expiryIcon = 'ti-clock';
-                      expiryText += ' (' + diffDays + ' hari)';
-                    } else {
-                      expiryClass = 'text-green-400';
-                      expiryIcon = 'ti-calendar-check';
-                    }
-                  }
-                %>
-                <div class="flex items-center <%= expiryClass %>">
-                  <i class="ti <%= expiryIcon %> mr-1.5"></i>
-                  <span class="text-sm"><%= expiryText %></span>
-                </div>
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap">
-                <% if (user.whatsapp_number) { %>
-                  <a href="https://wa.me/<%= user.whatsapp_number.replace('+', '') %>" 
-                     target="_blank"
-                     class="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-green-600/20 text-green-400 hover:bg-green-600/40 transition-colors"
-                     title="Chat via WhatsApp">
-                    <i class="ti ti-brand-whatsapp mr-1"></i>
-                    <span><%= user.whatsapp_number %></span>
-                  </a>
-                <% } else { %>
-                  <span class="text-gray-500 text-sm">-</span>
-                <% } %>
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap">
                 <div class="flex items-center gap-2 cursor-pointer hover:bg-gray-700/30 rounded p-1 -m-1" data-user-id="<%= user.id %>" data-username="<%= user.username %>" onclick="showVideoModal(this)">
                   <i class="ti ti-video text-gray-400"></i>
                   <span class="text-sm text-gray-400"><%= user.videoCount || 0 %> video</span>
@@ -177,19 +117,18 @@
                   </div>
                 </div>
               </td>
-              </td>
             </tr>
           <% }); %>
         <% } else { %>
           <tr id="defaultEmptyState">
-            <td colspan="8" class="px-6 py-8 text-center text-gray-400">
+            <td colspan="6" class="px-6 py-8 text-center text-gray-400">
               <i class="ti ti-users text-4xl mb-2"></i>
               <p>No users found</p>
             </td>
           </tr>
         <% } %>
         <tr id="searchEmptyState" class="hidden">
-          <td colspan="8" class="px-6 py-8 text-center text-gray-400">
+          <td colspan="6" class="px-6 py-8 text-center text-gray-400">
             <i class="ti ti-search-off text-4xl mb-2"></i>
             <p>No users match your search criteria</p>
             <p class="text-sm mt-1">Try adjusting your filters or search terms</p>
@@ -290,36 +229,6 @@
             <input type="password" id="editPassword" name="password" placeholder="Leave empty to keep current password"
               class="w-full bg-dark-700 border border-gray-600 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
           </div>
-
-          <!-- Expiry Date & WhatsApp Section -->
-          <div class="border-t border-gray-600/50 pt-4 mt-4">
-            <h4 class="text-sm font-medium text-gray-300 mb-4 flex items-center">
-              <i class="ti ti-calendar-event mr-2 text-primary"></i>
-              Subscription Info
-            </h4>
-            
-            <div class="mb-4">
-              <label for="editExpiryDate" class="block text-sm font-medium text-gray-300 mb-2">
-                Masa Aktif (Expiry Date)
-                <span class="text-xs text-gray-500 ml-1">(kosong = tidak ada batas)</span>
-              </label>
-              <input type="date" id="editExpiryDate" name="expiry_date"
-                class="w-full bg-dark-700 border border-gray-600 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
-              <p class="text-xs text-gray-500 mt-1">Tanggal berakhir masa aktif akun user</p>
-            </div>
-
-            <div class="mb-4">
-              <label for="editWhatsapp" class="block text-sm font-medium text-gray-300 mb-2">
-                <i class="ti ti-brand-whatsapp text-green-400 mr-1"></i>
-                Nomor WhatsApp
-              </label>
-              <div class="relative">
-                <input type="text" id="editWhatsapp" name="whatsapp_number" placeholder="08123456789 atau +628123456789"
-                  class="w-full bg-dark-700 border border-gray-600 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
-              </div>
-              <p class="text-xs text-gray-500 mt-1">Untuk follow-up perpanjangan masa aktif</p>
-            </div>
-          </div>
         </form>
       </div>
       
@@ -395,34 +304,6 @@
             <label for="createPassword" class="block text-sm font-medium text-gray-300 mb-2">Password</label>
             <input type="password" id="createPassword" name="password" required placeholder="Enter password"
               class="w-full bg-dark-700 border border-gray-600 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
-          </div>
-
-          <!-- Expiry Date & WhatsApp Section -->
-          <div class="border-t border-gray-600/50 pt-4 mt-4">
-            <h4 class="text-sm font-medium text-gray-300 mb-4 flex items-center">
-              <i class="ti ti-calendar-event mr-2 text-primary"></i>
-              Subscription Info
-            </h4>
-            
-            <div class="mb-4">
-              <label for="createExpiryDate" class="block text-sm font-medium text-gray-300 mb-2">
-                Masa Aktif (Expiry Date)
-                <span class="text-xs text-gray-500 ml-1">(opsional)</span>
-              </label>
-              <input type="date" id="createExpiryDate" name="expiry_date"
-                class="w-full bg-dark-700 border border-gray-600 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
-              <p class="text-xs text-gray-500 mt-1">Tanggal berakhir masa aktif akun user</p>
-            </div>
-
-            <div class="mb-4">
-              <label for="createWhatsapp" class="block text-sm font-medium text-gray-300 mb-2">
-                <i class="ti ti-brand-whatsapp text-green-400 mr-1"></i>
-                Nomor WhatsApp
-              </label>
-              <input type="text" id="createWhatsapp" name="whatsapp_number" placeholder="08123456789 atau +628123456789"
-                class="w-full bg-dark-700 border border-gray-600 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
-              <p class="text-xs text-gray-500 mt-1">Untuk follow-up perpanjangan masa aktif</p>
-            </div>
           </div>
         </form>
       </div>
@@ -584,18 +465,12 @@ function showToast(message, type = 'success') {
   }, 3000);
 }
 
-function openEditModal(userId, username, role, status, avatar, liveLimit, storageLimit, expiryDate, whatsapp) {
+function openEditModal(userId, username, role, status, avatar, liveLimit, storageLimit) {
   document.getElementById('editUserId').value = userId;
   document.getElementById('editUsername').value = username;
   document.getElementById('editRole').value = role;
   document.getElementById('editStatus').value = status;
   document.getElementById('editPassword').value = '';
-  
-  // Handle expiry date
-  document.getElementById('editExpiryDate').value = expiryDate || '';
-  
-  // Handle WhatsApp number
-  document.getElementById('editWhatsapp').value = whatsapp || '';
   
   // Handle live limit based on role
   updateLiveLimitUI(role, liveLimit);
@@ -661,8 +536,6 @@ function openCreateModal() {
   document.getElementById('createPassword').value = '';
   document.getElementById('createUserAvatar').src = '/images/default-avatar.jpg';
   document.getElementById('createAvatarInput').value = '';
-  document.getElementById('createExpiryDate').value = '';
-  document.getElementById('createWhatsapp').value = '';
   
   const modal = document.getElementById('createModal');
   const modalContent = document.getElementById('createModalContent');
@@ -691,8 +564,8 @@ function closeCreateModal() {
   }, 200);
 }
 
-function editUser(userId, username, role, status, avatarPath, liveLimit, storageLimit, expiryDate, whatsapp) {
-  openEditModal(userId, username, role, status, avatarPath, liveLimit, storageLimit, expiryDate, whatsapp);
+function editUser(userId, username, role, status, avatarPath, liveLimit, storageLimit) {
+  openEditModal(userId, username, role, status, avatarPath, liveLimit, storageLimit);
 }
 
 // Event delegation for edit and delete buttons
@@ -716,9 +589,7 @@ document.addEventListener('DOMContentLoaded', function() {
       const avatar = this.dataset.avatar;
       const liveLimit = this.dataset.liveLimit;
       const storageLimit = this.dataset.storageLimit;
-      const expiryDate = this.dataset.expiryDate;
-      const whatsapp = this.dataset.whatsapp;
-      openEditModal(userId, username, role, status, avatar, liveLimit, storageLimit, expiryDate, whatsapp);
+      openEditModal(userId, username, role, status, avatar, liveLimit, storageLimit);
     });
   });
   
@@ -908,54 +779,29 @@ document.getElementById('confirmButton').addEventListener('click', confirmAction
 document.getElementById('searchInput').addEventListener('input', filterUsers);
 document.getElementById('roleFilter').addEventListener('change', filterUsers);
 document.getElementById('statusFilter').addEventListener('change', filterUsers);
-document.getElementById('expiryFilter').addEventListener('change', filterUsers);
 
 function filterUsers() {
   const searchTerm = document.getElementById('searchInput').value.toLowerCase();
   const roleFilter = document.getElementById('roleFilter').value;
   const statusFilter = document.getElementById('statusFilter').value;
-  const expiryFilter = document.getElementById('expiryFilter').value;
   
   const rows = document.querySelectorAll('.user-row');
   const defaultEmptyState = document.getElementById('defaultEmptyState');
   const searchEmptyState = document.getElementById('searchEmptyState');
   
   let visibleCount = 0;
-  const hasFilters = searchTerm || roleFilter || statusFilter || expiryFilter;
-  const now = new Date();
+  const hasFilters = searchTerm || roleFilter || statusFilter;
   
   rows.forEach(row => {
     const username = row.dataset.username;
     const role = row.dataset.role;
     const status = row.dataset.status;
-    const expiryDate = row.dataset.expiryDate;
     
     const matchesSearch = username.includes(searchTerm);
     const matchesRole = !roleFilter || role === roleFilter;
     const matchesStatus = !statusFilter || status === statusFilter;
     
-    // Check expiry filter
-    let matchesExpiry = true;
-    if (expiryFilter) {
-      if (expiryFilter === 'noexpiry') {
-        matchesExpiry = !expiryDate;
-      } else if (expiryDate) {
-        const expiry = new Date(expiryDate);
-        const diffDays = Math.ceil((expiry - now) / (1000 * 60 * 60 * 24));
-        
-        if (expiryFilter === 'expired') {
-          matchesExpiry = diffDays < 0;
-        } else if (expiryFilter === 'soon') {
-          matchesExpiry = diffDays >= 0 && diffDays <= 7;
-        } else if (expiryFilter === 'month') {
-          matchesExpiry = diffDays >= 0 && diffDays <= 30;
-        }
-      } else {
-        matchesExpiry = false;
-      }
-    }
-    
-    if (matchesSearch && matchesRole && matchesStatus && matchesExpiry) {
+    if (matchesSearch && matchesRole && matchesStatus) {
       row.style.display = '';
       visibleCount++;
     } else {

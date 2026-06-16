@@ -67,15 +67,15 @@ class User {
       
       return new Promise((resolve, reject) => {
         db.run(
-          'INSERT INTO users (id, username, password, avatar_path, user_role, status, storage_limit, live_limit, expiry_date, whatsapp_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-          [userId, userData.username, hashedPassword, userData.avatar_path || null, userData.user_role || 'admin', userData.status || 'active', defaultStorageLimit, liveLimit, userData.expiry_date || null, userData.whatsapp_number || null],
+          'INSERT INTO users (id, username, password, avatar_path, user_role, status, storage_limit, live_limit) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          [userId, userData.username, hashedPassword, userData.avatar_path || null, userData.user_role || 'admin', userData.status || 'active', defaultStorageLimit, liveLimit],
           function (err) {
             if (err) {
               console.error("DB error during user creation:", err);
               return reject(err);
             }
             console.log("User created successfully with ID:", userId);
-            resolve({ id: userId, username: userData.username, user_role: userData.user_role || 'admin', status: userData.status || 'active', storage_limit: defaultStorageLimit, live_limit: liveLimit, expiry_date: userData.expiry_date || null, whatsapp_number: userData.whatsapp_number || null });
+            resolve({ id: userId, username: userData.username, user_role: userData.user_role || 'admin', status: userData.status || 'active', storage_limit: defaultStorageLimit, live_limit: liveLimit });
           }
         );
       });
@@ -315,16 +315,6 @@ class User {
       if (updateData.storage_limit !== undefined) {
         fields.push('storage_limit = ?');
         values.push(updateData.storage_limit);
-      }
-
-      if (updateData.expiry_date !== undefined) {
-        fields.push('expiry_date = ?');
-        values.push(updateData.expiry_date);
-      }
-
-      if (updateData.whatsapp_number !== undefined) {
-        fields.push('whatsapp_number = ?');
-        values.push(updateData.whatsapp_number);
       }
       
       if (fields.length === 0) {
