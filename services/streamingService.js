@@ -26,7 +26,7 @@ const streamLogs = new Map();
 const streamRetryCount = new Map();
 // IMPROVED: For unlimited streams (once without duration), allow infinite retries
 // For timed streams, use standard retry limit
-const MAX_RETRY_ATTEMPTS = 5; // Increased from 3 for timed streams
+const MAX_RETRY_ATTEMPTS = 20; // Generous CONSECUTIVE-failure budget for timed streams (resets to 0 on each successful reconnect)
 const MAX_RETRY_ATTEMPTS_UNLIMITED = 999; // Virtually infinite for unlimited streams
 const manuallyStoppingStreams = new Set();
 const MAX_LOG_LINES = 50; // OPTIMIZED: Reduced from 100 to 50 to save memory
@@ -295,7 +295,7 @@ async function checkStreamProcessHealth() {
           
           // Check if stream still has remaining duration - if so, attempt reconnect
           const remainingMs = getOriginalRemainingMs(streamId);
-          const shouldReconnect = remainingMs === null || remainingMs > 60000; // null = unlimited, or > 1 min remaining
+          const shouldReconnect = remainingMs === null || remainingMs > 15000; // null = unlimited, or > 15s remaining
           
           if (shouldReconnect && !manuallyStoppingStreams.has(streamId)) {
             console.log(`[ProcessHealthCheck] Stream ${streamId}: Attempting auto-reconnect (remaining: ${remainingMs ? (remainingMs / 60000).toFixed(1) + ' min' : 'unlimited'})`);
@@ -1551,13 +1551,29 @@ async function startStream(streamId) {
         return;
       }
       
-      // For SIGSEGV or error exits, check if duration is close to being exceeded
-      // If remaining time is less than 1 minute, don't restart
-      // BUT for unlimited streams, always restart
+      // Decide whether the stream should keep running after this (unexpected) exit.
+      // The user wants the actual end-live time to match the duration they configured,
+      // so ANY early exit (clean or error) must reconnect while time still remains.
       const remainingTime = getRemainingTime(streamId);
       const streamData = await Stream.findById(streamId);
       const isUnlimited = isUnlimitedStream(streamData);
-      const shouldNotRestart = !isUnlimited && remainingTime !== null && remainingTime < 60000; // Less than 1 minute
+
+      // Authoritative remaining time: anchored to the ORIGINAL start time + full
+      // configured duration, so it stays correct across multiple reconnect cycles.
+      // Falls back to the live duration-info value if original timing isn't tracked.
+      const originalRemainingMs = getOriginalRemainingMs(streamId);
+      const effectiveRemainingMs = (originalRemainingMs !== null) ? originalRemainingMs : remainingTime;
+
+      // Below this we treat the stream as genuinely finished. Reconnecting in the final
+      // seconds adds no value and risks a connect/disconnect flap right at the end.
+      const RECONNECT_MIN_REMAINING_MS = 15000; // 15 seconds
+
+      // Keep running if unlimited, or if a finite duration still has meaningful time left.
+      const streamShouldKeepRunning = isUnlimited
+        || (effectiveRemainingMs !== null && effectiveRemainingMs > RECONNECT_MIN_REMAINING_MS);
+
+      // Legacy flag used by the SIGSEGV / error branches below.
+      const shouldNotRestart = !streamShouldKeepRunning;
       
       if (signal === 'SIGSEGV') {
         if (shouldNotRestart) {
@@ -1703,27 +1719,57 @@ async function startStream(streamId) {
           }
         }
         
-        // Normal exit (code 0) - this could be FFmpeg -t parameter working correctly
-        // For unlimited streams with code 0, this means video ended (if not looping) - restart it
-        if (code === 0 && isUnlimited) {
-          console.log(`[StreamingService] Unlimited stream ${streamId} ended with code 0, restarting...`);
-          addStreamLog(streamId, `Unlimited stream ended normally, restarting automatically`);
-          clearDurationInfo(streamId);
-          setTimeout(async () => {
-            try {
-              const streamInfo = await Stream.findById(streamId);
-              if (streamInfo && streamInfo.status === 'live') {
-                const result = await startStream(streamId);
-                if (result.success) {
-                  console.log(`[StreamingService] Unlimited stream ${streamId} restarted successfully`);
-                  streamRetryCount.set(streamId, 0);
+        // Normal exit (code 0). FFmpeg's -t makes it exit 0 exactly when the configured
+        // duration is reached (that genuine end is already handled by the durationExceeded
+        // check at the top of this handler). If we reach here with code 0 but the stream
+        // SHOULD still be running, FFmpeg stopped early (RTMP/YouTube closed the connection,
+        // input read ended, a -stream_loop boundary glitch, etc.). We MUST reconnect so the
+        // real end-live time matches the duration the user configured. This applies to BOTH
+        // unlimited streams AND timed streams (Once/Daily/Weekly) that still have time left.
+        if (code === 0 && streamShouldKeepRunning) {
+          const retryCount = streamRetryCount.get(streamId) || 0;
+          const maxRetries = getMaxRetryAttempts(streamData);
+          if (retryCount < maxRetries) {
+            streamRetryCount.set(streamId, retryCount + 1);
+            const remainingLabel = isUnlimited
+              ? 'unlimited'
+              : `${(effectiveRemainingMs / 60000).toFixed(1)} min remaining`;
+            console.log(`[StreamingService] Stream ${streamId} exited early (code 0) but should keep running (${remainingLabel}). Reconnecting #${retryCount + 1}...`);
+            addStreamLog(streamId, `Stopped early (code 0) but ${remainingLabel} - auto-reconnecting #${retryCount + 1}`);
+            // Preserve original timing so the reconnect uses the correct remaining duration.
+            clearDurationInfo(streamId);
+            const backoffDelay = isUnlimited
+              ? Math.min(3000 + (retryCount * 2000), 30000)
+              : 3000;
+            setTimeout(async () => {
+              try {
+                const streamInfo = await Stream.findById(streamId);
+                if (streamInfo && streamInfo.status === 'live') {
+                  const result = await startStream(streamId);
+                  if (result.success) {
+                    console.log(`[StreamingService] Stream ${streamId} reconnected successfully after early exit`);
+                    streamRetryCount.set(streamId, 0);
+                  } else {
+                    console.error(`[StreamingService] Failed to reconnect stream ${streamId} after early exit: ${result.error}`);
+                    // Give up only after exhausting the consecutive-failure budget.
+                    if ((streamRetryCount.get(streamId) || 0) >= getMaxRetryAttempts(streamInfo)) {
+                      const newStatus = getStatusAfterStreamEnd(streamInfo);
+                      await Stream.updateStatus(streamId, newStatus, streamInfo.user_id);
+                      clearOriginalTiming(streamId);
+                    }
+                  }
+                } else {
+                  // No longer live (e.g. manually stopped meanwhile) - clean up timing.
+                  clearOriginalTiming(streamId);
                 }
+              } catch (error) {
+                console.error(`[StreamingService] Error reconnecting stream ${streamId} after early exit: ${error.message}`);
               }
-            } catch (error) {
-              console.error(`[StreamingService] Error restarting unlimited stream: ${error.message}`);
-            }
-          }, 3000);
-          return;
+            }, backoffDelay);
+            return;
+          }
+          console.error(`[StreamingService] Stream ${streamId} exited early (code 0) but max reconnect attempts (${maxRetries}) reached - giving up`);
+          addStreamLog(streamId, `Max reconnect attempts reached after early exit, stopping`);
         }
         
         if (code === 0) {

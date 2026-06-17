@@ -17,15 +17,20 @@ const { calculateDurationSeconds } = require('../utils/durationCalculator');
 const HEALTH_CHECK_INTERVAL_MS = 1 * 60 * 1000;
 
 // Maximum consecutive failures before giving up (timed streams)
-const MAX_CONSECUTIVE_FAILURES = 5;
+// The monitor checks once a minute and resets this counter on every successful
+// reconnect, so this is the number of consecutive minutes a timed stream may stay
+// down before we stop trying. Kept high so long streams (e.g. 5h) survive repeated
+// drops and still honor their configured end time.
+const MAX_CONSECUTIVE_FAILURES = 30;
 // For unlimited streams, allow many more failures before giving up
 const MAX_CONSECUTIVE_FAILURES_UNLIMITED = 100;
 
 // Reconnect delay: 3 seconds base, with exponential backoff for unlimited
 const RECONNECT_DELAY_MS = 3 * 1000;
 
-// Minimum remaining time to attempt reconnect (2 minutes) - only for timed streams
-const MIN_REMAINING_TIME_FOR_RECONNECT_MS = 2 * 60 * 1000;
+// Minimum remaining time to attempt reconnect - only for timed streams.
+// Reconnecting in the final seconds adds no value, so we stop just before the end.
+const MIN_REMAINING_TIME_FOR_RECONNECT_MS = 15 * 1000;
 
 class RTMPHealthMonitor {
   constructor() {
