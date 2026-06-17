@@ -125,6 +125,9 @@
                   <button type="button" class="flex items-center gap-1 hover:text-white transition-colors" data-user-id="<%= user.id %>" data-username="<%= user.username %>" onclick="showVideoModal(this)" title="Lihat video">
                     <i class="ti ti-video"></i><%= user.videoCount || 0 %>
                   </button>
+                  <button type="button" class="flex items-center gap-1 hover:text-white transition-colors" data-user-id="<%= user.id %>" data-username="<%= user.username %>" onclick="showAudioModal(this)" title="Lihat audio">
+                    <i class="ti ti-music"></i><%= user.audioCount || 0 %>
+                  </button>
                   <button type="button" class="flex items-center gap-1 hover:text-white transition-colors" data-user-id="<%= user.id %>" data-username="<%= user.username %>" onclick="showStreamModal(this)" title="Lihat stream">
                     <i class="ti ti-broadcast"></i><%= user.activeStreamCount || 0 %>/<%= user.live_limit || user.defaultLiveLimit || 1 %>
                   </button>
@@ -217,6 +220,13 @@
               <button type="button" class="text-gray-300 flex items-center gap-1" data-user-id="<%= user.id %>" data-username="<%= user.username %>" onclick="showVideoModal(this)">
                 <i class="ti ti-video text-gray-500"></i><%= user.videoCount || 0 %>
                 <span class="text-gray-500"><%= user.totalVideoSize || '0 B' %></span>
+              </button>
+            </div>
+            <div>
+              <p class="text-gray-500 mb-0.5">Audio</p>
+              <button type="button" class="text-gray-300 flex items-center gap-1" data-user-id="<%= user.id %>" data-username="<%= user.username %>" onclick="showAudioModal(this)">
+                <i class="ti ti-music text-gray-500"></i><%= user.audioCount || 0 %>
+                <span class="text-gray-500"><%= user.totalAudioSize || '0 B' %></span>
               </button>
             </div>
             <div>
@@ -528,25 +538,47 @@
 
 <div id="videoModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 opacity-0 pointer-events-none transition-opacity duration-300">
   <div class="flex items-center justify-center min-h-screen p-4">
-    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-2xl border border-gray-600/50 transform transition-transform duration-300 scale-95" id="videoModalContent">
-      <div class="flex items-center justify-between p-4 border-b border-gray-600/50">
-        <div class="flex items-center">
-          <h3 class="text-lg font-medium" id="videoModalTitle">Video Collection</h3>
-        </div>
+    <div class="bg-dark-800 rounded-xl shadow-xl w-full max-w-2xl border border-gray-700/50 transform transition-transform duration-300 scale-95" id="videoModalContent">
+      <div class="flex items-center justify-between px-5 py-4 border-b border-gray-700/50">
+        <h3 class="text-base font-semibold" id="videoModalTitle">Media</h3>
         <button onclick="closeVideoModal()" class="rounded-full w-8 h-8 flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700/50 transition-colors">
           <i class="ti ti-x"></i>
         </button>
       </div>
-      
-      <div class="p-6 max-h-96 overflow-y-auto">
-        <div id="videoList" class="space-y-3">
+
+      <!-- Tabs -->
+      <div class="flex px-5 gap-1 border-b border-gray-700/50">
+        <button id="mediaTabVideo" onclick="switchMediaTab('video')"
+          class="media-tab px-3 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors text-primary border-primary">
+          <i class="ti ti-video mr-1.5"></i>Video<span id="mediaVideoCount" class="ml-1.5 text-xs text-gray-500"></span>
+        </button>
+        <button id="mediaTabAudio" onclick="switchMediaTab('audio')"
+          class="media-tab px-3 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors text-gray-400 border-transparent hover:text-white">
+          <i class="ti ti-music mr-1.5"></i>Audio<span id="mediaAudioCount" class="ml-1.5 text-xs text-gray-500"></span>
+        </button>
+      </div>
+
+      <div class="p-4 max-h-[60vh] overflow-y-auto">
+        <div id="mediaLoading" class="hidden items-center justify-center p-10">
+          <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
         </div>
+
+        <div id="videoList" class="space-y-2"></div>
         <div id="videoEmptyState" class="text-center py-12 hidden">
-          <div class="w-16 h-16 bg-gray-600/30 rounded-full flex items-center justify-center mx-auto mb-4">
-            <i class="ti ti-video-off text-2xl text-gray-400"></i>
+          <div class="w-14 h-14 bg-gray-700/40 rounded-full flex items-center justify-center mx-auto mb-3">
+            <i class="ti ti-video-off text-2xl text-gray-500"></i>
           </div>
-          <h4 class="text-lg font-medium text-gray-300 mb-2">No Videos Found</h4>
-          <p class="text-gray-400 text-sm">This user hasn't uploaded any videos yet.</p>
+          <p class="text-gray-300 font-medium">Belum ada video</p>
+          <p class="text-gray-500 text-sm">User ini belum mengunggah video.</p>
+        </div>
+
+        <div id="audioList" class="space-y-2 hidden"></div>
+        <div id="audioEmptyState" class="text-center py-12 hidden">
+          <div class="w-14 h-14 bg-gray-700/40 rounded-full flex items-center justify-center mx-auto mb-3">
+            <i class="ti ti-music-off text-2xl text-gray-500"></i>
+          </div>
+          <p class="text-gray-300 font-medium">Belum ada audio</p>
+          <p class="text-gray-500 text-sm">User ini belum mengunggah audio.</p>
         </div>
       </div>
     </div>
@@ -582,6 +614,8 @@
 let currentAction = null;
 let currentVideoModalUserId = null;
 let currentVideoModalUsername = '';
+let currentMediaTab = 'video';
+let mediaLoaded = { video: false, audio: false };
 
 // Set expired date input to 30 days from now (YYYY-MM-DD)
 function dateIn30Days() {
@@ -1032,83 +1066,175 @@ function filterUsers() {
 }
 
 function showVideoModal(element) {
+  openMediaModal(element, 'video');
+}
+
+function showAudioModal(element) {
+  openMediaModal(element, 'audio');
+}
+
+function openMediaModal(element, tab) {
   currentVideoModalUserId = element.dataset.userId;
   currentVideoModalUsername = element.dataset.username;
-  
+  mediaLoaded = { video: false, audio: false };
+
+  document.getElementById('videoModalTitle').textContent = `Media — ${currentVideoModalUsername}`;
+  document.getElementById('mediaVideoCount').textContent = '';
+  document.getElementById('mediaAudioCount').textContent = '';
+
   const modal = document.getElementById('videoModal');
-  const title = document.getElementById('videoModalTitle');
-  
-  title.textContent = `Videos by ${currentVideoModalUsername}`;
-  
   modal.classList.remove('opacity-0', 'pointer-events-none');
   modal.querySelector('.bg-dark-800').classList.remove('scale-95');
-  
-  loadMemberVideos();
+
+  switchMediaTab(tab || 'video');
+}
+
+function switchMediaTab(tab) {
+  currentMediaTab = tab;
+  const videoTab = document.getElementById('mediaTabVideo');
+  const audioTab = document.getElementById('mediaTabAudio');
+  const videoList = document.getElementById('videoList');
+  const audioList = document.getElementById('audioList');
+  const videoEmpty = document.getElementById('videoEmptyState');
+  const audioEmpty = document.getElementById('audioEmptyState');
+
+  const active = 'text-primary border-primary';
+  const inactive = 'text-gray-400 border-transparent hover:text-white';
+
+  if (tab === 'video') {
+    videoTab.className = 'media-tab px-3 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ' + active;
+    audioTab.className = 'media-tab px-3 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ' + inactive;
+    videoList.classList.remove('hidden');
+    audioList.classList.add('hidden');
+    audioEmpty.classList.add('hidden');
+    if (!mediaLoaded.video) { loadMemberVideos(); }
+    else { videoEmpty.classList.toggle('hidden', videoList.children.length > 0); }
+  } else {
+    audioTab.className = 'media-tab px-3 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ' + active;
+    videoTab.className = 'media-tab px-3 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ' + inactive;
+    audioList.classList.remove('hidden');
+    videoList.classList.add('hidden');
+    videoEmpty.classList.add('hidden');
+    if (!mediaLoaded.audio) { loadMemberAudios(); }
+    else { audioEmpty.classList.toggle('hidden', audioList.children.length > 0); }
+  }
 }
 
 function renderMemberVideos(videos) {
   const videoList = document.getElementById('videoList');
   const emptyState = document.getElementById('videoEmptyState');
-  
+  document.getElementById('mediaVideoCount').textContent = videos && videos.length ? `(${videos.length})` : '';
+
   if (videos && videos.length > 0) {
-    videoList.innerHTML = videos.map(video => `
-      <div class="flex items-center justify-between p-4 bg-dark-700 rounded-lg border border-gray-600/50 hover:bg-dark-600/50 transition-colors">
-        <div class="flex items-center space-x-4">
-          <div class="w-16 h-12 bg-gray-600 rounded-lg overflow-hidden flex-shrink-0">
-            ${video.thumbnail_path ? 
-              `<img src="${video.thumbnail_path}" alt="${video.title || video.filename}" class="w-full h-full object-cover" onerror="this.onerror=null; this.parentElement.innerHTML='<i class=\'ti ti-video text-gray-400 text-lg\' style=\'display: flex; align-items: center; justify-content: center; height: 100%;\' ></i>';">` :
-              `<i class="ti ti-video text-gray-400 text-lg" style="display: flex; align-items: center; justify-content: center; height: 100%;"></i>`
-            }
-          </div>
-          <div class="flex-1 min-w-0">
-            <p class="text-white font-medium truncate">${video.title || video.filename}</p>
-            <div class="flex items-center space-x-2 mt-1">
-              <p class="text-gray-400 text-sm">${formatDate(video.created_at)}</p>
-              <span class="text-gray-500">•</span>
-              <p class="text-gray-400 text-sm">${formatDuration(video.duration)}</p>
-            </div>
-          </div>
+    videoList.innerHTML = videos.map(video => {
+      const name = video.title || video.filename || 'Untitled';
+      const safe = name.replace(/'/g, "\\'");
+      const thumb = video.thumbnail_path
+        ? `<img src="${video.thumbnail_path}" alt="" class="w-full h-full object-cover" onerror="this.onerror=null;this.parentElement.innerHTML='<i class=\\'ti ti-video text-gray-500\\'></i>';">`
+        : `<i class="ti ti-video text-gray-500"></i>`;
+      return `
+      <div class="flex items-center gap-3 p-2.5 rounded-lg hover:bg-dark-700/60 transition-colors">
+        <div class="w-14 h-10 bg-dark-700 rounded-md overflow-hidden flex-shrink-0 flex items-center justify-center">${thumb}</div>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm text-white truncate">${name}</p>
+          <p class="text-xs text-gray-500 mt-0.5">${formatDuration(video.duration)} · ${formatFileSize(video.file_size)}</p>
         </div>
-        <div class="flex items-center gap-2 flex-shrink-0">
-          <span class="inline-flex px-2.5 py-1 text-xs font-medium rounded-md bg-primary/20 text-accent border border-primary/30">
-            ${formatFileSize(video.file_size)}
-          </span>
-          <button onclick="playMemberVideo('${video.id}', '${(video.title || video.filename).replace(/'/g, "\\'")}')" 
-            class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white text-sm font-medium rounded-lg transition-colors" title="Play">
-            <i class="ti ti-player-play"></i>
-            <span>Play</span>
-          </button>
-          <button onclick="deleteMemberVideo('${video.id}', '${(video.title || video.filename).replace(/'/g, "\\'")}')"
-            class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white text-sm font-medium rounded-lg transition-colors" title="Delete">
-            <i class="ti ti-trash"></i>
-            <span>Delete</span>
-          </button>
+        <div class="flex items-center gap-1 flex-shrink-0">
+          <button onclick="playMemberVideo('${video.id}', '${safe}')" class="w-8 h-8 flex items-center justify-center text-green-400 hover:bg-green-500/10 rounded-lg transition-colors" title="Play"><i class="ti ti-player-play"></i></button>
+          <button onclick="deleteMemberVideo('${video.id}', '${safe}')" class="w-8 h-8 flex items-center justify-center text-red-400 hover:bg-red-500/10 rounded-lg transition-colors" title="Delete"><i class="ti ti-trash"></i></button>
         </div>
-      </div>
-    `).join('');
+      </div>`;
+    }).join('');
     emptyState.classList.add('hidden');
   } else {
     videoList.innerHTML = '';
-    emptyState.classList.remove('hidden');
+    if (currentMediaTab === 'video') emptyState.classList.remove('hidden');
+  }
+}
+
+function renderMemberAudios(audios) {
+  const audioList = document.getElementById('audioList');
+  const emptyState = document.getElementById('audioEmptyState');
+  document.getElementById('mediaAudioCount').textContent = audios && audios.length ? `(${audios.length})` : '';
+
+  if (audios && audios.length > 0) {
+    audioList.innerHTML = audios.map(audio => {
+      const name = audio.title || audio.filename || 'Untitled';
+      const safe = name.replace(/'/g, "\\'");
+      const src = (audio.filepath || '').replace(/'/g, "\\'");
+      return `
+      <div class="flex items-center gap-3 p-2.5 rounded-lg hover:bg-dark-700/60 transition-colors">
+        <div class="w-10 h-10 bg-primary/15 rounded-md flex-shrink-0 flex items-center justify-center"><i class="ti ti-music text-primary"></i></div>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm text-white truncate">${name}</p>
+          <p class="text-xs text-gray-500 mt-0.5">${formatDuration(audio.duration)} · ${formatFileSize(audio.file_size)}</p>
+        </div>
+        <div class="flex items-center gap-1 flex-shrink-0">
+          <button onclick="playMemberAudio('${audio.id}', '${safe}', '${src}')" class="w-8 h-8 flex items-center justify-center text-green-400 hover:bg-green-500/10 rounded-lg transition-colors" title="Play"><i class="ti ti-player-play"></i></button>
+          <button onclick="deleteMemberAudio('${audio.id}', '${safe}')" class="w-8 h-8 flex items-center justify-center text-red-400 hover:bg-red-500/10 rounded-lg transition-colors" title="Delete"><i class="ti ti-trash"></i></button>
+        </div>
+      </div>`;
+    }).join('');
+    emptyState.classList.add('hidden');
+  } else {
+    audioList.innerHTML = '';
+    if (currentMediaTab === 'audio') emptyState.classList.remove('hidden');
   }
 }
 
 function loadMemberVideos() {
   const videoList = document.getElementById('videoList');
-  videoList.innerHTML = '<div class="flex items-center justify-center p-8"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div></div>';
-  
+  const loading = document.getElementById('mediaLoading');
+  document.getElementById('videoEmptyState').classList.add('hidden');
+  videoList.innerHTML = '';
+  loading.classList.remove('hidden');
+  loading.classList.add('flex');
+
   fetch(`/api/users/${currentVideoModalUserId}/videos`)
     .then(response => response.json())
     .then(data => {
+      loading.classList.add('hidden');
+      loading.classList.remove('flex');
+      mediaLoaded.video = true;
       if (data.success) {
         renderMemberVideos(data.videos || []);
       } else {
-        document.getElementById('videoList').innerHTML = '<p class="text-red-400 text-center">Failed to load videos</p>';
+        videoList.innerHTML = '<p class="text-red-400 text-center py-6">Gagal memuat video</p>';
       }
     })
     .catch(error => {
       console.error('Error fetching videos:', error);
-      document.getElementById('videoList').innerHTML = '<p class="text-red-400 text-center">Error loading videos</p>';
+      loading.classList.add('hidden');
+      loading.classList.remove('flex');
+      videoList.innerHTML = '<p class="text-red-400 text-center py-6">Error memuat video</p>';
+    });
+}
+
+function loadMemberAudios() {
+  const audioList = document.getElementById('audioList');
+  const loading = document.getElementById('mediaLoading');
+  document.getElementById('audioEmptyState').classList.add('hidden');
+  audioList.innerHTML = '';
+  loading.classList.remove('hidden');
+  loading.classList.add('flex');
+
+  fetch(`/api/users/${currentVideoModalUserId}/audios`)
+    .then(response => response.json())
+    .then(data => {
+      loading.classList.add('hidden');
+      loading.classList.remove('flex');
+      mediaLoaded.audio = true;
+      if (data.success) {
+        renderMemberAudios(data.audios || []);
+      } else {
+        audioList.innerHTML = '<p class="text-red-400 text-center py-6">Gagal memuat audio</p>';
+      }
+    })
+    .catch(error => {
+      console.error('Error fetching audios:', error);
+      loading.classList.add('hidden');
+      loading.classList.remove('flex');
+      audioList.innerHTML = '<p class="text-red-400 text-center py-6">Error memuat audio</p>';
     });
 }
 
@@ -1135,6 +1261,64 @@ function deleteMemberVideo(videoId, videoTitle) {
         .catch(error => {
           console.error('Error deleting member video:', error);
           showToast(error.message || 'Failed to delete video', 'error');
+        });
+    }
+  );
+}
+
+function playMemberAudio(audioId, audioTitle, src) {
+  const modal = document.createElement('div');
+  modal.className = 'fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4';
+  modal.id = 'audio-player-modal';
+  modal.innerHTML = `
+    <div class="relative w-full max-w-md mx-auto">
+      <div class="bg-dark-800 rounded-xl overflow-hidden shadow-xl border border-gray-700/50">
+        <div class="flex items-center justify-between px-5 py-4 border-b border-gray-700/50">
+          <h3 class="text-base font-medium truncate pr-3">${audioTitle}</h3>
+          <button id="close-audio-player-btn" class="rounded-full w-8 h-8 flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700/50 flex-shrink-0">
+            <i class="ti ti-x"></i>
+          </button>
+        </div>
+        <div class="p-6 flex flex-col items-center gap-4">
+          <div class="w-20 h-20 rounded-full bg-primary/15 flex items-center justify-center">
+            <i class="ti ti-music text-primary text-3xl"></i>
+          </div>
+          <audio id="native-audio-player" class="w-full" controls autoplay>
+            <source src="${src}">
+          </audio>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  const close = () => { const a = document.getElementById('native-audio-player'); if (a) a.pause(); modal.remove(); };
+  document.getElementById('close-audio-player-btn').onclick = close;
+  modal.onclick = (e) => { if (e.target === modal) close(); };
+}
+
+function deleteMemberAudio(audioId, audioTitle) {
+  showConfirmModal(
+    'Delete Audio',
+    `Are you sure you want to delete "${audioTitle}" from ${currentVideoModalUsername}?`,
+    () => {
+      fetch(`/api/audios/${audioId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      })
+        .then(response => response.json())
+        .then(data => {
+          if (!data.success) {
+            throw new Error(data.error || 'Failed to delete audio');
+          }
+          showToast('Audio deleted successfully', 'success');
+          mediaLoaded.audio = false;
+          loadMemberAudios();
+          setTimeout(() => window.location.reload(), 500);
+        })
+        .catch(error => {
+          console.error('Error deleting member audio:', error);
+          showToast(error.message || 'Failed to delete audio', 'error');
         });
     }
   );

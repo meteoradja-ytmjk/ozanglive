@@ -1986,7 +1986,7 @@ app.get('/users', isAdmin, async (req, res) => {
 
       const audioStats = await new Promise((resolve, reject) => {
         db.get(
-          `SELECT COALESCE(SUM(file_size), 0) as totalSize FROM audios WHERE user_id = ?`,
+          `SELECT COUNT(*) as count, COALESCE(SUM(file_size), 0) as totalSize FROM audios WHERE user_id = ?`,
           [user.id],
           (err, row) => {
             if (err) reject(err);
@@ -2031,6 +2031,8 @@ app.get('/users', isAdmin, async (req, res) => {
         ...user,
         videoCount: videoStats.count,
         totalVideoSize: videoStats.totalSize > 0 ? formatFileSize(videoStats.totalSize) : null,
+        audioCount: audioStats.count,
+        totalAudioSize: audioStats.totalSize > 0 ? formatFileSize(audioStats.totalSize) : null,
         streamCount: streamStats.count,
         activeStreamCount: activeStreamStats.count,
         defaultLiveLimit: defaultLiveLimit,
@@ -2350,6 +2352,17 @@ app.get('/api/users/:id/videos', isAdmin, async (req, res) => {
   } catch (error) {
     console.error('Get user videos error:', error);
     res.status(500).json({ success: false, message: 'Failed to get user videos' });
+  }
+});
+
+app.get('/api/users/:id/audios', isAdmin, async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const audios = await Audio.findAll(userId);
+    res.json({ success: true, audios });
+  } catch (error) {
+    console.error('Get user audios error:', error);
+    res.status(500).json({ success: false, message: 'Failed to get user audios' });
   }
 });
 
@@ -6705,7 +6718,7 @@ app.delete('/api/audios/:id', isAuthenticated, canDeleteVideos, async (req, res)
     if (!audio) {
       return res.status(404).json({ success: false, error: 'Audio not found' });
     }
-    if (audio.user_id !== req.session.userId) {
+    if (audio.user_id !== req.session.userId && req.user.user_role !== 'admin') {
       return res.status(403).json({ success: false, error: 'Not authorized' });
     }
     await Audio.delete(audioId);
