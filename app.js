@@ -2185,7 +2185,7 @@ app.post('/api/users/delete', isAdmin, async (req, res) => {
 
 app.post('/api/users/update', isAdmin, upload.single('avatar'), async (req, res) => {
   try {
-    const { userId, username, role, status, password, live_limit, storage_limit } = req.body;
+    const { userId, username, role, status, password, live_limit, storage_limit, expired_at, whatsapp_number } = req.body;
 
     if (!userId) {
       return res.status(400).json({
@@ -2226,6 +2226,17 @@ app.post('/api/users/update', isAdmin, upload.single('avatar'), async (req, res)
       updateData.storage_limit = (isNaN(parsedStorageLimit) || parsedStorageLimit <= 0) ? null : parsedStorageLimit;
     }
 
+    // Handle expired_at - empty string means clear (no expiry)
+    if (expired_at !== undefined) {
+      updateData.expired_at = (expired_at && expired_at.trim() !== '') ? expired_at : null;
+    }
+
+    // Handle whatsapp_number - normalize digits, empty means clear
+    if (whatsapp_number !== undefined) {
+      const normalized = String(whatsapp_number).replace(/[^0-9]/g, '');
+      updateData.whatsapp_number = normalized !== '' ? normalized : null;
+    }
+
     if (password && password.trim() !== '') {
       const bcrypt = require('bcrypt');
       updateData.password = await bcrypt.hash(password, 10);
@@ -2253,7 +2264,7 @@ app.post('/api/users/update', isAdmin, upload.single('avatar'), async (req, res)
 
 app.post('/api/users/create', isAdmin, upload.single('avatar'), async (req, res) => {
   try {
-    const { username, role, status, password } = req.body;
+    const { username, role, status, password, expired_at, whatsapp_number } = req.body;
 
     // Username validation regex - only allow letters, numbers, and underscores
     const VALID_USERNAME_REGEX = /^[a-zA-Z0-9_]+$/;
@@ -2301,6 +2312,19 @@ app.post('/api/users/create', isAdmin, upload.single('avatar'), async (req, res)
       status: status || 'active',
       avatar_path: avatarPath
     };
+
+    // Handle expired_at - if not provided, model defaults to 30 days
+    if (expired_at && expired_at.trim() !== '') {
+      userData.expired_at = expired_at;
+    }
+
+    // Handle whatsapp_number - keep digits only
+    if (whatsapp_number) {
+      const normalized = String(whatsapp_number).replace(/[^0-9]/g, '');
+      if (normalized !== '') {
+        userData.whatsapp_number = normalized;
+      }
+    }
 
     const result = await User.create(userData);
 

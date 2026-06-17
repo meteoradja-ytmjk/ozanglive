@@ -64,18 +64,28 @@ class User {
       
       // Handle live_limit - use provided value or null for unlimited
       const liveLimit = userData.live_limit !== undefined ? userData.live_limit : null;
+
+      // Handle expired_at - use provided value or default to 30 days from now
+      let expiredAt = userData.expired_at;
+      if (!expiredAt) {
+        const date = new Date();
+        date.setDate(date.getDate() + 30);
+        expiredAt = date.toISOString();
+      }
+
+      const whatsappNumber = userData.whatsapp_number || null;
       
       return new Promise((resolve, reject) => {
         db.run(
-          'INSERT INTO users (id, username, password, avatar_path, user_role, status, storage_limit, live_limit) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-          [userId, userData.username, hashedPassword, userData.avatar_path || null, userData.user_role || 'admin', userData.status || 'active', defaultStorageLimit, liveLimit],
+          'INSERT INTO users (id, username, password, avatar_path, user_role, status, storage_limit, live_limit, expired_at, whatsapp_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [userId, userData.username, hashedPassword, userData.avatar_path || null, userData.user_role || 'admin', userData.status || 'active', defaultStorageLimit, liveLimit, expiredAt, whatsappNumber],
           function (err) {
             if (err) {
               console.error("DB error during user creation:", err);
               return reject(err);
             }
             console.log("User created successfully with ID:", userId);
-            resolve({ id: userId, username: userData.username, user_role: userData.user_role || 'admin', status: userData.status || 'active', storage_limit: defaultStorageLimit, live_limit: liveLimit });
+            resolve({ id: userId, username: userData.username, user_role: userData.user_role || 'admin', status: userData.status || 'active', storage_limit: defaultStorageLimit, live_limit: liveLimit, expired_at: expiredAt, whatsapp_number: whatsappNumber });
           }
         );
       });
@@ -315,6 +325,16 @@ class User {
       if (updateData.storage_limit !== undefined) {
         fields.push('storage_limit = ?');
         values.push(updateData.storage_limit);
+      }
+
+      if (updateData.expired_at !== undefined) {
+        fields.push('expired_at = ?');
+        values.push(updateData.expired_at);
+      }
+
+      if (updateData.whatsapp_number !== undefined) {
+        fields.push('whatsapp_number = ?');
+        values.push(updateData.whatsapp_number);
       }
       
       if (fields.length === 0) {

@@ -314,6 +314,8 @@ async function createCoreTablesAsync() {
   await runTableQuery(`ALTER TABLE users ADD COLUMN can_delete_videos INTEGER DEFAULT 1`, 'users.can_delete_videos');
   await runTableQuery(`ALTER TABLE users ADD COLUMN storage_limit INTEGER DEFAULT NULL`, 'users.storage_limit');
   await runTableQuery(`ALTER TABLE users ADD COLUMN storage_used INTEGER DEFAULT 0`, 'users.storage_used');
+  await runTableQuery(`ALTER TABLE users ADD COLUMN expired_at TIMESTAMP DEFAULT NULL`, 'users.expired_at');
+  await runTableQuery(`ALTER TABLE users ADD COLUMN whatsapp_number TEXT`, 'users.whatsapp_number');
 
   // Add columns to streams table
   await runTableQuery(`ALTER TABLE streams ADD COLUMN audio_id TEXT`, 'streams.audio_id');
