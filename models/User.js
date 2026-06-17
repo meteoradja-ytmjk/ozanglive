@@ -27,7 +27,7 @@ class User {
   static findById(id) {
     return new Promise((resolve, reject) => {
       // Use indexed query for better performance - select only needed columns
-      db.get('SELECT id, username, avatar_path, user_role, live_limit, storage_limit, storage_used FROM users WHERE id = ? LIMIT 1', [id], (err, row) => {
+      db.get('SELECT id, username, avatar_path, user_role, live_limit, storage_limit, storage_used, expired_at, created_at FROM users WHERE id = ? LIMIT 1', [id], (err, row) => {
         if (err) {
           console.error('Database error in findById:', err);
           return reject(err);

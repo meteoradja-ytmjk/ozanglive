@@ -25,6 +25,34 @@ class LiveLimitService {
   }
 
   /**
+   * Check if a member account has expired (admin never expires)
+   * @param {string} userId - User ID
+   * @returns {Promise<boolean>} True if the account is past its expiry date
+   */
+  static isExpired(userId) {
+    return new Promise((resolve, reject) => {
+      db.get(
+        "SELECT expired_at FROM users WHERE id = ?",
+        [userId],
+        (err, row) => {
+          if (err) {
+            console.error('Error checking account expiry:', err.message);
+            return reject(err);
+          }
+          if (!row || !row.expired_at) {
+            return resolve(false);
+          }
+          const exp = new Date(row.expired_at);
+          if (isNaN(exp.getTime())) {
+            return resolve(false);
+          }
+          resolve(exp.getTime() <= Date.now());
+        }
+      );
+    });
+  }
+
+  /**
    * Get the effective live limit for a user
    * Returns unlimited (Infinity) for admin, custom limit if set, otherwise returns default limit
    * @param {string} userId - User ID
@@ -36,7 +64,13 @@ class LiveLimitService {
     if (isAdmin) {
       return Infinity;
     }
-    
+
+    // Expired members cannot go live (limit drops to 0)
+    const expired = await this.isExpired(userId);
+    if (expired) {
+      return 0;
+    }
+
     const customLimit = await User.getLiveLimit(userId);
     if (customLimit !== null && customLimit > 0) {
       return customLimit;
@@ -104,8 +138,27 @@ class LiveLimitService {
     const customLimit = await User.getLiveLimit(userId);
     const defaultLimit = await SystemSettings.getDefaultLiveLimit();
     const isCustomLimit = customLimit !== null && customLimit > 0;
-    const effectiveLimit = isCustomLimit ? customLimit : defaultLimit;
     const activeStreams = await this.countActiveStreams(userId);
+
+    // Expired members: live limit forced to 0, cannot start streams
+    const expired = await this.isExpired(userId);
+    if (expired) {
+      return {
+        userId,
+        effectiveLimit: 0,
+        activeStreams,
+        canStart: false,
+        isCustomLimit,
+        isAdmin: false,
+        defaultLimit,
+        customLimit,
+        expired: true,
+        message: 'Akun Anda sudah kedaluwarsa. Hubungi Admin untuk memperpanjang masa aktif.',
+        displayLimit: '0'
+      };
+    }
+
+    const effectiveLimit = isCustomLimit ? customLimit : defaultLimit;
     const canStart = activeStreams < effectiveLimit;
 
     return {
@@ -117,6 +170,7 @@ class LiveLimitService {
       isAdmin: false,
       defaultLimit,
       customLimit,
+      expired: false,
       message: canStart ? null : 'Hubungi Admin Untuk Menambah Limit',
       displayLimit: effectiveLimit.toString()
     };

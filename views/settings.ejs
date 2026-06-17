@@ -95,6 +95,28 @@
         <div id="profile-tab" class="settings-content">
           <div class="p-6">
             <h3 class="text-lg font-semibold mb-6">Profile Settings</h3>
+
+            <% if (user.expired_at) {
+                 const _e = new Date(user.expired_at);
+                 if (!isNaN(_e.getTime())) {
+                   const _d = Math.ceil((_e - new Date()) / 86400000);
+                   const _ex = _d < 0;
+                   const _es = _e.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
+            %>
+              <div class="mb-6 rounded-lg border px-4 py-3 flex items-center gap-3 <%= _ex ? 'bg-red-500/10 border-red-500/30' : (_d <= 7 ? 'bg-amber-500/10 border-amber-500/30' : 'bg-dark-700 border-gray-700') %>">
+                <i class="ti <%= _ex ? 'ti-alert-triangle text-red-400' : 'ti-clock-hour-4 text-emerald-400' %> text-2xl flex-shrink-0"></i>
+                <div class="flex-1 min-w-0">
+                  <% if (_ex) { %>
+                    <p class="text-sm font-semibold text-red-400">Akun kedaluwarsa</p>
+                    <p class="text-xs text-gray-400">Berakhir <%= _es %>. Live streaming dinonaktifkan, hubungi admin.</p>
+                  <% } else { %>
+                    <p class="text-sm font-semibold text-white">Masa aktif tersisa <span class="<%= _d <= 7 ? 'text-amber-400' : 'text-emerald-400' %>"><%= _d %> hari lagi</span></p>
+                    <p class="text-xs text-gray-400">Aktif sampai <%= _es %></p>
+                  <% } %>
+                </div>
+              </div>
+            <%   } } %>
+
             <form id="profile-form" class="space-y-6" action="/settings/profile" method="post"
               enctype="multipart/form-data">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">

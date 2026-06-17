@@ -78,6 +78,57 @@
     }
   </style>
 
+  <%
+    // Account expiry banner (visible to the logged-in user)
+    if (typeof user !== 'undefined' && user && user.expired_at) {
+      const _exp = new Date(user.expired_at);
+      if (!isNaN(_exp.getTime())) {
+        const _now = new Date();
+        const _days = Math.ceil((_exp - _now) / 86400000);
+        const _isExpired = _days < 0;
+        const _expStr = _exp.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
+        // Progress from created_at -> expired_at
+        let _pct = null;
+        if (user.created_at) {
+          const _created = new Date(user.created_at);
+          if (!isNaN(_created.getTime()) && _exp > _created) {
+            const _total = _exp - _created;
+            const _elapsed = Math.min(Math.max(_now - _created, 0), _total);
+            _pct = Math.round((_elapsed / _total) * 100);
+          }
+        }
+        let _wrap = 'bg-dark-800/80 border-gray-700/60';
+        let _bar = 'bg-emerald-500';
+        if (_isExpired) { _wrap = 'bg-red-500/10 border-red-500/30'; _bar = 'bg-red-500'; }
+        else if (_days <= 7) { _wrap = 'bg-amber-500/10 border-amber-500/30'; _bar = 'bg-amber-500'; }
+  %>
+    <div class="mb-4 rounded-xl border px-4 py-3 <%= _wrap %>">
+      <div class="flex items-center gap-3">
+        <i class="ti <%= _isExpired ? 'ti-alert-triangle text-red-400' : (_days <= 7 ? 'ti-clock-exclamation text-amber-400' : 'ti-clock-hour-4 text-emerald-400') %> text-2xl flex-shrink-0"></i>
+        <div class="flex-1 min-w-0">
+          <% if (_isExpired) { %>
+            <p class="text-sm font-semibold text-red-400">Akun Anda telah kedaluwarsa</p>
+            <p class="text-xs text-gray-400">Masa aktif berakhir pada <%= _expStr %>. Live streaming dinonaktifkan. Hubungi admin untuk memperpanjang.</p>
+          <% } else { %>
+            <p class="text-sm font-semibold text-white">
+              Masa aktif tersisa
+              <span class="<%= _days <= 7 ? 'text-amber-400' : 'text-emerald-400' %>"><%= _days %> hari lagi</span>
+            </p>
+            <p class="text-xs text-gray-400">Akun aktif sampai <%= _expStr %></p>
+          <% } %>
+        </div>
+        <span class="hidden sm:inline-flex px-2.5 py-1 rounded-lg text-xs font-medium flex-shrink-0 <%= _isExpired ? 'bg-red-500/15 text-red-400' : (_days <= 7 ? 'bg-amber-500/15 text-amber-400' : 'bg-emerald-500/15 text-emerald-400') %>">
+          <%= _isExpired ? 'Expired' : _days + ' hari' %>
+        </span>
+      </div>
+      <% if (_pct !== null) { %>
+        <div class="mt-2.5 h-1.5 w-full bg-gray-700/60 rounded-full overflow-hidden">
+          <div class="h-full <%= _bar %> rounded-full transition-all" style="width: <%= _pct %>%"></div>
+        </div>
+      <% } %>
+    </div>
+  <%   } } %>
+
   <!-- Mobile Stats Bar - Portrait (FIXED - DO NOT CHANGE) -->
   <div class="md:hidden mb-4 mobile-stats-portrait">
     <div class="bg-gray-800/90 backdrop-blur-md rounded-2xl px-4 py-3 shadow-lg">
