@@ -24,6 +24,22 @@
     </button>
   </div>
 
+  <!-- ================= Quick Stats ================= -->
+  <div class="grid grid-cols-3 gap-3 mb-6">
+    <div class="bg-dark-800 rounded-xl border border-gray-700/50 p-4">
+      <p class="text-xs text-gray-400 flex items-center gap-1"><i class="ti ti-player-play text-green-400"></i> Sedang Live</p>
+      <p class="text-2xl font-bold text-green-400 mt-1" id="statLive">0</p>
+    </div>
+    <div class="bg-dark-800 rounded-xl border border-gray-700/50 p-4">
+      <p class="text-xs text-gray-400 flex items-center gap-1"><i class="ti ti-clock text-yellow-400"></i> Terjadwal</p>
+      <p class="text-2xl font-bold text-yellow-400 mt-1" id="statScheduled">0</p>
+    </div>
+    <div class="bg-dark-800 rounded-xl border border-gray-700/50 p-4">
+      <p class="text-xs text-gray-400 flex items-center gap-1"><i class="ti ti-broadcast text-primary"></i> Total Live</p>
+      <p class="text-2xl font-bold text-white mt-1" id="statTotal">0</p>
+    </div>
+  </div>
+
   <!-- ================= Connected Accounts ================= -->
   <div class="bg-dark-800 rounded-xl border border-gray-700/50 mb-6 overflow-hidden">
     <div class="flex items-center justify-between px-4 py-3 border-b border-gray-700/50 cursor-pointer hover:bg-gray-700/20 transition-colors select-none"
@@ -425,6 +441,120 @@
             <p class="text-[11px] text-gray-500 mt-2 text-center">Cukup isi Client ID &amp; Client Secret, lalu klik tombol ini.</p>
           </div>
         </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     EDIT LIVE MODAL (edits the RTMP stream side)
+     ============================================================ -->
+<div id="editLiveModal" class="fixed inset-0 bg-black/60 z-50 hidden overflow-y-auto">
+  <div class="flex min-h-screen items-center justify-center p-4">
+    <div class="bg-dark-800 rounded-xl shadow-2xl w-full max-w-lg flex flex-col max-h-[92vh]">
+      <div class="flex-shrink-0 flex items-center justify-between px-5 py-4 border-b border-gray-700">
+        <h3 class="text-lg font-semibold text-white">Edit Live</h3>
+        <button type="button" onclick="closeEditLive()" class="text-gray-400 hover:text-white">
+          <i class="ti ti-x text-xl"></i>
+        </button>
+      </div>
+      <form id="editLiveForm" class="p-5 space-y-4 overflow-y-auto flex-grow" onsubmit="return false;">
+        <input type="hidden" id="editStreamId" value="">
+
+        <!-- Title -->
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Judul</label>
+          <input type="text" id="editTitle"
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none">
+          <p class="text-xs text-gray-500 mt-1">Mengubah judul di sini hanya memengaruhi stream RTMP, bukan judul broadcast di YouTube.</p>
+        </div>
+
+        <!-- Video selector -->
+        <div class="relative">
+          <label class="text-sm font-medium text-white block mb-2">Video Sumber</label>
+          <button type="button" onclick="toggleEditPicker('video')"
+            class="w-full flex items-center justify-between px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg hover:border-primary transition-colors text-left">
+            <span class="text-sm text-gray-300 truncate" id="editVideoLabel">Pilih video...</span>
+            <i class="ti ti-chevron-down text-gray-400 flex-shrink-0"></i>
+          </button>
+          <input type="hidden" id="editVideoId" value="">
+          <div id="editVideoDropdown" class="hidden absolute z-20 mt-2 w-full bg-dark-700 rounded-lg border border-gray-600 shadow-lg">
+            <div class="p-2 border-b border-gray-600/50">
+              <input type="text" id="editVideoSearch" oninput="filterEditList('video')"
+                class="w-full bg-dark-800 text-white px-3 py-2 rounded-lg text-sm focus:outline-none border border-gray-700"
+                placeholder="Cari video...">
+            </div>
+            <div id="editVideoListContainer" class="p-2 space-y-1 max-h-60 overflow-y-auto"></div>
+          </div>
+        </div>
+
+        <!-- Audio selector -->
+        <div class="relative">
+          <label class="text-sm font-medium text-white block mb-2">Audio <span class="text-gray-500 text-xs">(opsional)</span></label>
+          <button type="button" onclick="toggleEditPicker('audio')"
+            class="w-full flex items-center justify-between px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg hover:border-primary transition-colors text-left">
+            <div class="flex items-center gap-2 min-w-0">
+              <i class="ti ti-music text-primary flex-shrink-0"></i>
+              <span class="text-sm text-gray-300 truncate" id="editAudioLabel">Tanpa audio tambahan</span>
+            </div>
+            <div class="flex items-center gap-2 flex-shrink-0">
+              <span id="editAudioClear" class="hidden text-red-400 hover:text-red-300 text-sm font-bold" onclick="event.stopPropagation(); clearEditAudio();">✕</span>
+              <i class="ti ti-chevron-down text-gray-400"></i>
+            </div>
+          </button>
+          <input type="hidden" id="editAudioId" value="">
+          <div id="editAudioDropdown" class="hidden absolute z-20 mt-2 w-full bg-dark-700 rounded-lg border border-gray-600 shadow-lg">
+            <div class="p-2 border-b border-gray-600/50">
+              <input type="text" id="editAudioSearch" oninput="filterEditList('audio')"
+                class="w-full bg-dark-800 text-white px-3 py-2 rounded-lg text-sm focus:outline-none border border-gray-700"
+                placeholder="Cari audio...">
+            </div>
+            <div id="editAudioListContainer" class="p-2 space-y-1 max-h-60 overflow-y-auto"></div>
+          </div>
+        </div>
+
+        <!-- Duration + loop -->
+        <div class="space-y-3">
+          <label class="text-sm font-medium text-white block">Durasi Streaming</label>
+          <div class="grid grid-cols-3 gap-3">
+            <div>
+              <label class="text-xs text-gray-400 block mb-1">Jam</label>
+              <input type="number" id="editDurationHours" min="0" placeholder="0"
+                class="w-full px-3 py-2.5 bg-dark-700 border border-gray-600 rounded-lg text-sm">
+            </div>
+            <div>
+              <label class="text-xs text-gray-400 block mb-1">Menit</label>
+              <input type="number" id="editDurationMinutes" min="0" max="59" placeholder="0"
+                class="w-full px-3 py-2.5 bg-dark-700 border border-gray-600 rounded-lg text-sm">
+            </div>
+            <div class="flex items-end pb-1">
+              <div class="flex items-center justify-between w-full">
+                <label class="text-xs text-gray-300">Loop</label>
+                <label class="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" id="editLoop" class="sr-only peer">
+                  <div class="w-11 h-6 bg-dark-600 rounded-full peer peer-checked:bg-primary"></div>
+                  <div class="absolute left-[2px] top-[2px] w-5 h-5 bg-white rounded-full transition-all peer-checked:translate-x-5"></div>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Schedule -->
+        <div>
+          <label class="text-sm font-medium text-white block mb-2">Waktu Mulai (jadwal RTMP)</label>
+          <input type="datetime-local" id="editScheduled"
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none [color-scheme:dark]">
+          <p class="text-xs text-gray-500 mt-1">Kosongkan jika ingin start manual. Tidak mengubah jadwal di YouTube.</p>
+        </div>
+      </form>
+      <div class="flex-shrink-0 flex items-center justify-end gap-3 p-4 px-5 border-t border-gray-700">
+        <button type="button" onclick="closeEditLive()"
+          class="px-5 py-2.5 text-sm font-medium text-gray-300 hover:text-white">Batal</button>
+        <button type="button" id="editSaveBtn" onclick="submitEditLive()"
+          class="px-5 py-2.5 text-sm font-medium bg-primary hover:bg-secondary text-white rounded-lg flex items-center gap-2">
+          <i class="ti ti-device-floppy"></i> Simpan
+        </button>
       </div>
     </div>
   </div>
@@ -896,6 +1026,15 @@
   function renderLives(streams) {
     const container = document.getElementById('livesContainer');
     document.getElementById('livesCount').textContent = streams.length;
+    // Update quick stats
+    const liveCount = streams.filter(s => s.status === 'live').length;
+    const schedCount = streams.filter(s => s.status === 'scheduled').length;
+    const statLive = document.getElementById('statLive');
+    const statScheduled = document.getElementById('statScheduled');
+    const statTotal = document.getElementById('statTotal');
+    if (statLive) statLive.textContent = liveCount;
+    if (statScheduled) statScheduled.textContent = schedCount;
+    if (statTotal) statTotal.textContent = streams.length;
     if (!streams || streams.length === 0) {
       container.innerHTML =
         '<div class="px-4 py-12 text-center">' +
@@ -931,6 +1070,9 @@
             (isLive
               ? '<button onclick="stopLive(\'' + stream.id + '\')" title="Stop" class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"><i class="ti ti-player-stop"></i></button>'
               : '<button onclick="startLive(\'' + stream.id + '\')" title="Start" class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-green-400 hover:bg-green-500/10 rounded-lg transition-colors"><i class="ti ti-player-play"></i></button>') +
+            (isLive
+              ? ''
+              : '<button onclick="openEditLive(\'' + stream.id + '\')" title="Edit" class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors"><i class="ti ti-edit"></i></button>') +
             '<button onclick="deleteLive(\'' + stream.id + '\', \'' + escapeHtml(stream.title).replace(/'/g, "\\'") + '\')" title="Hapus" class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"><i class="ti ti-trash"></i></button>' +
           '</div>' +
         '</div>';
@@ -999,15 +1141,197 @@
   }
 
   // ============================================================
+  // EDIT LIVE (RTMP stream side)
+  // ============================================================
+  function isoToLocalInput(iso) {
+    if (!iso) return '';
+    try {
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return '';
+      const pad = n => String(n).padStart(2, '0');
+      return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+    } catch (e) { return ''; }
+  }
+
+  function renderEditList(kind, items) {
+    const container = document.getElementById(kind === 'video' ? 'editVideoListContainer' : 'editAudioListContainer');
+    if (!container) return;
+    if (!items || items.length === 0) {
+      container.innerHTML = '<div class="text-center py-4 text-gray-400 text-sm"><i class="ti ti-search-off text-xl mb-1"></i><p>Tidak ada item</p></div>';
+      return;
+    }
+    container.innerHTML = '';
+    items.forEach(item => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'w-full flex items-center gap-3 p-2 rounded hover:bg-dark-600 transition-colors text-left';
+      if (kind === 'video') {
+        const isPlaylist = item.type === 'playlist';
+        btn.innerHTML =
+          '<div class="w-14 h-10 bg-dark-800 rounded overflow-hidden flex-shrink-0">' +
+            '<img src="' + (item.thumbnail || '/images/default-thumbnail.jpg') + '" class="w-full h-full object-cover" loading="lazy" onerror="this.src=\'/images/default-thumbnail.jpg\'">' +
+          '</div>' +
+          '<div class="flex-1 min-w-0">' +
+            '<p class="text-sm font-medium text-white truncate">' + (isPlaylist ? '[Playlist] ' : '') + escapeHtml(item.name) + '</p>' +
+            '<p class="text-xs text-gray-400 truncate">' + escapeHtml(item.resolution || '') + ' • ' + escapeHtml(item.duration || '') + '</p>' +
+          '</div>';
+        btn.onclick = () => {
+          document.getElementById('editVideoId').value = item.id;
+          document.getElementById('editVideoLabel').textContent = (isPlaylist ? '[Playlist] ' : '') + item.name;
+          document.getElementById('editVideoDropdown').classList.add('hidden');
+        };
+      } else {
+        const label = item.title || item.name || 'Audio';
+        btn.innerHTML =
+          '<div class="w-9 h-9 bg-dark-800 rounded flex items-center justify-center flex-shrink-0"><i class="ti ti-music text-primary"></i></div>' +
+          '<div class="flex-1 min-w-0">' +
+            '<p class="text-sm font-medium text-white truncate">' + escapeHtml(label) + '</p>' +
+            '<p class="text-xs text-gray-400 truncate">' + escapeHtml(item.duration || 'Unknown') + ' • ' + escapeHtml(item.format || 'audio') + '</p>' +
+          '</div>';
+        btn.onclick = () => {
+          document.getElementById('editAudioId').value = item.id;
+          document.getElementById('editAudioLabel').textContent = label;
+          document.getElementById('editAudioClear').classList.remove('hidden');
+          document.getElementById('editAudioDropdown').classList.add('hidden');
+        };
+      }
+      container.appendChild(btn);
+    });
+  }
+
+  function filterEditList(kind) {
+    const term = (document.getElementById(kind === 'video' ? 'editVideoSearch' : 'editAudioSearch').value || '').toLowerCase().trim();
+    const source = kind === 'video' ? wizVideos : wizAudios;
+    const filtered = term ? source.filter(i => (i.name || i.title || '').toLowerCase().includes(term)) : source;
+    renderEditList(kind, filtered);
+  }
+
+  function toggleEditPicker(kind) {
+    const dropId = kind === 'video' ? 'editVideoDropdown' : 'editAudioDropdown';
+    const otherId = kind === 'video' ? 'editAudioDropdown' : 'editVideoDropdown';
+    document.getElementById(otherId).classList.add('hidden');
+    document.getElementById(dropId).classList.toggle('hidden');
+  }
+
+  function clearEditAudio() {
+    document.getElementById('editAudioId').value = '';
+    document.getElementById('editAudioLabel').textContent = 'Tanpa audio tambahan';
+    document.getElementById('editAudioClear').classList.add('hidden');
+  }
+
+  async function openEditLive(id) {
+    try {
+      if (wizVideos.length === 0 && wizAudios.length === 0) await loadWizMedia();
+      const res = await fetch('/api/streams/' + id);
+      const data = await res.json();
+      if (!data.success || !data.stream) { showToast('Gagal memuat data live', 'error'); return; }
+      const s = data.stream;
+
+      document.getElementById('editStreamId').value = s.id;
+      document.getElementById('editTitle').value = s.title || '';
+
+      // Video
+      document.getElementById('editVideoId').value = s.video_id || '';
+      const vid = wizVideos.find(v => String(v.id) === String(s.video_id));
+      document.getElementById('editVideoLabel').textContent = vid ? ((vid.type === 'playlist' ? '[Playlist] ' : '') + vid.name) : (s.video_id ? 'Video terpilih' : 'Pilih video...');
+
+      // Audio
+      document.getElementById('editAudioId').value = s.audio_id || '';
+      const aud = wizAudios.find(a => String(a.id) === String(s.audio_id));
+      if (s.audio_id) {
+        document.getElementById('editAudioLabel').textContent = aud ? (aud.title || aud.name) : 'Audio terpilih';
+        document.getElementById('editAudioClear').classList.remove('hidden');
+      } else {
+        document.getElementById('editAudioLabel').textContent = 'Tanpa audio tambahan';
+        document.getElementById('editAudioClear').classList.add('hidden');
+      }
+
+      // Duration
+      const totalMin = parseInt(s.stream_duration_minutes) || 0;
+      document.getElementById('editDurationHours').value = totalMin > 0 ? Math.floor(totalMin / 60) : '';
+      document.getElementById('editDurationMinutes').value = totalMin > 0 ? (totalMin % 60) : '';
+
+      // Loop
+      document.getElementById('editLoop').checked = (s.loop_video === 1 || s.loop_video === true);
+
+      // Schedule
+      document.getElementById('editScheduled').value = isoToLocalInput(s.schedule_time);
+
+      // Render pickers
+      renderEditList('video', wizVideos);
+      renderEditList('audio', wizAudios);
+
+      document.getElementById('editLiveModal').classList.remove('hidden');
+    } catch (err) {
+      console.error('Open edit error:', err);
+      showToast('Terjadi kesalahan jaringan', 'error');
+    }
+  }
+
+  function closeEditLive() {
+    document.getElementById('editLiveModal').classList.add('hidden');
+    document.getElementById('editVideoDropdown').classList.add('hidden');
+    document.getElementById('editAudioDropdown').classList.add('hidden');
+  }
+
+  async function submitEditLive() {
+    const id = document.getElementById('editStreamId').value;
+    const title = document.getElementById('editTitle').value.trim();
+    const videoId = document.getElementById('editVideoId').value;
+    if (!title) { showToast('Judul wajib diisi', 'error'); return; }
+    if (!videoId) { showToast('Pilih video sumber', 'error'); return; }
+
+    const btn = document.getElementById('editSaveBtn');
+    const original = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ti ti-loader animate-spin"></i> Menyimpan...';
+
+    try {
+      const body = {
+        streamTitle: title,
+        videoId: videoId,
+        audioId: document.getElementById('editAudioId').value || '',
+        streamDurationHours: document.getElementById('editDurationHours').value || '0',
+        streamDurationMinutes: document.getElementById('editDurationMinutes').value || '0',
+        loopVideo: document.getElementById('editLoop').checked ? 'true' : 'false',
+        scheduleType: 'once'
+      };
+      const scheduled = document.getElementById('editScheduled').value;
+      if (scheduled) body.scheduleStartTime = scheduled;
+
+      const res = await fetch('/api/streams/' + id, {
+        method: 'PUT',
+        headers: csrfHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('Live diperbarui');
+        closeEditLive();
+        loadLives();
+      } else {
+        showToast(data.error || 'Gagal memperbarui live', 'error');
+      }
+    } catch (err) {
+      console.error('Submit edit error:', err);
+      showToast('Terjadi kesalahan jaringan', 'error');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = original;
+    }
+  }
+
+  // ============================================================
   // INIT
   // ============================================================
   // Close dropdowns when clicking outside
   document.addEventListener('click', function (e) {
-    ['wizVideo', 'wizAudio'].forEach(prefix => {
+    ['wizVideo', 'wizAudio', 'editVideo', 'editAudio'].forEach(prefix => {
       const drop = document.getElementById(prefix + 'Dropdown');
       if (!drop || drop.classList.contains('hidden')) return;
       const trigger = e.target.closest('button');
-      if (!drop.contains(e.target) && !(trigger && trigger.getAttribute('onclick') && trigger.getAttribute('onclick').includes(prefix === 'wizVideo' ? "'video'" : "'audio'"))) {
+      const kind = (prefix === 'wizVideo' || prefix === 'editVideo') ? "'video'" : "'audio'";
+      if (!drop.contains(e.target) && !(trigger && trigger.getAttribute('onclick') && trigger.getAttribute('onclick').includes(kind))) {
         drop.classList.add('hidden');
       }
     });
