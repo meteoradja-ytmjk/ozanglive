@@ -1261,6 +1261,81 @@ function buildFFmpegArgsVideoOnly(videoPath, rtmpUrl, durationSeconds, loopVideo
   console.log('[StreamingService] Video-only: minimal copy');
   return args;
 }
+
+/**
+ * Decide whether an FFmpeg startup failure is a transient network/RTMP error that
+ * is worth retrying automatically. These are connection-level problems (the server
+ * momentarily refused/closed the connection) rather than configuration mistakes.
+ * @param {string} stderr - Captured FFmpeg stderr text
+ * @returns {boolean}
+ */
+function isRetryableFFmpegError(stderr) {
+  if (!stderr) return false;
+  const text = stderr.toLowerCase();
+  const retryablePatterns = [
+    'input/output error',
+    'i/o error',
+    'connection refused',
+    'connection timed out',
+    'operation timed out',
+    'timed out',
+    'connection reset',
+    'broken pipe',
+    'end of file',
+    'error opening output',
+    'failed to connect',
+    'rtmp_connect',
+    'rtmp_readpacket',
+    'server error',
+    'temporary failure',
+    'network is unreachable'
+  ];
+  return retryablePatterns.some((p) => text.includes(p));
+}
+
+/**
+ * Turn a raw FFmpeg stderr dump into a short, human-friendly message (Indonesian)
+ * so the UI shows something actionable instead of the full FFmpeg banner.
+ * @param {string} stderr - Captured FFmpeg stderr text
+ * @returns {string}
+ */
+function summarizeFFmpegError(stderr) {
+  if (!stderr) return 'Gagal memulai stream. Coba lagi sebentar.';
+  const text = stderr.toLowerCase();
+
+  if (text.includes('input/output error') || text.includes('i/o error')) {
+    return 'Tidak bisa terhubung ke server streaming (Input/output error). Pastikan live di platform sudah dibuat & siap menerima, lalu coba Play lagi.';
+  }
+  if (text.includes('connection refused')) {
+    return 'Koneksi RTMP ditolak (Connection refused). Periksa RTMP URL dan Stream Key, lalu coba lagi.';
+  }
+  if (text.includes('connection timed out') || text.includes('operation timed out') || text.includes('timed out')) {
+    return 'Koneksi ke server RTMP timeout. Periksa jaringan server lalu coba lagi.';
+  }
+  if (text.includes('connection reset') || text.includes('broken pipe')) {
+    return 'Koneksi ke server RTMP terputus. Coba Play lagi dalam beberapa detik.';
+  }
+  if (text.includes('403') || text.includes('forbidden') || text.includes('unauthorized') || text.includes('access denied')) {
+    return 'Stream Key ditolak server (akses ditolak). Periksa kembali Stream Key di platform.';
+  }
+  if (text.includes('404') || text.includes('not found')) {
+    return 'Endpoint RTMP tidak ditemukan (404). Periksa kembali RTMP URL.';
+  }
+  if (text.includes('no such file') || text.includes('does not exist') || text.includes('not found on disk')) {
+    return 'File video/audio tidak ditemukan di server. Coba unggah ulang media.';
+  }
+  if (text.includes('invalid data') || text.includes('moov atom not found') || text.includes('could not find codec')) {
+    return 'File media bermasalah atau formatnya tidak didukung. Coba gunakan file lain.';
+  }
+
+  // Generic RTMP/output hint
+  if (text.includes('rtmp') || text.includes('flv')) {
+    return 'Gagal terhubung ke server streaming. Pastikan live di platform aktif lalu coba lagi.';
+  }
+
+  return 'Gagal memulai stream. Coba lagi sebentar.';
+}
+
 async function startStream(streamId) {
   try {
     streamRetryCount.set(streamId, 0);
@@ -1308,59 +1383,107 @@ async function startStream(streamId) {
     const fullCommand = `${ffmpegPath} ${ffmpegArgs.join(' ')}`;
     addStreamLog(streamId, `Starting stream with command: ${fullCommand}`);
     console.log(`Starting stream: ${fullCommand}`);
-    const ffmpegProcess = spawn(ffmpegPath, ffmpegArgs, {
-      detached: true,
-      stdio: ['ignore', 'pipe', 'pipe']
-    });
-    
-    // Wait for FFmpeg to confirm it's running before updating status
-    let streamConfirmed = false;
-    let earlyExitError = null;
-    let earlyStderrBuffer = '';
 
-    ffmpegProcess.stderr.on('data', (data) => {
-      if (!streamConfirmed) {
-        earlyStderrBuffer = `${earlyStderrBuffer}${data.toString()}`.slice(-1500);
+    // YouTube (and other RTMP servers) sometimes reject the very first connection
+    // attempt with a transient "Input/output error" even when everything is configured
+    // correctly. Instead of failing immediately and showing a scary FFmpeg banner, we
+    // retry the spawn a few times on transient network/RTMP errors so Play self-heals.
+    const MAX_START_ATTEMPTS = 3;
+    const START_RETRY_DELAY_MS = 3000;
+
+    let ffmpegProcess = null;
+    let startError = null;
+
+    for (let attempt = 1; attempt <= MAX_START_ATTEMPTS; attempt++) {
+      const proc = spawn(ffmpegPath, ffmpegArgs, {
+        detached: true,
+        stdio: ['ignore', 'pipe', 'pipe']
+      });
+
+      // Wait for FFmpeg to confirm it's running before updating status
+      let streamConfirmed = false;
+      let earlyExitInfo = null;
+      let earlyStderrBuffer = '';
+
+      const onEarlyStderr = (data) => {
+        if (!streamConfirmed) {
+          earlyStderrBuffer = `${earlyStderrBuffer}${data.toString()}`.slice(-2000);
+        }
+      };
+      proc.stderr.on('data', onEarlyStderr);
+
+      // Set up early exit detection
+      const earlyExitPromise = new Promise((resolve) => {
+        proc.once('exit', (code, signal) => {
+          if (!streamConfirmed) {
+            earlyExitInfo = { kind: 'exit', code, signal, stderr: earlyStderrBuffer.trim() };
+            resolve(false);
+          }
+        });
+        proc.once('error', (err) => {
+          if (!streamConfirmed) {
+            earlyExitInfo = { kind: 'error', message: err.message, stderr: earlyStderrBuffer.trim() };
+            resolve(false);
+          }
+        });
+      });
+
+      // Wait a short time to detect early failures
+      const confirmationTimeout = new Promise((resolve) => {
+        setTimeout(() => {
+          if (!earlyExitInfo) {
+            streamConfirmed = true;
+            resolve(true);
+          }
+        }, 2000); // Wait 2 seconds to confirm FFmpeg is running
+      });
+
+      const isRunning = await Promise.race([earlyExitPromise, confirmationTimeout]);
+
+      if (isRunning && !earlyExitInfo) {
+        // Confirmed running. Detach the temporary early-stderr listener; the
+        // permanent logging listener is attached further below.
+        proc.stderr.removeListener('data', onEarlyStderr);
+        ffmpegProcess = proc;
+        startError = null;
+        if (attempt > 1) {
+          console.log(`[StreamingService] Stream ${streamId} started successfully on attempt ${attempt}`);
+          addStreamLog(streamId, `Started successfully on attempt ${attempt}`);
+        }
+        break;
       }
-    });
 
-    // Set up early exit detection
-    const earlyExitPromise = new Promise((resolve) => {
-      ffmpegProcess.once('exit', (code, signal) => {
-        if (!streamConfirmed) {
-          const stderrDetails = earlyStderrBuffer.trim();
-          earlyExitError = `FFmpeg exited early with code ${code}, signal: ${signal}${stderrDetails ? `: ${stderrDetails}` : ''}`;
-          resolve(false);
-        }
-      });
-      ffmpegProcess.once('error', (err) => {
-        if (!streamConfirmed) {
-          earlyExitError = `FFmpeg error: ${err.message}`;
-          resolve(false);
-        }
-      });
-    });
-    
-    // Wait a short time to detect early failures
-    const confirmationTimeout = new Promise((resolve) => {
-      setTimeout(() => {
-        if (!earlyExitError) {
-          streamConfirmed = true;
-          resolve(true);
-        }
-      }, 2000); // Wait 2 seconds to confirm FFmpeg is running
-    });
-    
-    const isRunning = await Promise.race([earlyExitPromise, confirmationTimeout]);
-    
-    if (!isRunning || earlyExitError) {
-      console.error(`[StreamingService] FFmpeg failed to start for stream ${streamId}: ${earlyExitError}`);
-      addStreamLog(streamId, `Failed to start: ${earlyExitError}`);
+      // This attempt failed. Build a clean message and decide whether to retry.
+      const rawStderr = earlyExitInfo?.stderr || '';
+      const retryable = earlyExitInfo?.kind === 'exit'
+        ? isRetryableFFmpegError(rawStderr)
+        : true; // spawn 'error' (e.g. transient OS-level) is worth a retry
+      startError = earlyExitInfo?.kind === 'error' && !rawStderr
+        ? `Gagal menjalankan FFmpeg: ${earlyExitInfo.message}`
+        : summarizeFFmpegError(rawStderr);
+
+      console.error(`[StreamingService] Start attempt ${attempt}/${MAX_START_ATTEMPTS} failed for stream ${streamId}: ${startError}`);
+      addStreamLog(streamId, `Start attempt ${attempt} failed: ${startError}`);
+
+      // Clean up the failed process
+      try { proc.stderr.removeListener('data', onEarlyStderr); } catch (_) { /* noop */ }
+      try { if (!proc.killed) proc.kill('SIGKILL'); } catch (_) { /* noop */ }
+
+      if (!retryable || attempt >= MAX_START_ATTEMPTS) {
+        break;
+      }
+
+      console.log(`[StreamingService] Retrying start for stream ${streamId} in ${START_RETRY_DELAY_MS}ms (transient error)...`);
+      addStreamLog(streamId, `Transient error - retrying in ${START_RETRY_DELAY_MS / 1000}s...`);
+      await new Promise((resolve) => setTimeout(resolve, START_RETRY_DELAY_MS));
+    }
+
+    if (!ffmpegProcess) {
       activeStreams.delete(streamId);
       streamPids.delete(streamId);
-      return { success: false, error: earlyExitError || 'FFmpeg failed to start' };
+      return { success: false, error: startError || 'Gagal memulai stream. Coba lagi sebentar.' };
     }
-    
+
     // FFmpeg is confirmed running, now update status
     activeStreams.set(streamId, ffmpegProcess);
     // Track PID for process health monitoring
