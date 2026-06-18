@@ -1110,7 +1110,7 @@ app.post('/login', loginDelayMiddleware, loginLimiter, async (req, res) => {
         });
       }
       console.log('[Login] Session saved successfully, redirecting...');
-      res.redirect('/live-studio');
+      res.redirect('/dashboard');
     });
   } catch (error) {
     console.error('[Login] Error:', error);
@@ -1380,7 +1380,7 @@ app.post('/setup-account', upload.single('avatar'), [
 });
 app.get('/', (req, res) => {
   if (req.session && req.session.userId) {
-    res.redirect('/live-studio');
+    res.redirect('/dashboard');
   } else {
     res.redirect('/login');
   }
@@ -1690,7 +1690,7 @@ app.get('/settings', isAuthenticated, async (req, res) => {
 });
 
 app.get(['/stream', '/streams'], isAuthenticated, (req, res) => {
-  res.redirect('/live-studio');
+  res.redirect('/dashboard');
 });
 
 app.get('/galery', isAuthenticated, (req, res) => {
@@ -7324,29 +7324,6 @@ app.get('/youtube', isAuthenticated, async (req, res) => {
 });
 
 // ==========================================
-// INTEGRATED LIVE STUDIO PAGE
-// Combines the old "Streams" (dashboard) and "YouTube" tabs into one
-// unified, YouTube-focused workflow with a 2-step "Create Live" wizard.
-// ==========================================
-app.get('/live-studio', isAuthenticated, async (req, res) => {
-  try {
-    const accounts = await YouTubeCredentials.findAllByUserId(req.session.userId);
-    res.render('live-studio', {
-      title: 'Live Studio',
-      active: 'live-studio',
-      accounts,
-      baseUrl: process.env.BASE_URL || `${req.protocol}://${req.get('host')}`
-    });
-  } catch (error) {
-    console.error('Live Studio page error:', error);
-    res.status(500).render('error', {
-      title: 'Error',
-      message: 'Failed to load Live Studio page'
-    });
-  }
-});
-
-// ==========================================
 // YouTube OAuth2 Browser Flow Routes
 // ==========================================
 
@@ -9327,189 +9304,6 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to create broadcast'
-    });
-  }
-});
-
-// ==========================================
-// INTEGRATED LIVE STUDIO - Orchestration Endpoint
-// ------------------------------------------
-// Creates a YouTube broadcast AND its linked RTMP stream in a single step.
-// This removes the manual "copy stream key from YouTube tab -> paste into
-// Stream tab" workflow. One form ("sekali setting") drives both sides.
-//
-// Flow:
-//   1. Create the broadcast on YouTube (returns a fresh stream key + rtmp url)
-//   2. Persist YouTube broadcast settings (auto-start/stop, unlist replay)
-//   3. Upload thumbnail (optional: file upload or gallery path)
-//   4. Create the local RTMP stream record using YouTube's stream key + rtmp url
-//
-// Reuses the exact same services as POST /api/youtube/broadcasts and
-// POST /api/streams so behaviour stays identical to the legacy tabs.
-// ==========================================
-app.post('/api/live/create', isAuthenticated, thumbnailUpload.single('thumbnail'), async (req, res) => {
-  let createdBroadcast = null;
-  try {
-    // --- Resolve the YouTube account ---
-    const accountId = req.body.accountId ? parseInt(req.body.accountId) : null;
-    let credentials;
-    if (accountId) {
-      credentials = await YouTubeCredentials.findById(accountId);
-      if (!credentials || credentials.userId !== req.session.userId) {
-        return res.status(404).json({ success: false, error: 'Akun YouTube tidak ditemukan' });
-      }
-    } else {
-      credentials = await YouTubeCredentials.findByUserId(req.session.userId);
-    }
-    if (!credentials) {
-      return res.status(400).json({ success: false, error: 'Akun YouTube belum terhubung. Hubungkan akun terlebih dahulu.' });
-    }
-
-    const {
-      title, description, scheduledStartTime, privacyStatus, categoryId,
-      tags, unlistReplayOnEnd, thumbnailPath,
-      videoId, audioId, streamDurationHours, streamDurationMinutes, loopVideo
-    } = req.body;
-
-    // --- Validate required fields ---
-    if (!title || !title.trim()) {
-      return res.status(400).json({ success: false, error: 'Judul wajib diisi' });
-    }
-    if (!scheduledStartTime) {
-      return res.status(400).json({ success: false, error: 'Waktu mulai wajib diisi' });
-    }
-    if (!videoId) {
-      return res.status(400).json({ success: false, error: 'Silakan pilih video sumber' });
-    }
-
-    // --- Validate scheduled time (must be >= 10 minutes in the future) ---
-    // Parsed as WIB so the YouTube broadcast time and the local RTMP schedule
-    // align perfectly (the whole app is WIB-centric).
-    const scheduledDate = parseWIBDateTimeLocal(scheduledStartTime);
-    if (!scheduledDate) {
-      return res.status(400).json({ success: false, error: 'Format waktu mulai tidak valid' });
-    }
-    const minTime = Date.now() + 10 * 60 * 1000;
-    if (scheduledDate.getTime() < minTime) {
-      return res.status(400).json({ success: false, error: 'Waktu mulai minimal 10 menit dari sekarang' });
-    }
-
-    // --- Parse tags ---
-    let parsedTags = [];
-    if (tags) {
-      try {
-        parsedTags = typeof tags === 'string' ? JSON.parse(tags) : tags;
-      } catch (e) {
-        parsedTags = [];
-      }
-    }
-    if (!Array.isArray(parsedTags)) parsedTags = [];
-
-    // --- Step 1: Create the broadcast on YouTube ---
-    const accessToken = await youtubeService.getAccessToken(credentials.clientId, credentials.clientSecret, credentials.refreshToken, 0, credentials.id, 0, credentials.id);
-
-    const broadcast = await youtubeService.createBroadcast(accessToken, {
-      title: title.trim(),
-      description: description || '',
-      scheduledStartTime: scheduledDate.toISOString(),
-      privacyStatus: privacyStatus || 'unlisted',
-      streamId: null, // always create a fresh stream key for the integrated flow
-      tags: parsedTags,
-      categoryId: categoryId || '22',
-      enableAutoStart: true,
-      enableAutoStop: true
-    });
-    createdBroadcast = broadcast;
-
-    // --- Step 2: Persist broadcast settings (best-effort) ---
-    try {
-      await YouTubeBroadcastSettings.upsert({
-        broadcastId: broadcast.broadcastId,
-        userId: req.session.userId,
-        accountId: accountId || null,
-        enableAutoStart: true,
-        enableAutoStop: true,
-        unlistReplayOnEnd: unlistReplayOnEnd === 'true' || unlistReplayOnEnd === true,
-        originalPrivacyStatus: privacyStatus || 'unlisted',
-        thumbnailPath: thumbnailPath || null
-      });
-    } catch (settingsErr) {
-      console.error('[LiveStudio] Error saving broadcast settings (non-fatal):', settingsErr.message);
-    }
-
-    // --- Step 3: Upload thumbnail (optional, best-effort) ---
-    try {
-      if (req.file) {
-        const tr = await youtubeService.uploadThumbnail(accessToken, broadcast.broadcastId, req.file.buffer);
-        broadcast.thumbnailUrl = tr.thumbnailUrl;
-      } else if (thumbnailPath) {
-        const fullPath = path.join(__dirname, 'public', thumbnailPath);
-        if (fs.existsSync(fullPath)) {
-          const buf = fs.readFileSync(fullPath);
-          const tr = await youtubeService.uploadThumbnail(accessToken, broadcast.broadcastId, buf);
-          broadcast.thumbnailUrl = tr.thumbnailUrl;
-        }
-      }
-    } catch (thumbErr) {
-      console.error('[LiveStudio] Thumbnail upload failed (non-fatal):', thumbErr.message);
-    }
-
-    // --- Step 4: Create the local RTMP stream record linked by stream key ---
-    const hours = parseInt(streamDurationHours) || 0;
-    const minutes = parseInt(streamDurationMinutes) || 0;
-    const totalMinutes = (hours * 60) + minutes;
-
-    const streamData = {
-      title: title.trim(),
-      video_id: videoId || null,
-      audio_id: audioId || null,
-      rtmp_url: broadcast.rtmpUrl || 'rtmp://a.rtmp.youtube.com/live2',
-      stream_key: broadcast.streamKey,
-      platform: 'YouTube',
-      platform_icon: 'ti-brand-youtube',
-      bitrate: parseInt(req.body.bitrate) || 2500,
-      resolution: req.body.resolution || '1280x720',
-      fps: parseInt(req.body.fps) || 30,
-      orientation: req.body.orientation || 'horizontal',
-      loop_video: loopVideo === 'true' || loopVideo === true || loopVideo === 'on',
-      stream_duration_minutes: totalMinutes > 0 ? totalMinutes : null,
-      schedule_type: 'once',
-      schedule_time: scheduledDate.toISOString(),
-      status: 'scheduled',
-      user_id: req.session.userId
-    };
-
-    let stream;
-    try {
-      stream = await Stream.create(streamData);
-    } catch (streamErr) {
-      // The broadcast was created on YouTube but the local stream record failed.
-      // Surface a clear, actionable message instead of leaving things inconsistent.
-      console.error('[LiveStudio] Stream record creation failed after broadcast created:', streamErr.message);
-      invalidateBroadcastsCache(req.session.userId);
-      return res.status(500).json({
-        success: false,
-        broadcastCreated: true,
-        broadcast,
-        error: 'Broadcast YouTube berhasil dibuat, tetapi pembuatan stream RTMP gagal. Stream key: ' + broadcast.streamKey + '. Anda bisa membuat stream manual dengan stream key ini.'
-      });
-    }
-
-    invalidateBroadcastsCache(req.session.userId);
-
-    res.json({
-      success: true,
-      broadcast,
-      stream,
-      message: 'Live berhasil dibuat: broadcast YouTube terjadwal dan stream RTMP otomatis tersambung.'
-    });
-  } catch (error) {
-    console.error('[LiveStudio] Error creating integrated live:', error);
-    res.status(500).json({
-      success: false,
-      broadcastCreated: !!createdBroadcast,
-      broadcast: createdBroadcast || null,
-      error: error.message || 'Gagal membuat live'
     });
   }
 });
