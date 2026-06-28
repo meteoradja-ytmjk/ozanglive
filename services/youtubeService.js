@@ -203,14 +203,17 @@ class YouTubeService {
   /**
    * Get access token with graceful fallback (returns null instead of throwing)
    * Useful for non-critical operations like displaying channel name
+   * BUG FIX #9: Added accountId parameter so cached tokens are used instead of
+   * always hitting Google API. Without this, every call bypassed the cache.
    * @param {string} clientId - Google Client ID
    * @param {string} clientSecret - Google Client Secret
    * @param {string} refreshToken - Refresh Token
+   * @param {number|null} accountId - Optional account ID for cache lookup
    * @returns {Promise<string|null>} Access token or null if failed
    */
-  async getAccessTokenSafe(clientId, clientSecret, refreshToken) {
+  async getAccessTokenSafe(clientId, clientSecret, refreshToken, accountId = null) {
     try {
-      return await this.getAccessToken(clientId, clientSecret, refreshToken);
+      return await this.getAccessToken(clientId, clientSecret, refreshToken, 0, accountId);
     } catch (error) {
       console.warn(`[YouTubeService.getAccessTokenSafe] Failed to get token: ${error.message}`);
       return null;

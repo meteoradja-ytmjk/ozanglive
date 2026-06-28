@@ -154,18 +154,24 @@ async function cleanupStaleMaps() {
     // Clean streamOriginalTiming for inactive streams
     // IMPORTANT: Only clean if stream is also NOT in 'live' status in DB
     // During reconnect, stream is removed from activeStreams but originalTiming must persist
+    // BUG FIX #10: Use parallel queries instead of sequential await-in-loop
+    const inactiveTimingIds = [];
     for (const [id] of streamOriginalTiming) {
       if (!activeIds.has(id)) {
-        try {
-          const stream = await Stream.findById(id);
-          if (!stream || stream.status !== 'live') {
-            streamOriginalTiming.delete(id);
-            cleaned++;
-          }
-        } catch (e) {
-          // If we can't check DB, leave it alone to be safe
-        }
+        inactiveTimingIds.push(id);
       }
+    }
+    if (inactiveTimingIds.length > 0) {
+      const streamChecks = await Promise.all(
+        inactiveTimingIds.map(id => Stream.findById(id).catch(() => null))
+      );
+      inactiveTimingIds.forEach((id, index) => {
+        const stream = streamChecks[index];
+        if (!stream || stream.status !== 'live') {
+          streamOriginalTiming.delete(id);
+          cleaned++;
+        }
+      });
     }
     
     // HARD LIMIT: If streamOriginalTiming exceeds max size
@@ -855,7 +861,8 @@ function prerenderGaplessAudio(audioPaths, outputFile) {
   });
 }
 
-async function buildFFmpegArgsForPlaylist(stream, playlist, durationOverrideSeconds = null) {
+// BUG FIX #8: Added reconnecting param so shuffle is NOT re-randomized on reconnect
+async function buildFFmpegArgsForPlaylist(stream, playlist, durationOverrideSeconds = null, reconnecting = false) {
   if (!playlist.videos || playlist.videos.length === 0) {
     throw new Error(`Playlist is empty for playlist_id: ${stream.video_id}`);
   }
@@ -888,7 +895,8 @@ async function buildFFmpegArgsForPlaylist(stream, playlist, durationOverrideSeco
     console.log('[StreamingService] No duration set for playlist - stream will run until playlist ends or loop exhausts');
   }
   
-  const playlistVideos = playlist.is_shuffle || playlist.shuffle
+  // BUG FIX #8: Only shuffle on first start; reconnect uses same order to avoid viewer-visible jumps
+  const playlistVideos = (!reconnecting && (playlist.is_shuffle || playlist.shuffle))
     ? [...playlist.videos].sort(() => Math.random() - 0.5)
     : playlist.videos;
   const videoPaths = [];
@@ -1100,7 +1108,8 @@ async function buildFFmpegArgsForPlaylist(stream, playlist, durationOverrideSeco
   return args;
 }
 
-async function buildFFmpegArgs(stream, durationOverrideSeconds = null) {
+// BUG FIX #8: Pass reconnecting flag through to playlist builder
+async function buildFFmpegArgs(stream, durationOverrideSeconds = null, reconnecting = false) {
   const streamWithVideo = await Stream.getStreamWithVideo(stream.id);
   
   if (streamWithVideo && streamWithVideo.video_type === 'playlist') {
@@ -1111,7 +1120,8 @@ async function buildFFmpegArgs(stream, durationOverrideSeconds = null) {
       throw new Error(`Playlist not found for playlist_id: ${stream.video_id}`);
     }
     
-    return await buildFFmpegArgsForPlaylist(stream, playlist, durationOverrideSeconds);
+    // BUG FIX #8: Pass reconnecting so playlist doesn't re-shuffle
+    return await buildFFmpegArgsForPlaylist(stream, playlist, durationOverrideSeconds, reconnecting);
   }
   
   const video = await Video.findById(stream.video_id);
@@ -1196,9 +1206,9 @@ function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds
   
   // Loop the video when the user enabled loop OR when a finite duration is set.
   // If a duration is configured, the stream must run for that full duration, so a
-  // short video has to loop to fill it. Otherwise FFmpeg (with -shortest) ends as
-  // soon as the single video playthrough finishes — the "stops before the configured
-  // duration" bug. -t still cuts the output at the exact requested duration.
+  // short video has to loop to fill it. Without loop, FFmpeg exits when the single
+  // video playthrough finishes — the "stops before the configured duration" bug.
+  // -t still cuts the output at the exact requested duration.
   const shouldLoopVideo = loopVideo || (durationSeconds && durationSeconds > 0);
   if (shouldLoopVideo) {
     args.push('-stream_loop', '-1');
@@ -1211,7 +1221,10 @@ function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds
   
   args.push('-map', '0:v:0', '-map', '1:a:0');
   args.push('-c', 'copy');  // Copy both
-  args.push('-shortest');
+  // BUG FIX #1: Removed -shortest flag.
+  // -shortest caused FFmpeg to stop when the SHORTER input ended, which broke looping.
+  // When looping is enabled, neither input ever "ends", so -shortest was harmless but wrong.
+  // When no loop, the video ends naturally. Duration is controlled by -t (output limiter).
   
   // CRITICAL: -t must be placed BEFORE -f flv and output URL
   // This limits the OUTPUT duration correctly
@@ -1338,7 +1351,6 @@ function summarizeFFmpegError(stderr) {
 
 async function startStream(streamId) {
   try {
-    streamRetryCount.set(streamId, 0);
     if (activeStreams.has(streamId)) {
       return { success: false, error: 'Stream is already active' };
     }
@@ -1363,9 +1375,16 @@ async function startStream(streamId) {
     const startTimeIso = new Date().toISOString();
     const streamStartTime = new Date(startTimeIso);
     
+    // BUG FIX #2: Only reset retry counter on FIRST start, not on reconnect.
+    // Resetting on reconnect caused the counter to never accumulate, allowing
+    // infinite reconnect loops even when MAX_RETRY_ATTEMPTS was theoretically reached.
+    const reconnecting = isReconnect(streamId);
+    if (!reconnecting) {
+      streamRetryCount.set(streamId, 0);
+    }
+    
     // If this is a reconnect, calculate remaining duration for FFmpeg -t parameter
     let durationOverrideSeconds = null;
-    const reconnecting = isReconnect(streamId);
     if (reconnecting) {
       const remainingMs = getOriginalRemainingMs(streamId);
       if (remainingMs !== null && remainingMs > 0) {
@@ -1379,7 +1398,8 @@ async function startStream(streamId) {
       }
     }
     
-    const ffmpegArgs = await buildFFmpegArgs(stream, durationOverrideSeconds);
+    // BUG FIX #8: Pass reconnecting so playlist does NOT re-shuffle on reconnect
+    const ffmpegArgs = await buildFFmpegArgs(stream, durationOverrideSeconds, reconnecting);
     const fullCommand = `${ffmpegPath} ${ffmpegArgs.join(' ')}`;
     addStreamLog(streamId, `Starting stream with command: ${fullCommand}`);
     console.log(`Starting stream: ${fullCommand}`);
@@ -2122,12 +2142,12 @@ async function stopStream(streamId) {
 async function killFFmpegByStreamKey(streamKey) {
   if (!streamKey) return false;
   
-  return new Promise((resolve) => {
-    const isWindows = process.platform === 'win32';
-    
-    if (isWindows) {
-      // On Windows, use wmic to find and kill FFmpeg processes with this stream key
-      exec(`wmic process where "name='ffmpeg.exe'" get processid,commandline /format:csv`, { timeout: 10000 }, (err, stdout) => {
+  const isWindows = process.platform === 'win32';
+  
+  if (isWindows) {
+    // BUG FIX #4: Use Promise-based approach to correctly await all async kills
+    return new Promise((resolve) => {
+      exec(`wmic process where "name='ffmpeg.exe'" get processid,commandline /format:csv`, { timeout: 10000 }, async (err, stdout) => {
         if (err || !stdout) {
           resolve(false);
           return;
@@ -2140,36 +2160,47 @@ async function killFFmpegByStreamKey(streamKey) {
           return;
         }
         
-        // Extract PIDs and kill them
-        let killed = false;
+        // Extract valid PIDs
+        const pids = [];
         for (const line of lines) {
           const parts = line.split(',');
           const pid = parts[parts.length - 1]?.trim();
           if (pid && /^\d+$/.test(pid)) {
-            try {
-              exec(`taskkill /F /PID ${pid}`, (killErr) => {
-                if (!killErr) {
-                  console.log(`[StreamingService] Killed FFmpeg process PID ${pid}`);
-                  killed = true;
-                }
-              });
-            } catch (e) {
-              // Ignore kill errors
-            }
+            pids.push(pid);
           }
         }
         
-        // Wait a bit for kills to complete
-        setTimeout(() => resolve(killed), 1000);
+        if (pids.length === 0) {
+          resolve(false);
+          return;
+        }
+        
+        // BUG FIX #4: Kill all PIDs in parallel and await all completions before resolving
+        const killResults = await Promise.all(
+          pids.map(pid => new Promise((res) => {
+            exec(`taskkill /F /PID ${pid}`, (killErr) => {
+              if (!killErr) {
+                console.log(`[StreamingService] Killed FFmpeg process PID ${pid}`);
+                res(true);
+              } else {
+                res(false);
+              }
+            });
+          }))
+        );
+        
+        resolve(killResults.some(r => r));
       });
-    } else {
-      // On Linux/Mac, use pkill with pattern matching
+    });
+  } else {
+    // On Linux/Mac, use pkill with pattern matching
+    return new Promise((resolve) => {
       exec(`pkill -f "ffmpeg.*${streamKey}"`, { timeout: 5000 }, (err) => {
         // pkill returns 0 if processes were killed, 1 if no processes matched
         resolve(!err);
       });
-    }
-  });
+    });
+  }
 }
 
 async function syncStreamStatuses() {
@@ -2306,6 +2337,21 @@ async function saveStreamHistory(stream) {
     const durationSeconds = Math.floor((endTime - startTime) / 1000);
     if (durationSeconds < 1) {
       console.log(`[StreamingService] Not saving history for stream ${stream.id} - duration too short (${durationSeconds}s)`);
+      return false;
+    }
+    
+    // BUG FIX #5: Prevent duplicate history entries for the same stream session.
+    // On reconnect, saveStreamHistory may be called multiple times with same start_time.
+    // Check if an entry with the same stream_id and start_time already exists.
+    const isDuplicate = await new Promise((resolve) => {
+      db.get(
+        `SELECT id FROM stream_history WHERE stream_id = ? AND start_time = ? LIMIT 1`,
+        [stream.id, stream.start_time],
+        (err, row) => resolve(!err && !!row)
+      );
+    });
+    if (isDuplicate) {
+      console.log(`[StreamingService] Skipping duplicate history for stream ${stream.id} (start_time: ${stream.start_time})`);
       return false;
     }
     const videoDetails = stream.video_id ? await Video.findById(stream.video_id) : null;

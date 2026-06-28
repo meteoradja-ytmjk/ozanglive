@@ -147,6 +147,12 @@ class TokenRefreshScheduler {
               error: refreshResult.error
             });
           }
+          
+          // BUG FIX #6: Throttle between accounts to avoid Google OAuth API rate limits.
+          // With many accounts processed in rapid succession, Google may return 429.
+          // 500ms delay is imperceptible (scheduler runs every 12h) but prevents rate limiting.
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
         } catch (err) {
           console.error(`[TokenRefreshScheduler] Error processing account ${account.id}:`, err.message);
           results.failed++;

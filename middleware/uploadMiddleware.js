@@ -176,13 +176,26 @@ const audioFilter = (req, file, cb) => {
   if (allowedFormats.includes(file.mimetype) || allowedExts.includes(fileExt)) {
     cb(null, true);
   } else {
-    cb(new Error('Only .mp3, .wav, and .aac formats are allowed'), false);
+    // BUG FIX #7: Updated error message to include .m4a which is also allowed
+    cb(new Error('Only .mp3, .wav, .aac, and .m4a formats are allowed'), false);
   }
 };
 
+// BUG FIX #3: Added fileSize limit to prevent unlimited video uploads.
+// Default 5GB, configurable via MAX_VIDEO_SIZE_MB env variable.
+// checkStorageLimit middleware can be bypassed via missing Content-Length header,
+// so a hard limit here is essential as a defense-in-depth measure.
+const parsedMaxVideoSizeMb = parseInt(process.env.MAX_VIDEO_SIZE_MB || '5120', 10);
+const MAX_VIDEO_SIZE = Number.isFinite(parsedMaxVideoSizeMb) && parsedMaxVideoSizeMb > 0
+  ? parsedMaxVideoSizeMb * 1024 * 1024
+  : 5 * 1024 * 1024 * 1024; // Default 5GB
+
 const uploadVideo = multer({
   storage: videoStorage,
-  fileFilter: videoFilter
+  fileFilter: videoFilter,
+  limits: {
+    fileSize: MAX_VIDEO_SIZE
+  }
 });
 
 const upload = multer({
