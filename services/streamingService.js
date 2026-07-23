@@ -565,10 +565,6 @@ function getStatusAfterStreamEnd(stream) {
 function isUnlimitedStream(stream) {
   if (!stream) return false;
   
-  // Only 'once' schedule type can be unlimited
-  const isOnceSchedule = !stream.schedule_type || stream.schedule_type === 'once';
-  if (!isOnceSchedule) return false;
-  
   // Check if duration is set
   const hasDuration = stream.stream_duration_minutes && stream.stream_duration_minutes > 0;
   const hasEndTime = stream.end_time && new Date(stream.end_time) > new Date();
@@ -961,9 +957,8 @@ async function buildFFmpegArgsForPlaylist(stream, playlist, durationOverrideSeco
   // playlist has to repeat to fill it. Without this, FFmpeg exits as soon as the
   // playlist ends — the "stream stops before the configured duration" bug.
   // We use the FFmpeg `-stream_loop -1` input flag (added to args below) for a true
-  // infinite loop instead of repeating the concat list a fixed number of times, so it
-  // works correctly for any duration (including very long ones).
-  const shouldLoopPlaylist = !!stream.loop_video || (durationSeconds && durationSeconds > 0);
+  // Loop the playlist when user enabled loop, OR when stream is unlimited (live nonstop), OR when a finite duration is set.
+  const shouldLoopPlaylist = !!stream.loop_video || isUnlimitedStream(stream) || !durationSeconds || (durationSeconds && durationSeconds > 0);
 
   let concatContent = '';
   videoPaths.forEach(videoPath => {
@@ -1183,13 +1178,15 @@ async function buildFFmpegArgs(stream, durationOverrideSeconds = null, reconnect
     console.log('[StreamingService] No duration set for FFmpeg - stream will run indefinitely');
   }
   
+  const isUnlimited = isUnlimitedStream(stream);
+
   // Build FFmpeg args based on whether audio is selected
   if (audioPath) {
     // Video + Audio merge with looping
-    return buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds, stream.loop_video);
+    return buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds, stream.loop_video, isUnlimited);
   } else {
     // Video only (preserve original audio)
-    return buildFFmpegArgsVideoOnly(videoPath, rtmpUrl, durationSeconds, stream.loop_video);
+    return buildFFmpegArgsVideoOnly(videoPath, rtmpUrl, durationSeconds, stream.loop_video, isUnlimited);
   }
 }
 
@@ -1201,15 +1198,11 @@ async function buildFFmpegArgs(stream, durationOverrideSeconds = null, reconnect
  * IMPORTANT: -t parameter must be placed BEFORE the output URL to limit output duration
  * When using -stream_loop -1, FFmpeg will loop input infinitely, but -t limits the OUTPUT duration
  */
-function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds, loopVideo) {
+function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds, loopVideo, isUnlimited = false) {
   const args = ['-re'];
   
-  // Loop the video when the user enabled loop OR when a finite duration is set.
-  // If a duration is configured, the stream must run for that full duration, so a
-  // short video has to loop to fill it. Without loop, FFmpeg exits when the single
-  // video playthrough finishes — the "stops before the configured duration" bug.
-  // -t still cuts the output at the exact requested duration.
-  const shouldLoopVideo = loopVideo || (durationSeconds && durationSeconds > 0);
+  // Loop the video when user enabled loop, OR when stream is unlimited (live nonstop), OR when a finite duration is set.
+  const shouldLoopVideo = loopVideo || isUnlimited || !durationSeconds || (durationSeconds && durationSeconds > 0);
   if (shouldLoopVideo) {
     args.push('-stream_loop', '-1');
   }
@@ -1221,10 +1214,6 @@ function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds
   
   args.push('-map', '0:v:0', '-map', '1:a:0');
   args.push('-c', 'copy');  // Copy both
-  // BUG FIX #1: Removed -shortest flag.
-  // -shortest caused FFmpeg to stop when the SHORTER input ended, which broke looping.
-  // When looping is enabled, neither input ever "ends", so -shortest was harmless but wrong.
-  // When no loop, the video ends naturally. Duration is controlled by -t (output limiter).
   
   // CRITICAL: -t must be placed BEFORE -f flv and output URL
   // This limits the OUTPUT duration correctly
@@ -1235,7 +1224,7 @@ function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds
   
   args.push('-f', 'flv');
   args.push(rtmpUrl);
-  console.log('[StreamingService] Audio-merge: minimal copy');
+  console.log(`[StreamingService] Audio-merge: minimal copy (loop=${shouldLoopVideo}, duration=${durationSeconds ? durationSeconds + 's' : 'unlimited'})`);
   return args;
 }
 
@@ -1247,15 +1236,11 @@ function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds
  * IMPORTANT: -t parameter must be placed BEFORE the output URL to limit output duration
  * When using -stream_loop -1, FFmpeg will loop input infinitely, but -t limits the OUTPUT duration
  */
-function buildFFmpegArgsVideoOnly(videoPath, rtmpUrl, durationSeconds, loopVideo) {
+function buildFFmpegArgsVideoOnly(videoPath, rtmpUrl, durationSeconds, loopVideo, isUnlimited = false) {
   const args = ['-re'];
   
-  // Loop the video when the user enabled loop OR when a finite duration is set.
-  // A configured duration means the stream must run for that full time, so a short
-  // video has to loop to fill it. Without this FFmpeg exits when the single video
-  // playthrough finishes — the "stops before the configured duration" bug.
-  // -t still cuts the output at the exact requested duration.
-  const shouldLoopVideo = loopVideo || (durationSeconds && durationSeconds > 0);
+  // Loop the video when user enabled loop, OR when stream is unlimited (live nonstop), OR when a finite duration is set.
+  const shouldLoopVideo = loopVideo || isUnlimited || !durationSeconds || (durationSeconds && durationSeconds > 0);
   if (shouldLoopVideo) {
     args.push('-stream_loop', '-1');
   }
@@ -1271,7 +1256,7 @@ function buildFFmpegArgsVideoOnly(videoPath, rtmpUrl, durationSeconds, loopVideo
   
   args.push('-f', 'flv');
   args.push(rtmpUrl);
-  console.log('[StreamingService] Video-only: minimal copy');
+  console.log(`[StreamingService] Video-only: minimal copy (loop=${shouldLoopVideo}, duration=${durationSeconds ? durationSeconds + 's' : 'unlimited'})`);
   return args;
 }
 

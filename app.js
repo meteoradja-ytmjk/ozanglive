@@ -5653,6 +5653,7 @@ app.put('/api/streams/:id', isAuthenticated, async (req, res) => {
         // End time cleared - if no explicit duration, stream will be unlimited
         updateData.end_time = null;
         if (!hasExplicitDuration) {
+          updateData.stream_duration_minutes = null;
           updateData.duration = null;
           console.log(`[API Update] End time cleared, no duration set - stream will be UNLIMITED`);
         }
@@ -5673,9 +5674,10 @@ app.put('/api/streams/:id', isAuthenticated, async (req, res) => {
         if (scheduleEndDate) {
           updateData.end_time = scheduleEndDate.toISOString();
         }
-      } else if ('scheduleEndTime' in req.body && req.body.scheduleEndTime === '') {
+      } else if ('scheduleEndTime' in req.body && (req.body.scheduleEndTime === '' || req.body.scheduleEndTime === null)) {
         updateData.end_time = null;
         if (!hasExplicitDuration) {
+          updateData.stream_duration_minutes = null;
           updateData.duration = null;
         }
       }
@@ -5684,9 +5686,10 @@ app.put('/api/streams/:id', isAuthenticated, async (req, res) => {
       if (scheduleEndDate) {
         updateData.end_time = scheduleEndDate.toISOString();
       }
-    } else if ('scheduleEndTime' in req.body && req.body.scheduleEndTime === '') {
+    } else if ('scheduleEndTime' in req.body && (req.body.scheduleEndTime === '' || req.body.scheduleEndTime === null)) {
       updateData.end_time = null;
       if (!hasExplicitDuration) {
+        updateData.stream_duration_minutes = null;
         updateData.duration = null;
       }
     }

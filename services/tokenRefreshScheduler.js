@@ -24,11 +24,10 @@ class TokenRefreshScheduler {
   constructor() {
     this.intervalId = null;
     this.isRunning = false;
-    // Check every 12 hours (2x per day is more than enough)
-    // Token only needs refresh every 5 days, so checking 2x/day gives plenty of margin
-    this.checkInterval = 12 * 60 * 60 * 1000; // 12 hours in ms
-    // Refresh if token is older than 5 days (safe margin before 7-day expiry)
-    this.refreshThresholdDays = 5;
+    // Check every 2 hours (12x per day) to ensure access tokens and rolling refresh tokens stay fresh
+    this.checkInterval = 2 * 60 * 60 * 1000; // 2 hours in ms
+    // Refresh if last refresh was > 12 hours ago (0.5 days) or token expires soon
+    this.refreshThresholdDays = 0.5;
     // Track refresh results for UI display
     this.lastRunResults = null;
     this.lastRunTime = null;
@@ -188,9 +187,19 @@ class TokenRefreshScheduler {
       return true;
     }
 
+    const now = new Date();
+
+    // Check if token_expires_at is close (within 1 hour) or already passed
+    if (account.token_expires_at) {
+      const expiresAt = new Date(account.token_expires_at);
+      const msUntilExpiry = expiresAt.getTime() - now.getTime();
+      if (msUntilExpiry <= 60 * 60 * 1000) { // 1 hour buffer
+        return true;
+      }
+    }
+
     // Check if last refresh was more than threshold days ago
     const lastRefresh = new Date(account.last_refreshed_at);
-    const now = new Date();
     const daysSinceRefresh = (now - lastRefresh) / (1000 * 60 * 60 * 24);
 
     return daysSinceRefresh >= this.refreshThresholdDays;

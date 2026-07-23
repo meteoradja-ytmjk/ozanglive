@@ -42,7 +42,7 @@ function calculateDurationSeconds(stream) {
 
   // Priority 2: Calculate from schedule times (end_time - schedule_time)
   // ONLY used if stream_duration_minutes is NOT set
-  // For ONCE schedules, end_time can be used to calculate duration
+  // For ONCE schedules, end_time can be used to calculate duration if valid and not stale
   if (stream.end_time && stream.schedule_time) {
     const scheduleStart = new Date(stream.schedule_time);
     const scheduleEnd = new Date(stream.end_time);
@@ -50,7 +50,8 @@ function calculateDurationSeconds(stream) {
     // Validate dates
     if (!isNaN(scheduleStart.getTime()) && !isNaN(scheduleEnd.getTime())) {
       const durationMs = scheduleEnd.getTime() - scheduleStart.getTime();
-      if (durationMs > 0) {
+      // Ensure positive duration AND that scheduleEnd is not a stale date in the past
+      if (durationMs > 0 && (scheduleEnd > new Date() || stream.status === 'live')) {
         const seconds = Math.floor(durationMs / 1000);
         const minutes = seconds / 60;
         console.log(`[DurationCalculator] Using schedule calculation: ${minutes.toFixed(1)} minutes (${seconds} seconds)`);
