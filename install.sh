@@ -250,6 +250,12 @@ install_prereqs() {
     else
         print_status "$ICON_SUCCESS" "PM2 Process Manager terpasang"
     fi
+
+    if ! command -v fuser >/dev/null 2>&1; then
+        run_task "Menginstal psmisc (fuser utility)" sudo apt-get install -y psmisc
+    else
+        print_status "$ICON_SUCCESS" "psmisc (fuser utility) terpasang"
+    fi
     echo
 }
 
@@ -284,9 +290,9 @@ backup_existing_data() {
 # ==============================================================================
 start_pm2() {
     cd "$INSTALL_DIR"
-    run_task "Menghentikan instance PM2 lama (streamflow/ozanglive)" bash -c "pm2 delete streamflow >/dev/null 2>&1 || true; pm2 delete ozanglive >/dev/null 2>&1 || true"
+    run_task "Menghentikan seluruh instance PM2 lama (pm2 delete all)" bash -c "pm2 delete all >/dev/null 2>&1 || true"
     if command -v fuser >/dev/null 2>&1; then
-        run_task "Memastikan port 7575 bebas" bash -c "fuser -k 7575/tcp >/dev/null 2>&1 || true"
+        run_task "Membebaskan Port 7575 (fuser -k 7575/tcp)" bash -c "sudo fuser -k 7575/tcp >/dev/null 2>&1 || true"
     fi
 
     if [ -f "ecosystem.config.js" ]; then
@@ -359,7 +365,10 @@ do_fresh() {
 
         backup_existing_data "before-fresh-install"
 
-        run_task "Menghentikan instance PM2 lama" bash -c "pm2 delete ozanglive >/dev/null 2>&1 || true && pm2 save >/dev/null 2>&1 || true"
+        run_task "Menghentikan seluruh instance PM2 lama (pm2 delete all)" bash -c "pm2 delete all >/dev/null 2>&1 || true && pm2 save >/dev/null 2>&1 || true"
+        if command -v fuser >/dev/null 2>&1; then
+            run_task "Membebaskan Port 7575 (fuser -k 7575/tcp)" bash -c "sudo fuser -k 7575/tcp >/dev/null 2>&1 || true"
+        fi
         run_task "Menghapus folder instalasi lama" rm -rf "$INSTALL_DIR"
         echo
     fi
