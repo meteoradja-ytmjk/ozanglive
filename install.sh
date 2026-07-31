@@ -1,6 +1,8 @@
 #!/bin/bash
-#
-# OzangLive Installer / Updater
+# ==============================================================================
+#  OzangLive Quick Installer & Updater
+#  Visual UI Redesign - Premium Cyberpunk Terminal Interface
+# ==============================================================================
 #
 # Modes:
 #   - update  (default jika sudah ada instalasi)
@@ -19,13 +21,46 @@
 #   --update        paksa mode update (gagal jika tidak ada instalasi)
 #   --branch <name> checkout branch tertentu (default: main)
 #   --no-password   skip prompt password (untuk CI / re-run otomatis)
-#
+# ==============================================================================
 
 set -e
+
+# ANSI Styling Definitions
+NC='\033[0m'
+BOLD='\033[1m'
+DIM='\033[2m'
+
+CYAN='\033[36m'
+B_CYAN='\033[1;36m'
+BLUE='\033[34m'
+B_BLUE='\033[1;34m'
+PURPLE='\033[35m'
+B_PURPLE='\033[1;35m'
+GREEN='\033[32m'
+B_GREEN='\033[1;32m'
+YELLOW='\033[33m'
+B_YELLOW='\033[1;33m'
+RED='\033[31m'
+B_RED='\033[1;31m'
+WHITE='\033[1;37m'
+GRAY='\033[90m'
+
+# Icons
+ICON_SUCCESS="${B_GREEN}✔${NC}"
+ICON_ERROR="${B_RED}✖${NC}"
+ICON_WARN="${B_YELLOW}⚠️${NC}"
+ICON_INFO="${B_CYAN}ℹ${NC}"
+ICON_LOCK="${B_PURPLE}🔐${NC}"
+ICON_GEAR="${B_CYAN}⚙️${NC}"
+ICON_ROCKET="${B_GREEN}🚀${NC}"
+ICON_PACKAGE="${B_BLUE}📦${NC}"
+ICON_FIRE="${B_RED}🔥${NC}"
+ICON_WAIT="${B_CYAN}⏳${NC}"
 
 INSTALL_DIR="$HOME/ozanglive"
 BACKUP_ROOT="$HOME/ozanglive-backups"
 REPO_URL="https://github.com/meteoradja-ytmjk/ozanglive"
+LOG_FILE="/tmp/ozang_install_$(date +%s).log"
 
 MODE=""
 BRANCH="main"
@@ -38,26 +73,75 @@ while [ $# -gt 0 ]; do
         --update)      MODE="update"; shift ;;
         --branch)      BRANCH="$2"; shift 2 ;;
         --no-password) SKIP_PASSWORD="true"; shift ;;
-        *) echo "Unknown flag: $1"; exit 1 ;;
+        *) 
+            echo -e "${B_RED}Error: Flag tidak dikenal: $1${NC}"
+            exit 1 
+            ;;
     esac
 done
 
-# ================================
-# PASSWORD VALIDATION FUNCTIONS
-# ================================
+# ==============================================================================
+# UI DRAWING FUNCTIONS
+# ==============================================================================
+draw_banner() {
+    clear 2>/dev/null || true
+    echo -e "${B_CYAN}╭──────────────────────────────────────────────────────────╮${NC}"
+    echo -e "${B_CYAN}│${NC}  ${B_PURPLE}██████╗ ███████╗██████╗ ███╗   ██╗██╗██╗   ██╗███████╗${NC}  ${B_CYAN}│${NC}"
+    echo -e "${B_CYAN}│${NC}  ${B_PURPLE}██╔══██╗╚══███╔╝██╔══██╗████╗  ██║██║██║   ██║██╔════╝${NC}  ${B_CYAN}│${NC}"
+    echo -e "${B_CYAN}│${NC}  ${B_CYAN}██║  ██║  ███╔╝ ███████║██╔██╗ ██║██║██║   ██║█████╗${NC}    ${B_CYAN}│${NC}"
+    echo -e "${B_CYAN}│${NC}  ${B_CYAN}██║  ██║ ███╔╝  ██╔══██║██║╚██╗██║██║╚██╗ ██╔╝██╔══╝${NC}    ${B_CYAN}│${NC}"
+    echo -e "${B_CYAN}│${NC}  ${B_BLUE}██████╔╝███████╗██║  ██║██║ ╚████║██║ ╚████╔╝ ███████╗${NC}  ${B_CYAN}│${NC}"
+    echo -e "${B_CYAN}│${NC}  ${B_BLUE}╚═════╝ ╚══════╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═╝  ╚═══╝  ╚══════╝${NC}  ${B_CYAN}│${NC}"
+    echo -e "${B_CYAN}│${NC}        ${B_WHITE}STREAMING PLATFORM AUTOMATION — QUICK INSTALLER${NC}   ${B_CYAN}│${NC}"
+    echo -e "${B_CYAN}╰──────────────────────────────────────────────────────────╯${NC}"
+    echo
+}
+
+draw_section() {
+    local step="$1"
+    local title="$2"
+    echo -e "${B_CYAN}┌──────────────────────────────────────────────────────────┐${NC}"
+    echo -e "${B_CYAN}│${NC} ${B_YELLOW}[$step]${NC} ${B_WHITE}$title${NC}"
+    echo -e "${B_CYAN}└──────────────────────────────────────────────────────────┘${NC}"
+}
+
+print_status() {
+    local icon="$1"
+    local msg="$2"
+    echo -e "  $icon $msg"
+}
+
+run_task() {
+    local label="$1"
+    shift
+    printf "  ${ICON_WAIT} %-50s" "$label..."
+    if "$@" >> "$LOG_FILE" 2>&1; then
+        printf "\r  ${ICON_SUCCESS} %-50s ${GRAY}(Selesai)${NC}\n" "$label"
+    else
+        printf "\r  ${ICON_ERROR} %-50s ${B_RED}(Gagal)${NC}\n" "$label"
+        echo -e "\n${B_RED}╭────────────────── LOG ERROR SUMMARY ──────────────────╮${NC}"
+        tail -n 15 "$LOG_FILE" | sed 's/^/│ /'
+        echo -e "${B_RED}╰───────────────────────────────────────────────────────╯${NC}\n"
+        exit 1
+    fi
+}
+
+# ==============================================================================
+# PASSWORD & AUTHENTICATION
+# ==============================================================================
 validate_password() {
     [ "$1" = "1988" ]
 }
 
 show_failure_message() {
     echo
-    echo "================================"
-    echo "❌ INSTALASI DIBATALKAN"
-    echo "================================"
+    echo -e "${B_RED}╭──────────────────────────────────────────────────────────╮${NC}"
+    echo -e "${B_RED}│ ❌ INSTALASI DIBATALKAN                                  │${NC}"
+    echo -e "${B_RED}├──────────────────────────────────────────────────────────┤${NC}"
+    echo -e "${B_RED}│ Password salah 3 kali berturut-turut.                    │${NC}"
+    echo -e "${B_RED}│ Hubungi developer: 📱 WhatsApp 089621453431              │${NC}"
+    echo -e "${B_RED}╰──────────────────────────────────────────────────────────╯${NC}"
     echo
-    echo "Password salah 3 kali berturut-turut."
-    echo "Hubungi developer: 📱 WhatsApp 089621453431"
-    echo "================================"
 }
 
 prompt_password() {
@@ -68,17 +152,20 @@ prompt_password() {
     local password=""
 
     if [ ! -t 0 ] && [ ! -e /dev/tty ]; then
-        echo "❌ Error: Tidak dapat membaca input interaktif."
-        echo "   Jalankan script langsung, bukan via pipe tanpa /dev/tty."
+        echo -e "  ${ICON_ERROR} Error: Tidak dapat membaca input interaktif."
+        echo -e "     Jalankan script langsung, bukan via pipe tanpa /dev/tty."
         return 1
     fi
 
-    echo "🔐 Instalasi ini memerlukan password."
-    echo "   Hubungi developer untuk mendapatkan password."
+    echo -e "${B_PURPLE}╭──────────────────────────────────────────────────────────╮${NC}"
+    echo -e "${B_PURPLE}│ 🔐 OTENTIKASI KEAMANAN                                   │${NC}"
+    echo -e "${B_PURPLE}│    Instalasi ini memerlukan password otorisasi.          │${NC}"
+    echo -e "${B_PURPLE}│    Hubungi developer jika belum memiliki password.       │${NC}"
+    echo -e "${B_PURPLE}╰──────────────────────────────────────────────────────────╯${NC}"
     echo
 
     while [ $attempt -le $max_attempts ]; do
-        printf "🔑 Masukkan password: "
+        printf "  🔑 ${BOLD}Masukkan Password (${attempt}/${max_attempts}):${NC} "
         stty -echo 2>/dev/null </dev/tty || true
         read -r password </dev/tty
         stty echo 2>/dev/null </dev/tty || true
@@ -86,19 +173,18 @@ prompt_password() {
 
         if [ -z "$password" ]; then
             local remaining=$((max_attempts - attempt))
-            [ $remaining -gt 0 ] && echo "❌ Password tidak boleh kosong! Sisa percobaan: $remaining" && echo
+            [ $remaining -gt 0 ] && echo -e "  ${ICON_ERROR} ${RED}Password tidak boleh kosong! Sisa percobaan: ${remaining}${NC}\n"
             attempt=$((attempt + 1))
             continue
         fi
 
         if validate_password "$password"; then
-            echo
-            echo "✅ Password benar! Melanjutkan..."
-            echo
+            echo -e "  ${ICON_SUCCESS} ${B_GREEN}Password benar! Otorisasi diterima.${NC}\n"
+            sleep 1
             return 0
         else
             local remaining=$((max_attempts - attempt))
-            [ $remaining -gt 0 ] && echo "❌ Password salah! Sisa percobaan: $remaining" && echo
+            [ $remaining -gt 0 ] && echo -e "  ${ICON_ERROR} ${RED}Password salah! Sisa percobaan: ${remaining}${NC}\n"
             attempt=$((attempt + 1))
         fi
     done
@@ -115,11 +201,10 @@ confirm() {
 
     local reply=""
     if [ ! -t 0 ] && [ ! -e /dev/tty ]; then
-        # Non-interactive → pakai default
         [ "$default" = "Y" ] && return 0 || return 1
     fi
 
-    printf "%s %s " "$question" "$prompt_hint"
+    printf "  ${B_YELLOW}❓ %s %s:${NC} " "$question" "$prompt_hint"
     read -r reply </dev/tty || true
     [ -z "$reply" ] && reply="$default"
 
@@ -129,56 +214,57 @@ confirm() {
     esac
 }
 
-# ================================
-# INSTALL PREREQ (idempoten)
-# ================================
+# ==============================================================================
+# INSTALL PREREQUISITES
+# ==============================================================================
 install_prereqs() {
-    echo "🔄 Updating apt cache..."
-    sudo apt update -y
+    draw_section "1/4" "MEMERIKSA & MENGINSTAL DEPENDENSI SISTEM"
+
+    run_task "Mengupdate package cache apt" sudo apt-get update -y
 
     if ! command -v curl >/dev/null 2>&1; then
-        sudo apt install -y curl
+        run_task "Menginstal Curl" sudo apt-get install -y curl
+    else
+        print_status "$ICON_SUCCESS" "Curl terpasang"
     fi
+
     if ! command -v git >/dev/null 2>&1; then
-        echo "📦 Installing Git..."
-        sudo apt install -y git
+        run_task "Menginstal Git" sudo apt-get install -y git
+    else
+        print_status "$ICON_SUCCESS" "Git $(git --version 2>/dev/null | awk '{print $3}') terpasang"
     fi
+
     if ! command -v node >/dev/null 2>&1; then
-        echo "📦 Installing Node.js 22.x..."
-        curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-        sudo apt-get install -y nodejs
+        run_task "Mengonfigurasi repository Node.js 22.x" bash -c "curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -"
+        run_task "Menginstal Node.js 22.x" sudo apt-get install -y nodejs
     else
-        echo "✅ Node.js: $(node -v)"
+        print_status "$ICON_SUCCESS" "Node.js $(node -v 2>/dev/null) terpasang"
     fi
+
     if ! command -v ffmpeg >/dev/null 2>&1; then
-        echo "🎬 Installing FFmpeg..."
-        sudo apt install -y ffmpeg
+        run_task "Menginstal FFmpeg Multimedia Engine" sudo apt-get install -y ffmpeg
     else
-        echo "✅ FFmpeg sudah terinstall"
+        print_status "$ICON_SUCCESS" "FFmpeg Multimedia Engine terpasang"
     fi
+
     if ! command -v pm2 >/dev/null 2>&1; then
-        echo "🚀 Installing PM2..."
-        sudo npm install -g pm2
+        run_task "Menginstal PM2 Process Manager" sudo npm install -g pm2
     else
-        echo "✅ PM2 sudah terinstall"
+        print_status "$ICON_SUCCESS" "PM2 Process Manager terpasang"
     fi
+    echo
 }
 
 setup_timezone_firewall() {
-    echo "🕐 Setup timezone host → Asia/Jakarta..."
-    sudo timedatectl set-timezone Asia/Jakarta || true
-
-    echo "🔧 Setup firewall..."
+    run_task "Mengatur timezone server ke Asia/Jakarta" sudo timedatectl set-timezone Asia/Jakarta
     if command -v ufw >/dev/null 2>&1; then
-        sudo ufw allow ssh || true
-        sudo ufw allow 7575 || true
-        sudo ufw --force enable || true
+        run_task "Mengonfigurasi Firewall UFW (SSH & Port 7575)" bash -c "sudo ufw allow ssh >/dev/null 2>&1 && sudo ufw allow 7575 >/dev/null 2>&1 && sudo ufw --force enable >/dev/null 2>&1 || true"
     fi
 }
 
-# ================================
-# BACKUP existing data
-# ================================
+# ==============================================================================
+# DATA BACKUP
+# ==============================================================================
 backup_existing_data() {
     local label="$1"
     [ ! -d "$INSTALL_DIR" ] && return 0
@@ -186,57 +272,51 @@ backup_existing_data() {
     local stamp
     stamp="$(date +%Y%m%d_%H%M%S)"
     local target="$BACKUP_ROOT/${stamp}_${label}"
-    mkdir -p "$target"
 
-    echo "💾 Membuat backup ke $target ..."
+    printf "  ${ICON_WAIT} %-50s" "Membuat backup data pengguna..."
+    mkdir -p "$target"
     [ -d "$INSTALL_DIR/db" ]              && cp -a "$INSTALL_DIR/db"              "$target/db"               2>/dev/null || true
     [ -d "$INSTALL_DIR/public/uploads" ]  && cp -a "$INSTALL_DIR/public/uploads"  "$target/uploads"          2>/dev/null || true
     [ -f "$INSTALL_DIR/.env" ]            && cp -a "$INSTALL_DIR/.env"            "$target/.env"             2>/dev/null || true
-    echo "✅ Backup selesai."
+    printf "\r  ${ICON_SUCCESS} %-50s ${GRAY}(%s)${NC}\n" "Backup data pengguna selesai" "$target"
 }
 
-# ================================
-# START / RESTART via PM2 ecosystem
-# ================================
+# ==============================================================================
+# PM2 & ENVIRONMENT
+# ==============================================================================
 start_pm2() {
     cd "$INSTALL_DIR"
     if pm2 list 2>/dev/null | grep -q "ozanglive"; then
-        echo "🔄 Restart ozanglive via ecosystem.config.js..."
-        pm2 delete ozanglive >/dev/null 2>&1 || true
-    else
-        echo "▶️ Start ozanglive via ecosystem.config.js..."
+        run_task "Menghentikan instance PM2 OzangLive lama" bash -c "pm2 delete ozanglive >/dev/null 2>&1 || true"
     fi
 
     if [ -f "ecosystem.config.js" ]; then
-        pm2 start ecosystem.config.js
+        run_task "Menjalankan OzangLive via ecosystem.config.js" pm2 start ecosystem.config.js
     else
-        echo "⚠️ ecosystem.config.js tidak ditemukan, fallback ke app.js..."
-        pm2 start app.js --name ozanglive
+        print_status "$ICON_WARN" "ecosystem.config.js tidak ditemukan, fallback ke app.js"
+        run_task "Menjalankan OzangLive via app.js" pm2 start app.js --name ozanglive
     fi
-    pm2 save
+    run_task "Menyimpan konfigurasi PM2 (pm2 save)" pm2 save
 }
 
 ensure_env_secret() {
     cd "$INSTALL_DIR"
     if [ ! -f ".env" ] || ! grep -q "^SESSION_SECRET=" .env 2>/dev/null; then
         if [ -f "package.json" ] && grep -q "\"generate-secret\"" package.json; then
-            echo "🔐 Generating SESSION_SECRET..."
-            npm run generate-secret || true
+            run_task "Membuat SESSION_SECRET otomatis di .env" npm run generate-secret
         fi
     fi
 }
 
-# ================================
+# ==============================================================================
 # UPDATE FLOW
-# ================================
+# ==============================================================================
 do_update() {
-    echo "================================"
-    echo "   OzangLive UPDATE Mode       "
-    echo "================================"
+    draw_section "2/4" "MODE PEMBARUAN (UPDATE MODE)"
 
     if [ ! -d "$INSTALL_DIR/.git" ]; then
-        echo "❌ Folder $INSTALL_DIR bukan git repo. Tidak bisa update."
-        echo "   Jalankan dengan --fresh untuk install ulang."
+        print_status "$ICON_ERROR" "Folder $INSTALL_DIR bukan repository git. Tidak dapat update."
+        print_status "$ICON_INFO" "Gunakan flag --fresh untuk menginstal dari awal."
         exit 1
     fi
 
@@ -244,82 +324,63 @@ do_update() {
 
     cd "$INSTALL_DIR"
 
-    # Simpan perubahan lokal apa adanya (jangan hilangkan)
     if ! git diff --quiet || ! git diff --cached --quiet; then
-        echo "⚠️ Ada perubahan lokal yang belum di-commit. Stashing..."
-        git stash push -u -m "auto-stash before installer update $(date +%Y%m%d_%H%M%S)" || true
+        run_task "Stash perubahan lokal sementara" bash -c "git stash push -u -m 'auto-stash before installer update $(date +%Y%m%d_%H%M%S)' || true"
     fi
 
-    echo "📥 Fetching latest from origin..."
-    git fetch --all --prune
+    run_task "Mengambil pembaruan terbaru (git fetch)" git fetch --all --prune
+    run_task "Checkout ke branch $BRANCH" git checkout "$BRANCH"
+    run_task "Menarik kode terbaru (git pull)" git pull --ff-only origin "$BRANCH"
 
-    echo "🔀 Checkout branch: $BRANCH"
-    git checkout "$BRANCH"
-    git pull --ff-only origin "$BRANCH"
+    draw_section "3/4" "MENGINSTAL DEPENDENSI PROYEK"
+    run_task "Menginstal Node.js dependencies" bash -c "npm install --omit=dev || npm install --production"
 
-    echo "📦 Updating dependencies..."
-    npm install --omit=dev || npm install --production
-
+    draw_section "4/4" "KONFIGURASI AKHIR & MENJALANKAN SERVICE"
     ensure_env_secret
     setup_timezone_firewall
     start_pm2
 }
 
-# ================================
+# ==============================================================================
 # FRESH INSTALL FLOW
-# ================================
+# ==============================================================================
 do_fresh() {
-    echo "================================"
-    echo "   OzangLive FRESH Install     "
-    echo "================================"
+    draw_section "2/4" "MODE INSTALASI BARU (FRESH INSTALL)"
 
     if [ -d "$INSTALL_DIR" ] || pm2 list 2>/dev/null | grep -q "ozanglive"; then
-        echo "⚠️  Instalasi OzangLive sudah ada di $INSTALL_DIR"
-        echo "    FRESH install AKAN MENGHAPUS folder tersebut."
-        echo "    Data user (database, uploads, .env) akan di-backup dulu ke:"
-        echo "    $BACKUP_ROOT"
+        echo -e "  ${ICON_WARN} ${B_YELLOW}Instalasi OzangLive terdeteksi di:${NC} $INSTALL_DIR"
+        echo -e "  ${GRAY}FRESH install akan MENGHAPUS folder lama setelah mem-backup data.${NC}"
+        echo -e "  ${GRAY}Database, uploads, dan file .env akan disimpan di:${NC} $BACKUP_ROOT"
         echo
-        if ! confirm "Lanjutkan fresh install?" "N"; then
-            echo "Dibatalkan. Gunakan --update untuk update tanpa hapus data."
+
+        if ! confirm "Apakah Anda yakin ingin melanjutkan Fresh Install?" "N"; then
+            print_status "$ICON_INFO" "Dibatalkan. Gunakan mode --update untuk update tanpa hapus data."
             exit 1
         fi
 
         backup_existing_data "before-fresh-install"
 
-        echo "🛑 Menghentikan PM2 ozanglive lama..."
-        pm2 delete ozanglive >/dev/null 2>&1 || true
-        pm2 save >/dev/null 2>&1 || true
-
-        echo "🗑️  Menghapus folder lama..."
-        rm -rf "$INSTALL_DIR"
-        echo "✅ Folder lama dihapus (backup tersimpan di $BACKUP_ROOT)."
+        run_task "Menghentikan instance PM2 lama" bash -c "pm2 delete ozanglive >/dev/null 2>&1 || true && pm2 save >/dev/null 2>&1 || true"
+        run_task "Menghapus folder instalasi lama" rm -rf "$INSTALL_DIR"
         echo
     fi
 
-    echo "📥 Clone repository..."
-    cd "$HOME"
-    git clone "$REPO_URL" "$INSTALL_DIR"
+    run_task "Cloning repository OzangLive ($BRANCH)" git clone -b "$BRANCH" "$REPO_URL" "$INSTALL_DIR"
     cd "$INSTALL_DIR"
 
-    if [ "$BRANCH" != "main" ]; then
-        git checkout "$BRANCH"
-    fi
+    draw_section "3/4" "MENGINSTAL DEPENDENSI PROYEK"
+    run_task "Menginstal Node.js dependencies" bash -c "npm install --omit=dev || npm install --production"
 
-    echo "⚙️ Installing dependencies..."
-    npm install --omit=dev || npm install --production
-
+    draw_section "4/4" "KONFIGURASI AKHIR & MENJALANKAN SERVICE"
     ensure_env_secret
     setup_timezone_firewall
     start_pm2
 }
 
-# ================================
-# MAIN
-# ================================
-echo "================================"
-echo "   OzangLive Quick Installer   "
-echo "================================"
-echo
+# ==============================================================================
+# MAIN EXECUTION
+# ==============================================================================
+draw_banner
 
 if ! prompt_password; then
     exit 1
@@ -329,8 +390,8 @@ fi
 if [ -z "$MODE" ]; then
     if [ -d "$INSTALL_DIR/.git" ]; then
         MODE="update"
-        echo "ℹ️ Instalasi terdeteksi → mode UPDATE (data aman, akan di-backup)."
-        echo "   Tambahkan --fresh untuk paksa install ulang dari nol."
+        print_status "$ICON_INFO" "Instalasi terdeteksi → Mode ${B_CYAN}UPDATE${NC} (Data aman & di-backup otomatis)."
+        print_status "$ICON_INFO" "Tambahkan ${YELLOW}--fresh${NC} jika ingin menginstal dari awal."
         echo
     else
         MODE="fresh"
@@ -342,34 +403,34 @@ install_prereqs
 case "$MODE" in
     update) do_update ;;
     fresh)  do_fresh  ;;
-    *)      echo "Mode tidak dikenal: $MODE"; exit 1 ;;
+    *)      print_status "$ICON_ERROR" "Mode tidak dikenal: $MODE"; exit 1 ;;
 esac
 
-# ----- pm2 startup hint -----
+# Summary
+SERVER_IP=$(curl -s ifconfig.me 2>/dev/null || echo "IP_SERVER_ANDA")
+
+echo
+echo -e "${B_GREEN}╭──────────────────────────────────────────────────────────╮${NC}"
+echo -e "${B_GREEN}│ 🎉 INSTALASI & KONFIGURASI BERHASIL DISLESAIKAN!       │${NC}"
+echo -e "${B_GREEN}├──────────────────────────────────────────────────────────┤${NC}"
+echo -e "${B_GREEN}│${NC} 🌐 ${BOLD}URL Akses Web${NC} : ${B_CYAN}http://${SERVER_IP}:7575${NC}"
+echo -e "${B_GREEN}│${NC} 📁 ${BOLD}Lokasi App${NC}   : ${WHITE}${INSTALL_DIR}${NC}"
+echo -e "${B_GREEN}│${NC} 💾 ${BOLD}Folder Backup${NC}: ${WHITE}${BACKUP_ROOT}${NC}"
+echo -e "${B_GREEN}├──────────────────────────────────────────────────────────┤${NC}"
+echo -e "${B_GREEN}│ 📌 ${BOLD}PERINTAH PENTING MANAGEMENT (PM2):${NC}                   │"
+echo -e "${B_GREEN}│${NC}   • ${B_YELLOW}pm2 status${NC}              - Status aplikasi"
+echo -e "${B_GREEN}│${NC}   • ${B_YELLOW}pm2 logs ozanglive${NC}      - Monitoring log real-time"
+echo -e "${B_GREEN}│${NC}   • ${B_YELLOW}pm2 restart ozanglive${NC}   - Restart aplikasi"
+echo -e "${B_GREEN}│${NC}   • ${B_YELLOW}pm2 monit${NC}               - Dashboard performa RAM/CPU"
+echo -e "${B_GREEN}╰──────────────────────────────────────────────────────────╯${NC}"
+
 if ! systemctl list-unit-files 2>/dev/null | grep -q "pm2-"; then
     echo
-    echo "💡 Untuk auto-start saat reboot, jalankan:"
-    echo "   pm2 startup"
-    echo "   (lalu copy & jalankan perintah yang ditampilkan)"
+    echo -e "  ${ICON_INFO} ${B_YELLOW}Tips Auto-Start Reboot:${NC}"
+    echo -e "     Jalankan ${B_CYAN}pm2 startup${NC} dan ikuti perintah yang muncul agar"
+    echo -e "     OzangLive otomatis berjalan saat VPS/Server dinyalakan ulang."
 fi
 
 echo
-echo "================================"
-echo "✅ SELESAI!"
-echo "================================"
-
-SERVER_IP=$(curl -s ifconfig.me 2>/dev/null || echo "IP_SERVER")
+echo -e "  ${ICON_ROCKET} ${B_GREEN}Terima kasih telah menggunakan OzangLive Quick Installer!${NC}"
 echo
-echo "🌐 URL Akses : http://$SERVER_IP:7575"
-echo "📁 Folder    : $INSTALL_DIR"
-echo "💾 Backups   : $BACKUP_ROOT"
-echo
-echo "📌 Perintah berguna:"
-echo "   pm2 status              - Cek status"
-echo "   pm2 logs ozanglive      - Lihat logs"
-echo "   pm2 restart ozanglive   - Restart app"
-echo "   pm2 monit               - Monitor realtime"
-echo
-echo "🔁 Untuk update di kemudian hari, jalankan ulang script ini."
-echo "   Mode UPDATE akan otomatis terpilih, data tetap aman."
-echo "================================"

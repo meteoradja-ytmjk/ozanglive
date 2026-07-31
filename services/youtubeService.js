@@ -131,10 +131,14 @@ class YouTubeService {
         throw new Error('Failed to obtain access token from refresh token');
       }
       
-      // Update cache if we have accountId
+      // Update cache and refresh_token if we have accountId
       if (accountId) {
         try {
           const tokenRefreshScheduler = require('./tokenRefreshScheduler');
+          if (credentials.refresh_token && credentials.refresh_token !== refreshToken) {
+            await tokenRefreshScheduler.updateRefreshToken(accountId, credentials.refresh_token);
+            console.log(`[YouTubeService.getAccessToken] Saved updated refresh_token for account ${accountId}`);
+          }
           await tokenRefreshScheduler.updateTokenInfo(accountId, {
             accessToken: credentials.access_token,
             tokenExpiresAt: credentials.expiry_date 

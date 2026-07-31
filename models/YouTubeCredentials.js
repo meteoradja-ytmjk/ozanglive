@@ -443,7 +443,7 @@ class YouTubeCredentials {
             this.findByUserId(userId).then(resolve).catch(reject);
             return;
           }
-          resolve({
+          resolve(this._decryptSensitiveFields({
             id: row.id,
             userId: row.user_id,
             clientId: row.client_id,
@@ -453,7 +453,7 @@ class YouTubeCredentials {
             channelId: row.channel_id,
             isPrimary: true,
             createdAt: row.created_at
-          });
+          }));
         }
       );
     });

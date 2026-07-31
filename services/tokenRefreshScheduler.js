@@ -291,7 +291,25 @@ class TokenRefreshScheduler {
             reject(err);
             return;
           }
-          resolve(rows || []);
+          const { decrypt, isEncrypted } = require('../utils/encryption');
+          const decryptedRows = (rows || []).map(row => {
+            let clientSecret = row.client_secret;
+            let refreshToken = row.refresh_token;
+
+            if (clientSecret && isEncrypted(clientSecret)) {
+              try { clientSecret = decrypt(clientSecret); } catch (e) { clientSecret = null; }
+            }
+            if (refreshToken && isEncrypted(refreshToken)) {
+              try { refreshToken = decrypt(refreshToken); } catch (e) { refreshToken = null; }
+            }
+
+            return {
+              ...row,
+              client_secret: clientSecret,
+              refresh_token: refreshToken
+            };
+          });
+          resolve(decryptedRows);
         }
       );
     });
@@ -349,9 +367,14 @@ class TokenRefreshScheduler {
    */
   updateRefreshToken(accountId, newRefreshToken) {
     return new Promise((resolve, reject) => {
+      const { encrypt, isEncrypted } = require('../utils/encryption');
+      const encryptedToken = (newRefreshToken && !isEncrypted(newRefreshToken))
+        ? encrypt(newRefreshToken)
+        : newRefreshToken;
+
       db.run(
         'UPDATE youtube_credentials SET refresh_token = ? WHERE id = ?',
-        [newRefreshToken, accountId],
+        [encryptedToken, accountId],
         (err) => {
           if (err) reject(err);
           else resolve();
@@ -433,7 +456,7 @@ class TokenRefreshScheduler {
     }
 
     // Check if we have a cached token that's still valid
-    if (account.access_token && account.token_expires_at) {
+    if (account.access_token && account.token_expires_at && account.token_status === 'active') {
       const expiresAt = new Date(account.token_expires_at);
       const now = new Date();
       // Token is valid if it expires more than 5 minutes from now
