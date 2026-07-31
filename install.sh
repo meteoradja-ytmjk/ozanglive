@@ -284,8 +284,9 @@ backup_existing_data() {
 # ==============================================================================
 start_pm2() {
     cd "$INSTALL_DIR"
-    if pm2 list 2>/dev/null | grep -q "ozanglive"; then
-        run_task "Menghentikan instance PM2 MonsterLive lama" bash -c "pm2 delete ozanglive >/dev/null 2>&1 || true"
+    run_task "Menghentikan instance PM2 lama (streamflow/ozanglive)" bash -c "pm2 delete streamflow >/dev/null 2>&1 || true; pm2 delete ozanglive >/dev/null 2>&1 || true"
+    if command -v fuser >/dev/null 2>&1; then
+        run_task "Memastikan port 7575 bebas" bash -c "fuser -k 7575/tcp >/dev/null 2>&1 || true"
     fi
 
     if [ -f "ecosystem.config.js" ]; then

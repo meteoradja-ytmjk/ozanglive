@@ -12499,8 +12499,10 @@ async function startServer() {
   httpServer.on('error', (error) => {
     if (error.code === 'EADDRINUSE') {
       console.error(`[Startup] Port ${port} is already in use. Please close the other application or use a different port.`);
+      process.exit(1);
     } else {
       console.error('[Startup] Server error:', error);
+      process.exit(1);
     }
   });
 

@@ -76,7 +76,7 @@ module.exports = {
 
       // Graceful shutdown
       kill_timeout: 20000, // 20 seconds to allow cleanup
-      listen_timeout: 10000, // 10 seconds to start listening
+      listen_timeout: 30000, // 30 seconds to start listening
 
       // Crash handling - STABLE recovery
       exp_backoff_restart_delay: 100, // Start with 100ms delay
