@@ -9775,3 +9775,105 @@ async function submitAutoPilotCampaign(event) {
   }
 }
 
+// ==========================================
+// YouTube API Guide Modal Handlers
+// ==========================================
+
+function openYouTubeGuideModal() {
+  console.log('[YouTube Studio] Opening Panduan API Modal');
+  const modal = document.getElementById('youtubeGuideModal');
+  if (!modal) {
+    console.error('[YouTube Studio] youtubeGuideModal element not found');
+    if (typeof showToast === 'function') {
+      showToast('Panduan API Modal tidak ditemukan', 'error');
+    }
+    return;
+  }
+  
+  // Set current origin redirect URI dynamically
+  const redirectUriEl = document.getElementById('guideRedirectUriText');
+  if (redirectUriEl) {
+    const origin = window.location.origin || 'http://localhost:7575';
+    redirectUriEl.textContent = `${origin}/api/youtube/oauth/callback`;
+  }
+  
+  modal.classList.remove('hidden');
+  switchGuideTab('setup');
+
+  // Keydown listener to close modal on Escape
+  const onEsc = (e) => {
+    if (e.key === 'Escape') {
+      closeYouTubeGuideModal();
+      document.removeEventListener('keydown', onEsc);
+    }
+  };
+  document.addEventListener('keydown', onEsc);
+}
+
+function closeYouTubeGuideModal() {
+  const modal = document.getElementById('youtubeGuideModal');
+  if (modal) {
+    modal.classList.add('hidden');
+  }
+}
+
+function switchGuideTab(tabName) {
+  const tabs = ['setup', 'production', 'quota'];
+  tabs.forEach(t => {
+    const btn = document.getElementById(`guide-tab-btn-${t}`);
+    const panel = document.getElementById(`guide-panel-${t}`);
+    if (!btn || !panel) return;
+    
+    if (t === tabName) {
+      btn.className = "guide-tab-btn px-4 py-2.5 text-xs sm:text-sm font-semibold rounded-t-xl border-b-2 border-blue-500 text-blue-400 flex items-center gap-2 transition-all whitespace-nowrap cursor-pointer touch-manipulation";
+      panel.classList.remove('hidden');
+    } else {
+      btn.className = "guide-tab-btn px-4 py-2.5 text-xs sm:text-sm font-semibold rounded-t-xl border-b-2 border-transparent text-gray-400 hover:text-white flex items-center gap-2 transition-all whitespace-nowrap cursor-pointer touch-manipulation";
+      panel.classList.add('hidden');
+    }
+  });
+}
+
+function copyGuideRedirectUri() {
+  const redirectUriEl = document.getElementById('guideRedirectUriText');
+  const textToCopy = redirectUriEl ? redirectUriEl.textContent.trim() : 'http://localhost:7575/api/youtube/oauth/callback';
+  
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(textToCopy).then(showSuccessCopy).catch(() => fallbackCopyText(textToCopy));
+  } else {
+    fallbackCopyText(textToCopy);
+  }
+}
+
+function showSuccessCopy() {
+  const copyUriText = document.getElementById('copyUriText');
+  const copyUriIcon = document.getElementById('copyUriIcon');
+  if (copyUriText) copyUriText.textContent = 'Copied!';
+  if (copyUriIcon) copyUriIcon.className = 'ti ti-check text-green-400 text-xs';
+  if (typeof showToast === 'function') {
+    showToast('Redirect URI disalin ke clipboard!', 'success');
+  }
+  
+  setTimeout(() => {
+    if (copyUriText) copyUriText.textContent = 'Copy';
+    if (copyUriIcon) copyUriIcon.className = 'ti ti-copy text-xs';
+  }, 2000);
+}
+
+function fallbackCopyText(text) {
+  const tempInput = document.createElement('textarea');
+  tempInput.value = text;
+  document.body.appendChild(tempInput);
+  tempInput.select();
+  try {
+    document.execCommand('copy');
+    showSuccessCopy();
+  } catch (err) {
+    if (typeof showToast === 'function') {
+      showToast('Gagal menyalin otomatis. Silakan salin manual.', 'error');
+    }
+  }
+  document.body.removeChild(tempInput);
+}
+
+
