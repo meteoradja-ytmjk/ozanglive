@@ -7417,8 +7417,9 @@ app.post('/api/youtube/oauth/authorize', isAuthenticated, async (req, res) => {
       });
     }
     
-    // Determine base URL for redirect
-    const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
+    // Determine base URL for redirect (handling proxy headers like ngrok)
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+    const baseUrl = process.env.BASE_URL || `${protocol}://${req.get('host')}`;
     const redirectUri = `${baseUrl}/api/youtube/oauth/callback`;
     
     // Generate CSRF state token to prevent attacks
