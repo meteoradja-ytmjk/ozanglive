@@ -7306,6 +7306,92 @@ app.delete('/api/templates/:id', isAuthenticated, async (req, res) => {
   }
 });
 
+// ==========================================
+// 🚀 Auto-Pilot Campaign Engine Endpoint
+// ==========================================
+app.post('/api/autopilot/create-campaign', isAuthenticated, async (req, res) => {
+  try {
+    const {
+      accountId,
+      videoType,
+      videoId,
+      audioType,
+      audioId,
+      titleFolderId,
+      thumbnailFolderId,
+      scheduleType,
+      scheduleTime,
+      duration,
+      unlistReplayOnEnd
+    } = req.body;
+
+    const userId = req.session.userId;
+    if (!accountId) {
+      return res.status(400).json({ success: false, error: 'Akun YouTube target wajib dipilih' });
+    }
+
+    console.log('[AutoPilot] Creating Campaign for user:', userId, 'Account:', accountId);
+
+    let broadcastTitle = `Live Stream Auto-Pilot ${new Date().toLocaleDateString('id-ID')}`;
+    if (titleFolderId) {
+      try {
+        const titleData = await youtubeService.getNextRotatorTitle(titleFolderId, userId);
+        if (titleData && titleData.title) broadcastTitle = titleData.title;
+      } catch (err) {
+        console.warn('[AutoPilot] Rotator title warning:', err.message);
+      }
+    }
+
+    let broadcastResult = null;
+    try {
+      broadcastResult = await youtubeService.createBroadcast(userId, accountId, {
+        title: broadcastTitle,
+        description: 'Auto-Pilot Stream - Scheduled automatically',
+        scheduledStartTime: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+        privacyStatus: 'public'
+      });
+    } catch (ytErr) {
+      console.warn('[AutoPilot] YouTube API warning (falling back to RTMP stream):', ytErr.message);
+    }
+
+    const streamKey = broadcastResult ? broadcastResult.streamKey : null;
+
+    const streamData = {
+      user_id: userId,
+      name: broadcastTitle,
+      video_id: videoId || null,
+      audio_id: audioId || null,
+      rtmp_url: broadcastResult ? broadcastResult.rtmpUrl : 'rtmp://a.rtmp.youtube.com/live2',
+      stream_key: streamKey || '',
+      schedule_type: scheduleType === '247' ? 'once' : scheduleType,
+      schedule_time: scheduleTime || '08:00',
+      duration_minutes: duration ? parseInt(duration) : (scheduleType === '247' ? 0 : 120),
+      is_24_7: scheduleType === '247' ? 1 : 0,
+      unlist_replay_on_end: unlistReplayOnEnd === 'true' || unlistReplayOnEnd === true ? 1 : 0,
+      youtube_account_id: accountId
+    };
+
+    const newStream = await Schedule.create(streamData);
+
+    if (scheduleType === '247') {
+      try {
+        await streamingService.startStream(newStream.id, userId);
+      } catch (startErr) {
+        console.error('[AutoPilot] Failed to auto-start 24/7 stream:', startErr.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Auto-Pilot Campaign launched successfully',
+      campaignId: newStream.id
+    });
+  } catch (error) {
+    console.error('[AutoPilot] Campaign creation error:', error);
+    res.status(500).json({ success: false, error: error.message || 'Failed to launch Auto-Pilot Campaign' });
+  }
+});
+
 // ============================================
 // YouTube Sync Routes (Multiple Accounts Support)
 // ============================================

@@ -498,6 +498,12 @@
         <i class="ti ti-photo text-lg"></i>
         <span>Thumbnails</span>
       </button>
+      <button onclick="openAutoPilotCampaignModal()"
+        class="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white px-4 py-2.5 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 font-medium shadow-lg shadow-emerald-500/25"
+        title="1-Click Auto-Pilot Studio: Setel sekali, siaran otomatis jalan selamanya">
+        <i class="ti ti-robot text-lg"></i>
+        <span>Auto-Pilot Campaign</span>
+      </button>
       <button onclick="openCreateBroadcastModal()"
         class="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-4 py-2.5 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 font-medium shadow-lg shadow-red-500/25">
         <i class="ti ti-plus text-lg"></i>
@@ -527,3 +533,182 @@
   
   <% } %>
 </div>
+
+<!-- Auto-Pilot Campaign Modal -->
+<div id="autoPilotCampaignModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden modal-overlay overflow-y-auto">
+  <div class="flex min-h-screen items-center justify-center p-4">
+    <div class="bg-dark-800 border border-gray-700/80 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden">
+      <div class="flex items-center justify-between p-5 bg-gradient-to-r from-emerald-500/20 via-teal-500/10 to-transparent border-b border-gray-700">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 bg-emerald-500/20 rounded-xl flex items-center justify-center text-emerald-400">
+            <i class="ti ti-robot text-2xl"></i>
+          </div>
+          <div>
+            <h3 class="text-lg font-bold text-white flex items-center gap-2">
+              Auto-Pilot Campaign Studio
+              <span class="text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-md font-semibold uppercase">Sekali Setting</span>
+            </h3>
+            <p class="text-xs text-gray-400">Setel siaran otomatis 1-klik yang berjalan terus selamanya</p>
+          </div>
+        </div>
+        <button onclick="closeAutoPilotCampaignModal()" class="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-dark-700 transition-colors">
+          <i class="ti ti-x text-xl"></i>
+        </button>
+      </div>
+
+      <form id="autoPilotCampaignForm" onsubmit="submitAutoPilotCampaign(event)" class="p-6 space-y-5">
+        <!-- 1. YouTube Account (WAJIB) -->
+        <div class="bg-dark-700/40 p-4 rounded-xl border border-gray-700/60">
+          <label class="text-sm font-semibold text-white mb-2 flex items-center gap-2">
+            <span class="w-6 h-6 rounded-full bg-red-500/20 text-red-400 text-xs flex items-center justify-center font-bold">1</span>
+            Akun YouTube Target <span class="text-red-400">*</span>
+          </label>
+          <select id="autoPilotAccountId" name="accountId" required
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-emerald-500 focus:outline-none text-sm text-white">
+            <% if (accounts && accounts.length > 0) { %>
+              <% accounts.forEach(function(account) { %>
+              <option value="<%= account.id %>"><%= account.channelName || 'YouTube Channel #' + account.id %></option>
+              <% }); %>
+            <% } else { %>
+              <option value="">-- Hubungkan Akun YouTube Terlebih Dahulu --</option>
+            <% } %>
+          </select>
+        </div>
+
+        <!-- 2. Video Source (WAJIB) -->
+        <div class="bg-dark-700/40 p-4 rounded-xl border border-gray-700/60">
+          <label class="text-sm font-semibold text-white mb-2 flex items-center justify-between">
+            <span class="flex items-center gap-2">
+              <span class="w-6 h-6 rounded-full bg-violet-500/20 text-violet-400 text-xs flex items-center justify-center font-bold">2</span>
+              Sumber Video <span class="text-red-400">*</span>
+            </span>
+            <span class="text-xs text-violet-400 font-medium">Single / Playlist / Folder</span>
+          </label>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+            <div>
+              <label class="text-xs text-gray-400 block mb-1">Tipe Video</label>
+              <select id="autoPilotVideoType" name="videoType" onchange="onAutoPilotVideoTypeChange(this.value)" required
+                class="w-full px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg focus:border-emerald-500 focus:outline-none text-xs text-white">
+                <option value="single">Video Galeri (Tunggal)</option>
+                <option value="playlist">Playlist Video</option>
+                <option value="folder">Folder Galeri Video</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs text-gray-400 block mb-1">Pilih Item Video</label>
+              <select id="autoPilotVideoSelect" name="videoId" required
+                class="w-full px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg focus:border-emerald-500 focus:outline-none text-xs text-white">
+                <option value="">Loading video list...</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. Audio Source (WAJIB) -->
+        <div class="bg-dark-700/40 p-4 rounded-xl border border-gray-700/60">
+          <label class="text-sm font-semibold text-white mb-2 flex items-center justify-between">
+            <span class="flex items-center gap-2">
+              <span class="w-6 h-6 rounded-full bg-cyan-500/20 text-cyan-400 text-xs flex items-center justify-center font-bold">3</span>
+              Sumber Audio <span class="text-red-400">*</span>
+            </span>
+            <span class="text-xs text-cyan-400 font-medium">Bawaan / Custom MP3 / Audio Playlist</span>
+          </label>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="text-xs text-gray-400 block mb-1">Tipe Audio</label>
+              <select id="autoPilotAudioType" name="audioType" onchange="onAutoPilotAudioTypeChange(this.value)" required
+                class="w-full px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg focus:border-emerald-500 focus:outline-none text-xs text-white">
+                <option value="original">Audio Bawaan Video (Default)</option>
+                <option value="single_audio">File Audio MP3/WAV</option>
+                <option value="audio_playlist">Playlist Audio</option>
+              </select>
+            </div>
+            <div id="autoPilotAudioSelectContainer" class="hidden">
+              <label class="text-xs text-gray-400 block mb-1">Pilih Item Audio</label>
+              <select id="autoPilotAudioSelect" name="audioId"
+                class="w-full px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg focus:border-emerald-500 focus:outline-none text-xs text-white">
+                <option value="">-- Pilih Audio --</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. Smart Rotator Manager (WAJIB) -->
+        <div class="bg-dark-700/40 p-4 rounded-xl border border-gray-700/60">
+          <label class="text-sm font-semibold text-white mb-2 flex items-center justify-between">
+            <span class="flex items-center gap-2">
+              <span class="w-6 h-6 rounded-full bg-amber-500/20 text-amber-400 text-xs flex items-center justify-center font-bold">4</span>
+              Smart Rotator Manager <span class="text-red-400">*</span>
+            </span>
+            <span class="text-xs text-amber-400 font-medium">Auto-Rotate Title & Thumbnail</span>
+          </label>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="text-xs text-gray-400 block mb-1">Folder Rotasi Judul <span class="text-red-400">*</span></label>
+              <select id="autoPilotTitleFolderId" name="titleFolderId" required
+                class="w-full px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg focus:border-emerald-500 focus:outline-none text-xs text-white">
+                <option value="">Loading title folders...</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs text-gray-400 block mb-1">Folder Rotasi Thumbnail <span class="text-red-400">*</span></label>
+              <select id="autoPilotThumbnailFolderId" name="thumbnailFolderId" required
+                class="w-full px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg focus:border-emerald-500 focus:outline-none text-xs text-white">
+                <option value="">Loading thumbnail folders...</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5. Schedule Pattern (WAJIB) -->
+        <div class="bg-dark-700/40 p-4 rounded-xl border border-gray-700/60">
+          <label class="text-sm font-semibold text-white mb-2 flex items-center justify-between">
+            <span class="flex items-center gap-2">
+              <span class="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 text-xs flex items-center justify-center font-bold">5</span>
+              Pola Jadwal Otomatis <span class="text-red-400">*</span>
+            </span>
+            <span class="text-xs text-emerald-400 font-medium">Jalan Terus Selamanya</span>
+          </label>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+            <div>
+              <label class="text-xs text-gray-400 block mb-1">Tipe Jadwal</label>
+              <select id="autoPilotScheduleType" name="scheduleType" onchange="onAutoPilotScheduleTypeChange(this.value)" required
+                class="w-full px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg focus:border-emerald-500 focus:outline-none text-xs text-white">
+                <option value="247">24/7 Nonstop Loop</option>
+                <option value="daily">Rutin Harian (Daily)</option>
+                <option value="weekly">Rutin Mingguan (Weekly)</option>
+              </select>
+            </div>
+            <div id="autoPilotTimeContainer" class="hidden">
+              <label class="text-xs text-gray-400 block mb-1">Jam Tayang (WIB)</label>
+              <input type="time" id="autoPilotScheduleTime" name="scheduleTime" value="08:00"
+                class="w-full px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg focus:border-emerald-500 focus:outline-none text-xs text-white [color-scheme:dark]">
+            </div>
+            <div id="autoPilotDurationContainer" class="hidden">
+              <label class="text-xs text-gray-400 block mb-1">Durasi Stream (Menit)</label>
+              <input type="number" id="autoPilotDuration" name="duration" min="15" value="120" placeholder="120"
+                class="w-full px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg focus:border-emerald-500 focus:outline-none text-xs text-white">
+            </div>
+          </div>
+        </div>
+
+        <!-- Privacy & Replay Settings -->
+        <div class="flex items-center justify-between p-3 bg-dark-700/30 rounded-xl border border-gray-700/40 text-xs">
+          <div class="flex items-center gap-2 text-gray-300">
+            <i class="ti ti-eye-off text-emerald-400 text-base"></i>
+            <span>Unlist video replay otomatis setelah siaran selesai</span>
+          </div>
+          <input type="checkbox" id="autoPilotUnlistReplay" name="unlistReplayOnEnd" value="true" checked class="w-4 h-4 rounded text-emerald-500 border-gray-600 bg-dark-700 focus:ring-emerald-500">
+        </div>
+
+        <!-- Submit Button -->
+        <button type="submit" id="submitAutoPilotBtn"
+          class="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg shadow-emerald-500/25 transition-all flex items-center justify-center gap-2 text-sm">
+          <i class="ti ti-rocket text-lg"></i>
+          <span>LAUNCH AUTO-PILOT CAMPAIGN</span>
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+
