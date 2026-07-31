@@ -86,12 +86,18 @@ done
 draw_banner() {
     clear 2>/dev/null || true
     echo -e "${B_CYAN}╭──────────────────────────────────────────────────────────╮${NC}"
-    echo -e "${B_CYAN}│${NC}  ${B_PURPLE}██████╗ ███████╗██████╗ ███╗   ██╗██╗██╗   ██╗███████╗${NC}  ${B_CYAN}│${NC}"
-    echo -e "${B_CYAN}│${NC}  ${B_PURPLE}██╔══██╗╚══███╔╝██╔══██╗████╗  ██║██║██║   ██║██╔════╝${NC}  ${B_CYAN}│${NC}"
-    echo -e "${B_CYAN}│${NC}  ${B_CYAN}██║  ██║  ███╔╝ ███████║██╔██╗ ██║██║██║   ██║█████╗${NC}    ${B_CYAN}│${NC}"
-    echo -e "${B_CYAN}│${NC}  ${B_CYAN}██║  ██║ ███╔╝  ██╔══██║██║╚██╗██║██║╚██╗ ██╔╝██╔══╝${NC}    ${B_CYAN}│${NC}"
-    echo -e "${B_CYAN}│${NC}  ${B_BLUE}██████╔╝███████╗██║  ██║██║ ╚████║██║ ╚████╔╝ ███████╗${NC}  ${B_CYAN}│${NC}"
-    echo -e "${B_CYAN}│${NC}  ${B_BLUE}╚═════╝ ╚══════╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═╝  ╚═══╝  ╚══════╝${NC}  ${B_CYAN}│${NC}"
+    echo -e "${B_CYAN}│${NC}  ${B_PURPLE}███╗   ███╗ ██████╗ ███╗   ██╗███████╗████████╗██████╗${NC}  ${B_CYAN}│${NC}"
+    echo -e "${B_CYAN}│${NC}  ${B_PURPLE}████╗ ████║██╔═══██╗████╗  ██║██╔════╝╚══██╔══╝██╔══██╗${NC} ${B_CYAN}│${NC}"
+    echo -e "${B_CYAN}│${NC}  ${B_CYAN}██╔████╔██║██║   ██║██╔██╗ ██║███████╗   ██║   ██████╔╝${NC} ${B_CYAN}│${NC}"
+    echo -e "${B_CYAN}│${NC}  ${B_CYAN}██║╚██╔╝██║██║   ██║██║╚██╗██║╚════██║   ██║   ██╔══██╗${NC} ${B_CYAN}│${NC}"
+    echo -e "${B_CYAN}│${NC}  ${B_BLUE}██║ ╚═╝ ██║╚██████╔╝██║ ╚████║███████║   ██║   ██║  ██║${NC} ${B_CYAN}│${NC}"
+    echo -e "${B_CYAN}│${NC}  ${B_BLUE}╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═══╝╚══════╝   ╚═╝   ╚═╝  ╚═╝${NC} ${B_CYAN}│${NC}"
+    echo -e "${B_CYAN}│${NC}               ${B_PURPLE}██╗     ██╗██╗   ██╗███████╗${NC}               ${B_CYAN}│${NC}"
+    echo -e "${B_CYAN}│${NC}               ${B_CYAN}██║     ██║██║   ██║██╔════╝${NC}               ${B_CYAN}│${NC}"
+    echo -e "${B_CYAN}│${NC}               ${B_CYAN}██║     ██║██║   ██║█████╗${NC}                 ${B_CYAN}│${NC}"
+    echo -e "${B_CYAN}│${NC}               ${B_BLUE}██║     ██║╚██╗ ██╔╝██╔══╝${NC}                 ${B_CYAN}│${NC}"
+    echo -e "${B_CYAN}│${NC}               ${B_BLUE}███████╗██║ ╚████╔╝ ███████╗${NC}               ${B_CYAN}│${NC}"
+    echo -e "${B_CYAN}│${NC}               ${B_BLUE}╚══════╝╚═╝  ╚═══╝  ╚══════╝${NC}               ${B_CYAN}│${NC}"
     echo -e "${B_CYAN}│${NC}        ${B_WHITE}STREAMING PLATFORM AUTOMATION — QUICK INSTALLER${NC}   ${B_CYAN}│${NC}"
     echo -e "${B_CYAN}╰──────────────────────────────────────────────────────────╯${NC}"
     echo
@@ -287,14 +293,14 @@ backup_existing_data() {
 start_pm2() {
     cd "$INSTALL_DIR"
     if pm2 list 2>/dev/null | grep -q "ozanglive"; then
-        run_task "Menghentikan instance PM2 OzangLive lama" bash -c "pm2 delete ozanglive >/dev/null 2>&1 || true"
+        run_task "Menghentikan instance PM2 MonsterLive lama" bash -c "pm2 delete ozanglive >/dev/null 2>&1 || true"
     fi
 
     if [ -f "ecosystem.config.js" ]; then
-        run_task "Menjalankan OzangLive via ecosystem.config.js" pm2 start ecosystem.config.js
+        run_task "Menjalankan MonsterLive via ecosystem.config.js" pm2 start ecosystem.config.js
     else
         print_status "$ICON_WARN" "ecosystem.config.js tidak ditemukan, fallback ke app.js"
-        run_task "Menjalankan OzangLive via app.js" pm2 start app.js --name ozanglive
+        run_task "Menjalankan MonsterLive via app.js" pm2 start app.js --name ozanglive
     fi
     run_task "Menyimpan konfigurasi PM2 (pm2 save)" pm2 save
 }
@@ -348,7 +354,7 @@ do_fresh() {
     draw_section "2/4" "MODE INSTALASI BARU (FRESH INSTALL)"
 
     if [ -d "$INSTALL_DIR" ] || pm2 list 2>/dev/null | grep -q "ozanglive"; then
-        echo -e "  ${ICON_WARN} ${B_YELLOW}Instalasi OzangLive terdeteksi di:${NC} $INSTALL_DIR"
+        echo -e "  ${ICON_WARN} ${B_YELLOW}Instalasi MonsterLive terdeteksi di:${NC} $INSTALL_DIR"
         echo -e "  ${GRAY}FRESH install akan MENGHAPUS folder lama setelah mem-backup data.${NC}"
         echo -e "  ${GRAY}Database, uploads, dan file .env akan disimpan di:${NC} $BACKUP_ROOT"
         echo
@@ -365,7 +371,7 @@ do_fresh() {
         echo
     fi
 
-    run_task "Cloning repository OzangLive ($BRANCH)" git clone -b "$BRANCH" "$REPO_URL" "$INSTALL_DIR"
+    run_task "Cloning repository MonsterLive ($BRANCH)" git clone -b "$BRANCH" "$REPO_URL" "$INSTALL_DIR"
     cd "$INSTALL_DIR"
 
     draw_section "3/4" "MENGINSTAL DEPENDENSI PROYEK"
@@ -428,9 +434,9 @@ if ! systemctl list-unit-files 2>/dev/null | grep -q "pm2-"; then
     echo
     echo -e "  ${ICON_INFO} ${B_YELLOW}Tips Auto-Start Reboot:${NC}"
     echo -e "     Jalankan ${B_CYAN}pm2 startup${NC} dan ikuti perintah yang muncul agar"
-    echo -e "     OzangLive otomatis berjalan saat VPS/Server dinyalakan ulang."
+    echo -e "     MonsterLive otomatis berjalan saat VPS/Server dinyalakan ulang."
 fi
 
 echo
-echo -e "  ${ICON_ROCKET} ${B_GREEN}Terima kasih telah menggunakan OzangLive Quick Installer!${NC}"
+echo -e "  ${ICON_ROCKET} ${B_GREEN}Terima kasih telah menggunakan MonsterLive Quick Installer!${NC}"
 echo
