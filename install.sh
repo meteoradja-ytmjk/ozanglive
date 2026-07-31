@@ -86,18 +86,10 @@ done
 draw_banner() {
     clear 2>/dev/null || true
     echo -e "${B_CYAN}╭──────────────────────────────────────────────────────────╮${NC}"
-    echo -e "${B_CYAN}│${NC}  ${B_PURPLE}███╗   ███╗ ██████╗ ███╗   ██╗███████╗████████╗██████╗${NC}  ${B_CYAN}│${NC}"
-    echo -e "${B_CYAN}│${NC}  ${B_PURPLE}████╗ ████║██╔═══██╗████╗  ██║██╔════╝╚══██╔══╝██╔══██╗${NC} ${B_CYAN}│${NC}"
-    echo -e "${B_CYAN}│${NC}  ${B_CYAN}██╔████╔██║██║   ██║██╔██╗ ██║███████╗   ██║   ██████╔╝${NC} ${B_CYAN}│${NC}"
-    echo -e "${B_CYAN}│${NC}  ${B_CYAN}██║╚██╔╝██║██║   ██║██║╚██╗██║╚════██║   ██║   ██╔══██╗${NC} ${B_CYAN}│${NC}"
-    echo -e "${B_CYAN}│${NC}  ${B_BLUE}██║ ╚═╝ ██║╚██████╔╝██║ ╚████║███████║   ██║   ██║  ██║${NC} ${B_CYAN}│${NC}"
-    echo -e "${B_CYAN}│${NC}  ${B_BLUE}╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═══╝╚══════╝   ╚═╝   ╚═╝  ╚═╝${NC} ${B_CYAN}│${NC}"
-    echo -e "${B_CYAN}│${NC}               ${B_PURPLE}██╗     ██╗██╗   ██╗███████╗${NC}               ${B_CYAN}│${NC}"
-    echo -e "${B_CYAN}│${NC}               ${B_CYAN}██║     ██║██║   ██║██╔════╝${NC}               ${B_CYAN}│${NC}"
-    echo -e "${B_CYAN}│${NC}               ${B_CYAN}██║     ██║██║   ██║█████╗${NC}                 ${B_CYAN}│${NC}"
-    echo -e "${B_CYAN}│${NC}               ${B_BLUE}██║     ██║╚██╗ ██╔╝██╔══╝${NC}                 ${B_CYAN}│${NC}"
-    echo -e "${B_CYAN}│${NC}               ${B_BLUE}███████╗██║ ╚████╔╝ ███████╗${NC}               ${B_CYAN}│${NC}"
-    echo -e "${B_CYAN}│${NC}               ${B_BLUE}╚══════╝╚═╝  ╚═══╝  ╚══════╝${NC}               ${B_CYAN}│${NC}"
+    echo -e "${B_CYAN}│${NC}       ${B_PURPLE}█▀▄▀█ █▀█ █▄ █ █▀▀ ▀█▀ █▀▀ █▀▄ █   █ █ █▀▀${NC}         ${B_CYAN}│${NC}"
+    echo -e "${B_CYAN}│${NC}       ${B_CYAN}█ ▀ █ █ █ █ ▀█ ▀▀█  █  █▀▀ █▀▄ █   █ ▀▄▀ █▀▀${NC}         ${B_CYAN}│${NC}"
+    echo -e "${B_CYAN}│${NC}       ${B_BLUE}█   █ █▄█ █  █ ▄▄█  █  ██▄ █ █ █▄▄ █  █  ██▄${NC}         ${B_CYAN}│${NC}"
+    echo -e "${B_CYAN}│${NC}                                                          ${B_CYAN}│${NC}"
     echo -e "${B_CYAN}│${NC}        ${B_WHITE}STREAMING PLATFORM AUTOMATION — QUICK INSTALLER${NC}   ${B_CYAN}│${NC}"
     echo -e "${B_CYAN}╰──────────────────────────────────────────────────────────╯${NC}"
     echo
