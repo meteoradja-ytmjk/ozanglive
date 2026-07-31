@@ -1480,11 +1480,23 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
       });
     }
 
-    console.log('[Dashboard] Rendering dashboard for user:', user.username, 'role:', user.user_role);
+    console.log('[Dashboard] Rendering Live Studio for user:', user.username, 'role:', user.user_role);
+    let accounts = [];
+    try {
+      accounts = await YouTubeCredentials.findAllByUserId(req.session.userId);
+    } catch (ytError) {
+      console.warn('[Dashboard] Could not fetch YouTube accounts (non-critical):', ytError.message);
+    }
+
     res.render('dashboard', {
-      title: 'Dashboard',
+      title: 'Live Studio',
       active: 'dashboard',
-      user: user
+      user: user,
+      accounts: accounts || [],
+      credentials: (accounts && accounts.length > 0) ? accounts[0] : null,
+      broadcasts: null,
+      lazyLoad: true,
+      baseUrl: process.env.BASE_URL || `${req.protocol}://${req.get('host')}`
     });
   } catch (error) {
     console.error('[Dashboard] Error:', error);
@@ -7298,32 +7310,9 @@ app.delete('/api/templates/:id', isAuthenticated, async (req, res) => {
 // YouTube Sync Routes (Multiple Accounts Support)
 // ============================================
 
-// YouTube Sync Page - displays all connected accounts and their broadcasts
+// YouTube Sync Page - Redirect to Unified Live Studio (Broadcasts Tab)
 app.get('/youtube', isAuthenticated, async (req, res) => {
-  try {
-    // Get all connected YouTube accounts for this user
-    const accounts = await YouTubeCredentials.findAllByUserId(req.session.userId);
-    
-    // PERFORMANCE OPTIMIZATION: Don't render broadcasts on initial page load
-    // Page loads instantly, broadcasts will be fetched via AJAX after page renders
-    // This prevents slow HTML rendering when there are hundreds/thousands of broadcasts
-    
-    res.render('youtube', {
-      title: 'YouTube Sync',
-      active: 'youtube',
-      accounts,
-      credentials: accounts.length > 0 ? accounts[0] : null, // For backward compatibility
-      broadcasts: null, // null = will be loaded via AJAX (different from empty array)
-      lazyLoad: true, // Flag to enable lazy loading
-      baseUrl: process.env.BASE_URL || `${req.protocol}://${req.get('host')}`
-    });
-  } catch (error) {
-    console.error('YouTube page error:', error);
-    res.status(500).render('error', {
-      title: 'Error',
-      message: 'Failed to load YouTube Sync page'
-    });
-  }
+  return res.redirect('/dashboard?tab=broadcasts');
 });
 
 // ==========================================
