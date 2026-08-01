@@ -1496,7 +1496,7 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
       credentials: (accounts && accounts.length > 0) ? accounts[0] : null,
       broadcasts: null,
       lazyLoad: true,
-      baseUrl: process.env.BASE_URL || `${req.protocol}://${req.get('host')}`
+      baseUrl: (process.env.BASE_URL && !process.env.BASE_URL.includes('localhost') && !req.get('host').includes('ngrok')) ? process.env.BASE_URL : `${(req.headers['x-forwarded-proto'] === 'https' || req.get('host').includes('ngrok')) ? 'https' : req.protocol}://${req.get('host')}`
     });
   } catch (error) {
     console.error('[Dashboard] Error:', error);
@@ -7421,7 +7421,10 @@ app.post('/api/youtube/oauth/authorize', isAuthenticated, async (req, res) => {
     const host = req.get('host') || '';
     const isNgrokOrHttps = host.includes('ngrok') || req.headers['x-forwarded-proto'] === 'https';
     const protocol = isNgrokOrHttps ? 'https' : (req.headers['x-forwarded-proto'] || req.protocol || 'http');
-    const baseUrl = process.env.BASE_URL || `${protocol}://${host}`;
+    let baseUrl = `${protocol}://${host}`;
+    if (process.env.BASE_URL && !process.env.BASE_URL.includes('localhost') && !host.includes('ngrok')) {
+      baseUrl = process.env.BASE_URL;
+    }
     const redirectUri = `${baseUrl}/api/youtube/oauth/callback`;
     console.log('[OAuth Debug] Host:', host, '| Protocol:', protocol, '| redirectUri:', redirectUri);
     
