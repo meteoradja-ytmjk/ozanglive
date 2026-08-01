@@ -7423,6 +7423,7 @@ app.post('/api/youtube/oauth/authorize', isAuthenticated, async (req, res) => {
     const protocol = isNgrokOrHttps ? 'https' : (req.headers['x-forwarded-proto'] || req.protocol || 'http');
     const baseUrl = process.env.BASE_URL || `${protocol}://${host}`;
     const redirectUri = `${baseUrl}/api/youtube/oauth/callback`;
+    console.log('[OAuth Debug] Host:', host, '| Protocol:', protocol, '| redirectUri:', redirectUri);
     
     // Generate CSRF state token to prevent attacks
     const state = crypto.randomBytes(32).toString('hex');
