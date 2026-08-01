@@ -7421,10 +7421,7 @@ app.post('/api/youtube/oauth/authorize', isAuthenticated, async (req, res) => {
     const host = req.get('host') || '';
     const isNgrokOrHttps = host.includes('ngrok') || req.headers['x-forwarded-proto'] === 'https';
     const protocol = isNgrokOrHttps ? 'https' : (req.headers['x-forwarded-proto'] || req.protocol || 'http');
-    let baseUrl = `${protocol}://${host}`;
-    if (process.env.BASE_URL && !process.env.BASE_URL.includes('localhost') && !host.includes('ngrok')) {
-      baseUrl = process.env.BASE_URL;
-    }
+    const baseUrl = (process.env.BASE_URL && !process.env.BASE_URL.includes('localhost')) ? process.env.BASE_URL : `${protocol}://${host}`;
     const redirectUri = `${baseUrl}/api/youtube/oauth/callback`;
     console.log('[OAuth Debug] Host:', host, '| Protocol:', protocol, '| redirectUri:', redirectUri);
     
