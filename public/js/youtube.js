@@ -1108,6 +1108,12 @@ async function initiateOAuth(clientId, clientSecret, credentialId = null) {
     const data = await response.json();
     
     if (data.success && data.authUrl) {
+      try {
+        const parsedUrl = new URL(data.authUrl);
+        const reqRedirectUri = parsedUrl.searchParams.get('redirect_uri');
+        console.log('[OAuth Debug] Auth URL generated:', data.authUrl);
+        console.log('[OAuth Debug] Exact Redirect URI required in Google Console:', reqRedirectUri);
+      } catch (e) {}
       // Redirect to Google OAuth consent screen
       window.location.href = data.authUrl;
     } else {
