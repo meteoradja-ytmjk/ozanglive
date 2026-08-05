@@ -2934,13 +2934,24 @@ function initTagInput() {
 }
 
 // Create Broadcast Modal
+function toLocalDatetimeInputString(d = new Date()) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 function openCreateBroadcastModal() {
   document.getElementById('createBroadcastModal').classList.remove('hidden');
   
-  // Set minimum datetime to 10 minutes from now
+  // Set minimum datetime to 11 minutes from now, default value to 15 minutes from now in LOCAL time
   const minDate = new Date(Date.now() + 11 * 60 * 1000);
-  const minDateStr = minDate.toISOString().slice(0, 16);
-  document.getElementById('scheduledStartTime').min = minDateStr;
+  const defaultDate = new Date(Date.now() + 15 * 60 * 1000);
+  const scheduledInput = document.getElementById('scheduledStartTime');
+  if (scheduledInput) {
+    scheduledInput.min = toLocalDatetimeInputString(minDate);
+    if (!scheduledInput.value || new Date(scheduledInput.value) < minDate) {
+      scheduledInput.value = toLocalDatetimeInputString(defaultDate);
+    }
+  }
   
   // Reset tags
   currentTags = [];
@@ -3041,17 +3052,42 @@ if (createBroadcastForm) {
       
       // Add account ID
       const accountSelect = document.getElementById('accountSelect');
-      if (accountSelect && accountSelect.value) {
-        formData.append('accountId', accountSelect.value);
+      if (!accountSelect || !accountSelect.value) {
+        showToast('Silakan pilih atau sambungkan akun YouTube terlebih dahulu', 'error');
+        return;
       }
+      formData.append('accountId', accountSelect.value);
       
-      formData.append('title', document.getElementById('broadcastTitle').value);
-      formData.append('description', document.getElementById('broadcastDescription').value);
-      formData.append('scheduledStartTime', document.getElementById('scheduledStartTime').value);
-      formData.append('privacyStatus', document.getElementById('privacyStatus').value);
+      const titleVal = document.getElementById('broadcastTitle')?.value;
+      if (!titleVal || !titleVal.trim()) {
+        showToast('Judul broadcast wajib diisi', 'error');
+        return;
+      }
+      formData.append('title', titleVal.trim());
+      formData.append('description', document.getElementById('broadcastDescription')?.value || '');
+
+      // Validate scheduledStartTime
+      const scheduledVal = document.getElementById('scheduledStartTime')?.value;
+      if (!scheduledVal) {
+        showToast('Waktu jadwal tayang (Scheduled Start Time) wajib diisi', 'error');
+        return;
+      }
+      const scheduledDateObj = new Date(scheduledVal);
+      if (isNaN(scheduledDateObj.getTime())) {
+        showToast('Format waktu jadwal tayang tidak valid', 'error');
+        return;
+      }
+      const minAllowed = new Date(Date.now() + 10 * 60 * 1000);
+      if (scheduledDateObj < minAllowed) {
+        showToast('Jadwal tayang harus minimal 10 menit ke depan dari waktu sekarang', 'error');
+        return;
+      }
+      formData.append('scheduledStartTime', scheduledVal);
+      formData.append('privacyStatus', document.getElementById('privacyStatus')?.value || 'unlisted');
       
       // Add stream key if selected
-      const streamId = document.getElementById('streamKeySelect').value;
+      const streamSelect = document.getElementById('streamKeySelect');
+      const streamId = streamSelect ? streamSelect.value : '';
 
       if (!streamId && streamFetchState.tokenExpired) {
         showToast('Tidak bisa membuat broadcast saat token expired karena akan memicu stream key baru. Reconnect akun YouTube dulu.', 'error');
@@ -3068,15 +3104,13 @@ if (createBroadcastForm) {
       }
       
       // Add category ID (default: 22 - People & Blogs)
-      const categoryId = document.getElementById('categoryId').value;
+      const categoryId = document.getElementById('categoryId')?.value;
       formData.append('categoryId', categoryId || '22');
       
       // Add Additional Settings
-      // Auto-start and auto-stop are always true (hidden inputs)
-      const enableAutoStart = document.getElementById('enableAutoStart').value === 'true';
-      const enableAutoStop = document.getElementById('enableAutoStop').value === 'true';
-      // Unlist replay is optional (checkbox)
-      const unlistReplayOnEnd = document.getElementById('unlistReplayOnEnd').checked;
+      const enableAutoStart = document.getElementById('enableAutoStart')?.value === 'true';
+      const enableAutoStop = document.getElementById('enableAutoStop')?.value === 'true';
+      const unlistReplayOnEnd = document.getElementById('unlistReplayOnEnd')?.checked ?? true;
       
       formData.append('enableAutoStart', enableAutoStart);
       formData.append('enableAutoStop', enableAutoStop);
@@ -3084,33 +3118,23 @@ if (createBroadcastForm) {
       
       // Add thumbnail from gallery selection - ONLY if pinned mode
       const thumbnailMode = document.querySelector('input[name="thumbnailMode"]:checked')?.value || 'sequential';
-      const thumbnailPath = document.getElementById('selectedThumbnailPath').value;
+      const thumbnailPath = document.getElementById('selectedThumbnailPath')?.value;
       const pinnedThumbnail = document.getElementById('pinnedThumbnail')?.value;
       
-      // Only send thumbnailPath if:
-      // 1. Mode is pinned AND pinnedThumbnail is set, OR
-      // 2. User explicitly selected a thumbnail AND mode is pinned
       if (thumbnailMode === 'pinned' && pinnedThumbnail) {
         formData.append('thumbnailPath', pinnedThumbnail);
         console.log('[CreateBroadcast] Using pinned thumbnail:', pinnedThumbnail);
       }
-      // For sequential mode, don't send thumbnailPath - let backend handle sequential selection
       
       // Add selected thumbnail index
       const thumbnailIndex = window.createSelectedThumbnailIndex || 0;
       formData.append('thumbnailIndex', thumbnailIndex);
-      
-      // Add current thumbnail folder for sequential selection
-      // Always send thumbnailFolder - empty string for root, folder name for specific folder
-      // This ensures the folder selection is saved and can be restored when editing
       formData.append('thumbnailFolder', currentThumbnailFolder || '');
       
-      // Add pinned thumbnail if set (for backward compatibility)
       if (pinnedThumbnail) {
         formData.append('pinnedThumbnail', pinnedThumbnail);
       }
       
-      // Add stream key folder mapping if set
       const streamKeyFolderMapping = document.getElementById('streamKeyFolderMapping')?.value;
       if (streamKeyFolderMapping) {
         formData.append('streamKeyFolderMapping', streamKeyFolderMapping);
@@ -3127,19 +3151,18 @@ if (createBroadcastForm) {
       const data = await response.json();
       
       if (data.success) {
-        // NOTE: Thumbnail index is already incremented by backend in sequential mode
-        // No need to increment here to avoid double increment
-        console.log('[CreateBroadcast] Broadcast created successfully, thumbnail index handled by backend');
-        
-        showToast('Broadcast created successfully!');
+        console.log('[CreateBroadcast] Broadcast created successfully');
+        showToast('Broadcast berhasil dibuat!');
         closeCreateBroadcastModal();
         setTimeout(() => window.location.reload(), 1000);
       } else {
-        showToast(data.error || 'Failed to create broadcast', 'error');
+        const errMsg = data.error || data.message || 'Gagal membuat broadcast';
+        console.error('[CreateBroadcast] Error response from server:', data);
+        showToast(errMsg, 'error');
       }
     } catch (error) {
-      console.error('Error:', error);
-      showToast('An error occurred', 'error');
+      console.error('Error creating broadcast:', error);
+      showToast('Terjadi kesalahan sistem: ' + (error.message || error), 'error');
     } finally {
       createBtn.innerHTML = originalText;
       createBtn.disabled = false;
@@ -5258,7 +5281,7 @@ function renderRecreateBroadcastList(preservedSchedules = null) {
 
   listEl.innerHTML = broadcasts.map((b, i) => {
     const minDate = new Date(Date.now() + 11 * 60 * 1000);
-    const minDateStr = minDate.toISOString().slice(0, 16);
+    const minDateStr = toLocalDatetimeInputString(minDate);
 
     // Determine folder for this broadcast
     const streamId = b.streamId || template.stream_id;
