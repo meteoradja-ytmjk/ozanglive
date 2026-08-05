@@ -9882,4 +9882,70 @@ function fallbackCopyText(text) {
   document.body.removeChild(tempInput);
 }
 
+// Global live stats refresh & auto-refresh helpers
+async function refreshLiveStats() {
+  const refreshIcon = document.getElementById('refreshIcon');
+  const refreshIconMobile = document.getElementById('refreshIconMobile');
+  if (refreshIcon) refreshIcon.classList.add('animate-spin');
+  if (refreshIconMobile) refreshIconMobile.classList.add('animate-spin');
+  
+  try {
+    if (typeof broadcastsCache !== 'undefined') {
+      broadcastsCache.timestamp = null;
+    }
+    if (typeof lazyLoadBroadcasts === 'function') {
+      await lazyLoadBroadcasts();
+    }
+    if (typeof showToast === 'function') {
+      showToast('Stats & Broadcasts refreshed', 'success');
+    }
+  } catch (err) {
+    console.error('Error refreshing live stats:', err);
+    if (typeof showToast === 'function') {
+      showToast('Failed to refresh live stats', 'error');
+    }
+  } finally {
+    if (refreshIcon) refreshIcon.classList.remove('animate-spin');
+    if (refreshIconMobile) refreshIconMobile.classList.remove('animate-spin');
+  }
+}
+window.refreshLiveStats = refreshLiveStats;
 
+let autoRefreshTimer = null;
+function toggleAutoRefresh() {
+  const label = document.getElementById('autoRefreshLabel');
+  const labelMobile = document.getElementById('autoRefreshLabelMobile');
+  const icon = document.getElementById('autoRefreshIcon');
+  const iconMobile = document.getElementById('autoRefreshIconMobile');
+
+  if (autoRefreshTimer) {
+    clearInterval(autoRefreshTimer);
+    autoRefreshTimer = null;
+    if (label) label.textContent = 'OFF';
+    if (labelMobile) labelMobile.textContent = 'OFF';
+    if (icon) icon.classList.remove('text-green-400');
+    if (iconMobile) iconMobile.classList.remove('text-green-400');
+    if (typeof showToast === 'function') showToast('Auto refresh disabled', 'info');
+  } else {
+    autoRefreshTimer = setInterval(() => {
+      refreshLiveStats();
+    }, 30000);
+    if (label) label.textContent = 'ON';
+    if (labelMobile) labelMobile.textContent = 'ON';
+    if (icon) icon.classList.add('text-green-400');
+    if (iconMobile) iconMobile.classList.add('text-green-400');
+    if (typeof showToast === 'function') showToast('Auto refresh enabled (every 30s)', 'success');
+  }
+}
+window.toggleAutoRefresh = toggleAutoRefresh;
+
+function toggleSelectAllBroadcasts(checkbox) {
+  if (typeof toggleSelectAll === 'function') {
+    toggleSelectAll(checkbox);
+  } else {
+    const allCheckboxes = document.querySelectorAll('.broadcast-checkbox');
+    allCheckboxes.forEach(cb => { cb.checked = checkbox.checked; });
+    if (typeof updateSelectionCount === 'function') updateSelectionCount();
+  }
+}
+window.toggleSelectAllBroadcasts = toggleSelectAllBroadcasts;
