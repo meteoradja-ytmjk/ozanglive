@@ -22,7 +22,6 @@ class YouTubeService {
     return oauth2Client.generateAuthUrl({
       access_type: 'offline',
       prompt: 'consent select_account',
-      approval_prompt: 'force',
       scope: YOUTUBE_SCOPES,
       state: state,
       include_granted_scopes: true
