@@ -20,8 +20,9 @@ class YouTubeService {
     const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
     
     return oauth2Client.generateAuthUrl({
-      access_type: 'offline', // IMPORTANT: This gets us a refresh_token
-      prompt: 'consent',       // IMPORTANT: Force consent to always get refresh_token
+      access_type: 'offline',
+      prompt: 'consent select_account',
+      approval_prompt: 'force',
       scope: YOUTUBE_SCOPES,
       state: state,
       include_granted_scopes: true

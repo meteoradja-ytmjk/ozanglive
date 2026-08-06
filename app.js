@@ -7412,10 +7412,11 @@ app.get('/youtube', isAuthenticated, async (req, res) => {
 
 function createOAuthStateToken(payload) {
   try {
-    const { encrypt } = require('./utils/encryption');
     const jsonStr = JSON.stringify(payload);
-    const encrypted = encrypt(jsonStr);
-    return Buffer.from(encrypted).toString('base64url');
+    const base64 = Buffer.from(jsonStr, 'utf8').toString('base64url');
+    const secret = process.env.SESSION_SECRET || 'ozanglive-secret-key';
+    const hmac = crypto.createHmac('sha256', secret).update(base64).digest('hex');
+    return `${base64}.${hmac}`;
   } catch (err) {
     console.error('[OAuth State] Encoding error:', err);
     return crypto.randomBytes(32).toString('hex');
@@ -7423,11 +7424,16 @@ function createOAuthStateToken(payload) {
 }
 
 function parseOAuthStateToken(stateStr) {
-  if (!stateStr) return null;
+  if (!stateStr || typeof stateStr !== 'string' || !stateStr.includes('.')) return null;
   try {
-    const { decrypt } = require('./utils/encryption');
-    const encrypted = Buffer.from(stateStr, 'base64url').toString('utf8');
-    const jsonStr = decrypt(encrypted);
+    const [base64, hmac] = stateStr.split('.');
+    const secret = process.env.SESSION_SECRET || 'ozanglive-secret-key';
+    const expectedHmac = crypto.createHmac('sha256', secret).update(base64).digest('hex');
+    if (hmac !== expectedHmac) {
+      console.warn('[OAuth State] HMAC signature mismatch');
+      return null;
+    }
+    const jsonStr = Buffer.from(base64, 'base64url').toString('utf8');
     return JSON.parse(jsonStr);
   } catch (err) {
     console.warn('[OAuth State] Parse failed:', err.message);

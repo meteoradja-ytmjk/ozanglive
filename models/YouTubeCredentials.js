@@ -60,7 +60,7 @@ class YouTubeCredentials {
    * @param {Object} data - Credentials data
    * @returns {Promise<Object>} Created credentials
    */
-  static async create(userId, { clientId, clientSecret, refreshToken, channelName, channelId }) {
+  static async create(userId, { clientId, clientSecret, refreshToken, channelName, channelId, accessToken, tokenExpiresAt }) {
     return new Promise(async (resolve, reject) => {
       try {
         // Check if this channel is already connected for this user
@@ -74,14 +74,31 @@ class YouTubeCredentials {
         const existingAccounts = await this.findAllByUserId(userId);
         const isPrimary = existingAccounts.length === 0 ? 1 : 0;
         
+        // Ensure safeRefreshToken is never empty or null (prevents SQLite NOT NULL constraint failure)
+        const safeRefreshToken = (refreshToken && refreshToken.trim()) ? refreshToken.trim() : ('NO_REFRESH_TOKEN_' + Date.now());
+        
         // SECURITY FIX: Encrypt sensitive fields before storing
-        const encrypted = this._encryptSensitiveFields({ clientSecret, refreshToken });
+        const encrypted = this._encryptSensitiveFields({ clientSecret, refreshToken: safeRefreshToken });
+        const initialStatus = (!refreshToken || refreshToken.startsWith('NO_REFRESH_TOKEN')) ? 'warning' : 'active';
+        const nowStr = new Date().toISOString();
 
         db.run(
           `INSERT INTO youtube_credentials 
-           (user_id, client_id, client_secret, refresh_token, channel_name, channel_id, is_primary)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [userId, clientId, encrypted.clientSecret, encrypted.refreshToken, channelName, channelId, isPrimary],
+           (user_id, client_id, client_secret, refresh_token, channel_name, channel_id, is_primary, access_token, token_expires_at, last_refreshed_at, token_status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            userId,
+            clientId,
+            encrypted.clientSecret,
+            encrypted.refreshToken,
+            channelName || ('Channel ' + channelId) || 'YouTube Channel',
+            channelId,
+            isPrimary,
+            accessToken || null,
+            tokenExpiresAt ? (typeof tokenExpiresAt === 'number' ? new Date(tokenExpiresAt).toISOString() : tokenExpiresAt) : null,
+            nowStr,
+            initialStatus
+          ],
           function(err) {
             if (err) {
               reject(err);
@@ -92,7 +109,7 @@ class YouTubeCredentials {
               userId,
               clientId,
               clientSecret, // Return decrypted for immediate use
-              refreshToken, // Return decrypted for immediate use
+              refreshToken: safeRefreshToken, // Return decrypted for immediate use
               channelName,
               channelId,
               isPrimary
@@ -290,34 +307,48 @@ class YouTubeCredentials {
    * @param {Object} data - Data to update
    * @returns {Promise<Object>} Updated credentials
    */
-  static async update(id, { clientId, clientSecret, refreshToken, channelName, channelId }) {
+  static async update(id, { clientId, clientSecret, refreshToken, channelName, channelId, accessToken, tokenExpiresAt, tokenStatus }) {
     return new Promise((resolve, reject) => {
       const updates = [];
       const values = [];
 
-      if (clientId !== undefined) {
+      if (clientId !== undefined && clientId !== null) {
         updates.push('client_id = ?');
         values.push(clientId);
       }
-      if (clientSecret !== undefined) {
+      if (clientSecret !== undefined && clientSecret !== null) {
         // SECURITY FIX: Encrypt before storing
         const encrypted = this._encryptSensitiveFields({ clientSecret });
         updates.push('client_secret = ?');
         values.push(encrypted.clientSecret);
       }
-      if (refreshToken !== undefined) {
+      if (refreshToken !== undefined && refreshToken !== null && refreshToken !== '') {
         // SECURITY FIX: Encrypt before storing
         const encrypted = this._encryptSensitiveFields({ refreshToken });
         updates.push('refresh_token = ?');
         values.push(encrypted.refreshToken);
       }
-      if (channelName !== undefined) {
+      if (channelName !== undefined && channelName !== null) {
         updates.push('channel_name = ?');
         values.push(channelName);
       }
-      if (channelId !== undefined) {
+      if (channelId !== undefined && channelId !== null) {
         updates.push('channel_id = ?');
         values.push(channelId);
+      }
+      if (accessToken !== undefined && accessToken !== null) {
+        updates.push('access_token = ?');
+        values.push(accessToken);
+      }
+      if (tokenExpiresAt !== undefined && tokenExpiresAt !== null) {
+        updates.push('token_expires_at = ?');
+        values.push(typeof tokenExpiresAt === 'number' ? new Date(tokenExpiresAt).toISOString() : tokenExpiresAt);
+        updates.push('last_refreshed_at = ?');
+        values.push(new Date().toISOString());
+      }
+      if (tokenStatus !== undefined && tokenStatus !== null) {
+        updates.push('token_status = ?');
+        values.push(tokenStatus);
       }
 
       if (updates.length === 0) {
