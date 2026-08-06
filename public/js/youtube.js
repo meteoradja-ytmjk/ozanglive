@@ -927,6 +927,89 @@ function extractGoogleCredentials(obj) {
 }
 
 /**
+ * Prompt user to paste JSON string directly
+ */
+function promptPasteJson(isModal = false) {
+  const text = prompt('Paste teks isi file .json dari Google Cloud Console di sini:');
+  if (text) {
+    handleJsonTextPaste(text, isModal);
+  }
+}
+
+/**
+ * Handle pasted JSON text directly and extract credentials
+ */
+function handleJsonTextPaste(rawText, isModal = false) {
+  if (!rawText || !rawText.trim()) return;
+  try {
+    const json = JSON.parse(rawText.trim());
+    const creds = extractGoogleCredentials(json);
+    
+    if (!creds || !creds.clientId || !creds.clientSecret) {
+      showToast('Teks JSON tidak valid atau tidak memuat Client ID / Secret Google Cloud.', 'error');
+      return;
+    }
+    
+    const clientIdId = isModal ? 'newClientId' : 'clientId';
+    const clientSecretId = isModal ? 'newClientSecret' : 'clientSecret';
+    
+    const idInput = document.getElementById(clientIdId);
+    const secretInput = document.getElementById(clientSecretId);
+    
+    if (idInput) {
+      idInput.value = creds.clientId;
+      idInput.dispatchEvent(new Event('input', { bubbles: true }));
+      idInput.dispatchEvent(new Event('change', { bubbles: true }));
+      idInput.classList.remove('border-gray-600');
+      idInput.classList.add('border-green-500', 'bg-green-500/10', 'text-green-300');
+    }
+    
+    if (secretInput) {
+      secretInput.value = creds.clientSecret;
+      secretInput.type = 'text'; // Make it visible so user sees it filled!
+      const eye = document.getElementById((isModal ? 'newClientSecret' : 'clientSecret') + 'Eye');
+      if (eye) {
+        eye.classList.remove('ti-eye');
+        eye.classList.add('ti-eye-off');
+      }
+      secretInput.dispatchEvent(new Event('input', { bubbles: true }));
+      secretInput.dispatchEvent(new Event('change', { bubbles: true }));
+      secretInput.classList.remove('border-gray-600');
+      secretInput.classList.add('border-green-500', 'bg-green-500/10', 'text-green-300');
+    }
+    
+    const card = document.getElementById(isModal ? 'modalJsonExtractedCard' : 'jsonExtractedCard');
+    if (card) {
+      const idPreview = escapeHtml(creds.clientId);
+      const secretPreview = escapeHtml(creds.clientSecret);
+      card.innerHTML = `
+        <div class="flex items-center justify-between mb-1.5">
+          <span class="font-bold text-green-400 text-xs flex items-center gap-1.5">
+            <i class="ti ti-circle-check-filled text-sm"></i> Teks JSON Terbaca & Terurai!
+          </span>
+          <span class="text-[10px] bg-green-500/20 text-green-300 px-2 py-0.5 rounded font-mono font-semibold">Auto-Filled</span>
+        </div>
+        <div class="space-y-1 text-[11px] font-mono text-gray-200 bg-dark-900/80 p-2.5 rounded-lg border border-green-500/30 break-all">
+          <p><strong class="text-gray-400">Client ID:</strong> ${idPreview}</p>
+          <p><strong class="text-gray-400">Client Secret:</strong> ${secretPreview}</p>
+        </div>
+      `;
+      card.classList.remove('hidden');
+    }
+    
+    const badge = document.getElementById(isModal ? 'modalJsonSuccessBadge' : 'jsonSuccessBadge');
+    if (badge) {
+      badge.classList.remove('hidden');
+    }
+    
+    showToast('✅ Teks JSON berhasil dibaca! Client ID & Secret terisi otomatis.', 'success');
+  } catch (err) {
+    console.error('[JSON Paste Error]', err);
+    showToast('Gagal membaca teks JSON. Pastikan format JSON valid.', 'error');
+  }
+}
+
+/**
  * Toggle Client Secret visibility (Password vs Text)
  */
 function toggleSecretVisibility(inputId) {
