@@ -41,13 +41,9 @@ class YouTubeService {
     
     const { tokens } = await oauth2Client.getToken(code);
     
-    if (!tokens.refresh_token) {
-      throw new Error('No refresh token received. Make sure to use access_type=offline and prompt=consent');
-    }
-    
     return {
       access_token: tokens.access_token,
-      refresh_token: tokens.refresh_token,
+      refresh_token: tokens.refresh_token || null,
       expiry_date: tokens.expiry_date
     };
   }

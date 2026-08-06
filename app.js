@@ -7410,10 +7410,45 @@ app.get('/youtube', isAuthenticated, async (req, res) => {
 // YouTube OAuth2 Browser Flow Routes
 // ==========================================
 
+function createOAuthStateToken(payload) {
+  try {
+    const { encrypt } = require('./utils/encryption');
+    const jsonStr = JSON.stringify(payload);
+    const encrypted = encrypt(jsonStr);
+    return Buffer.from(encrypted).toString('base64url');
+  } catch (err) {
+    console.error('[OAuth State] Encoding error:', err);
+    return crypto.randomBytes(32).toString('hex');
+  }
+}
+
+function parseOAuthStateToken(stateStr) {
+  if (!stateStr) return null;
+  try {
+    const { decrypt } = require('./utils/encryption');
+    const encrypted = Buffer.from(stateStr, 'base64url').toString('utf8');
+    const jsonStr = decrypt(encrypted);
+    return JSON.parse(jsonStr);
+  } catch (err) {
+    console.warn('[OAuth State] Parse failed:', err.message);
+    return null;
+  }
+}
+
 // Step 1: Start OAuth flow - generate auth URL and redirect user to Google
 app.post('/api/youtube/oauth/authorize', isAuthenticated, async (req, res) => {
   try {
-    const { clientId, clientSecret } = req.body;
+    let { clientId, clientSecret } = req.body;
+    
+    // Fallback: If clientId or clientSecret are not provided in request body, try fetching from user's existing credentials
+    if ((!clientId || !clientId.trim()) || (!clientSecret || !clientSecret.trim())) {
+      const existingAccounts = await YouTubeCredentials.findAllByUserId(req.session.userId);
+      const primaryAcc = existingAccounts.find(a => a.isPrimary) || existingAccounts[0];
+      if (primaryAcc && primaryAcc.clientId && primaryAcc.clientSecret) {
+        clientId = primaryAcc.clientId;
+        clientSecret = primaryAcc.clientSecret;
+      }
+    }
     
     if (!clientId || !clientSecret) {
       return res.status(400).json({
@@ -7430,16 +7465,23 @@ app.post('/api/youtube/oauth/authorize', isAuthenticated, async (req, res) => {
     const redirectUri = `${baseUrl}/api/youtube/oauth/callback`;
     console.log('[OAuth Debug] Host:', host, '| Protocol:', protocol, '| redirectUri:', redirectUri);
     
-    // Generate CSRF state token to prevent attacks
-    const state = crypto.randomBytes(32).toString('hex');
+    // Create state payload containing user and credential metadata
+    const statePayload = {
+      userId: req.session.userId,
+      clientId,
+      clientSecret,
+      redirectUri,
+      credentialId: req.body.credentialId ? parseInt(req.body.credentialId) : null,
+      timestamp: Date.now()
+    };
     
-    // Store OAuth state in session
+    const state = createOAuthStateToken(statePayload);
+    
+    // Store in session as backup
     req.session.oauthState = state;
     req.session.oauthClientId = clientId;
     req.session.oauthClientSecret = clientSecret;
     req.session.oauthRedirectUri = redirectUri;
-    
-    // If reconnecting an existing account, store the credential ID
     if (req.body.credentialId) {
       req.session.oauthCredentialId = parseInt(req.body.credentialId);
     } else {
@@ -7463,79 +7505,120 @@ app.post('/api/youtube/oauth/authorize', isAuthenticated, async (req, res) => {
 });
 
 // Step 2: OAuth callback - Google redirects here after user consents
-app.get('/api/youtube/oauth/callback', isAuthenticated, async (req, res) => {
+app.get('/api/youtube/oauth/callback', async (req, res) => {
   try {
     const { code, state, error: oauthError } = req.query;
     
     // Handle user denying access
     if (oauthError) {
       console.warn('[OAuth] User denied access:', oauthError);
-      return res.redirect('/youtube?oauth_error=access_denied');
-    }
-    
-    // Validate state to prevent CSRF
-    if (!state || state !== req.session.oauthState) {
-      console.error('[OAuth] State mismatch - possible CSRF attack');
-      return res.redirect('/youtube?oauth_error=invalid_state');
+      return res.redirect('/youtube?oauth_error=' + encodeURIComponent(oauthError));
     }
     
     if (!code) {
       return res.redirect('/youtube?oauth_error=no_code');
     }
     
-    // Retrieve stored OAuth data from session
-    const clientId = req.session.oauthClientId;
-    const clientSecret = req.session.oauthClientSecret;
-    const redirectUri = req.session.oauthRedirectUri;
-    const credentialId = req.session.oauthCredentialId; // If reconnecting
+    // Decode OAuth state token
+    let decodedState = parseOAuthStateToken(state);
     
-    if (!clientId || !clientSecret || !redirectUri) {
-      console.error('[OAuth] Missing OAuth session data');
+    // Fallback to session data if token parsing fails
+    if (!decodedState && req.session) {
+      if (req.session.oauthClientId && req.session.oauthClientSecret && req.session.oauthRedirectUri) {
+        decodedState = {
+          userId: req.session.userId,
+          clientId: req.session.oauthClientId,
+          clientSecret: req.session.oauthClientSecret,
+          redirectUri: req.session.oauthRedirectUri,
+          credentialId: req.session.oauthCredentialId
+        };
+      }
+    }
+    
+    if (!decodedState || !decodedState.clientId || !decodedState.clientSecret || !decodedState.redirectUri) {
+      console.error('[OAuth] Missing or invalid OAuth state data');
       return res.redirect('/youtube?oauth_error=session_expired');
     }
     
+    const targetUserId = decodedState.userId || (req.session ? req.session.userId : null);
+    if (!targetUserId) {
+      console.error('[OAuth] Missing user ID for OAuth callback');
+      return res.redirect('/youtube?oauth_error=session_expired');
+    }
+    
+    // Restore session userId if missing
+    if (req.session && !req.session.userId) {
+      req.session.userId = targetUserId;
+    }
+    
     // Exchange authorization code for tokens
-    const tokens = await youtubeService.exchangeCodeForTokens(clientId, clientSecret, redirectUri, code);
+    const tokens = await youtubeService.exchangeCodeForTokens(
+      decodedState.clientId,
+      decodedState.clientSecret,
+      decodedState.redirectUri,
+      code
+    );
     
     // Validate the tokens by getting channel info
     const channelInfo = await youtubeService.getChannelInfo(tokens.access_token);
     
-    if (credentialId) {
+    // Check refresh token: if Google didn't return a new refresh token (user re-authorizing),
+    // check DB for existing refresh token for this channel
+    let refreshToken = tokens.refresh_token;
+    
+    if (!refreshToken) {
+      let existingCred = null;
+      if (decodedState.credentialId) {
+        existingCred = await YouTubeCredentials.findById(decodedState.credentialId);
+      } else {
+        const userAccounts = await YouTubeCredentials.findAllByUserId(targetUserId);
+        existingCred = userAccounts.find(a => a.channelId === channelInfo.id);
+      }
+      
+      if (existingCred && existingCred.refreshToken) {
+        refreshToken = existingCred.refreshToken;
+        console.log(`[OAuth] Reusing existing refresh_token for channel ${channelInfo.title}`);
+      } else {
+        throw new Error('Google did not return a refresh token. Please revoke app access at myaccount.google.com/permissions and try connecting again.');
+      }
+    }
+    
+    if (decodedState.credentialId) {
       // RECONNECT: Update existing credential with new refresh token
-      const existing = await YouTubeCredentials.findById(credentialId);
-      if (existing && existing.userId === req.session.userId) {
-        await YouTubeCredentials.update(credentialId, {
-          clientId,
-          clientSecret,
-          refreshToken: tokens.refresh_token,
+      const existing = await YouTubeCredentials.findById(decodedState.credentialId);
+      if (existing && existing.userId === targetUserId) {
+        await YouTubeCredentials.update(decodedState.credentialId, {
+          clientId: decodedState.clientId,
+          clientSecret: decodedState.clientSecret,
+          refreshToken: refreshToken,
           channelName: channelInfo.title,
           channelId: channelInfo.id
         });
-        console.log(`[OAuth] Reconnected account ${credentialId} - channel: ${channelInfo.title}`);
+        console.log(`[OAuth] Reconnected account ${decodedState.credentialId} - channel: ${channelInfo.title}`);
       }
     } else {
       // NEW CONNECTION: Check if channel already exists
-      const channelExists = await YouTubeCredentials.existsByChannel(req.session.userId, channelInfo.id);
+      const channelExists = await YouTubeCredentials.existsByChannel(targetUserId, channelInfo.id);
       
       if (channelExists) {
         // Update existing channel's refresh token instead of creating duplicate
-        const allAccounts = await YouTubeCredentials.findAllByUserId(req.session.userId);
+        const allAccounts = await YouTubeCredentials.findAllByUserId(targetUserId);
         const existingAccount = allAccounts.find(a => a.channelId === channelInfo.id);
         if (existingAccount) {
           await YouTubeCredentials.update(existingAccount.id, {
-            clientId,
-            clientSecret,
-            refreshToken: tokens.refresh_token,
+            clientId: decodedState.clientId,
+            clientSecret: decodedState.clientSecret,
+            refreshToken: refreshToken,
             channelName: channelInfo.title
           });
           console.log(`[OAuth] Updated existing account for channel: ${channelInfo.title}`);
         }
       } else {
         // Create new credential
-        await YouTubeCredentials.create(req.session.userId, {
-          clientId,
-          clientSecret,
-          refreshToken: tokens.refresh_token,
+        await YouTubeCredentials.create(targetUserId, {
+          clientId: decodedState.clientId,
+          clientSecret: decodedState.clientSecret,
+          refreshToken: refreshToken,
           channelName: channelInfo.title,
           channelId: channelInfo.id
         });
@@ -7544,11 +7627,13 @@ app.get('/api/youtube/oauth/callback', isAuthenticated, async (req, res) => {
     }
     
     // Clean up session OAuth data
-    delete req.session.oauthState;
-    delete req.session.oauthClientId;
-    delete req.session.oauthClientSecret;
-    delete req.session.oauthRedirectUri;
-    delete req.session.oauthCredentialId;
+    if (req.session) {
+      delete req.session.oauthState;
+      delete req.session.oauthClientId;
+      delete req.session.oauthClientSecret;
+      delete req.session.oauthRedirectUri;
+      delete req.session.oauthCredentialId;
+    }
     
     // Redirect back to YouTube page with success
     res.redirect('/youtube?oauth_success=1&channel=' + encodeURIComponent(channelInfo.title));
@@ -7556,12 +7641,13 @@ app.get('/api/youtube/oauth/callback', isAuthenticated, async (req, res) => {
   } catch (error) {
     console.error('[OAuth] Callback error:', error);
     
-    // Clean up session
-    delete req.session.oauthState;
-    delete req.session.oauthClientId;
-    delete req.session.oauthClientSecret;
-    delete req.session.oauthRedirectUri;
-    delete req.session.oauthCredentialId;
+    if (req.session) {
+      delete req.session.oauthState;
+      delete req.session.oauthClientId;
+      delete req.session.oauthClientSecret;
+      delete req.session.oauthRedirectUri;
+      delete req.session.oauthCredentialId;
+    }
     
     const errorMsg = encodeURIComponent(error.message || 'OAuth failed');
     res.redirect(`/youtube?oauth_error=${errorMsg}`);

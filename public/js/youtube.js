@@ -1034,13 +1034,8 @@ function closeAddAccountModal() {
  * Start OAuth flow from the initial connect form (no accounts yet)
  */
 async function startOAuthFlow() {
-  const clientId = document.getElementById('clientId').value.trim();
-  const clientSecret = document.getElementById('clientSecret').value.trim();
-  
-  if (!clientId || !clientSecret) {
-    showToast('Please enter Client ID and Client Secret first', 'error');
-    return;
-  }
+  const clientId = document.getElementById('clientId') ? document.getElementById('clientId').value.trim() : '';
+  const clientSecret = document.getElementById('clientSecret') ? document.getElementById('clientSecret').value.trim() : '';
   
   await initiateOAuth(clientId, clientSecret);
 }
@@ -1049,13 +1044,8 @@ async function startOAuthFlow() {
  * Start OAuth flow from the Add Account modal
  */
 async function startOAuthFlowFromModal() {
-  const clientId = document.getElementById('newClientId').value.trim();
-  const clientSecret = document.getElementById('newClientSecret').value.trim();
-  
-  if (!clientId || !clientSecret) {
-    showToast('Please enter Client ID and Client Secret first', 'error');
-    return;
-  }
+  const clientId = document.getElementById('newClientId') ? document.getElementById('newClientId').value.trim() : '';
+  const clientSecret = document.getElementById('newClientSecret') ? document.getElementById('newClientSecret').value.trim() : '';
   
   await initiateOAuth(clientId, clientSecret);
 }
@@ -1064,14 +1054,9 @@ async function startOAuthFlowFromModal() {
  * Reconnect existing account via OAuth (from Edit modal)
  */
 async function reconnectOAuth() {
-  const credentialId = document.getElementById('editAccountId').value;
-  const clientId = document.getElementById('editClientId').value.trim();
-  const clientSecret = document.getElementById('editClientSecret').value.trim();
-  
-  if (!clientId || !clientSecret) {
-    showToast('Client ID dan Client Secret harus diisi', 'error');
-    return;
-  }
+  const credentialId = document.getElementById('editAccountId') ? document.getElementById('editAccountId').value : null;
+  const clientId = document.getElementById('editClientId') ? document.getElementById('editClientId').value.trim() : '';
+  const clientSecret = document.getElementById('editClientSecret') ? document.getElementById('editClientSecret').value.trim() : '';
   
   await initiateOAuth(clientId, clientSecret, credentialId);
 }
