@@ -79,72 +79,94 @@
 
   <% if (!accounts || accounts.length === 0) { %>
   <!-- Credentials Form (No Accounts Connected) -->
-  <div class="bg-gray-800 rounded-lg p-4 sm:p-6 shadow-md">
+  <div class="bg-gray-800 rounded-2xl p-4 sm:p-6 shadow-xl border border-gray-700/50">
     <div class="flex items-center gap-3 mb-6">
-      <i class="ti ti-key text-primary text-2xl"></i>
+      <div class="w-12 h-12 bg-red-500/15 rounded-xl flex items-center justify-center text-red-500 text-2xl flex-shrink-0">
+        <i class="ti ti-brand-youtube"></i>
+      </div>
       <div>
-        <h2 class="text-lg font-semibold">Connect YouTube Account</h2>
-        <p class="text-sm text-gray-400">Enter your API credentials to get started</p>
+        <h2 class="text-lg sm:text-xl font-bold text-white">Hubungkan Akun YouTube</h2>
+        <p class="text-xs sm:text-sm text-gray-400">Upload file <code class="text-red-400 bg-dark-700 px-1 py-0.5 rounded">client_secret.json</code> atau masukkan Client ID & Secret untuk mulai</p>
+      </div>
+    </div>
+
+    <!-- Upload JSON File Box -->
+    <div class="bg-dark-700/60 rounded-xl p-4 border border-dashed border-gray-600 hover:border-red-500/50 transition-colors mb-5">
+      <div class="flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 bg-blue-500/15 text-blue-400 rounded-lg flex items-center justify-center flex-shrink-0">
+            <i class="ti ti-file-code text-xl"></i>
+          </div>
+          <div>
+            <p class="text-xs sm:text-sm font-semibold text-white">Upload File client_secret.json (Rekomendasi)</p>
+            <p class="text-[11px] text-gray-400">Otomatis isi Client ID & Client Secret dari Google Console</p>
+          </div>
+        </div>
+        <label class="bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-colors flex items-center gap-2 whitespace-nowrap shadow-md">
+          <i class="ti ti-upload text-sm"></i>
+          <span>Pilih File JSON</span>
+          <input type="file" accept=".json" class="hidden" onchange="handleJsonFileUpload(event, false)">
+        </label>
+      </div>
+      <div id="jsonSuccessBadge" class="hidden mt-2 pt-2 border-t border-gray-600/50 flex items-center gap-1.5 text-xs text-green-400 font-medium">
+        <i class="ti ti-circle-check"></i>
+        <span>File JSON berhasil dibaca & data terisi otomatis!</span>
       </div>
     </div>
     
     <form id="credentialsForm" class="space-y-4">
       <div>
-        <label class="text-sm font-medium text-white block mb-2">Client ID <span class="text-red-400">*</span></label>
+        <label class="text-xs sm:text-sm font-medium text-white block mb-1.5">Google Client ID <span class="text-red-400">*</span></label>
         <input type="text" id="clientId" name="clientId" required
-          class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none"
+          class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-red-500 focus:outline-none text-xs sm:text-sm text-white"
           placeholder="Enter your Google Client ID">
       </div>
       
       <div>
-        <label class="text-sm font-medium text-white block mb-2">Client Secret <span class="text-red-400">*</span></label>
+        <label class="text-xs sm:text-sm font-medium text-white block mb-1.5">Google Client Secret <span class="text-red-400">*</span></label>
         <input type="password" id="clientSecret" name="clientSecret" required
-          class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none"
+          class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-red-500 focus:outline-none text-xs sm:text-sm text-white"
           placeholder="Enter your Google Client Secret">
       </div>
       
-      <div>
-        <label class="text-sm font-medium text-white block mb-2">Refresh Token <span class="text-red-400">*</span></label>
-        <textarea id="refreshToken" name="refreshToken" rows="3" required
-          class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none resize-none"
-          placeholder="Paste Refresh Token dari OAuth Playground"></textarea>
-      </div>
-      
-      <div class="bg-dark-700 rounded-lg p-4 border border-gray-600">
-        <p class="text-sm text-gray-400 break-words">
-          <i class="ti ti-info-circle text-primary mr-1"></i>
-          Get your credentials from <a href="https://console.cloud.google.com/apis/credentials" target="_blank" class="text-primary hover:underline">Google Cloud Console</a>. 
-          Make sure to enable YouTube Data API v3 and add <code class="bg-dark-600 px-1 rounded text-primary text-xs break-all"><%= typeof baseUrl !== 'undefined' ? baseUrl : 'http://localhost:7575' %>/api/youtube/oauth/callback</code> as Authorized Redirect URI.
+      <div class="bg-dark-700/80 rounded-xl p-3.5 border border-gray-600/60 text-xs text-gray-400 space-y-1">
+        <p class="flex items-center gap-1.5 text-gray-300 font-medium">
+          <i class="ti ti-info-circle text-blue-400 text-sm"></i>
+          Authorized Redirect URI (Wajib ditambahkan di Google Cloud Console):
         </p>
+        <code class="block bg-dark-900/80 px-2.5 py-1.5 rounded text-red-400 text-[11px] font-mono break-all border border-gray-700/60">
+          <%= typeof baseUrl !== 'undefined' ? baseUrl : 'http://localhost:7575' %>/api/youtube/oauth/callback
+        </code>
       </div>
       
-      <button type="submit" id="connectBtn"
-        class="w-full bg-red-500 hover:bg-red-600 text-white px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2">
-        <i class="ti ti-brand-youtube flex-shrink-0"></i>
-        <span class="whitespace-nowrap">Connect Manual</span>
+      <!-- Primary Action: Connect with Google -->
+      <button type="button" onclick="startOAuthFlow()" id="connectGoogleBtn"
+        class="w-full bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-4 py-3 rounded-xl font-semibold transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-red-500/25 active:scale-[0.99]">
+        <i class="ti ti-brand-google text-lg flex-shrink-0"></i>
+        <span class="whitespace-nowrap">Connect with Google</span>
       </button>
       
-      <div class="border-t border-gray-600 pt-4 mt-4">
-        <button type="button" onclick="toggleOAuthSection(event)" class="w-full flex items-center justify-between text-gray-400 hover:text-gray-300 transition-colors py-2 touch-manipulation">
+      <!-- Collapsible Manual OAuth Playground Option -->
+      <div class="border-t border-gray-700/60 pt-3 mt-3">
+        <button type="button" onclick="toggleOAuthSection(event)" class="w-full flex items-center justify-between text-gray-400 hover:text-gray-200 transition-colors py-1.5 touch-manipulation">
           <span class="text-xs font-medium flex items-center gap-2">
             <i class="ti ti-chevron-right text-sm transition-transform duration-200" id="oauthSectionChevron"></i>
-            <span>Opsi Lain: Auto-connect via Google</span>
+            <span>Atau Input Manual Refresh Token (OAuth Playground)</span>
           </span>
-          <span class="text-[10px] bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded">Advanced</span>
+          <span class="text-[10px] bg-gray-700 text-gray-300 px-2 py-0.5 rounded font-mono">Legacy</span>
         </button>
-        <div id="oauthSection" class="hidden mt-3">
-          <div class="bg-gradient-to-r from-blue-500/10 to-green-500/10 rounded-lg p-4 border border-blue-500/30">
-            <p class="text-sm text-blue-300 mb-3 flex items-start gap-2">
-              <i class="ti ti-sparkles text-lg flex-shrink-0"></i>
-              <span><strong>Recommended:</strong> auto-connect via Google, refresh token otomatis.</span>
-            </p>
-            <button type="button" onclick="startOAuthFlow()"
-              class="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-4 py-3 rounded-lg font-medium transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25">
-              <i class="ti ti-brand-google text-lg flex-shrink-0"></i>
-              <span class="whitespace-nowrap">Connect with Google</span>
-            </button>
-            <p class="text-xs text-gray-400 mt-2 text-center">Sesi diperbarui otomatis. Publish app ke Production agar koneksi tidak terputus.</p>
+        <div id="oauthSection" class="hidden mt-3 space-y-3">
+          <div>
+            <label class="text-xs font-medium text-white block mb-1">Refresh Token</label>
+            <textarea id="refreshToken" name="refreshToken" rows="3"
+              class="w-full px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg focus:border-red-500 focus:outline-none text-xs resize-none"
+              placeholder="Paste Refresh Token dari OAuth Playground jika ada"></textarea>
           </div>
+          <button type="submit" id="connectBtn"
+            class="w-full bg-gray-700 hover:bg-gray-600 text-white px-4 py-2.5 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-2">
+            <i class="ti ti-plug"></i>
+            <span>Connect Manual dengan Refresh Token</span>
+          </button>
         </div>
       </div>
     </form>
@@ -1301,12 +1323,15 @@
 </div>
 
 <!-- Add Account Modal -->
-<div id="addAccountModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto">
+<div id="addAccountModal" class="fixed inset-0 bg-black/60 z-50 hidden modal-overlay overflow-y-auto backdrop-blur-xs">
   <div class="flex min-h-screen items-center justify-center p-4">
-    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-lg">
-      <div class="flex items-center justify-between p-4 sm:p-6 border-b border-gray-700">
-        <h3 class="text-base sm:text-lg font-semibold">Add YouTube Account</h3>
-        <button onclick="closeAddAccountModal()" class="text-gray-400 hover:text-white flex-shrink-0">
+    <div class="bg-dark-800 rounded-2xl shadow-2xl w-full max-w-lg border border-gray-700/60 overflow-hidden">
+      <div class="flex items-center justify-between p-4 sm:p-5 border-b border-gray-700/60 bg-dark-700/40">
+        <div class="flex items-center gap-2.5">
+          <i class="ti ti-brand-youtube text-red-500 text-xl"></i>
+          <h3 class="text-base sm:text-lg font-bold text-white">Tambah Akun YouTube</h3>
+        </div>
+        <button onclick="closeAddAccountModal()" class="text-gray-400 hover:text-white flex-shrink-0 p-1">
           <i class="ti ti-x text-xl"></i>
         </button>
       </div>
@@ -1323,69 +1348,81 @@
           <select id="reconnectTargetSelect" class="w-full mt-3 px-3 py-2 bg-dark-600 border border-gray-600 rounded-lg focus:border-primary focus:outline-none text-sm"></select>
         </div>
 
+        <!-- Upload JSON File Box (Modal) -->
+        <div class="bg-dark-700/60 rounded-xl p-3.5 border border-dashed border-gray-600 hover:border-red-500/50 transition-colors">
+          <div class="flex flex-col sm:flex-row items-center justify-between gap-2.5">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 bg-blue-500/15 text-blue-400 rounded-lg flex items-center justify-center flex-shrink-0">
+                <i class="ti ti-file-code text-base"></i>
+              </div>
+              <div>
+                <p class="text-xs font-semibold text-white">Upload client_secret.json</p>
+                <p class="text-[10px] text-gray-400">Otomatis isi Client ID & Secret</p>
+              </div>
+            </div>
+            <label class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors flex items-center gap-1.5 whitespace-nowrap shadow-sm">
+              <i class="ti ti-upload text-xs"></i>
+              <span>Pilih File JSON</span>
+              <input type="file" accept=".json" class="hidden" onchange="handleJsonFileUpload(event, true)">
+            </label>
+          </div>
+          <div id="modalJsonSuccessBadge" class="hidden mt-2 pt-1.5 border-t border-gray-600/50 flex items-center gap-1.5 text-[11px] text-green-400 font-medium">
+            <i class="ti ti-circle-check"></i>
+            <span>File JSON berhasil dibaca & terisi!</span>
+          </div>
+        </div>
+
         <div>
-          <label class="text-sm font-medium text-white block mb-2">Client ID <span class="text-red-400">*</span></label>
+          <label class="text-xs sm:text-sm font-medium text-white block mb-1.5">Google Client ID <span class="text-red-400">*</span></label>
           <input type="text" id="newClientId" name="clientId" required
-            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none"
+            class="w-full px-3.5 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-red-500 focus:outline-none text-xs sm:text-sm text-white"
             placeholder="Enter your Google Client ID">
         </div>
         
         <div>
-          <label class="text-sm font-medium text-white block mb-2">Client Secret <span class="text-red-400">*</span></label>
+          <label class="text-xs sm:text-sm font-medium text-white block mb-1.5">Google Client Secret <span class="text-red-400">*</span></label>
           <input type="password" id="newClientSecret" name="clientSecret" required
-            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none"
+            class="w-full px-3.5 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-red-500 focus:outline-none text-xs sm:text-sm text-white"
             placeholder="Enter your Google Client Secret">
         </div>
         
-        <div>
-          <label class="text-sm font-medium text-white block mb-2">Refresh Token <span class="text-red-400">*</span></label>
-          <textarea id="newRefreshToken" name="refreshToken" rows="3" required
-            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none resize-none"
-            placeholder="Paste Refresh Token dari OAuth Playground"></textarea>
-        </div>
-        
-        <div class="bg-dark-700 rounded-lg p-4 border border-gray-600">
-          <p class="text-sm text-gray-400 break-words">
-            <i class="ti ti-info-circle text-primary mr-1"></i>
-            Get your credentials from <a href="https://console.cloud.google.com/apis/credentials" target="_blank" class="text-primary hover:underline">Google Cloud Console</a>. 
-            Add <code class="bg-dark-600 px-1 rounded text-primary text-xs break-all"><%= typeof baseUrl !== 'undefined' ? baseUrl : 'http://localhost:7575' %>/api/youtube/oauth/callback</code> as Redirect URI.
+        <div class="bg-dark-700/80 rounded-xl p-3 border border-gray-600/60 text-[11px] text-gray-400">
+          <p class="text-gray-300 font-medium mb-1">
+            <i class="ti ti-info-circle text-blue-400"></i> Authorized Redirect URI (Wajib di Google Console):
           </p>
+          <code class="block bg-dark-900/80 px-2 py-1 rounded text-red-400 font-mono break-all">
+            <%= typeof baseUrl !== 'undefined' ? baseUrl : 'http://localhost:7575' %>/api/youtube/oauth/callback
+          </code>
         </div>
         
-        <div class="pt-4 flex gap-3">
-          <button type="button" onclick="closeAddAccountModal()"
-            class="flex-1 bg-dark-700 hover:bg-dark-600 text-white px-4 py-2.5 rounded-lg transition-colors">
-            Cancel
-          </button>
-          <button type="submit" id="addAccountBtn"
-            class="flex-1 bg-red-500 hover:bg-red-600 text-white px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
-            <i class="ti ti-brand-youtube"></i>
-            <span>Add Manual</span>
-          </button>
-        </div>
-        
-        <!-- OAuth Auto-Connect Section - Collapsible (Hidden by Default) -->
-        <div class="border-t border-gray-600 pt-4">
-          <button type="button" onclick="toggleOAuthSectionModal(event)" class="w-full flex items-center justify-between text-gray-400 hover:text-gray-300 transition-colors py-2 touch-manipulation">
+        <!-- Primary Action Button: Connect with Google -->
+        <button type="button" onclick="startOAuthFlowFromModal()" id="modalConnectGoogleBtn"
+          class="w-full bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-4 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 shadow-lg shadow-red-500/25 active:scale-[0.99]">
+          <i class="ti ti-brand-google text-lg"></i>
+          <span>Connect with Google</span>
+        </button>
+
+        <!-- Collapsible Manual Refresh Token Option -->
+        <div class="border-t border-gray-700/60 pt-3">
+          <button type="button" onclick="toggleOAuthSectionModal(event)" class="w-full flex items-center justify-between text-gray-400 hover:text-gray-200 transition-colors py-1.5 touch-manipulation">
             <span class="text-xs font-medium flex items-center gap-2">
               <i class="ti ti-chevron-right text-sm transition-transform duration-200" id="oauthSectionModalChevron"></i>
-              <span>Opsi Lain: Auto-connect via Google</span>
+              <span>Atau Connect Manual via Refresh Token</span>
             </span>
-            <span class="text-[10px] bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded">Advanced</span>
+            <span class="text-[10px] bg-gray-700 text-gray-300 px-2 py-0.5 rounded font-mono">Legacy</span>
           </button>
-          <div id="oauthSectionModal" class="hidden mt-3">
-            <div class="bg-gradient-to-r from-blue-500/10 to-green-500/10 rounded-lg p-4 border border-blue-500/30">
-              <p class="text-sm text-blue-300 mb-3 flex items-start gap-2">
-                <i class="ti ti-sparkles text-lg flex-shrink-0"></i>
-                <span><strong>Recommended:</strong> auto-connect via Google.</span>
-              </p>
-              <button type="button" onclick="startOAuthFlowFromModal()"
-                class="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-4 py-2.5 rounded-lg font-medium transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25">
-                <i class="ti ti-brand-google text-lg flex-shrink-0"></i>
-                <span class="whitespace-nowrap">Connect with Google</span>
-              </button>
-              <p class="text-xs text-gray-400 mt-2 text-center">Refresh token otomatis, tanpa paste manual</p>
+          <div id="oauthSectionModal" class="hidden mt-3 space-y-3">
+            <div>
+              <label class="text-xs font-medium text-white block mb-1">Refresh Token</label>
+              <textarea id="newRefreshToken" name="refreshToken" rows="2"
+                class="w-full px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg focus:border-red-500 focus:outline-none text-xs resize-none"
+                placeholder="Paste Refresh Token dari OAuth Playground jika ada"></textarea>
             </div>
+            <button type="submit" id="addAccountBtn"
+              class="w-full bg-gray-700 hover:bg-gray-600 text-white px-4 py-2.5 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-2">
+              <i class="ti ti-plug"></i>
+              <span>Add Manual dengan Refresh Token</span>
+            </button>
           </div>
         </div>
       </form>

@@ -829,16 +829,24 @@ if (credentialsForm) {
   credentialsForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     
+    const refreshToken = document.getElementById('refreshToken') ? document.getElementById('refreshToken').value.trim() : '';
+    if (!refreshToken) {
+      await startOAuthFlow();
+      return;
+    }
+    
     const connectBtn = document.getElementById('connectBtn');
-    const originalText = connectBtn.innerHTML;
-    connectBtn.innerHTML = '<i class="ti ti-loader animate-spin"></i> Connecting...';
-    connectBtn.disabled = true;
+    const originalText = connectBtn ? connectBtn.innerHTML : '';
+    if (connectBtn) {
+      connectBtn.innerHTML = '<i class="ti ti-loader animate-spin"></i> Connecting...';
+      connectBtn.disabled = true;
+    }
     
     try {
       const formData = {
-        clientId: document.getElementById('clientId').value,
-        clientSecret: document.getElementById('clientSecret').value,
-        refreshToken: document.getElementById('refreshToken').value
+        clientId: document.getElementById('clientId').value.trim(),
+        clientSecret: document.getElementById('clientSecret').value.trim(),
+        refreshToken: refreshToken
       };
       
       const response = await fetch('/api/youtube/credentials', {
@@ -863,10 +871,53 @@ if (credentialsForm) {
       console.error('Error:', error);
       showToast('An error occurred', 'error');
     } finally {
-      connectBtn.innerHTML = originalText;
-      connectBtn.disabled = false;
+      if (connectBtn) {
+        connectBtn.innerHTML = originalText;
+        connectBtn.disabled = false;
+      }
     }
   });
+}
+
+/**
+ * Parse uploaded client_secret.json file and populate Client ID and Client Secret inputs
+ */
+function handleJsonFileUpload(event, isModal = false) {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      const creds = data.web || data.installed || data;
+      
+      const clientId = (creds.client_id || '').trim();
+      const clientSecret = (creds.client_secret || '').trim();
+      
+      if (!clientId || !clientSecret) {
+        showToast('File JSON tidak valid. Pastikan file client_secret dari Google Cloud Console.', 'error');
+        return;
+      }
+      
+      const idInput = document.getElementById(isModal ? 'newClientId' : 'clientId');
+      const secretInput = document.getElementById(isModal ? 'newClientSecret' : 'clientSecret');
+      
+      if (idInput) idInput.value = clientId;
+      if (secretInput) secretInput.value = clientSecret;
+      
+      const badge = document.getElementById(isModal ? 'modalJsonSuccessBadge' : 'jsonSuccessBadge');
+      if (badge) {
+        badge.classList.remove('hidden');
+      }
+      
+      showToast('✅ client_secret.json berhasil dibaca! Client ID & Secret terisi otomatis.', 'success');
+    } catch (err) {
+      console.error('[JSON Upload Error]', err);
+      showToast('Gagal membaca file JSON. Format file tidak sesuai.', 'error');
+    }
+  };
+  reader.readAsText(file);
 }
 
 // Disconnect specific YouTube account
@@ -1320,16 +1371,24 @@ if (addAccountForm) {
   addAccountForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     
+    const refreshToken = document.getElementById('newRefreshToken') ? document.getElementById('newRefreshToken').value.trim() : '';
+    if (!refreshToken) {
+      await startOAuthFlowFromModal();
+      return;
+    }
+    
     const addBtn = document.getElementById('addAccountBtn');
-    const originalText = addBtn.innerHTML;
-    addBtn.innerHTML = '<i class="ti ti-loader animate-spin"></i> Adding...';
-    addBtn.disabled = true;
+    const originalText = addBtn ? addBtn.innerHTML : '';
+    if (addBtn) {
+      addBtn.innerHTML = '<i class="ti ti-loader animate-spin"></i> Adding...';
+      addBtn.disabled = true;
+    }
     
     try {
       const formData = {
-        clientId: document.getElementById('newClientId').value,
-        clientSecret: document.getElementById('newClientSecret').value,
-        refreshToken: document.getElementById('newRefreshToken').value
+        clientId: document.getElementById('newClientId').value.trim(),
+        clientSecret: document.getElementById('newClientSecret').value.trim(),
+        refreshToken: refreshToken
       };
       
       const response = await fetch('/api/youtube/credentials', {
