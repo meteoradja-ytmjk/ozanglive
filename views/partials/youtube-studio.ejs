@@ -103,17 +103,11 @@
             <p class="text-[11px] text-gray-400">Tarik & lepas file JSON dari Google Cloud Console ke sini</p>
           </div>
         </div>
-        <div class="flex items-center gap-2">
-          <label class="bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-colors flex items-center gap-2 whitespace-nowrap shadow-md">
-            <i class="ti ti-upload text-sm"></i>
-            <span>Pilih File JSON</span>
-            <input type="file" accept=".json" class="hidden" onchange="handleJsonFileUpload(event, false)">
-          </label>
-          <button type="button" onclick="promptPasteJson(false)" class="bg-dark-600 hover:bg-dark-500 text-gray-200 px-3 py-2 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 whitespace-nowrap border border-gray-600">
-            <i class="ti ti-clipboard text-sm"></i>
-            <span>Paste JSON</span>
-          </button>
-        </div>
+        <label class="bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-colors flex items-center gap-2 whitespace-nowrap shadow-md">
+          <i class="ti ti-upload text-sm"></i>
+          <span>Pilih File JSON</span>
+          <input type="file" accept=".json" class="hidden" onchange="handleJsonFileUpload(event)">
+        </label>
       </div>
       <div id="jsonSuccessBadge" class="hidden mt-2 pt-2 border-t border-gray-600/50 flex items-center gap-1.5 text-xs text-green-400 font-medium">
         <i class="ti ti-circle-check"></i>
@@ -1376,17 +1370,11 @@
                 <p class="text-[10px] text-gray-400">Otomatis isi Client ID & Secret</p>
               </div>
             </div>
-            <div class="flex items-center gap-1.5">
-              <label class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors flex items-center gap-1.5 whitespace-nowrap shadow-sm">
-                <i class="ti ti-upload text-xs"></i>
-                <span>Pilih File JSON</span>
-                <input type="file" accept=".json" class="hidden" onchange="handleJsonFileUpload(event, true)">
-              </label>
-              <button type="button" onclick="promptPasteJson(true)" class="bg-dark-600 hover:bg-dark-500 text-gray-200 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 whitespace-nowrap border border-gray-600">
-                <i class="ti ti-clipboard text-xs"></i>
-                <span>Paste JSON</span>
-              </button>
-            </div>
+            <label class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors flex items-center gap-1.5 whitespace-nowrap shadow-sm">
+              <i class="ti ti-upload text-xs"></i>
+              <span>Pilih File JSON</span>
+              <input type="file" accept=".json" class="hidden" onchange="handleJsonFileUpload(event)">
+            </label>
           </div>
           <div id="modalJsonSuccessBadge" class="hidden mt-2 pt-1.5 border-t border-gray-600/50 flex items-center gap-1.5 text-[11px] text-green-400 font-medium">
             <i class="ti ti-circle-check"></i>

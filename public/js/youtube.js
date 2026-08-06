@@ -1061,14 +1061,14 @@ function handleJsonDrop(event, isModal = false) {
 /**
  * Parse uploaded client_secret.json file and populate Client ID and Client Secret inputs
  */
-function handleJsonFileUpload(event, isModal = false) {
+function handleJsonFileUpload(event) {
   const fileInput = event.target;
   const file = fileInput.files ? fileInput.files[0] : null;
   if (!file) return;
-  processJsonFile(file, isModal, fileInput);
+  processJsonFile(file, fileInput);
 }
 
-function processJsonFile(file, isModal = false, fileInput = null) {
+function processJsonFile(file, fileInput = null) {
   const reader = new FileReader();
   reader.onload = function(e) {
     try {
@@ -1083,61 +1083,11 @@ function processJsonFile(file, isModal = false, fileInput = null) {
         return;
       }
       
-      const clientIdId = isModal ? 'newClientId' : 'clientId';
-      const clientSecretId = isModal ? 'newClientSecret' : 'clientSecret';
-      
-      const idInput = document.getElementById(clientIdId);
-      const secretInput = document.getElementById(clientSecretId);
-      
-      if (idInput) {
-        idInput.value = creds.clientId;
-        idInput.dispatchEvent(new Event('input', { bubbles: true }));
-        idInput.dispatchEvent(new Event('change', { bubbles: true }));
-        idInput.classList.remove('border-gray-600');
-        idInput.classList.add('border-green-500', 'bg-green-500/10', 'text-green-300');
-      }
-      
-      if (secretInput) {
-        secretInput.value = creds.clientSecret;
-        secretInput.type = 'text'; // Make it visible so user sees it filled!
-        const eye = document.getElementById((isModal ? 'newClientSecret' : 'clientSecret') + 'Eye');
-        if (eye) {
-          eye.classList.remove('ti-eye');
-          eye.classList.add('ti-eye-off');
-        }
-        secretInput.dispatchEvent(new Event('input', { bubbles: true }));
-        secretInput.dispatchEvent(new Event('change', { bubbles: true }));
-        secretInput.classList.remove('border-gray-600');
-        secretInput.classList.add('border-green-500', 'bg-green-500/10', 'text-green-300');
-      }
-      
-      const card = document.getElementById(isModal ? 'modalJsonExtractedCard' : 'jsonExtractedCard');
-      if (card) {
-        const idPreview = escapeHtml(creds.clientId);
-        const secretPreview = escapeHtml(creds.clientSecret);
-        card.innerHTML = `
-          <div class="flex items-center justify-between mb-1.5">
-            <span class="font-bold text-green-400 text-xs flex items-center gap-1.5">
-              <i class="ti ti-circle-check-filled text-sm"></i> File "${escapeHtml(file.name)}" Terbaca!
-            </span>
-            <span class="text-[10px] bg-green-500/20 text-green-300 px-2 py-0.5 rounded font-mono font-semibold">Auto-Filled</span>
-          </div>
-          <div class="space-y-1 text-[11px] font-mono text-gray-200 bg-dark-900/80 p-2.5 rounded-lg border border-green-500/30 break-all">
-            <p><strong class="text-gray-400">Client ID:</strong> ${idPreview}</p>
-            <p><strong class="text-gray-400">Client Secret:</strong> ${secretPreview}</p>
-          </div>
-        `;
-        card.classList.remove('hidden');
-      }
-      
-      const badge = document.getElementById(isModal ? 'modalJsonSuccessBadge' : 'jsonSuccessBadge');
-      if (badge) {
-        badge.classList.remove('hidden');
-      }
+      populateCredentialsToAllInputs(creds, file.name || 'client_secret.json');
       
       if (fileInput) fileInput.value = '';
       
-      showToast(`✅ File "${file.name}" berhasil dimuat! Client ID & Secret terisi.`, 'success');
+      showToast(`✅ File "${file.name}" berhasil dimuat! Client ID & Secret terisi otomatis.`, 'success');
     } catch (err) {
       console.error('[JSON Upload Error]', err);
       showToast('Gagal membaca file JSON. Pastikan file berformat JSON valid.', 'error');
@@ -1145,6 +1095,76 @@ function processJsonFile(file, isModal = false, fileInput = null) {
     }
   };
   reader.readAsText(file);
+}
+
+/**
+ * Populate extracted credentials to ALL matching Client ID and Secret input elements in the DOM & cache to sessionStorage
+ */
+function populateCredentialsToAllInputs(creds, fileName = 'client_secret.json') {
+  if (!creds || !creds.clientId || !creds.clientSecret) return;
+
+  // 1. Cache to sessionStorage for persistent fallback
+  try {
+    sessionStorage.setItem('ozang_oauth_client_id', creds.clientId);
+    sessionStorage.setItem('ozang_oauth_client_secret', creds.clientSecret);
+  } catch (e) {}
+
+  // 2. Find ALL Client ID elements in DOM
+  const idInputs = document.querySelectorAll('#clientId, #newClientId, #editClientId, input[name="clientId"]');
+  idInputs.forEach(input => {
+    input.value = creds.clientId;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    input.classList.remove('border-gray-600');
+    input.classList.add('border-green-500', 'bg-green-500/10', 'text-green-300');
+  });
+
+  // 3. Find ALL Client Secret elements in DOM
+  const secretInputs = document.querySelectorAll('#clientSecret, #newClientSecret, #editClientSecret, input[name="clientSecret"]');
+  secretInputs.forEach(input => {
+    input.value = creds.clientSecret;
+    input.type = 'text'; // Make visible text so user sees it filled!
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    input.classList.remove('border-gray-600');
+    input.classList.add('border-green-500', 'bg-green-500/10', 'text-green-300');
+    
+    // Update eye icons if present
+    const eyeId = input.id + 'Eye';
+    const eye = document.getElementById(eyeId);
+    if (eye) {
+      eye.classList.remove('ti-eye');
+      eye.classList.add('ti-eye-off');
+    }
+  });
+
+  // 4. Update preview cards
+  ['jsonExtractedCard', 'modalJsonExtractedCard'].forEach(cardId => {
+    const card = document.getElementById(cardId);
+    if (card) {
+      const idPreview = escapeHtml(creds.clientId);
+      const secretPreview = escapeHtml(creds.clientSecret);
+      card.innerHTML = `
+        <div class="flex items-center justify-between mb-1.5">
+          <span class="font-bold text-green-400 text-xs flex items-center gap-1.5">
+            <i class="ti ti-circle-check-filled text-sm"></i> File "${escapeHtml(fileName)}" Terbaca!
+          </span>
+          <span class="text-[10px] bg-green-500/20 text-green-300 px-2 py-0.5 rounded font-mono font-semibold">Auto-Filled</span>
+        </div>
+        <div class="space-y-1 text-[11px] font-mono text-gray-200 bg-dark-900/80 p-2.5 rounded-lg border border-green-500/30 break-all">
+          <p><strong class="text-gray-400">Client ID:</strong> ${idPreview}</p>
+          <p><strong class="text-gray-400">Client Secret:</strong> ${secretPreview}</p>
+        </div>
+      `;
+      card.classList.remove('hidden');
+    }
+  });
+
+  // 5. Update success badges
+  ['jsonSuccessBadge', 'modalJsonSuccessBadge'].forEach(badgeId => {
+    const badge = document.getElementById(badgeId);
+    if (badge) badge.classList.remove('hidden');
+  });
 }
 
 // Disconnect specific YouTube account
@@ -1312,8 +1332,12 @@ function closeAddAccountModal() {
  * Start OAuth flow from the initial connect form (no accounts yet)
  */
 async function startOAuthFlow() {
-  const clientId = document.getElementById('clientId') ? document.getElementById('clientId').value.trim() : '';
-  const clientSecret = document.getElementById('clientSecret') ? document.getElementById('clientSecret').value.trim() : '';
+  let clientId = document.getElementById('clientId') ? document.getElementById('clientId').value.trim() : '';
+  let clientSecret = document.getElementById('clientSecret') ? document.getElementById('clientSecret').value.trim() : '';
+  
+  // Fallback to sessionStorage if input values were missing
+  if (!clientId) clientId = (sessionStorage.getItem('ozang_oauth_client_id') || '').trim();
+  if (!clientSecret) clientSecret = (sessionStorage.getItem('ozang_oauth_client_secret') || '').trim();
   
   await initiateOAuth(clientId, clientSecret);
 }
@@ -1322,8 +1346,12 @@ async function startOAuthFlow() {
  * Start OAuth flow from the Add Account modal
  */
 async function startOAuthFlowFromModal() {
-  const clientId = document.getElementById('newClientId') ? document.getElementById('newClientId').value.trim() : '';
-  const clientSecret = document.getElementById('newClientSecret') ? document.getElementById('newClientSecret').value.trim() : '';
+  let clientId = document.getElementById('newClientId') ? document.getElementById('newClientId').value.trim() : '';
+  let clientSecret = document.getElementById('newClientSecret') ? document.getElementById('newClientSecret').value.trim() : '';
+  
+  // Fallback to sessionStorage if input values were missing
+  if (!clientId) clientId = (sessionStorage.getItem('ozang_oauth_client_id') || '').trim();
+  if (!clientSecret) clientSecret = (sessionStorage.getItem('ozang_oauth_client_secret') || '').trim();
   
   const select = document.getElementById('reconnectTargetSelect');
   if (select && select.value !== '') {
@@ -1338,9 +1366,13 @@ async function startOAuthFlowFromModal() {
  */
 async function reconnectOAuth() {
   const credentialId = document.getElementById('editAccountId') ? document.getElementById('editAccountId').value : null;
-  const clientId = document.getElementById('editClientId') ? document.getElementById('editClientId').value.trim() : '';
-  const clientSecret = document.getElementById('editClientSecret') ? document.getElementById('editClientSecret').value.trim() : '';
+  let clientId = document.getElementById('editClientId') ? document.getElementById('editClientId').value.trim() : '';
+  let clientSecret = document.getElementById('editClientSecret') ? document.getElementById('editClientSecret').value.trim() : '';
   
+  // Fallback to sessionStorage if input values were missing
+  if (!clientId) clientId = (sessionStorage.getItem('ozang_oauth_client_id') || '').trim();
+  if (!clientSecret) clientSecret = (sessionStorage.getItem('ozang_oauth_client_secret') || '').trim();
+
   await initiateOAuth(clientId, clientSecret, credentialId);
 }
 
@@ -1349,6 +1381,15 @@ async function reconnectOAuth() {
  */
 async function initiateOAuth(clientId, clientSecret, credentialId = null) {
   try {
+    // Ultimate fallback check
+    if (!clientId) clientId = (sessionStorage.getItem('ozang_oauth_client_id') || '').trim();
+    if (!clientSecret) clientSecret = (sessionStorage.getItem('ozang_oauth_client_secret') || '').trim();
+
+    if (!clientId || !clientSecret) {
+      showToast('Client ID & Client Secret wajib diisi atau di-upload via file JSON!', 'error');
+      return;
+    }
+
     showToast('Redirecting to Google...', 'info');
     
     const body = { clientId, clientSecret };
