@@ -880,41 +880,185 @@ if (credentialsForm) {
 }
 
 /**
+ * Robust Google Credentials Parser: extracts Client ID & Client Secret from any Google JSON structure
+ */
+function extractGoogleCredentials(obj) {
+  if (!obj || typeof obj !== 'object') return null;
+
+  let clientId = '';
+  let clientSecret = '';
+
+  // 1. Direct key search (web, installed, credentials, oauth2, or first element if array)
+  const target = obj.web || obj.installed || obj.credentials || obj.oauth2 || (Array.isArray(obj) ? obj[0] : obj);
+  
+  if (target && typeof target === 'object') {
+    clientId = target.client_id || target.clientId || target.client_ID || target.clientid || '';
+    clientSecret = target.client_secret || target.clientSecret || target.client_SECRET || target.secret || '';
+  }
+
+  // 2. Fallback: Deep recursive search if clientId or clientSecret are still missing
+  if (!clientId || !clientSecret) {
+    function findRecursive(item) {
+      if (!item) return;
+      if (typeof item === 'string') {
+        const trimmed = item.trim();
+        if (!clientId && trimmed.includes('.apps.googleusercontent.com')) {
+          clientId = trimmed;
+        }
+      } else if (typeof item === 'object') {
+        for (const key of Object.keys(item)) {
+          const lowerKey = key.toLowerCase();
+          if (!clientSecret && (lowerKey === 'client_secret' || lowerKey === 'clientsecret' || lowerKey === 'secret')) {
+            if (typeof item[key] === 'string' && item[key].trim()) {
+              clientSecret = item[key].trim();
+            }
+          }
+          findRecursive(item[key]);
+        }
+      }
+    }
+    findRecursive(obj);
+  }
+
+  if (clientId && clientSecret) {
+    return { clientId: clientId.trim(), clientSecret: clientSecret.trim() };
+  }
+  return null;
+}
+
+/**
+ * Toggle Client Secret visibility (Password vs Text)
+ */
+function toggleSecretVisibility(inputId) {
+  const input = document.getElementById(inputId);
+  const eye = document.getElementById(inputId + 'Eye');
+  if (!input) return;
+  
+  if (input.type === 'password') {
+    input.type = 'text';
+    if (eye) {
+      eye.classList.remove('ti-eye');
+      eye.classList.add('ti-eye-off');
+    }
+  } else {
+    input.type = 'password';
+    if (eye) {
+      eye.classList.remove('ti-eye-off');
+      eye.classList.add('ti-eye');
+    }
+  }
+}
+
+/**
+ * Drag & Drop handlers for client_secret.json
+ */
+function handleJsonDragOver(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  event.currentTarget.classList.add('border-red-500', 'bg-red-500/10');
+}
+
+function handleJsonDragLeave(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  event.currentTarget.classList.remove('border-red-500', 'bg-red-500/10');
+}
+
+function handleJsonDrop(event, isModal = false) {
+  event.preventDefault();
+  event.stopPropagation();
+  event.currentTarget.classList.remove('border-red-500', 'bg-red-500/10');
+  
+  const files = event.dataTransfer ? event.dataTransfer.files : null;
+  if (files && files.length > 0) {
+    processJsonFile(files[0], isModal);
+  }
+}
+
+/**
  * Parse uploaded client_secret.json file and populate Client ID and Client Secret inputs
  */
 function handleJsonFileUpload(event, isModal = false) {
-  const file = event.target.files[0];
+  const fileInput = event.target;
+  const file = fileInput.files ? fileInput.files[0] : null;
   if (!file) return;
-  
+  processJsonFile(file, isModal, fileInput);
+}
+
+function processJsonFile(file, isModal = false, fileInput = null) {
   const reader = new FileReader();
   reader.onload = function(e) {
     try {
-      const data = JSON.parse(e.target.result);
-      const creds = data.web || data.installed || data;
+      const rawText = e.target.result;
+      const json = JSON.parse(rawText);
       
-      const clientId = (creds.client_id || '').trim();
-      const clientSecret = (creds.client_secret || '').trim();
+      const creds = extractGoogleCredentials(json);
       
-      if (!clientId || !clientSecret) {
-        showToast('File JSON tidak valid. Pastikan file client_secret dari Google Cloud Console.', 'error');
+      if (!creds || !creds.clientId || !creds.clientSecret) {
+        showToast('File JSON tidak valid atau tidak memuat Client ID / Secret Google Cloud.', 'error');
+        if (fileInput) fileInput.value = '';
         return;
       }
       
-      const idInput = document.getElementById(isModal ? 'newClientId' : 'clientId');
-      const secretInput = document.getElementById(isModal ? 'newClientSecret' : 'clientSecret');
+      const clientIdId = isModal ? 'newClientId' : 'clientId';
+      const clientSecretId = isModal ? 'newClientSecret' : 'clientSecret';
       
-      if (idInput) idInput.value = clientId;
-      if (secretInput) secretInput.value = clientSecret;
+      const idInput = document.getElementById(clientIdId);
+      const secretInput = document.getElementById(clientSecretId);
+      
+      if (idInput) {
+        idInput.value = creds.clientId;
+        idInput.dispatchEvent(new Event('input', { bubbles: true }));
+        idInput.dispatchEvent(new Event('change', { bubbles: true }));
+        idInput.classList.remove('border-gray-600');
+        idInput.classList.add('border-green-500', 'bg-green-500/10', 'text-green-300');
+      }
+      
+      if (secretInput) {
+        secretInput.value = creds.clientSecret;
+        secretInput.type = 'text'; // Make it visible so user sees it filled!
+        const eye = document.getElementById((isModal ? 'newClientSecret' : 'clientSecret') + 'Eye');
+        if (eye) {
+          eye.classList.remove('ti-eye');
+          eye.classList.add('ti-eye-off');
+        }
+        secretInput.dispatchEvent(new Event('input', { bubbles: true }));
+        secretInput.dispatchEvent(new Event('change', { bubbles: true }));
+        secretInput.classList.remove('border-gray-600');
+        secretInput.classList.add('border-green-500', 'bg-green-500/10', 'text-green-300');
+      }
+      
+      const card = document.getElementById(isModal ? 'modalJsonExtractedCard' : 'jsonExtractedCard');
+      if (card) {
+        const idPreview = escapeHtml(creds.clientId);
+        const secretPreview = escapeHtml(creds.clientSecret);
+        card.innerHTML = `
+          <div class="flex items-center justify-between mb-1.5">
+            <span class="font-bold text-green-400 text-xs flex items-center gap-1.5">
+              <i class="ti ti-circle-check-filled text-sm"></i> File "${escapeHtml(file.name)}" Terbaca!
+            </span>
+            <span class="text-[10px] bg-green-500/20 text-green-300 px-2 py-0.5 rounded font-mono font-semibold">Auto-Filled</span>
+          </div>
+          <div class="space-y-1 text-[11px] font-mono text-gray-200 bg-dark-900/80 p-2.5 rounded-lg border border-green-500/30 break-all">
+            <p><strong class="text-gray-400">Client ID:</strong> ${idPreview}</p>
+            <p><strong class="text-gray-400">Client Secret:</strong> ${secretPreview}</p>
+          </div>
+        `;
+        card.classList.remove('hidden');
+      }
       
       const badge = document.getElementById(isModal ? 'modalJsonSuccessBadge' : 'jsonSuccessBadge');
       if (badge) {
         badge.classList.remove('hidden');
       }
       
-      showToast('✅ client_secret.json berhasil dibaca! Client ID & Secret terisi otomatis.', 'success');
+      if (fileInput) fileInput.value = '';
+      
+      showToast(`✅ File "${file.name}" berhasil dimuat! Client ID & Secret terisi.`, 'success');
     } catch (err) {
       console.error('[JSON Upload Error]', err);
-      showToast('Gagal membaca file JSON. Format file tidak sesuai.', 'error');
+      showToast('Gagal membaca file JSON. Pastikan file berformat JSON valid.', 'error');
+      if (fileInput) fileInput.value = '';
     }
   };
   reader.readAsText(file);

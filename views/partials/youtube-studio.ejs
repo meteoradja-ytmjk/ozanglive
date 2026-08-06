@@ -90,16 +90,17 @@
       </div>
     </div>
 
-    <!-- Upload JSON File Box -->
-    <div class="bg-dark-700/60 rounded-xl p-4 border border-dashed border-gray-600 hover:border-red-500/50 transition-colors mb-5">
+    <!-- Upload JSON File Box (Drag & Drop) -->
+    <div id="jsonDropZone" ondragover="handleJsonDragOver(event)" ondragleave="handleJsonDragLeave(event)" ondrop="handleJsonDrop(event, false)"
+      class="bg-dark-700/60 rounded-xl p-4 border border-dashed border-gray-600 hover:border-red-500/60 transition-all duration-200 mb-4">
       <div class="flex flex-col sm:flex-row items-center justify-between gap-3">
         <div class="flex items-center gap-3">
           <div class="w-10 h-10 bg-blue-500/15 text-blue-400 rounded-lg flex items-center justify-center flex-shrink-0">
             <i class="ti ti-file-code text-xl"></i>
           </div>
           <div>
-            <p class="text-xs sm:text-sm font-semibold text-white">Upload File client_secret.json (Rekomendasi)</p>
-            <p class="text-[11px] text-gray-400">Otomatis isi Client ID & Client Secret dari Google Console</p>
+            <p class="text-xs sm:text-sm font-semibold text-white">Upload / Drop File client_secret.json</p>
+            <p class="text-[11px] text-gray-400">Tarik & lepas file JSON dari Google Cloud Console ke sini</p>
           </div>
         </div>
         <label class="bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-colors flex items-center gap-2 whitespace-nowrap shadow-md">
@@ -113,20 +114,28 @@
         <span>File JSON berhasil dibaca & data terisi otomatis!</span>
       </div>
     </div>
+
+    <!-- Extracted Credentials Preview Card -->
+    <div id="jsonExtractedCard" class="hidden mb-4 p-3 bg-green-500/10 border border-green-500/30 rounded-xl transition-all"></div>
     
     <form id="credentialsForm" class="space-y-4">
       <div>
         <label class="text-xs sm:text-sm font-medium text-white block mb-1.5">Google Client ID <span class="text-red-400">*</span></label>
         <input type="text" id="clientId" name="clientId" required
-          class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-red-500 focus:outline-none text-xs sm:text-sm text-white"
-          placeholder="Enter your Google Client ID">
+          class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-red-500 focus:outline-none text-xs sm:text-sm text-white transition-colors"
+          placeholder="contoh: 1234567890-xxx.apps.googleusercontent.com">
       </div>
       
       <div>
         <label class="text-xs sm:text-sm font-medium text-white block mb-1.5">Google Client Secret <span class="text-red-400">*</span></label>
-        <input type="password" id="clientSecret" name="clientSecret" required
-          class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-red-500 focus:outline-none text-xs sm:text-sm text-white"
-          placeholder="Enter your Google Client Secret">
+        <div class="relative">
+          <input type="password" id="clientSecret" name="clientSecret" required
+            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-red-500 focus:outline-none text-xs sm:text-sm text-white pr-10 transition-colors"
+            placeholder="contoh: GOCSPX-xxxxxxxxxxxxxxxxxxxx">
+          <button type="button" onclick="toggleSecretVisibility('clientSecret')" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white text-base">
+            <i class="ti ti-eye" id="clientSecretEye"></i>
+          </button>
+        </div>
       </div>
       
       <div class="bg-dark-700/80 rounded-xl p-3.5 border border-gray-600/60 text-xs text-gray-400 space-y-1">
@@ -1348,15 +1357,16 @@
           <select id="reconnectTargetSelect" class="w-full mt-3 px-3 py-2 bg-dark-600 border border-gray-600 rounded-lg focus:border-primary focus:outline-none text-sm"></select>
         </div>
 
-        <!-- Upload JSON File Box (Modal) -->
-        <div class="bg-dark-700/60 rounded-xl p-3.5 border border-dashed border-gray-600 hover:border-red-500/50 transition-colors">
+        <!-- Upload JSON File Box (Modal Drag & Drop) -->
+        <div id="modalJsonDropZone" ondragover="handleJsonDragOver(event)" ondragleave="handleJsonDragLeave(event)" ondrop="handleJsonDrop(event, true)"
+          class="bg-dark-700/60 rounded-xl p-3.5 border border-dashed border-gray-600 hover:border-red-500/60 transition-all duration-200">
           <div class="flex flex-col sm:flex-row items-center justify-between gap-2.5">
             <div class="flex items-center gap-2.5">
               <div class="w-8 h-8 bg-blue-500/15 text-blue-400 rounded-lg flex items-center justify-center flex-shrink-0">
                 <i class="ti ti-file-code text-base"></i>
               </div>
               <div>
-                <p class="text-xs font-semibold text-white">Upload client_secret.json</p>
+                <p class="text-xs font-semibold text-white">Upload / Drop client_secret.json</p>
                 <p class="text-[10px] text-gray-400">Otomatis isi Client ID & Secret</p>
               </div>
             </div>
@@ -1372,18 +1382,26 @@
           </div>
         </div>
 
+        <!-- Extracted Credentials Preview Card (Modal) -->
+        <div id="modalJsonExtractedCard" class="hidden p-3 bg-green-500/10 border border-green-500/30 rounded-xl transition-all"></div>
+
         <div>
           <label class="text-xs sm:text-sm font-medium text-white block mb-1.5">Google Client ID <span class="text-red-400">*</span></label>
           <input type="text" id="newClientId" name="clientId" required
-            class="w-full px-3.5 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-red-500 focus:outline-none text-xs sm:text-sm text-white"
+            class="w-full px-3.5 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-red-500 focus:outline-none text-xs sm:text-sm text-white transition-colors"
             placeholder="Enter your Google Client ID">
         </div>
         
         <div>
           <label class="text-xs sm:text-sm font-medium text-white block mb-1.5">Google Client Secret <span class="text-red-400">*</span></label>
-          <input type="password" id="newClientSecret" name="clientSecret" required
-            class="w-full px-3.5 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-red-500 focus:outline-none text-xs sm:text-sm text-white"
-            placeholder="Enter your Google Client Secret">
+          <div class="relative">
+            <input type="password" id="newClientSecret" name="clientSecret" required
+              class="w-full px-3.5 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-red-500 focus:outline-none text-xs sm:text-sm text-white pr-10 transition-colors"
+              placeholder="Enter your Google Client Secret">
+            <button type="button" onclick="toggleSecretVisibility('newClientSecret')" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white text-base">
+              <i class="ti ti-eye" id="newClientSecretEye"></i>
+            </button>
+          </div>
         </div>
         
         <div class="bg-dark-700/80 rounded-xl p-3 border border-gray-600/60 text-[11px] text-gray-400">
