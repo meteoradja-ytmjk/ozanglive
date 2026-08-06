@@ -133,8 +133,8 @@ class YouTubeCredentials {
     return new Promise((resolve, reject) => {
       // Check if credentials already exist for this user and channel
       db.get(
-        'SELECT id FROM youtube_credentials WHERE user_id = ? AND channel_id = ?',
-        [userId, channelId],
+        'SELECT id FROM youtube_credentials WHERE (user_id = ? OR CAST(user_id AS TEXT) = CAST(? AS TEXT)) AND channel_id = ?',
+        [userId, String(userId), channelId],
         (err, existing) => {
           if (err) {
             reject(err);
@@ -189,9 +189,9 @@ class YouTubeCredentials {
                 access_token, token_expires_at, last_refreshed_at, 
                 token_status, last_refresh_error
          FROM youtube_credentials 
-         WHERE user_id = ?
+         WHERE (user_id = ? OR CAST(user_id AS TEXT) = CAST(? AS TEXT))
          ORDER BY is_primary DESC, created_at ASC`,
-        [userId],
+        [userId, String(userId)],
         (err, rows) => {
           if (err) {
             reject(err);
@@ -271,10 +271,10 @@ class YouTubeCredentials {
         `SELECT id, user_id, client_id, client_secret, refresh_token, 
                 channel_name, channel_id, is_primary, created_at
          FROM youtube_credentials 
-         WHERE user_id = ?
+         WHERE (user_id = ? OR CAST(user_id AS TEXT) = CAST(? AS TEXT))
          ORDER BY is_primary DESC, created_at ASC
          LIMIT 1`,
-        [userId],
+        [userId, String(userId)],
         (err, row) => {
           if (err) {
             reject(err);
@@ -401,8 +401,8 @@ class YouTubeCredentials {
   static async delete(userId) {
     return new Promise((resolve, reject) => {
       db.run(
-        'DELETE FROM youtube_credentials WHERE user_id = ?',
-        [userId],
+        'DELETE FROM youtube_credentials WHERE (user_id = ? OR CAST(user_id AS TEXT) = CAST(? AS TEXT))',
+        [userId, String(userId)],
         function(err) {
           if (err) {
             reject(err);
@@ -425,8 +425,8 @@ class YouTubeCredentials {
       db.serialize(() => {
         // First, unset all primary flags for this user
         db.run(
-          'UPDATE youtube_credentials SET is_primary = 0 WHERE user_id = ?',
-          [userId],
+          'UPDATE youtube_credentials SET is_primary = 0 WHERE (user_id = ? OR CAST(user_id AS TEXT) = CAST(? AS TEXT))',
+          [userId, String(userId)],
           (err) => {
             if (err) {
               reject(err);
@@ -437,8 +437,8 @@ class YouTubeCredentials {
 
         // Then set the specified credential as primary
         db.run(
-          'UPDATE youtube_credentials SET is_primary = 1 WHERE id = ? AND user_id = ?',
-          [credentialId, userId],
+          'UPDATE youtube_credentials SET is_primary = 1 WHERE id = ? AND (user_id = ? OR CAST(user_id AS TEXT) = CAST(? AS TEXT))',
+          [credentialId, userId, String(userId)],
           function(err) {
             if (err) {
               reject(err);
@@ -462,8 +462,8 @@ class YouTubeCredentials {
         `SELECT id, user_id, client_id, client_secret, refresh_token, 
                 channel_name, channel_id, is_primary, created_at
          FROM youtube_credentials 
-         WHERE user_id = ? AND is_primary = 1`,
-        [userId],
+         WHERE (user_id = ? OR CAST(user_id AS TEXT) = CAST(? AS TEXT)) AND is_primary = 1`,
+        [userId, String(userId)],
         (err, row) => {
           if (err) {
             reject(err);
@@ -499,8 +499,8 @@ class YouTubeCredentials {
   static async existsByChannel(userId, channelId) {
     return new Promise((resolve, reject) => {
       db.get(
-        'SELECT 1 FROM youtube_credentials WHERE user_id = ? AND channel_id = ?',
-        [userId, channelId],
+        'SELECT 1 FROM youtube_credentials WHERE (user_id = ? OR CAST(user_id AS TEXT) = CAST(? AS TEXT)) AND channel_id = ?',
+        [userId, String(userId), channelId],
         (err, row) => {
           if (err) {
             reject(err);
@@ -520,8 +520,8 @@ class YouTubeCredentials {
   static async exists(userId) {
     return new Promise((resolve, reject) => {
       db.get(
-        'SELECT 1 FROM youtube_credentials WHERE user_id = ?',
-        [userId],
+        'SELECT 1 FROM youtube_credentials WHERE (user_id = ? OR CAST(user_id AS TEXT) = CAST(? AS TEXT))',
+        [userId, String(userId)],
         (err, row) => {
           if (err) {
             reject(err);
@@ -541,8 +541,8 @@ class YouTubeCredentials {
   static async count(userId) {
     return new Promise((resolve, reject) => {
       db.get(
-        'SELECT COUNT(*) as count FROM youtube_credentials WHERE user_id = ?',
-        [userId],
+        'SELECT COUNT(*) as count FROM youtube_credentials WHERE (user_id = ? OR CAST(user_id AS TEXT) = CAST(? AS TEXT))',
+        [userId, String(userId)],
         (err, row) => {
           if (err) {
             reject(err);

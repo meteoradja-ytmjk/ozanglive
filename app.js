@@ -7546,15 +7546,16 @@ app.get('/api/youtube/oauth/callback', async (req, res) => {
       return res.redirect('/youtube?oauth_error=session_expired');
     }
     
-    const targetUserId = decodedState.userId || (req.session ? req.session.userId : null);
+    const targetUserId = decodedState.userId ? String(decodedState.userId) : (req.session && req.session.userId ? String(req.session.userId) : null);
     if (!targetUserId) {
       console.error('[OAuth] Missing user ID for OAuth callback');
       return res.redirect('/youtube?oauth_error=session_expired');
     }
     
-    // Restore session userId if missing
-    if (req.session && !req.session.userId) {
+    // Restore session userId & force session save to persist across redirect
+    if (req.session) {
       req.session.userId = targetUserId;
+      await new Promise((resolve) => req.session.save(resolve));
     }
     
     // Exchange authorization code for tokens
