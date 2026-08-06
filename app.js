@@ -7398,6 +7398,11 @@ app.post('/api/autopilot/create-campaign', isAuthenticated, async (req, res) => 
 
 // YouTube Sync Page - Redirect to Unified Live Studio (Broadcasts Tab)
 app.get('/youtube', isAuthenticated, async (req, res) => {
+  const queryPos = req.url.indexOf('?');
+  if (queryPos !== -1) {
+    const queryStr = req.url.substring(queryPos + 1);
+    return res.redirect('/dashboard?tab=broadcasts&' + queryStr);
+  }
   return res.redirect('/dashboard?tab=broadcasts');
 });
 
@@ -7627,7 +7632,7 @@ app.get('/api/youtube/accounts', isAuthenticated, async (req, res) => {
       success: true,
       accounts: accounts.map(a => ({
         id: a.id,
-        channelName: a.channelName,
+        channelName: a.channelName || a.channelId || ('YouTube Channel #' + a.id),
         channelId: a.channelId,
         isPrimary: a.isPrimary,
         createdAt: a.createdAt
@@ -7711,7 +7716,7 @@ app.get('/api/youtube/credentials', isAuthenticated, async (req, res) => {
       success: true,
       hasCredentials: accounts.length > 0,
       accountCount: accounts.length,
-      channelName: primary?.channelName || null,
+      channelName: primary ? (primary.channelName || primary.channelId || ('YouTube Channel #' + primary.id)) : null,
       channelId: primary?.channelId || null
     });
   } catch (error) {

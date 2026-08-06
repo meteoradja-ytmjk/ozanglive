@@ -292,8 +292,8 @@ class YouTubeService {
     const channel = response.data.items[0];
     return {
       id: channel.id,
-      title: channel.snippet.title,
-      thumbnail: channel.snippet.thumbnails?.default?.url || ''
+      title: channel.snippet?.title || (`Channel ${channel.id}`) || 'YouTube Channel',
+      thumbnail: channel.snippet?.thumbnails?.default?.url || ''
     };
   }
 

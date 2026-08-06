@@ -168,8 +168,10 @@
       </button>
     </div>
     
-    <div id="connectedAccountsList" class="transition-all duration-200" style="display: none;">
-      <% accounts.forEach(function(account, index) { %>
+    <div id="connectedAccountsList" class="transition-all duration-200" style="display: block;">
+      <% accounts.forEach(function(account, index) { 
+         const displayName = account.channelName || account.channelId || ('YouTube Channel #' + account.id);
+      %>
       <div class="flex items-center justify-between px-4 py-2.5 hover:bg-gray-700/30 transition-colors <%= index < accounts.length - 1 ? 'border-b border-gray-700/30' : '' %>">
         <div class="flex items-center gap-3 min-w-0 flex-1">
           <div class="w-8 h-8 bg-red-500/15 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -177,7 +179,7 @@
           </div>
           <div class="min-w-0 flex-1">
             <div class="flex items-center gap-2">
-              <span class="text-sm font-medium text-white truncate"><%= account.channelName || 'YouTube Channel' %></span>
+              <span class="text-sm font-medium text-white truncate"><%= displayName %></span>
               <% if (account.isPrimary) { %>
               <span class="px-1.5 py-0.5 bg-yellow-500/15 text-yellow-400 text-[10px] rounded font-medium flex-shrink-0">★ Primary</span>
               <% } %>
@@ -189,11 +191,11 @@
           </div>
         </div>
         <div class="flex items-center gap-0.5 flex-shrink-0">
-          <button onclick="reconnectAccountOAuth(<%= account.id %>, '<%= (account.channelName || 'YouTube Channel').replace(/'/g, "\\'") %>')" 
+          <button onclick="reconnectAccountOAuth(<%= account.id %>, '<%= displayName.replace(/'/g, "\\'") %>')" 
             class="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-green-400 hover:bg-green-500/10 rounded-md transition-colors" title="Reconnect Token">
             <i class="ti ti-refresh text-sm"></i>
           </button>
-          <button onclick="openEditAccountModal(<%= account.id %>, '<%= (account.channelName || 'YouTube Channel').replace(/'/g, "\\'") %>')" 
+          <button onclick="openEditAccountModal(<%= account.id %>, '<%= displayName.replace(/'/g, "\\'") %>')" 
             class="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-blue-400 hover:bg-blue-500/10 rounded-md transition-colors" title="Edit">
             <i class="ti ti-edit text-sm"></i>
           </button>
@@ -201,7 +203,7 @@
             class="w-7 h-7 flex items-center justify-center rounded-md transition-colors <%= account.isPrimary ? 'text-yellow-400' : 'text-gray-500 hover:text-yellow-400 hover:bg-yellow-500/10' %>" title="<%= account.isPrimary ? 'Primary' : 'Set Primary' %>">
             <i class="ti <%= account.isPrimary ? 'ti-star-filled' : 'ti-star' %> text-sm"></i>
           </button>
-          <button onclick="disconnectAccount(<%= account.id %>, '<%= (account.channelName || 'this account').replace(/'/g, "\\'") %>')" 
+          <button onclick="disconnectAccount(<%= account.id %>, '<%= displayName.replace(/'/g, "\\'") %>')" 
             class="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-md transition-colors" title="Disconnect">
             <i class="ti ti-unlink text-sm"></i>
           </button>

@@ -9,35 +9,26 @@ function toggleConnectedAccounts() {
   const accountsList = document.getElementById('connectedAccountsList');
   const chevron = document.getElementById('accountsChevron');
   
-  console.log('[Collapsible] accountsList:', accountsList);
-  console.log('[Collapsible] chevron:', chevron);
-  
   if (!accountsList || !chevron) {
     console.error('[Collapsible] Elements not found!');
     return;
   }
   
-  const isHidden = accountsList.style.display === 'none' || !accountsList.style.display;
-  
-  console.log('[Collapsible] Current state - isHidden:', isHidden);
+  const isHidden = accountsList.style.display === 'none';
   
   if (isHidden) {
     // Expand
     console.log('[Collapsible] Expanding...');
     accountsList.style.display = 'block';
-    chevron.style.transform = 'rotate(180deg)';
-    chevron.classList.remove('ti-chevron-down');
-    chevron.classList.add('ti-chevron-up');
+    chevron.style.transform = 'rotate(0deg)';
+    localStorage.removeItem('connectedAccountsCollapsed');
   } else {
     // Collapse
     console.log('[Collapsible] Collapsing...');
     accountsList.style.display = 'none';
-    chevron.style.transform = 'rotate(0deg)';
-    chevron.classList.remove('ti-chevron-up');
-    chevron.classList.add('ti-chevron-down');
+    chevron.style.transform = 'rotate(-90deg)';
+    localStorage.setItem('connectedAccountsCollapsed', 'true');
   }
-  
-  console.log('[Collapsible] Toggle complete');
 }
 
 // Toggle OAuth Section (main form) - Hidden by default
@@ -862,6 +853,7 @@ if (credentialsForm) {
       const data = await response.json();
       
       if (data.success) {
+        localStorage.removeItem('connectedAccountsCollapsed');
         showToast('YouTube account connected successfully!');
         setTimeout(() => window.location.reload(), 1000);
       } else {
@@ -1133,9 +1125,14 @@ function checkOAuthResult() {
   
   if (params.get('oauth_success') === '1') {
     const channel = params.get('channel') || 'YouTube';
+    localStorage.removeItem('connectedAccountsCollapsed');
     showToast(`✅ Successfully connected: ${channel}`, 'success');
-    // Clean URL
-    window.history.replaceState({}, '', window.location.pathname);
+    
+    // Clean OAuth parameters from URL while preserving tab query param
+    const currentUrl = new URL(window.location.href);
+    currentUrl.searchParams.delete('oauth_success');
+    currentUrl.searchParams.delete('channel');
+    window.history.replaceState({}, '', currentUrl.pathname + currentUrl.search);
   }
   
   if (params.get('oauth_error')) {
@@ -1149,8 +1146,11 @@ function checkOAuthResult() {
     else message = decodeURIComponent(error);
     
     showToast(`❌ ${message}`, 'error');
-    // Clean URL
-    window.history.replaceState({}, '', window.location.pathname);
+    
+    // Clean OAuth parameters from URL while preserving tab query param
+    const currentUrl = new URL(window.location.href);
+    currentUrl.searchParams.delete('oauth_error');
+    window.history.replaceState({}, '', currentUrl.pathname + currentUrl.search);
   }
 }
 
@@ -1390,6 +1390,7 @@ if (addAccountForm) {
           showToast('YouTube account added successfully!');
         }
 
+        localStorage.removeItem('connectedAccountsCollapsed');
         closeAddAccountModal();
         setTimeout(() => window.location.reload(), 1000);
       } else {
