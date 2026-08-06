@@ -1098,6 +1098,11 @@ async function startOAuthFlowFromModal() {
   const clientId = document.getElementById('newClientId') ? document.getElementById('newClientId').value.trim() : '';
   const clientSecret = document.getElementById('newClientSecret') ? document.getElementById('newClientSecret').value.trim() : '';
   
+  const select = document.getElementById('reconnectTargetSelect');
+  if (select && select.value !== '') {
+    sessionStorage.setItem('oauth_reconnect_target_idx', select.value);
+  }
+  
   await initiateOAuth(clientId, clientSecret);
 }
 
@@ -1156,19 +1161,54 @@ async function initiateOAuth(clientId, clientSecret, credentialId = null) {
 /**
  * Check URL parameters for OAuth result (called on page load)
  */
-function checkOAuthResult() {
+async function checkOAuthResult() {
   const params = new URLSearchParams(window.location.search);
   
   if (params.get('oauth_success') === '1') {
-    const channel = params.get('channel') || 'YouTube';
+    const channel = params.get('channel') || 'YouTube Channel';
     localStorage.removeItem('connectedAccountsCollapsed');
-    showToast(`✅ Successfully connected: ${channel}`, 'success');
     
-    // Clean OAuth parameters from URL while preserving tab query param
+    // Check if there was a pending reconnect target stored before OAuth redirect
+    const targetIdxStr = sessionStorage.getItem('oauth_reconnect_target_idx');
+    if (targetIdxStr !== null) {
+      sessionStorage.removeItem('oauth_reconnect_target_idx');
+      try {
+        const accRes = await fetch('/api/youtube/credentials');
+        const accData = await accRes.json();
+        if (accData.success && accData.accounts && accData.accounts.length > 0) {
+          const newest = [...accData.accounts].sort((a, b) => b.id - a.id)[0];
+          const tplRes = await fetch('/api/youtube/templates/reconnect-targets');
+          const tplData = await tplRes.json();
+          if (tplData.success && tplData.templates) {
+            const disconnected = tplData.templates.filter(t => t.account_valid === false);
+            const target = disconnected[Number(targetIdxStr)];
+            if (target && newest) {
+              await fetch('/api/youtube/templates/relink-account', {
+                method: 'PUT',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'X-CSRF-Token': getCsrfToken()
+                },
+                body: JSON.stringify({
+                  oldAccountId: target.account_id,
+                  newAccountId: newest.id
+                })
+              });
+              showToast(`✅ Akun "${channel}" tersambung & template lama dialihkan!`, 'success');
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[OAuth Relink Error]', err);
+      }
+    } else {
+      showToast(`✅ Successfully connected: ${channel}`, 'success');
+    }
+    
     const currentUrl = new URL(window.location.href);
     currentUrl.searchParams.delete('oauth_success');
     currentUrl.searchParams.delete('channel');
-    window.history.replaceState({}, '', currentUrl.pathname + currentUrl.search);
+    window.history.replaceState({}, document.title, currentUrl.pathname + currentUrl.search);
   }
   
   if (params.get('oauth_error')) {
@@ -1178,15 +1218,13 @@ function checkOAuthResult() {
     if (error === 'access_denied') message = 'You denied access. Please try again.';
     else if (error === 'invalid_state') message = 'Session expired. Please try again.';
     else if (error === 'session_expired') message = 'Session expired. Please login again.';
-    else if (error === 'no_code') message = 'No authorization code received.';
     else message = decodeURIComponent(error);
     
-    showToast(`❌ ${message}`, 'error');
+    showToast(message, 'error');
     
-    // Clean OAuth parameters from URL while preserving tab query param
     const currentUrl = new URL(window.location.href);
     currentUrl.searchParams.delete('oauth_error');
-    window.history.replaceState({}, '', currentUrl.pathname + currentUrl.search);
+    window.history.replaceState({}, document.title, currentUrl.pathname + currentUrl.search);
   }
 }
 
