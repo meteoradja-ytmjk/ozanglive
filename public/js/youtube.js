@@ -9649,8 +9649,143 @@ function autoFillCredentials(clientId, clientSecret, formType = 'main') {
     if (clientSecretField) clientSecretField.classList.remove('border-green-500');
   }, 2000);
   
+  // Show success badge
+  const badge = document.getElementById('jsonSuccessBadge');
+  if (badge) {
+    badge.classList.remove('hidden');
+    setTimeout(() => badge.classList.add('hidden'), 5000);
+  }
+  
+  // Show extracted card
+  showExtractedCredentialsCard(clientId, clientSecret);
+  
   showToast('✅ Credentials auto-filled from JSON!', 'success');
   return true;
+}
+
+/**
+ * Show extracted credentials preview card
+ */
+function showExtractedCredentialsCard(clientId, clientSecret) {
+  const card = document.getElementById('jsonExtractedCard');
+  if (!card) return;
+  
+  const maskedSecret = clientSecret ? clientSecret.substring(0, 10) + '...' : '';
+  
+  card.innerHTML = `
+    <div class="flex items-start gap-2">
+      <i class="ti ti-circle-check text-green-400 text-lg mt-0.5"></i>
+      <div class="flex-1 min-w-0">
+        <p class="text-xs font-semibold text-green-300 mb-1.5">✓ JSON berhasil diproses!</p>
+        <div class="space-y-1 text-[11px]">
+          <div class="flex items-center gap-2">
+            <span class="text-gray-400 w-16">Client ID:</span>
+            <code class="text-white bg-dark-700 px-1.5 py-0.5 rounded font-mono truncate flex-1">${clientId}</code>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-gray-400 w-16">Secret:</span>
+            <code class="text-white bg-dark-700 px-1.5 py-0.5 rounded font-mono">${maskedSecret}</code>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  card.classList.remove('hidden');
+}
+
+/**
+ * Handle JSON file upload via button
+ */
+function handleJsonFileUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  if (!file.name.endsWith('.json')) {
+    showToast('Please upload a .json file', 'error');
+    return;
+  }
+  
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const jsonText = e.target.result;
+    const { clientId, clientSecret } = extractCredentialsFromJson(jsonText);
+    
+    if (clientId && clientSecret) {
+      autoFillCredentials(clientId, clientSecret, 'main');
+    } else {
+      showToast('Invalid JSON format. Please upload client_secret.json from Google Cloud Console', 'error');
+    }
+  };
+  
+  reader.onerror = () => {
+    showToast('Failed to read file', 'error');
+  };
+  
+  reader.readAsText(file);
+}
+
+/**
+ * Handle drag over event
+ */
+function handleJsonDragOver(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  const dropZone = document.getElementById('jsonDropZone');
+  if (dropZone) {
+    dropZone.classList.add('border-red-500', 'bg-red-500/10');
+  }
+}
+
+/**
+ * Handle drag leave event
+ */
+function handleJsonDragLeave(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  const dropZone = document.getElementById('jsonDropZone');
+  if (dropZone) {
+    dropZone.classList.remove('border-red-500', 'bg-red-500/10');
+  }
+}
+
+/**
+ * Handle file drop event
+ */
+function handleJsonDrop(event, isModal = false) {
+  event.preventDefault();
+  event.stopPropagation();
+  
+  const dropZone = document.getElementById('jsonDropZone');
+  if (dropZone) {
+    dropZone.classList.remove('border-red-500', 'bg-red-500/10');
+  }
+  
+  const files = event.dataTransfer.files;
+  if (files.length === 0) return;
+  
+  const file = files[0];
+  if (!file.name.endsWith('.json')) {
+    showToast('Please drop a .json file', 'error');
+    return;
+  }
+  
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const jsonText = e.target.result;
+    const { clientId, clientSecret } = extractCredentialsFromJson(jsonText);
+    
+    if (clientId && clientSecret) {
+      autoFillCredentials(clientId, clientSecret, isModal ? 'modal' : 'main');
+    } else {
+      showToast('Invalid JSON format. Please use client_secret.json from Google Cloud Console', 'error');
+    }
+  };
+  
+  reader.onerror = () => {
+    showToast('Failed to read file', 'error');
+  };
+  
+  reader.readAsText(file);
 }
 
 /**

@@ -148,19 +148,17 @@
         </code>
       </div>
       
-      <!-- Action Buttons: Save Credentials & Connect Google -->
-      <div class="flex flex-col sm:flex-row items-center gap-3">
-        <button type="button" onclick="saveApiCredentials(false)" id="saveApiBtn"
-          class="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-xl font-semibold transition-all duration-200 flex items-center justify-center gap-2 shadow-md active:scale-[0.99] whitespace-nowrap">
-          <i class="ti ti-device-floppy text-lg"></i>
-          <span>Simpan API Kredensial</span>
-        </button>
-
+      <!-- Action Button: Connect with Google (Auto-Save) -->
+      <div class="flex flex-col items-center gap-3">
         <button type="button" onclick="startOAuthFlow()" id="connectGoogleBtn"
-          class="flex-1 w-full bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-4 py-3 rounded-xl font-semibold transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-red-500/25 active:scale-[0.99]">
+          class="w-full bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-4 py-3 rounded-xl font-semibold transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-red-500/25 active:scale-[0.99]">
           <i class="ti ti-brand-google text-lg flex-shrink-0"></i>
           <span class="whitespace-nowrap">Connect with Google</span>
         </button>
+        <p class="text-xs text-gray-500 text-center">
+          <i class="ti ti-info-circle"></i>
+          Credentials akan otomatis tersimpan saat connect
+        </p>
       </div>
       
       <!-- Collapsible Manual OAuth Playground Option -->
@@ -1421,19 +1419,17 @@
           </code>
         </div>
         
-        <!-- Action Buttons (Modal): Save Credentials & Connect Google -->
-        <div class="flex flex-col sm:flex-row items-center gap-2.5">
-          <button type="button" onclick="saveApiCredentials(true)" id="modalSaveApiBtn"
-            class="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 shadow-md active:scale-[0.99] whitespace-nowrap text-xs sm:text-sm">
-            <i class="ti ti-device-floppy text-base"></i>
-            <span>Simpan API Kredensial</span>
-          </button>
-
+        <!-- Action Button: Connect with Google (Modal - Auto-Save) -->
+        <div class="flex flex-col items-center gap-2.5">
           <button type="button" onclick="startOAuthFlowFromModal()" id="modalConnectGoogleBtn"
-            class="flex-1 w-full bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-4 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 shadow-lg shadow-red-500/25 active:scale-[0.99] text-xs sm:text-sm">
+            class="w-full bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-4 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 shadow-lg shadow-red-500/25 active:scale-[0.99] text-xs sm:text-sm">
             <i class="ti ti-brand-google text-lg flex-shrink-0"></i>
             <span>Connect with Google</span>
           </button>
+          <p class="text-xs text-gray-500 text-center">
+            <i class="ti ti-info-circle"></i>
+            Credentials akan otomatis tersimpan saat connect
+          </p>
         </div>
 
         <!-- Collapsible Manual Refresh Token Option -->
