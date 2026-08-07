@@ -1040,6 +1040,7 @@ function closeAddAccountModal() {
 
 /**
  * Start OAuth flow from the initial connect form (no accounts yet)
+ * AUTO-SAVE: Saves credentials before OAuth redirect
  */
 async function startOAuthFlow() {
   const clientId = document.getElementById('clientId').value.trim();
@@ -1050,11 +1051,16 @@ async function startOAuthFlow() {
     return;
   }
   
+  // Auto-save credentials to sessionStorage before OAuth redirect
+  sessionStorage.setItem('youtube_client_id', clientId);
+  sessionStorage.setItem('youtube_client_secret', clientSecret);
+  
   await initiateOAuth(clientId, clientSecret);
 }
 
 /**
  * Start OAuth flow from the Add Account modal
+ * AUTO-SAVE: Saves credentials before OAuth redirect
  */
 async function startOAuthFlowFromModal() {
   const clientId = document.getElementById('newClientId').value.trim();
@@ -1064,6 +1070,10 @@ async function startOAuthFlowFromModal() {
     showToast('Please enter Client ID and Client Secret first', 'error');
     return;
   }
+  
+  // Auto-save credentials to sessionStorage before OAuth redirect
+  sessionStorage.setItem('youtube_client_id', clientId);
+  sessionStorage.setItem('youtube_client_secret', clientSecret);
   
   await initiateOAuth(clientId, clientSecret);
 }
@@ -9563,3 +9573,134 @@ if (document.readyState === 'loading') {
 }
 
 console.log('[Quick Reconnect] Feature loaded ✓');
+
+
+// ============================================
+// JSON Credentials Auto-Fill Feature
+// ============================================
+
+/**
+ * Extract credentials from Google OAuth JSON
+ * Supports both "web" and "installed" client types
+ */
+function extractCredentialsFromJson(jsonText) {
+  try {
+    const data = JSON.parse(jsonText);
+    
+    // Support multiple formats:
+    // 1. Direct web/installed format: { "web": { "client_id": "...", "client_secret": "..." } }
+    // 2. Wrapper format: { "installed": { ... } }
+    // 3. Already extracted: { "client_id": "...", "client_secret": "..." }
+    
+    let clientId = '';
+    let clientSecret = '';
+    
+    if (data.web) {
+      clientId = data.web.client_id || '';
+      clientSecret = data.web.client_secret || '';
+    } else if (data.installed) {
+      clientId = data.installed.client_id || '';
+      clientSecret = data.installed.client_secret || '';
+    } else if (data.client_id && data.client_secret) {
+      clientId = data.client_id;
+      clientSecret = data.client_secret;
+    }
+    
+    return { clientId, clientSecret };
+  } catch (error) {
+    console.error('[JSON Parse] Error:', error);
+    return { clientId: '', clientSecret: '' };
+  }
+}
+
+/**
+ * Auto-fill credentials from JSON into form fields
+ */
+function autoFillCredentials(clientId, clientSecret, formType = 'main') {
+  if (!clientId && !clientSecret) {
+    showToast('No valid credentials found in JSON', 'error');
+    return false;
+  }
+  
+  let clientIdField, clientSecretField;
+  
+  if (formType === 'modal') {
+    clientIdField = document.getElementById('newClientId');
+    clientSecretField = document.getElementById('newClientSecret');
+  } else {
+    clientIdField = document.getElementById('clientId');
+    clientSecretField = document.getElementById('clientSecret');
+  }
+  
+  if (clientIdField && clientId) {
+    clientIdField.value = clientId;
+  }
+  
+  if (clientSecretField && clientSecret) {
+    clientSecretField.value = clientSecret;
+  }
+  
+  // Visual feedback
+  if (clientIdField) clientIdField.classList.add('border-green-500');
+  if (clientSecretField) clientSecretField.classList.add('border-green-500');
+  
+  setTimeout(() => {
+    if (clientIdField) clientIdField.classList.remove('border-green-500');
+    if (clientSecretField) clientSecretField.classList.remove('border-green-500');
+  }, 2000);
+  
+  showToast('✅ Credentials auto-filled from JSON!', 'success');
+  return true;
+}
+
+/**
+ * Setup paste event listeners for JSON auto-fill
+ */
+function setupJsonPasteListeners() {
+  // Main form fields
+  const mainClientId = document.getElementById('clientId');
+  const mainClientSecret = document.getElementById('clientSecret');
+  
+  // Modal form fields
+  const modalClientId = document.getElementById('newClientId');
+  const modalClientSecret = document.getElementById('newClientSecret');
+  
+  // Add paste listeners
+  [mainClientId, mainClientSecret].forEach(field => {
+    if (field) {
+      field.addEventListener('paste', (e) => {
+        setTimeout(() => {
+          const pastedText = field.value;
+          if (pastedText.includes('{') && pastedText.includes('client_id')) {
+            const { clientId, clientSecret } = extractCredentialsFromJson(pastedText);
+            if (clientId && clientSecret) {
+              autoFillCredentials(clientId, clientSecret, 'main');
+            }
+          }
+        }, 10);
+      });
+    }
+  });
+  
+  [modalClientId, modalClientSecret].forEach(field => {
+    if (field) {
+      field.addEventListener('paste', (e) => {
+        setTimeout(() => {
+          const pastedText = field.value;
+          if (pastedText.includes('{') && pastedText.includes('client_id')) {
+            const { clientId, clientSecret } = extractCredentialsFromJson(pastedText);
+            if (clientId && clientSecret) {
+              autoFillCredentials(clientId, clientSecret, 'modal');
+            }
+          }
+        }, 10);
+      });
+    }
+  });
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', () => {
+  console.log('[JSON Auto-Fill] Setting up paste listeners...');
+  setupJsonPasteListeners();
+});
