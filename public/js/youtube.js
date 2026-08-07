@@ -802,6 +802,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // Check OAuth result from redirect
   checkOAuthResult();
   
+  // Restore saved API credentials if available
+  restoreSavedApiCredentials();
+  
   // PERFORMANCE OPTIMIZATION: Only restore account selection, don't fetch data
   // Data will be fetched lazily when modals are opened
   const accountId = restorePreferredAccount('accountSelect');
@@ -1165,6 +1168,74 @@ function populateCredentialsToAllInputs(creds, fileName = 'client_secret.json') 
     const badge = document.getElementById(badgeId);
     if (badge) badge.classList.remove('hidden');
   });
+}
+
+/**
+ * Save API Credentials (Client ID & Client Secret) explicitly to persistent storage & populate all DOM inputs
+ */
+function saveApiCredentials(isModal = false) {
+  const clientIdEl = document.getElementById(isModal ? 'newClientId' : 'clientId');
+  const clientSecretEl = document.getElementById(isModal ? 'newClientSecret' : 'clientSecret');
+  
+  let clientId = (clientIdEl ? clientIdEl.value : '').trim();
+  let clientSecret = (clientSecretEl ? clientSecretEl.value : '').trim();
+  
+  // Fallback check from any input on page
+  if (!clientId) {
+    const anyId = document.querySelector('#clientId, #newClientId, #editClientId, input[name="clientId"]');
+    if (anyId) clientId = anyId.value.trim();
+  }
+  if (!clientSecret) {
+    const anySecret = document.querySelector('#clientSecret, #newClientSecret, #editClientSecret, input[name="clientSecret"]');
+    if (anySecret) clientSecret = anySecret.value.trim();
+  }
+  
+  if (!clientId || !clientSecret) {
+    showToast('Harap isi Google Client ID & Google Client Secret (atau upload file client_secret.json) terlebih dahulu!', 'error');
+    return false;
+  }
+  
+  // Save to both localStorage & sessionStorage for maximum persistence
+  try {
+    localStorage.setItem('ozang_saved_client_id', clientId);
+    localStorage.setItem('ozang_saved_client_secret', clientSecret);
+    sessionStorage.setItem('ozang_oauth_client_id', clientId);
+    sessionStorage.setItem('ozang_oauth_client_secret', clientSecret);
+  } catch (e) {}
+  
+  // Populate to ALL DOM inputs and apply green highlight
+  populateCredentialsToAllInputs({ clientId, clientSecret }, 'Kredensial Tersimpan');
+  
+  // Visual feedback on save buttons
+  const saveBtn = document.getElementById(isModal ? 'modalSaveApiBtn' : 'saveApiBtn');
+  if (saveBtn) {
+    const origHtml = saveBtn.innerHTML;
+    saveBtn.innerHTML = `<i class="ti ti-circle-check text-lg"></i> <span>Tersimpan!</span>`;
+    saveBtn.classList.remove('bg-green-600', 'hover:bg-green-700');
+    saveBtn.classList.add('bg-emerald-700', 'ring-2', 'ring-emerald-400');
+    setTimeout(() => {
+      saveBtn.innerHTML = origHtml;
+      saveBtn.classList.remove('bg-emerald-700', 'ring-2', 'ring-emerald-400');
+      saveBtn.classList.add('bg-green-600', 'hover:bg-green-700');
+    }, 2500);
+  }
+  
+  showToast('✅ Kredensial API berhasil disimpan! Silakan klik "Connect with Google" untuk menghubungkan channel.', 'success');
+  return true;
+}
+
+/**
+ * Restore saved API credentials from localStorage / sessionStorage on page load
+ */
+function restoreSavedApiCredentials() {
+  try {
+    const savedId = localStorage.getItem('ozang_saved_client_id') || sessionStorage.getItem('ozang_oauth_client_id');
+    const savedSecret = localStorage.getItem('ozang_saved_client_secret') || sessionStorage.getItem('ozang_oauth_client_secret');
+    
+    if (savedId && savedSecret) {
+      populateCredentialsToAllInputs({ clientId: savedId, clientSecret: savedSecret }, 'Kredensial Tersimpan');
+    }
+  } catch (e) {}
 }
 
 // Disconnect specific YouTube account
