@@ -9,26 +9,35 @@ function toggleConnectedAccounts() {
   const accountsList = document.getElementById('connectedAccountsList');
   const chevron = document.getElementById('accountsChevron');
   
+  console.log('[Collapsible] accountsList:', accountsList);
+  console.log('[Collapsible] chevron:', chevron);
+  
   if (!accountsList || !chevron) {
     console.error('[Collapsible] Elements not found!');
     return;
   }
   
-  const isHidden = accountsList.style.display === 'none';
+  const isHidden = accountsList.style.display === 'none' || !accountsList.style.display;
+  
+  console.log('[Collapsible] Current state - isHidden:', isHidden);
   
   if (isHidden) {
     // Expand
     console.log('[Collapsible] Expanding...');
     accountsList.style.display = 'block';
-    chevron.style.transform = 'rotate(0deg)';
-    localStorage.removeItem('connectedAccountsCollapsed');
+    chevron.style.transform = 'rotate(180deg)';
+    chevron.classList.remove('ti-chevron-down');
+    chevron.classList.add('ti-chevron-up');
   } else {
     // Collapse
     console.log('[Collapsible] Collapsing...');
     accountsList.style.display = 'none';
-    chevron.style.transform = 'rotate(-90deg)';
-    localStorage.setItem('connectedAccountsCollapsed', 'true');
+    chevron.style.transform = 'rotate(0deg)';
+    chevron.classList.remove('ti-chevron-up');
+    chevron.classList.add('ti-chevron-down');
   }
+  
+  console.log('[Collapsible] Toggle complete');
 }
 
 // Toggle OAuth Section (main form) - Hidden by default
@@ -802,9 +811,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // Check OAuth result from redirect
   checkOAuthResult();
   
-  // Restore saved API credentials if available
-  restoreSavedApiCredentials();
-  
   // PERFORMANCE OPTIMIZATION: Only restore account selection, don't fetch data
   // Data will be fetched lazily when modals are opened
   const accountId = restorePreferredAccount('accountSelect');
@@ -832,24 +838,16 @@ if (credentialsForm) {
   credentialsForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     
-    const refreshToken = document.getElementById('refreshToken') ? document.getElementById('refreshToken').value.trim() : '';
-    if (!refreshToken) {
-      await startOAuthFlow();
-      return;
-    }
-    
     const connectBtn = document.getElementById('connectBtn');
-    const originalText = connectBtn ? connectBtn.innerHTML : '';
-    if (connectBtn) {
-      connectBtn.innerHTML = '<i class="ti ti-loader animate-spin"></i> Connecting...';
-      connectBtn.disabled = true;
-    }
+    const originalText = connectBtn.innerHTML;
+    connectBtn.innerHTML = '<i class="ti ti-loader animate-spin"></i> Connecting...';
+    connectBtn.disabled = true;
     
     try {
       const formData = {
-        clientId: document.getElementById('clientId').value.trim(),
-        clientSecret: document.getElementById('clientSecret').value.trim(),
-        refreshToken: refreshToken
+        clientId: document.getElementById('clientId').value,
+        clientSecret: document.getElementById('clientSecret').value,
+        refreshToken: document.getElementById('refreshToken').value
       };
       
       const response = await fetch('/api/youtube/credentials', {
@@ -864,7 +862,6 @@ if (credentialsForm) {
       const data = await response.json();
       
       if (data.success) {
-        localStorage.removeItem('connectedAccountsCollapsed');
         showToast('YouTube account connected successfully!');
         setTimeout(() => window.location.reload(), 1000);
       } else {
@@ -874,368 +871,10 @@ if (credentialsForm) {
       console.error('Error:', error);
       showToast('An error occurred', 'error');
     } finally {
-      if (connectBtn) {
-        connectBtn.innerHTML = originalText;
-        connectBtn.disabled = false;
-      }
+      connectBtn.innerHTML = originalText;
+      connectBtn.disabled = false;
     }
   });
-}
-
-/**
- * Robust Google Credentials Parser: extracts Client ID & Client Secret from any Google JSON structure
- */
-function extractGoogleCredentials(obj) {
-  if (!obj || typeof obj !== 'object') return null;
-
-  let clientId = '';
-  let clientSecret = '';
-
-  // 1. Direct key search (web, installed, credentials, oauth2, or first element if array)
-  const target = obj.web || obj.installed || obj.credentials || obj.oauth2 || (Array.isArray(obj) ? obj[0] : obj);
-  
-  if (target && typeof target === 'object') {
-    clientId = target.client_id || target.clientId || target.client_ID || target.clientid || '';
-    clientSecret = target.client_secret || target.clientSecret || target.client_SECRET || target.secret || '';
-  }
-
-  // 2. Fallback: Deep recursive search if clientId or clientSecret are still missing
-  if (!clientId || !clientSecret) {
-    function findRecursive(item) {
-      if (!item) return;
-      if (typeof item === 'string') {
-        const trimmed = item.trim();
-        if (!clientId && trimmed.includes('.apps.googleusercontent.com')) {
-          clientId = trimmed;
-        }
-      } else if (typeof item === 'object') {
-        for (const key of Object.keys(item)) {
-          const lowerKey = key.toLowerCase();
-          if (!clientSecret && (lowerKey === 'client_secret' || lowerKey === 'clientsecret' || lowerKey === 'secret')) {
-            if (typeof item[key] === 'string' && item[key].trim()) {
-              clientSecret = item[key].trim();
-            }
-          }
-          findRecursive(item[key]);
-        }
-      }
-    }
-    findRecursive(obj);
-  }
-
-  if (clientId && clientSecret) {
-    return { clientId: clientId.trim(), clientSecret: clientSecret.trim() };
-  }
-  return null;
-}
-
-/**
- * Prompt user to paste JSON string directly
- */
-function promptPasteJson(isModal = false) {
-  const text = prompt('Paste teks isi file .json dari Google Cloud Console di sini:');
-  if (text) {
-    handleJsonTextPaste(text, isModal);
-  }
-}
-
-/**
- * Handle pasted JSON text directly and extract credentials
- */
-function handleJsonTextPaste(rawText, isModal = false) {
-  if (!rawText || !rawText.trim()) return;
-  try {
-    const json = JSON.parse(rawText.trim());
-    const creds = extractGoogleCredentials(json);
-    
-    if (!creds || !creds.clientId || !creds.clientSecret) {
-      showToast('Teks JSON tidak valid atau tidak memuat Client ID / Secret Google Cloud.', 'error');
-      return;
-    }
-    
-    const clientIdId = isModal ? 'newClientId' : 'clientId';
-    const clientSecretId = isModal ? 'newClientSecret' : 'clientSecret';
-    
-    const idInput = document.getElementById(clientIdId);
-    const secretInput = document.getElementById(clientSecretId);
-    
-    if (idInput) {
-      idInput.value = creds.clientId;
-      idInput.dispatchEvent(new Event('input', { bubbles: true }));
-      idInput.dispatchEvent(new Event('change', { bubbles: true }));
-      idInput.classList.remove('border-gray-600');
-      idInput.classList.add('border-green-500', 'bg-green-500/10', 'text-green-300');
-    }
-    
-    if (secretInput) {
-      secretInput.value = creds.clientSecret;
-      secretInput.type = 'text'; // Make it visible so user sees it filled!
-      const eye = document.getElementById((isModal ? 'newClientSecret' : 'clientSecret') + 'Eye');
-      if (eye) {
-        eye.classList.remove('ti-eye');
-        eye.classList.add('ti-eye-off');
-      }
-      secretInput.dispatchEvent(new Event('input', { bubbles: true }));
-      secretInput.dispatchEvent(new Event('change', { bubbles: true }));
-      secretInput.classList.remove('border-gray-600');
-      secretInput.classList.add('border-green-500', 'bg-green-500/10', 'text-green-300');
-    }
-    
-    const card = document.getElementById(isModal ? 'modalJsonExtractedCard' : 'jsonExtractedCard');
-    if (card) {
-      const idPreview = escapeHtml(creds.clientId);
-      const secretPreview = escapeHtml(creds.clientSecret);
-      card.innerHTML = `
-        <div class="flex items-center justify-between mb-1.5">
-          <span class="font-bold text-green-400 text-xs flex items-center gap-1.5">
-            <i class="ti ti-circle-check-filled text-sm"></i> Teks JSON Terbaca & Terurai!
-          </span>
-          <span class="text-[10px] bg-green-500/20 text-green-300 px-2 py-0.5 rounded font-mono font-semibold">Auto-Filled</span>
-        </div>
-        <div class="space-y-1 text-[11px] font-mono text-gray-200 bg-dark-900/80 p-2.5 rounded-lg border border-green-500/30 break-all">
-          <p><strong class="text-gray-400">Client ID:</strong> ${idPreview}</p>
-          <p><strong class="text-gray-400">Client Secret:</strong> ${secretPreview}</p>
-        </div>
-      `;
-      card.classList.remove('hidden');
-    }
-    
-    const badge = document.getElementById(isModal ? 'modalJsonSuccessBadge' : 'jsonSuccessBadge');
-    if (badge) {
-      badge.classList.remove('hidden');
-    }
-    
-    showToast('✅ Teks JSON berhasil dibaca! Client ID & Secret terisi otomatis.', 'success');
-  } catch (err) {
-    console.error('[JSON Paste Error]', err);
-    showToast('Gagal membaca teks JSON. Pastikan format JSON valid.', 'error');
-  }
-}
-
-/**
- * Toggle Client Secret visibility (Password vs Text)
- */
-function toggleSecretVisibility(inputId) {
-  const input = document.getElementById(inputId);
-  const eye = document.getElementById(inputId + 'Eye');
-  if (!input) return;
-  
-  if (input.type === 'password') {
-    input.type = 'text';
-    if (eye) {
-      eye.classList.remove('ti-eye');
-      eye.classList.add('ti-eye-off');
-    }
-  } else {
-    input.type = 'password';
-    if (eye) {
-      eye.classList.remove('ti-eye-off');
-      eye.classList.add('ti-eye');
-    }
-  }
-}
-
-/**
- * Drag & Drop handlers for client_secret.json
- */
-function handleJsonDragOver(event) {
-  event.preventDefault();
-  event.stopPropagation();
-  event.currentTarget.classList.add('border-red-500', 'bg-red-500/10');
-}
-
-function handleJsonDragLeave(event) {
-  event.preventDefault();
-  event.stopPropagation();
-  event.currentTarget.classList.remove('border-red-500', 'bg-red-500/10');
-}
-
-function handleJsonDrop(event, isModal = false) {
-  event.preventDefault();
-  event.stopPropagation();
-  event.currentTarget.classList.remove('border-red-500', 'bg-red-500/10');
-  
-  const files = event.dataTransfer ? event.dataTransfer.files : null;
-  if (files && files.length > 0) {
-    processJsonFile(files[0], isModal);
-  }
-}
-
-/**
- * Parse uploaded client_secret.json file and populate Client ID and Client Secret inputs
- */
-function handleJsonFileUpload(event) {
-  const fileInput = event.target;
-  const file = fileInput.files ? fileInput.files[0] : null;
-  if (!file) return;
-  processJsonFile(file, fileInput);
-}
-
-function processJsonFile(file, fileInput = null) {
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    try {
-      const rawText = e.target.result;
-      const json = JSON.parse(rawText);
-      
-      const creds = extractGoogleCredentials(json);
-      
-      if (!creds || !creds.clientId || !creds.clientSecret) {
-        showToast('File JSON tidak valid atau tidak memuat Client ID / Secret Google Cloud.', 'error');
-        if (fileInput) fileInput.value = '';
-        return;
-      }
-      
-      populateCredentialsToAllInputs(creds, file.name || 'client_secret.json');
-      
-      if (fileInput) fileInput.value = '';
-      
-      showToast(`✅ File "${file.name}" berhasil dimuat! Client ID & Secret terisi otomatis.`, 'success');
-    } catch (err) {
-      console.error('[JSON Upload Error]', err);
-      showToast('Gagal membaca file JSON. Pastikan file berformat JSON valid.', 'error');
-      if (fileInput) fileInput.value = '';
-    }
-  };
-  reader.readAsText(file);
-}
-
-/**
- * Populate extracted credentials to ALL matching Client ID and Secret input elements in the DOM & cache to sessionStorage
- */
-function populateCredentialsToAllInputs(creds, fileName = 'client_secret.json') {
-  if (!creds || !creds.clientId || !creds.clientSecret) return;
-
-  // 1. Cache to sessionStorage for persistent fallback
-  try {
-    sessionStorage.setItem('ozang_oauth_client_id', creds.clientId);
-    sessionStorage.setItem('ozang_oauth_client_secret', creds.clientSecret);
-  } catch (e) {}
-
-  // 2. Find ALL Client ID elements in DOM
-  const idInputs = document.querySelectorAll('#clientId, #newClientId, #editClientId, input[name="clientId"]');
-  idInputs.forEach(input => {
-    input.value = creds.clientId;
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    input.dispatchEvent(new Event('change', { bubbles: true }));
-    input.classList.remove('border-gray-600');
-    input.classList.add('border-green-500', 'bg-green-500/10', 'text-green-300');
-  });
-
-  // 3. Find ALL Client Secret elements in DOM
-  const secretInputs = document.querySelectorAll('#clientSecret, #newClientSecret, #editClientSecret, input[name="clientSecret"]');
-  secretInputs.forEach(input => {
-    input.value = creds.clientSecret;
-    input.type = 'text'; // Make visible text so user sees it filled!
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    input.dispatchEvent(new Event('change', { bubbles: true }));
-    input.classList.remove('border-gray-600');
-    input.classList.add('border-green-500', 'bg-green-500/10', 'text-green-300');
-    
-    // Update eye icons if present
-    const eyeId = input.id + 'Eye';
-    const eye = document.getElementById(eyeId);
-    if (eye) {
-      eye.classList.remove('ti-eye');
-      eye.classList.add('ti-eye-off');
-    }
-  });
-
-  // 4. Update preview cards
-  ['jsonExtractedCard', 'modalJsonExtractedCard'].forEach(cardId => {
-    const card = document.getElementById(cardId);
-    if (card) {
-      const idPreview = escapeHtml(creds.clientId);
-      const secretPreview = escapeHtml(creds.clientSecret);
-      card.innerHTML = `
-        <div class="flex items-center justify-between mb-1.5">
-          <span class="font-bold text-green-400 text-xs flex items-center gap-1.5">
-            <i class="ti ti-circle-check-filled text-sm"></i> File "${escapeHtml(fileName)}" Terbaca!
-          </span>
-          <span class="text-[10px] bg-green-500/20 text-green-300 px-2 py-0.5 rounded font-mono font-semibold">Auto-Filled</span>
-        </div>
-        <div class="space-y-1 text-[11px] font-mono text-gray-200 bg-dark-900/80 p-2.5 rounded-lg border border-green-500/30 break-all">
-          <p><strong class="text-gray-400">Client ID:</strong> ${idPreview}</p>
-          <p><strong class="text-gray-400">Client Secret:</strong> ${secretPreview}</p>
-        </div>
-      `;
-      card.classList.remove('hidden');
-    }
-  });
-
-  // 5. Update success badges
-  ['jsonSuccessBadge', 'modalJsonSuccessBadge'].forEach(badgeId => {
-    const badge = document.getElementById(badgeId);
-    if (badge) badge.classList.remove('hidden');
-  });
-}
-
-/**
- * Save API Credentials (Client ID & Client Secret) explicitly to persistent storage & populate all DOM inputs
- */
-function saveApiCredentials(isModal = false) {
-  const clientIdEl = document.getElementById(isModal ? 'newClientId' : 'clientId');
-  const clientSecretEl = document.getElementById(isModal ? 'newClientSecret' : 'clientSecret');
-  
-  let clientId = (clientIdEl ? clientIdEl.value : '').trim();
-  let clientSecret = (clientSecretEl ? clientSecretEl.value : '').trim();
-  
-  // Fallback check from any input on page
-  if (!clientId) {
-    const anyId = document.querySelector('#clientId, #newClientId, #editClientId, input[name="clientId"]');
-    if (anyId) clientId = anyId.value.trim();
-  }
-  if (!clientSecret) {
-    const anySecret = document.querySelector('#clientSecret, #newClientSecret, #editClientSecret, input[name="clientSecret"]');
-    if (anySecret) clientSecret = anySecret.value.trim();
-  }
-  
-  if (!clientId || !clientSecret) {
-    showToast('Harap isi Google Client ID & Google Client Secret (atau upload file client_secret.json) terlebih dahulu!', 'error');
-    return false;
-  }
-  
-  // Save to both localStorage & sessionStorage for maximum persistence
-  try {
-    localStorage.setItem('ozang_saved_client_id', clientId);
-    localStorage.setItem('ozang_saved_client_secret', clientSecret);
-    sessionStorage.setItem('ozang_oauth_client_id', clientId);
-    sessionStorage.setItem('ozang_oauth_client_secret', clientSecret);
-  } catch (e) {}
-  
-  // Populate to ALL DOM inputs and apply green highlight
-  populateCredentialsToAllInputs({ clientId, clientSecret }, 'Kredensial Tersimpan');
-  
-  // Visual feedback on save buttons
-  const saveBtn = document.getElementById(isModal ? 'modalSaveApiBtn' : 'saveApiBtn');
-  if (saveBtn) {
-    const origHtml = saveBtn.innerHTML;
-    saveBtn.innerHTML = `<i class="ti ti-circle-check text-lg"></i> <span>Tersimpan!</span>`;
-    saveBtn.classList.remove('bg-green-600', 'hover:bg-green-700');
-    saveBtn.classList.add('bg-emerald-700', 'ring-2', 'ring-emerald-400');
-    setTimeout(() => {
-      saveBtn.innerHTML = origHtml;
-      saveBtn.classList.remove('bg-emerald-700', 'ring-2', 'ring-emerald-400');
-      saveBtn.classList.add('bg-green-600', 'hover:bg-green-700');
-    }, 2500);
-  }
-  
-  showToast('✅ Kredensial API berhasil disimpan! Silakan klik "Connect with Google" untuk menghubungkan channel.', 'success');
-  return true;
-}
-
-/**
- * Restore saved API credentials from localStorage / sessionStorage on page load
- */
-function restoreSavedApiCredentials() {
-  try {
-    const savedId = localStorage.getItem('ozang_saved_client_id') || sessionStorage.getItem('ozang_oauth_client_id');
-    const savedSecret = localStorage.getItem('ozang_saved_client_secret') || sessionStorage.getItem('ozang_oauth_client_secret');
-    
-    if (savedId && savedSecret) {
-      populateCredentialsToAllInputs({ clientId: savedId, clientSecret: savedSecret }, 'Kredensial Tersimpan');
-    }
-  } catch (e) {}
 }
 
 // Disconnect specific YouTube account
@@ -1401,33 +1040,40 @@ function closeAddAccountModal() {
 
 /**
  * Start OAuth flow from the initial connect form (no accounts yet)
+ * AUTO-SAVE: Saves credentials before OAuth redirect
  */
 async function startOAuthFlow() {
-  let clientId = document.getElementById('clientId') ? document.getElementById('clientId').value.trim() : '';
-  let clientSecret = document.getElementById('clientSecret') ? document.getElementById('clientSecret').value.trim() : '';
+  const clientId = document.getElementById('clientId').value.trim();
+  const clientSecret = document.getElementById('clientSecret').value.trim();
   
-  // Fallback to sessionStorage if input values were missing
-  if (!clientId) clientId = (sessionStorage.getItem('ozang_oauth_client_id') || '').trim();
-  if (!clientSecret) clientSecret = (sessionStorage.getItem('ozang_oauth_client_secret') || '').trim();
+  if (!clientId || !clientSecret) {
+    showToast('Please enter Client ID and Client Secret first', 'error');
+    return;
+  }
+  
+  // Auto-save credentials to sessionStorage before OAuth redirect
+  sessionStorage.setItem('youtube_client_id', clientId);
+  sessionStorage.setItem('youtube_client_secret', clientSecret);
   
   await initiateOAuth(clientId, clientSecret);
 }
 
 /**
  * Start OAuth flow from the Add Account modal
+ * AUTO-SAVE: Saves credentials before OAuth redirect
  */
 async function startOAuthFlowFromModal() {
-  let clientId = document.getElementById('newClientId') ? document.getElementById('newClientId').value.trim() : '';
-  let clientSecret = document.getElementById('newClientSecret') ? document.getElementById('newClientSecret').value.trim() : '';
+  const clientId = document.getElementById('newClientId').value.trim();
+  const clientSecret = document.getElementById('newClientSecret').value.trim();
   
-  // Fallback to sessionStorage if input values were missing
-  if (!clientId) clientId = (sessionStorage.getItem('ozang_oauth_client_id') || '').trim();
-  if (!clientSecret) clientSecret = (sessionStorage.getItem('ozang_oauth_client_secret') || '').trim();
-  
-  const select = document.getElementById('reconnectTargetSelect');
-  if (select && select.value !== '') {
-    sessionStorage.setItem('oauth_reconnect_target_idx', select.value);
+  if (!clientId || !clientSecret) {
+    showToast('Please enter Client ID and Client Secret first', 'error');
+    return;
   }
+  
+  // Auto-save credentials to sessionStorage before OAuth redirect
+  sessionStorage.setItem('youtube_client_id', clientId);
+  sessionStorage.setItem('youtube_client_secret', clientSecret);
   
   await initiateOAuth(clientId, clientSecret);
 }
@@ -1436,14 +1082,15 @@ async function startOAuthFlowFromModal() {
  * Reconnect existing account via OAuth (from Edit modal)
  */
 async function reconnectOAuth() {
-  const credentialId = document.getElementById('editAccountId') ? document.getElementById('editAccountId').value : null;
-  let clientId = document.getElementById('editClientId') ? document.getElementById('editClientId').value.trim() : '';
-  let clientSecret = document.getElementById('editClientSecret') ? document.getElementById('editClientSecret').value.trim() : '';
+  const credentialId = document.getElementById('editAccountId').value;
+  const clientId = document.getElementById('editClientId').value.trim();
+  const clientSecret = document.getElementById('editClientSecret').value.trim();
   
-  // Fallback to sessionStorage if input values were missing
-  if (!clientId) clientId = (sessionStorage.getItem('ozang_oauth_client_id') || '').trim();
-  if (!clientSecret) clientSecret = (sessionStorage.getItem('ozang_oauth_client_secret') || '').trim();
-
+  if (!clientId || !clientSecret) {
+    showToast('Client ID dan Client Secret harus diisi', 'error');
+    return;
+  }
+  
   await initiateOAuth(clientId, clientSecret, credentialId);
 }
 
@@ -1452,15 +1099,6 @@ async function reconnectOAuth() {
  */
 async function initiateOAuth(clientId, clientSecret, credentialId = null) {
   try {
-    // Ultimate fallback check
-    if (!clientId) clientId = (sessionStorage.getItem('ozang_oauth_client_id') || '').trim();
-    if (!clientSecret) clientSecret = (sessionStorage.getItem('ozang_oauth_client_secret') || '').trim();
-
-    if (!clientId || !clientSecret) {
-      showToast('Client ID & Client Secret wajib diisi atau di-upload via file JSON!', 'error');
-      return;
-    }
-
     showToast('Redirecting to Google...', 'info');
     
     const body = { clientId, clientSecret };
@@ -1480,12 +1118,6 @@ async function initiateOAuth(clientId, clientSecret, credentialId = null) {
     const data = await response.json();
     
     if (data.success && data.authUrl) {
-      try {
-        const parsedUrl = new URL(data.authUrl);
-        const reqRedirectUri = parsedUrl.searchParams.get('redirect_uri');
-        console.log('[OAuth Debug] Auth URL generated:', data.authUrl);
-        console.log('[OAuth Debug] Exact Redirect URI required in Google Console:', reqRedirectUri);
-      } catch (e) {}
       // Redirect to Google OAuth consent screen
       window.location.href = data.authUrl;
     } else {
@@ -1500,54 +1132,14 @@ async function initiateOAuth(clientId, clientSecret, credentialId = null) {
 /**
  * Check URL parameters for OAuth result (called on page load)
  */
-async function checkOAuthResult() {
+function checkOAuthResult() {
   const params = new URLSearchParams(window.location.search);
   
   if (params.get('oauth_success') === '1') {
-    const channel = params.get('channel') || 'YouTube Channel';
-    localStorage.removeItem('connectedAccountsCollapsed');
-    
-    // Check if there was a pending reconnect target stored before OAuth redirect
-    const targetIdxStr = sessionStorage.getItem('oauth_reconnect_target_idx');
-    if (targetIdxStr !== null) {
-      sessionStorage.removeItem('oauth_reconnect_target_idx');
-      try {
-        const accRes = await fetch('/api/youtube/credentials');
-        const accData = await accRes.json();
-        if (accData.success && accData.accounts && accData.accounts.length > 0) {
-          const newest = [...accData.accounts].sort((a, b) => b.id - a.id)[0];
-          const tplRes = await fetch('/api/youtube/templates/reconnect-targets');
-          const tplData = await tplRes.json();
-          if (tplData.success && tplData.templates) {
-            const disconnected = tplData.templates.filter(t => t.account_valid === false);
-            const target = disconnected[Number(targetIdxStr)];
-            if (target && newest) {
-              await fetch('/api/youtube/templates/relink-account', {
-                method: 'PUT',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'X-CSRF-Token': getCsrfToken()
-                },
-                body: JSON.stringify({
-                  oldAccountId: target.account_id,
-                  newAccountId: newest.id
-                })
-              });
-              showToast(`✅ Akun "${channel}" tersambung & template lama dialihkan!`, 'success');
-            }
-          }
-        }
-      } catch (err) {
-        console.warn('[OAuth Relink Error]', err);
-      }
-    } else {
-      showToast(`✅ Successfully connected: ${channel}`, 'success');
-    }
-    
-    const currentUrl = new URL(window.location.href);
-    currentUrl.searchParams.delete('oauth_success');
-    currentUrl.searchParams.delete('channel');
-    window.history.replaceState({}, document.title, currentUrl.pathname + currentUrl.search);
+    const channel = params.get('channel') || 'YouTube';
+    showToast(`✅ Successfully connected: ${channel}`, 'success');
+    // Clean URL
+    window.history.replaceState({}, '', window.location.pathname);
   }
   
   if (params.get('oauth_error')) {
@@ -1557,13 +1149,12 @@ async function checkOAuthResult() {
     if (error === 'access_denied') message = 'You denied access. Please try again.';
     else if (error === 'invalid_state') message = 'Session expired. Please try again.';
     else if (error === 'session_expired') message = 'Session expired. Please login again.';
+    else if (error === 'no_code') message = 'No authorization code received.';
     else message = decodeURIComponent(error);
     
-    showToast(message, 'error');
-    
-    const currentUrl = new URL(window.location.href);
-    currentUrl.searchParams.delete('oauth_error');
-    window.history.replaceState({}, document.title, currentUrl.pathname + currentUrl.search);
+    showToast(`❌ ${message}`, 'error');
+    // Clean URL
+    window.history.replaceState({}, '', window.location.pathname);
   }
 }
 
@@ -1748,24 +1339,16 @@ if (addAccountForm) {
   addAccountForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     
-    const refreshToken = document.getElementById('newRefreshToken') ? document.getElementById('newRefreshToken').value.trim() : '';
-    if (!refreshToken) {
-      await startOAuthFlowFromModal();
-      return;
-    }
-    
     const addBtn = document.getElementById('addAccountBtn');
-    const originalText = addBtn ? addBtn.innerHTML : '';
-    if (addBtn) {
-      addBtn.innerHTML = '<i class="ti ti-loader animate-spin"></i> Adding...';
-      addBtn.disabled = true;
-    }
+    const originalText = addBtn.innerHTML;
+    addBtn.innerHTML = '<i class="ti ti-loader animate-spin"></i> Adding...';
+    addBtn.disabled = true;
     
     try {
       const formData = {
-        clientId: document.getElementById('newClientId').value.trim(),
-        clientSecret: document.getElementById('newClientSecret').value.trim(),
-        refreshToken: refreshToken
+        clientId: document.getElementById('newClientId').value,
+        clientSecret: document.getElementById('newClientSecret').value,
+        refreshToken: document.getElementById('newRefreshToken').value
       };
       
       const response = await fetch('/api/youtube/credentials', {
@@ -1811,7 +1394,6 @@ if (addAccountForm) {
           showToast('YouTube account added successfully!');
         }
 
-        localStorage.removeItem('connectedAccountsCollapsed');
         closeAddAccountModal();
         setTimeout(() => window.location.reload(), 1000);
       } else {
@@ -3356,24 +2938,13 @@ function initTagInput() {
 }
 
 // Create Broadcast Modal
-function toLocalDatetimeInputString(d = new Date()) {
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
 function openCreateBroadcastModal() {
   document.getElementById('createBroadcastModal').classList.remove('hidden');
   
-  // Set minimum datetime to 11 minutes from now, default value to 15 minutes from now in LOCAL time
+  // Set minimum datetime to 10 minutes from now
   const minDate = new Date(Date.now() + 11 * 60 * 1000);
-  const defaultDate = new Date(Date.now() + 15 * 60 * 1000);
-  const scheduledInput = document.getElementById('scheduledStartTime');
-  if (scheduledInput) {
-    scheduledInput.min = toLocalDatetimeInputString(minDate);
-    if (!scheduledInput.value || new Date(scheduledInput.value) < minDate) {
-      scheduledInput.value = toLocalDatetimeInputString(defaultDate);
-    }
-  }
+  const minDateStr = minDate.toISOString().slice(0, 16);
+  document.getElementById('scheduledStartTime').min = minDateStr;
   
   // Reset tags
   currentTags = [];
@@ -3474,42 +3045,17 @@ if (createBroadcastForm) {
       
       // Add account ID
       const accountSelect = document.getElementById('accountSelect');
-      if (!accountSelect || !accountSelect.value) {
-        showToast('Silakan pilih atau sambungkan akun YouTube terlebih dahulu', 'error');
-        return;
+      if (accountSelect && accountSelect.value) {
+        formData.append('accountId', accountSelect.value);
       }
-      formData.append('accountId', accountSelect.value);
       
-      const titleVal = document.getElementById('broadcastTitle')?.value;
-      if (!titleVal || !titleVal.trim()) {
-        showToast('Judul broadcast wajib diisi', 'error');
-        return;
-      }
-      formData.append('title', titleVal.trim());
-      formData.append('description', document.getElementById('broadcastDescription')?.value || '');
-
-      // Validate scheduledStartTime
-      const scheduledVal = document.getElementById('scheduledStartTime')?.value;
-      if (!scheduledVal) {
-        showToast('Waktu jadwal tayang (Scheduled Start Time) wajib diisi', 'error');
-        return;
-      }
-      const scheduledDateObj = new Date(scheduledVal);
-      if (isNaN(scheduledDateObj.getTime())) {
-        showToast('Format waktu jadwal tayang tidak valid', 'error');
-        return;
-      }
-      const minAllowed = new Date(Date.now() + 10 * 60 * 1000);
-      if (scheduledDateObj < minAllowed) {
-        showToast('Jadwal tayang harus minimal 10 menit ke depan dari waktu sekarang', 'error');
-        return;
-      }
-      formData.append('scheduledStartTime', scheduledVal);
-      formData.append('privacyStatus', document.getElementById('privacyStatus')?.value || 'unlisted');
+      formData.append('title', document.getElementById('broadcastTitle').value);
+      formData.append('description', document.getElementById('broadcastDescription').value);
+      formData.append('scheduledStartTime', document.getElementById('scheduledStartTime').value);
+      formData.append('privacyStatus', document.getElementById('privacyStatus').value);
       
       // Add stream key if selected
-      const streamSelect = document.getElementById('streamKeySelect');
-      const streamId = streamSelect ? streamSelect.value : '';
+      const streamId = document.getElementById('streamKeySelect').value;
 
       if (!streamId && streamFetchState.tokenExpired) {
         showToast('Tidak bisa membuat broadcast saat token expired karena akan memicu stream key baru. Reconnect akun YouTube dulu.', 'error');
@@ -3526,13 +3072,15 @@ if (createBroadcastForm) {
       }
       
       // Add category ID (default: 22 - People & Blogs)
-      const categoryId = document.getElementById('categoryId')?.value;
+      const categoryId = document.getElementById('categoryId').value;
       formData.append('categoryId', categoryId || '22');
       
       // Add Additional Settings
-      const enableAutoStart = document.getElementById('enableAutoStart')?.value === 'true';
-      const enableAutoStop = document.getElementById('enableAutoStop')?.value === 'true';
-      const unlistReplayOnEnd = document.getElementById('unlistReplayOnEnd')?.checked ?? true;
+      // Auto-start and auto-stop are always true (hidden inputs)
+      const enableAutoStart = document.getElementById('enableAutoStart').value === 'true';
+      const enableAutoStop = document.getElementById('enableAutoStop').value === 'true';
+      // Unlist replay is optional (checkbox)
+      const unlistReplayOnEnd = document.getElementById('unlistReplayOnEnd').checked;
       
       formData.append('enableAutoStart', enableAutoStart);
       formData.append('enableAutoStop', enableAutoStop);
@@ -3540,23 +3088,33 @@ if (createBroadcastForm) {
       
       // Add thumbnail from gallery selection - ONLY if pinned mode
       const thumbnailMode = document.querySelector('input[name="thumbnailMode"]:checked')?.value || 'sequential';
-      const thumbnailPath = document.getElementById('selectedThumbnailPath')?.value;
+      const thumbnailPath = document.getElementById('selectedThumbnailPath').value;
       const pinnedThumbnail = document.getElementById('pinnedThumbnail')?.value;
       
+      // Only send thumbnailPath if:
+      // 1. Mode is pinned AND pinnedThumbnail is set, OR
+      // 2. User explicitly selected a thumbnail AND mode is pinned
       if (thumbnailMode === 'pinned' && pinnedThumbnail) {
         formData.append('thumbnailPath', pinnedThumbnail);
         console.log('[CreateBroadcast] Using pinned thumbnail:', pinnedThumbnail);
       }
+      // For sequential mode, don't send thumbnailPath - let backend handle sequential selection
       
       // Add selected thumbnail index
       const thumbnailIndex = window.createSelectedThumbnailIndex || 0;
       formData.append('thumbnailIndex', thumbnailIndex);
+      
+      // Add current thumbnail folder for sequential selection
+      // Always send thumbnailFolder - empty string for root, folder name for specific folder
+      // This ensures the folder selection is saved and can be restored when editing
       formData.append('thumbnailFolder', currentThumbnailFolder || '');
       
+      // Add pinned thumbnail if set (for backward compatibility)
       if (pinnedThumbnail) {
         formData.append('pinnedThumbnail', pinnedThumbnail);
       }
       
+      // Add stream key folder mapping if set
       const streamKeyFolderMapping = document.getElementById('streamKeyFolderMapping')?.value;
       if (streamKeyFolderMapping) {
         formData.append('streamKeyFolderMapping', streamKeyFolderMapping);
@@ -3573,18 +3131,19 @@ if (createBroadcastForm) {
       const data = await response.json();
       
       if (data.success) {
-        console.log('[CreateBroadcast] Broadcast created successfully');
-        showToast('Broadcast berhasil dibuat!');
+        // NOTE: Thumbnail index is already incremented by backend in sequential mode
+        // No need to increment here to avoid double increment
+        console.log('[CreateBroadcast] Broadcast created successfully, thumbnail index handled by backend');
+        
+        showToast('Broadcast created successfully!');
         closeCreateBroadcastModal();
         setTimeout(() => window.location.reload(), 1000);
       } else {
-        const errMsg = data.error || data.message || 'Gagal membuat broadcast';
-        console.error('[CreateBroadcast] Error response from server:', data);
-        showToast(errMsg, 'error');
+        showToast(data.error || 'Failed to create broadcast', 'error');
       }
     } catch (error) {
-      console.error('Error creating broadcast:', error);
-      showToast('Terjadi kesalahan sistem: ' + (error.message || error), 'error');
+      console.error('Error:', error);
+      showToast('An error occurred', 'error');
     } finally {
       createBtn.innerHTML = originalText;
       createBtn.disabled = false;
@@ -5703,7 +5262,7 @@ function renderRecreateBroadcastList(preservedSchedules = null) {
 
   listEl.innerHTML = broadcasts.map((b, i) => {
     const minDate = new Date(Date.now() + 11 * 60 * 1000);
-    const minDateStr = toLocalDatetimeInputString(minDate);
+    const minDateStr = minDate.toISOString().slice(0, 16);
 
     // Determine folder for this broadcast
     const streamId = b.streamId || template.stream_id;
@@ -10015,382 +9574,133 @@ if (document.readyState === 'loading') {
 
 console.log('[Quick Reconnect] Feature loaded ✓');
 
-// ==========================================
-// Auto-Pilot Campaign Studio Handlers
-// ==========================================
 
-async function openAutoPilotCampaignModal() {
-  const modal = document.getElementById('autoPilotCampaignModal');
-  if (!modal) return;
-  modal.classList.remove('hidden');
+// ============================================
+// JSON Credentials Auto-Fill Feature
+// ============================================
 
-  await Promise.all([
-    loadAutoPilotVideos('single'),
-    loadAutoPilotAudios('original'),
-    loadAutoPilotTitleFolders(),
-    loadAutoPilotThumbnailFolders()
-  ]);
-}
-
-function closeAutoPilotCampaignModal() {
-  const modal = document.getElementById('autoPilotCampaignModal');
-  if (modal) modal.classList.add('hidden');
-}
-
-async function loadAutoPilotVideos(videoType) {
-  const select = document.getElementById('autoPilotVideoSelect');
-  if (!select) return;
-  select.innerHTML = '<option value="">Loading video list...</option>';
-
+/**
+ * Extract credentials from Google OAuth JSON
+ * Supports both "web" and "installed" client types
+ */
+function extractCredentialsFromJson(jsonText) {
   try {
-    if (videoType === 'single') {
-      const res = await fetch('/api/videos', { headers: { 'X-CSRF-Token': getCsrfToken() } });
-      const data = await res.json();
-      const videos = data.videos || data || [];
-      if (Array.isArray(videos) && videos.length > 0) {
-        select.innerHTML = videos.map(v => `<option value="${v.id}">${v.title || v.filename || 'Video #' + v.id}</option>`).join('');
-      } else {
-        select.innerHTML = '<option value="">-- Tidak ada video di galeri --</option>';
-      }
-    } else if (videoType === 'playlist') {
-      const res = await fetch('/api/playlists', { headers: { 'X-CSRF-Token': getCsrfToken() } });
-      const data = await res.json();
-      const playlists = data.playlists || data || [];
-      if (Array.isArray(playlists) && playlists.length > 0) {
-        select.innerHTML = playlists.map(p => `<option value="${p.id}">${p.name || 'Playlist #' + p.id}</option>`).join('');
-      } else {
-        select.innerHTML = '<option value="">-- Tidak ada playlist video --</option>';
-      }
-    } else if (videoType === 'folder') {
-      const res = await fetch('/api/videos/folders', { headers: { 'X-CSRF-Token': getCsrfToken() } });
-      const data = await res.json();
-      const folders = data.folders || data || [];
-      if (Array.isArray(folders) && folders.length > 0) {
-        select.innerHTML = folders.map(f => `<option value="${f.id}">${f.name || 'Folder #' + f.id}</option>`).join('');
-      } else {
-        select.innerHTML = '<option value="all">Semua Video Galeri (All)</option>';
-      }
-    }
-  } catch (err) {
-    console.error('[AutoPilot] Error loading videos:', err);
-    select.innerHTML = '<option value="">Failed to load videos</option>';
-  }
-}
-
-function onAutoPilotVideoTypeChange(videoType) {
-  loadAutoPilotVideos(videoType);
-}
-
-async function loadAutoPilotAudios(audioType) {
-  const container = document.getElementById('autoPilotAudioSelectContainer');
-  const select = document.getElementById('autoPilotAudioSelect');
-  if (!container || !select) return;
-
-  if (audioType === 'original') {
-    container.classList.add('hidden');
-    select.removeAttribute('required');
-    return;
-  }
-
-  container.classList.remove('hidden');
-  select.setAttribute('required', 'true');
-  select.innerHTML = '<option value="">Loading audio list...</option>';
-
-  try {
-    if (audioType === 'single_audio') {
-      const res = await fetch('/api/audios', { headers: { 'X-CSRF-Token': getCsrfToken() } });
-      const data = await res.json();
-      const audios = data.audios || data || [];
-      if (Array.isArray(audios) && audios.length > 0) {
-        select.innerHTML = audios.map(a => `<option value="${a.id}">${a.title || a.filename || 'Audio #' + a.id}</option>`).join('');
-      } else {
-        select.innerHTML = '<option value="">-- Tidak ada audio di galeri --</option>';
-      }
-    } else if (audioType === 'audio_playlist') {
-      const res = await fetch('/api/audio-playlists', { headers: { 'X-CSRF-Token': getCsrfToken() } });
-      const data = await res.json();
-      const playlists = data.playlists || data || [];
-      if (Array.isArray(playlists) && playlists.length > 0) {
-        select.innerHTML = playlists.map(p => `<option value="${p.id}">${p.name || 'Audio Playlist #' + p.id}</option>`).join('');
-      } else {
-        select.innerHTML = '<option value="">-- Tidak ada playlist audio --</option>';
-      }
-    }
-  } catch (err) {
-    console.error('[AutoPilot] Error loading audio:', err);
-    select.innerHTML = '<option value="">Failed to load audio</option>';
-  }
-}
-
-function onAutoPilotAudioTypeChange(audioType) {
-  loadAutoPilotAudios(audioType);
-}
-
-async function loadAutoPilotTitleFolders() {
-  const select = document.getElementById('autoPilotTitleFolderId');
-  if (!select) return;
-  select.innerHTML = '<option value="">Loading title folders...</option>';
-
-  try {
-    const res = await fetch('/api/youtube/title-folders', { headers: { 'X-CSRF-Token': getCsrfToken() } });
-    const data = await res.json();
-    const folders = data.folders || data || [];
-    if (Array.isArray(folders) && folders.length > 0) {
-      select.innerHTML = folders.map(f => `<option value="${f.id}">${f.folderName || f.name || 'Folder #' + f.id}</option>`).join('');
-    } else {
-      select.innerHTML = '<option value="">-- Buat Folder Judul Terlebih Dahulu --</option>';
-    }
-  } catch (err) {
-    console.error('[AutoPilot] Error loading title folders:', err);
-    select.innerHTML = '<option value="">Failed to load title folders</option>';
-  }
-}
-
-async function loadAutoPilotThumbnailFolders() {
-  const select = document.getElementById('autoPilotThumbnailFolderId');
-  if (!select) return;
-  select.innerHTML = '<option value="">Loading thumbnail folders...</option>';
-
-  try {
-    const res = await fetch('/api/youtube/thumbnail-folders', { headers: { 'X-CSRF-Token': getCsrfToken() } });
-    const data = await res.json();
-    const folders = data.folders || data || [];
-    if (Array.isArray(folders) && folders.length > 0) {
-      select.innerHTML = folders.map(f => `<option value="${f.id}">${f.name || f.folderName || 'Folder #' + f.id}</option>`).join('');
-    } else {
-      select.innerHTML = '<option value="">-- Buat Folder Thumbnail Terlebih Dahulu --</option>';
-    }
-  } catch (err) {
-    console.error('[AutoPilot] Error loading thumbnail folders:', err);
-    select.innerHTML = '<option value="">Failed to load thumbnail folders</option>';
-  }
-}
-
-function onAutoPilotScheduleTypeChange(type) {
-  const timeContainer = document.getElementById('autoPilotTimeContainer');
-  const durationContainer = document.getElementById('autoPilotDurationContainer');
-  if (!timeContainer || !durationContainer) return;
-
-  if (type === '247') {
-    timeContainer.classList.add('hidden');
-    durationContainer.classList.add('hidden');
-  } else {
-    timeContainer.classList.remove('hidden');
-    durationContainer.classList.remove('hidden');
-  }
-}
-
-async function submitAutoPilotCampaign(event) {
-  event.preventDefault();
-  const btn = document.getElementById('submitAutoPilotBtn');
-  if (btn) {
-    btn.disabled = true;
-    btn.innerHTML = '<i class="ti ti-loader animate-spin text-lg"></i><span>Membuat Auto-Pilot Campaign...</span>';
-  }
-
-  try {
-    const form = document.getElementById('autoPilotCampaignForm');
-    const formData = new FormData(form);
-    const payload = Object.fromEntries(formData.entries());
-
-    const response = await fetch('/api/autopilot/create-campaign', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRF-Token': getCsrfToken()
-      },
-      body: JSON.stringify(payload)
-    });
-
-    const result = await response.json();
-
-    if (result.success) {
-      closeAutoPilotCampaignModal();
-      if (typeof showCenterToast === 'function') {
-        showCenterToast('success', '🤖 Auto-Pilot Campaign Berhasil Diluncurkan!');
-      } else {
-        alert('🤖 Auto-Pilot Campaign Berhasil Diluncurkan!');
-      }
-      setTimeout(() => { window.location.reload(); }, 1500);
-    } else {
-      alert('Gagal membuat Auto-Pilot Campaign: ' + (result.error || 'Terjadi kesalahan'));
-    }
-  } catch (err) {
-    console.error('[AutoPilot] Submit error:', err);
-    alert('Terjadi kesalahan jaringan saat membuat campaign.');
-  } finally {
-    if (btn) {
-      btn.disabled = false;
-      btn.innerHTML = '<i class="ti ti-rocket text-lg"></i><span>LAUNCH AUTO-PILOT CAMPAIGN</span>';
-    }
-  }
-}
-
-// ==========================================
-// YouTube API Guide Modal Handlers
-// ==========================================
-
-function openYouTubeGuideModal() {
-  console.log('[YouTube Studio] Opening Panduan API Modal');
-  const modal = document.getElementById('youtubeGuideModal');
-  if (!modal) {
-    console.error('[YouTube Studio] youtubeGuideModal element not found');
-    if (typeof showToast === 'function') {
-      showToast('Panduan API Modal tidak ditemukan', 'error');
-    }
-    return;
-  }
-  
-  // Set current origin redirect URI dynamically
-  const redirectUriEl = document.getElementById('guideRedirectUriText');
-  if (redirectUriEl) {
-    const origin = window.location.origin || 'http://localhost:7575';
-    redirectUriEl.textContent = `${origin}/api/youtube/oauth/callback`;
-  }
-  
-  modal.classList.remove('hidden');
-  switchGuideTab('setup');
-
-  // Keydown listener to close modal on Escape
-  const onEsc = (e) => {
-    if (e.key === 'Escape') {
-      closeYouTubeGuideModal();
-      document.removeEventListener('keydown', onEsc);
-    }
-  };
-  document.addEventListener('keydown', onEsc);
-}
-
-function closeYouTubeGuideModal() {
-  const modal = document.getElementById('youtubeGuideModal');
-  if (modal) {
-    modal.classList.add('hidden');
-  }
-}
-
-function switchGuideTab(tabName) {
-  const tabs = ['setup', 'production', 'quota'];
-  tabs.forEach(t => {
-    const btn = document.getElementById(`guide-tab-btn-${t}`);
-    const panel = document.getElementById(`guide-panel-${t}`);
-    if (!btn || !panel) return;
+    const data = JSON.parse(jsonText);
     
-    if (t === tabName) {
-      btn.className = "guide-tab-btn px-4 py-2.5 text-xs sm:text-sm font-semibold rounded-t-xl border-b-2 border-blue-500 text-blue-400 flex items-center gap-2 transition-all whitespace-nowrap cursor-pointer touch-manipulation";
-      panel.classList.remove('hidden');
-    } else {
-      btn.className = "guide-tab-btn px-4 py-2.5 text-xs sm:text-sm font-semibold rounded-t-xl border-b-2 border-transparent text-gray-400 hover:text-white flex items-center gap-2 transition-all whitespace-nowrap cursor-pointer touch-manipulation";
-      panel.classList.add('hidden');
+    // Support multiple formats:
+    // 1. Direct web/installed format: { "web": { "client_id": "...", "client_secret": "..." } }
+    // 2. Wrapper format: { "installed": { ... } }
+    // 3. Already extracted: { "client_id": "...", "client_secret": "..." }
+    
+    let clientId = '';
+    let clientSecret = '';
+    
+    if (data.web) {
+      clientId = data.web.client_id || '';
+      clientSecret = data.web.client_secret || '';
+    } else if (data.installed) {
+      clientId = data.installed.client_id || '';
+      clientSecret = data.installed.client_secret || '';
+    } else if (data.client_id && data.client_secret) {
+      clientId = data.client_id;
+      clientSecret = data.client_secret;
+    }
+    
+    return { clientId, clientSecret };
+  } catch (error) {
+    console.error('[JSON Parse] Error:', error);
+    return { clientId: '', clientSecret: '' };
+  }
+}
+
+/**
+ * Auto-fill credentials from JSON into form fields
+ */
+function autoFillCredentials(clientId, clientSecret, formType = 'main') {
+  if (!clientId && !clientSecret) {
+    showToast('No valid credentials found in JSON', 'error');
+    return false;
+  }
+  
+  let clientIdField, clientSecretField;
+  
+  if (formType === 'modal') {
+    clientIdField = document.getElementById('newClientId');
+    clientSecretField = document.getElementById('newClientSecret');
+  } else {
+    clientIdField = document.getElementById('clientId');
+    clientSecretField = document.getElementById('clientSecret');
+  }
+  
+  if (clientIdField && clientId) {
+    clientIdField.value = clientId;
+  }
+  
+  if (clientSecretField && clientSecret) {
+    clientSecretField.value = clientSecret;
+  }
+  
+  // Visual feedback
+  if (clientIdField) clientIdField.classList.add('border-green-500');
+  if (clientSecretField) clientSecretField.classList.add('border-green-500');
+  
+  setTimeout(() => {
+    if (clientIdField) clientIdField.classList.remove('border-green-500');
+    if (clientSecretField) clientSecretField.classList.remove('border-green-500');
+  }, 2000);
+  
+  showToast('✅ Credentials auto-filled from JSON!', 'success');
+  return true;
+}
+
+/**
+ * Setup paste event listeners for JSON auto-fill
+ */
+function setupJsonPasteListeners() {
+  // Main form fields
+  const mainClientId = document.getElementById('clientId');
+  const mainClientSecret = document.getElementById('clientSecret');
+  
+  // Modal form fields
+  const modalClientId = document.getElementById('newClientId');
+  const modalClientSecret = document.getElementById('newClientSecret');
+  
+  // Add paste listeners
+  [mainClientId, mainClientSecret].forEach(field => {
+    if (field) {
+      field.addEventListener('paste', (e) => {
+        setTimeout(() => {
+          const pastedText = field.value;
+          if (pastedText.includes('{') && pastedText.includes('client_id')) {
+            const { clientId, clientSecret } = extractCredentialsFromJson(pastedText);
+            if (clientId && clientSecret) {
+              autoFillCredentials(clientId, clientSecret, 'main');
+            }
+          }
+        }, 10);
+      });
+    }
+  });
+  
+  [modalClientId, modalClientSecret].forEach(field => {
+    if (field) {
+      field.addEventListener('paste', (e) => {
+        setTimeout(() => {
+          const pastedText = field.value;
+          if (pastedText.includes('{') && pastedText.includes('client_id')) {
+            const { clientId, clientSecret } = extractCredentialsFromJson(pastedText);
+            if (clientId && clientSecret) {
+              autoFillCredentials(clientId, clientSecret, 'modal');
+            }
+          }
+        }, 10);
+      });
     }
   });
 }
 
-function copyGuideRedirectUri() {
-  const redirectUriEl = document.getElementById('guideRedirectUriText');
-  const textToCopy = redirectUriEl ? redirectUriEl.textContent.trim() : 'http://localhost:7575/api/youtube/oauth/callback';
-  
-  if (navigator.clipboard && window.isSecureContext) {
-    navigator.clipboard.writeText(textToCopy).then(showSuccessCopy).catch(() => fallbackCopyText(textToCopy));
-  } else {
-    fallbackCopyText(textToCopy);
-  }
-}
-
-function showSuccessCopy() {
-  const copyUriText = document.getElementById('copyUriText');
-  const copyUriIcon = document.getElementById('copyUriIcon');
-  if (copyUriText) copyUriText.textContent = 'Copied!';
-  if (copyUriIcon) copyUriIcon.className = 'ti ti-check text-green-400 text-xs';
-  if (typeof showToast === 'function') {
-    showToast('Redirect URI disalin ke clipboard!', 'success');
-  }
-  
-  setTimeout(() => {
-    if (copyUriText) copyUriText.textContent = 'Copy';
-    if (copyUriIcon) copyUriIcon.className = 'ti ti-copy text-xs';
-  }, 2000);
-}
-
-function fallbackCopyText(text) {
-  const tempInput = document.createElement('textarea');
-  tempInput.value = text;
-  document.body.appendChild(tempInput);
-  tempInput.select();
-  try {
-    document.execCommand('copy');
-    showSuccessCopy();
-  } catch (err) {
-    if (typeof showToast === 'function') {
-      showToast('Gagal menyalin otomatis. Silakan salin manual.', 'error');
-    }
-  }
-  document.body.removeChild(tempInput);
-}
-
-// Global live stats refresh & auto-refresh helpers
-async function refreshLiveStats() {
-  const refreshIcon = document.getElementById('refreshIcon');
-  const refreshIconMobile = document.getElementById('refreshIconMobile');
-  if (refreshIcon) refreshIcon.classList.add('animate-spin');
-  if (refreshIconMobile) refreshIconMobile.classList.add('animate-spin');
-  
-  try {
-    if (typeof broadcastsCache !== 'undefined') {
-      broadcastsCache.timestamp = null;
-    }
-    if (typeof lazyLoadBroadcasts === 'function') {
-      await lazyLoadBroadcasts();
-    }
-    if (typeof showToast === 'function') {
-      showToast('Stats & Broadcasts refreshed', 'success');
-    }
-  } catch (err) {
-    console.error('Error refreshing live stats:', err);
-    if (typeof showToast === 'function') {
-      showToast('Failed to refresh live stats', 'error');
-    }
-  } finally {
-    if (refreshIcon) refreshIcon.classList.remove('animate-spin');
-    if (refreshIconMobile) refreshIconMobile.classList.remove('animate-spin');
-  }
-}
-window.refreshLiveStats = refreshLiveStats;
-
-let autoRefreshTimer = null;
-function toggleAutoRefresh() {
-  const label = document.getElementById('autoRefreshLabel');
-  const labelMobile = document.getElementById('autoRefreshLabelMobile');
-  const icon = document.getElementById('autoRefreshIcon');
-  const iconMobile = document.getElementById('autoRefreshIconMobile');
-
-  if (autoRefreshTimer) {
-    clearInterval(autoRefreshTimer);
-    autoRefreshTimer = null;
-    if (label) label.textContent = 'OFF';
-    if (labelMobile) labelMobile.textContent = 'OFF';
-    if (icon) icon.classList.remove('text-green-400');
-    if (iconMobile) iconMobile.classList.remove('text-green-400');
-    if (typeof showToast === 'function') showToast('Auto refresh disabled', 'info');
-  } else {
-    autoRefreshTimer = setInterval(() => {
-      refreshLiveStats();
-    }, 30000);
-    if (label) label.textContent = 'ON';
-    if (labelMobile) labelMobile.textContent = 'ON';
-    if (icon) icon.classList.add('text-green-400');
-    if (iconMobile) iconMobile.classList.add('text-green-400');
-    if (typeof showToast === 'function') showToast('Auto refresh enabled (every 30s)', 'success');
-  }
-}
-window.toggleAutoRefresh = toggleAutoRefresh;
-
-function toggleSelectAllBroadcasts(checkbox) {
-  if (typeof toggleSelectAll === 'function') {
-    toggleSelectAll(checkbox);
-  } else {
-    const allCheckboxes = document.querySelectorAll('.broadcast-checkbox');
-    allCheckboxes.forEach(cb => { cb.checked = checkbox.checked; });
-    if (typeof updateSelectionCount === 'function') updateSelectionCount();
-  }
-}
-window.toggleSelectAllBroadcasts = toggleSelectAllBroadcasts;
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', () => {
+  console.log('[JSON Auto-Fill] Setting up paste listeners...');
+  setupJsonPasteListeners();
+});
