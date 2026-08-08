@@ -1013,26 +1013,9 @@ async function loadReconnectTargets() {
   }
 }
 
-function toggleCredentialsForm() {
-  const container = document.getElementById('credentialsFormContainer');
-  if (container) {
-    container.classList.toggle('hidden');
-    if (!container.classList.contains('hidden')) {
-      container.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }
-  }
-}
-
 function openAddAccountModal(reconnectTarget = null) {
-  // If credentials form container exists on page, toggle it smoothly
-  const container = document.getElementById('credentialsFormContainer');
-  if (container) {
-    container.classList.remove('hidden');
-    container.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }
   selectedReconnectTarget = reconnectTarget;
-  const modal = document.getElementById('addAccountModal');
-  if (modal) modal.classList.remove('hidden');
+  document.getElementById('addAccountModal').classList.remove('hidden');
   loadReconnectTargets();
 }
 

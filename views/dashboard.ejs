@@ -226,7 +226,7 @@
     </button>
   </div>
 
-  <!-- Panel 1: Live Control Room (Streams Engine) -->
+  <!-- Panel 1: Live Control Room (Streams) -->
   <div id="studio-panel-streams" class="studio-tab-panel">
 
   <!-- Desktop Stats Cards -->
@@ -907,56 +907,54 @@
         <i class="ti ti-brand-whatsapp text-lg"></i>
         <span>Tambah Limit</span>
       </a>
+    </div>
   </div> <!-- End of #studio-panel-streams -->
 
-  <!-- Panel 2: YouTube Studio (Broadcasts & Templates) -->
+  <!-- Panel 2: YouTube Studio (Broadcasts, Accounts & Templates) -->
   <div id="studio-panel-broadcasts" class="studio-tab-panel hidden">
     <%- include('partials/youtube-studio') %>
   </div>
 
-<script src="/js/youtube.js?v=1.0.9" defer></script>
-<script>
-  function switchStudioTab(tabName) {
-    const target = (tabName === 'youtube') ? 'broadcasts' : tabName;
-    const tabs = ['streams', 'broadcasts'];
-    
-    tabs.forEach(t => {
-      const btn = document.getElementById(`studio-tab-btn-${t}`);
-      const panel = document.getElementById(`studio-panel-${t}`);
-      if (!btn || !panel) return;
-      
-      if (t === target) {
-        btn.className = "studio-tab-btn flex-1 min-w-[120px] py-2.5 px-4 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all bg-primary text-white shadow-md cursor-pointer touch-manipulation active:scale-[0.98] min-h-[44px]";
-        panel.style.display = 'block';
-        panel.classList.remove('hidden');
-      } else {
-        btn.className = "studio-tab-btn flex-1 min-w-[120px] py-2.5 px-4 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all text-gray-400 hover:text-white hover:bg-dark-700/50 cursor-pointer touch-manipulation active:scale-[0.98] min-h-[44px]";
-        panel.style.display = 'none';
-        panel.classList.add('hidden');
+  <script src="/js/youtube.js?v=1.0.6" defer></script>
+  <script>
+    function switchStudioTab(tabName) {
+      const tabs = ['streams', 'broadcasts'];
+      tabs.forEach(t => {
+        const btn = document.getElementById(`studio-tab-btn-${t}`);
+        const panel = document.getElementById(`studio-panel-${t}`);
+        if (!btn || !panel) return;
+        if (t === tabName) {
+          btn.className = "studio-tab-btn flex-1 min-w-[120px] py-2.5 px-4 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all bg-primary text-white shadow-md cursor-pointer touch-manipulation active:scale-[0.98] min-h-[44px]";
+          panel.classList.remove('hidden');
+        } else {
+          btn.className = "studio-tab-btn flex-1 min-w-[120px] py-2.5 px-4 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all text-gray-400 hover:text-white hover:bg-dark-700/50 cursor-pointer touch-manipulation active:scale-[0.98] min-h-[44px]";
+          panel.classList.add('hidden');
+        }
+      });
+
+      try {
+        const url = new URL(window.location);
+        url.searchParams.set('tab', tabName);
+        window.history.replaceState({}, '', url);
+      } catch (e) {}
+
+      if (tabName === 'broadcasts' && typeof refreshLiveStats === 'function') {
+        refreshLiveStats();
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const requestedTab = urlParams.get('tab');
+      if (requestedTab && ['streams', 'broadcasts', 'youtube'].includes(requestedTab)) {
+        if (requestedTab === 'youtube' || requestedTab === 'broadcasts') {
+          switchStudioTab('broadcasts');
+        } else {
+          switchStudioTab(requestedTab);
+        }
       }
     });
-
-    try {
-      const url = new URL(window.location);
-      url.searchParams.set('tab', target);
-      window.history.replaceState({}, '', url);
-    } catch (e) {}
-
-    if (target === 'broadcasts' && typeof refreshLiveStats === 'function') {
-      refreshLiveStats();
-    }
-  }
-
-  document.addEventListener('DOMContentLoaded', function() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const requestedTab = urlParams.get('tab');
-    if (requestedTab && ['streams', 'broadcasts', 'youtube'].includes(requestedTab)) {
-      switchStudioTab(requestedTab);
-    } else {
-      switchStudioTab('streams');
-    }
-  });
-</script>
+  </script>
 
   <script>
     /**
