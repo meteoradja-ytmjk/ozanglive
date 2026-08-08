@@ -9839,3 +9839,243 @@ document.addEventListener('DOMContentLoaded', () => {
   console.log('[JSON Auto-Fill] Setting up paste listeners...');
   setupJsonPasteListeners();
 });
+
+// ==========================================
+// Auto-Pilot Campaign Studio Handlers
+// ==========================================
+
+async function openAutoPilotCampaignModal() {
+  const modal = document.getElementById('autoPilotCampaignModal');
+  if (!modal) {
+    console.error('[AutoPilot] Modal element #autoPilotCampaignModal not found');
+    showToast('Auto-Pilot Studio modal tidak ditemukan di halaman.', 'error');
+    return;
+  }
+
+  // Show modal immediately
+  modal.classList.remove('hidden');
+
+  // Populate accounts & form options safely
+  try {
+    await populateAutoPilotAccounts();
+    await Promise.allSettled([
+      loadAutoPilotVideos('single'),
+      loadAutoPilotAudios('original'),
+      loadAutoPilotTitleFolders(),
+      loadAutoPilotThumbnailFolders()
+    ]);
+  } catch (err) {
+    console.error('[AutoPilot] Modal init error:', err);
+  }
+}
+
+function closeAutoPilotCampaignModal() {
+  const modal = document.getElementById('autoPilotCampaignModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+async function populateAutoPilotAccounts() {
+  const select = document.getElementById('autoPilotAccountId');
+  if (!select) return;
+  
+  try {
+    const res = await fetch('/api/youtube/accounts', { headers: { 'X-CSRF-Token': getCsrfToken() } });
+    const data = await res.json();
+    const accounts = data.accounts || [];
+    
+    if (Array.isArray(accounts) && accounts.length > 0) {
+      select.innerHTML = accounts.map(a => `<option value="${a.id}">${escapeHtml(a.channelName || 'YouTube Channel #' + a.id)}</option>`).join('');
+    } else {
+      select.innerHTML = '<option value="">-- Belum Ada Akun Terhubung (Connect Akun Dulu) --</option>';
+    }
+  } catch (err) {
+    console.error('[AutoPilot] Error fetching accounts:', err);
+  }
+}
+
+async function loadAutoPilotVideos(videoType) {
+  const select = document.getElementById('autoPilotVideoSelect');
+  if (!select) return;
+  select.innerHTML = '<option value="">Loading video list...</option>';
+
+  try {
+    if (videoType === 'single') {
+      const res = await fetch('/api/videos', { headers: { 'X-CSRF-Token': getCsrfToken() } });
+      const data = await res.json();
+      const videos = data.videos || data || [];
+      if (Array.isArray(videos) && videos.length > 0) {
+        select.innerHTML = videos.map(v => `<option value="${v.id}">${v.title || v.filename || 'Video #' + v.id}</option>`).join('');
+      } else {
+        select.innerHTML = '<option value="">-- Tidak ada video di galeri --</option>';
+      }
+    } else if (videoType === 'playlist') {
+      const res = await fetch('/api/playlists', { headers: { 'X-CSRF-Token': getCsrfToken() } });
+      const data = await res.json();
+      const playlists = data.playlists || data || [];
+      if (Array.isArray(playlists) && playlists.length > 0) {
+        select.innerHTML = playlists.map(p => `<option value="${p.id}">${p.name || 'Playlist #' + p.id}</option>`).join('');
+      } else {
+        select.innerHTML = '<option value="">-- Tidak ada playlist video --</option>';
+      }
+    } else if (videoType === 'folder') {
+      const res = await fetch('/api/videos/folders', { headers: { 'X-CSRF-Token': getCsrfToken() } });
+      const data = await res.json();
+      const folders = data.folders || data || [];
+      if (Array.isArray(folders) && folders.length > 0) {
+        select.innerHTML = folders.map(f => `<option value="${f.id}">${f.name || 'Folder #' + f.id}</option>`).join('');
+      } else {
+        select.innerHTML = '<option value="all">Semua Video Galeri (All)</option>';
+      }
+    }
+  } catch (err) {
+    console.error('[AutoPilot] Error loading videos:', err);
+    select.innerHTML = '<option value="">Failed to load videos</option>';
+  }
+}
+
+function onAutoPilotVideoTypeChange(videoType) {
+  loadAutoPilotVideos(videoType);
+}
+
+async function loadAutoPilotAudios(audioType) {
+  const container = document.getElementById('autoPilotAudioSelectContainer');
+  const select = document.getElementById('autoPilotAudioSelect');
+  if (!container || !select) return;
+
+  if (audioType === 'original') {
+    container.classList.add('hidden');
+    select.removeAttribute('required');
+    return;
+  }
+
+  container.classList.remove('hidden');
+  select.setAttribute('required', 'true');
+  select.innerHTML = '<option value="">Loading audio list...</option>';
+
+  try {
+    if (audioType === 'single_audio') {
+      const res = await fetch('/api/audios', { headers: { 'X-CSRF-Token': getCsrfToken() } });
+      const data = await res.json();
+      const audios = data.audios || data || [];
+      if (Array.isArray(audios) && audios.length > 0) {
+        select.innerHTML = audios.map(a => `<option value="${a.id}">${a.title || a.filename || 'Audio #' + a.id}</option>`).join('');
+      } else {
+        select.innerHTML = '<option value="">-- Tidak ada audio di galeri --</option>';
+      }
+    } else if (audioType === 'audio_playlist') {
+      const res = await fetch('/api/audio-playlists', { headers: { 'X-CSRF-Token': getCsrfToken() } });
+      const data = await res.json();
+      const playlists = data.playlists || data || [];
+      if (Array.isArray(playlists) && playlists.length > 0) {
+        select.innerHTML = playlists.map(p => `<option value="${p.id}">${p.name || 'Audio Playlist #' + p.id}</option>`).join('');
+      } else {
+        select.innerHTML = '<option value="">-- Tidak ada playlist audio --</option>';
+      }
+    }
+  } catch (err) {
+    console.error('[AutoPilot] Error loading audio:', err);
+    select.innerHTML = '<option value="">Failed to load audio</option>';
+  }
+}
+
+function onAutoPilotAudioTypeChange(audioType) {
+  loadAutoPilotAudios(audioType);
+}
+
+async function loadAutoPilotTitleFolders() {
+  const select = document.getElementById('autoPilotTitleFolderId');
+  if (!select) return;
+  select.innerHTML = '<option value="">Loading title folders...</option>';
+
+  try {
+    const res = await fetch('/api/youtube/title-folders', { headers: { 'X-CSRF-Token': getCsrfToken() } });
+    const data = await res.json();
+    const folders = data.folders || data || [];
+    if (Array.isArray(folders) && folders.length > 0) {
+      select.innerHTML = folders.map(f => `<option value="${f.id}">${f.folderName || f.name || 'Folder #' + f.id}</option>`).join('');
+    } else {
+      select.innerHTML = '<option value="">-- Buat Folder Judul Terlebih Dahulu --</option>';
+    }
+  } catch (err) {
+    console.error('[AutoPilot] Error loading title folders:', err);
+    select.innerHTML = '<option value="">Failed to load title folders</option>';
+  }
+}
+
+async function loadAutoPilotThumbnailFolders() {
+  const select = document.getElementById('autoPilotThumbnailFolderId');
+  if (!select) return;
+  select.innerHTML = '<option value="">Loading thumbnail folders...</option>';
+
+  try {
+    const res = await fetch('/api/youtube/thumbnail-folders', { headers: { 'X-CSRF-Token': getCsrfToken() } });
+    const data = await res.json();
+    const folders = data.folders || data || [];
+    if (Array.isArray(folders) && folders.length > 0) {
+      select.innerHTML = folders.map(f => `<option value="${f.id}">${f.name || f.folderName || 'Folder #' + f.id}</option>`).join('');
+    } else {
+      select.innerHTML = '<option value="">-- Buat Folder Thumbnail Terlebih Dahulu --</option>';
+    }
+  } catch (err) {
+    console.error('[AutoPilot] Error loading thumbnail folders:', err);
+    select.innerHTML = '<option value="">Failed to load thumbnail folders</option>';
+  }
+}
+
+function onAutoPilotScheduleTypeChange(type) {
+  const timeContainer = document.getElementById('autoPilotTimeContainer');
+  const durationContainer = document.getElementById('autoPilotDurationContainer');
+  if (!timeContainer || !durationContainer) return;
+
+  if (type === '247') {
+    timeContainer.classList.add('hidden');
+    durationContainer.classList.add('hidden');
+  } else {
+    timeContainer.classList.remove('hidden');
+    durationContainer.classList.remove('hidden');
+  }
+}
+
+async function submitAutoPilotCampaign(event) {
+  if (event) event.preventDefault();
+
+  const btn = document.getElementById('submitAutoPilotBtn');
+  const originalHtml = btn ? btn.innerHTML : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ti ti-loader animate-spin text-lg"></i> <span>Memproses Kampanye Auto-Pilot...</span>';
+  }
+
+  try {
+    const form = document.getElementById('autoPilotCampaignForm');
+    const formData = new FormData(form);
+    const payload = Object.fromEntries(formData.entries());
+
+    const response = await fetch('/api/autopilot/create-campaign', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getCsrfToken()
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      closeAutoPilotCampaignModal();
+      showToast('🚀 Kampanye Auto-Pilot 24/7 Berhasil Dibuat & Berjalan!', 'success');
+      setTimeout(() => window.location.reload(), 1500);
+    } else {
+      showToast(data.error || 'Gagal membuat kampanye Auto-Pilot.', 'error');
+    }
+  } catch (err) {
+    console.error('[AutoPilot] Submit error:', err);
+    showToast('Terjadi kesalahan saat memproses Auto-Pilot.', 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = originalHtml;
+    }
+  }
+}
