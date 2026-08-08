@@ -9845,15 +9845,18 @@ document.addEventListener('DOMContentLoaded', () => {
 // ==========================================
 
 async function openAutoPilotCampaignModal() {
+  console.log('[AutoPilot] Opening Auto-Pilot Campaign Studio modal...');
   const modal = document.getElementById('autoPilotCampaignModal');
   if (!modal) {
-    console.error('[AutoPilot] Modal element #autoPilotCampaignModal not found');
-    showToast('Auto-Pilot Studio modal tidak ditemukan di halaman.', 'error');
+    console.error('[AutoPilot] Modal element #autoPilotCampaignModal not found in DOM');
+    showToast('Auto-Pilot Studio modal tidak ditemukan di halaman. Harap refresh halaman.', 'error');
     return;
   }
 
-  // Show modal immediately
+  // Force show modal using both class removal and inline style display for 100% reliability
   modal.classList.remove('hidden');
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
 
   // Populate accounts & form options safely
   try {
@@ -9871,7 +9874,11 @@ async function openAutoPilotCampaignModal() {
 
 function closeAutoPilotCampaignModal() {
   const modal = document.getElementById('autoPilotCampaignModal');
-  if (modal) modal.classList.add('hidden');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+    document.body.style.overflow = '';
+  }
 }
 
 async function populateAutoPilotAccounts() {
