@@ -212,9 +212,23 @@
     </div>
   </div>
 
+  <!-- Mobile Studio Navigation Bar (< 1024px) -->
+  <div class="lg:hidden mb-4 bg-dark-800/90 backdrop-blur-md rounded-xl p-1.5 border border-gray-700/60 shadow-lg flex gap-1.5 select-none">
+    <button type="button" onclick="switchMobileStudioTab('streams')" id="mobile-tab-btn-streams"
+      class="mobile-studio-tab flex-1 py-2.5 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all bg-primary text-white shadow-sm touch-manipulation min-h-[40px]">
+      <i class="ti ti-broadcast text-sm"></i>
+      <span>Streams Engine</span>
+    </button>
+    <button type="button" onclick="switchMobileStudioTab('broadcasts')" id="mobile-tab-btn-broadcasts"
+      class="mobile-studio-tab flex-1 py-2.5 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all text-gray-400 hover:text-white touch-manipulation min-h-[40px]">
+      <i class="ti ti-brand-youtube text-sm text-red-500"></i>
+      <span>YouTube Studio</span>
+    </button>
+  </div>
+
   <!-- Unified Live Command Center Grid Container -->
   <div id="unified-command-center" class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-    <!-- Panel 1: Live Control Room (Streams Engine) - Sisi Kiri (5 Kolom) -->
+    <!-- Panel 1: Live Control Room (Streams Engine) - Sisi Kiri (5 Kolom di Desktop) -->
     <div id="studio-panel-streams" class="lg:col-span-5 space-y-6">
 
   <!-- Desktop Stats Cards -->
@@ -903,37 +917,66 @@
   </div>
 </div> <!-- End of #unified-command-center -->
 
-<script src="/js/youtube.js?v=1.0.6" defer></script>
+<script src="/js/youtube.js?v=1.0.7" defer></script>
 <script>
-  function switchStudioTab(tabName) {
-    if (tabName === 'broadcasts' && typeof refreshLiveStats === 'function') {
-      refreshLiveStats();
+  function switchMobileStudioTab(tabName) {
+    const isMobile = window.innerWidth < 1024;
+    const streamsPanel = document.getElementById('studio-panel-streams');
+    const broadcastsPanel = document.getElementById('studio-panel-broadcasts');
+    const streamsBtn = document.getElementById('mobile-tab-btn-streams');
+    const broadcastsBtn = document.getElementById('mobile-tab-btn-broadcasts');
+
+    if (!streamsPanel || !broadcastsPanel) return;
+
+    if (tabName === 'broadcasts' || tabName === 'youtube') {
+      if (isMobile) {
+        streamsPanel.classList.add('hidden');
+        broadcastsPanel.classList.remove('hidden');
+      }
+      if (streamsBtn && broadcastsBtn) {
+        streamsBtn.className = "mobile-studio-tab flex-1 py-2.5 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all text-gray-400 hover:text-white touch-manipulation min-h-[40px]";
+        broadcastsBtn.className = "mobile-studio-tab flex-1 py-2.5 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all bg-red-600 text-white shadow-sm touch-manipulation min-h-[40px]";
+      }
+      if (typeof refreshLiveStats === 'function') refreshLiveStats();
+    } else {
+      if (isMobile) {
+        streamsPanel.classList.remove('hidden');
+        broadcastsPanel.classList.add('hidden');
+      }
+      if (streamsBtn && broadcastsBtn) {
+        streamsBtn.className = "mobile-studio-tab flex-1 py-2.5 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all bg-primary text-white shadow-sm touch-manipulation min-h-[40px]";
+        broadcastsBtn.className = "mobile-studio-tab flex-1 py-2.5 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all text-gray-400 hover:text-white touch-manipulation min-h-[40px]";
+      }
     }
+
+    try {
+      const url = new URL(window.location);
+      url.searchParams.set('tab', tabName);
+      window.history.replaceState({}, '', url);
+    } catch (e) {}
   }
 
-      try {
-        const url = new URL(window.location);
-        url.searchParams.set('tab', tabName);
-        window.history.replaceState({}, '', url);
-      } catch (e) {}
+  function switchStudioTab(tabName) {
+    switchMobileStudioTab(tabName);
+  }
 
-      if (tabName === 'broadcasts' && typeof refreshLiveStats === 'function') {
-        refreshLiveStats();
-      }
+  window.addEventListener('resize', function() {
+    if (window.innerWidth >= 1024) {
+      const streamsPanel = document.getElementById('studio-panel-streams');
+      const broadcastsPanel = document.getElementById('studio-panel-broadcasts');
+      if (streamsPanel) streamsPanel.classList.remove('hidden');
+      if (broadcastsPanel) broadcastsPanel.classList.remove('hidden');
     }
+  });
 
-    document.addEventListener('DOMContentLoaded', function() {
-      const urlParams = new URLSearchParams(window.location.search);
-      const requestedTab = urlParams.get('tab');
-      if (requestedTab && ['streams', 'broadcasts', 'youtube'].includes(requestedTab)) {
-        if (requestedTab === 'youtube' || requestedTab === 'broadcasts') {
-          switchStudioTab('broadcasts');
-        } else {
-          switchStudioTab(requestedTab);
-        }
-      }
-    });
-  </script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const requestedTab = urlParams.get('tab');
+    if (requestedTab && ['streams', 'broadcasts', 'youtube'].includes(requestedTab)) {
+      switchMobileStudioTab(requestedTab);
+    }
+  });
+</script>
 
   <script>
     /**
