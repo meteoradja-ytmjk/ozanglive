@@ -77,17 +77,89 @@
     </div>
   </div>
 
-  <% if (!accounts || accounts.length === 0) { %>
-  <!-- Credentials Form (No Accounts Connected) -->
-  <div class="bg-gray-800 rounded-2xl p-4 sm:p-6 shadow-xl border border-gray-700/50">
-    <div class="flex items-center gap-3 mb-6">
-      <div class="w-12 h-12 bg-red-500/15 rounded-xl flex items-center justify-center text-red-500 text-2xl flex-shrink-0">
-        <i class="ti ti-brand-youtube"></i>
+  <% const hasConnectedAccounts = accounts && accounts.length > 0; %>
+
+  <% if (hasConnectedAccounts) { %>
+  <!-- Connected Accounts Summary Card -->
+  <div class="bg-gray-800 rounded-xl border border-gray-700/50 mb-6 overflow-hidden">
+    <div class="flex items-center justify-between px-4 py-3 min-h-[48px] border-b border-gray-700/50 cursor-pointer hover:bg-gray-700/20 active:bg-gray-700/40 transition-colors select-none"
+         onclick="toggleConnectedAccounts()" id="connectedAccountsHeader" role="button" tabindex="0">
+      <div class="flex items-center gap-2 pointer-events-none">
+        <i class="ti ti-chevron-down text-gray-400 text-base transition-transform duration-200" id="accountsChevron"></i>
+        <i class="ti ti-brand-youtube text-red-400 text-base"></i>
+        <span class="text-sm font-semibold text-white">Akun YouTube Terhubung</span>
+        <span class="bg-primary/15 text-primary text-xs px-1.5 py-0.5 rounded-md font-medium"><%= accounts.length %></span>
       </div>
-      <div>
-        <h2 class="text-lg sm:text-xl font-bold text-white">Hubungkan Akun YouTube</h2>
-        <p class="text-xs sm:text-sm text-gray-400">Upload file <code class="text-red-400 bg-dark-700 px-1 py-0.5 rounded">client_secret.json</code> atau masukkan Client ID & Secret untuk mulai</p>
+      <button onclick="event.stopPropagation(); toggleCredentialsForm()" 
+        class="bg-red-500 hover:bg-red-600 active:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs transition-colors flex items-center gap-1.5 font-medium pointer-events-auto min-h-[32px]">
+        <i class="ti ti-plus text-sm"></i>
+        <span>Hubungkan Akun Baru / Import JSON</span>
+      </button>
+    </div>
+    
+    <div id="connectedAccountsList" class="transition-all duration-200" style="display: block;">
+      <% accounts.forEach(function(account, index) { 
+         const displayName = account.channelName || account.channelId || ('YouTube Channel #' + account.id);
+      %>
+      <div class="flex items-center justify-between px-4 py-2.5 hover:bg-gray-700/30 transition-colors <%= index < accounts.length - 1 ? 'border-b border-gray-700/30' : '' %>">
+        <div class="flex items-center gap-3 min-w-0 flex-1">
+          <div class="w-8 h-8 bg-red-500/15 rounded-lg flex items-center justify-center flex-shrink-0">
+            <i class="ti ti-brand-youtube text-red-400 text-sm"></i>
+          </div>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-2">
+              <span class="text-sm font-medium text-white truncate"><%= displayName %></span>
+              <% if (account.isPrimary) { %>
+              <span class="px-1.5 py-0.5 bg-yellow-500/15 text-yellow-400 text-[10px] rounded font-medium flex-shrink-0">★ Primary</span>
+              <% } %>
+            </div>
+            <p class="text-[11px] text-green-400/80 flex items-center gap-1 mt-0.5">
+              <i class="ti ti-circle-check text-[10px]"></i>
+              Connected
+            </p>
+          </div>
+        </div>
+        <div class="flex items-center gap-0.5 flex-shrink-0">
+          <button onclick="reconnectAccountOAuth(<%= account.id %>, '<%= displayName.replace(/'/g, "\\'") %>')" 
+            class="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-green-400 hover:bg-green-500/10 rounded-md transition-colors" title="Reconnect Token">
+            <i class="ti ti-refresh text-sm"></i>
+          </button>
+          <button onclick="openEditAccountModal(<%= account.id %>, '<%= displayName.replace(/'/g, "\\'") %>')" 
+            class="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-blue-400 hover:bg-blue-500/10 rounded-md transition-colors" title="Edit">
+            <i class="ti ti-edit text-sm"></i>
+          </button>
+          <button onclick="setPrimaryAccount(<%= account.id %>)" 
+            class="w-7 h-7 flex items-center justify-center rounded-md transition-colors <%= account.isPrimary ? 'text-yellow-400' : 'text-gray-500 hover:text-yellow-400 hover:bg-yellow-500/10' %>" title="<%= account.isPrimary ? 'Primary' : 'Set Primary' %>">
+            <i class="ti <%= account.isPrimary ? 'ti-star-filled' : 'ti-star' %> text-sm"></i>
+          </button>
+          <button onclick="disconnectAccount(<%= account.id %>, '<%= displayName.replace(/'/g, "\\'") %>')" 
+            class="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-md transition-colors" title="Disconnect">
+            <i class="ti ti-unlink text-sm"></i>
+          </button>
+        </div>
       </div>
+      <% }); %>
+    </div>
+  </div>
+  <% } %>
+
+  <!-- Credentials Form & Upload JSON File Box (ALWAYS Available) -->
+  <div id="credentialsFormContainer" class="bg-gray-800 rounded-2xl p-4 sm:p-6 shadow-xl border border-gray-700/50 mb-6 <%= hasConnectedAccounts ? 'hidden' : '' %>">
+    <div class="flex items-center justify-between mb-6">
+      <div class="flex items-center gap-3">
+        <div class="w-12 h-12 bg-red-500/15 rounded-xl flex items-center justify-center text-red-500 text-2xl flex-shrink-0">
+          <i class="ti ti-brand-youtube"></i>
+        </div>
+        <div>
+          <h2 class="text-lg sm:text-xl font-bold text-white">Hubungkan Akun YouTube / Import JSON</h2>
+          <p class="text-xs sm:text-sm text-gray-400">Upload file <code class="text-red-400 bg-dark-700 px-1 py-0.5 rounded">client_secret.json</code> atau masukkan Client ID & Secret untuk mulai</p>
+        </div>
+      </div>
+      <% if (hasConnectedAccounts) { %>
+      <button type="button" onclick="toggleCredentialsForm()" class="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-dark-700">
+        <i class="ti ti-x text-xl"></i>
+      </button>
+      <% } %>
     </div>
 
     <!-- Upload JSON File Box (Drag & Drop) -->
@@ -160,94 +232,7 @@
           Credentials akan otomatis tersimpan saat connect
         </p>
       </div>
-      
-      <!-- Collapsible Manual OAuth Playground Option -->
-      <div class="border-t border-gray-700/60 pt-3 mt-3">
-        <button type="button" onclick="toggleOAuthSection(event)" class="w-full flex items-center justify-between text-gray-400 hover:text-gray-200 transition-colors py-1.5 touch-manipulation">
-          <span class="text-xs font-medium flex items-center gap-2">
-            <i class="ti ti-chevron-right text-sm transition-transform duration-200" id="oauthSectionChevron"></i>
-            <span>Atau Input Manual Refresh Token (OAuth Playground)</span>
-          </span>
-          <span class="text-[10px] bg-gray-700 text-gray-300 px-2 py-0.5 rounded font-mono">Legacy</span>
-        </button>
-        <div id="oauthSection" class="hidden mt-3 space-y-3">
-          <div>
-            <label class="text-xs font-medium text-white block mb-1">Refresh Token</label>
-            <textarea id="refreshToken" name="refreshToken" rows="3"
-              class="w-full px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg focus:border-red-500 focus:outline-none text-xs resize-none"
-              placeholder="Paste Refresh Token dari OAuth Playground jika ada"></textarea>
-          </div>
-          <button type="submit" id="connectBtn"
-            class="w-full bg-gray-700 hover:bg-gray-600 text-white px-4 py-2.5 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-2">
-            <i class="ti ti-plug"></i>
-            <span>Connect Manual dengan Refresh Token</span>
-          </button>
-        </div>
-      </div>
     </form>
-  </div>
-  
-  <% } else { %>
-  <!-- Connected Accounts & Token Status -->
-  <div class="bg-gray-800 rounded-xl border border-gray-700/50 mb-6 overflow-hidden">
-    <div class="flex items-center justify-between px-4 py-3 min-h-[48px] border-b border-gray-700/50 cursor-pointer hover:bg-gray-700/20 active:bg-gray-700/40 transition-colors select-none"
-         onclick="toggleConnectedAccounts()" id="connectedAccountsHeader" role="button" tabindex="0">
-      <div class="flex items-center gap-2 pointer-events-none">
-        <i class="ti ti-chevron-down text-gray-400 text-base transition-transform duration-200" id="accountsChevron"></i>
-        <i class="ti ti-brand-youtube text-red-400 text-base"></i>
-        <span class="text-sm font-semibold text-white">Connected Accounts</span>
-        <span class="bg-primary/15 text-primary text-xs px-1.5 py-0.5 rounded-md font-medium"><%= accounts.length %></span>
-      </div>
-      <button onclick="event.stopPropagation(); openAddAccountModal()" 
-        class="bg-red-500 hover:bg-red-600 active:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs transition-colors flex items-center gap-1.5 font-medium pointer-events-auto min-h-[32px]">
-        <i class="ti ti-plus text-sm"></i>
-        <span>Add</span>
-      </button>
-    </div>
-    
-    <div id="connectedAccountsList" class="transition-all duration-200" style="display: block;">
-      <% accounts.forEach(function(account, index) { 
-         const displayName = account.channelName || account.channelId || ('YouTube Channel #' + account.id);
-      %>
-      <div class="flex items-center justify-between px-4 py-2.5 hover:bg-gray-700/30 transition-colors <%= index < accounts.length - 1 ? 'border-b border-gray-700/30' : '' %>">
-        <div class="flex items-center gap-3 min-w-0 flex-1">
-          <div class="w-8 h-8 bg-red-500/15 rounded-lg flex items-center justify-center flex-shrink-0">
-            <i class="ti ti-brand-youtube text-red-400 text-sm"></i>
-          </div>
-          <div class="min-w-0 flex-1">
-            <div class="flex items-center gap-2">
-              <span class="text-sm font-medium text-white truncate"><%= displayName %></span>
-              <% if (account.isPrimary) { %>
-              <span class="px-1.5 py-0.5 bg-yellow-500/15 text-yellow-400 text-[10px] rounded font-medium flex-shrink-0">★ Primary</span>
-              <% } %>
-            </div>
-            <p class="text-[11px] text-green-400/80 flex items-center gap-1 mt-0.5">
-              <i class="ti ti-circle-check text-[10px]"></i>
-              Connected
-            </p>
-          </div>
-        </div>
-        <div class="flex items-center gap-0.5 flex-shrink-0">
-          <button onclick="reconnectAccountOAuth(<%= account.id %>, '<%= displayName.replace(/'/g, "\\'") %>')" 
-            class="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-green-400 hover:bg-green-500/10 rounded-md transition-colors" title="Reconnect Token">
-            <i class="ti ti-refresh text-sm"></i>
-          </button>
-          <button onclick="openEditAccountModal(<%= account.id %>, '<%= displayName.replace(/'/g, "\\'") %>')" 
-            class="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-blue-400 hover:bg-blue-500/10 rounded-md transition-colors" title="Edit">
-            <i class="ti ti-edit text-sm"></i>
-          </button>
-          <button onclick="setPrimaryAccount(<%= account.id %>)" 
-            class="w-7 h-7 flex items-center justify-center rounded-md transition-colors <%= account.isPrimary ? 'text-yellow-400' : 'text-gray-500 hover:text-yellow-400 hover:bg-yellow-500/10' %>" title="<%= account.isPrimary ? 'Primary' : 'Set Primary' %>">
-            <i class="ti <%= account.isPrimary ? 'ti-star-filled' : 'ti-star' %> text-sm"></i>
-          </button>
-          <button onclick="disconnectAccount(<%= account.id %>, '<%= displayName.replace(/'/g, "\\'") %>')" 
-            class="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-md transition-colors" title="Disconnect">
-            <i class="ti ti-unlink text-sm"></i>
-          </button>
-        </div>
-      </div>
-      <% }); %>
-    </div>
   </div>
 
   <% 
