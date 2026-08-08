@@ -143,23 +143,16 @@
   </div>
   <% } %>
 
-  <!-- Credentials Form & Upload JSON File Box (ALWAYS Available) -->
-  <div id="credentialsFormContainer" class="bg-gray-800 rounded-2xl p-4 sm:p-6 shadow-xl border border-gray-700/50 mb-6 <%= hasConnectedAccounts ? 'hidden' : '' %>">
-    <div class="flex items-center justify-between mb-6">
-      <div class="flex items-center gap-3">
-        <div class="w-12 h-12 bg-red-500/15 rounded-xl flex items-center justify-center text-red-500 text-2xl flex-shrink-0">
-          <i class="ti ti-brand-youtube"></i>
-        </div>
-        <div>
-          <h2 class="text-lg sm:text-xl font-bold text-white">Hubungkan Akun YouTube / Import JSON</h2>
-          <p class="text-xs sm:text-sm text-gray-400">Upload file <code class="text-red-400 bg-dark-700 px-1 py-0.5 rounded">client_secret.json</code> atau masukkan Client ID & Secret untuk mulai</p>
-        </div>
+  <!-- Credentials Form & Upload JSON File Box (ALWAYS Visible) -->
+  <div id="credentialsFormContainer" class="bg-gray-800 rounded-2xl p-4 sm:p-6 shadow-xl border border-gray-700/50 mb-6">
+    <div class="flex items-center gap-3 mb-6">
+      <div class="w-12 h-12 bg-red-500/15 rounded-xl flex items-center justify-center text-red-500 text-2xl flex-shrink-0">
+        <i class="ti ti-brand-youtube"></i>
       </div>
-      <% if (hasConnectedAccounts) { %>
-      <button type="button" onclick="toggleCredentialsForm()" class="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-dark-700">
-        <i class="ti ti-x text-xl"></i>
-      </button>
-      <% } %>
+      <div>
+        <h2 class="text-lg sm:text-xl font-bold text-white">Hubungkan Akun YouTube / Import JSON</h2>
+        <p class="text-xs sm:text-sm text-gray-400">Upload file <code class="text-red-400 bg-dark-700 px-1 py-0.5 rounded">client_secret.json</code> atau masukkan Client ID & Secret untuk mulai</p>
+      </div>
     </div>
 
     <!-- Upload JSON File Box (Drag & Drop) -->
