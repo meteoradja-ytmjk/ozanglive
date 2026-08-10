@@ -143,8 +143,8 @@
           <i class="ti ti-info-circle text-blue-400 text-sm"></i>
           Authorized Redirect URI (Wajib ditambahkan di Google Cloud Console):
         </p>
-        <code class="block bg-dark-900/80 px-2.5 py-1.5 rounded text-red-400 text-[11px] font-mono break-all border border-gray-700/60">
-          <%= typeof baseUrl !== 'undefined' ? baseUrl : 'http://localhost:7575' %>/api/youtube/oauth/callback
+        <code id="currentRedirectUri" class="block bg-dark-900/80 px-2.5 py-1.5 rounded text-red-400 text-[11px] font-mono break-all border border-gray-700/60">
+          <%= baseUrl %>/api/youtube/oauth/callback
         </code>
       </div>
       
@@ -839,7 +839,7 @@
               <div class="ml-8 space-y-2">
                 <p class="text-xs text-gray-400">Tambahkan URL berikut ke kolom <strong>Authorized redirect URIs</strong>:</p>
                 <div class="flex items-center gap-2 bg-dark-900/90 p-2.5 rounded-lg border border-gray-700/80 font-mono text-xs">
-                  <span id="guideRedirectUriText" class="text-blue-300 select-all truncate flex-1">http://localhost:7575/api/youtube/oauth/callback</span>
+                  <span id="guideRedirectUriText" class="text-blue-300 select-all truncate flex-1"><%= baseUrl %>/api/youtube/oauth/callback</span>
                   <button type="button" onclick="copyGuideRedirectUri()" 
                     class="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded text-[11px] font-sans font-medium flex items-center gap-1 transition-all active:scale-95 cursor-pointer touch-manipulation">
                     <i class="ti ti-copy text-xs" id="copyUriIcon"></i>
@@ -1415,7 +1415,7 @@
             <i class="ti ti-info-circle text-blue-400"></i> Authorized Redirect URI (Wajib di Google Console):
           </p>
           <code class="block bg-dark-900/80 px-2 py-1 rounded text-red-400 font-mono break-all">
-            <%= typeof baseUrl !== 'undefined' ? baseUrl : 'http://localhost:7575' %>/api/youtube/oauth/callback
+            <%= baseUrl %>/api/youtube/oauth/callback
           </code>
         </div>
         
