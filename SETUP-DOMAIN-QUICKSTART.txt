@@ -1,0 +1,73 @@
+╔══════════════════════════════════════════════════════════════╗
+║  🌐 OZANGLIVE - SETUP DOMAIN QUICK REFERENCE                ║
+╚══════════════════════════════════════════════════════════════╝
+
+📋 PERSYARATAN:
+   ✅ Aplikasi sudah terinstal
+   ✅ Domain sudah ditambahkan ke Cloudflare
+   ✅ Punya akses login Cloudflare
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🚀 CARA TERCEPAT - COPY & PASTE INI:
+
+   cd ~ && bash ozanglive-universal-multidomain-quick-installer-v2.sh
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📥 JIKA INSTALLER TIDAK ADA - COPY & PASTE INI:
+
+cd ~ && \
+curl -fsSL https://raw.githubusercontent.com/meteoradja-ytmjk/ozanglive/main/ozanglive-universal-multidomain-quick-installer-v2.sh -o domain-setup.sh && \
+chmod +x domain-setup.sh && \
+bash domain-setup.sh
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📖 CONTOH INPUT:
+
+   Nama tunnel: live-user-01
+   Base domain sama? Y/N
+   
+   [Jika Y]
+   Base domain: monsterlive.my.id
+   Subdomain: live2
+   → Hasil: https://live2.monsterlive.my.id
+   
+   [Jika N]
+   Domain publik: stream.budilive.com
+   → Hasil: https://stream.budilive.com
+   
+   Port aplikasi: 7575
+   Folder aplikasi: /home/ubuntu/ozanglive
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔧 TROUBLESHOOTING:
+
+   # Cek status cloudflared
+   sudo systemctl status cloudflared
+
+   # Cek log cloudflared
+   sudo journalctl -u cloudflared -n 50
+
+   # Restart cloudflared
+   sudo systemctl restart cloudflared
+
+   # Cek aplikasi
+   pm2 status
+
+   # Restart aplikasi
+   pm2 restart all
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📞 BANTUAN: WhatsApp 089621453431
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📚 Dokumentasi lengkap: ~/ozanglive/CARA-SETUP-DOMAIN.md
+
+   cat ~/ozanglive/CARA-SETUP-DOMAIN.md
+
+╚══════════════════════════════════════════════════════════════╝

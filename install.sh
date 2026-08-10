@@ -442,3 +442,85 @@ fi
 echo
 echo -e "  ${ICON_ROCKET} ${B_GREEN}Terima kasih telah menggunakan MonsterLive Quick Installer!${NC}"
 echo
+
+# ==============================================================================
+# AUTO DOMAIN SETUP PROMPT
+# ==============================================================================
+echo
+echo -e "${B_PURPLE}╭──────────────────────────────────────────────────────────╮${NC}"
+echo -e "${B_PURPLE}│ 🌐 SETUP DOMAIN DENGAN CLOUDFLARE                        │${NC}"
+echo -e "${B_PURPLE}├──────────────────────────────────────────────────────────┤${NC}"
+echo -e "${B_PURPLE}│${NC} Aplikasi Anda sudah berjalan di: ${B_CYAN}http://${SERVER_IP}:7575${NC}"
+echo -e "${B_PURPLE}│${NC}"
+echo -e "${B_PURPLE}│${NC} Apakah Anda ingin menambahkan DOMAIN KUSTOM?"
+echo -e "${B_PURPLE}│${NC} (Cloudflare Tunnel akan dikonfigurasi otomatis)"
+echo -e "${B_PURPLE}│${NC}"
+echo -e "${B_PURPLE}│${NC} ${GRAY}• Aplikasi akan dapat diakses melalui domain Anda${NC}"
+echo -e "${B_PURPLE}│${NC} ${GRAY}• HTTPS otomatis dengan Cloudflare Tunnel${NC}"
+echo -e "${B_PURPLE}│${NC} ${GRAY}• Tidak perlu setup SSL manual${NC}"
+echo -e "${B_PURPLE}╰──────────────────────────────────────────────────────────╯${NC}"
+echo
+
+if confirm "Apakah Anda ingin setup domain sekarang?" "Y"; then
+    echo
+    print_status "$ICON_INFO" "Memulai installer domain Cloudflare..."
+    sleep 2
+    
+    # Check if domain installer exists
+    DOMAIN_INSTALLER="$HOME/ozanglive-universal-multidomain-quick-installer-v2.sh"
+    
+    if [ ! -f "$DOMAIN_INSTALLER" ]; then
+        # Try to find it in the installation directory
+        if [ -f "$INSTALL_DIR/ozanglive-universal-multidomain-quick-installer-v2.sh" ]; then
+            DOMAIN_INSTALLER="$INSTALL_DIR/ozanglive-universal-multidomain-quick-installer-v2.sh"
+        else
+            print_status "$ICON_WARN" "Domain installer tidak ditemukan."
+            echo -e "  ${ICON_INFO} Silakan download installer dari repository:"
+            echo -e "     ${B_CYAN}https://github.com/meteoradja-ytmjk/ozanglive${NC}"
+            echo -e "  ${ICON_INFO} Atau jalankan manual:"
+            echo -e "     ${B_YELLOW}bash ozanglive-universal-multidomain-quick-installer-v2.sh${NC}"
+            echo
+            exit 0
+        fi
+    fi
+    
+    # Make sure the installer is executable
+    chmod +x "$DOMAIN_INSTALLER"
+    
+    echo
+    echo -e "${B_CYAN}════════════════════════════════════════════════════════════${NC}"
+    echo -e "${B_CYAN}  Meluncurkan Domain Setup Installer...${NC}"
+    echo -e "${B_CYAN}════════════════════════════════════════════════════════════${NC}"
+    echo
+    sleep 1
+    
+    # Run the domain installer
+    bash "$DOMAIN_INSTALLER"
+else
+    echo
+    print_status "$ICON_INFO" "Domain setup dilewati."
+    echo
+    echo -e "${B_CYAN}╭──────────────────────────────────────────────────────────╮${NC}"
+    echo -e "${B_CYAN}│ 📖 CARA SETUP DOMAIN DI KEMUDIAN HARI                    │${NC}"
+    echo -e "${B_CYAN}├──────────────────────────────────────────────────────────┤${NC}"
+    echo -e "${B_CYAN}│${NC} ${BOLD}CARA 1: ONE-LINER (Copy & Paste)${NC}"
+    echo -e "${B_CYAN}│${NC}"
+    echo -e "${B_CYAN}│${NC} ${B_YELLOW}cd ~ && bash ozanglive-universal-multidomain-quick-installer-v2.sh${NC}"
+    echo -e "${B_CYAN}│${NC}"
+    echo -e "${B_CYAN}├──────────────────────────────────────────────────────────┤${NC}"
+    echo -e "${B_CYAN}│${NC} ${BOLD}CARA 2: Download & Jalankan${NC}"
+    echo -e "${B_CYAN}│${NC}"
+    echo -e "${B_CYAN}│${NC} ${GRAY}curl -fsSL https://raw.githubusercontent.com/meteoradja-ytmjk/ozanglive/main/ozanglive-universal-multidomain-quick-installer-v2.sh -o ~/domain-setup.sh${NC}"
+    echo -e "${B_CYAN}│${NC} ${GRAY}chmod +x ~/domain-setup.sh${NC}"
+    echo -e "${B_CYAN}│${NC} ${GRAY}bash ~/domain-setup.sh${NC}"
+    echo -e "${B_CYAN}│${NC}"
+    echo -e "${B_CYAN}├──────────────────────────────────────────────────────────┤${NC}"
+    echo -e "${B_CYAN}│${NC} ${BOLD}📄 Dokumentasi Lengkap:${NC}"
+    echo -e "${B_CYAN}│${NC} ${WHITE}$INSTALL_DIR/CARA-SETUP-DOMAIN.md${NC}"
+    echo -e "${B_CYAN}│${NC}"
+    echo -e "${B_CYAN}│${NC} Baca dengan: ${B_YELLOW}cat $INSTALL_DIR/CARA-SETUP-DOMAIN.md${NC}"
+    echo -e "${B_CYAN}╰──────────────────────────────────────────────────────────╯${NC}"
+    echo
+fi
+
+echo
