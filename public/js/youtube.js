@@ -1418,10 +1418,12 @@ let streamFetchState = {
 async function fetchStreams(accountId = null) {
   const select = document.getElementById('streamKeySelect');
   const loading = document.getElementById('streamKeyLoading');
+  const indicator = document.getElementById('streamKeyAutoFillIndicator');
   
   if (!select) return;
   
   if (loading) loading.classList.remove('hidden');
+  if (indicator) indicator.classList.add('hidden');
   
   try {
     let url = '/api/youtube/streams';
@@ -1441,27 +1443,52 @@ async function fetchStreams(accountId = null) {
     console.log('[fetchStreams] Response:', data);
     
     // Clear existing options except first
-    select.innerHTML = '<option value="">Create new stream key</option>';
+    select.innerHTML = '<option value="">🔑 Create new stream key</option>';
     
     if (data.success && data.streams && data.streams.length > 0) {
       streamFetchState = { tokenExpired: false, accountId };
       console.log('[fetchStreams] Found', data.streams.length, 'stream keys');
-      data.streams.forEach(stream => {
+      
+      // Add separator for better UX
+      const separator = document.createElement('option');
+      separator.disabled = true;
+      separator.textContent = '─────────────────────────────';
+      select.appendChild(separator);
+      
+      const reuse = document.createElement('option');
+      reuse.disabled = true;
+      reuse.textContent = '📋 Reuse Existing Stream Keys:';
+      select.appendChild(reuse);
+      
+      data.streams.forEach((stream, index) => {
         const option = document.createElement('option');
         option.value = stream.id;
-        option.textContent = `${stream.title} (${stream.resolution} @ ${stream.frameRate})`;
+        option.textContent = `${index + 1}. ${stream.title} (${stream.resolution} @ ${stream.frameRate})`;
         select.appendChild(option);
       });
+      
+      // Show success indicator
+      if (indicator) {
+        indicator.classList.remove('hidden');
+        setTimeout(() => indicator.classList.add('hidden'), 3000);
+      }
+      
+      // Show toast for better feedback
+      showToast(`✓ Loaded ${data.streams.length} stream key${data.streams.length > 1 ? 's' : ''} from your channel`, 'success');
     } else {
       console.log('[fetchStreams] No stream keys found or error:', data.error || 'empty response');
 
       if (data.error && data.error.includes('TOKEN_EXPIRED')) {
         streamFetchState = { tokenExpired: true, accountId };
         showToast('Token YouTube untuk akun ini sudah expired. Silakan reconnect akun agar stream key lama tetap bisa dipakai.', 'error');
+      } else {
+        // No existing keys, show friendly message
+        showToast('No existing stream keys found. A new one will be created.', 'info');
       }
     }
   } catch (error) {
     console.error('[fetchStreams] Error:', error);
+    showToast('Failed to load stream keys. You can still create a new one.', 'error');
   } finally {
     if (loading) loading.classList.add('hidden');
   }
@@ -1501,6 +1528,14 @@ function restorePreferredAccount(selectId) {
 function onAccountChange(accountId) {
   if (accountId) {
     savePreferredAccount('accountSelect', accountId);
+    
+    // Show loading feedback
+    const streamKeySelect = document.getElementById('streamKeySelect');
+    if (streamKeySelect) {
+      streamKeySelect.innerHTML = '<option value="">⏳ Loading stream keys...</option>';
+    }
+    
+    // Fetch data in parallel
     fetchStreams(accountId);
     fetchChannelDefaults(accountId);
   }
