@@ -564,6 +564,28 @@
             <input type="hidden" id="selectedAudioId" name="audioId" value="">
             <input type="hidden" id="rtmpUrl" name="rtmpUrl" value="rtmp://a.rtmp.youtube.com/live2">
 
+            <!-- YouTube Account Selector -->
+            <div>
+              <label class="text-sm font-medium text-white block mb-2">
+                YouTube Account
+                <span class="text-xs text-gray-500">(Optional - Auto-fill stream key)</span>
+              </label>
+              <select id="controlRoomAccountSelect" name="youtubeAccountId"
+                class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none transition-all"
+                onchange="onControlRoomAccountChange(this.value)">
+                <option value="">-- Manual Stream Key --</option>
+                <% if (accounts && accounts.length > 0) { %>
+                  <% accounts.forEach(function(account) { %>
+                  <option value="<%= account.id %>"><%= account.channelName || 'YouTube Channel' %></option>
+                  <% }); %>
+                <% } %>
+              </select>
+              <p class="text-xs text-gray-500 mt-1">
+                <i class="ti ti-info-circle text-primary mr-1"></i>
+                Select a YouTube account to auto-load stream keys, or leave empty for manual input
+              </p>
+            </div>
+
             <!-- Video Selector -->
             <div class="relative">
               <label class="text-sm font-medium text-white block mb-2">Select Video <span
@@ -622,15 +644,44 @@
 
             <!-- Stream Key -->
             <div>
-              <label class="text-sm font-medium text-white block mb-2">Stream Key <span
-                  class="text-red-400">*</span></label>
-              <div class="relative">
-                <input type="text" id="streamKey" name="streamKey"
-                  class="w-full pl-10 pr-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg text-sm"
-                  placeholder="Paste your YouTube stream key here..." required>
-                <i class="ti ti-key absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+              <label class="text-sm font-medium text-white block mb-2">
+                Stream Key <span class="text-red-400">*</span>
+                <span id="controlRoomStreamKeyAutoFillIndicator" class="hidden ml-2 text-xs text-green-400" title="Stream keys loaded from YouTube">
+                  ✓ Auto-loaded
+                </span>
+              </label>
+              
+              <!-- Stream Key Selector (shown when account selected) -->
+              <div id="controlRoomStreamKeySelector" class="hidden">
+                <div class="relative">
+                  <select id="controlRoomStreamKeySelect" name="youtubeStreamId"
+                    class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none transition-all"
+                    onchange="onControlRoomStreamKeyChange(this.value)">
+                    <option value="">🔑 Create new stream key</option>
+                  </select>
+                  <div id="controlRoomStreamKeyLoading" class="hidden absolute right-3 top-1/2 -translate-y-1/2">
+                    <i class="ti ti-loader animate-spin text-primary"></i>
+                  </div>
+                </div>
+                <p class="text-xs text-gray-500 mt-1">
+                  <i class="ti ti-info-circle text-primary mr-1"></i>
+                  Reuse existing stream keys or create a new one
+                </p>
               </div>
-              <p class="text-xs text-gray-500 mt-1">Get your stream key from YouTube Studio → Go Live</p>
+              
+              <!-- Manual Stream Key Input (shown when no account selected) -->
+              <div id="controlRoomStreamKeyManual">
+                <div class="relative">
+                  <input type="text" id="streamKey" name="streamKey"
+                    class="w-full pl-10 pr-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg text-sm"
+                    placeholder="Paste your YouTube stream key here..." required>
+                  <i class="ti ti-key absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                </div>
+                <p class="text-xs text-gray-500 mt-1">Get your stream key from YouTube Studio → Go Live</p>
+              </div>
+              
+              <!-- Hidden input for actual stream key value -->
+              <input type="hidden" id="controlRoomStreamKeyValue" name="actualStreamKey" value="">
             </div>
 
             <!-- Duration and Loop Settings -->
