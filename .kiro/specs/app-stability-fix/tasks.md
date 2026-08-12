@@ -7,7 +7,7 @@
     - Add error handling for initialization failures ✓
     - Added SQLite optimizations (WAL mode, busy_timeout, cache_size) ✓
     - _Requirements: 1.1, 1.3, 1.4_
-  - [~] 1.2 Write property test for database initialization order
+  - [ ] 1.2 Write property test for database initialization order
     - **Property 1: Database Initialization Order**
     - **Validates: Requirements 1.1, 1.4**
     - *Optional - core functionality tested manually*
@@ -29,7 +29,7 @@
     - Generate secure fallback secret if not defined ✓
     - Added session error handling middleware ✓
     - _Requirements: 2.1, 2.2, 2.3_
-  - [~] 4.2 Write property test for session error handling
+  - [ ] 4.2 Write property test for session error handling
     - *Optional - core functionality tested manually*
 
 - [x] 5. Enhance Error Handling in Services
@@ -53,7 +53,7 @@
     - Close database connection properly ✓
     - Add force exit timeout (30 seconds) ✓
     - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5_
-  - [~] 7.2 Write property test for graceful shutdown cleanup
+  - [ ] 7.2 Write property test for graceful shutdown cleanup
     - *Optional - core functionality tested manually*
 
 - [x] 8. Enhance Health Check Endpoint
@@ -62,7 +62,7 @@
     - Component health status ✓
     - Return non-200 status when unhealthy ✓
     - _Requirements: 5.1, 5.2, 5.3_
-  - [~] 8.2 Write property test for health check completeness
+  - [ ] 8.2 Write property test for health check completeness
     - *Optional - core functionality tested manually*
 
 - [x] 9. Improve Unhandled Rejection Handling
@@ -71,7 +71,7 @@
     - Added context to error logging ✓
     - Added recoverable error detection ✓
     - _Requirements: 6.1, 6.3_
-  - [~] 9.2 Write property test for unhandled rejection recovery
+  - [ ] 9.2 Write property test for unhandled rejection recovery
     - *Optional - core functionality tested manually*
 
 - [x] 10. Additional Stability Improvements (Beyond Original Spec)
