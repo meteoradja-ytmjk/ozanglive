@@ -991,6 +991,17 @@ window.fetchControlRoomStreamKeys = async function(accountId) {
         });
       });
       
+      // Auto-select the first stream key if available
+      if (data.streams.length > 0) {
+        const firstStream = data.streams[0];
+        select.value = firstStream.id;
+        
+        // Trigger the change event to auto-fill the stream key
+        onControlRoomStreamKeyChange(firstStream.id);
+        
+        console.log('[Control Room] Auto-selected first stream key:', firstStream.title);
+      }
+      
       // Show success indicator
       if (indicator) {
         indicator.classList.remove('hidden');
@@ -999,12 +1010,16 @@ window.fetchControlRoomStreamKeys = async function(accountId) {
       
       // Show toast
       if (typeof showToast === 'function') {
-        showToast(`✓ Loaded ${data.streams.length} stream key${data.streams.length > 1 ? 's' : ''} from your channel`, 'success');
+        showToast(`✓ Auto-loaded stream key from your channel`, 'success');
       }
     } else {
       console.log('[Control Room] No stream keys found');
+      
+      // Still show the dropdown but with only "Create new" option
+      if (indicator) indicator.classList.add('hidden');
+      
       if (typeof showToast === 'function') {
-        showToast('No existing stream keys found. A new one will be created when you use YouTube Studio.', 'info');
+        showToast('No existing stream keys found. A new one will be created automatically.', 'info');
       }
     }
   } catch (error) {
@@ -1022,6 +1037,7 @@ window.onControlRoomStreamKeyChange = function(streamId) {
   const select = document.getElementById('controlRoomStreamKeySelect');
   const valueInput = document.getElementById('controlRoomStreamKeyValue');
   const rtmpInput = document.getElementById('rtmpUrl');
+  const indicator = document.getElementById('controlRoomStreamKeyAutoFillIndicator');
   
   console.log('[Control Room] Stream key changed to:', streamId);
   
@@ -1039,12 +1055,21 @@ window.onControlRoomStreamKeyChange = function(streamId) {
     valueInput.value = streamKey;
     if (rtmpInput) rtmpInput.value = rtmpUrl;
     
+    // Show indicator when stream key is auto-filled
+    if (indicator && streamKey) {
+      indicator.classList.remove('hidden');
+      indicator.textContent = '✓ Stream key loaded';
+    }
+    
     console.log('[Control Room] Selected stream key:', streamKey ? 'SET' : 'EMPTY');
     console.log('[Control Room] RTMP URL:', rtmpUrl);
   } else {
     // "Create new" selected - clear value (will be created later)
     valueInput.value = '';
     if (rtmpInput) rtmpInput.value = 'rtmp://a.rtmp.youtube.com/live2';
+    
+    // Hide indicator
+    if (indicator) indicator.classList.add('hidden');
     
     console.log('[Control Room] Will create new stream key');
   }
