@@ -22,6 +22,13 @@ function openNewStreamModal() {
   modal.offsetHeight;
   modal.classList.add('active');
   loadGalleryVideos();
+  
+  // Check if Control Room account is already selected and trigger auto-load
+  const accountSelect = document.getElementById('controlRoomAccountSelect');
+  if (accountSelect && accountSelect.value && typeof window.onControlRoomAccountChange === 'function') {
+    console.log('[Control Room] Modal opened with account pre-selected, triggering auto-load...');
+    window.onControlRoomAccountChange(accountSelect.value);
+  }
 }
 function closeNewStreamModal() {
   const modal = document.getElementById('newStreamModal');
@@ -404,6 +411,19 @@ function resetModalForm() {
   const audioDropdown = document.getElementById('audioSelectorDropdown');
   if (videoDropdown) videoDropdown.classList.add('hidden');
   if (audioDropdown) audioDropdown.classList.add('hidden');
+  
+  // Reset Control Room state - switch back to manual mode
+  const manualSection = document.getElementById('controlRoomStreamKeyManual');
+  const selectorSection = document.getElementById('controlRoomStreamKeySelector');
+  const streamKeyInput = document.getElementById('streamKey');
+  const indicator = document.getElementById('controlRoomStreamKeyAutoFillIndicator');
+  const streamKeyValue = document.getElementById('controlRoomStreamKeyValue');
+  
+  if (manualSection) manualSection.classList.remove('hidden');
+  if (selectorSection) selectorSection.classList.add('hidden');
+  if (streamKeyInput) streamKeyInput.setAttribute('required', 'required');
+  if (indicator) indicator.classList.add('hidden');
+  if (streamKeyValue) streamKeyValue.value = '';
 }
 function initModal() {
   const modal = document.getElementById('newStreamModal');
