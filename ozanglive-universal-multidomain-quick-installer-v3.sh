@@ -152,15 +152,68 @@ DOMAIN_READY="${DOMAIN_READY:-Y}"
 read -rp "Port aplikasi [7575]: " APP_PORT
 APP_PORT="${APP_PORT:-7575}"
 
-read -rp "Folder aplikasi [/home/ubuntu/ozanglive]: " APP_DIR
-APP_DIR="${APP_DIR:-/home/ubuntu/ozanglive}"
+# Auto-detect application directory
+DEFAULT_APP_DIR="/home/ubuntu/ozanglive"
+if [[ ! -d "$DEFAULT_APP_DIR" ]]; then
+    # Try to find ozanglive directory
+    if [[ -d "$HOME/ozanglive" ]]; then
+        DEFAULT_APP_DIR="$HOME/ozanglive"
+    elif [[ -d "/opt/ozanglive" ]]; then
+        DEFAULT_APP_DIR="/opt/ozanglive"
+    elif [[ -d "/var/www/ozanglive" ]]; then
+        DEFAULT_APP_DIR="/var/www/ozanglive"
+    fi
+fi
+
+echo
+echo "Mencari folder aplikasi MonsterLive..."
+if [[ -d "$DEFAULT_APP_DIR" ]]; then
+    ok "Folder ditemukan: $DEFAULT_APP_DIR"
+else
+    warn "Folder default tidak ditemukan: $DEFAULT_APP_DIR"
+fi
+
+read -rp "Folder aplikasi [$DEFAULT_APP_DIR]: " APP_DIR
+APP_DIR="${APP_DIR:-$DEFAULT_APP_DIR}"
+
+# Expand ~ to home directory if present
+APP_DIR="${APP_DIR/#\~/$HOME}"
 
 read -rp "Nama aplikasi PM2 [ozanglive]: " PM2_APP
 PM2_APP="${PM2_APP:-ozanglive}"
 
 [[ "$APP_PORT" =~ ^[0-9]+$ ]] || die "Port harus berupa angka."
 [[ -n "$PM2_APP" ]] || die "Nama aplikasi PM2 wajib diisi."
-[[ -d "$APP_DIR" ]] || die "Folder aplikasi tidak ditemukan: $APP_DIR"
+
+# Check if app directory exists, give helpful error if not
+if [[ ! -d "$APP_DIR" ]]; then
+    echo
+    warn "Folder aplikasi tidak ditemukan: $APP_DIR"
+    echo
+    echo "Kemungkinan penyebab:"
+    echo "  1. Aplikasi MonsterLive belum diinstall"
+    echo "  2. Path folder salah"
+    echo
+    echo "Solusi:"
+    echo "  - Install aplikasi dulu dengan: bash install.sh"
+    echo "  - Atau masukkan path folder yang benar"
+    echo
+    read -rp "Apakah Anda ingin mencoba path folder lain? [Y/n]: " TRY_AGAIN
+    TRY_AGAIN="${TRY_AGAIN:-Y}"
+    
+    if [[ "$TRY_AGAIN" =~ ^[Yy]$ ]]; then
+        read -rp "Masukkan path folder aplikasi: " APP_DIR
+        APP_DIR="${APP_DIR/#\~/$HOME}"
+        
+        if [[ ! -d "$APP_DIR" ]]; then
+            die "Folder tidak ditemukan: $APP_DIR. Install aplikasi terlebih dahulu."
+        fi
+    else
+        die "Installer dibatalkan. Install aplikasi MonsterLive terlebih dahulu dengan: bash install.sh"
+    fi
+fi
+
+ok "Folder aplikasi ditemukan: $APP_DIR"
 
 if [[ "$EUID" -eq 0 ]]; then
     SUDO=""
