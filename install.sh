@@ -466,36 +466,43 @@ if confirm "Apakah Anda ingin setup domain sekarang?" "Y"; then
     print_status "$ICON_INFO" "Memulai installer domain Cloudflare..."
     sleep 2
     
-    # Check if domain installer exists
-    DOMAIN_INSTALLER="$HOME/ozanglive-universal-multidomain-quick-installer-v2.sh"
+    # Check if domain installer V3 exists
+    DOMAIN_INSTALLER_V3="$INSTALL_DIR/ozanglive-universal-multidomain-quick-installer-v3.sh"
     
-    if [ ! -f "$DOMAIN_INSTALLER" ]; then
-        # Try to find it in the installation directory
-        if [ -f "$INSTALL_DIR/ozanglive-universal-multidomain-quick-installer-v2.sh" ]; then
-            DOMAIN_INSTALLER="$INSTALL_DIR/ozanglive-universal-multidomain-quick-installer-v2.sh"
+    if [ ! -f "$DOMAIN_INSTALLER_V3" ]; then
+        print_status "$ICON_WARN" "Domain installer V3 tidak ditemukan di folder aplikasi."
+        print_status "$ICON_INFO" "Mendownload installer terbaru..."
+        
+        if curl -fsSL "https://raw.githubusercontent.com/meteoradja-ytmjk/ozanglive/main/ozanglive-universal-multidomain-quick-installer-v3.sh" -o "$DOMAIN_INSTALLER_V3" 2>/dev/null; then
+            chmod +x "$DOMAIN_INSTALLER_V3"
+            print_status "$ICON_SUCCESS" "Domain installer V3 berhasil didownload"
         else
-            print_status "$ICON_WARN" "Domain installer tidak ditemukan."
-            echo -e "  ${ICON_INFO} Silakan download installer dari repository:"
-            echo -e "     ${B_CYAN}https://github.com/meteoradja-ytmjk/ozanglive${NC}"
-            echo -e "  ${ICON_INFO} Atau jalankan manual:"
-            echo -e "     ${B_YELLOW}bash ozanglive-universal-multidomain-quick-installer-v2.sh${NC}"
+            print_status "$ICON_ERROR" "Gagal mendownload installer"
+            echo
+            echo -e "${B_YELLOW}╭──────────────────────────────────────────────────────────╮${NC}"
+            echo -e "${B_YELLOW}│ 📋 COPY COMMAND INI UNTUK SETUP DOMAIN MANUAL:           │${NC}"
+            echo -e "${B_YELLOW}├──────────────────────────────────────────────────────────┤${NC}"
+            echo -e "${B_YELLOW}│${NC}"
+            echo -e "${B_YELLOW}│${NC} ${B_CYAN}cd ~/ozanglive && bash ozanglive-universal-multidomain-quick-installer-v3.sh${NC}"
+            echo -e "${B_YELLOW}│${NC}"
+            echo -e "${B_YELLOW}╰──────────────────────────────────────────────────────────╯${NC}"
             echo
             exit 0
         fi
     fi
     
     # Make sure the installer is executable
-    chmod +x "$DOMAIN_INSTALLER"
+    chmod +x "$DOMAIN_INSTALLER_V3"
     
     echo
     echo -e "${B_CYAN}════════════════════════════════════════════════════════════${NC}"
-    echo -e "${B_CYAN}  Meluncurkan Domain Setup Installer...${NC}"
+    echo -e "${B_CYAN}  Meluncurkan Domain Setup Installer V3...${NC}"
     echo -e "${B_CYAN}════════════════════════════════════════════════════════════${NC}"
     echo
     sleep 1
     
-    # Run the domain installer
-    bash "$DOMAIN_INSTALLER"
+    # Run the domain installer V3
+    bash "$DOMAIN_INSTALLER_V3"
 else
     echo
     print_status "$ICON_INFO" "Domain setup dilewati."
@@ -503,22 +510,26 @@ else
     echo -e "${B_CYAN}╭──────────────────────────────────────────────────────────╮${NC}"
     echo -e "${B_CYAN}│ 📖 CARA SETUP DOMAIN DI KEMUDIAN HARI                    │${NC}"
     echo -e "${B_CYAN}├──────────────────────────────────────────────────────────┤${NC}"
-    echo -e "${B_CYAN}│${NC} ${BOLD}CARA 1: ONE-LINER (Copy & Paste)${NC}"
     echo -e "${B_CYAN}│${NC}"
-    echo -e "${B_CYAN}│${NC} ${B_YELLOW}cd ~ && bash ozanglive-universal-multidomain-quick-installer-v2.sh${NC}"
+    echo -e "${B_CYAN}│${NC} ${BOLD}📋 COPY & PASTE COMMAND INI:${NC}"
+    echo -e "${B_CYAN}│${NC}"
+    echo -e "${B_CYAN}│${NC} ${B_YELLOW}cd ~/ozanglive && bash ozanglive-universal-multidomain-quick-installer-v3.sh${NC}"
     echo -e "${B_CYAN}│${NC}"
     echo -e "${B_CYAN}├──────────────────────────────────────────────────────────┤${NC}"
-    echo -e "${B_CYAN}│${NC} ${BOLD}CARA 2: Download & Jalankan${NC}"
+    echo -e "${B_CYAN}│${NC} ${BOLD}Atau Download Manual:${NC}"
     echo -e "${B_CYAN}│${NC}"
-    echo -e "${B_CYAN}│${NC} ${GRAY}curl -fsSL https://raw.githubusercontent.com/meteoradja-ytmjk/ozanglive/main/ozanglive-universal-multidomain-quick-installer-v2.sh -o ~/domain-setup.sh${NC}"
+    echo -e "${B_CYAN}│${NC} ${GRAY}curl -fsSL https://raw.githubusercontent.com/meteoradja-ytmjk/\\${NC}"
+    echo -e "${B_CYAN}│${NC} ${GRAY}  ozanglive/main/ozanglive-universal-multidomain-quick-\\${NC}"
+    echo -e "${B_CYAN}│${NC} ${GRAY}  installer-v3.sh -o ~/domain-setup.sh${NC}"
+    echo -e "${B_CYAN}│${NC}"
     echo -e "${B_CYAN}│${NC} ${GRAY}chmod +x ~/domain-setup.sh${NC}"
     echo -e "${B_CYAN}│${NC} ${GRAY}bash ~/domain-setup.sh${NC}"
     echo -e "${B_CYAN}│${NC}"
     echo -e "${B_CYAN}├──────────────────────────────────────────────────────────┤${NC}"
     echo -e "${B_CYAN}│${NC} ${BOLD}📄 Dokumentasi Lengkap:${NC}"
-    echo -e "${B_CYAN}│${NC} ${WHITE}$INSTALL_DIR/CARA-SETUP-DOMAIN.md${NC}"
+    echo -e "${B_CYAN}│${NC} ${WHITE}~/ozanglive/CARA-SETUP-DOMAIN.md${NC}"
     echo -e "${B_CYAN}│${NC}"
-    echo -e "${B_CYAN}│${NC} Baca dengan: ${B_YELLOW}cat $INSTALL_DIR/CARA-SETUP-DOMAIN.md${NC}"
+    echo -e "${B_CYAN}│${NC} Baca dengan: ${B_YELLOW}cat ~/ozanglive/CARA-SETUP-DOMAIN.md${NC}"
     echo -e "${B_CYAN}╰──────────────────────────────────────────────────────────╯${NC}"
     echo
 fi

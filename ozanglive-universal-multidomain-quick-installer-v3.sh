@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
-set -Eeuo pipefail
 
 # ==============================================================
 # OZANGLIVE - UNIVERSAL MULTI-USER / MULTI-DOMAIN QUICK INSTALLER V3
 # ==============================================================
 # IMPORTANT:
-# Run this on a NEW VPS AFTER Ozanglive/Streamflow is installed.
+# Run this on a VPS AFTER Ozanglive/MonsterLive is installed.
 #
 # This installer does NOT assume monsterlive.my.id.
 # Every customer/user can have a completely different domain:
@@ -17,10 +16,9 @@ set -Eeuo pipefail
 # Each VPS gets its OWN Cloudflare Tunnel + UUID + JSON credential.
 #
 # REQUIREMENT:
-# 1. The user's domain/zone MUST already be added to Cloudflare.
-# 2. The Cloudflare account used by "cloudflared tunnel login"
-#    must have permission to manage that zone.
-# 3. The application must already exist in APP_DIR.
+# 1. The application must already be running (check with: pm2 status)
+# 2. Domain SEBAIKNYA sudah ditambahkan ke Cloudflare (bisa skip, setup manual nanti)
+# 3. Port 7575 atau port aplikasi harus bisa diakses
 #
 # The installer:
 # - installs cloudflared
@@ -34,11 +32,13 @@ set -Eeuo pipefail
 # - tests local origin + public HTTPS
 #
 # It does NOT:
+# - install aplikasi MonsterLive (gunakan install.sh dulu)
 # - change Google Cloud OAuth Console
 # - replace an existing ENCRYPTION_KEY
 # - copy secrets to the screen
 # ==============================================================
 
+set -Eeuo pipefail
 trap 'echo; echo "❌ Installer berhenti pada baris $LINENO."; exit 1' ERR
 
 C_RESET='\033[0m'
@@ -52,11 +52,42 @@ die()  { echo -e "${C_RED}❌ $*${C_RESET}"; exit 1; }
 
 echo
 echo "=============================================================="
-echo " OZANGLIVE - UNIVERSAL MULTI-DOMAIN QUICK INSTALLER"
+echo " OZANGLIVE - UNIVERSAL MULTI-DOMAIN QUICK INSTALLER V3"
 echo "=============================================================="
+echo
+echo "Installer ini akan mengkonfigurasi DOMAIN KUSTOM untuk aplikasi"
+echo "MonsterLive Anda menggunakan Cloudflare Tunnel."
 echo
 echo "Domain tidak harus monsterlive.my.id."
 echo "Setiap user boleh memakai domain yang berbeda."
+echo
+
+# ---------------- PRE-CHECK ----------------
+
+echo "=============================================================="
+echo " PRE-FLIGHT CHECK"
+echo "=============================================================="
+echo
+
+# Check if PM2 app is running
+if ! command -v pm2 >/dev/null 2>&1; then
+    die "PM2 tidak terinstall. Jalankan install.sh terlebih dahulu."
+fi
+
+if ! pm2 list 2>/dev/null | grep -q "ozanglive"; then
+    warn "Aplikasi 'ozanglive' tidak ditemukan di PM2."
+    echo
+    echo "Pastikan aplikasi MonsterLive sudah terinstall dan running."
+    echo "Jalankan dulu: bash install.sh"
+    echo
+    read -rp "Tetap lanjutkan installer domain? [y/N]: " FORCE_CONTINUE
+    if [[ ! "$FORCE_CONTINUE" =~ ^[Yy]$ ]]; then
+        die "Installer dibatalkan. Instal aplikasi terlebih dahulu."
+    fi
+else
+    ok "Aplikasi MonsterLive ditemukan di PM2"
+fi
+
 echo
 
 # ---------------- INPUT ----------------
@@ -271,16 +302,37 @@ if [[ "$DOMAIN_READY" =~ ^[Nn]$ ]]; then
     echo "Installer tetap mencoba membuat route setelah login."
     echo "Jika route gagal, tambahkan domain/zone ke Cloudflare terlebih dahulu,"
     echo "lalu jalankan ulang installer."
-fi
-
-DNS_OUTPUT="$(cloudflared tunnel route dns "$TUNNEL_NAME" "$PUBLIC_HOST" 2>&1 || true)"
-echo "$DNS_OUTPUT"
-
-if printf '%s\n' "$DNS_OUTPUT" | grep -qiE 'already configured|created|route|success'; then
-    ok "DNS route diproses."
+    echo
+    echo "Anda bisa skip DNS route sekarang dan setup manual nanti dengan:"
+    echo "cloudflared tunnel route dns $TUNNEL_NAME $PUBLIC_HOST"
+    echo
+    read -rp "Tetap lanjutkan setup DNS route sekarang? [Y/n]: " CONTINUE_DNS
+    CONTINUE_DNS="${CONTINUE_DNS:-Y}"
+    
+    if [[ "$CONTINUE_DNS" =~ ^[Nn]$ ]]; then
+        warn "DNS route dilewati. Setup manual nanti dengan perintah di atas."
+    else
+        DNS_OUTPUT="$(cloudflared tunnel route dns "$TUNNEL_NAME" "$PUBLIC_HOST" 2>&1 || true)"
+        echo "$DNS_OUTPUT"
+        
+        if printf '%s\n' "$DNS_OUTPUT" | grep -qiE 'already configured|created|route|success'; then
+            ok "DNS route diproses."
+        else
+            warn "DNS route gagal atau belum dapat dipastikan."
+            warn "Setup manual nanti dengan: cloudflared tunnel route dns $TUNNEL_NAME $PUBLIC_HOST"
+        fi
+    fi
 else
-    warn "DNS route belum dapat dipastikan."
-    warn "Kemungkinan zone belum ada di Cloudflare atau permission tidak cukup."
+    DNS_OUTPUT="$(cloudflared tunnel route dns "$TUNNEL_NAME" "$PUBLIC_HOST" 2>&1 || true)"
+    echo "$DNS_OUTPUT"
+    
+    if printf '%s\n' "$DNS_OUTPUT" | grep -qiE 'already configured|created|route|success'; then
+        ok "DNS route diproses."
+    else
+        warn "DNS route belum dapat dipastikan."
+        warn "Kemungkinan zone belum ada di Cloudflare atau permission tidak cukup."
+        warn "Setup manual nanti dengan: cloudflared tunnel route dns $TUNNEL_NAME $PUBLIC_HOST"
+    fi
 fi
 
 # ---------------- 5. ENV ----------------
@@ -427,17 +479,24 @@ echo "Local origin:"
 if curl -fsS --max-time 10 "http://127.0.0.1:$APP_PORT/" >/dev/null; then
     ok "http://127.0.0.1:$APP_PORT OK"
 else
-    warn "Origin belum OK."
+    warn "Origin belum OK. Pastikan aplikasi berjalan di port $APP_PORT"
 fi
 
 echo
 echo "Public HTTPS:"
-if curl -fsSIL --max-time 25 "https://$PUBLIC_HOST/" >/dev/null; then
+if curl -fsSIL --max-time 25 "https://$PUBLIC_HOST/" >/dev/null 2>&1; then
     ok "https://$PUBLIC_HOST OK"
 else
     warn "HTTPS belum OK."
-    echo "Tunggu 10-30 detik lalu:"
-    echo "curl -I https://$PUBLIC_HOST"
+    echo "Ini NORMAL jika:"
+    echo "  1. Domain baru saja di-route (tunggu 10-60 detik)"
+    echo "  2. DNS route dilewati (setup manual diperlukan)"
+    echo
+    echo "Untuk setup manual DNS route:"
+    echo "  cloudflared tunnel route dns $TUNNEL_NAME $PUBLIC_HOST"
+    echo
+    echo "Test manual setelah beberapa saat:"
+    echo "  curl -I https://$PUBLIC_HOST"
 fi
 
 echo
@@ -472,8 +531,38 @@ else
     echo "Domain      : $PUBLIC_HOST"
 fi
 echo
-echo "Log Cloudflare:"
-echo "sudo journalctl -u cloudflared -n 50 --no-pager"
+echo "=============================================================="
+echo " TROUBLESHOOTING"
+echo "=============================================================="
+echo
+echo "Jika HTTPS belum berfungsi:"
+echo
+echo "1. Cek status cloudflared:"
+echo "   sudo systemctl status cloudflared"
+echo
+echo "2. Cek log cloudflared:"
+echo "   sudo journalctl -u cloudflared -n 50 --no-pager"
+echo
+echo "3. Cek tunnel info:"
+echo "   cloudflared tunnel info $TUNNEL_NAME"
+echo
+echo "4. Setup DNS route manual (jika dilewati):"
+echo "   cloudflared tunnel route dns $TUNNEL_NAME $PUBLIC_HOST"
+echo
+echo "5. Test origin local:"
+echo "   curl http://127.0.0.1:$APP_PORT"
+echo
+echo "6. Test public HTTPS:"
+echo "   curl -I https://$PUBLIC_HOST"
+echo
+echo "7. Restart cloudflared jika perlu:"
+echo "   sudo systemctl restart cloudflared"
+echo
+echo "8. Cek PM2 app:"
+echo "   pm2 list"
+echo "   pm2 logs $PM2_APP --lines 50"
+echo
+echo "=============================================================="
 echo
 echo "JANGAN membagikan:"
 echo "- ~/.cloudflared/cert.pem"
