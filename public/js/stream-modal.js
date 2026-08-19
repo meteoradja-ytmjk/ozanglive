@@ -925,25 +925,38 @@ resetModalForm = function () {
 // ============================================
 
 // Toggle between Manual and Auto Stream Key Mode in Control Room
-window.toggleControlRoomStreamKeyMode = function() {
+window.toggleControlRoomStreamKeyMode = function(forcedMode) {
   const manualSection = document.getElementById('controlRoomStreamKeyManual');
   const selectorSection = document.getElementById('controlRoomStreamKeySelector');
   const streamKeyInput = document.getElementById('streamKey');
+  const label = document.getElementById('streamKeyModeLabel');
   const accountSelect = document.getElementById('controlRoomAccountSelect');
 
   if (!manualSection || !selectorSection) return;
 
-  const isManualHidden = manualSection.classList.contains('hidden');
-  if (isManualHidden) {
+  let targetMode = forcedMode;
+  if (!targetMode) {
+    targetMode = manualSection.classList.contains('hidden') ? 'manual' : 'auto';
+  }
+
+  if (targetMode === 'manual') {
     // Switch to manual mode
     manualSection.classList.remove('hidden');
     selectorSection.classList.add('hidden');
-    if (streamKeyInput) streamKeyInput.setAttribute('required', 'required');
+    if (streamKeyInput) {
+      streamKeyInput.setAttribute('required', 'required');
+      setTimeout(() => streamKeyInput.focus(), 50);
+    }
+    if (label) label.innerHTML = 'Mode: <strong class="text-amber-400">Manual Paste</strong>';
+    console.log('[Control Room] Switched to MANUAL mode');
   } else {
     // Switch to auto mode
     manualSection.classList.add('hidden');
     selectorSection.classList.remove('hidden');
     if (streamKeyInput) streamKeyInput.removeAttribute('required');
+    if (label) label.innerHTML = 'Mode: <strong class="text-primary">Auto YouTube</strong>';
+    console.log('[Control Room] Switched to AUTO mode');
+    
     if (accountSelect && accountSelect.value) {
       window.fetchControlRoomStreamKeys(accountSelect.value);
     }

@@ -667,8 +667,9 @@
                     ✓ Auto-loaded
                   </span>
                 </label>
-                <button type="button" id="toggleStreamKeyModeBtn" onclick="toggleControlRoomStreamKeyMode()" class="text-xs text-primary hover:underline flex items-center gap-1 cursor-pointer" title="Switch manual / auto stream key input">
-                  <i class="ti ti-edit text-xs"></i> Mode Manual / Auto
+                <button type="button" id="toggleStreamKeyModeBtn" onclick="toggleControlRoomStreamKeyMode()" class="text-xs flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-dark-600 border border-gray-600 hover:border-primary text-gray-300 hover:text-white transition-all cursor-pointer shadow-sm" title="Klik untuk beralih mode manual atau auto">
+                  <i class="ti ti-switch text-primary text-sm"></i>
+                  <span id="streamKeyModeLabel">Mode: <strong class="text-primary">Auto YouTube</strong></span>
                 </button>
               </div>
               
@@ -988,7 +989,7 @@
   </div>
 
   <script src="/js/youtube.js?v=1.0.7" defer></script>
-  <script src="/js/stream-modal.js?v=1.0.8" defer></script>
+  <script src="/js/stream-modal.js?v=1.0.9" defer></script>
   <script>
     function switchStudioTab(tabName) {
       const tabs = ['streams', 'broadcasts'];
@@ -1098,6 +1099,41 @@
           window.initDurationEndTimeMutualExclusion();
         }
       }, 100);
+    };
+
+    // Toggle between Manual and Auto Stream Key Mode
+    window.toggleControlRoomStreamKeyMode = function (forcedMode) {
+      const manualSection = document.getElementById('controlRoomStreamKeyManual');
+      const selectorSection = document.getElementById('controlRoomStreamKeySelector');
+      const streamKeyInput = document.getElementById('streamKey');
+      const label = document.getElementById('streamKeyModeLabel');
+      const accountSelect = document.getElementById('controlRoomAccountSelect');
+
+      if (!manualSection || !selectorSection) return;
+
+      let targetMode = forcedMode;
+      if (!targetMode) {
+        targetMode = manualSection.classList.contains('hidden') ? 'manual' : 'auto';
+      }
+
+      if (targetMode === 'manual') {
+        manualSection.classList.remove('hidden');
+        selectorSection.classList.add('hidden');
+        if (streamKeyInput) {
+          streamKeyInput.setAttribute('required', 'required');
+          setTimeout(() => streamKeyInput.focus(), 50);
+        }
+        if (label) label.innerHTML = 'Mode: <strong class="text-amber-400">Manual Paste</strong>';
+      } else {
+        manualSection.classList.add('hidden');
+        selectorSection.classList.remove('hidden');
+        if (streamKeyInput) streamKeyInput.removeAttribute('required');
+        if (label) label.innerHTML = 'Mode: <strong class="text-primary">Auto YouTube</strong>';
+
+        if (accountSelect && accountSelect.value && typeof window.fetchControlRoomStreamKeys === 'function') {
+          window.fetchControlRoomStreamKeys(accountSelect.value);
+        }
+      }
     };
 
     // Close New Stream Modal - always define to ensure it works
