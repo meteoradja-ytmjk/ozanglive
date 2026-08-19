@@ -652,10 +652,61 @@ class YouTubeService {
     } catch (bErr) {
       console.error('[YouTubeService.listStreams] Error merging broadcasts:', bErr.message);
     }
+
+    // Auto-create a stream key if the channel has no stream keys or bound broadcasts
+    if (result.length === 0) {
+      try {
+        console.log('[YouTubeService.listStreams] No existing stream keys found on channel. Auto-creating a new default stream key...');
+        const newStream = await this.createStreamKey(accessToken, 'OzangLive Auto Stream Key');
+        if (newStream && newStream.streamKey) {
+          result.push(newStream);
+          console.log('[YouTubeService.listStreams] Successfully auto-created default stream key:', newStream.streamKey.substring(0, 8) + '...');
+        }
+      } catch (autoCreateErr) {
+        console.error('[YouTubeService.listStreams] Error auto-creating stream key:', autoCreateErr.message);
+      }
+    }
     
     console.log('[YouTubeService.listStreams] Total mapped streams:', result.map(s => `${s.title} (${s.streamKey ? 'KEY_OK' : 'NO_KEY'})`));
     
     return result;
+  }
+
+  /**
+   * Create a new stream key on YouTube
+   * @param {string} accessToken - YouTube access token
+   * @param {string} [title='OzangLive Stream Key'] - Stream title
+   * @returns {Promise<Object>} Created stream object
+   */
+  async createStreamKey(accessToken, title = 'OzangLive Stream Key') {
+    const oauth2Client = new google.auth.OAuth2();
+    oauth2Client.setCredentials({ access_token: accessToken });
+    const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+
+    const response = await youtube.liveStreams.insert({
+      part: 'snippet,cdn',
+      requestBody: {
+        snippet: {
+          title: title || 'OzangLive Stream Key'
+        },
+        cdn: {
+          frameRate: 'variable',
+          ingestionType: 'rtmp',
+          resolution: 'variable'
+        }
+      }
+    });
+
+    const stream = response.data;
+    return {
+      id: stream.id,
+      title: stream.snippet?.title || title,
+      streamKey: stream.cdn?.ingestionInfo?.streamName || '',
+      rtmpUrl: stream.cdn?.ingestionInfo?.ingestionAddress || 'rtmp://a.rtmp.youtube.com/live2',
+      resolution: stream.cdn?.resolution || 'variable',
+      frameRate: stream.cdn?.frameRate || 'variable',
+      source: 'auto-created'
+    };
   }
 
   /**

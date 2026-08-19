@@ -1185,10 +1185,66 @@ window.onControlRoomStreamKeyChange = function(streamId) {
     console.log('[Control Room] RTMP URL:', rtmpUrl);
   } else {
     valueInput.value = '';
+    if (manualInput) manualInput.value = '';
     if (rtmpInput) rtmpInput.value = 'rtmp://a.rtmp.youtube.com/live2';
     if (indicator) indicator.classList.add('hidden');
     
     console.log('[Control Room] Will create new stream key');
+    const accountSelect = document.getElementById('controlRoomAccountSelect');
+    if (accountSelect && accountSelect.value) {
+      window.createControlRoomNewStreamKey(accountSelect.value);
+    }
+  }
+};
+
+// Auto-create a new stream key on demand via YouTube API
+window.createControlRoomNewStreamKey = async function(accountId) {
+  const select = document.getElementById('controlRoomStreamKeySelect');
+  const loading = document.getElementById('controlRoomStreamKeyLoading');
+  const valueInput = document.getElementById('controlRoomStreamKeyValue');
+  const manualInput = document.getElementById('streamKey');
+  const indicator = document.getElementById('controlRoomStreamKeyAutoFillIndicator');
+
+  if (!accountId) return;
+
+  if (loading) loading.classList.remove('hidden');
+  try {
+    const response = await fetch('/api/youtube/streams/create', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getCsrfToken()
+      },
+      body: JSON.stringify({ accountId })
+    });
+
+    const data = await response.json();
+    if (data.success && data.stream && data.stream.streamKey) {
+      const stream = data.stream;
+      const option = document.createElement('option');
+      option.value = stream.id;
+      option.textContent = `✨ New Key: ${stream.title} [${stream.streamKey.substring(0, 8)}...]`;
+      option.dataset.streamKey = stream.streamKey;
+      option.dataset.rtmpUrl = stream.rtmpUrl || 'rtmp://a.rtmp.youtube.com/live2';
+      select.appendChild(option);
+
+      select.value = stream.id;
+      valueInput.value = stream.streamKey;
+      if (manualInput) manualInput.value = stream.streamKey;
+
+      if (indicator) {
+        indicator.classList.remove('hidden');
+        indicator.textContent = '✓ Stream key baru dibuat';
+      }
+
+      if (typeof showToast === 'function') {
+        showToast('success', '✨ Stream key baru berhasil dibuat dari YouTube');
+      }
+    }
+  } catch (err) {
+    console.error('[Control Room] Error creating new stream key:', err);
+  } finally {
+    if (loading) loading.classList.add('hidden');
   }
 };
 
