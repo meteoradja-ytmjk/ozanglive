@@ -450,7 +450,6 @@ class YouTubeService {
   }
 
   /**
-  /**
    * List broadcasts with flexible query options
    * @param {string} accessToken - Access token
    * @param {Object|string} [options='upcoming'] - Query options or broadcastStatus string
@@ -472,6 +471,7 @@ class YouTubeService {
 
     if (queryOpts.mine) {
       params.mine = true;
+      params.broadcastStatus = queryOpts.broadcastStatus || 'all';
     } else if (queryOpts.broadcastStatus) {
       params.broadcastStatus = queryOpts.broadcastStatus;
     } else {
@@ -605,7 +605,7 @@ class YouTubeService {
 
     // Also fetch ALL broadcasts to catch broadcast-bound stream keys from YouTube Studio
     try {
-      const broadcasts = await this.listBroadcasts(accessToken, { mine: true });
+      const broadcasts = await this.listBroadcasts(accessToken, { mine: true, broadcastStatus: 'all' });
       if (broadcasts && broadcasts.length > 0) {
         broadcasts.forEach(b => {
           if (b.streamKey) {

@@ -1124,25 +1124,22 @@ window.fetchControlRoomStreamKeys = async function(accountId) {
       }
     } else {
       console.log('[Control Room] No stream keys found or empty list');
-      if (manualSection && selectorSection) {
-        manualSection.classList.remove('hidden');
-        selectorSection.classList.add('hidden');
-        if (streamKeyInput) streamKeyInput.setAttribute('required', 'required');
-      }
+      select.innerHTML = '<option value="">🔑 Create new stream key</option>';
+      const emptyOpt = document.createElement('option');
+      emptyOpt.disabled = true;
+      emptyOpt.textContent = 'ℹ️ Tidak ada stream key tersimpan (New key akan dibuat)';
+      select.appendChild(emptyOpt);
+
       if (indicator) indicator.classList.add('hidden');
       if (typeof showToast === 'function') {
-        showToast('info', 'Belum ada stream key di channel ini. Silakan masukkan stream key secara manual.');
+        showToast('info', 'Belum ada stream key tersimpan di channel ini. Stream key baru akan dibuat.');
       }
     }
   } catch (error) {
     console.error('[Control Room] Error fetching stream keys:', error);
-    if (manualSection && selectorSection) {
-      manualSection.classList.remove('hidden');
-      selectorSection.classList.add('hidden');
-      if (streamKeyInput) streamKeyInput.setAttribute('required', 'required');
-    }
+    select.innerHTML = '<option value="">🔑 Create new stream key</option>';
     if (typeof showToast === 'function') {
-      showToast('error', 'Gagal memuat stream key YouTube. Silakan masukkan secara manual.');
+      showToast('error', 'Gagal memuat stream key YouTube. Anda masih bisa memilih Create new atau mode manual.');
     }
   } finally {
     if (loading) loading.classList.add('hidden');
