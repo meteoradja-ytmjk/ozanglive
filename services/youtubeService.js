@@ -557,25 +557,64 @@ class YouTubeService {
     
     console.log('[YouTubeService.listStreams] Fetching streams...');
     
-    const response = await youtube.liveStreams.list({
-      part: 'snippet,cdn',
-      mine: true,
-      maxResults: 50
-    });
+    let result = [];
+    const seenStreamKeys = new Set();
+    const seenStreamIds = new Set();
     
-    const streams = response.data.items || [];
-    console.log('[YouTubeService.listStreams] Raw response items:', streams.length);
+    try {
+      const response = await youtube.liveStreams.list({
+        part: 'snippet,cdn',
+        mine: true,
+        maxResults: 50
+      });
+      
+      const streams = response.data.items || [];
+      console.log('[YouTubeService.listStreams] Raw liveStreams response items:', streams.length);
+      
+      streams.forEach(stream => {
+        const streamKey = stream.cdn?.ingestionInfo?.streamName || '';
+        const id = stream.id;
+        if (id) seenStreamIds.add(id);
+        if (streamKey) seenStreamKeys.add(streamKey);
+        
+        result.push({
+          id: id,
+          title: stream.snippet.title,
+          streamKey: streamKey,
+          rtmpUrl: stream.cdn?.ingestionInfo?.ingestionAddress || 'rtmp://a.rtmp.youtube.com/live2',
+          resolution: stream.cdn?.resolution || 'variable',
+          frameRate: stream.cdn?.frameRate || 'variable',
+          source: 'stream'
+        });
+      });
+    } catch (err) {
+      console.error('[YouTubeService.listStreams] Error fetching liveStreams:', err.message);
+    }
+
+    // Also fetch broadcasts to catch broadcast-bound stream keys from YouTube Studio
+    try {
+      const broadcasts = await this.listBroadcasts(accessToken);
+      if (broadcasts && broadcasts.length > 0) {
+        broadcasts.forEach(b => {
+          if (b.streamKey && !seenStreamKeys.has(b.streamKey)) {
+            seenStreamKeys.add(b.streamKey);
+            result.push({
+              id: b.streamId || b.id,
+              title: `[Broadcast] ${b.title}`,
+              streamKey: b.streamKey,
+              rtmpUrl: b.rtmpUrl || 'rtmp://a.rtmp.youtube.com/live2',
+              resolution: 'variable',
+              frameRate: 'variable',
+              source: 'broadcast'
+            });
+          }
+        });
+      }
+    } catch (bErr) {
+      console.error('[YouTubeService.listStreams] Error merging broadcasts:', bErr.message);
+    }
     
-    const result = streams.map(stream => ({
-      id: stream.id,
-      title: stream.snippet.title,
-      streamKey: stream.cdn?.ingestionInfo?.streamName || '',
-      rtmpUrl: stream.cdn?.ingestionInfo?.ingestionAddress || 'rtmp://a.rtmp.youtube.com/live2',
-      resolution: stream.cdn?.resolution || 'variable',
-      frameRate: stream.cdn?.frameRate || 'variable'
-    }));
-    
-    console.log('[YouTubeService.listStreams] Mapped streams:', result.map(s => s.title));
+    console.log('[YouTubeService.listStreams] Total mapped streams:', result.map(s => `${s.title} (${s.streamKey ? 'KEY_OK' : 'NO_KEY'})`));
     
     return result;
   }
