@@ -1080,17 +1080,11 @@
         window.loadGalleryVideos();
       }
 
-      // Auto-load stream key immediately for pre-selected account
+      // Auto-load stream key immediately for selected account
       const accountSelect = document.getElementById('controlRoomAccountSelect');
-      if (accountSelect && accountSelect.value) {
-        if (typeof window.onControlRoomAccountChange === 'function') {
-          window.onControlRoomAccountChange(accountSelect.value);
-        } else if (typeof window.fetchControlRoomStreamKeys === 'function') {
-          window.fetchControlRoomStreamKeys(accountSelect.value);
-        }
-      }
-      if (typeof window.syncControlRoomAccounts === 'function') {
-        window.syncControlRoomAccounts(false);
+      const accountId = accountSelect ? accountSelect.value : null;
+      if (accountId && typeof window.fetchControlRoomStreamKeys === 'function') {
+        window.fetchControlRoomStreamKeys(accountId);
       }
 
       // Initialize mutual exclusion for duration/end time (for once schedule)
