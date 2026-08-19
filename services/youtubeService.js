@@ -450,23 +450,35 @@ class YouTubeService {
   }
 
   /**
-   * List upcoming broadcasts
+  /**
+   * List broadcasts with flexible query options
    * @param {string} accessToken - Access token
+   * @param {Object|string} [options='upcoming'] - Query options or broadcastStatus string
    * @returns {Promise<Array>} List of broadcasts
    */
-  async listBroadcasts(accessToken) {
+  async listBroadcasts(accessToken, options = 'upcoming') {
     const oauth2Client = new google.auth.OAuth2();
     oauth2Client.setCredentials({ access_token: accessToken });
     
     const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
     
-    console.log('[YouTubeService.listBroadcasts] Fetching broadcasts...');
+    const queryOpts = typeof options === 'string' ? { broadcastStatus: options } : (options || {});
+    console.log('[YouTubeService.listBroadcasts] Fetching broadcasts with options:', queryOpts);
     
-    const response = await youtube.liveBroadcasts.list({
+    const params = {
       part: 'snippet,status,contentDetails',
-      broadcastStatus: 'upcoming',
       maxResults: 50
-    });
+    };
+
+    if (queryOpts.mine) {
+      params.mine = true;
+    } else if (queryOpts.broadcastStatus) {
+      params.broadcastStatus = queryOpts.broadcastStatus;
+    } else {
+      params.broadcastStatus = 'upcoming';
+    }
+    
+    const response = await youtube.liveBroadcasts.list(params);
     
     const broadcasts = response.data.items || [];
     console.log(`[YouTubeService.listBroadcasts] Found ${broadcasts.length} broadcasts`);
@@ -579,7 +591,7 @@ class YouTubeService {
         
         result.push({
           id: id,
-          title: stream.snippet.title,
+          title: stream.snippet?.title || 'YouTube Live Stream',
           streamKey: streamKey,
           rtmpUrl: stream.cdn?.ingestionInfo?.ingestionAddress || 'rtmp://a.rtmp.youtube.com/live2',
           resolution: stream.cdn?.resolution || 'variable',
@@ -591,22 +603,30 @@ class YouTubeService {
       console.error('[YouTubeService.listStreams] Error fetching liveStreams:', err.message);
     }
 
-    // Also fetch broadcasts to catch broadcast-bound stream keys from YouTube Studio
+    // Also fetch ALL broadcasts to catch broadcast-bound stream keys from YouTube Studio
     try {
-      const broadcasts = await this.listBroadcasts(accessToken);
+      const broadcasts = await this.listBroadcasts(accessToken, { mine: true });
       if (broadcasts && broadcasts.length > 0) {
         broadcasts.forEach(b => {
-          if (b.streamKey && !seenStreamKeys.has(b.streamKey)) {
-            seenStreamKeys.add(b.streamKey);
-            result.push({
-              id: b.streamId || b.id,
-              title: `[Broadcast] ${b.title}`,
-              streamKey: b.streamKey,
-              rtmpUrl: b.rtmpUrl || 'rtmp://a.rtmp.youtube.com/live2',
-              resolution: 'variable',
-              frameRate: 'variable',
-              source: 'broadcast'
-            });
+          if (b.streamKey) {
+            const existingIndex = result.findIndex(r => r.streamKey === b.streamKey || r.id === b.streamId);
+            if (existingIndex >= 0) {
+              const currentTitle = result[existingIndex].title || '';
+              if (!currentTitle || currentTitle.toLowerCase().includes('untitled') || currentTitle.toLowerCase().includes('default') || currentTitle === 'YouTube Live Stream') {
+                result[existingIndex].title = `${b.title}`;
+              }
+            } else {
+              seenStreamKeys.add(b.streamKey);
+              result.push({
+                id: b.streamId || b.id,
+                title: b.title ? `${b.title}` : `Stream Key (${b.streamKey.substring(0, 8)}...)`,
+                streamKey: b.streamKey,
+                rtmpUrl: b.rtmpUrl || 'rtmp://a.rtmp.youtube.com/live2',
+                resolution: 'variable',
+                frameRate: 'variable',
+                source: 'broadcast'
+              });
+            }
           }
         });
       }
