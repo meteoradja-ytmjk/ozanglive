@@ -3020,49 +3020,319 @@ function openThumbnailManager() {
   }, 200);
 }
 
+// ==========================================
+// YouTube Studio - Gallery Video & Audio Selector
+// ==========================================
+let studioSelectedVideoData = null;
+let studioSelectedAudioData = null;
+window.allStudioVideos = null;
+window.allStudioAudios = null;
+
+function toggleStudioVideoSelector() {
+  const dropdown = document.getElementById('studioVideoSelectorDropdown');
+  if (!dropdown) return;
+
+  if (dropdown.classList.contains('hidden')) {
+    dropdown.classList.remove('hidden');
+    loadStudioGalleryVideos();
+    const searchInput = document.getElementById('studioVideoSearchInput');
+    if (searchInput) setTimeout(() => searchInput.focus(), 10);
+  } else {
+    dropdown.classList.add('hidden');
+  }
+}
+
+async function loadStudioGalleryVideos() {
+  try {
+    const container = document.getElementById('studioVideoListContainer');
+    if (!container) return;
+
+    container.innerHTML = '<div class="text-center py-4 text-gray-400 text-xs"><i class="ti ti-loader animate-spin mr-1"></i> Memuat video dari galeri...</div>';
+    const res = await fetch('/api/videos');
+    const videos = await res.json();
+    window.allStudioVideos = videos;
+    displayFilteredStudioVideos(videos);
+
+    const searchInput = document.getElementById('studioVideoSearchInput');
+    if (searchInput) {
+      searchInput.removeEventListener('input', handleStudioVideoSearch);
+      searchInput.addEventListener('input', handleStudioVideoSearch);
+    }
+  } catch (err) {
+    console.error('Error loading gallery videos:', err);
+  }
+}
+
+function handleStudioVideoSearch(e) {
+  const query = e.target.value.toLowerCase().trim();
+  if (!window.allStudioVideos) return;
+  if (!query) {
+    displayFilteredStudioVideos(window.allStudioVideos);
+    return;
+  }
+  const filtered = window.allStudioVideos.filter(v =>
+    (v.name && v.name.toLowerCase().includes(query)) ||
+    (v.title && v.title.toLowerCase().includes(query))
+  );
+  displayFilteredStudioVideos(filtered);
+}
+
+function displayFilteredStudioVideos(videos) {
+  const container = document.getElementById('studioVideoListContainer');
+  if (!container) return;
+  container.innerHTML = '';
+
+  if (videos && videos.length > 0) {
+    videos.forEach(v => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'w-full flex items-center gap-3 p-2 rounded-lg hover:bg-dark-600 transition-colors text-left';
+      btn.onclick = () => selectStudioVideo(v);
+      btn.innerHTML = `
+        <div class="w-12 h-9 bg-dark-800 rounded flex-shrink-0 overflow-hidden flex items-center justify-center border border-gray-700">
+          ${v.thumbnail ? `<img src="${v.thumbnail}" class="w-full h-full object-cover" onerror="this.src='/images/default-thumbnail.jpg'">` : '<i class="ti ti-video text-primary text-sm"></i>'}
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-xs font-medium text-white truncate">${v.name || v.title}</p>
+          <p class="text-[10px] text-gray-400">${v.resolution || 'Video'} • ${v.duration || '0:00'}</p>
+        </div>
+      `;
+      container.appendChild(btn);
+    });
+  } else {
+    container.innerHTML = '<div class="text-center py-4 text-gray-500 text-xs">Tidak ada video ditemukan</div>';
+  }
+}
+
+function selectStudioVideo(video) {
+  studioSelectedVideoData = video;
+  const label = document.getElementById('studioSelectedVideo');
+  const input = document.getElementById('studioSelectedVideoId');
+  if (label) label.textContent = video.name || video.title;
+  if (input) input.value = video.id;
+
+  const dropdown = document.getElementById('studioVideoSelectorDropdown');
+  if (dropdown) dropdown.classList.add('hidden');
+}
+
+function toggleStudioAudioSelector() {
+  const dropdown = document.getElementById('studioAudioSelectorDropdown');
+  if (!dropdown) return;
+
+  if (dropdown.classList.contains('hidden')) {
+    dropdown.classList.remove('hidden');
+    loadStudioGalleryAudios();
+    const searchInput = document.getElementById('studioAudioSearchInput');
+    if (searchInput) setTimeout(() => searchInput.focus(), 10);
+  } else {
+    dropdown.classList.add('hidden');
+  }
+}
+
+async function loadStudioGalleryAudios() {
+  try {
+    const container = document.getElementById('studioAudioListContainer');
+    if (!container) return;
+
+    container.innerHTML = '<div class="text-center py-4 text-gray-400 text-xs"><i class="ti ti-loader animate-spin mr-1"></i> Memuat audio dari galeri...</div>';
+    const res = await fetch('/api/stream/audios');
+    const audios = await res.json();
+    window.allStudioAudios = audios;
+    displayFilteredStudioAudios(audios);
+
+    const searchInput = document.getElementById('studioAudioSearchInput');
+    if (searchInput) {
+      searchInput.removeEventListener('input', handleStudioAudioSearch);
+      searchInput.addEventListener('input', handleStudioAudioSearch);
+    }
+  } catch (err) {
+    console.error('Error loading gallery audios:', err);
+  }
+}
+
+function handleStudioAudioSearch(e) {
+  const query = e.target.value.toLowerCase().trim();
+  if (!window.allStudioAudios) return;
+  if (!query) {
+    displayFilteredStudioAudios(window.allStudioAudios);
+    return;
+  }
+  const filtered = window.allStudioAudios.filter(a =>
+    (a.title && a.title.toLowerCase().includes(query)) ||
+    (a.name && a.name.toLowerCase().includes(query))
+  );
+  displayFilteredStudioAudios(filtered);
+}
+
+function displayFilteredStudioAudios(audios) {
+  const container = document.getElementById('studioAudioListContainer');
+  if (!container) return;
+  container.innerHTML = '';
+
+  if (audios && audios.length > 0) {
+    audios.forEach(a => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'w-full flex items-center gap-3 p-2 rounded-lg hover:bg-dark-600 transition-colors text-left';
+      btn.onclick = () => selectStudioAudio(a);
+      btn.innerHTML = `
+        <div class="w-8 h-8 bg-dark-800 rounded flex-shrink-0 flex items-center justify-center border border-gray-700">
+          <i class="ti ti-music text-primary text-xs"></i>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-xs font-medium text-white truncate">${a.title || a.name}</p>
+          <p class="text-[10px] text-gray-400">${a.duration || 'Audio'}</p>
+        </div>
+      `;
+      container.appendChild(btn);
+    });
+  } else {
+    container.innerHTML = '<div class="text-center py-4 text-gray-500 text-xs">Tidak ada audio ditemukan</div>';
+  }
+}
+
+function selectStudioAudio(audio) {
+  studioSelectedAudioData = audio;
+  const label = document.getElementById('studioSelectedAudio');
+  const input = document.getElementById('studioSelectedAudioId');
+  const clearBtn = document.getElementById('studioClearAudioBtn');
+  if (label) label.textContent = audio.title || audio.name;
+  if (input) input.value = audio.id;
+  if (clearBtn) clearBtn.classList.remove('hidden');
+
+  const dropdown = document.getElementById('studioAudioSelectorDropdown');
+  if (dropdown) dropdown.classList.add('hidden');
+}
+
+function clearStudioAudioSelection() {
+  studioSelectedAudioData = null;
+  const label = document.getElementById('studioSelectedAudio');
+  const input = document.getElementById('studioSelectedAudioId');
+  const clearBtn = document.getElementById('studioClearAudioBtn');
+  if (label) label.textContent = 'Audio asli dari video';
+  if (input) input.value = '';
+  if (clearBtn) clearBtn.classList.add('hidden');
+}
+
+// Studio Schedule Type Selector
+function setStudioScheduleType(type) {
+  const hiddenInput = document.getElementById('studioScheduleType');
+  if (hiddenInput) hiddenInput.value = type;
+
+  const onceBtn = document.getElementById('studioScheduleTypeOnce');
+  const dailyBtn = document.getElementById('studioScheduleTypeDaily');
+  const weeklyBtn = document.getElementById('studioScheduleTypeWeekly');
+
+  const onceSection = document.getElementById('studioOnceScheduleSettings');
+  const recurringSection = document.getElementById('studioRecurringScheduleSettings');
+  const weeklyDays = document.getElementById('studioWeeklyDaysSelector');
+
+  // Reset button styles
+  [onceBtn, dailyBtn, weeklyBtn].forEach(b => {
+    if (b) {
+      b.className = 'flex-1 px-3 py-2 text-xs font-medium rounded-lg border border-gray-600 bg-dark-700 text-gray-300 hover:border-primary transition-colors';
+    }
+  });
+
+  if (type === 'once') {
+    if (onceBtn) onceBtn.className = 'flex-1 px-3 py-2 text-xs font-medium rounded-lg border border-primary bg-primary text-white transition-colors';
+    if (onceSection) onceSection.classList.remove('hidden');
+    if (recurringSection) recurringSection.classList.add('hidden');
+  } else if (type === 'daily') {
+    if (dailyBtn) dailyBtn.className = 'flex-1 px-3 py-2 text-xs font-medium rounded-lg border border-primary bg-primary text-white transition-colors';
+    if (onceSection) onceSection.classList.add('hidden');
+    if (recurringSection) recurringSection.classList.remove('hidden');
+    if (weeklyDays) weeklyDays.classList.add('hidden');
+  } else if (type === 'weekly') {
+    if (weeklyBtn) weeklyBtn.className = 'flex-1 px-3 py-2 text-xs font-medium rounded-lg border border-primary bg-primary text-white transition-colors';
+    if (onceSection) onceSection.classList.add('hidden');
+    if (recurringSection) recurringSection.classList.remove('hidden');
+    if (weeklyDays) weeklyDays.classList.remove('hidden');
+  }
+}
+
+let studioSelectedDays = [];
+function toggleStudioDay(dayIndex) {
+  const idx = studioSelectedDays.indexOf(dayIndex);
+  const btn = document.querySelector(`[data-studio-day="${dayIndex}"]`);
+
+  if (idx > -1) {
+    studioSelectedDays.splice(idx, 1);
+    if (btn) {
+      btn.classList.remove('border-primary', 'bg-primary', 'text-white');
+      btn.classList.add('border-gray-600', 'bg-dark-700', 'text-gray-300');
+    }
+  } else {
+    studioSelectedDays.push(dayIndex);
+    if (btn) {
+      btn.classList.remove('border-gray-600', 'bg-dark-700', 'text-gray-300');
+      btn.classList.add('border-primary', 'bg-primary', 'text-white');
+    }
+  }
+
+  const daysInput = document.getElementById('studioScheduleDays');
+  if (daysInput) daysInput.value = JSON.stringify(studioSelectedDays);
+}
+
+// Trigger start immediately
+function submitBroadcastAndStartNow() {
+  const form = document.getElementById('createBroadcastForm');
+  if (!form) return;
+  form.dataset.startImmediately = 'true';
+  form.requestSubmit();
+}
+
 function closeCreateBroadcastModal() {
-  document.getElementById('createBroadcastModal').classList.add('hidden');
-  document.getElementById('createBroadcastForm').reset();
-  document.getElementById('thumbnailPreview').innerHTML = '<i class="ti ti-photo text-gray-500 text-2xl"></i>';
-  document.getElementById('selectedThumbnailPath').value = '';
+  const modal = document.getElementById('createBroadcastModal');
+  if (modal) modal.classList.add('hidden');
   
-  // Reset thumbnail folder
+  const form = document.getElementById('createBroadcastForm');
+  if (form) {
+    delete form.dataset.startImmediately;
+    form.reset();
+  }
+
+  const thumbnailPreview = document.getElementById('thumbnailPreview');
+  if (thumbnailPreview) thumbnailPreview.innerHTML = '<i class="ti ti-photo text-gray-500 text-2xl"></i>';
+  
+  const selectedThumbnailPath = document.getElementById('selectedThumbnailPath');
+  if (selectedThumbnailPath) selectedThumbnailPath.value = '';
+  
   currentThumbnailFolder = null;
   const folderInput = document.getElementById('currentThumbnailFolder');
   if (folderInput) folderInput.value = '';
   
-  // Reset selected thumbnail index
   window.createSelectedThumbnailIndex = 0;
   window.createSelectedThumbnailPath = null;
   
-  // Reset pinned thumbnail
   const pinnedInput = document.getElementById('pinnedThumbnail');
   if (pinnedInput) pinnedInput.value = '';
   const pinnedIndicator = document.getElementById('pinnedThumbnailIndicator');
   if (pinnedIndicator) pinnedIndicator.classList.add('hidden');
   
-  // Reset stream key folder mapping
   const mappingInput = document.getElementById('streamKeyFolderMapping');
   if (mappingInput) mappingInput.value = '';
   
-  // Reset thumbnail mode to sequential
   const sequentialRadio = document.querySelector('input[name="thumbnailMode"][value="sequential"]');
   if (sequentialRadio) sequentialRadio.checked = true;
   
-  // Clear thumbnail selection
   document.querySelectorAll('.thumbnail-item').forEach(item => {
     item.classList.remove('border-primary', 'border-red-500', 'border-green-500', 'ring-2', 'ring-primary/50', 'ring-green-500/50');
     item.classList.add('border-transparent');
   });
   
-  // Reset tags
   currentTags = [];
   renderTags();
-  
-  // Hide all auto-fill indicators
   hideAutoFillIndicators();
-}
 
+  // Reset Studio Media & Schedule
+  clearStudioAudioSelection();
+  const videoLabel = document.getElementById('studioSelectedVideo');
+  const videoInput = document.getElementById('studioSelectedVideoId');
+  if (videoLabel) videoLabel.textContent = 'Pilih video untuk di-stream...';
+  if (videoInput) videoInput.value = '';
+  setStudioScheduleType('once');
+}
 
 // Create Broadcast Form Handler
 const createBroadcastForm = document.getElementById('createBroadcastForm');
@@ -3071,14 +3341,19 @@ if (createBroadcastForm) {
     e.preventDefault();
     
     const createBtn = document.getElementById('createBroadcastBtn');
-    const originalText = createBtn.innerHTML;
-    createBtn.innerHTML = '<i class="ti ti-loader animate-spin"></i> Creating...';
-    createBtn.disabled = true;
+    const startNowBtn = document.getElementById('createAndStartBroadcastBtn');
+    const isStartNow = createBroadcastForm.dataset.startImmediately === 'true';
+    
+    const activeBtn = isStartNow ? startNowBtn : createBtn;
+    const originalText = activeBtn ? activeBtn.innerHTML : '';
+    if (activeBtn) {
+      activeBtn.innerHTML = '<i class="ti ti-loader animate-spin mr-1"></i> Memproses...';
+      activeBtn.disabled = true;
+    }
     
     try {
       const formData = new FormData();
       
-      // Add account ID
       const accountSelect = document.getElementById('accountSelect');
       if (accountSelect && accountSelect.value) {
         formData.append('accountId', accountSelect.value);
@@ -3089,70 +3364,62 @@ if (createBroadcastForm) {
       formData.append('scheduledStartTime', document.getElementById('scheduledStartTime').value);
       formData.append('privacyStatus', document.getElementById('privacyStatus').value);
       
-      // Add stream key if selected
       const streamId = document.getElementById('streamKeySelect').value;
-
-      if (!streamId && streamFetchState.tokenExpired) {
-        showToast('Tidak bisa membuat broadcast saat token expired karena akan memicu stream key baru. Reconnect akun YouTube dulu.', 'error');
-        return;
-      }
-
       if (streamId) {
         formData.append('streamId', streamId);
       }
       
-      // Add tags
+      // Video and Audio inputs
+      const videoId = document.getElementById('studioSelectedVideoId')?.value;
+      const audioId = document.getElementById('studioSelectedAudioId')?.value;
+      if (videoId) formData.append('videoId', videoId);
+      if (audioId) formData.append('audioId', audioId);
+
+      // Duration and Schedule fields
+      const durationHours = document.getElementById('studioStreamDurationHours')?.value || '0';
+      const durationMinutes = document.getElementById('studioStreamDurationMinutes')?.value || '0';
+      const loopVideo = document.getElementById('studioLoopVideoToggle')?.checked ? 'true' : 'false';
+      const scheduleType = document.getElementById('studioScheduleType')?.value || 'once';
+      const scheduleStartTime = document.getElementById('studioScheduleStartTime')?.value || '';
+      const scheduleEndTime = document.getElementById('studioScheduleEndTime')?.value || '';
+      const recurringTime = document.getElementById('studioRecurringTime')?.value || '';
+      const scheduleDays = document.getElementById('studioScheduleDays')?.value || '[]';
+      const recurringEnabled = document.getElementById('studioRecurringEnabled')?.checked ? 'true' : 'false';
+
+      formData.append('streamDurationHours', durationHours);
+      formData.append('streamDurationMinutes', durationMinutes);
+      formData.append('loopVideo', loopVideo);
+      formData.append('scheduleType', scheduleType);
+      formData.append('scheduleStartTime', scheduleStartTime);
+      formData.append('scheduleEndTime', scheduleEndTime);
+      formData.append('recurringTime', recurringTime);
+      formData.append('scheduleDays', scheduleDays);
+      formData.append('recurringEnabled', recurringEnabled);
+      formData.append('startImmediately', isStartNow ? 'true' : 'false');
+
+      // Tags & Category
       if (currentTags.length > 0) {
         formData.append('tags', JSON.stringify(currentTags));
       }
-      
-      // Add category ID (default: 22 - People & Blogs)
-      const categoryId = document.getElementById('categoryId').value;
+      const categoryId = document.getElementById('categoryId')?.value;
       formData.append('categoryId', categoryId || '22');
       
-      // Add Additional Settings
-      // Auto-start and auto-stop are always true (hidden inputs)
-      const enableAutoStart = document.getElementById('enableAutoStart').value === 'true';
-      const enableAutoStop = document.getElementById('enableAutoStop').value === 'true';
-      // Unlist replay is optional (checkbox)
-      const unlistReplayOnEnd = document.getElementById('unlistReplayOnEnd').checked;
+      formData.append('enableAutoStart', 'true');
+      formData.append('enableAutoStop', 'true');
+      formData.append('unlistReplayOnEnd', document.getElementById('unlistReplayOnEnd')?.checked ? 'true' : 'false');
       
-      formData.append('enableAutoStart', enableAutoStart);
-      formData.append('enableAutoStop', enableAutoStop);
-      formData.append('unlistReplayOnEnd', unlistReplayOnEnd);
-      
-      // Add thumbnail from gallery selection - ONLY if pinned mode
+      // Thumbnail
       const thumbnailMode = document.querySelector('input[name="thumbnailMode"]:checked')?.value || 'sequential';
-      const thumbnailPath = document.getElementById('selectedThumbnailPath').value;
+      const thumbnailPath = document.getElementById('selectedThumbnailPath')?.value;
       const pinnedThumbnail = document.getElementById('pinnedThumbnail')?.value;
       
-      // Only send thumbnailPath if:
-      // 1. Mode is pinned AND pinnedThumbnail is set, OR
-      // 2. User explicitly selected a thumbnail AND mode is pinned
       if (thumbnailMode === 'pinned' && pinnedThumbnail) {
         formData.append('thumbnailPath', pinnedThumbnail);
-        console.log('[CreateBroadcast] Using pinned thumbnail:', pinnedThumbnail);
       }
-      // For sequential mode, don't send thumbnailPath - let backend handle sequential selection
-      
-      // Add selected thumbnail index
-      const thumbnailIndex = window.createSelectedThumbnailIndex || 0;
-      formData.append('thumbnailIndex', thumbnailIndex);
-      
-      // Add current thumbnail folder for sequential selection
-      // Always send thumbnailFolder - empty string for root, folder name for specific folder
-      // This ensures the folder selection is saved and can be restored when editing
+      formData.append('thumbnailIndex', window.createSelectedThumbnailIndex || 0);
       formData.append('thumbnailFolder', currentThumbnailFolder || '');
-      
-      // Add pinned thumbnail if set (for backward compatibility)
       if (pinnedThumbnail) {
         formData.append('pinnedThumbnail', pinnedThumbnail);
-      }
-      
-      // Add stream key folder mapping if set
-      const streamKeyFolderMapping = document.getElementById('streamKeyFolderMapping')?.value;
-      if (streamKeyFolderMapping) {
-        formData.append('streamKeyFolderMapping', streamKeyFolderMapping);
       }
       
       const response = await fetch('/api/youtube/broadcasts', {
@@ -3166,22 +3433,21 @@ if (createBroadcastForm) {
       const data = await response.json();
       
       if (data.success) {
-        // NOTE: Thumbnail index is already incremented by backend in sequential mode
-        // No need to increment here to avoid double increment
-        console.log('[CreateBroadcast] Broadcast created successfully, thumbnail index handled by backend');
-        
-        showToast('Broadcast created successfully!');
+        showToast(isStartNow ? '✓ Live streaming berhasil dimulai!' : '✓ Broadcast & Jadwal Live berhasil dibuat!');
         closeCreateBroadcastModal();
-        setTimeout(() => window.location.reload(), 1000);
+        setTimeout(() => window.location.reload(), 1200);
       } else {
-        showToast(data.error || 'Failed to create broadcast', 'error');
+        showToast(data.error || 'Gagal membuat broadcast', 'error');
       }
     } catch (error) {
-      console.error('Error:', error);
-      showToast('An error occurred', 'error');
+      console.error('Error creating unified broadcast:', error);
+      showToast('Terjadi kesalahan saat memproses broadcast', 'error');
     } finally {
-      createBtn.innerHTML = originalText;
-      createBtn.disabled = false;
+      if (activeBtn) {
+        activeBtn.innerHTML = originalText;
+        activeBtn.disabled = false;
+      }
+      delete createBroadcastForm.dataset.startImmediately;
     }
   });
 }
