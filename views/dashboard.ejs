@@ -1079,15 +1079,17 @@
         window.loadGalleryVideos();
       }
 
-      // Auto-sync YouTube accounts and auto-load stream key
-      if (typeof window.syncControlRoomAccounts === 'function') {
-        window.syncControlRoomAccounts(true);
-      } else {
-        const accountSelect = document.getElementById('controlRoomAccountSelect');
-        if (accountSelect && accountSelect.value && typeof window.onControlRoomAccountChange === 'function') {
-          console.log('[Control Room] Modal opened with account pre-selected, triggering auto-load...');
+      // Auto-load stream key immediately for pre-selected account
+      const accountSelect = document.getElementById('controlRoomAccountSelect');
+      if (accountSelect && accountSelect.value) {
+        if (typeof window.onControlRoomAccountChange === 'function') {
           window.onControlRoomAccountChange(accountSelect.value);
+        } else if (typeof window.fetchControlRoomStreamKeys === 'function') {
+          window.fetchControlRoomStreamKeys(accountSelect.value);
         }
+      }
+      if (typeof window.syncControlRoomAccounts === 'function') {
+        window.syncControlRoomAccounts(false);
       }
 
       // Initialize mutual exclusion for duration/end time (for once schedule)

@@ -18,7 +18,6 @@ window.openNewStreamModal = function () {
   }
   document.body.style.overflow = 'hidden';
   modal.classList.remove('hidden');
-  // Force reflow before adding active class
   modal.offsetHeight;
   modal.classList.add('active');
   
@@ -26,14 +25,16 @@ window.openNewStreamModal = function () {
     loadGalleryVideos();
   }
   
-  // Auto-sync YouTube accounts and auto-load stream key
-  if (typeof window.syncControlRoomAccounts === 'function') {
-    window.syncControlRoomAccounts(true);
-  } else {
-    const accountSelect = document.getElementById('controlRoomAccountSelect');
-    if (accountSelect && accountSelect.value && typeof window.onControlRoomAccountChange === 'function') {
+  // Auto-sync YouTube accounts and auto-load stream key immediately
+  const accountSelect = document.getElementById('controlRoomAccountSelect');
+  if (accountSelect && accountSelect.value) {
+    if (typeof window.onControlRoomAccountChange === 'function') {
       window.onControlRoomAccountChange(accountSelect.value);
+    } else if (typeof window.fetchControlRoomStreamKeys === 'function') {
+      window.fetchControlRoomStreamKeys(accountSelect.value);
     }
+  } else if (typeof window.syncControlRoomAccounts === 'function') {
+    window.syncControlRoomAccounts(true);
   }
 };
 function closeNewStreamModal() {
@@ -1056,11 +1057,17 @@ window.fetchControlRoomStreamKeys = async function(accountId) {
     return;
   }
   
+  // Show loading indicator in select dropdown
+  select.innerHTML = '<option value="">⏳ Loading stream keys...</option>';
   if (loading) loading.classList.remove('hidden');
   if (indicator) indicator.classList.add('hidden');
   
   try {
-    const url = `/api/youtube/streams?accountId=${accountId}`;
+    let url = '/api/youtube/streams';
+    if (accountId) {
+      url += `?accountId=${accountId}`;
+    }
+    
     console.log('[Control Room] Fetching stream keys from:', url);
     
     const response = await fetch(url, {
@@ -1084,7 +1091,7 @@ window.fetchControlRoomStreamKeys = async function(accountId) {
       
       const reuse = document.createElement('option');
       reuse.disabled = true;
-      reuse.textContent = '📋 YouTube Stream Keys Available:';
+      reuse.textContent = '📋 Reuse Existing Stream Keys:';
       select.appendChild(reuse);
       
       let validStreamFound = null;
@@ -1094,8 +1101,9 @@ window.fetchControlRoomStreamKeys = async function(accountId) {
         const streamIdVal = stream.id || `stream_${index}`;
         option.value = streamIdVal;
         
+        const resInfo = (stream.resolution && stream.resolution !== 'variable') ? ` (${stream.resolution} @ ${stream.frameRate || '30fps'})` : '';
         const keySnippet = stream.streamKey ? ` [${stream.streamKey.substring(0, 8)}...]` : '';
-        option.textContent = `${index + 1}. ${stream.title}${keySnippet}`;
+        option.textContent = `${index + 1}. ${stream.title}${resInfo}${keySnippet}`;
         option.dataset.streamKey = stream.streamKey || '';
         option.dataset.rtmpUrl = stream.rtmpUrl || 'rtmp://a.rtmp.youtube.com/live2';
         select.appendChild(option);
@@ -1110,30 +1118,27 @@ window.fetchControlRoomStreamKeys = async function(accountId) {
       if (targetStream) {
         const targetId = targetStream.id || 'stream_0';
         select.value = targetId;
-        onControlRoomStreamKeyChange(targetId);
+        window.onControlRoomStreamKeyChange(targetId);
         console.log('[Control Room] Auto-selected stream key:', targetStream.title);
       }
       
       if (indicator) {
         indicator.classList.remove('hidden');
-        indicator.textContent = '✓ Stream key auto-loaded';
+        indicator.textContent = '✓ Auto-loaded';
       }
       
       if (typeof showToast === 'function') {
-        showToast('success', '✓ Stream key berhasil di-load dari YouTube');
+        showToast('success', `✓ Loaded ${data.streams.length} stream key${data.streams.length > 1 ? 's' : ''} from your channel`);
       }
     } else {
-      console.log('[Control Room] No stream keys found or empty list');
+      console.log('[Control Room] No stream keys found');
       select.innerHTML = '<option value="">🔑 Create new stream key</option>';
       const emptyOpt = document.createElement('option');
       emptyOpt.disabled = true;
-      emptyOpt.textContent = 'ℹ️ Tidak ada stream key tersimpan (New key akan dibuat)';
+      emptyOpt.textContent = '📋 No existing stream keys found (New key will be created)';
       select.appendChild(emptyOpt);
 
       if (indicator) indicator.classList.add('hidden');
-      if (typeof showToast === 'function') {
-        showToast('info', 'Belum ada stream key tersimpan di channel ini. Stream key baru akan dibuat.');
-      }
     }
   } catch (error) {
     console.error('[Control Room] Error fetching stream keys:', error);
@@ -1145,6 +1150,17 @@ window.fetchControlRoomStreamKeys = async function(accountId) {
     if (loading) loading.classList.add('hidden');
   }
 };
+
+// Pre-fetch stream keys immediately when DOM is ready
+document.addEventListener('DOMContentLoaded', function () {
+  setTimeout(() => {
+    const accountSelect = document.getElementById('controlRoomAccountSelect');
+    if (accountSelect && accountSelect.value) {
+      console.log('[Control Room] Pre-fetching stream keys on DOM ready for account:', accountSelect.value);
+      window.fetchControlRoomStreamKeys(accountSelect.value);
+    }
+  }, 200);
+});
 
 // Handle stream key selection change in Control Room
 window.onControlRoomStreamKeyChange = function(streamId) {
