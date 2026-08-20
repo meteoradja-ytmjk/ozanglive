@@ -983,7 +983,7 @@
     <%- include('partials/youtube-studio') %>
   </div>
 
-  <script src="/js/youtube.js?v=1.1.2" defer></script>
+  <script src="/js/youtube.js?v=1.1.3" defer></script>
   <script src="/js/stream-modal.js?v=1.0.9" defer></script>
   <script>
     function switchStudioTab(tabName) {
@@ -2659,112 +2659,16 @@
         const result = await response.json();
 
         if (result.success && result.stream) {
-          const stream = result.stream;
-
-          // Open modal
-          openNewStreamModal();
-
-          // Set form title
-          document.querySelector('#newStreamModal h3').textContent = 'Edit Stream';
-
-          // Fill form data
-          document.getElementById('streamTitle').value = stream.title || '';
-          document.getElementById('streamKey').value = stream.stream_key || '';
-
-          // Parse duration to hours and minutes
-          const { hours, minutes } = parseDurationToFields(stream.stream_duration_minutes);
-          document.getElementById('streamDurationHours').value = hours || '';
-          document.getElementById('streamDurationMinutes').value = minutes || '';
-
-          // Reset disabled state before setting values
-          const durationHoursEl = document.getElementById('streamDurationHours');
-          const durationMinutesEl = document.getElementById('streamDurationMinutes');
-          const endTimeEl = document.getElementById('scheduleEndTime');
-
-          if (durationHoursEl) {
-            durationHoursEl.disabled = false;
-            durationHoursEl.classList.remove('opacity-50', 'cursor-not-allowed');
-          }
-          if (durationMinutesEl) {
-            durationMinutesEl.disabled = false;
-            durationMinutesEl.classList.remove('opacity-50', 'cursor-not-allowed');
-          }
-          if (endTimeEl) {
-            endTimeEl.disabled = false;
-            endTimeEl.classList.remove('opacity-50', 'cursor-not-allowed');
-          }
-
-          // Set schedule times - preserve original values from database
-          if (stream.schedule_time) {
-            document.getElementById('scheduleStartTime').value = formatDateTimeLocal(stream.schedule_time);
+          if (typeof window.openEditStudioModal === 'function') {
+            window.openEditStudioModal(result.stream);
           } else {
-            document.getElementById('scheduleStartTime').value = '';
+            console.error('openEditStudioModal function not found');
           }
-
-          // Only set end_time if duration is NOT set (mutual exclusion)
-          const hasDuration = (hours > 0 || minutes > 0);
-          if (stream.end_time && !hasDuration) {
-            document.getElementById('scheduleEndTime').value = formatDateTimeLocal(stream.end_time);
-          } else {
-            document.getElementById('scheduleEndTime').value = '';
-          }
-
-          // Set video selection
-          if (stream.video_id) {
-            const selectedStreamVideo = { id: stream.video_id, name: stream.video_title || 'Selected Video', type: stream.video_type || 'video' };
-            selectedVideoData = selectedStreamVideo;
-            window.selectedVideoData = selectedStreamVideo;
-            document.getElementById('selectedVideo').textContent = stream.video_type === 'playlist' ? '[Playlist] ' + (stream.video_title || 'Selected Playlist') : (stream.video_title || 'Selected Video');
-            document.getElementById('selectedVideoId').value = stream.video_id;
-          }
-
-          // Set audio selection
-          if (stream.audio_id) {
-            selectedAudioData = { id: stream.audio_id, title: stream.audio_title || 'Selected Audio' };
-            window.selectedAudioData = selectedAudioData;
-            document.getElementById('selectedAudio').textContent = stream.audio_title || 'Selected Audio';
-            document.getElementById('selectedAudioId').value = stream.audio_id;
-            document.getElementById('clearAudioBtn').classList.remove('hidden');
-          } else {
-            selectedAudioData = null;
-            document.getElementById('selectedAudio').textContent = 'No audio selected';
-            document.getElementById('selectedAudioId').value = '';
-            document.getElementById('clearAudioBtn').classList.add('hidden');
-          }
-
-          // Set loop video
-          const loopCheckbox = document.querySelector('input[name="loopVideo"]');
-          if (loopCheckbox) loopCheckbox.checked = stream.loop_video;
-
-          // Load recurring schedule data
-          if (typeof loadRecurringScheduleData === 'function') {
-            loadRecurringScheduleData(stream);
-          }
-
-          // Refresh unlimited/loop warning to reflect the edited stream's values
-          if (typeof window.updateUnlimitedLoopWarning === 'function') {
-            window.updateUnlimitedLoopWarning();
-          }
-
-          // Initialize mutual exclusion after setting values
-          if (stream.schedule_type === 'once') {
-            setTimeout(() => {
-              initDurationEndTimeMutualExclusion();
-              updateDurationEndTimeState();
-            }, 100);
-          }
-
-          // Store stream ID for update
-          document.getElementById('newStreamForm').dataset.editId = id;
-
-          // Change submit button text
-          document.querySelector('button[type="submit"][form="newStreamForm"]').textContent = 'Update Stream';
         }
       } catch (error) {
         console.error('Error loading stream for edit:', error);
-        if (typeof showToast === 'function') showToast('error', 'Failed to load stream');
+        if (typeof showToast === 'function') showToast('Failed to load stream', 'error');
       } finally {
-        // Restore the edit button (the list is not re-rendered here, so the button persists)
         setStreamButtonBusy(btn, false);
         streamActionLocks.delete(lockKey);
       }

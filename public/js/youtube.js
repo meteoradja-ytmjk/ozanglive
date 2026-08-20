@@ -3477,6 +3477,149 @@ function submitBroadcastAndStartNow() {
   form.requestSubmit();
 }
 
+// Open Studio Modal for Editing Existing Stream
+window.openEditStudioModal = function(stream) {
+  openCreateBroadcastModal();
+
+  const form = document.getElementById('createBroadcastForm');
+  if (!form) return;
+
+  form.dataset.editingStreamId = stream.id;
+  form.dataset.editingBroadcastId = stream.youtube_broadcast_id || '';
+
+  // Update modal title
+  const modalHeader = document.querySelector('#createBroadcastModal h3');
+  if (modalHeader) {
+    modalHeader.textContent = 'Edit Live Stream (YouTube Studio)';
+  }
+  const modalSubtitle = document.querySelector('#createBroadcastModal p.text-xs.text-gray-400');
+  if (modalSubtitle) {
+    modalSubtitle.textContent = 'Perbarui Pengaturan Siaran & Mesin Live YouTube';
+  }
+
+  // Update button texts
+  const createBtn = document.getElementById('createBroadcastBtn');
+  if (createBtn) {
+    createBtn.innerHTML = '<i class="ti ti-check text-base"></i><span>Simpan Perubahan Stream</span>';
+  }
+  const startNowBtn = document.getElementById('createAndStartBroadcastBtn');
+  if (startNowBtn) {
+    startNowBtn.innerHTML = '<i class="ti ti-player-play text-base"></i><span>Simpan & Mulai Live Sekarang</span>';
+  }
+
+  // Account selector
+  if (stream.youtube_account_id) {
+    const accountSelect = document.getElementById('accountSelect');
+    if (accountSelect) {
+      accountSelect.value = stream.youtube_account_id;
+      if (typeof fetchStreams === 'function') fetchStreams(stream.youtube_account_id);
+    }
+  }
+
+  // Title & Description
+  const titleInput = document.getElementById('broadcastTitle');
+  if (titleInput) titleInput.value = stream.title || '';
+
+  const descInput = document.getElementById('broadcastDescription');
+  if (descInput) descInput.value = stream.description || '';
+
+  const startTimeInput = document.getElementById('scheduledStartTime');
+  if (startTimeInput) {
+    startTimeInput.value = stream.schedule_time ? formatDateTimeLocal(stream.schedule_time) : (stream.schedule_start_time ? formatDateTimeLocal(stream.schedule_start_time) : '');
+  }
+
+  // Stream Key
+  if (stream.stream_key) {
+    const streamKeySelect = document.getElementById('streamKeySelect');
+    if (streamKeySelect) {
+      let found = false;
+      for (let i = 0; i < streamKeySelect.options.length; i++) {
+        if (streamKeySelect.options[i].value === stream.stream_key || streamKeySelect.options[i].text.includes(stream.stream_key)) {
+          streamKeySelect.selectedIndex = i;
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        const opt = document.createElement('option');
+        opt.value = stream.stream_key;
+        opt.textContent = `🔑 Stream Key (${stream.stream_key.substring(0, 8)}...)`;
+        opt.selected = true;
+        streamKeySelect.appendChild(opt);
+      }
+    }
+  }
+
+  // Video Selector
+  if (stream.video_id) {
+    const isPlaylist = stream.video_type === 'playlist';
+    const folderPrefix = stream.video_folder ? `[${stream.video_folder}] ` : '';
+    const videoLabel = document.getElementById('studioSelectedVideo');
+    const videoInput = document.getElementById('studioSelectedVideoId');
+    const icon = document.getElementById('studioVideoIcon');
+
+    if (videoLabel) videoLabel.textContent = isPlaylist ? `[Playlist] ${stream.video_title}` : `${folderPrefix}${stream.video_title || 'Video Terpilih'}`;
+    if (videoInput) videoInput.value = stream.video_id;
+    if (icon) icon.className = isPlaylist ? 'ti ti-playlist text-blue-400' : 'ti ti-movie text-primary';
+  }
+
+  // Audio Selector
+  if (stream.audio_id) {
+    const audioLabel = document.getElementById('studioSelectedAudio');
+    const audioInput = document.getElementById('studioSelectedAudioId');
+    const clearBtn = document.getElementById('studioClearAudioBtn');
+    if (audioLabel) audioLabel.textContent = stream.audio_title || 'Audio Pengganti';
+    if (audioInput) audioInput.value = stream.audio_id;
+    if (clearBtn) clearBtn.classList.remove('hidden');
+  } else {
+    clearStudioAudioSelection();
+  }
+
+  // Duration & Loop
+  const totalMin = stream.stream_duration_minutes || 0;
+  const hours = Math.floor(totalMin / 60);
+  const minutes = totalMin % 60;
+  const hoursInput = document.getElementById('studioStreamDurationHours');
+  const minutesInput = document.getElementById('studioStreamDurationMinutes');
+  const loopToggle = document.getElementById('studioLoopVideoToggle');
+
+  if (hoursInput) hoursInput.value = hours > 0 ? hours : '';
+  if (minutesInput) minutesInput.value = minutes > 0 ? minutes : '';
+  if (loopToggle) loopToggle.checked = stream.loop_video !== false;
+
+  // Schedule Type
+  setStudioScheduleType(stream.schedule_type || 'once');
+  if (stream.schedule_type === 'once') {
+    const sStart = document.getElementById('studioScheduleStartTime');
+    const sEnd = document.getElementById('studioScheduleEndTime');
+    if (sStart && stream.schedule_time) sStart.value = formatDateTimeLocal(stream.schedule_time);
+    if (sEnd && stream.end_time) sEnd.value = formatDateTimeLocal(stream.end_time);
+  } else {
+    const rTime = document.getElementById('studioRecurringTime');
+    const rEnabled = document.getElementById('studioRecurringEnabled');
+    if (rTime) rTime.value = stream.recurring_time || '';
+    if (rEnabled) rEnabled.checked = stream.recurring_enabled !== false;
+
+    if (stream.schedule_type === 'weekly' && stream.schedule_days) {
+      try {
+        studioSelectedDays = typeof stream.schedule_days === 'string' ? JSON.parse(stream.schedule_days) : stream.schedule_days;
+      } catch (e) { studioSelectedDays = []; }
+      document.querySelectorAll('.studio-day-btn').forEach(btn => {
+        const d = parseInt(btn.getAttribute('data-studio-day'));
+        if (studioSelectedDays.includes(d)) {
+          btn.classList.remove('border-gray-600', 'bg-dark-700', 'text-gray-300');
+          btn.classList.add('border-primary', 'bg-primary', 'text-white');
+        } else {
+          btn.classList.remove('border-primary', 'bg-primary', 'text-white');
+          btn.classList.add('border-gray-600', 'bg-dark-700', 'text-gray-300');
+        }
+      });
+      const daysInput = document.getElementById('studioScheduleDays');
+      if (daysInput) daysInput.value = JSON.stringify(studioSelectedDays);
+    }
+  }
+};
+
 function closeCreateBroadcastModal() {
   const modal = document.getElementById('createBroadcastModal');
   if (modal) modal.classList.add('hidden');
@@ -3484,7 +3627,24 @@ function closeCreateBroadcastModal() {
   const form = document.getElementById('createBroadcastForm');
   if (form) {
     delete form.dataset.startImmediately;
+    delete form.dataset.editingStreamId;
+    delete form.dataset.editingBroadcastId;
     form.reset();
+  }
+
+  // Restore default titles
+  const modalHeader = document.querySelector('#createBroadcastModal h3');
+  if (modalHeader) modalHeader.textContent = 'YouTube Live Studio';
+  const modalSubtitle = document.querySelector('#createBroadcastModal p.text-xs.text-gray-400');
+  if (modalSubtitle) modalSubtitle.textContent = 'Buat Broadcast & Siarkan Video Live ke YouTube';
+
+  const createBtn = document.getElementById('createBroadcastBtn');
+  if (createBtn) {
+    createBtn.innerHTML = '<i class="ti ti-calendar-event text-base"></i><span>Buat Broadcast & Jadwalkan Live</span>';
+  }
+  const startNowBtn = document.getElementById('createAndStartBroadcastBtn');
+  if (startNowBtn) {
+    startNowBtn.innerHTML = '<i class="ti ti-broadcast text-base"></i><span>Mulai Live Streaming Sekarang</span>';
   }
 
   const thumbnailPreview = document.getElementById('thumbnailPreview');
@@ -3529,12 +3689,16 @@ function closeCreateBroadcastModal() {
   setStudioScheduleType('once');
 }
 
-// Create Broadcast Form Handler
+// Create / Update Broadcast Form Handler
 const createBroadcastForm = document.getElementById('createBroadcastForm');
 if (createBroadcastForm) {
   createBroadcastForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     
+    const isEditing = !!createBroadcastForm.dataset.editingStreamId;
+    const editingStreamId = createBroadcastForm.dataset.editingStreamId;
+    const editingBroadcastId = createBroadcastForm.dataset.editingBroadcastId;
+
     const createBtn = document.getElementById('createBroadcastBtn');
     const startNowBtn = document.getElementById('createAndStartBroadcastBtn');
     const isStartNow = createBroadcastForm.dataset.startImmediately === 'true';
@@ -3547,6 +3711,57 @@ if (createBroadcastForm) {
     }
     
     try {
+      if (isEditing && editingStreamId) {
+        // UPDATE EXISTING STREAM
+        const updatePayload = {
+          streamTitle: document.getElementById('broadcastTitle').value,
+          description: document.getElementById('broadcastDescription').value,
+          videoId: document.getElementById('studioSelectedVideoId')?.value || null,
+          audioId: document.getElementById('studioSelectedAudioId')?.value || null,
+          streamDurationHours: document.getElementById('studioStreamDurationHours')?.value || '0',
+          streamDurationMinutes: document.getElementById('studioStreamDurationMinutes')?.value || '0',
+          loopVideo: document.getElementById('studioLoopVideoToggle')?.checked ? 'true' : 'false',
+          scheduleType: document.getElementById('studioScheduleType')?.value || 'once',
+          scheduleStartTime: document.getElementById('studioScheduleStartTime')?.value || '',
+          scheduleEndTime: document.getElementById('studioScheduleEndTime')?.value || '',
+          recurringTime: document.getElementById('studioRecurringTime')?.value || '',
+          scheduleDays: document.getElementById('studioScheduleDays')?.value || '[]',
+          recurringEnabled: document.getElementById('studioRecurringEnabled')?.checked ? 'true' : 'false',
+          streamKey: document.getElementById('streamKeySelect')?.value || ''
+        };
+
+        const res = await fetch(`/api/streams/${editingStreamId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': getCsrfToken()
+          },
+          body: JSON.stringify(updatePayload)
+        });
+
+        const data = await res.json();
+        if (data.success) {
+          // If start immediately requested
+          if (isStartNow) {
+            try {
+              await fetch(`/api/streams/${editingStreamId}/start`, {
+                method: 'POST',
+                headers: { 'X-CSRF-Token': getCsrfToken() }
+              });
+            } catch(startErr) {
+              console.warn('Error starting stream immediately:', startErr);
+            }
+          }
+          showToast('✓ Pengaturan siaran berhasil diperbarui!');
+          closeCreateBroadcastModal();
+          setTimeout(() => window.location.reload(), 1000);
+        } else {
+          showToast(data.error || 'Gagal memperbarui stream', 'error');
+        }
+        return;
+      }
+
+      // CREATE NEW BROADCAST FLOW
       const formData = new FormData();
       
       const accountSelect = document.getElementById('accountSelect');
