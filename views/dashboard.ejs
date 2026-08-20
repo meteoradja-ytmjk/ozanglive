@@ -339,10 +339,10 @@
           <span id="realtime-date" class="font-semibold text-white">--/--/----</span>
         </div>
       </div>
-      <!-- Right: Buttons 2x2 grid -->
-      <div class="grid grid-cols-2 gap-2 w-[340px] shrink-0">
-        <!-- Row 1: All Streams + New Stream -->
-        <div class="relative">
+      <!-- Right: Control Room Tools & Filter (Pure Monitoring & Operations) -->
+      <div class="flex items-center gap-2 shrink-0">
+        <!-- All Streams Filter -->
+        <div class="relative w-44">
           <select id="streamFilter" onchange="applyStreamFilter(this.value)"
             class="w-full bg-dark-700 border border-gray-600 text-white pl-9 pr-4 py-2.5 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary appearance-none cursor-pointer text-sm h-[42px]">
             <option value="all">All Streams</option>
@@ -350,76 +350,76 @@
           <i class="ti ti-filter absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
           <i class="ti ti-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
         </div>
-        <button type="button" onclick="openNewStreamModal()"
-          class="flex items-center justify-center gap-2 bg-primary hover:bg-secondary text-white py-2.5 rounded-lg transition-colors whitespace-nowrap font-medium h-[42px]">
-          <i class="ti ti-plus"></i>
-          <span>New Stream</span>
-        </button>
-        <!-- Row 2: Schedule+Backup (small, split) + Expand (full width) -->
-        <div class="flex items-center gap-2">
-          <div class="relative flex-1" id="scheduleDropdown">
-            <button onclick="toggleScheduleDropdown()"
-              class="w-full flex items-center justify-center gap-1 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white h-[42px] rounded-lg transition-colors"
-              title="Schedule">
-              <i class="ti ti-calendar-event"></i>
-              <i class="ti ti-chevron-down text-[10px]"></i>
+
+        <!-- Schedule Dropdown -->
+        <div class="relative" id="scheduleDropdown">
+          <button onclick="toggleScheduleDropdown()"
+            class="px-3 flex items-center justify-center gap-1.5 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white h-[42px] rounded-lg transition-colors text-sm font-medium"
+            title="Schedule Overview">
+            <i class="ti ti-calendar-event text-primary"></i>
+            <span>Schedule</span>
+            <i class="ti ti-chevron-down text-[10px] text-gray-400"></i>
+          </button>
+          <div id="scheduleDropdownMenu"
+            class="hidden absolute left-0 mt-2 w-40 bg-dark-700 border border-gray-600 rounded-lg shadow-lg z-20 overflow-hidden">
+            <button onclick="openScheduleModal('once')"
+              class="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-white bg-primary hover:bg-secondary transition-colors">
+              <i class="ti ti-calendar"></i>
+              <span>Once</span>
             </button>
-            <div id="scheduleDropdownMenu"
-              class="hidden absolute left-0 mt-2 w-40 bg-dark-700 border border-gray-600 rounded-lg shadow-lg z-20 overflow-hidden">
-              <button onclick="openScheduleModal('once')"
-                class="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-white bg-primary hover:bg-secondary transition-colors">
-                <i class="ti ti-calendar"></i>
-                <span>Once</span>
-              </button>
-              <button onclick="openScheduleModal('daily')"
-                class="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-300 hover:bg-dark-600 transition-colors">
-                <i class="ti ti-repeat"></i>
-                <span>Daily</span>
-              </button>
-              <button onclick="openScheduleModal('weekly')"
-                class="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-300 hover:bg-dark-600 transition-colors">
-                <i class="ti ti-calendar-week"></i>
-                <span>Weekly</span>
-              </button>
-            </div>
-          </div>
-          <div class="relative flex-1" id="backupDropdown">
-            <button onclick="toggleBackupDropdown()"
-              class="w-full flex items-center justify-center gap-1 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white h-[42px] rounded-lg transition-colors"
-              title="Backup Menu">
-              <i class="ti ti-settings-2"></i>
-              <i class="ti ti-chevron-down text-[10px]"></i>
+            <button onclick="openScheduleModal('daily')"
+              class="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-300 hover:bg-dark-600 transition-colors">
+              <i class="ti ti-repeat"></i>
+              <span>Daily</span>
             </button>
-            <div id="backupDropdownMenu"
-              class="hidden absolute right-0 mt-2 w-48 bg-dark-700 border border-gray-600 rounded-lg shadow-lg z-20 overflow-hidden">
-              <button onclick="resetAllStreamSettings()"
-                class="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-orange-400 hover:bg-orange-500/10 transition-colors border-b border-gray-600">
-                <i class="ti ti-refresh"></i>
-                <span>Reset All Stream</span>
-              </button>
-              <button onclick="exportStreamSettings()"
-                class="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-green-400 hover:bg-green-500/10 transition-colors border-b border-gray-600">
-                <i class="ti ti-download"></i>
-                <span>Export</span>
-              </button>
-              <button onclick="triggerImportFile()"
-                class="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-blue-400 hover:bg-blue-500/10 transition-colors border-b border-gray-600">
-                <i class="ti ti-upload"></i>
-                <span>Import</span>
-              </button>
-              <button onclick="deleteAllStreams()"
-                class="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors">
-                <i class="ti ti-trash"></i>
-                <span id="deleteAllLabel">Delete All</span>
-              </button>
-            </div>
+            <button onclick="openScheduleModal('weekly')"
+              class="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-300 hover:bg-dark-600 transition-colors">
+              <i class="ti ti-calendar-week"></i>
+              <span>Weekly</span>
+            </button>
           </div>
         </div>
+
+        <!-- Backup Dropdown -->
+        <div class="relative" id="backupDropdown">
+          <button onclick="toggleBackupDropdown()"
+            class="px-3 flex items-center justify-center gap-1.5 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white h-[42px] rounded-lg transition-colors text-sm font-medium"
+            title="Backup & Manage">
+            <i class="ti ti-settings-2 text-gray-300"></i>
+            <span>Manage</span>
+            <i class="ti ti-chevron-down text-[10px] text-gray-400"></i>
+          </button>
+          <div id="backupDropdownMenu"
+            class="hidden absolute right-0 mt-2 w-48 bg-dark-700 border border-gray-600 rounded-lg shadow-lg z-20 overflow-hidden">
+            <button onclick="resetAllStreamSettings()"
+              class="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-orange-400 hover:bg-orange-500/10 transition-colors border-b border-gray-600">
+              <i class="ti ti-refresh"></i>
+              <span>Reset All Stream</span>
+            </button>
+            <button onclick="exportStreamSettings()"
+              class="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-green-400 hover:bg-green-500/10 transition-colors border-b border-gray-600">
+              <i class="ti ti-download"></i>
+              <span>Export</span>
+            </button>
+            <button onclick="triggerImportFile()"
+              class="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-blue-400 hover:bg-blue-500/10 transition-colors border-b border-gray-600">
+              <i class="ti ti-upload"></i>
+              <span>Import</span>
+            </button>
+            <button onclick="deleteAllStreams()"
+              class="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors">
+              <i class="ti ti-trash"></i>
+              <span id="deleteAllLabel">Delete All</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Expand / Collapse All -->
         <button type="button" id="toggleAllGroupsBtn" onclick="toggleAllStreamGroups()"
-          class="flex items-center justify-center gap-2 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white h-[42px] rounded-lg transition-colors font-medium"
+          class="px-3 flex items-center justify-center gap-1.5 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white h-[42px] rounded-lg transition-colors text-sm font-medium"
           title="Expand/Collapse All Group">
-          <i class="ti ti-fold-down"></i>
-          <span id="toggleAllGroupsLabel">Expand All</span>
+          <i class="ti ti-fold-down text-gray-300"></i>
+          <span id="toggleAllGroupsLabel">Expand</span>
         </button>
       </div>
     </div>
@@ -434,16 +434,11 @@
             <i class="ti ti-filter absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
             <i class="ti ti-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
           </div>
-          <div class="mobile-stream-buttons grid grid-cols-4 gap-2 w-full">
-            <button type="button" onclick="openNewStreamModal()"
-              class="flex items-center justify-center gap-1 bg-primary hover:bg-secondary text-white px-2 py-2 rounded-lg transition-colors text-xs font-medium overflow-hidden">
-              <i class="ti ti-plus flex-shrink-0"></i>
-              <span class="truncate">New</span>
-            </button>
+          <div class="mobile-stream-buttons grid grid-cols-3 gap-2 w-full">
             <div class="relative" id="scheduleDropdownMobile">
               <button onclick="toggleScheduleDropdown()"
                 class="w-full flex items-center justify-center gap-1 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white px-2 py-2 rounded-lg transition-colors text-xs overflow-hidden">
-                <i class="ti ti-calendar-event flex-shrink-0"></i>
+                <i class="ti ti-calendar-event flex-shrink-0 text-primary"></i>
                 <span class="truncate">Schedule</span>
               </button>
             </div>
@@ -451,7 +446,7 @@
               <button onclick="toggleBackupDropdown()"
                 class="w-full flex items-center justify-center gap-1 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white px-2 py-2 rounded-lg transition-colors text-xs overflow-hidden">
                 <i class="ti ti-settings-2 flex-shrink-0"></i>
-                <span class="truncate">Backup</span>
+                <span class="truncate">Manage</span>
               </button>
             </div>
             <button type="button" id="toggleAllGroupsBtnMobile" onclick="toggleAllStreamGroups()"
