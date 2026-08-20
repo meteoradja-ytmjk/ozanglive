@@ -983,17 +983,9 @@
     <%- include('partials/youtube-studio') %>
   </div>
 
-  <script src="/js/youtube.js?v=1.1.4" defer></script>
+  <script src="/js/youtube.js?v=1.1.5" defer></script>
   <script src="/js/stream-modal.js?v=1.0.9" defer></script>
   <script>
-    function moveStudioModalsToBody() {
-      const panel = document.getElementById('studio-panel-broadcasts');
-      if (!panel) return;
-      panel.querySelectorAll('.modal-overlay').forEach(function(modal) {
-        document.body.appendChild(modal);
-      });
-    }
-
     function switchStudioTab(tabName) {
       const tabs = ['streams', 'broadcasts'];
       tabs.forEach(t => {
@@ -1021,7 +1013,6 @@
     }
 
     document.addEventListener('DOMContentLoaded', function() {
-      moveStudioModalsToBody();
       const urlParams = new URLSearchParams(window.location.search);
       const requestedTab = urlParams.get('tab');
       if (requestedTab && ['streams', 'broadcasts', 'youtube'].includes(requestedTab)) {
