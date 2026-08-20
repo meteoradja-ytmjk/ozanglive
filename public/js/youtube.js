@@ -1015,7 +1015,11 @@ async function loadReconnectTargets() {
 
 function openAddAccountModal(reconnectTarget = null) {
   selectedReconnectTarget = reconnectTarget;
-  document.getElementById('addAccountModal').classList.remove('hidden');
+  const modal = document.getElementById('addAccountModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.style.display = 'block';
+  }
   loadReconnectTargets();
 }
 
@@ -1029,8 +1033,13 @@ function openReconnectAccountModal(templateId, templateName, accountId, channelN
 }
 
 function closeAddAccountModal() {
-  document.getElementById('addAccountModal').classList.add('hidden');
-  document.getElementById('addAccountForm').reset();
+  const modal = document.getElementById('addAccountModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+  }
+  const form = document.getElementById('addAccountForm');
+  if (form) form.reset();
   selectedReconnectTarget = null;
 }
 
@@ -1195,7 +1204,11 @@ async function reconnectAccountOAuth(accountId, channelName) {
 async function openEditAccountModal(accountId, channelName) {
   document.getElementById('editAccountId').value = accountId;
   document.getElementById('editAccountChannelName').textContent = channelName || 'YouTube Channel';
-  document.getElementById('editAccountModal').classList.remove('hidden');
+  const modal = document.getElementById('editAccountModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.style.display = 'block';
+  }
 
   // Set token status to "checking" initially
   const tokenDot = document.getElementById('editTokenDot');
@@ -1276,8 +1289,13 @@ async function updateEditModalTokenStatus(accountId) {
 }
 
 function closeEditAccountModal() {
-  document.getElementById('editAccountModal').classList.add('hidden');
-  document.getElementById('editAccountForm').reset();
+  const modal = document.getElementById('editAccountModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+  }
+  const form = document.getElementById('editAccountForm');
+  if (form) form.reset();
   document.getElementById('editAccountId').value = '';
   document.getElementById('editAccountChannelName').textContent = '';
 }
@@ -4438,12 +4456,20 @@ document.addEventListener('keydown', (e) => {
 
 // Template Library Modal
 function openTemplateLibraryModal() {
-  document.getElementById('templateLibraryModal').classList.remove('hidden');
+  const modal = document.getElementById('templateLibraryModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.style.display = 'block';
+  }
   loadTemplates();
 }
 
 function closeTemplateLibraryModal() {
-  document.getElementById('templateLibraryModal').classList.add('hidden');
+  const modal = document.getElementById('templateLibraryModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+  }
 }
 
 // Load templates from API
@@ -7690,7 +7716,11 @@ let titleRotationFolderId = null;
  */
 async function openTitleManagerModal(context = 'edit') {
   titleManagerContext = context;
-  document.getElementById('titleManagerModal').classList.remove('hidden');
+  const modal = document.getElementById('titleManagerModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.style.display = 'block';
+  }
   
   // Load folders first, then rotation settings (which depends on folders)
   await loadTitleFolders();
@@ -7702,7 +7732,11 @@ async function openTitleManagerModal(context = 'edit') {
  * Close Title Manager Modal
  */
 function closeTitleManagerModal() {
-  document.getElementById('titleManagerModal').classList.add('hidden');
+  const modal = document.getElementById('titleManagerModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+  }
 }
 
 // ============================================
@@ -8025,54 +8059,39 @@ function openCreateTitleFolderModal() {
   nameEl.value = '';
   selectFolderColor('#8B5CF6');
   
-  // Show modal using classList (consistent with other modals)
   modal.classList.remove('hidden');
   modal.classList.add('flex');
+  modal.style.display = 'flex';
   
-  // Focus input after a short delay
   setTimeout(() => {
     nameEl.focus();
   }, 100);
-  
-  console.log('[TITLE FOLDER] Modal opened successfully');
 }
 
-/**
- * Open edit folder modal
- */
 function openEditFolderModal(id, name, color) {
-  console.log('[TITLE FOLDER] openEditFolderModal called:', { id, name, color });
-  
   const modal = document.getElementById('titleFolderModal');
-  if (!modal) {
-    console.error('[TITLE FOLDER] Modal titleFolderModal not found!');
-    showToast('Error: Modal tidak ditemukan', 'error');
-    return;
-  }
+  if (!modal) return;
   
   document.getElementById('folderModalTitle').textContent = 'Edit Folder';
   document.getElementById('editFolderId').value = id;
   document.getElementById('folderNameInput').value = name;
   selectFolderColor(color);
   
-  // Show modal using classList (consistent with other modals)
   modal.classList.remove('hidden');
   modal.classList.add('flex');
+  modal.style.display = 'flex';
   
-  // Focus input after a short delay
   setTimeout(() => {
     document.getElementById('folderNameInput').focus();
   }, 100);
 }
 
-/**
- * Close folder modal
- */
 function closeFolderModal() {
   const modal = document.getElementById('titleFolderModal');
   if (modal) {
     modal.classList.add('hidden');
     modal.classList.remove('flex');
+    modal.style.display = 'none';
   }
 }
 
@@ -9196,10 +9215,10 @@ function openThumbnailManagerModal() {
   
   console.log('[ThumbnailManager] Opening modal');
   modal.classList.remove('hidden');
+  modal.style.display = 'block';
   
   // Load folders and open first folder (or show empty state)
   fetchThumbnailFoldersForManager().then(() => {
-    // Auto-open first folder if exists, otherwise show empty gallery
     const firstFolder = document.querySelector('.folder-item-manager');
     if (firstFolder) {
       const folderName = firstFolder.querySelector('span.truncate')?.textContent;
@@ -9207,17 +9226,16 @@ function openThumbnailManagerModal() {
         openThumbnailFolderInManager(folderName);
       }
     } else {
-      // No folders, show empty state
       showEmptyFolderState();
     }
   });
 }
 
-// Close Thumbnail Manager Modal
 function closeThumbnailManagerModal() {
   const modal = document.getElementById('thumbnailManagerModal');
   if (modal) {
     modal.classList.add('hidden');
+    modal.style.display = 'none';
   }
   currentThumbnailFolderManager = null;
 }
