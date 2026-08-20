@@ -4340,11 +4340,13 @@ app.get('/api/stream/content', isAuthenticated, async (req, res) => {
       return {
         id: video.id,
         name: video.title,
+        title: video.title,
         thumbnail: video.thumbnail_path,
         resolution: video.resolution || '1280x720',
         duration: formattedDuration,
         url: `/stream/${video.id}`,
-        type: 'video'
+        type: 'video',
+        folder_name: (video.folder_name || '').trim() || null
       };
     });
 

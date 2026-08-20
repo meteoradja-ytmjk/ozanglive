@@ -3071,6 +3071,19 @@ async function loadStudioGalleryVideos() {
   }
 }
 
+function toggleStudioFolderGroup(groupId) {
+  const el = document.getElementById(groupId);
+  const icon = document.getElementById('icon-' + groupId);
+  if (!el) return;
+  if (el.classList.contains('hidden')) {
+    el.classList.remove('hidden');
+    if (icon) icon.style.transform = 'rotate(0deg)';
+  } else {
+    el.classList.add('hidden');
+    if (icon) icon.style.transform = 'rotate(-90deg)';
+  }
+}
+
 function handleStudioVideoSearch(e) {
   const query = e.target.value.toLowerCase().trim();
   if (!window.allStudioVideos) return;
@@ -3081,6 +3094,7 @@ function handleStudioVideoSearch(e) {
   const filtered = window.allStudioVideos.filter(v =>
     (v.name && v.name.toLowerCase().includes(query)) ||
     (v.title && v.title.toLowerCase().includes(query)) ||
+    (v.folder_name && v.folder_name.toLowerCase().includes(query)) ||
     (v.description && v.description.toLowerCase().includes(query))
   );
   displayFilteredStudioVideos(filtered);
@@ -3091,26 +3105,7 @@ function displayFilteredStudioVideos(videos) {
   if (!container) return;
   container.innerHTML = '';
 
-  if (videos && videos.length > 0) {
-    videos.forEach(v => {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'w-full flex items-center gap-3 p-2 rounded-lg hover:bg-dark-600 transition-colors text-left';
-      btn.onclick = () => selectStudioVideo(v);
-
-      const isPlaylist = v.type === 'playlist';
-      btn.innerHTML = `
-        <div class="w-12 h-9 bg-dark-800 rounded flex-shrink-0 overflow-hidden flex items-center justify-center border border-gray-700">
-          ${v.thumbnail ? `<img src="${v.thumbnail}" class="w-full h-full object-cover" onerror="this.src='/images/default-thumbnail.jpg'">` : (isPlaylist ? '<i class="ti ti-playlist text-blue-400 text-sm"></i>' : '<i class="ti ti-video text-primary text-sm"></i>')}
-        </div>
-        <div class="flex-1 min-w-0">
-          <p class="text-xs font-medium text-white truncate">${isPlaylist ? '<span class="text-blue-400 font-bold mr-1">[Playlist]</span>' : ''}${v.name || v.title}</p>
-          <p class="text-[10px] text-gray-400">${v.resolution || 'Video'} • ${v.duration || '0:00'}</p>
-        </div>
-      `;
-      container.appendChild(btn);
-    });
-  } else {
+  if (!videos || videos.length === 0) {
     container.innerHTML = `
       <div class="text-center py-6 text-gray-400">
         <i class="ti ti-video-off text-2xl mb-1 text-gray-500"></i>
@@ -3118,13 +3113,117 @@ function displayFilteredStudioVideos(videos) {
         <p class="text-[10px] text-gray-500 mt-0.5">Silakan upload video di menu Gallery</p>
       </div>
     `;
+    return;
+  }
+
+  const createVideoBtn = (v) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'w-full flex items-center gap-3 p-2 rounded-lg hover:bg-dark-700/80 transition-colors text-left border border-transparent hover:border-gray-600/50';
+    btn.onclick = () => selectStudioVideo(v);
+
+    const isPlaylist = v.type === 'playlist';
+    btn.innerHTML = `
+      <div class="w-12 h-9 bg-dark-900 rounded flex-shrink-0 overflow-hidden flex items-center justify-center border border-gray-700">
+        ${v.thumbnail ? `<img src="${v.thumbnail}" class="w-full h-full object-cover" onerror="this.src='/images/default-thumbnail.jpg'">` : (isPlaylist ? '<i class="ti ti-playlist text-blue-400 text-sm"></i>' : '<i class="ti ti-video text-primary text-sm"></i>')}
+      </div>
+      <div class="flex-1 min-w-0">
+        <p class="text-xs font-medium text-white truncate">${isPlaylist ? '<span class="text-blue-400 font-bold mr-1">[Playlist]</span>' : ''}${v.name || v.title}</p>
+        <p class="text-[10px] text-gray-400">${v.resolution || 'Video'} • ${v.duration || '0:00'}</p>
+      </div>
+    `;
+    return btn;
+  };
+
+  const playlists = [];
+  const foldersMap = {};
+  const rootVideos = [];
+
+  videos.forEach(v => {
+    if (v.type === 'playlist') {
+      playlists.push(v);
+    } else if (v.folder_name && v.folder_name.trim()) {
+      const fName = v.folder_name.trim();
+      if (!foldersMap[fName]) foldersMap[fName] = [];
+      foldersMap[fName].push(v);
+    } else {
+      rootVideos.push(v);
+    }
+  });
+
+  // 1. Playlists Group
+  if (playlists.length > 0) {
+    const plBox = document.createElement('div');
+    plBox.className = 'rounded-lg border border-blue-900/60 overflow-hidden mb-2 bg-[#0f172a]';
+    plBox.innerHTML = `
+      <div class="flex items-center justify-between px-3 py-2 bg-blue-950/70 hover:bg-blue-900/60 cursor-pointer transition-colors" onclick="toggleStudioFolderGroup('studio-pl-group')">
+        <div class="flex items-center gap-2">
+          <i class="ti ti-playlist text-blue-400 text-sm"></i>
+          <span class="text-xs font-bold text-blue-200">Playlists</span>
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-900 text-blue-200 font-medium">${playlists.length}</span>
+        </div>
+        <i class="ti ti-chevron-down text-blue-300 text-xs transition-transform" id="icon-studio-pl-group"></i>
+      </div>
+      <div id="studio-pl-group" class="p-1 space-y-1 bg-[#0f172a]"></div>
+    `;
+    const plList = plBox.querySelector('#studio-pl-group');
+    playlists.forEach(p => plList.appendChild(createVideoBtn(p)));
+    container.appendChild(plBox);
+  }
+
+  // 2. Folders
+  const folderNames = Object.keys(foldersMap).sort();
+  folderNames.forEach((fName, fIdx) => {
+    const fVideos = foldersMap[fName];
+    const groupId = `studio-v-folder-${fIdx}`;
+    const fBox = document.createElement('div');
+    fBox.className = 'rounded-lg border border-gray-700/60 overflow-hidden mb-2 bg-[#0f172a]';
+    fBox.innerHTML = `
+      <div class="flex items-center justify-between px-3 py-2 bg-[#1e293b] hover:bg-[#334155] cursor-pointer transition-colors" onclick="toggleStudioFolderGroup('${groupId}')">
+        <div class="flex items-center gap-2">
+          <i class="ti ti-folder-filled text-amber-400 text-sm"></i>
+          <span class="text-xs font-bold text-white">${fName}</span>
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-gray-700 text-gray-300 font-medium">${fVideos.length}</span>
+        </div>
+        <i class="ti ti-chevron-down text-gray-400 text-xs transition-transform" id="icon-${groupId}"></i>
+      </div>
+      <div id="${groupId}" class="p-1 space-y-1 bg-[#0f172a]"></div>
+    `;
+    const fList = fBox.querySelector(`#${groupId}`);
+    fVideos.forEach(v => fList.appendChild(createVideoBtn(v)));
+    container.appendChild(fBox);
+  });
+
+  // 3. Root / Uncategorized Videos
+  if (rootVideos.length > 0) {
+    if (folderNames.length > 0 || playlists.length > 0) {
+      const rBox = document.createElement('div');
+      rBox.className = 'rounded-lg border border-gray-700/60 overflow-hidden mb-2 bg-[#0f172a]';
+      rBox.innerHTML = `
+        <div class="flex items-center justify-between px-3 py-2 bg-[#1e293b] hover:bg-[#334155] cursor-pointer transition-colors" onclick="toggleStudioFolderGroup('studio-v-root')">
+          <div class="flex items-center gap-2">
+            <i class="ti ti-folder text-gray-400 text-sm"></i>
+            <span class="text-xs font-bold text-gray-300">File Lainnya (Di Luar Folder)</span>
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-gray-700 text-gray-300 font-medium">${rootVideos.length}</span>
+          </div>
+          <i class="ti ti-chevron-down text-gray-400 text-xs transition-transform" id="icon-studio-v-root"></i>
+        </div>
+        <div id="studio-v-root" class="p-1 space-y-1 bg-[#0f172a]"></div>
+      `;
+      const rList = rBox.querySelector('#studio-v-root');
+      rootVideos.forEach(v => rList.appendChild(createVideoBtn(v)));
+      container.appendChild(rBox);
+    } else {
+      rootVideos.forEach(v => container.appendChild(createVideoBtn(v)));
+    }
   }
 }
 
 function selectStudioVideo(video) {
   studioSelectedVideoData = video;
   const isPlaylist = video.type === 'playlist';
-  const displayText = isPlaylist ? `[Playlist] ${video.name}` : (video.name || video.title);
+  const folderPrefix = video.folder_name ? `[${video.folder_name}] ` : '';
+  const displayText = isPlaylist ? `[Playlist] ${video.name}` : `${folderPrefix}${video.name || video.title}`;
 
   const label = document.getElementById('studioSelectedVideo');
   const input = document.getElementById('studioSelectedVideoId');
@@ -3188,7 +3287,8 @@ function handleStudioAudioSearch(e) {
   }
   const filtered = window.allStudioAudios.filter(a =>
     (a.title && a.title.toLowerCase().includes(query)) ||
-    (a.name && a.name.toLowerCase().includes(query))
+    (a.name && a.name.toLowerCase().includes(query)) ||
+    (a.folder_name && a.folder_name.toLowerCase().includes(query))
   );
   displayFilteredStudioAudios(filtered);
 }
@@ -3198,24 +3298,7 @@ function displayFilteredStudioAudios(audios) {
   if (!container) return;
   container.innerHTML = '';
 
-  if (audios && audios.length > 0) {
-    audios.forEach(a => {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'w-full flex items-center gap-3 p-2 rounded-lg hover:bg-dark-600 transition-colors text-left';
-      btn.onclick = () => selectStudioAudio(a);
-      btn.innerHTML = `
-        <div class="w-8 h-8 bg-dark-800 rounded flex-shrink-0 flex items-center justify-center border border-gray-700">
-          <i class="ti ti-music text-primary text-xs"></i>
-        </div>
-        <div class="flex-1 min-w-0">
-          <p class="text-xs font-medium text-white truncate">${a.title || a.name}</p>
-          <p class="text-[10px] text-gray-400">${a.duration || 'Audio'}</p>
-        </div>
-      `;
-      container.appendChild(btn);
-    });
-  } else {
+  if (!audios || audios.length === 0) {
     container.innerHTML = `
       <div class="text-center py-6 text-gray-400">
         <i class="ti ti-music-off text-2xl mb-1 text-gray-500"></i>
@@ -3223,15 +3306,92 @@ function displayFilteredStudioAudios(audios) {
         <p class="text-[10px] text-gray-500 mt-0.5">Silakan upload audio di menu Gallery</p>
       </div>
     `;
+    return;
+  }
+
+  const createAudioBtn = (a) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'w-full flex items-center gap-3 p-2 rounded-lg hover:bg-dark-700/80 transition-colors text-left border border-transparent hover:border-gray-600/50';
+    btn.onclick = () => selectStudioAudio(a);
+    btn.innerHTML = `
+      <div class="w-8 h-8 bg-dark-900 rounded flex-shrink-0 flex items-center justify-center border border-gray-700">
+        <i class="ti ti-music text-primary text-xs"></i>
+      </div>
+      <div class="flex-1 min-w-0">
+        <p class="text-xs font-medium text-white truncate">${a.title || a.name}</p>
+        <p class="text-[10px] text-gray-400">${a.duration || 'Audio'}</p>
+      </div>
+    `;
+    return btn;
+  };
+
+  const foldersMap = {};
+  const rootAudios = [];
+
+  audios.forEach(a => {
+    if (a.folder_name && a.folder_name.trim()) {
+      const fName = a.folder_name.trim();
+      if (!foldersMap[fName]) foldersMap[fName] = [];
+      foldersMap[fName].push(a);
+    } else {
+      rootAudios.push(a);
+    }
+  });
+
+  const folderNames = Object.keys(foldersMap).sort();
+  folderNames.forEach((fName, fIdx) => {
+    const fAudios = foldersMap[fName];
+    const groupId = `studio-a-folder-${fIdx}`;
+    const fBox = document.createElement('div');
+    fBox.className = 'rounded-lg border border-gray-700/60 overflow-hidden mb-2 bg-[#0f172a]';
+    fBox.innerHTML = `
+      <div class="flex items-center justify-between px-3 py-2 bg-[#1e293b] hover:bg-[#334155] cursor-pointer transition-colors" onclick="toggleStudioFolderGroup('${groupId}')">
+        <div class="flex items-center gap-2">
+          <i class="ti ti-folder-filled text-emerald-400 text-sm"></i>
+          <span class="text-xs font-bold text-white">${fName}</span>
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-gray-700 text-gray-300 font-medium">${fAudios.length}</span>
+        </div>
+        <i class="ti ti-chevron-down text-gray-400 text-xs transition-transform" id="icon-${groupId}"></i>
+      </div>
+      <div id="${groupId}" class="p-1 space-y-1 bg-[#0f172a]"></div>
+    `;
+    const fList = fBox.querySelector(`#${groupId}`);
+    fAudios.forEach(a => fList.appendChild(createAudioBtn(a)));
+    container.appendChild(fBox);
+  });
+
+  if (rootAudios.length > 0) {
+    if (folderNames.length > 0) {
+      const rBox = document.createElement('div');
+      rBox.className = 'rounded-lg border border-gray-700/60 overflow-hidden mb-2 bg-[#0f172a]';
+      rBox.innerHTML = `
+        <div class="flex items-center justify-between px-3 py-2 bg-[#1e293b] hover:bg-[#334155] cursor-pointer transition-colors" onclick="toggleStudioFolderGroup('studio-a-root')">
+          <div class="flex items-center gap-2">
+            <i class="ti ti-folder text-gray-400 text-sm"></i>
+            <span class="text-xs font-bold text-gray-300">Audio Lainnya (Di Luar Folder)</span>
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-gray-700 text-gray-300 font-medium">${rootAudios.length}</span>
+          </div>
+          <i class="ti ti-chevron-down text-gray-400 text-xs transition-transform" id="icon-studio-a-root"></i>
+        </div>
+        <div id="studio-a-root" class="p-1 space-y-1 bg-[#0f172a]"></div>
+      `;
+      const rList = rBox.querySelector('#studio-a-root');
+      rootAudios.forEach(a => rList.appendChild(createAudioBtn(a)));
+      container.appendChild(rBox);
+    } else {
+      rootAudios.forEach(a => container.appendChild(createAudioBtn(a)));
+    }
   }
 }
 
 function selectStudioAudio(audio) {
   studioSelectedAudioData = audio;
+  const folderPrefix = audio.folder_name ? `[${audio.folder_name}] ` : '';
   const label = document.getElementById('studioSelectedAudio');
   const input = document.getElementById('studioSelectedAudioId');
   const clearBtn = document.getElementById('studioClearAudioBtn');
-  if (label) label.textContent = audio.title || audio.name;
+  if (label) label.textContent = `${folderPrefix}${audio.title || audio.name}`;
   if (input) input.value = audio.id;
   if (clearBtn) clearBtn.classList.remove('hidden');
 
