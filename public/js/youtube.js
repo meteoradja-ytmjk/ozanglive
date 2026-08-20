@@ -2988,6 +2988,10 @@ function openCreateBroadcastModal() {
   // Initialize tag input
   initTagInput();
   
+  // Pre-load gallery videos and audios
+  loadStudioGalleryVideos();
+  loadStudioGalleryAudios();
+
   // Get selected account ID
   const accountSelect = document.getElementById('accountSelect');
   const accountId = accountSelect ? accountSelect.value : null;
@@ -3048,10 +3052,10 @@ async function loadStudioGalleryVideos() {
     if (!container) return;
 
     container.innerHTML = '<div class="text-center py-4 text-gray-400 text-xs"><i class="ti ti-loader animate-spin mr-1"></i> Memuat video dari galeri...</div>';
-    const res = await fetch('/api/videos');
-    const videos = await res.json();
-    window.allStudioVideos = videos;
-    displayFilteredStudioVideos(videos);
+    const res = await fetch('/api/stream/content');
+    const content = await res.json();
+    window.allStudioVideos = content;
+    displayFilteredStudioVideos(content);
 
     const searchInput = document.getElementById('studioVideoSearchInput');
     if (searchInput) {
@@ -3060,6 +3064,10 @@ async function loadStudioGalleryVideos() {
     }
   } catch (err) {
     console.error('Error loading gallery videos:', err);
+    const container = document.getElementById('studioVideoListContainer');
+    if (container) {
+      container.innerHTML = '<div class="text-center py-4 text-red-400 text-xs"><i class="ti ti-alert-circle mr-1"></i> Gagal memuat video galeri</div>';
+    }
   }
 }
 
@@ -3072,7 +3080,8 @@ function handleStudioVideoSearch(e) {
   }
   const filtered = window.allStudioVideos.filter(v =>
     (v.name && v.name.toLowerCase().includes(query)) ||
-    (v.title && v.title.toLowerCase().includes(query))
+    (v.title && v.title.toLowerCase().includes(query)) ||
+    (v.description && v.description.toLowerCase().includes(query))
   );
   displayFilteredStudioVideos(filtered);
 }
@@ -3088,28 +3097,44 @@ function displayFilteredStudioVideos(videos) {
       btn.type = 'button';
       btn.className = 'w-full flex items-center gap-3 p-2 rounded-lg hover:bg-dark-600 transition-colors text-left';
       btn.onclick = () => selectStudioVideo(v);
+
+      const isPlaylist = v.type === 'playlist';
       btn.innerHTML = `
         <div class="w-12 h-9 bg-dark-800 rounded flex-shrink-0 overflow-hidden flex items-center justify-center border border-gray-700">
-          ${v.thumbnail ? `<img src="${v.thumbnail}" class="w-full h-full object-cover" onerror="this.src='/images/default-thumbnail.jpg'">` : '<i class="ti ti-video text-primary text-sm"></i>'}
+          ${v.thumbnail ? `<img src="${v.thumbnail}" class="w-full h-full object-cover" onerror="this.src='/images/default-thumbnail.jpg'">` : (isPlaylist ? '<i class="ti ti-playlist text-blue-400 text-sm"></i>' : '<i class="ti ti-video text-primary text-sm"></i>')}
         </div>
         <div class="flex-1 min-w-0">
-          <p class="text-xs font-medium text-white truncate">${v.name || v.title}</p>
+          <p class="text-xs font-medium text-white truncate">${isPlaylist ? '<span class="text-blue-400 font-bold mr-1">[Playlist]</span>' : ''}${v.name || v.title}</p>
           <p class="text-[10px] text-gray-400">${v.resolution || 'Video'} • ${v.duration || '0:00'}</p>
         </div>
       `;
       container.appendChild(btn);
     });
   } else {
-    container.innerHTML = '<div class="text-center py-4 text-gray-500 text-xs">Tidak ada video ditemukan</div>';
+    container.innerHTML = `
+      <div class="text-center py-6 text-gray-400">
+        <i class="ti ti-video-off text-2xl mb-1 text-gray-500"></i>
+        <p class="text-xs">Tidak ada video di galeri</p>
+        <p class="text-[10px] text-gray-500 mt-0.5">Silakan upload video di menu Gallery</p>
+      </div>
+    `;
   }
 }
 
 function selectStudioVideo(video) {
   studioSelectedVideoData = video;
+  const isPlaylist = video.type === 'playlist';
+  const displayText = isPlaylist ? `[Playlist] ${video.name}` : (video.name || video.title);
+
   const label = document.getElementById('studioSelectedVideo');
   const input = document.getElementById('studioSelectedVideoId');
-  if (label) label.textContent = video.name || video.title;
+  const icon = document.getElementById('studioVideoIcon');
+
+  if (label) label.textContent = displayText;
   if (input) input.value = video.id;
+  if (icon) {
+    icon.className = isPlaylist ? 'ti ti-playlist text-blue-400' : 'ti ti-movie text-primary';
+  }
 
   const dropdown = document.getElementById('studioVideoSelectorDropdown');
   if (dropdown) dropdown.classList.add('hidden');
@@ -3147,6 +3172,10 @@ async function loadStudioGalleryAudios() {
     }
   } catch (err) {
     console.error('Error loading gallery audios:', err);
+    const container = document.getElementById('studioAudioListContainer');
+    if (container) {
+      container.innerHTML = '<div class="text-center py-4 text-red-400 text-xs"><i class="ti ti-alert-circle mr-1"></i> Gagal memuat audio galeri</div>';
+    }
   }
 }
 
@@ -3187,7 +3216,13 @@ function displayFilteredStudioAudios(audios) {
       container.appendChild(btn);
     });
   } else {
-    container.innerHTML = '<div class="text-center py-4 text-gray-500 text-xs">Tidak ada audio ditemukan</div>';
+    container.innerHTML = `
+      <div class="text-center py-6 text-gray-400">
+        <i class="ti ti-music-off text-2xl mb-1 text-gray-500"></i>
+        <p class="text-xs">Tidak ada file audio di galeri</p>
+        <p class="text-[10px] text-gray-500 mt-0.5">Silakan upload audio di menu Gallery</p>
+      </div>
+    `;
   }
 }
 
