@@ -2972,21 +2972,57 @@ function initTagInput() {
   });
 }
 
+// Safe date-time formatter for local WIB
+function formatDateTimeLocal(isoString) {
+  if (!isoString) return '';
+  const date = new Date(isoString);
+  if (isNaN(date.getTime())) return '';
+  try {
+    const fmt = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Jakarta',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hour12: false
+    });
+    const parts = fmt.formatToParts(date);
+    const get = (t) => (parts.find(p => p.type === t) || {}).value || '00';
+    let hours = get('hour');
+    if (hours === '24') hours = '00';
+    return `${get('year')}-${get('month')}-${get('day')}T${hours}:${get('minute')}`;
+  } catch (e) {
+    const wib = new Date(date.getTime() + 7 * 60 * 60 * 1000);
+    const pad = n => String(n).padStart(2, '0');
+    return `${wib.getUTCFullYear()}-${pad(wib.getUTCMonth() + 1)}-${pad(wib.getUTCDate())}T${pad(wib.getUTCHours())}:${pad(wib.getUTCMinutes())}`;
+  }
+}
+window.formatDateTimeLocal = formatDateTimeLocal;
+
 // Create Broadcast Modal
 function openCreateBroadcastModal() {
-  document.getElementById('createBroadcastModal').classList.remove('hidden');
+  const modal = document.getElementById('createBroadcastModal');
+  if (!modal) {
+    console.error('createBroadcastModal element not found');
+    return;
+  }
+  
+  if (modal.parentElement !== document.body) {
+    document.body.appendChild(modal);
+  }
+  
+  modal.classList.remove('hidden');
+  modal.style.display = 'block';
   
   // Set minimum datetime to 10 minutes from now
   const minDate = new Date(Date.now() + 11 * 60 * 1000);
   const minDateStr = minDate.toISOString().slice(0, 16);
-  document.getElementById('scheduledStartTime').min = minDateStr;
+  const scheduledInput = document.getElementById('scheduledStartTime');
+  if (scheduledInput) scheduledInput.min = minDateStr;
   
   // Reset tags
   currentTags = [];
-  renderTags();
+  if (typeof renderTags === 'function') renderTags();
   
   // Initialize tag input
-  initTagInput();
+  if (typeof initTagInput === 'function') initTagInput();
   
   // Pre-load gallery videos and audios
   loadStudioGalleryVideos();
@@ -3004,11 +3040,12 @@ function openCreateBroadcastModal() {
   if (indicator) indicator.classList.add('hidden');
   
   // Fetch streams, thumbnails, folders, and channel defaults for selected account
-  fetchStreams(accountId);
-  fetchThumbnailFolders();
-  fetchThumbnails(null);
-  fetchChannelDefaults(accountId);
+  if (typeof fetchStreams === 'function') fetchStreams(accountId);
+  if (typeof fetchThumbnailFolders === 'function') fetchThumbnailFolders();
+  if (typeof fetchThumbnails === 'function') fetchThumbnails(null);
+  if (typeof fetchChannelDefaults === 'function') fetchChannelDefaults(accountId);
 }
+window.openCreateBroadcastModal = openCreateBroadcastModal;
 
 function openThumbnailManager() {
   openCreateBroadcastModal();
@@ -3622,7 +3659,10 @@ window.openEditStudioModal = function(stream) {
 
 function closeCreateBroadcastModal() {
   const modal = document.getElementById('createBroadcastModal');
-  if (modal) modal.classList.add('hidden');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+  }
   
   const form = document.getElementById('createBroadcastForm');
   if (form) {
