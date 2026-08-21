@@ -10816,6 +10816,8 @@ app.post('/api/youtube/templates/:id/create-broadcast', isAuthenticated, async (
       }
     }
 
+    invalidateBroadcastsCache(req.session.userId);
+
     res.json({
       success: true,
       broadcast: {
@@ -10946,6 +10948,8 @@ app.post('/api/youtube/templates/:id/bulk-create', isAuthenticated, async (req, 
         });
       }
     }
+
+    invalidateBroadcastsCache(req.session.userId);
 
     // Return 207 Multi-Status if there were partial failures
     const statusCode = results.failed > 0 && results.success > 0 ? 207 :

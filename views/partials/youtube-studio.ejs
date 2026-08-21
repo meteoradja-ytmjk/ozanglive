@@ -543,7 +543,7 @@
       <button type="button" onclick="openCreateBroadcastModal()"
         class="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 active:scale-95 text-white px-4 py-3 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 font-semibold text-sm shadow-lg shadow-red-500/25 hover:shadow-red-500/40 cursor-pointer touch-manipulation min-h-[48px]">
         <i class="ti ti-plus text-xl"></i>
-        <span>Create</span>
+        <span>Create Broadcast</span>
       </button>
     </div>
   </div>
@@ -844,20 +844,24 @@
           
           <!-- Title with Title Manager -->
           <div>
-            <div class="flex items-center justify-between mb-1.5">
-              <label class="text-sm font-medium text-white">
-                Judul Live <span class="text-red-400">*</span>
-                <span id="titleAutoFillIndicator" class="hidden ml-2 text-xs text-green-400" title="Auto-filled from YouTube defaults">
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+              <label class="text-sm font-medium text-white flex items-center gap-1.5">
+                <span>Judul Live</span> <span class="text-red-400 font-bold">*</span>
+                <span id="titleAutoFillIndicator" class="hidden ml-1 text-[11px] text-green-400 bg-green-500/10 border border-green-500/20 px-1.5 py-0.5 rounded" title="Auto-filled from YouTube defaults">
                   <i class="ti ti-sparkles"></i> Auto-filled
                 </span>
               </label>
-              <div class="flex items-center gap-2">
-                <button type="button" onclick="saveCurrentTitleToManager('create')" class="text-xs text-green-400 hover:text-green-300 flex items-center gap-1" title="Save current title">
-                  <i class="ti ti-bookmark"></i>
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <button type="button" onclick="saveCurrentTitleToManager('create')" 
+                  class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 hover:border-emerald-500/50 rounded-lg transition-all active:scale-95 shadow-xs" 
+                  title="Simpan judul saat ini ke database">
+                  <i class="ti ti-bookmark text-xs"></i>
                   <span>Simpan</span>
                 </button>
-                <button type="button" onclick="openTitleManagerModal('create')" class="text-xs text-primary hover:text-primary/80 flex items-center gap-1">
-                  <i class="ti ti-list"></i>
+                <button type="button" onclick="openTitleManagerModal('create')" 
+                  class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-purple-300 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 hover:border-purple-500/50 rounded-lg transition-all active:scale-95 shadow-xs"
+                  title="Buka pengelola judul & rotasi">
+                  <i class="ti ti-rotate-clockwise text-xs text-purple-400"></i>
                   <span>Title Manager (Rotasi)</span>
                 </button>
               </div>
@@ -1644,15 +1648,22 @@
         
         <!-- Title with Title Manager -->
         <div>
-          <div class="flex items-center justify-between mb-2">
-            <label class="text-sm font-medium text-white">Title <span class="text-red-400">*</span></label>
-            <div class="flex items-center gap-2">
-              <button type="button" onclick="saveCurrentTitleToManager('edit')" class="text-xs text-green-400 hover:text-green-300 flex items-center gap-1" title="Save current title">
-                <i class="ti ti-bookmark"></i>
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+            <label class="text-sm font-medium text-white flex items-center gap-1.5">
+              <span>Title</span> <span class="text-red-400 font-bold">*</span>
+            </label>
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <button type="button" onclick="saveCurrentTitleToManager('edit')" 
+                class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 hover:border-emerald-500/50 rounded-lg transition-all active:scale-95 shadow-xs" 
+                title="Simpan judul saat ini">
+                <i class="ti ti-bookmark text-xs"></i>
+                <span>Simpan</span>
               </button>
-              <button type="button" onclick="openTitleManagerModal('edit')" class="text-xs text-primary hover:text-primary/80 flex items-center gap-1">
-                <i class="ti ti-list"></i>
-                <span>Manage Titles</span>
+              <button type="button" onclick="openTitleManagerModal('edit')" 
+                class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-purple-300 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 hover:border-purple-500/50 rounded-lg transition-all active:scale-95 shadow-xs"
+                title="Buka pengelola judul & rotasi">
+                <i class="ti ti-rotate-clockwise text-xs text-purple-400"></i>
+                <span>Title Manager (Rotasi)</span>
               </button>
             </div>
           </div>

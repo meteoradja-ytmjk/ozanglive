@@ -341,6 +341,14 @@
       </div>
       <!-- Right: Control Room Tools & Filter (Pure Monitoring & Operations) -->
       <div class="flex items-center gap-2 shrink-0">
+        <!-- Create Broadcast Button -->
+        <button type="button" onclick="openCreateBroadcastModal()"
+          class="px-3.5 flex items-center justify-center gap-2 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 active:scale-95 text-white h-[42px] rounded-lg transition-all text-sm font-semibold shadow-md shadow-red-500/25 hover:shadow-red-500/40 cursor-pointer touch-manipulation min-w-max"
+          title="Create YouTube Broadcast">
+          <i class="ti ti-plus text-base font-bold"></i>
+          <span>Create Broadcast</span>
+        </button>
+
         <!-- All Streams Filter -->
         <div class="relative w-44">
           <select id="streamFilter" onchange="applyStreamFilter(this.value)"
@@ -434,7 +442,12 @@
             <i class="ti ti-filter absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
             <i class="ti ti-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
           </div>
-          <div class="mobile-stream-buttons grid grid-cols-3 gap-2 w-full">
+          <div class="mobile-stream-buttons grid grid-cols-4 gap-2 w-full">
+            <button type="button" onclick="openCreateBroadcastModal()"
+              class="flex items-center justify-center gap-1 bg-gradient-to-r from-red-500 to-red-600 text-white px-2 py-2 rounded-lg transition-all text-xs font-semibold overflow-hidden active:scale-95 shadow-sm shadow-red-500/30">
+              <i class="ti ti-plus flex-shrink-0"></i>
+              <span class="truncate">Create</span>
+            </button>
             <div class="relative" id="scheduleDropdownMobile">
               <button onclick="toggleScheduleDropdown()"
                 class="w-full flex items-center justify-center gap-1 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white px-2 py-2 rounded-lg transition-colors text-xs overflow-hidden">

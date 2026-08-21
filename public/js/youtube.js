@@ -3029,11 +3029,18 @@ function openCreateBroadcastModal() {
   modal.classList.remove('hidden');
   modal.style.display = 'block';
   
-  // Set minimum datetime to 10 minutes from now
+  // Set minimum and default datetime to at least 15 minutes from now (formatted for local timezone)
   const minDate = new Date(Date.now() + 11 * 60 * 1000);
-  const minDateStr = minDate.toISOString().slice(0, 16);
+  const defaultDate = new Date(Date.now() + 15 * 60 * 1000);
+  const minDateStr = typeof formatDateTimeLocal === 'function' ? formatDateTimeLocal(minDate) : minDate.toISOString().slice(0, 16);
+  const defaultDateStr = typeof formatDateTimeLocal === 'function' ? formatDateTimeLocal(defaultDate) : defaultDate.toISOString().slice(0, 16);
   const scheduledInput = document.getElementById('scheduledStartTime');
-  if (scheduledInput) scheduledInput.min = minDateStr;
+  if (scheduledInput) {
+    scheduledInput.min = minDateStr;
+    if (!scheduledInput.value) {
+      scheduledInput.value = defaultDateStr;
+    }
+  }
   
   // Reset tags
   currentTags = [];
@@ -3528,6 +3535,11 @@ function toggleStudioDay(dayIndex) {
 function submitBroadcastAndStartNow() {
   const form = document.getElementById('createBroadcastForm');
   if (!form) return;
+  const scheduledInput = document.getElementById('scheduledStartTime');
+  if (scheduledInput && !scheduledInput.value) {
+    const defaultDate = new Date(Date.now() + 15 * 60 * 1000);
+    scheduledInput.value = typeof formatDateTimeLocal === 'function' ? formatDateTimeLocal(defaultDate) : defaultDate.toISOString().slice(0, 16);
+  }
   form.dataset.startImmediately = 'true';
   form.requestSubmit();
 }
