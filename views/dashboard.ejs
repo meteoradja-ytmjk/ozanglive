@@ -1007,8 +1007,9 @@
         window.history.replaceState({}, '', url);
       } catch (e) {}
 
-      if (tabName === 'broadcasts' && typeof refreshLiveStats === 'function') {
-        refreshLiveStats();
+      if (tabName === 'broadcasts') {
+        if (typeof refreshLiveStats === 'function') refreshLiveStats();
+        if (typeof lazyLoadBroadcasts === 'function') lazyLoadBroadcasts();
       }
     }
 
@@ -3006,7 +3007,7 @@
           const stream = result.stream;
 
           document.getElementById('scheduleEditStreamId').value = streamId;
-          document.getElementById('scheduleEditType').value = stream.schedule_type;
+          document.getElementById('scheduleEditType').value = stream.schedule_type || 'once';
           document.getElementById('scheduleEditTitle').value = stream.title || '';
 
           // Hide all settings first
@@ -3014,38 +3015,48 @@
           document.getElementById('scheduleEditRecurringSettings').classList.add('hidden');
           document.getElementById('scheduleEditWeeklyDays').classList.add('hidden');
 
-          if (stream.schedule_type === 'once') {
+          if (stream.schedule_type === 'once' || !stream.schedule_type) {
             document.getElementById('scheduleEditOnceSettings').classList.remove('hidden');
             if (stream.schedule_time) {
-              document.getElementById('scheduleEditStartTime').value = formatDateTimeLocal(stream.schedule_time);
+              document.getElementById('scheduleEditStartTime').value = typeof formatDateTimeLocal === 'function' ? formatDateTimeLocal(stream.schedule_time) : stream.schedule_time.slice(0, 16);
+            } else {
+              document.getElementById('scheduleEditStartTime').value = '';
             }
             if (stream.end_time) {
-              document.getElementById('scheduleEditEndTime').value = formatDateTimeLocal(stream.end_time);
+              document.getElementById('scheduleEditEndTime').value = typeof formatDateTimeLocal === 'function' ? formatDateTimeLocal(stream.end_time) : stream.end_time.slice(0, 16);
+            } else {
+              document.getElementById('scheduleEditEndTime').value = '';
             }
           } else {
             document.getElementById('scheduleEditRecurringSettings').classList.remove('hidden');
             document.getElementById('scheduleEditRecurringTime').value = stream.recurring_time || '';
-            document.getElementById('scheduleEditRecurringEnabled').checked = stream.recurring_enabled !== false;
+            document.getElementById('scheduleEditRecurringEnabled').checked = stream.recurring_enabled !== false && stream.recurring_enabled !== 0;
 
             if (stream.schedule_type === 'weekly') {
               document.getElementById('scheduleEditWeeklyDays').classList.remove('hidden');
-              scheduleEditSelectedDays = Array.isArray(stream.schedule_days) ? [...stream.schedule_days] : [];
+              let days = stream.schedule_days;
+              if (typeof days === 'string') {
+                try { days = JSON.parse(days); } catch(e) { days = []; }
+              }
+              scheduleEditSelectedDays = Array.isArray(days) ? [...days] : [];
               updateScheduleEditDayButtons();
             }
           }
 
           // Duration
-          const totalMinutes = stream.stream_duration_minutes || 0;
+          const totalMinutes = stream.stream_duration_minutes || stream.duration || 0;
           document.getElementById('scheduleEditDurationHours').value = Math.floor(totalMinutes / 60) || '';
           document.getElementById('scheduleEditDurationMinutes').value = totalMinutes % 60 || '';
 
           document.getElementById('scheduleEditModal').classList.remove('hidden');
         } else {
-          showToast('error', 'Failed to load stream data');
+          if (typeof showCenterToast === 'function') showCenterToast('error', 'Failed to load stream data');
+          else if (typeof showToast === 'function') showToast('Failed to load stream data', 'error');
         }
       } catch (error) {
         console.error('Error loading stream:', error);
-        showToast('error', 'Failed to load stream');
+        if (typeof showCenterToast === 'function') showCenterToast('error', 'Failed to load stream');
+        else if (typeof showToast === 'function') showToast('Failed to load stream', 'error');
       }
     }
 
@@ -3082,24 +3093,39 @@
       const streamId = document.getElementById('scheduleEditStreamId').value;
       if (!streamId || !currentScheduleEditStream) return;
 
-      const updateData = {
-        title: document.getElementById('scheduleEditTitle').value
-      };
-
       const hours = parseInt(document.getElementById('scheduleEditDurationHours').value) || 0;
       const minutes = parseInt(document.getElementById('scheduleEditDurationMinutes').value) || 0;
-      updateData.stream_duration_minutes = hours * 60 + minutes;
+
+      const updateData = {
+        streamTitle: document.getElementById('scheduleEditTitle').value,
+        title: document.getElementById('scheduleEditTitle').value,
+        streamDurationHours: hours,
+        streamDurationMinutes: minutes,
+        stream_duration_minutes: hours * 60 + minutes,
+        scheduleType: currentScheduleEditStream.schedule_type
+      };
 
       if (currentScheduleEditStream.schedule_type === 'once') {
         const startTime = document.getElementById('scheduleEditStartTime').value;
         const endTime = document.getElementById('scheduleEditEndTime').value;
-        if (startTime) updateData.schedule_time = new Date(startTime).toISOString();
-        if (endTime) updateData.end_time = new Date(endTime).toISOString();
+        if (startTime) {
+          updateData.scheduleStartTime = startTime;
+          updateData.schedule_time = startTime;
+        }
+        if (endTime) {
+          updateData.scheduleEndTime = endTime;
+          updateData.end_time = endTime;
+        }
       } else {
-        updateData.recurring_time = document.getElementById('scheduleEditRecurringTime').value;
-        updateData.recurring_enabled = document.getElementById('scheduleEditRecurringEnabled').checked;
+        const recTime = document.getElementById('scheduleEditRecurringTime').value;
+        const recEnabled = document.getElementById('scheduleEditRecurringEnabled').checked;
+        updateData.recurringTime = recTime;
+        updateData.recurring_time = recTime;
+        updateData.recurringEnabled = recEnabled;
+        updateData.recurring_enabled = recEnabled;
 
         if (currentScheduleEditStream.schedule_type === 'weekly') {
+          updateData.scheduleDays = JSON.stringify(scheduleEditSelectedDays);
           updateData.schedule_days = JSON.stringify(scheduleEditSelectedDays);
         }
       }
@@ -3107,22 +3133,40 @@
       try {
         const response = await fetch('/api/streams/' + streamId, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': typeof getCsrfToken === 'function' ? getCsrfToken() : ''
+          },
           body: JSON.stringify(updateData)
         });
 
         const result = await response.json();
 
         if (result.success) {
-          showToast('success', 'Schedule updated');
+          if (typeof showCenterToast === 'function') {
+            showCenterToast('success', 'Schedule updated');
+          } else if (typeof showToast === 'function') {
+            showToast('Schedule updated', 'success');
+          }
           closeScheduleEditModal();
-          loadSchedules(currentScheduleType);
+          await loadSchedules(currentScheduleType);
+          if (typeof loadStreams === 'function') {
+            await loadStreams();
+          }
         } else {
-          showToast('error', result.error || 'Failed to update');
+          if (typeof showCenterToast === 'function') {
+            showCenterToast('error', result.error || 'Failed to update');
+          } else if (typeof showToast === 'function') {
+            showToast(result.error || 'Failed to update', 'error');
+          }
         }
       } catch (error) {
         console.error('Error updating schedule:', error);
-        showToast('error', 'Failed to update schedule');
+        if (typeof showCenterToast === 'function') {
+          showCenterToast('error', 'Failed to update schedule');
+        } else if (typeof showToast === 'function') {
+          showToast('Failed to update schedule', 'error');
+        }
       }
     }
 
