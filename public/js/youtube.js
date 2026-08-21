@@ -3022,36 +3022,42 @@ function openCreateBroadcastModal() {
     return;
   }
   
-  if (modal.parentElement !== document.body) {
-    document.body.appendChild(modal);
-  }
-  
   modal.classList.remove('hidden');
-  modal.style.display = 'block';
+  modal.style.setProperty('display', 'block', 'important');
   
   // Set minimum and default datetime to at least 15 minutes from now (formatted for local timezone)
-  const minDate = new Date(Date.now() + 11 * 60 * 1000);
-  const defaultDate = new Date(Date.now() + 15 * 60 * 1000);
-  const minDateStr = typeof formatDateTimeLocal === 'function' ? formatDateTimeLocal(minDate) : minDate.toISOString().slice(0, 16);
-  const defaultDateStr = typeof formatDateTimeLocal === 'function' ? formatDateTimeLocal(defaultDate) : defaultDate.toISOString().slice(0, 16);
-  const scheduledInput = document.getElementById('scheduledStartTime');
-  if (scheduledInput) {
-    scheduledInput.min = minDateStr;
-    if (!scheduledInput.value) {
-      scheduledInput.value = defaultDateStr;
+  try {
+    const minDate = new Date(Date.now() + 11 * 60 * 1000);
+    const defaultDate = new Date(Date.now() + 15 * 60 * 1000);
+    const minDateStr = typeof formatDateTimeLocal === 'function' ? formatDateTimeLocal(minDate) : minDate.toISOString().slice(0, 16);
+    const defaultDateStr = typeof formatDateTimeLocal === 'function' ? formatDateTimeLocal(defaultDate) : defaultDate.toISOString().slice(0, 16);
+    const scheduledInput = document.getElementById('scheduledStartTime');
+    if (scheduledInput) {
+      scheduledInput.min = minDateStr;
+      if (!scheduledInput.value) {
+        scheduledInput.value = defaultDateStr;
+      }
     }
+  } catch (e) {
+    console.warn('[openCreateBroadcastModal] Date setup warning:', e);
   }
   
-  // Reset tags
-  currentTags = [];
-  if (typeof renderTags === 'function') renderTags();
-  
-  // Initialize tag input
-  if (typeof initTagInput === 'function') initTagInput();
+  // Reset tags safely
+  try {
+    currentTags = [];
+    if (typeof renderTags === 'function') renderTags();
+    if (typeof initTagInput === 'function') initTagInput();
+  } catch (e) {
+    console.warn('[openCreateBroadcastModal] Tag setup warning:', e);
+  }
   
   // Pre-load gallery videos and audios
-  loadStudioGalleryVideos();
-  loadStudioGalleryAudios();
+  try {
+    if (typeof loadStudioGalleryVideos === 'function') loadStudioGalleryVideos();
+    if (typeof loadStudioGalleryAudios === 'function') loadStudioGalleryAudios();
+  } catch (e) {
+    console.warn('[openCreateBroadcastModal] Gallery setup warning:', e);
+  }
 
   // Get selected account ID
   const accountSelect = document.getElementById('accountSelect');
@@ -3065,10 +3071,14 @@ function openCreateBroadcastModal() {
   if (indicator) indicator.classList.add('hidden');
   
   // Fetch streams, thumbnails, folders, and channel defaults for selected account
-  if (typeof fetchStreams === 'function') fetchStreams(accountId);
-  if (typeof fetchThumbnailFolders === 'function') fetchThumbnailFolders();
-  if (typeof fetchThumbnails === 'function') fetchThumbnails(null);
-  if (typeof fetchChannelDefaults === 'function') fetchChannelDefaults(accountId);
+  try {
+    if (typeof fetchStreams === 'function') fetchStreams(accountId);
+    if (typeof fetchThumbnailFolders === 'function') fetchThumbnailFolders();
+    if (typeof fetchThumbnails === 'function') fetchThumbnails(null);
+    if (typeof fetchChannelDefaults === 'function') fetchChannelDefaults(accountId);
+  } catch (e) {
+    console.warn('[openCreateBroadcastModal] Fetch warning:', e);
+  }
 }
 window.openCreateBroadcastModal = openCreateBroadcastModal;
 
