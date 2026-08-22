@@ -5047,7 +5047,36 @@ app.get('/api/streams/:id/youtube-status', isAuthenticated, async (req, res) => 
     res.status(500).json({ success: false, error: 'Failed to fetch YouTube status' });
   }
 });
-app.post('/api/streams', isAuthenticated, [
+// Middleware to auto-resolve streamKey from YouTube account if missing
+const autoResolveYouTubeStreamKey = async (req, res, next) => {
+  if (!req.body.streamKey || !req.body.streamKey.trim()) {
+    const accountId = req.body.youtubeAccountId || req.body.actualStreamKey;
+    if (accountId || req.session.userId) {
+      try {
+        let credentials = null;
+        if (accountId && !isNaN(parseInt(accountId))) {
+          credentials = await YouTubeCredentials.findById(parseInt(accountId));
+        }
+        if (!credentials) {
+          credentials = await YouTubeCredentials.findByUserId(req.session.userId);
+        }
+        if (credentials) {
+          const accessToken = await youtubeService.getAccessToken(credentials.clientId, credentials.clientSecret, credentials.refreshToken, 0, credentials.id, 0, credentials.id);
+          const streams = await youtubeService.listStreams(accessToken);
+          if (streams && streams.length > 0 && streams[0].streamKey) {
+            req.body.streamKey = streams[0].streamKey;
+            console.log('[autoResolveYouTubeStreamKey] Auto-resolved streamKey for user:', streams[0].streamKey.substring(0, 8) + '...');
+          }
+        }
+      } catch (err) {
+        console.warn('[autoResolveYouTubeStreamKey] Error auto-resolving:', err.message);
+      }
+    }
+  }
+  next();
+};
+
+app.post('/api/streams', isAuthenticated, autoResolveYouTubeStreamKey, [
   body('streamTitle').trim().isLength({ min: 1 }).withMessage('Title is required'),
   body('rtmpUrl').trim().isLength({ min: 1 }).withMessage('RTMP URL is required'),
   body('streamKey').trim().isLength({ min: 1 }).withMessage('Stream key is required')
@@ -8612,6 +8641,33 @@ app.get('/api/youtube/streams', isAuthenticated, async (req, res) => {
     }
 
     res.status(500).json({ success: false, error: 'Failed to list stream keys' });
+  }
+});
+
+// Create a new stream key on demand for a YouTube account
+app.post('/api/youtube/streams/create', isAuthenticated, async (req, res) => {
+  try {
+    const accountId = req.body.accountId ? parseInt(req.body.accountId) : null;
+    let credentials;
+
+    if (accountId) {
+      credentials = await YouTubeCredentials.findById(accountId);
+    } else {
+      credentials = await YouTubeCredentials.findByUserId(req.session.userId);
+    }
+
+    if (!credentials || credentials.userId !== req.session.userId) {
+      return res.status(404).json({ success: false, error: 'YouTube account not found' });
+    }
+
+    const accessToken = await youtubeService.getAccessToken(credentials.clientId, credentials.clientSecret, credentials.refreshToken, 0, credentials.id, 0, credentials.id);
+    const title = req.body.title || `OzangLive Key ${new Date().toLocaleDateString()}`;
+    const createdStream = await youtubeService.createStreamKey(accessToken, title);
+
+    res.json({ success: true, stream: createdStream, accountId: credentials.id });
+  } catch (error) {
+    console.error('[/api/youtube/streams/create] Error:', error.message);
+    res.status(500).json({ success: false, error: error.message || 'Failed to create new stream key' });
   }
 });
 

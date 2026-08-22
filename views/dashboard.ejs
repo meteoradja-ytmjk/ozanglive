@@ -566,23 +566,39 @@
 
             <!-- YouTube Account Selector -->
             <div>
-              <label class="text-sm font-medium text-white block mb-2">
-                YouTube Account
-                <span class="text-xs text-gray-500">(Optional - Auto-fill stream key)</span>
-              </label>
+              <div class="flex items-center justify-between mb-2">
+                <label class="text-sm font-medium text-white">
+                  YouTube Account
+                  <span class="text-xs text-gray-400 font-normal ml-1">(Auto-load Stream Key)</span>
+                </label>
+                <button type="button" onclick="if(typeof syncControlRoomAccounts==='function')syncControlRoomAccounts(true)" class="text-xs text-primary hover:underline flex items-center gap-1 cursor-pointer" title="Refresh list akun YouTube">
+                  <i class="ti ti-refresh text-xs"></i> Refresh Akun
+                </button>
+              </div>
               <select id="controlRoomAccountSelect" name="youtubeAccountId"
                 class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none transition-all"
                 onchange="onControlRoomAccountChange(this.value)">
-                <option value="">-- Manual Stream Key --</option>
                 <% if (accounts && accounts.length > 0) { %>
-                  <% accounts.forEach(function(account) { %>
-                  <option value="<%= account.id %>"><%= account.channelName || 'YouTube Channel' %></option>
+                  <% accounts.forEach(function(account, idx) { %>
+                  <option value="<%= account.id %>" <%= idx === 0 ? 'selected' : '' %>>📺 <%= account.channelName || ('YouTube Channel #' + account.id) %></option>
                   <% }); %>
+                  <option value="">-- Gunakan Stream Key Manual --</option>
+                <% } else { %>
+                  <option value="">-- Stream Key Manual (Belum Ada Akun Terhubung) --</option>
                 <% } %>
               </select>
+              <div id="noYouTubeAccountWarning" class="<%= (accounts && accounts.length > 0) ? 'hidden' : '' %> mt-2 p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-center justify-between text-xs text-amber-300">
+                <span class="flex items-center gap-1.5">
+                  <i class="ti ti-alert-triangle text-amber-400 text-sm"></i>
+                  Akun YouTube belum terhubung.
+                </span>
+                <button type="button" onclick="closeNewStreamModal(); switchStudioTab('broadcasts');" class="text-primary hover:underline font-semibold ml-2">
+                  Hubungkan di YouTube Studio →
+                </button>
+              </div>
               <p class="text-xs text-gray-500 mt-1">
                 <i class="ti ti-info-circle text-primary mr-1"></i>
-                Select a YouTube account to auto-load stream keys, or leave empty for manual input
+                Pilih channel YouTube untuk otomatis mengambil stream key dari YouTube Studio.
               </p>
             </div>
 
@@ -644,18 +660,23 @@
 
             <!-- Stream Key -->
             <div>
-              <label class="text-sm font-medium text-white block mb-2">
-                Stream Key <span class="text-red-400">*</span>
-                <span id="controlRoomStreamKeyAutoFillIndicator" class="hidden ml-2 text-xs text-green-400" title="Stream keys loaded from YouTube">
-                  ✓ Auto-loaded
-                </span>
-              </label>
+              <div class="flex items-center justify-between mb-2">
+                <label class="text-sm font-medium text-white flex items-center gap-1.5">
+                  Stream Key <span class="text-red-400">*</span>
+                  <span id="controlRoomStreamKeyAutoFillIndicator" class="hidden ml-2 text-xs text-green-400" title="Stream keys loaded from YouTube">
+                    ✓ Auto-loaded
+                  </span>
+                </label>
+                <button type="button" id="toggleStreamKeyModeBtn" onclick="toggleControlRoomStreamKeyMode()" class="text-xs text-primary hover:underline flex items-center gap-1 cursor-pointer" title="Switch manual / auto stream key input">
+                  <i class="ti ti-edit text-xs"></i> Mode Manual / Auto
+                </button>
+              </div>
               
               <!-- Stream Key Selector (shown when account selected) -->
-              <div id="controlRoomStreamKeySelector" class="hidden">
+              <div id="controlRoomStreamKeySelector" class="<%= (accounts && accounts.length > 0) ? '' : 'hidden' %>">
                 <div class="relative">
                   <select id="controlRoomStreamKeySelect" name="youtubeStreamId"
-                    class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none transition-all"
+                    class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none transition-all text-sm"
                     onchange="onControlRoomStreamKeyChange(this.value)">
                     <option value="">🔑 Create new stream key</option>
                   </select>
@@ -665,16 +686,16 @@
                 </div>
                 <p class="text-xs text-gray-500 mt-1">
                   <i class="ti ti-info-circle text-primary mr-1"></i>
-                  Reuse existing stream keys or create a new one
+                  Pilih stream key yang akan digunakan untuk live streaming.
                 </p>
               </div>
               
-              <!-- Manual Stream Key Input (shown when no account selected) -->
-              <div id="controlRoomStreamKeyManual">
+              <!-- Manual Stream Key Input (shown when no account selected or manual mode) -->
+              <div id="controlRoomStreamKeyManual" class="<%= (accounts && accounts.length > 0) ? 'hidden' : '' %>">
                 <div class="relative">
                   <input type="text" id="streamKey" name="streamKey"
                     class="w-full pl-10 pr-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg text-sm"
-                    placeholder="Paste your YouTube stream key here..." required>
+                    placeholder="Paste your YouTube stream key here..." <%= (accounts && accounts.length > 0) ? '' : 'required' %>>
                   <i class="ti ti-key absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
                 </div>
                 <p class="text-xs text-gray-500 mt-1">Get your stream key from YouTube Studio → Go Live</p>
@@ -966,8 +987,8 @@
     <%- include('partials/youtube-studio') %>
   </div>
 
-  <script src="/js/youtube.js?v=1.0.6" defer></script>
-  <script src="/js/stream-modal.js?v=1.0.0" defer></script>
+  <script src="/js/youtube.js?v=1.0.7" defer></script>
+  <script src="/js/stream-modal.js?v=1.0.8" defer></script>
   <script>
     function switchStudioTab(tabName) {
       const tabs = ['streams', 'broadcasts'];
@@ -1056,6 +1077,19 @@
       // Load videos when modal opens
       if (typeof window.loadGalleryVideos === 'function') {
         window.loadGalleryVideos();
+      }
+
+      // Auto-load stream key immediately for pre-selected account
+      const accountSelect = document.getElementById('controlRoomAccountSelect');
+      if (accountSelect && accountSelect.value) {
+        if (typeof window.onControlRoomAccountChange === 'function') {
+          window.onControlRoomAccountChange(accountSelect.value);
+        } else if (typeof window.fetchControlRoomStreamKeys === 'function') {
+          window.fetchControlRoomStreamKeys(accountSelect.value);
+        }
+      }
+      if (typeof window.syncControlRoomAccounts === 'function') {
+        window.syncControlRoomAccounts(false);
       }
 
       // Initialize mutual exclusion for duration/end time (for once schedule)
@@ -1152,6 +1186,29 @@
       });
       const scheduleDaysInput = document.getElementById('scheduleDays');
       if (scheduleDaysInput) scheduleDaysInput.value = '[]';
+
+      // Reset Control Room state
+      const accountSelect = document.getElementById('controlRoomAccountSelect');
+      const manualSection = document.getElementById('controlRoomStreamKeyManual');
+      const selectorSection = document.getElementById('controlRoomStreamKeySelector');
+      const streamKeyInput = document.getElementById('streamKey');
+      const indicator = document.getElementById('controlRoomStreamKeyAutoFillIndicator');
+      const streamKeyValue = document.getElementById('controlRoomStreamKeyValue');
+
+      if (accountSelect && accountSelect.value) {
+        if (manualSection) manualSection.classList.add('hidden');
+        if (selectorSection) selectorSection.classList.remove('hidden');
+        if (streamKeyInput) streamKeyInput.removeAttribute('required');
+      } else {
+        if (manualSection) manualSection.classList.remove('hidden');
+        if (selectorSection) selectorSection.classList.add('hidden');
+        if (streamKeyInput) streamKeyInput.setAttribute('required', 'required');
+      }
+      if (indicator) indicator.classList.add('hidden');
+      if (streamKeyValue) streamKeyValue.value = '';
+      if (typeof resetModalForm === 'function') {
+        resetModalForm();
+      }
     };
 
     // Toggle Video Selector - always define to ensure it works
@@ -1653,9 +1710,14 @@
       }
     };
 
-    // Toast Notification Function - redirects to center toast
+    // Toast Notification Function - redirects to center toast (supports both (type, message) and (message, type))
     function showToast(type, message) {
-      showCenterToast(type, message, 5000);
+      if (['success', 'error', 'info', 'warning'].includes(message)) {
+        const temp = type;
+        type = message;
+        message = temp;
+      }
+      showCenterToast(type || 'info', message || '', 5000);
     }
 
     // Center Toast Notification Function
@@ -3468,7 +3530,8 @@
             audioId: window.selectedAudioData ? window.selectedAudioData.id : (document.getElementById('selectedAudioId').value || null),
             streamTitle: formData.get('streamTitle'),
             rtmpUrl: formData.get('rtmpUrl') || 'rtmp://a.rtmp.youtube.com/live2',
-            streamKey: formData.get('streamKey'),
+            // Use actualStreamKey from dropdown if available, otherwise use manual input
+            streamKey: formData.get('actualStreamKey') || formData.get('streamKey'),
             loopVideo: formData.get('loopVideo') === 'on',
             streamDurationHours: formData.get('streamDurationHours') || 0,
             streamDurationMinutes: formData.get('streamDurationMinutes') || 0,

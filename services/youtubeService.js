@@ -450,25 +450,58 @@ class YouTubeService {
   }
 
   /**
-   * List upcoming broadcasts
+   * List broadcasts with flexible query options
    * @param {string} accessToken - Access token
+   * @param {Object|string} [options='upcoming'] - Query options or broadcastStatus string
    * @returns {Promise<Array>} List of broadcasts
    */
-  async listBroadcasts(accessToken) {
+  async listBroadcasts(accessToken, options = 'all') {
     const oauth2Client = new google.auth.OAuth2();
     oauth2Client.setCredentials({ access_token: accessToken });
     
     const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
     
-    console.log('[YouTubeService.listBroadcasts] Fetching broadcasts...');
+    const queryOpts = typeof options === 'string' ? { broadcastStatus: options } : (options || {});
+    const targetStatus = queryOpts.broadcastStatus || 'all';
+    console.log('[YouTubeService.listBroadcasts] Fetching broadcasts with options:', queryOpts);
     
-    const response = await youtube.liveBroadcasts.list({
-      part: 'snippet,status,contentDetails',
-      broadcastStatus: 'upcoming',
-      maxResults: 50
-    });
+    let broadcasts = [];
+
+    if (targetStatus === 'all') {
+      try {
+        const [upcomingRes, activeRes, completedRes] = await Promise.allSettled([
+          youtube.liveBroadcasts.list({ part: 'snippet,status,contentDetails', mine: true, broadcastStatus: 'upcoming', maxResults: 50 }),
+          youtube.liveBroadcasts.list({ part: 'snippet,status,contentDetails', mine: true, broadcastStatus: 'active', maxResults: 50 }),
+          youtube.liveBroadcasts.list({ part: 'snippet,status,contentDetails', mine: true, broadcastStatus: 'completed', maxResults: 20 })
+        ]);
+        
+        if (upcomingRes.status === 'fulfilled' && upcomingRes.value.data.items) {
+          broadcasts.push(...upcomingRes.value.data.items);
+        }
+        if (activeRes.status === 'fulfilled' && activeRes.value.data.items) {
+          broadcasts.push(...activeRes.value.data.items);
+        }
+        if (completedRes.status === 'fulfilled' && completedRes.value.data.items) {
+          broadcasts.push(...completedRes.value.data.items);
+        }
+      } catch (err) {
+        console.error('[YouTubeService.listBroadcasts] Error fetching all broadcasts:', err.message);
+      }
+    } else {
+      const params = {
+        part: 'snippet,status,contentDetails',
+        mine: true,
+        broadcastStatus: targetStatus,
+        maxResults: 50
+      };
+      try {
+        const response = await youtube.liveBroadcasts.list(params);
+        broadcasts = response.data.items || [];
+      } catch (err) {
+        console.error('[YouTubeService.listBroadcasts] Error fetching broadcasts:', err.message);
+      }
+    }
     
-    const broadcasts = response.data.items || [];
     console.log(`[YouTubeService.listBroadcasts] Found ${broadcasts.length} broadcasts`);
     
     // OPTIMIZATION: Collect all unique stream IDs first
@@ -482,30 +515,28 @@ class YouTubeService {
     let streamsMap = {};
     if (streamIds.length > 0) {
       try {
-        // YouTube API allows comma-separated IDs (up to 50)
         const uniqueStreamIds = [...new Set(streamIds)]; // Remove duplicates
         console.log(`[YouTubeService.listBroadcasts] Fetching ${uniqueStreamIds.length} unique streams in batch...`);
         
         const streamResponse = await youtube.liveStreams.list({
-          part: 'cdn',
+          part: 'snippet,cdn',
           id: uniqueStreamIds.join(','),
           maxResults: 50
         });
         
         console.log(`[YouTubeService.listBroadcasts] Batch fetch returned ${streamResponse.data.items?.length || 0} streams`);
         
-        // Create a map for quick lookup
         if (streamResponse.data.items) {
           streamResponse.data.items.forEach(stream => {
             streamsMap[stream.id] = {
               streamKey: stream.cdn?.ingestionInfo?.streamName || '',
-              rtmpUrl: stream.cdn?.ingestionInfo?.ingestionAddress || 'rtmp://a.rtmp.youtube.com/live2'
+              rtmpUrl: stream.cdn?.ingestionInfo?.ingestionAddress || 'rtmp://a.rtmp.youtube.com/live2',
+              title: stream.snippet?.title || ''
             };
           });
         }
       } catch (err) {
         console.error('[YouTubeService.listBroadcasts] Error fetching streams in batch:', err.message);
-        // Continue without stream info if batch fetch fails
       }
     }
     
@@ -557,27 +588,125 @@ class YouTubeService {
     
     console.log('[YouTubeService.listStreams] Fetching streams...');
     
-    const response = await youtube.liveStreams.list({
+    let result = [];
+    const seenStreamKeys = new Set();
+    const seenStreamIds = new Set();
+    
+    try {
+      const response = await youtube.liveStreams.list({
+        part: 'snippet,cdn',
+        mine: true,
+        maxResults: 50
+      });
+      
+      const streams = response.data.items || [];
+      console.log('[YouTubeService.listStreams] Raw liveStreams response items:', streams.length);
+      
+      streams.forEach((stream, idx) => {
+        const streamKey = stream.cdn?.ingestionInfo?.streamName || '';
+        const id = stream.id || `stream_${idx}`;
+        if (id) seenStreamIds.add(id);
+        if (streamKey) seenStreamKeys.add(streamKey);
+        
+        result.push({
+          id: id,
+          title: stream.snippet?.title || `Stream Key ${idx + 1}`,
+          streamKey: streamKey,
+          rtmpUrl: stream.cdn?.ingestionInfo?.ingestionAddress || 'rtmp://a.rtmp.youtube.com/live2',
+          resolution: stream.cdn?.resolution || 'variable',
+          frameRate: stream.cdn?.frameRate || 'variable',
+          source: 'stream'
+        });
+      });
+    } catch (err) {
+      console.error('[YouTubeService.listStreams] Error fetching liveStreams:', err.message);
+    }
+
+    // Also fetch ALL broadcasts to catch broadcast-bound stream keys from YouTube Studio
+    try {
+      const broadcasts = await this.listBroadcasts(accessToken, { broadcastStatus: 'all' });
+      if (broadcasts && broadcasts.length > 0) {
+        broadcasts.forEach(b => {
+          if (b.streamKey) {
+            const existingIndex = result.findIndex(r => r.streamKey === b.streamKey || r.id === b.streamId);
+            if (existingIndex >= 0) {
+              const currentTitle = result[existingIndex].title || '';
+              if (!currentTitle || currentTitle.toLowerCase().includes('untitled') || currentTitle.toLowerCase().includes('default') || currentTitle === 'YouTube Live Stream') {
+                result[existingIndex].title = b.title;
+              }
+            } else {
+              seenStreamKeys.add(b.streamKey);
+              result.push({
+                id: b.streamId || b.id,
+                title: b.title || 'YouTube Broadcast Stream',
+                streamKey: b.streamKey,
+                rtmpUrl: b.rtmpUrl || 'rtmp://a.rtmp.youtube.com/live2',
+                resolution: 'variable',
+                frameRate: 'variable',
+                source: 'broadcast'
+              });
+            }
+          }
+        });
+      }
+    } catch (bErr) {
+      console.error('[YouTubeService.listStreams] Error merging broadcasts:', bErr.message);
+    }
+
+    // Auto-create a stream key if the channel has no stream keys or bound broadcasts
+    if (result.length === 0) {
+      try {
+        console.log('[YouTubeService.listStreams] No existing stream keys found on channel. Auto-creating a new default stream key...');
+        const newStream = await this.createStreamKey(accessToken, 'OzangLive Auto Stream Key');
+        if (newStream && newStream.streamKey) {
+          result.push(newStream);
+          console.log('[YouTubeService.listStreams] Successfully auto-created default stream key:', newStream.streamKey.substring(0, 8) + '...');
+        }
+      } catch (autoCreateErr) {
+        console.error('[YouTubeService.listStreams] Error auto-creating stream key:', autoCreateErr.message);
+      }
+    }
+    
+    console.log('[YouTubeService.listStreams] Total mapped streams:', result.map(s => `${s.title} (${s.streamKey ? 'KEY_OK' : 'NO_KEY'})`));
+    
+    return result;
+  }
+
+  /**
+   * Create a new stream key on YouTube
+   * @param {string} accessToken - YouTube access token
+   * @param {string} [title='OzangLive Stream Key'] - Stream title
+   * @returns {Promise<Object>} Created stream object
+   */
+  async createStreamKey(accessToken, title = 'OzangLive Stream Key') {
+    const oauth2Client = new google.auth.OAuth2();
+    oauth2Client.setCredentials({ access_token: accessToken });
+    const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+
+    const response = await youtube.liveStreams.insert({
       part: 'snippet,cdn',
-      mine: true,
-      maxResults: 50
+      requestBody: {
+        snippet: {
+          title: title || 'OzangLive Stream Key'
+        },
+        cdn: {
+          frameRate: 'variable',
+          ingestionType: 'rtmp',
+          resolution: 'variable'
+        }
+      }
     });
-    
-    const streams = response.data.items || [];
-    console.log('[YouTubeService.listStreams] Raw response items:', streams.length);
-    
-    const result = streams.map(stream => ({
+
+    const stream = response.data;
+    return {
       id: stream.id,
-      title: stream.snippet.title,
+      title: stream.snippet?.title || title,
       streamKey: stream.cdn?.ingestionInfo?.streamName || '',
       rtmpUrl: stream.cdn?.ingestionInfo?.ingestionAddress || 'rtmp://a.rtmp.youtube.com/live2',
       resolution: stream.cdn?.resolution || 'variable',
-      frameRate: stream.cdn?.frameRate || 'variable'
-    }));
-    
-    console.log('[YouTubeService.listStreams] Mapped streams:', result.map(s => s.title));
-    
-    return result;
+      frameRate: stream.cdn?.frameRate || 'variable',
+      source: 'auto-created'
+    };
   }
 
   /**

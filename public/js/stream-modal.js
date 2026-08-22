@@ -10,7 +10,7 @@ let mobileVideoPlayer = null;
 let streamKeyTimeout = null;
 let isStreamKeyValid = true;
 let currentPlatform = 'YouTube';
-function openNewStreamModal() {
+window.openNewStreamModal = function () {
   const modal = document.getElementById('newStreamModal');
   if (!modal) {
     console.error('newStreamModal not found');
@@ -18,18 +18,25 @@ function openNewStreamModal() {
   }
   document.body.style.overflow = 'hidden';
   modal.classList.remove('hidden');
-  // Force reflow before adding active class
   modal.offsetHeight;
   modal.classList.add('active');
-  loadGalleryVideos();
   
-  // Check if Control Room account is already selected and trigger auto-load
-  const accountSelect = document.getElementById('controlRoomAccountSelect');
-  if (accountSelect && accountSelect.value && typeof window.onControlRoomAccountChange === 'function') {
-    console.log('[Control Room] Modal opened with account pre-selected, triggering auto-load...');
-    window.onControlRoomAccountChange(accountSelect.value);
+  if (typeof loadGalleryVideos === 'function') {
+    loadGalleryVideos();
   }
-}
+  
+  // Auto-sync YouTube accounts and auto-load stream key immediately
+  const accountSelect = document.getElementById('controlRoomAccountSelect');
+  if (accountSelect && accountSelect.value) {
+    if (typeof window.onControlRoomAccountChange === 'function') {
+      window.onControlRoomAccountChange(accountSelect.value);
+    } else if (typeof window.fetchControlRoomStreamKeys === 'function') {
+      window.fetchControlRoomStreamKeys(accountSelect.value);
+    }
+  } else if (typeof window.syncControlRoomAccounts === 'function') {
+    window.syncControlRoomAccounts(true);
+  }
+};
 function closeNewStreamModal() {
   const modal = document.getElementById('newStreamModal');
   if (!modal) {
@@ -412,16 +419,23 @@ function resetModalForm() {
   if (videoDropdown) videoDropdown.classList.add('hidden');
   if (audioDropdown) audioDropdown.classList.add('hidden');
   
-  // Reset Control Room state - switch back to manual mode
+  // Reset Control Room state
+  const accountSelect = document.getElementById('controlRoomAccountSelect');
   const manualSection = document.getElementById('controlRoomStreamKeyManual');
   const selectorSection = document.getElementById('controlRoomStreamKeySelector');
   const streamKeyInput = document.getElementById('streamKey');
   const indicator = document.getElementById('controlRoomStreamKeyAutoFillIndicator');
   const streamKeyValue = document.getElementById('controlRoomStreamKeyValue');
-  
-  if (manualSection) manualSection.classList.remove('hidden');
-  if (selectorSection) selectorSection.classList.add('hidden');
-  if (streamKeyInput) streamKeyInput.setAttribute('required', 'required');
+
+  if (accountSelect && accountSelect.value) {
+    if (manualSection) manualSection.classList.add('hidden');
+    if (selectorSection) selectorSection.classList.remove('hidden');
+    if (streamKeyInput) streamKeyInput.removeAttribute('required');
+  } else {
+    if (manualSection) manualSection.classList.remove('hidden');
+    if (selectorSection) selectorSection.classList.add('hidden');
+    if (streamKeyInput) streamKeyInput.setAttribute('required', 'required');
+  }
   if (indicator) indicator.classList.add('hidden');
   if (streamKeyValue) streamKeyValue.value = '';
 }
@@ -910,6 +924,85 @@ resetModalForm = function () {
 // Control Room - YouTube Account Integration
 // ============================================
 
+// Toggle between Manual and Auto Stream Key Mode in Control Room
+window.toggleControlRoomStreamKeyMode = function() {
+  const manualSection = document.getElementById('controlRoomStreamKeyManual');
+  const selectorSection = document.getElementById('controlRoomStreamKeySelector');
+  const streamKeyInput = document.getElementById('streamKey');
+  const accountSelect = document.getElementById('controlRoomAccountSelect');
+
+  if (!manualSection || !selectorSection) return;
+
+  const isManualHidden = manualSection.classList.contains('hidden');
+  if (isManualHidden) {
+    // Switch to manual mode
+    manualSection.classList.remove('hidden');
+    selectorSection.classList.add('hidden');
+    if (streamKeyInput) streamKeyInput.setAttribute('required', 'required');
+  } else {
+    // Switch to auto mode
+    manualSection.classList.add('hidden');
+    selectorSection.classList.remove('hidden');
+    if (streamKeyInput) streamKeyInput.removeAttribute('required');
+    if (accountSelect && accountSelect.value) {
+      window.fetchControlRoomStreamKeys(accountSelect.value);
+    }
+  }
+};
+
+// Sync YouTube accounts list dynamically for Control Room modal
+window.syncControlRoomAccounts = async function(autoTrigger = true) {
+  const accountSelect = document.getElementById('controlRoomAccountSelect');
+  const warningEl = document.getElementById('noYouTubeAccountWarning');
+  if (!accountSelect) return;
+
+  try {
+    const res = await fetch('/api/youtube/accounts');
+    const data = await res.json();
+    
+    if (data.success && data.accounts && data.accounts.length > 0) {
+      const currentVal = accountSelect.value;
+      accountSelect.innerHTML = '';
+      
+      data.accounts.forEach((acc) => {
+        const opt = document.createElement('option');
+        opt.value = acc.id;
+        opt.textContent = `📺 ${acc.channelName || ('YouTube Channel #' + acc.id)}` + (acc.isPrimary ? ' (Primary)' : '');
+        accountSelect.appendChild(opt);
+      });
+      
+      const manualOpt = document.createElement('option');
+      manualOpt.value = '';
+      manualOpt.textContent = '-- Gunakan Stream Key Manual --';
+      accountSelect.appendChild(manualOpt);
+      
+      if (warningEl) warningEl.classList.add('hidden');
+
+      // Keep previous selection if valid, otherwise select the first account
+      if (currentVal && data.accounts.some(a => String(a.id) === String(currentVal))) {
+        accountSelect.value = currentVal;
+      } else {
+        accountSelect.value = data.accounts[0].id;
+      }
+      
+      if (autoTrigger && accountSelect.value) {
+        await window.onControlRoomAccountChange(accountSelect.value);
+      }
+    } else {
+      accountSelect.innerHTML = '<option value="">-- Stream Key Manual (Belum Ada Akun Terhubung) --</option>';
+      if (warningEl) warningEl.classList.remove('hidden');
+      if (autoTrigger) {
+        await window.onControlRoomAccountChange('');
+      }
+    }
+  } catch (err) {
+    console.warn('[Control Room] Could not sync accounts dynamically:', err);
+    if (autoTrigger && accountSelect.value) {
+      await window.onControlRoomAccountChange(accountSelect.value);
+    }
+  }
+};
+
 // Handle YouTube Account change in Control Room
 window.onControlRoomAccountChange = async function(accountId) {
   const manualSection = document.getElementById('controlRoomStreamKeyManual');
@@ -929,10 +1022,8 @@ window.onControlRoomAccountChange = async function(accountId) {
     manualSection.classList.add('hidden');
     selectorSection.classList.remove('hidden');
     
-    // Remove required from manual input
     if (streamKeyInput) streamKeyInput.removeAttribute('required');
     
-    // Fetch stream keys for selected account
     await fetchControlRoomStreamKeys(accountId);
   } else {
     // No account - show manual input
@@ -940,12 +1031,13 @@ window.onControlRoomAccountChange = async function(accountId) {
     manualSection.classList.remove('hidden');
     selectorSection.classList.add('hidden');
     
-    // Add required back to manual input
     if (streamKeyInput) streamKeyInput.setAttribute('required', 'required');
     
-    // Clear stream key value
     const valueInput = document.getElementById('controlRoomStreamKeyValue');
     if (valueInput) valueInput.value = '';
+    
+    const indicator = document.getElementById('controlRoomStreamKeyAutoFillIndicator');
+    if (indicator) indicator.classList.add('hidden');
   }
 };
 
@@ -954,6 +1046,9 @@ window.fetchControlRoomStreamKeys = async function(accountId) {
   const select = document.getElementById('controlRoomStreamKeySelect');
   const loading = document.getElementById('controlRoomStreamKeyLoading');
   const indicator = document.getElementById('controlRoomStreamKeyAutoFillIndicator');
+  const manualSection = document.getElementById('controlRoomStreamKeyManual');
+  const selectorSection = document.getElementById('controlRoomStreamKeySelector');
+  const streamKeyInput = document.getElementById('streamKey');
   
   console.log('[Control Room] fetchControlRoomStreamKeys called with accountId:', accountId);
   
@@ -962,11 +1057,17 @@ window.fetchControlRoomStreamKeys = async function(accountId) {
     return;
   }
   
+  // Show loading indicator in select dropdown
+  select.innerHTML = '<option value="">⏳ Loading stream keys...</option>';
   if (loading) loading.classList.remove('hidden');
   if (indicator) indicator.classList.add('hidden');
   
   try {
-    const url = `/api/youtube/streams?accountId=${accountId}`;
+    let url = '/api/youtube/streams';
+    if (accountId) {
+      url += `?accountId=${accountId}`;
+    }
+    
     console.log('[Control Room] Fetching stream keys from:', url);
     
     const response = await fetch(url, {
@@ -978,13 +1079,11 @@ window.fetchControlRoomStreamKeys = async function(accountId) {
     const data = await response.json();
     console.log('[Control Room] Stream keys response:', data);
     
-    // Clear existing options
     select.innerHTML = '<option value="">🔑 Create new stream key</option>';
     
     if (data.success && data.streams && data.streams.length > 0) {
       console.log('[Control Room] Found', data.streams.length, 'stream keys');
       
-      // Add separator
       const separator = document.createElement('option');
       separator.disabled = true;
       separator.textContent = '─────────────────────────────';
@@ -995,67 +1094,79 @@ window.fetchControlRoomStreamKeys = async function(accountId) {
       reuse.textContent = '📋 Reuse Existing Stream Keys:';
       select.appendChild(reuse);
       
-      // Add stream key options with their actual stream keys stored in data attributes
+      let validStreamFound = null;
+
       data.streams.forEach((stream, index) => {
         const option = document.createElement('option');
-        option.value = stream.id;
-        option.textContent = `${index + 1}. ${stream.title} (${stream.resolution} @ ${stream.frameRate})`;
+        const streamIdVal = stream.id || `stream_${index}`;
+        option.value = streamIdVal;
+        
+        const resInfo = (stream.resolution && stream.resolution !== 'variable') ? ` (${stream.resolution} @ ${stream.frameRate || '30fps'})` : '';
+        const keySnippet = stream.streamKey ? ` [${stream.streamKey.substring(0, 8)}...]` : '';
+        option.textContent = `${index + 1}. ${stream.title}${resInfo}${keySnippet}`;
         option.dataset.streamKey = stream.streamKey || '';
         option.dataset.rtmpUrl = stream.rtmpUrl || 'rtmp://a.rtmp.youtube.com/live2';
         select.appendChild(option);
-        
-        console.log('[Control Room] Added stream key option:', {
-          id: stream.id,
-          title: stream.title,
-          hasKey: !!stream.streamKey
-        });
+
+        if (!validStreamFound && stream.streamKey && stream.streamKey.trim() !== '') {
+          validStreamFound = { id: streamIdVal, ...stream };
+        }
       });
       
       // Auto-select the first stream key if available
-      if (data.streams.length > 0) {
-        const firstStream = data.streams[0];
-        select.value = firstStream.id;
-        
-        // Trigger the change event to auto-fill the stream key
-        onControlRoomStreamKeyChange(firstStream.id);
-        
-        console.log('[Control Room] Auto-selected first stream key:', firstStream.title);
+      const targetStream = validStreamFound || data.streams[0];
+      if (targetStream) {
+        const targetId = targetStream.id || 'stream_0';
+        select.value = targetId;
+        window.onControlRoomStreamKeyChange(targetId);
+        console.log('[Control Room] Auto-selected stream key:', targetStream.title);
       }
       
-      // Show success indicator
       if (indicator) {
         indicator.classList.remove('hidden');
-        setTimeout(() => indicator.classList.add('hidden'), 3000);
+        indicator.textContent = '✓ Auto-loaded';
       }
       
-      // Show toast
       if (typeof showToast === 'function') {
-        showToast(`✓ Auto-loaded stream key from your channel`, 'success');
+        showToast('success', `✓ Loaded ${data.streams.length} stream key${data.streams.length > 1 ? 's' : ''} from your channel`);
       }
     } else {
       console.log('[Control Room] No stream keys found');
-      
-      // Still show the dropdown but with only "Create new" option
+      select.innerHTML = '<option value="">🔑 Create new stream key</option>';
+      const emptyOpt = document.createElement('option');
+      emptyOpt.disabled = true;
+      emptyOpt.textContent = '📋 No existing stream keys found (New key will be created)';
+      select.appendChild(emptyOpt);
+
       if (indicator) indicator.classList.add('hidden');
-      
-      if (typeof showToast === 'function') {
-        showToast('No existing stream keys found. A new one will be created automatically.', 'info');
-      }
     }
   } catch (error) {
     console.error('[Control Room] Error fetching stream keys:', error);
+    select.innerHTML = '<option value="">🔑 Create new stream key</option>';
     if (typeof showToast === 'function') {
-      showToast('Failed to load stream keys. You can still enter manually.', 'error');
+      showToast('error', 'Gagal memuat stream key YouTube. Anda masih bisa memilih Create new atau mode manual.');
     }
   } finally {
     if (loading) loading.classList.add('hidden');
   }
 };
 
+// Pre-fetch stream keys immediately when DOM is ready
+document.addEventListener('DOMContentLoaded', function () {
+  setTimeout(() => {
+    const accountSelect = document.getElementById('controlRoomAccountSelect');
+    if (accountSelect && accountSelect.value) {
+      console.log('[Control Room] Pre-fetching stream keys on DOM ready for account:', accountSelect.value);
+      window.fetchControlRoomStreamKeys(accountSelect.value);
+    }
+  }, 200);
+});
+
 // Handle stream key selection change in Control Room
 window.onControlRoomStreamKeyChange = function(streamId) {
   const select = document.getElementById('controlRoomStreamKeySelect');
   const valueInput = document.getElementById('controlRoomStreamKeyValue');
+  const manualInput = document.getElementById('streamKey');
   const rtmpInput = document.getElementById('rtmpUrl');
   const indicator = document.getElementById('controlRoomStreamKeyAutoFillIndicator');
   
@@ -1067,15 +1178,20 @@ window.onControlRoomStreamKeyChange = function(streamId) {
   }
   
   if (streamId) {
-    // Stream key selected - get from option's data attribute
-    const selectedOption = select.options[select.selectedIndex];
-    const streamKey = selectedOption.dataset.streamKey || '';
-    const rtmpUrl = selectedOption.dataset.rtmpUrl || 'rtmp://a.rtmp.youtube.com/live2';
+    let selectedOption = null;
+    try {
+      selectedOption = select.querySelector(`option[value="${CSS.escape(streamId)}"]`) || select.options[select.selectedIndex];
+    } catch (e) {
+      selectedOption = select.options[select.selectedIndex];
+    }
+    
+    const streamKey = selectedOption ? (selectedOption.dataset.streamKey || '') : '';
+    const rtmpUrl = selectedOption ? (selectedOption.dataset.rtmpUrl || 'rtmp://a.rtmp.youtube.com/live2') : 'rtmp://a.rtmp.youtube.com/live2';
     
     valueInput.value = streamKey;
+    if (manualInput) manualInput.value = streamKey;
     if (rtmpInput) rtmpInput.value = rtmpUrl;
     
-    // Show indicator when stream key is auto-filled
     if (indicator && streamKey) {
       indicator.classList.remove('hidden');
       indicator.textContent = '✓ Stream key loaded';
@@ -1084,14 +1200,67 @@ window.onControlRoomStreamKeyChange = function(streamId) {
     console.log('[Control Room] Selected stream key:', streamKey ? 'SET' : 'EMPTY');
     console.log('[Control Room] RTMP URL:', rtmpUrl);
   } else {
-    // "Create new" selected - clear value (will be created later)
     valueInput.value = '';
+    if (manualInput) manualInput.value = '';
     if (rtmpInput) rtmpInput.value = 'rtmp://a.rtmp.youtube.com/live2';
-    
-    // Hide indicator
     if (indicator) indicator.classList.add('hidden');
     
     console.log('[Control Room] Will create new stream key');
+    const accountSelect = document.getElementById('controlRoomAccountSelect');
+    if (accountSelect && accountSelect.value) {
+      window.createControlRoomNewStreamKey(accountSelect.value);
+    }
+  }
+};
+
+// Auto-create a new stream key on demand via YouTube API
+window.createControlRoomNewStreamKey = async function(accountId) {
+  const select = document.getElementById('controlRoomStreamKeySelect');
+  const loading = document.getElementById('controlRoomStreamKeyLoading');
+  const valueInput = document.getElementById('controlRoomStreamKeyValue');
+  const manualInput = document.getElementById('streamKey');
+  const indicator = document.getElementById('controlRoomStreamKeyAutoFillIndicator');
+
+  if (!accountId) return;
+
+  if (loading) loading.classList.remove('hidden');
+  try {
+    const response = await fetch('/api/youtube/streams/create', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getCsrfToken()
+      },
+      body: JSON.stringify({ accountId })
+    });
+
+    const data = await response.json();
+    if (data.success && data.stream && data.stream.streamKey) {
+      const stream = data.stream;
+      const option = document.createElement('option');
+      option.value = stream.id;
+      option.textContent = `✨ New Key: ${stream.title} [${stream.streamKey.substring(0, 8)}...]`;
+      option.dataset.streamKey = stream.streamKey;
+      option.dataset.rtmpUrl = stream.rtmpUrl || 'rtmp://a.rtmp.youtube.com/live2';
+      select.appendChild(option);
+
+      select.value = stream.id;
+      valueInput.value = stream.streamKey;
+      if (manualInput) manualInput.value = stream.streamKey;
+
+      if (indicator) {
+        indicator.classList.remove('hidden');
+        indicator.textContent = '✓ Stream key baru dibuat';
+      }
+
+      if (typeof showToast === 'function') {
+        showToast('success', '✨ Stream key baru berhasil dibuat dari YouTube');
+      }
+    }
+  } catch (err) {
+    console.error('[Control Room] Error creating new stream key:', err);
+  } finally {
+    if (loading) loading.classList.add('hidden');
   }
 };
 
