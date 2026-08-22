@@ -3828,6 +3828,10 @@ if (createBroadcastForm) {
 
         const data = await res.json();
         if (data.success) {
+          // CRITICAL: Clear broadcasts cache to force refresh from server
+          broadcastsCache.data = null;
+          broadcastsCache.timestamp = null;
+          
           // If start immediately requested
           if (isStartNow) {
             try {
@@ -3841,7 +3845,7 @@ if (createBroadcastForm) {
           }
           showToast('✓ Pengaturan siaran berhasil diperbarui!');
           closeCreateBroadcastModal();
-          setTimeout(() => window.location.reload(), 1000);
+          setTimeout(() => window.location.reload(), 500);
         } else {
           showToast(data.error || 'Gagal memperbarui stream', 'error');
         }
@@ -3930,9 +3934,15 @@ if (createBroadcastForm) {
       const data = await response.json();
       
       if (data.success) {
+        // CRITICAL: Clear broadcasts cache to force refresh from server
+        broadcastsCache.data = null;
+        broadcastsCache.timestamp = null;
+        
         showToast(isStartNow ? '✓ Live streaming berhasil dimulai!' : '✓ Broadcast & Jadwal Live berhasil dibuat!');
         closeCreateBroadcastModal();
-        setTimeout(() => window.location.reload(), 1200);
+        
+        // Immediate reload to show new broadcast
+        setTimeout(() => window.location.reload(), 500);
       } else {
         showToast(data.error || 'Gagal membuat broadcast', 'error');
       }
