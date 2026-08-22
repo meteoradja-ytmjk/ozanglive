@@ -201,6 +201,14 @@ async function lazyLoadBroadcasts() {
     console.log('[Performance] Broadcasts count:', data.broadcasts ? data.broadcasts.length : 0);
     console.log('[Performance] Accounts count:', data.accounts ? data.accounts.length : 0);
     
+    // Log sample broadcasts for debugging
+    if (data.broadcasts && data.broadcasts.length > 0) {
+      console.log('[Performance] Sample broadcasts (first 3):');
+      data.broadcasts.slice(0, 3).forEach((b, i) => {
+        console.log(`  ${i + 1}. ${b.title} - Status: ${b.lifeCycleStatus} - Scheduled: ${b.scheduledStartTime}`);
+      });
+    }
+    
     // CRITICAL: Hide loading and show container FIRST (before any rendering)
     console.log('[Performance] Hiding loading container...');
     if (loadingContainer) {
@@ -3933,7 +3941,12 @@ if (createBroadcastForm) {
       
       const data = await response.json();
       
+      console.log('[CreateBroadcast] Response:', data);
+      
       if (data.success) {
+        console.log('[CreateBroadcast] Success! Broadcast created:', data.broadcast?.broadcastId);
+        console.log('[CreateBroadcast] Clearing cache and reloading...');
+        
         // CRITICAL: Clear broadcasts cache to force refresh from server
         broadcastsCache.data = null;
         broadcastsCache.timestamp = null;
@@ -3941,9 +3954,14 @@ if (createBroadcastForm) {
         showToast(isStartNow ? '✓ Live streaming berhasil dimulai!' : '✓ Broadcast & Jadwal Live berhasil dibuat!');
         closeCreateBroadcastModal();
         
-        // Immediate reload to show new broadcast
-        setTimeout(() => window.location.reload(), 500);
+        // Wait a bit for YouTube API to propagate the new broadcast
+        // Then reload to show new broadcast
+        setTimeout(() => {
+          console.log('[CreateBroadcast] Reloading page now...');
+          window.location.reload();
+        }, 2000); // Increased to 2 seconds for YouTube API propagation
       } else {
+        console.error('[CreateBroadcast] Failed:', data.error);
         showToast(data.error || 'Gagal membuat broadcast', 'error');
       }
     } catch (error) {
