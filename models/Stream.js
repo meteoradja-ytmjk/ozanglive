@@ -666,8 +666,9 @@ class Stream {
         LEFT JOIN audios a ON s.audio_id = a.id
         WHERE s.user_id = ?
         AND (
-          (s.schedule_type = 'once' AND s.schedule_time IS NOT NULL)
-          OR (s.schedule_type IN ('daily', 'weekly') AND s.recurring_enabled = 1)
+          (s.schedule_type = 'once' AND s.schedule_time IS NOT NULL AND s.schedule_time != '')
+          OR (s.schedule_type IN ('daily', 'weekly') AND (s.recurring_enabled = 1 OR s.recurring_enabled = '1' OR s.recurring_enabled = true OR s.recurring_enabled = 'true'))
+          OR (s.status = 'scheduled')
         )
         ORDER BY
           CASE s.schedule_type

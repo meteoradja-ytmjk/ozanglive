@@ -3016,6 +3016,13 @@ window.formatDateTimeLocal = formatDateTimeLocal;
 
 // Create Broadcast Modal
 function openCreateBroadcastModal() {
+  if (typeof switchStudioTab === 'function') {
+    const broadcastsPanel = document.getElementById('studio-panel-broadcasts');
+    if (broadcastsPanel && broadcastsPanel.classList.contains('hidden')) {
+      switchStudioTab('broadcasts');
+    }
+  }
+
   const modal = document.getElementById('createBroadcastModal');
   if (!modal) {
     console.error('createBroadcastModal element not found');

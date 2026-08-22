@@ -2746,14 +2746,22 @@
       switchScheduleTab(type);
 
       // Show modal
-      document.getElementById('scheduleModal').classList.remove('hidden');
+      const modal = document.getElementById('scheduleModal');
+      if (modal) {
+        modal.classList.remove('hidden');
+        modal.style.setProperty('display', 'block', 'important');
+      }
 
       // Load schedules
       await loadSchedules(type);
     }
 
     function closeScheduleModal() {
-      document.getElementById('scheduleModal').classList.add('hidden');
+      const modal = document.getElementById('scheduleModal');
+      if (modal) {
+        modal.classList.add('hidden');
+        modal.style.display = 'none';
+      }
     }
 
     function switchScheduleTab(type) {
@@ -3048,7 +3056,11 @@
           document.getElementById('scheduleEditDurationHours').value = Math.floor(totalMinutes / 60) || '';
           document.getElementById('scheduleEditDurationMinutes').value = totalMinutes % 60 || '';
 
-          document.getElementById('scheduleEditModal').classList.remove('hidden');
+          const modal = document.getElementById('scheduleEditModal');
+          if (modal) {
+            modal.classList.remove('hidden');
+            modal.style.setProperty('display', 'block', 'important');
+          }
         } else {
           if (typeof showCenterToast === 'function') showCenterToast('error', 'Failed to load stream data');
           else if (typeof showToast === 'function') showToast('Failed to load stream data', 'error');
@@ -3061,7 +3073,11 @@
     }
 
     function closeScheduleEditModal() {
-      document.getElementById('scheduleEditModal').classList.add('hidden');
+      const modal = document.getElementById('scheduleEditModal');
+      if (modal) {
+        modal.classList.add('hidden');
+        modal.style.display = 'none';
+      }
       currentScheduleEditStream = null;
       scheduleEditSelectedDays = [];
     }

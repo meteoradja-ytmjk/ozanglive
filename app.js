@@ -9519,78 +9519,93 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
     }
 
     let createdStream = null;
-    if (req.body.videoId) {
-      try {
-        let scheduleDays = null;
-        if (req.body.scheduleDays) {
-          try {
-            scheduleDays = typeof req.body.scheduleDays === 'string'
-              ? JSON.parse(req.body.scheduleDays)
-              : req.body.scheduleDays;
-          } catch (e) {
-            scheduleDays = null;
-          }
+    try {
+      let scheduleDays = null;
+      if (req.body.scheduleDays) {
+        try {
+          scheduleDays = typeof req.body.scheduleDays === 'string'
+            ? JSON.parse(req.body.scheduleDays)
+            : req.body.scheduleDays;
+        } catch (e) {
+          scheduleDays = null;
         }
-
-        const hours = parseInt(req.body.streamDurationHours) || 0;
-        const minutes = parseInt(req.body.streamDurationMinutes) || 0;
-        const totalMinutes = (hours * 60) + minutes;
-
-        // Resolve stream key value from broadcast or credentials/streamId
-        let finalStreamKey = broadcast.streamKey || '';
-        if (!finalStreamKey && streamId) {
-          try {
-            const streamsList = await youtubeService.listStreams(accessToken);
-            const matchingStream = streamsList.find(s => s.id === streamId);
-            if (matchingStream && matchingStream.streamKey) {
-              finalStreamKey = matchingStream.streamKey;
-            }
-          } catch (keyErr) {
-            console.warn('[API] Could not resolve stream key for streamId:', streamId, keyErr.message);
-          }
-        }
-
-        const streamData = {
-          title: broadcast.title || title,
-          video_id: req.body.videoId || null,
-          audio_id: req.body.audioId || null,
-          rtmp_url: broadcast.rtmpUrl || 'rtmp://a.rtmp.youtube.com/live2',
-          stream_key: finalStreamKey || (streamId ? String(streamId) : ''),
-          platform: 'YouTube',
-          platform_icon: 'ti-brand-youtube',
-          bitrate: 2500,
-          resolution: '1280x720',
-          fps: 30,
-          orientation: 'horizontal',
-          loop_video: req.body.loopVideo === 'true' || req.body.loopVideo === true,
-          stream_duration_minutes: totalMinutes > 0 ? totalMinutes : null,
-          duration: totalMinutes > 0 ? totalMinutes : null,
-          schedule_type: req.body.scheduleType || 'once',
-          schedule_days: scheduleDays,
-          recurring_time: req.body.recurringTime || null,
-          recurring_enabled: req.body.recurringEnabled === 'true' || req.body.recurringEnabled === true || req.body.recurringEnabled === 'on',
-          user_id: req.session.userId,
-          youtube_broadcast_id: broadcast.broadcastId,
-          youtube_account_id: accountId || (credentials ? credentials.id : null),
-          status: req.body.startImmediately === 'true' ? 'offline' : (req.body.scheduleType === 'daily' || req.body.scheduleType === 'weekly' ? 'scheduled' : 'offline')
-        };
-
-        createdStream = await Stream.create(streamData);
-        console.log('[API] Created associated Stream record:', createdStream.id, 'for broadcast:', broadcast.broadcastId);
-
-        if (req.body.startImmediately === 'true' && createdStream) {
-          if (typeof streamService !== 'undefined' && typeof streamService.startStream === 'function') {
-            try {
-              await streamService.startStream(createdStream.id, req.session.userId);
-              console.log('[API] Stream engine started immediately for stream ID:', createdStream.id);
-            } catch (startErr) {
-              console.error('[API] Error starting stream engine immediately:', startErr.message);
-            }
-          }
-        }
-      } catch (streamErr) {
-        console.error('[API] Error creating associated stream for broadcast:', streamErr.message);
       }
+
+      const hours = parseInt(req.body.streamDurationHours) || 0;
+      const minutes = parseInt(req.body.streamDurationMinutes) || 0;
+      const totalMinutes = (hours * 60) + minutes;
+
+      // Resolve stream key value from broadcast or credentials/streamId
+      let finalStreamKey = broadcast.streamKey || '';
+      if (!finalStreamKey && streamId) {
+        try {
+          const streamsList = await youtubeService.listStreams(accessToken);
+          const matchingStream = streamsList.find(s => s.id === streamId);
+          if (matchingStream && matchingStream.streamKey) {
+            finalStreamKey = matchingStream.streamKey;
+          }
+        } catch (keyErr) {
+          console.warn('[API] Could not resolve stream key for streamId:', streamId, keyErr.message);
+        }
+      }
+
+      const rawStartTime = req.body.scheduleStartTime || req.body.scheduledStartTime;
+      const rawEndTime = req.body.scheduleEndTime;
+      let scheduleIso = null;
+      let endIso = null;
+      if (rawStartTime) {
+        const sDate = parseWIBDateTimeLocal(rawStartTime);
+        if (sDate) scheduleIso = sDate.toISOString();
+      }
+      if (rawEndTime) {
+        const eDate = parseWIBDateTimeLocal(rawEndTime);
+        if (eDate) endIso = eDate.toISOString();
+      }
+
+      const isScheduled = (req.body.scheduleType === 'daily' || req.body.scheduleType === 'weekly') || (scheduleIso !== null);
+
+      const streamData = {
+        title: broadcast.title || title,
+        video_id: req.body.videoId || null,
+        audio_id: req.body.audioId || null,
+        rtmp_url: broadcast.rtmpUrl || 'rtmp://a.rtmp.youtube.com/live2',
+        stream_key: finalStreamKey || (streamId ? String(streamId) : ''),
+        platform: 'YouTube',
+        platform_icon: 'ti-brand-youtube',
+        bitrate: 2500,
+        resolution: '1280x720',
+        fps: 30,
+        orientation: 'horizontal',
+        loop_video: req.body.loopVideo === 'true' || req.body.loopVideo === true,
+        stream_duration_minutes: totalMinutes > 0 ? totalMinutes : null,
+        duration: totalMinutes > 0 ? totalMinutes : null,
+        schedule_type: req.body.scheduleType || 'once',
+        schedule_time: scheduleIso,
+        end_time: endIso,
+        schedule_days: scheduleDays,
+        recurring_time: req.body.recurringTime || null,
+        recurring_enabled: req.body.recurringEnabled === 'true' || req.body.recurringEnabled === true || req.body.recurringEnabled === 'on' ? 1 : 0,
+        user_id: req.session.userId,
+        youtube_broadcast_id: broadcast.broadcastId,
+        youtube_account_id: accountId || (credentials ? credentials.id : null),
+        status: req.body.startImmediately === 'true' ? 'offline' : (isScheduled ? 'scheduled' : 'offline')
+      };
+
+      createdStream = await Stream.create(streamData);
+      console.log('[API] Created associated Stream record:', createdStream.id, 'for broadcast:', broadcast.broadcastId, 'schedule_time:', scheduleIso);
+
+      if (req.body.startImmediately === 'true' && createdStream && req.body.videoId) {
+        if (typeof streamService !== 'undefined' && typeof streamService.startStream === 'function') {
+          try {
+            await streamService.startStream(createdStream.id, req.session.userId);
+            console.log('[API] Stream engine started immediately for stream ID:', createdStream.id);
+          } catch (startErr) {
+            console.error('[API] Error starting stream engine immediately:', startErr.message);
+          }
+        }
+      }
+    } catch (streamErr) {
+      console.error('[API] Error creating associated stream for broadcast:', streamErr.message);
     }
 
     invalidateBroadcastsCache(req.session.userId);

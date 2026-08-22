@@ -444,9 +444,9 @@
 
 
 <!-- Edit Schedule Modal -->
-<div id="editScheduleModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto">
+<div id="editScheduleModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto" style="display: none;">
   <div class="flex min-h-screen items-center justify-center p-4">
-    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-md modal-container flex flex-col max-h-[90vh]">
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-md flex flex-col max-h-[90vh]">
       <div class="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-700">
         <h3 class="text-lg font-semibold">Edit Schedule</h3>
         <button onclick="closeEditModal()" class="text-gray-400 hover:text-white">
@@ -678,7 +678,11 @@
         }
         
         // Show modal
-        document.getElementById('editScheduleModal').classList.remove('hidden');
+        const modal = document.getElementById('editScheduleModal');
+        if (modal) {
+          modal.classList.remove('hidden');
+          modal.style.setProperty('display', 'block', 'important');
+        }
       } else {
         showToast('error', 'Failed to load stream data');
       }
@@ -782,7 +786,11 @@
   }
 
   function closeEditModal() {
-    document.getElementById('editScheduleModal').classList.add('hidden');
+    const modal = document.getElementById('editScheduleModal');
+    if (modal) {
+      modal.classList.add('hidden');
+      modal.style.display = 'none';
+    }
     currentEditStream = null;
     editSelectedDays = [];
     
@@ -827,7 +835,8 @@
     if (!streamId || !currentEditStream) return;
     
     const updateData = {
-      streamTitle: document.getElementById('editStreamTitle').value
+      streamTitle: document.getElementById('editStreamTitle').value,
+      title: document.getElementById('editStreamTitle').value
     };
     
     // Get duration - send as separate hours and minutes for API
@@ -835,6 +844,8 @@
     const minutes = parseInt(document.getElementById('editDurationMinutes').value) || 0;
     updateData.streamDurationHours = hours;
     updateData.streamDurationMinutes = minutes;
+    updateData.stream_duration_minutes = hours * 60 + minutes;
+    updateData.scheduleType = currentEditStream.schedule_type;
     
     const hasDuration = hours > 0 || minutes > 0;
     
@@ -844,28 +855,43 @@
       const endTime = document.getElementById('editEndTime').value;
       
       // Always send start time
-      if (scheduleTime) updateData.scheduleStartTime = scheduleTime;
+      if (scheduleTime) {
+        updateData.scheduleStartTime = scheduleTime;
+        updateData.schedule_time = scheduleTime;
+      }
       
       // Only send end time if duration is NOT set (mutual exclusion)
       // If duration is set, clear end time
       if (hasDuration) {
-        updateData.scheduleEndTime = null; // Clear end time when duration is set
+        updateData.scheduleEndTime = null;
+        updateData.end_time = null;
       } else if (endTime) {
         updateData.scheduleEndTime = endTime;
+        updateData.end_time = endTime;
       }
     } else if (currentEditStream.schedule_type === 'daily' || currentEditStream.schedule_type === 'weekly') {
-      updateData.recurringTime = document.getElementById('editRecurringTime').value;
-      updateData.recurringEnabled = document.getElementById('editRecurringEnabled').checked;
+      const recTime = document.getElementById('editRecurringTime').value;
+      const recEnabled = document.getElementById('editRecurringEnabled').checked;
+      updateData.recurringTime = recTime;
+      updateData.recurring_time = recTime;
+      updateData.recurringEnabled = recEnabled;
+      updateData.recurring_enabled = recEnabled;
       
       if (currentEditStream.schedule_type === 'weekly') {
         updateData.scheduleDays = JSON.stringify(editSelectedDays);
+        updateData.schedule_days = JSON.stringify(editSelectedDays);
       }
     }
+    
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     
     try {
       const response = await fetch(`/api/streams/${streamId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken
+        },
         body: JSON.stringify(updateData)
       });
       
