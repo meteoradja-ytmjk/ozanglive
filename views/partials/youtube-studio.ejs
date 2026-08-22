@@ -543,7 +543,7 @@
       <button type="button" onclick="openCreateBroadcastModal()"
         class="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 active:scale-95 text-white px-4 py-3 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 font-semibold text-sm shadow-lg shadow-red-500/25 hover:shadow-red-500/40 cursor-pointer touch-manipulation min-h-[48px]">
         <i class="ti ti-plus text-xl"></i>
-        <span>Create</span>
+        <span>Create Broadcast</span>
       </button>
     </div>
   </div>
@@ -571,7 +571,7 @@
 </div>
 
 <!-- YouTube API Guide Modal -->
-<div id="youtubeGuideModal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 hidden modal-overlay overflow-y-auto" onclick="if(event.target === this) closeYouTubeGuideModal()">
+<div id="youtubeGuideModal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 hidden modal-overlay overflow-y-auto" style="display: none;" onclick="if(event.target === this) closeYouTubeGuideModal()">
   <div class="flex min-h-screen items-center justify-center p-3 sm:p-4">
     <div class="bg-dark-800 border border-gray-700/80 rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden transition-all transform" onclick="event.stopPropagation()">
       <!-- Modal Header -->
@@ -778,340 +778,544 @@
 
 
 <!-- Create Broadcast Modal -->
-<div id="createBroadcastModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto">
+<div id="createBroadcastModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto" style="display: none;">
   <div class="flex min-h-screen items-center justify-center p-4">
-    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-lg">
-      <div class="flex items-center justify-between p-6 border-b border-gray-700">
-        <h3 class="text-lg font-semibold">Create Broadcast</h3>
-        <button onclick="closeCreateBroadcastModal()" class="text-gray-400 hover:text-white">
+    <div class="bg-dark-800 rounded-xl shadow-2xl w-full max-w-2xl border border-gray-700/70 overflow-hidden">
+      <div class="flex items-center justify-between p-5 border-b border-gray-700 bg-dark-750">
+        <div class="flex items-center gap-2.5">
+          <i class="ti ti-brand-youtube text-red-500 text-2xl"></i>
+          <div>
+            <h3 class="text-lg font-bold text-white">YouTube Live Studio</h3>
+            <p class="text-xs text-gray-400">Buat Broadcast & Siarkan Video Live ke YouTube</p>
+          </div>
+        </div>
+        <button onclick="closeCreateBroadcastModal()" class="text-gray-400 hover:text-white p-1">
           <i class="ti ti-x text-xl"></i>
         </button>
       </div>
       
-      <form id="createBroadcastForm" class="p-6 space-y-4">
-        <!-- Account Selector -->
-        <div>
-          <label class="text-sm font-medium text-white block mb-2">YouTube Account <span class="text-red-400">*</span></label>
-          <select id="accountSelect" name="accountId" required
-            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none"
-            onchange="onAccountChange(this.value)">
-            <% if (accounts && accounts.length > 0) { %>
-              <% accounts.forEach(function(account) { %>
-              <option value="<%= account.id %>"><%= account.channelName || 'YouTube Channel' %></option>
-              <% }); %>
-            <% } %>
-          </select>
-        </div>
+      <form id="createBroadcastForm" class="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
         
-        <div>
-          <div class="flex items-center justify-between mb-2">
-            <label class="text-sm font-medium text-white">
-              Title <span class="text-red-400">*</span>
-              <span id="titleAutoFillIndicator" class="hidden ml-2 text-xs text-green-400" title="Auto-filled from YouTube defaults">
-                <i class="ti ti-sparkles"></i> Auto-filled
-              </span>
-            </label>
-            <div class="flex items-center gap-2">
-              <button type="button" onclick="saveCurrentTitleToManager('create')" class="text-xs text-green-400 hover:text-green-300 flex items-center gap-1" title="Save current title">
-                <i class="ti ti-bookmark"></i>
-              </button>
-              <button type="button" onclick="openTitleManagerModal('create')" class="text-xs text-primary hover:text-primary/80 flex items-center gap-1">
-                <i class="ti ti-list"></i>
-                <span>Titles</span>
-              </button>
-            </div>
-          </div>
-          <div class="relative">
-            <input type="text" id="broadcastTitle" name="title" required
-              class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none pr-10"
-              placeholder="Enter broadcast title"
-              oninput="searchTitleSuggestions(this.value, 'create')"
-              onfocus="showTitleSuggestions('create')"
-              autocomplete="off">
-            <button type="button" onclick="toggleTitleDropdown('create')" class="absolute right-8 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white p-1">
-              <i class="ti ti-chevron-down"></i>
-            </button>
-            <div id="titleLoading" class="hidden absolute right-3 top-1/2 -translate-y-1/2">
-              <i class="ti ti-loader animate-spin text-gray-400"></i>
-            </div>
-            <!-- Title Suggestions Dropdown -->
-            <div id="titleSuggestions" class="hidden absolute left-0 right-0 z-20 mt-1 bg-dark-700 border border-gray-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-              <!-- Suggestions will be populated here -->
-            </div>
-          </div>
-        </div>
-        
-        <div>
-          <label class="text-sm font-medium text-white block mb-2">
-            Description
-            <span id="descriptionAutoFillIndicator" class="hidden ml-2 text-xs text-green-400" title="Auto-filled from YouTube defaults">
-              <i class="ti ti-sparkles"></i> Auto-filled
+        <!-- BAGIAN 1: TARGET STREAMING & YOUTUBE INTEGRATION -->
+        <div class="space-y-4 p-4 bg-dark-700/40 rounded-xl border border-gray-700/60">
+          <div class="flex items-center justify-between border-b border-gray-700/60 pb-2">
+            <span class="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
+              <i class="ti ti-brand-youtube text-red-400"></i> 1. Target Streaming & YouTube Integration
             </span>
-          </label>
-          <div class="relative">
-            <textarea id="broadcastDescription" name="description" rows="3"
-              class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none resize-none"
-              placeholder="Enter broadcast description (optional)"></textarea>
-            <div id="descriptionLoading" class="hidden absolute right-3 top-3">
-              <i class="ti ti-loader animate-spin text-gray-400"></i>
-            </div>
           </div>
-        </div>
-        
-        <div>
-          <label class="text-sm font-medium text-white block mb-2">Scheduled Start Time <span class="text-red-400">*</span></label>
-          <input type="datetime-local" id="scheduledStartTime" name="scheduledStartTime" required
-            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none [color-scheme:dark]">
-          <p class="text-xs text-gray-500 mt-1">Must be at least 10 minutes in the future</p>
-        </div>
-        
-        <div>
-          <label class="text-sm font-medium text-white block mb-2">Privacy Status</label>
-          <select id="privacyStatus" name="privacyStatus"
-            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none">
-            <option value="unlisted">Unlisted</option>
-            <option value="public">Public</option>
-            <option value="private">Private</option>
-          </select>
-        </div>
-        
-        <div>
-          <label class="text-sm font-medium text-white block mb-2">Category</label>
-          <select id="categoryId" name="categoryId"
-            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none">
-            <option value="22" selected>People & Blogs</option>
-            <option value="1">Film & Animation</option>
-            <option value="2">Autos & Vehicles</option>
-            <option value="10">Music</option>
-            <option value="15">Pets & Animals</option>
-            <option value="17">Sports</option>
-            <option value="18">Short Movies</option>
-            <option value="19">Travel & Events</option>
-            <option value="20">Gaming</option>
-            <option value="21">Videoblogging</option>
-            <option value="23">Comedy</option>
-            <option value="24">Entertainment</option>
-            <option value="25">News & Politics</option>
-            <option value="26">Howto & Style</option>
-            <option value="27">Education</option>
-            <option value="28">Science & Technology</option>
-            <option value="29">Nonprofits & Activism</option>
-          </select>
-          <p class="text-xs text-gray-500 mt-1">Add your stream to a category so that viewers can find it more easily</p>
-        </div>
-        
-        <div>
-          <label class="text-sm font-medium text-white block mb-2">
-            Stream Key
-            <span id="streamKeyAutoFillIndicator" class="hidden ml-2 text-xs text-green-400" title="Stream keys loaded from YouTube">
-              ✓ Auto-loaded
-            </span>
-          </label>
-          <div class="relative">
-            <select id="streamKeySelect" name="streamId"
-              class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none transition-all"
-              onchange="onStreamKeyChange(this.value)">
-              <option value="">🔑 Create new stream key</option>
+
+          <!-- Account Selector -->
+          <div>
+            <label class="text-sm font-medium text-white block mb-1.5">YouTube Account <span class="text-red-400">*</span></label>
+            <select id="accountSelect" name="accountId" required
+              class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none transition-all text-sm"
+              onchange="onAccountChange(this.value)">
+              <% if (accounts && accounts.length > 0) { %>
+                <% accounts.forEach(function(account) { %>
+                <option value="<%= account.id %>">📺 <%= account.channelName || 'YouTube Channel' %></option>
+                <% }); %>
+              <% } %>
             </select>
-            <div id="streamKeyLoading" class="hidden absolute right-3 top-1/2 -translate-y-1/2">
-              <i class="ti ti-loader animate-spin text-primary"></i>
+          </div>
+
+          <!-- Stream Key Selector -->
+          <div>
+            <label class="text-sm font-medium text-white block mb-1.5">
+              Stream Key
+              <span id="streamKeyAutoFillIndicator" class="hidden ml-2 text-xs text-green-400" title="Stream keys loaded from YouTube">
+                ✓ Auto-loaded
+              </span>
+            </label>
+            <div class="relative">
+              <select id="streamKeySelect" name="streamId"
+                class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none transition-all text-sm"
+                onchange="onStreamKeyChange(this.value)">
+                <option value="">🔑 Create new stream key</option>
+              </select>
+              <div id="streamKeyLoading" class="hidden absolute right-3 top-1/2 -translate-y-1/2">
+                <i class="ti ti-loader animate-spin text-primary"></i>
+              </div>
+            </div>
+            <p class="text-xs text-gray-500 mt-1">
+              <i class="ti ti-info-circle text-primary mr-1"></i>
+              Pilih stream key yang akan digunakan atau biarkan untuk membuat baru secara otomatis.
+            </p>
+          </div>
+          
+          <!-- Title with Title Manager -->
+          <div>
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+              <label class="text-sm font-medium text-white flex items-center gap-1.5">
+                <span>Judul Live</span> <span class="text-red-400 font-bold">*</span>
+                <span id="titleAutoFillIndicator" class="hidden ml-1 text-[11px] text-green-400 bg-green-500/10 border border-green-500/20 px-1.5 py-0.5 rounded" title="Auto-filled from YouTube defaults">
+                  <i class="ti ti-sparkles"></i> Auto-filled
+                </span>
+              </label>
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <button type="button" onclick="saveCurrentTitleToManager('create')" 
+                  class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 hover:border-emerald-500/50 rounded-lg transition-all active:scale-95 shadow-xs" 
+                  title="Simpan judul saat ini ke database">
+                  <i class="ti ti-bookmark text-xs"></i>
+                  <span>Simpan</span>
+                </button>
+                <button type="button" onclick="openTitleManagerModal('create')" 
+                  class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-purple-300 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 hover:border-purple-500/50 rounded-lg transition-all active:scale-95 shadow-xs"
+                  title="Buka pengelola judul & rotasi">
+                  <i class="ti ti-rotate-clockwise text-xs text-purple-400"></i>
+                  <span>Title Manager (Rotasi)</span>
+                </button>
+              </div>
+            </div>
+            <div class="relative">
+              <input type="text" id="broadcastTitle" name="title" required
+                class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none pr-10 text-sm"
+                placeholder="Masukkan judul live streaming..."
+                oninput="searchTitleSuggestions(this.value, 'create')"
+                onfocus="showTitleSuggestions('create')"
+                autocomplete="off">
+              <button type="button" onclick="toggleTitleDropdown('create')" class="absolute right-8 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white p-1">
+                <i class="ti ti-chevron-down"></i>
+              </button>
+              <div id="titleLoading" class="hidden absolute right-3 top-1/2 -translate-y-1/2">
+                <i class="ti ti-loader animate-spin text-gray-400"></i>
+              </div>
+              <!-- Title Suggestions Dropdown -->
+              <div id="titleSuggestions" class="hidden absolute left-0 right-0 z-20 mt-1 bg-dark-700 border border-gray-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+              </div>
             </div>
           </div>
-          <p class="text-xs text-gray-500 mt-1">
-            <i class="ti ti-info-circle text-primary mr-1"></i>
-            Reuse existing stream keys or create a new one for this broadcast
-          </p>
-        </div>
-        
-        <!-- Tags Field - Collapsible -->
-        <div>
-          <div class="flex items-center justify-between mb-2">
-            <label class="text-sm font-medium text-white flex items-center gap-2">
-              Tags
-              <span id="tagsCount" class="text-xs text-gray-400">(0)</span>
-              <span id="tagsAutoFillIndicator" class="hidden text-xs text-green-400" title="Auto-filled from YouTube defaults">
+          
+          <!-- Description -->
+          <div>
+            <label class="text-sm font-medium text-white block mb-1.5">
+              Deskripsi
+              <span id="descriptionAutoFillIndicator" class="hidden ml-2 text-xs text-green-400" title="Auto-filled from YouTube defaults">
                 <i class="ti ti-sparkles"></i> Auto-filled
               </span>
             </label>
-            <button type="button" id="toggleTagsBtn" onclick="toggleTagsVisibility()" class="text-xs text-primary hover:text-primary/80 flex items-center gap-1">
-              <span id="toggleTagsText">Show</span>
-              <i id="toggleTagsIcon" class="ti ti-chevron-down text-sm transition-transform"></i>
-            </button>
-          </div>
-          
-          <!-- Collapsed Preview -->
-          <div id="tagsPreview" class="px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg text-xs text-gray-400 truncate">
-            <span id="tagsPreviewText">No tags added</span>
-          </div>
-          
-          <!-- Expanded Tags Container -->
-          <div id="tagsExpandedContainer" class="hidden">
             <div class="relative">
-              <div id="tagsContainer" class="max-h-32 overflow-y-auto px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg focus-within:border-primary flex flex-wrap gap-1.5 items-start content-start">
-                <!-- Tag chips will be rendered here -->
-                <input type="text" id="tagInput" 
-                  class="flex-1 min-w-[100px] bg-transparent border-none outline-none text-white text-sm py-1"
-                  placeholder="Add tag and press Enter">
-              </div>
-              <div id="tagsLoading" class="hidden absolute right-3 top-3">
+              <textarea id="broadcastDescription" name="description" rows="3"
+                class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none resize-none text-sm"
+                placeholder="Masukkan deskripsi live streaming (opsional)..."></textarea>
+              <div id="descriptionLoading" class="hidden absolute right-3 top-3">
                 <i class="ti ti-loader animate-spin text-gray-400"></i>
               </div>
             </div>
-            <p class="text-xs text-gray-500 mt-1">Press Enter to add tags. Max 500 characters total.</p>
           </div>
-          <input type="hidden" id="tagsHidden" name="tags" value="">
+          
+          <!-- Scheduled Start Time, Privacy, Category in Grid -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label class="text-xs font-medium text-white block mb-1">Jadwal Mulai <span class="text-red-400">*</span></label>
+              <input type="datetime-local" id="scheduledStartTime" name="scheduledStartTime" required
+                class="w-full px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none [color-scheme:dark] text-xs">
+            </div>
+            <div>
+              <label class="text-xs font-medium text-white block mb-1">Privacy</label>
+              <select id="privacyStatus" name="privacyStatus"
+                class="w-full px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none text-xs">
+                <option value="public" selected>Public</option>
+                <option value="unlisted">Unlisted</option>
+                <option value="private">Private</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs font-medium text-white block mb-1">Kategori</label>
+              <select id="categoryId" name="categoryId"
+                class="w-full px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none text-xs">
+                <option value="22" selected>People & Blogs</option>
+                <option value="1">Film & Animation</option>
+                <option value="2">Autos & Vehicles</option>
+                <option value="10">Music</option>
+                <option value="15">Pets & Animals</option>
+                <option value="17">Sports</option>
+                <option value="20">Gaming</option>
+                <option value="23">Comedy</option>
+                <option value="24">Entertainment</option>
+                <option value="25">News & Politics</option>
+                <option value="27">Education</option>
+                <option value="28">Science & Tech</option>
+              </select>
+            </div>
+          </div>
         </div>
 
-        <!-- Auto-start and Auto-stop (hidden, always ON) -->
-        <input type="hidden" id="enableAutoStart" name="enableAutoStart" value="true">
-        <input type="hidden" id="enableAutoStop" name="enableAutoStop" value="true">
-
-        <!-- Unlist Replay Setting (visible, default ON) -->
-        <div class="bg-dark-700/50 rounded-lg p-4">
-          <label class="flex items-center justify-between cursor-pointer group">
-            <div class="flex-1">
-              <div class="flex items-center gap-2 mb-1">
-                <i class="ti ti-eye-off text-primary"></i>
-                <span class="text-sm font-medium text-white">Unlist replay when stream ends</span>
-              </div>
-              <p class="text-xs text-gray-500">
-                Automatically change video privacy to unlisted after stream ends
-              </p>
-            </div>
-            <div class="relative ml-4 flex-shrink-0">
-              <input type="checkbox" id="unlistReplayOnEnd" name="unlistReplayOnEnd" value="true" checked
-                class="sr-only peer"
-                onchange="this.value = this.checked ? 'true' : 'false'">
-              <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-            </div>
-          </label>
-        </div>
-
-        <input type="hidden" id="pinnedThumbnail" name="pinnedThumbnail" value="">
-        <input type="hidden" id="streamKeyFolderMapping" name="streamKeyFolderMapping" value="">
-
-        <div id="thumbnailManagerSection">
-          <label class="text-sm font-medium text-white block mb-2">
-            Thumbnail
-            <span id="thumbnailCount" class="ml-2 text-xs text-gray-400">(0)</span>
-          </label>
-          
-          <!-- Thumbnail Mode Selection -->
-          <div class="flex items-center gap-4 mb-3 p-2 bg-dark-700/50 rounded-lg">
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input type="radio" name="thumbnailMode" value="sequential" checked 
-                class="w-4 h-4 text-primary bg-dark-700 border-gray-600 focus:ring-primary"
-                onchange="updateThumbnailMode(this.value)">
-              <span class="text-sm text-gray-300">Rotasi</span>
-            </label>
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input type="radio" name="thumbnailMode" value="pinned"
-                class="w-4 h-4 text-primary bg-dark-700 border-gray-600 focus:ring-primary"
-                onchange="updateThumbnailMode(this.value)">
-              <span class="text-sm text-gray-300">Pin Thumbnail</span>
-            </label>
-          </div>
-          
-          <!-- Thumbnail Folder Navigation -->
-          <div id="thumbnailFolderNav" class="mb-3">
-            <div class="flex items-center justify-between mb-2">
-              <p class="text-xs text-gray-400 flex items-center gap-2">
-                <i class="ti ti-folder text-primary"></i>
-                Manajemen Folder Thumbnail
-              </p>
-              <button type="button" onclick="openRenameFolderModal(currentThumbnailFolder)" id="editThumbnailFolderBtn"
-                class="px-3 py-1.5 text-xs rounded-lg bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 transition-colors flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
-                disabled>
-                <i class="ti ti-pencil text-sm"></i>
-                <span>Edit</span>
-              </button>
-            </div>
-            <!-- Header Row -->
-            <div class="flex items-center justify-between gap-2 mb-2">
-              <button type="button" onclick="openThumbnailFolder(null)" id="thumbnailRootBtn" 
-                class="px-3 py-1.5 text-xs rounded-lg bg-primary/20 text-primary hover:bg-primary/30 transition-colors flex items-center gap-1.5">
-                <i class="ti ti-home text-sm"></i>
-                <span>Root</span>
-              </button>
-              <button type="button" id="addThumbnailFolderBtn" onclick="openAddThumbnailFolderModal()" 
-                class="px-3 py-1.5 text-xs rounded-lg bg-dark-600 hover:bg-dark-500 text-gray-300 transition-colors flex items-center gap-1.5">
-                <i class="ti ti-plus text-sm"></i>
-                <span>Tambah Folder</span>
-              </button>
-            </div>
-            
-            <!-- Folder List - 2 columns -->
-            <div id="thumbnailFolderList" class="grid grid-cols-2 gap-x-4 gap-y-1 max-h-32 overflow-y-auto">
-              <!-- Folders will be loaded here -->
-            </div>
-            
-            <!-- Current Folder Indicator -->
-            <div id="currentFolderIndicator" class="hidden mt-2 pt-2 border-t border-gray-700/50 flex items-center justify-between text-xs">
-              <span class="text-gray-400 flex items-center gap-1">
-                <i class="ti ti-folder-open text-primary text-sm"></i>
-                <span id="currentFolderName" class="text-white">Root</span>
-              </span>
-              <button type="button" onclick="openThumbnailFolder(null)" class="text-primary hover:text-primary/80 text-xs">
-                ← Back
-              </button>
-            </div>
-          </div>
-          
-          <!-- Thumbnail Gallery -->
-          <div id="thumbnailGallery" class="mb-3">
-            <div id="thumbnailGalleryGrid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4 mb-2">
-              <!-- Thumbnails will be loaded here -->
-            </div>
-            <div id="thumbnailGalleryLoading" class="hidden text-center py-6 bg-dark-700/30 rounded-lg">
-              <i class="ti ti-loader animate-spin text-primary text-xl"></i>
-              <p class="text-gray-400 text-sm mt-2">Loading thumbnails...</p>
-            </div>
-            <div id="thumbnailGalleryEmpty" class="hidden text-center py-6 bg-dark-700/30 rounded-lg border border-dashed border-gray-600">
-              <i class="ti ti-photo-off text-gray-500 text-2xl"></i>
-              <p class="text-gray-500 text-xs mt-2">No thumbnails in this folder</p>
-            </div>
-          </div>
-          
-          <!-- Pinned Thumbnail Indicator -->
-          <div id="pinnedThumbnailIndicator" class="hidden mb-3 p-2 bg-green-500/10 border border-green-500/30 rounded-lg flex items-center justify-between">
-            <span class="text-sm text-green-400 flex items-center gap-2">
-              <i class="ti ti-pin-filled"></i>
-              <span>Thumbnail di-pin: <span id="pinnedThumbnailName" class="font-medium"></span></span>
+        <!-- BAGIAN 2: SUMBER MEDIA (VIDEO & AUDIO) -->
+        <div class="space-y-4 p-4 bg-dark-700/40 rounded-xl border border-gray-700/60">
+          <div class="flex items-center justify-between border-b border-gray-700/60 pb-2">
+            <span class="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
+              <i class="ti ti-video text-blue-400"></i> 2. Sumber Media (Video & Audio Input)
             </span>
-            <button type="button" onclick="unpinThumbnail()" class="text-red-400 hover:text-red-300 text-sm">
-              <i class="ti ti-x"></i> Hapus Pin
-            </button>
           </div>
-          
-          <!-- Upload Section -->
-          <div class="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-3 bg-dark-700/30 rounded-lg border border-gray-700">
-            <div id="thumbnailPreview" class="w-24 h-14 sm:w-28 sm:h-16 bg-dark-600 rounded-lg overflow-hidden flex items-center justify-center border border-gray-600 shrink-0">
-              <i class="ti ti-photo text-gray-500 text-xl"></i>
+
+          <!-- Video Selector -->
+          <div class="relative">
+            <label class="text-sm font-medium text-white block mb-1.5">Pilih Video dari Galeri <span class="text-red-400">*</span></label>
+            <button type="button" onclick="toggleStudioVideoSelector()"
+              class="w-full flex items-center justify-between px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg hover:border-primary transition-colors text-left">
+              <div class="flex items-center gap-2">
+                <i class="ti ti-movie text-primary" id="studioVideoIcon"></i>
+                <span class="text-sm text-gray-300" id="studioSelectedVideo">Pilih video untuk di-stream...</span>
+              </div>
+              <i class="ti ti-chevron-down text-gray-400"></i>
+            </button>
+            <input type="hidden" id="studioSelectedVideoId" name="videoId" value="">
+            <div id="studioVideoSelectorDropdown"
+              class="hidden absolute z-50 mt-2 w-full rounded-xl border border-gray-600 shadow-2xl overflow-hidden"
+              style="background-color: #182234; border-color: #475569;">
+              <div class="p-2 border-b border-gray-700" style="background-color: #0f172a;">
+                <div class="relative">
+                  <i class="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+                  <input type="text" id="studioVideoSearchInput"
+                    class="w-full text-white pl-9 pr-4 py-2 rounded-lg text-sm focus:outline-none border border-gray-600"
+                    style="background-color: #1e293b;"
+                    placeholder="Cari video / folder / playlist...">
+                </div>
+              </div>
+              <div id="studioVideoListContainer" class="p-2 space-y-2 max-h-72 overflow-y-auto" style="background-color: #182234;"></div>
             </div>
-            <div class="flex-1 w-full sm:w-auto">
-              <input type="file" id="thumbnailFile" name="thumbnail" accept="image/jpeg,image/png" multiple
-                class="hidden" onchange="previewAndUploadThumbnail(this)">
-              <input type="hidden" id="selectedThumbnailPath" name="thumbnailPath" value="">
-              <input type="hidden" id="currentThumbnailFolder" value="">
-              <button type="button" id="uploadThumbnailGalleryBtn" onclick="document.getElementById('thumbnailFile').click()"
-                class="w-full sm:w-auto bg-primary/20 hover:bg-primary/30 text-primary border border-primary/50 px-4 py-2 rounded-lg transition-colors text-sm flex items-center justify-center gap-2">
-                <i class="ti ti-upload"></i>
-                <span>Upload to Gallery</span>
+          </div>
+
+          <!-- Audio Selector -->
+          <div class="relative">
+            <label class="text-sm font-medium text-white block mb-1.5">Pilih Audio Pengganti <span class="text-gray-400 text-xs">(Opsional - Menggantikan suara video)</span></label>
+            <button type="button" onclick="toggleStudioAudioSelector()"
+              class="w-full flex items-center justify-between px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg hover:border-primary transition-colors text-left">
+              <div class="flex items-center gap-2">
+                <i class="ti ti-music text-primary" id="studioAudioIcon"></i>
+                <span class="text-sm text-gray-300" id="studioSelectedAudio">Audio asli dari video</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span id="studioClearAudioBtn" class="hidden text-red-400 hover:text-red-300 text-sm font-bold"
+                  onclick="event.stopPropagation(); clearStudioAudioSelection();">✕</span>
+                <i class="ti ti-chevron-down text-gray-400"></i>
+              </div>
+            </button>
+            <input type="hidden" id="studioSelectedAudioId" name="audioId" value="">
+            <div id="studioAudioSelectorDropdown"
+              class="hidden absolute z-50 mt-2 w-full rounded-xl border border-gray-600 shadow-2xl overflow-hidden"
+              style="background-color: #182234; border-color: #475569;">
+              <div class="p-2 border-b border-gray-700" style="background-color: #0f172a;">
+                <div class="relative">
+                  <i class="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+                  <input type="text" id="studioAudioSearchInput"
+                    class="w-full text-white pl-9 pr-4 py-2 rounded-lg text-sm focus:outline-none border border-gray-600"
+                    style="background-color: #1e293b;"
+                    placeholder="Cari file audio / folder...">
+                </div>
+              </div>
+              <div id="studioAudioListContainer" class="p-2 space-y-2 max-h-72 overflow-y-auto" style="background-color: #182234;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- BAGIAN 3: PENGATURAN DURASI, JADWAL & ENGINE FFMPEG -->
+        <div class="space-y-4 p-4 bg-dark-700/40 rounded-xl border border-gray-700/60">
+          <div class="flex items-center justify-between border-b border-gray-700/60 pb-2">
+            <span class="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
+              <i class="ti ti-clock text-amber-400"></i> 3. Pengaturan Durasi & Jadwal Streaming
+            </span>
+          </div>
+
+          <!-- Durasi & Loop -->
+          <div class="grid grid-cols-3 gap-3">
+            <div>
+              <label class="text-xs text-gray-400 block mb-1">Durasi (Jam)</label>
+              <input type="number" id="studioStreamDurationHours" name="streamDurationHours" min="0"
+                class="w-full px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg text-sm" placeholder="0">
+            </div>
+            <div>
+              <label class="text-xs text-gray-400 block mb-1">Durasi (Menit)</label>
+              <input type="number" id="studioStreamDurationMinutes" name="streamDurationMinutes" min="0" max="59"
+                class="w-full px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg text-sm" placeholder="0">
+            </div>
+            <div class="flex items-end pb-1">
+              <div class="flex items-center justify-between w-full">
+                <label class="text-xs text-gray-300">Loop Video</label>
+                <label class="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" id="studioLoopVideoToggle" name="loopVideo" class="sr-only peer" checked>
+                  <div class="w-11 h-6 bg-dark-700 rounded-full peer peer-checked:bg-primary"></div>
+                  <div class="absolute left-[2px] top-[2px] w-5 h-5 bg-white rounded-full transition-all peer-checked:translate-x-5"></div>
+                </label>
+              </div>
+            </div>
+          </div>
+          <p class="text-xs text-gray-400">💡 Kosongkan <strong class="text-gray-200">Jam & Menit</strong> dan aktifkan <strong class="text-gray-200">Loop</strong> agar streaming berjalan tanpa batas (Unlimited / Selamanya).</p>
+
+          <!-- Schedule Type Selector -->
+          <div>
+            <label class="text-xs text-gray-400 block mb-2">Tipe Jadwal (Schedule Type)</label>
+            <div class="flex gap-2">
+              <button type="button" onclick="setStudioScheduleType('once')" id="studioScheduleTypeOnce"
+                class="flex-1 px-3 py-2 text-xs font-medium rounded-lg border border-primary bg-primary text-white transition-colors">
+                Sekali (Once)
               </button>
-              <p class="text-xs text-gray-500 mt-1">JPG or PNG, max 2MB each. Multiple files supported.</p>
+              <button type="button" onclick="setStudioScheduleType('daily')" id="studioScheduleTypeDaily"
+                class="flex-1 px-3 py-2 text-xs font-medium rounded-lg border border-gray-600 bg-dark-700 text-gray-300 hover:border-primary transition-colors">
+                Setiap Hari (Daily)
+              </button>
+              <button type="button" onclick="setStudioScheduleType('weekly')" id="studioScheduleTypeWeekly"
+                class="flex-1 px-3 py-2 text-xs font-medium rounded-lg border border-gray-600 bg-dark-700 text-gray-300 hover:border-primary transition-colors">
+                Mingguan (Weekly)
+              </button>
+            </div>
+            <input type="hidden" id="studioScheduleType" name="scheduleType" value="once">
+          </div>
+
+          <!-- Once Schedule Settings -->
+          <div id="studioOnceScheduleSettings" class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="text-xs text-gray-400 block mb-1">Mulai Streaming</label>
+              <input type="datetime-local" id="studioScheduleStartTime" name="scheduleStartTime"
+                class="w-full px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg text-sm [color-scheme:dark]">
+            </div>
+            <div>
+              <label class="text-xs text-gray-400 block mb-1">Selesai Streaming (Opsional)</label>
+              <input type="datetime-local" id="studioScheduleEndTime" name="scheduleEndTime"
+                class="w-full px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg text-sm [color-scheme:dark]">
+            </div>
+          </div>
+
+          <!-- Recurring Schedule Settings (Daily/Weekly) -->
+          <div id="studioRecurringScheduleSettings" class="hidden space-y-3">
+            <div>
+              <label class="text-xs text-gray-400 block mb-1">Jam Siaran (WIB)</label>
+              <input type="time" id="studioRecurringTime" name="recurringTime"
+                class="w-full px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg text-sm [color-scheme:dark]">
+            </div>
+            <div id="studioWeeklyDaysSelector" class="hidden">
+              <label class="text-xs text-gray-400 block mb-1">Pilih Hari Siaran</label>
+              <div class="grid grid-cols-7 gap-1">
+                <button type="button" onclick="toggleStudioDay(0)" data-studio-day="0"
+                  class="studio-day-btn py-2 text-xs rounded-lg border border-gray-600 bg-dark-700 text-gray-300 hover:border-primary text-center">Min</button>
+                <button type="button" onclick="toggleStudioDay(1)" data-studio-day="1"
+                  class="studio-day-btn py-2 text-xs rounded-lg border border-gray-600 bg-dark-700 text-gray-300 hover:border-primary text-center">Sen</button>
+                <button type="button" onclick="toggleStudioDay(2)" data-studio-day="2"
+                  class="studio-day-btn py-2 text-xs rounded-lg border border-gray-600 bg-dark-700 text-gray-300 hover:border-primary text-center">Sel</button>
+                <button type="button" onclick="toggleStudioDay(3)" data-studio-day="3"
+                  class="studio-day-btn py-2 text-xs rounded-lg border border-gray-600 bg-dark-700 text-gray-300 hover:border-primary text-center">Rab</button>
+                <button type="button" onclick="toggleStudioDay(4)" data-studio-day="4"
+                  class="studio-day-btn py-2 text-xs rounded-lg border border-gray-600 bg-dark-700 text-gray-300 hover:border-primary text-center">Kam</button>
+                <button type="button" onclick="toggleStudioDay(5)" data-studio-day="5"
+                  class="studio-day-btn py-2 text-xs rounded-lg border border-gray-600 bg-dark-700 text-gray-300 hover:border-primary text-center">Jum</button>
+                <button type="button" onclick="toggleStudioDay(6)" data-studio-day="6"
+                  class="studio-day-btn py-2 text-xs rounded-lg border border-gray-600 bg-dark-700 text-gray-300 hover:border-primary text-center">Sab</button>
+              </div>
+              <input type="hidden" id="studioScheduleDays" name="scheduleDays" value="[]">
+            </div>
+            <div class="flex items-center justify-between pt-1">
+              <label class="text-xs text-gray-300">Aktifkan Jadwal Berulang</label>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" id="studioRecurringEnabled" name="recurringEnabled" class="sr-only peer" checked>
+                <div class="w-11 h-6 bg-dark-700 rounded-full peer peer-checked:bg-primary"></div>
+                <div class="absolute left-[2px] top-[2px] w-5 h-5 bg-white rounded-full transition-all peer-checked:translate-x-5"></div>
+              </label>
             </div>
           </div>
         </div>
         
-        <div class="pt-4 flex gap-3">
+        <!-- BAGIAN 4: THUMBNAIL, TAGS & TEMPLATE (YOUTUBE FEATURES) -->
+        <div class="space-y-4 p-4 bg-dark-700/40 rounded-xl border border-gray-700/60">
+          <div class="flex items-center justify-between border-b border-gray-700/60 pb-2">
+            <span class="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
+              <i class="ti ti-photo text-purple-400"></i> 4. Thumbnail & Tags
+            </span>
+          </div>
+
+          <!-- Tags Field - Collapsible -->
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <label class="text-sm font-medium text-white flex items-center gap-2">
+                Tags
+                <span id="tagsCount" class="text-xs text-gray-400">(0)</span>
+                <span id="tagsAutoFillIndicator" class="hidden text-xs text-green-400" title="Auto-filled from YouTube defaults">
+                  <i class="ti ti-sparkles"></i> Auto-filled
+                </span>
+              </label>
+              <button type="button" id="toggleTagsBtn" onclick="toggleTagsVisibility()" class="text-xs text-primary hover:text-primary/80 flex items-center gap-1">
+                <span id="toggleTagsText">Show</span>
+                <i id="toggleTagsIcon" class="ti ti-chevron-down text-sm transition-transform"></i>
+              </button>
+            </div>
+            
+            <!-- Collapsed Preview -->
+            <div id="tagsPreview" class="px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg text-xs text-gray-400 truncate">
+              <span id="tagsPreviewText">No tags added</span>
+            </div>
+            
+            <!-- Expanded Tags Container -->
+            <div id="tagsExpandedContainer" class="hidden">
+              <div class="relative">
+                <div id="tagsContainer" class="max-h-32 overflow-y-auto px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg focus-within:border-primary flex flex-wrap gap-1.5 items-start content-start">
+                  <input type="text" id="tagInput" 
+                    class="flex-1 min-w-[100px] bg-transparent border-none outline-none text-white text-sm py-1"
+                    placeholder="Add tag and press Enter">
+                </div>
+                <div id="tagsLoading" class="hidden absolute right-3 top-3">
+                  <i class="ti ti-loader animate-spin text-gray-400"></i>
+                </div>
+              </div>
+              <p class="text-xs text-gray-500 mt-1">Press Enter to add tags. Max 500 characters total.</p>
+            </div>
+            <input type="hidden" id="tagsHidden" name="tags" value="">
+          </div>
+
+          <!-- Auto-start and Auto-stop (hidden, always ON) -->
+          <input type="hidden" id="enableAutoStart" name="enableAutoStart" value="true">
+          <input type="hidden" id="enableAutoStop" name="enableAutoStop" value="true">
+
+          <!-- Unlist Replay Setting (visible, default ON) -->
+          <div class="bg-dark-700/50 rounded-lg p-3">
+            <label class="flex items-center justify-between cursor-pointer group">
+              <div class="flex-1">
+                <div class="flex items-center gap-2 mb-1">
+                  <i class="ti ti-eye-off text-primary"></i>
+                  <span class="text-xs font-medium text-white">Unlist replay when stream ends</span>
+                </div>
+                <p class="text-[11px] text-gray-500">
+                  Ubah privasi video menjadi unlisted otomatis setelah live streaming selesai
+                </p>
+              </div>
+              <div class="relative ml-4 flex-shrink-0">
+                <input type="checkbox" id="unlistReplayOnEnd" name="unlistReplayOnEnd" value="true" checked
+                  class="sr-only peer"
+                  onchange="this.value = this.checked ? 'true' : 'false'">
+                <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+              </div>
+            </label>
+          </div>
+
+          <input type="hidden" id="pinnedThumbnail" name="pinnedThumbnail" value="">
+          <input type="hidden" id="streamKeyFolderMapping" name="streamKeyFolderMapping" value="">
+
+          <!-- Thumbnail Manager Section -->
+          <div id="thumbnailManagerSection">
+            <label class="text-sm font-medium text-white block mb-2">
+              Thumbnail
+              <span id="thumbnailCount" class="ml-2 text-xs text-gray-400">(0)</span>
+            </label>
+            
+            <!-- Thumbnail Mode Selection -->
+            <div class="flex items-center gap-4 mb-3 p-2 bg-dark-700/50 rounded-lg">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="radio" name="thumbnailMode" value="sequential" checked 
+                  class="w-4 h-4 text-primary bg-dark-700 border-gray-600 focus:ring-primary"
+                  onchange="updateThumbnailMode(this.value)">
+                <span class="text-sm text-gray-300">Rotasi</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="radio" name="thumbnailMode" value="pinned"
+                  class="w-4 h-4 text-primary bg-dark-700 border-gray-600 focus:ring-primary"
+                  onchange="updateThumbnailMode(this.value)">
+                <span class="text-sm text-gray-300">Pin Thumbnail</span>
+              </label>
+            </div>
+            
+            <!-- Thumbnail Folder Navigation -->
+            <div id="thumbnailFolderNav" class="mb-3">
+              <div class="flex items-center justify-between mb-2">
+                <p class="text-xs text-gray-400 flex items-center gap-2">
+                  <i class="ti ti-folder text-primary"></i>
+                  Manajemen Folder Thumbnail
+                </p>
+                <button type="button" onclick="openRenameFolderModal(currentThumbnailFolder)" id="editThumbnailFolderBtn"
+                  class="px-3 py-1.5 text-xs rounded-lg bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 transition-colors flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+                  disabled>
+                  <i class="ti ti-pencil text-sm"></i>
+                  <span>Edit</span>
+                </button>
+              </div>
+              <!-- Header Row -->
+              <div class="flex items-center justify-between gap-2 mb-2">
+                <button type="button" onclick="openThumbnailFolder(null)" id="thumbnailRootBtn" 
+                  class="px-3 py-1.5 text-xs rounded-lg bg-primary/20 text-primary hover:bg-primary/30 transition-colors flex items-center gap-1.5">
+                  <i class="ti ti-home text-sm"></i>
+                  <span>Root</span>
+                </button>
+                <button type="button" id="addThumbnailFolderBtn" onclick="openAddThumbnailFolderModal()" 
+                  class="px-3 py-1.5 text-xs rounded-lg bg-dark-600 hover:bg-dark-500 text-gray-300 transition-colors flex items-center gap-1.5">
+                  <i class="ti ti-plus text-sm"></i>
+                  <span>Tambah Folder</span>
+                </button>
+              </div>
+              
+              <!-- Folder List - 2 columns -->
+              <div id="thumbnailFolderList" class="grid grid-cols-2 gap-x-4 gap-y-1 max-h-32 overflow-y-auto">
+              </div>
+              
+              <!-- Current Folder Indicator -->
+              <div id="currentFolderIndicator" class="hidden mt-2 pt-2 border-t border-gray-700/50 flex items-center justify-between text-xs">
+                <span class="text-gray-400 flex items-center gap-1">
+                  <i class="ti ti-folder-open text-primary text-sm"></i>
+                  <span id="currentFolderName" class="text-white">Root</span>
+                </span>
+                <button type="button" onclick="openThumbnailFolder(null)" class="text-primary hover:text-primary/80 text-xs">
+                  ← Back
+                </button>
+              </div>
+            </div>
+            
+            <!-- Thumbnail Gallery -->
+            <div id="thumbnailGallery" class="mb-3">
+              <div id="thumbnailGalleryGrid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4 mb-2">
+              </div>
+              <div id="thumbnailGalleryLoading" class="hidden text-center py-6 bg-dark-700/30 rounded-lg">
+                <i class="ti ti-loader animate-spin text-primary text-xl"></i>
+                <p class="text-gray-400 text-sm mt-2">Loading thumbnails...</p>
+              </div>
+              <div id="thumbnailGalleryEmpty" class="hidden text-center py-6 bg-dark-700/30 rounded-lg border border-dashed border-gray-600">
+                <i class="ti ti-photo-off text-gray-500 text-2xl"></i>
+                <p class="text-gray-500 text-xs mt-2">No thumbnails in this folder</p>
+              </div>
+            </div>
+            
+            <!-- Pinned Thumbnail Indicator -->
+            <div id="pinnedThumbnailIndicator" class="hidden mb-3 p-2 bg-green-500/10 border border-green-500/30 rounded-lg flex items-center justify-between">
+              <span class="text-sm text-green-400 flex items-center gap-2">
+                <i class="ti ti-pin-filled"></i>
+                <span>Thumbnail di-pin: <span id="pinnedThumbnailName" class="font-medium"></span></span>
+              </span>
+              <button type="button" onclick="unpinThumbnail()" class="text-red-400 hover:text-red-300 text-sm">
+                <i class="ti ti-x"></i> Hapus Pin
+              </button>
+            </div>
+            
+            <!-- Upload Section -->
+            <div class="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-3 bg-dark-700/30 rounded-lg border border-gray-700">
+              <div id="thumbnailPreview" class="w-24 h-14 sm:w-28 sm:h-16 bg-dark-600 rounded-lg overflow-hidden flex items-center justify-center border border-gray-600 shrink-0">
+                <i class="ti ti-photo text-gray-500 text-xl"></i>
+              </div>
+              <div class="flex-1 w-full sm:w-auto">
+                <input type="file" id="thumbnailFile" name="thumbnail" accept="image/jpeg,image/png" multiple
+                  class="hidden" onchange="previewAndUploadThumbnail(this)">
+                <input type="hidden" id="selectedThumbnailPath" name="thumbnailPath" value="">
+                <input type="hidden" id="currentThumbnailFolder" value="">
+                <button type="button" id="uploadThumbnailGalleryBtn" onclick="document.getElementById('thumbnailFile').click()"
+                  class="w-full sm:w-auto bg-primary/20 hover:bg-primary/30 text-primary border border-primary/50 px-4 py-2 rounded-lg transition-colors text-sm flex items-center justify-center gap-2">
+                  <i class="ti ti-upload"></i>
+                  <span>Upload to Gallery</span>
+                </button>
+                <p class="text-xs text-gray-500 mt-1">JPG or PNG, max 2MB each. Multiple files supported.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- BUTTONS -->
+        <div class="pt-2 flex flex-col sm:flex-row gap-3 border-t border-gray-700/80">
           <button type="button" onclick="closeCreateBroadcastModal()"
-            class="flex-1 bg-dark-700 hover:bg-dark-600 text-white px-4 py-2.5 rounded-lg transition-colors">
-            Cancel
+            class="px-4 py-2.5 bg-dark-700 hover:bg-dark-600 text-white rounded-lg transition-colors text-sm">
+            Batal
           </button>
           <button type="submit" id="createBroadcastBtn"
-            class="flex-1 bg-red-500 hover:bg-red-600 text-white px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
-            <i class="ti ti-broadcast"></i>
-            <span>Create Broadcast</span>
+            class="flex-1 bg-primary hover:bg-secondary text-white px-5 py-2.5 rounded-lg transition-all text-sm font-medium flex items-center justify-center gap-2 shadow-lg shadow-primary/20">
+            <i class="ti ti-calendar-event text-base"></i>
+            <span>Buat Broadcast & Jadwalkan Live</span>
+          </button>
+          <button type="button" id="createAndStartBroadcastBtn" onclick="submitBroadcastAndStartNow()"
+            class="flex-1 bg-red-600 hover:bg-red-500 text-white px-5 py-2.5 rounded-lg transition-all text-sm font-medium flex items-center justify-center gap-2 shadow-lg shadow-red-600/20">
+            <i class="ti ti-broadcast text-base"></i>
+            <span>Mulai Live Streaming Sekarang</span>
           </button>
         </div>
       </form>
@@ -1120,7 +1324,7 @@
 </div>
 
 <!-- Change Thumbnail Modal -->
-<div id="changeThumbnailModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay">
+<div id="changeThumbnailModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay" style="display: none;">
   <div class="flex min-h-screen items-center justify-center p-4">
     <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-md">
       <div class="flex items-center justify-between p-6 border-b border-gray-700">
@@ -1162,7 +1366,7 @@
 </div>
 
 <!-- Add Account Modal -->
-<div id="addAccountModal" class="fixed inset-0 bg-black/60 z-50 hidden modal-overlay overflow-y-auto backdrop-blur-xs">
+<div id="addAccountModal" class="fixed inset-0 bg-black/60 z-50 hidden modal-overlay overflow-y-auto backdrop-blur-xs" style="display: none;">
   <div class="flex min-h-screen items-center justify-center p-4">
     <div class="bg-dark-800 rounded-2xl shadow-2xl w-full max-w-lg border border-gray-700/60 overflow-hidden">
       <div class="flex items-center justify-between p-4 sm:p-5 border-b border-gray-700/60 bg-dark-700/40">
@@ -1285,7 +1489,7 @@
 </div>
 
 <!-- Edit Account Modal -->
-<div id="editAccountModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto">
+<div id="editAccountModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto" style="display: none;">
   <div class="flex min-h-screen items-center justify-center p-4">
     <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-md">
       <div class="flex items-center justify-between px-5 py-4 border-b border-gray-700">
@@ -1357,7 +1561,7 @@
 </div>
 
 <!-- Edit Broadcast Modal -->
-<div id="editBroadcastModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto">
+<div id="editBroadcastModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto" style="display: none;">
   <div class="flex min-h-screen items-center justify-center p-4">
     <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
       <div class="flex items-center justify-between p-6 border-b border-gray-700 flex-shrink-0">
@@ -1444,15 +1648,22 @@
         
         <!-- Title with Title Manager -->
         <div>
-          <div class="flex items-center justify-between mb-2">
-            <label class="text-sm font-medium text-white">Title <span class="text-red-400">*</span></label>
-            <div class="flex items-center gap-2">
-              <button type="button" onclick="saveCurrentTitleToManager('edit')" class="text-xs text-green-400 hover:text-green-300 flex items-center gap-1" title="Save current title">
-                <i class="ti ti-bookmark"></i>
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+            <label class="text-sm font-medium text-white flex items-center gap-1.5">
+              <span>Title</span> <span class="text-red-400 font-bold">*</span>
+            </label>
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <button type="button" onclick="saveCurrentTitleToManager('edit')" 
+                class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 hover:border-emerald-500/50 rounded-lg transition-all active:scale-95 shadow-xs" 
+                title="Simpan judul saat ini">
+                <i class="ti ti-bookmark text-xs"></i>
+                <span>Simpan</span>
               </button>
-              <button type="button" onclick="openTitleManagerModal('edit')" class="text-xs text-primary hover:text-primary/80 flex items-center gap-1">
-                <i class="ti ti-list"></i>
-                <span>Manage Titles</span>
+              <button type="button" onclick="openTitleManagerModal('edit')" 
+                class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-purple-300 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 hover:border-purple-500/50 rounded-lg transition-all active:scale-95 shadow-xs"
+                title="Buka pengelola judul & rotasi">
+                <i class="ti ti-rotate-clockwise text-xs text-purple-400"></i>
+                <span>Title Manager (Rotasi)</span>
               </button>
             </div>
           </div>
@@ -1537,7 +1748,7 @@
 </div>
 
 <!-- Title Manager Modal -->
-<div id="titleManagerModal" class="fixed inset-0 bg-black/50 z-[60] hidden modal-overlay overflow-y-auto">
+<div id="titleManagerModal" class="fixed inset-0 bg-black/50 z-[60] hidden modal-overlay overflow-y-auto" style="display: none;">
   <div class="flex min-h-screen items-center justify-center p-2 sm:p-4">
     <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
       <div class="flex items-center justify-between p-3 border-b border-gray-700 flex-shrink-0">
@@ -1651,7 +1862,7 @@
 </div>
 
 <!-- Create/Edit Folder Modal -->
-<div id="titleFolderModal" class="fixed inset-0 bg-black/60 z-[70] modal-overlay hidden items-center justify-center">
+<div id="titleFolderModal" class="fixed inset-0 bg-black/60 z-[70] modal-overlay hidden items-center justify-center" style="display: none;">
   <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-xs sm:max-w-sm mx-4">
     <div class="flex items-center justify-between p-3 sm:p-4 border-b border-gray-700">
       <h3 class="text-sm sm:text-base font-semibold" id="folderModalTitle">Buat Folder Baru</h3>
@@ -1691,7 +1902,7 @@
 </div>
 
 <!-- Template Library Modal -->
-<div id="templateLibraryModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto">
+<div id="templateLibraryModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto" style="display: none;">
   <div class="flex min-h-screen items-center justify-center p-2 sm:p-4">
     <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
       <!-- Compact Header with Export/Import buttons -->
@@ -1733,7 +1944,7 @@
 </div>
 
 <!-- Save as Template Modal -->
-<div id="saveAsTemplateModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay">
+<div id="saveAsTemplateModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay" style="display: none;">
   <div class="flex min-h-screen items-center justify-center p-4">
     <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-md">
       <div class="flex items-center justify-between p-6 border-b border-gray-700">
@@ -1779,7 +1990,7 @@
 </div>
 
 <!-- Create Template Modal -->
-<div id="createTemplateModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto">
+<div id="createTemplateModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto" style="display: none;">
   <div class="flex min-h-screen items-center justify-center p-4">
     <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-lg">
       <div class="flex items-center justify-between p-6 border-b border-gray-700">
@@ -2005,7 +2216,7 @@
 </div>
 
 <!-- Edit Template Modal (Recurring Schedule Only) -->
-<div id="editTemplateModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto">
+<div id="editTemplateModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto" style="display: none;">
   <div class="flex min-h-screen items-center justify-center p-4">
     <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-md">
       <div class="flex items-center justify-between p-6 border-b border-gray-700">
@@ -2135,7 +2346,7 @@
   </div>
 </div>
 
-<div id="multiSaveTemplateModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto">
+<div id="multiSaveTemplateModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto" style="display: none;">
   <div class="flex min-h-screen items-center justify-center p-4">
     <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-md">
       <div class="flex items-center justify-between p-6 border-b border-gray-700">
@@ -2195,7 +2406,7 @@
 </div>
 
 <!-- Re-create from Template Modal -->
-<div id="recreateFromTemplateModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto">
+<div id="recreateFromTemplateModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto" style="display: none;">
   <div class="flex min-h-screen items-center justify-center p-4">
     <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-lg">
       <div class="flex items-center justify-between p-6 border-b border-gray-700">
@@ -2262,7 +2473,7 @@
 </div>
 
 <!-- Import Template Modal -->
-<div id="importTemplateModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto">
+<div id="importTemplateModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto" style="display: none;">
   <div class="flex min-h-screen items-center justify-center p-4">
     <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-md">
       <div class="flex items-center justify-between p-6 border-b border-gray-700">
@@ -2338,7 +2549,7 @@
 </div>
 
 <!-- Import Result Modal -->
-<div id="importResultModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto">
+<div id="importResultModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto" style="display: none;">
   <div class="flex min-h-screen items-center justify-center p-4">
     <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-md">
       <div class="flex items-center justify-between p-6 border-b border-gray-700">
@@ -2381,7 +2592,7 @@
 </div>
 
 <!-- YouTube API Guide Modal -->
-<div id="youtubeGuideModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto">
+<div id="youtubeGuideModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto" style="display: none;">
   <div class="flex min-h-screen items-center justify-center p-4">
     <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
       <div class="flex items-center justify-between p-6 border-b border-gray-700 sticky top-0 bg-dark-800 z-10">
@@ -3021,7 +3232,7 @@ document.addEventListener('keydown', function(e) {
 </script>
 
 <!-- Create Thumbnail Folder Modal -->
-<div id="addThumbnailFolderModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] hidden modal-overlay">
+<div id="addThumbnailFolderModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] hidden modal-overlay" style="display: none;">
   <div class="flex min-h-screen items-center justify-center p-4">
     <div class="bg-dark-800 rounded-xl shadow-2xl w-full max-w-sm border border-gray-700">
       <div class="flex items-center justify-between p-4 border-b border-gray-700">
@@ -3062,7 +3273,7 @@ document.addEventListener('keydown', function(e) {
 </div>
 
 <!-- Old Create Thumbnail Folder Modal - kept for backward compatibility -->
-<div id="createFolderModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] hidden modal-overlay">
+<div id="createFolderModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] hidden modal-overlay" style="display: none;">
   <div class="flex min-h-screen items-center justify-center p-4">
     <div class="bg-dark-800 rounded-xl shadow-2xl w-full max-w-sm border border-gray-700">
       <div class="flex items-center justify-between p-4 border-b border-gray-700">
@@ -3103,7 +3314,7 @@ document.addEventListener('keydown', function(e) {
 </div>
 
 <!-- Rename Thumbnail Folder Modal -->
-<div id="renameFolderModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] hidden modal-overlay">
+<div id="renameFolderModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] hidden modal-overlay" style="display: none;">
   <div class="flex min-h-screen items-center justify-center p-4">
     <div class="bg-dark-800 rounded-xl shadow-2xl w-full max-w-sm border border-gray-700">
       <div class="flex items-center justify-between p-4 border-b border-gray-700">
@@ -3170,7 +3381,7 @@ document.addEventListener('keydown', function(e) {
 </div>
 
 <!-- Thumbnail Manager Modal (Standalone) -->
-<div id="thumbnailManagerModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] hidden modal-overlay overflow-y-auto">
+<div id="thumbnailManagerModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] hidden modal-overlay overflow-y-auto" style="display: none;">
   <div class="flex min-h-screen items-center justify-center md:p-4">
     <div class="bg-dark-800 md:rounded-xl shadow-2xl w-full md:max-w-4xl md:border border-gray-700 md:my-8 min-h-screen md:min-h-0">
       <!-- Header -->

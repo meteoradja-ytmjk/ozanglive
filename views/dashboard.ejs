@@ -339,10 +339,10 @@
           <span id="realtime-date" class="font-semibold text-white">--/--/----</span>
         </div>
       </div>
-      <!-- Right: Buttons 2x2 grid -->
-      <div class="grid grid-cols-2 gap-2 w-[340px] shrink-0">
-        <!-- Row 1: All Streams + New Stream -->
-        <div class="relative">
+      <!-- Right: Control Room Tools & Filter (Pure Monitoring & Operations) -->
+      <div class="flex items-center gap-2 shrink-0">
+        <!-- All Streams Filter -->
+        <div class="relative w-44">
           <select id="streamFilter" onchange="applyStreamFilter(this.value)"
             class="w-full bg-dark-700 border border-gray-600 text-white pl-9 pr-4 py-2.5 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary appearance-none cursor-pointer text-sm h-[42px]">
             <option value="all">All Streams</option>
@@ -350,76 +350,76 @@
           <i class="ti ti-filter absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
           <i class="ti ti-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
         </div>
-        <button type="button" onclick="openNewStreamModal()"
-          class="flex items-center justify-center gap-2 bg-primary hover:bg-secondary text-white py-2.5 rounded-lg transition-colors whitespace-nowrap font-medium h-[42px]">
-          <i class="ti ti-plus"></i>
-          <span>New Stream</span>
-        </button>
-        <!-- Row 2: Schedule+Backup (small, split) + Expand (full width) -->
-        <div class="flex items-center gap-2">
-          <div class="relative flex-1" id="scheduleDropdown">
-            <button onclick="toggleScheduleDropdown()"
-              class="w-full flex items-center justify-center gap-1 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white h-[42px] rounded-lg transition-colors"
-              title="Schedule">
-              <i class="ti ti-calendar-event"></i>
-              <i class="ti ti-chevron-down text-[10px]"></i>
+
+        <!-- Schedule Dropdown -->
+        <div class="relative" id="scheduleDropdown">
+          <button onclick="toggleScheduleDropdown()"
+            class="px-3 flex items-center justify-center gap-1.5 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white h-[42px] rounded-lg transition-colors text-sm font-medium"
+            title="Schedule Overview">
+            <i class="ti ti-calendar-event text-primary"></i>
+            <span>Schedule</span>
+            <i class="ti ti-chevron-down text-[10px] text-gray-400"></i>
+          </button>
+          <div id="scheduleDropdownMenu"
+            class="hidden absolute left-0 mt-2 w-40 bg-dark-700 border border-gray-600 rounded-lg shadow-lg z-20 overflow-hidden">
+            <button onclick="openScheduleModal('once')"
+              class="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-white bg-primary hover:bg-secondary transition-colors">
+              <i class="ti ti-calendar"></i>
+              <span>Once</span>
             </button>
-            <div id="scheduleDropdownMenu"
-              class="hidden absolute left-0 mt-2 w-40 bg-dark-700 border border-gray-600 rounded-lg shadow-lg z-20 overflow-hidden">
-              <button onclick="openScheduleModal('once')"
-                class="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-white bg-primary hover:bg-secondary transition-colors">
-                <i class="ti ti-calendar"></i>
-                <span>Once</span>
-              </button>
-              <button onclick="openScheduleModal('daily')"
-                class="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-300 hover:bg-dark-600 transition-colors">
-                <i class="ti ti-repeat"></i>
-                <span>Daily</span>
-              </button>
-              <button onclick="openScheduleModal('weekly')"
-                class="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-300 hover:bg-dark-600 transition-colors">
-                <i class="ti ti-calendar-week"></i>
-                <span>Weekly</span>
-              </button>
-            </div>
-          </div>
-          <div class="relative flex-1" id="backupDropdown">
-            <button onclick="toggleBackupDropdown()"
-              class="w-full flex items-center justify-center gap-1 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white h-[42px] rounded-lg transition-colors"
-              title="Backup Menu">
-              <i class="ti ti-settings-2"></i>
-              <i class="ti ti-chevron-down text-[10px]"></i>
+            <button onclick="openScheduleModal('daily')"
+              class="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-300 hover:bg-dark-600 transition-colors">
+              <i class="ti ti-repeat"></i>
+              <span>Daily</span>
             </button>
-            <div id="backupDropdownMenu"
-              class="hidden absolute right-0 mt-2 w-48 bg-dark-700 border border-gray-600 rounded-lg shadow-lg z-20 overflow-hidden">
-              <button onclick="resetAllStreamSettings()"
-                class="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-orange-400 hover:bg-orange-500/10 transition-colors border-b border-gray-600">
-                <i class="ti ti-refresh"></i>
-                <span>Reset All Stream</span>
-              </button>
-              <button onclick="exportStreamSettings()"
-                class="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-green-400 hover:bg-green-500/10 transition-colors border-b border-gray-600">
-                <i class="ti ti-download"></i>
-                <span>Export</span>
-              </button>
-              <button onclick="triggerImportFile()"
-                class="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-blue-400 hover:bg-blue-500/10 transition-colors border-b border-gray-600">
-                <i class="ti ti-upload"></i>
-                <span>Import</span>
-              </button>
-              <button onclick="deleteAllStreams()"
-                class="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors">
-                <i class="ti ti-trash"></i>
-                <span id="deleteAllLabel">Delete All</span>
-              </button>
-            </div>
+            <button onclick="openScheduleModal('weekly')"
+              class="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-300 hover:bg-dark-600 transition-colors">
+              <i class="ti ti-calendar-week"></i>
+              <span>Weekly</span>
+            </button>
           </div>
         </div>
+
+        <!-- Backup Dropdown -->
+        <div class="relative" id="backupDropdown">
+          <button onclick="toggleBackupDropdown()"
+            class="px-3 flex items-center justify-center gap-1.5 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white h-[42px] rounded-lg transition-colors text-sm font-medium"
+            title="Backup & Manage">
+            <i class="ti ti-settings-2 text-gray-300"></i>
+            <span>Manage</span>
+            <i class="ti ti-chevron-down text-[10px] text-gray-400"></i>
+          </button>
+          <div id="backupDropdownMenu"
+            class="hidden absolute right-0 mt-2 w-48 bg-dark-700 border border-gray-600 rounded-lg shadow-lg z-20 overflow-hidden">
+            <button onclick="resetAllStreamSettings()"
+              class="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-orange-400 hover:bg-orange-500/10 transition-colors border-b border-gray-600">
+              <i class="ti ti-refresh"></i>
+              <span>Reset All Stream</span>
+            </button>
+            <button onclick="exportStreamSettings()"
+              class="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-green-400 hover:bg-green-500/10 transition-colors border-b border-gray-600">
+              <i class="ti ti-download"></i>
+              <span>Export</span>
+            </button>
+            <button onclick="triggerImportFile()"
+              class="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-blue-400 hover:bg-blue-500/10 transition-colors border-b border-gray-600">
+              <i class="ti ti-upload"></i>
+              <span>Import</span>
+            </button>
+            <button onclick="deleteAllStreams()"
+              class="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors">
+              <i class="ti ti-trash"></i>
+              <span id="deleteAllLabel">Delete All</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Expand / Collapse All -->
         <button type="button" id="toggleAllGroupsBtn" onclick="toggleAllStreamGroups()"
-          class="flex items-center justify-center gap-2 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white h-[42px] rounded-lg transition-colors font-medium"
+          class="px-3 flex items-center justify-center gap-1.5 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white h-[42px] rounded-lg transition-colors text-sm font-medium"
           title="Expand/Collapse All Group">
-          <i class="ti ti-fold-down"></i>
-          <span id="toggleAllGroupsLabel">Expand All</span>
+          <i class="ti ti-fold-down text-gray-300"></i>
+          <span id="toggleAllGroupsLabel">Expand</span>
         </button>
       </div>
     </div>
@@ -434,16 +434,11 @@
             <i class="ti ti-filter absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
             <i class="ti ti-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
           </div>
-          <div class="mobile-stream-buttons grid grid-cols-4 gap-2 w-full">
-            <button type="button" onclick="openNewStreamModal()"
-              class="flex items-center justify-center gap-1 bg-primary hover:bg-secondary text-white px-2 py-2 rounded-lg transition-colors text-xs font-medium overflow-hidden">
-              <i class="ti ti-plus flex-shrink-0"></i>
-              <span class="truncate">New</span>
-            </button>
+          <div class="mobile-stream-buttons grid grid-cols-3 gap-2 w-full">
             <div class="relative" id="scheduleDropdownMobile">
               <button onclick="toggleScheduleDropdown()"
                 class="w-full flex items-center justify-center gap-1 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white px-2 py-2 rounded-lg transition-colors text-xs overflow-hidden">
-                <i class="ti ti-calendar-event flex-shrink-0"></i>
+                <i class="ti ti-calendar-event flex-shrink-0 text-primary"></i>
                 <span class="truncate">Schedule</span>
               </button>
             </div>
@@ -451,7 +446,7 @@
               <button onclick="toggleBackupDropdown()"
                 class="w-full flex items-center justify-center gap-1 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white px-2 py-2 rounded-lg transition-colors text-xs overflow-hidden">
                 <i class="ti ti-settings-2 flex-shrink-0"></i>
-                <span class="truncate">Backup</span>
+                <span class="truncate">Manage</span>
               </button>
             </div>
             <button type="button" id="toggleAllGroupsBtnMobile" onclick="toggleAllStreamGroups()"
@@ -667,8 +662,9 @@
                     ✓ Auto-loaded
                   </span>
                 </label>
-                <button type="button" id="toggleStreamKeyModeBtn" onclick="toggleControlRoomStreamKeyMode()" class="text-xs text-primary hover:underline flex items-center gap-1 cursor-pointer" title="Switch manual / auto stream key input">
-                  <i class="ti ti-edit text-xs"></i> Mode Manual / Auto
+                <button type="button" id="toggleStreamKeyModeBtn" onclick="toggleControlRoomStreamKeyMode()" class="text-xs flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-dark-600 border border-gray-600 hover:border-primary text-gray-300 hover:text-white transition-all cursor-pointer shadow-sm" title="Klik untuk beralih mode manual atau auto">
+                  <i class="ti ti-switch text-primary text-sm"></i>
+                  <span id="streamKeyModeLabel">Mode: <strong class="text-primary">Auto YouTube</strong></span>
                 </button>
               </div>
               
@@ -987,8 +983,8 @@
     <%- include('partials/youtube-studio') %>
   </div>
 
-  <script src="/js/youtube.js?v=1.0.7" defer></script>
-  <script src="/js/stream-modal.js?v=1.0.8" defer></script>
+  <script src="/js/youtube.js?v=1.1.6" defer></script>
+  <script src="/js/stream-modal.js?v=1.0.9" defer></script>
   <script>
     function switchStudioTab(tabName) {
       const tabs = ['streams', 'broadcasts'];
@@ -1011,8 +1007,9 @@
         window.history.replaceState({}, '', url);
       } catch (e) {}
 
-      if (tabName === 'broadcasts' && typeof refreshLiveStats === 'function') {
-        refreshLiveStats();
+      if (tabName === 'broadcasts') {
+        if (typeof refreshLiveStats === 'function') refreshLiveStats();
+        if (typeof lazyLoadBroadcasts === 'function') lazyLoadBroadcasts();
       }
     }
 
@@ -1057,6 +1054,7 @@
         return `${wib.getUTCFullYear()}-${pad(wib.getUTCMonth() + 1)}-${pad(wib.getUTCDate())}T${pad(wib.getUTCHours())}:${pad(wib.getUTCMinutes())}`;
       }
     }
+    window.formatDateTimeLocal = formatDateTimeLocal;
 
     // Global variables for video/audio selection
     window.selectedVideoData = null;
@@ -1079,17 +1077,11 @@
         window.loadGalleryVideos();
       }
 
-      // Auto-load stream key immediately for pre-selected account
+      // Auto-load stream key immediately for selected account
       const accountSelect = document.getElementById('controlRoomAccountSelect');
-      if (accountSelect && accountSelect.value) {
-        if (typeof window.onControlRoomAccountChange === 'function') {
-          window.onControlRoomAccountChange(accountSelect.value);
-        } else if (typeof window.fetchControlRoomStreamKeys === 'function') {
-          window.fetchControlRoomStreamKeys(accountSelect.value);
-        }
-      }
-      if (typeof window.syncControlRoomAccounts === 'function') {
-        window.syncControlRoomAccounts(false);
+      const accountId = accountSelect ? accountSelect.value : null;
+      if (accountId && typeof window.fetchControlRoomStreamKeys === 'function') {
+        window.fetchControlRoomStreamKeys(accountId);
       }
 
       // Initialize mutual exclusion for duration/end time (for once schedule)
@@ -1098,6 +1090,41 @@
           window.initDurationEndTimeMutualExclusion();
         }
       }, 100);
+    };
+
+    // Toggle between Manual and Auto Stream Key Mode
+    window.toggleControlRoomStreamKeyMode = function (forcedMode) {
+      const manualSection = document.getElementById('controlRoomStreamKeyManual');
+      const selectorSection = document.getElementById('controlRoomStreamKeySelector');
+      const streamKeyInput = document.getElementById('streamKey');
+      const label = document.getElementById('streamKeyModeLabel');
+      const accountSelect = document.getElementById('controlRoomAccountSelect');
+
+      if (!manualSection || !selectorSection) return;
+
+      let targetMode = forcedMode;
+      if (!targetMode) {
+        targetMode = manualSection.classList.contains('hidden') ? 'manual' : 'auto';
+      }
+
+      if (targetMode === 'manual') {
+        manualSection.classList.remove('hidden');
+        selectorSection.classList.add('hidden');
+        if (streamKeyInput) {
+          streamKeyInput.setAttribute('required', 'required');
+          setTimeout(() => streamKeyInput.focus(), 50);
+        }
+        if (label) label.innerHTML = 'Mode: <strong class="text-amber-400">Manual Paste</strong>';
+      } else {
+        manualSection.classList.add('hidden');
+        selectorSection.classList.remove('hidden');
+        if (streamKeyInput) streamKeyInput.removeAttribute('required');
+        if (label) label.innerHTML = 'Mode: <strong class="text-primary">Auto YouTube</strong>';
+
+        if (accountSelect && accountSelect.value && typeof window.fetchControlRoomStreamKeys === 'function') {
+          window.fetchControlRoomStreamKeys(accountSelect.value);
+        }
+      }
     };
 
     // Close New Stream Modal - always define to ensure it works
@@ -2634,112 +2661,16 @@
         const result = await response.json();
 
         if (result.success && result.stream) {
-          const stream = result.stream;
-
-          // Open modal
-          openNewStreamModal();
-
-          // Set form title
-          document.querySelector('#newStreamModal h3').textContent = 'Edit Stream';
-
-          // Fill form data
-          document.getElementById('streamTitle').value = stream.title || '';
-          document.getElementById('streamKey').value = stream.stream_key || '';
-
-          // Parse duration to hours and minutes
-          const { hours, minutes } = parseDurationToFields(stream.stream_duration_minutes);
-          document.getElementById('streamDurationHours').value = hours || '';
-          document.getElementById('streamDurationMinutes').value = minutes || '';
-
-          // Reset disabled state before setting values
-          const durationHoursEl = document.getElementById('streamDurationHours');
-          const durationMinutesEl = document.getElementById('streamDurationMinutes');
-          const endTimeEl = document.getElementById('scheduleEndTime');
-
-          if (durationHoursEl) {
-            durationHoursEl.disabled = false;
-            durationHoursEl.classList.remove('opacity-50', 'cursor-not-allowed');
-          }
-          if (durationMinutesEl) {
-            durationMinutesEl.disabled = false;
-            durationMinutesEl.classList.remove('opacity-50', 'cursor-not-allowed');
-          }
-          if (endTimeEl) {
-            endTimeEl.disabled = false;
-            endTimeEl.classList.remove('opacity-50', 'cursor-not-allowed');
-          }
-
-          // Set schedule times - preserve original values from database
-          if (stream.schedule_time) {
-            document.getElementById('scheduleStartTime').value = formatDateTimeLocal(stream.schedule_time);
+          if (typeof window.openEditStudioModal === 'function') {
+            window.openEditStudioModal(result.stream);
           } else {
-            document.getElementById('scheduleStartTime').value = '';
+            console.error('openEditStudioModal function not found');
           }
-
-          // Only set end_time if duration is NOT set (mutual exclusion)
-          const hasDuration = (hours > 0 || minutes > 0);
-          if (stream.end_time && !hasDuration) {
-            document.getElementById('scheduleEndTime').value = formatDateTimeLocal(stream.end_time);
-          } else {
-            document.getElementById('scheduleEndTime').value = '';
-          }
-
-          // Set video selection
-          if (stream.video_id) {
-            const selectedStreamVideo = { id: stream.video_id, name: stream.video_title || 'Selected Video', type: stream.video_type || 'video' };
-            selectedVideoData = selectedStreamVideo;
-            window.selectedVideoData = selectedStreamVideo;
-            document.getElementById('selectedVideo').textContent = stream.video_type === 'playlist' ? '[Playlist] ' + (stream.video_title || 'Selected Playlist') : (stream.video_title || 'Selected Video');
-            document.getElementById('selectedVideoId').value = stream.video_id;
-          }
-
-          // Set audio selection
-          if (stream.audio_id) {
-            selectedAudioData = { id: stream.audio_id, title: stream.audio_title || 'Selected Audio' };
-            window.selectedAudioData = selectedAudioData;
-            document.getElementById('selectedAudio').textContent = stream.audio_title || 'Selected Audio';
-            document.getElementById('selectedAudioId').value = stream.audio_id;
-            document.getElementById('clearAudioBtn').classList.remove('hidden');
-          } else {
-            selectedAudioData = null;
-            document.getElementById('selectedAudio').textContent = 'No audio selected';
-            document.getElementById('selectedAudioId').value = '';
-            document.getElementById('clearAudioBtn').classList.add('hidden');
-          }
-
-          // Set loop video
-          const loopCheckbox = document.querySelector('input[name="loopVideo"]');
-          if (loopCheckbox) loopCheckbox.checked = stream.loop_video;
-
-          // Load recurring schedule data
-          if (typeof loadRecurringScheduleData === 'function') {
-            loadRecurringScheduleData(stream);
-          }
-
-          // Refresh unlimited/loop warning to reflect the edited stream's values
-          if (typeof window.updateUnlimitedLoopWarning === 'function') {
-            window.updateUnlimitedLoopWarning();
-          }
-
-          // Initialize mutual exclusion after setting values
-          if (stream.schedule_type === 'once') {
-            setTimeout(() => {
-              initDurationEndTimeMutualExclusion();
-              updateDurationEndTimeState();
-            }, 100);
-          }
-
-          // Store stream ID for update
-          document.getElementById('newStreamForm').dataset.editId = id;
-
-          // Change submit button text
-          document.querySelector('button[type="submit"][form="newStreamForm"]').textContent = 'Update Stream';
         }
       } catch (error) {
         console.error('Error loading stream for edit:', error);
-        if (typeof showToast === 'function') showToast('error', 'Failed to load stream');
+        if (typeof showToast === 'function') showToast('Failed to load stream', 'error');
       } finally {
-        // Restore the edit button (the list is not re-rendered here, so the button persists)
         setStreamButtonBusy(btn, false);
         streamActionLocks.delete(lockKey);
       }
@@ -2815,14 +2746,22 @@
       switchScheduleTab(type);
 
       // Show modal
-      document.getElementById('scheduleModal').classList.remove('hidden');
+      const modal = document.getElementById('scheduleModal');
+      if (modal) {
+        modal.classList.remove('hidden');
+        modal.style.setProperty('display', 'block', 'important');
+      }
 
       // Load schedules
       await loadSchedules(type);
     }
 
     function closeScheduleModal() {
-      document.getElementById('scheduleModal').classList.add('hidden');
+      const modal = document.getElementById('scheduleModal');
+      if (modal) {
+        modal.classList.add('hidden');
+        modal.style.display = 'none';
+      }
     }
 
     function switchScheduleTab(type) {
@@ -3076,7 +3015,7 @@
           const stream = result.stream;
 
           document.getElementById('scheduleEditStreamId').value = streamId;
-          document.getElementById('scheduleEditType').value = stream.schedule_type;
+          document.getElementById('scheduleEditType').value = stream.schedule_type || 'once';
           document.getElementById('scheduleEditTitle').value = stream.title || '';
 
           // Hide all settings first
@@ -3084,43 +3023,61 @@
           document.getElementById('scheduleEditRecurringSettings').classList.add('hidden');
           document.getElementById('scheduleEditWeeklyDays').classList.add('hidden');
 
-          if (stream.schedule_type === 'once') {
+          if (stream.schedule_type === 'once' || !stream.schedule_type) {
             document.getElementById('scheduleEditOnceSettings').classList.remove('hidden');
             if (stream.schedule_time) {
-              document.getElementById('scheduleEditStartTime').value = formatDateTimeLocal(stream.schedule_time);
+              document.getElementById('scheduleEditStartTime').value = typeof formatDateTimeLocal === 'function' ? formatDateTimeLocal(stream.schedule_time) : stream.schedule_time.slice(0, 16);
+            } else {
+              document.getElementById('scheduleEditStartTime').value = '';
             }
             if (stream.end_time) {
-              document.getElementById('scheduleEditEndTime').value = formatDateTimeLocal(stream.end_time);
+              document.getElementById('scheduleEditEndTime').value = typeof formatDateTimeLocal === 'function' ? formatDateTimeLocal(stream.end_time) : stream.end_time.slice(0, 16);
+            } else {
+              document.getElementById('scheduleEditEndTime').value = '';
             }
           } else {
             document.getElementById('scheduleEditRecurringSettings').classList.remove('hidden');
             document.getElementById('scheduleEditRecurringTime').value = stream.recurring_time || '';
-            document.getElementById('scheduleEditRecurringEnabled').checked = stream.recurring_enabled !== false;
+            document.getElementById('scheduleEditRecurringEnabled').checked = stream.recurring_enabled !== false && stream.recurring_enabled !== 0;
 
             if (stream.schedule_type === 'weekly') {
               document.getElementById('scheduleEditWeeklyDays').classList.remove('hidden');
-              scheduleEditSelectedDays = Array.isArray(stream.schedule_days) ? [...stream.schedule_days] : [];
+              let days = stream.schedule_days;
+              if (typeof days === 'string') {
+                try { days = JSON.parse(days); } catch(e) { days = []; }
+              }
+              scheduleEditSelectedDays = Array.isArray(days) ? [...days] : [];
               updateScheduleEditDayButtons();
             }
           }
 
           // Duration
-          const totalMinutes = stream.stream_duration_minutes || 0;
+          const totalMinutes = stream.stream_duration_minutes || stream.duration || 0;
           document.getElementById('scheduleEditDurationHours').value = Math.floor(totalMinutes / 60) || '';
           document.getElementById('scheduleEditDurationMinutes').value = totalMinutes % 60 || '';
 
-          document.getElementById('scheduleEditModal').classList.remove('hidden');
+          const modal = document.getElementById('scheduleEditModal');
+          if (modal) {
+            modal.classList.remove('hidden');
+            modal.style.setProperty('display', 'block', 'important');
+          }
         } else {
-          showToast('error', 'Failed to load stream data');
+          if (typeof showCenterToast === 'function') showCenterToast('error', 'Failed to load stream data');
+          else if (typeof showToast === 'function') showToast('Failed to load stream data', 'error');
         }
       } catch (error) {
         console.error('Error loading stream:', error);
-        showToast('error', 'Failed to load stream');
+        if (typeof showCenterToast === 'function') showCenterToast('error', 'Failed to load stream');
+        else if (typeof showToast === 'function') showToast('Failed to load stream', 'error');
       }
     }
 
     function closeScheduleEditModal() {
-      document.getElementById('scheduleEditModal').classList.add('hidden');
+      const modal = document.getElementById('scheduleEditModal');
+      if (modal) {
+        modal.classList.add('hidden');
+        modal.style.display = 'none';
+      }
       currentScheduleEditStream = null;
       scheduleEditSelectedDays = [];
     }
@@ -3152,24 +3109,39 @@
       const streamId = document.getElementById('scheduleEditStreamId').value;
       if (!streamId || !currentScheduleEditStream) return;
 
-      const updateData = {
-        title: document.getElementById('scheduleEditTitle').value
-      };
-
       const hours = parseInt(document.getElementById('scheduleEditDurationHours').value) || 0;
       const minutes = parseInt(document.getElementById('scheduleEditDurationMinutes').value) || 0;
-      updateData.stream_duration_minutes = hours * 60 + minutes;
+
+      const updateData = {
+        streamTitle: document.getElementById('scheduleEditTitle').value,
+        title: document.getElementById('scheduleEditTitle').value,
+        streamDurationHours: hours,
+        streamDurationMinutes: minutes,
+        stream_duration_minutes: hours * 60 + minutes,
+        scheduleType: currentScheduleEditStream.schedule_type
+      };
 
       if (currentScheduleEditStream.schedule_type === 'once') {
         const startTime = document.getElementById('scheduleEditStartTime').value;
         const endTime = document.getElementById('scheduleEditEndTime').value;
-        if (startTime) updateData.schedule_time = new Date(startTime).toISOString();
-        if (endTime) updateData.end_time = new Date(endTime).toISOString();
+        if (startTime) {
+          updateData.scheduleStartTime = startTime;
+          updateData.schedule_time = startTime;
+        }
+        if (endTime) {
+          updateData.scheduleEndTime = endTime;
+          updateData.end_time = endTime;
+        }
       } else {
-        updateData.recurring_time = document.getElementById('scheduleEditRecurringTime').value;
-        updateData.recurring_enabled = document.getElementById('scheduleEditRecurringEnabled').checked;
+        const recTime = document.getElementById('scheduleEditRecurringTime').value;
+        const recEnabled = document.getElementById('scheduleEditRecurringEnabled').checked;
+        updateData.recurringTime = recTime;
+        updateData.recurring_time = recTime;
+        updateData.recurringEnabled = recEnabled;
+        updateData.recurring_enabled = recEnabled;
 
         if (currentScheduleEditStream.schedule_type === 'weekly') {
+          updateData.scheduleDays = JSON.stringify(scheduleEditSelectedDays);
           updateData.schedule_days = JSON.stringify(scheduleEditSelectedDays);
         }
       }
@@ -3177,22 +3149,40 @@
       try {
         const response = await fetch('/api/streams/' + streamId, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': typeof getCsrfToken === 'function' ? getCsrfToken() : ''
+          },
           body: JSON.stringify(updateData)
         });
 
         const result = await response.json();
 
         if (result.success) {
-          showToast('success', 'Schedule updated');
+          if (typeof showCenterToast === 'function') {
+            showCenterToast('success', 'Schedule updated');
+          } else if (typeof showToast === 'function') {
+            showToast('Schedule updated', 'success');
+          }
           closeScheduleEditModal();
-          loadSchedules(currentScheduleType);
+          await loadSchedules(currentScheduleType);
+          if (typeof loadStreams === 'function') {
+            await loadStreams();
+          }
         } else {
-          showToast('error', result.error || 'Failed to update');
+          if (typeof showCenterToast === 'function') {
+            showCenterToast('error', result.error || 'Failed to update');
+          } else if (typeof showToast === 'function') {
+            showToast(result.error || 'Failed to update', 'error');
+          }
         }
       } catch (error) {
         console.error('Error updating schedule:', error);
-        showToast('error', 'Failed to update schedule');
+        if (typeof showCenterToast === 'function') {
+          showCenterToast('error', 'Failed to update schedule');
+        } else if (typeof showToast === 'function') {
+          showToast('Failed to update schedule', 'error');
+        }
       }
     }
 

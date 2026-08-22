@@ -25,16 +25,11 @@ window.openNewStreamModal = function () {
     loadGalleryVideos();
   }
   
-  // Auto-sync YouTube accounts and auto-load stream key immediately
+  // Directly load stream keys for selected account
   const accountSelect = document.getElementById('controlRoomAccountSelect');
-  if (accountSelect && accountSelect.value) {
-    if (typeof window.onControlRoomAccountChange === 'function') {
-      window.onControlRoomAccountChange(accountSelect.value);
-    } else if (typeof window.fetchControlRoomStreamKeys === 'function') {
-      window.fetchControlRoomStreamKeys(accountSelect.value);
-    }
-  } else if (typeof window.syncControlRoomAccounts === 'function') {
-    window.syncControlRoomAccounts(true);
+  const accountId = accountSelect ? accountSelect.value : null;
+  if (accountId && typeof window.fetchControlRoomStreamKeys === 'function') {
+    window.fetchControlRoomStreamKeys(accountId);
   }
 };
 function closeNewStreamModal() {
@@ -925,25 +920,38 @@ resetModalForm = function () {
 // ============================================
 
 // Toggle between Manual and Auto Stream Key Mode in Control Room
-window.toggleControlRoomStreamKeyMode = function() {
+window.toggleControlRoomStreamKeyMode = function(forcedMode) {
   const manualSection = document.getElementById('controlRoomStreamKeyManual');
   const selectorSection = document.getElementById('controlRoomStreamKeySelector');
   const streamKeyInput = document.getElementById('streamKey');
+  const label = document.getElementById('streamKeyModeLabel');
   const accountSelect = document.getElementById('controlRoomAccountSelect');
 
   if (!manualSection || !selectorSection) return;
 
-  const isManualHidden = manualSection.classList.contains('hidden');
-  if (isManualHidden) {
+  let targetMode = forcedMode;
+  if (!targetMode) {
+    targetMode = manualSection.classList.contains('hidden') ? 'manual' : 'auto';
+  }
+
+  if (targetMode === 'manual') {
     // Switch to manual mode
     manualSection.classList.remove('hidden');
     selectorSection.classList.add('hidden');
-    if (streamKeyInput) streamKeyInput.setAttribute('required', 'required');
+    if (streamKeyInput) {
+      streamKeyInput.setAttribute('required', 'required');
+      setTimeout(() => streamKeyInput.focus(), 50);
+    }
+    if (label) label.innerHTML = 'Mode: <strong class="text-amber-400">Manual Paste</strong>';
+    console.log('[Control Room] Switched to MANUAL mode');
   } else {
     // Switch to auto mode
     manualSection.classList.add('hidden');
     selectorSection.classList.remove('hidden');
     if (streamKeyInput) streamKeyInput.removeAttribute('required');
+    if (label) label.innerHTML = 'Mode: <strong class="text-primary">Auto YouTube</strong>';
+    console.log('[Control Room] Switched to AUTO mode');
+    
     if (accountSelect && accountSelect.value) {
       window.fetchControlRoomStreamKeys(accountSelect.value);
     }
@@ -956,50 +964,46 @@ window.syncControlRoomAccounts = async function(autoTrigger = true) {
   const warningEl = document.getElementById('noYouTubeAccountWarning');
   if (!accountSelect) return;
 
+  if (accountSelect.value) {
+    window.fetchControlRoomStreamKeys(accountSelect.value);
+  }
+
   try {
     const res = await fetch('/api/youtube/accounts');
     const data = await res.json();
     
     if (data.success && data.accounts && data.accounts.length > 0) {
-      const currentVal = accountSelect.value;
-      accountSelect.innerHTML = '';
+      const currentVal = accountSelect.value || data.accounts[0].id;
       
-      data.accounts.forEach((acc) => {
-        const opt = document.createElement('option');
-        opt.value = acc.id;
-        opt.textContent = `📺 ${acc.channelName || ('YouTube Channel #' + acc.id)}` + (acc.isPrimary ? ' (Primary)' : '');
-        accountSelect.appendChild(opt);
-      });
-      
-      const manualOpt = document.createElement('option');
-      manualOpt.value = '';
-      manualOpt.textContent = '-- Gunakan Stream Key Manual --';
-      accountSelect.appendChild(manualOpt);
+      const existingOptions = Array.from(accountSelect.options).map(o => o.value).filter(v => v);
+      const newIds = data.accounts.map(a => String(a.id));
+      const hasChanged = existingOptions.length !== newIds.length || !existingOptions.every(id => newIds.includes(String(id)));
+
+      if (hasChanged) {
+        accountSelect.innerHTML = '';
+        data.accounts.forEach((acc) => {
+          const opt = document.createElement('option');
+          opt.value = acc.id;
+          opt.textContent = `📺 ${acc.channelName || ('YouTube Channel #' + acc.id)}` + (acc.isPrimary ? ' (Primary)' : '');
+          accountSelect.appendChild(opt);
+        });
+        
+        const manualOpt = document.createElement('option');
+        manualOpt.value = '';
+        manualOpt.textContent = '-- Gunakan Stream Key Manual --';
+        accountSelect.appendChild(manualOpt);
+        
+        accountSelect.value = currentVal;
+      }
       
       if (warningEl) warningEl.classList.add('hidden');
-
-      // Keep previous selection if valid, otherwise select the first account
-      if (currentVal && data.accounts.some(a => String(a.id) === String(currentVal))) {
-        accountSelect.value = currentVal;
-      } else {
-        accountSelect.value = data.accounts[0].id;
-      }
       
       if (autoTrigger && accountSelect.value) {
-        await window.onControlRoomAccountChange(accountSelect.value);
-      }
-    } else {
-      accountSelect.innerHTML = '<option value="">-- Stream Key Manual (Belum Ada Akun Terhubung) --</option>';
-      if (warningEl) warningEl.classList.remove('hidden');
-      if (autoTrigger) {
-        await window.onControlRoomAccountChange('');
+        await window.fetchControlRoomStreamKeys(accountSelect.value);
       }
     }
   } catch (err) {
     console.warn('[Control Room] Could not sync accounts dynamically:', err);
-    if (autoTrigger && accountSelect.value) {
-      await window.onControlRoomAccountChange(accountSelect.value);
-    }
   }
 };
 
@@ -1024,7 +1028,7 @@ window.onControlRoomAccountChange = async function(accountId) {
     
     if (streamKeyInput) streamKeyInput.removeAttribute('required');
     
-    await fetchControlRoomStreamKeys(accountId);
+    await window.fetchControlRoomStreamKeys(accountId);
   } else {
     // No account - show manual input
     console.log('[Control Room] Switching to MANUAL mode');
@@ -1050,6 +1054,11 @@ window.fetchControlRoomStreamKeys = async function(accountId) {
   const selectorSection = document.getElementById('controlRoomStreamKeySelector');
   const streamKeyInput = document.getElementById('streamKey');
   
+  if (!accountId) {
+    const accSelect = document.getElementById('controlRoomAccountSelect');
+    accountId = accSelect ? accSelect.value : null;
+  }
+
   console.log('[Control Room] fetchControlRoomStreamKeys called with accountId:', accountId);
   
   if (!select) {
@@ -1065,7 +1074,7 @@ window.fetchControlRoomStreamKeys = async function(accountId) {
   try {
     let url = '/api/youtube/streams';
     if (accountId) {
-      url += `?accountId=${accountId}`;
+      url += `?accountId=${encodeURIComponent(accountId)}`;
     }
     
     console.log('[Control Room] Fetching stream keys from:', url);
@@ -1101,9 +1110,11 @@ window.fetchControlRoomStreamKeys = async function(accountId) {
         const streamIdVal = stream.id || `stream_${index}`;
         option.value = streamIdVal;
         
-        const resInfo = (stream.resolution && stream.resolution !== 'variable') ? ` (${stream.resolution} @ ${stream.frameRate || '30fps'})` : '';
-        const keySnippet = stream.streamKey ? ` [${stream.streamKey.substring(0, 8)}...]` : '';
-        option.textContent = `${index + 1}. ${stream.title}${resInfo}${keySnippet}`;
+        // Exact formatting as in YouTube Studio tab
+        const res = stream.resolution || 'variable';
+        const fps = stream.frameRate || 'variable';
+        option.textContent = `${index + 1}. ${stream.title} (${res} @ ${fps})`;
+        
         option.dataset.streamKey = stream.streamKey || '';
         option.dataset.rtmpUrl = stream.rtmpUrl || 'rtmp://a.rtmp.youtube.com/live2';
         select.appendChild(option);

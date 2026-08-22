@@ -1015,7 +1015,11 @@ async function loadReconnectTargets() {
 
 function openAddAccountModal(reconnectTarget = null) {
   selectedReconnectTarget = reconnectTarget;
-  document.getElementById('addAccountModal').classList.remove('hidden');
+  const modal = document.getElementById('addAccountModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.style.display = 'block';
+  }
   loadReconnectTargets();
 }
 
@@ -1029,8 +1033,13 @@ function openReconnectAccountModal(templateId, templateName, accountId, channelN
 }
 
 function closeAddAccountModal() {
-  document.getElementById('addAccountModal').classList.add('hidden');
-  document.getElementById('addAccountForm').reset();
+  const modal = document.getElementById('addAccountModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+  }
+  const form = document.getElementById('addAccountForm');
+  if (form) form.reset();
   selectedReconnectTarget = null;
 }
 
@@ -1195,7 +1204,11 @@ async function reconnectAccountOAuth(accountId, channelName) {
 async function openEditAccountModal(accountId, channelName) {
   document.getElementById('editAccountId').value = accountId;
   document.getElementById('editAccountChannelName').textContent = channelName || 'YouTube Channel';
-  document.getElementById('editAccountModal').classList.remove('hidden');
+  const modal = document.getElementById('editAccountModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.style.display = 'block';
+  }
 
   // Set token status to "checking" initially
   const tokenDot = document.getElementById('editTokenDot');
@@ -1276,8 +1289,13 @@ async function updateEditModalTokenStatus(accountId) {
 }
 
 function closeEditAccountModal() {
-  document.getElementById('editAccountModal').classList.add('hidden');
-  document.getElementById('editAccountForm').reset();
+  const modal = document.getElementById('editAccountModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+  }
+  const form = document.getElementById('editAccountForm');
+  if (form) form.reset();
   document.getElementById('editAccountId').value = '';
   document.getElementById('editAccountChannelName').textContent = '';
 }
@@ -2972,22 +2990,82 @@ function initTagInput() {
   });
 }
 
+// Safe date-time formatter for local WIB
+function formatDateTimeLocal(isoString) {
+  if (!isoString) return '';
+  const date = new Date(isoString);
+  if (isNaN(date.getTime())) return '';
+  try {
+    const fmt = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Jakarta',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hour12: false
+    });
+    const parts = fmt.formatToParts(date);
+    const get = (t) => (parts.find(p => p.type === t) || {}).value || '00';
+    let hours = get('hour');
+    if (hours === '24') hours = '00';
+    return `${get('year')}-${get('month')}-${get('day')}T${hours}:${get('minute')}`;
+  } catch (e) {
+    const wib = new Date(date.getTime() + 7 * 60 * 60 * 1000);
+    const pad = n => String(n).padStart(2, '0');
+    return `${wib.getUTCFullYear()}-${pad(wib.getUTCMonth() + 1)}-${pad(wib.getUTCDate())}T${pad(wib.getUTCHours())}:${pad(wib.getUTCMinutes())}`;
+  }
+}
+window.formatDateTimeLocal = formatDateTimeLocal;
+
 // Create Broadcast Modal
 function openCreateBroadcastModal() {
-  document.getElementById('createBroadcastModal').classList.remove('hidden');
+  if (typeof switchStudioTab === 'function') {
+    const broadcastsPanel = document.getElementById('studio-panel-broadcasts');
+    if (broadcastsPanel && broadcastsPanel.classList.contains('hidden')) {
+      switchStudioTab('broadcasts');
+    }
+  }
+
+  const modal = document.getElementById('createBroadcastModal');
+  if (!modal) {
+    console.error('createBroadcastModal element not found');
+    return;
+  }
   
-  // Set minimum datetime to 10 minutes from now
-  const minDate = new Date(Date.now() + 11 * 60 * 1000);
-  const minDateStr = minDate.toISOString().slice(0, 16);
-  document.getElementById('scheduledStartTime').min = minDateStr;
+  modal.classList.remove('hidden');
+  modal.style.setProperty('display', 'block', 'important');
   
-  // Reset tags
-  currentTags = [];
-  renderTags();
+  // Set minimum and default datetime to at least 15 minutes from now (formatted for local timezone)
+  try {
+    const minDate = new Date(Date.now() + 11 * 60 * 1000);
+    const defaultDate = new Date(Date.now() + 15 * 60 * 1000);
+    const minDateStr = typeof formatDateTimeLocal === 'function' ? formatDateTimeLocal(minDate) : minDate.toISOString().slice(0, 16);
+    const defaultDateStr = typeof formatDateTimeLocal === 'function' ? formatDateTimeLocal(defaultDate) : defaultDate.toISOString().slice(0, 16);
+    const scheduledInput = document.getElementById('scheduledStartTime');
+    if (scheduledInput) {
+      scheduledInput.min = minDateStr;
+      if (!scheduledInput.value) {
+        scheduledInput.value = defaultDateStr;
+      }
+    }
+  } catch (e) {
+    console.warn('[openCreateBroadcastModal] Date setup warning:', e);
+  }
   
-  // Initialize tag input
-  initTagInput();
+  // Reset tags safely
+  try {
+    currentTags = [];
+    if (typeof renderTags === 'function') renderTags();
+    if (typeof initTagInput === 'function') initTagInput();
+  } catch (e) {
+    console.warn('[openCreateBroadcastModal] Tag setup warning:', e);
+  }
   
+  // Pre-load gallery videos and audios
+  try {
+    if (typeof loadStudioGalleryVideos === 'function') loadStudioGalleryVideos();
+    if (typeof loadStudioGalleryAudios === 'function') loadStudioGalleryAudios();
+  } catch (e) {
+    console.warn('[openCreateBroadcastModal] Gallery setup warning:', e);
+  }
+
   // Get selected account ID
   const accountSelect = document.getElementById('accountSelect');
   const accountId = accountSelect ? accountSelect.value : null;
@@ -3000,11 +3078,16 @@ function openCreateBroadcastModal() {
   if (indicator) indicator.classList.add('hidden');
   
   // Fetch streams, thumbnails, folders, and channel defaults for selected account
-  fetchStreams(accountId);
-  fetchThumbnailFolders();
-  fetchThumbnails(null);
-  fetchChannelDefaults(accountId);
+  try {
+    if (typeof fetchStreams === 'function') fetchStreams(accountId);
+    if (typeof fetchThumbnailFolders === 'function') fetchThumbnailFolders();
+    if (typeof fetchThumbnails === 'function') fetchThumbnails(null);
+    if (typeof fetchChannelDefaults === 'function') fetchChannelDefaults(accountId);
+  } catch (e) {
+    console.warn('[openCreateBroadcastModal] Fetch warning:', e);
+  }
 }
+window.openCreateBroadcastModal = openCreateBroadcastModal;
 
 function openThumbnailManager() {
   openCreateBroadcastModal();
@@ -3020,65 +3103,754 @@ function openThumbnailManager() {
   }, 200);
 }
 
+// ==========================================
+// YouTube Studio - Gallery Video & Audio Selector
+// ==========================================
+let studioSelectedVideoData = null;
+let studioSelectedAudioData = null;
+window.allStudioVideos = null;
+window.allStudioAudios = null;
+
+function toggleStudioVideoSelector() {
+  const dropdown = document.getElementById('studioVideoSelectorDropdown');
+  if (!dropdown) return;
+
+  if (dropdown.classList.contains('hidden')) {
+    dropdown.classList.remove('hidden');
+    loadStudioGalleryVideos();
+    const searchInput = document.getElementById('studioVideoSearchInput');
+    if (searchInput) setTimeout(() => searchInput.focus(), 10);
+  } else {
+    dropdown.classList.add('hidden');
+  }
+}
+
+async function loadStudioGalleryVideos() {
+  try {
+    const container = document.getElementById('studioVideoListContainer');
+    if (!container) return;
+
+    container.innerHTML = '<div class="text-center py-4 text-gray-400 text-xs"><i class="ti ti-loader animate-spin mr-1"></i> Memuat video dari galeri...</div>';
+    const res = await fetch('/api/stream/content');
+    const content = await res.json();
+    window.allStudioVideos = content;
+    displayFilteredStudioVideos(content);
+
+    const searchInput = document.getElementById('studioVideoSearchInput');
+    if (searchInput) {
+      searchInput.removeEventListener('input', handleStudioVideoSearch);
+      searchInput.addEventListener('input', handleStudioVideoSearch);
+    }
+  } catch (err) {
+    console.error('Error loading gallery videos:', err);
+    const container = document.getElementById('studioVideoListContainer');
+    if (container) {
+      container.innerHTML = '<div class="text-center py-4 text-red-400 text-xs"><i class="ti ti-alert-circle mr-1"></i> Gagal memuat video galeri</div>';
+    }
+  }
+}
+
+function toggleStudioFolderGroup(groupId) {
+  const el = document.getElementById(groupId);
+  const icon = document.getElementById('icon-' + groupId);
+  if (!el) return;
+  if (el.classList.contains('hidden')) {
+    el.classList.remove('hidden');
+    if (icon) icon.style.transform = 'rotate(0deg)';
+  } else {
+    el.classList.add('hidden');
+    if (icon) icon.style.transform = 'rotate(-90deg)';
+  }
+}
+
+function handleStudioVideoSearch(e) {
+  const query = e.target.value.toLowerCase().trim();
+  if (!window.allStudioVideos) return;
+  if (!query) {
+    displayFilteredStudioVideos(window.allStudioVideos);
+    return;
+  }
+  const filtered = window.allStudioVideos.filter(v =>
+    (v.name && v.name.toLowerCase().includes(query)) ||
+    (v.title && v.title.toLowerCase().includes(query)) ||
+    (v.folder_name && v.folder_name.toLowerCase().includes(query)) ||
+    (v.description && v.description.toLowerCase().includes(query))
+  );
+  displayFilteredStudioVideos(filtered);
+}
+
+function displayFilteredStudioVideos(videos) {
+  const container = document.getElementById('studioVideoListContainer');
+  if (!container) return;
+  container.innerHTML = '';
+
+  if (!videos || videos.length === 0) {
+    container.innerHTML = `
+      <div class="text-center py-6 text-gray-400">
+        <i class="ti ti-video-off text-2xl mb-1 text-gray-500"></i>
+        <p class="text-xs">Tidak ada video di galeri</p>
+        <p class="text-[10px] text-gray-500 mt-0.5">Silakan upload video di menu Gallery</p>
+      </div>
+    `;
+    return;
+  }
+
+  const createVideoBtn = (v) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'w-full flex items-center gap-3 p-2 rounded-lg hover:bg-dark-700/80 transition-colors text-left border border-transparent hover:border-gray-600/50';
+    btn.onclick = () => selectStudioVideo(v);
+
+    const isPlaylist = v.type === 'playlist';
+    btn.innerHTML = `
+      <div class="w-12 h-9 bg-dark-900 rounded flex-shrink-0 overflow-hidden flex items-center justify-center border border-gray-700">
+        ${v.thumbnail ? `<img src="${v.thumbnail}" class="w-full h-full object-cover" onerror="this.src='/images/default-thumbnail.jpg'">` : (isPlaylist ? '<i class="ti ti-playlist text-blue-400 text-sm"></i>' : '<i class="ti ti-video text-primary text-sm"></i>')}
+      </div>
+      <div class="flex-1 min-w-0">
+        <p class="text-xs font-medium text-white truncate">${isPlaylist ? '<span class="text-blue-400 font-bold mr-1">[Playlist]</span>' : ''}${v.name || v.title}</p>
+        <p class="text-[10px] text-gray-400">${v.resolution || 'Video'} • ${v.duration || '0:00'}</p>
+      </div>
+    `;
+    return btn;
+  };
+
+  const playlists = [];
+  const foldersMap = {};
+  const rootVideos = [];
+
+  videos.forEach(v => {
+    if (v.type === 'playlist') {
+      playlists.push(v);
+    } else if (v.folder_name && v.folder_name.trim()) {
+      const fName = v.folder_name.trim();
+      if (!foldersMap[fName]) foldersMap[fName] = [];
+      foldersMap[fName].push(v);
+    } else {
+      rootVideos.push(v);
+    }
+  });
+
+  // 1. Playlists Group
+  if (playlists.length > 0) {
+    const plBox = document.createElement('div');
+    plBox.className = 'rounded-lg border border-blue-900/60 overflow-hidden mb-2 bg-[#0f172a]';
+    plBox.innerHTML = `
+      <div class="flex items-center justify-between px-3 py-2 bg-blue-950/70 hover:bg-blue-900/60 cursor-pointer transition-colors" onclick="toggleStudioFolderGroup('studio-pl-group')">
+        <div class="flex items-center gap-2">
+          <i class="ti ti-playlist text-blue-400 text-sm"></i>
+          <span class="text-xs font-bold text-blue-200">Playlists</span>
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-900 text-blue-200 font-medium">${playlists.length}</span>
+        </div>
+        <i class="ti ti-chevron-down text-blue-300 text-xs transition-transform" id="icon-studio-pl-group"></i>
+      </div>
+      <div id="studio-pl-group" class="p-1 space-y-1 bg-[#0f172a]"></div>
+    `;
+    const plList = plBox.querySelector('#studio-pl-group');
+    playlists.forEach(p => plList.appendChild(createVideoBtn(p)));
+    container.appendChild(plBox);
+  }
+
+  // 2. Folders
+  const folderNames = Object.keys(foldersMap).sort();
+  folderNames.forEach((fName, fIdx) => {
+    const fVideos = foldersMap[fName];
+    const groupId = `studio-v-folder-${fIdx}`;
+    const fBox = document.createElement('div');
+    fBox.className = 'rounded-lg border border-gray-700/60 overflow-hidden mb-2 bg-[#0f172a]';
+    fBox.innerHTML = `
+      <div class="flex items-center justify-between px-3 py-2 bg-[#1e293b] hover:bg-[#334155] cursor-pointer transition-colors" onclick="toggleStudioFolderGroup('${groupId}')">
+        <div class="flex items-center gap-2">
+          <i class="ti ti-folder-filled text-amber-400 text-sm"></i>
+          <span class="text-xs font-bold text-white">${fName}</span>
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-gray-700 text-gray-300 font-medium">${fVideos.length}</span>
+        </div>
+        <i class="ti ti-chevron-down text-gray-400 text-xs transition-transform" id="icon-${groupId}"></i>
+      </div>
+      <div id="${groupId}" class="p-1 space-y-1 bg-[#0f172a]"></div>
+    `;
+    const fList = fBox.querySelector(`#${groupId}`);
+    fVideos.forEach(v => fList.appendChild(createVideoBtn(v)));
+    container.appendChild(fBox);
+  });
+
+  // 3. Root / Uncategorized Videos
+  if (rootVideos.length > 0) {
+    if (folderNames.length > 0 || playlists.length > 0) {
+      const rBox = document.createElement('div');
+      rBox.className = 'rounded-lg border border-gray-700/60 overflow-hidden mb-2 bg-[#0f172a]';
+      rBox.innerHTML = `
+        <div class="flex items-center justify-between px-3 py-2 bg-[#1e293b] hover:bg-[#334155] cursor-pointer transition-colors" onclick="toggleStudioFolderGroup('studio-v-root')">
+          <div class="flex items-center gap-2">
+            <i class="ti ti-folder text-gray-400 text-sm"></i>
+            <span class="text-xs font-bold text-gray-300">File Lainnya (Di Luar Folder)</span>
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-gray-700 text-gray-300 font-medium">${rootVideos.length}</span>
+          </div>
+          <i class="ti ti-chevron-down text-gray-400 text-xs transition-transform" id="icon-studio-v-root"></i>
+        </div>
+        <div id="studio-v-root" class="p-1 space-y-1 bg-[#0f172a]"></div>
+      `;
+      const rList = rBox.querySelector('#studio-v-root');
+      rootVideos.forEach(v => rList.appendChild(createVideoBtn(v)));
+      container.appendChild(rBox);
+    } else {
+      rootVideos.forEach(v => container.appendChild(createVideoBtn(v)));
+    }
+  }
+}
+
+function selectStudioVideo(video) {
+  studioSelectedVideoData = video;
+  const isPlaylist = video.type === 'playlist';
+  const folderPrefix = video.folder_name ? `[${video.folder_name}] ` : '';
+  const displayText = isPlaylist ? `[Playlist] ${video.name}` : `${folderPrefix}${video.name || video.title}`;
+
+  const label = document.getElementById('studioSelectedVideo');
+  const input = document.getElementById('studioSelectedVideoId');
+  const icon = document.getElementById('studioVideoIcon');
+
+  if (label) label.textContent = displayText;
+  if (input) input.value = video.id;
+  if (icon) {
+    icon.className = isPlaylist ? 'ti ti-playlist text-blue-400' : 'ti ti-movie text-primary';
+  }
+
+  const dropdown = document.getElementById('studioVideoSelectorDropdown');
+  if (dropdown) dropdown.classList.add('hidden');
+}
+
+function toggleStudioAudioSelector() {
+  const dropdown = document.getElementById('studioAudioSelectorDropdown');
+  if (!dropdown) return;
+
+  if (dropdown.classList.contains('hidden')) {
+    dropdown.classList.remove('hidden');
+    loadStudioGalleryAudios();
+    const searchInput = document.getElementById('studioAudioSearchInput');
+    if (searchInput) setTimeout(() => searchInput.focus(), 10);
+  } else {
+    dropdown.classList.add('hidden');
+  }
+}
+
+async function loadStudioGalleryAudios() {
+  try {
+    const container = document.getElementById('studioAudioListContainer');
+    if (!container) return;
+
+    container.innerHTML = '<div class="text-center py-4 text-gray-400 text-xs"><i class="ti ti-loader animate-spin mr-1"></i> Memuat audio dari galeri...</div>';
+    const res = await fetch('/api/stream/audios');
+    const audios = await res.json();
+    window.allStudioAudios = audios;
+    displayFilteredStudioAudios(audios);
+
+    const searchInput = document.getElementById('studioAudioSearchInput');
+    if (searchInput) {
+      searchInput.removeEventListener('input', handleStudioAudioSearch);
+      searchInput.addEventListener('input', handleStudioAudioSearch);
+    }
+  } catch (err) {
+    console.error('Error loading gallery audios:', err);
+    const container = document.getElementById('studioAudioListContainer');
+    if (container) {
+      container.innerHTML = '<div class="text-center py-4 text-red-400 text-xs"><i class="ti ti-alert-circle mr-1"></i> Gagal memuat audio galeri</div>';
+    }
+  }
+}
+
+function handleStudioAudioSearch(e) {
+  const query = e.target.value.toLowerCase().trim();
+  if (!window.allStudioAudios) return;
+  if (!query) {
+    displayFilteredStudioAudios(window.allStudioAudios);
+    return;
+  }
+  const filtered = window.allStudioAudios.filter(a =>
+    (a.title && a.title.toLowerCase().includes(query)) ||
+    (a.name && a.name.toLowerCase().includes(query)) ||
+    (a.folder_name && a.folder_name.toLowerCase().includes(query))
+  );
+  displayFilteredStudioAudios(filtered);
+}
+
+function displayFilteredStudioAudios(audios) {
+  const container = document.getElementById('studioAudioListContainer');
+  if (!container) return;
+  container.innerHTML = '';
+
+  if (!audios || audios.length === 0) {
+    container.innerHTML = `
+      <div class="text-center py-6 text-gray-400">
+        <i class="ti ti-music-off text-2xl mb-1 text-gray-500"></i>
+        <p class="text-xs">Tidak ada file audio di galeri</p>
+        <p class="text-[10px] text-gray-500 mt-0.5">Silakan upload audio di menu Gallery</p>
+      </div>
+    `;
+    return;
+  }
+
+  const createAudioBtn = (a) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'w-full flex items-center gap-3 p-2 rounded-lg hover:bg-dark-700/80 transition-colors text-left border border-transparent hover:border-gray-600/50';
+    btn.onclick = () => selectStudioAudio(a);
+    btn.innerHTML = `
+      <div class="w-8 h-8 bg-dark-900 rounded flex-shrink-0 flex items-center justify-center border border-gray-700">
+        <i class="ti ti-music text-primary text-xs"></i>
+      </div>
+      <div class="flex-1 min-w-0">
+        <p class="text-xs font-medium text-white truncate">${a.title || a.name}</p>
+        <p class="text-[10px] text-gray-400">${a.duration || 'Audio'}</p>
+      </div>
+    `;
+    return btn;
+  };
+
+  const foldersMap = {};
+  const rootAudios = [];
+
+  audios.forEach(a => {
+    if (a.folder_name && a.folder_name.trim()) {
+      const fName = a.folder_name.trim();
+      if (!foldersMap[fName]) foldersMap[fName] = [];
+      foldersMap[fName].push(a);
+    } else {
+      rootAudios.push(a);
+    }
+  });
+
+  const folderNames = Object.keys(foldersMap).sort();
+  folderNames.forEach((fName, fIdx) => {
+    const fAudios = foldersMap[fName];
+    const groupId = `studio-a-folder-${fIdx}`;
+    const fBox = document.createElement('div');
+    fBox.className = 'rounded-lg border border-gray-700/60 overflow-hidden mb-2 bg-[#0f172a]';
+    fBox.innerHTML = `
+      <div class="flex items-center justify-between px-3 py-2 bg-[#1e293b] hover:bg-[#334155] cursor-pointer transition-colors" onclick="toggleStudioFolderGroup('${groupId}')">
+        <div class="flex items-center gap-2">
+          <i class="ti ti-folder-filled text-emerald-400 text-sm"></i>
+          <span class="text-xs font-bold text-white">${fName}</span>
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-gray-700 text-gray-300 font-medium">${fAudios.length}</span>
+        </div>
+        <i class="ti ti-chevron-down text-gray-400 text-xs transition-transform" id="icon-${groupId}"></i>
+      </div>
+      <div id="${groupId}" class="p-1 space-y-1 bg-[#0f172a]"></div>
+    `;
+    const fList = fBox.querySelector(`#${groupId}`);
+    fAudios.forEach(a => fList.appendChild(createAudioBtn(a)));
+    container.appendChild(fBox);
+  });
+
+  if (rootAudios.length > 0) {
+    if (folderNames.length > 0) {
+      const rBox = document.createElement('div');
+      rBox.className = 'rounded-lg border border-gray-700/60 overflow-hidden mb-2 bg-[#0f172a]';
+      rBox.innerHTML = `
+        <div class="flex items-center justify-between px-3 py-2 bg-[#1e293b] hover:bg-[#334155] cursor-pointer transition-colors" onclick="toggleStudioFolderGroup('studio-a-root')">
+          <div class="flex items-center gap-2">
+            <i class="ti ti-folder text-gray-400 text-sm"></i>
+            <span class="text-xs font-bold text-gray-300">Audio Lainnya (Di Luar Folder)</span>
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-gray-700 text-gray-300 font-medium">${rootAudios.length}</span>
+          </div>
+          <i class="ti ti-chevron-down text-gray-400 text-xs transition-transform" id="icon-studio-a-root"></i>
+        </div>
+        <div id="studio-a-root" class="p-1 space-y-1 bg-[#0f172a]"></div>
+      `;
+      const rList = rBox.querySelector('#studio-a-root');
+      rootAudios.forEach(a => rList.appendChild(createAudioBtn(a)));
+      container.appendChild(rBox);
+    } else {
+      rootAudios.forEach(a => container.appendChild(createAudioBtn(a)));
+    }
+  }
+}
+
+function selectStudioAudio(audio) {
+  studioSelectedAudioData = audio;
+  const folderPrefix = audio.folder_name ? `[${audio.folder_name}] ` : '';
+  const label = document.getElementById('studioSelectedAudio');
+  const input = document.getElementById('studioSelectedAudioId');
+  const clearBtn = document.getElementById('studioClearAudioBtn');
+  if (label) label.textContent = `${folderPrefix}${audio.title || audio.name}`;
+  if (input) input.value = audio.id;
+  if (clearBtn) clearBtn.classList.remove('hidden');
+
+  const dropdown = document.getElementById('studioAudioSelectorDropdown');
+  if (dropdown) dropdown.classList.add('hidden');
+}
+
+function clearStudioAudioSelection() {
+  studioSelectedAudioData = null;
+  const label = document.getElementById('studioSelectedAudio');
+  const input = document.getElementById('studioSelectedAudioId');
+  const clearBtn = document.getElementById('studioClearAudioBtn');
+  if (label) label.textContent = 'Audio asli dari video';
+  if (input) input.value = '';
+  if (clearBtn) clearBtn.classList.add('hidden');
+}
+
+// Studio Schedule Type Selector
+function setStudioScheduleType(type) {
+  const hiddenInput = document.getElementById('studioScheduleType');
+  if (hiddenInput) hiddenInput.value = type;
+
+  const onceBtn = document.getElementById('studioScheduleTypeOnce');
+  const dailyBtn = document.getElementById('studioScheduleTypeDaily');
+  const weeklyBtn = document.getElementById('studioScheduleTypeWeekly');
+
+  const onceSection = document.getElementById('studioOnceScheduleSettings');
+  const recurringSection = document.getElementById('studioRecurringScheduleSettings');
+  const weeklyDays = document.getElementById('studioWeeklyDaysSelector');
+
+  // Reset button styles
+  [onceBtn, dailyBtn, weeklyBtn].forEach(b => {
+    if (b) {
+      b.className = 'flex-1 px-3 py-2 text-xs font-medium rounded-lg border border-gray-600 bg-dark-700 text-gray-300 hover:border-primary transition-colors';
+    }
+  });
+
+  if (type === 'once') {
+    if (onceBtn) onceBtn.className = 'flex-1 px-3 py-2 text-xs font-medium rounded-lg border border-primary bg-primary text-white transition-colors';
+    if (onceSection) onceSection.classList.remove('hidden');
+    if (recurringSection) recurringSection.classList.add('hidden');
+  } else if (type === 'daily') {
+    if (dailyBtn) dailyBtn.className = 'flex-1 px-3 py-2 text-xs font-medium rounded-lg border border-primary bg-primary text-white transition-colors';
+    if (onceSection) onceSection.classList.add('hidden');
+    if (recurringSection) recurringSection.classList.remove('hidden');
+    if (weeklyDays) weeklyDays.classList.add('hidden');
+  } else if (type === 'weekly') {
+    if (weeklyBtn) weeklyBtn.className = 'flex-1 px-3 py-2 text-xs font-medium rounded-lg border border-primary bg-primary text-white transition-colors';
+    if (onceSection) onceSection.classList.add('hidden');
+    if (recurringSection) recurringSection.classList.remove('hidden');
+    if (weeklyDays) weeklyDays.classList.remove('hidden');
+  }
+}
+
+let studioSelectedDays = [];
+function toggleStudioDay(dayIndex) {
+  const idx = studioSelectedDays.indexOf(dayIndex);
+  const btn = document.querySelector(`[data-studio-day="${dayIndex}"]`);
+
+  if (idx > -1) {
+    studioSelectedDays.splice(idx, 1);
+    if (btn) {
+      btn.classList.remove('border-primary', 'bg-primary', 'text-white');
+      btn.classList.add('border-gray-600', 'bg-dark-700', 'text-gray-300');
+    }
+  } else {
+    studioSelectedDays.push(dayIndex);
+    if (btn) {
+      btn.classList.remove('border-gray-600', 'bg-dark-700', 'text-gray-300');
+      btn.classList.add('border-primary', 'bg-primary', 'text-white');
+    }
+  }
+
+  const daysInput = document.getElementById('studioScheduleDays');
+  if (daysInput) daysInput.value = JSON.stringify(studioSelectedDays);
+}
+
+// Trigger start immediately
+function submitBroadcastAndStartNow() {
+  const form = document.getElementById('createBroadcastForm');
+  if (!form) return;
+  const scheduledInput = document.getElementById('scheduledStartTime');
+  if (scheduledInput && !scheduledInput.value) {
+    const defaultDate = new Date(Date.now() + 15 * 60 * 1000);
+    scheduledInput.value = typeof formatDateTimeLocal === 'function' ? formatDateTimeLocal(defaultDate) : defaultDate.toISOString().slice(0, 16);
+  }
+  form.dataset.startImmediately = 'true';
+  form.requestSubmit();
+}
+
+// Open Studio Modal for Editing Existing Stream
+window.openEditStudioModal = function(stream) {
+  openCreateBroadcastModal();
+
+  const form = document.getElementById('createBroadcastForm');
+  if (!form) return;
+
+  form.dataset.editingStreamId = stream.id;
+  form.dataset.editingBroadcastId = stream.youtube_broadcast_id || '';
+
+  // Update modal title
+  const modalHeader = document.querySelector('#createBroadcastModal h3');
+  if (modalHeader) {
+    modalHeader.textContent = 'Edit Live Stream (YouTube Studio)';
+  }
+  const modalSubtitle = document.querySelector('#createBroadcastModal p.text-xs.text-gray-400');
+  if (modalSubtitle) {
+    modalSubtitle.textContent = 'Perbarui Pengaturan Siaran & Mesin Live YouTube';
+  }
+
+  // Update button texts
+  const createBtn = document.getElementById('createBroadcastBtn');
+  if (createBtn) {
+    createBtn.innerHTML = '<i class="ti ti-check text-base"></i><span>Simpan Perubahan Stream</span>';
+  }
+  const startNowBtn = document.getElementById('createAndStartBroadcastBtn');
+  if (startNowBtn) {
+    startNowBtn.innerHTML = '<i class="ti ti-player-play text-base"></i><span>Simpan & Mulai Live Sekarang</span>';
+  }
+
+  // Account selector
+  if (stream.youtube_account_id) {
+    const accountSelect = document.getElementById('accountSelect');
+    if (accountSelect) {
+      accountSelect.value = stream.youtube_account_id;
+      if (typeof fetchStreams === 'function') fetchStreams(stream.youtube_account_id);
+    }
+  }
+
+  // Title & Description
+  const titleInput = document.getElementById('broadcastTitle');
+  if (titleInput) titleInput.value = stream.title || '';
+
+  const descInput = document.getElementById('broadcastDescription');
+  if (descInput) descInput.value = stream.description || '';
+
+  const startTimeInput = document.getElementById('scheduledStartTime');
+  if (startTimeInput) {
+    startTimeInput.value = stream.schedule_time ? formatDateTimeLocal(stream.schedule_time) : (stream.schedule_start_time ? formatDateTimeLocal(stream.schedule_start_time) : '');
+  }
+
+  // Stream Key
+  if (stream.stream_key) {
+    const streamKeySelect = document.getElementById('streamKeySelect');
+    if (streamKeySelect) {
+      let found = false;
+      for (let i = 0; i < streamKeySelect.options.length; i++) {
+        if (streamKeySelect.options[i].value === stream.stream_key || streamKeySelect.options[i].text.includes(stream.stream_key)) {
+          streamKeySelect.selectedIndex = i;
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        const opt = document.createElement('option');
+        opt.value = stream.stream_key;
+        opt.textContent = `🔑 Stream Key (${stream.stream_key.substring(0, 8)}...)`;
+        opt.selected = true;
+        streamKeySelect.appendChild(opt);
+      }
+    }
+  }
+
+  // Video Selector
+  if (stream.video_id) {
+    const isPlaylist = stream.video_type === 'playlist';
+    const folderPrefix = stream.video_folder ? `[${stream.video_folder}] ` : '';
+    const videoLabel = document.getElementById('studioSelectedVideo');
+    const videoInput = document.getElementById('studioSelectedVideoId');
+    const icon = document.getElementById('studioVideoIcon');
+
+    if (videoLabel) videoLabel.textContent = isPlaylist ? `[Playlist] ${stream.video_title}` : `${folderPrefix}${stream.video_title || 'Video Terpilih'}`;
+    if (videoInput) videoInput.value = stream.video_id;
+    if (icon) icon.className = isPlaylist ? 'ti ti-playlist text-blue-400' : 'ti ti-movie text-primary';
+  }
+
+  // Audio Selector
+  if (stream.audio_id) {
+    const audioLabel = document.getElementById('studioSelectedAudio');
+    const audioInput = document.getElementById('studioSelectedAudioId');
+    const clearBtn = document.getElementById('studioClearAudioBtn');
+    if (audioLabel) audioLabel.textContent = stream.audio_title || 'Audio Pengganti';
+    if (audioInput) audioInput.value = stream.audio_id;
+    if (clearBtn) clearBtn.classList.remove('hidden');
+  } else {
+    clearStudioAudioSelection();
+  }
+
+  // Duration & Loop
+  const totalMin = stream.stream_duration_minutes || 0;
+  const hours = Math.floor(totalMin / 60);
+  const minutes = totalMin % 60;
+  const hoursInput = document.getElementById('studioStreamDurationHours');
+  const minutesInput = document.getElementById('studioStreamDurationMinutes');
+  const loopToggle = document.getElementById('studioLoopVideoToggle');
+
+  if (hoursInput) hoursInput.value = hours > 0 ? hours : '';
+  if (minutesInput) minutesInput.value = minutes > 0 ? minutes : '';
+  if (loopToggle) loopToggle.checked = stream.loop_video !== false;
+
+  // Schedule Type
+  setStudioScheduleType(stream.schedule_type || 'once');
+  if (stream.schedule_type === 'once') {
+    const sStart = document.getElementById('studioScheduleStartTime');
+    const sEnd = document.getElementById('studioScheduleEndTime');
+    if (sStart && stream.schedule_time) sStart.value = formatDateTimeLocal(stream.schedule_time);
+    if (sEnd && stream.end_time) sEnd.value = formatDateTimeLocal(stream.end_time);
+  } else {
+    const rTime = document.getElementById('studioRecurringTime');
+    const rEnabled = document.getElementById('studioRecurringEnabled');
+    if (rTime) rTime.value = stream.recurring_time || '';
+    if (rEnabled) rEnabled.checked = stream.recurring_enabled !== false;
+
+    if (stream.schedule_type === 'weekly' && stream.schedule_days) {
+      try {
+        studioSelectedDays = typeof stream.schedule_days === 'string' ? JSON.parse(stream.schedule_days) : stream.schedule_days;
+      } catch (e) { studioSelectedDays = []; }
+      document.querySelectorAll('.studio-day-btn').forEach(btn => {
+        const d = parseInt(btn.getAttribute('data-studio-day'));
+        if (studioSelectedDays.includes(d)) {
+          btn.classList.remove('border-gray-600', 'bg-dark-700', 'text-gray-300');
+          btn.classList.add('border-primary', 'bg-primary', 'text-white');
+        } else {
+          btn.classList.remove('border-primary', 'bg-primary', 'text-white');
+          btn.classList.add('border-gray-600', 'bg-dark-700', 'text-gray-300');
+        }
+      });
+      const daysInput = document.getElementById('studioScheduleDays');
+      if (daysInput) daysInput.value = JSON.stringify(studioSelectedDays);
+    }
+  }
+};
+
 function closeCreateBroadcastModal() {
-  document.getElementById('createBroadcastModal').classList.add('hidden');
-  document.getElementById('createBroadcastForm').reset();
-  document.getElementById('thumbnailPreview').innerHTML = '<i class="ti ti-photo text-gray-500 text-2xl"></i>';
-  document.getElementById('selectedThumbnailPath').value = '';
+  const modal = document.getElementById('createBroadcastModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+  }
   
-  // Reset thumbnail folder
+  const form = document.getElementById('createBroadcastForm');
+  if (form) {
+    delete form.dataset.startImmediately;
+    delete form.dataset.editingStreamId;
+    delete form.dataset.editingBroadcastId;
+    form.reset();
+  }
+
+  // Restore default titles
+  const modalHeader = document.querySelector('#createBroadcastModal h3');
+  if (modalHeader) modalHeader.textContent = 'YouTube Live Studio';
+  const modalSubtitle = document.querySelector('#createBroadcastModal p.text-xs.text-gray-400');
+  if (modalSubtitle) modalSubtitle.textContent = 'Buat Broadcast & Siarkan Video Live ke YouTube';
+
+  const createBtn = document.getElementById('createBroadcastBtn');
+  if (createBtn) {
+    createBtn.innerHTML = '<i class="ti ti-calendar-event text-base"></i><span>Buat Broadcast & Jadwalkan Live</span>';
+  }
+  const startNowBtn = document.getElementById('createAndStartBroadcastBtn');
+  if (startNowBtn) {
+    startNowBtn.innerHTML = '<i class="ti ti-broadcast text-base"></i><span>Mulai Live Streaming Sekarang</span>';
+  }
+
+  const thumbnailPreview = document.getElementById('thumbnailPreview');
+  if (thumbnailPreview) thumbnailPreview.innerHTML = '<i class="ti ti-photo text-gray-500 text-2xl"></i>';
+  
+  const selectedThumbnailPath = document.getElementById('selectedThumbnailPath');
+  if (selectedThumbnailPath) selectedThumbnailPath.value = '';
+  
   currentThumbnailFolder = null;
   const folderInput = document.getElementById('currentThumbnailFolder');
   if (folderInput) folderInput.value = '';
   
-  // Reset selected thumbnail index
   window.createSelectedThumbnailIndex = 0;
   window.createSelectedThumbnailPath = null;
   
-  // Reset pinned thumbnail
   const pinnedInput = document.getElementById('pinnedThumbnail');
   if (pinnedInput) pinnedInput.value = '';
   const pinnedIndicator = document.getElementById('pinnedThumbnailIndicator');
   if (pinnedIndicator) pinnedIndicator.classList.add('hidden');
   
-  // Reset stream key folder mapping
   const mappingInput = document.getElementById('streamKeyFolderMapping');
   if (mappingInput) mappingInput.value = '';
   
-  // Reset thumbnail mode to sequential
   const sequentialRadio = document.querySelector('input[name="thumbnailMode"][value="sequential"]');
   if (sequentialRadio) sequentialRadio.checked = true;
   
-  // Clear thumbnail selection
   document.querySelectorAll('.thumbnail-item').forEach(item => {
     item.classList.remove('border-primary', 'border-red-500', 'border-green-500', 'ring-2', 'ring-primary/50', 'ring-green-500/50');
     item.classList.add('border-transparent');
   });
   
-  // Reset tags
   currentTags = [];
   renderTags();
-  
-  // Hide all auto-fill indicators
   hideAutoFillIndicators();
+
+  // Reset Studio Media & Schedule
+  clearStudioAudioSelection();
+  const videoLabel = document.getElementById('studioSelectedVideo');
+  const videoInput = document.getElementById('studioSelectedVideoId');
+  if (videoLabel) videoLabel.textContent = 'Pilih video untuk di-stream...';
+  if (videoInput) videoInput.value = '';
+  setStudioScheduleType('once');
 }
 
-
-// Create Broadcast Form Handler
+// Create / Update Broadcast Form Handler
 const createBroadcastForm = document.getElementById('createBroadcastForm');
 if (createBroadcastForm) {
   createBroadcastForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     
+    const isEditing = !!createBroadcastForm.dataset.editingStreamId;
+    const editingStreamId = createBroadcastForm.dataset.editingStreamId;
+    const editingBroadcastId = createBroadcastForm.dataset.editingBroadcastId;
+
     const createBtn = document.getElementById('createBroadcastBtn');
-    const originalText = createBtn.innerHTML;
-    createBtn.innerHTML = '<i class="ti ti-loader animate-spin"></i> Creating...';
-    createBtn.disabled = true;
+    const startNowBtn = document.getElementById('createAndStartBroadcastBtn');
+    const isStartNow = createBroadcastForm.dataset.startImmediately === 'true';
+    
+    const activeBtn = isStartNow ? startNowBtn : createBtn;
+    const originalText = activeBtn ? activeBtn.innerHTML : '';
+    if (activeBtn) {
+      activeBtn.innerHTML = '<i class="ti ti-loader animate-spin mr-1"></i> Memproses...';
+      activeBtn.disabled = true;
+    }
     
     try {
+      if (isEditing && editingStreamId) {
+        // UPDATE EXISTING STREAM
+        const updatePayload = {
+          streamTitle: document.getElementById('broadcastTitle').value,
+          description: document.getElementById('broadcastDescription').value,
+          videoId: document.getElementById('studioSelectedVideoId')?.value || null,
+          audioId: document.getElementById('studioSelectedAudioId')?.value || null,
+          streamDurationHours: document.getElementById('studioStreamDurationHours')?.value || '0',
+          streamDurationMinutes: document.getElementById('studioStreamDurationMinutes')?.value || '0',
+          loopVideo: document.getElementById('studioLoopVideoToggle')?.checked ? 'true' : 'false',
+          scheduleType: document.getElementById('studioScheduleType')?.value || 'once',
+          scheduleStartTime: document.getElementById('studioScheduleStartTime')?.value || '',
+          scheduleEndTime: document.getElementById('studioScheduleEndTime')?.value || '',
+          recurringTime: document.getElementById('studioRecurringTime')?.value || '',
+          scheduleDays: document.getElementById('studioScheduleDays')?.value || '[]',
+          recurringEnabled: document.getElementById('studioRecurringEnabled')?.checked ? 'true' : 'false',
+          streamKey: document.getElementById('streamKeySelect')?.value || ''
+        };
+
+        const res = await fetch(`/api/streams/${editingStreamId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': getCsrfToken()
+          },
+          body: JSON.stringify(updatePayload)
+        });
+
+        const data = await res.json();
+        if (data.success) {
+          // If start immediately requested
+          if (isStartNow) {
+            try {
+              await fetch(`/api/streams/${editingStreamId}/start`, {
+                method: 'POST',
+                headers: { 'X-CSRF-Token': getCsrfToken() }
+              });
+            } catch(startErr) {
+              console.warn('Error starting stream immediately:', startErr);
+            }
+          }
+          showToast('✓ Pengaturan siaran berhasil diperbarui!');
+          closeCreateBroadcastModal();
+          setTimeout(() => window.location.reload(), 1000);
+        } else {
+          showToast(data.error || 'Gagal memperbarui stream', 'error');
+        }
+        return;
+      }
+
+      // CREATE NEW BROADCAST FLOW
       const formData = new FormData();
       
-      // Add account ID
       const accountSelect = document.getElementById('accountSelect');
       if (accountSelect && accountSelect.value) {
         formData.append('accountId', accountSelect.value);
@@ -3089,70 +3861,62 @@ if (createBroadcastForm) {
       formData.append('scheduledStartTime', document.getElementById('scheduledStartTime').value);
       formData.append('privacyStatus', document.getElementById('privacyStatus').value);
       
-      // Add stream key if selected
       const streamId = document.getElementById('streamKeySelect').value;
-
-      if (!streamId && streamFetchState.tokenExpired) {
-        showToast('Tidak bisa membuat broadcast saat token expired karena akan memicu stream key baru. Reconnect akun YouTube dulu.', 'error');
-        return;
-      }
-
       if (streamId) {
         formData.append('streamId', streamId);
       }
       
-      // Add tags
+      // Video and Audio inputs
+      const videoId = document.getElementById('studioSelectedVideoId')?.value;
+      const audioId = document.getElementById('studioSelectedAudioId')?.value;
+      if (videoId) formData.append('videoId', videoId);
+      if (audioId) formData.append('audioId', audioId);
+
+      // Duration and Schedule fields
+      const durationHours = document.getElementById('studioStreamDurationHours')?.value || '0';
+      const durationMinutes = document.getElementById('studioStreamDurationMinutes')?.value || '0';
+      const loopVideo = document.getElementById('studioLoopVideoToggle')?.checked ? 'true' : 'false';
+      const scheduleType = document.getElementById('studioScheduleType')?.value || 'once';
+      const scheduleStartTime = document.getElementById('studioScheduleStartTime')?.value || '';
+      const scheduleEndTime = document.getElementById('studioScheduleEndTime')?.value || '';
+      const recurringTime = document.getElementById('studioRecurringTime')?.value || '';
+      const scheduleDays = document.getElementById('studioScheduleDays')?.value || '[]';
+      const recurringEnabled = document.getElementById('studioRecurringEnabled')?.checked ? 'true' : 'false';
+
+      formData.append('streamDurationHours', durationHours);
+      formData.append('streamDurationMinutes', durationMinutes);
+      formData.append('loopVideo', loopVideo);
+      formData.append('scheduleType', scheduleType);
+      formData.append('scheduleStartTime', scheduleStartTime);
+      formData.append('scheduleEndTime', scheduleEndTime);
+      formData.append('recurringTime', recurringTime);
+      formData.append('scheduleDays', scheduleDays);
+      formData.append('recurringEnabled', recurringEnabled);
+      formData.append('startImmediately', isStartNow ? 'true' : 'false');
+
+      // Tags & Category
       if (currentTags.length > 0) {
         formData.append('tags', JSON.stringify(currentTags));
       }
-      
-      // Add category ID (default: 22 - People & Blogs)
-      const categoryId = document.getElementById('categoryId').value;
+      const categoryId = document.getElementById('categoryId')?.value;
       formData.append('categoryId', categoryId || '22');
       
-      // Add Additional Settings
-      // Auto-start and auto-stop are always true (hidden inputs)
-      const enableAutoStart = document.getElementById('enableAutoStart').value === 'true';
-      const enableAutoStop = document.getElementById('enableAutoStop').value === 'true';
-      // Unlist replay is optional (checkbox)
-      const unlistReplayOnEnd = document.getElementById('unlistReplayOnEnd').checked;
+      formData.append('enableAutoStart', 'true');
+      formData.append('enableAutoStop', 'true');
+      formData.append('unlistReplayOnEnd', document.getElementById('unlistReplayOnEnd')?.checked ? 'true' : 'false');
       
-      formData.append('enableAutoStart', enableAutoStart);
-      formData.append('enableAutoStop', enableAutoStop);
-      formData.append('unlistReplayOnEnd', unlistReplayOnEnd);
-      
-      // Add thumbnail from gallery selection - ONLY if pinned mode
+      // Thumbnail
       const thumbnailMode = document.querySelector('input[name="thumbnailMode"]:checked')?.value || 'sequential';
-      const thumbnailPath = document.getElementById('selectedThumbnailPath').value;
+      const thumbnailPath = document.getElementById('selectedThumbnailPath')?.value;
       const pinnedThumbnail = document.getElementById('pinnedThumbnail')?.value;
       
-      // Only send thumbnailPath if:
-      // 1. Mode is pinned AND pinnedThumbnail is set, OR
-      // 2. User explicitly selected a thumbnail AND mode is pinned
       if (thumbnailMode === 'pinned' && pinnedThumbnail) {
         formData.append('thumbnailPath', pinnedThumbnail);
-        console.log('[CreateBroadcast] Using pinned thumbnail:', pinnedThumbnail);
       }
-      // For sequential mode, don't send thumbnailPath - let backend handle sequential selection
-      
-      // Add selected thumbnail index
-      const thumbnailIndex = window.createSelectedThumbnailIndex || 0;
-      formData.append('thumbnailIndex', thumbnailIndex);
-      
-      // Add current thumbnail folder for sequential selection
-      // Always send thumbnailFolder - empty string for root, folder name for specific folder
-      // This ensures the folder selection is saved and can be restored when editing
+      formData.append('thumbnailIndex', window.createSelectedThumbnailIndex || 0);
       formData.append('thumbnailFolder', currentThumbnailFolder || '');
-      
-      // Add pinned thumbnail if set (for backward compatibility)
       if (pinnedThumbnail) {
         formData.append('pinnedThumbnail', pinnedThumbnail);
-      }
-      
-      // Add stream key folder mapping if set
-      const streamKeyFolderMapping = document.getElementById('streamKeyFolderMapping')?.value;
-      if (streamKeyFolderMapping) {
-        formData.append('streamKeyFolderMapping', streamKeyFolderMapping);
       }
       
       const response = await fetch('/api/youtube/broadcasts', {
@@ -3166,22 +3930,21 @@ if (createBroadcastForm) {
       const data = await response.json();
       
       if (data.success) {
-        // NOTE: Thumbnail index is already incremented by backend in sequential mode
-        // No need to increment here to avoid double increment
-        console.log('[CreateBroadcast] Broadcast created successfully, thumbnail index handled by backend');
-        
-        showToast('Broadcast created successfully!');
+        showToast(isStartNow ? '✓ Live streaming berhasil dimulai!' : '✓ Broadcast & Jadwal Live berhasil dibuat!');
         closeCreateBroadcastModal();
-        setTimeout(() => window.location.reload(), 1000);
+        setTimeout(() => window.location.reload(), 1200);
       } else {
-        showToast(data.error || 'Failed to create broadcast', 'error');
+        showToast(data.error || 'Gagal membuat broadcast', 'error');
       }
     } catch (error) {
-      console.error('Error:', error);
-      showToast('An error occurred', 'error');
+      console.error('Error creating unified broadcast:', error);
+      showToast('Terjadi kesalahan saat memproses broadcast', 'error');
     } finally {
-      createBtn.innerHTML = originalText;
-      createBtn.disabled = false;
+      if (activeBtn) {
+        activeBtn.innerHTML = originalText;
+        activeBtn.disabled = false;
+      }
+      delete createBroadcastForm.dataset.startImmediately;
     }
   });
 }
@@ -3722,12 +4485,20 @@ document.addEventListener('keydown', (e) => {
 
 // Template Library Modal
 function openTemplateLibraryModal() {
-  document.getElementById('templateLibraryModal').classList.remove('hidden');
+  const modal = document.getElementById('templateLibraryModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.style.display = 'block';
+  }
   loadTemplates();
 }
 
 function closeTemplateLibraryModal() {
-  document.getElementById('templateLibraryModal').classList.add('hidden');
+  const modal = document.getElementById('templateLibraryModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+  }
 }
 
 // Load templates from API
@@ -6974,7 +7745,11 @@ let titleRotationFolderId = null;
  */
 async function openTitleManagerModal(context = 'edit') {
   titleManagerContext = context;
-  document.getElementById('titleManagerModal').classList.remove('hidden');
+  const modal = document.getElementById('titleManagerModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.style.display = 'block';
+  }
   
   // Load folders first, then rotation settings (which depends on folders)
   await loadTitleFolders();
@@ -6986,7 +7761,11 @@ async function openTitleManagerModal(context = 'edit') {
  * Close Title Manager Modal
  */
 function closeTitleManagerModal() {
-  document.getElementById('titleManagerModal').classList.add('hidden');
+  const modal = document.getElementById('titleManagerModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+  }
 }
 
 // ============================================
@@ -7309,54 +8088,39 @@ function openCreateTitleFolderModal() {
   nameEl.value = '';
   selectFolderColor('#8B5CF6');
   
-  // Show modal using classList (consistent with other modals)
   modal.classList.remove('hidden');
   modal.classList.add('flex');
+  modal.style.display = 'flex';
   
-  // Focus input after a short delay
   setTimeout(() => {
     nameEl.focus();
   }, 100);
-  
-  console.log('[TITLE FOLDER] Modal opened successfully');
 }
 
-/**
- * Open edit folder modal
- */
 function openEditFolderModal(id, name, color) {
-  console.log('[TITLE FOLDER] openEditFolderModal called:', { id, name, color });
-  
   const modal = document.getElementById('titleFolderModal');
-  if (!modal) {
-    console.error('[TITLE FOLDER] Modal titleFolderModal not found!');
-    showToast('Error: Modal tidak ditemukan', 'error');
-    return;
-  }
+  if (!modal) return;
   
   document.getElementById('folderModalTitle').textContent = 'Edit Folder';
   document.getElementById('editFolderId').value = id;
   document.getElementById('folderNameInput').value = name;
   selectFolderColor(color);
   
-  // Show modal using classList (consistent with other modals)
   modal.classList.remove('hidden');
   modal.classList.add('flex');
+  modal.style.display = 'flex';
   
-  // Focus input after a short delay
   setTimeout(() => {
     document.getElementById('folderNameInput').focus();
   }, 100);
 }
 
-/**
- * Close folder modal
- */
 function closeFolderModal() {
   const modal = document.getElementById('titleFolderModal');
   if (modal) {
     modal.classList.add('hidden');
     modal.classList.remove('flex');
+    modal.style.display = 'none';
   }
 }
 
@@ -8480,10 +9244,10 @@ function openThumbnailManagerModal() {
   
   console.log('[ThumbnailManager] Opening modal');
   modal.classList.remove('hidden');
+  modal.style.display = 'block';
   
   // Load folders and open first folder (or show empty state)
   fetchThumbnailFoldersForManager().then(() => {
-    // Auto-open first folder if exists, otherwise show empty gallery
     const firstFolder = document.querySelector('.folder-item-manager');
     if (firstFolder) {
       const folderName = firstFolder.querySelector('span.truncate')?.textContent;
@@ -8491,17 +9255,16 @@ function openThumbnailManagerModal() {
         openThumbnailFolderInManager(folderName);
       }
     } else {
-      // No folders, show empty state
       showEmptyFolderState();
     }
   });
 }
 
-// Close Thumbnail Manager Modal
 function closeThumbnailManagerModal() {
   const modal = document.getElementById('thumbnailManagerModal');
   if (modal) {
     modal.classList.add('hidden');
+    modal.style.display = 'none';
   }
   currentThumbnailFolderManager = null;
 }

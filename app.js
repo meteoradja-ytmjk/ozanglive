@@ -4340,11 +4340,13 @@ app.get('/api/stream/content', isAuthenticated, async (req, res) => {
       return {
         id: video.id,
         name: video.title,
+        title: video.title,
         thumbnail: video.thumbnail_path,
         resolution: video.resolution || '1280x720',
         duration: formattedDuration,
         url: `/stream/${video.id}`,
-        type: 'video'
+        type: 'video',
+        folder_name: (video.folder_name || '').trim() || null
       };
     });
 
@@ -5524,8 +5526,8 @@ app.put('/api/streams/:id', isAuthenticated, async (req, res) => {
       return res.status(403).json({ success: false, error: 'Not authorized to update this stream' });
     }
     const updateData = {};
-    if (req.body.streamTitle) updateData.title = req.body.streamTitle;
-    if (req.body.videoId) updateData.video_id = req.body.videoId;
+    if (req.body.streamTitle || req.body.title) updateData.title = req.body.streamTitle || req.body.title;
+    if (req.body.videoId !== undefined) updateData.video_id = req.body.videoId || null;
 
     if (req.body.rtmpUrl) {
       updateData.rtmp_url = req.body.rtmpUrl;
@@ -5580,6 +5582,10 @@ app.put('/api/streams/:id', isAuthenticated, async (req, res) => {
       updateData.stream_duration_minutes = totalMinutes > 0 ? totalMinutes : null;
       hasExplicitDuration = totalMinutes > 0;
       console.log(`[API Update] Duration set: ${hours}h + ${minutes}m = ${totalMinutes} minutes, hasExplicitDuration=${hasExplicitDuration}`);
+    } else if (req.body.stream_duration_minutes !== undefined) {
+      const totalMinutes = parseInt(req.body.stream_duration_minutes) || 0;
+      updateData.stream_duration_minutes = totalMinutes > 0 ? totalMinutes : null;
+      hasExplicitDuration = totalMinutes > 0;
     }
 
     // Handle audio selection
@@ -5588,25 +5594,29 @@ app.put('/api/streams/:id', isAuthenticated, async (req, res) => {
     }
 
     // Handle recurring schedule fields
-    if (req.body.scheduleType !== undefined) {
-      updateData.schedule_type = req.body.scheduleType || 'once';
+    const scheduleTypeVal = req.body.scheduleType || req.body.schedule_type;
+    if (scheduleTypeVal !== undefined) {
+      updateData.schedule_type = scheduleTypeVal || 'once';
     }
-    if (req.body.recurringTime !== undefined) {
-      updateData.recurring_time = req.body.recurringTime || null;
+    const recTimeVal = req.body.recurringTime !== undefined ? req.body.recurringTime : req.body.recurring_time;
+    if (recTimeVal !== undefined) {
+      updateData.recurring_time = recTimeVal || null;
     }
-    if (req.body.scheduleDays !== undefined) {
+    const schedDaysVal = req.body.scheduleDays !== undefined ? req.body.scheduleDays : req.body.schedule_days;
+    if (schedDaysVal !== undefined) {
       try {
-        const days = typeof req.body.scheduleDays === 'string'
-          ? JSON.parse(req.body.scheduleDays)
-          : req.body.scheduleDays;
+        const days = typeof schedDaysVal === 'string'
+          ? JSON.parse(schedDaysVal)
+          : schedDaysVal;
         updateData.schedule_days = days ? JSON.stringify(days) : null;
       } catch (e) {
         updateData.schedule_days = null;
       }
     }
-    if (req.body.recurringEnabled !== undefined) {
+    const recEnabledVal = req.body.recurringEnabled !== undefined ? req.body.recurringEnabled : req.body.recurring_enabled;
+    if (recEnabledVal !== undefined) {
       // FIXED: Handle all possible truthy values for recurring_enabled
-      updateData.recurring_enabled = (req.body.recurringEnabled === 'true' || req.body.recurringEnabled === true || req.body.recurringEnabled === 'on' || req.body.recurringEnabled === 1) ? 1 : 0;
+      updateData.recurring_enabled = (recEnabledVal === 'true' || recEnabledVal === true || recEnabledVal === 'on' || recEnabledVal === 1) ? 1 : 0;
     }
 
     // Set status to scheduled for recurring schedules
@@ -5614,17 +5624,9 @@ app.put('/api/streams/:id', isAuthenticated, async (req, res) => {
       updateData.status = 'scheduled';
     }
 
-    // FIXED: For 'once' schedule type, set status based on whether schedule_time is set
-    // This ensures that when user changes from daily/weekly to once with a schedule_time,
-    // the status is correctly set to 'scheduled'
-    if (updateData.schedule_type === 'once' || (!updateData.schedule_type && stream.schedule_type === 'once')) {
-      // Status will be set later based on scheduleStartTime
-      // If scheduleStartTime is set, status will be 'scheduled'
-      // If scheduleStartTime is not set, status will be 'offline'
-    }
-
-    if (req.body.scheduleStartTime) {
-      const scheduleStartDate = parseWIBDateTimeLocal(req.body.scheduleStartTime);
+    const rawStartTime = req.body.scheduleStartTime || req.body.schedule_time;
+    if (rawStartTime) {
+      const scheduleStartDate = parseWIBDateTimeLocal(rawStartTime);
       if (!scheduleStartDate) {
         return res.status(400).json({
           success: false,
@@ -5656,8 +5658,9 @@ app.put('/api/streams/:id', isAuthenticated, async (req, res) => {
       }
 
       // FIXED: Only use end_time for duration if user hasn't set explicit duration
-      if (req.body.scheduleEndTime && !hasExplicitDuration) {
-        const scheduleEndDate = parseWIBDateTimeLocal(req.body.scheduleEndTime);
+      const rawEndTime = req.body.scheduleEndTime || req.body.end_time;
+      if (rawEndTime && !hasExplicitDuration) {
+        const scheduleEndDate = parseWIBDateTimeLocal(rawEndTime);
         if (!scheduleEndDate) {
           return res.status(400).json({
             success: false,
@@ -5675,34 +5678,16 @@ app.put('/api/streams/:id', isAuthenticated, async (req, res) => {
         updateData.end_time = scheduleEndDate.toISOString();
         const durationMs = scheduleEndDate - scheduleStartDate;
         const durationMinutes = Math.round(durationMs / (1000 * 60));
-        // Only set duration from end_time if no explicit duration
         updateData.stream_duration_minutes = durationMinutes > 0 ? durationMinutes : null;
         updateData.duration = durationMinutes > 0 ? durationMinutes : null;
-        console.log(`[API Update] Duration from end_time: ${durationMinutes} minutes`);
-      } else if (req.body.scheduleEndTime && hasExplicitDuration) {
-        // User set both duration and end_time - use duration, store end_time for reference only
-        const scheduleEndDate = parseWIBDateTimeLocal(req.body.scheduleEndTime);
+      } else if (rawEndTime && hasExplicitDuration) {
+        const scheduleEndDate = parseWIBDateTimeLocal(rawEndTime);
         if (scheduleEndDate) {
           updateData.end_time = scheduleEndDate.toISOString();
         }
-        console.log(`[API Update] Using explicit duration (${updateData.stream_duration_minutes} min), end_time stored for reference only`);
-      } else if (hasExplicitDuration) {
-        // Duration is set, clear end_time (mutual exclusion)
-        updateData.end_time = null;
-        console.log(`[API Update] Duration set (${updateData.stream_duration_minutes} min), clearing end_time (mutual exclusion)`);
-      } else if ('scheduleEndTime' in req.body && (req.body.scheduleEndTime === '' || req.body.scheduleEndTime === null)) {
-        // End time cleared - if no explicit duration, stream will be unlimited
-        updateData.end_time = null;
-        if (!hasExplicitDuration) {
-          updateData.stream_duration_minutes = null;
-          updateData.duration = null;
-          console.log(`[API Update] End time cleared, no duration set - stream will be UNLIMITED`);
-        }
       }
-    } else if ('scheduleStartTime' in req.body && !req.body.scheduleStartTime) {
+    } else if (('scheduleStartTime' in req.body && !req.body.scheduleStartTime) || ('schedule_time' in req.body && !req.body.schedule_time)) {
       updateData.schedule_time = null;
-      // FIXED: Only set to offline if not a recurring schedule
-      // For recurring schedules (daily/weekly), keep status as 'scheduled'
       const scheduleType = updateData.schedule_type || stream.schedule_type;
       if (scheduleType === 'daily' || scheduleType === 'weekly') {
         updateData.status = 'scheduled';
@@ -9130,7 +9115,7 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
 
       const accessToken = await youtubeService.getAccessToken(credentials.clientId, credentials.clientSecret, credentials.refreshToken, 0, credentials.id, 0, credentials.id);
 
-      const broadcasts = await youtubeService.listBroadcasts(accessToken);
+      const broadcasts = await youtubeService.listBroadcasts(accessToken, { broadcastStatus: 'all' });
       const result = broadcasts.map(b => ({ 
         ...b, 
         accountId: credentials.id, 
@@ -9183,7 +9168,7 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
           
           const fetchPromise = (async () => {
             const accessToken = await youtubeService.getAccessToken(account.clientId, account.clientSecret, account.refreshToken, 0, account.id, 0, account.id);
-            const broadcasts = await youtubeService.listBroadcasts(accessToken);
+            const broadcasts = await youtubeService.listBroadcasts(accessToken, { broadcastStatus: 'all' });
             return broadcasts.map(b => ({
               ...b,
               accountId: account.id,
@@ -9533,8 +9518,98 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       }
     }
 
+    let createdStream = null;
+    try {
+      let scheduleDays = null;
+      if (req.body.scheduleDays) {
+        try {
+          scheduleDays = typeof req.body.scheduleDays === 'string'
+            ? JSON.parse(req.body.scheduleDays)
+            : req.body.scheduleDays;
+        } catch (e) {
+          scheduleDays = null;
+        }
+      }
+
+      const hours = parseInt(req.body.streamDurationHours) || 0;
+      const minutes = parseInt(req.body.streamDurationMinutes) || 0;
+      const totalMinutes = (hours * 60) + minutes;
+
+      // Resolve stream key value from broadcast or credentials/streamId
+      let finalStreamKey = broadcast.streamKey || '';
+      if (!finalStreamKey && streamId) {
+        try {
+          const streamsList = await youtubeService.listStreams(accessToken);
+          const matchingStream = streamsList.find(s => s.id === streamId);
+          if (matchingStream && matchingStream.streamKey) {
+            finalStreamKey = matchingStream.streamKey;
+          }
+        } catch (keyErr) {
+          console.warn('[API] Could not resolve stream key for streamId:', streamId, keyErr.message);
+        }
+      }
+
+      const rawStartTime = req.body.scheduleStartTime || req.body.scheduledStartTime;
+      const rawEndTime = req.body.scheduleEndTime;
+      let scheduleIso = null;
+      let endIso = null;
+      if (rawStartTime) {
+        const sDate = parseWIBDateTimeLocal(rawStartTime);
+        if (sDate) scheduleIso = sDate.toISOString();
+      }
+      if (rawEndTime) {
+        const eDate = parseWIBDateTimeLocal(rawEndTime);
+        if (eDate) endIso = eDate.toISOString();
+      }
+
+      const isScheduled = (req.body.scheduleType === 'daily' || req.body.scheduleType === 'weekly') || (scheduleIso !== null);
+
+      const streamData = {
+        title: broadcast.title || title,
+        video_id: req.body.videoId || null,
+        audio_id: req.body.audioId || null,
+        rtmp_url: broadcast.rtmpUrl || 'rtmp://a.rtmp.youtube.com/live2',
+        stream_key: finalStreamKey || (streamId ? String(streamId) : ''),
+        platform: 'YouTube',
+        platform_icon: 'ti-brand-youtube',
+        bitrate: 2500,
+        resolution: '1280x720',
+        fps: 30,
+        orientation: 'horizontal',
+        loop_video: req.body.loopVideo === 'true' || req.body.loopVideo === true,
+        stream_duration_minutes: totalMinutes > 0 ? totalMinutes : null,
+        duration: totalMinutes > 0 ? totalMinutes : null,
+        schedule_type: req.body.scheduleType || 'once',
+        schedule_time: scheduleIso,
+        end_time: endIso,
+        schedule_days: scheduleDays,
+        recurring_time: req.body.recurringTime || null,
+        recurring_enabled: req.body.recurringEnabled === 'true' || req.body.recurringEnabled === true || req.body.recurringEnabled === 'on' ? 1 : 0,
+        user_id: req.session.userId,
+        youtube_broadcast_id: broadcast.broadcastId,
+        youtube_account_id: accountId || (credentials ? credentials.id : null),
+        status: req.body.startImmediately === 'true' ? 'offline' : (isScheduled ? 'scheduled' : 'offline')
+      };
+
+      createdStream = await Stream.create(streamData);
+      console.log('[API] Created associated Stream record:', createdStream.id, 'for broadcast:', broadcast.broadcastId, 'schedule_time:', scheduleIso);
+
+      if (req.body.startImmediately === 'true' && createdStream && req.body.videoId) {
+        if (typeof streamService !== 'undefined' && typeof streamService.startStream === 'function') {
+          try {
+            await streamService.startStream(createdStream.id, req.session.userId);
+            console.log('[API] Stream engine started immediately for stream ID:', createdStream.id);
+          } catch (startErr) {
+            console.error('[API] Error starting stream engine immediately:', startErr.message);
+          }
+        }
+      }
+    } catch (streamErr) {
+      console.error('[API] Error creating associated stream for broadcast:', streamErr.message);
+    }
+
     invalidateBroadcastsCache(req.session.userId);
-    res.json({ success: true, broadcast });
+    res.json({ success: true, broadcast, stream: createdStream });
   } catch (error) {
     console.error('Error creating broadcast:', error);
     res.status(500).json({
@@ -10739,6 +10814,8 @@ app.post('/api/youtube/templates/:id/create-broadcast', isAuthenticated, async (
       }
     }
 
+    invalidateBroadcastsCache(req.session.userId);
+
     res.json({
       success: true,
       broadcast: {
@@ -10869,6 +10946,8 @@ app.post('/api/youtube/templates/:id/bulk-create', isAuthenticated, async (req, 
         });
       }
     }
+
+    invalidateBroadcastsCache(req.session.userId);
 
     // Return 207 Multi-Status if there were partial failures
     const statusCode = results.failed > 0 && results.success > 0 ? 207 :
