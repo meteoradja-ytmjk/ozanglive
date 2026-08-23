@@ -464,24 +464,33 @@ class YouTubeService {
     const queryOpts = typeof options === 'string' ? { broadcastStatus: options } : (options || {});
     const targetStatus = queryOpts.broadcastStatus || 'all';
     console.log('[YouTubeService.listBroadcasts] Fetching broadcasts with options:', queryOpts);
+    console.log('[YouTubeService.listBroadcasts] Target status:', targetStatus);
     
     let broadcasts = [];
 
     if (targetStatus === 'all') {
       try {
+        console.log('[YouTubeService.listBroadcasts] Fetching ALL broadcasts (upcoming + active + completed)...');
         const [upcomingRes, activeRes, completedRes] = await Promise.allSettled([
           youtube.liveBroadcasts.list({ part: 'snippet,status,contentDetails', mine: true, broadcastStatus: 'upcoming', maxResults: 50 }),
           youtube.liveBroadcasts.list({ part: 'snippet,status,contentDetails', mine: true, broadcastStatus: 'active', maxResults: 50 }),
           youtube.liveBroadcasts.list({ part: 'snippet,status,contentDetails', mine: true, broadcastStatus: 'completed', maxResults: 20 })
         ]);
         
+        console.log('[YouTubeService.listBroadcasts] Upcoming result:', upcomingRes.status, upcomingRes.status === 'fulfilled' ? upcomingRes.value.data.items?.length : 'error');
+        console.log('[YouTubeService.listBroadcasts] Active result:', activeRes.status, activeRes.status === 'fulfilled' ? activeRes.value.data.items?.length : 'error');
+        console.log('[YouTubeService.listBroadcasts] Completed result:', completedRes.status, completedRes.status === 'fulfilled' ? completedRes.value.data.items?.length : 'error');
+        
         if (upcomingRes.status === 'fulfilled' && upcomingRes.value.data.items) {
+          console.log('[YouTubeService.listBroadcasts] Adding', upcomingRes.value.data.items.length, 'upcoming broadcasts');
           broadcasts.push(...upcomingRes.value.data.items);
         }
         if (activeRes.status === 'fulfilled' && activeRes.value.data.items) {
+          console.log('[YouTubeService.listBroadcasts] Adding', activeRes.value.data.items.length, 'active broadcasts');
           broadcasts.push(...activeRes.value.data.items);
         }
         if (completedRes.status === 'fulfilled' && completedRes.value.data.items) {
+          console.log('[YouTubeService.listBroadcasts] Adding', completedRes.value.data.items.length, 'completed broadcasts');
           broadcasts.push(...completedRes.value.data.items);
         }
       } catch (err) {
@@ -571,7 +580,19 @@ class YouTubeService {
       };
     });
     
-    console.log(`[YouTubeService.listBroadcasts] Returning ${result.length} broadcasts with stream info`);
+    console.log(`[YouTubeService.listBroadcasts] ========================================`);
+    console.log(`[YouTubeService.listBroadcasts] FINAL RESULT: ${result.length} broadcasts`);
+    console.log(`[YouTubeService.listBroadcasts] ========================================`);
+    if (result.length > 0) {
+      console.log('[YouTubeService.listBroadcasts] Sample broadcasts (first 3):');
+      result.slice(0, 3).forEach((b, i) => {
+        console.log(`  ${i + 1}. "${b.title}" - Status: ${b.lifeCycleStatus} - Privacy: ${b.privacyStatus} - ID: ${b.id}`);
+      });
+    } else {
+      console.log('[YouTubeService.listBroadcasts] ⚠️ NO BROADCASTS FOUND!');
+    }
+    console.log(`[YouTubeService.listBroadcasts] ========================================`);
+    
     return result;
   }
 
