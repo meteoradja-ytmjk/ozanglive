@@ -9218,6 +9218,126 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
   }
 });
 
+// DEBUG ENDPOINT: Test YouTube API directly (remove in production)
+app.get('/api/youtube/broadcasts/debug', isAuthenticated, async (req, res) => {
+  try {
+    const accounts = await YouTubeCredentials.findAllByUserId(req.session.userId);
+    
+    if (accounts.length === 0) {
+      return res.json({ 
+        success: false, 
+        error: 'No YouTube accounts connected',
+        accounts: []
+      });
+    }
+    
+    const debugResults = [];
+    
+    for (const account of accounts) {
+      try {
+        console.log(`\n[DEBUG] Testing account: ${account.channelName} (ID: ${account.id})`);
+        
+        const accessToken = await youtubeService.getAccessToken(
+          account.clientId, 
+          account.clientSecret, 
+          account.refreshToken, 
+          0, 
+          account.id
+        );
+        
+        console.log('[DEBUG] Got access token, fetching broadcasts...');
+        
+        // Direct YouTube API call
+        const { google } = require('googleapis');
+        const oauth2Client = new google.auth.OAuth2();
+        oauth2Client.setCredentials({ access_token: accessToken });
+        const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+        
+        // Fetch all three types
+        const [upcomingRes, activeRes, completedRes] = await Promise.allSettled([
+          youtube.liveBroadcasts.list({ 
+            part: 'snippet,status,contentDetails', 
+            mine: true, 
+            broadcastStatus: 'upcoming', 
+            maxResults: 50 
+          }),
+          youtube.liveBroadcasts.list({ 
+            part: 'snippet,status,contentDetails', 
+            mine: true, 
+            broadcastStatus: 'active', 
+            maxResults: 50 
+          }),
+          youtube.liveBroadcasts.list({ 
+            part: 'snippet,status,contentDetails', 
+            mine: true, 
+            broadcastStatus: 'completed', 
+            maxResults: 20 
+          })
+        ]);
+        
+        const upcoming = upcomingRes.status === 'fulfilled' ? upcomingRes.value.data.items : [];
+        const active = activeRes.status === 'fulfilled' ? activeRes.value.data.items : [];
+        const completed = completedRes.status === 'fulfilled' ? completedRes.value.data.items : [];
+        
+        console.log(`[DEBUG] Raw API results - Upcoming: ${upcoming?.length || 0}, Active: ${active?.length || 0}, Completed: ${completed?.length || 0}`);
+        
+        debugResults.push({
+          accountId: account.id,
+          channelName: account.channelName,
+          channelId: account.channelId,
+          upcomingCount: upcoming?.length || 0,
+          activeCount: active?.length || 0,
+          completedCount: completed?.length || 0,
+          totalCount: (upcoming?.length || 0) + (active?.length || 0) + (completed?.length || 0),
+          upcomingBroadcasts: upcoming?.map(b => ({
+            id: b.id,
+            title: b.snippet?.title,
+            scheduledStartTime: b.snippet?.scheduledStartTime,
+            lifeCycleStatus: b.status?.lifeCycleStatus,
+            privacyStatus: b.status?.privacyStatus
+          })) || [],
+          activeBroadcasts: active?.map(b => ({
+            id: b.id,
+            title: b.snippet?.title,
+            actualStartTime: b.snippet?.actualStartTime,
+            lifeCycleStatus: b.status?.lifeCycleStatus
+          })) || [],
+          completedBroadcasts: completed?.map(b => ({
+            id: b.id,
+            title: b.snippet?.title,
+            actualEndTime: b.snippet?.actualEndTime,
+            lifeCycleStatus: b.status?.lifeCycleStatus
+          })) || []
+        });
+        
+      } catch (accErr) {
+        console.error(`[DEBUG] Error for account ${account.channelName}:`, accErr.message);
+        debugResults.push({
+          accountId: account.id,
+          channelName: account.channelName,
+          error: accErr.message
+        });
+      }
+    }
+    
+    console.log('[DEBUG] Final results:', JSON.stringify(debugResults, null, 2));
+    
+    res.json({
+      success: true,
+      message: 'Direct YouTube API test - see server console for details',
+      accounts: debugResults,
+      totalBroadcasts: debugResults.reduce((sum, acc) => sum + (acc.totalCount || 0), 0)
+    });
+    
+  } catch (error) {
+    console.error('[DEBUG] Error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
 // Create YouTube broadcast - supports accountId parameter
 app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'), async (req, res) => {
   try {
