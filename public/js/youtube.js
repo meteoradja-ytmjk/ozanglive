@@ -10995,9 +10995,9 @@ function switchGuideTab(tabName) {
     const panel = document.getElementById(`guide-panel-${t}`);
     if (btn) {
       if (t === tabName) {
-        btn.className = "guide-tab-btn px-4 py-2.5 text-xs sm:text-sm font-semibold rounded-t-xl border-b-2 border-blue-500 text-blue-400 flex items-center gap-2 transition-all whitespace-nowrap cursor-pointer touch-manipulation";
+        btn.className = "guide-tab-btn py-2 sm:py-2.5 px-1 sm:px-3 rounded-xl text-xs sm:text-sm font-semibold flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 transition-all duration-150 cursor-pointer touch-manipulation active:scale-95 bg-blue-600 text-white shadow-md shadow-blue-500/25";
       } else {
-        btn.className = "guide-tab-btn px-4 py-2.5 text-xs sm:text-sm font-semibold rounded-t-xl border-b-2 border-transparent text-gray-400 hover:text-white flex items-center gap-2 transition-all whitespace-nowrap cursor-pointer touch-manipulation";
+        btn.className = "guide-tab-btn py-2 sm:py-2.5 px-1 sm:px-3 rounded-xl text-xs sm:text-sm font-semibold flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 transition-all duration-150 cursor-pointer touch-manipulation active:scale-95 text-gray-400 hover:text-gray-200 hover:bg-dark-700/50";
       }
     }
     if (panel) {

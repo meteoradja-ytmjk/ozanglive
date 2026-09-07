@@ -72,7 +72,7 @@
       <button type="button" onclick="openYouTubeGuideModal()" title="Panduan API"
         class="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 active:scale-95 text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm transition-all duration-150 flex items-center justify-center gap-1.5 font-semibold shadow-lg shadow-blue-500/25 cursor-pointer touch-manipulation min-h-[38px] select-none">
         <i class="ti ti-help-circle text-base sm:text-lg"></i>
-        <span class="whitespace-nowrap">Panduan API</span>
+        <span class="whitespace-nowrap"><span class="sm:hidden">Panduan</span><span class="hidden sm:inline">Panduan API</span></span>
       </button>
     </div>
   </div>
@@ -575,17 +575,17 @@
   <div class="flex min-h-screen items-center justify-center p-3 sm:p-4">
     <div class="bg-dark-800 border border-gray-700/80 rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden transition-all transform" onclick="event.stopPropagation()">
       <!-- Modal Header -->
-      <div class="flex items-center justify-between p-4 sm:p-5 bg-gradient-to-r from-blue-600/20 via-indigo-600/10 to-transparent border-b border-gray-700/80">
-        <div class="flex items-center gap-3 min-w-0">
-          <div class="w-10 h-10 bg-blue-500/20 rounded-xl flex items-center justify-center text-blue-400 flex-shrink-0">
-            <i class="ti ti-brand-youtube text-2xl"></i>
+      <div class="flex items-center justify-between p-3.5 sm:p-5 bg-gradient-to-r from-blue-600/20 via-indigo-600/10 to-transparent border-b border-gray-700/80">
+        <div class="flex items-center gap-2.5 sm:gap-3 min-w-0">
+          <div class="w-9 h-9 sm:w-10 sm:h-10 bg-blue-500/20 rounded-xl flex items-center justify-center text-blue-400 flex-shrink-0">
+            <i class="ti ti-brand-youtube text-xl sm:text-2xl"></i>
           </div>
           <div class="min-w-0">
-            <h3 class="text-base sm:text-lg font-bold text-white flex items-center gap-2 truncate">
-              Panduan Integrasi YouTube Data API v3
-              <span class="text-[10px] bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-md font-semibold uppercase hidden sm:inline">Panduan Lengkap</span>
+            <h3 class="text-sm sm:text-lg font-bold text-white flex items-center gap-1.5 sm:gap-2 min-w-0">
+              <span class="truncate">Panduan YouTube Data API v3</span>
+              <span class="text-[10px] bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-md font-semibold uppercase hidden sm:inline flex-shrink-0">Lengkap</span>
             </h3>
-            <p class="text-xs text-gray-400 truncate">Petunjuk setup Client ID, OAuth Redirect URI, status Production & kuota API</p>
+            <p class="text-[11px] sm:text-xs text-gray-400 truncate">Petunjuk setup Client ID, Redirect URI & kuota</p>
           </div>
         </div>
         <button type="button" onclick="closeYouTubeGuideModal()" 
@@ -594,31 +594,42 @@
         </button>
       </div>
 
-      <!-- Navigation Tabs inside Modal -->
-      <div class="flex border-b border-gray-700/60 bg-dark-900/40 px-4 pt-2 gap-2 overflow-x-auto scrollbar-none">
-        <button type="button" onclick="switchGuideTab('setup')" id="guide-tab-btn-setup"
-          class="guide-tab-btn px-4 py-2.5 text-xs sm:text-sm font-semibold rounded-t-xl border-b-2 border-blue-500 text-blue-400 flex items-center gap-2 transition-all whitespace-nowrap cursor-pointer touch-manipulation">
-          <i class="ti ti-rocket text-base"></i>
-          <span>1. Quick Setup</span>
-        </button>
-        <button type="button" onclick="switchGuideTab('production')" id="guide-tab-btn-production"
-          class="guide-tab-btn px-4 py-2.5 text-xs sm:text-sm font-semibold rounded-t-xl border-b-2 border-transparent text-gray-400 hover:text-white flex items-center gap-2 transition-all whitespace-nowrap cursor-pointer touch-manipulation">
-          <i class="ti ti-shield-check text-base"></i>
-          <span>2. Solusi Token Expired (Production)</span>
-        </button>
-        <button type="button" onclick="switchGuideTab('quota')" id="guide-tab-btn-quota"
-          class="guide-tab-btn px-4 py-2.5 text-xs sm:text-sm font-semibold rounded-t-xl border-b-2 border-transparent text-gray-400 hover:text-white flex items-center gap-2 transition-all whitespace-nowrap cursor-pointer touch-manipulation">
-          <i class="ti ti-api text-base"></i>
-          <span>3. Kuota API & Optimasi</span>
-        </button>
+      <!-- Navigation Tabs inside Modal (Portrait-Friendly Segmented Grid) -->
+      <div class="p-2 sm:p-3 bg-dark-900/60 border-b border-gray-700/60">
+        <div class="grid grid-cols-3 gap-1 sm:gap-2 bg-dark-900/80 p-1 sm:p-1.5 rounded-xl border border-gray-700/50">
+          <button type="button" onclick="switchGuideTab('setup')" id="guide-tab-btn-setup"
+            class="guide-tab-btn py-2 sm:py-2.5 px-1 sm:px-3 rounded-xl text-xs sm:text-sm font-semibold flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 transition-all duration-150 cursor-pointer touch-manipulation active:scale-95 bg-blue-600 text-white shadow-md shadow-blue-500/25">
+            <i class="ti ti-rocket text-base sm:text-lg flex-shrink-0"></i>
+            <span class="text-center leading-tight">
+              <span class="sm:hidden text-[11px] font-bold block">1. Setup</span>
+              <span class="hidden sm:inline">1. Quick Setup</span>
+            </span>
+          </button>
+          <button type="button" onclick="switchGuideTab('production')" id="guide-tab-btn-production"
+            class="guide-tab-btn py-2 sm:py-2.5 px-1 sm:px-3 rounded-xl text-xs sm:text-sm font-semibold flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 transition-all duration-150 cursor-pointer touch-manipulation active:scale-95 text-gray-400 hover:text-gray-200 hover:bg-dark-700/50">
+            <i class="ti ti-shield-check text-base sm:text-lg flex-shrink-0"></i>
+            <span class="text-center leading-tight">
+              <span class="sm:hidden text-[11px] font-bold block">2. Token</span>
+              <span class="hidden sm:inline">2. Token Expired</span>
+            </span>
+          </button>
+          <button type="button" onclick="switchGuideTab('quota')" id="guide-tab-btn-quota"
+            class="guide-tab-btn py-2 sm:py-2.5 px-1 sm:px-3 rounded-xl text-xs sm:text-sm font-semibold flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 transition-all duration-150 cursor-pointer touch-manipulation active:scale-95 text-gray-400 hover:text-gray-200 hover:bg-dark-700/50">
+            <i class="ti ti-api text-base sm:text-lg flex-shrink-0"></i>
+            <span class="text-center leading-tight">
+              <span class="sm:hidden text-[11px] font-bold block">3. Kuota</span>
+              <span class="hidden sm:inline">3. Kuota API</span>
+            </span>
+          </button>
+        </div>
       </div>
 
       <!-- Modal Body Content -->
-      <div class="p-4 sm:p-6 space-y-4 max-h-[70vh] overflow-y-auto custom-scrollbar">
+      <div class="p-3.5 sm:p-6 space-y-4 max-h-[70vh] overflow-y-auto custom-scrollbar">
         <!-- Tab 1: Quick Setup -->
         <div id="guide-panel-setup" class="guide-panel space-y-4">
-          <div class="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 flex items-start gap-3">
-            <i class="ti ti-info-circle text-blue-400 text-xl flex-shrink-0 mt-0.5"></i>
+          <div class="bg-blue-500/10 border border-blue-500/30 rounded-xl p-3 sm:p-4 flex items-start gap-2.5 sm:gap-3">
+            <i class="ti ti-info-circle text-blue-400 text-lg sm:text-xl flex-shrink-0 mt-0.5"></i>
             <div class="text-xs sm:text-sm text-gray-300 leading-relaxed">
               <span class="font-bold text-white">Ingin cara tercepat?</span> Anda hanya perlu **Client ID** dan **Client Secret** dari Google Cloud Console. Setelah itu gunakan fitur <span class="text-blue-400 font-semibold">1-Click Connect with Google</span>.
             </div>
@@ -626,52 +637,52 @@
 
           <div class="space-y-3">
             <!-- Step 1 -->
-            <div class="bg-dark-700/50 rounded-xl p-4 border border-gray-700/60">
-              <div class="flex items-center gap-2 mb-2">
-                <span class="w-6 h-6 rounded-full bg-red-500/20 text-red-400 text-xs font-bold flex items-center justify-center">1</span>
-                <h4 class="text-sm font-bold text-white">Aktifkan YouTube Data API v3</h4>
+            <div class="bg-dark-700/50 rounded-xl p-3.5 sm:p-4 border border-gray-700/60">
+              <div class="flex items-center gap-2 mb-1.5">
+                <span class="w-6 h-6 rounded-full bg-red-500/20 text-red-400 text-xs font-bold flex items-center justify-center flex-shrink-0">1</span>
+                <h4 class="text-xs sm:text-sm font-bold text-white">Aktifkan YouTube Data API v3</h4>
               </div>
-              <p class="text-xs text-gray-300 ml-8 leading-relaxed mb-3">
+              <p class="text-xs text-gray-300 mt-1 sm:ml-8 leading-relaxed mb-3">
                 Buka Google Cloud Console, pilih project Anda (atau buat project baru), lalu aktifkan library API YouTube.
               </p>
-              <div class="ml-8">
+              <div class="mt-2.5 sm:ml-8">
                 <a href="https://console.cloud.google.com/apis/library/youtube.googleapis.com" target="_blank" rel="noopener noreferrer"
-                  class="inline-flex items-center gap-2 px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 rounded-lg text-xs font-medium transition-all active:scale-95">
-                  <i class="ti ti-external-link"></i>
+                  class="inline-flex w-full sm:w-auto items-center justify-center gap-2 px-3.5 py-2.5 bg-red-500/20 hover:bg-red-500/30 active:bg-red-500/40 text-red-400 border border-red-500/30 rounded-xl text-xs font-semibold transition-all active:scale-95 shadow-sm min-h-[38px]">
+                  <i class="ti ti-external-link text-sm"></i>
                   <span>Buka Page YouTube Data API v3</span>
                 </a>
               </div>
             </div>
 
             <!-- Step 2 -->
-            <div class="bg-dark-700/50 rounded-xl p-4 border border-gray-700/60">
-              <div class="flex items-center gap-2 mb-2">
-                <span class="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 text-xs font-bold flex items-center justify-center">2</span>
-                <h4 class="text-sm font-bold text-white">Buat Credentials (OAuth Client ID) & Tambah Redirect URI</h4>
+            <div class="bg-dark-700/50 rounded-xl p-3.5 sm:p-4 border border-gray-700/60">
+              <div class="flex items-center gap-2 mb-1.5">
+                <span class="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 text-xs font-bold flex items-center justify-center flex-shrink-0">2</span>
+                <h4 class="text-xs sm:text-sm font-bold text-white">Buat Credentials & Tambah Redirect URI</h4>
               </div>
-              <p class="text-xs text-gray-300 ml-8 leading-relaxed mb-2">
+              <p class="text-xs text-gray-300 mt-1 sm:ml-8 leading-relaxed mb-2">
                 Masuk ke menu <strong>Credentials > Create Credentials > OAuth Client ID</strong>. Pilih tipe <strong>Web Application</strong>.
               </p>
-              <div class="ml-8 space-y-2">
+              <div class="mt-2.5 sm:ml-8 space-y-2">
                 <p class="text-xs text-gray-400">Tambahkan URL berikut ke kolom <strong>Authorized redirect URIs</strong>:</p>
-                <div class="flex items-center gap-2 bg-dark-900/90 p-2.5 rounded-lg border border-gray-700/80 font-mono text-xs">
-                  <span id="guideRedirectUriText" class="text-blue-300 select-all truncate flex-1"><%= baseUrl %>/api/youtube/oauth/callback</span>
+                <div class="flex flex-col sm:flex-row sm:items-center gap-2 bg-dark-900/90 p-2.5 sm:p-3 rounded-xl border border-gray-700/80 font-mono text-xs">
+                  <span id="guideRedirectUriText" class="text-blue-300 select-all break-all sm:truncate flex-1 text-[11px] sm:text-xs py-0.5"><%= baseUrl %>/api/youtube/oauth/callback</span>
                   <button type="button" onclick="copyGuideRedirectUri()" 
-                    class="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded text-[11px] font-sans font-medium flex items-center gap-1 transition-all active:scale-95 cursor-pointer touch-manipulation">
-                    <i class="ti ti-copy text-xs" id="copyUriIcon"></i>
-                    <span id="copyUriText">Copy</span>
+                    class="w-full sm:w-auto justify-center px-3.5 py-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-lg text-xs font-sans font-semibold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer touch-manipulation shadow-sm flex-shrink-0 min-h-[36px]">
+                    <i class="ti ti-copy text-sm" id="copyUriIcon"></i>
+                    <span id="copyUriText">Copy Redirect URI</span>
                   </button>
                 </div>
               </div>
             </div>
 
             <!-- Step 3 -->
-            <div class="bg-dark-700/50 rounded-xl p-4 border border-gray-700/60">
-              <div class="flex items-center gap-2 mb-2">
-                <span class="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold flex items-center justify-center">3</span>
-                <h4 class="text-sm font-bold text-white">Koneksikan Akun di StreamFlow</h4>
+            <div class="bg-dark-700/50 rounded-xl p-3.5 sm:p-4 border border-gray-700/60">
+              <div class="flex items-center gap-2 mb-1.5">
+                <span class="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold flex items-center justify-center flex-shrink-0">3</span>
+                <h4 class="text-xs sm:text-sm font-bold text-white">Koneksikan Akun di StreamFlow</h4>
               </div>
-              <p class="text-xs text-gray-300 ml-8 leading-relaxed">
+              <p class="text-xs text-gray-300 mt-1 sm:ml-8 leading-relaxed">
                 Copy <strong>Client ID</strong> dan <strong>Client Secret</strong> lalu tempelkan pada form <strong>Connect YouTube Account</strong>, lalu klik <strong>Connect with Google</strong>. Anda akan di-redirect untuk konfirmasi izin channel YouTube.
               </p>
             </div>
@@ -680,22 +691,22 @@
 
         <!-- Tab 2: Production / Solusi Token Expired -->
         <div id="guide-panel-production" class="guide-panel space-y-4 hidden">
-          <div class="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 flex items-start gap-3">
-            <i class="ti ti-alert-triangle text-amber-400 text-xl flex-shrink-0 mt-0.5"></i>
+          <div class="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 sm:p-4 flex items-start gap-2.5 sm:gap-3">
+            <i class="ti ti-alert-triangle text-amber-400 text-lg sm:text-xl flex-shrink-0 mt-0.5"></i>
             <div class="text-xs sm:text-sm text-gray-300 leading-relaxed">
               <span class="font-bold text-amber-400">Mengapa Token YouTube Sering Expired Tiap 7 Hari?</span><br>
               Jika OAuth consent screen di Google Cloud Console masih berstatus <span class="underline decoration-amber-400 font-semibold">Testing</span>, Google secara otomatis membatasi umur Refresh Token maksimal 7 hari.
             </div>
           </div>
 
-          <div class="bg-dark-700/50 rounded-xl p-4 border border-gray-700/60 space-y-3">
-            <h4 class="text-sm font-bold text-white flex items-center gap-2">
-              <i class="ti ti-circle-check text-emerald-400 text-lg"></i>
-              Solusi Permanen: Ubah Publishing Status ke "In Production"
+          <div class="bg-dark-700/50 rounded-xl p-3.5 sm:p-4 border border-gray-700/60 space-y-3">
+            <h4 class="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
+              <i class="ti ti-circle-check text-emerald-400 text-lg flex-shrink-0"></i>
+              <span>Solusi Permanen: Ubah Publishing Status ke "In Production"</span>
             </h4>
             <ol class="list-decimal list-inside text-xs text-gray-300 space-y-2.5 leading-relaxed pl-1">
               <li>
-                Buka menu <a href="https://console.cloud.google.com/apis/credentials/consent" target="_blank" class="text-blue-400 underline hover:text-blue-300">OAuth consent screen</a> di Google Cloud Console.
+                Buka menu <a href="https://console.cloud.google.com/apis/credentials/consent" target="_blank" class="text-blue-400 underline hover:text-blue-300 font-medium">OAuth consent screen</a> di Google Cloud Console.
               </li>
               <li>
                 Pada bagian <strong>Publishing status</strong>, klik tombol <strong>PUBLISH APP</strong>.
@@ -706,7 +717,7 @@
             </ol>
 
             <div class="bg-dark-900/60 p-3 rounded-lg border border-gray-700/50 mt-2">
-              <p class="text-xs text-gray-400 leading-relaxed">
+              <p class="text-[11px] sm:text-xs text-gray-400 leading-relaxed">
                 💡 <strong class="text-gray-200">Apakah butuh verifikasi dari Google?</strong><br>
                 Jika aplikasi ini digunakan untuk akun/channel Anda sendiri, Anda <strong>TIDAK PERLU</strong> mengajukan verifikasi lanjutan. Status "In Production" langsung aktif secara instan dan token akun Anda akan auto-refresh permanen!
               </p>
@@ -716,8 +727,8 @@
 
         <!-- Tab 3: Kuota API & Optimasi -->
         <div id="guide-panel-quota" class="guide-panel space-y-4 hidden">
-          <div class="bg-purple-500/10 border border-purple-500/30 rounded-xl p-4 flex items-start gap-3">
-            <i class="ti ti-chart-dots text-purple-400 text-xl flex-shrink-0 mt-0.5"></i>
+          <div class="bg-purple-500/10 border border-purple-500/30 rounded-xl p-3 sm:p-4 flex items-start gap-2.5 sm:gap-3">
+            <i class="ti ti-chart-dots text-purple-400 text-lg sm:text-xl flex-shrink-0 mt-0.5"></i>
             <div class="text-xs sm:text-sm text-gray-300 leading-relaxed">
               <span class="font-bold text-white">Batas Kuota Gratis YouTube API v3:</span><br>
               Google memberikan jatah gratis <span class="text-purple-400 font-bold">10.000 units/hari</span> untuk setiap Project Google Cloud Console. Kuota direset otomatis setiap jam 14:00 WIB (00:00 PST).
@@ -760,14 +771,14 @@
       </div>
 
       <!-- Modal Footer -->
-      <div class="flex items-center justify-between p-4 bg-dark-900/80 border-t border-gray-700/80">
+      <div class="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5 p-3.5 sm:p-4 bg-dark-900/80 border-t border-gray-700/80">
         <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer"
-          class="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 font-medium transition-colors">
+          class="text-xs text-blue-400 hover:text-blue-300 flex items-center justify-center sm:justify-start gap-1 font-medium transition-colors py-1 sm:py-0">
           <i class="ti ti-external-link"></i>
           <span>Google Cloud Credentials Console</span>
         </a>
         <button type="button" onclick="closeYouTubeGuideModal()"
-          class="px-4 py-2 bg-gray-700 hover:bg-gray-600 active:bg-gray-800 text-white text-xs font-semibold rounded-xl transition-all cursor-pointer touch-manipulation active:scale-95">
+          class="w-full sm:w-auto px-5 py-2.5 bg-gray-700 hover:bg-gray-600 active:bg-gray-800 text-white text-xs font-semibold rounded-xl transition-all cursor-pointer touch-manipulation active:scale-95 text-center min-h-[38px] flex items-center justify-center">
           Tutup Panduan
         </button>
       </div>
@@ -3131,9 +3142,9 @@ function switchGuideTab(tabName) {
     const panel = document.getElementById(`guide-panel-${t}`);
     if (btn) {
       if (t === tabName) {
-        btn.className = "guide-tab-btn px-4 py-2.5 text-xs sm:text-sm font-semibold rounded-t-xl border-b-2 border-blue-500 text-blue-400 flex items-center gap-2 transition-all whitespace-nowrap cursor-pointer touch-manipulation";
+        btn.className = "guide-tab-btn py-2 sm:py-2.5 px-1 sm:px-3 rounded-xl text-xs sm:text-sm font-semibold flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 transition-all duration-150 cursor-pointer touch-manipulation active:scale-95 bg-blue-600 text-white shadow-md shadow-blue-500/25";
       } else {
-        btn.className = "guide-tab-btn px-4 py-2.5 text-xs sm:text-sm font-semibold rounded-t-xl border-b-2 border-transparent text-gray-400 hover:text-white flex items-center gap-2 transition-all whitespace-nowrap cursor-pointer touch-manipulation";
+        btn.className = "guide-tab-btn py-2 sm:py-2.5 px-1 sm:px-3 rounded-xl text-xs sm:text-sm font-semibold flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 transition-all duration-150 cursor-pointer touch-manipulation active:scale-95 text-gray-400 hover:text-gray-200 hover:bg-dark-700/50";
       }
     }
     if (panel) {
