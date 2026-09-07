@@ -10444,26 +10444,46 @@ function extractCredentialsFromJson(jsonText) {
  */
 function autoFillCredentials(clientId, clientSecret, formType = 'main') {
   if (!clientId && !clientSecret) {
-    showToast('No valid credentials found in JSON', 'error');
+    if (typeof showToast === 'function') {
+      showToast('No valid credentials found in JSON', 'error');
+    }
     return false;
+  }
+  
+  // Auto-detect modal vs main if needed
+  let isModal = (formType === 'modal');
+  if (!isModal) {
+    const addAccountModal = document.getElementById('addAccountModal');
+    const isModalOpen = addAccountModal && !addAccountModal.classList.contains('hidden') && addAccountModal.style.display !== 'none';
+    if (isModalOpen || (!document.getElementById('clientId') && document.getElementById('newClientId'))) {
+      isModal = true;
+    }
   }
   
   let clientIdField, clientSecretField;
   
-  if (formType === 'modal') {
-    clientIdField = document.getElementById('newClientId');
-    clientSecretField = document.getElementById('newClientSecret');
+  if (isModal) {
+    clientIdField = document.getElementById('newClientId') || document.getElementById('clientId');
+    clientSecretField = document.getElementById('newClientSecret') || document.getElementById('clientSecret');
   } else {
-    clientIdField = document.getElementById('clientId');
-    clientSecretField = document.getElementById('clientSecret');
+    clientIdField = document.getElementById('clientId') || document.getElementById('newClientId');
+    clientSecretField = document.getElementById('clientSecret') || document.getElementById('newClientSecret');
   }
   
   if (clientIdField && clientId) {
     clientIdField.value = clientId;
+    try {
+      clientIdField.dispatchEvent(new Event('input', { bubbles: true }));
+      clientIdField.dispatchEvent(new Event('change', { bubbles: true }));
+    } catch (e) {}
   }
   
   if (clientSecretField && clientSecret) {
     clientSecretField.value = clientSecret;
+    try {
+      clientSecretField.dispatchEvent(new Event('input', { bubbles: true }));
+      clientSecretField.dispatchEvent(new Event('change', { bubbles: true }));
+    } catch (e) {}
   }
   
   // Visual feedback
@@ -10476,27 +10496,34 @@ function autoFillCredentials(clientId, clientSecret, formType = 'main') {
   }, 2000);
   
   // Show success badge
-  const badge = document.getElementById('jsonSuccessBadge');
+  const badgeId = isModal ? 'modalJsonSuccessBadge' : 'jsonSuccessBadge';
+  const badge = document.getElementById(badgeId) || document.getElementById('modalJsonSuccessBadge') || document.getElementById('jsonSuccessBadge');
   if (badge) {
     badge.classList.remove('hidden');
     setTimeout(() => badge.classList.add('hidden'), 5000);
   }
   
   // Show extracted card
-  showExtractedCredentialsCard(clientId, clientSecret);
+  showExtractedCredentialsCard(clientId, clientSecret, isModal);
   
-  showToast('✅ Credentials auto-filled from JSON!', 'success');
+  if (typeof showToast === 'function') {
+    showToast('✅ Credentials auto-filled from JSON!', 'success');
+  }
   return true;
 }
 
 /**
  * Show extracted credentials preview card
  */
-function showExtractedCredentialsCard(clientId, clientSecret) {
-  const card = document.getElementById('jsonExtractedCard');
+function showExtractedCredentialsCard(clientId, clientSecret, isModal = false) {
+  const cardId = isModal ? 'modalJsonExtractedCard' : 'jsonExtractedCard';
+  let card = document.getElementById(cardId);
+  if (!card) {
+    card = isModal ? document.getElementById('jsonExtractedCard') : document.getElementById('modalJsonExtractedCard');
+  }
   if (!card) return;
   
-  const maskedSecret = clientSecret ? clientSecret.substring(0, 10) + '...' : '';
+  const maskedSecret = clientSecret ? (clientSecret.length > 10 ? clientSecret.substring(0, 10) + '...' : clientSecret) : '';
   
   card.innerHTML = `
     <div class="flex items-start gap-2">
@@ -10522,13 +10549,22 @@ function showExtractedCredentialsCard(clientId, clientSecret) {
 /**
  * Handle JSON file upload via button
  */
-function handleJsonFileUpload(event) {
-  const file = event.target.files[0];
+function handleJsonFileUpload(event, isModal = null) {
+  const file = event.target && event.target.files && event.target.files[0];
   if (!file) return;
   
   if (!file.name.endsWith('.json')) {
-    showToast('Please upload a .json file', 'error');
+    if (typeof showToast === 'function') showToast('Please upload a .json file', 'error');
+    try { event.target.value = ''; } catch (e) {}
     return;
+  }
+
+  // Determine if upload is within modal
+  if (isModal === null) {
+    const addAccountModal = document.getElementById('addAccountModal');
+    const isModalVisible = addAccountModal && !addAccountModal.classList.contains('hidden') && addAccountModal.style.display !== 'none';
+    const isInsideModal = event.target && event.target.closest && event.target.closest('#addAccountModal');
+    isModal = Boolean(isInsideModal || isModalVisible || (!document.getElementById('clientId') && document.getElementById('newClientId')));
   }
   
   const reader = new FileReader();
@@ -10537,14 +10573,18 @@ function handleJsonFileUpload(event) {
     const { clientId, clientSecret } = extractCredentialsFromJson(jsonText);
     
     if (clientId && clientSecret) {
-      autoFillCredentials(clientId, clientSecret, 'main');
+      autoFillCredentials(clientId, clientSecret, isModal ? 'modal' : 'main');
     } else {
-      showToast('Invalid JSON format. Please upload client_secret.json from Google Cloud Console', 'error');
+      if (typeof showToast === 'function') {
+        showToast('Invalid JSON format. Please upload client_secret.json from Google Cloud Console', 'error');
+      }
     }
+    try { event.target.value = ''; } catch (err) {}
   };
   
   reader.onerror = () => {
-    showToast('Failed to read file', 'error');
+    if (typeof showToast === 'function') showToast('Failed to read file', 'error');
+    try { event.target.value = ''; } catch (err) {}
   };
   
   reader.readAsText(file);
@@ -10553,10 +10593,11 @@ function handleJsonFileUpload(event) {
 /**
  * Handle drag over event
  */
-function handleJsonDragOver(event) {
+function handleJsonDragOver(event, isModal = null) {
   event.preventDefault();
   event.stopPropagation();
-  const dropZone = document.getElementById('jsonDropZone');
+  const zoneId = (isModal || (event.currentTarget && event.currentTarget.id === 'modalJsonDropZone')) ? 'modalJsonDropZone' : 'jsonDropZone';
+  const dropZone = (event.currentTarget && event.currentTarget.id ? event.currentTarget : document.getElementById(zoneId)) || document.getElementById('jsonDropZone') || document.getElementById('modalJsonDropZone');
   if (dropZone) {
     dropZone.classList.add('border-red-500', 'bg-red-500/10');
   }
@@ -10565,10 +10606,11 @@ function handleJsonDragOver(event) {
 /**
  * Handle drag leave event
  */
-function handleJsonDragLeave(event) {
+function handleJsonDragLeave(event, isModal = null) {
   event.preventDefault();
   event.stopPropagation();
-  const dropZone = document.getElementById('jsonDropZone');
+  const zoneId = (isModal || (event.currentTarget && event.currentTarget.id === 'modalJsonDropZone')) ? 'modalJsonDropZone' : 'jsonDropZone';
+  const dropZone = (event.currentTarget && event.currentTarget.id ? event.currentTarget : document.getElementById(zoneId)) || document.getElementById('jsonDropZone') || document.getElementById('modalJsonDropZone');
   if (dropZone) {
     dropZone.classList.remove('border-red-500', 'bg-red-500/10');
   }
@@ -10577,21 +10619,29 @@ function handleJsonDragLeave(event) {
 /**
  * Handle file drop event
  */
-function handleJsonDrop(event, isModal = false) {
+function handleJsonDrop(event, isModal = null) {
   event.preventDefault();
   event.stopPropagation();
   
-  const dropZone = document.getElementById('jsonDropZone');
+  if (isModal === null) {
+    const addAccountModal = document.getElementById('addAccountModal');
+    const isModalVisible = addAccountModal && !addAccountModal.classList.contains('hidden') && addAccountModal.style.display !== 'none';
+    const isInsideModal = event.target && event.target.closest && event.target.closest('#addAccountModal');
+    isModal = Boolean(isInsideModal || isModalVisible || (event.currentTarget && event.currentTarget.id === 'modalJsonDropZone'));
+  }
+  
+  const zoneId = isModal ? 'modalJsonDropZone' : 'jsonDropZone';
+  const dropZone = (event.currentTarget && event.currentTarget.id ? event.currentTarget : document.getElementById(zoneId)) || document.getElementById('jsonDropZone') || document.getElementById('modalJsonDropZone');
   if (dropZone) {
     dropZone.classList.remove('border-red-500', 'bg-red-500/10');
   }
   
-  const files = event.dataTransfer.files;
-  if (files.length === 0) return;
+  const files = event.dataTransfer ? event.dataTransfer.files : [];
+  if (!files || files.length === 0) return;
   
   const file = files[0];
   if (!file.name.endsWith('.json')) {
-    showToast('Please drop a .json file', 'error');
+    if (typeof showToast === 'function') showToast('Please drop a .json file', 'error');
     return;
   }
   
@@ -10603,12 +10653,14 @@ function handleJsonDrop(event, isModal = false) {
     if (clientId && clientSecret) {
       autoFillCredentials(clientId, clientSecret, isModal ? 'modal' : 'main');
     } else {
-      showToast('Invalid JSON format. Please use client_secret.json from Google Cloud Console', 'error');
+      if (typeof showToast === 'function') {
+        showToast('Invalid JSON format. Please use client_secret.json from Google Cloud Console', 'error');
+      }
     }
   };
   
   reader.onerror = () => {
-    showToast('Failed to read file', 'error');
+    if (typeof showToast === 'function') showToast('Failed to read file', 'error');
   };
   
   reader.readAsText(file);
@@ -10912,3 +10964,101 @@ async function submitAutoPilotCampaign(event) {
     }
   }
 }
+
+// ==========================================
+// YouTube API Guide Modal Functions
+// ==========================================
+function openYouTubeGuideModal() {
+  const modal = document.getElementById('youtubeGuideModal');
+  if (!modal) {
+    console.error('[YouTube Guide] Modal #youtubeGuideModal not found');
+    return;
+  }
+  modal.classList.remove('hidden');
+  modal.style.display = 'block';
+  document.body.style.overflow = 'hidden';
+  switchGuideTab('setup');
+}
+
+function closeYouTubeGuideModal() {
+  const modal = document.getElementById('youtubeGuideModal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  modal.style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+function switchGuideTab(tabName) {
+  const tabs = ['setup', 'production', 'quota'];
+  tabs.forEach(t => {
+    const btn = document.getElementById(`guide-tab-btn-${t}`);
+    const panel = document.getElementById(`guide-panel-${t}`);
+    if (btn) {
+      if (t === tabName) {
+        btn.className = "guide-tab-btn px-4 py-2.5 text-xs sm:text-sm font-semibold rounded-t-xl border-b-2 border-blue-500 text-blue-400 flex items-center gap-2 transition-all whitespace-nowrap cursor-pointer touch-manipulation";
+      } else {
+        btn.className = "guide-tab-btn px-4 py-2.5 text-xs sm:text-sm font-semibold rounded-t-xl border-b-2 border-transparent text-gray-400 hover:text-white flex items-center gap-2 transition-all whitespace-nowrap cursor-pointer touch-manipulation";
+      }
+    }
+    if (panel) {
+      if (t === tabName) {
+        panel.classList.remove('hidden');
+      } else {
+        panel.classList.add('hidden');
+      }
+    }
+  });
+}
+
+function copyGuideRedirectUri() {
+  const uriEl = document.getElementById('guideRedirectUriText');
+  const text = uriEl ? uriEl.innerText.trim() : (window.location.origin + '/api/youtube/oauth/callback');
+  
+  const showCopiedFeedback = () => {
+    const icon = document.getElementById('copyUriIcon');
+    const label = document.getElementById('copyUriText');
+    if (icon) icon.className = 'ti ti-check text-xs';
+    if (label) label.textContent = 'Copied!';
+    if (typeof showToast === 'function') {
+      showToast('Redirect URI berhasil disalin ke clipboard!', 'success');
+    }
+    setTimeout(() => {
+      if (icon) icon.className = 'ti ti-copy text-xs';
+      if (label) label.textContent = 'Copy';
+    }, 2000);
+  };
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text)
+      .then(showCopiedFeedback)
+      .catch(() => fallbackCopyGuideText(text, showCopiedFeedback));
+  } else {
+    fallbackCopyGuideText(text, showCopiedFeedback);
+  }
+}
+
+function fallbackCopyGuideText(text, callback) {
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  try {
+    document.execCommand('copy');
+    if (callback) callback();
+  } catch (err) {
+    if (typeof showToast === 'function') {
+      showToast('Gagal menyalin: ' + err.message, 'error');
+    }
+  }
+  document.body.removeChild(textarea);
+}
+
+// Global exposure
+window.openYouTubeGuideModal = openYouTubeGuideModal;
+window.closeYouTubeGuideModal = closeYouTubeGuideModal;
+window.switchGuideTab = switchGuideTab;
+window.copyGuideRedirectUri = copyGuideRedirectUri;
+
