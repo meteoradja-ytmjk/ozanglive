@@ -303,15 +303,45 @@ echo ""
 echo "Kemudian pilih Linux dan copy Tunnel Token."
 echo ""
 
-read -r -s -p "Paste Tunnel Token: " TUNNEL_TOKEN
+# ------------------------------------------------------
+# TOKEN INPUT YANG RAMAH UNTUK SSH / HP
+# ------------------------------------------------------
+# V3 memakai "read -s". Pada beberapa aplikasi SSH mobile,
+# input tersembunyi dapat membuat paste terlihat seperti tidak masuk.
+# Di versi ini token sengaja dibuat TERLIHAT saat paste agar mudah
+# dipastikan sudah masuk. Token tidak dimasukkan ke shell history.
+# ------------------------------------------------------
 
 echo ""
+echo "CARA PASTE TOKEN:"
+echo "1. Copy Tunnel Token dari Cloudflare."
+echo "2. Paste ke prompt di bawah."
+echo "3. Tekan ENTER."
+echo ""
+echo "CATATAN: token akan terlihat di layar saat ditempel."
+echo "Jangan screenshot atau bagikan token tersebut."
 echo ""
 
-if [[ -z "$TUNNEL_TOKEN" ]]; then
-    echo "ERROR: Tunnel token kosong."
-    exit 1
-fi
+# Pastikan sudo siap sebelum proses instalasi service.
+sudo -v
+
+TUNNEL_TOKEN=""
+while [[ -z "$TUNNEL_TOKEN" ]]; do
+    IFS= read -r -p "Paste Tunnel Token: " TUNNEL_TOKEN
+    # Bersihkan carriage-return yang kadang ikut terbawa dari clipboard.
+    TUNNEL_TOKEN="${TUNNEL_TOKEN//$'\\r'/}"
+    TUNNEL_TOKEN="${TUNNEL_TOKEN#"${TUNNEL_TOKEN%%[![:space:]]*}"}"
+    TUNNEL_TOKEN="${TUNNEL_TOKEN%"${TUNNEL_TOKEN##*[![:space:]]}"}"
+
+    if [[ -z "$TUNNEL_TOKEN" ]]; then
+        echo ""
+        echo "ERROR: Token kosong. Silakan paste ulang."
+        echo ""
+    fi
+done
+
+echo ""
+echo "Token diterima. Memasang Cloudflare Tunnel service..."
 
 # ======================================================
 # INSTALL CLOUDFLARED SERVICE
@@ -320,7 +350,26 @@ fi
 echo ""
 echo "[7/9] Memasang Cloudflare Tunnel service..."
 
-sudo cloudflared service install "$TUNNEL_TOKEN"
+if ! sudo cloudflared service install "$TUNNEL_TOKEN"; then
+    echo ""
+    echo "ERROR: Cloudflare gagal memasang service menggunakan token."
+    echo ""
+    echo "Kemungkinan:"
+    echo "  - Token terpotong saat copy/paste."
+    echo "  - Yang ditempel bukan Tunnel Token."
+    echo "  - Tunnel di Cloudflare sudah dihapus/tidak valid."
+    echo ""
+    echo "Silakan jalankan installer kembali dan copy token dari:"
+    echo "Cloudflare Dashboard -> Networking -> Tunnels -> tunnel -> Connectors"
+    unset TUNNEL_TOKEN
+    exit 1
+fi
+
+# Token tidak lagi dibutuhkan oleh script.
+unset TUNNEL_TOKEN
+
+echo ""
+echo "OK: Cloudflare service terpasang."
 
 echo ""
 echo "OK: Cloudflare service terpasang."
