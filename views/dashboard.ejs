@@ -2460,7 +2460,6 @@
       const hoursInput = document.createElement('input');
       hoursInput.type = 'number';
       hoursInput.min = '0';
-      hoursInput.max = '168';
       hoursInput.value = hours || '';
       hoursInput.className = 'w-14 px-2 py-1 bg-dark-700 border border-primary rounded text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary text-center';
       hoursInput.placeholder = '0';
@@ -3121,16 +3120,18 @@
         scheduleType: currentScheduleEditStream.schedule_type
       };
 
+      const hasDuration = (hours > 0 || minutes > 0);
       if (currentScheduleEditStream.schedule_type === 'once') {
         const startTime = document.getElementById('scheduleEditStartTime').value;
         const endTime = document.getElementById('scheduleEditEndTime').value;
-        if (startTime) {
-          updateData.scheduleStartTime = startTime;
-          updateData.schedule_time = startTime;
-        }
-        if (endTime) {
-          updateData.scheduleEndTime = endTime;
-          updateData.end_time = endTime;
+        updateData.scheduleStartTime = startTime || null;
+        updateData.schedule_time = startTime || null;
+        if (hasDuration) {
+          updateData.scheduleEndTime = null;
+          updateData.end_time = null;
+        } else {
+          updateData.scheduleEndTime = endTime || null;
+          updateData.end_time = endTime || null;
         }
       } else {
         const recTime = document.getElementById('scheduleEditRecurringTime').value;
