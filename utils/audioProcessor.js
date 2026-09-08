@@ -13,15 +13,10 @@
 const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
-const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
+const { getFFmpegPath, getFFprobePath } = require('./ffmpegPath');
 
-// Use system FFmpeg if available, otherwise use ffmpeg-static, then bundled
-let ffmpegPath;
-if (fs.existsSync('/usr/bin/ffmpeg')) {
-  ffmpegPath = '/usr/bin/ffmpeg';
-} else {
-  try { ffmpegPath = require('ffmpeg-static'); } catch(e) { ffmpegPath = ffmpegInstaller.path; }
-}
+const ffmpegPath = getFFmpegPath();
+const ffprobePath = getFFprobePath();
 
 /**
  * Process audio file for optimal streaming

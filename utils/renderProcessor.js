@@ -3,17 +3,16 @@ const path = require('path');
 const os = require('os');
 const ffmpeg = require('fluent-ffmpeg');
 
-// Use ffmpeg-static (v6.1.1) as primary, fallback to @ffmpeg-installer
-let ffmpegPath;
-try {
-  ffmpegPath = require('ffmpeg-static');
-} catch (e) {
-  ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
-}
+const { getFFmpegPath, getFFprobePath } = require('./ffmpegPath');
+const ffmpegPath = getFFmpegPath();
+const ffprobePath = getFFprobePath();
 
 const { buildVisualizerFilter, validateSettings: validateVisualizerSettings } = require('./visualizerEngine');
 
 ffmpeg.setFfmpegPath(ffmpegPath);
+if (ffprobePath) {
+  try { ffmpeg.setFfprobePath(ffprobePath); } catch (e) {}
+}
 console.log('[FFmpeg] Using:', ffmpegPath);
 
 const runFfmpeg = (configure, { onProgress, estimatedDurationSec } = {}) => new Promise((resolve, reject) => {

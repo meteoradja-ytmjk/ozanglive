@@ -1,7 +1,7 @@
 const { spawn, exec } = require('child_process');
 const fs = require('fs');
 const path = require('path');
-const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
+const { getFFmpegPath } = require('../utils/ffmpegPath');
 const schedulerService = require('./schedulerService');
 const LiveLimitService = require('./liveLimitService');
 const youtubeStatusSync = require('./youtubeStatusSync');
@@ -11,14 +11,8 @@ const { db } = require('../db/database');
 const Stream = require('../models/Stream');
 const Playlist = require('../models/Playlist');
 const { calculateDurationSeconds, calculateRemainingDuration, formatDuration } = require('../utils/durationCalculator');
-let ffmpegPath;
-if (fs.existsSync('/usr/bin/ffmpeg')) {
-  ffmpegPath = '/usr/bin/ffmpeg';
-  console.log('Using system FFmpeg at:', ffmpegPath);
-} else {
-  try { ffmpegPath = require('ffmpeg-static'); } catch(e) { ffmpegPath = ffmpegInstaller.path; }
-  console.log('Using bundled FFmpeg at:', ffmpegPath);
-}
+const ffmpegPath = getFFmpegPath();
+console.log('[StreamingService] Using FFmpeg at:', ffmpegPath);
 const Video = require('../models/Video');
 const Audio = require('../models/Audio');
 const activeStreams = new Map();
