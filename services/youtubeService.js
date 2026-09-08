@@ -322,10 +322,20 @@ class YouTubeService {
     const finalCategoryId = categoryId || '22';
     console.log('[YouTubeService.createBroadcast] Will set categoryId:', finalCategoryId);
     
+    let startTimeIso;
+    try {
+      const parsedDate = scheduledStartTime ? new Date(scheduledStartTime) : null;
+      startTimeIso = (parsedDate && !isNaN(parsedDate.getTime())) 
+        ? parsedDate.toISOString() 
+        : new Date(Date.now() + 15 * 60 * 1000).toISOString();
+    } catch (e) {
+      startTimeIso = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+    }
+
     const snippet = {
       title: title,
       description: description || '',
-      scheduledStartTime: new Date(scheduledStartTime).toISOString()
+      scheduledStartTime: startTimeIso
     };
     
     // Add tags if provided (YouTube API accepts tags in snippet)
@@ -793,12 +803,22 @@ class YouTubeService {
     // Build update request - preserve all existing values if not provided
     // Note: categoryId is NOT included here because liveBroadcasts API doesn't support it
     // Category will be updated separately using Videos API
+    let parsedStartTime = current.snippet.scheduledStartTime;
+    if (scheduledStartTime) {
+      try {
+        const d = new Date(scheduledStartTime);
+        if (!isNaN(d.getTime())) {
+          parsedStartTime = d.toISOString();
+        }
+      } catch (e) {}
+    }
+
     const updateRequest = {
       id: broadcastId,
       snippet: {
         title: title !== undefined && title !== '' ? title : current.snippet.title,
         description: description !== undefined ? description : current.snippet.description,
-        scheduledStartTime: scheduledStartTime ? new Date(scheduledStartTime).toISOString() : current.snippet.scheduledStartTime
+        scheduledStartTime: parsedStartTime
       },
       status: {
         privacyStatus: privacyStatus !== undefined && privacyStatus !== '' ? privacyStatus : current.status.privacyStatus,

@@ -1206,9 +1206,10 @@ class ScheduleService {
         nextRun ? formatNextRunAt(nextRun) : null
       );
       
-      console.log(`[ScheduleService] Template ${template.name}: Created ${results.length} broadcast(s)`);
-      console.log(`[ScheduleService] Next run: ${nextRun?.toISOString() || 'N/A'}`);
-      
+      if (template.user_id && typeof global.invalidateBroadcastsCache === 'function') {
+        global.invalidateBroadcastsCache(template.user_id);
+      }
+
       releaseLock();
       return results;
     } catch (error) {

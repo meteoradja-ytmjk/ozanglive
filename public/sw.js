@@ -92,7 +92,7 @@ self.addEventListener('fetch', (event) => {
 });
 
 function isStaticResource(url) {
-  return STATIC_RESOURCES.some(resource => url.includes(resource.replace(/^\
+  return STATIC_RESOURCES.some(resource => url.includes(resource.replace(/^\//, ''))) ||
          url.includes('tabler-icons') ||
          url.includes('cdn.jsdelivr.net') ||
          url.endsWith('.css') ||

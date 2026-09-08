@@ -984,7 +984,6 @@
   </div>
 
   <script src="/js/youtube.js?v=1.1.8" defer></script>
-  <script src="/js/stream-modal.js?v=1.0.9" defer></script>
   <script>
     function switchStudioTab(tabName) {
       const tabs = ['streams', 'broadcasts'];
@@ -3006,6 +3005,7 @@
     }
 
     async function openScheduleEditModal(streamId) {
+      if (!streamId) return;
       try {
         const response = await fetch('/api/streams/' + streamId);
         const result = await response.json();

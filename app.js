@@ -2648,191 +2648,6 @@ app.post('/api/settings/default-live-limit-registration', isAdmin, async (req, r
       isUnlimited: parsedLimit === 0
     });
   } catch (error) {
-
-// ============================================
-// BRANDING API ENDPOINTS (White Label)
-// ============================================
-
-// Get current branding settings
-app.get('/api/branding', isAdmin, async (req, res) => {
-  try {
-    const branding = await BrandingSettings.get();
-    res.json({ success: true, branding });
-  } catch (error) {
-    console.error('[Branding API] Error getting branding:', error);
-    res.status(500).json({ success: false, error: 'Failed to get branding settings' });
-  }
-});
-
-// Update branding settings
-app.post('/api/branding/update', isAdmin, upload.fields([
-  { name: 'logo', maxCount: 1 },
-  { name: 'favicon', maxCount: 1 },
-  { name: 'qris_image', maxCount: 1 }
-]), async (req, res) => {
-  try {
-    const {
-      app_name,
-      company_name,
-      primary_color,
-      secondary_color,
-      accent_color,
-      footer_text,
-      support_email,
-      support_url,
-      show_powered_by,
-      custom_css,
-      whatsapp_number,
-      remove_qris
-    } = req.body;
-
-    // Get current branding for logo paths
-    const currentBranding = await BrandingSettings.get();
-    let logo_path = currentBranding.logo_path;
-    let favicon_path = currentBranding.favicon_path;
-    let qris_image_path = currentBranding.qris_image_path;
-
-    // Handle logo upload
-    if (req.files && req.files.logo && req.files.logo[0]) {
-      const logoFile = req.files.logo[0];
-      const logoFilename = `logo-${Date.now()}${path.extname(logoFile.originalname)}`;
-      const logoPath = path.join(__dirname, 'public', 'uploads', 'branding', logoFilename);
-      
-      await fs.promises.rename(logoFile.path, logoPath);
-      logo_path = `/uploads/branding/${logoFilename}`;
-
-      // Delete old logo only if it's an uploaded file (don't touch bundled defaults in /images)
-      if (currentBranding.logo_path && currentBranding.logo_path.startsWith('/uploads/')) {
-        const oldLogoPath = path.join(__dirname, 'public', currentBranding.logo_path);
-        try {
-          await fs.promises.unlink(oldLogoPath);
-        } catch (err) {
-          console.log('[Branding] Could not delete old logo:', err.message);
-        }
-      }
-    }
-
-    // Handle favicon upload
-    if (req.files && req.files.favicon && req.files.favicon[0]) {
-      const faviconFile = req.files.favicon[0];
-      const faviconFilename = `favicon-${Date.now()}${path.extname(faviconFile.originalname)}`;
-      const faviconPath = path.join(__dirname, 'public', 'uploads', 'branding', faviconFilename);
-      
-      await fs.promises.rename(faviconFile.path, faviconPath);
-      favicon_path = `/uploads/branding/${faviconFilename}`;
-
-      // Delete old favicon only if it's an uploaded file (don't touch bundled defaults in /images)
-      if (currentBranding.favicon_path && currentBranding.favicon_path.startsWith('/uploads/')) {
-        const oldFaviconPath = path.join(__dirname, 'public', currentBranding.favicon_path);
-        try {
-          await fs.promises.unlink(oldFaviconPath);
-        } catch (err) {
-          console.log('[Branding] Could not delete old favicon:', err.message);
-        }
-      }
-    }
-
-    // Handle QRIS image upload
-    if (req.files && req.files.qris_image && req.files.qris_image[0]) {
-      const qrisFile = req.files.qris_image[0];
-      const qrisFilename = `qris-${Date.now()}${path.extname(qrisFile.originalname)}`;
-      const qrisPath = path.join(__dirname, 'public', 'uploads', 'branding', qrisFilename);
-      
-      await fs.promises.rename(qrisFile.path, qrisPath);
-      qris_image_path = `/uploads/branding/${qrisFilename}`;
-
-      // Delete old QRIS image
-      if (currentBranding.qris_image_path && currentBranding.qris_image_path.startsWith('/uploads/')) {
-        const oldQrisPath = path.join(__dirname, 'public', currentBranding.qris_image_path);
-        try {
-          await fs.promises.unlink(oldQrisPath);
-        } catch (err) {
-          console.log('[Branding] Could not delete old QRIS image:', err.message);
-        }
-      }
-    }
-
-    // Handle QRIS removal
-    if (remove_qris === '1' || remove_qris === 'true') {
-      if (qris_image_path && qris_image_path.startsWith('/uploads/')) {
-        const oldQrisPath = path.join(__dirname, 'public', qris_image_path);
-        try {
-          await fs.promises.unlink(oldQrisPath);
-        } catch (err) {
-          console.log('[Branding] Could not delete QRIS image:', err.message);
-        }
-      }
-      qris_image_path = null;
-    }
-
-    // Update branding settings
-    await BrandingSettings.update({
-      app_name: app_name || 'OzangLive',
-      company_name: company_name || 'OzangLive Team',
-      logo_path,
-      favicon_path,
-      primary_color: primary_color || '#8B5CF6',
-      secondary_color: secondary_color || '#7C3AED',
-      accent_color: accent_color || '#6D28D9',
-      login_background: null,
-      custom_css: custom_css || null,
-      footer_text: footer_text || '© 2024 OzangLive. All rights reserved.',
-      support_email: support_email || 'support@ozanglive.com',
-      support_url: support_url || null,
-      show_powered_by: show_powered_by === 'on' || show_powered_by === '1' || show_powered_by === 'true' ? 1 : 0,
-      whatsapp_number: whatsapp_number || '',
-      qris_image_path
-    });
-
-    // Clear branding cache
-    clearBrandingCache();
-
-    res.json({ success: true, message: 'Branding updated successfully' });
-  } catch (error) {
-    console.error('[Branding API] Error updating branding:', error);
-    res.status(500).json({ success: false, error: 'Failed to update branding settings' });
-  }
-});
-
-// Reset branding to default
-app.post('/api/branding/reset', isAdmin, async (req, res) => {
-  try {
-    // Get current branding to delete uploaded files
-    const currentBranding = await BrandingSettings.get();
-
-    // Delete uploaded logo if exists
-    if (currentBranding.logo_path && currentBranding.logo_path.startsWith('/uploads/')) {
-      const logoPath = path.join(__dirname, 'public', currentBranding.logo_path);
-      try {
-        await fs.promises.unlink(logoPath);
-      } catch (err) {
-        console.log('[Branding] Could not delete logo:', err.message);
-      }
-    }
-
-    // Delete uploaded favicon if exists
-    if (currentBranding.favicon_path && currentBranding.favicon_path.startsWith('/uploads/')) {
-      const faviconPath = path.join(__dirname, 'public', currentBranding.favicon_path);
-      try {
-        await fs.promises.unlink(faviconPath);
-      } catch (err) {
-        console.log('[Branding] Could not delete favicon:', err.message);
-      }
-    }
-
-    // Reset to default
-    await BrandingSettings.reset();
-
-    // Clear branding cache
-    clearBrandingCache();
-
-    res.json({ success: true, message: 'Branding reset to default' });
-  } catch (error) {
-    console.error('[Branding API] Error resetting branding:', error);
-    res.status(500).json({ success: false, error: 'Failed to reset branding' });
-  }
-});
-
     console.error('Set default live limit registration error:', error);
     res.status(500).json({ success: false, message: 'Failed to update default live limit' });
   }
@@ -6039,7 +5854,8 @@ app.get('/playlist', isAuthenticated, async (req, res) => {
   }
 });
 
-app.get('/api/playlists', isAuthenticated, async (req, res) => {
+// Get all playlists (video or audio)
+app.get(['/api/playlists', '/api/audio-playlists'], isAuthenticated, async (req, res) => {
   try {
     const playlists = await Playlist.findAll(req.session.userId);
 
@@ -8259,7 +8075,7 @@ app.get('/api/youtube/connection-status', isAuthenticated, async (req, res) => {
 });
 
 // List thumbnail folders (per user)
-app.get('/api/thumbnail-folders', isAuthenticated, async (req, res) => {
+app.get(['/api/thumbnail-folders', '/api/youtube/thumbnail-folders'], isAuthenticated, async (req, res) => {
   try {
     const userId = req.session.userId;
     const thumbnailsDir = path.join(__dirname, 'public', 'uploads', 'thumbnails', String(userId));
@@ -8462,11 +8278,13 @@ app.get('/api/thumbnails', isAuthenticated, async (req, res) => {
 const thumbnailUpload = multer({
   storage: multer.memoryStorage(),
   fileFilter: (req, file, cb) => {
-    const allowedFormats = ['image/jpeg', 'image/jpg', 'image/png'];
-    if (allowedFormats.includes(file.mimetype)) {
+    const allowedFormats = ['image/jpeg', 'image/jpg', 'image/png', 'image/pjpeg', 'image/x-png', 'image/webp'];
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    const allowedExts = ['.jpg', '.jpeg', '.png', '.webp'];
+    if (allowedFormats.includes(file.mimetype) || allowedExts.includes(ext)) {
       cb(null, true);
     } else {
-      cb(new Error('Only JPG and PNG files are allowed'), false);
+      cb(new Error('Hanya file gambar JPG dan PNG yang diperbolehkan'), false);
     }
   },
   limits: {
@@ -8474,8 +8292,33 @@ const thumbnailUpload = multer({
   }
 });
 
+// Multer error handling wrappers to ensure API returns JSON 400 instead of HTML
+const handleThumbnailArrayUpload = (req, res, next) => {
+  thumbnailUpload.array('thumbnail', 100)(req, res, (err) => {
+    if (err) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ success: false, error: 'Ukuran file terlalu besar. Maksimal 2MB per gambar.' });
+      }
+      return res.status(400).json({ success: false, error: err.message || 'Gagal mengunggah thumbnail' });
+    }
+    next();
+  });
+};
+
+const handleThumbnailSingleUpload = (req, res, next) => {
+  thumbnailUpload.single('thumbnail')(req, res, (err) => {
+    if (err) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ success: false, error: 'Ukuran file terlalu besar. Maksimal 2MB.' });
+      }
+      return res.status(400).json({ success: false, error: err.message || 'Gagal mengunggah thumbnail' });
+    }
+    next();
+  });
+};
+
 // Upload thumbnail to user's gallery - supports multiple files (no limit)
-app.post('/api/thumbnails', isAuthenticated, thumbnailUpload.array('thumbnail', 100), async (req, res) => {
+app.post('/api/thumbnails', isAuthenticated, handleThumbnailArrayUpload, async (req, res) => {
   try {
     const userId = req.session.userId;
     const folder = req.body.folder || null;
@@ -9081,6 +8924,7 @@ function invalidateBroadcastsCache(userId) {
     console.log(`[Cache INVALIDATE] Cleared ${cleared} broadcast cache entr${cleared === 1 ? 'y' : 'ies'} for user ${userId}`);
   }
 }
+global.invalidateBroadcastsCache = invalidateBroadcastsCache;
 
 app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
   try {
@@ -9890,8 +9734,8 @@ app.delete('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
   }
 });
 
-// Upload/change thumbnail for broadcast - supports accountId parameter
-app.post('/api/youtube/broadcasts/:id/thumbnail', isAuthenticated, thumbnailUpload.single('thumbnail'), async (req, res) => {
+// Upload/change thumbnail for broadcast - supports accountId parameter and multi-account fallback
+app.post('/api/youtube/broadcasts/:id/thumbnail', isAuthenticated, handleThumbnailSingleUpload, async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({
@@ -9900,65 +9744,97 @@ app.post('/api/youtube/broadcasts/:id/thumbnail', isAuthenticated, thumbnailUplo
       });
     }
 
+    const broadcastId = req.params.id;
+    const accountId = req.body.accountId ? parseInt(req.body.accountId) : (req.query.accountId ? parseInt(req.query.accountId) : null);
+
     console.log('[Thumbnail Upload] File received:', {
       originalname: req.file.originalname,
       mimetype: req.file.mimetype,
       size: req.file.size,
-      broadcastId: req.params.id,
-      accountId: req.body.accountId
+      broadcastId: broadcastId,
+      accountId: accountId
     });
 
-    // Validate file type
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg'];
-    if (!allowedTypes.includes(req.file.mimetype)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid file type. Only JPG and PNG are allowed'
-      });
-    }
+    // Normalize mimetype for YouTube API (accept JPG, PNG, WEBP)
+    const mimeType = (req.file.mimetype === 'image/jpg' || req.file.mimetype === 'image/jpeg') ? 'image/jpeg' : req.file.mimetype;
 
-    // Validate file size (max 2MB)
-    const maxSize = 2 * 1024 * 1024;
-    if (req.file.size > maxSize) {
-      return res.status(400).json({
-        success: false,
-        error: 'File too large. Maximum size is 2MB'
-      });
-    }
-
-    const accountId = req.body.accountId ? parseInt(req.body.accountId) : null;
-    let credentials;
-
+    let targetCredentials = null;
     if (accountId) {
-      credentials = await YouTubeCredentials.findById(accountId);
-      if (!credentials || credentials.userId !== req.session.userId) {
-        return res.status(404).json({ success: false, error: 'Account not found' });
+      targetCredentials = await YouTubeCredentials.findById(accountId);
+      if (targetCredentials && targetCredentials.userId !== req.session.userId) {
+        targetCredentials = null;
       }
-    } else {
-      credentials = await YouTubeCredentials.findByUserId(req.session.userId);
     }
 
-    if (!credentials) {
+    let result = null;
+    let lastError = null;
+
+    // Try target credentials first if available
+    if (targetCredentials) {
+      try {
+        const accessToken = await youtubeService.getAccessToken(
+          targetCredentials.clientId,
+          targetCredentials.clientSecret,
+          targetCredentials.refreshToken,
+          0,
+          targetCredentials.id,
+          0,
+          targetCredentials.id
+        );
+        result = await youtubeService.uploadThumbnail(
+          accessToken,
+          broadcastId,
+          req.file.buffer,
+          mimeType
+        );
+      } catch (err) {
+        console.warn(`[Thumbnail Upload] Failed with account ${targetCredentials.id}, will try fallback:`, err.message);
+        lastError = err;
+      }
+    }
+
+    // Fallback: If no accountId provided or if the attempt failed, try other connected accounts of this user
+    if (!result) {
+      const allAccounts = await YouTubeCredentials.findAllByUserId(req.session.userId);
+      for (const account of allAccounts) {
+        if (targetCredentials && account.id === targetCredentials.id) continue; // Already tried
+        try {
+          console.log(`[Thumbnail Upload] Trying alternate account ${account.id} (${account.channelTitle})...`);
+          const accessToken = await youtubeService.getAccessToken(
+            account.clientId,
+            account.clientSecret,
+            account.refreshToken,
+            0,
+            account.id,
+            0,
+            account.id
+          );
+          result = await youtubeService.uploadThumbnail(
+            accessToken,
+            broadcastId,
+            req.file.buffer,
+            mimeType
+          );
+          if (result) {
+            console.log(`[Thumbnail Upload] Successfully uploaded thumbnail using account ${account.id}`);
+            break;
+          }
+        } catch (err) {
+          lastError = err;
+        }
+      }
+    }
+
+    if (!result) {
+      const errMsg = lastError?.response?.data?.error?.message || lastError?.message || 'Gagal mengunggah thumbnail ke YouTube';
+      console.error('[Thumbnail Upload] All accounts failed:', errMsg);
       return res.status(400).json({
         success: false,
-        error: 'YouTube account not connected'
+        error: errMsg
       });
     }
-
-    const accessToken = await youtubeService.getAccessToken(credentials.clientId, credentials.clientSecret, credentials.refreshToken, 0, credentials.id, 0, credentials.id);
-
-    // Normalize mimetype for YouTube API
-    const mimeType = req.file.mimetype === 'image/jpg' ? 'image/jpeg' : req.file.mimetype;
-
-    const result = await youtubeService.uploadThumbnail(
-      accessToken,
-      req.params.id,
-      req.file.buffer,
-      mimeType
-    );
 
     console.log('[Thumbnail Upload] Success:', result);
-
     res.json({ success: true, thumbnailUrl: result.thumbnailUrl });
   } catch (error) {
     console.error('Error uploading thumbnail:', error);
@@ -11303,6 +11179,7 @@ app.post('/api/youtube/templates/:id/run-now', isAuthenticated, async (req, res)
 
     console.log(`[API] Manual trigger for template: ${template.name}`);
     const result = await scheduleService.executeTemplate(templateWithCreds);
+    invalidateBroadcastsCache(req.session.userId);
 
     res.json({
       success: true,
@@ -11827,7 +11704,7 @@ app.post('/api/title-suggestions/:id/move', isAuthenticated, async (req, res) =>
 // ============================================
 
 // Get all folders for user
-app.get('/api/title-folders', isAuthenticated, async (req, res) => {
+app.get(['/api/title-folders', '/api/youtube/title-folders'], isAuthenticated, async (req, res) => {
   try {
     const folders = await TitleFolder.findByUserId(req.session.userId);
     res.json({ success: true, folders });
@@ -12757,11 +12634,16 @@ app.use((err, req, res, next) => {
   // Default error response
   res.status(err.status || 500);
 
-  // Check if request expects JSON
-  if (req.xhr || req.headers.accept?.includes('application/json')) {
+  // Check if request expects JSON or is an API route
+  if (req.path.startsWith('/api/') || req.xhr || req.headers.accept?.includes('application/json')) {
+    let errorMessage = err.message || 'An unexpected error occurred';
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      errorMessage = 'Ukuran file terlalu besar. Maksimal 2MB per gambar.';
+      res.status(400);
+    }
     return res.json({
       success: false,
-      error: isDev ? err.message : 'An unexpected error occurred'
+      error: errorMessage
     });
   }
 

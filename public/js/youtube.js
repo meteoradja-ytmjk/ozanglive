@@ -138,6 +138,11 @@ function getCsrfToken() {
 
 // Show toast notification
 function showToast(message, type = 'success') {
+  if (['success', 'error', 'info', 'warning'].includes(message) && type && !['success', 'error', 'info', 'warning'].includes(type)) {
+    const temp = message;
+    message = type;
+    type = temp;
+  }
   const toast = document.createElement('div');
   toast.className = `fixed bottom-24 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-lg shadow-lg z-50 transition-all duration-300 ${
     type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-blue-500'
@@ -165,7 +170,33 @@ async function lazyLoadBroadcasts() {
   
   // Check if we need to lazy load (loading container exists)
   if (!loadingContainer) {
-    console.log('[Performance] Broadcasts already rendered server-side, skipping lazy load');
+    // If cache was invalidated or expired, fetch and update in background without full loader
+    if (!broadcastsCache.data || (broadcastsCache.timestamp && Date.now() - broadcastsCache.timestamp > broadcastsCache.ttl)) {
+      console.log('[Performance] Broadcasts cache empty/expired on tab switch, refreshing in background...');
+      try {
+        const response = await fetch('/api/youtube/broadcasts', {
+          headers: { 'X-CSRF-Token': getCsrfToken() }
+        });
+        const data = await response.json();
+        if (data.success && data.broadcasts !== undefined) {
+          broadcastsCache.data = data.broadcasts;
+          broadcastsCache.timestamp = Date.now();
+          if (broadcastsContainer) {
+            broadcastsContainer.style.display = 'block';
+            broadcastsContainer.classList.remove('hidden');
+            if (data.broadcasts.length > 0) {
+              renderBroadcastsGrouped(data.broadcasts, data.accounts || []);
+            } else if (typeof renderEmptyState === 'function') {
+              renderEmptyState();
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[Performance] Background broadcast refresh error:', err);
+      }
+    } else {
+      console.log('[Performance] Broadcasts already rendered and cache fresh, skipping lazy load');
+    }
     return;
   }
   
@@ -420,7 +451,7 @@ function createChannelGroup(channelName, group, channelIndex) {
           <input type="checkbox" class="channel-select-all w-4 h-4 rounded border-gray-600 bg-dark-700 text-primary focus:ring-primary cursor-pointer"
             onclick="event.stopPropagation(); toggleChannelSelectAll(this, ${group.accountId})"
             title="Select all in this channel">
-          <span class="text-gray-400 text-xl transition-transform" id="channelChevron_${channelIndex}" style="display: inline-block;">▶</span>
+          <span class="text-gray-400 text-xl transition-transform" id="channelChevron_${channelIndex}" style="display: inline-block;">${channelIndex === 0 ? '▼' : '▶'}</span>
         </div>
       </div>
     `;
@@ -434,10 +465,11 @@ function createChannelGroup(channelName, group, channelIndex) {
       }
     }).join('');
     
-    // AUTO-COLLAPSE: Start with display:none and chevron pointing right (▶)
+    // First channel group is expanded by default so broadcasts are immediately visible
+    const isExpanded = (channelIndex === 0);
     div.innerHTML = `
       ${headerHtml}
-      <div id="channelBroadcasts_${channelIndex}" class="divide-y divide-gray-700/50" style="display: none;">
+      <div id="channelBroadcasts_${channelIndex}" class="divide-y divide-gray-700/50" style="display: ${isExpanded ? 'block' : 'none'};">
         ${broadcastsHtml}
       </div>
     `;
@@ -512,7 +544,7 @@ function createBroadcastRowHtml(broadcast, index) {
               <i class="ti ti-copy text-sm"></i>
             </button>
           </div>
-          <div class="w-32 flex items-center justify-center gap-2">
+          <div class="w-44 flex items-center justify-center gap-1.5">
             <button onclick="editBroadcast('${broadcast.id}', ${broadcast.accountId})"
               class="px-2 py-1 text-xs bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded transition-colors" title="Edit">
               ✏️ Edit
@@ -520,6 +552,10 @@ function createBroadcastRowHtml(broadcast, index) {
             <button onclick="reuseBroadcast('${broadcast.id}', ${broadcast.accountId})"
               class="px-2 py-1 text-xs bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded transition-colors" title="Sync">
               🔄 Sync
+            </button>
+            <button onclick="addSaveAsTemplateButton('${broadcast.id}', ${broadcast.accountId}, '${safeTitleJs}', '${broadcast.privacyStatus}')"
+              class="px-2 py-1 text-xs bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 rounded transition-colors" title="Save as Template">
+              📑 Template
             </button>
             <button onclick="deleteBroadcast('${broadcast.id}', '${safeTitleJs}', ${broadcast.accountId})"
               class="px-2 py-1 text-xs bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded transition-colors" title="Delete">
@@ -553,6 +589,10 @@ function createBroadcastRowHtml(broadcast, index) {
               class="px-1.5 py-1 text-xs bg-green-500/20 text-green-400 rounded" title="Sync">
               🔄
             </button>
+            <button onclick="addSaveAsTemplateButton('${broadcast.id}', ${broadcast.accountId}', '${safeTitleJs}', '${broadcast.privacyStatus}')"
+              class="px-1.5 py-1 text-xs bg-yellow-500/20 text-yellow-400 rounded" title="Save as Template">
+              📑
+            </button>
             <button onclick="deleteBroadcast('${broadcast.id}', '${safeTitleJs}', ${broadcast.accountId})"
               class="px-1.5 py-1 text-xs bg-red-500/20 text-red-400 rounded" title="Delete">
               🗑️
@@ -569,7 +609,7 @@ function createBroadcastRowHtml(broadcast, index) {
 
 // Manual refresh broadcasts (called by user action)
 async function refreshBroadcasts() {
-  const broadcastsContainer = document.querySelector('.space-y-4');
+  const broadcastsContainer = document.getElementById('broadcastsContainer') || document.querySelector('.space-y-4');
   
   if (!broadcastsContainer) {
     console.log('[Refresh] No broadcasts container found');
@@ -606,8 +646,18 @@ async function refreshBroadcasts() {
       
       showToast(`Refreshed ${data.broadcasts.length} broadcasts`);
       
-      // Reload page to show updated data
-      setTimeout(() => window.location.reload(), 500);
+      // Update in-place smoothly
+      if (typeof renderBroadcastsGrouped === 'function' && broadcastsContainer) {
+        broadcastsContainer.style.display = 'block';
+        broadcastsContainer.classList.remove('hidden');
+        if (data.broadcasts.length > 0) {
+          renderBroadcastsGrouped(data.broadcasts, data.accounts || []);
+        } else if (typeof renderEmptyState === 'function') {
+          renderEmptyState();
+        }
+      } else {
+        setTimeout(() => window.location.reload(), 500);
+      }
     } else {
       showToast(data.error || 'Failed to refresh broadcasts', 'error');
     }
@@ -684,15 +734,26 @@ function updateSelectionCount() {
 
 // Clear selection
 function clearSelection() {
-  const checkboxes = document.querySelectorAll('.broadcast-checkbox:checked');
-  checkboxes.forEach(cb => cb.checked = false);
+  const checkboxes = document.querySelectorAll('.broadcast-checkbox');
+  checkboxes.forEach(cb => {
+    cb.checked = false;
+  });
   
   // Also clear channel select all checkboxes
   const channelCheckboxes = document.querySelectorAll('.channel-select-all');
-  channelCheckboxes.forEach(cb => cb.checked = false);
+  channelCheckboxes.forEach(cb => {
+    cb.checked = false;
+  });
+  
+  const selectAllCheckbox = document.getElementById('selectAllBroadcasts');
+  if (selectAllCheckbox) {
+    selectAllCheckbox.checked = false;
+    selectAllCheckbox.indeterminate = false;
+  }
   
   updateSelectionCount();
 }
+window.clearSelection = clearSelection;
 
 // Copy stream key to clipboard
 // NOTE: copyStreamKey() is defined later in this file (single source of truth).
@@ -758,7 +819,7 @@ function createBroadcastCard(broadcast) {
             <i class="ti ti-copy text-sm"></i>
             <span>Reuse</span>
           </button>
-          <button onclick="changeThumbnail('${broadcast.id}')" 
+          <button onclick="changeThumbnail('${broadcast.id}', ${broadcast.accountId || 'null'})" 
             class="px-3 py-1.5 bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 rounded-lg text-xs transition-colors flex items-center gap-1">
             <i class="ti ti-photo text-sm"></i>
             <span>Thumbnail</span>
@@ -2572,8 +2633,24 @@ function selectGalleryThumbnail(element, url, path) {
   document.getElementById('selectedThumbnailPath').value = path;
 }
 
+// Helper to validate thumbnail image format (MIME or file extension fallback)
+function isSupportedThumbnailFile(file) {
+  if (!file) return false;
+  const allowedMimes = ['image/jpeg', 'image/png', 'image/jpg', 'image/pjpeg', 'image/x-png', 'image/webp'];
+  const ext = (file.name || '').split('.').pop().toLowerCase();
+  return allowedMimes.includes(file.type) || ['jpg', 'jpeg', 'png', 'webp'].includes(ext);
+}
+
 // Upload thumbnail to user's gallery (supports folder)
 async function uploadThumbnailToGallery(file) {
+  if (!isSupportedThumbnailFile(file)) {
+    showToast('Hanya file gambar JPG, PNG, atau WEBP yang diperbolehkan', 'error');
+    return false;
+  }
+  if (file.size > 2 * 1024 * 1024) {
+    showToast('Ukuran file maksimal 2MB', 'error');
+    return false;
+  }
   try {
     const formData = new FormData();
     formData.append('thumbnail', file);
@@ -2586,7 +2663,8 @@ async function uploadThumbnailToGallery(file) {
     const response = await fetch('/api/thumbnails', {
       method: 'POST',
       headers: {
-        'X-CSRF-Token': getCsrfToken()
+        'X-CSRF-Token': getCsrfToken(),
+        'Accept': 'application/json'
       },
       body: formData
     });
@@ -2627,14 +2705,14 @@ async function uploadMultipleThumbnailsToGallery(files) {
     const validFiles = [];
     for (const file of files) {
       // Validate file type
-      if (!['image/jpeg', 'image/png', 'image/jpg'].includes(file.type)) {
-        showToast(`${file.name}: Only JPG and PNG files are allowed`, 'error');
+      if (!isSupportedThumbnailFile(file)) {
+        showToast(`${file.name}: Hanya file JPG, PNG, atau WEBP yang diperbolehkan`, 'error');
         continue;
       }
       
       // Validate file size (2MB)
       if (file.size > 2 * 1024 * 1024) {
-        showToast(`${file.name}: File size must be less than 2MB`, 'error');
+        showToast(`${file.name}: Ukuran file harus kurang dari 2MB`, 'error');
         continue;
       }
       
@@ -2661,7 +2739,8 @@ async function uploadMultipleThumbnailsToGallery(files) {
     const response = await fetch('/api/thumbnails', {
       method: 'POST',
       headers: {
-        'X-CSRF-Token': getCsrfToken()
+        'X-CSRF-Token': getCsrfToken(),
+        'Accept': 'application/json'
       },
       body: formData
     });
@@ -2749,15 +2828,15 @@ function previewAndUploadThumbnail(input) {
       const file = input.files[0];
       
       // Validate file type
-      if (!['image/jpeg', 'image/png', 'image/jpg'].includes(file.type)) {
-        showToast('Only JPG and PNG files are allowed', 'error');
+      if (!isSupportedThumbnailFile(file)) {
+        showToast('Hanya file JPG, PNG, atau WEBP yang diperbolehkan', 'error');
         input.value = '';
         return;
       }
       
       // Validate file size (2MB)
       if (file.size > 2 * 1024 * 1024) {
-        showToast('File size must be less than 2MB', 'error');
+        showToast('Ukuran file harus kurang dari 2MB', 'error');
         input.value = '';
         return;
       }
@@ -3853,7 +3932,7 @@ if (createBroadcastForm) {
           }
           showToast('✓ Pengaturan siaran berhasil diperbarui!');
           closeCreateBroadcastModal();
-          setTimeout(() => window.location.reload(), 500);
+          setTimeout(() => { window.location.href = '/dashboard?tab=broadcasts'; }, 500);
         } else {
           showToast(data.error || 'Gagal memperbarui stream', 'error');
         }
@@ -3955,11 +4034,11 @@ if (createBroadcastForm) {
         closeCreateBroadcastModal();
         
         // Wait a bit for YouTube API to propagate the new broadcast
-        // Then reload to show new broadcast
+        // Then redirect to YouTube Studio tab to show new broadcast
         setTimeout(() => {
-          console.log('[CreateBroadcast] Reloading page now...');
-          window.location.reload();
-        }, 2000); // Increased to 2 seconds for YouTube API propagation
+          console.log('[CreateBroadcast] Navigating to YouTube Studio tab...');
+          window.location.href = '/dashboard?tab=broadcasts';
+        }, 1500);
       } else {
         console.error('[CreateBroadcast] Failed:', data.error);
         showToast(data.error || 'Gagal membuat broadcast', 'error');
@@ -4114,7 +4193,8 @@ async function editBroadcast(broadcastId, accountId) {
 // Open Edit Broadcast Modal
 async function openEditBroadcastModal(broadcast) {
   document.getElementById('editBroadcastId').value = broadcast.id;
-  document.getElementById('editAccountId').value = broadcast.accountId;
+  const broadcastAccountEl = document.getElementById('editBroadcastAccountId') || document.getElementById('editAccountId');
+  if (broadcastAccountEl) broadcastAccountEl.value = broadcast.accountId;
   document.getElementById('editBroadcastTitle').value = broadcast.title || '';
   document.getElementById('editBroadcastDescription').value = broadcast.description || '';
   document.getElementById('editPrivacyStatus').value = broadcast.privacyStatus || 'unlisted';
@@ -4196,11 +4276,19 @@ async function openEditBroadcastModal(broadcast) {
   // Load thumbnails from selected folder
   loadEditThumbnailFolder(boundFolder);
   
-  document.getElementById('editBroadcastModal').classList.remove('hidden');
+  const modal = document.getElementById('editBroadcastModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.style.display = 'block';
+  }
 }
 
 function closeEditBroadcastModal() {
-  document.getElementById('editBroadcastModal').classList.add('hidden');
+  const modal = document.getElementById('editBroadcastModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+  }
   document.getElementById('editBroadcastForm').reset();
 }
 
@@ -4217,7 +4305,7 @@ if (editBroadcastForm) {
     
     try {
       const broadcastId = document.getElementById('editBroadcastId').value;
-      const accountId = document.getElementById('editAccountId').value;
+      const accountId = document.getElementById('editBroadcastAccountId')?.value || document.getElementById('editAccountId')?.value;
       
       console.log('[EditBroadcast-Original] Starting update for broadcast:', broadcastId, 'account:', accountId);
       
@@ -4293,7 +4381,7 @@ if (editBroadcastForm) {
       if (data.success) {
         showToast('Broadcast updated successfully!');
         closeEditBroadcastModal();
-        setTimeout(() => window.location.reload(), 1500);
+        setTimeout(() => { window.location.href = '/dashboard?tab=broadcasts'; }, 1200);
       } else {
         showToast(data.error || 'Failed to update broadcast', 'error');
       }
@@ -4405,8 +4493,10 @@ function copyStreamKey(streamKey, keyNumber) {
 }
 
 // Change Thumbnail Modal
-function changeThumbnail(broadcastId) {
+function changeThumbnail(broadcastId, accountId = null) {
   document.getElementById('changeThumbnailBroadcastId').value = broadcastId;
+  const accInput = document.getElementById('changeThumbnailAccountId');
+  if (accInput) accInput.value = (accountId && accountId !== 'null') ? accountId : '';
   document.getElementById('changeThumbnailModal').classList.remove('hidden');
 }
 
@@ -4422,15 +4512,15 @@ function previewNewThumbnail(input) {
     const file = input.files[0];
     
     // Validate file type
-    if (!['image/jpeg', 'image/png', 'image/jpg'].includes(file.type)) {
-      showToast('Only JPG and PNG files are allowed', 'error');
+    if (!isSupportedThumbnailFile(file)) {
+      showToast('Hanya file JPG, PNG, atau WEBP yang diperbolehkan', 'error');
       input.value = '';
       return;
     }
     
     // Validate file size (2MB)
     if (file.size > 2 * 1024 * 1024) {
-      showToast('File size must be less than 2MB', 'error');
+      showToast('Ukuran file harus kurang dari 2MB', 'error');
       input.value = '';
       return;
     }
@@ -4457,13 +4547,18 @@ if (changeThumbnailForm) {
     
     try {
       const broadcastId = document.getElementById('changeThumbnailBroadcastId').value;
+      const accountId = document.getElementById('changeThumbnailAccountId')?.value;
       const formData = new FormData();
       formData.append('thumbnail', document.getElementById('newThumbnailFile').files[0]);
+      if (accountId) {
+        formData.append('accountId', accountId);
+      }
       
       const response = await fetch(`/api/youtube/broadcasts/${broadcastId}/thumbnail`, {
         method: 'POST',
         headers: {
-          'X-CSRF-Token': getCsrfToken()
+          'X-CSRF-Token': getCsrfToken(),
+          'Accept': 'application/json'
         },
         body: formData
       });
@@ -4699,7 +4794,11 @@ function renderTemplateList(templates) {
 // Create Template Modal
 function openCreateTemplateModal() {
   closeTemplateLibraryModal();
-  document.getElementById('createTemplateModal').classList.remove('hidden');
+  const modal = document.getElementById('createTemplateModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.style.display = 'block';
+  }
 
   // Restore preferred account so template flow is independent from global primary account
   const restoredAccountId = restorePreferredAccount('templateAccountSelect');
@@ -4897,7 +4996,11 @@ function onTemplateAccountChange(accountId) {
 }
 
 function closeCreateTemplateModal() {
-  document.getElementById('createTemplateModal').classList.add('hidden');
+  const modal = document.getElementById('createTemplateModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+  }
   document.getElementById('createTemplateForm').reset();
   // Reset recurring fields
   resetRecurringFields();
@@ -5005,16 +5108,24 @@ if (createTemplateForm) {
 
 // Save as Template Modal
 function openSaveAsTemplateModal(broadcastId, accountId, title, privacyStatus) {
+  const modal = document.getElementById('saveAsTemplateModal');
+  if (!modal) return;
   document.getElementById('saveTemplateBroadcastId').value = broadcastId;
   document.getElementById('saveTemplateAccountId').value = accountId;
   document.getElementById('previewTitle').textContent = title || '-';
   document.getElementById('previewPrivacy').textContent = privacyStatus || '-';
-  document.getElementById('saveAsTemplateModal').classList.remove('hidden');
+  modal.classList.remove('hidden');
+  modal.style.display = 'block';
 }
 
 function closeSaveAsTemplateModal() {
-  document.getElementById('saveAsTemplateModal').classList.add('hidden');
-  document.getElementById('saveAsTemplateForm').reset();
+  const modal = document.getElementById('saveAsTemplateModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+  }
+  const form = document.getElementById('saveAsTemplateForm');
+  if (form) form.reset();
 }
 
 // Save as Template Form Handler
@@ -5216,11 +5327,19 @@ function openEditTemplateModal(template) {
   // Hide error message
   document.getElementById('editRecurringDaysError').classList.add('hidden');
   
-  document.getElementById('editTemplateModal').classList.remove('hidden');
+  const modal = document.getElementById('editTemplateModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.style.display = 'block';
+  }
 }
 
 function closeEditTemplateModal() {
-  document.getElementById('editTemplateModal').classList.add('hidden');
+  const modal = document.getElementById('editTemplateModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+  }
   document.getElementById('editTemplateForm').reset();
   // Clear stored template data
   window.currentEditTemplate = null;
@@ -5616,20 +5735,6 @@ function toggleSelectAll(checkbox) {
   updateSelectionCount();
 }
 
-// Clear all selections
-function clearSelection() {
-  const allCheckboxes = document.querySelectorAll('.broadcast-checkbox');
-  allCheckboxes.forEach(cb => {
-    cb.checked = false;
-  });
-  const selectAllCheckbox = document.getElementById('selectAllBroadcasts');
-  if (selectAllCheckbox) {
-    selectAllCheckbox.checked = false;
-    selectAllCheckbox.indeterminate = false;
-  }
-  updateSelectionCount();
-}
-
 // Save selected broadcasts as template
 function saveSelectedAsTemplate() {
   const selected = getSelectedBroadcasts();
@@ -5857,11 +5962,19 @@ async function openMultiSaveTemplateModal(broadcasts) {
     warningEl.classList.add('hidden');
   }
   
-  document.getElementById('multiSaveTemplateModal').classList.remove('hidden');
+  const modal = document.getElementById('multiSaveTemplateModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.style.display = 'block';
+  }
 }
 
 function closeMultiSaveTemplateModal() {
-  document.getElementById('multiSaveTemplateModal').classList.add('hidden');
+  const modal = document.getElementById('multiSaveTemplateModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+  }
   document.getElementById('multiSaveTemplateForm').reset();
   window.selectedBroadcastsForTemplate = null;
   window.multiTemplateBroadcastFolders = null;
@@ -6076,7 +6189,11 @@ function openRecreateFromTemplateModal(template) {
   // Render broadcast list with schedule inputs
   renderRecreateBroadcastList();
   
-  document.getElementById('recreateFromTemplateModal').classList.remove('hidden');
+  const modal = document.getElementById('recreateFromTemplateModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.style.display = 'block';
+  }
   
   // Load title rotation settings and check if enabled
   loadRecreateTitleRotationPreview();
@@ -6180,7 +6297,11 @@ function removeRecreateBroadcast(index) {
 }
 
 function closeRecreateFromTemplateModal() {
-  document.getElementById('recreateFromTemplateModal').classList.add('hidden');
+  const modal = document.getElementById('recreateFromTemplateModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+  }
   window.currentRecreateTemplate = null;
   window.recreateUseTitleRotation = false;
   
@@ -6546,11 +6667,11 @@ if (recreateFromTemplateForm) {
       // Show results
       if (results.failed === 0) {
         showToast(`Successfully created ${results.success} broadcast(s)!`);
-        setTimeout(() => window.location.reload(), 1000);
+        setTimeout(() => { window.location.href = '/dashboard?tab=broadcasts'; }, 1000);
       } else {
         showToast(`Created ${results.success}/${results.total} broadcasts. ${results.failed} failed.`, 'error');
         console.error('Failed broadcasts:', results.errors);
-        setTimeout(() => window.location.reload(), 2000);
+        setTimeout(() => { window.location.href = '/dashboard?tab=broadcasts'; }, 2000);
       }
       
     } catch (error) {
@@ -6723,7 +6844,7 @@ async function runTemplateNow(templateId, templateName) {
     
     if (data.success) {
       showToast('Broadcast(s) created successfully!');
-      setTimeout(() => window.location.reload(), 1500);
+      setTimeout(() => { window.location.href = '/dashboard?tab=broadcasts'; }, 1500);
     } else {
       showToast(data.error || 'Failed to run schedule', 'error');
     }
@@ -6861,14 +6982,22 @@ function openImportTemplateModal() {
   document.getElementById('confirmImportBtn').disabled = true;
   document.getElementById('skipDuplicates').checked = true;
   
-  document.getElementById('importTemplateModal').classList.remove('hidden');
+  const modal = document.getElementById('importTemplateModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.style.display = 'block';
+  }
 }
 
 /**
  * Close import template modal
  */
 function closeImportTemplateModal() {
-  document.getElementById('importTemplateModal').classList.add('hidden');
+  const modal = document.getElementById('importTemplateModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+  }
   importBackupData = null;
 }
 
@@ -7009,7 +7138,11 @@ function showImportResults(results) {
     errorsList.classList.add('hidden');
   }
   
-  document.getElementById('importResultModal').classList.remove('hidden');
+  const modal = document.getElementById('importResultModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.style.display = 'block';
+  }
   
   // Show toast based on results
   if (results.imported > 0) {
@@ -7118,7 +7251,8 @@ async function uploadEditThumbnail(broadcastId, accountId) {
     const response = await fetch(`/api/youtube/broadcasts/${broadcastId}/thumbnail`, {
       method: 'POST',
       headers: {
-        'X-CSRF-Token': getCsrfToken()
+        'X-CSRF-Token': getCsrfToken(),
+        'Accept': 'application/json'
       },
       body: formData
     });
@@ -9006,7 +9140,7 @@ if (originalEditBroadcastForm) {
     
     try {
       const broadcastId = document.getElementById('editBroadcastId').value;
-      const accountId = document.getElementById('editAccountId').value;
+      const accountId = document.getElementById('editBroadcastAccountId')?.value || document.getElementById('editAccountId')?.value;
       
       // Get thumbnail folder from dropdown
       const folderSelect = document.getElementById('editThumbnailFolderSelect');
@@ -9104,7 +9238,11 @@ if (originalEditBroadcastForm) {
 // Override closeEditBroadcastModal to reset thumbnail
 const originalCloseEditBroadcastModal = window.closeEditBroadcastModal;
 window.closeEditBroadcastModal = function() {
-  document.getElementById('editBroadcastModal').classList.add('hidden');
+  const modal = document.getElementById('editBroadcastModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+  }
   document.getElementById('editBroadcastForm').reset();
   
   // Reset thumbnail preview
@@ -9140,7 +9278,8 @@ window.openEditBroadcastModal = async function(broadcast) {
   console.log('[openEditBroadcastModal] Opening modal for broadcast:', broadcast.id);
   
   document.getElementById('editBroadcastId').value = broadcast.id;
-  document.getElementById('editAccountId').value = broadcast.accountId;
+  const broadcastAccountEl = document.getElementById('editBroadcastAccountId') || document.getElementById('editAccountId');
+  if (broadcastAccountEl) broadcastAccountEl.value = broadcast.accountId;
   document.getElementById('editBroadcastTitle').value = broadcast.title || '';
   document.getElementById('editBroadcastDescription').value = broadcast.description || '';
   document.getElementById('editPrivacyStatus').value = broadcast.privacyStatus || 'unlisted';
@@ -9215,7 +9354,11 @@ window.openEditBroadcastModal = async function(broadcast) {
   // Load thumbnails from the bound folder and auto-select saved thumbnail
   await loadEditThumbnailFolderWithSelection(boundFolder === '' ? null : boundFolder, savedThumbnailIndex, savedThumbnailPath);
   
-  document.getElementById('editBroadcastModal').classList.remove('hidden');
+  const modal = document.getElementById('editBroadcastModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.style.display = 'block';
+  }
   console.log('[openEditBroadcastModal] Modal opened with folder:', boundFolder || 'Root', 'thumbnail index:', savedThumbnailIndex);
 };
 
@@ -9562,21 +9705,48 @@ async function handleThumbnailManagerUpload(event) {
   const files = event.target.files;
   if (!files || files.length === 0) return;
   
-  const folder = currentThumbnailFolderManager || '';
+  let folder = currentThumbnailFolderManager || '';
+  if (!folder) {
+    const activeFolder = document.querySelector('.folder-item-manager.bg-primary\\/20') || document.querySelector('.folder-item-manager');
+    if (activeFolder) {
+      folder = activeFolder.querySelector('span.truncate')?.textContent?.trim() || '';
+      if (folder) currentThumbnailFolderManager = folder;
+    }
+  }
   
   // Validate: must have folder selected
   if (!folder) {
-    showToast('Pilih folder terlebih dahulu atau buat folder baru', 'warning');
+    showToast('Pilih folder terlebih dahulu atau buat folder baru dengan tombol Add', 'warning');
     event.target.value = '';
     return;
   }
   
+  // Validate all files
+  const validFiles = [];
+  for (let i = 0; i < files.length; i++) {
+    const f = files[i];
+    if (!isSupportedThumbnailFile(f)) {
+      showToast(`${f.name}: Hanya file JPG, PNG, atau WEBP yang diperbolehkan`, 'error');
+      continue;
+    }
+    if (f.size > 2 * 1024 * 1024) {
+      showToast(`${f.name}: Ukuran file melebihi 2MB`, 'error');
+      continue;
+    }
+    validFiles.push(f);
+  }
+
+  if (validFiles.length === 0) {
+    event.target.value = '';
+    return;
+  }
+
   // Show loading toast
-  showToast(`Uploading ${files.length} thumbnail(s)...`, 'info');
+  showToast(`Uploading ${validFiles.length} thumbnail(s)...`, 'info');
   
   const formData = new FormData();
-  for (let i = 0; i < files.length; i++) {
-    formData.append('thumbnail', files[i]);
+  for (let i = 0; i < validFiles.length; i++) {
+    formData.append('thumbnail', validFiles[i]);
   }
   formData.append('folder', folder);
   
@@ -9584,7 +9754,8 @@ async function handleThumbnailManagerUpload(event) {
     const response = await fetch('/api/thumbnails', {
       method: 'POST',
       headers: {
-        'X-CSRF-Token': getCsrfToken()
+        'X-CSRF-Token': getCsrfToken(),
+        'Accept': 'application/json'
       },
       body: formData
     });
@@ -10848,7 +11019,7 @@ async function loadAutoPilotAudios(audioType) {
         select.innerHTML = '<option value="">-- Tidak ada audio di galeri --</option>';
       }
     } else if (audioType === 'audio_playlist') {
-      const res = await fetch('/api/audio-playlists', { headers: { 'X-CSRF-Token': getCsrfToken() } });
+      const res = await fetch('/api/playlists', { headers: { 'X-CSRF-Token': getCsrfToken() } });
       const data = await res.json();
       const playlists = data.playlists || data || [];
       if (Array.isArray(playlists) && playlists.length > 0) {
@@ -10873,7 +11044,7 @@ async function loadAutoPilotTitleFolders() {
   select.innerHTML = '<option value="">Loading title folders...</option>';
 
   try {
-    const res = await fetch('/api/youtube/title-folders', { headers: { 'X-CSRF-Token': getCsrfToken() } });
+    const res = await fetch('/api/title-folders', { headers: { 'X-CSRF-Token': getCsrfToken() } });
     const data = await res.json();
     const folders = data.folders || data || [];
     if (Array.isArray(folders) && folders.length > 0) {
@@ -10893,7 +11064,7 @@ async function loadAutoPilotThumbnailFolders() {
   select.innerHTML = '<option value="">Loading thumbnail folders...</option>';
 
   try {
-    const res = await fetch('/api/youtube/thumbnail-folders', { headers: { 'X-CSRF-Token': getCsrfToken() } });
+    const res = await fetch('/api/thumbnail-folders', { headers: { 'X-CSRF-Token': getCsrfToken() } });
     const data = await res.json();
     const folders = data.folders || data || [];
     if (Array.isArray(folders) && folders.length > 0) {
