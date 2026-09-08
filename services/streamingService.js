@@ -1208,12 +1208,16 @@ function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds
   }
   args.push('-i', videoPath);
   
-  // Audio input with loop
+  // Audio input with loop (loops independently of video length)
   args.push('-stream_loop', '-1');
   args.push('-i', audioPath);
   
+  // Map video from file 0, audio from file 1
   args.push('-map', '0:v:0', '-map', '1:a:0');
-  args.push('-c', 'copy');  // Copy both
+  // Copy video directly (0% CPU), encode audio to standard AAC stereo (works with MP3, WAV, AAC, M4A)
+  args.push('-c:v', 'copy');
+  args.push('-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2');
+  args.push('-sn', '-dn');
   
   // CRITICAL: -t must be placed BEFORE -f flv and output URL
   // This limits the OUTPUT duration correctly
@@ -1224,7 +1228,7 @@ function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds
   
   args.push('-f', 'flv');
   args.push(rtmpUrl);
-  console.log(`[StreamingService] Audio-merge: minimal copy (loop=${shouldLoopVideo}, duration=${durationSeconds ? durationSeconds + 's' : 'unlimited'})`);
+  console.log(`[StreamingService] Audio-merge: copy video, AAC audio (loop=${shouldLoopVideo}, duration=${durationSeconds ? durationSeconds + 's' : 'unlimited'})`);
   return args;
 }
 
@@ -1246,6 +1250,7 @@ function buildFFmpegArgsVideoOnly(videoPath, rtmpUrl, durationSeconds, loopVideo
   }
   args.push('-i', videoPath);
   args.push('-c', 'copy');
+  args.push('-sn', '-dn');
   
   // CRITICAL: -t must be placed BEFORE -f flv and output URL
   // This limits the OUTPUT duration correctly
