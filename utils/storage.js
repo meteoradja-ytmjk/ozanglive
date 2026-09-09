@@ -7,10 +7,15 @@ const ensureDirectories = () => {
     path.join(__dirname, '../public/uploads/avatars'),
     path.join(__dirname, '../public/uploads/audios'),
     path.join(__dirname, '../public/uploads/branding'),
-    path.join(__dirname, '../tmp/upload-chunks')
+    path.join(__dirname, '../public/uploads/rendered'),
+    path.join(__dirname, '../tmp/upload-chunks'),
+    path.join(__dirname, '../logs'),
+    path.join(__dirname, '../db')
   ];
   dirs.forEach(dir => {
-    fs.ensureDirSync(dir);
+    try {
+      fs.ensureDirSync(dir);
+    } catch (e) {}
   });
 };
 const getUniqueFilename = (originalFilename) => {

@@ -24,6 +24,16 @@
 
 // CRITICAL: Load environment variables from .env file
 require('dotenv').config();
+const fs = require('fs');
+const path = require('path');
+
+// Pastikan folder logs selalu ada agar PM2 tidak error membuka log file
+const logsDir = path.join(__dirname, 'logs');
+if (!fs.existsSync(logsDir)) {
+  try {
+    fs.mkdirSync(logsDir, { recursive: true });
+  } catch (e) {}
+}
 
 module.exports = {
   apps: [
@@ -38,24 +48,22 @@ module.exports = {
       // Auto-restart configuration - BALANCED for stability
       autorestart: true,
       watch: false, // Don't watch for file changes in production
-      max_restarts: 100, // Allow many restarts (app should be resilient)
-      min_uptime: '10s', // Wait 10 seconds before considering app stable
-      restart_delay: 3000, // Wait 3 seconds between restarts
+      max_restarts: 50,
+      min_uptime: '5s',
+      restart_delay: 2000,
 
       // Memory management - CONSERVATIVE for 1GB VPS
-      // CRITICAL: Set lower to prevent OOM killer from killing the process
-      max_memory_restart: '700M', // Restart at 700MB to leave room for system
+      max_memory_restart: '850M',
 
       // Environment variables
       env: {
         NODE_ENV: 'production',
         PORT: 7575,
         // CRITICAL: Force application timezone to WIB (Asia/Jakarta)
-        // ensuring schedule comparisons match user input regardless of host TZ.
         TZ: 'Asia/Jakarta',
         // CRITICAL: Pass SESSION_SECRET from .env to PM2
         SESSION_SECRET: process.env.SESSION_SECRET,
-        // CRITICAL: Disable Node.js memory warnings that can cause issues
+        // Disable memory warnings
         NODE_OPTIONS: '--max-old-space-size=768 --no-warnings'
       },
 
@@ -75,29 +83,23 @@ module.exports = {
       retain: 3, // Keep only 3 log files
 
       // Graceful shutdown
-      kill_timeout: 20000, // 20 seconds to allow cleanup
-      listen_timeout: 30000, // 30 seconds to start listening
+      kill_timeout: 10000,
+      listen_timeout: 15000,
 
       // Crash handling - STABLE recovery
-      exp_backoff_restart_delay: 100, // Start with 100ms delay
+      exp_backoff_restart_delay: 100,
 
-      // Node.js arguments - REMOVED from here, using NODE_OPTIONS instead
-      // This prevents issues with argument parsing
       node_args: [],
 
-      // Cron restart - ENABLED: restart every day at 4 AM WIB to prevent memory buildup
+      // Cron restart - restart every day at 4 AM WIB
       cron_restart: '0 4 * * *',
 
-      // Source map support for better error traces
       source_map_support: true,
-
-      // CRITICAL: Don't combine with other processes
       combine_logs: false,
 
-      // CRITICAL: Increase wait time for ready signal
-      wait_ready: true,
+      // CRITICAL: Disable wait_ready to prevent PM2 kill/restart loops on heavy startup
+      wait_ready: false,
 
-      // CRITICAL: Don't kill on SIGINT during development
       treekill: true
     }
   ]

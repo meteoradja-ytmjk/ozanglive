@@ -12727,6 +12727,14 @@ async function startServer() {
   }
 
   httpServer = app.listen(port, '0.0.0.0', async () => {
+    // CRITICAL: Signal to PM2 IMMEDIATELY that server is listening and ready!
+    if (process.send) {
+      try {
+        process.send('ready');
+        console.log('[Startup] Sent ready signal to PM2');
+      } catch (e) {}
+    }
+
     const ipAddresses = getLocalIpAddresses();
     console.log(`OzangLive running at:`);
     if (ipAddresses && ipAddresses.length > 0) {
@@ -12795,22 +12803,8 @@ async function startServer() {
       // Don't crash - scheduler can be retried
     }
 
-    // REMOVED: Don't sync stream statuses on startup
-    // This was causing live streams to be incorrectly marked as offline
-    // The periodic sync (every 15 min) will handle cleanup later
-    // Status changes should only happen when:
-    // 1. User manually starts/stops a stream
-    // 2. FFmpeg process exits (handled by exit event)
-    // 3. Duration is reached (handled by scheduler)
     console.log('[Startup] Skipping initial sync - status will be managed by events');
-
     console.log('OzangLive startup complete');
-
-    // Signal to PM2 that app is ready
-    if (process.send) {
-      process.send('ready');
-      console.log('[Startup] Sent ready signal to PM2');
-    }
   });
 
   // Handle server errors

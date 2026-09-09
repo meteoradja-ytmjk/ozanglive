@@ -282,6 +282,9 @@ setup_timezone_firewall() {
     if command -v ufw >/dev/null 2>&1; then
         run_task "Mengonfigurasi Firewall UFW (SSH & Port 7575)" bash -c "sudo ufw allow 22/tcp >/dev/null 2>&1 || true; sudo ufw allow ssh >/dev/null 2>&1 || true; sudo ufw allow 7575/tcp >/dev/null 2>&1 || true"
     fi
+    if command -v iptables >/dev/null 2>&1; then
+        run_task "Membuka Port 7575 di iptables" bash -c "sudo iptables -I INPUT -p tcp --dport 7575 -j ACCEPT >/dev/null 2>&1 || true"
+    fi
 }
 
 # ==============================================================================
@@ -308,18 +311,41 @@ backup_existing_data() {
 # ==============================================================================
 start_pm2() {
     cd "$INSTALL_DIR"
+    mkdir -p "$INSTALL_DIR/logs" "$INSTALL_DIR/db" "$INSTALL_DIR/public/uploads/videos" "$INSTALL_DIR/public/uploads/thumbnails" "$INSTALL_DIR/public/uploads/avatars" "$INSTALL_DIR/public/uploads/audios" "$INSTALL_DIR/public/uploads/branding" "$INSTALL_DIR/public/uploads/rendered"
+
+    # Bersihkan file session SQLite yang berpotensi terkunci / corrupt
+    run_task "Membersihkan session lock lama" bash -c "rm -f db/sessions.db* || true"
+
     run_task "Menghentikan seluruh instance PM2 lama (pm2 delete all)" bash -c "pm2 delete all >/dev/null 2>&1 || true"
     if command -v fuser >/dev/null 2>&1; then
         run_task "Membebaskan Port 7575 (fuser -k 7575/tcp)" bash -c "sudo fuser -k 7575/tcp >/dev/null 2>&1 || true"
     fi
 
     if [ -f "ecosystem.config.js" ]; then
-        run_task "Menjalankan MonsterLive via ecosystem.config.js" pm2 start ecosystem.config.js
+        run_task "Menjalankan OzangLive via ecosystem.config.js" pm2 start ecosystem.config.js
     else
         print_status "$ICON_WARN" "ecosystem.config.js tidak ditemukan, fallback ke app.js"
-        run_task "Menjalankan MonsterLive via app.js" pm2 start app.js --name ozanglive
+        run_task "Menjalankan OzangLive via app.js" pm2 start app.js --name ozanglive
     fi
     run_task "Menyimpan konfigurasi PM2 (pm2 save)" pm2 save
+
+    # Verifikasi langsung respon aplikasi (Health Check)
+    printf "  ${ICON_WAIT} %-50s" "Memverifikasi aplikasi aktif & merespon..."
+    local online=false
+    for i in $(seq 1 10); do
+        if curl -fsSIL --max-time 3 http://127.0.0.1:7575/health >/dev/null 2>&1 || curl -fsSIL --max-time 3 http://127.0.0.1:7575/login >/dev/null 2>&1 || curl -fsSIL --max-time 3 http://127.0.0.1:7575/ >/dev/null 2>&1; then
+            online=true
+            break
+        fi
+        sleep 2
+    done
+
+    if [ "$online" = "true" ]; then
+        printf "\r  ${ICON_SUCCESS} %-50s ${GRAY}(Online & Aktif)${NC}\n" "Aplikasi berhasil aktif & merespon"
+    else
+        printf "\r  ${ICON_WARN} %-50s ${B_YELLOW}(Sedang booting)${NC}\n" "Aplikasi dalam proses startup"
+        pm2 restart ozanglive >/dev/null 2>&1 || true
+    fi
 }
 
 ensure_env_secret() {
@@ -353,7 +379,7 @@ do_update() {
 
     run_task "Mengambil pembaruan terbaru (git fetch)" git fetch --all --prune
     run_task "Checkout ke branch $BRANCH" git checkout "$BRANCH"
-    run_task "Menarik kode terbaru (git pull)" git pull --ff-only origin "$BRANCH"
+    run_task "Menarik kode terbaru (git pull)" bash -c "git pull --ff-only origin '$BRANCH' 2>/dev/null || (git reset --hard origin/'$BRANCH' && git clean -fdq)"
 
     draw_section "3/4" "MENGINSTAL DEPENDENSI PROYEK"
     run_task "Menginstal Node.js dependencies" bash -c "npm install --omit=dev || npm install --production"
@@ -433,7 +459,7 @@ case "$MODE" in
 esac
 
 # Summary
-SERVER_IP=$(curl -s ifconfig.me 2>/dev/null || echo "IP_SERVER_ANDA")
+SERVER_IP=$(curl -s --max-time 3 ifconfig.me 2>/dev/null || curl -s --max-time 3 icanhazip.com 2>/dev/null || echo "IP_SERVER_ANDA")
 
 echo
 echo -e "${B_GREEN}╭──────────────────────────────────────────────────────────╮${NC}"

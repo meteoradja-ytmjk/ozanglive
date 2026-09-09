@@ -165,14 +165,21 @@ async function setPragmas() {
 
 /**
  * Run semua optimasi
+ * Catatan: VACUUM hanya dijalankan jika script dipanggil manual (npm run optimize-db)
+ * agar tidak mengunci (lock) database SQLite saat aplikasi baru start.
  */
 async function runOptimizations() {
   try {
-    console.log('[DB Optimize] Starting database optimization...');
+    console.log('[DB Optimize] Starting lightweight database optimization...');
     
     await setPragmas();
     await createIndexes();
-    await optimizeDatabase();
+
+    if (require.main === module || process.env.RUN_VACUUM === 'true') {
+      await optimizeDatabase();
+    } else {
+      console.log('[DB Optimize] VACUUM skipped on server boot to prevent database lock');
+    }
     
     console.log('[DB Optimize] ✅ Database optimization completed successfully');
     return true;
