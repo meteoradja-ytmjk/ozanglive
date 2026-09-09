@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 
-set -Eeu
+# Safe mode
+set +e
 
 # Reconnect standard input to terminal if run through a pipe (e.g. curl ... | bash)
-if [ ! -t 0 ] && [ -e /dev/tty ]; then
-    exec < /dev/tty
+if [ ! -t 0 ] && [ -r /dev/tty ]; then
+    exec < /dev/tty 2>/dev/null || true
 fi
 
 # Fallback for sudo if root or command not found
@@ -94,7 +95,7 @@ echo "  app.domainlain.com"
 echo "(Tekan ENTER atau ketik 'skip' jika ingin melewati konfigurasi domain sekarang)"
 echo ""
 
-read -r -p "Masukkan DOMAIN yang akan digunakan: " DOMAIN || DOMAIN=""
+read -r -p "Masukkan DOMAIN yang akan digunakan: " DOMAIN </dev/tty 2>/dev/null || read -r -p "Masukkan DOMAIN yang akan digunakan: " DOMAIN || DOMAIN=""
 
 DOMAIN="${DOMAIN#https://}"
 DOMAIN="${DOMAIN#http://}"
@@ -122,7 +123,7 @@ echo "Domain yang dipilih:"
 echo "  $BASE_URL"
 echo ""
 
-read -r -p "Benar? [Y/n]: " CONFIRM || CONFIRM="Y"
+read -r -p "Benar? [Y/n]: " CONFIRM </dev/tty 2>/dev/null || read -r -p "Benar? [Y/n]: " CONFIRM || CONFIRM="Y"
 
 if [[ "${CONFIRM:-Y}" =~ ^[Nn]$ ]]; then
     echo "Dibatalkan."
@@ -286,7 +287,7 @@ if systemctl list-unit-files 2>/dev/null | grep -q '^cloudflared.service'; then
         || echo "Status: NOT RUNNING"
 
     echo ""
-    read -r -p "Apakah ingin mengganti tunnel/service yang ada? [y/N]: " REPLACE
+    read -r -p "Apakah ingin mengganti tunnel/service yang ada? [y/N]: " REPLACE </dev/tty 2>/dev/null || read -r -p "Apakah ingin mengganti tunnel/service yang ada? [y/N]: " REPLACE || REPLACE="N"
 
     if [[ ! "$REPLACE" =~ ^[Yy]$ ]]; then
         echo ""
@@ -349,7 +350,7 @@ sudo -v
 
 TUNNEL_TOKEN=""
 while [[ -z "$TUNNEL_TOKEN" ]]; do
-    IFS= read -r -p "Paste Tunnel Token: " TUNNEL_TOKEN
+    IFS= read -r -p "Paste Tunnel Token: " TUNNEL_TOKEN </dev/tty 2>/dev/null || IFS= read -r -p "Paste Tunnel Token: " TUNNEL_TOKEN || TUNNEL_TOKEN=""
     # Bersihkan carriage-return yang kadang ikut terbawa dari clipboard.
     TUNNEL_TOKEN="${TUNNEL_TOKEN//$'\\r'/}"
     TUNNEL_TOKEN="${TUNNEL_TOKEN#"${TUNNEL_TOKEN%%[![:space:]]*}"}"

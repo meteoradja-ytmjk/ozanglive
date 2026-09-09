@@ -167,7 +167,7 @@ prompt_password() {
     while [ $attempt -le $max_attempts ]; do
         printf "  🔑 ${BOLD}Masukkan Password (${attempt}/${max_attempts}):${NC} "
         stty -echo 2>/dev/null </dev/tty || true
-        read -r password </dev/tty
+        read -r password </dev/tty 2>/dev/null || read -r password || true
         stty echo 2>/dev/null </dev/tty || true
         echo
 
@@ -205,7 +205,7 @@ confirm() {
     fi
 
     printf "  ${B_YELLOW}❓ %s %s:${NC} " "$question" "$prompt_hint"
-    read -r reply </dev/tty || true
+    read -r reply </dev/tty 2>/dev/null || read -r reply || true
     [ -z "$reply" ] && reply="$default"
 
     case "$reply" in
@@ -217,7 +217,23 @@ confirm() {
 # ==============================================================================
 # INSTALL PREREQUISITES
 # ==============================================================================
+ensure_swap() {
+    if [ -f /proc/meminfo ]; then
+        local total_mem
+        total_mem=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo 2>/dev/null || echo 2048)
+        local total_swap
+        total_swap=$(awk '/SwapTotal/ {print int($2/1024)}' /proc/meminfo 2>/dev/null || echo 0)
+        
+        if [ "$total_mem" -lt 2000 ] && [ "$total_swap" -lt 512 ]; then
+            if [ ! -f /swapfile ] && command -v dd >/dev/null 2>&1; then
+                run_task "Membuat Swap 2GB (mencegah OOM crash pada RAM kecil)" bash -c "sudo dd if=/dev/zero of=/swapfile bs=1M count=2048 2>/dev/null && sudo chmod 600 /swapfile && sudo mkswap /swapfile >/dev/null 2>&1 && sudo swapon /swapfile >/dev/null 2>&1 || true"
+            fi
+        fi
+    fi
+}
+
 install_prereqs() {
+    ensure_swap
     draw_section "1/4" "MEMERIKSA & MENGINSTAL DEPENDENSI SISTEM"
 
     run_task "Mengupdate package cache apt" sudo apt-get update -y
@@ -264,7 +280,7 @@ install_prereqs() {
 setup_timezone_firewall() {
     run_task "Mengatur timezone server ke Asia/Jakarta" sudo timedatectl set-timezone Asia/Jakarta
     if command -v ufw >/dev/null 2>&1; then
-        run_task "Mengonfigurasi Firewall UFW (SSH & Port 7575)" bash -c "sudo ufw allow ssh >/dev/null 2>&1 && sudo ufw allow 7575 >/dev/null 2>&1 && sudo ufw --force enable >/dev/null 2>&1 || true"
+        run_task "Mengonfigurasi Firewall UFW (SSH & Port 7575)" bash -c "sudo ufw allow 22/tcp >/dev/null 2>&1 || true; sudo ufw allow ssh >/dev/null 2>&1 || true; sudo ufw allow 7575/tcp >/dev/null 2>&1 || true"
     fi
 }
 
@@ -507,9 +523,20 @@ sleep 1
 export APP_DIR="$INSTALL_DIR"
 cd "$INSTALL_DIR"
 
-# Run domain installer V3 connected to interactive terminal TTY
-if [ -e /dev/tty ]; then
-    exec bash "$DOMAIN_INSTALLER_V3" < /dev/tty
+# Jalankan domain installer tanpa exec agar shell/terminal tidak tertutup
+if [ -t 0 ]; then
+    bash "$DOMAIN_INSTALLER_V3"
+elif [ -r /dev/tty ]; then
+    bash "$DOMAIN_INSTALLER_V3" < /dev/tty
 else
-    exec bash "$DOMAIN_INSTALLER_V3"
+    bash "$DOMAIN_INSTALLER_V3"
 fi
+
+echo
+echo -e "${B_GREEN}╭──────────────────────────────────────────────────────────╮${NC}"
+echo -e "${B_GREEN}│ 🎉 PROSES SELESAI! SEMUA INSTALASI TELAH SELESAI!        │${NC}"
+echo -e "${B_GREEN}├──────────────────────────────────────────────────────────┤${NC}"
+echo -e "${B_GREEN}│${NC} 🌐 Akses Web : ${B_CYAN}http://${SERVER_IP}:7575${NC}"
+echo -e "${B_GREEN}│${NC} 📁 Lokasi App: ${WHITE}${INSTALL_DIR}${NC}"
+echo -e "${B_GREEN}╰──────────────────────────────────────────────────────────╯${NC}"
+echo
