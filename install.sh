@@ -65,6 +65,7 @@ LOG_FILE="/tmp/ozang_install_$(date +%s).log"
 MODE=""
 BRANCH="main"
 SKIP_PASSWORD="false"
+SKIP_DOMAIN="false"
 
 # ---------- Parse flags ----------
 while [ $# -gt 0 ]; do
@@ -73,6 +74,7 @@ while [ $# -gt 0 ]; do
         --update)      MODE="update"; shift ;;
         --branch)      BRANCH="$2"; shift 2 ;;
         --no-password) SKIP_PASSWORD="true"; shift ;;
+        --no-domain|--skip-domain) SKIP_DOMAIN="true"; shift ;;
         *) 
             echo -e "${B_RED}Error: Flag tidak dikenal: $1${NC}"
             exit 1 
@@ -419,11 +421,11 @@ SERVER_IP=$(curl -s ifconfig.me 2>/dev/null || echo "IP_SERVER_ANDA")
 
 echo
 echo -e "${B_GREEN}╭──────────────────────────────────────────────────────────╮${NC}"
-echo -e "${B_GREEN}│ 🎉 INSTALASI & KONFIGURASI BERHASIL DISLESAIKAN!       │${NC}"
+echo -e "${B_GREEN}│ 🎉 INSTALASI & KONFIGURASI BERHASIL DISLESAIKAN!         │${NC}"
 echo -e "${B_GREEN}├──────────────────────────────────────────────────────────┤${NC}"
-echo -e "${B_GREEN}│${NC} 🌐 ${BOLD}URL Akses Web${NC} : ${B_CYAN}http://${SERVER_IP}:7575${NC}"
-echo -e "${B_GREEN}│${NC} 📁 ${BOLD}Lokasi App${NC}   : ${WHITE}${INSTALL_DIR}${NC}"
-echo -e "${B_GREEN}│${NC} 💾 ${BOLD}Folder Backup${NC}: ${WHITE}${BACKUP_ROOT}${NC}"
+echo -e "${B_GREEN}│${NC} 🌐 ${BOLD}URL Akses Web (IP)${NC} : ${B_CYAN}http://${SERVER_IP}:7575${NC}"
+echo -e "${B_GREEN}│${NC} 📁 ${BOLD}Lokasi App${NC}        : ${WHITE}${INSTALL_DIR}${NC}"
+echo -e "${B_GREEN}│${NC} 💾 ${BOLD}Folder Backup${NC}     : ${WHITE}${BACKUP_ROOT}${NC}"
 echo -e "${B_GREEN}├──────────────────────────────────────────────────────────┤${NC}"
 echo -e "${B_GREEN}│ 📌 ${BOLD}PERINTAH PENTING MANAGEMENT (PM2):${NC}                   │"
 echo -e "${B_GREEN}│${NC}   • ${B_YELLOW}pm2 status${NC}              - Status aplikasi"
@@ -436,102 +438,78 @@ if ! systemctl list-unit-files 2>/dev/null | grep -q "pm2-"; then
     echo
     echo -e "  ${ICON_INFO} ${B_YELLOW}Tips Auto-Start Reboot:${NC}"
     echo -e "     Jalankan ${B_CYAN}pm2 startup${NC} dan ikuti perintah yang muncul agar"
-    echo -e "     MonsterLive otomatis berjalan saat VPS/Server dinyalakan ulang."
+    echo -e "     OzangLive otomatis berjalan saat VPS/Server dinyalakan ulang."
 fi
 
 echo
-echo -e "  ${ICON_ROCKET} ${B_GREEN}Terima kasih telah menggunakan MonsterLive Quick Installer!${NC}"
+echo -e "  ${ICON_ROCKET} ${B_GREEN}Aplikasi ozanglive sudah berhasil berjalan di background!${NC}"
 echo
 
+if [ "$SKIP_DOMAIN" = "true" ]; then
+    echo -e "${B_CYAN}╭──────────────────────────────────────────────────────────╮${NC}"
+    echo -e "${B_CYAN}│ 📖 SETUP DOMAIN DILEWATI (--skip-domain)                 │${NC}"
+    echo -e "${B_CYAN}├──────────────────────────────────────────────────────────┤${NC}"
+    echo -e "${B_CYAN}│${NC} Untuk setup domain kapan saja di kemudian hari:"
+    echo -e "${B_CYAN}│${NC} ${B_YELLOW}cd $INSTALL_DIR && bash ozanglive-universal-multidomain-quick-installer-v3.sh${NC}"
+    echo -e "${B_CYAN}╰──────────────────────────────────────────────────────────╯${NC}"
+    echo
+    exit 0
+fi
+
 # ==============================================================================
-# AUTO DOMAIN SETUP PROMPT
+# AUTO CONNECT TO MULTIDOMAIN QUICK INSTALLER V3
 # ==============================================================================
 echo
 echo -e "${B_PURPLE}╭──────────────────────────────────────────────────────────╮${NC}"
-echo -e "${B_PURPLE}│ 🌐 SETUP DOMAIN DENGAN CLOUDFLARE                        │${NC}"
+echo -e "${B_PURPLE}│ 🌐 SETUP DOMAIN & CLOUDFLARE (AUTO CONNECT)              │${NC}"
 echo -e "${B_PURPLE}├──────────────────────────────────────────────────────────┤${NC}"
-echo -e "${B_PURPLE}│${NC} Aplikasi Anda sudah berjalan di: ${B_CYAN}http://${SERVER_IP}:7575${NC}"
+echo -e "${B_PURPLE}│${NC} Aplikasi OzangLive sudah aktif di: ${B_CYAN}http://${SERVER_IP}:7575${NC}"
 echo -e "${B_PURPLE}│${NC}"
-echo -e "${B_PURPLE}│${NC} Apakah Anda ingin menambahkan DOMAIN KUSTOM?"
-echo -e "${B_PURPLE}│${NC} (Cloudflare Tunnel akan dikonfigurasi otomatis)"
-echo -e "${B_PURPLE}│${NC}"
-echo -e "${B_PURPLE}│${NC} ${GRAY}• Aplikasi akan dapat diakses melalui domain Anda${NC}"
-echo -e "${B_PURPLE}│${NC} ${GRAY}• HTTPS otomatis dengan Cloudflare Tunnel${NC}"
-echo -e "${B_PURPLE}│${NC} ${GRAY}• Tidak perlu setup SSL manual${NC}"
+echo -e "${B_PURPLE}│${NC} ${B_WHITE}Menyambungkan langsung ke Quick Installer Multidomain...${NC}"
+echo -e "${B_PURPLE}│${NC} ${GRAY}(Tekan Enter / ketik 'skip' jika ingin melewati konfigurasi domain)${NC}"
 echo -e "${B_PURPLE}╰──────────────────────────────────────────────────────────╯${NC}"
 echo
+sleep 2
 
-if confirm "Apakah Anda ingin setup domain sekarang?" "Y"; then
-    echo
-    print_status "$ICON_INFO" "Memulai installer domain Cloudflare..."
-    sleep 2
+# Check if domain installer V3 exists
+DOMAIN_INSTALLER_V3="$INSTALL_DIR/ozanglive-universal-multidomain-quick-installer-v3.sh"
+
+if [ ! -f "$DOMAIN_INSTALLER_V3" ]; then
+    print_status "$ICON_WARN" "Domain installer V3 tidak ditemukan di folder aplikasi."
+    print_status "$ICON_INFO" "Mendownload installer terbaru dari GitHub..."
     
-    # Check if domain installer V3 exists
-    DOMAIN_INSTALLER_V3="$INSTALL_DIR/ozanglive-universal-multidomain-quick-installer-v3.sh"
-    
-    if [ ! -f "$DOMAIN_INSTALLER_V3" ]; then
-        print_status "$ICON_WARN" "Domain installer V3 tidak ditemukan di folder aplikasi."
-        print_status "$ICON_INFO" "Mendownload installer terbaru..."
-        
-        if curl -fsSL "https://raw.githubusercontent.com/meteoradja-ytmjk/ozanglive/main/ozanglive-universal-multidomain-quick-installer-v3.sh" -o "$DOMAIN_INSTALLER_V3" 2>/dev/null; then
-            chmod +x "$DOMAIN_INSTALLER_V3"
-            print_status "$ICON_SUCCESS" "Domain installer V3 berhasil didownload"
-        else
-            print_status "$ICON_ERROR" "Gagal mendownload installer"
-            echo
-            echo -e "${B_YELLOW}╭──────────────────────────────────────────────────────────╮${NC}"
-            echo -e "${B_YELLOW}│ 📋 COPY COMMAND INI UNTUK SETUP DOMAIN MANUAL:           │${NC}"
-            echo -e "${B_YELLOW}├──────────────────────────────────────────────────────────┤${NC}"
-            echo -e "${B_YELLOW}│${NC}"
-            echo -e "${B_YELLOW}│${NC} ${B_CYAN}cd ~/ozanglive && bash ozanglive-universal-multidomain-quick-installer-v3.sh${NC}"
-            echo -e "${B_YELLOW}│${NC}"
-            echo -e "${B_YELLOW}╰──────────────────────────────────────────────────────────╯${NC}"
-            echo
-            exit 0
-        fi
+    if curl -fsSL "https://raw.githubusercontent.com/meteoradja-ytmjk/ozanglive/main/ozanglive-universal-multidomain-quick-installer-v3.sh" -o "$DOMAIN_INSTALLER_V3" 2>/dev/null; then
+        chmod +x "$DOMAIN_INSTALLER_V3"
+        print_status "$ICON_SUCCESS" "Domain installer V3 berhasil didownload"
+    else
+        print_status "$ICON_ERROR" "Gagal mendownload installer domain"
+        echo
+        echo -e "${B_YELLOW}╭──────────────────────────────────────────────────────────╮${NC}"
+        echo -e "${B_YELLOW}│ 📋 JALANKAN SETUP DOMAIN MANUAL:                         │${NC}"
+        echo -e "${B_YELLOW}├──────────────────────────────────────────────────────────┤${NC}"
+        echo -e "${B_YELLOW}│${NC} ${B_CYAN}cd $INSTALL_DIR && bash ozanglive-universal-multidomain-quick-installer-v3.sh${NC}"
+        echo -e "${B_YELLOW}╰──────────────────────────────────────────────────────────╯${NC}"
+        echo
+        exit 0
     fi
-    
-    # Make sure the installer is executable
-    chmod +x "$DOMAIN_INSTALLER_V3"
-    
-    echo
-    echo -e "${B_CYAN}════════════════════════════════════════════════════════════${NC}"
-    echo -e "${B_CYAN}  Meluncurkan Domain Setup Installer V3...${NC}"
-    echo -e "${B_CYAN}════════════════════════════════════════════════════════════${NC}"
-    echo
-    sleep 1
-    
-    # Run the domain installer V3
-    bash "$DOMAIN_INSTALLER_V3"
-else
-    echo
-    print_status "$ICON_INFO" "Domain setup dilewati."
-    echo
-    echo -e "${B_CYAN}╭──────────────────────────────────────────────────────────╮${NC}"
-    echo -e "${B_CYAN}│ 📖 CARA SETUP DOMAIN DI KEMUDIAN HARI                    │${NC}"
-    echo -e "${B_CYAN}├──────────────────────────────────────────────────────────┤${NC}"
-    echo -e "${B_CYAN}│${NC}"
-    echo -e "${B_CYAN}│${NC} ${BOLD}📋 COPY & PASTE COMMAND INI:${NC}"
-    echo -e "${B_CYAN}│${NC}"
-    echo -e "${B_CYAN}│${NC} ${B_YELLOW}cd ~/ozanglive && bash ozanglive-universal-multidomain-quick-installer-v3.sh${NC}"
-    echo -e "${B_CYAN}│${NC}"
-    echo -e "${B_CYAN}├──────────────────────────────────────────────────────────┤${NC}"
-    echo -e "${B_CYAN}│${NC} ${BOLD}Atau Download Manual:${NC}"
-    echo -e "${B_CYAN}│${NC}"
-    echo -e "${B_CYAN}│${NC} ${GRAY}curl -fsSL https://raw.githubusercontent.com/meteoradja-ytmjk/\\${NC}"
-    echo -e "${B_CYAN}│${NC} ${GRAY}  ozanglive/main/ozanglive-universal-multidomain-quick-\\${NC}"
-    echo -e "${B_CYAN}│${NC} ${GRAY}  installer-v3.sh -o ~/domain-setup.sh${NC}"
-    echo -e "${B_CYAN}│${NC}"
-    echo -e "${B_CYAN}│${NC} ${GRAY}chmod +x ~/domain-setup.sh${NC}"
-    echo -e "${B_CYAN}│${NC} ${GRAY}bash ~/domain-setup.sh${NC}"
-    echo -e "${B_CYAN}│${NC}"
-    echo -e "${B_CYAN}├──────────────────────────────────────────────────────────┤${NC}"
-    echo -e "${B_CYAN}│${NC} ${BOLD}📄 Dokumentasi Lengkap:${NC}"
-    echo -e "${B_CYAN}│${NC} ${WHITE}~/ozanglive/CARA-SETUP-DOMAIN.md${NC}"
-    echo -e "${B_CYAN}│${NC}"
-    echo -e "${B_CYAN}│${NC} Baca dengan: ${B_YELLOW}cat ~/ozanglive/CARA-SETUP-DOMAIN.md${NC}"
-    echo -e "${B_CYAN}╰──────────────────────────────────────────────────────────╯${NC}"
-    echo
 fi
 
+# Make sure the installer is executable
+chmod +x "$DOMAIN_INSTALLER_V3"
+
 echo
+echo -e "${B_CYAN}════════════════════════════════════════════════════════════${NC}"
+echo -e "${B_CYAN}  🚀 Meluncurkan Quick Installer Multidomain V3...          ${NC}"
+echo -e "${B_CYAN}════════════════════════════════════════════════════════════${NC}"
+echo
+sleep 1
+
+export APP_DIR="$INSTALL_DIR"
+cd "$INSTALL_DIR"
+
+# Run domain installer V3 connected to interactive terminal TTY
+if [ -e /dev/tty ]; then
+    exec bash "$DOMAIN_INSTALLER_V3" < /dev/tty
+else
+    exec bash "$DOMAIN_INSTALLER_V3"
+fi

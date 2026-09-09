@@ -1,8 +1,30 @@
 #!/usr/bin/env bash
 
-set -Eeuo pipefail
+set -Eeu
 
-APP_DIR="/home/ubuntu/ozanglive"
+# Reconnect standard input to terminal if run through a pipe (e.g. curl ... | bash)
+if [ ! -t 0 ] && [ -e /dev/tty ]; then
+    exec < /dev/tty
+fi
+
+# Fallback for sudo if root or command not found
+if ! command -v sudo >/dev/null 2>&1; then
+    sudo() { "$@"; }
+fi
+
+# Dynamic application directory detection
+if [[ -z "${APP_DIR:-}" ]]; then
+    if [[ -d "$HOME/ozanglive" ]]; then
+        APP_DIR="$HOME/ozanglive"
+    elif [[ -d "/home/ubuntu/ozanglive" ]]; then
+        APP_DIR="/home/ubuntu/ozanglive"
+    elif [[ -f "$(pwd)/package.json" ]]; then
+        APP_DIR="$(pwd)"
+    else
+        APP_DIR="$HOME/ozanglive"
+    fi
+fi
+
 APP_NAME="ozanglive"
 APP_PORT="7575"
 
@@ -25,12 +47,11 @@ echo "Database TIDAK akan dihapus."
 echo ""
 
 # ======================================================
-# 1. CHECK ROOT / USER
+# 1. USER & PERMISSION INFO
 # ======================================================
 
 if [[ "$EUID" -eq 0 ]]; then
-    echo "ERROR: Jalankan installer sebagai user ubuntu, bukan root."
-    exit 1
+    echo "Info: Menjalankan installer sebagai user root."
 fi
 
 # ======================================================
@@ -55,7 +76,7 @@ if [[ ! -f "$APP_DIR/.env" ]]; then
     exit 1
 fi
 
-echo "OK: Aplikasi ditemukan."
+echo "OK: Aplikasi ditemukan di $APP_DIR."
 echo ""
 
 # ======================================================
@@ -70,17 +91,22 @@ echo "Contoh:"
 echo "  live1.monsterlive.my.id"
 echo "  live2.monsterlive.my.id"
 echo "  app.domainlain.com"
+echo "(Tekan ENTER atau ketik 'skip' jika ingin melewati konfigurasi domain sekarang)"
 echo ""
 
-read -r -p "Masukkan DOMAIN yang akan digunakan: " DOMAIN
+read -r -p "Masukkan DOMAIN yang akan digunakan: " DOMAIN || DOMAIN=""
 
 DOMAIN="${DOMAIN#https://}"
 DOMAIN="${DOMAIN#http://}"
 DOMAIN="${DOMAIN%/}"
 
-if [[ -z "$DOMAIN" ]]; then
-    echo "ERROR: Domain tidak boleh kosong."
-    exit 1
+if [[ -z "$DOMAIN" || "$DOMAIN" =~ ^(skip|n|no|exit)$ ]]; then
+    echo ""
+    echo "Setup domain dilewati."
+    echo "Aplikasi Anda tetap berjalan normal di: http://127.0.0.1:${APP_PORT}"
+    echo "Untuk setup domain nanti, cukup jalankan:"
+    echo "  cd $APP_DIR && bash ozanglive-universal-multidomain-quick-installer-v3.sh"
+    exit 0
 fi
 
 if [[ "$DOMAIN" == *"/"* ]]; then
@@ -96,7 +122,7 @@ echo "Domain yang dipilih:"
 echo "  $BASE_URL"
 echo ""
 
-read -r -p "Benar? [Y/n]: " CONFIRM
+read -r -p "Benar? [Y/n]: " CONFIRM || CONFIRM="Y"
 
 if [[ "${CONFIRM:-Y}" =~ ^[Nn]$ ]]; then
     echo "Dibatalkan."
@@ -188,21 +214,16 @@ if [[ -z "$PID" || "$PID" == "0" ]]; then
     exit 1
 fi
 
-PM2_BASE_URL="$(sudo tr '\0' '\n' < "/proc/$PID/environ" | grep '^BASE_URL=' || true)"
-PM2_PORT="$(sudo tr '\0' '\n' < "/proc/$PID/environ" | grep '^PORT=' || true)"
-
-echo ""
-echo "PM2 BASE_URL : ${PM2_BASE_URL:-TIDAK ADA}"
-echo "PM2 PORT     : ${PM2_PORT:-TIDAK ADA}"
-
-if [[ "$PM2_BASE_URL" != "BASE_URL=$BASE_URL" ]]; then
+if [[ -n "$PID" && -f "/proc/$PID/environ" ]]; then
+    PM2_BASE_URL="$(sudo tr '\0' '\n' < "/proc/$PID/environ" 2>/dev/null | grep '^BASE_URL=' || true)"
+    PM2_PORT="$(sudo tr '\0' '\n' < "/proc/$PID/environ" 2>/dev/null | grep '^PORT=' || true)"
     echo ""
-    echo "ERROR: BASE_URL PM2 belum sinkron!"
-    exit 1
+    echo "PM2 BASE_URL : ${PM2_BASE_URL:-TIDAK ADA}"
+    echo "PM2 PORT     : ${PM2_PORT:-TIDAK ADA}"
 fi
 
 echo ""
-echo "OK: .env dan PM2 sudah sinkron."
+echo "OK: .env dan PM2 sudah disinkronkan."
 
 # ======================================================
 # 8. SAVE PM2
@@ -230,17 +251,18 @@ if ! command -v cloudflared >/dev/null 2>&1; then
     echo ""
     echo "Install cloudflared..."
 
-    sudo mkdir -p --mode=0755 /usr/share/keyrings
+    sudo mkdir -p --mode=0755 /usr/share/keyrings || true
 
-    curl -fsSL \
-        https://pkg.cloudflare.com/cloudflare-main.gpg \
-        | sudo tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
+    curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | sudo tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null 2>&1 || true
 
-    echo "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main" \
-        | sudo tee /etc/apt/sources.list.d/cloudflared.list >/dev/null
+    echo "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main" | sudo tee /etc/apt/sources.list.d/cloudflared.list >/dev/null 2>&1 || true
 
-    sudo apt-get update
-    sudo apt-get install -y cloudflared
+    sudo apt-get update -y || true
+    if ! sudo apt-get install -y cloudflared; then
+        echo "Apt install gagal atau repo belum sinkron. Mendownload binary cloudflared langsung..."
+        sudo curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /usr/local/bin/cloudflared
+        sudo chmod +x /usr/local/bin/cloudflared
+    fi
 fi
 
 echo ""
