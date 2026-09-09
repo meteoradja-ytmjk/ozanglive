@@ -461,82 +461,16 @@ echo
 echo -e "  ${ICON_ROCKET} ${B_GREEN}Aplikasi ozanglive sudah berhasil berjalan di background!${NC}"
 echo
 
-if [ "$SKIP_DOMAIN" = "true" ]; then
-    echo -e "${B_CYAN}╭──────────────────────────────────────────────────────────╮${NC}"
-    echo -e "${B_CYAN}│ 📖 SETUP DOMAIN DILEWATI (--skip-domain)                 │${NC}"
-    echo -e "${B_CYAN}├──────────────────────────────────────────────────────────┤${NC}"
-    echo -e "${B_CYAN}│${NC} Untuk setup domain kapan saja di kemudian hari:"
-    echo -e "${B_CYAN}│${NC} ${B_YELLOW}cd $INSTALL_DIR && bash ozanglive-universal-multidomain-quick-installer-v3.sh${NC}"
-    echo -e "${B_CYAN}╰──────────────────────────────────────────────────────────╯${NC}"
-    echo
-    exit 0
-fi
-
-# ==============================================================================
-# AUTO CONNECT TO MULTIDOMAIN QUICK INSTALLER V3
-# ==============================================================================
-echo
-echo -e "${B_PURPLE}╭──────────────────────────────────────────────────────────╮${NC}"
-echo -e "${B_PURPLE}│ 🌐 SETUP DOMAIN & CLOUDFLARE (AUTO CONNECT)              │${NC}"
-echo -e "${B_PURPLE}├──────────────────────────────────────────────────────────┤${NC}"
-echo -e "${B_PURPLE}│${NC} Aplikasi OzangLive sudah aktif di: ${B_CYAN}http://${SERVER_IP}:7575${NC}"
-echo -e "${B_PURPLE}│${NC}"
-echo -e "${B_PURPLE}│${NC} ${B_WHITE}Menyambungkan langsung ke Quick Installer Multidomain...${NC}"
-echo -e "${B_PURPLE}│${NC} ${GRAY}(Tekan Enter / ketik 'skip' jika ingin melewati konfigurasi domain)${NC}"
-echo -e "${B_PURPLE}╰──────────────────────────────────────────────────────────╯${NC}"
-echo
-sleep 2
-
-# Check if domain installer V3 exists
-DOMAIN_INSTALLER_V3="$INSTALL_DIR/ozanglive-universal-multidomain-quick-installer-v3.sh"
-
-if [ ! -f "$DOMAIN_INSTALLER_V3" ]; then
-    print_status "$ICON_WARN" "Domain installer V3 tidak ditemukan di folder aplikasi."
-    print_status "$ICON_INFO" "Mendownload installer terbaru dari GitHub..."
-    
-    if curl -fsSL "https://raw.githubusercontent.com/meteoradja-ytmjk/ozanglive/main/ozanglive-universal-multidomain-quick-installer-v3.sh" -o "$DOMAIN_INSTALLER_V3" 2>/dev/null; then
-        chmod +x "$DOMAIN_INSTALLER_V3"
-        print_status "$ICON_SUCCESS" "Domain installer V3 berhasil didownload"
-    else
-        print_status "$ICON_ERROR" "Gagal mendownload installer domain"
-        echo
-        echo -e "${B_YELLOW}╭──────────────────────────────────────────────────────────╮${NC}"
-        echo -e "${B_YELLOW}│ 📋 JALANKAN SETUP DOMAIN MANUAL:                         │${NC}"
-        echo -e "${B_YELLOW}├──────────────────────────────────────────────────────────┤${NC}"
-        echo -e "${B_YELLOW}│${NC} ${B_CYAN}cd $INSTALL_DIR && bash ozanglive-universal-multidomain-quick-installer-v3.sh${NC}"
-        echo -e "${B_YELLOW}╰──────────────────────────────────────────────────────────╯${NC}"
-        echo
-        exit 0
-    fi
-fi
-
-# Make sure the installer is executable
-chmod +x "$DOMAIN_INSTALLER_V3"
-
-echo
-echo -e "${B_CYAN}════════════════════════════════════════════════════════════${NC}"
-echo -e "${B_CYAN}  🚀 Meluncurkan Quick Installer Multidomain V3...          ${NC}"
-echo -e "${B_CYAN}════════════════════════════════════════════════════════════${NC}"
-echo
-sleep 1
-
-export APP_DIR="$INSTALL_DIR"
-cd "$INSTALL_DIR"
-
-# Jalankan domain installer tanpa exec agar shell/terminal tidak tertutup
-if [ -t 0 ]; then
-    bash "$DOMAIN_INSTALLER_V3"
-elif [ -r /dev/tty ]; then
-    bash "$DOMAIN_INSTALLER_V3" < /dev/tty
-else
-    bash "$DOMAIN_INSTALLER_V3"
-fi
-
-echo
-echo -e "${B_GREEN}╭──────────────────────────────────────────────────────────╮${NC}"
-echo -e "${B_GREEN}│ 🎉 PROSES SELESAI! SEMUA INSTALASI TELAH SELESAI!        │${NC}"
-echo -e "${B_GREEN}├──────────────────────────────────────────────────────────┤${NC}"
-echo -e "${B_GREEN}│${NC} 🌐 Akses Web : ${B_CYAN}http://${SERVER_IP}:7575${NC}"
-echo -e "${B_GREEN}│${NC} 📁 Lokasi App: ${WHITE}${INSTALL_DIR}${NC}"
-echo -e "${B_GREEN}╰──────────────────────────────────────────────────────────╯${NC}"
+echo -e "${B_CYAN}╭──────────────────────────────────────────────────────────╮${NC}"
+echo -e "${B_CYAN}│ 💡 INFORMASI: SETUP DOMAIN & HTTPS (TERPISAH)            │${NC}"
+echo -e "${B_CYAN}├──────────────────────────────────────────────────────────┤${NC}"
+echo -e "${B_CYAN}│${NC} Aplikasi OzangLive berhasil diinstal dan berjalan normal."
+echo -e "${B_CYAN}│${NC} Dapat diakses langsung via IP: ${B_CYAN}http://${SERVER_IP}:7575${NC}"
+echo -e "${B_CYAN}│${NC}"
+echo -e "${B_CYAN}│${NC} Jika Anda ingin menghubungkan domain kustom (Cloudflare):"
+echo -e "${B_CYAN}│${NC} Jalankan script terpisah berikut di terminal VPS Anda:"
+echo -e "${B_CYAN}│${NC}"
+echo -e "${B_CYAN}│${NC}   ${B_YELLOW}cd $INSTALL_DIR && bash ozanglive-universal-multidomain-quick-installer-v3.sh${NC}"
+echo -e "${B_CYAN}│${NC}"
+echo -e "${B_CYAN}╰──────────────────────────────────────────────────────────╯${NC}"
 echo
