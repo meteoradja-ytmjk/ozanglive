@@ -280,10 +280,13 @@ install_prereqs() {
 setup_timezone_firewall() {
     run_task "Mengatur timezone server ke Asia/Jakarta" sudo timedatectl set-timezone Asia/Jakarta
     if command -v ufw >/dev/null 2>&1; then
-        run_task "Mengonfigurasi Firewall UFW (SSH & Port 7575)" bash -c "sudo ufw allow 22/tcp >/dev/null 2>&1 || true; sudo ufw allow ssh >/dev/null 2>&1 || true; sudo ufw allow 7575/tcp >/dev/null 2>&1 || true"
+        run_task "Mengonfigurasi Firewall UFW (SSH & Port 7575)" bash -c "sudo ufw allow 22/tcp >/dev/null 2>&1 || true; sudo ufw allow ssh >/dev/null 2>&1 || true; sudo ufw allow 7575/tcp >/dev/null 2>&1 || true; sudo ufw reload >/dev/null 2>&1 || true"
     fi
     if command -v iptables >/dev/null 2>&1; then
-        run_task "Membuka Port 7575 di iptables" bash -c "sudo iptables -I INPUT -p tcp --dport 7575 -j ACCEPT >/dev/null 2>&1 || true"
+        run_task "Membuka Port 7575 di iptables" bash -c "sudo iptables -I INPUT 1 -p tcp --dport 7575 -j ACCEPT >/dev/null 2>&1 || true"
+    fi
+    if command -v firewall-cmd >/dev/null 2>&1; then
+        run_task "Membuka Port 7575 di firewalld" bash -c "sudo firewall-cmd --add-port=7575/tcp --permanent >/dev/null 2>&1 || true; sudo firewall-cmd --reload >/dev/null 2>&1 || true"
     fi
 }
 
@@ -313,6 +316,11 @@ start_pm2() {
     cd "$INSTALL_DIR"
     mkdir -p "$INSTALL_DIR/logs" "$INSTALL_DIR/db" "$INSTALL_DIR/public/uploads/videos" "$INSTALL_DIR/public/uploads/thumbnails" "$INSTALL_DIR/public/uploads/avatars" "$INSTALL_DIR/public/uploads/audios" "$INSTALL_DIR/public/uploads/branding" "$INSTALL_DIR/public/uploads/rendered"
 
+    # Nonaktifkan cloudflared service lama jika ada agar tidak bentrok dengan instalasi normal
+    if systemctl list-unit-files 2>/dev/null | grep -q '^cloudflared.service'; then
+        run_task "Menonaktifkan cloudflared service lama agar tidak bentrok" bash -c "sudo systemctl stop cloudflared 2>/dev/null || true; sudo systemctl disable cloudflared 2>/dev/null || true"
+    fi
+
     # Bersihkan file session SQLite yang berpotensi terkunci / corrupt
     run_task "Membersihkan session lock lama" bash -c "rm -f db/sessions.db* || true"
 
@@ -332,7 +340,7 @@ start_pm2() {
     # Verifikasi langsung respon aplikasi (Health Check)
     printf "  ${ICON_WAIT} %-50s" "Memverifikasi aplikasi aktif & merespon..."
     local online=false
-    for i in $(seq 1 10); do
+    for i in $(seq 1 12); do
         if curl -fsSIL --max-time 3 http://127.0.0.1:7575/health >/dev/null 2>&1 || curl -fsSIL --max-time 3 http://127.0.0.1:7575/login >/dev/null 2>&1 || curl -fsSIL --max-time 3 http://127.0.0.1:7575/ >/dev/null 2>&1; then
             online=true
             break
@@ -343,8 +351,16 @@ start_pm2() {
     if [ "$online" = "true" ]; then
         printf "\r  ${ICON_SUCCESS} %-50s ${GRAY}(Online & Aktif)${NC}\n" "Aplikasi berhasil aktif & merespon"
     else
-        printf "\r  ${ICON_WARN} %-50s ${B_YELLOW}(Sedang booting)${NC}\n" "Aplikasi dalam proses startup"
+        printf "\r  ${ICON_WARN} %-50s ${B_YELLOW}(Mencoba restart fallback...)${NC}\n" "Aplikasi belum merespon"
         pm2 restart ozanglive >/dev/null 2>&1 || true
+        sleep 3
+        if curl -fsSIL --max-time 3 http://127.0.0.1:7575/health >/dev/null 2>&1 || curl -fsSIL --max-time 3 http://127.0.0.1:7575/ >/dev/null 2>&1; then
+            print_status "$ICON_SUCCESS" "Aplikasi online setelah restart PM2"
+        else
+            print_status "$ICON_WARN" "Aplikasi sedang startup di background"
+            echo -e "${GRAY}Log PM2 terkini:${NC}"
+            pm2 logs ozanglive --lines 10 --nostream 2>/dev/null || true
+        fi
     fi
 }
 
@@ -354,6 +370,10 @@ ensure_env_secret() {
         if [ -f "package.json" ] && grep -q "\"generate-secret\"" package.json; then
             run_task "Membuat SESSION_SECRET otomatis di .env" npm run generate-secret
         fi
+    fi
+    # Reset BASE_URL ke default normal jika sebelumnya terisi domain HTTPS yang tidak aktif
+    if grep -q "^BASE_URL=https://" .env 2>/dev/null; then
+        run_task "Mereset BASE_URL ke default normal di .env" bash -c "sed -i 's|^BASE_URL=.*|BASE_URL=http://localhost:7575|' .env"
     fi
 }
 
@@ -487,16 +507,3 @@ echo
 echo -e "  ${ICON_ROCKET} ${B_GREEN}Aplikasi ozanglive sudah berhasil berjalan di background!${NC}"
 echo
 
-echo -e "${B_CYAN}╭──────────────────────────────────────────────────────────╮${NC}"
-echo -e "${B_CYAN}│ 💡 INFORMASI: SETUP DOMAIN & HTTPS (TERPISAH)            │${NC}"
-echo -e "${B_CYAN}├──────────────────────────────────────────────────────────┤${NC}"
-echo -e "${B_CYAN}│${NC} Aplikasi OzangLive berhasil diinstal dan berjalan normal."
-echo -e "${B_CYAN}│${NC} Dapat diakses langsung via IP: ${B_CYAN}http://${SERVER_IP}:7575${NC}"
-echo -e "${B_CYAN}│${NC}"
-echo -e "${B_CYAN}│${NC} Jika Anda ingin menghubungkan domain kustom (Cloudflare):"
-echo -e "${B_CYAN}│${NC} Jalankan script terpisah berikut di terminal VPS Anda:"
-echo -e "${B_CYAN}│${NC}"
-echo -e "${B_CYAN}│${NC}   ${B_YELLOW}cd $INSTALL_DIR && bash ozanglive-universal-multidomain-quick-installer-v3.sh${NC}"
-echo -e "${B_CYAN}│${NC}"
-echo -e "${B_CYAN}╰──────────────────────────────────────────────────────────╯${NC}"
-echo

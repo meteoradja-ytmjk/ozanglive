@@ -74,9 +74,9 @@ module.exports = {
       },
 
       // Logging - OPTIMIZED to prevent disk space issues
-      log_file: './logs/pm2-combined.log',
-      out_file: './logs/pm2-out.log',
-      error_file: './logs/pm2-error.log',
+      log_file: path.join(__dirname, 'logs', 'pm2-combined.log'),
+      out_file: path.join(__dirname, 'logs', 'pm2-out.log'),
+      error_file: path.join(__dirname, 'logs', 'pm2-error.log'),
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
       merge_logs: true,
       max_size: '50M', // Rotate logs at 50MB
