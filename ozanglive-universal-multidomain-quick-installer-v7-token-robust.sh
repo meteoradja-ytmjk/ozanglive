@@ -1,31 +1,8 @@
 #!/usr/bin/env bash
 
-# Safe mode
-set +e
+set -Eeuo pipefail
 
-# Reconnect standard input to terminal if run through a pipe (e.g. curl ... | bash)
-if [ ! -t 0 ] && [ -r /dev/tty ]; then
-    exec < /dev/tty 2>/dev/null || true
-fi
-
-# Fallback for sudo if root or command not found
-if ! command -v sudo >/dev/null 2>&1; then
-    sudo() { "$@"; }
-fi
-
-# Dynamic application directory detection
-if [[ -z "${APP_DIR:-}" ]]; then
-    if [[ -d "$HOME/ozanglive" ]]; then
-        APP_DIR="$HOME/ozanglive"
-    elif [[ -d "/home/ubuntu/ozanglive" ]]; then
-        APP_DIR="/home/ubuntu/ozanglive"
-    elif [[ -f "$(pwd)/package.json" ]]; then
-        APP_DIR="$(pwd)"
-    else
-        APP_DIR="$HOME/ozanglive"
-    fi
-fi
-
+APP_DIR="/home/ubuntu/ozanglive"
 APP_NAME="ozanglive"
 APP_PORT="7575"
 
@@ -48,11 +25,12 @@ echo "Database TIDAK akan dihapus."
 echo ""
 
 # ======================================================
-# 1. USER & PERMISSION INFO
+# 1. CHECK ROOT / USER
 # ======================================================
 
 if [[ "$EUID" -eq 0 ]]; then
-    echo "Info: Menjalankan installer sebagai user root."
+    echo "ERROR: Jalankan installer sebagai user ubuntu, bukan root."
+    exit 1
 fi
 
 # ======================================================
@@ -77,7 +55,7 @@ if [[ ! -f "$APP_DIR/.env" ]]; then
     exit 1
 fi
 
-echo "OK: Aplikasi ditemukan di $APP_DIR."
+echo "OK: Aplikasi ditemukan."
 echo ""
 
 # ======================================================
@@ -92,22 +70,17 @@ echo "Contoh:"
 echo "  live1.monsterlive.my.id"
 echo "  live2.monsterlive.my.id"
 echo "  app.domainlain.com"
-echo "(Tekan ENTER atau ketik 'skip' jika ingin melewati konfigurasi domain sekarang)"
 echo ""
 
-read -r -p "Masukkan DOMAIN yang akan digunakan: " DOMAIN </dev/tty 2>/dev/null || read -r -p "Masukkan DOMAIN yang akan digunakan: " DOMAIN || DOMAIN=""
+read -r -p "Masukkan DOMAIN yang akan digunakan: " DOMAIN
 
 DOMAIN="${DOMAIN#https://}"
 DOMAIN="${DOMAIN#http://}"
 DOMAIN="${DOMAIN%/}"
 
-if [[ -z "$DOMAIN" || "$DOMAIN" =~ ^(skip|n|no|exit)$ ]]; then
-    echo ""
-    echo "Setup domain dilewati."
-    echo "Aplikasi Anda tetap berjalan normal di: http://127.0.0.1:${APP_PORT}"
-    echo "Untuk setup domain nanti, cukup jalankan:"
-    echo "  cd $APP_DIR && bash ozanglive-universal-multidomain-quick-installer-v3.sh"
-    exit 0
+if [[ -z "$DOMAIN" ]]; then
+    echo "ERROR: Domain tidak boleh kosong."
+    exit 1
 fi
 
 if [[ "$DOMAIN" == *"/"* ]]; then
@@ -123,7 +96,7 @@ echo "Domain yang dipilih:"
 echo "  $BASE_URL"
 echo ""
 
-read -r -p "Benar? [Y/n]: " CONFIRM </dev/tty 2>/dev/null || read -r -p "Benar? [Y/n]: " CONFIRM || CONFIRM="Y"
+read -r -p "Benar? [Y/n]: " CONFIRM
 
 if [[ "${CONFIRM:-Y}" =~ ^[Nn]$ ]]; then
     echo "Dibatalkan."
@@ -215,16 +188,21 @@ if [[ -z "$PID" || "$PID" == "0" ]]; then
     exit 1
 fi
 
-if [[ -n "$PID" && -f "/proc/$PID/environ" ]]; then
-    PM2_BASE_URL="$(sudo tr '\0' '\n' < "/proc/$PID/environ" 2>/dev/null | grep '^BASE_URL=' || true)"
-    PM2_PORT="$(sudo tr '\0' '\n' < "/proc/$PID/environ" 2>/dev/null | grep '^PORT=' || true)"
+PM2_BASE_URL="$(sudo tr '\0' '\n' < "/proc/$PID/environ" | grep '^BASE_URL=' || true)"
+PM2_PORT="$(sudo tr '\0' '\n' < "/proc/$PID/environ" | grep '^PORT=' || true)"
+
+echo ""
+echo "PM2 BASE_URL : ${PM2_BASE_URL:-TIDAK ADA}"
+echo "PM2 PORT     : ${PM2_PORT:-TIDAK ADA}"
+
+if [[ "$PM2_BASE_URL" != "BASE_URL=$BASE_URL" ]]; then
     echo ""
-    echo "PM2 BASE_URL : ${PM2_BASE_URL:-TIDAK ADA}"
-    echo "PM2 PORT     : ${PM2_PORT:-TIDAK ADA}"
+    echo "ERROR: BASE_URL PM2 belum sinkron!"
+    exit 1
 fi
 
 echo ""
-echo "OK: .env dan PM2 sudah disinkronkan."
+echo "OK: .env dan PM2 sudah sinkron."
 
 # ======================================================
 # 8. SAVE PM2
@@ -252,18 +230,17 @@ if ! command -v cloudflared >/dev/null 2>&1; then
     echo ""
     echo "Install cloudflared..."
 
-    sudo mkdir -p --mode=0755 /usr/share/keyrings || true
+    sudo mkdir -p --mode=0755 /usr/share/keyrings
 
-    curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | sudo tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null 2>&1 || true
+    curl -fsSL \
+        https://pkg.cloudflare.com/cloudflare-main.gpg \
+        | sudo tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
 
-    echo "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main" | sudo tee /etc/apt/sources.list.d/cloudflared.list >/dev/null 2>&1 || true
+    echo "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main" \
+        | sudo tee /etc/apt/sources.list.d/cloudflared.list >/dev/null
 
-    sudo apt-get update -y || true
-    if ! sudo apt-get install -y cloudflared; then
-        echo "Apt install gagal atau repo belum sinkron. Mendownload binary cloudflared langsung..."
-        sudo curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /usr/local/bin/cloudflared
-        sudo chmod +x /usr/local/bin/cloudflared
-    fi
+    sudo apt-get update
+    sudo apt-get install -y cloudflared
 fi
 
 echo ""
@@ -287,7 +264,7 @@ if systemctl list-unit-files 2>/dev/null | grep -q '^cloudflared.service'; then
         || echo "Status: NOT RUNNING"
 
     echo ""
-    read -r -p "Apakah ingin mengganti tunnel/service yang ada? [y/N]: " REPLACE </dev/tty 2>/dev/null || read -r -p "Apakah ingin mengganti tunnel/service yang ada? [y/N]: " REPLACE || REPLACE="N"
+    read -r -p "Apakah ingin mengganti tunnel/service yang ada? [y/N]: " REPLACE
 
     if [[ ! "$REPLACE" =~ ^[Yy]$ ]]; then
         echo ""
@@ -327,12 +304,13 @@ echo "Kemudian pilih Linux dan copy Tunnel Token."
 echo ""
 
 # ------------------------------------------------------
-# TOKEN INPUT YANG RAMAH UNTUK SSH / HP
+# TOKEN INPUT YANG AMAN UNTUK SSH / HP
 # ------------------------------------------------------
-# V3 memakai "read -s". Pada beberapa aplikasi SSH mobile,
-# input tersembunyi dapat membuat paste terlihat seperti tidak masuk.
-# Di versi ini token sengaja dibuat TERLIHAT saat paste agar mudah
-# dipastikan sudah masuk. Token tidak dimasukkan ke shell history.
+# Jangan memakai read -s: beberapa aplikasi SSH mobile bermasalah
+# saat paste input tersembunyi.
+# Input juga TIDAK diteruskan melalui shell/eval.
+# Jika user menempelkan seluruh perintah install dari Cloudflare,
+# script akan mengambil token dari argumen terakhir.
 # ------------------------------------------------------
 
 echo ""
@@ -341,58 +319,86 @@ echo "1. Copy Tunnel Token dari Cloudflare."
 echo "2. Paste ke prompt di bawah."
 echo "3. Tekan ENTER."
 echo ""
-echo "CATATAN: token akan terlihat di layar saat ditempel."
-echo "Jangan screenshot atau bagikan token tersebut."
+echo "Bisa paste TOKEN SAJA atau seluruh perintah 'cloudflared service install ...'."
+echo "Token tidak disimpan ke shell history."
 echo ""
 
 # Pastikan sudo siap sebelum proses instalasi service.
 sudo -v
 
 TUNNEL_TOKEN=""
-while [[ -z "$TUNNEL_TOKEN" ]]; do
-    IFS= read -r -p "Paste Tunnel Token: " TUNNEL_TOKEN </dev/tty 2>/dev/null || IFS= read -r -p "Paste Tunnel Token: " TUNNEL_TOKEN || TUNNEL_TOKEN=""
-    # Bersihkan carriage-return yang kadang ikut terbawa dari clipboard.
-    TUNNEL_TOKEN="${TUNNEL_TOKEN//$'\\r'/}"
-    TUNNEL_TOKEN="${TUNNEL_TOKEN#"${TUNNEL_TOKEN%%[![:space:]]*}"}"
-    TUNNEL_TOKEN="${TUNNEL_TOKEN%"${TUNNEL_TOKEN##*[![:space:]]}"}"
+INSTALL_OK=0
+
+while [[ "$INSTALL_OK" -ne 1 ]]; do
+    echo ""
+    IFS= read -r -p "Paste Tunnel Token: " RAW_TOKEN || true
+
+    # Bersihkan karakter clipboard yang umum.
+    RAW_TOKEN="${RAW_TOKEN//$'\r'/}"
+    RAW_TOKEN="${RAW_TOKEN#"${RAW_TOKEN%%[![:space:]]*}"}"
+    RAW_TOKEN="${RAW_TOKEN%"${RAW_TOKEN##*[![:space:]]}"}"
+
+    # Ambil token dari beberapa format yang mungkin disalin dari Cloudflare.
+    # Contoh:
+    #   eyJ...
+    #   cloudflared tunnel run --token eyJ...
+    #   sudo cloudflared service install eyJ...
+    if [[ "$RAW_TOKEN" == *"--token"* ]]; then
+        TUNNEL_TOKEN="${RAW_TOKEN#*--token}"
+    elif [[ "$RAW_TOKEN" == *"service install"* ]]; then
+        TUNNEL_TOKEN="${RAW_TOKEN#*service install}"
+    else
+        TUNNEL_TOKEN="$RAW_TOKEN"
+    fi
+
+    # Ambil hanya token pertama setelah command/flag, lalu bersihkan quote.
+    TUNNEL_TOKEN="$(printf '%s\n' "$TUNNEL_TOKEN" | awk '{print $1}')"
+    TUNNEL_TOKEN="${TUNNEL_TOKEN#\"}"
+    TUNNEL_TOKEN="${TUNNEL_TOKEN%\"}"
+    TUNNEL_TOKEN="${TUNNEL_TOKEN#\'}"
+    TUNNEL_TOKEN="${TUNNEL_TOKEN%\'}"
+    TUNNEL_TOKEN="${TUNNEL_TOKEN//$'\r'/}"
 
     if [[ -z "$TUNNEL_TOKEN" ]]; then
         echo ""
         echo "ERROR: Token kosong. Silakan paste ulang."
+        continue
+    fi
+
+    # JANGAN memvalidasi bentuk JWT di sini.
+    # Format token dapat berubah; cloudflared sendiri yang menjadi validator.
+    echo ""
+    echo "Token diterima. Memasang Cloudflare Tunnel service..."
+    echo "(Jika gagal, installer TIDAK akan menutup terminal.)"
+    echo ""
+
+    # Jangan biarkan kegagalan service install mematikan script/SSH.
+    set +e
+    sudo cloudflared service install "$TUNNEL_TOKEN"
+    INSTALL_RC=$?
+    set -e
+
+    if [[ "$INSTALL_RC" -eq 0 ]]; then
+        INSTALL_OK=1
         echo ""
+        echo "OK: Cloudflare service berhasil dipasang."
+    else
+        echo ""
+        echo "ERROR: Cloudflare gagal memasang service. (exit code: $INSTALL_RC)"
+        echo ""
+        echo "Kemungkinan:"
+        echo "  - Token tidak valid / sudah di-rotate."
+        echo "  - Token terpotong saat copy/paste."
+        echo "  - Service lama masih bentrok."
+        echo ""
+        echo "Silakan paste token yang BARU untuk mencoba lagi."
+        echo "Tidak perlu menjalankan ulang script."
+        TUNNEL_TOKEN=""
     fi
 done
 
-echo ""
-echo "Token diterima. Memasang Cloudflare Tunnel service..."
-
-# ======================================================
-# INSTALL CLOUDFLARED SERVICE
-# ======================================================
-
-echo ""
-echo "[7/9] Memasang Cloudflare Tunnel service..."
-
-if ! sudo cloudflared service install "$TUNNEL_TOKEN"; then
-    echo ""
-    echo "ERROR: Cloudflare gagal memasang service menggunakan token."
-    echo ""
-    echo "Kemungkinan:"
-    echo "  - Token terpotong saat copy/paste."
-    echo "  - Yang ditempel bukan Tunnel Token."
-    echo "  - Tunnel di Cloudflare sudah dihapus/tidak valid."
-    echo ""
-    echo "Silakan jalankan installer kembali dan copy token dari:"
-    echo "Cloudflare Dashboard -> Networking -> Tunnels -> tunnel -> Connectors"
-    unset TUNNEL_TOKEN
-    exit 1
-fi
-
 # Token tidak lagi dibutuhkan oleh script.
 unset TUNNEL_TOKEN
-
-echo ""
-echo "OK: Cloudflare service terpasang."
 
 echo ""
 echo "OK: Cloudflare service terpasang."
