@@ -316,9 +316,11 @@ start_pm2() {
     cd "$INSTALL_DIR"
     mkdir -p "$INSTALL_DIR/logs" "$INSTALL_DIR/db" "$INSTALL_DIR/public/uploads/videos" "$INSTALL_DIR/public/uploads/thumbnails" "$INSTALL_DIR/public/uploads/avatars" "$INSTALL_DIR/public/uploads/audios" "$INSTALL_DIR/public/uploads/branding" "$INSTALL_DIR/public/uploads/rendered"
 
-    # Nonaktifkan cloudflared service lama jika ada agar tidak bentrok dengan instalasi normal
-    if systemctl list-unit-files 2>/dev/null | grep -q '^cloudflared.service'; then
-        run_task "Menonaktifkan cloudflared service lama agar tidak bentrok" bash -c "sudo systemctl stop cloudflared 2>/dev/null || true; sudo systemctl disable cloudflared 2>/dev/null || true"
+    # Nonaktifkan cloudflared service lama jika mode fresh atau jika service tidak aktif/bermasalah
+    if [ "$MODE" = "fresh" ] || ! systemctl is-active --quiet cloudflared 2>/dev/null; then
+        if systemctl list-unit-files 2>/dev/null | grep -q '^cloudflared.service'; then
+            run_task "Menonaktifkan cloudflared service lama agar tidak bentrok" bash -c "sudo systemctl stop cloudflared 2>/dev/null || true; sudo systemctl disable cloudflared 2>/dev/null || true"
+        fi
     fi
 
     # Bersihkan file session SQLite yang berpotensi terkunci / corrupt
@@ -371,9 +373,11 @@ ensure_env_secret() {
             run_task "Membuat SESSION_SECRET otomatis di .env" npm run generate-secret
         fi
     fi
-    # Reset BASE_URL ke default normal jika sebelumnya terisi domain HTTPS yang tidak aktif
-    if grep -q "^BASE_URL=https://" .env 2>/dev/null; then
-        run_task "Mereset BASE_URL ke default normal di .env" bash -c "sed -i 's|^BASE_URL=.*|BASE_URL=http://localhost:7575|' .env"
+    # Reset BASE_URL ke default normal hanya jika mode fresh atau cloudflared tidak aktif
+    if [ "$MODE" = "fresh" ] || ! systemctl is-active --quiet cloudflared 2>/dev/null; then
+        if grep -q "^BASE_URL=https://" .env 2>/dev/null; then
+            run_task "Mereset BASE_URL ke default normal di .env" bash -c "sed -i 's|^BASE_URL=.*|BASE_URL=http://localhost:7575|' .env"
+        fi
     fi
 }
 
@@ -506,4 +510,50 @@ fi
 echo
 echo -e "  ${ICON_ROCKET} ${B_GREEN}Aplikasi ozanglive sudah berhasil berjalan di background!${NC}"
 echo
+
+# ------------------------------------------------------------------------------
+# Penawaran Konfigurasi Domain Kustom & HTTPS (Cloudflare Tunnel)
+# ------------------------------------------------------------------------------
+if [ "$SKIP_DOMAIN" != "true" ]; then
+    echo -e "${B_CYAN}╭──────────────────────────────────────────────────────────╮${NC}"
+    echo -e "${B_CYAN}│ 🌐 PENAWARAN: SETUP DOMAIN & HTTPS (CLOUDFLARE TUNNEL)   │${NC}"
+    echo -e "${B_CYAN}├──────────────────────────────────────────────────────────┤${NC}"
+    echo -e "${B_CYAN}│${NC} Ingin menghubungkan domain Anda sekarang?"
+    echo -e "${B_CYAN}│${NC} (Gratis HTTPS/SSL otomatis via Cloudflare Tunnel)"
+    echo -e "${B_CYAN}╰──────────────────────────────────────────────────────────╯${NC}"
+    echo
+
+    SETUP_DOMAIN="n"
+    if [ -t 0 ]; then
+        read -r -p "👉 Ingin atur domain & HTTPS sekarang? [y/N] (Default: N): " SETUP_DOMAIN || SETUP_DOMAIN="n"
+    elif [ -r /dev/tty ]; then
+        read -r -p "👉 Ingin atur domain & HTTPS sekarang? [y/N] (Default: N): " SETUP_DOMAIN </dev/tty || SETUP_DOMAIN="n"
+    else
+        SETUP_DOMAIN="n"
+    fi
+
+    if [[ "$SETUP_DOMAIN" =~ ^[Yy]$ ]]; then
+        DOMAIN_SCRIPT="$INSTALL_DIR/ozanglive-universal-multidomain-quick-installer-v7-token-robust.sh"
+        if [ -f "$DOMAIN_SCRIPT" ]; then
+            chmod +x "$DOMAIN_SCRIPT"
+            echo
+            print_status "$ICON_ROCKET" "Memulai wizard pengaturan domain..."
+            echo
+            if [ -r /dev/tty ]; then
+                bash "$DOMAIN_SCRIPT" </dev/tty
+            else
+                bash "$DOMAIN_SCRIPT"
+            fi
+        else
+            print_status "$ICON_WARN" "Script domain tidak ditemukan di: $DOMAIN_SCRIPT"
+        fi
+    else
+        echo
+        echo -e "  ${ICON_INFO} ${GRAY}Pengaturan domain dilewati.${NC}"
+        echo -e "     Jika ingin mengatur domain nanti, jalankan di terminal VPS:"
+        echo -e "     ${B_YELLOW}cd $INSTALL_DIR && bash ozanglive-universal-multidomain-quick-installer-v7-token-robust.sh${NC}"
+        echo
+    fi
+fi
+
 

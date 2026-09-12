@@ -63,6 +63,8 @@ module.exports = {
         TZ: 'Asia/Jakarta',
         // CRITICAL: Pass SESSION_SECRET from .env to PM2
         SESSION_SECRET: process.env.SESSION_SECRET,
+        // Pass BASE_URL from .env to PM2 if defined
+        BASE_URL: process.env.BASE_URL,
         // Disable memory warnings
         NODE_OPTIONS: '--max-old-space-size=768 --no-warnings'
       },

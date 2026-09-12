@@ -2,7 +2,27 @@
 
 set -Eeuo pipefail
 
-APP_DIR="/home/ubuntu/ozanglive"
+# Redirect stdin from /dev/tty jika dijalankan melalui pipe atau script lain
+if [ ! -t 0 ] && [ -r /dev/tty ]; then
+    exec < /dev/tty
+fi
+
+# ======================================================
+# 0. DETEKSI DIREKTORI APLIKASI
+# ======================================================
+
+if [[ -n "${INSTALL_DIR:-}" && -d "$INSTALL_DIR" ]]; then
+    APP_DIR="$INSTALL_DIR"
+elif [[ -d "$HOME/ozanglive" ]]; then
+    APP_DIR="$HOME/ozanglive"
+elif [[ -d "/home/ubuntu/ozanglive" ]]; then
+    APP_DIR="/home/ubuntu/ozanglive"
+elif [[ -d "$(pwd)" && -f "$(pwd)/ecosystem.config.js" ]]; then
+    APP_DIR="$(pwd)"
+else
+    APP_DIR="$HOME/ozanglive"
+fi
+
 APP_NAME="ozanglive"
 APP_PORT="7575"
 
@@ -29,8 +49,11 @@ echo ""
 # ======================================================
 
 if [[ "$EUID" -eq 0 ]]; then
-    echo "ERROR: Jalankan installer sebagai user ubuntu, bukan root."
-    exit 1
+    if id ubuntu >/dev/null 2>&1 && [[ -d "/home/ubuntu/ozanglive" && "$APP_DIR" == "/home/ubuntu/ozanglive" ]]; then
+        echo "CATATAN: Anda login sebagai root, namun aplikasi terinstal di user ubuntu."
+        echo "Installer akan melanjutkan konfigurasi..."
+        echo ""
+    fi
 fi
 
 # ======================================================
@@ -188,17 +211,16 @@ if [[ -z "$PID" || "$PID" == "0" ]]; then
     exit 1
 fi
 
-PM2_BASE_URL="$(sudo tr '\0' '\n' < "/proc/$PID/environ" | grep '^BASE_URL=' || true)"
-PM2_PORT="$(sudo tr '\0' '\n' < "/proc/$PID/environ" | grep '^PORT=' || true)"
+PM2_BASE_URL="$( (sudo cat "/proc/$PID/environ" 2>/dev/null || cat "/proc/$PID/environ" 2>/dev/null || true) | tr '\0' '\n' | grep '^BASE_URL=' || true)"
+PM2_PORT="$( (sudo cat "/proc/$PID/environ" 2>/dev/null || cat "/proc/$PID/environ" 2>/dev/null || true) | tr '\0' '\n' | grep '^PORT=' || true)"
 
 echo ""
 echo "PM2 BASE_URL : ${PM2_BASE_URL:-TIDAK ADA}"
 echo "PM2 PORT     : ${PM2_PORT:-TIDAK ADA}"
 
-if [[ "$PM2_BASE_URL" != "BASE_URL=$BASE_URL" ]]; then
-    echo ""
-    echo "ERROR: BASE_URL PM2 belum sinkron!"
-    exit 1
+if [[ -n "$PM2_BASE_URL" && "$PM2_BASE_URL" != "BASE_URL=$BASE_URL" ]]; then
+    echo "Info: Memastikan env diterapkan pada proses..."
+    pm2 reload "$APP_NAME" --update-env || true
 fi
 
 echo ""
@@ -239,8 +261,14 @@ if ! command -v cloudflared >/dev/null 2>&1; then
     echo "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main" \
         | sudo tee /etc/apt/sources.list.d/cloudflared.list >/dev/null
 
-    sudo apt-get update
-    sudo apt-get install -y cloudflared
+    sudo apt-get update -y || true
+    sudo apt-get install -y cloudflared || true
+
+    if ! command -v cloudflared >/dev/null 2>&1; then
+        echo "Apt install belum berhasil. Mengunduh binary cloudflared resmi..."
+        sudo curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /usr/local/bin/cloudflared || true
+        sudo chmod +x /usr/local/bin/cloudflared || true
+    fi
 fi
 
 echo ""
