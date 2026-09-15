@@ -160,7 +160,7 @@ function showToast(message, type = 'success') {
 let broadcastsCache = {
   data: null,
   timestamp: null,
-  ttl: 60000 // 60 seconds cache (increased for better performance)
+  ttl: 60000 // 60 seconds cache for populated lists
 };
 
 // Lazy load broadcasts after page loads (for performance optimization)
@@ -170,8 +170,9 @@ async function lazyLoadBroadcasts() {
   
   // Check if we need to lazy load (loading container exists)
   if (!loadingContainer) {
-    // If cache was invalidated or expired, fetch and update in background without full loader
-    if (!broadcastsCache.data || (broadcastsCache.timestamp && Date.now() - broadcastsCache.timestamp > broadcastsCache.ttl)) {
+    // If cache was invalidated or expired (empty list expires after 3 seconds)
+    const currentMaxAge = (broadcastsCache.data && broadcastsCache.data.length > 0) ? broadcastsCache.ttl : 3000;
+    if (!broadcastsCache.data || (broadcastsCache.timestamp && Date.now() - broadcastsCache.timestamp > currentMaxAge)) {
       console.log('[Performance] Broadcasts cache empty/expired on tab switch, refreshing in background...');
       try {
         const response = await fetch('/api/youtube/broadcasts', {
@@ -351,13 +352,20 @@ function renderEmptyState() {
       <div class="w-16 h-16 bg-dark-700 rounded-full flex items-center justify-center mx-auto mb-4">
         <i class="ti ti-broadcast text-gray-500 text-2xl"></i>
       </div>
-      <p class="text-gray-400 font-medium mb-2">No scheduled broadcasts</p>
-      <p class="text-gray-500 text-sm mb-4">Create your first broadcast to get started</p>
-      <button onclick="openCreateBroadcastModal()"
-        class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors inline-flex items-center gap-2">
-        <i class="ti ti-plus"></i>
-        <span>Create Broadcast</span>
-      </button>
+      <p class="text-gray-300 font-semibold mb-1 text-base">No scheduled broadcasts</p>
+      <p class="text-gray-400 text-sm mb-5">Belum ada siaran terjadwal atau siaran baru sedang disinkronkan dari YouTube</p>
+      <div class="flex flex-wrap items-center justify-center gap-3">
+        <button onclick="refreshBroadcasts()"
+          class="bg-dark-700 hover:bg-dark-600 text-white border border-gray-600 hover:border-primary px-4 py-2.5 rounded-lg transition-colors inline-flex items-center gap-2 text-sm font-medium">
+          <i class="ti ti-refresh text-primary"></i>
+          <span>Sinkronisasi dari YouTube</span>
+        </button>
+        <button onclick="openCreateBroadcastModal()"
+          class="bg-red-500 hover:bg-red-600 text-white px-4 py-2.5 rounded-lg transition-colors inline-flex items-center gap-2 text-sm font-medium shadow-md shadow-red-500/20">
+          <i class="ti ti-plus"></i>
+          <span>Create Broadcast</span>
+        </button>
+      </div>
     </div>
   `;
 }
@@ -4033,12 +4041,25 @@ if (createBroadcastForm) {
         showToast(isStartNow ? '✓ Live streaming berhasil dimulai!' : '✓ Broadcast & Jadwal Live berhasil dibuat!');
         closeCreateBroadcastModal();
         
-        // Wait a bit for YouTube API to propagate the new broadcast
-        // Then redirect to YouTube Studio tab to show new broadcast
-        setTimeout(() => {
-          console.log('[CreateBroadcast] Navigating to YouTube Studio tab...');
-          window.location.href = '/dashboard?tab=broadcasts';
-        }, 1500);
+        // Refresh broadcasts immediately in-place if already on dashboard, or redirect
+        if (window.location.pathname === '/dashboard') {
+          console.log('[CreateBroadcast] Refreshing broadcasts in-place...');
+          if (typeof switchStudioTab === 'function') switchStudioTab('broadcasts');
+          if (typeof refreshBroadcasts === 'function') {
+            refreshBroadcasts();
+            // Secondary background refresh 3.5s later to ensure any trailing search index updates are reflected
+            setTimeout(() => {
+              broadcastsCache.data = null;
+              broadcastsCache.timestamp = null;
+              refreshBroadcasts();
+            }, 3500);
+          }
+        } else {
+          setTimeout(() => {
+            console.log('[CreateBroadcast] Navigating to YouTube Studio tab...');
+            window.location.href = '/dashboard?tab=broadcasts';
+          }, 800);
+        }
       } else {
         console.error('[CreateBroadcast] Failed:', data.error);
         showToast(data.error || 'Gagal membuat broadcast', 'error');

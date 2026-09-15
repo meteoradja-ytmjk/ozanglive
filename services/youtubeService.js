@@ -480,28 +480,45 @@ class YouTubeService {
 
     if (targetStatus === 'all') {
       try {
-        console.log('[YouTubeService.listBroadcasts] Fetching ALL broadcasts (upcoming + active + completed)...');
-        const [upcomingRes, activeRes, completedRes] = await Promise.allSettled([
-          youtube.liveBroadcasts.list({ part: 'snippet,status,contentDetails', mine: true, broadcastStatus: 'upcoming', maxResults: 50 }),
-          youtube.liveBroadcasts.list({ part: 'snippet,status,contentDetails', mine: true, broadcastStatus: 'active', maxResults: 50 }),
-          youtube.liveBroadcasts.list({ part: 'snippet,status,contentDetails', mine: true, broadcastStatus: 'completed', maxResults: 20 })
+        console.log('[YouTubeService.listBroadcasts] Fetching ALL broadcasts (upcoming + active + completed + persistent)...');
+        const [upcomingRes, activeRes, completedRes, allFallbackRes] = await Promise.allSettled([
+          youtube.liveBroadcasts.list({ part: 'snippet,status,contentDetails', mine: true, broadcastStatus: 'upcoming', broadcastType: 'all', maxResults: 50 }),
+          youtube.liveBroadcasts.list({ part: 'snippet,status,contentDetails', mine: true, broadcastStatus: 'active', broadcastType: 'all', maxResults: 50 }),
+          youtube.liveBroadcasts.list({ part: 'snippet,status,contentDetails', mine: true, broadcastStatus: 'completed', broadcastType: 'all', maxResults: 20 }),
+          // Optional fallback for broadcasts that may not fall neatly into upcoming/active/completed
+          youtube.liveBroadcasts.list({ part: 'snippet,status,contentDetails', mine: true, broadcastStatus: 'all', broadcastType: 'all', maxResults: 50 })
         ]);
         
-        console.log('[YouTubeService.listBroadcasts] Upcoming result:', upcomingRes.status, upcomingRes.status === 'fulfilled' ? upcomingRes.value.data.items?.length : 'error');
-        console.log('[YouTubeService.listBroadcasts] Active result:', activeRes.status, activeRes.status === 'fulfilled' ? activeRes.value.data.items?.length : 'error');
-        console.log('[YouTubeService.listBroadcasts] Completed result:', completedRes.status, completedRes.status === 'fulfilled' ? completedRes.value.data.items?.length : 'error');
+        console.log('[YouTubeService.listBroadcasts] Upcoming result:', upcomingRes.status, upcomingRes.status === 'fulfilled' ? upcomingRes.value.data.items?.length : (upcomingRes.reason?.message || 'error'));
+        console.log('[YouTubeService.listBroadcasts] Active result:', activeRes.status, activeRes.status === 'fulfilled' ? activeRes.value.data.items?.length : (activeRes.reason?.message || 'error'));
+        console.log('[YouTubeService.listBroadcasts] Completed result:', completedRes.status, completedRes.status === 'fulfilled' ? completedRes.value.data.items?.length : (completedRes.reason?.message || 'error'));
+        console.log('[YouTubeService.listBroadcasts] All-status fallback result:', allFallbackRes.status, allFallbackRes.status === 'fulfilled' ? allFallbackRes.value.data.items?.length : (allFallbackRes.reason?.message || 'error'));
         
+        const rawItems = [];
         if (upcomingRes.status === 'fulfilled' && upcomingRes.value.data.items) {
           console.log('[YouTubeService.listBroadcasts] Adding', upcomingRes.value.data.items.length, 'upcoming broadcasts');
-          broadcasts.push(...upcomingRes.value.data.items);
+          rawItems.push(...upcomingRes.value.data.items);
         }
         if (activeRes.status === 'fulfilled' && activeRes.value.data.items) {
           console.log('[YouTubeService.listBroadcasts] Adding', activeRes.value.data.items.length, 'active broadcasts');
-          broadcasts.push(...activeRes.value.data.items);
+          rawItems.push(...activeRes.value.data.items);
         }
         if (completedRes.status === 'fulfilled' && completedRes.value.data.items) {
           console.log('[YouTubeService.listBroadcasts] Adding', completedRes.value.data.items.length, 'completed broadcasts');
-          broadcasts.push(...completedRes.value.data.items);
+          rawItems.push(...completedRes.value.data.items);
+        }
+        if (allFallbackRes.status === 'fulfilled' && allFallbackRes.value.data.items) {
+          console.log('[YouTubeService.listBroadcasts] Fallback query returned', allFallbackRes.value.data.items.length, 'broadcasts');
+          rawItems.push(...allFallbackRes.value.data.items);
+        }
+
+        // Deduplicate raw broadcasts by ID
+        const seenRawIds = new Set();
+        for (const item of rawItems) {
+          if (item && item.id && !seenRawIds.has(item.id)) {
+            seenRawIds.add(item.id);
+            broadcasts.push(item);
+          }
         }
       } catch (err) {
         console.error('[YouTubeService.listBroadcasts] Error fetching all broadcasts:', err.message);
@@ -511,6 +528,7 @@ class YouTubeService {
         part: 'snippet,status,contentDetails',
         mine: true,
         broadcastStatus: targetStatus,
+        broadcastType: 'all',
         maxResults: 50
       };
       try {
@@ -521,7 +539,7 @@ class YouTubeService {
       }
     }
     
-    console.log(`[YouTubeService.listBroadcasts] Found ${broadcasts.length} broadcasts`);
+    console.log(`[YouTubeService.listBroadcasts] Found ${broadcasts.length} unique broadcasts`);
     
     // OPTIMIZATION: Collect all unique stream IDs first
     const streamIds = broadcasts
@@ -576,14 +594,14 @@ class YouTubeService {
       
       return {
         id: broadcast.id,
-        title: broadcast.snippet.title,
-        description: broadcast.snippet.description,
-        scheduledStartTime: broadcast.snippet.scheduledStartTime,
-        privacyStatus: broadcast.status.privacyStatus,
-        lifeCycleStatus: broadcast.status.lifeCycleStatus,
-        categoryId: broadcast.snippet.categoryId || '22',
-        tags: broadcast.snippet.tags || [],
-        thumbnailUrl: broadcast.snippet.thumbnails?.medium?.url || broadcast.snippet.thumbnails?.default?.url || '',
+        title: broadcast.snippet?.title || 'Untitled Broadcast',
+        description: broadcast.snippet?.description || '',
+        scheduledStartTime: broadcast.snippet?.scheduledStartTime || null,
+        privacyStatus: broadcast.status?.privacyStatus || 'unlisted',
+        lifeCycleStatus: broadcast.status?.lifeCycleStatus || 'created',
+        categoryId: broadcast.snippet?.categoryId || '22',
+        tags: broadcast.snippet?.tags || [],
+        thumbnailUrl: broadcast.snippet?.thumbnails?.medium?.url || broadcast.snippet?.thumbnails?.default?.url || '',
         streamId,
         streamKey,
         rtmpUrl
@@ -604,6 +622,115 @@ class YouTubeService {
     console.log(`[YouTubeService.listBroadcasts] ========================================`);
     
     return result;
+  }
+
+  /**
+   * Fetch specific broadcasts by an array of broadcast IDs directly
+   * Bypasses search indexing propagation delay and status filters
+   * @param {string} accessToken - Access token
+   * @param {Array<string>} broadcastIds - List of YouTube broadcast IDs
+   * @returns {Promise<Array>} List of broadcasts
+   */
+  async getBroadcastsByIds(accessToken, broadcastIds) {
+    if (!broadcastIds || !Array.isArray(broadcastIds) || broadcastIds.length === 0) {
+      return [];
+    }
+
+    try {
+      const oauth2Client = new google.auth.OAuth2();
+      oauth2Client.setCredentials({ access_token: accessToken });
+      const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+
+      const uniqueIds = [...new Set(broadcastIds.filter(id => Boolean(id)))];
+      if (uniqueIds.length === 0) return [];
+
+      console.log(`[YouTubeService.getBroadcastsByIds] Querying ${uniqueIds.length} broadcasts by ID...`);
+
+      // YouTube API allows comma-separated IDs (max 50 per batch)
+      const batches = [];
+      for (let i = 0; i < uniqueIds.length; i += 50) {
+        batches.push(uniqueIds.slice(i, i + 50));
+      }
+
+      let allFoundItems = [];
+      for (const batch of batches) {
+        try {
+          const response = await youtube.liveBroadcasts.list({
+            part: 'snippet,status,contentDetails',
+            id: batch.join(',')
+          });
+          if (response.data.items && response.data.items.length > 0) {
+            allFoundItems.push(...response.data.items);
+          }
+        } catch (batchErr) {
+          console.warn('[YouTubeService.getBroadcastsByIds] Batch query error:', batchErr.message);
+        }
+      }
+
+      console.log(`[YouTubeService.getBroadcastsByIds] Found ${allFoundItems.length} broadcasts from ${uniqueIds.length} IDs`);
+      if (allFoundItems.length === 0) return [];
+
+      // Fetch bound stream keys if available
+      const streamIds = allFoundItems
+        .map(b => b.contentDetails?.boundStreamId)
+        .filter(id => Boolean(id));
+
+      let streamsMap = {};
+      if (streamIds.length > 0) {
+        try {
+          const uniqueStreamIds = [...new Set(streamIds)];
+          const streamResponse = await youtube.liveStreams.list({
+            part: 'snippet,cdn',
+            id: uniqueStreamIds.join(','),
+            maxResults: 50
+          });
+          if (streamResponse.data.items) {
+            streamResponse.data.items.forEach(stream => {
+              streamsMap[stream.id] = {
+                streamKey: stream.cdn?.ingestionInfo?.streamName || '',
+                rtmpUrl: stream.cdn?.ingestionInfo?.ingestionAddress || 'rtmp://a.rtmp.youtube.com/live2',
+                title: stream.snippet?.title || ''
+              };
+            });
+          }
+        } catch (sErr) {
+          console.warn('[YouTubeService.getBroadcastsByIds] Stream resolution warning:', sErr.message);
+        }
+      }
+
+      return allFoundItems.map(broadcast => {
+        let streamKey = '';
+        let streamId = null;
+        let rtmpUrl = 'rtmp://a.rtmp.youtube.com/live2';
+
+        if (broadcast.contentDetails?.boundStreamId) {
+          streamId = broadcast.contentDetails.boundStreamId;
+          const sInfo = streamsMap[streamId];
+          if (sInfo) {
+            streamKey = sInfo.streamKey;
+            rtmpUrl = sInfo.rtmpUrl;
+          }
+        }
+
+        return {
+          id: broadcast.id,
+          title: broadcast.snippet?.title || 'Untitled Broadcast',
+          description: broadcast.snippet?.description || '',
+          scheduledStartTime: broadcast.snippet?.scheduledStartTime || null,
+          privacyStatus: broadcast.status?.privacyStatus || 'unlisted',
+          lifeCycleStatus: broadcast.status?.lifeCycleStatus || 'created',
+          categoryId: broadcast.snippet?.categoryId || '22',
+          tags: broadcast.snippet?.tags || [],
+          thumbnailUrl: broadcast.snippet?.thumbnails?.medium?.url || broadcast.snippet?.thumbnails?.default?.url || '',
+          streamId,
+          streamKey,
+          rtmpUrl
+        };
+      });
+    } catch (err) {
+      console.error('[YouTubeService.getBroadcastsByIds] Error:', err.message);
+      return [];
+    }
   }
 
   /**

@@ -8938,15 +8938,45 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
     // Create cache key
     const cacheKey = accountId ? `user_${userId}_account_${accountId}` : `user_${userId}_all`;
     
-    // Check cache first
+    // Check cache first (empty list is only cached for 3 seconds to avoid locking user in empty state)
     const cached = broadcastsApiCache.get(cacheKey);
-    if (cached && (Date.now() - cached.timestamp < BROADCASTS_CACHE_TTL)) {
-      console.log(`[Cache HIT] Returning cached broadcasts for ${cacheKey}`);
-      console.log(`[DEBUG] Sample cached broadcast:`, cached.data[0]);
-      return res.json({ success: true, broadcasts: cached.data, accounts: cached.accounts || [], cached: true });
+    if (cached) {
+      const cacheAge = Date.now() - cached.timestamp;
+      const maxAge = (cached.data && cached.data.length > 0) ? BROADCASTS_CACHE_TTL : 3000;
+      if (cacheAge < maxAge) {
+        console.log(`[Cache HIT] Returning cached broadcasts for ${cacheKey} (${cached.data.length} items, age: ${Math.round(cacheAge / 1000)}s)`);
+        return res.json({ success: true, broadcasts: cached.data, accounts: cached.accounts || [], cached: true });
+      }
     }
     
     console.log(`[Cache MISS] Fetching fresh broadcasts for ${cacheKey}`);
+
+    // Helper to retrieve locally recorded broadcasts for this user
+    const getLocalStreams = () => new Promise((resolve) => {
+      db.all(
+        `SELECT id, title, rtmp_url, stream_key, schedule_time, youtube_broadcast_id, youtube_account_id, status 
+         FROM streams 
+         WHERE user_id = ? AND youtube_broadcast_id IS NOT NULL AND youtube_broadcast_id != ''`,
+        [userId],
+        (err, rows) => {
+          if (err) {
+            console.warn('[Broadcasts API] Local streams query error:', err.message);
+            resolve([]);
+          } else {
+            resolve(rows || []);
+          }
+        }
+      );
+    });
+
+    const localStreams = await getLocalStreams();
+    const localStreamMap = new Map();
+    localStreams.forEach(s => {
+      if (s.youtube_broadcast_id) {
+        localStreamMap.set(s.youtube_broadcast_id, s);
+      }
+    });
+    console.log(`[Broadcasts API] Found ${localStreams.length} locally recorded broadcast(s) for user ${userId}`);
 
     if (accountId) {
       // Get broadcasts for specific account
@@ -8961,16 +8991,63 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
         channelId: credentials.channelId
       });
 
-      const accessToken = await youtubeService.getAccessToken(credentials.clientId, credentials.clientSecret, credentials.refreshToken, 0, credentials.id, 0, credentials.id);
+      const accessToken = await youtubeService.getAccessToken(credentials.clientId, credentials.clientSecret, credentials.refreshToken, 0, credentials.id);
 
-      const broadcasts = await youtubeService.listBroadcasts(accessToken, { broadcastStatus: 'all' });
-      const result = broadcasts.map(b => ({ 
+      let broadcasts = await youtubeService.listBroadcasts(accessToken, { broadcastStatus: 'all' });
+      let result = broadcasts.map(b => ({ 
         ...b, 
         accountId: credentials.id, 
         channelName: credentials.channelName 
       }));
+
+      // Check if any local streams belonging to this account are missing from YouTube API response
+      const fetchedIds = new Set(result.map(b => b.id));
+      const missingLocal = localStreams.filter(s => 
+        (!s.youtube_account_id || String(s.youtube_account_id) === String(credentials.id)) &&
+        !fetchedIds.has(s.youtube_broadcast_id)
+      );
+
+      if (missingLocal.length > 0) {
+        console.log(`[Broadcasts API] Found ${missingLocal.length} local broadcast(s) missing from search index, checking by ID...`);
+        const missingIds = missingLocal.map(s => s.youtube_broadcast_id);
+        try {
+          const directBroadcasts = await youtubeService.getBroadcastsByIds(accessToken, missingIds);
+          const directIds = new Set();
+          directBroadcasts.forEach(b => {
+            directIds.add(b.id);
+            result.unshift({
+              ...b,
+              accountId: credentials.id,
+              channelName: credentials.channelName
+            });
+          });
+
+          // If still not indexed on YouTube (within seconds of creation), add local fallback entry
+          missingLocal.forEach(s => {
+            if (!directIds.has(s.youtube_broadcast_id) && !fetchedIds.has(s.youtube_broadcast_id)) {
+              console.log(`[Broadcasts API] Adding pending local broadcast to list: ${s.youtube_broadcast_id} (${s.title})`);
+              result.unshift({
+                id: s.youtube_broadcast_id,
+                title: s.title || 'Untitled Broadcast',
+                description: '',
+                scheduledStartTime: s.schedule_time || null,
+                privacyStatus: 'unlisted',
+                lifeCycleStatus: 'created',
+                streamId: null,
+                streamKey: s.stream_key || '',
+                rtmpUrl: s.rtmp_url || 'rtmp://a.rtmp.youtube.com/live2',
+                accountId: credentials.id,
+                channelName: credentials.channelName,
+                isLocalFallback: true
+              });
+            }
+          });
+        } catch (byIdErr) {
+          console.warn('[Broadcasts API] getBroadcastsByIds error:', byIdErr.message);
+        }
+      }
       
-      console.log(`[DEBUG] Sample broadcast with channelName:`, result[0]);
+      console.log(`[DEBUG] Final broadcasts for account ${accountId}: ${result.length}`);
       
       // Cache the result WITH accounts
       const accountsInfo = [{ id: credentials.id, channelName: credentials.channelName }];
@@ -8991,13 +9068,6 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
       const accounts = await YouTubeCredentials.findAllByUserId(req.session.userId);
 
       console.log(`[DEBUG] Found ${accounts.length} accounts for user ${userId}`);
-      accounts.forEach(acc => {
-        console.log(`[DEBUG] Account:`, {
-          id: acc.id,
-          channelName: acc.channelName,
-          channelId: acc.channelId
-        });
-      });
 
       if (accounts.length === 0) {
         return res.status(400).json({
@@ -9006,47 +9076,119 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
         });
       }
 
-      // Fetch all broadcasts in parallel with timeout (10 seconds per account - increased for reliability)
+      // Fetch all broadcasts in parallel with timeout (12 seconds per account for high reliability)
       const broadcastPromises = accounts.map(async (account) => {
         try {
-          // Add timeout to prevent hanging
           const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Timeout')), 10000)
+            setTimeout(() => reject(new Error('Timeout')), 12000)
           );
           
           const fetchPromise = (async () => {
-            const accessToken = await youtubeService.getAccessToken(account.clientId, account.clientSecret, account.refreshToken, 0, account.id, 0, account.id);
-            const broadcasts = await youtubeService.listBroadcasts(accessToken, { broadcastStatus: 'all' });
-            return broadcasts.map(b => ({
+            const accessToken = await youtubeService.getAccessToken(account.clientId, account.clientSecret, account.refreshToken, 0, account.id);
+            let broadcasts = await youtubeService.listBroadcasts(accessToken, { broadcastStatus: 'all' });
+            
+            let accountBroadcasts = broadcasts.map(b => ({
               ...b,
               accountId: account.id,
               channelName: account.channelName
             }));
+
+            // Sync with local streams for this account if missing from YouTube API response
+            const fetchedIds = new Set(accountBroadcasts.map(b => b.id));
+            const missingLocal = localStreams.filter(s => 
+              (!s.youtube_account_id || String(s.youtube_account_id) === String(account.id)) &&
+              !fetchedIds.has(s.youtube_broadcast_id)
+            );
+
+            if (missingLocal.length > 0) {
+              console.log(`[Broadcasts API] Account ${account.channelName}: ${missingLocal.length} local broadcast(s) missing from search index, checking by ID...`);
+              try {
+                const missingIds = missingLocal.map(s => s.youtube_broadcast_id);
+                const directBroadcasts = await youtubeService.getBroadcastsByIds(accessToken, missingIds);
+                const directIds = new Set();
+                directBroadcasts.forEach(b => {
+                  directIds.add(b.id);
+                  accountBroadcasts.unshift({
+                    ...b,
+                    accountId: account.id,
+                    channelName: account.channelName
+                  });
+                });
+
+                // Add pending local fallback for broadcasts just created
+                missingLocal.forEach(s => {
+                  if (!directIds.has(s.youtube_broadcast_id) && !fetchedIds.has(s.youtube_broadcast_id)) {
+                    accountBroadcasts.unshift({
+                      id: s.youtube_broadcast_id,
+                      title: s.title || 'Untitled Broadcast',
+                      description: '',
+                      scheduledStartTime: s.schedule_time || null,
+                      privacyStatus: 'unlisted',
+                      lifeCycleStatus: 'created',
+                      streamId: null,
+                      streamKey: s.stream_key || '',
+                      rtmpUrl: s.rtmp_url || 'rtmp://a.rtmp.youtube.com/live2',
+                      accountId: account.id,
+                      channelName: account.channelName,
+                      isLocalFallback: true
+                    });
+                  }
+                });
+              } catch (directErr) {
+                console.warn(`[Broadcasts API] Account ${account.channelName} direct ID query warning:`, directErr.message);
+              }
+            }
+
+            return accountBroadcasts;
           })();
           
           return await Promise.race([fetchPromise, timeoutPromise]);
         } catch (err) {
           console.error(`Error fetching broadcasts for ${account.channelName}:`, err.message);
-          return []; // Return empty array on error
+          // Fallback to locally recorded streams for this account so user never sees empty screen
+          const accountLocalStreams = localStreams.filter(s => 
+            !s.youtube_account_id || String(s.youtube_account_id) === String(account.id)
+          );
+          if (accountLocalStreams.length > 0) {
+            console.log(`[Broadcasts API] Using ${accountLocalStreams.length} local streams as offline fallback for ${account.channelName}`);
+            return accountLocalStreams.map(s => ({
+              id: s.youtube_broadcast_id,
+              title: s.title || 'Untitled Broadcast',
+              description: '',
+              scheduledStartTime: s.schedule_time || null,
+              privacyStatus: 'unlisted',
+              lifeCycleStatus: 'created',
+              streamId: null,
+              streamKey: s.stream_key || '',
+              rtmpUrl: s.rtmp_url || 'rtmp://a.rtmp.youtube.com/live2',
+              accountId: account.id,
+              channelName: account.channelName,
+              isLocalFallback: true
+            }));
+          }
+          return [];
         }
       });
 
       // Wait for all promises to resolve
       const broadcastArrays = await Promise.all(broadcastPromises);
       
-      // Flatten array of arrays into single array
-      const allBroadcasts = broadcastArrays.flat();
+      // Flatten array of arrays and deduplicate by broadcast ID
+      const seenIds = new Set();
+      const allBroadcasts = [];
+      broadcastArrays.flat().forEach(b => {
+        if (b && b.id && !seenIds.has(b.id)) {
+          seenIds.add(b.id);
+          allBroadcasts.push(b);
+        }
+      });
       
-      console.log(`[DEBUG] Total broadcasts fetched: ${allBroadcasts.length}`);
-      if (allBroadcasts.length > 0) {
-        console.log(`[DEBUG] Sample broadcast:`, allBroadcasts[0]);
-      }
+      console.log(`[DEBUG] Total unique broadcasts fetched: ${allBroadcasts.length}`);
       
       // Prepare accounts info
       const accountsInfo = accounts.map(a => ({ id: a.id, channelName: a.channelName }));
-      console.log(`[DEBUG] Accounts info:`, accountsInfo);
       
-      // Cache the result WITH accounts
+      // Cache the result WITH accounts (short cache if empty, normal TTL if populated)
       broadcastsApiCache.set(cacheKey, { 
         data: allBroadcasts, 
         accounts: accountsInfo,
