@@ -695,29 +695,34 @@ function createBroadcastRowHtml(broadcast, index) {
   }
 }
 
-// Manual refresh broadcasts (called by user action)
-async function refreshBroadcasts() {
+// Manual / Auto refresh broadcasts
+async function refreshBroadcasts(options = {}) {
+  const silent = Boolean(options && options.silent);
   const broadcastsContainer = document.getElementById('broadcastsContainer') || document.querySelector('.space-y-4');
   
   if (!broadcastsContainer) {
-    console.log('[Refresh] No broadcasts container found');
     return;
   }
   
-  // Show loading indicator
-  const loadingDiv = document.createElement('div');
-  loadingDiv.id = 'broadcastsRefreshLoading';
-  loadingDiv.className = 'fixed top-20 right-4 bg-dark-800 border border-primary/50 rounded-lg px-4 py-3 shadow-lg z-50 flex items-center gap-3';
-  loadingDiv.innerHTML = `
-    <i class="ti ti-loader animate-spin text-primary text-xl"></i>
-    <span class="text-sm text-white">Refreshing broadcasts...</span>
-  `;
-  document.body.appendChild(loadingDiv);
+  // Show loading indicator only when not silent
+  let loadingDiv = null;
+  if (!silent) {
+    loadingDiv = document.createElement('div');
+    loadingDiv.id = 'broadcastsRefreshLoading';
+    loadingDiv.className = 'fixed top-20 right-4 bg-dark-800 border border-primary/50 rounded-lg px-4 py-3 shadow-lg z-50 flex items-center gap-3';
+    loadingDiv.innerHTML = `
+      <i class="ti ti-loader animate-spin text-primary text-xl"></i>
+      <span class="text-sm text-white">Refreshing broadcasts...</span>
+    `;
+    document.body.appendChild(loadingDiv);
+  }
   
   try {
     // Clear cache
-    broadcastsCache.data = null;
-    broadcastsCache.timestamp = null;
+    if (typeof broadcastsCache !== 'undefined' && broadcastsCache) {
+      broadcastsCache.data = null;
+      broadcastsCache.timestamp = null;
+    }
     
     const response = await fetch('/api/youtube/broadcasts?force=1', {
       headers: {
@@ -729,10 +734,14 @@ async function refreshBroadcasts() {
     
     if (data.success && data.broadcasts !== undefined) {
       // Update cache
-      broadcastsCache.data = data.broadcasts;
-      broadcastsCache.timestamp = Date.now();
+      if (typeof broadcastsCache !== 'undefined' && broadcastsCache) {
+        broadcastsCache.data = data.broadcasts;
+        broadcastsCache.timestamp = Date.now();
+      }
       
-      showToast(`Refreshed ${data.broadcasts.length} broadcasts`);
+      if (!silent) {
+        showToast(`Refreshed ${data.broadcasts.length} broadcasts`);
+      }
       
       // Update in-place smoothly
       if (typeof renderBroadcastsGrouped === 'function' && broadcastsContainer) {
@@ -743,23 +752,41 @@ async function refreshBroadcasts() {
         } else if (typeof renderEmptyState === 'function') {
           renderEmptyState(data.errors || []);
         }
-      } else {
-        setTimeout(() => window.location.reload(), 500);
       }
-    } else {
+    } else if (!silent) {
       showToast(data.error || 'Failed to refresh broadcasts', 'error');
-      if (typeof renderEmptyState === 'function' && broadcastsContainer) {
-        renderEmptyState(data.errors || (data.error ? [{ error: data.error, message: data.message }] : []));
-      }
     }
   } catch (error) {
-    console.error('Error refreshing broadcasts:', error);
-    showToast('Failed to refresh broadcasts', 'error');
+    if (!silent) {
+      console.error('Error refreshing broadcasts:', error);
+      showToast('Failed to refresh broadcasts', 'error');
+    }
   } finally {
-    // Remove loading indicator
+    if (loadingDiv) loadingDiv.remove();
     const loading = document.getElementById('broadcastsRefreshLoading');
     if (loading) loading.remove();
   }
+}
+window.refreshBroadcasts = refreshBroadcasts;
+
+// Setup silent automatic background sync (no manual button needed)
+if (typeof window !== 'undefined' && !window._broadcastsAutoSyncInitialized) {
+  window._broadcastsAutoSyncInitialized = true;
+  window.addEventListener('focus', () => {
+    if (document.getElementById('broadcastsContainer')) {
+      refreshBroadcasts({ silent: true });
+    }
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && document.getElementById('broadcastsContainer')) {
+      refreshBroadcasts({ silent: true });
+    }
+  });
+  setInterval(() => {
+    if (!document.hidden && document.getElementById('broadcastsContainer')) {
+      refreshBroadcasts({ silent: true });
+    }
+  }, 30000);
 }
 
 // Toggle broadcast channel collapse
@@ -808,10 +835,52 @@ function syncCheckboxes(checkbox) {
   });
 }
 
-// Update selection count
+// Toggle select all / uncheck all broadcasts
+function toggleSelectAllBroadcasts(checkbox) {
+  const masterCb = checkbox || document.getElementById('selectAllBroadcasts');
+  if (!masterCb) return;
+  const targetState = masterCb.checked;
+  
+  // Set all broadcast checkboxes (both desktop and mobile)
+  const allBroadcastCheckboxes = document.querySelectorAll('.broadcast-checkbox');
+  allBroadcastCheckboxes.forEach(cb => {
+    cb.checked = targetState;
+  });
+  
+  // Set all channel header select-all checkboxes
+  const allChannelCheckboxes = document.querySelectorAll('.channel-select-all');
+  allChannelCheckboxes.forEach(cb => {
+    cb.checked = targetState;
+  });
+  
+  masterCb.indeterminate = false;
+  
+  if (typeof updateSelectionCount === 'function') {
+    updateSelectionCount();
+  }
+}
+window.toggleSelectAllBroadcasts = toggleSelectAllBroadcasts;
+
+// Update selection count & sync master checkbox
 function updateSelectionCount() {
-  const checkboxes = document.querySelectorAll('.broadcast-checkbox:checked');
-  const count = checkboxes.length;
+  // Count unique broadcast IDs selected
+  const checkedBoxes = document.querySelectorAll('.broadcast-checkbox:checked');
+  const selectedIds = new Set();
+  checkedBoxes.forEach(cb => {
+    const id = cb.getAttribute('data-broadcast-id');
+    if (id) selectedIds.add(id);
+  });
+  
+  const allBoxes = document.querySelectorAll('.broadcast-checkbox');
+  const allIds = new Set();
+  allBoxes.forEach(cb => {
+    const id = cb.getAttribute('data-broadcast-id');
+    if (id) allIds.add(id);
+  });
+  
+  const count = selectedIds.size;
+  const total = allIds.size;
+  
   const selectionActions = document.getElementById('selectionActions');
   const selectedCount = document.getElementById('selectedCount');
   
@@ -821,7 +890,23 @@ function updateSelectionCount() {
   } else {
     if (selectionActions) selectionActions.classList.add('hidden');
   }
+  
+  // Sync master checkbox state (checked / unchecked / indeterminate)
+  const masterCb = document.getElementById('selectAllBroadcasts');
+  if (masterCb) {
+    if (count === 0) {
+      masterCb.checked = false;
+      masterCb.indeterminate = false;
+    } else if (count === total && total > 0) {
+      masterCb.checked = true;
+      masterCb.indeterminate = false;
+    } else {
+      masterCb.checked = false;
+      masterCb.indeterminate = true;
+    }
+  }
 }
+window.updateSelectionCount = updateSelectionCount;
 
 // Clear selection
 function clearSelection() {
