@@ -612,18 +612,18 @@ function createBroadcastRowHtml(broadcast, index) {
               <i class="ti ti-copy text-sm"></i>
             </button>
           </div>
-          <div class="w-48 flex items-center justify-center gap-1.5">
+          <div class="w-32 flex items-center justify-center gap-1.5">
             <button type="button" onclick="editBroadcast('${broadcast.id}', ${broadcast.accountId || 'null'})"
-              class="px-2.5 py-1 text-xs font-medium bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded transition-colors flex items-center gap-1" title="Edit">
-              <i class="ti ti-edit text-xs"></i> Edit
+              class="w-8 h-8 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 active:bg-blue-500/35 text-blue-400 border border-blue-500/20 flex items-center justify-center transition-all active:scale-95 touch-manipulation" title="Edit">
+              <i class="ti ti-edit text-sm"></i>
             </button>
             <button type="button" onclick="openDuplicateBroadcastModal('${broadcast.id}', ${broadcast.accountId || 'null'})"
-              class="px-2.5 py-1 text-xs font-medium bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 rounded transition-colors flex items-center gap-1" title="Duplikat Siaran">
-              <i class="ti ti-copy text-xs"></i> Copy
+              class="w-8 h-8 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 active:bg-purple-500/35 text-purple-400 border border-purple-500/20 flex items-center justify-center transition-all active:scale-95 touch-manipulation" title="Duplikat Siaran">
+              <i class="ti ti-copy text-sm"></i>
             </button>
             <button type="button" onclick="deleteBroadcast('${broadcast.id}', null, ${broadcast.accountId || 'null'})"
-              class="px-2.5 py-1 text-xs font-medium bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded transition-colors flex items-center gap-1" title="Hapus">
-              <i class="ti ti-trash text-xs"></i> Del
+              class="w-8 h-8 rounded-lg bg-red-500/15 hover:bg-red-500/25 active:bg-red-500/35 text-red-400 border border-red-500/20 flex items-center justify-center transition-all active:scale-95 touch-manipulation" title="Hapus">
+              <i class="ti ti-trash text-sm"></i>
             </button>
           </div>
         </div>
@@ -673,19 +673,16 @@ function createBroadcastRowHtml(broadcast, index) {
 
             <div class="flex items-center gap-1.5 flex-shrink-0">
               <button type="button" onclick="editBroadcast('${broadcast.id}', ${broadcast.accountId || 'null'})"
-                class="px-2.5 py-1.5 text-xs font-medium bg-blue-500/15 hover:bg-blue-500/25 active:bg-blue-500/35 text-blue-400 border border-blue-500/20 rounded-lg transition-all active:scale-95 touch-manipulation flex items-center gap-1 min-h-[34px]" title="Edit">
-                <i class="ti ti-edit text-xs"></i>
-                <span>Edit</span>
+                class="w-8 h-8 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 active:bg-blue-500/35 text-blue-400 border border-blue-500/20 flex items-center justify-center transition-all active:scale-95 touch-manipulation" title="Edit">
+                <i class="ti ti-edit text-sm"></i>
               </button>
               <button type="button" onclick="openDuplicateBroadcastModal('${broadcast.id}', ${broadcast.accountId || 'null'})"
-                class="px-2.5 py-1.5 text-xs font-medium bg-purple-500/15 hover:bg-purple-500/25 active:bg-purple-500/35 text-purple-400 border border-purple-500/20 rounded-lg transition-all active:scale-95 touch-manipulation flex items-center gap-1 min-h-[34px]" title="Duplikat Siaran">
-                <i class="ti ti-copy text-xs"></i>
-                <span>Copy</span>
+                class="w-8 h-8 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 active:bg-purple-500/35 text-purple-400 border border-purple-500/20 flex items-center justify-center transition-all active:scale-95 touch-manipulation" title="Duplikat Siaran">
+                <i class="ti ti-copy text-sm"></i>
               </button>
               <button type="button" onclick="deleteBroadcast('${broadcast.id}', null, ${broadcast.accountId || 'null'})"
-                class="px-2.5 py-1.5 text-xs font-medium bg-red-500/15 hover:bg-red-500/25 active:bg-red-500/35 text-red-400 border border-red-500/20 rounded-lg transition-all active:scale-95 touch-manipulation flex items-center gap-1 min-h-[34px]" title="Hapus">
-                <i class="ti ti-trash text-xs"></i>
-                <span>Del</span>
+                class="w-8 h-8 rounded-lg bg-red-500/15 hover:bg-red-500/25 active:bg-red-500/35 text-red-400 border border-red-500/20 flex items-center justify-center transition-all active:scale-95 touch-manipulation" title="Hapus">
+                <i class="ti ti-trash text-sm"></i>
               </button>
             </div>
           </div>
