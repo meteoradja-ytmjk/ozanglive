@@ -494,7 +494,7 @@
   <div class="yt-broadcast-header flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 mb-5">
     <div class="flex flex-col sm:flex-row sm:items-center gap-3 w-full sm:w-auto">
       <div class="flex items-center gap-3">
-        <input type="checkbox" id="selectAllBroadcasts" onchange="toggleSelectAllBroadcasts(this)" class="w-4 h-4 rounded text-primary border-gray-600 bg-dark-700 focus:ring-primary cursor-pointer transition-transform hover:scale-110" title="Pilih Semua / Batal Pilih Semua">
+        <input type="checkbox" id="selectAllBroadcasts" onclick="toggleSelectAllBroadcasts(this)" class="w-4 h-4 rounded text-primary border-gray-600 bg-dark-700 focus:ring-primary cursor-pointer transition-transform hover:scale-110" title="Pilih Semua / Batal Pilih Semua">
         <h2 class="text-lg sm:text-xl font-bold text-white tracking-tight">Scheduled Broadcasts</h2>
       </div>
       <div id="selectionActions" class="hidden">
@@ -2905,26 +2905,33 @@ function toggleChannelSelectAll(checkbox, accountId) {
 // Toggle select all / uncheck all broadcasts across all channels
 function toggleSelectAllBroadcasts(checkbox) {
   const masterCb = checkbox || document.getElementById('selectAllBroadcasts');
-  if (!masterCb) return;
-  const isChecked = masterCb.checked;
+  const checkedBoxes = document.querySelectorAll('.broadcast-checkbox:checked');
+  
+  // If ANY broadcast is checked -> UNCHECK ALL (targetState = false)
+  // If NO broadcast is checked -> CHECK ALL (targetState = true)
+  const targetState = (checkedBoxes.length === 0);
   
   const allBroadcastCheckboxes = document.querySelectorAll('.broadcast-checkbox');
   allBroadcastCheckboxes.forEach(cb => {
-    cb.checked = isChecked;
+    cb.checked = targetState;
   });
   
   const allChannelSelectAll = document.querySelectorAll('.channel-select-all');
   allChannelSelectAll.forEach(cb => {
-    cb.checked = isChecked;
+    cb.checked = targetState;
   });
   
-  masterCb.indeterminate = false;
+  if (masterCb) {
+    masterCb.checked = targetState;
+    masterCb.indeterminate = false;
+  }
   
   if (typeof updateSelectionCount === 'function') {
     updateSelectionCount();
   }
 }
 window.toggleSelectAllBroadcasts = toggleSelectAllBroadcasts;
+window.toggleSelectAll = toggleSelectAllBroadcasts;
 
 // Toggle visibility of secret input fields (password / text)
 function toggleSecretVisibility(inputId) {

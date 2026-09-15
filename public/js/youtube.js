@@ -838,8 +838,13 @@ function syncCheckboxes(checkbox) {
 // Toggle select all / uncheck all broadcasts
 function toggleSelectAllBroadcasts(checkbox) {
   const masterCb = checkbox || document.getElementById('selectAllBroadcasts');
-  if (!masterCb) return;
-  const targetState = masterCb.checked;
+  
+  // Count currently checked unique broadcasts
+  const checkedBoxes = document.querySelectorAll('.broadcast-checkbox:checked');
+  
+  // If ANY broadcast is checked -> UNCHECK ALL (targetState = false)
+  // If NO broadcast is checked -> CHECK ALL (targetState = true)
+  const targetState = (checkedBoxes.length === 0);
   
   // Set all broadcast checkboxes (both desktop and mobile)
   const allBroadcastCheckboxes = document.querySelectorAll('.broadcast-checkbox');
@@ -853,29 +858,44 @@ function toggleSelectAllBroadcasts(checkbox) {
     cb.checked = targetState;
   });
   
-  masterCb.indeterminate = false;
-  
-  if (typeof updateSelectionCount === 'function') {
-    updateSelectionCount();
+  if (masterCb) {
+    masterCb.checked = targetState;
+    masterCb.indeterminate = false;
   }
+  
+  updateSelectionCount();
 }
 window.toggleSelectAllBroadcasts = toggleSelectAllBroadcasts;
+window.toggleSelectAll = toggleSelectAllBroadcasts;
 
 // Update selection count & sync master checkbox
 function updateSelectionCount() {
-  // Count unique broadcast IDs selected
   const checkedBoxes = document.querySelectorAll('.broadcast-checkbox:checked');
   const selectedIds = new Set();
   checkedBoxes.forEach(cb => {
-    const id = cb.getAttribute('data-broadcast-id');
-    if (id) selectedIds.add(id);
+    const id = cb.getAttribute('data-broadcast-id') || (cb.dataset && cb.dataset.broadcastId);
+    if (id) {
+      selectedIds.add(String(id));
+    } else if (cb.dataset && cb.dataset.broadcast) {
+      try {
+        const d = JSON.parse(cb.dataset.broadcast);
+        if (d && d.id) selectedIds.add(String(d.id));
+      } catch (e) {}
+    }
   });
   
   const allBoxes = document.querySelectorAll('.broadcast-checkbox');
   const allIds = new Set();
   allBoxes.forEach(cb => {
-    const id = cb.getAttribute('data-broadcast-id');
-    if (id) allIds.add(id);
+    const id = cb.getAttribute('data-broadcast-id') || (cb.dataset && cb.dataset.broadcastId);
+    if (id) {
+      allIds.add(String(id));
+    } else if (cb.dataset && cb.dataset.broadcast) {
+      try {
+        const d = JSON.parse(cb.dataset.broadcast);
+        if (d && d.id) allIds.add(String(d.id));
+      } catch (e) {}
+    }
   });
   
   const count = selectedIds.size;
@@ -885,19 +905,25 @@ function updateSelectionCount() {
   const selectedCount = document.getElementById('selectedCount');
   
   if (count > 0) {
-    if (selectionActions) selectionActions.classList.remove('hidden');
+    if (selectionActions) {
+      selectionActions.classList.remove('hidden');
+      selectionActions.classList.add('flex');
+    }
     if (selectedCount) selectedCount.textContent = `${count} selected`;
   } else {
-    if (selectionActions) selectionActions.classList.add('hidden');
+    if (selectionActions) {
+      selectionActions.classList.add('hidden');
+      selectionActions.classList.remove('flex');
+    }
   }
   
   // Sync master checkbox state (checked / unchecked / indeterminate)
   const masterCb = document.getElementById('selectAllBroadcasts');
   if (masterCb) {
-    if (count === 0) {
+    if (total === 0 || count === 0) {
       masterCb.checked = false;
       masterCb.indeterminate = false;
-    } else if (count === total && total > 0) {
+    } else if (count === total) {
       masterCb.checked = true;
       masterCb.indeterminate = false;
     } else {
@@ -5899,43 +5925,75 @@ function syncCheckboxes(checkbox) {
   });
 }
 
-// Update selection count display
+// Second updateSelectionCount and toggleSelectAll redirect to unified implementation
 function updateSelectionCount() {
-  const selected = getSelectedBroadcasts();
-  const countEl = document.getElementById('selectedCount');
-  const actionsEl = document.getElementById('selectionActions');
+  const checkedBoxes = document.querySelectorAll('.broadcast-checkbox:checked');
+  const selectedIds = new Set();
+  checkedBoxes.forEach(cb => {
+    const id = cb.getAttribute('data-broadcast-id') || (cb.dataset && cb.dataset.broadcastId);
+    if (id) {
+      selectedIds.add(String(id));
+    } else if (cb.dataset && cb.dataset.broadcast) {
+      try {
+        const d = JSON.parse(cb.dataset.broadcast);
+        if (d && d.id) selectedIds.add(String(d.id));
+      } catch (e) {}
+    }
+  });
   
-  if (countEl) {
-    countEl.textContent = `${selected.length} selected`;
-  }
+  const allBoxes = document.querySelectorAll('.broadcast-checkbox');
+  const allIds = new Set();
+  allBoxes.forEach(cb => {
+    const id = cb.getAttribute('data-broadcast-id') || (cb.dataset && cb.dataset.broadcastId);
+    if (id) {
+      allIds.add(String(id));
+    } else if (cb.dataset && cb.dataset.broadcast) {
+      try {
+        const d = JSON.parse(cb.dataset.broadcast);
+        if (d && d.id) allIds.add(String(d.id));
+      } catch (e) {}
+    }
+  });
   
-  if (actionsEl) {
-    if (selected.length > 0) {
-      actionsEl.classList.remove('hidden');
-      actionsEl.classList.add('flex');
-    } else {
-      actionsEl.classList.add('hidden');
-      actionsEl.classList.remove('flex');
+  const count = selectedIds.size;
+  const total = allIds.size;
+  
+  const selectionActions = document.getElementById('selectionActions');
+  const selectedCount = document.getElementById('selectedCount');
+  
+  if (count > 0) {
+    if (selectionActions) {
+      selectionActions.classList.remove('hidden');
+      selectionActions.classList.add('flex');
+    }
+    if (selectedCount) selectedCount.textContent = `${count} selected`;
+  } else {
+    if (selectionActions) {
+      selectionActions.classList.add('hidden');
+      selectionActions.classList.remove('flex');
     }
   }
   
-  // Update select all checkbox state
-  const selectAllCheckbox = document.getElementById('selectAllBroadcasts');
-  const allCheckboxes = document.querySelectorAll('.broadcast-checkbox');
-  if (selectAllCheckbox && allCheckboxes.length > 0) {
-    selectAllCheckbox.checked = selected.length === allCheckboxes.length;
-    selectAllCheckbox.indeterminate = selected.length > 0 && selected.length < allCheckboxes.length;
+  const masterCb = document.getElementById('selectAllBroadcasts');
+  if (masterCb) {
+    if (total === 0 || count === 0) {
+      masterCb.checked = false;
+      masterCb.indeterminate = false;
+    } else if (count === total) {
+      masterCb.checked = true;
+      masterCb.indeterminate = false;
+    } else {
+      masterCb.checked = false;
+      masterCb.indeterminate = true;
+    }
   }
 }
+window.updateSelectionCount = updateSelectionCount;
 
-// Toggle select all broadcasts
 function toggleSelectAll(checkbox) {
-  const allCheckboxes = document.querySelectorAll('.broadcast-checkbox');
-  allCheckboxes.forEach(cb => {
-    cb.checked = checkbox.checked;
-  });
-  updateSelectionCount();
+  toggleSelectAllBroadcasts(checkbox);
 }
+window.toggleSelectAll = toggleSelectAll;
 
 // Save selected broadcasts as template
 function saveSelectedAsTemplate() {
