@@ -480,21 +480,17 @@ class YouTubeService {
 
     if (targetStatus === 'all') {
       try {
-        console.log('[YouTubeService.listBroadcasts] Fetching ALL broadcasts (upcoming + active + completed + all)...');
-        const [upcomingRes, activeRes, completedRes, allFallbackRes] = await Promise.allSettled([
+        console.log('[YouTubeService.listBroadcasts] Fetching live broadcasts (upcoming + active)...');
+        const [upcomingRes, activeRes] = await Promise.allSettled([
           youtube.liveBroadcasts.list({ part: 'snippet,status,contentDetails', mine: true, broadcastStatus: 'upcoming', maxResults: 50 }),
-          youtube.liveBroadcasts.list({ part: 'snippet,status,contentDetails', mine: true, broadcastStatus: 'active', maxResults: 50 }),
-          youtube.liveBroadcasts.list({ part: 'snippet,status,contentDetails', mine: true, broadcastStatus: 'completed', maxResults: 20 }),
-          youtube.liveBroadcasts.list({ part: 'snippet,status,contentDetails', mine: true, broadcastStatus: 'all', maxResults: 50 })
+          youtube.liveBroadcasts.list({ part: 'snippet,status,contentDetails', mine: true, broadcastStatus: 'active', maxResults: 50 })
         ]);
         
         console.log('[YouTubeService.listBroadcasts] Upcoming result:', upcomingRes.status, upcomingRes.status === 'fulfilled' ? upcomingRes.value.data.items?.length : (upcomingRes.reason?.message || 'error'));
         console.log('[YouTubeService.listBroadcasts] Active result:', activeRes.status, activeRes.status === 'fulfilled' ? activeRes.value.data.items?.length : (activeRes.reason?.message || 'error'));
-        console.log('[YouTubeService.listBroadcasts] Completed result:', completedRes.status, completedRes.status === 'fulfilled' ? completedRes.value.data.items?.length : (completedRes.reason?.message || 'error'));
-        console.log('[YouTubeService.listBroadcasts] All-status fallback result:', allFallbackRes.status, allFallbackRes.status === 'fulfilled' ? allFallbackRes.value.data.items?.length : (allFallbackRes.reason?.message || 'error'));
         
         // Detect critical token / authentication errors
-        const rejectedReasons = [upcomingRes, activeRes, completedRes, allFallbackRes]
+        const rejectedReasons = [upcomingRes, activeRes]
           .filter(r => r.status === 'rejected')
           .map(r => r.reason);
 
@@ -504,7 +500,7 @@ class YouTubeService {
           err?.message?.includes('expired') ||
           err?.message?.includes('revoked')
         );
-        if (authErr && rejectedReasons.length === 4) {
+        if (authErr && rejectedReasons.length === 2) {
           throw new Error('TOKEN_EXPIRED: YouTube token has expired or been revoked. Please reconnect your YouTube account.');
         }
 
@@ -516,14 +512,6 @@ class YouTubeService {
         if (activeRes.status === 'fulfilled' && activeRes.value.data.items) {
           console.log('[YouTubeService.listBroadcasts] Adding', activeRes.value.data.items.length, 'active broadcasts');
           rawItems.push(...activeRes.value.data.items);
-        }
-        if (completedRes.status === 'fulfilled' && completedRes.value.data.items) {
-          console.log('[YouTubeService.listBroadcasts] Adding', completedRes.value.data.items.length, 'completed broadcasts');
-          rawItems.push(...completedRes.value.data.items);
-        }
-        if (allFallbackRes.status === 'fulfilled' && allFallbackRes.value.data.items) {
-          console.log('[YouTubeService.listBroadcasts] Fallback query returned', allFallbackRes.value.data.items.length, 'broadcasts');
-          rawItems.push(...allFallbackRes.value.data.items);
         }
 
         // Additional fallback: Query user's upcoming channel live events via search.list
@@ -571,10 +559,16 @@ class YouTubeService {
           console.log('[YouTubeService.listBroadcasts] search.list fallback info:', searchErr.message);
         }
 
-        // Deduplicate raw broadcasts by ID
+        // Deduplicate raw broadcasts by ID, strictly filtering out completed/revoked broadcasts
         const seenRawIds = new Set();
         for (const item of rawItems) {
-          if (item && item.id && !seenRawIds.has(item.id)) {
+          if (!item || !item.id) continue;
+          const status = item.status?.lifeCycleStatus;
+          if (status === 'complete' || status === 'completed' || status === 'revoked') {
+            console.log(`[YouTubeService.listBroadcasts] Skipping broadcast ${item.id} with completed/revoked status: ${status}`);
+            continue;
+          }
+          if (!seenRawIds.has(item.id)) {
             seenRawIds.add(item.id);
             broadcasts.push(item);
           }
@@ -594,7 +588,13 @@ class YouTubeService {
       };
       try {
         const response = await youtube.liveBroadcasts.list(params);
-        broadcasts = response.data.items || [];
+        const fetched = response.data.items || [];
+        broadcasts = (targetStatus === 'completed')
+          ? fetched
+          : fetched.filter(item => {
+              const st = item.status?.lifeCycleStatus;
+              return st !== 'complete' && st !== 'completed' && st !== 'revoked';
+            });
       } catch (err) {
         console.error('[YouTubeService.listBroadcasts] Error fetching broadcasts:', err.message);
         if (err.message && (err.message.includes('invalid_grant') || err.message.includes('revoked') || err.code === 401)) {
@@ -736,6 +736,11 @@ class YouTubeService {
       }
 
       console.log(`[YouTubeService.getBroadcastsByIds] Found ${allFoundItems.length} broadcasts from ${uniqueIds.length} IDs`);
+      // Only keep active or upcoming broadcasts; completed/revoked broadcasts are ended/past streams
+      allFoundItems = allFoundItems.filter(b => {
+        const st = b.status?.lifeCycleStatus;
+        return st !== 'complete' && st !== 'completed' && st !== 'revoked';
+      });
       if (allFoundItems.length === 0) return [];
 
       // Fetch bound stream keys if available
@@ -947,11 +952,35 @@ class YouTubeService {
     
     const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
     
-    await youtube.liveBroadcasts.delete({
-      id: broadcastId
-    });
-    
-    return true;
+    try {
+      await youtube.liveBroadcasts.delete({
+        id: broadcastId
+      });
+      console.log(`[YouTubeService.deleteBroadcast] Deleted broadcast on YouTube: ${broadcastId}`);
+      return true;
+    } catch (err) {
+      if (err.code === 404 || err.status === 404 || (err.message && err.message.toLowerCase().includes('not found'))) {
+        console.log(`[YouTubeService.deleteBroadcast] Broadcast ${broadcastId} already deleted or not found on YouTube (treated as success)`);
+        return true;
+      }
+      
+      // Fallback: If liveBroadcasts.delete fails (e.g. broadcast state error or converted into video), try deleting via videos API
+      try {
+        console.log(`[YouTubeService.deleteBroadcast] liveBroadcasts.delete failed (${err.message}), attempting videos.delete fallback for ${broadcastId}...`);
+        await youtube.videos.delete({ id: broadcastId });
+        console.log(`[YouTubeService.deleteBroadcast] Deleted via videos.delete on YouTube: ${broadcastId}`);
+        return true;
+      } catch (vidErr) {
+        if (vidErr.code === 404 || vidErr.status === 404 || (vidErr.message && vidErr.message.toLowerCase().includes('not found'))) {
+          console.log(`[YouTubeService.deleteBroadcast] Video ${broadcastId} already deleted or not found (treated as success)`);
+          return true;
+        }
+        console.warn(`[YouTubeService.deleteBroadcast] videos.delete fallback also failed for ${broadcastId}:`, vidErr.message);
+      }
+
+      console.error(`[YouTubeService.deleteBroadcast] Error deleting broadcast ${broadcastId}:`, err.message);
+      throw err;
+    }
   }
 
   /**

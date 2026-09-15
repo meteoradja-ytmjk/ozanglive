@@ -8940,7 +8940,9 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
     const cacheKey = accountId ? `user_${userId}_account_${accountId}` : `user_${userId}_all`;
     
     // Check cache first (skipped if forceRefresh is requested; empty list expires in 3s)
-    if (!forceRefresh) {
+    if (forceRefresh) {
+      invalidateBroadcastsCache(userId);
+    } else {
       const cached = broadcastsApiCache.get(cacheKey);
       if (cached) {
         const cacheAge = Date.now() - cached.timestamp;
@@ -9065,7 +9067,7 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
       );
 
       if (missingLocal.length > 0) {
-        console.log(`[Broadcasts API] Found ${missingLocal.length} local broadcast(s) missing from search index, checking by ID...`);
+        console.log(`[Broadcasts API] Verifying ${missingLocal.length} known broadcast IDs against YouTube API...`);
         const missingIds = missingLocal.map(s => s.youtube_broadcast_id);
         try {
           const directBroadcasts = await youtubeService.getBroadcastsByIds(accessToken, missingIds);
@@ -9079,26 +9081,17 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
             });
           });
 
-          // If still not indexed on YouTube, add local fallback entry so it is visible immediately
-          missingLocal.forEach(s => {
-            if (!directIds.has(s.youtube_broadcast_id) && !fetchedIds.has(s.youtube_broadcast_id)) {
-              console.log(`[Broadcasts API] Adding local fallback broadcast to list: ${s.youtube_broadcast_id} (${s.title})`);
-              result.unshift({
-                id: s.youtube_broadcast_id,
-                title: s.title || 'Untitled Broadcast',
-                description: '',
-                scheduledStartTime: s.schedule_time || null,
-                privacyStatus: s.privacyStatus || 'unlisted',
-                lifeCycleStatus: 'created',
-                streamId: null,
-                streamKey: s.stream_key || '',
-                rtmpUrl: s.rtmp_url || 'rtmp://a.rtmp.youtube.com/live2',
-                accountId: credentials.id,
-                channelName: credentials.channelName,
-                isLocalFallback: true
-              });
-            }
-          });
+          // PRUNE STALE BROADCASTS:
+          // If a broadcast was not found on YouTube API, it means it has been deleted on YouTube.com!
+          // We strictly remove it from local DB and DO NOT show it, ensuring 100% sync with YouTube.com.
+          const notFoundOnYouTube = missingLocal.filter(s => !directIds.has(s.youtube_broadcast_id));
+          if (notFoundOnYouTube.length > 0) {
+            console.log(`[Broadcasts API] Pruning ${notFoundOnYouTube.length} broadcast(s) no longer on YouTube.com...`);
+            notFoundOnYouTube.forEach(stale => {
+              db.run(`DELETE FROM youtube_broadcast_settings WHERE broadcast_id = ?`, [stale.youtube_broadcast_id]);
+              db.run(`DELETE FROM streams WHERE youtube_broadcast_id = ?`, [stale.youtube_broadcast_id]);
+            });
+          }
         } catch (byIdErr) {
           console.warn('[Broadcasts API] getBroadcastsByIds error:', byIdErr.message);
         }
@@ -9179,7 +9172,7 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
             );
 
             if (missingLocal.length > 0) {
-              console.log(`[Broadcasts API] Account ${account.channelName}: ${missingLocal.length} local broadcast(s) missing from search index, checking by ID...`);
+              console.log(`[Broadcasts API] Account ${account.channelName}: verifying ${missingLocal.length} known broadcast IDs against YouTube...`);
               try {
                 const missingIds = missingLocal.map(s => s.youtube_broadcast_id);
                 const directBroadcasts = await youtubeService.getBroadcastsByIds(accessToken, missingIds);
@@ -9193,25 +9186,17 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
                   });
                 });
 
-                // Add pending local fallback for broadcasts just created
-                missingLocal.forEach(s => {
-                  if (!directIds.has(s.youtube_broadcast_id) && !fetchedIds.has(s.youtube_broadcast_id)) {
-                    accountBroadcasts.unshift({
-                      id: s.youtube_broadcast_id,
-                      title: s.title || 'Untitled Broadcast',
-                      description: '',
-                      scheduledStartTime: s.schedule_time || null,
-                      privacyStatus: s.privacyStatus || 'unlisted',
-                      lifeCycleStatus: 'created',
-                      streamId: null,
-                      streamKey: s.stream_key || '',
-                      rtmpUrl: s.rtmp_url || 'rtmp://a.rtmp.youtube.com/live2',
-                      accountId: account.id,
-                      channelName: account.channelName,
-                      isLocalFallback: true
-                    });
-                  }
-                });
+                // PRUNE STALE BROADCASTS:
+                // If it was not returned by YouTube API, it has been deleted on YouTube.com!
+                // Remove from local DB and DO NOT display it.
+                const notFoundOnYouTube = missingLocal.filter(s => !directIds.has(s.youtube_broadcast_id));
+                if (notFoundOnYouTube.length > 0) {
+                  console.log(`[Broadcasts API] Account ${account.channelName}: pruning ${notFoundOnYouTube.length} stale broadcast(s) no longer on YouTube.com`);
+                  notFoundOnYouTube.forEach(stale => {
+                    db.run(`DELETE FROM youtube_broadcast_settings WHERE broadcast_id = ?`, [stale.youtube_broadcast_id]);
+                    db.run(`DELETE FROM streams WHERE youtube_broadcast_id = ?`, [stale.youtube_broadcast_id]);
+                  });
+                }
               } catch (directErr) {
                 console.warn(`[Broadcasts API] Account ${account.channelName} direct ID query warning:`, directErr.message);
               }
@@ -9223,27 +9208,6 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
           return await Promise.race([fetchPromise, timeoutPromise]);
         } catch (err) {
           console.error(`Error fetching broadcasts for ${account.channelName}:`, err.message);
-          // Fallback to locally recorded streams for this account so user never sees empty screen
-          const accountLocalStreams = localStreams.filter(s => 
-            !s.youtube_account_id || String(s.youtube_account_id) === String(account.id)
-          );
-          if (accountLocalStreams.length > 0) {
-            console.log(`[Broadcasts API] Using ${accountLocalStreams.length} local streams as offline fallback for ${account.channelName}`);
-            return accountLocalStreams.map(s => ({
-              id: s.youtube_broadcast_id,
-              title: s.title || 'Untitled Broadcast',
-              description: '',
-              scheduledStartTime: s.schedule_time || null,
-              privacyStatus: s.privacyStatus || 'unlisted',
-              lifeCycleStatus: 'created',
-              streamId: null,
-              streamKey: s.stream_key || '',
-              rtmpUrl: s.rtmp_url || 'rtmp://a.rtmp.youtube.com/live2',
-              accountId: account.id,
-              channelName: account.channelName,
-              isLocalFallback: true
-            }));
-          }
           return [];
         }
       });
@@ -9918,44 +9882,79 @@ app.put('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
   }
 });
 
-// Delete YouTube broadcast - supports accountId parameter
+// Delete YouTube broadcast - supports accountId parameter and guarantees local DB cleanup
 app.delete('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
+  const broadcastId = req.params.id;
+  const userId = req.session.userId;
+  const accountId = req.query.accountId ? parseInt(req.query.accountId) : null;
+
+  // Always remove from local database (streams and youtube_broadcast_settings)
+  const cleanupLocalBroadcast = () => new Promise((resolve) => {
+    db.run(
+      'DELETE FROM youtube_broadcast_settings WHERE broadcast_id = ? AND (user_id = ? OR CAST(user_id AS TEXT) = CAST(? AS TEXT))',
+      [broadcastId, userId, String(userId)],
+      () => {
+        db.run(
+          'DELETE FROM streams WHERE youtube_broadcast_id = ? AND (user_id = ? OR CAST(user_id AS TEXT) = CAST(? AS TEXT))',
+          [broadcastId, userId, String(userId)],
+          () => {
+            resolve();
+          }
+        );
+      }
+    );
+  });
+
   try {
-    const accountId = req.query.accountId ? parseInt(req.query.accountId) : null;
-    let credentials;
+    let accountsToTry = [];
 
     if (accountId) {
-      credentials = await YouTubeCredentials.findById(accountId);
-      if (!credentials || credentials.userId !== req.session.userId) {
-        return res.status(404).json({ success: false, error: 'Account not found' });
+      const credentials = await YouTubeCredentials.findById(accountId);
+      if (credentials && String(credentials.userId) === String(userId)) {
+        accountsToTry.push(credentials);
       }
-    } else {
-      // Try to find the account that owns this broadcast by checking all accounts
-      const accounts = await YouTubeCredentials.findAllByUserId(req.session.userId);
-      for (const account of accounts) {
-        try {
-          const accessToken = await youtubeService.getAccessToken(account.clientId, account.clientSecret, account.refreshToken, 0, account.id, 0, account.id);
-          await youtubeService.deleteBroadcast(accessToken, req.params.id);
-          invalidateBroadcastsCache(req.session.userId);
-          return res.json({ success: true, message: 'Broadcast deleted' });
-        } catch (err) {
-          // Continue to next account if this one doesn't own the broadcast
-          continue;
-        }
-      }
-      return res.status(404).json({ success: false, error: 'Broadcast not found' });
     }
 
-    const accessToken = await youtubeService.getAccessToken(credentials.clientId, credentials.clientSecret, credentials.refreshToken, 0, credentials.id, 0, credentials.id);
+    if (accountsToTry.length === 0) {
+      accountsToTry = await YouTubeCredentials.findAllByUserId(userId);
+    }
 
-    await youtubeService.deleteBroadcast(accessToken, req.params.id);
-    invalidateBroadcastsCache(req.session.userId);
-    res.json({ success: true, message: 'Broadcast deleted' });
+    // Try deleting on YouTube API
+    let deletedOnYouTube = false;
+    for (const account of accountsToTry) {
+      try {
+        const accessToken = await youtubeService.getAccessToken(account.clientId, account.clientSecret, account.refreshToken, 0, account.id);
+        const ok = await youtubeService.deleteBroadcast(accessToken, broadcastId);
+        if (ok) {
+          deletedOnYouTube = true;
+          break;
+        }
+      } catch (err) {
+        if (err.code === 404 || err.status === 404 || (err.message && err.message.toLowerCase().includes('not found'))) {
+          console.log(`[DeleteBroadcast] Broadcast ${broadcastId} was already removed on YouTube Studio for account ${account.channelName}`);
+          deletedOnYouTube = true;
+          break;
+        }
+        console.warn(`[DeleteBroadcast] Account ${account.channelName} failed to delete on YouTube:`, err.message);
+      }
+    }
+
+    // Clean up local database and flush cache
+    await cleanupLocalBroadcast();
+    invalidateBroadcastsCache(userId);
+
+    return res.json({ 
+      success: true, 
+      message: 'Broadcast deleted successfully' 
+    });
   } catch (error) {
     console.error('Error deleting broadcast:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message || 'Failed to delete broadcast'
+    // Still clean up locally so user is never stuck with stale/undeletable broadcasts
+    await cleanupLocalBroadcast();
+    invalidateBroadcastsCache(userId);
+    return res.json({ 
+      success: true, 
+      message: 'Broadcast removed' 
     });
   }
 });

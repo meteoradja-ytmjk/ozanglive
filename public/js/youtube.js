@@ -571,13 +571,13 @@ function createBroadcastRowHtml(broadcast, index) {
     
     return `
       <div class="broadcast-list-item broadcast-row hover:bg-dark-700/30 transition-colors" 
-        data-broadcast-id="${broadcast.id}" data-account-id="${broadcast.accountId}">
+        data-broadcast-id="${broadcast.id}" data-account-id="${broadcast.accountId || ''}">
         <!-- Desktop Row -->
         <div class="hidden md:flex items-center gap-2 px-4 py-2">
           <div class="w-8 text-center">
             <input type="checkbox" class="broadcast-checkbox w-4 h-4 rounded border-gray-600 bg-dark-700 text-primary focus:ring-primary cursor-pointer"
               data-broadcast-id="${broadcast.id}"
-              data-account-id="${broadcast.accountId}"
+              data-account-id="${broadcast.accountId || ''}"
               data-broadcast="${broadcastData}"
               onchange="syncCheckboxes(this); updateSelectionCount()">
           </div>
@@ -602,21 +602,21 @@ function createBroadcastRowHtml(broadcast, index) {
             </button>
           </div>
           <div class="w-44 flex items-center justify-center gap-1.5">
-            <button onclick="editBroadcast('${broadcast.id}', ${broadcast.accountId})"
-              class="px-2 py-1 text-xs bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded transition-colors" title="Edit">
-              ✏️ Edit
+            <button onclick="editBroadcast('${broadcast.id}', ${broadcast.accountId || 'null'})"
+              class="px-2 py-1 text-xs bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded transition-colors flex items-center gap-1" title="Edit">
+              <i class="ti ti-edit text-xs"></i> Edit
             </button>
-            <button onclick="reuseBroadcast('${broadcast.id}', ${broadcast.accountId})"
-              class="px-2 py-1 text-xs bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded transition-colors" title="Sync">
-              🔄 Sync
+            <button onclick="reuseBroadcast('${broadcast.id}', ${broadcast.accountId || 'null'})"
+              class="px-2 py-1 text-xs bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded transition-colors flex items-center gap-1" title="Sync">
+              <i class="ti ti-refresh text-xs"></i> Sync
             </button>
-            <button onclick="addSaveAsTemplateButton('${broadcast.id}', ${broadcast.accountId}, '${safeTitleJs}', '${broadcast.privacyStatus}')"
-              class="px-2 py-1 text-xs bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 rounded transition-colors" title="Save as Template">
-              📑 Template
+            <button onclick="addSaveAsTemplateButton('${broadcast.id}', ${broadcast.accountId || 'null'}, null, '${broadcast.privacyStatus || 'unlisted'}')"
+              class="px-2 py-1 text-xs bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 rounded transition-colors flex items-center gap-1" title="Save as Template">
+              <i class="ti ti-file-plus text-xs"></i> Template
             </button>
-            <button onclick="deleteBroadcast('${broadcast.id}', '${safeTitleJs}', ${broadcast.accountId})"
-              class="px-2 py-1 text-xs bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded transition-colors" title="Delete">
-              🗑️ Del
+            <button onclick="deleteBroadcast('${broadcast.id}', null, ${broadcast.accountId || 'null'})"
+              class="px-2 py-1 text-xs bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded transition-colors flex items-center gap-1" title="Delete">
+              <i class="ti ti-trash text-xs"></i> Del
             </button>
           </div>
         </div>
@@ -625,7 +625,7 @@ function createBroadcastRowHtml(broadcast, index) {
         <div class="md:hidden flex items-center gap-2 px-3 py-2">
           <input type="checkbox" class="broadcast-checkbox w-4 h-4 rounded border-gray-600 bg-dark-700 text-primary focus:ring-primary cursor-pointer flex-shrink-0"
             data-broadcast-id="${broadcast.id}"
-            data-account-id="${broadcast.accountId}"
+            data-account-id="${broadcast.accountId || ''}"
             data-broadcast="${broadcastData}"
             onchange="syncCheckboxes(this); updateSelectionCount()">
           <span class="text-[10px] font-bold text-primary bg-primary/15 px-1.5 py-0.5 rounded flex-shrink-0" title="Stream key #${index + 1}">#${index + 1}</span>
@@ -635,24 +635,24 @@ function createBroadcastRowHtml(broadcast, index) {
           </span>
           <div class="flex items-center gap-1 flex-shrink-0">
             <button onclick="copyStreamKey('${escapeJsString(broadcast.streamKey || '')}', ${index + 1})"
-              class="px-1.5 py-1 text-xs bg-primary/20 text-primary rounded ${broadcast.streamKey ? '' : 'opacity-40 pointer-events-none'}" title="Copy stream key #${index + 1}">
-              📋
+              class="p-1.5 text-xs bg-primary/20 hover:bg-primary/30 text-primary rounded ${broadcast.streamKey ? '' : 'opacity-40 pointer-events-none'}" title="Copy stream key #${index + 1}">
+              <i class="ti ti-copy text-xs"></i>
             </button>
-            <button onclick="editBroadcast('${broadcast.id}', ${broadcast.accountId})"
-              class="px-1.5 py-1 text-xs bg-blue-500/20 text-blue-400 rounded" title="Edit">
-              ✏️
+            <button onclick="editBroadcast('${broadcast.id}', ${broadcast.accountId || 'null'})"
+              class="p-1.5 text-xs bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded" title="Edit">
+              <i class="ti ti-edit text-xs"></i>
             </button>
-            <button onclick="reuseBroadcast('${broadcast.id}', ${broadcast.accountId})"
-              class="px-1.5 py-1 text-xs bg-green-500/20 text-green-400 rounded" title="Sync">
-              🔄
+            <button onclick="reuseBroadcast('${broadcast.id}', ${broadcast.accountId || 'null'})"
+              class="p-1.5 text-xs bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded" title="Sync">
+              <i class="ti ti-refresh text-xs"></i>
             </button>
-            <button onclick="addSaveAsTemplateButton('${broadcast.id}', ${broadcast.accountId}', '${safeTitleJs}', '${broadcast.privacyStatus}')"
-              class="px-1.5 py-1 text-xs bg-yellow-500/20 text-yellow-400 rounded" title="Save as Template">
-              📑
+            <button onclick="addSaveAsTemplateButton('${broadcast.id}', ${broadcast.accountId || 'null'}, null, '${broadcast.privacyStatus || 'unlisted'}')"
+              class="p-1.5 text-xs bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 rounded" title="Save as Template">
+              <i class="ti ti-file-plus text-xs"></i>
             </button>
-            <button onclick="deleteBroadcast('${broadcast.id}', '${safeTitleJs}', ${broadcast.accountId})"
-              class="px-1.5 py-1 text-xs bg-red-500/20 text-red-400 rounded" title="Delete">
-              🗑️
+            <button onclick="deleteBroadcast('${broadcast.id}', null, ${broadcast.accountId || 'null'})"
+              class="p-1.5 text-xs bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded" title="Delete">
+              <i class="ti ti-trash text-xs"></i>
             </button>
           </div>
         </div>
@@ -4177,20 +4177,23 @@ function _restoreDeleteButtons(buttons) {
 }
 
 // Delete Broadcast
-async function deleteBroadcast(broadcastId, title, accountId = null) {
+async function deleteBroadcast(broadcastId, title = null, accountId = null) {
   const key = String(broadcastId);
 
   // Guard: ignore repeated clicks while a delete for this broadcast is in flight
   if (_deletingBroadcastIds.has(key)) return;
 
-  if (!confirm(`Are you sure you want to delete "${title}"?`)) {
+  // Resolve title cleanly from DOM if not passed
+  const row = document.querySelector(`.broadcast-row[data-broadcast-id="${broadcastId}"]`);
+  const resolvedTitle = title || row?.querySelector('.truncate')?.textContent?.trim() || 'this broadcast';
+
+  if (!confirm(`Are you sure you want to delete "${resolvedTitle}"?`)) {
     return;
   }
 
   _deletingBroadcastIds.add(key);
 
   // Instant feedback: disable + spinner on this row's delete button(s)
-  const row = document.querySelector(`.broadcast-row[data-broadcast-id="${broadcastId}"]`);
   const delButtons = row ? Array.from(row.querySelectorAll('button[title="Delete"]')) : [];
   delButtons.forEach(btn => {
     btn.dataset._origHtml = btn.innerHTML;
@@ -4200,15 +4203,20 @@ async function deleteBroadcast(broadcastId, title, accountId = null) {
     btn.style.opacity = '0.6';
   });
 
+  const resolvedAccountId = (accountId && accountId !== 'null' && accountId !== 'undefined')
+    ? accountId
+    : (row?.getAttribute('data-account-id') || null);
+
   try {
-    let url = `/api/youtube/broadcasts/${broadcastId}`;
-    if (accountId) {
-      url += `?accountId=${accountId}`;
+    let url = `/api/youtube/broadcasts/${encodeURIComponent(broadcastId)}`;
+    if (resolvedAccountId) {
+      url += `?accountId=${encodeURIComponent(resolvedAccountId)}`;
     }
 
     const response = await fetch(url, {
       method: 'DELETE',
       headers: {
+        'Accept': 'application/json',
         'X-CSRF-Token': getCsrfToken()
       }
     });
@@ -4216,17 +4224,20 @@ async function deleteBroadcast(broadcastId, title, accountId = null) {
     let data = {};
     try { data = await response.json(); } catch (e) { /* ignore non-JSON */ }
 
-    // Idempotent: treat "already gone" (404) the same as a successful delete
-    if (data.success || response.status === 404) {
+    // Idempotent: treat success, 200 OK, or 404 (already gone) as successful deletion
+    if (data.success || response.status === 404 || response.ok) {
       showToast('Broadcast deleted');
       removeBroadcastRowsFromDOM([broadcastId]);
+      if (typeof broadcastsCache !== 'undefined' && broadcastsCache && broadcastsCache.data) {
+        broadcastsCache.data = broadcastsCache.data.filter(b => String(b.id) !== String(broadcastId));
+      }
     } else {
       showToast(data.error || 'Failed to delete broadcast', 'error');
       _restoreDeleteButtons(delButtons);
     }
   } catch (error) {
-    console.error('Error:', error);
-    showToast('An error occurred', 'error');
+    console.error('Error deleting broadcast:', error);
+    showToast('An error occurred while deleting broadcast', 'error');
     _restoreDeleteButtons(delButtons);
   } finally {
     _deletingBroadcastIds.delete(key);
@@ -5183,9 +5194,11 @@ if (createTemplateForm) {
 function openSaveAsTemplateModal(broadcastId, accountId, title, privacyStatus) {
   const modal = document.getElementById('saveAsTemplateModal');
   if (!modal) return;
+  const row = document.querySelector(`.broadcast-row[data-broadcast-id="${broadcastId}"]`);
+  const resolvedTitle = title || row?.querySelector('.truncate')?.textContent?.trim() || '-';
   document.getElementById('saveTemplateBroadcastId').value = broadcastId;
   document.getElementById('saveTemplateAccountId').value = accountId;
-  document.getElementById('previewTitle').textContent = title || '-';
+  document.getElementById('previewTitle').textContent = resolvedTitle;
   document.getElementById('previewPrivacy').textContent = privacyStatus || '-';
   modal.classList.remove('hidden');
   modal.style.display = 'block';
@@ -5885,7 +5898,7 @@ async function deleteSelectedBroadcasts() {
         try { data = await response.json(); } catch (e) { /* ignore non-JSON */ }
 
         // Idempotent: 404 means it's already gone → count as success
-        if (data.success || response.status === 404) {
+        if (data.success || response.status === 404 || response.ok) {
           successCount++;
           deletedIds.push(broadcast.id);
         } else {
@@ -5910,6 +5923,10 @@ async function deleteSelectedBroadcasts() {
   // Remove successfully deleted rows from the DOM (no full reload)
   if (deletedIds.length > 0) {
     removeBroadcastRowsFromDOM(deletedIds);
+    if (typeof broadcastsCache !== 'undefined' && broadcastsCache && broadcastsCache.data) {
+      const delSet = new Set(deletedIds.map(String));
+      broadcastsCache.data = broadcastsCache.data.filter(b => !delSet.has(String(b.id)));
+    }
   }
 
   // Reset selection state
