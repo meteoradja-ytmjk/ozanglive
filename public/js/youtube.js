@@ -11429,9 +11429,9 @@ async function openDuplicateBroadcastModal(broadcastId, accountId = null) {
     streamKeyDisplay.textContent = broadcast.streamKey ? (broadcast.streamKey.substring(0, 16) + '...') : (broadcast.streamId || 'Auto / Default');
   }
 
-  // Set minimum time and default start time (+15 minutes)
+  // Set minimum time and default start time (+1 hour)
   const minDate = new Date(Date.now() + 11 * 60 * 1000);
-  const defaultDate = new Date(Date.now() + 15 * 60 * 1000);
+  const defaultDate = new Date(Date.now() + 60 * 60 * 1000);
   const startTimeInput = document.getElementById('duplicateScheduledStartTime');
   if (startTimeInput) {
     startTimeInput.min = typeof formatDateTimeLocal === 'function' ? formatDateTimeLocal(minDate) : minDate.toISOString().slice(0, 16);
