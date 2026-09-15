@@ -629,7 +629,7 @@ function createBroadcastRowHtml(broadcast, index) {
         </div>
         
         <!-- Mobile Row (Touch-Friendly Card Layout with Full Title Visibility) -->
-        <div class="md:hidden p-3.5 flex flex-col gap-2.5 bg-dark-800/40 border-b border-gray-700/50">
+        <div class="md:hidden p-3.5 flex flex-col gap-2.5 bg-dark-800/40 border-b border-gray-700/50 last:border-b-0">
           <!-- Top: Checkbox, Badge #, Full Title (Visible & Wrapping), Privacy Badge -->
           <div class="flex items-start gap-2.5 min-w-0">
             <div class="pt-0.5 flex-shrink-0">
@@ -743,6 +743,13 @@ async function refreshBroadcasts(options = {}) {
         showToast(`Refreshed ${data.broadcasts.length} broadcasts`);
       }
       
+      // Ensure loading skeleton container is removed
+      const loadingContainer = document.getElementById('broadcastsLoadingContainer');
+      if (loadingContainer) {
+        loadingContainer.style.display = 'none';
+        loadingContainer.remove();
+      }
+
       // Update in-place smoothly
       if (typeof renderBroadcastsGrouped === 'function' && broadcastsContainer) {
         broadcastsContainer.style.display = 'block';

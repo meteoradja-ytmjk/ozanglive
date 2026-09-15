@@ -250,7 +250,7 @@
       </div>
 
       <!-- Page Content -->
-      <div class="p-4 lg:p-6 pt-4 lg:pt-20 pb-24 lg:pb-6 main-content-wrapper mobile-scroll-view">
+      <div class="p-4 lg:p-6 pt-4 lg:pt-20 pb-20 lg:pb-6 main-content-wrapper mobile-scroll-view">
         <%- body %>
       </div>
 
@@ -461,7 +461,7 @@
 
     body {
       padding-top: 64px;
-      padding-bottom: 120px !important;
+      padding-bottom: 0 !important;
       min-height: 100vh;
       height: auto !important;
       overflow-y: auto !important;
@@ -476,15 +476,15 @@
     }
 
     .main-content-wrapper {
-      padding-bottom: 6rem !important;
+      padding-bottom: 5rem !important; /* 80px: preserves comfortable space above 64px mobile nav bar without excessive void */
       overflow: visible !important;
     }
 
     .mobile-scroll-view {
-      max-height: calc(100dvh - 64px - 64px);
-      overflow-y: auto !important;
+      max-height: none !important;
+      overflow-y: visible !important;
       -webkit-overflow-scrolling: touch;
-      overscroll-behavior-y: contain;
+      overscroll-behavior-y: auto;
     }
 
     .main-container {
