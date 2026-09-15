@@ -569,11 +569,21 @@ function createBroadcastRowHtml(broadcast, index) {
     const safeTitle = escapeHtml(broadcast.title || 'Untitled');
     const safeTitleJs = escapeJsString(broadcast.title || 'Untitled');
     
+    let scheduledTimeStr = '';
+    if (broadcast.scheduledStartTime) {
+      try {
+        const d = new Date(broadcast.scheduledStartTime);
+        if (!isNaN(d.getTime())) {
+          scheduledTimeStr = d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+        }
+      } catch (e) {}
+    }
+    
     return `
       <div class="broadcast-list-item broadcast-row hover:bg-dark-700/30 transition-colors" 
         data-broadcast-id="${broadcast.id}" data-account-id="${broadcast.accountId || ''}">
         <!-- Desktop Row -->
-        <div class="hidden md:flex items-center gap-2 px-4 py-2">
+        <div class="hidden md:flex items-center gap-2 px-4 py-2.5">
           <div class="w-8 text-center">
             <input type="checkbox" class="broadcast-checkbox w-4 h-4 rounded border-gray-600 bg-dark-700 text-primary focus:ring-primary cursor-pointer"
               data-broadcast-id="${broadcast.id}"
@@ -583,10 +593,11 @@ function createBroadcastRowHtml(broadcast, index) {
           </div>
           <div class="w-8 text-center text-xs text-gray-500">${index + 1}</div>
           <div class="flex-1 min-w-0">
-            <span class="text-sm text-white truncate block">${safeTitle}</span>
+            <span class="text-sm font-medium text-white truncate block" title="${safeTitle}">${safeTitle}</span>
+            ${scheduledTimeStr ? `<span class="text-[11px] text-gray-400 flex items-center gap-1 mt-0.5"><i class="ti ti-calendar-time text-xs text-primary/70"></i> ${scheduledTimeStr}</span>` : ''}
           </div>
           <div class="w-20 text-center">
-            <span class="px-2 py-0.5 rounded text-xs font-medium uppercase ${privacyClass}">
+            <span class="px-2 py-0.5 rounded text-xs font-semibold uppercase ${privacyClass}">
               ${broadcast.privacyStatus || 'private'}
             </span>
           </div>
@@ -601,59 +612,82 @@ function createBroadcastRowHtml(broadcast, index) {
               <i class="ti ti-copy text-sm"></i>
             </button>
           </div>
-          <div class="w-44 flex items-center justify-center gap-1.5">
-            <button onclick="editBroadcast('${broadcast.id}', ${broadcast.accountId || 'null'})"
-              class="px-2 py-1 text-xs bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded transition-colors flex items-center gap-1" title="Edit">
+          <div class="w-48 flex items-center justify-center gap-1.5">
+            <button type="button" onclick="editBroadcast('${broadcast.id}', ${broadcast.accountId || 'null'})"
+              class="px-2.5 py-1 text-xs font-medium bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded transition-colors flex items-center gap-1" title="Edit">
               <i class="ti ti-edit text-xs"></i> Edit
             </button>
-            <button onclick="reuseBroadcast('${broadcast.id}', ${broadcast.accountId || 'null'})"
-              class="px-2 py-1 text-xs bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded transition-colors flex items-center gap-1" title="Sync">
-              <i class="ti ti-refresh text-xs"></i> Sync
+            <button type="button" onclick="openDuplicateBroadcastModal('${broadcast.id}', ${broadcast.accountId || 'null'})"
+              class="px-2.5 py-1 text-xs font-medium bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 rounded transition-colors flex items-center gap-1" title="Duplikat Siaran">
+              <i class="ti ti-copy text-xs"></i> Copy
             </button>
-            <button onclick="addSaveAsTemplateButton('${broadcast.id}', ${broadcast.accountId || 'null'}, null, '${broadcast.privacyStatus || 'unlisted'}')"
-              class="px-2 py-1 text-xs bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 rounded transition-colors flex items-center gap-1" title="Save as Template">
-              <i class="ti ti-file-plus text-xs"></i> Template
-            </button>
-            <button onclick="deleteBroadcast('${broadcast.id}', null, ${broadcast.accountId || 'null'})"
-              class="px-2 py-1 text-xs bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded transition-colors flex items-center gap-1" title="Delete">
+            <button type="button" onclick="deleteBroadcast('${broadcast.id}', null, ${broadcast.accountId || 'null'})"
+              class="px-2.5 py-1 text-xs font-medium bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded transition-colors flex items-center gap-1" title="Hapus">
               <i class="ti ti-trash text-xs"></i> Del
             </button>
           </div>
         </div>
         
-        <!-- Mobile Row -->
-        <div class="md:hidden flex items-center gap-2 px-3 py-2">
-          <input type="checkbox" class="broadcast-checkbox w-4 h-4 rounded border-gray-600 bg-dark-700 text-primary focus:ring-primary cursor-pointer flex-shrink-0"
-            data-broadcast-id="${broadcast.id}"
-            data-account-id="${broadcast.accountId || ''}"
-            data-broadcast="${broadcastData}"
-            onchange="syncCheckboxes(this); updateSelectionCount()">
-          <span class="text-[10px] font-bold text-primary bg-primary/15 px-1.5 py-0.5 rounded flex-shrink-0" title="Stream key #${index + 1}">#${index + 1}</span>
-          <span class="flex-1 text-xs text-white truncate min-w-0">${safeTitle}</span>
-          <span class="px-1.5 py-0.5 rounded text-[10px] font-medium uppercase flex-shrink-0 ${privacyClass}">
-            ${(broadcast.privacyStatus || 'pri').substring(0, 3)}
-          </span>
-          <div class="flex items-center gap-1 flex-shrink-0">
-            <button onclick="copyStreamKey('${escapeJsString(broadcast.streamKey || '')}', ${index + 1})"
-              class="p-1.5 text-xs bg-primary/20 hover:bg-primary/30 text-primary rounded ${broadcast.streamKey ? '' : 'opacity-40 pointer-events-none'}" title="Copy stream key #${index + 1}">
-              <i class="ti ti-copy text-xs"></i>
-            </button>
-            <button onclick="editBroadcast('${broadcast.id}', ${broadcast.accountId || 'null'})"
-              class="p-1.5 text-xs bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded" title="Edit">
-              <i class="ti ti-edit text-xs"></i>
-            </button>
-            <button onclick="reuseBroadcast('${broadcast.id}', ${broadcast.accountId || 'null'})"
-              class="p-1.5 text-xs bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded" title="Sync">
-              <i class="ti ti-refresh text-xs"></i>
-            </button>
-            <button onclick="addSaveAsTemplateButton('${broadcast.id}', ${broadcast.accountId || 'null'}, null, '${broadcast.privacyStatus || 'unlisted'}')"
-              class="p-1.5 text-xs bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 rounded" title="Save as Template">
-              <i class="ti ti-file-plus text-xs"></i>
-            </button>
-            <button onclick="deleteBroadcast('${broadcast.id}', null, ${broadcast.accountId || 'null'})"
-              class="p-1.5 text-xs bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded" title="Delete">
-              <i class="ti ti-trash text-xs"></i>
-            </button>
+        <!-- Mobile Row (Touch-Friendly Card Layout with Full Title Visibility) -->
+        <div class="md:hidden p-3.5 flex flex-col gap-2.5 bg-dark-800/40 border-b border-gray-700/50">
+          <!-- Top: Checkbox, Badge #, Full Title (Visible & Wrapping), Privacy Badge -->
+          <div class="flex items-start gap-2.5 min-w-0">
+            <div class="pt-0.5 flex-shrink-0">
+              <input type="checkbox" class="broadcast-checkbox w-4 h-4 rounded border-gray-600 bg-dark-700 text-primary focus:ring-primary cursor-pointer"
+                data-broadcast-id="${broadcast.id}"
+                data-account-id="${broadcast.accountId || ''}"
+                data-broadcast="${broadcastData}"
+                onchange="syncCheckboxes(this); updateSelectionCount()">
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-start justify-between gap-2">
+                <div class="flex items-center gap-1.5 flex-wrap min-w-0">
+                  <span class="text-[10px] font-bold text-primary bg-primary/15 px-1.5 py-0.5 rounded flex-shrink-0">#${index + 1}</span>
+                  <span class="text-sm font-semibold text-white break-words leading-tight">${safeTitle}</span>
+                </div>
+                <span class="px-2 py-0.5 rounded text-[10px] font-semibold tracking-wide uppercase flex-shrink-0 ${privacyClass}">
+                  ${broadcast.privacyStatus || 'private'}
+                </span>
+              </div>
+              ${scheduledTimeStr ? `
+                <div class="text-[11px] text-gray-400 flex items-center gap-1 mt-1">
+                  <i class="ti ti-calendar-time text-xs text-primary/80"></i>
+                  <span>${scheduledTimeStr}</span>
+                </div>
+              ` : ''}
+            </div>
+          </div>
+
+          <!-- Bottom: Stream Key + Action Buttons (Responsive & Touch-Friendly) -->
+          <div class="flex items-center justify-between gap-2 pt-1 border-t border-gray-700/30">
+            <div class="flex items-center gap-1.5 min-w-0 flex-1">
+              <span class="font-mono text-xs text-gray-400 truncate" title="${escapeHtml(broadcast.streamKey || '')}">
+                ${streamKeyDisplay}
+              </span>
+              <button type="button" onclick="copyStreamKey('${escapeJsString(broadcast.streamKey || '')}', ${index + 1})"
+                class="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-primary hover:bg-primary/10 active:bg-primary/20 rounded-lg active:scale-95 transition-all touch-manipulation flex-shrink-0 ${broadcast.streamKey ? '' : 'opacity-40 pointer-events-none'}"
+                title="Copy stream key #${index + 1}">
+                <i class="ti ti-copy text-sm"></i>
+              </button>
+            </div>
+
+            <div class="flex items-center gap-1.5 flex-shrink-0">
+              <button type="button" onclick="editBroadcast('${broadcast.id}', ${broadcast.accountId || 'null'})"
+                class="px-2.5 py-1.5 text-xs font-medium bg-blue-500/15 hover:bg-blue-500/25 active:bg-blue-500/35 text-blue-400 border border-blue-500/20 rounded-lg transition-all active:scale-95 touch-manipulation flex items-center gap-1 min-h-[34px]" title="Edit">
+                <i class="ti ti-edit text-xs"></i>
+                <span>Edit</span>
+              </button>
+              <button type="button" onclick="openDuplicateBroadcastModal('${broadcast.id}', ${broadcast.accountId || 'null'})"
+                class="px-2.5 py-1.5 text-xs font-medium bg-purple-500/15 hover:bg-purple-500/25 active:bg-purple-500/35 text-purple-400 border border-purple-500/20 rounded-lg transition-all active:scale-95 touch-manipulation flex items-center gap-1 min-h-[34px]" title="Duplikat Siaran">
+                <i class="ti ti-copy text-xs"></i>
+                <span>Copy</span>
+              </button>
+              <button type="button" onclick="deleteBroadcast('${broadcast.id}', null, ${broadcast.accountId || 'null'})"
+                class="px-2.5 py-1.5 text-xs font-medium bg-red-500/15 hover:bg-red-500/25 active:bg-red-500/35 text-red-400 border border-red-500/20 rounded-lg transition-all active:scale-95 touch-manipulation flex items-center gap-1 min-h-[34px]" title="Hapus">
+                <i class="ti ti-trash text-xs"></i>
+                <span>Del</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -11323,3 +11357,201 @@ window.closeYouTubeGuideModal = closeYouTubeGuideModal;
 window.switchGuideTab = switchGuideTab;
 window.copyGuideRedirectUri = copyGuideRedirectUri;
 
+
+// ==========================================
+// Duplicate Broadcast Functions
+// ==========================================
+
+async function openDuplicateBroadcastModal(broadcastId, accountId = null) {
+  const modal = document.getElementById('duplicateBroadcastModal');
+  if (!modal) {
+    console.error('duplicateBroadcastModal not found');
+    return;
+  }
+
+  // Find broadcast data in memory/cache first
+  let broadcast = null;
+  if (typeof broadcastsCache !== 'undefined' && broadcastsCache?.data) {
+    broadcast = broadcastsCache.data.find(b => String(b.id) === String(broadcastId));
+  }
+
+  // If not found in cache, fetch it
+  if (!broadcast) {
+    try {
+      const url = accountId ? `/api/youtube/broadcasts?accountId=${accountId}` : '/api/youtube/broadcasts';
+      const res = await fetch(url, { headers: { 'X-CSRF-Token': getCsrfToken() } });
+      const data = await res.json();
+      if (data.success && data.broadcasts) {
+        broadcast = data.broadcasts.find(b => String(b.id) === String(broadcastId));
+      }
+    } catch (err) {
+      console.warn('[openDuplicateBroadcastModal] Fetch error:', err);
+    }
+  }
+
+  if (!broadcast) {
+    showToast('Tidak dapat memuat detail siaran untuk diduplikat', 'error');
+    return;
+  }
+
+  const resolvedAccountId = accountId || broadcast.accountId || '';
+
+  // Populate modal fields
+  const srcIdEl = document.getElementById('duplicateSourceBroadcastId');
+  if (srcIdEl) srcIdEl.value = broadcast.id;
+
+  const accIdEl = document.getElementById('duplicateAccountId');
+  if (accIdEl) accIdEl.value = resolvedAccountId;
+
+  const titleEl = document.getElementById('duplicateTitle');
+  if (titleEl) titleEl.value = (broadcast.title || '') + ' (Copy)';
+
+  const descEl = document.getElementById('duplicateDescription');
+  if (descEl) descEl.value = broadcast.description || '';
+
+  const privEl = document.getElementById('duplicatePrivacyStatus');
+  if (privEl) privEl.value = broadcast.privacyStatus || 'unlisted';
+
+  const streamIdEl = document.getElementById('duplicateStreamId');
+  if (streamIdEl) streamIdEl.value = broadcast.streamId || '';
+
+  const catIdEl = document.getElementById('duplicateCategoryId');
+  if (catIdEl) catIdEl.value = broadcast.categoryId || '22';
+
+  const tagsEl = document.getElementById('duplicateTags');
+  if (tagsEl) tagsEl.value = JSON.stringify(broadcast.tags || []);
+
+  const thumbEl = document.getElementById('duplicateThumbnailPath');
+  if (thumbEl) thumbEl.value = broadcast.thumbnailPath || '';
+
+  const channelNameEl = document.getElementById('duplicateChannelName');
+  if (channelNameEl) channelNameEl.textContent = broadcast.channelName || ('Channel #' + resolvedAccountId);
+
+  const streamKeyDisplay = document.getElementById('duplicateStreamKeyDisplay');
+  if (streamKeyDisplay) {
+    streamKeyDisplay.textContent = broadcast.streamKey ? (broadcast.streamKey.substring(0, 16) + '...') : (broadcast.streamId || 'Auto / Default');
+  }
+
+  // Set minimum time and default start time (+15 minutes)
+  const minDate = new Date(Date.now() + 11 * 60 * 1000);
+  const defaultDate = new Date(Date.now() + 15 * 60 * 1000);
+  const startTimeInput = document.getElementById('duplicateScheduledStartTime');
+  if (startTimeInput) {
+    startTimeInput.min = typeof formatDateTimeLocal === 'function' ? formatDateTimeLocal(minDate) : minDate.toISOString().slice(0, 16);
+    startTimeInput.value = typeof formatDateTimeLocal === 'function' ? formatDateTimeLocal(defaultDate) : defaultDate.toISOString().slice(0, 16);
+  }
+
+  modal.classList.remove('hidden');
+  modal.style.setProperty('display', 'block', 'important');
+}
+window.openDuplicateBroadcastModal = openDuplicateBroadcastModal;
+
+function closeDuplicateBroadcastModal() {
+  const modal = document.getElementById('duplicateBroadcastModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+  }
+}
+window.closeDuplicateBroadcastModal = closeDuplicateBroadcastModal;
+
+function setDuplicateStartTimeOffset(minutes) {
+  const targetDate = new Date(Date.now() + minutes * 60 * 1000);
+  const startTimeInput = document.getElementById('duplicateScheduledStartTime');
+  if (startTimeInput) {
+    startTimeInput.value = typeof formatDateTimeLocal === 'function' ? formatDateTimeLocal(targetDate) : targetDate.toISOString().slice(0, 16);
+  }
+}
+window.setDuplicateStartTimeOffset = setDuplicateStartTimeOffset;
+
+async function submitDuplicateBroadcast(event) {
+  event.preventDefault();
+  const submitBtn = document.getElementById('duplicateSubmitBtn');
+  const origBtnContent = submitBtn ? submitBtn.innerHTML : '';
+  
+  const title = document.getElementById('duplicateTitle').value.trim();
+  const scheduledStartTime = document.getElementById('duplicateScheduledStartTime').value;
+  const privacyStatus = document.getElementById('duplicatePrivacyStatus').value;
+  const description = document.getElementById('duplicateDescription').value;
+  const accountId = document.getElementById('duplicateAccountId').value;
+  const streamId = document.getElementById('duplicateStreamId').value;
+  const categoryId = document.getElementById('duplicateCategoryId').value;
+  const tags = document.getElementById('duplicateTags').value;
+  const thumbnailPath = document.getElementById('duplicateThumbnailPath').value;
+
+  if (!title) {
+    showToast('Judul siaran wajib diisi', 'error');
+    return;
+  }
+  if (!scheduledStartTime) {
+    showToast('Waktu mulai siaran wajib diisi', 'error');
+    return;
+  }
+
+  // Validate scheduled start time (at least 10 minutes in future)
+  const scheduledDate = new Date(scheduledStartTime);
+  if (isNaN(scheduledDate.getTime()) || scheduledDate < new Date(Date.now() + 10 * 60 * 1000)) {
+    showToast('Waktu mulai harus minimal 10 menit ke depan dari sekarang', 'error');
+    return;
+  }
+
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="ti ti-loader animate-spin"></i> <span>Menduplikasi...</span>';
+  }
+
+  try {
+    const formData = new FormData();
+    formData.append('title', title);
+    formData.append('scheduledStartTime', new Date(scheduledStartTime).toISOString());
+    formData.append('privacyStatus', privacyStatus);
+    formData.append('description', description);
+    if (accountId) formData.append('accountId', accountId);
+    if (streamId) formData.append('streamId', streamId);
+    if (categoryId) formData.append('categoryId', categoryId);
+    if (tags) formData.append('tags', tags);
+    if (thumbnailPath) formData.append('thumbnailPath', thumbnailPath);
+    formData.append('enableAutoStart', 'true');
+    formData.append('enableAutoStop', 'true');
+
+    const response = await fetch('/api/youtube/broadcasts', {
+      method: 'POST',
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      },
+      body: formData
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      showToast('Siaran berhasil diduplikat!', 'success');
+      closeDuplicateBroadcastModal();
+      
+      // Clear cache and refresh list
+      if (typeof broadcastsCache !== 'undefined' && broadcastsCache) {
+        broadcastsCache.data = null;
+        broadcastsCache.timestamp = null;
+      }
+      if (typeof refreshBroadcasts === 'function') {
+        refreshBroadcasts();
+      } else {
+        setTimeout(() => window.location.reload(), 800);
+      }
+    } else {
+      showToast(data.error || 'Gagal menduplikat siaran', 'error');
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = origBtnContent;
+      }
+    }
+  } catch (error) {
+    console.error('Error duplicating broadcast:', error);
+    showToast('Terjadi kesalahan saat menduplikat siaran', 'error');
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = origBtnContent;
+    }
+  }
+}
+window.submitDuplicateBroadcast = submitDuplicateBroadcast;
