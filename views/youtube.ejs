@@ -489,13 +489,14 @@
   </div>
 
   <!-- Scheduled Broadcasts Header -->
-  <div class="yt-broadcast-header flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-    <div class="flex flex-col sm:flex-row sm:items-center gap-3">
-      <div class="flex items-center gap-3">
-        <h2 class="text-xl font-semibold">Scheduled Broadcasts</h2>
-        <button type="button" onclick="refreshBroadcasts()" class="text-gray-400 hover:text-primary transition-colors p-1.5 rounded-lg hover:bg-dark-700 active:scale-95 flex items-center gap-1 text-xs border border-gray-700 bg-dark-800" title="Sinkronisasi siaran dari YouTube">
+  <div class="yt-broadcast-header flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 mb-5">
+    <div class="flex flex-col sm:flex-row sm:items-center gap-3 w-full sm:w-auto">
+      <div class="flex items-center justify-between w-full sm:w-auto gap-3">
+        <div class="flex items-center gap-2.5 sm:gap-3">
+          <h2 class="text-lg sm:text-xl font-bold text-white tracking-tight">Scheduled Broadcasts</h2>
+        </div>
+        <button type="button" onclick="refreshBroadcasts()" class="w-9 h-9 flex items-center justify-center text-gray-400 hover:text-primary hover:bg-dark-700 active:bg-dark-600 border border-gray-700 bg-dark-800 rounded-xl transition-all active:scale-95 shadow-sm shrink-0" title="Sinkronisasi siaran dari YouTube">
           <i class="ti ti-refresh text-base"></i>
-          <span class="hidden sm:inline">Sync</span>
         </button>
       </div>
       <!-- Selection Actions (hidden by default) -->
@@ -534,24 +535,24 @@
       </div>
     </div>
     <div class="header-buttons grid grid-cols-2 sm:grid-cols-4 gap-2 w-full sm:w-auto sm:flex-shrink-0">
-      <button onclick="openTemplateLibraryModal()"
-        class="bg-primary/20 hover:bg-primary/30 text-primary px-4 py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2 font-medium">
-        <i class="ti ti-template text-lg"></i>
+      <button type="button" onclick="openTemplateLibraryModal()"
+        class="h-11 sm:h-12 bg-primary/15 hover:bg-primary/25 active:bg-primary/30 active:scale-95 text-primary border border-primary/20 px-3 sm:px-4 rounded-xl transition-all flex items-center justify-center gap-2 font-semibold text-xs sm:text-sm shadow-sm cursor-pointer touch-manipulation whitespace-nowrap">
+        <i class="ti ti-template text-base sm:text-lg"></i>
         <span>Templates</span>
       </button>
-      <button onclick="openThumbnailManagerModal()"
-        class="bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 px-4 py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2 font-medium">
-        <i class="ti ti-photo text-lg"></i>
+      <button type="button" onclick="openThumbnailManagerModal()"
+        class="h-11 sm:h-12 bg-purple-500/15 hover:bg-purple-500/25 active:bg-purple-500/30 active:scale-95 text-purple-400 border border-purple-500/20 px-3 sm:px-4 rounded-xl transition-all flex items-center justify-center gap-2 font-semibold text-xs sm:text-sm shadow-sm cursor-pointer touch-manipulation whitespace-nowrap">
+        <i class="ti ti-photo text-base sm:text-lg"></i>
         <span>Thumbnails</span>
       </button>
-      <button onclick="openAutoPilotCampaignModal()"
-        class="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white px-4 py-2.5 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 font-medium shadow-lg shadow-emerald-500/25">
-        <i class="ti ti-robot text-lg"></i>
+      <button type="button" onclick="openAutoPilotCampaignModal()"
+        class="h-11 sm:h-12 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 active:scale-95 text-white px-3 sm:px-4 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 font-semibold text-xs sm:text-sm shadow-lg shadow-emerald-500/25 cursor-pointer touch-manipulation whitespace-nowrap">
+        <i class="ti ti-robot text-base sm:text-lg"></i>
         <span>Auto-Pilot</span>
       </button>
-      <button onclick="openCreateBroadcastModal()"
-        class="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-4 py-2.5 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 font-medium shadow-lg shadow-red-500/25">
-        <i class="ti ti-plus text-lg"></i>
+      <button type="button" onclick="openCreateBroadcastModal()"
+        class="h-11 sm:h-12 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 active:scale-95 text-white px-3 sm:px-4 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 font-semibold text-xs sm:text-sm shadow-lg shadow-red-500/25 cursor-pointer touch-manipulation whitespace-nowrap">
+        <i class="ti ti-plus text-base sm:text-lg"></i>
         <span>Create</span>
       </button>
     </div>
