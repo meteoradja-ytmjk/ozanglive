@@ -480,13 +480,12 @@ class YouTubeService {
 
     if (targetStatus === 'all') {
       try {
-        console.log('[YouTubeService.listBroadcasts] Fetching ALL broadcasts (upcoming + active + completed + persistent)...');
+        console.log('[YouTubeService.listBroadcasts] Fetching ALL broadcasts (upcoming + active + completed + all)...');
         const [upcomingRes, activeRes, completedRes, allFallbackRes] = await Promise.allSettled([
-          youtube.liveBroadcasts.list({ part: 'snippet,status,contentDetails', mine: true, broadcastStatus: 'upcoming', broadcastType: 'all', maxResults: 50 }),
-          youtube.liveBroadcasts.list({ part: 'snippet,status,contentDetails', mine: true, broadcastStatus: 'active', broadcastType: 'all', maxResults: 50 }),
-          youtube.liveBroadcasts.list({ part: 'snippet,status,contentDetails', mine: true, broadcastStatus: 'completed', broadcastType: 'all', maxResults: 20 }),
-          // Optional fallback for broadcasts that may not fall neatly into upcoming/active/completed
-          youtube.liveBroadcasts.list({ part: 'snippet,status,contentDetails', mine: true, broadcastStatus: 'all', broadcastType: 'all', maxResults: 50 })
+          youtube.liveBroadcasts.list({ part: 'snippet,status,contentDetails', mine: true, broadcastStatus: 'upcoming', maxResults: 50 }),
+          youtube.liveBroadcasts.list({ part: 'snippet,status,contentDetails', mine: true, broadcastStatus: 'active', maxResults: 50 }),
+          youtube.liveBroadcasts.list({ part: 'snippet,status,contentDetails', mine: true, broadcastStatus: 'completed', maxResults: 20 }),
+          youtube.liveBroadcasts.list({ part: 'snippet,status,contentDetails', mine: true, broadcastStatus: 'all', maxResults: 50 })
         ]);
         
         console.log('[YouTubeService.listBroadcasts] Upcoming result:', upcomingRes.status, upcomingRes.status === 'fulfilled' ? upcomingRes.value.data.items?.length : (upcomingRes.reason?.message || 'error'));
@@ -494,6 +493,21 @@ class YouTubeService {
         console.log('[YouTubeService.listBroadcasts] Completed result:', completedRes.status, completedRes.status === 'fulfilled' ? completedRes.value.data.items?.length : (completedRes.reason?.message || 'error'));
         console.log('[YouTubeService.listBroadcasts] All-status fallback result:', allFallbackRes.status, allFallbackRes.status === 'fulfilled' ? allFallbackRes.value.data.items?.length : (allFallbackRes.reason?.message || 'error'));
         
+        // Detect critical token / authentication errors
+        const rejectedReasons = [upcomingRes, activeRes, completedRes, allFallbackRes]
+          .filter(r => r.status === 'rejected')
+          .map(r => r.reason);
+
+        const authErr = rejectedReasons.find(err => 
+          err?.code === 401 || err?.status === 401 ||
+          err?.message?.includes('invalid_grant') ||
+          err?.message?.includes('expired') ||
+          err?.message?.includes('revoked')
+        );
+        if (authErr && rejectedReasons.length === 4) {
+          throw new Error('TOKEN_EXPIRED: YouTube token has expired or been revoked. Please reconnect your YouTube account.');
+        }
+
         const rawItems = [];
         if (upcomingRes.status === 'fulfilled' && upcomingRes.value.data.items) {
           console.log('[YouTubeService.listBroadcasts] Adding', upcomingRes.value.data.items.length, 'upcoming broadcasts');
@@ -512,6 +526,51 @@ class YouTubeService {
           rawItems.push(...allFallbackRes.value.data.items);
         }
 
+        // Additional fallback: Query user's upcoming channel live events via search.list
+        try {
+          const searchRes = await youtube.search.list({
+            part: 'id',
+            forMine: true,
+            type: 'video',
+            eventType: 'upcoming',
+            maxResults: 50
+          });
+          if (searchRes.data?.items && searchRes.data.items.length > 0) {
+            const searchIds = searchRes.data.items.map(it => it.id?.videoId).filter(Boolean);
+            const existingIds = new Set(rawItems.map(b => b.id));
+            const missingSearchIds = searchIds.filter(id => !existingIds.has(id));
+            if (missingSearchIds.length > 0) {
+              console.log(`[YouTubeService.listBroadcasts] search.list found ${missingSearchIds.length} upcoming broadcast ID(s) not in standard index, fetching by ID...`);
+              const directSearchItems = await this.getBroadcastsByIds(accessToken, missingSearchIds);
+              // Direct broadcast objects map to full structure
+              directSearchItems.forEach(b => {
+                rawItems.push({
+                  id: b.id,
+                  snippet: {
+                    title: b.title,
+                    description: b.description,
+                    scheduledStartTime: b.scheduledStartTime,
+                    categoryId: b.categoryId,
+                    tags: b.tags,
+                    thumbnails: { default: { url: b.thumbnailUrl } }
+                  },
+                  status: {
+                    privacyStatus: b.privacyStatus,
+                    lifeCycleStatus: b.lifeCycleStatus
+                  },
+                  contentDetails: {
+                    boundStreamId: b.streamId
+                  },
+                  _directStreamKey: b.streamKey,
+                  _directRtmpUrl: b.rtmpUrl
+                });
+              });
+            }
+          }
+        } catch (searchErr) {
+          console.log('[YouTubeService.listBroadcasts] search.list fallback info:', searchErr.message);
+        }
+
         // Deduplicate raw broadcasts by ID
         const seenRawIds = new Set();
         for (const item of rawItems) {
@@ -522,13 +581,15 @@ class YouTubeService {
         }
       } catch (err) {
         console.error('[YouTubeService.listBroadcasts] Error fetching all broadcasts:', err.message);
+        if (err.message && err.message.includes('TOKEN_EXPIRED')) {
+          throw err;
+        }
       }
     } else {
       const params = {
         part: 'snippet,status,contentDetails',
         mine: true,
         broadcastStatus: targetStatus,
-        broadcastType: 'all',
         maxResults: 50
       };
       try {
@@ -536,6 +597,9 @@ class YouTubeService {
         broadcasts = response.data.items || [];
       } catch (err) {
         console.error('[YouTubeService.listBroadcasts] Error fetching broadcasts:', err.message);
+        if (err.message && (err.message.includes('invalid_grant') || err.message.includes('revoked') || err.code === 401)) {
+          throw new Error('TOKEN_EXPIRED: YouTube token has expired or been revoked. Please reconnect your YouTube account.');
+        }
       }
     }
     
@@ -590,6 +654,10 @@ class YouTubeService {
           streamKey = streamInfo.streamKey;
           rtmpUrl = streamInfo.rtmpUrl;
         }
+      }
+      if (!streamKey && broadcast._directStreamKey) {
+        streamKey = broadcast._directStreamKey;
+        rtmpUrl = broadcast._directRtmpUrl || rtmpUrl;
       }
       
       return {

@@ -329,6 +329,7 @@ async function createCoreTablesAsync() {
 
   // YouTube status sync columns
   await runTableQuery(`ALTER TABLE streams ADD COLUMN youtube_broadcast_id TEXT`, 'streams.youtube_broadcast_id');
+  await runTableQuery(`ALTER TABLE streams ADD COLUMN youtube_account_id INTEGER`, 'streams.youtube_account_id');
   await runTableQuery(`ALTER TABLE streams ADD COLUMN youtube_lifecycle_status TEXT`, 'streams.youtube_lifecycle_status');
 
   // YouTube broadcast settings columns

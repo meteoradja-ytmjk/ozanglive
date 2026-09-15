@@ -25,6 +25,9 @@ class Stream {
       recurring_time = null,
       recurring_enabled = true,
       original_settings = null,
+      youtube_broadcast_id = null,
+      youtube_account_id = null,
+      youtube_lifecycle_status = null,
       status,
       user_id
     } = streamData;
@@ -46,7 +49,7 @@ class Stream {
     }
     const status_updated_at = new Date().toISOString();
 
-    console.log(`[Stream.create] Creating stream with duration: ${stream_duration_minutes} minutes`);
+    console.log(`[Stream.create] Creating stream with duration: ${stream_duration_minutes} minutes, broadcast_id: ${youtube_broadcast_id}`);
 
     return new Promise((resolve, reject) => {
       db.run(
@@ -55,14 +58,16 @@ class Stream {
           bitrate, resolution, fps, orientation, loop_video,
           schedule_time, end_time, duration, stream_duration_minutes,
           schedule_type, schedule_days, recurring_time, recurring_enabled,
-          original_settings, status, status_updated_at, user_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          original_settings, status, status_updated_at, user_id,
+          youtube_broadcast_id, youtube_account_id, youtube_lifecycle_status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id, title, video_id, audio_id, rtmp_url, stream_key, platform, platform_icon,
           bitrate, resolution, fps, orientation, loop_video_int,
           schedule_time, end_time, duration, stream_duration_minutes,
           schedule_type, schedule_days_json, recurring_time, recurring_enabled_int,
-          original_settings_json, final_status, status_updated_at, user_id
+          original_settings_json, final_status, status_updated_at, user_id,
+          youtube_broadcast_id, youtube_account_id, youtube_lifecycle_status
         ],
         function (err) {
           if (err) {

@@ -175,7 +175,7 @@ async function lazyLoadBroadcasts() {
     if (!broadcastsCache.data || (broadcastsCache.timestamp && Date.now() - broadcastsCache.timestamp > currentMaxAge)) {
       console.log('[Performance] Broadcasts cache empty/expired on tab switch, refreshing in background...');
       try {
-        const response = await fetch('/api/youtube/broadcasts', {
+        const response = await fetch('/api/youtube/broadcasts?force=1', {
           headers: { 'X-CSRF-Token': getCsrfToken() }
         });
         const data = await response.json();
@@ -186,9 +186,9 @@ async function lazyLoadBroadcasts() {
             broadcastsContainer.style.display = 'block';
             broadcastsContainer.classList.remove('hidden');
             if (data.broadcasts.length > 0) {
-              renderBroadcastsGrouped(data.broadcasts, data.accounts || []);
+              renderBroadcastsGrouped(data.broadcasts, data.accounts || [], data.errors || []);
             } else if (typeof renderEmptyState === 'function') {
-              renderEmptyState();
+              renderEmptyState(data.errors || []);
             }
           }
         }
@@ -263,15 +263,15 @@ async function lazyLoadBroadcasts() {
       // Then render broadcasts
       if (data.broadcasts.length > 0) {
         console.log('[Performance] Rendering broadcasts...');
-        renderBroadcastsGrouped(data.broadcasts, data.accounts || []);
+        renderBroadcastsGrouped(data.broadcasts, data.accounts || [], data.errors || []);
         console.log('[Performance] Broadcasts rendered successfully');
       } else {
         console.log('[Performance] No broadcasts, showing empty state');
-        renderEmptyState();
+        renderEmptyState(data.errors || []);
       }
     } else {
       console.error('[Performance] Failed to load broadcasts:', data.error || 'Unknown error');
-      renderEmptyState();
+      renderEmptyState(data.errors || (data.error ? [{ error: data.error, message: data.message }] : []));
     }
   } catch (error) {
     clearTimeout(timeoutId);
@@ -342,12 +342,36 @@ function showTimeoutError() {
   `;
 }
 
-// Render empty state
-function renderEmptyState() {
+// Render empty state with optional reconnect alert
+function renderEmptyState(accountErrors) {
   const container = document.getElementById('broadcastsContainer');
   if (!container) return;
   
+  let errorBanner = '';
+  if (accountErrors && accountErrors.length > 0) {
+    const expiredAccounts = accountErrors.filter(e => e.isTokenExpired || e.error === 'TOKEN_EXPIRED');
+    if (expiredAccounts.length > 0) {
+      const channelNames = expiredAccounts.map(a => a.channelName || 'Akun YouTube').join(', ');
+      errorBanner = `
+        <div class="mb-4 p-4 bg-amber-500/15 border border-amber-500/40 rounded-xl text-left">
+          <div class="flex items-center gap-2 text-amber-400 font-semibold mb-1 text-sm">
+            <i class="ti ti-alert-triangle text-lg"></i>
+            <span>Akun YouTube Perlu Dihubungkan Ulang</span>
+          </div>
+          <p class="text-xs text-gray-300 mb-3">
+            Token Google untuk <strong>${escapeHtml(channelNames)}</strong> telah kedaluwarsa atau dicabut oleh Google. Silakan klik tombol di bawah untuk Reconnect.
+          </p>
+          <button type="button" onclick="openAddAccountModal()" class="bg-amber-600 hover:bg-amber-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-colors shadow-md">
+            <i class="ti ti-plug"></i>
+            <span>Hubungkan Ulang (Reconnect)</span>
+          </button>
+        </div>
+      `;
+    }
+  }
+
   container.innerHTML = `
+    ${errorBanner}
     <div class="bg-gray-800 rounded-lg p-10 text-center">
       <div class="w-16 h-16 bg-dark-700 rounded-full flex items-center justify-center mx-auto mb-4">
         <i class="ti ti-broadcast text-gray-500 text-2xl"></i>
@@ -371,7 +395,7 @@ function renderEmptyState() {
 }
 
 // Render broadcasts grouped by channel
-function renderBroadcastsGrouped(broadcasts, accounts) {
+function renderBroadcastsGrouped(broadcasts, accounts, accountErrors) {
   console.log('[renderBroadcastsGrouped] Starting render with', broadcasts.length, 'broadcasts');
   console.log('[renderBroadcastsGrouped] Accounts:', accounts);
   console.log('[renderBroadcastsGrouped] Sample broadcast:', broadcasts[0]);
@@ -415,11 +439,36 @@ function renderBroadcastsGrouped(broadcasts, accounts) {
   
   // Render each channel group
   container.innerHTML = '';
+
+  // Render error banner if any accounts have expired tokens
+  if (accountErrors && accountErrors.length > 0) {
+    const expiredAccounts = accountErrors.filter(e => e.isTokenExpired || e.error === 'TOKEN_EXPIRED');
+    if (expiredAccounts.length > 0) {
+      const channelNames = expiredAccounts.map(a => a.channelName || 'Akun YouTube').join(', ');
+      const bannerDiv = document.createElement('div');
+      bannerDiv.className = 'mb-4 p-4 bg-amber-500/15 border border-amber-500/40 rounded-xl text-left';
+      bannerDiv.innerHTML = `
+        <div class="flex items-center gap-2 text-amber-400 font-semibold mb-1 text-sm">
+          <i class="ti ti-alert-triangle text-lg"></i>
+          <span>Perhatian: Akun YouTube Perlu Dihubungkan Ulang</span>
+        </div>
+        <p class="text-xs text-gray-300 mb-3">
+          Token Google untuk akun <strong>${escapeHtml(channelNames)}</strong> telah kedaluwarsa. Siaran untuk akun ini mungkin tidak dapat disinkronkan sampai Anda menghubungkan ulang akun.
+        </p>
+        <button type="button" onclick="openAddAccountModal()" class="bg-amber-600 hover:bg-amber-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-colors shadow-md">
+          <i class="ti ti-plug"></i>
+          <span>Hubungkan Ulang (Reconnect)</span>
+        </button>
+      `;
+      container.appendChild(bannerDiv);
+    }
+  }
+
   const channelNames = Object.keys(groupedBroadcasts);
   
   if (channelNames.length === 0) {
     console.warn('[renderBroadcastsGrouped] No channels to render');
-    renderEmptyState();
+    renderEmptyState(accountErrors);
     return;
   }
   
@@ -459,7 +508,7 @@ function createChannelGroup(channelName, group, channelIndex) {
           <input type="checkbox" class="channel-select-all w-4 h-4 rounded border-gray-600 bg-dark-700 text-primary focus:ring-primary cursor-pointer"
             onclick="event.stopPropagation(); toggleChannelSelectAll(this, ${group.accountId})"
             title="Select all in this channel">
-          <span class="text-gray-400 text-xl transition-transform" id="channelChevron_${channelIndex}" style="display: inline-block;">${channelIndex === 0 ? '▼' : '▶'}</span>
+          <span class="text-gray-400 text-xl transition-transform" id="channelChevron_${channelIndex}" style="display: inline-block;">▼</span>
         </div>
       </div>
     `;
@@ -473,8 +522,8 @@ function createChannelGroup(channelName, group, channelIndex) {
       }
     }).join('');
     
-    // First channel group is expanded by default so broadcasts are immediately visible
-    const isExpanded = (channelIndex === 0);
+    // Channel groups are expanded by default so broadcasts are immediately visible
+    const isExpanded = true;
     div.innerHTML = `
       ${headerHtml}
       <div id="channelBroadcasts_${channelIndex}" class="divide-y divide-gray-700/50" style="display: ${isExpanded ? 'block' : 'none'};">
@@ -639,7 +688,7 @@ async function refreshBroadcasts() {
     broadcastsCache.data = null;
     broadcastsCache.timestamp = null;
     
-    const response = await fetch('/api/youtube/broadcasts', {
+    const response = await fetch('/api/youtube/broadcasts?force=1', {
       headers: {
         'X-CSRF-Token': getCsrfToken()
       }
@@ -647,7 +696,7 @@ async function refreshBroadcasts() {
     
     const data = await response.json();
     
-    if (data.success && data.broadcasts) {
+    if (data.success && data.broadcasts !== undefined) {
       // Update cache
       broadcastsCache.data = data.broadcasts;
       broadcastsCache.timestamp = Date.now();
@@ -659,15 +708,18 @@ async function refreshBroadcasts() {
         broadcastsContainer.style.display = 'block';
         broadcastsContainer.classList.remove('hidden');
         if (data.broadcasts.length > 0) {
-          renderBroadcastsGrouped(data.broadcasts, data.accounts || []);
+          renderBroadcastsGrouped(data.broadcasts, data.accounts || [], data.errors || []);
         } else if (typeof renderEmptyState === 'function') {
-          renderEmptyState();
+          renderEmptyState(data.errors || []);
         }
       } else {
         setTimeout(() => window.location.reload(), 500);
       }
     } else {
       showToast(data.error || 'Failed to refresh broadcasts', 'error');
+      if (typeof renderEmptyState === 'function' && broadcastsContainer) {
+        renderEmptyState(data.errors || (data.error ? [{ error: data.error, message: data.message }] : []));
+      }
     }
   } catch (error) {
     console.error('Error refreshing broadcasts:', error);

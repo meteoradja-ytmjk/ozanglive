@@ -8933,67 +8933,124 @@ global.invalidateBroadcastsCache = invalidateBroadcastsCache;
 app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
   try {
     const accountId = req.query.accountId ? parseInt(req.query.accountId) : null;
+    const forceRefresh = req.query.force === '1' || req.query.force === 'true';
     const userId = req.session.userId;
     
     // Create cache key
     const cacheKey = accountId ? `user_${userId}_account_${accountId}` : `user_${userId}_all`;
     
-    // Check cache first (empty list is only cached for 3 seconds to avoid locking user in empty state)
-    const cached = broadcastsApiCache.get(cacheKey);
-    if (cached) {
-      const cacheAge = Date.now() - cached.timestamp;
-      const maxAge = (cached.data && cached.data.length > 0) ? BROADCASTS_CACHE_TTL : 3000;
-      if (cacheAge < maxAge) {
-        console.log(`[Cache HIT] Returning cached broadcasts for ${cacheKey} (${cached.data.length} items, age: ${Math.round(cacheAge / 1000)}s)`);
-        return res.json({ success: true, broadcasts: cached.data, accounts: cached.accounts || [], cached: true });
+    // Check cache first (skipped if forceRefresh is requested; empty list expires in 3s)
+    if (!forceRefresh) {
+      const cached = broadcastsApiCache.get(cacheKey);
+      if (cached) {
+        const cacheAge = Date.now() - cached.timestamp;
+        const maxAge = (cached.data && cached.data.length > 0) ? BROADCASTS_CACHE_TTL : 3000;
+        if (cacheAge < maxAge) {
+          console.log(`[Cache HIT] Returning cached broadcasts for ${cacheKey} (${cached.data.length} items, age: ${Math.round(cacheAge / 1000)}s)`);
+          return res.json({ success: true, broadcasts: cached.data, accounts: cached.accounts || [], errors: cached.errors || [], cached: true });
+        }
       }
     }
     
-    console.log(`[Cache MISS] Fetching fresh broadcasts for ${cacheKey}`);
+    console.log(`[Cache MISS] Fetching fresh broadcasts for ${cacheKey} (force: ${forceRefresh})`);
 
-    // Helper to retrieve locally recorded broadcasts for this user
+    // Helper to retrieve all locally recorded broadcasts for this user across both streams and youtube_broadcast_settings
     const getLocalStreams = () => new Promise((resolve) => {
       db.all(
         `SELECT id, title, rtmp_url, stream_key, schedule_time, youtube_broadcast_id, youtube_account_id, status 
          FROM streams 
-         WHERE user_id = ? AND youtube_broadcast_id IS NOT NULL AND youtube_broadcast_id != ''`,
-        [userId],
-        (err, rows) => {
-          if (err) {
-            console.warn('[Broadcasts API] Local streams query error:', err.message);
-            resolve([]);
-          } else {
-            resolve(rows || []);
-          }
+         WHERE (user_id = ? OR CAST(user_id AS TEXT) = CAST(? AS TEXT)) 
+           AND youtube_broadcast_id IS NOT NULL 
+           AND youtube_broadcast_id != ''`,
+        [userId, String(userId)],
+        (err, streamRows) => {
+          const sRows = (err ? [] : (streamRows || []));
+          
+          db.all(
+            `SELECT broadcast_id, user_id, account_id, original_privacy_status, thumbnail_path, created_at
+             FROM youtube_broadcast_settings
+             WHERE (user_id = ? OR CAST(user_id AS TEXT) = CAST(? AS TEXT))
+               AND broadcast_id IS NOT NULL 
+               AND broadcast_id != ''`,
+            [userId, String(userId)],
+            (settingsErr, settingsRows) => {
+              const setRows = (settingsErr ? [] : (settingsRows || []));
+              
+              // Combine and deduplicate by broadcast ID
+              const mergedMap = new Map();
+              
+              setRows.forEach(st => {
+                if (st.broadcast_id) {
+                  mergedMap.set(st.broadcast_id, {
+                    id: null,
+                    title: 'YouTube Scheduled Broadcast',
+                    rtmp_url: 'rtmp://a.rtmp.youtube.com/live2',
+                    stream_key: '',
+                    schedule_time: st.created_at || null,
+                    youtube_broadcast_id: st.broadcast_id,
+                    youtube_account_id: st.account_id ? parseInt(st.account_id) : null,
+                    privacyStatus: st.original_privacy_status || 'unlisted',
+                    thumbnailPath: st.thumbnail_path || null,
+                    status: 'scheduled'
+                  });
+                }
+              });
+              
+              sRows.forEach(sr => {
+                if (sr.youtube_broadcast_id) {
+                  const existing = mergedMap.get(sr.youtube_broadcast_id);
+                  mergedMap.set(sr.youtube_broadcast_id, {
+                    ...existing,
+                    id: sr.id,
+                    title: sr.title || (existing ? existing.title : 'YouTube Broadcast'),
+                    rtmp_url: sr.rtmp_url || 'rtmp://a.rtmp.youtube.com/live2',
+                    stream_key: sr.stream_key || '',
+                    schedule_time: sr.schedule_time || (existing ? existing.schedule_time : null),
+                    youtube_broadcast_id: sr.youtube_broadcast_id,
+                    youtube_account_id: sr.youtube_account_id ? parseInt(sr.youtube_account_id) : (existing ? existing.youtube_account_id : null),
+                    status: sr.status || 'scheduled'
+                  });
+                }
+              });
+              
+              resolve(Array.from(mergedMap.values()));
+            }
+          );
         }
       );
     });
 
     const localStreams = await getLocalStreams();
-    const localStreamMap = new Map();
-    localStreams.forEach(s => {
-      if (s.youtube_broadcast_id) {
-        localStreamMap.set(s.youtube_broadcast_id, s);
-      }
-    });
     console.log(`[Broadcasts API] Found ${localStreams.length} locally recorded broadcast(s) for user ${userId}`);
 
     if (accountId) {
       // Get broadcasts for specific account
       const credentials = await YouTubeCredentials.findById(accountId);
-      if (!credentials || credentials.userId !== req.session.userId) {
+      if (!credentials || String(credentials.userId) !== String(req.session.userId)) {
         return res.status(404).json({ success: false, error: 'Account not found' });
       }
 
-      console.log(`[DEBUG] Credentials for account ${accountId}:`, {
-        id: credentials.id,
-        channelName: credentials.channelName,
-        channelId: credentials.channelId
-      });
+      let accessToken;
+      try {
+        accessToken = await youtubeService.getAccessToken(credentials.clientId, credentials.clientSecret, credentials.refreshToken, 0, credentials.id);
+      } catch (tokenErr) {
+        console.error(`[Broadcasts API] Token error for account ${accountId}:`, tokenErr.message);
+        return res.status(401).json({
+          success: false,
+          error: 'TOKEN_EXPIRED',
+          message: 'Token YouTube Anda kedaluwarsa. Silakan hubungkan ulang akun (Reconnect).',
+          accountId: credentials.id,
+          channelName: credentials.channelName
+        });
+      }
 
-      const accessToken = await youtubeService.getAccessToken(credentials.clientId, credentials.clientSecret, credentials.refreshToken, 0, credentials.id);
+      let broadcasts = [];
+      try {
+        broadcasts = await youtubeService.listBroadcasts(accessToken, { broadcastStatus: 'all' });
+      } catch (listErr) {
+        console.warn(`[Broadcasts API] listBroadcasts error for account ${accountId}:`, listErr.message);
+      }
 
-      let broadcasts = await youtubeService.listBroadcasts(accessToken, { broadcastStatus: 'all' });
       let result = broadcasts.map(b => ({ 
         ...b, 
         accountId: credentials.id, 
@@ -9022,16 +9079,16 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
             });
           });
 
-          // If still not indexed on YouTube (within seconds of creation), add local fallback entry
+          // If still not indexed on YouTube, add local fallback entry so it is visible immediately
           missingLocal.forEach(s => {
             if (!directIds.has(s.youtube_broadcast_id) && !fetchedIds.has(s.youtube_broadcast_id)) {
-              console.log(`[Broadcasts API] Adding pending local broadcast to list: ${s.youtube_broadcast_id} (${s.title})`);
+              console.log(`[Broadcasts API] Adding local fallback broadcast to list: ${s.youtube_broadcast_id} (${s.title})`);
               result.unshift({
                 id: s.youtube_broadcast_id,
                 title: s.title || 'Untitled Broadcast',
                 description: '',
                 scheduledStartTime: s.schedule_time || null,
-                privacyStatus: 'unlisted',
+                privacyStatus: s.privacyStatus || 'unlisted',
                 lifeCycleStatus: 'created',
                 streamId: null,
                 streamKey: s.stream_key || '',
@@ -9054,17 +9111,18 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
       broadcastsApiCache.set(cacheKey, { 
         data: result, 
         accounts: accountsInfo,
+        errors: [],
         timestamp: Date.now() 
       });
       
-      // Return with accounts info for rendering
-      res.json({ 
+      return res.json({ 
         success: true, 
         broadcasts: result,
-        accounts: accountsInfo
+        accounts: accountsInfo,
+        errors: []
       });
     } else {
-      // OPTIMIZATION: Get broadcasts from all accounts in PARALLEL with timeout
+      // Fetch broadcasts from all accounts
       const accounts = await YouTubeCredentials.findAllByUserId(req.session.userId);
 
       console.log(`[DEBUG] Found ${accounts.length} accounts for user ${userId}`);
@@ -9076,6 +9134,8 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
         });
       }
 
+      const accountErrors = [];
+
       // Fetch all broadcasts in parallel with timeout (12 seconds per account for high reliability)
       const broadcastPromises = accounts.map(async (account) => {
         try {
@@ -9084,8 +9144,26 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
           );
           
           const fetchPromise = (async () => {
-            const accessToken = await youtubeService.getAccessToken(account.clientId, account.clientSecret, account.refreshToken, 0, account.id);
-            let broadcasts = await youtubeService.listBroadcasts(accessToken, { broadcastStatus: 'all' });
+            let accessToken;
+            try {
+              accessToken = await youtubeService.getAccessToken(account.clientId, account.clientSecret, account.refreshToken, 0, account.id);
+            } catch (tokenErr) {
+              console.error(`[Broadcasts API] Token error for account ${account.channelName}:`, tokenErr.message);
+              accountErrors.push({
+                accountId: account.id,
+                channelName: account.channelName,
+                error: 'TOKEN_EXPIRED',
+                message: 'Token expired or revoked'
+              });
+              throw tokenErr;
+            }
+
+            let broadcasts = [];
+            try {
+              broadcasts = await youtubeService.listBroadcasts(accessToken, { broadcastStatus: 'all' });
+            } catch (listErr) {
+              console.warn(`[Broadcasts API] listBroadcasts error for ${account.channelName}:`, listErr.message);
+            }
             
             let accountBroadcasts = broadcasts.map(b => ({
               ...b,
@@ -9123,7 +9201,7 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
                       title: s.title || 'Untitled Broadcast',
                       description: '',
                       scheduledStartTime: s.schedule_time || null,
-                      privacyStatus: 'unlisted',
+                      privacyStatus: s.privacyStatus || 'unlisted',
                       lifeCycleStatus: 'created',
                       streamId: null,
                       streamKey: s.stream_key || '',
@@ -9156,7 +9234,7 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
               title: s.title || 'Untitled Broadcast',
               description: '',
               scheduledStartTime: s.schedule_time || null,
-              privacyStatus: 'unlisted',
+              privacyStatus: s.privacyStatus || 'unlisted',
               lifeCycleStatus: 'created',
               streamId: null,
               streamKey: s.stream_key || '',
@@ -9192,14 +9270,16 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
       broadcastsApiCache.set(cacheKey, { 
         data: allBroadcasts, 
         accounts: accountsInfo,
+        errors: accountErrors,
         timestamp: Date.now() 
       });
 
-      // Return with accounts info for rendering
+      // Return with accounts info and errors for rendering
       res.json({ 
         success: true, 
         broadcasts: allBroadcasts,
-        accounts: accountsInfo
+        accounts: accountsInfo,
+        errors: accountErrors
       });
     }
   } catch (error) {
