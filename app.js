@@ -9406,14 +9406,21 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
     }
 
     // Validate scheduled time (at least 10 minutes in future)
+    let finalScheduledStartTime = scheduledStartTime;
     const scheduledDate = new Date(scheduledStartTime);
     const minTime = new Date(Date.now() + 10 * 60 * 1000);
 
     if (scheduledDate < minTime) {
-      return res.status(400).json({
-        success: false,
-        error: 'Scheduled start time must be at least 10 minutes in the future'
-      });
+      if (req.body.startImmediately === 'true') {
+        // Automatically adjust to 15 minutes ahead so YouTube API accepts immediate live without 400 error
+        finalScheduledStartTime = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+        console.log('[API] Auto-adjusted scheduledStartTime for immediate start:', finalScheduledStartTime);
+      } else {
+        return res.status(400).json({
+          success: false,
+          error: 'Scheduled start time must be at least 10 minutes in the future'
+        });
+      }
     }
 
     // Parse tags if provided as JSON string
@@ -9434,7 +9441,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
     const broadcast = await youtubeService.createBroadcast(accessToken, {
       title,
       description: description || '',
-      scheduledStartTime,
+      scheduledStartTime: finalScheduledStartTime,
       privacyStatus: privacyStatus || 'unlisted',
       streamId: streamId || null,
       tags: parsedTags,
@@ -9748,13 +9755,15 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       createdStream = await Stream.create(streamData);
       console.log('[API] Created associated Stream record:', createdStream.id, 'for broadcast:', broadcast.broadcastId, 'schedule_time:', scheduleIso);
 
+      let streamStartResult = null;
       if (req.body.startImmediately === 'true' && createdStream && req.body.videoId) {
-        if (typeof streamService !== 'undefined' && typeof streamService.startStream === 'function') {
+        if (typeof streamingService !== 'undefined' && typeof streamingService.startStream === 'function') {
           try {
-            await streamService.startStream(createdStream.id, req.session.userId);
-            console.log('[API] Stream engine started immediately for stream ID:', createdStream.id);
+            streamStartResult = await streamingService.startStream(createdStream.id);
+            console.log('[API] Stream engine started immediately for stream ID:', createdStream.id, 'result:', streamStartResult);
           } catch (startErr) {
             console.error('[API] Error starting stream engine immediately:', startErr.message);
+            streamStartResult = { success: false, error: startErr.message };
           }
         }
       }
@@ -9763,7 +9772,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
     }
 
     invalidateBroadcastsCache(req.session.userId);
-    res.json({ success: true, broadcast, stream: createdStream });
+    res.json({ success: true, broadcast, stream: createdStream, streamStartResult });
   } catch (error) {
     console.error('Error creating broadcast:', error);
     res.status(500).json({

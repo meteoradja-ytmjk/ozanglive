@@ -3865,11 +3865,25 @@ function toggleStudioDay(dayIndex) {
 function submitBroadcastAndStartNow() {
   const form = document.getElementById('createBroadcastForm');
   if (!form) return;
+
+  // Validation: Ensure a video is selected before starting live
+  const videoId = document.getElementById('studioSelectedVideoId')?.value;
+  if (!videoId) {
+    if (typeof showToast === 'function') {
+      showToast('Pilih video dari galeri terlebih dahulu untuk mulai live!', 'warning');
+    }
+    const videoBtn = document.getElementById('studioSelectedVideo')?.closest('button');
+    if (videoBtn) videoBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
+
+  // Always ensure scheduledStartTime is set to at least 15 minutes ahead so YouTube API accepts the broadcast
   const scheduledInput = document.getElementById('scheduledStartTime');
-  if (scheduledInput && !scheduledInput.value) {
+  if (scheduledInput) {
     const defaultDate = new Date(Date.now() + 15 * 60 * 1000);
     scheduledInput.value = typeof formatDateTimeLocal === 'function' ? formatDateTimeLocal(defaultDate) : defaultDate.toISOString().slice(0, 16);
   }
+
   form.dataset.startImmediately = 'true';
   form.requestSubmit();
 }
@@ -4256,7 +4270,11 @@ if (createBroadcastForm) {
         broadcastsCache.data = null;
         broadcastsCache.timestamp = null;
         
-        showToast(isStartNow ? '✓ Live streaming berhasil dimulai!' : '✓ Broadcast & Jadwal Live berhasil dibuat!');
+        if (isStartNow && data.streamStartResult && !data.streamStartResult.success) {
+          showToast(`Broadcast dibuat, tetapi stream gagal dimulai: ${data.streamStartResult.error || 'Terjadi kesalahan'}`, 'warning');
+        } else {
+          showToast(isStartNow ? '✓ Live streaming berhasil dimulai!' : '✓ Broadcast & Jadwal Live berhasil dibuat!');
+        }
         closeCreateBroadcastModal();
         
         // Refresh broadcasts immediately in-place if already on dashboard, or redirect
