@@ -14,11 +14,7 @@
       <link rel="preconnect" href="https://fonts.googleapis.com">
       <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
       <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-      <link rel="preload" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.30.0/tabler-icons.min.css"
-        as="style" onload="this.onload=null;this.rel='stylesheet'">
-      <noscript>
-        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.30.0/tabler-icons.min.css">
-      </noscript>
+      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.30.0/tabler-icons.min.css">
       <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
         rel="stylesheet">
       <script src="https://cdn.tailwindcss.com"></script>
@@ -101,21 +97,39 @@
       <script src="/js/stream-modal.js?v=1.0.9" defer></script>
       <script src="/js/tab-optimizer.js" defer></script>
       <script>
-        document.addEventListener('DOMContentLoaded', function () {
+        (function() {
+          function markLoaded(root) {
+            var scope = root && root.querySelectorAll ? root : document;
+            scope.querySelectorAll('.ti:not(.font-loaded)').forEach(function (icon) {
+              icon.classList.add('font-loaded');
+            });
+          }
+          if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() { markLoaded(); });
+          } else {
+            markLoaded();
+          }
           if (document.fonts && document.fonts.ready) {
-            document.fonts.ready.then(function () {
-              document.querySelectorAll('.ti').forEach(function (icon) {
-                icon.classList.add('font-loaded');
+            document.fonts.ready.then(function() { markLoaded(); });
+          }
+          if (typeof MutationObserver !== 'undefined') {
+            var observer = new MutationObserver(function(mutations) {
+              mutations.forEach(function(m) {
+                if (m.addedNodes && m.addedNodes.length) {
+                  m.addedNodes.forEach(function(node) {
+                    if (node.nodeType === 1) {
+                      if (node.classList && node.classList.contains('ti')) {
+                        node.classList.add('font-loaded');
+                      }
+                      markLoaded(node);
+                    }
+                  });
+                }
               });
             });
-          } else {
-            setTimeout(function () {
-              document.querySelectorAll('.ti').forEach(function (icon) {
-                icon.classList.add('font-loaded');
-              });
-            }, 100);
+            observer.observe(document.documentElement, { childList: true, subtree: true });
           }
-        });
+        })();
       </script>
 
       <!-- White Label: Custom CSS -->

@@ -594,7 +594,7 @@ function createBroadcastRowHtml(broadcast, index) {
           <div class="w-8 text-center text-xs text-gray-500">${index + 1}</div>
           <div class="flex-1 min-w-0">
             <span class="text-sm font-medium text-white truncate block" title="${safeTitle}">${safeTitle}</span>
-            ${scheduledTimeStr ? `<span class="text-[11px] text-gray-400 flex items-center gap-1 mt-0.5"><i class="ti ti-calendar-time text-xs text-primary/70"></i> ${scheduledTimeStr}</span>` : ''}
+            ${scheduledTimeStr ? `<span class="text-[11px] text-gray-400 flex items-center gap-1 mt-0.5"><i class="ti ti-calendar-time text-xs text-primary/70 font-loaded"></i> ${scheduledTimeStr}</span>` : ''}
           </div>
           <div class="w-20 text-center">
             <span class="px-2 py-0.5 rounded text-xs font-semibold uppercase ${privacyClass}">
@@ -609,21 +609,21 @@ function createBroadcastRowHtml(broadcast, index) {
             <button type="button" onclick="copyStreamKey('${escapeJsString(broadcast.streamKey || '')}', ${index + 1})"
               class="shrink-0 w-7 h-7 flex items-center justify-center text-gray-400 hover:text-primary hover:bg-primary/10 rounded transition-colors ${broadcast.streamKey ? '' : 'opacity-40 pointer-events-none'}"
               title="Copy stream key #${index + 1}">
-              <i class="ti ti-copy text-sm"></i>
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8v-2a2 2 0 0 0 -2 -2h-8a2 2 0 0 0 -2 2v8a2 2 0 0 0 2 2h2" /></svg>
             </button>
           </div>
           <div class="w-32 flex items-center justify-center gap-1.5">
             <button type="button" onclick="editBroadcast('${broadcast.id}', ${broadcast.accountId || 'null'})"
               class="w-8 h-8 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 active:bg-blue-500/35 text-blue-400 border border-blue-500/20 flex items-center justify-center transition-all active:scale-95 touch-manipulation" title="Edit">
-              <i class="ti ti-edit text-sm"></i>
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" /><path d="M13.5 6.5l4 4" /></svg>
             </button>
             <button type="button" onclick="openDuplicateBroadcastModal('${broadcast.id}', ${broadcast.accountId || 'null'})"
               class="w-8 h-8 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 active:bg-purple-500/35 text-purple-400 border border-purple-500/20 flex items-center justify-center transition-all active:scale-95 touch-manipulation" title="Duplikat Siaran">
-              <i class="ti ti-copy text-sm"></i>
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8v-2a2 2 0 0 0 -2 -2h-8a2 2 0 0 0 -2 2v8a2 2 0 0 0 2 2h2" /></svg>
             </button>
             <button type="button" onclick="deleteBroadcast('${broadcast.id}', null, ${broadcast.accountId || 'null'})"
               class="w-8 h-8 rounded-lg bg-red-500/15 hover:bg-red-500/25 active:bg-red-500/35 text-red-400 border border-red-500/20 flex items-center justify-center transition-all active:scale-95 touch-manipulation" title="Hapus">
-              <i class="ti ti-trash text-sm"></i>
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7l16 0" /><path d="M10 11l0 6" /><path d="M14 11l0 6" /><path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12" /><path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3" /></svg>
             </button>
           </div>
         </div>
@@ -651,7 +651,7 @@ function createBroadcastRowHtml(broadcast, index) {
               </div>
               ${scheduledTimeStr ? `
                 <div class="text-[11px] text-gray-400 flex items-center gap-1 mt-1">
-                  <i class="ti ti-calendar-time text-xs text-primary/80"></i>
+                  <i class="ti ti-calendar-time text-xs text-primary/80 font-loaded"></i>
                   <span>${scheduledTimeStr}</span>
                 </div>
               ` : ''}
@@ -667,22 +667,22 @@ function createBroadcastRowHtml(broadcast, index) {
               <button type="button" onclick="copyStreamKey('${escapeJsString(broadcast.streamKey || '')}', ${index + 1})"
                 class="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-primary hover:bg-primary/10 active:bg-primary/20 rounded-lg active:scale-95 transition-all touch-manipulation flex-shrink-0 ${broadcast.streamKey ? '' : 'opacity-40 pointer-events-none'}"
                 title="Copy stream key #${index + 1}">
-                <i class="ti ti-copy text-sm"></i>
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8v-2a2 2 0 0 0 -2 -2h-8a2 2 0 0 0 -2 2v8a2 2 0 0 0 2 2h2" /></svg>
               </button>
             </div>
 
             <div class="flex items-center gap-1.5 flex-shrink-0">
               <button type="button" onclick="editBroadcast('${broadcast.id}', ${broadcast.accountId || 'null'})"
                 class="w-8 h-8 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 active:bg-blue-500/35 text-blue-400 border border-blue-500/20 flex items-center justify-center transition-all active:scale-95 touch-manipulation" title="Edit">
-                <i class="ti ti-edit text-sm"></i>
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" /><path d="M13.5 6.5l4 4" /></svg>
               </button>
               <button type="button" onclick="openDuplicateBroadcastModal('${broadcast.id}', ${broadcast.accountId || 'null'})"
                 class="w-8 h-8 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 active:bg-purple-500/35 text-purple-400 border border-purple-500/20 flex items-center justify-center transition-all active:scale-95 touch-manipulation" title="Duplikat Siaran">
-                <i class="ti ti-copy text-sm"></i>
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8v-2a2 2 0 0 0 -2 -2h-8a2 2 0 0 0 -2 2v8a2 2 0 0 0 2 2h2" /></svg>
               </button>
               <button type="button" onclick="deleteBroadcast('${broadcast.id}', null, ${broadcast.accountId || 'null'})"
                 class="w-8 h-8 rounded-lg bg-red-500/15 hover:bg-red-500/25 active:bg-red-500/35 text-red-400 border border-red-500/20 flex items-center justify-center transition-all active:scale-95 touch-manipulation" title="Hapus">
-                <i class="ti ti-trash text-sm"></i>
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7l16 0" /><path d="M10 11l0 6" /><path d="M14 11l0 6" /><path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12" /><path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3" /></svg>
               </button>
             </div>
           </div>
@@ -1013,34 +1013,34 @@ function createBroadcastCard(broadcast) {
         </div>
         
         <div class="flex items-center gap-2 text-xs text-gray-400 mb-3">
-          <i class="ti ti-calendar text-sm"></i>
+          <i class="ti ti-calendar text-sm font-loaded"></i>
           <span>${formattedDate}</span>
         </div>
         
         <div class="flex items-center gap-1 flex-wrap">
           <button onclick="editBroadcast('${broadcast.id}', ${broadcast.accountId})" 
             class="px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg text-xs transition-colors flex items-center gap-1">
-            <i class="ti ti-edit text-sm"></i>
+            <i class="ti ti-edit text-sm font-loaded"></i>
             <span>Edit</span>
           </button>
           <button onclick="reuseBroadcast('${broadcast.id}', ${broadcast.accountId})" 
             class="px-3 py-1.5 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg text-xs transition-colors flex items-center gap-1">
-            <i class="ti ti-copy text-sm"></i>
+            <i class="ti ti-copy text-sm font-loaded"></i>
             <span>Reuse</span>
           </button>
           <button onclick="changeThumbnail('${broadcast.id}', ${broadcast.accountId || 'null'})" 
             class="px-3 py-1.5 bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 rounded-lg text-xs transition-colors flex items-center gap-1">
-            <i class="ti ti-photo text-sm"></i>
+            <i class="ti ti-photo text-sm font-loaded"></i>
             <span>Thumbnail</span>
           </button>
           <button onclick="addSaveAsTemplateButton('${broadcast.id}', ${broadcast.accountId}, '${escapeJsString(broadcast.title)}', '${broadcast.privacyStatus}')" 
             class="px-3 py-1.5 bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 rounded-lg text-xs transition-colors flex items-center gap-1">
-            <i class="ti ti-bookmark text-sm"></i>
+            <i class="ti ti-bookmark text-sm font-loaded"></i>
             <span>Template</span>
           </button>
           <button onclick="deleteBroadcast('${broadcast.id}', '${escapeJsString(broadcast.title)}', ${broadcast.accountId})" 
             class="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg text-xs transition-colors flex items-center gap-1">
-            <i class="ti ti-trash text-sm"></i>
+            <i class="ti ti-trash text-sm font-loaded"></i>
             <span>Delete</span>
           </button>
         </div>

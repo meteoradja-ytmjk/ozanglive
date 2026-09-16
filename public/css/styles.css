@@ -1,4 +1,4 @@
-﻿/*
+/*
  * StreamFlow v2.1 - Live Streaming Lewat VPS
  * 
  * Custom Features & UI Components
@@ -11,10 +11,7 @@
 .ti {
   font-family: 'tabler-icons', sans-serif;
   font-display: swap;
-}
-
-.ti {
-  visibility: hidden;
+  visibility: visible;
 }
 
 .ti.font-loaded {
