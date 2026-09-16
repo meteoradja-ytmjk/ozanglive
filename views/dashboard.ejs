@@ -79,6 +79,11 @@
   </style>
 
   <%
+    const isAdmin = Boolean(
+      (typeof user !== 'undefined' && user && (user.user_role === 'admin' || user.role === 'admin')) ||
+      (typeof req !== 'undefined' && req.session && req.session.user_role === 'admin')
+    );
+
     // Account expiry banner (visible to the logged-in user)
     if (typeof user !== 'undefined' && user && user.expired_at) {
       const _exp = new Date(user.expired_at);
@@ -129,7 +134,8 @@
     </div>
   <%   } } %>
 
-  <!-- Mobile Stats Bar - Portrait (FIXED - DO NOT CHANGE) -->
+  <% if (isAdmin) { %>
+  <!-- Mobile Stats Bar - Portrait (Admin: Full VPS Specs + Live) -->
   <div class="md:hidden mb-4 mobile-stats-portrait">
     <div class="bg-gray-800/90 backdrop-blur-md rounded-2xl px-4 py-3 shadow-lg">
       <div class="flex items-center justify-between">
@@ -161,28 +167,9 @@
         </div>
       </div>
     </div>
-
-    <!-- Hidden elements for compatibility -->
-    <div class="hidden">
-      <span id="live-limit-mobile"></span>
-      <div id="limit-warning-mobile"></div>
-      <div id="cpu-bar-mobile"></div>
-      <div id="memory-bar-mobile"></div>
-      <span id="memory-total-mobile"></span>
-      <span id="network-disk-title-mobile"></span>
-      <span id="toggle-icon-mobile"></span>
-      <div id="network-content-mobile"></div>
-      <span id="upload-speed-mobile"></span>
-      <span id="download-speed-mobile"></span>
-      <div id="disk-content-mobile">
-        <span id="disk-used-mobile"></span>
-        <span id="disk-total-mobile"></span>
-        <div id="disk-bar-mobile"></div>
-      </div>
-    </div>
   </div>
 
-  <!-- Mobile Stats Bar - Landscape Only (same concept as portrait but with disk info) -->
+  <!-- Mobile Stats Bar - Landscape Only (Admin: Full VPS Specs) -->
   <div class="hidden mobile-stats-landscape mb-3">
     <div class="bg-gray-800/90 backdrop-blur-md rounded-2xl px-4 py-3 shadow-lg">
       <div class="flex items-center justify-between">
@@ -211,6 +198,80 @@
       </div>
     </div>
   </div>
+  <% } else { %>
+  <!-- Mobile Stats Bar - Portrait (User: Hanya Info Jumlah Live) -->
+  <div class="md:hidden mb-4 mobile-stats-portrait">
+    <div class="bg-gray-800/90 backdrop-blur-md rounded-2xl px-4 py-3 shadow-lg">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <div class="w-7 h-7 rounded-lg bg-violet-500/15 flex items-center justify-center text-violet-400">
+            <i class="ti ti-broadcast text-lg"></i>
+          </div>
+          <span class="text-xs text-gray-400">Live Streaming:</span>
+          <span id="active-streams-mobile" class="text-violet-400 font-bold text-base">0</span>
+          <span class="text-gray-400 text-xs">live aktif</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mobile Stats Bar - Landscape (User: Hanya Info Jumlah Live) -->
+  <div class="hidden mobile-stats-landscape mb-3">
+    <div class="bg-gray-800/90 backdrop-blur-md rounded-2xl px-4 py-3 shadow-lg">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <div class="w-7 h-7 rounded-lg bg-violet-500/15 flex items-center justify-center text-violet-400">
+            <i class="ti ti-broadcast text-lg"></i>
+          </div>
+          <span class="text-xs text-gray-400">Live Streaming:</span>
+          <span id="active-streams-landscape" class="text-violet-400 font-bold text-base">0</span>
+          <span class="text-gray-400 text-xs">live aktif</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <% } %>
+
+  <!-- Hidden elements for compatibility -->
+  <div class="hidden">
+    <span id="live-limit-mobile"></span>
+    <div id="limit-warning-mobile"></div>
+    <div id="cpu-bar-mobile"></div>
+    <div id="memory-bar-mobile"></div>
+    <span id="memory-total-mobile"></span>
+    <span id="network-disk-title-mobile"></span>
+    <span id="toggle-icon-mobile"></span>
+    <div id="network-content-mobile"></div>
+    <span id="upload-speed-mobile"></span>
+    <span id="download-speed-mobile"></span>
+    <div id="disk-content-mobile">
+      <span id="disk-used-mobile"></span>
+      <span id="disk-total-mobile"></span>
+      <div id="disk-bar-mobile"></div>
+    </div>
+    <% if (!isAdmin) { %>
+    <span id="cpu-usage"></span>
+    <span id="cpu-usage-mobile"></span>
+    <span id="cpu-usage-landscape"></span>
+    <div id="cpu-bar"></div>
+    <span id="memory-usage"></span>
+    <span id="memory-total"></span>
+    <div id="memory-bar"></div>
+    <span id="memory-usage-mobile"></span>
+    <span id="memory-display-landscape"></span>
+    <span id="network-disk-title"></span>
+    <span id="toggle-icon-desktop"></span>
+    <div id="network-content-desktop"></div>
+    <span id="upload-speed"></span>
+    <span id="download-speed"></span>
+    <div id="disk-content-desktop">
+      <span id="disk-used"></span>
+      <span id="disk-total"></span>
+      <div id="disk-bar"></div>
+    </div>
+    <span id="disk-usage-landscape"></span>
+    <% } %>
+  </div>
 
   <!-- Live Studio Sub-Header Navigation Tab Bar -->
   <div class="mb-6 bg-dark-800/90 backdrop-blur-md rounded-2xl p-1.5 border border-gray-700/60 shadow-lg flex flex-wrap sm:flex-nowrap gap-1.5 select-none">
@@ -230,7 +291,7 @@
   <div id="studio-panel-streams" class="studio-tab-panel">
 
   <!-- Desktop Stats Cards -->
-  <div class="hidden md:grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+  <div class="hidden md:grid <%= isAdmin ? 'md:grid-cols-2 lg:grid-cols-4' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' %> gap-6 mb-6">
     <div class="bg-gray-800 rounded-lg p-6 shadow-md neon-panel neon-bottom-right gradient-border hover-lift particles">
       <div class="neon-inner-glow"></div>
       <div class="flex items-center justify-between relative z-10">
@@ -254,6 +315,7 @@
         </a>
       </div>
     </div>
+    <% if (isAdmin) { %>
     <div class="bg-gray-800 rounded-lg p-6 shadow-md neon-panel neon-bottom-left gradient-border hover-lift particles">
       <div class="neon-inner-glow"></div>
       <div class="flex items-center justify-between relative z-10">
@@ -313,6 +375,7 @@
         </div>
       </div>
     </div>
+    <% } %>
   </div>
 
   <!-- Streaming Status Section -->
@@ -1931,6 +1994,9 @@
 
     // System Stats
     async function loadSystemStats() {
+      <% if (!isAdmin) { %>
+      return;
+      <% } %>
       try {
         const response = await fetch('/api/system-stats');
         const stats = await response.json();
@@ -3594,12 +3660,16 @@
     // Initialize
     document.addEventListener('DOMContentLoaded', function () {
       loadStreams();
+      <% if (isAdmin) { %>
       loadSystemStats();
+      <% } %>
       loadLiveLimitInfo();
       updateRealtimeClock();
 
+      <% if (isAdmin) { %>
       // ULTRA OPTIMIZED: Refresh stats every 2 minutes (was 60s) - CPU usage is cached
       setInterval(loadSystemStats, 120000);
+      <% } %>
       // SMART POLLING: Faster refresh when streams are live (30s), slower when idle (90s)
       let streamPollInterval = null;
       function startSmartPolling() {
