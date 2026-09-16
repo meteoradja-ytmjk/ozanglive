@@ -1092,15 +1092,22 @@
           </div>
         </div>
         
-        <div class="pt-4 flex gap-3">
+        <!-- BUTTONS (Symmetrical 3-Column Grid) -->
+        <div class="pt-3 grid grid-cols-3 gap-2 sm:gap-3 border-t border-gray-700/80">
           <button type="button" onclick="closeCreateBroadcastModal()"
-            class="flex-1 bg-dark-700 hover:bg-dark-600 text-white px-4 py-2.5 rounded-lg transition-colors">
-            Cancel
+            class="w-full h-11 px-2 sm:px-4 bg-dark-700 hover:bg-dark-600 active:scale-[0.98] text-gray-300 hover:text-white rounded-xl transition-all text-xs sm:text-sm font-medium flex items-center justify-center gap-1.5 border border-gray-600/50 shadow-sm cursor-pointer select-none">
+            <i class="ti ti-x text-sm sm:text-base"></i>
+            <span>Batal</span>
           </button>
           <button type="submit" id="createBroadcastBtn"
-            class="flex-1 bg-red-500 hover:bg-red-600 text-white px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
-            <i class="ti ti-broadcast"></i>
-            <span>Create Broadcast</span>
+            class="w-full h-11 px-2 sm:px-4 bg-primary hover:bg-secondary active:scale-[0.98] text-white rounded-xl transition-all text-xs sm:text-sm font-medium flex items-center justify-center gap-1.5 shadow-lg shadow-primary/20 cursor-pointer select-none">
+            <i class="ti ti-calendar-event text-sm sm:text-base"></i>
+            <span>Jadwal Live</span>
+          </button>
+          <button type="button" id="createAndStartBroadcastBtn" onclick="submitBroadcastAndStartNow()"
+            class="w-full h-11 px-2 sm:px-4 bg-red-600 hover:bg-red-500 active:scale-[0.98] text-white rounded-xl transition-all text-xs sm:text-sm font-medium flex items-center justify-center gap-1.5 shadow-lg shadow-red-600/20 cursor-pointer select-none">
+            <i class="ti ti-broadcast text-sm sm:text-base"></i>
+            <span>Mulai Live</span>
           </button>
         </div>
       </form>
@@ -3583,4 +3590,4 @@ document.addEventListener('keydown', function(e) {
   </div>
 </div>
 
-<script src="/js/youtube.js?v=1.3.0"></script>
+<script src="/js/youtube.js?v=1.3.1"></script>

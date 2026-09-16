@@ -3897,11 +3897,11 @@ window.openEditStudioModal = function(stream) {
   // Update button texts
   const createBtn = document.getElementById('createBroadcastBtn');
   if (createBtn) {
-    createBtn.innerHTML = '<i class="ti ti-check text-base"></i><span>Simpan Perubahan Stream</span>';
+    createBtn.innerHTML = '<i class="ti ti-check text-sm sm:text-base"></i><span>Simpan</span>';
   }
   const startNowBtn = document.getElementById('createAndStartBroadcastBtn');
   if (startNowBtn) {
-    startNowBtn.innerHTML = '<i class="ti ti-player-play text-base"></i><span>Simpan & Mulai Live Sekarang</span>';
+    startNowBtn.innerHTML = '<i class="ti ti-player-play text-sm sm:text-base"></i><span>Simpan & Live</span>';
   }
 
   // Account selector
@@ -4040,11 +4040,11 @@ function closeCreateBroadcastModal() {
 
   const createBtn = document.getElementById('createBroadcastBtn');
   if (createBtn) {
-    createBtn.innerHTML = '<i class="ti ti-calendar-event text-base"></i><span>Buat Broadcast & Jadwalkan Live</span>';
+    createBtn.innerHTML = '<i class="ti ti-calendar-event text-sm sm:text-base"></i><span>Jadwal Live</span>';
   }
   const startNowBtn = document.getElementById('createAndStartBroadcastBtn');
   if (startNowBtn) {
-    startNowBtn.innerHTML = '<i class="ti ti-broadcast text-base"></i><span>Mulai Live Streaming Sekarang</span>';
+    startNowBtn.innerHTML = '<i class="ti ti-broadcast text-sm sm:text-base"></i><span>Mulai Live</span>';
   }
 
   const thumbnailPreview = document.getElementById('thumbnailPreview');
@@ -4106,7 +4106,7 @@ if (createBroadcastForm) {
     const activeBtn = isStartNow ? startNowBtn : createBtn;
     const originalText = activeBtn ? activeBtn.innerHTML : '';
     if (activeBtn) {
-      activeBtn.innerHTML = '<i class="ti ti-loader animate-spin mr-1"></i> Memproses...';
+      activeBtn.innerHTML = '<i class="ti ti-loader animate-spin mr-1"></i> Proses...';
       activeBtn.disabled = true;
     }
     
