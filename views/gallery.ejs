@@ -123,38 +123,41 @@ function formatDuration(seconds) {
   </button>
 </div>
 
-<!-- Search and Sort -->
-<div class="bg-gray-800 rounded-lg p-4 mb-6">
-  <div class="mb-3 flex items-start gap-2 text-xs text-gray-400">
-    <i class="ti ti-drag-drop text-primary mt-0.5"></i>
-    <span>Drag kartu video/audio ke header folder tujuan, atau klik ikon pensil di folder untuk rename.</span>
+<!-- Search and Sort (Single Line Modern Toolbar) -->
+<div class="bg-gray-800/80 backdrop-blur-sm border border-gray-700/60 rounded-2xl p-3 sm:p-3.5 mb-6 shadow-sm">
+  <div class="mb-2.5 flex items-center gap-1.5 text-[11px] sm:text-xs text-gray-400/90 px-0.5">
+    <i class="ti ti-info-circle text-primary shrink-0"></i>
+    <span class="truncate">Drag kartu video/audio ke folder tujuan, atau klik pensil untuk rename.</span>
   </div>
-  <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-    <div class="relative flex-1 sm:w-80 md:w-96">
+  <div class="flex items-center gap-1.5 sm:gap-2.5 w-full">
+    <div class="relative flex-1 min-w-0">
       <input type="text" id="searchInput" placeholder="Search media..."
-        class="w-full bg-dark-700 text-white pl-9 pr-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
-      <i class="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+        class="w-full h-9 sm:h-10 bg-dark-700/90 text-white pl-9 pr-3 text-xs sm:text-sm border border-gray-600/50 rounded-xl focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary placeholder-gray-400 transition-all">
+      <i class="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
     </div>
-    <div class="flex gap-2">
+    <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
       <select id="sortSelect"
-        class="bg-dark-700 border border-gray-600 text-white px-3 py-2.5 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
+        class="h-9 sm:h-10 bg-dark-700/90 border border-gray-600/50 hover:border-gray-500 text-gray-200 hover:text-white px-2 sm:px-3 text-xs sm:text-sm rounded-xl focus:outline-none focus:ring-1 focus:ring-primary transition-all cursor-pointer">
         <option value="newest" selected>Z to A</option>
         <option value="oldest">A to Z</option>
       </select>
       <% if (typeof permissions !== 'undefined' && permissions.can_delete_videos) { %>
       <button onclick="deleteSelectedFolders()" title="Delete Selected Folders"
-        class="px-3 py-2.5 bg-red-500/10 border border-red-500/40 text-red-400 hover:text-red-300 hover:bg-red-500/20 rounded-lg transition-colors">
-        <i class="ti ti-trash"></i>
+        class="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 hover:border-red-500/50 text-red-400 hover:text-red-300 rounded-xl transition-all active:scale-95 shrink-0">
+        <i class="ti ti-trash text-sm sm:text-base"></i>
       </button>
       <% } %>
-      <button onclick="expandAllGroups()" title="Expand All Groups"
-        class="px-3 py-2.5 bg-dark-700 border border-gray-600 text-gray-400 hover:text-white hover:border-primary rounded-lg transition-colors">
-        <i class="ti ti-chevrons-down"></i>
-      </button>
-      <button onclick="collapseAllGroups()" title="Collapse All Groups"
-        class="px-3 py-2.5 bg-dark-700 border border-gray-600 text-gray-400 hover:text-white hover:border-primary rounded-lg transition-colors">
-        <i class="ti ti-chevrons-up"></i>
-      </button>
+      <div class="flex items-center bg-dark-700/90 border border-gray-600/50 rounded-xl p-0.5 shrink-0">
+        <button onclick="expandAllGroups()" title="Expand All Groups"
+          class="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center text-gray-400 hover:text-white hover:bg-dark-600 rounded-lg transition-all active:scale-95">
+          <i class="ti ti-chevrons-down text-sm sm:text-base"></i>
+        </button>
+        <div class="w-px h-4 bg-gray-600/60"></div>
+        <button onclick="collapseAllGroups()" title="Collapse All Groups"
+          class="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center text-gray-400 hover:text-white hover:bg-dark-600 rounded-lg transition-all active:scale-95">
+          <i class="ti ti-chevrons-up text-sm sm:text-base"></i>
+        </button>
+      </div>
     </div>
   </div>
 </div>
