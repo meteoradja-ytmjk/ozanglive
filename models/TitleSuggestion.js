@@ -78,6 +78,9 @@ class TitleSuggestion {
       return Promise.reject(new Error('titles are required'));
     }
 
+    const cleanFolderId = (folder_id && folder_id !== 'null' && folder_id !== 'undefined' && folder_id !== 'unassigned' && folder_id !== '') ? folder_id : null;
+    const cleanStreamKeyId = (stream_key_id && stream_key_id !== 'null' && stream_key_id !== 'undefined' && stream_key_id !== '') ? stream_key_id : null;
+
     const uniqueTitles = [];
     const seen = new Set();
 
@@ -105,8 +108,12 @@ class TitleSuggestion {
             return reject(err);
           }
 
-          const insertSql = `INSERT OR IGNORE INTO title_suggestions (id, user_id, title, stream_key_id, folder_id, use_count, sort_order, is_pinned)
-             VALUES (?, ?, ?, ?, ?, 0, ?, 0)`;
+          const insertSql = `INSERT INTO title_suggestions (id, user_id, title, stream_key_id, folder_id, use_count, sort_order, is_pinned)
+             VALUES (?, ?, ?, ?, ?, 0, ?, 0)
+             ON CONFLICT(user_id, title) DO UPDATE SET
+               folder_id = CASE WHEN excluded.folder_id IS NOT NULL THEN excluded.folder_id ELSE title_suggestions.folder_id END,
+               stream_key_id = COALESCE(excluded.stream_key_id, title_suggestions.stream_key_id),
+               updated_at = CURRENT_TIMESTAMP`;
 
           let sortOrder = row?.max_order || 0;
           let imported = 0;
@@ -135,7 +142,7 @@ class TitleSuggestion {
               sortOrder += 1;
               db.run(
                 insertSql,
-                [uuidv4(), user_id, uniqueTitles[index], stream_key_id, folder_id, sortOrder],
+                [uuidv4(), user_id, uniqueTitles[index], cleanStreamKeyId, cleanFolderId, sortOrder],
                 function (insertErr) {
                   if (insertErr) {
                     db.run('ROLLBACK');
@@ -162,16 +169,17 @@ class TitleSuggestion {
   }
 
   /**
-   * Delete all titles within a selected folder or channel scope.
-   * Folder scope takes priority because the Title Manager list is folder-based.
+   * Delete all titles within a selected folder, unassigned scope, or all user titles.
    * @param {string} userId - User ID
    * @param {Object} scope - Delete scope
-   * @param {string|null} scope.folderId - Folder ID to delete from
-   * @param {string|null} scope.streamKeyId - Stream key/channel ID to delete from when no folder is selected
+   * @param {string|null} scope.scope - 'all' | 'unassigned' | 'folder'
+   * @param {string|null} scope.folderId - Folder ID to delete from ('all', 'unassigned', or UUID)
+   * @param {string|null} scope.streamKeyId - Stream key/channel ID to delete from
+   * @param {boolean} scope.deleteAll - If true, deletes all titles for user
    * @returns {Promise<Object>} Delete summary
    */
   static deleteByScope(userId, scope = {}) {
-    const { folderId = null, streamKeyId = null } = scope;
+    const { folderId = null, streamKeyId = null, scope: scopeType = null, deleteAll = false } = scope;
 
     if (!userId) {
       return Promise.reject(new Error('userId is required'));
@@ -180,14 +188,21 @@ class TitleSuggestion {
     const params = [userId];
     let scopeCondition = '';
 
-    if (folderId) {
+    if (deleteAll || scopeType === 'all' || folderId === 'all') {
+      // Delete all titles belonging to this user
+      scopeCondition = '1=1';
+    } else if (scopeType === 'unassigned' || folderId === 'unassigned') {
+      // Delete titles without folder
+      scopeCondition = '(folder_id IS NULL OR folder_id = \'\' OR folder_id = \'unassigned\')';
+    } else if (folderId && folderId !== 'null' && folderId !== 'undefined') {
       scopeCondition = 'folder_id = ?';
       params.push(folderId);
-    } else if (streamKeyId) {
+    } else if (streamKeyId && streamKeyId !== 'null' && streamKeyId !== 'undefined') {
       scopeCondition = 'stream_key_id = ?';
       params.push(streamKeyId);
     } else {
-      return Promise.reject(new Error('folderId or streamKeyId is required'));
+      // Default: delete all user titles if no specific scope condition was requested
+      scopeCondition = '1=1';
     }
 
     return new Promise((resolve, reject) => {
@@ -210,7 +225,7 @@ class TitleSuggestion {
    * Find all titles for a user
    * @param {string} userId - User ID
    * @param {string} streamKeyId - Optional stream key filter
-   * @param {string} folderId - Optional folder filter
+   * @param {string} folderId - Optional folder filter ('unassigned' for titles without folder)
    * @returns {Promise<Array>} Array of titles
    */
   static findByUserId(userId, streamKeyId = null, folderId = null) {
@@ -218,18 +233,21 @@ class TitleSuggestion {
       let query = `SELECT * FROM title_suggestions WHERE user_id = ?`;
       const params = [userId];
 
-      if (streamKeyId) {
+      const cleanStreamKeyId = (streamKeyId && streamKeyId !== 'null' && streamKeyId !== 'undefined') ? streamKeyId : null;
+      if (cleanStreamKeyId) {
         query += ` AND (stream_key_id = ? OR stream_key_id IS NULL)`;
-        params.push(streamKeyId);
+        params.push(cleanStreamKeyId);
       }
 
-      if (folderId) {
+      if (folderId === 'unassigned') {
+        query += ` AND (folder_id IS NULL OR folder_id = '' OR folder_id = 'unassigned')`;
+      } else if (folderId && folderId !== 'null' && folderId !== 'undefined' && folderId !== 'all') {
         query += ` AND folder_id = ?`;
         params.push(folderId);
       }
 
-      // Order: pinned first, then by sort_order
-      query += ` ORDER BY is_pinned DESC, sort_order ASC, created_at DESC`;
+      // Order: pinned first, then by sort_order, then created_at ASC, id ASC
+      query += ` ORDER BY is_pinned DESC, sort_order ASC, created_at ASC, id ASC`;
 
       db.all(query, params, (err, rows) => {
         if (err) {
@@ -250,9 +268,10 @@ class TitleSuggestion {
    */
   static moveToFolder(id, userId, folderId) {
     return new Promise((resolve, reject) => {
+      const cleanFolderId = (folderId && folderId !== 'null' && folderId !== 'undefined' && folderId !== 'unassigned') ? folderId : null;
       db.run(
         `UPDATE title_suggestions SET folder_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?`,
-        [folderId, id, userId],
+        [cleanFolderId, id, userId],
         function(err) {
           if (err) {
             console.error('Error moving title to folder:', err.message);
@@ -275,7 +294,7 @@ class TitleSuggestion {
       db.all(
         `SELECT * FROM title_suggestions 
          WHERE user_id = ? AND stream_key_id = ?
-         ORDER BY is_pinned DESC, sort_order ASC`,
+         ORDER BY is_pinned DESC, sort_order ASC, created_at ASC, id ASC`,
         [userId, streamKeyId],
         (err, rows) => {
           if (err) {
@@ -292,18 +311,23 @@ class TitleSuggestion {
    * Get next title in rotation for a user
    * @param {string} userId - User ID
    * @param {number} currentIndex - Current title index
-   * @param {string} folderId - Optional folder ID to filter titles
-   * @returns {Promise<{title: Object|null, nextIndex: number}>} Next title and index
+   * @param {string} folderId - Optional folder ID to filter titles ('unassigned' for titles without folder)
+   * @returns {Promise<{title: Object|null, nextIndex: number, isPinned: boolean, totalCount: number, currentPosition: number}>} Next title and index
    */
   static async getNextTitle(userId, currentIndex = 0, folderId = null) {
     return new Promise((resolve, reject) => {
+      const cleanFolderId = (folderId && folderId !== 'null' && folderId !== 'undefined' && folderId !== 'all') ? folderId : null;
+      const isUnassigned = folderId === 'unassigned';
+
       // First check for pinned title (optionally in folder)
       let pinnedQuery = `SELECT * FROM title_suggestions WHERE user_id = ? AND is_pinned = 1`;
       const pinnedParams = [userId];
       
-      if (folderId) {
+      if (isUnassigned) {
+        pinnedQuery += ` AND (folder_id IS NULL OR folder_id = '' OR folder_id = 'unassigned')`;
+      } else if (cleanFolderId) {
         pinnedQuery += ` AND folder_id = ?`;
-        pinnedParams.push(folderId);
+        pinnedParams.push(cleanFolderId);
       }
       pinnedQuery += ` LIMIT 1`;
       
@@ -315,18 +339,26 @@ class TitleSuggestion {
         
         // If pinned title exists, always use it
         if (pinnedTitle) {
-          return resolve({ title: pinnedTitle, nextIndex: currentIndex, isPinned: true });
+          return resolve({ 
+            title: pinnedTitle, 
+            nextIndex: currentIndex, 
+            isPinned: true,
+            totalCount: 1,
+            currentPosition: 1
+          });
         }
         
         // Get all titles for this user (optionally filtered by folder), ordered by sort_order
         let query = `SELECT * FROM title_suggestions WHERE user_id = ?`;
         const params = [userId];
         
-        if (folderId) {
+        if (isUnassigned) {
+          query += ` AND (folder_id IS NULL OR folder_id = '' OR folder_id = 'unassigned')`;
+        } else if (cleanFolderId) {
           query += ` AND folder_id = ?`;
-          params.push(folderId);
+          params.push(cleanFolderId);
         }
-        query += ` ORDER BY sort_order ASC`;
+        query += ` ORDER BY sort_order ASC, created_at ASC, id ASC`;
         
         db.all(query, params, (err, titles) => {
           if (err) {
@@ -335,11 +367,18 @@ class TitleSuggestion {
           }
           
           if (!titles || titles.length === 0) {
-            return resolve({ title: null, nextIndex: 0, isPinned: false });
+            return resolve({ 
+              title: null, 
+              nextIndex: 0, 
+              isPinned: false, 
+              totalCount: 0, 
+              currentPosition: 0 
+            });
           }
           
           // Calculate actual index (wrap around)
-          const actualIndex = currentIndex % titles.length;
+          const validIndex = (typeof currentIndex === 'number' && !isNaN(currentIndex) && currentIndex >= 0) ? currentIndex : 0;
+          const actualIndex = validIndex % titles.length;
           const selectedTitle = titles[actualIndex];
           const nextIndex = (actualIndex + 1) % titles.length;
           

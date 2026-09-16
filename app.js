@@ -11753,14 +11753,13 @@ app.get('/api/title-suggestions/popular', isAuthenticated, async (req, res) => {
 // Get next title in rotation for a stream key
 app.get('/api/title-suggestions/next', isAuthenticated, async (req, res) => {
   try {
-    const { streamKeyId, currentIndex } = req.query;
-    if (!streamKeyId) {
-      return res.status(400).json({ success: false, error: 'streamKeyId is required' });
-    }
+    const { streamKeyId, currentIndex, folderId } = req.query;
+    const parsedIndex = (currentIndex !== undefined && currentIndex !== '' && !isNaN(parseInt(currentIndex))) ? parseInt(currentIndex) : 0;
+    const cleanFolderId = (folderId && folderId !== 'null' && folderId !== 'undefined' && folderId !== 'all') ? folderId : null;
     const result = await TitleSuggestion.getNextTitle(
       req.session.userId,
-      streamKeyId,
-      parseInt(currentIndex) || 0
+      parsedIndex,
+      cleanFolderId
     );
     res.json({ success: true, ...result });
   } catch (error) {
@@ -11776,11 +11775,12 @@ app.post('/api/title-suggestions', isAuthenticated, async (req, res) => {
     if (!title || !title.trim()) {
       return res.status(400).json({ success: false, error: 'Title is required' });
     }
+    const cleanFolderId = (folderId && folderId !== 'null' && folderId !== 'undefined' && folderId !== 'unassigned' && folderId !== 'all') ? folderId : null;
     const newTitle = await TitleSuggestion.create({
       user_id: req.session.userId,
       title: title.trim(),
       stream_key_id: streamKeyId || null,
-      folder_id: folderId || null
+      folder_id: cleanFolderId
     });
     res.json({ success: true, title: newTitle });
   } catch (error) {
@@ -11805,9 +11805,9 @@ app.post('/api/title-suggestions/import', isAuthenticated, async (req, res) => {
       return res.status(400).json({ success: false, error: 'Maximum 1000 titles per import' });
     }
 
-    const targetFolderId = folderId || null;
-    if (targetFolderId) {
-      const folder = await TitleFolder.findById(targetFolderId, req.session.userId);
+    const cleanFolderId = (folderId && folderId !== 'null' && folderId !== 'undefined' && folderId !== 'unassigned' && folderId !== 'all' && folderId !== '') ? folderId : null;
+    if (cleanFolderId) {
+      const folder = await TitleFolder.findById(cleanFolderId, req.session.userId);
       if (!folder) {
         return res.status(404).json({ success: false, error: 'Folder not found' });
       }
@@ -11817,7 +11817,7 @@ app.post('/api/title-suggestions/import', isAuthenticated, async (req, res) => {
       user_id: req.session.userId,
       titles,
       stream_key_id: streamKeyId || null,
-      folder_id: targetFolderId
+      folder_id: cleanFolderId
     });
 
     res.json({ success: true, ...summary });
@@ -11874,28 +11874,33 @@ app.post('/api/title-suggestions/:id/use', isAuthenticated, async (req, res) => 
   }
 });
 
-// Delete all title suggestions from the selected folder/channel scope
+// Delete all title suggestions from the selected folder/channel scope or all user titles
 app.delete('/api/title-suggestions/bulk-delete', isAuthenticated, async (req, res) => {
   try {
-    const { folderId, streamKeyId } = req.body;
-    const targetFolderId = folderId || null;
-    const targetStreamKeyId = streamKeyId || null;
+    const { folderId, streamKeyId, scope, deleteAll } = req.body;
+    const cleanFolderId = (folderId && folderId !== 'null' && folderId !== 'undefined' && folderId !== '') ? folderId : null;
+    const cleanStreamKeyId = (streamKeyId && streamKeyId !== 'null' && streamKeyId !== 'undefined' && streamKeyId !== '') ? streamKeyId : null;
 
-    if (!targetFolderId && !targetStreamKeyId) {
-      return res.status(400).json({ success: false, error: 'Folder or channel is required' });
-    }
-
-    if (targetFolderId) {
-      const folder = await TitleFolder.findById(targetFolderId, req.session.userId);
+    if (cleanFolderId && cleanFolderId !== 'all' && cleanFolderId !== 'unassigned') {
+      const folder = await TitleFolder.findById(cleanFolderId, req.session.userId);
       if (!folder) {
         return res.status(404).json({ success: false, error: 'Folder not found' });
       }
     }
 
     const result = await TitleSuggestion.deleteByScope(req.session.userId, {
-      folderId: targetFolderId,
-      streamKeyId: targetStreamKeyId
+      folderId: cleanFolderId,
+      streamKeyId: cleanStreamKeyId,
+      scope,
+      deleteAll: !!deleteAll || scope === 'all' || cleanFolderId === 'all'
     });
+
+    // Reset title rotation index to 0 after bulk delete to keep rotation healthy
+    try {
+      await updateTitleRotationIndex(req.session.userId, 0);
+    } catch (resetErr) {
+      console.warn('Failed to reset title rotation index after bulk delete:', resetErr.message);
+    }
 
     res.json({ success: true, deleted: result.deleted || 0 });
   } catch (error) {
@@ -12045,8 +12050,10 @@ app.post('/api/title-rotation/settings', isAuthenticated, async (req, res) => {
 // Get next title in rotation
 app.get('/api/title-rotation/next', isAuthenticated, async (req, res) => {
   try {
-    const folderId = req.query.folderId || null;
-    const currentIndex = parseInt(req.query.currentIndex) || null;
+    const rawFolderId = req.query.folderId;
+    const folderId = (rawFolderId && rawFolderId !== 'null' && rawFolderId !== 'undefined' && rawFolderId !== 'all' && rawFolderId !== '') ? rawFolderId : null;
+    const hasCurrentIndex = req.query.currentIndex !== undefined && req.query.currentIndex !== '' && !isNaN(parseInt(req.query.currentIndex));
+    const currentIndex = hasCurrentIndex ? parseInt(req.query.currentIndex) : null;
 
     // Use provided currentIndex or get from settings
     let indexToUse = currentIndex;

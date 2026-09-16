@@ -8337,8 +8337,9 @@ async function openTitleManagerModal(context = 'edit') {
   
   // Load folders first, then rotation settings (which depends on folders)
   await loadTitleFolders();
+  await loadTitleRotationSettings();
   loadTitleSuggestions();
-  loadTitleRotationSettings();
+  updateTitleManagerTargetIndicator();
 }
 
 /**
@@ -8453,6 +8454,22 @@ async function toggleTitleAutoRotation(enabled) {
 }
 
 /**
+ * Update indicator of currently active target folder in Title Manager
+ */
+function updateTitleManagerTargetIndicator() {
+  const indicator = document.getElementById('titleTargetIndicator');
+  if (!indicator) return;
+  if (selectedTitleFolderId === 'unassigned') {
+    indicator.textContent = '📂 Tanpa Folder';
+  } else if (selectedTitleFolderId) {
+    const f = titleFolders.find(folder => folder.id === selectedTitleFolderId);
+    indicator.textContent = f ? `📁 ${f.name}` : '📁 Folder Terpilih';
+  } else {
+    indicator.textContent = '🌐 Semua Judul';
+  }
+}
+
+/**
  * Populate title rotation folder dropdown
  */
 function populateTitleRotationFolderDropdown() {
@@ -8462,7 +8479,16 @@ function populateTitleRotationFolderDropdown() {
   // Clear dropdown
   select.innerHTML = '';
   
-  // Add folders only
+  // Option for rotating across all titles
+  const allOption = document.createElement('option');
+  allOption.value = '';
+  allOption.textContent = '🌐 Semua Judul (Semua Folder)';
+  if (!titleRotationFolderId) {
+    allOption.selected = true;
+  }
+  select.appendChild(allOption);
+  
+  // Add folders
   titleFolders.forEach(folder => {
     const option = document.createElement('option');
     option.value = folder.id;
@@ -8472,16 +8498,6 @@ function populateTitleRotationFolderDropdown() {
     }
     select.appendChild(option);
   });
-  
-  // Auto-select first folder if none selected
-  if (!titleRotationFolderId && titleFolders.length > 0) {
-    titleRotationFolderId = titleFolders[0].id;
-    selectedTitleFolderId = titleFolders[0].id;
-    select.value = titleRotationFolderId;
-    
-    // Save the auto-selected folder to server
-    saveTitleRotationSettings();
-  }
 }
 
 /**
@@ -8511,7 +8527,7 @@ async function saveTitleRotationSettings() {
 async function onTitleRotationFolderChange(folderId) {
   titleRotationFolderId = folderId || null;
   
-  // Also set selectedTitleFolderId so new titles go to this folder
+  // Also sync selectedTitleFolderId so the list shows the rotation folder
   selectedTitleFolderId = folderId || null;
   
   // Update folder list UI to show selected folder
@@ -8599,42 +8615,75 @@ async function loadTitleFolders() {
 }
 
 /**
- * Render folder list
+ * Render folder list with active states and 'Semua Judul' / 'Tanpa Folder' options
  */
 function renderTitleFolderList() {
   const container = document.getElementById('titleFolderList');
+  if (!container) return;
   
-  const folderItems = titleFolders.map(f => `
-    <div class="flex items-center justify-between py-1">
-      <div class="flex items-center gap-2 flex-1 min-w-0 cursor-pointer ${selectedTitleFolderId === f.id ? 'text-primary' : 'text-gray-300'}" onclick="selectTitleFolder('${escapeJsString(f.id)}')">
-        <span style="color: ${f.color}">📁</span>
-        <span class="text-sm truncate">${escapeHtml(f.name)}</span>
-        <span class="text-xs text-gray-500">${f.title_count || 0}</span>
+  const isAllSelected = !selectedTitleFolderId || selectedTitleFolderId === 'all';
+  const isUnassignedSelected = selectedTitleFolderId === 'unassigned';
+
+  let html = `
+    <div class="flex items-center justify-between py-1 px-2 rounded cursor-pointer transition-all ${isAllSelected ? 'bg-primary/20 border border-primary/40 text-primary font-medium' : 'text-gray-300 hover:bg-dark-700/50'}" onclick="selectTitleFolder(null)">
+      <div class="flex items-center gap-2 flex-1 min-w-0">
+        <span>🌐</span>
+        <span class="text-xs truncate">Semua Judul</span>
       </div>
-      <div class="flex items-center">
-        <button type="button" onclick="event.stopPropagation();openEditFolderModal('${escapeJsString(f.id)}','${escapeJsString(f.name)}','${f.color}')"
-          class="px-1.5 py-0.5 text-xs text-yellow-400 hover:bg-yellow-500/20 rounded">✎</button>
-        <button type="button" onclick="event.stopPropagation();deleteTitleFolder('${escapeJsString(f.id)}')"
-          class="px-1.5 py-0.5 text-xs text-red-400 hover:bg-red-500/20 rounded">✕</button>
-      </div>
+      ${isAllSelected ? '<span class="text-[10px] text-primary bg-primary/20 px-1.5 py-0.5 rounded font-medium">Aktif</span>' : ''}
     </div>
-  `).join('');
-  
-  container.innerHTML = folderItems;
+  `;
+
+  titleFolders.forEach(f => {
+    const isSelected = selectedTitleFolderId === f.id;
+    html += `
+      <div class="flex items-center justify-between py-1 px-2 rounded mt-1 transition-all ${isSelected ? 'bg-primary/20 border border-primary/40 text-white font-medium' : 'text-gray-300 hover:bg-dark-700/50'}">
+        <div class="flex items-center gap-2 flex-1 min-w-0 cursor-pointer" onclick="selectTitleFolder('${escapeJsString(f.id)}')">
+          <span style="color: ${f.color}">📁</span>
+          <span class="text-xs truncate">${escapeHtml(f.name)}</span>
+          <span class="text-[10px] text-gray-400">(${f.title_count || 0})</span>
+        </div>
+        <div class="flex items-center gap-1">
+          ${isSelected ? '<span class="text-[10px] text-primary bg-primary/20 px-1.5 py-0.5 rounded font-medium mr-1">Aktif</span>' : ''}
+          <button type="button" onclick="event.stopPropagation();openEditFolderModal('${escapeJsString(f.id)}','${escapeJsString(f.name)}','${f.color}')"
+            class="px-1.5 py-0.5 text-xs text-yellow-400 hover:bg-yellow-500/20 rounded" title="Edit folder">✎</button>
+          <button type="button" onclick="event.stopPropagation();deleteTitleFolder('${escapeJsString(f.id)}')"
+            class="px-1.5 py-0.5 text-xs text-red-400 hover:bg-red-500/20 rounded" title="Hapus folder">✕</button>
+        </div>
+      </div>
+    `;
+  });
+
+  html += `
+    <div class="flex items-center justify-between py-1 px-2 rounded mt-1 cursor-pointer transition-all ${isUnassignedSelected ? 'bg-primary/20 border border-primary/40 text-primary font-medium' : 'text-gray-400 hover:bg-dark-700/50'}" onclick="selectTitleFolder('unassigned')">
+      <div class="flex items-center gap-2 flex-1 min-w-0">
+        <span>📂</span>
+        <span class="text-xs truncate">Tanpa Folder</span>
+      </div>
+      ${isUnassignedSelected ? '<span class="text-[10px] text-primary bg-primary/20 px-1.5 py-0.5 rounded font-medium">Aktif</span>' : ''}
+    </div>
+  `;
+
+  container.innerHTML = html;
+  updateTitleManagerTargetIndicator();
 }
 
 /**
  * Select folder filter
  */
 function selectTitleFolder(folderId) {
-  selectedTitleFolderId = folderId;
+  selectedTitleFolderId = (folderId && folderId !== 'all') ? folderId : null;
   
-  // Also sync with rotation folder if auto rotation is enabled
+  // Also sync with rotation folder if auto rotation is enabled and a specific folder is clicked
   if (titleAutoRotationEnabled) {
-    titleRotationFolderId = folderId;
+    if (selectedTitleFolderId && selectedTitleFolderId !== 'unassigned') {
+      titleRotationFolderId = selectedTitleFolderId;
+    } else {
+      titleRotationFolderId = null;
+    }
     const rotationSelect = document.getElementById('titleRotationFolderSelect');
     if (rotationSelect) {
-      rotationSelect.value = folderId || '';
+      rotationSelect.value = titleRotationFolderId || '';
     }
     saveTitleRotationSettings();
     loadNextRotationTitle();
@@ -8776,7 +8825,18 @@ async function saveFolder() {
     if (data.success) {
       showToast(id ? 'Folder diupdate' : 'Folder dibuat');
       closeFolderModal();
-      loadTitleFolders();
+      if (!id && data.folder?.id) {
+        selectedTitleFolderId = data.folder.id;
+        if (titleAutoRotationEnabled) {
+          titleRotationFolderId = data.folder.id;
+          const rotationSelect = document.getElementById('titleRotationFolderSelect');
+          if (rotationSelect) rotationSelect.value = data.folder.id;
+          saveTitleRotationSettings();
+        }
+      }
+      await loadTitleFolders();
+      loadTitleSuggestions();
+      updateTitleManagerTargetIndicator();
     } else {
       showToast(data.error || 'Gagal menyimpan folder', 'error');
     }
@@ -9030,11 +9090,8 @@ function closeTitleDropdown() {
  * Add new title suggestion
  */
 async function addNewTitle() {
-  console.log('[ADD TITLE] addNewTitle called');
-  
   const input = document.getElementById('newTitleInput');
   if (!input) {
-    console.error('[ADD TITLE] Input element not found!');
     showToast('Error: Input tidak ditemukan', 'error');
     return;
   }
@@ -9042,16 +9099,10 @@ async function addNewTitle() {
   const title = input.value.trim();
   const csrfToken = getCsrfToken();
   
-  // Use selected folder from folder list, or rotation folder if auto rotation is enabled
-  let targetFolderId = selectedTitleFolderId;
+  let targetFolderId = (selectedTitleFolderId && selectedTitleFolderId !== 'unassigned') ? selectedTitleFolderId : null;
   if (!targetFolderId && titleAutoRotationEnabled && titleRotationFolderId) {
     targetFolderId = titleRotationFolderId;
   }
-  
-  console.log('[ADD TITLE] Title value:', title);
-  console.log('[ADD TITLE] Selected folder ID:', selectedTitleFolderId);
-  console.log('[ADD TITLE] Target folder ID:', targetFolderId);
-  console.log('[ADD TITLE] CSRF Token:', csrfToken ? 'present (' + csrfToken.substring(0, 10) + '...)' : 'MISSING');
   
   if (!title) {
     showToast('Masukkan judul', 'error');
@@ -9064,7 +9115,6 @@ async function addNewTitle() {
   }
   
   try {
-    console.log('[ADD TITLE] Sending request to /api/title-suggestions');
     const response = await fetch('/api/title-suggestions', {
       method: 'POST',
       headers: {
@@ -9077,26 +9127,13 @@ async function addNewTitle() {
       })
     });
     
-    console.log('[ADD TITLE] Response status:', response.status);
-    
-    // Check if response is JSON
-    const contentType = response.headers.get('content-type');
-    if (!contentType || !contentType.includes('application/json')) {
-      console.error('[ADD TITLE] Non-JSON response:', contentType);
-      const text = await response.text();
-      console.error('[ADD TITLE] Response text:', text.substring(0, 200));
-      showToast('Server error. Please refresh the page and try again.', 'error');
-      return;
-    }
-    
     const data = await response.json();
-    console.log('[ADD TITLE] Response:', data);
-    
     if (data.success) {
       input.value = '';
       showToast('Judul ditambahkan');
-      loadTitleFolders();
+      await loadTitleFolders();
       loadTitleSuggestions();
+      if (titleAutoRotationEnabled) loadNextRotationTitle();
     } else {
       showToast(data.error || 'Gagal menambahkan judul', 'error');
     }
@@ -9110,7 +9147,7 @@ async function addNewTitle() {
  * Resolve target folder for title actions.
  */
 function getTitleManagerTargetFolderId() {
-  if (selectedTitleFolderId) return selectedTitleFolderId;
+  if (selectedTitleFolderId && selectedTitleFolderId !== 'unassigned') return selectedTitleFolderId;
   if (titleAutoRotationEnabled && titleRotationFolderId) return titleRotationFolderId;
   return null;
 }
@@ -9138,11 +9175,6 @@ function openTitleTxtImportPicker() {
     return;
   }
 
-  if (!getTitleManagerTargetFolderId() && titleFolders.length > 0) {
-    showToast('Pilih folder/channel tujuan sebelum import .txt', 'error');
-    return;
-  }
-
   input.value = '';
   input.click();
 }
@@ -9166,7 +9198,7 @@ function importTitleTxtFile(event) {
     const rawText = String(reader.result || '').replace(/^\uFEFF/, '');
     const titles = rawText
       .split(/\r?\n/)
-      .map(line => line.trim().replace(/^(?:[-*•]\s+|\d+[.)]\s+)/, '').trim())
+      .map(line => line.trim())
       .filter(Boolean);
 
     if (titles.length === 0) {
@@ -9182,7 +9214,6 @@ function importTitleTxtFile(event) {
     }
 
     const targetFolderId = getTitleManagerTargetFolderId();
-    const streamKeyId = getTitleManagerStreamKeyId();
 
     try {
       const response = await fetch('/api/title-suggestions/import', {
@@ -9193,15 +9224,14 @@ function importTitleTxtFile(event) {
         },
         body: JSON.stringify({
           titles,
-          folderId: targetFolderId,
-          streamKeyId
+          folderId: targetFolderId
         })
       });
 
       const data = await response.json();
 
       if (data.success) {
-        showToast(`Import selesai: ${data.imported || 0} judul ditambahkan, ${data.skipped || 0} dilewati`);
+        showToast(`Import selesai: ${data.imported || 0} judul berhasil dimasukkan (${data.skipped || 0} dilewati)`);
         await loadTitleFolders();
         loadTitleSuggestions();
         if (titleAutoRotationEnabled) loadNextRotationTitle();
@@ -9225,23 +9255,31 @@ function importTitleTxtFile(event) {
 }
 
 /**
- * Delete every title in the currently selected folder/channel scope.
+ * Delete every title in the currently selected folder, unassigned, or all scope.
  */
 async function deleteAllTitlesInCurrentScope() {
-  const targetFolderId = getTitleManagerTargetFolderId();
-  const streamKeyId = getTitleManagerStreamKeyId();
-
-  if (!targetFolderId && !streamKeyId) {
-    showToast('Pilih folder/channel terlebih dahulu', 'error');
+  if (titleSuggestions.length === 0) {
+    showToast('Tidak ada judul untuk dihapus', 'info');
     return;
   }
 
-  const selectedFolder = targetFolderId ? titleFolders.find(folder => folder.id === targetFolderId) : null;
-  const scopeLabel = selectedFolder?.name || 'channel yang sedang dipilih';
-  const currentCount = titleSuggestions.length;
-  const countLabel = currentCount > 0 ? `${currentCount} ` : '';
+  let scope = 'all';
+  let folderId = null;
+  let targetLabel = 'semua judul';
 
-  if (!confirm(`Hapus semua ${countLabel}judul di ${scopeLabel}? Tindakan ini tidak bisa dibatalkan.`)) {
+  if (selectedTitleFolderId === 'unassigned') {
+    scope = 'unassigned';
+    folderId = 'unassigned';
+    targetLabel = 'judul tanpa folder';
+  } else if (selectedTitleFolderId) {
+    scope = 'folder';
+    folderId = selectedTitleFolderId;
+    const selectedFolder = titleFolders.find(f => f.id === selectedTitleFolderId);
+    targetLabel = selectedFolder ? `judul di folder "${selectedFolder.name}"` : 'judul di folder ini';
+  }
+
+  const count = titleSuggestions.length;
+  if (!confirm(`Hapus semua ${count} ${targetLabel}? Tindakan ini tidak bisa dibatalkan.`)) {
     return;
   }
 
@@ -9253,24 +9291,25 @@ async function deleteAllTitlesInCurrentScope() {
         'X-CSRF-Token': getCsrfToken()
       },
       body: JSON.stringify({
-        folderId: targetFolderId,
-        streamKeyId
+        scope,
+        folderId,
+        deleteAll: scope === 'all'
       })
     });
 
     const data = await response.json();
 
     if (data.success) {
-      showToast(`${data.deleted || 0} judul dihapus`);
+      showToast(`${data.deleted || 0} judul berhasil dihapus`);
       await loadTitleFolders();
       loadTitleSuggestions();
       if (titleAutoRotationEnabled) loadNextRotationTitle();
     } else {
-      showToast(data.error || 'Gagal menghapus semua judul', 'error');
+      showToast(data.error || 'Gagal menghapus judul', 'error');
     }
   } catch (error) {
     console.error('Error deleting titles by scope:', error);
-    showToast('Gagal menghapus semua judul', 'error');
+    showToast('Gagal menghapus judul', 'error');
   }
 }
 
