@@ -983,7 +983,24 @@ function renderBroadcasts(broadcasts) {
 // Create broadcast card element
 function createBroadcastCard(broadcast) {
   const div = document.createElement('div');
-  div.className = 'bg-dark-700 rounded-xl p-4 border border-gray-600/30 hover:border-primary/50 transition-all';
+  div.className = 'broadcast-row broadcast-list-item bg-dark-700 rounded-xl p-4 border border-gray-600/30 hover:border-primary/50 transition-all';
+  div.setAttribute('data-broadcast-id', broadcast.id);
+  div.setAttribute('data-account-id', broadcast.accountId || '');
+  try {
+    const broadcastData = JSON.stringify({
+      id: broadcast.id,
+      accountId: broadcast.accountId,
+      title: broadcast.title || '',
+      description: broadcast.description || '',
+      privacyStatus: broadcast.privacyStatus || 'private',
+      streamId: broadcast.streamId || null,
+      streamKey: broadcast.streamKey || '',
+      categoryId: broadcast.categoryId || '22',
+      tags: broadcast.tags || [],
+      thumbnailPath: broadcast.thumbnailPath || null
+    }).replace(/"/g, '&quot;');
+    div.setAttribute('data-broadcast', broadcastData);
+  } catch (e) {}
   
   const scheduledDate = new Date(broadcast.scheduledStartTime);
   const formattedDate = scheduledDate.toLocaleString('id-ID', {
@@ -1018,7 +1035,7 @@ function createBroadcastCard(broadcast) {
         </div>
         
         <div class="flex items-center gap-1 flex-wrap">
-          <button onclick="editBroadcast('${broadcast.id}', ${broadcast.accountId})" 
+          <button onclick="editBroadcast('${broadcast.id}', ${broadcast.accountId}, this)" 
             class="px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg text-xs transition-colors flex items-center gap-1">
             <i class="ti ti-edit text-sm font-loaded"></i>
             <span>Edit</span>
@@ -4396,68 +4413,93 @@ async function deleteBroadcast(broadcastId, title = null, accountId = null, trig
   }
 }
 
-// Edit Broadcast (Instant 0ms response via DOM-data or cache, fallback to API)
+// Edit Broadcast (Instant 0ms response, NO button loading spinner, identical to duplicate broadcast modal)
 async function editBroadcast(broadcastId, accountId, triggerBtn = null) {
   // 1. Instant resolution from clicked triggerBtn or DOM row or cache
   let broadcast = null;
   const row = (triggerBtn && triggerBtn.closest)
-    ? triggerBtn.closest('.broadcast-row')
-    : document.querySelector(`.broadcast-row[data-broadcast-id="${broadcastId}"]`);
+    ? triggerBtn.closest('.broadcast-row, .broadcast-list-item, [data-broadcast-id]')
+    : document.querySelector(`.broadcast-row[data-broadcast-id="${broadcastId}"], [data-broadcast-id="${broadcastId}"]`);
 
   if (row) {
     const raw = row.getAttribute('data-broadcast') || row.querySelector('input.broadcast-checkbox')?.getAttribute('data-broadcast');
     if (raw) {
-      try { broadcast = JSON.parse(raw); } catch (e) {}
+      try {
+        broadcast = typeof raw === 'object' ? raw : JSON.parse(raw);
+      } catch (e) {
+        try {
+          const decoded = raw.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+          broadcast = JSON.parse(decoded);
+        } catch (e2) {}
+      }
     }
   }
+
+  // 2. Check in-memory broadcastsCache
   if (!broadcast && typeof broadcastsCache !== 'undefined' && broadcastsCache?.data) {
     broadcast = broadcastsCache.data.find(b => String(b.id) === String(broadcastId));
   }
 
-  if (broadcast) {
-    broadcast.accountId = accountId || broadcast.accountId;
-    openEditBroadcastModal(broadcast);
-    return;
+  // 3. Extract directly from visible DOM elements in row if data-broadcast is missing
+  if (!broadcast && row) {
+    const titleEl = row.querySelector('.broadcast-title') || row.querySelector('h3') || row.querySelector('span.text-sm.font-semibold, span.text-sm.font-medium, span.text-white.truncate');
+    const streamKeyEl = row.querySelector('.font-mono');
+    const privacyEl = row.querySelector('.uppercase');
+    broadcast = {
+      id: broadcastId,
+      accountId: accountId || row.getAttribute('data-account-id') || '',
+      title: titleEl ? (titleEl.getAttribute('title') || titleEl.textContent.trim()) : '',
+      streamKey: streamKeyEl ? (streamKeyEl.getAttribute('title') || streamKeyEl.textContent.trim().replace(/\.\.\.$/, '')) : '',
+      privacyStatus: privacyEl ? privacyEl.textContent.trim().toLowerCase() : 'unlisted',
+      description: '',
+      streamId: null,
+      categoryId: '22'
+    };
   }
 
-  // 2. Fallback only if broadcast object was completely missing from DOM
-  let origHtml = null;
-  if (triggerBtn) {
-    origHtml = triggerBtn.innerHTML;
-    triggerBtn.innerHTML = '<svg class="w-4 h-4 animate-spin text-blue-400 pointer-events-none" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
-    triggerBtn.disabled = true;
+  // 4. Local fallback object so modal opens immediately in 0ms (NO spinner on button!)
+  if (!broadcast) {
+    broadcast = {
+      id: broadcastId,
+      accountId: accountId || '',
+      title: '',
+      description: '',
+      privacyStatus: 'unlisted',
+      streamId: null,
+      categoryId: '22'
+    };
   }
 
-  try {
-    const response = await fetch(`/api/youtube/broadcasts?accountId=${accountId}`, {
-      headers: {
-        'X-CSRF-Token': getCsrfToken()
+  broadcast.accountId = accountId || broadcast.accountId || '';
+
+  // 5. Open modal INSTANTLY (0ms response - NO button loading spinner!)
+  openEditBroadcastModal(broadcast);
+
+  // 6. If broadcast details were sparse, silently enrich in background without blocking
+  if (!broadcast.title && accountId) {
+    fetch(`/api/youtube/broadcasts?accountId=${accountId}`, {
+      headers: { 'X-CSRF-Token': getCsrfToken() }
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success && data.broadcasts) {
+        const fullB = data.broadcasts.find(item => String(item.id) === String(broadcastId));
+        if (fullB) {
+          const titleField = document.getElementById('editBroadcastTitle');
+          if (titleField && !titleField.value) titleField.value = fullB.title || '';
+          const descField = document.getElementById('editBroadcastDescription');
+          if (descField && !descField.value) descField.value = fullB.description || '';
+          const privField = document.getElementById('editPrivacyStatus');
+          if (privField) privField.value = fullB.privacyStatus || 'unlisted';
+          const catField = document.getElementById('editCategoryId');
+          if (catField && fullB.categoryId) catField.value = fullB.categoryId;
+        }
       }
-    });
-    
-    const data = await response.json();
-    
-    if (data.success && data.broadcasts) {
-      const b = data.broadcasts.find(item => String(item.id) === String(broadcastId));
-      if (b) {
-        b.accountId = accountId;
-        openEditBroadcastModal(b);
-      } else {
-        showToast('Broadcast not found', 'error');
-      }
-    } else {
-      showToast(data.error || 'Failed to load broadcast', 'error');
-    }
-  } catch (error) {
-    console.error('Error fetching broadcast:', error);
-    showToast('Failed to load broadcast', 'error');
-  } finally {
-    if (triggerBtn && origHtml !== null) {
-      triggerBtn.innerHTML = origHtml;
-      triggerBtn.disabled = false;
-    }
+    })
+    .catch(e => console.warn('[editBroadcast] Silent enrichment error:', e));
   }
 }
+window.editBroadcast = editBroadcast;
 
 // Open Edit Broadcast Modal (Opens IMMEDIATELY in 0ms, loads thumbnail folders in background)
 async function openEditBroadcastModal(broadcast) {
@@ -4465,28 +4507,48 @@ async function openEditBroadcastModal(broadcast) {
   const modal = document.getElementById('editBroadcastModal');
   if (modal) {
     modal.classList.remove('hidden');
-    modal.style.display = 'block';
+    modal.style.setProperty('display', 'block', 'important');
   }
 
-  document.getElementById('editBroadcastId').value = broadcast.id || '';
+  const idEl = document.getElementById('editBroadcastId');
+  if (idEl) idEl.value = broadcast.id || '';
+
   const broadcastAccountEl = document.getElementById('editBroadcastAccountId') || document.getElementById('editAccountId');
   if (broadcastAccountEl) broadcastAccountEl.value = broadcast.accountId || '';
-  document.getElementById('editBroadcastTitle').value = broadcast.title || '';
-  document.getElementById('editBroadcastDescription').value = broadcast.description || '';
-  document.getElementById('editPrivacyStatus').value = broadcast.privacyStatus || 'unlisted';
+
+  const titleEl = document.getElementById('editBroadcastTitle');
+  if (titleEl) titleEl.value = broadcast.title || '';
+
+  const descEl = document.getElementById('editBroadcastDescription');
+  if (descEl) descEl.value = broadcast.description || '';
+
+  const privEl = document.getElementById('editPrivacyStatus');
+  if (privEl) privEl.value = broadcast.privacyStatus || 'unlisted';
+
+  // Set category - preserve existing value
+  const categorySelect = document.getElementById('editCategoryId');
+  if (categorySelect) {
+    categorySelect.value = broadcast.categoryId || '22';
+  }
   
   // Store stream key ID for thumbnail rotation
   window.editBroadcastStreamId = broadcast.streamId || null;
   console.log('[openEditBroadcastModal] Stream ID:', window.editBroadcastStreamId);
   
   // Format datetime for input
-  if (broadcast.scheduledStartTime) {
-    const date = new Date(broadcast.scheduledStartTime);
-    const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
-    document.getElementById('editScheduledStartTime').value = localDate.toISOString().slice(0, 16);
-  } else {
-    const dateEl = document.getElementById('editScheduledStartTime');
-    if (dateEl) dateEl.value = '';
+  const dateEl = document.getElementById('editScheduledStartTime');
+  if (dateEl) {
+    if (broadcast.scheduledStartTime) {
+      try {
+        const date = new Date(broadcast.scheduledStartTime);
+        const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+        dateEl.value = localDate.toISOString().slice(0, 16);
+      } catch (e) {
+        dateEl.value = '';
+      }
+    } else {
+      dateEl.value = '';
+    }
   }
   
   // Reset thumbnail mode to sequential
@@ -4509,7 +4571,7 @@ async function openEditBroadcastModal(broadcast) {
   if (preview) {
     const indicator = document.getElementById('editPinnedThumbnailIndicator');
     if (broadcast.thumbnailUrl) {
-      preview.innerHTML = `<img src="${broadcast.thumbnailUrl}" class="w-full h-full object-cover">`;
+      preview.innerHTML = `<img src="${broadcast.thumbnailUrl}" class="w-full h-full object-cover" onerror="this.parentElement.innerHTML='<i class=\\'ti ti-photo text-gray-500 text-2xl font-loaded\\'></i>'">`;
     } else {
       preview.innerHTML = '<i class="ti ti-photo text-gray-500 text-2xl font-loaded"></i>';
     }
@@ -4522,49 +4584,79 @@ async function openEditBroadcastModal(broadcast) {
   // Clear any previously selected thumbnail file
   window.editThumbnailFile = null;
   window.editThumbnailFromHistory = false;
+  const fileInput = document.getElementById('editThumbnailFile');
+  if (fileInput) fileInput.value = '';
   
   // Load thumbnail folders & settings asynchronously in background without delaying modal display
   (async () => {
     try {
-      const firstFolder = await loadEditThumbnailFolders();
+      if (typeof loadEditThumbnailFolders === 'function') {
+        await loadEditThumbnailFolders();
+      }
       
       const broadcastId = broadcast.id;
       const accountId = broadcast.accountId;
-      let boundFolder = null;
+      let boundFolder = '';
+      let savedThumbnailIndex = 0;
+      let savedThumbnailPath = null;
       
-      if (broadcastId) {
+      if (broadcastId && typeof getBroadcastSettingsFromServer === 'function') {
         const settings = await getBroadcastSettingsFromServer(broadcastId, accountId);
         if (settings && settings.thumbnailFolder !== null && settings.thumbnailFolder !== undefined) {
           boundFolder = settings.thumbnailFolder;
+          savedThumbnailIndex = settings.thumbnailIndex || 0;
+          savedThumbnailPath = settings.thumbnailPath || null;
           console.log(`[openEditBroadcastModal] Using folder from broadcast settings: "${boundFolder || '(root)'}"`);
         }
       }
       
-      if (boundFolder === null && firstFolder) {
-        boundFolder = firstFolder;
-        console.log(`[openEditBroadcastModal] Using first available folder: "${boundFolder}"`);
-      }
+      window.editSavedThumbnailIndex = savedThumbnailIndex;
+      window.editSavedThumbnailPath = savedThumbnailPath;
       
       const folderSelect = document.getElementById('editThumbnailFolderSelect');
-      if (folderSelect && boundFolder !== null) {
-        folderSelect.value = boundFolder;
+      if (folderSelect) {
+        folderSelect.value = boundFolder || '';
       }
       
-      loadEditThumbnailFolder(boundFolder);
+      if (typeof loadEditThumbnailFolderWithSelection === 'function') {
+        await loadEditThumbnailFolderWithSelection(boundFolder === '' ? null : boundFolder, savedThumbnailIndex, savedThumbnailPath);
+      } else if (typeof loadEditThumbnailFolder === 'function') {
+        loadEditThumbnailFolder(boundFolder);
+      }
     } catch (err) {
       console.warn('[openEditBroadcastModal] Background thumbnail load error:', err);
     }
   })();
 }
+window.openEditBroadcastModal = openEditBroadcastModal;
 
 function closeEditBroadcastModal() {
   const modal = document.getElementById('editBroadcastModal');
   if (modal) {
     modal.classList.add('hidden');
-    modal.style.display = 'none';
+    modal.style.removeProperty('display');
   }
-  document.getElementById('editBroadcastForm').reset();
+  const form = document.getElementById('editBroadcastForm');
+  if (form) form.reset();
+
+  const preview = document.getElementById('editThumbnailPreview');
+  if (preview) {
+    preview.innerHTML = '<i class="ti ti-photo text-gray-500 text-2xl font-loaded"></i>';
+  }
+  window.editThumbnailFile = null;
+  window.editSelectedThumbnailIndex = 0;
+  window.editSelectedThumbnailPath = null;
+  window.editSavedThumbnailIndex = 0;
+  window.editSavedThumbnailPath = null;
+  window.editBroadcastStreamId = null;
+
+  const fileInput = document.getElementById('editThumbnailFile');
+  if (fileInput) fileInput.value = '';
+
+  const categorySelect = document.getElementById('editCategoryId');
+  if (categorySelect) categorySelect.value = '22';
 }
+window.closeEditBroadcastModal = closeEditBroadcastModal;
 
 // Edit Broadcast Form Handler - includes thumbnail upload and category
 const editBroadcastForm = document.getElementById('editBroadcastForm');
@@ -9547,132 +9639,9 @@ if (originalEditBroadcastForm) {
   });
 }
 
-// Override closeEditBroadcastModal to reset thumbnail
-const originalCloseEditBroadcastModal = window.closeEditBroadcastModal;
-window.closeEditBroadcastModal = function() {
-  const modal = document.getElementById('editBroadcastModal');
-  if (modal) {
-    modal.classList.add('hidden');
-    modal.style.display = 'none';
-  }
-  document.getElementById('editBroadcastForm').reset();
-  
-  // Reset thumbnail preview
-  const preview = document.getElementById('editThumbnailPreview');
-  if (preview) {
-    preview.innerHTML = '<i class="ti ti-photo text-gray-500 text-2xl"></i>';
-  }
-  window.editThumbnailFile = null;
-  
-  // Reset selected thumbnail index and path
-  window.editSelectedThumbnailIndex = 0;
-  window.editSelectedThumbnailPath = null;
-  window.editSavedThumbnailIndex = 0;
-  window.editSavedThumbnailPath = null;
-  
-  // Reset stream ID from broadcast
-  window.editBroadcastStreamId = null;
-  
-  // Reset file input
-  const fileInput = document.getElementById('editThumbnailFile');
-  if (fileInput) fileInput.value = '';
-  
-  // Reset category to default
-  const categorySelect = document.getElementById('editCategoryId');
-  if (categorySelect) categorySelect.value = '22';
-  
-  console.log('[closeEditBroadcastModal] Modal closed, thumbnail reset');
-};
-
-// Override openEditBroadcastModal to show existing thumbnail AND load correct folder
-const originalOpenEditBroadcastModal = window.openEditBroadcastModal;
-window.openEditBroadcastModal = async function(broadcast) {
-  console.log('[openEditBroadcastModal] Opening modal for broadcast:', broadcast.id);
-  
-  document.getElementById('editBroadcastId').value = broadcast.id;
-  const broadcastAccountEl = document.getElementById('editBroadcastAccountId') || document.getElementById('editAccountId');
-  if (broadcastAccountEl) broadcastAccountEl.value = broadcast.accountId;
-  document.getElementById('editBroadcastTitle').value = broadcast.title || '';
-  document.getElementById('editBroadcastDescription').value = broadcast.description || '';
-  document.getElementById('editPrivacyStatus').value = broadcast.privacyStatus || 'unlisted';
-  
-  // Store stream key ID for thumbnail rotation
-  window.editBroadcastStreamId = broadcast.streamId || null;
-  console.log('[openEditBroadcastModal] Stream ID:', window.editBroadcastStreamId);
-  
-  // Set category - preserve existing value
-  const categorySelect = document.getElementById('editCategoryId');
-  if (categorySelect) {
-    categorySelect.value = broadcast.categoryId || '22';
-    console.log('[openEditBroadcastModal] Category set to:', categorySelect.value);
-  }
-  
-  // Format datetime for input
-  if (broadcast.scheduledStartTime) {
-    const date = new Date(broadcast.scheduledStartTime);
-    const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
-    document.getElementById('editScheduledStartTime').value = localDate.toISOString().slice(0, 16);
-  }
-  
-  // Show existing thumbnail if available
-  const preview = document.getElementById('editThumbnailPreview');
-  if (preview) {
-    if (broadcast.thumbnailUrl) {
-      preview.innerHTML = `<img src="${broadcast.thumbnailUrl}" class="w-full h-full object-cover" onerror="this.parentElement.innerHTML='<i class=\\'ti ti-photo text-gray-500 text-2xl\\'></i>'">`;
-    } else {
-      preview.innerHTML = '<i class="ti ti-photo text-gray-500 text-2xl"></i>';
-    }
-  }
-  
-  // Reset file input and thumbnail file variable
-  window.editThumbnailFile = null;
-  const fileInput = document.getElementById('editThumbnailFile');
-  if (fileInput) fileInput.value = '';
-  
-  // Load thumbnail folders first
-  await loadEditThumbnailFolders();
-  
-  // Get thumbnail folder and index from broadcast settings (saved when broadcast was created)
-  const broadcastId = broadcast.id;
-  let boundFolder = '';
-  let savedThumbnailIndex = 0;
-  let savedThumbnailPath = null;
-  
-  if (broadcastId) {
-    const settings = await getBroadcastSettingsFromServer(broadcastId);
-    // Check if settings exist and thumbnailFolder is explicitly set (including empty string for root)
-    if (settings && (settings.thumbnailFolder !== null && settings.thumbnailFolder !== undefined)) {
-      boundFolder = settings.thumbnailFolder;
-      savedThumbnailIndex = settings.thumbnailIndex || 0;
-      savedThumbnailPath = settings.thumbnailPath || null;
-      console.log(`[openEditBroadcastModal] Broadcast ${broadcastId} has folder: "${boundFolder}" (${boundFolder === '' ? 'root' : 'folder'}), index: ${savedThumbnailIndex}, path: ${savedThumbnailPath}`);
-    } else {
-      console.log(`[openEditBroadcastModal] Broadcast ${broadcastId} has no saved folder settings, will use root`);
-      boundFolder = '';
-    }
-  }
-  
-  // Store saved thumbnail info for use after gallery loads
-  window.editSavedThumbnailIndex = savedThumbnailIndex;
-  window.editSavedThumbnailPath = savedThumbnailPath;
-  
-  // Set the folder dropdown value
-  const folderSelect = document.getElementById('editThumbnailFolderSelect');
-  if (folderSelect) {
-    folderSelect.value = boundFolder || ''; // '' for root, 'folderName' for folder
-    console.log('[openEditBroadcastModal] Folder dropdown set to:', folderSelect.value || 'Root');
-  }
-  
-  // Load thumbnails from the bound folder and auto-select saved thumbnail
-  await loadEditThumbnailFolderWithSelection(boundFolder === '' ? null : boundFolder, savedThumbnailIndex, savedThumbnailPath);
-  
-  const modal = document.getElementById('editBroadcastModal');
-  if (modal) {
-    modal.classList.remove('hidden');
-    modal.style.display = 'block';
-  }
-  console.log('[openEditBroadcastModal] Modal opened with folder:', boundFolder || 'Root', 'thumbnail index:', savedThumbnailIndex);
-};
+// Expose closeEditBroadcastModal and openEditBroadcastModal globally
+window.closeEditBroadcastModal = closeEditBroadcastModal;
+window.openEditBroadcastModal = openEditBroadcastModal;
 
 
 /**
@@ -11559,11 +11528,21 @@ async function openDuplicateBroadcastModal(broadcastId, accountId = null, trigge
 
   // 1. Instant resolution from DOM row first (0ms delay!)
   let broadcast = null;
-  const row = document.querySelector(`.broadcast-row[data-broadcast-id="${broadcastId}"]`);
+  const row = (triggerBtn && triggerBtn.closest)
+    ? triggerBtn.closest('.broadcast-row, .broadcast-list-item, [data-broadcast-id]')
+    : document.querySelector(`.broadcast-row[data-broadcast-id="${broadcastId}"], [data-broadcast-id="${broadcastId}"]`);
+
   if (row) {
     const raw = row.getAttribute('data-broadcast') || row.querySelector('input.broadcast-checkbox')?.getAttribute('data-broadcast');
     if (raw) {
-      try { broadcast = JSON.parse(raw); } catch (e) {}
+      try {
+        broadcast = typeof raw === 'object' ? raw : JSON.parse(raw);
+      } catch (e) {
+        try {
+          const decoded = raw.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+          broadcast = JSON.parse(decoded);
+        } catch (e2) {}
+      }
     }
   }
 
@@ -11572,34 +11551,32 @@ async function openDuplicateBroadcastModal(broadcastId, accountId = null, trigge
     broadcast = broadcastsCache.data.find(b => String(b.id) === String(broadcastId));
   }
 
-  // 3. If still not found, fetch it with trigger button feedback
-  if (!broadcast) {
-    let origHtml = null;
-    if (triggerBtn) {
-      origHtml = triggerBtn.innerHTML;
-      triggerBtn.innerHTML = '<svg class="w-4 h-4 animate-spin text-purple-400 pointer-events-none" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
-      triggerBtn.disabled = true;
-    }
-    try {
-      const url = accountId ? `/api/youtube/broadcasts?accountId=${accountId}` : '/api/youtube/broadcasts';
-      const res = await fetch(url, { headers: { 'X-CSRF-Token': getCsrfToken() } });
-      const data = await res.json();
-      if (data.success && data.broadcasts) {
-        broadcast = data.broadcasts.find(b => String(b.id) === String(broadcastId));
-      }
-    } catch (err) {
-      console.warn('[openDuplicateBroadcastModal] Fetch error:', err);
-    } finally {
-      if (triggerBtn && origHtml !== null) {
-        triggerBtn.innerHTML = origHtml;
-        triggerBtn.disabled = false;
-      }
-    }
+  // 3. Fallback to extracting from row DOM elements
+  if (!broadcast && row) {
+    const titleEl = row.querySelector('.broadcast-title') || row.querySelector('h3') || row.querySelector('span.text-sm.font-semibold, span.text-sm.font-medium, span.text-white.truncate');
+    const streamKeyEl = row.querySelector('.font-mono');
+    const privacyEl = row.querySelector('.uppercase');
+    broadcast = {
+      id: broadcastId,
+      accountId: accountId || row.getAttribute('data-account-id') || '',
+      title: titleEl ? (titleEl.getAttribute('title') || titleEl.textContent.trim()) : '',
+      streamKey: streamKeyEl ? (streamKeyEl.getAttribute('title') || streamKeyEl.textContent.trim().replace(/\.\.\.$/, '')) : '',
+      privacyStatus: privacyEl ? privacyEl.textContent.trim().toLowerCase() : 'unlisted',
+      description: '',
+      streamId: null,
+      categoryId: '22'
+    };
   }
 
+  // 4. If still not found, minimal fallback
   if (!broadcast) {
-    showToast('Tidak dapat memuat detail siaran untuk diduplikat', 'error');
-    return;
+    broadcast = {
+      id: broadcastId,
+      accountId: accountId || '',
+      title: 'Broadcast ' + broadcastId,
+      privacyStatus: 'unlisted',
+      categoryId: '22'
+    };
   }
 
   const resolvedAccountId = accountId || broadcast.accountId || '';
