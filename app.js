@@ -12308,15 +12308,31 @@ async function checkHealthEndpoint(healthUrl, attempts = 8, intervalMs = 3000) {
 // System Update API Endpoints (Admin only)
 // ============================================
 
-// Get current version
+// Get current version & last updated date
 app.get('/api/system/version', isAuthenticated, async (req, res) => {
   try {
     // Read package.json fresh (don't use require cache)
     const packagePath = path.join(__dirname, 'package.json');
     const packageData = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
+    
+    let lastUpdated = null;
+    try {
+      const { execSync } = require('child_process');
+      const gitDate = execSync('git log -1 --format=%cI', { cwd: __dirname, encoding: 'utf8', timeout: 3000, stdio: 'pipe' }).trim();
+      if (gitDate) {
+        lastUpdated = gitDate;
+      }
+    } catch (e) {
+      try {
+        const stat = fs.statSync(packagePath);
+        lastUpdated = stat.mtime.toISOString();
+      } catch (err) {}
+    }
+
     res.json({
       success: true,
-      currentVersion: packageData.version || 'Unknown'
+      currentVersion: packageData.version || 'Unknown',
+      lastUpdated
     });
   } catch (error) {
     console.error('Error getting version:', error);
@@ -12484,10 +12500,22 @@ app.get('/api/system/check-update', isAuthenticated, isAdmin, async (req, res) =
 
       const versionPoint = getVersionPoint(currentVersion, latestVersion);
 
+      let lastUpdated = null;
+      try {
+        const gitDate = execSync('git log -1 --format=%cI', { cwd: appDir, encoding: 'utf8', timeout: 3000, stdio: 'pipe' }).trim();
+        if (gitDate) lastUpdated = gitDate;
+      } catch (e) {
+        try {
+          const stat = fs.statSync(packagePath);
+          lastUpdated = stat.mtime.toISOString();
+        } catch (err) {}
+      }
+
       res.json({
         success: true,
         currentVersion,
         latestVersion,
+        lastUpdated,
         versionPoint,
         updateAvailable: behindCount > 0,
         commitsAhead: 0,

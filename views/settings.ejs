@@ -94,7 +94,10 @@
 
         <div id="profile-tab" class="settings-content">
           <div class="p-6">
-            <h3 class="text-lg font-semibold mb-6">Profile Settings</h3>
+            <h3 class="text-lg font-semibold mb-6 flex items-center">
+              <i class="ti ti-user mr-2 text-primary"></i>
+              Profile Settings
+            </h3>
 
             <% if (user.expired_at) {
                  const _e = new Date(user.expired_at);
@@ -103,7 +106,7 @@
                    const _ex = _d < 0;
                    const _es = _e.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
             %>
-              <div class="mb-6 rounded-lg border px-4 py-3 flex items-center gap-3 <%= _ex ? 'bg-red-500/10 border-red-500/30' : (_d <= 7 ? 'bg-amber-500/10 border-amber-500/30' : 'bg-dark-700 border-gray-700') %>">
+              <div class="mb-6 rounded-2xl border px-4 py-3 flex items-center gap-3 <%= _ex ? 'bg-red-500/10 border-red-500/30' : (_d <= 7 ? 'bg-amber-500/10 border-amber-500/30' : 'bg-dark-700/80 border-gray-700/60') %>">
                 <i class="ti <%= _ex ? 'ti-alert-triangle text-red-400' : 'ti-clock-hour-4 text-emerald-400' %> text-2xl flex-shrink-0"></i>
                 <div class="flex-1 min-w-0">
                   <% if (_ex) { %>
@@ -117,51 +120,55 @@
               </div>
             <%   } } %>
 
-            <form id="profile-form" class="space-y-6" action="/settings/profile" method="post"
+            <form id="profile-form" class="space-y-6 max-w-xl" action="/settings/profile" method="post"
               enctype="multipart/form-data">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
               <input type="hidden" name="activeTab" value="profile">
 
-              <div class="space-y-4">
-                <label class="block text-sm font-medium text-gray-300">Profile Photo</label>
-                <div class="flex items-center space-x-6">
-                  <div class="relative">
-                    <div class="w-24 h-24 rounded-full bg-dark-700 overflow-hidden border-2 border-gray-700">
+              <div class="bg-dark-700/70 border border-gray-700/60 rounded-2xl p-5 space-y-5">
+                <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400">Profile Photo</label>
+                <div class="flex items-center gap-5">
+                  <div class="relative group">
+                    <div class="w-20 h-20 rounded-2xl bg-dark-900 overflow-hidden border-2 border-gray-700 shadow-inner flex items-center justify-center">
                       <img id="profile-preview" src="<%= user.avatar_path || '/images/default-avatar.jpg' %>"
                         class="w-full h-full object-cover" alt="Profile Photo"
                         onerror="this.src='/images/default-avatar.jpg'">
                     </div>
-                    <div class="absolute bottom-0 right-0">
-                      <label for="profile-upload"
-                        class="flex items-center justify-center w-8 h-8 rounded-full bg-primary hover:bg-secondary cursor-pointer shadow-lg transition-colors">
-                        <i class="ti ti-pencil text-white text-sm"></i>
-                      </label>
-                      <input id="profile-upload" name="avatar" type="file" accept="image/*" class="hidden">
-                    </div>
+                    <label for="profile-upload"
+                      class="absolute -bottom-1 -right-1 flex items-center justify-center w-7 h-7 rounded-xl bg-primary hover:bg-secondary cursor-pointer shadow-lg transition-transform hover:scale-110 text-white"
+                      title="Upload photo">
+                      <i class="ti ti-pencil text-xs"></i>
+                    </label>
+                    <input id="profile-upload" name="avatar" type="file" accept="image/*" class="hidden">
                   </div>
-                  <div class="text-sm text-gray-400">
-                    <p>Upload a new photo</p>
-                    <p class="mt-1">Maximum file size: 2MB</p>
+                  <div class="space-y-2">
+                    <button type="button" onclick="document.getElementById('profile-upload').click()"
+                      class="px-4 py-2 bg-dark-900 border border-gray-600 hover:bg-dark-600 text-white rounded-xl text-xs font-medium transition-colors flex items-center gap-1.5">
+                      <i class="ti ti-upload"></i>
+                      <span>Upload New Photo</span>
+                    </button>
+                    <p class="text-[11px] text-gray-400">PNG, JPG or GIF • Max 2MB</p>
+                  </div>
+                </div>
+
+                <div class="space-y-1.5 pt-3 border-t border-gray-700/50">
+                  <label for="username" class="block text-sm font-medium text-gray-300">Username</label>
+                  <div class="relative">
+                    <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-gray-400">
+                      <i class="ti ti-user text-base"></i>
+                    </span>
+                    <input type="text" id="username" name="username"
+                      class="w-full bg-dark-900 border border-gray-700/60 text-white pl-10 pr-4 py-2.5 rounded-xl focus:outline-none focus:ring-1 focus:ring-primary text-sm"
+                      value="<%= user.username %>">
                   </div>
                 </div>
               </div>
 
-              <div class="space-y-2">
-                <label for="username" class="block text-sm font-medium text-gray-300">Username</label>
-                <div class="relative">
-                  <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
-                    <i class="ti ti-user"></i>
-                  </span>
-                  <input type="text" id="username" name="username"
-                    class="bg-dark-900 text-white pl-10 pr-4 py-2 rounded-lg block w-full sm:max-w-md focus:outline-none focus:ring-1 focus:ring-primary"
-                    value="<%= user.username %>">
-                </div>
-              </div>
-
-              <div class="pt-4">
+              <div class="flex justify-end">
                 <button type="submit"
-                  class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-lg transition-colors">
-                  Save Profile Changes
+                  class="w-full sm:w-auto px-6 py-2.5 bg-primary hover:bg-secondary text-white rounded-xl transition-all font-medium flex items-center justify-center gap-2 text-sm shadow-md">
+                  <i class="ti ti-device-floppy text-base"></i>
+                  <span>Save Profile Changes</span>
                 </button>
               </div>
             </form>
@@ -170,144 +177,154 @@
 
         <div id="security-tab" class="settings-content hidden">
           <div class="p-6">
-            <h3 class="text-lg font-semibold mb-6">Security Settings</h3>
-            <form id="password-form" class="space-y-6" action="/settings/password" method="post">
+            <h3 class="text-lg font-semibold mb-6 flex items-center">
+              <i class="ti ti-shield-lock mr-2 text-primary"></i>
+              Security Settings
+            </h3>
+            <form id="password-form" class="space-y-6 max-w-xl" action="/settings/password" method="post">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
               <input type="hidden" name="activeTab" value="security">
 
-              <div class="space-y-2">
-                <label for="current-password" class="block text-sm font-medium text-gray-300">Current Password</label>
-                <div class="relative">
-                  <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
-                    <i class="ti ti-lock"></i>
-                  </span>
-                  <input type="password" id="current-password" name="currentPassword"
-                    class="bg-dark-900 text-white pl-10 pr-4 py-2 rounded-lg block w-full sm:max-w-md focus:outline-none focus:ring-1 focus:ring-primary"
-                    placeholder="Enter your current password">
+              <div class="bg-dark-700/70 border border-gray-700/60 rounded-2xl p-5 space-y-4">
+                <div class="space-y-1.5">
+                  <label for="current-password" class="block text-sm font-medium text-gray-300">Current Password</label>
+                  <div class="relative">
+                    <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-gray-400">
+                      <i class="ti ti-lock text-base"></i>
+                    </span>
+                    <input type="password" id="current-password" name="currentPassword"
+                      class="w-full bg-dark-900 border border-gray-700/60 text-white pl-10 pr-4 py-2.5 rounded-xl focus:outline-none focus:ring-1 focus:ring-primary text-sm"
+                      placeholder="Enter your current password">
+                  </div>
+                </div>
+
+                <div class="space-y-1.5">
+                  <label for="new-password" class="block text-sm font-medium text-gray-300">New Password</label>
+                  <div class="relative">
+                    <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-gray-400">
+                      <i class="ti ti-lock text-base"></i>
+                    </span>
+                    <input type="password" id="new-password" name="newPassword"
+                      class="w-full bg-dark-900 border border-gray-700/60 text-white pl-10 pr-10 py-2.5 rounded-xl focus:outline-none focus:ring-1 focus:ring-primary text-sm"
+                      placeholder="Enter new password">
+                    <button type="button"
+                      class="absolute inset-y-0 right-0 flex items-center pr-3.5 text-gray-400 hover:text-white"
+                      id="toggle-password">
+                      <i class="ti ti-eye"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="space-y-1.5">
+                  <label for="confirm-password" class="block text-sm font-medium text-gray-300">Confirm New Password</label>
+                  <div class="relative">
+                    <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-gray-400">
+                      <i class="ti ti-lock text-base"></i>
+                    </span>
+                    <input type="password" id="confirm-password" name="confirmPassword"
+                      class="w-full bg-dark-900 border border-gray-700/60 text-white pl-10 pr-4 py-2.5 rounded-xl focus:outline-none focus:ring-1 focus:ring-primary text-sm"
+                      placeholder="Confirm new password">
+                  </div>
+                </div>
+
+                <div class="flex items-center gap-2 p-3 bg-dark-900/60 border border-gray-700/50 rounded-xl text-xs text-gray-400">
+                  <i class="ti ti-info-circle text-primary text-base flex-shrink-0"></i>
+                  <span>Password must be at least 8 characters and include uppercase, lowercase, and a number.</span>
                 </div>
               </div>
 
-              <div class="space-y-2">
-                <label for="new-password" class="block text-sm font-medium text-gray-300">New Password</label>
-                <div class="relative sm:max-w-md">
-                  <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
-                    <i class="ti ti-lock"></i>
-                  </span>
-                  <input type="password" id="new-password" name="newPassword"
-                    class="bg-dark-900 text-white pl-10 pr-10 py-2 rounded-lg block w-full focus:outline-none focus:ring-1 focus:ring-primary"
-                    placeholder="Enter new password">
-                  <button type="button"
-                    class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-white"
-                    id="toggle-password">
-                    <i class="ti ti-eye"></i>
-                  </button>
-                </div>
-                <div class="text-xs text-gray-400 mt-1">
-                  Password must be at least 8 characters and include uppercase, lowercase and a number
-                </div>
-              </div>
-
-              <div class="space-y-2">
-                <label for="confirm-password" class="block text-sm font-medium text-gray-300">Confirm New
-                  Password</label>
-                <div class="relative sm:max-w-md">
-                  <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
-                    <i class="ti ti-lock"></i>
-                  </span>
-                  <input type="password" id="confirm-password" name="confirmPassword"
-                    class="bg-dark-900 text-white pl-10 pr-4 py-2 rounded-lg block w-full focus:outline-none focus:ring-1 focus:ring-primary"
-                    placeholder="Confirm new password">
-                </div>
-              </div>
-
-              <div class="pt-4">
+              <div class="flex justify-end">
                 <button type="submit"
-                  class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-lg transition-colors">
-                  Change Password
+                  class="w-full sm:w-auto px-6 py-2.5 bg-primary hover:bg-secondary text-white rounded-xl transition-all font-medium flex items-center justify-center gap-2 text-sm shadow-md">
+                  <i class="ti ti-key text-base"></i>
+                  <span>Change Password</span>
                 </button>
               </div>
             </form>
-
           </div>
         </div>
 
         <!-- Backup & Restore Tab -->
         <div id="backup-tab" class="settings-content hidden">
           <div class="p-6">
-            <h3 class="text-lg font-semibold mb-6">Backup & Restore</h3>
+            <h3 class="text-lg font-semibold mb-6 flex items-center">
+              <i class="ti ti-database-export mr-2 text-primary"></i>
+              Backup & Restore
+            </h3>
 
             <div class="space-y-6">
               <!-- Export Section -->
-              <div class="bg-dark-700 rounded-lg p-4">
-                <h4 class="text-md font-medium mb-4 flex items-center">
-                  <i class="ti ti-download mr-2 text-primary"></i>
-                  Export Data
-                </h4>
-                <p class="text-sm text-gray-400 mb-4">
+              <div class="bg-dark-700/70 border border-gray-700/60 rounded-2xl p-5 space-y-4">
+                <div class="flex items-center justify-between">
+                  <h4 class="text-md font-medium flex items-center">
+                    <i class="ti ti-download mr-2 text-primary"></i>
+                    Export Data
+                  </h4>
+                </div>
+                <p class="text-sm text-gray-400">
                   Export semua data Anda termasuk streams, YouTube credentials, broadcast templates, recurring
                   schedules, stream templates, playlists, title manager, dan thumbnail files.
                 </p>
-                <div class="bg-yellow-900/20 border border-yellow-700/50 rounded-lg p-3 mb-4">
-                  <p class="text-xs text-yellow-400">
-                    <i class="ti ti-info-circle mr-1"></i>
-                    <strong>Catatan:</strong> Semua thumbnail files akan di-export sesuai kondisi data Anda. Template
-                    mapping tetap ikut di-export.
+                <div class="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 flex items-start gap-2.5">
+                  <i class="ti ti-info-circle text-amber-400 text-base flex-shrink-0 mt-0.5"></i>
+                  <p class="text-xs text-amber-300">
+                    <strong>Catatan:</strong> Semua thumbnail files akan di-export sesuai kondisi data Anda. Template mapping tetap ikut di-export.
                   </p>
                 </div>
 
                 <div class="space-y-4">
                   <div class="space-y-2">
-                    <label class="block text-sm font-medium text-gray-300 mb-2">Pilih kategori untuk di-export:</label>
-                    <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
-                      <label class="flex items-center space-x-2 text-sm text-gray-300">
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400">Pilih kategori untuk di-export:</label>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                      <label class="flex items-center gap-2.5 p-3 rounded-xl bg-dark-900/60 border border-gray-700/50 hover:border-gray-600 transition-colors text-xs text-gray-300 cursor-pointer">
                         <input type="checkbox"
                           class="export-category rounded bg-dark-900 border-gray-600 text-primary focus:ring-primary"
                           value="streams" checked>
                         <span>Streams</span>
                       </label>
-                      <label class="flex items-center space-x-2 text-sm text-gray-300">
+                      <label class="flex items-center gap-2.5 p-3 rounded-xl bg-dark-900/60 border border-gray-700/50 hover:border-gray-600 transition-colors text-xs text-gray-300 cursor-pointer">
                         <input type="checkbox"
                           class="export-category rounded bg-dark-900 border-gray-600 text-primary focus:ring-primary"
                           value="youtube_credentials" checked>
                         <span>YouTube Credentials</span>
                       </label>
-                      <label class="flex items-center space-x-2 text-sm text-gray-300">
+                      <label class="flex items-center gap-2.5 p-3 rounded-xl bg-dark-900/60 border border-gray-700/50 hover:border-gray-600 transition-colors text-xs text-gray-300 cursor-pointer">
                         <input type="checkbox"
                           class="export-category rounded bg-dark-900 border-gray-600 text-primary focus:ring-primary"
                           value="broadcast_templates" checked>
                         <span>Broadcast Templates</span>
                       </label>
-                      <label class="flex items-center space-x-2 text-sm text-gray-300">
+                      <label class="flex items-center gap-2.5 p-3 rounded-xl bg-dark-900/60 border border-gray-700/50 hover:border-gray-600 transition-colors text-xs text-gray-300 cursor-pointer">
                         <input type="checkbox"
                           class="export-category rounded bg-dark-900 border-gray-600 text-primary focus:ring-primary"
                           value="recurring_schedules" checked>
                         <span>Recurring Schedules</span>
                       </label>
-                      <label class="flex items-center space-x-2 text-sm text-gray-300">
+                      <label class="flex items-center gap-2.5 p-3 rounded-xl bg-dark-900/60 border border-gray-700/50 hover:border-gray-600 transition-colors text-xs text-gray-300 cursor-pointer">
                         <input type="checkbox"
                           class="export-category rounded bg-dark-900 border-gray-600 text-primary focus:ring-primary"
                           value="stream_templates" checked>
                         <span>Stream Templates</span>
                       </label>
-                      <label class="flex items-center space-x-2 text-sm text-gray-300">
+                      <label class="flex items-center gap-2.5 p-3 rounded-xl bg-dark-900/60 border border-gray-700/50 hover:border-gray-600 transition-colors text-xs text-gray-300 cursor-pointer">
                         <input type="checkbox"
                           class="export-category rounded bg-dark-900 border-gray-600 text-primary focus:ring-primary"
                           value="playlists" checked>
                         <span>Playlists</span>
                       </label>
-                      <label class="flex items-center space-x-2 text-sm text-gray-300">
+                      <label class="flex items-center gap-2.5 p-3 rounded-xl bg-dark-900/60 border border-gray-700/50 hover:border-gray-600 transition-colors text-xs text-gray-300 cursor-pointer">
                         <input type="checkbox"
                           class="export-category rounded bg-dark-900 border-gray-600 text-primary focus:ring-primary"
                           value="title_folders" checked>
                         <span>Title Folders</span>
                       </label>
-                      <label class="flex items-center space-x-2 text-sm text-gray-300">
+                      <label class="flex items-center gap-2.5 p-3 rounded-xl bg-dark-900/60 border border-gray-700/50 hover:border-gray-600 transition-colors text-xs text-gray-300 cursor-pointer">
                         <input type="checkbox"
                           class="export-category rounded bg-dark-900 border-gray-600 text-primary focus:ring-primary"
                           value="title_suggestions" checked>
                         <span>Title Manager</span>
                       </label>
-                      <label class="flex items-center space-x-2 text-sm text-gray-300">
+                      <label class="flex items-center gap-2.5 p-3 rounded-xl bg-dark-900/60 border border-gray-700/50 hover:border-gray-600 transition-colors text-xs text-gray-300 cursor-pointer">
                         <input type="checkbox"
                           class="export-category rounded bg-dark-900 border-gray-600 text-primary focus:ring-primary"
                           value="thumbnail_files" checked>
@@ -316,27 +333,28 @@
                     </div>
                   </div>
 
-                  <div class="flex gap-3">
+                  <div class="flex flex-wrap items-center gap-3 pt-2">
                     <button type="button" id="export-all-btn"
-                      class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-lg transition-colors flex items-center">
-                      <i class="ti ti-download mr-2"></i>
-                      Export Semua Data
+                      class="w-full sm:w-auto px-6 py-2.5 bg-primary hover:bg-secondary text-white rounded-xl font-medium transition-all shadow-md flex items-center justify-center gap-2 text-sm">
+                      <i class="ti ti-download text-base"></i>
+                      <span>Export Semua Data</span>
                     </button>
                     <button type="button" id="select-all-categories"
-                      class="px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded-lg transition-colors text-sm">
-                      Pilih Semua
+                      class="w-full sm:w-auto px-5 py-2.5 bg-dark-900 border border-gray-600 hover:bg-dark-600 text-gray-200 hover:text-white rounded-xl font-medium transition-all flex items-center justify-center gap-2 text-sm">
+                      <i class="ti ti-check-double text-base"></i>
+                      <span>Pilih Semua</span>
                     </button>
                   </div>
                 </div>
               </div>
 
               <!-- Import Section -->
-              <div class="bg-dark-700 rounded-lg p-4">
-                <h4 class="text-md font-medium mb-4 flex items-center">
-                  <i class="ti ti-upload mr-2 text-green-400"></i>
+              <div class="bg-dark-700/70 border border-gray-700/60 rounded-2xl p-5 space-y-4">
+                <h4 class="text-md font-medium flex items-center">
+                  <i class="ti ti-upload mr-2 text-emerald-400"></i>
                   Import Data
                 </h4>
-                <p class="text-sm text-gray-400 mb-4">
+                <p class="text-sm text-gray-400">
                   Restore data dari file backup JSON. Data yang sudah ada dapat di-skip atau di-overwrite.
                 </p>
 
@@ -344,22 +362,17 @@
                   <input type="hidden" name="_csrf" value="<%= csrfToken %>">
 
                   <div class="space-y-2">
-                    <label class="block text-sm font-medium text-gray-300">File Backup</label>
-                    <div class="flex items-center gap-3">
-                      <input type="file" id="import-file" name="backupFile" accept=".json"
-                        class="bg-dark-900 text-white px-4 py-2 rounded-lg w-full max-w-md focus:outline-none focus:ring-1 focus:ring-primary file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:bg-primary file:text-white file:cursor-pointer">
-                    </div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400">File Backup (.json)</label>
+                    <input type="file" id="import-file" name="backupFile" accept=".json"
+                      class="w-full max-w-lg bg-dark-900 border border-gray-700/60 text-white px-4 py-2 rounded-xl focus:outline-none focus:ring-1 focus:ring-primary text-sm file:mr-4 file:py-1.5 file:px-3.5 file:rounded-lg file:border-0 file:bg-primary file:text-white file:text-xs file:font-medium file:cursor-pointer">
                   </div>
 
                   <div class="space-y-2">
-                    <label class="block text-sm font-medium text-gray-300 mb-2">Opsi Import:</label>
-                    <div class="flex flex-col gap-2">
-                      <label class="flex items-center space-x-2 text-sm text-gray-300">
-                        <input type="checkbox" id="skip-duplicates" name="skipDuplicates" checked
-                          class="rounded bg-dark-900 border-gray-600 text-primary focus:ring-primary">
-                        <span>Skip data duplikat (berdasarkan nama/channel)</span>
-                      </label>
-                    </div>
+                    <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+                      <input type="checkbox" id="skip-duplicates" name="skipDuplicates" checked
+                        class="rounded bg-dark-900 border-gray-600 text-primary focus:ring-primary">
+                      <span>Skip data duplikat (berdasarkan nama/channel)</span>
+                    </label>
                   </div>
 
                   <!-- Progress Bar -->
@@ -368,9 +381,9 @@
                       <span id="import-progress-message">Memulai import...</span>
                       <span id="import-progress-percentage">0%</span>
                     </div>
-                    <div class="w-full bg-dark-900 rounded-full h-3 overflow-hidden">
+                    <div class="w-full bg-dark-900 rounded-full h-2.5 overflow-hidden">
                       <div id="import-progress-bar"
-                        class="bg-gradient-to-r from-primary to-blue-500 h-3 rounded-full transition-all duration-300"
+                        class="bg-gradient-to-r from-primary to-blue-500 h-2.5 rounded-full transition-all duration-300"
                         style="width: 0%"></div>
                     </div>
                     <div class="text-xs text-gray-400" id="import-progress-detail">
@@ -378,34 +391,38 @@
                     </div>
                   </div>
 
-                  <button type="submit" id="import-all-btn"
-                    class="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-colors flex items-center">
-                    <i class="ti ti-upload mr-2"></i>
-                    Import Data
-                  </button>
+                  <div class="pt-1">
+                    <button type="submit" id="import-all-btn"
+                      class="w-full sm:w-auto px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-medium transition-all shadow-md flex items-center justify-center gap-2 text-sm">
+                      <i class="ti ti-upload text-base"></i>
+                      <span>Import Data</span>
+                    </button>
+                  </div>
                 </form>
 
                 <!-- Import Results -->
-                <div id="import-results" class="hidden mt-4 p-4 bg-dark-900 rounded-lg">
+                <div id="import-results" class="hidden mt-4 p-4 bg-dark-900 rounded-xl border border-gray-700/50">
                   <h5 class="text-sm font-medium text-gray-300 mb-2">Hasil Import:</h5>
                   <div id="import-results-content" class="text-sm text-gray-400"></div>
                 </div>
               </div>
 
               <!-- Legacy Export (Streams Only) -->
-              <div class="bg-dark-700 rounded-lg p-4">
-                <h4 class="text-md font-medium mb-4 flex items-center">
-                  <i class="ti ti-broadcast mr-2 text-yellow-400"></i>
+              <div class="bg-dark-700/70 border border-gray-700/60 rounded-2xl p-5 space-y-3">
+                <h4 class="text-md font-medium flex items-center">
+                  <i class="ti ti-broadcast mr-2 text-amber-400"></i>
                   Export Streams Saja (Legacy)
                 </h4>
-                <p class="text-sm text-gray-400 mb-4">
+                <p class="text-sm text-gray-400">
                   Export hanya konfigurasi streams untuk kompatibilitas dengan format backup lama.
                 </p>
-                <a href="/api/streams/export"
-                  class="inline-flex items-center px-4 py-2 bg-yellow-600 hover:bg-yellow-500 text-white rounded-lg transition-colors">
-                  <i class="ti ti-download mr-2"></i>
-                  Export Streams
-                </a>
+                <div class="pt-1">
+                  <a href="/api/streams/export"
+                    class="inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl font-medium transition-all text-sm shadow-md">
+                    <i class="ti ti-download text-base"></i>
+                    <span>Export Streams</span>
+                  </a>
+                </div>
               </div>
             </div>
           </div>
@@ -414,82 +431,89 @@
         <% if (userRole === 'admin') { %>
           <div id="system-tab" class="settings-content hidden">
             <div class="p-6">
-              <h3 class="text-lg font-semibold mb-6">System Settings</h3>
+              <h3 class="text-lg font-semibold mb-6 flex items-center">
+                <i class="ti ti-settings mr-2 text-primary"></i>
+                System Settings
+              </h3>
 
               <div class="space-y-6">
-                <div class="bg-dark-700 rounded-lg p-4">
-                  <h4 class="text-md font-medium mb-4 flex items-center">
+                <div class="bg-dark-700/70 border border-gray-700/60 rounded-2xl p-5 space-y-4">
+                  <h4 class="text-md font-medium flex items-center">
                     <i class="ti ti-broadcast mr-2 text-primary"></i>
                     Live Streaming Limits
                   </h4>
-                  <p class="text-sm text-gray-400 mb-4">
-                    Control the maximum number of simultaneous live streams per member.
-                    Individual users can have custom limits set in User Management.
+                  <p class="text-sm text-gray-400">
+                    Control the maximum number of simultaneous live streams and storage limit per member.
                   </p>
 
-                  <div class="space-y-4">
-                    <div class="space-y-2">
-                      <label for="default-live-limit" class="block text-sm font-medium text-gray-300">
-                        Default Live Limit (per member)
-                      </label>
-                      <div class="flex items-center gap-3">
+                  <div class="space-y-4 pt-1">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl bg-dark-900/60 border border-gray-700/50">
+                      <div>
+                        <label for="default-live-limit" class="block text-sm font-medium text-gray-200">
+                          Default Live Limit (per member)
+                        </label>
+                        <p class="text-xs text-gray-400 mt-0.5">
+                          Members without a custom limit will use this default value.
+                        </p>
+                      </div>
+                      <div class="flex items-center gap-2.5 self-start sm:self-auto">
                         <input type="number" id="default-live-limit" min="1" max="100" value="1"
-                          class="bg-dark-900 text-white px-4 py-2 rounded-lg w-24 focus:outline-none focus:ring-1 focus:ring-primary">
+                          class="bg-dark-900 border border-gray-700/60 text-white px-3 py-2 rounded-xl w-24 text-center text-sm focus:ring-1 focus:ring-primary">
                         <button type="button" id="save-live-limit"
-                          class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-lg transition-colors">
-                          Save
+                          class="px-5 py-2 bg-primary hover:bg-secondary text-white rounded-xl font-medium transition-all text-sm flex items-center gap-1.5 shadow-sm">
+                          <i class="ti ti-check"></i>
+                          <span>Save</span>
                         </button>
                       </div>
-                      <p class="text-xs text-gray-500">
-                        Members without a custom limit will use this default value.
-                      </p>
                     </div>
 
-                    <div class="space-y-2 mt-6 pt-6 border-t border-gray-700">
-                      <label for="default-storage-limit" class="block text-sm font-medium text-gray-300">
-                        Default Storage Limit (per member)
-                      </label>
-                      <div class="flex items-center gap-3">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl bg-dark-900/60 border border-gray-700/50">
+                      <div>
+                        <label for="default-storage-limit-value" class="block text-sm font-medium text-gray-200">
+                          Default Storage Limit (per member)
+                        </label>
+                        <p class="text-xs text-gray-400 mt-0.5">
+                          Set to 0 for unlimited storage. New members will use this default value.
+                        </p>
+                        <p class="text-xs text-primary mt-1" id="current-default-storage-limit"></p>
+                      </div>
+                      <div class="flex items-center gap-2 self-start sm:self-auto">
                         <input type="number" id="default-storage-limit-value" min="0" placeholder="0"
-                          class="bg-dark-900 text-white px-4 py-2 rounded-lg w-24 focus:outline-none focus:ring-1 focus:ring-primary">
+                          class="bg-dark-900 border border-gray-700/60 text-white px-3 py-2 rounded-xl w-20 text-center text-sm focus:ring-1 focus:ring-primary">
                         <select id="default-storage-limit-unit"
-                          class="bg-dark-900 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
+                          class="bg-dark-900 border border-gray-700/60 text-white px-2.5 py-2 rounded-xl text-sm focus:ring-1 focus:ring-primary">
                           <option value="1073741824">GB</option>
                           <option value="1048576">MB</option>
                           <option value="1099511627776">TB</option>
                         </select>
                         <button type="button" id="save-storage-limit"
-                          class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-lg transition-colors">
-                          Save
+                          class="px-5 py-2 bg-primary hover:bg-secondary text-white rounded-xl font-medium transition-all text-sm flex items-center gap-1.5 shadow-sm">
+                          <i class="ti ti-check"></i>
+                          <span>Save</span>
                         </button>
                       </div>
-                      <p class="text-xs text-gray-500">
-                        Set to 0 for unlimited storage. New members will use this default value.
-                      </p>
-                      <p class="text-xs text-gray-400" id="current-default-storage-limit"></p>
                     </div>
                   </div>
                 </div>
 
                 <!-- User Registration Settings -->
-                <div class="bg-dark-700 rounded-lg p-4">
-                  <h4 class="text-md font-medium mb-4 flex items-center">
-                    <i class="ti ti-user-plus mr-2 text-green-400"></i>
+                <div class="bg-dark-700/70 border border-gray-700/60 rounded-2xl p-5 space-y-4">
+                  <h4 class="text-md font-medium flex items-center">
+                    <i class="ti ti-user-plus mr-2 text-emerald-400"></i>
                     User Registration Settings
                   </h4>
-                  <p class="text-sm text-gray-400 mb-4">
-                    Configure how new user registrations are handled.
+                  <p class="text-sm text-gray-400">
+                    Configure how new user registrations and their default limits are handled.
                   </p>
 
-                  <div class="space-y-4">
+                  <div class="space-y-4 pt-1">
                     <!-- Auto-Approve Toggle -->
-                    <div class="flex items-center justify-between py-2">
+                    <div class="flex items-center justify-between p-4 rounded-xl bg-dark-900/60 border border-gray-700/50">
                       <div>
-                        <label class="text-sm font-medium text-gray-300">Auto-Approve New Users</label>
-                        <p class="text-xs text-gray-500">When enabled, new users will be automatically activated without
-                          admin approval</p>
+                        <label class="text-sm font-medium text-gray-200 block">Auto-Approve New Users</label>
+                        <p class="text-xs text-gray-400 mt-0.5">When enabled, new users will be automatically activated without admin approval</p>
                       </div>
-                      <label class="relative inline-flex items-center cursor-pointer">
+                      <label class="relative inline-flex items-center cursor-pointer ml-4">
                         <input type="checkbox" id="auto-approve-toggle" class="sr-only peer">
                         <div
                           class="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary">
@@ -498,25 +522,26 @@
                     </div>
 
                     <!-- Default Live Limit for Registration -->
-                    <div class="space-y-2 pt-4 border-t border-gray-700">
-                      <label for="default-live-limit-reg" class="block text-sm font-medium text-gray-300">
-                        Default Live Limit for New Users
-                      </label>
-                      <div class="flex items-center gap-3">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl bg-dark-900/60 border border-gray-700/50">
+                      <div>
+                        <label for="default-live-limit-reg" class="block text-sm font-medium text-gray-200">
+                          Default Live Limit for New Users
+                        </label>
+                        <p class="text-xs text-gray-400 mt-0.5">
+                          Set to 0 for unlimited. This limit will be applied to new user registrations.
+                        </p>
+                        <p class="text-xs text-primary mt-1" id="current-live-limit-reg"></p>
+                      </div>
+                      <div class="flex items-center gap-2.5 self-start sm:self-auto">
                         <input type="number" id="default-live-limit-reg" min="0" max="100" value="0"
-                          class="bg-dark-900 text-white px-4 py-2 rounded-lg w-24 focus:outline-none focus:ring-1 focus:ring-primary">
+                          class="bg-dark-900 border border-gray-700/60 text-white px-3 py-2 rounded-xl w-24 text-center text-sm focus:ring-1 focus:ring-primary">
                         <button type="button" id="save-live-limit-reg"
-                          class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-lg transition-colors">
-                          Save
+                          class="px-5 py-2 bg-primary hover:bg-secondary text-white rounded-xl font-medium transition-all text-sm flex items-center gap-1.5 shadow-sm">
+                          <i class="ti ti-check"></i>
+                          <span>Save</span>
                         </button>
                       </div>
-                      <p class="text-xs text-gray-500">
-                        Set to 0 for unlimited. This limit will be applied to new user registrations.
-                      </p>
-                      <p class="text-xs text-gray-400" id="current-live-limit-reg"></p>
                     </div>
-
-
                   </div>
                 </div>
               </div>
@@ -527,132 +552,93 @@
 
           <!-- Update Tab -->
           <div id="update-tab" class="settings-content hidden">
-            <div class="p-4 sm:p-6">
+            <div class="p-6 max-w-xl mx-auto space-y-6">
 
-              <!-- Version Cards -->
-              <div class="grid grid-cols-2 gap-3 mb-3">
-                <div class="bg-dark-700 rounded-xl p-4 text-center">
-                  <p class="text-[10px] uppercase tracking-wider text-gray-500 mb-1">Current</p>
-                  <p class="text-xl font-bold text-white" id="current-version">--</p>
+              <!-- App Update Card -->
+              <div class="bg-dark-700/80 border border-gray-700/60 rounded-2xl p-6 sm:p-8 text-center space-y-4 shadow-xl">
+                <div class="w-16 h-16 mx-auto rounded-2xl bg-primary/15 text-primary flex items-center justify-center shadow-inner">
+                  <i class="ti ti-refresh text-3xl"></i>
                 </div>
-                <div class="bg-dark-700 rounded-xl p-4 text-center">
-                  <p class="text-[10px] uppercase tracking-wider text-gray-500 mb-1">Latest</p>
-                  <p class="text-xl font-bold text-gray-400" id="latest-version">--</p>
+                
+                <div class="space-y-1">
+                  <h3 class="text-lg font-semibold text-white">Pembaruan Sistem</h3>
+                  <p class="text-xs text-gray-400">Periksa pembaruan fitur, perbaikan bug, dan stabilitas aplikasi</p>
                 </div>
-              </div>
 
-              <div id="version-point-container" class="hidden mb-4">
-                <div class="bg-primary/10 border border-primary/30 rounded-xl p-3 flex items-center justify-between gap-3">
-                  <div>
-                    <p class="text-xs text-gray-300">Version Point Update</p>
-                    <p class="text-sm text-white font-semibold" id="version-point-text">--</p>
-                  </div>
-                  <span id="version-point-badge" class="px-2 py-1 rounded text-xs font-medium bg-blue-500/20 text-blue-300">Patch</span>
+                <!-- Last Updated Info Pill -->
+                <div class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-dark-900/70 border border-gray-700/50 text-xs text-gray-300">
+                  <i class="ti ti-calendar-time text-primary text-sm"></i>
+                  <span>Terakhir Diperbarui: <strong id="last-updated-text" class="text-white font-medium">Memuat...</strong></span>
                 </div>
-              </div>
 
-              <!-- Check Update Button -->
-              <button type="button" id="check-update-btn"
-                class="w-full py-3 bg-dark-700 hover:bg-dark-600 text-white rounded-xl transition-all flex items-center justify-center gap-2 mb-4">
-                <i class="ti ti-refresh text-lg"></i>
-                <span>Check for Updates</span>
-              </button>
-
-              <!-- Rollback Card -->
-              <div id="rollback-container" class="hidden mb-4">
-                <div class="bg-gradient-to-br from-amber-500/10 to-orange-500/5 border border-amber-500/20 rounded-xl p-4">
-                  <div class="flex items-center gap-3 mb-3">
-                    <div class="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center">
-                      <i class="ti ti-history text-amber-400"></i>
-                    </div>
-                    <div>
-                      <p class="font-medium text-amber-400">Rollback Tersedia</p>
-                      <p class="text-xs text-gray-400" id="rollback-info">Kembali ke versi sebelumnya jika update tidak cocok.</p>
-                    </div>
-                  </div>
-                  <button type="button" id="rollback-update-btn"
-                    class="w-full py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg transition-all flex items-center justify-center gap-2 font-medium text-sm">
-                    <i class="ti ti-rewind-backward-10"></i>
-                    <span>Rollback ke Versi Sebelumnya</span>
+                <!-- Check Update Button -->
+                <div class="pt-2">
+                  <button type="button" id="check-update-btn"
+                    class="w-full sm:w-auto min-w-[220px] mx-auto px-6 py-3 bg-primary hover:bg-secondary active:scale-[0.98] text-white rounded-xl font-medium transition-all shadow-lg flex items-center justify-center gap-2 text-sm">
+                    <i class="ti ti-refresh text-lg"></i>
+                    <span>Check for Updates</span>
                   </button>
                 </div>
               </div>
 
-              <!-- Update Status -->
-              <div id="update-status-container" class="hidden">
-
+              <!-- Update Status Container -->
+              <div id="update-status-container" class="hidden space-y-4">
                 <!-- Update Available -->
                 <div id="update-available" class="hidden">
-                  <div
-                    class="bg-gradient-to-br from-green-500/10 to-emerald-500/5 border border-green-500/20 rounded-xl p-4 mb-4">
-                    <div class="flex items-center gap-3 mb-3">
-                      <div class="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
-                        <i class="ti ti-sparkles text-green-400"></i>
+                  <div class="bg-gradient-to-br from-emerald-500/10 to-green-500/5 border border-emerald-500/30 rounded-2xl p-5 space-y-3">
+                    <div class="flex items-center gap-3">
+                      <div class="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                        <i class="ti ti-sparkles text-xl"></i>
                       </div>
                       <div>
-                        <p class="font-medium text-green-400">Update Available</p>
-                        <p class="text-xs text-gray-400">New version ready to install</p>
+                        <p class="text-sm font-semibold text-emerald-400">Update Tersedia</p>
+                        <p class="text-xs text-gray-400">Versi pembaruan baru siap dipasang</p>
                       </div>
                     </div>
 
                     <!-- Changelog -->
-                    <div id="changelog-container" class="hidden mb-4">
-                      <div id="changelog-content"
-                        class="bg-dark-900/50 rounded-lg p-3 text-xs text-gray-300 max-h-32 overflow-y-auto space-y-1">
-                      </div>
+                    <div id="changelog-container" class="hidden">
+                      <div id="changelog-content" class="bg-dark-900/60 border border-gray-700/50 rounded-xl p-3 text-xs text-gray-300 max-h-40 overflow-y-auto space-y-1 font-mono"></div>
                     </div>
 
                     <button type="button" id="perform-update-btn"
-                      class="w-full py-2.5 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-all flex items-center justify-center gap-2 font-medium">
+                      class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-all flex items-center justify-center gap-2 font-medium text-sm shadow-md">
                       <i class="ti ti-download"></i>
-                      <span>Update Now</span>
+                      <span>Update Sekarang</span>
                     </button>
                   </div>
                 </div>
 
                 <!-- Conflict Resolution -->
                 <div id="update-conflict" class="hidden">
-                  <div
-                    class="bg-gradient-to-br from-yellow-500/10 to-orange-500/5 border border-yellow-500/20 rounded-xl p-4 mb-4">
-                    <div class="flex items-center gap-3 mb-3">
-                      <div class="w-10 h-10 rounded-full bg-yellow-500/20 flex items-center justify-center">
-                        <i class="ti ti-alert-triangle text-yellow-400"></i>
+                  <div class="bg-gradient-to-br from-amber-500/10 to-orange-500/5 border border-amber-500/30 rounded-2xl p-5 space-y-3">
+                    <div class="flex items-center gap-3">
+                      <div class="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
+                        <i class="ti ti-alert-triangle text-xl"></i>
                       </div>
                       <div>
-                        <p class="font-medium text-yellow-400">Local Changes Detected</p>
-                        <p class="text-xs text-gray-400" id="conflict-message">Your local changes would be overwritten
-                          by the update</p>
+                        <p class="text-sm font-semibold text-amber-400">Perubahan Lokal Terdeteksi</p>
+                        <p class="text-xs text-gray-400" id="conflict-message">Ada perubahan lokal yang belum di-commit.</p>
                       </div>
                     </div>
 
-                    <!-- Conflict Log -->
-                    <div id="conflict-log"
-                      class="bg-dark-900/50 rounded-lg p-3 text-xs text-gray-300 max-h-24 overflow-y-auto mb-4 font-mono">
-                    </div>
+                    <div id="conflict-log" class="bg-dark-900/60 border border-gray-700/50 rounded-xl p-3 text-xs text-gray-300 max-h-28 overflow-y-auto font-mono"></div>
 
-                    <p class="text-xs text-gray-400 mb-3">Choose how to proceed:</p>
-
-                    <div class="space-y-2">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2">
                       <button type="button" id="update-stash-btn"
-                        class="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-all flex items-center justify-center gap-2 font-medium text-sm">
+                        class="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition-all flex items-center justify-center gap-1.5 text-xs font-medium">
                         <i class="ti ti-archive"></i>
-                        <span>Stash & Update</span>
+                        <span>Simpan & Update</span>
                       </button>
-                      <p class="text-[10px] text-gray-500 text-center mb-2">Save your changes temporarily, update, then
-                        restore them</p>
-
                       <button type="button" id="update-force-btn"
-                        class="w-full py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-lg transition-all flex items-center justify-center gap-2 font-medium text-sm">
+                        class="w-full py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl transition-all flex items-center justify-center gap-1.5 text-xs font-medium">
                         <i class="ti ti-trash"></i>
-                        <span>Force Update</span>
+                        <span>Paksa Update</span>
                       </button>
-                      <p class="text-[10px] text-gray-500 text-center mb-2">Discard all local changes and update (cannot
-                        be undone)</p>
-
                       <button type="button" id="update-cancel-btn"
-                        class="w-full py-2 bg-gray-600 hover:bg-gray-500 text-white rounded-lg transition-all flex items-center justify-center gap-2 text-sm">
+                        class="w-full py-2.5 bg-gray-600 hover:bg-gray-500 text-white rounded-xl transition-all flex items-center justify-center gap-1.5 text-xs font-medium">
                         <i class="ti ti-x"></i>
-                        <span>Cancel</span>
+                        <span>Batal</span>
                       </button>
                     </div>
                   </div>
@@ -660,63 +646,57 @@
 
                 <!-- Up to Date -->
                 <div id="update-uptodate" class="hidden">
-                  <div
-                    class="bg-gradient-to-br from-green-500/10 to-emerald-500/5 border border-green-500/20 rounded-xl p-4 text-center">
-                    <div class="w-12 h-12 rounded-full bg-green-500/20 flex items-center justify-center mx-auto mb-3">
-                      <i class="ti ti-check text-green-400 text-xl"></i>
+                  <div class="bg-gradient-to-br from-emerald-500/10 to-green-500/5 border border-emerald-500/30 rounded-2xl p-5 text-center space-y-2">
+                    <div class="w-12 h-12 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto">
+                      <i class="ti ti-check text-2xl"></i>
                     </div>
-                    <p class="font-medium text-green-400">You're up to date!</p>
-                    <p class="text-xs text-gray-400 mt-1">Running the latest version</p>
+                    <p class="font-semibold text-emerald-400 text-sm">Aplikasi Sudah Versi Terbaru</p>
+                    <p class="text-xs text-gray-400">Tidak ada pembaruan baru yang ditemukan saat ini.</p>
                   </div>
                 </div>
 
                 <!-- Error -->
                 <div id="update-error" class="hidden">
-                  <div
-                    class="bg-gradient-to-br from-red-500/10 to-rose-500/5 border border-red-500/20 rounded-xl p-4 text-center">
-                    <div class="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center mx-auto mb-3">
-                      <i class="ti ti-alert-triangle text-red-400 text-xl"></i>
+                  <div class="bg-gradient-to-br from-red-500/10 to-rose-500/5 border border-red-500/30 rounded-2xl p-5 text-center space-y-2">
+                    <div class="w-12 h-12 rounded-xl bg-red-500/20 text-red-400 flex items-center justify-center mx-auto">
+                      <i class="ti ti-alert-triangle text-2xl"></i>
                     </div>
-                    <p class="font-medium text-red-400">Check Failed</p>
-                    <p class="text-xs text-gray-400 mt-1" id="update-error-message">Unable to check for updates</p>
+                    <p class="font-semibold text-red-400 text-sm">Gagal Memeriksa Pembaruan</p>
+                    <p class="text-xs text-gray-400" id="update-error-message">Tidak dapat memeriksa pembaruan</p>
                   </div>
                 </div>
               </div>
 
               <!-- Update Progress -->
               <div id="update-progress-container" class="hidden">
-                <div class="bg-dark-700 rounded-xl p-4">
-                  <div class="flex items-center gap-3 mb-4">
-                    <div class="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
-                      <i class="ti ti-loader animate-spin text-primary"></i>
+                <div class="bg-dark-700/90 border border-gray-700/60 rounded-2xl p-5 space-y-4">
+                  <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-primary/20 text-primary flex items-center justify-center">
+                      <i class="ti ti-loader animate-spin text-xl"></i>
                     </div>
                     <div>
-                      <p class="font-medium text-white text-sm">Updating...</p>
-                      <p class="text-xs text-gray-400" id="update-progress-text">Preparing</p>
+                      <p class="text-sm font-semibold text-white">Memperbarui Aplikasi</p>
+                      <p class="text-xs text-gray-400" id="update-progress-text">Menyiapkan...</p>
                     </div>
                   </div>
-                  <div class="w-full bg-dark-900 rounded-full h-1.5 mb-3">
-                    <div id="update-progress-bar" class="bg-primary h-1.5 rounded-full transition-all duration-500"
-                      style="width: 0%"></div>
+                  <div class="w-full bg-dark-900 rounded-full h-2 overflow-hidden">
+                    <div id="update-progress-bar" class="bg-primary h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
                   </div>
-                  <div id="update-log"
-                    class="bg-dark-900 rounded-lg p-2 text-[10px] text-gray-500 font-mono max-h-24 overflow-y-auto">
-                  </div>
+                  <div id="update-log" class="bg-dark-900/70 rounded-xl p-3 text-xs text-gray-400 font-mono max-h-32 overflow-y-auto space-y-1"></div>
                 </div>
               </div>
 
               <!-- Update Complete -->
               <div id="update-complete-container" class="hidden">
-                <div
-                  class="bg-gradient-to-br from-green-500/10 to-emerald-500/5 border border-green-500/20 rounded-xl p-4 text-center">
-                  <div class="w-12 h-12 rounded-full bg-green-500/20 flex items-center justify-center mx-auto mb-3">
-                    <i class="ti ti-check text-green-400 text-xl"></i>
+                <div class="bg-gradient-to-br from-emerald-500/10 to-green-500/5 border border-emerald-500/30 rounded-2xl p-5 text-center space-y-3">
+                  <div class="w-12 h-12 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto">
+                    <i class="ti ti-circle-check text-2xl"></i>
                   </div>
-                  <p class="font-medium text-green-400">Update Complete!</p>
-                  <p class="text-xs text-gray-400 mt-1 mb-4">Restarting application...</p>
+                  <p class="font-semibold text-emerald-400 text-sm">Pembaruan Selesai!</p>
+                  <p class="text-xs text-gray-400">Aplikasi sedang memuat ulang halaman...</p>
                   <button type="button" id="reload-page-btn"
-                    class="px-4 py-2 bg-dark-700 hover:bg-dark-600 text-white rounded-lg transition-all text-sm">
-                    <i class="ti ti-refresh mr-1"></i>Reload
+                    class="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-medium transition-colors shadow-sm">
+                    Muat Ulang Sekarang
                   </button>
                 </div>
               </div>
@@ -1342,8 +1322,7 @@
       const checkUpdateBtn = document.getElementById('check-update-btn');
             const performUpdateBtn = document.getElementById('perform-update-btn');
             const reloadPageBtn = document.getElementById('reload-page-btn');
-            const currentVersionEl = document.getElementById('current-version');
-            const latestVersionEl = document.getElementById('latest-version');
+            const lastUpdatedText = document.getElementById('last-updated-text');
             const updateStatusContainer = document.getElementById('update-status-container');
             const updateAvailable = document.getElementById('update-available');
             const updateUptodate = document.getElementById('update-uptodate');
@@ -1356,34 +1335,42 @@
             const updateCompleteContainer = document.getElementById('update-complete-container');
             const changelogContainer = document.getElementById('changelog-container');
             const changelogContent = document.getElementById('changelog-content');
-            const rollbackContainer = document.getElementById('rollback-container');
-            const rollbackUpdateBtn = document.getElementById('rollback-update-btn');
-            const rollbackInfo = document.getElementById('rollback-info');
-            const versionPointContainer = document.getElementById('version-point-container');
-            const versionPointText = document.getElementById('version-point-text');
-            const versionPointBadge = document.getElementById('version-point-badge');
 
-            if (currentVersionEl) loadVersionInfo();
-            loadRollbackStatus();
+            function formatLastUpdated(dateStr) {
+              if (!dateStr) return 'Belum tersedia';
+              const d = new Date(dateStr);
+              if (isNaN(d.getTime())) return 'Belum tersedia';
+              return d.toLocaleDateString('id-ID', {
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric'
+              }) + ', ' + d.toLocaleTimeString('id-ID', {
+                hour: '2-digit',
+                minute: '2-digit'
+              }) + ' WIB';
+            }
+
+            loadVersionInfo();
 
             async function loadVersionInfo() {
               try {
                 const res = await fetch('/api/system/version');
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const data = await res.json();
-                currentVersionEl.textContent = data.success ? (data.currentVersion || '--') : '--';
-                latestVersionEl.textContent = '--';
-                if (versionPointContainer) versionPointContainer.classList.add('hidden');
+                if (lastUpdatedText) {
+                  lastUpdatedText.textContent = formatLastUpdated(data.lastUpdated);
+                }
               } catch (err) {
-                currentVersionEl.textContent = '--';
-                if (versionPointContainer) versionPointContainer.classList.add('hidden');
+                if (lastUpdatedText) {
+                  lastUpdatedText.textContent = 'Belum tersedia';
+                }
               }
             }
 
             if (checkUpdateBtn) {
               checkUpdateBtn.addEventListener('click', async () => {
                 checkUpdateBtn.disabled = true;
-                checkUpdateBtn.innerHTML = '<i class="ti ti-loader animate-spin text-lg"></i><span>Checking...</span>';
+                checkUpdateBtn.innerHTML = '<i class="ti ti-loader animate-spin text-lg"></i><span>Memeriksa...</span>';
 
                 updateStatusContainer.classList.add('hidden');
                 updateAvailable.classList.add('hidden');
@@ -1401,27 +1388,8 @@
                   updateStatusContainer.classList.remove('hidden');
 
                   if (data.success) {
-                    currentVersionEl.textContent = data.currentVersion || '--';
-                    latestVersionEl.textContent = data.latestVersion || '--';
-                    latestVersionEl.className = data.updateAvailable ? 'text-xl font-bold text-green-400' : 'text-xl font-bold text-gray-300';
-
-                    if (versionPointContainer) {
-                      if (data.updateAvailable && data.versionPoint && data.versionPoint.label) {
-                        versionPointContainer.classList.remove('hidden');
-                        versionPointText.textContent = `${data.currentVersion || '--'} → ${data.latestVersion || '--'} (${data.versionPoint.label})`;
-
-                        const badgeType = data.versionPoint.type || 'patch';
-                        const badgeStyles = {
-                          major: 'bg-red-500/20 text-red-300',
-                          minor: 'bg-amber-500/20 text-amber-300',
-                          patch: 'bg-blue-500/20 text-blue-300'
-                        };
-
-                        versionPointBadge.textContent = badgeType.toUpperCase();
-                        versionPointBadge.className = `px-2 py-1 rounded text-xs font-medium ${badgeStyles[badgeType] || badgeStyles.patch}`;
-                      } else {
-                        versionPointContainer.classList.add('hidden');
-                      }
+                    if (lastUpdatedText && data.lastUpdated) {
+                      lastUpdatedText.textContent = formatLastUpdated(data.lastUpdated);
                     }
 
                     if (data.updateAvailable) {
@@ -1429,7 +1397,6 @@
                       if (data.changelog && data.changelog.length > 0) {
                         changelogContainer.classList.remove('hidden');
                         changelogContent.innerHTML = data.changelog.map(c => {
-                          // Check if it's a version header
                           if (c.startsWith('📦')) {
                             return `<div class="text-primary font-semibold mt-2 first:mt-0">${escapeHtml(c)}</div>`;
                           }
@@ -1447,7 +1414,6 @@
                   updateStatusContainer.classList.remove('hidden');
                   updateError.classList.remove('hidden');
                   updateErrorMessage.textContent = err.message;
-                  if (versionPointContainer) versionPointContainer.classList.add('hidden');
                 } finally {
                   checkUpdateBtn.disabled = false;
                   checkUpdateBtn.innerHTML = '<i class="ti ti-refresh text-lg"></i><span>Check for Updates</span>';
@@ -1562,57 +1528,6 @@
               }
             }
 
-            if (rollbackUpdateBtn) {
-              rollbackUpdateBtn.addEventListener('click', async () => {
-                if (!confirm('Rollback akan mengembalikan aplikasi ke versi sebelumnya dan me-restart aplikasi. Lanjutkan?')) return;
-
-                rollbackUpdateBtn.disabled = true;
-                rollbackUpdateBtn.innerHTML = '<i class="ti ti-loader animate-spin"></i><span>Rollback...</span>';
-
-                try {
-                  const res = await fetch('/api/system/rollback-update', {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      'X-CSRF-Token': '<%= csrfToken %>'
-                    }
-                  });
-                  const data = await res.json();
-
-                  if (data.success) {
-                    showToast('success', data.message || 'Rollback berhasil.');
-                    setTimeout(() => window.location.reload(), 3000);
-                  } else {
-                    showToast('error', data.error || 'Rollback gagal.');
-                  }
-                } catch (err) {
-                  showToast('error', 'Rollback gagal: ' + err.message);
-                } finally {
-                  rollbackUpdateBtn.disabled = false;
-                  rollbackUpdateBtn.innerHTML = '<i class="ti ti-rewind-backward-10"></i><span>Rollback ke Versi Sebelumnya</span>';
-                  loadRollbackStatus();
-                }
-              });
-            }
-
-            async function loadRollbackStatus() {
-              if (!rollbackContainer) return;
-              try {
-                const res = await fetch('/api/system/rollback-status', {
-                  headers: { 'X-CSRF-Token': '<%= csrfToken %>' }
-                });
-                const data = await res.json();
-
-                if (data.success && data.canRollback) {
-                  rollbackContainer.classList.remove('hidden');
-                  rollbackInfo.textContent = `Rollback dari ${data.currentVersion || '--'} ke ${data.previousVersion || '--'}`;
-                } else {
-                  rollbackContainer.classList.add('hidden');
-                }
-              } catch (err) {
-                rollbackContainer.classList.add('hidden');
-              }
-            }
 
             if (reloadPageBtn) {
               reloadPageBtn.addEventListener('click', () => window.location.reload());
