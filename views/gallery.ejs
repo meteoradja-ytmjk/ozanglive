@@ -17,12 +17,14 @@ function formatDuration(seconds) {
 <style>
   .tab-hidden { display: none !important; }
   .tab-visible { display: flex !important; }
-  /* Mobile buttons - only show on mobile (below md breakpoint) */
-  @media (min-width: 768px) {
-    #videoButtonsCol, #audioButtonsCol { display: none !important; }
+  /* Action buttons responsive display */
+  #videoButtonsCol.tab-visible, #audioButtonsCol.tab-visible {
+    display: grid !important;
   }
-  @media (max-width: 767px) {
-    #videoButtonsCol.tab-visible, #audioButtonsCol.tab-visible { display: grid !important; }
+  @media (min-width: 640px) {
+    #videoButtonsCol.tab-visible, #audioButtonsCol.tab-visible {
+      display: flex !important;
+    }
   }
   
   /* Group collapse animations */
@@ -74,61 +76,43 @@ function formatDuration(seconds) {
   }
 </style>
 
-<div class="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+<div class="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
   <div>
-    <h2 class="text-2xl font-bold">Media Gallery</h2>
-    <p class="text-gray-400 text-sm mt-1">Manage your videos and audio for streaming</p>
+    <h2 class="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
+      <span>Media Gallery</span>
+    </h2>
+    <p class="text-gray-400 text-xs sm:text-sm mt-1">Manage your videos and audio for streaming</p>
   </div>
   
-  <!-- Desktop buttons -->
-  <div class="hidden md:flex flex-wrap gap-3">
-    <button onclick="openUploadModal()" id="uploadVideoBtnDesktop"
-      class="flex items-center gap-2 bg-primary hover:bg-secondary text-white px-4 py-2 rounded-lg transition-colors" style="display: <%= activeTab === 'audio' ? 'none' : 'flex' %>">
-      <i class="ti ti-upload"></i>
-      <span>Upload Video</span>
-    </button>
-    <button onclick="openAudioUploadModal()" id="uploadAudioBtnDesktop"
-      class="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors" style="display: <%= activeTab === 'audio' ? 'flex' : 'none' %>">
-      <i class="ti ti-upload"></i>
-      <span>Upload Audio</span>
-    </button>
-    <button onclick="openGDriveModal()" id="gdriveBtnDesktop"
-      class="flex items-center gap-2 bg-[#4285F4]/20 border border-[#4285F4]/50 hover:bg-[#4285F4]/30 text-white px-4 py-2 rounded-lg transition-colors" style="display: <%= activeTab === 'audio' ? 'none' : 'flex' %>">
-      <i class="ti ti-brand-google-drive text-[#4285F4]"></i>
-      <span>Import from Drive</span>
-    </button>
-    <button onclick="openAudioGDriveModal()" id="gdriveAudioBtnDesktop"
-      class="flex items-center gap-2 bg-[#4285F4]/20 border border-[#4285F4]/50 hover:bg-[#4285F4]/30 text-white px-4 py-2 rounded-lg transition-colors" style="display: <%= activeTab === 'audio' ? 'flex' : 'none' %>">
-      <i class="ti ti-brand-google-drive text-[#4285F4]"></i>
-      <span>Import from Drive</span>
-    </button>
-  </div>
-  
-  <!-- Mobile buttons - 2 column grid layout (side by side) -->
-  <div id="videoButtonsCol" class="md:hidden grid grid-cols-2 gap-3 w-full <%= activeTab === 'audio' ? 'tab-hidden' : 'tab-visible' %>">
-    <button onclick="openUploadModal()" id="uploadVideoBtn"
-      class="flex items-center justify-center gap-2 bg-primary hover:bg-secondary text-white px-4 py-2.5 rounded-lg transition-colors">
-      <i class="ti ti-upload"></i>
-      <span>Upload Video</span>
-    </button>
-    <button onclick="openGDriveModal()" id="gdriveBtn"
-      class="flex items-center justify-center gap-2 bg-[#4285F4]/20 border border-[#4285F4]/50 hover:bg-[#4285F4]/30 text-white px-4 py-2.5 rounded-lg transition-colors">
-      <i class="ti ti-brand-google-drive text-[#4285F4]"></i>
-      <span>Import Video</span>
-    </button>
-  </div>
-  <!-- Audio buttons - 2 column grid layout (side by side) -->
-  <div id="audioButtonsCol" class="md:hidden grid grid-cols-2 gap-3 w-full <%= activeTab === 'audio' ? 'tab-visible' : 'tab-hidden' %>">
-    <button onclick="openAudioUploadModal()" id="uploadAudioBtn"
-      class="flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2.5 rounded-lg transition-colors">
-      <i class="ti ti-upload"></i>
-      <span>Upload Audio</span>
-    </button>
-    <button onclick="openAudioGDriveModal()" id="gdriveAudioBtn"
-      class="flex items-center justify-center gap-2 bg-green-600/20 border border-green-500/50 hover:bg-green-600/30 text-white px-4 py-2.5 rounded-lg transition-colors">
-      <i class="ti ti-brand-google-drive text-green-500"></i>
-      <span>Import Audio</span>
-    </button>
+  <!-- Contextual Action Buttons (Adapts to Active Tab) -->
+  <div class="w-full sm:w-auto">
+    <!-- Video Actions (Shown when Video tab is active) -->
+    <div id="videoButtonsCol" class="grid grid-cols-2 sm:flex sm:items-center gap-2.5 w-full sm:w-auto <%= activeTab === 'audio' ? 'tab-hidden' : 'tab-visible' %>">
+      <button onclick="openUploadModal()" id="uploadVideoBtn"
+        class="h-10 px-4 rounded-xl text-xs sm:text-sm font-medium text-white bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-500 shadow-md shadow-primary/20 hover:shadow-primary/30 active:scale-[0.98] transition-all duration-150 flex items-center justify-center gap-2 border border-purple-400/20">
+        <i class="ti ti-upload text-sm sm:text-base"></i>
+        <span>Upload Video</span>
+      </button>
+      <button onclick="openGDriveModal()" id="gdriveBtn"
+        class="h-10 px-4 rounded-xl text-xs sm:text-sm font-medium text-gray-200 hover:text-white bg-dark-700/80 hover:bg-dark-600 border border-gray-600/60 hover:border-[#4285F4]/60 active:scale-[0.98] transition-all duration-150 flex items-center justify-center gap-2">
+        <i class="ti ti-brand-google-drive text-[#4285F4] text-sm sm:text-base"></i>
+        <span>Import Drive</span>
+      </button>
+    </div>
+
+    <!-- Audio Actions (Shown when Audio tab is active) -->
+    <div id="audioButtonsCol" class="grid grid-cols-2 sm:flex sm:items-center gap-2.5 w-full sm:w-auto <%= activeTab === 'audio' ? 'tab-visible' : 'tab-hidden' %>">
+      <button onclick="openAudioUploadModal()" id="uploadAudioBtn"
+        class="h-10 px-4 rounded-xl text-xs sm:text-sm font-medium text-white bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 shadow-md shadow-emerald-600/20 hover:shadow-emerald-600/30 active:scale-[0.98] transition-all duration-150 flex items-center justify-center gap-2 border border-emerald-400/20">
+        <i class="ti ti-upload text-sm sm:text-base"></i>
+        <span>Upload Audio</span>
+      </button>
+      <button onclick="openAudioGDriveModal()" id="gdriveAudioBtn"
+        class="h-10 px-4 rounded-xl text-xs sm:text-sm font-medium text-gray-200 hover:text-white bg-dark-700/80 hover:bg-dark-600 border border-gray-600/60 hover:border-emerald-500/60 active:scale-[0.98] transition-all duration-150 flex items-center justify-center gap-2">
+        <i class="ti ti-brand-google-drive text-emerald-400 text-sm sm:text-base"></i>
+        <span>Import Drive</span>
+      </button>
+    </div>
   </div>
 </div>
 
@@ -1202,13 +1186,7 @@ function formatDuration(seconds) {
     const videoTab = document.getElementById('videoTab');
     const audioTab = document.getElementById('audioTab');
     
-    // Desktop buttons
-    const uploadVideoBtnDesktop = document.getElementById('uploadVideoBtnDesktop');
-    const uploadAudioBtnDesktop = document.getElementById('uploadAudioBtnDesktop');
-    const gdriveBtnDesktop = document.getElementById('gdriveBtnDesktop');
-    const gdriveAudioBtnDesktop = document.getElementById('gdriveAudioBtnDesktop');
-    
-    // Mobile button columns
+    // Action buttons columns
     const videoButtonsCol = document.getElementById('videoButtonsCol');
     const audioButtonsCol = document.getElementById('audioButtonsCol');
     
@@ -1221,13 +1199,7 @@ function formatDuration(seconds) {
       videoTab.className = 'flex-1 px-4 md:px-6 py-3 font-medium transition-colors text-center text-gray-400 hover:text-white hover:bg-gray-700/50';
       audioTab.className = 'flex-1 px-4 md:px-6 py-3 font-medium transition-colors text-center bg-green-500/20 text-green-500 border-b-2 border-green-500';
       
-      // Desktop buttons
-      if (uploadVideoBtnDesktop) uploadVideoBtnDesktop.style.display = 'none';
-      if (uploadAudioBtnDesktop) uploadAudioBtnDesktop.style.display = 'flex';
-      if (gdriveBtnDesktop) gdriveBtnDesktop.style.display = 'none';
-      if (gdriveAudioBtnDesktop) gdriveAudioBtnDesktop.style.display = 'flex';
-      
-      // Mobile button columns
+      // Action button containers
       if (videoButtonsCol) {
         videoButtonsCol.classList.remove('tab-visible');
         videoButtonsCol.classList.add('tab-hidden');
@@ -1245,13 +1217,7 @@ function formatDuration(seconds) {
       videoTab.className = 'flex-1 px-4 md:px-6 py-3 font-medium transition-colors text-center bg-primary/20 text-primary border-b-2 border-primary';
       audioTab.className = 'flex-1 px-4 md:px-6 py-3 font-medium transition-colors text-center text-gray-400 hover:text-white hover:bg-gray-700/50';
       
-      // Desktop buttons
-      if (uploadVideoBtnDesktop) uploadVideoBtnDesktop.style.display = 'flex';
-      if (uploadAudioBtnDesktop) uploadAudioBtnDesktop.style.display = 'none';
-      if (gdriveBtnDesktop) gdriveBtnDesktop.style.display = 'flex';
-      if (gdriveAudioBtnDesktop) gdriveAudioBtnDesktop.style.display = 'none';
-      
-      // Mobile button columns
+      // Action button containers
       if (videoButtonsCol) {
         videoButtonsCol.classList.remove('tab-hidden');
         videoButtonsCol.classList.add('tab-visible');
@@ -1829,31 +1795,19 @@ function formatDuration(seconds) {
     const audioGrid = document.getElementById('audioGrid');
     const videoButtonsCol = document.getElementById('videoButtonsCol');
     const audioButtonsCol = document.getElementById('audioButtonsCol');
-    const uploadVideoBtnDesktop = document.getElementById('uploadVideoBtnDesktop');
-    const uploadAudioBtnDesktop = document.getElementById('uploadAudioBtnDesktop');
-    const gdriveBtnDesktop = document.getElementById('gdriveBtnDesktop');
-    const gdriveAudioBtnDesktop = document.getElementById('gdriveAudioBtnDesktop');
     
     if (currentTab === 'audio') {
       // Audio tab active - hide video, show audio
-      if (videoGrid) videoGrid.style.display = 'none';
-      if (audioGrid) audioGrid.style.display = 'flex';
-      if (videoButtonsCol) videoButtonsCol.style.display = 'none';
-      if (audioButtonsCol) audioButtonsCol.style.display = 'flex';
-      if (uploadVideoBtnDesktop) uploadVideoBtnDesktop.style.display = 'none';
-      if (uploadAudioBtnDesktop) uploadAudioBtnDesktop.style.display = 'flex';
-      if (gdriveBtnDesktop) gdriveBtnDesktop.style.display = 'none';
-      if (gdriveAudioBtnDesktop) gdriveAudioBtnDesktop.style.display = 'flex';
+      if (videoGrid) { videoGrid.classList.remove('tab-visible'); videoGrid.classList.add('tab-hidden'); }
+      if (audioGrid) { audioGrid.classList.remove('tab-hidden'); audioGrid.classList.add('tab-visible'); }
+      if (videoButtonsCol) { videoButtonsCol.classList.remove('tab-visible'); videoButtonsCol.classList.add('tab-hidden'); }
+      if (audioButtonsCol) { audioButtonsCol.classList.remove('tab-hidden'); audioButtonsCol.classList.add('tab-visible'); }
     } else {
       // Video tab active - hide audio, show video
-      if (videoGrid) videoGrid.style.display = 'flex';
-      if (audioGrid) audioGrid.style.display = 'none';
-      if (videoButtonsCol) videoButtonsCol.style.display = 'flex';
-      if (audioButtonsCol) audioButtonsCol.style.display = 'none';
-      if (uploadVideoBtnDesktop) uploadVideoBtnDesktop.style.display = 'flex';
-      if (uploadAudioBtnDesktop) uploadAudioBtnDesktop.style.display = 'none';
-      if (gdriveBtnDesktop) gdriveBtnDesktop.style.display = 'flex';
-      if (gdriveAudioBtnDesktop) gdriveAudioBtnDesktop.style.display = 'none';
+      if (videoGrid) { videoGrid.classList.remove('tab-hidden'); videoGrid.classList.add('tab-visible'); }
+      if (audioGrid) { audioGrid.classList.remove('tab-visible'); audioGrid.classList.add('tab-hidden'); }
+      if (videoButtonsCol) { videoButtonsCol.classList.remove('tab-hidden'); videoButtonsCol.classList.add('tab-visible'); }
+      if (audioButtonsCol) { audioButtonsCol.classList.remove('tab-visible'); audioButtonsCol.classList.add('tab-hidden'); }
     }
 
     updateMinimizedVideoStatus();
