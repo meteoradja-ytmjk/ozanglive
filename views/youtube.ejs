@@ -636,7 +636,7 @@
       <!-- Channel Broadcasts - START COLLAPSED -->
       <div id="channelBroadcasts_<%= channelIndex %>" class="divide-y divide-gray-700/50" style="display: none;">
         <% group.broadcasts.forEach(function(broadcast, index) { %>
-        <div class="broadcast-list-item broadcast-row hover:bg-dark-700/30 transition-colors" data-broadcast-id="<%= broadcast.id %>" data-account-id="<%= broadcast.accountId %>">
+        <div class="broadcast-list-item broadcast-row hover:bg-dark-700/30 transition-colors" data-broadcast-id="<%= broadcast.id %>" data-account-id="<%= broadcast.accountId %>" data-broadcast='<%= JSON.stringify({id: broadcast.id, accountId: broadcast.accountId, title: broadcast.title, description: broadcast.description || "", privacyStatus: broadcast.privacyStatus, streamId: broadcast.streamId || null, streamKey: broadcast.streamKey || "", categoryId: broadcast.categoryId || "22", tags: broadcast.tags || [], thumbnailPath: broadcast.thumbnailPath || null}) %>'>
           <!-- Desktop Row -->
           <div class="hidden md:flex items-center gap-2 px-4 py-2">
             <div class="w-8 text-center">

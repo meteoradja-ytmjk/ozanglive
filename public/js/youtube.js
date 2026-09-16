@@ -581,7 +581,7 @@ function createBroadcastRowHtml(broadcast, index) {
     
     return `
       <div class="broadcast-list-item broadcast-row hover:bg-dark-700/30 transition-colors" 
-        data-broadcast-id="${broadcast.id}" data-account-id="${broadcast.accountId || ''}">
+        data-broadcast-id="${broadcast.id}" data-account-id="${broadcast.accountId || ''}" data-broadcast="${broadcastData}">
         <!-- Desktop Row -->
         <div class="hidden md:flex items-center gap-2 px-4 py-2.5">
           <div class="w-8 text-center">
@@ -4398,9 +4398,12 @@ async function deleteBroadcast(broadcastId, title = null, accountId = null, trig
 
 // Edit Broadcast (Instant 0ms response via DOM-data or cache, fallback to API)
 async function editBroadcast(broadcastId, accountId, triggerBtn = null) {
-  // 1. Instant resolution from DOM row or in-memory cache
+  // 1. Instant resolution from clicked triggerBtn or DOM row or cache
   let broadcast = null;
-  const row = document.querySelector(`.broadcast-row[data-broadcast-id="${broadcastId}"]`);
+  const row = (triggerBtn && triggerBtn.closest)
+    ? triggerBtn.closest('.broadcast-row')
+    : document.querySelector(`.broadcast-row[data-broadcast-id="${broadcastId}"]`);
+
   if (row) {
     const raw = row.getAttribute('data-broadcast') || row.querySelector('input.broadcast-checkbox')?.getAttribute('data-broadcast');
     if (raw) {
@@ -4417,7 +4420,7 @@ async function editBroadcast(broadcastId, accountId, triggerBtn = null) {
     return;
   }
 
-  // 2. Fallback: fetch details with instant spinner on trigger button
+  // 2. Fallback only if broadcast object was completely missing from DOM
   let origHtml = null;
   if (triggerBtn) {
     origHtml = triggerBtn.innerHTML;
@@ -4456,11 +4459,18 @@ async function editBroadcast(broadcastId, accountId, triggerBtn = null) {
   }
 }
 
-// Open Edit Broadcast Modal
+// Open Edit Broadcast Modal (Opens IMMEDIATELY in 0ms, loads thumbnail folders in background)
 async function openEditBroadcastModal(broadcast) {
-  document.getElementById('editBroadcastId').value = broadcast.id;
+  // Show modal immediately so user experiences instant 0ms response
+  const modal = document.getElementById('editBroadcastModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.style.display = 'block';
+  }
+
+  document.getElementById('editBroadcastId').value = broadcast.id || '';
   const broadcastAccountEl = document.getElementById('editBroadcastAccountId') || document.getElementById('editAccountId');
-  if (broadcastAccountEl) broadcastAccountEl.value = broadcast.accountId;
+  if (broadcastAccountEl) broadcastAccountEl.value = broadcast.accountId || '';
   document.getElementById('editBroadcastTitle').value = broadcast.title || '';
   document.getElementById('editBroadcastDescription').value = broadcast.description || '';
   document.getElementById('editPrivacyStatus').value = broadcast.privacyStatus || 'unlisted';
@@ -4474,6 +4484,9 @@ async function openEditBroadcastModal(broadcast) {
     const date = new Date(broadcast.scheduledStartTime);
     const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
     document.getElementById('editScheduledStartTime').value = localDate.toISOString().slice(0, 16);
+  } else {
+    const dateEl = document.getElementById('editScheduledStartTime');
+    if (dateEl) dateEl.value = '';
   }
   
   // Reset thumbnail mode to sequential
@@ -4498,7 +4511,7 @@ async function openEditBroadcastModal(broadcast) {
     if (broadcast.thumbnailUrl) {
       preview.innerHTML = `<img src="${broadcast.thumbnailUrl}" class="w-full h-full object-cover">`;
     } else {
-      preview.innerHTML = '<i class="ti ti-photo text-gray-500 text-2xl"></i>';
+      preview.innerHTML = '<i class="ti ti-photo text-gray-500 text-2xl font-loaded"></i>';
     }
     if (indicator) {
       indicator.classList.add('hidden');
@@ -4510,43 +4523,38 @@ async function openEditBroadcastModal(broadcast) {
   window.editThumbnailFile = null;
   window.editThumbnailFromHistory = false;
   
-  // Load thumbnail folders first and get first folder as default
-  const firstFolder = await loadEditThumbnailFolders();
-  
-  // Get thumbnail folder from broadcast settings (not from template - user should choose)
-  const broadcastId = broadcast.id;
-  const accountId = broadcast.accountId;
-  let boundFolder = null;
-  
-  // Get folder from broadcast settings only
-  if (broadcastId) {
-    const settings = await getBroadcastSettingsFromServer(broadcastId, accountId);
-    if (settings && settings.thumbnailFolder !== null && settings.thumbnailFolder !== undefined) {
-      boundFolder = settings.thumbnailFolder;
-      console.log(`[openEditBroadcastModal] Using folder from broadcast settings: "${boundFolder || '(root)'}"`);
+  // Load thumbnail folders & settings asynchronously in background without delaying modal display
+  (async () => {
+    try {
+      const firstFolder = await loadEditThumbnailFolders();
+      
+      const broadcastId = broadcast.id;
+      const accountId = broadcast.accountId;
+      let boundFolder = null;
+      
+      if (broadcastId) {
+        const settings = await getBroadcastSettingsFromServer(broadcastId, accountId);
+        if (settings && settings.thumbnailFolder !== null && settings.thumbnailFolder !== undefined) {
+          boundFolder = settings.thumbnailFolder;
+          console.log(`[openEditBroadcastModal] Using folder from broadcast settings: "${boundFolder || '(root)'}"`);
+        }
+      }
+      
+      if (boundFolder === null && firstFolder) {
+        boundFolder = firstFolder;
+        console.log(`[openEditBroadcastModal] Using first available folder: "${boundFolder}"`);
+      }
+      
+      const folderSelect = document.getElementById('editThumbnailFolderSelect');
+      if (folderSelect && boundFolder !== null) {
+        folderSelect.value = boundFolder;
+      }
+      
+      loadEditThumbnailFolder(boundFolder);
+    } catch (err) {
+      console.warn('[openEditBroadcastModal] Background thumbnail load error:', err);
     }
-  }
-  
-  // If no folder from broadcast settings, use first available folder as default
-  if (boundFolder === null && firstFolder) {
-    boundFolder = firstFolder;
-    console.log(`[openEditBroadcastModal] Using first available folder: "${boundFolder}"`);
-  }
-  
-  // Set the folder dropdown and load thumbnails
-  const folderSelect = document.getElementById('editThumbnailFolderSelect');
-  if (folderSelect && boundFolder !== null) {
-    folderSelect.value = boundFolder;
-  }
-  
-  // Load thumbnails from selected folder
-  loadEditThumbnailFolder(boundFolder);
-  
-  const modal = document.getElementById('editBroadcastModal');
-  if (modal) {
-    modal.classList.remove('hidden');
-    modal.style.display = 'block';
-  }
+  })();
 }
 
 function closeEditBroadcastModal() {
