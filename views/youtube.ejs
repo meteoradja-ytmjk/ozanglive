@@ -165,7 +165,7 @@
       <button onclick="event.stopPropagation(); openAddAccountModal()" 
         class="h-8 px-3 bg-red-500/15 hover:bg-red-500/25 active:scale-95 text-red-400 border border-red-500/30 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 pointer-events-auto select-none shadow-sm touch-manipulation"
         title="Add YouTube Account">
-        <i class="ti ti-plus text-sm"></i>
+        <i class="ti ti-user-plus text-sm"></i>
         <span>Add</span>
       </button>
     </div>
@@ -176,13 +176,15 @@
          const displayName = account.channelName || account.channelId || ('YouTube Channel #' + account.id);
       %>
       <div class="flex items-center justify-between px-3.5 py-2.5 sm:px-4 sm:py-3 hover:bg-gray-700/20 transition-colors gap-2 min-w-0">
-        <!-- Left: Channel Name + Primary Badge (1 Line) -->
-        <div class="flex items-center gap-2 min-w-0 flex-1">
-          <span class="text-xs sm:text-sm font-bold text-white truncate" title="<%= displayName %>"><%= displayName %></span>
+        <!-- Left: Channel Name (Full Width) + Primary Badge Underneath -->
+        <div class="flex flex-col justify-center min-w-0 flex-1">
+          <span class="text-xs sm:text-sm font-bold text-white truncate leading-tight" title="<%= displayName %>"><%= displayName %></span>
           <% if (account.isPrimary) { %>
-          <span class="px-1.5 py-0.5 bg-yellow-500/15 text-yellow-400 text-[10px] rounded font-semibold border border-yellow-500/30 flex items-center gap-0.5 flex-shrink-0" title="Primary Account">
-            <i class="ti ti-star-filled text-[10px]"></i> Primary
-          </span>
+          <div class="flex items-center mt-1">
+            <span class="px-1.5 py-0.5 bg-yellow-500/15 text-yellow-400 text-[10px] rounded font-semibold border border-yellow-500/30 inline-flex items-center gap-1 leading-none" title="Primary Account">
+              <i class="ti ti-star-filled text-[9px]"></i> Primary
+            </span>
+          </div>
           <% } %>
         </div>
 
