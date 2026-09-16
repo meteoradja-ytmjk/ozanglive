@@ -612,17 +612,17 @@ function createBroadcastRowHtml(broadcast, index) {
               <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8v-2a2 2 0 0 0 -2 -2h-8a2 2 0 0 0 -2 2v8a2 2 0 0 0 2 2h2" /></svg>
             </button>
           </div>
-          <div class="w-32 flex items-center justify-center gap-1.5">
-            <button type="button" onclick="editBroadcast('${broadcast.id}', ${broadcast.accountId || 'null'})"
-              class="w-8 h-8 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 active:bg-blue-500/35 text-blue-400 border border-blue-500/20 flex items-center justify-center transition-all active:scale-95 touch-manipulation" title="Edit">
+          <div class="w-36 flex items-center justify-center gap-2">
+            <button type="button" data-action="edit" onclick="editBroadcast('${broadcast.id}', ${broadcast.accountId || 'null'}, this)"
+              class="w-8.5 h-8.5 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 active:bg-blue-500/40 text-blue-400 border border-blue-500/30 flex items-center justify-center transition-all duration-150 hover:scale-105 active:scale-90 touch-manipulation cursor-pointer shadow-sm select-none" title="Edit">
               <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" /><path d="M13.5 6.5l4 4" /></svg>
             </button>
-            <button type="button" onclick="openDuplicateBroadcastModal('${broadcast.id}', ${broadcast.accountId || 'null'})"
-              class="w-8 h-8 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 active:bg-purple-500/35 text-purple-400 border border-purple-500/20 flex items-center justify-center transition-all active:scale-95 touch-manipulation" title="Duplikat Siaran">
+            <button type="button" data-action="duplicate" onclick="openDuplicateBroadcastModal('${broadcast.id}', ${broadcast.accountId || 'null'}, this)"
+              class="w-8.5 h-8.5 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 active:bg-purple-500/40 text-purple-400 border border-purple-500/30 flex items-center justify-center transition-all duration-150 hover:scale-105 active:scale-90 touch-manipulation cursor-pointer shadow-sm select-none" title="Duplikat Siaran">
               <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8v-2a2 2 0 0 0 -2 -2h-8a2 2 0 0 0 -2 2v8a2 2 0 0 0 2 2h2" /></svg>
             </button>
-            <button type="button" onclick="deleteBroadcast('${broadcast.id}', null, ${broadcast.accountId || 'null'})"
-              class="w-8 h-8 rounded-lg bg-red-500/15 hover:bg-red-500/25 active:bg-red-500/35 text-red-400 border border-red-500/20 flex items-center justify-center transition-all active:scale-95 touch-manipulation" title="Hapus">
+            <button type="button" data-action="delete" onclick="deleteBroadcast('${broadcast.id}', null, ${broadcast.accountId || 'null'}, this)"
+              class="w-8.5 h-8.5 rounded-lg bg-red-500/15 hover:bg-red-500/25 active:bg-red-500/40 text-red-400 border border-red-500/30 flex items-center justify-center transition-all duration-150 hover:scale-105 active:scale-90 touch-manipulation cursor-pointer shadow-sm select-none" title="Hapus">
               <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7l16 0" /><path d="M10 11l0 6" /><path d="M14 11l0 6" /><path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12" /><path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3" /></svg>
             </button>
           </div>
@@ -665,23 +665,23 @@ function createBroadcastRowHtml(broadcast, index) {
                 ${streamKeyDisplay}
               </span>
               <button type="button" onclick="copyStreamKey('${escapeJsString(broadcast.streamKey || '')}', ${index + 1})"
-                class="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-primary hover:bg-primary/10 active:bg-primary/20 rounded-lg active:scale-95 transition-all touch-manipulation flex-shrink-0 ${broadcast.streamKey ? '' : 'opacity-40 pointer-events-none'}"
+                class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-primary hover:bg-primary/10 active:bg-primary/20 rounded-lg active:scale-90 transition-all touch-manipulation flex-shrink-0 cursor-pointer select-none ${broadcast.streamKey ? '' : 'opacity-40 pointer-events-none'}"
                 title="Copy stream key #${index + 1}">
                 <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8v-2a2 2 0 0 0 -2 -2h-8a2 2 0 0 0 -2 2v8a2 2 0 0 0 2 2h2" /></svg>
               </button>
             </div>
 
-            <div class="flex items-center gap-1.5 flex-shrink-0">
-              <button type="button" onclick="editBroadcast('${broadcast.id}', ${broadcast.accountId || 'null'})"
-                class="w-8 h-8 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 active:bg-blue-500/35 text-blue-400 border border-blue-500/20 flex items-center justify-center transition-all active:scale-95 touch-manipulation" title="Edit">
+            <div class="flex items-center gap-2 flex-shrink-0">
+              <button type="button" data-action="edit" onclick="editBroadcast('${broadcast.id}', ${broadcast.accountId || 'null'}, this)"
+                class="w-9 h-9 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 active:bg-blue-500/40 text-blue-400 border border-blue-500/30 flex items-center justify-center transition-all duration-150 active:scale-90 touch-manipulation cursor-pointer shadow-sm select-none" title="Edit">
                 <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" /><path d="M13.5 6.5l4 4" /></svg>
               </button>
-              <button type="button" onclick="openDuplicateBroadcastModal('${broadcast.id}', ${broadcast.accountId || 'null'})"
-                class="w-8 h-8 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 active:bg-purple-500/35 text-purple-400 border border-purple-500/20 flex items-center justify-center transition-all active:scale-95 touch-manipulation" title="Duplikat Siaran">
+              <button type="button" data-action="duplicate" onclick="openDuplicateBroadcastModal('${broadcast.id}', ${broadcast.accountId || 'null'}, this)"
+                class="w-9 h-9 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 active:bg-purple-500/40 text-purple-400 border border-purple-500/30 flex items-center justify-center transition-all duration-150 active:scale-90 touch-manipulation cursor-pointer shadow-sm select-none" title="Duplikat Siaran">
                 <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8v-2a2 2 0 0 0 -2 -2h-8a2 2 0 0 0 -2 2v8a2 2 0 0 0 2 2h2" /></svg>
               </button>
-              <button type="button" onclick="deleteBroadcast('${broadcast.id}', null, ${broadcast.accountId || 'null'})"
-                class="w-8 h-8 rounded-lg bg-red-500/15 hover:bg-red-500/25 active:bg-red-500/35 text-red-400 border border-red-500/20 flex items-center justify-center transition-all active:scale-95 touch-manipulation" title="Hapus">
+              <button type="button" data-action="delete" onclick="deleteBroadcast('${broadcast.id}', null, ${broadcast.accountId || 'null'}, this)"
+                class="w-9 h-9 rounded-lg bg-red-500/15 hover:bg-red-500/25 active:bg-red-500/40 text-red-400 border border-red-500/30 flex items-center justify-center transition-all duration-150 active:scale-90 touch-manipulation cursor-pointer shadow-sm select-none" title="Hapus">
                 <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7l16 0" /><path d="M10 11l0 6" /><path d="M14 11l0 6" /><path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12" /><path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3" /></svg>
               </button>
             </div>
@@ -4326,7 +4326,7 @@ function _restoreDeleteButtons(buttons) {
 }
 
 // Delete Broadcast
-async function deleteBroadcast(broadcastId, title = null, accountId = null) {
+async function deleteBroadcast(broadcastId, title = null, accountId = null, triggerBtn = null) {
   const key = String(broadcastId);
 
   // Guard: ignore repeated clicks while a delete for this broadcast is in flight
@@ -4343,13 +4343,16 @@ async function deleteBroadcast(broadcastId, title = null, accountId = null) {
   _deletingBroadcastIds.add(key);
 
   // Instant feedback: disable + spinner on this row's delete button(s)
-  const delButtons = row ? Array.from(row.querySelectorAll('button[title="Delete"]')) : [];
+  const delButtons = row ? Array.from(row.querySelectorAll('button[data-action="delete"], button[title="Hapus"], button[title="Delete"]')) : [];
+  if (triggerBtn && !delButtons.includes(triggerBtn)) {
+    delButtons.push(triggerBtn);
+  }
   delButtons.forEach(btn => {
     btn.dataset._origHtml = btn.innerHTML;
     btn.disabled = true;
-    btn.innerHTML = '<i class="ti ti-loader animate-spin"></i>';
+    btn.innerHTML = '<svg class="w-4 h-4 animate-spin text-red-400 pointer-events-none" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
     btn.style.pointerEvents = 'none';
-    btn.style.opacity = '0.6';
+    btn.style.opacity = '0.7';
   });
 
   const resolvedAccountId = (accountId && accountId !== 'null' && accountId !== 'undefined')
@@ -4393,10 +4396,36 @@ async function deleteBroadcast(broadcastId, title = null, accountId = null) {
   }
 }
 
-// Edit Broadcast
-async function editBroadcast(broadcastId, accountId) {
+// Edit Broadcast (Instant 0ms response via DOM-data or cache, fallback to API)
+async function editBroadcast(broadcastId, accountId, triggerBtn = null) {
+  // 1. Instant resolution from DOM row or in-memory cache
+  let broadcast = null;
+  const row = document.querySelector(`.broadcast-row[data-broadcast-id="${broadcastId}"]`);
+  if (row) {
+    const raw = row.getAttribute('data-broadcast') || row.querySelector('input.broadcast-checkbox')?.getAttribute('data-broadcast');
+    if (raw) {
+      try { broadcast = JSON.parse(raw); } catch (e) {}
+    }
+  }
+  if (!broadcast && typeof broadcastsCache !== 'undefined' && broadcastsCache?.data) {
+    broadcast = broadcastsCache.data.find(b => String(b.id) === String(broadcastId));
+  }
+
+  if (broadcast) {
+    broadcast.accountId = accountId || broadcast.accountId;
+    openEditBroadcastModal(broadcast);
+    return;
+  }
+
+  // 2. Fallback: fetch details with instant spinner on trigger button
+  let origHtml = null;
+  if (triggerBtn) {
+    origHtml = triggerBtn.innerHTML;
+    triggerBtn.innerHTML = '<svg class="w-4 h-4 animate-spin text-blue-400 pointer-events-none" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
+    triggerBtn.disabled = true;
+  }
+
   try {
-    // Fetch broadcast details
     const response = await fetch(`/api/youtube/broadcasts?accountId=${accountId}`, {
       headers: {
         'X-CSRF-Token': getCsrfToken()
@@ -4406,11 +4435,10 @@ async function editBroadcast(broadcastId, accountId) {
     const data = await response.json();
     
     if (data.success && data.broadcasts) {
-      const broadcast = data.broadcasts.find(b => b.id === broadcastId);
-      if (broadcast) {
-        // Add accountId to broadcast object for the modal
-        broadcast.accountId = accountId;
-        openEditBroadcastModal(broadcast);
+      const b = data.broadcasts.find(item => String(item.id) === String(broadcastId));
+      if (b) {
+        b.accountId = accountId;
+        openEditBroadcastModal(b);
       } else {
         showToast('Broadcast not found', 'error');
       }
@@ -4420,6 +4448,11 @@ async function editBroadcast(broadcastId, accountId) {
   } catch (error) {
     console.error('Error fetching broadcast:', error);
     showToast('Failed to load broadcast', 'error');
+  } finally {
+    if (triggerBtn && origHtml !== null) {
+      triggerBtn.innerHTML = origHtml;
+      triggerBtn.disabled = false;
+    }
   }
 }
 
@@ -11509,21 +11542,36 @@ window.copyGuideRedirectUri = copyGuideRedirectUri;
 // Duplicate Broadcast Functions
 // ==========================================
 
-async function openDuplicateBroadcastModal(broadcastId, accountId = null) {
+async function openDuplicateBroadcastModal(broadcastId, accountId = null, triggerBtn = null) {
   const modal = document.getElementById('duplicateBroadcastModal');
   if (!modal) {
     console.error('duplicateBroadcastModal not found');
     return;
   }
 
-  // Find broadcast data in memory/cache first
+  // 1. Instant resolution from DOM row first (0ms delay!)
   let broadcast = null;
-  if (typeof broadcastsCache !== 'undefined' && broadcastsCache?.data) {
+  const row = document.querySelector(`.broadcast-row[data-broadcast-id="${broadcastId}"]`);
+  if (row) {
+    const raw = row.getAttribute('data-broadcast') || row.querySelector('input.broadcast-checkbox')?.getAttribute('data-broadcast');
+    if (raw) {
+      try { broadcast = JSON.parse(raw); } catch (e) {}
+    }
+  }
+
+  // 2. Find broadcast data in memory/cache
+  if (!broadcast && typeof broadcastsCache !== 'undefined' && broadcastsCache?.data) {
     broadcast = broadcastsCache.data.find(b => String(b.id) === String(broadcastId));
   }
 
-  // If not found in cache, fetch it
+  // 3. If still not found, fetch it with trigger button feedback
   if (!broadcast) {
+    let origHtml = null;
+    if (triggerBtn) {
+      origHtml = triggerBtn.innerHTML;
+      triggerBtn.innerHTML = '<svg class="w-4 h-4 animate-spin text-purple-400 pointer-events-none" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
+      triggerBtn.disabled = true;
+    }
     try {
       const url = accountId ? `/api/youtube/broadcasts?accountId=${accountId}` : '/api/youtube/broadcasts';
       const res = await fetch(url, { headers: { 'X-CSRF-Token': getCsrfToken() } });
@@ -11533,6 +11581,11 @@ async function openDuplicateBroadcastModal(broadcastId, accountId = null) {
       }
     } catch (err) {
       console.warn('[openDuplicateBroadcastModal] Fetch error:', err);
+    } finally {
+      if (triggerBtn && origHtml !== null) {
+        triggerBtn.innerHTML = origHtml;
+        triggerBtn.disabled = false;
+      }
     }
   }
 
