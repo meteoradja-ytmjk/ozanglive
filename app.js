@@ -5416,31 +5416,41 @@ app.put('/api/streams/:id', isAuthenticated, async (req, res) => {
     const scheduleTypeVal = req.body.scheduleType || req.body.schedule_type;
     if (scheduleTypeVal !== undefined) {
       updateData.schedule_type = scheduleTypeVal || 'once';
-    }
-    const recTimeVal = req.body.recurringTime !== undefined ? req.body.recurringTime : req.body.recurring_time;
-    if (recTimeVal !== undefined) {
-      updateData.recurring_time = recTimeVal || null;
-    }
-    const schedDaysVal = req.body.scheduleDays !== undefined ? req.body.scheduleDays : req.body.schedule_days;
-    if (schedDaysVal !== undefined) {
-      try {
-        const days = typeof schedDaysVal === 'string'
-          ? JSON.parse(schedDaysVal)
-          : schedDaysVal;
-        updateData.schedule_days = days ? JSON.stringify(days) : null;
-      } catch (e) {
+      if (updateData.schedule_type === 'once') {
+        updateData.recurring_time = null;
         updateData.schedule_days = null;
+        updateData.recurring_enabled = 0;
       }
     }
-    const recEnabledVal = req.body.recurringEnabled !== undefined ? req.body.recurringEnabled : req.body.recurring_enabled;
-    if (recEnabledVal !== undefined) {
-      // FIXED: Handle all possible truthy values for recurring_enabled
-      updateData.recurring_enabled = (recEnabledVal === 'true' || recEnabledVal === true || recEnabledVal === 'on' || recEnabledVal === 1) ? 1 : 0;
+    if (updateData.schedule_type !== 'once') {
+      const recTimeVal = req.body.recurringTime !== undefined ? req.body.recurringTime : req.body.recurring_time;
+      if (recTimeVal !== undefined) {
+        updateData.recurring_time = recTimeVal || null;
+      }
+      const schedDaysVal = req.body.scheduleDays !== undefined ? req.body.scheduleDays : req.body.schedule_days;
+      if (schedDaysVal !== undefined) {
+        try {
+          const days = typeof schedDaysVal === 'string'
+            ? JSON.parse(schedDaysVal)
+            : schedDaysVal;
+          updateData.schedule_days = (Array.isArray(days) && days.length > 0) ? JSON.stringify(days) : null;
+        } catch (e) {
+          updateData.schedule_days = null;
+        }
+      }
+      const recEnabledVal = req.body.recurringEnabled !== undefined ? req.body.recurringEnabled : req.body.recurring_enabled;
+      if (recEnabledVal !== undefined) {
+        // FIXED: Handle all possible truthy values for recurring_enabled
+        updateData.recurring_enabled = (recEnabledVal === 'true' || recEnabledVal === true || recEnabledVal === 'on' || recEnabledVal === 1) ? 1 : 0;
+      }
     }
 
-    // Set status to scheduled for recurring schedules
+    // Set status to scheduled for recurring schedules (only if not currently live)
     if (updateData.schedule_type && (updateData.schedule_type === 'daily' || updateData.schedule_type === 'weekly')) {
-      updateData.status = 'scheduled';
+      if (stream.status !== 'live') {
+        const isRecEnabled = updateData.recurring_enabled !== undefined ? updateData.recurring_enabled === 1 : stream.recurring_enabled === 1;
+        updateData.status = isRecEnabled ? 'scheduled' : 'offline';
+      }
     }
 
     const rawStartTime = req.body.scheduleStartTime || req.body.schedule_time;
@@ -9694,7 +9704,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
 
       const hours = parseInt(req.body.streamDurationHours) || 0;
       const minutes = parseInt(req.body.streamDurationMinutes) || 0;
-      const totalMinutes = (hours * 60) + minutes;
+      let totalMinutes = (hours * 60) + minutes;
 
       // Resolve stream key value from broadcast or credentials/streamId
       let finalStreamKey = broadcast.streamKey || '';
@@ -9714,16 +9724,40 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       const rawEndTime = req.body.scheduleEndTime;
       let scheduleIso = null;
       let endIso = null;
+      let sDate = null;
+      let eDate = null;
       if (rawStartTime) {
-        const sDate = parseWIBDateTimeLocal(rawStartTime);
+        sDate = parseWIBDateTimeLocal(rawStartTime);
         if (sDate) scheduleIso = sDate.toISOString();
       }
       if (rawEndTime) {
-        const eDate = parseWIBDateTimeLocal(rawEndTime);
+        eDate = parseWIBDateTimeLocal(rawEndTime);
         if (eDate) endIso = eDate.toISOString();
       }
 
-      const isScheduled = (req.body.scheduleType === 'daily' || req.body.scheduleType === 'weekly') || (scheduleIso !== null);
+      // If user provided start and end times but left duration hours/minutes at 0, calculate duration from difference
+      if (totalMinutes === 0 && sDate && eDate && eDate > sDate) {
+        totalMinutes = Math.round((eDate.getTime() - sDate.getTime()) / (1000 * 60));
+        console.log(`[API] Calculated duration from start/end times: ${totalMinutes} minutes`);
+      }
+
+      const scheduleType = req.body.scheduleType || 'once';
+
+      // For daily/weekly, if schedule_time is null, compute the next scheduled run in WIB
+      if ((scheduleType === 'daily' || scheduleType === 'weekly') && !scheduleIso && req.body.recurringTime) {
+        const tempStream = {
+          schedule_type: scheduleType,
+          recurring_time: req.body.recurringTime,
+          schedule_days: scheduleDays
+        };
+        const nextDate = Stream.getNextScheduledTime(tempStream);
+        if (nextDate) {
+          scheduleIso = nextDate.toISOString();
+          console.log(`[API] Set initial schedule_time for ${scheduleType} stream: ${scheduleIso}`);
+        }
+      }
+
+      const isScheduled = (scheduleType === 'daily' || scheduleType === 'weekly') || (scheduleIso !== null);
 
       const streamData = {
         title: broadcast.title || title,
@@ -9740,7 +9774,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         loop_video: req.body.loopVideo === 'true' || req.body.loopVideo === true,
         stream_duration_minutes: totalMinutes > 0 ? totalMinutes : null,
         duration: totalMinutes > 0 ? totalMinutes : null,
-        schedule_type: req.body.scheduleType || 'once',
+        schedule_type: scheduleType,
         schedule_time: scheduleIso,
         end_time: endIso,
         schedule_days: scheduleDays,

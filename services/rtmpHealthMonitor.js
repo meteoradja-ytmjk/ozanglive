@@ -51,9 +51,12 @@ class RTMPHealthMonitor {
    */
   isUnlimitedStream(stream) {
     if (!stream) return false;
+    const isOnce = !stream.schedule_type || stream.schedule_type === 'once';
+    if (!isOnce) return false;
     const hasDuration = stream.stream_duration_minutes && stream.stream_duration_minutes > 0;
     const hasEndTime = stream.end_time && new Date(stream.end_time) > new Date();
-    return !hasDuration && !hasEndTime;
+    const loopEnabled = stream.loop_video !== false && stream.loop_video !== 0;
+    return !hasDuration && !hasEndTime && loopEnabled;
   }
 
   /**

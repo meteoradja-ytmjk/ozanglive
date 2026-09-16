@@ -3802,6 +3802,70 @@ function clearStudioAudioSelection() {
 }
 
 // Studio Schedule Type Selector
+function syncStudioRecurringToScheduledStartTime() {
+  const type = document.getElementById('studioScheduleType')?.value || 'once';
+  if (type === 'once') return;
+
+  const rTimeInput = document.getElementById('studioRecurringTime');
+  const scheduledInput = document.getElementById('scheduledStartTime');
+  if (!rTimeInput || !scheduledInput || !rTimeInput.value) return;
+
+  const [hours, minutes] = rTimeInput.value.split(':').map(Number);
+  if (isNaN(hours) || isNaN(minutes)) return;
+
+  // Calculate next run date based on WIB context (UTC+7)
+  const now = new Date();
+  const wibTime = new Date(now.getTime() + 7 * 60 * 60 * 1000);
+  const wibHours = wibTime.getUTCHours();
+  const wibMinutes = wibTime.getUTCMinutes();
+  const wibDay = wibTime.getUTCDay();
+
+  let targetDate = new Date(wibTime);
+  targetDate.setUTCHours(hours, minutes, 0, 0);
+
+  const currentMinutesTotal = wibHours * 60 + wibMinutes;
+  const scheduledMinutesTotal = hours * 60 + minutes;
+
+  if (type === 'daily') {
+    // If scheduled time has passed today in WIB (with 10m buffer), move to tomorrow
+    if (scheduledMinutesTotal <= currentMinutesTotal + 10) {
+      targetDate.setUTCDate(targetDate.getUTCDate() + 1);
+    }
+  } else if (type === 'weekly') {
+    if (!studioSelectedDays || studioSelectedDays.length === 0) return;
+    const sortedDays = [...studioSelectedDays].sort((a, b) => a - b);
+    let dayOffset = null;
+
+    for (let i = 0; i < 7; i++) {
+      const checkDay = (wibDay + i) % 7;
+      if (sortedDays.includes(checkDay)) {
+        if (i === 0 && scheduledMinutesTotal <= currentMinutesTotal + 10) {
+          continue;
+        }
+        dayOffset = i;
+        break;
+      }
+    }
+    if (dayOffset === null) {
+      dayOffset = (7 - wibDay + sortedDays[0]) % 7 || 7;
+    }
+    targetDate.setUTCDate(targetDate.getUTCDate() + dayOffset);
+  }
+
+  // Format as YYYY-MM-DDTHH:mm
+  const pad = n => String(n).padStart(2, '0');
+  const y = targetDate.getUTCFullYear();
+  const m = pad(targetDate.getUTCMonth() + 1);
+  const d = pad(targetDate.getUTCDate());
+  const h = pad(targetDate.getUTCHours());
+  const min = pad(targetDate.getUTCMinutes());
+  const formattedVal = `${y}-${m}-${d}T${h}:${min}`;
+
+  scheduledInput.value = formattedVal;
+  const studioStart = document.getElementById('studioScheduleStartTime');
+  if (studioStart) studioStart.value = formattedVal;
+}
+
 function setStudioScheduleType(type) {
   const hiddenInput = document.getElementById('studioScheduleType');
   if (hiddenInput) hiddenInput.value = type;
@@ -3825,16 +3889,27 @@ function setStudioScheduleType(type) {
     if (onceBtn) onceBtn.className = 'flex-1 px-3 py-2 text-xs font-medium rounded-lg border border-primary bg-primary text-white transition-colors';
     if (onceSection) onceSection.classList.remove('hidden');
     if (recurringSection) recurringSection.classList.add('hidden');
+    
+    // Sync times for once
+    const scheduledInput = document.getElementById('scheduledStartTime');
+    const sStart = document.getElementById('studioScheduleStartTime');
+    if (sStart && scheduledInput && !sStart.value && scheduledInput.value) {
+      sStart.value = scheduledInput.value;
+    } else if (sStart && scheduledInput && sStart.value) {
+      scheduledInput.value = sStart.value;
+    }
   } else if (type === 'daily') {
     if (dailyBtn) dailyBtn.className = 'flex-1 px-3 py-2 text-xs font-medium rounded-lg border border-primary bg-primary text-white transition-colors';
     if (onceSection) onceSection.classList.add('hidden');
     if (recurringSection) recurringSection.classList.remove('hidden');
     if (weeklyDays) weeklyDays.classList.add('hidden');
+    syncStudioRecurringToScheduledStartTime();
   } else if (type === 'weekly') {
     if (weeklyBtn) weeklyBtn.className = 'flex-1 px-3 py-2 text-xs font-medium rounded-lg border border-primary bg-primary text-white transition-colors';
     if (onceSection) onceSection.classList.add('hidden');
     if (recurringSection) recurringSection.classList.remove('hidden');
     if (weeklyDays) weeklyDays.classList.remove('hidden');
+    syncStudioRecurringToScheduledStartTime();
   }
 }
 
@@ -3859,7 +3934,46 @@ function toggleStudioDay(dayIndex) {
 
   const daysInput = document.getElementById('studioScheduleDays');
   if (daysInput) daysInput.value = JSON.stringify(studioSelectedDays);
+  syncStudioRecurringToScheduledStartTime();
 }
+
+// Sync listeners for studio schedule inputs
+(() => {
+  const initScheduleSyncListeners = () => {
+    const rTimeInput = document.getElementById('studioRecurringTime');
+    if (rTimeInput) {
+      rTimeInput.addEventListener('input', syncStudioRecurringToScheduledStartTime);
+      rTimeInput.addEventListener('change', syncStudioRecurringToScheduledStartTime);
+    }
+
+    const studioStart = document.getElementById('studioScheduleStartTime');
+    const scheduledInput = document.getElementById('scheduledStartTime');
+    if (studioStart && scheduledInput) {
+      studioStart.addEventListener('input', () => {
+        const type = document.getElementById('studioScheduleType')?.value || 'once';
+        if (type === 'once' && studioStart.value) scheduledInput.value = studioStart.value;
+      });
+      studioStart.addEventListener('change', () => {
+        const type = document.getElementById('studioScheduleType')?.value || 'once';
+        if (type === 'once' && studioStart.value) scheduledInput.value = studioStart.value;
+      });
+      scheduledInput.addEventListener('input', () => {
+        const type = document.getElementById('studioScheduleType')?.value || 'once';
+        if (type === 'once' && scheduledInput.value) studioStart.value = scheduledInput.value;
+      });
+      scheduledInput.addEventListener('change', () => {
+        const type = document.getElementById('studioScheduleType')?.value || 'once';
+        if (type === 'once' && scheduledInput.value) studioStart.value = scheduledInput.value;
+      });
+    }
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initScheduleSyncListeners);
+  } else {
+    initScheduleSyncListeners();
+  }
+})();
 
 // Trigger start immediately
 function submitBroadcastAndStartNow() {
@@ -4027,6 +4141,14 @@ window.openEditStudioModal = function(stream) {
       });
       const daysInput = document.getElementById('studioScheduleDays');
       if (daysInput) daysInput.value = JSON.stringify(studioSelectedDays);
+    } else {
+      studioSelectedDays = [];
+      const daysInput = document.getElementById('studioScheduleDays');
+      if (daysInput) daysInput.value = '[]';
+      document.querySelectorAll('.studio-day-btn').forEach(btn => {
+        btn.classList.remove('border-primary', 'bg-primary', 'text-white');
+        btn.classList.add('border-gray-600', 'bg-dark-700', 'text-gray-300');
+      });
     }
   }
 };
@@ -4094,12 +4216,39 @@ function closeCreateBroadcastModal() {
   renderTags();
   hideAutoFillIndicators();
 
-  // Reset Studio Media & Schedule
+  // Reset Studio Media & Schedule cleanly
   clearStudioAudioSelection();
   const videoLabel = document.getElementById('studioSelectedVideo');
   const videoInput = document.getElementById('studioSelectedVideoId');
   if (videoLabel) videoLabel.textContent = 'Pilih video untuk di-stream...';
   if (videoInput) videoInput.value = '';
+
+  // Clean reset of schedule days
+  studioSelectedDays = [];
+  const daysInput = document.getElementById('studioScheduleDays');
+  if (daysInput) daysInput.value = '[]';
+  document.querySelectorAll('.studio-day-btn').forEach(btn => {
+    btn.classList.remove('border-primary', 'bg-primary', 'text-white');
+    btn.classList.add('border-gray-600', 'bg-dark-700', 'text-gray-300');
+  });
+
+  const hoursInput = document.getElementById('studioStreamDurationHours');
+  const minutesInput = document.getElementById('studioStreamDurationMinutes');
+  if (hoursInput) hoursInput.value = '';
+  if (minutesInput) minutesInput.value = '';
+  const loopToggle = document.getElementById('studioLoopVideoToggle');
+  if (loopToggle) loopToggle.checked = true;
+
+  const sStart = document.getElementById('studioScheduleStartTime');
+  const sEnd = document.getElementById('studioScheduleEndTime');
+  if (sStart) sStart.value = '';
+  if (sEnd) sEnd.value = '';
+
+  const rTime = document.getElementById('studioRecurringTime');
+  const rEnabled = document.getElementById('studioRecurringEnabled');
+  if (rTime) rTime.value = '';
+  if (rEnabled) rEnabled.checked = true;
+
   setStudioScheduleType('once');
 }
 
@@ -4124,9 +4273,43 @@ if (createBroadcastForm) {
       activeBtn.disabled = true;
     }
     
+    const scheduleType = document.getElementById('studioScheduleType')?.value || 'once';
+    const recurringTime = document.getElementById('studioRecurringTime')?.value || '';
+
+    // Validate recurring schedule fields when not starting immediately
+    if (!isStartNow) {
+      if (scheduleType === 'daily') {
+        if (!recurringTime) {
+          showToast('Silakan tentukan Jam Siaran (WIB) untuk jadwal Setiap Hari!', 'warning');
+          document.getElementById('studioRecurringTime')?.focus();
+          if (activeBtn) { activeBtn.innerHTML = originalText; activeBtn.disabled = false; }
+          return;
+        }
+      } else if (scheduleType === 'weekly') {
+        if (!recurringTime) {
+          showToast('Silakan tentukan Jam Siaran (WIB) untuk jadwal Mingguan!', 'warning');
+          document.getElementById('studioRecurringTime')?.focus();
+          if (activeBtn) { activeBtn.innerHTML = originalText; activeBtn.disabled = false; }
+          return;
+        }
+        if (!studioSelectedDays || studioSelectedDays.length === 0) {
+          showToast('Silakan pilih minimal satu hari siaran untuk jadwal Mingguan!', 'warning');
+          const daysSelector = document.getElementById('studioWeeklyDaysSelector');
+          if (daysSelector) daysSelector.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          if (activeBtn) { activeBtn.innerHTML = originalText; activeBtn.disabled = false; }
+          return;
+        }
+      }
+    }
+
     try {
       if (isEditing && editingStreamId) {
         // UPDATE EXISTING STREAM
+        let finalScheduleStartTime = document.getElementById('studioScheduleStartTime')?.value || '';
+        if (scheduleType === 'once' && !finalScheduleStartTime) {
+          finalScheduleStartTime = document.getElementById('scheduledStartTime')?.value || '';
+        }
+
         const updatePayload = {
           streamTitle: document.getElementById('broadcastTitle').value,
           description: document.getElementById('broadcastDescription').value,
@@ -4135,10 +4318,10 @@ if (createBroadcastForm) {
           streamDurationHours: document.getElementById('studioStreamDurationHours')?.value || '0',
           streamDurationMinutes: document.getElementById('studioStreamDurationMinutes')?.value || '0',
           loopVideo: document.getElementById('studioLoopVideoToggle')?.checked ? 'true' : 'false',
-          scheduleType: document.getElementById('studioScheduleType')?.value || 'once',
-          scheduleStartTime: document.getElementById('studioScheduleStartTime')?.value || '',
+          scheduleType: scheduleType,
+          scheduleStartTime: finalScheduleStartTime,
           scheduleEndTime: document.getElementById('studioScheduleEndTime')?.value || '',
-          recurringTime: document.getElementById('studioRecurringTime')?.value || '',
+          recurringTime: recurringTime,
           scheduleDays: document.getElementById('studioScheduleDays')?.value || '[]',
           recurringEnabled: document.getElementById('studioRecurringEnabled')?.checked ? 'true' : 'false',
           streamKey: document.getElementById('streamKeySelect')?.value || ''
@@ -4189,7 +4372,14 @@ if (createBroadcastForm) {
       
       formData.append('title', document.getElementById('broadcastTitle').value);
       formData.append('description', document.getElementById('broadcastDescription').value);
-      formData.append('scheduledStartTime', document.getElementById('scheduledStartTime').value);
+
+      // Determine proper scheduledStartTime for YouTube broadcast
+      let topStartTime = document.getElementById('scheduledStartTime')?.value || '';
+      let studioStartTime = document.getElementById('studioScheduleStartTime')?.value || '';
+      if (scheduleType === 'once' && studioStartTime) {
+        topStartTime = studioStartTime;
+      }
+      formData.append('scheduledStartTime', topStartTime);
       formData.append('privacyStatus', document.getElementById('privacyStatus').value);
       
       const streamId = document.getElementById('streamKeySelect').value;
@@ -4207,10 +4397,7 @@ if (createBroadcastForm) {
       const durationHours = document.getElementById('studioStreamDurationHours')?.value || '0';
       const durationMinutes = document.getElementById('studioStreamDurationMinutes')?.value || '0';
       const loopVideo = document.getElementById('studioLoopVideoToggle')?.checked ? 'true' : 'false';
-      const scheduleType = document.getElementById('studioScheduleType')?.value || 'once';
-      const scheduleStartTime = document.getElementById('studioScheduleStartTime')?.value || '';
       const scheduleEndTime = document.getElementById('studioScheduleEndTime')?.value || '';
-      const recurringTime = document.getElementById('studioRecurringTime')?.value || '';
       const scheduleDays = document.getElementById('studioScheduleDays')?.value || '[]';
       const recurringEnabled = document.getElementById('studioRecurringEnabled')?.checked ? 'true' : 'false';
 
@@ -4218,12 +4405,14 @@ if (createBroadcastForm) {
       formData.append('streamDurationMinutes', durationMinutes);
       formData.append('loopVideo', loopVideo);
       formData.append('scheduleType', scheduleType);
-      formData.append('scheduleStartTime', scheduleStartTime);
+      formData.append('scheduleStartTime', studioStartTime || topStartTime);
       formData.append('scheduleEndTime', scheduleEndTime);
       formData.append('recurringTime', recurringTime);
       formData.append('scheduleDays', scheduleDays);
       formData.append('recurringEnabled', recurringEnabled);
       formData.append('startImmediately', isStartNow ? 'true' : 'false');
+
+
 
       // Tags & Category
       if (currentTags.length > 0) {

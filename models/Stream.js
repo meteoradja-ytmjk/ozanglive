@@ -1,5 +1,6 @@
 const { v4: uuidv4 } = require('uuid');
 const { db } = require('../db/database');
+const { createWIBDate } = require('../utils/wibTime');
 class Stream {
   static create(streamData) {
     const id = uuidv4();
@@ -548,21 +549,15 @@ class Stream {
     const now = new Date();
     const wibNow = this.getWIBTime(now);
     const [hours, minutes] = stream.recurring_time.split(':').map(Number);
+    const monthIndex = wibNow.month - 1; // 0-indexed month for createWIBDate
 
     if (stream.schedule_type === 'daily') {
-      // Create date in WIB context
-      const nextRun = new Date(now);
-      nextRun.setHours(hours, minutes, 0, 0);
-
-      // Compare using WIB time
       const currentTimeWIB = wibNow.hours * 60 + wibNow.minutes;
       const scheduleTimeWIB = hours * 60 + minutes;
 
       // If time has passed today in WIB, schedule for tomorrow
-      if (scheduleTimeWIB <= currentTimeWIB) {
-        nextRun.setDate(nextRun.getDate() + 1);
-      }
-      return nextRun;
+      const dayOffset = (scheduleTimeWIB <= currentTimeWIB) ? 1 : 0;
+      return createWIBDate(wibNow.year, monthIndex, wibNow.dayOfMonth + dayOffset, hours, minutes, 0);
     }
 
     if (stream.schedule_type === 'weekly') {
@@ -586,24 +581,17 @@ class Stream {
       for (let i = 0; i < 7; i++) {
         const checkDay = (currentDayWIB + i) % 7;
         if (sortedDays.includes(checkDay)) {
-          const nextRun = new Date(now);
-          nextRun.setDate(now.getDate() + i);
-          nextRun.setHours(hours, minutes, 0, 0);
-
           // If it's today in WIB but time has passed, continue to next day
           if (i === 0 && scheduleTimeWIB <= currentTimeWIB) {
             continue;
           }
-          return nextRun;
+          return createWIBDate(wibNow.year, monthIndex, wibNow.dayOfMonth + i, hours, minutes, 0);
         }
       }
 
-      // If no day found in current week, get first day of next week
+      // If no day found in current week loop, get first day of next week
       const daysUntilNext = (7 - currentDayWIB + sortedDays[0]) % 7 || 7;
-      const nextRun = new Date(now);
-      nextRun.setDate(now.getDate() + daysUntilNext);
-      nextRun.setHours(hours, minutes, 0, 0);
-      return nextRun;
+      return createWIBDate(wibNow.year, monthIndex, wibNow.dayOfMonth + daysUntilNext, hours, minutes, 0);
     }
 
     return null;

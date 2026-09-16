@@ -559,11 +559,19 @@ function getStatusAfterStreamEnd(stream) {
 function isUnlimitedStream(stream) {
   if (!stream) return false;
   
+  // Unlimited mode ONLY applies to 'once' schedule (or no schedule set)
+  // Daily and weekly schedules have recurring intervals and must not be treated as unlimited
+  const isOnce = !stream.schedule_type || stream.schedule_type === 'once';
+  if (!isOnce) return false;
+
   // Check if duration is set
   const hasDuration = stream.stream_duration_minutes && stream.stream_duration_minutes > 0;
   const hasEndTime = stream.end_time && new Date(stream.end_time) > new Date();
   
-  return !hasDuration && !hasEndTime;
+  // User must have loop_video enabled (not false and not 0) for unlimited live
+  const loopEnabled = stream.loop_video !== false && stream.loop_video !== 0;
+
+  return !hasDuration && !hasEndTime && loopEnabled;
 }
 
 /**
@@ -951,8 +959,9 @@ async function buildFFmpegArgsForPlaylist(stream, playlist, durationOverrideSeco
   // playlist has to repeat to fill it. Without this, FFmpeg exits as soon as the
   // playlist ends — the "stream stops before the configured duration" bug.
   // We use the FFmpeg `-stream_loop -1` input flag (added to args below) for a true
-  // Loop the playlist when user enabled loop, OR when stream is unlimited (live nonstop), OR when a finite duration is set.
-  const shouldLoopPlaylist = !!stream.loop_video || isUnlimitedStream(stream) || !durationSeconds || (durationSeconds && durationSeconds > 0);
+  // Loop the playlist when user enabled loop, OR when a finite duration is set (to fill duration).
+  // When loop is disabled and no duration is set, playlist plays once and stops naturally.
+  const shouldLoopPlaylist = (stream.loop_video !== false && stream.loop_video !== 0 && stream.loop_video !== 'false') || (durationSeconds && durationSeconds > 0);
 
   let concatContent = '';
   videoPaths.forEach(videoPath => {
@@ -1195,8 +1204,9 @@ async function buildFFmpegArgs(stream, durationOverrideSeconds = null, reconnect
 function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds, loopVideo, isUnlimited = false) {
   const args = ['-re'];
   
-  // Loop the video when user enabled loop, OR when stream is unlimited (live nonstop), OR when a finite duration is set.
-  const shouldLoopVideo = loopVideo || isUnlimited || !durationSeconds || (durationSeconds && durationSeconds > 0);
+  // Loop the video when user enabled loop, OR when a finite duration is set (to fill duration).
+  // When loop is disabled and no duration is set, video plays once and stops naturally.
+  const shouldLoopVideo = (loopVideo !== false && loopVideo !== 0 && loopVideo !== 'false') || (durationSeconds && durationSeconds > 0);
   if (shouldLoopVideo) {
     args.push('-stream_loop', '-1');
   }
@@ -1237,8 +1247,9 @@ function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds
 function buildFFmpegArgsVideoOnly(videoPath, rtmpUrl, durationSeconds, loopVideo, isUnlimited = false) {
   const args = ['-re'];
   
-  // Loop the video when user enabled loop, OR when stream is unlimited (live nonstop), OR when a finite duration is set.
-  const shouldLoopVideo = loopVideo || isUnlimited || !durationSeconds || (durationSeconds && durationSeconds > 0);
+  // Loop the video when user enabled loop, OR when a finite duration is set (to fill duration).
+  // When loop is disabled and no duration is set, video plays once and stops naturally.
+  const shouldLoopVideo = (loopVideo !== false && loopVideo !== 0 && loopVideo !== 'false') || (durationSeconds && durationSeconds > 0);
   if (shouldLoopVideo) {
     args.push('-stream_loop', '-1');
   }
