@@ -11,42 +11,42 @@
   }
 %>
 
-<!-- Page Header & Action Bar (Aligned with Schedule style) -->
-<div class="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
-  <div>
-    <h2 class="text-2xl font-bold flex items-center gap-2.5">
-      <span>Playlists</span>
-      <span class="text-xs px-2.5 py-0.5 rounded-full bg-primary/20 text-primary border border-primary/30 font-semibold">
-        <%= playlists ? playlists.length : 0 %>
-      </span>
-    </h2>
-    <p class="text-gray-400 text-sm mt-1">View and manage your streaming playlists</p>
-  </div>
-  <div class="flex flex-wrap items-center gap-3">
-    <!-- Search Input -->
-    <div class="relative w-full sm:w-52">
-      <input type="text" id="searchPlaylists" placeholder="Cari playlist..."
-        class="w-full bg-dark-700 border border-gray-600 text-white pl-8 pr-3 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary text-xs sm:text-sm placeholder-gray-400">
-      <i class="ti ti-search absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
-    </div>
+<!-- Page Header -->
+<div class="mb-4">
+  <h2 class="text-2xl font-bold flex items-center gap-2.5 text-white">
+    <span>Playlists</span>
+    <span class="text-xs px-2.5 py-0.5 rounded-full bg-primary/20 text-primary border border-primary/30 font-semibold">
+      <%= playlists ? playlists.length : 0 %>
+    </span>
+  </h2>
+  <p class="text-gray-400 text-xs sm:text-sm mt-0.5">Kelola susunan video dan audio untuk otomasi live streaming</p>
+</div>
 
-    <!-- Filter / Sort Dropdown -->
-    <div class="w-40">
-      <select id="sortPlaylists"
-        class="bg-dark-700 border border-gray-600 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary text-xs sm:text-sm w-full cursor-pointer">
-        <option value="newest">Terbaru Diupdate</option>
-        <option value="oldest">Terlama Dibuat</option>
-        <option value="name">Nama (A-Z)</option>
-      </select>
-    </div>
-
-    <!-- Create Playlist Button -->
-    <button onclick="openCreatePlaylistModal()"
-      class="h-[38px] px-3.5 rounded-lg text-xs sm:text-sm font-semibold text-white bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-500 shadow-md shadow-primary/25 active:scale-[0.98] transition-all flex items-center gap-1.5 flex-shrink-0">
-      <i class="ti ti-plus text-sm"></i>
-      <span>Create Playlist</span>
-    </button>
+<!-- Single Line Toolbar: Cari playlist (lebih panjang), Terbaru Diupdate & Create Playlist (ukurannya sama) -->
+<div class="flex items-center gap-2.5 sm:gap-3 mb-4 w-full">
+  <!-- 1. Cari Playlist (Lebih panjang / flex-1) -->
+  <div class="relative flex-1 min-w-0">
+    <input type="text" id="searchPlaylists" placeholder="Cari playlist berdasarkan nama atau deskripsi..."
+      class="w-full h-10 bg-dark-700 border border-gray-600 text-white pl-9 pr-3 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary text-xs sm:text-sm placeholder-gray-400 transition-all">
+    <i class="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
   </div>
+
+  <!-- 2. Terbaru Diupdate (Sort Dropdown) -->
+  <div class="w-40 sm:w-44 flex-shrink-0">
+    <select id="sortPlaylists"
+      class="w-full h-10 bg-dark-700 border border-gray-600 text-white px-3 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary text-xs sm:text-sm cursor-pointer transition-all">
+      <option value="newest">Terbaru Diupdate</option>
+      <option value="oldest">Terlama Dibuat</option>
+      <option value="name">Nama (A-Z)</option>
+    </select>
+  </div>
+
+  <!-- 3. Create Playlist (Ukuran sama persis dengan Terbaru Diupdate) -->
+  <button onclick="openCreatePlaylistModal()"
+    class="w-40 sm:w-44 h-10 flex-shrink-0 rounded-lg text-xs sm:text-sm font-semibold text-white bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-500 shadow-md shadow-primary/25 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5">
+    <i class="ti ti-plus text-base"></i>
+    <span>Create Playlist</span>
+  </button>
 </div>
 
 <!-- Playlists Container (Single-Line Compact List) -->
