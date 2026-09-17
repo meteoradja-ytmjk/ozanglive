@@ -11,48 +11,41 @@
   }
 %>
 
-<!-- Page Header & Action Bar -->
-<div class="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-3">
-  <div class="flex items-center gap-3">
-    <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-primary/25 to-purple-600/25 border border-primary/30 flex items-center justify-center shadow-lg shadow-primary/20 text-primary">
-      <i class="ti ti-playlist text-lg"></i>
-    </div>
-    <div>
-      <h2 class="text-xl font-bold tracking-tight text-white flex items-center gap-2">
-        <span>Playlists</span>
-        <span class="text-xs px-2 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/25 font-semibold">
-          <%= playlists ? playlists.length : 0 %>
-        </span>
-      </h2>
-      <p class="text-gray-400 text-xs">Kelola susunan video dan audio untuk otomasi live streaming</p>
-    </div>
+<!-- Page Header & Action Bar (Aligned with Schedule style) -->
+<div class="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+  <div>
+    <h2 class="text-2xl font-bold flex items-center gap-2.5">
+      <span>Playlists</span>
+      <span class="text-xs px-2.5 py-0.5 rounded-full bg-primary/20 text-primary border border-primary/30 font-semibold">
+        <%= playlists ? playlists.length : 0 %>
+      </span>
+    </h2>
+    <p class="text-gray-400 text-sm mt-1">View and manage your streaming playlists</p>
   </div>
-  <div class="flex items-center gap-2">
+  <div class="flex flex-wrap items-center gap-3">
+    <!-- Search Input -->
+    <div class="relative w-full sm:w-52">
+      <input type="text" id="searchPlaylists" placeholder="Cari playlist..."
+        class="w-full bg-dark-700 border border-gray-600 text-white pl-8 pr-3 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary text-xs sm:text-sm placeholder-gray-400">
+      <i class="ti ti-search absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+    </div>
+
+    <!-- Filter / Sort Dropdown -->
+    <div class="w-40">
+      <select id="sortPlaylists"
+        class="bg-dark-700 border border-gray-600 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary text-xs sm:text-sm w-full cursor-pointer">
+        <option value="newest">Terbaru Diupdate</option>
+        <option value="oldest">Terlama Dibuat</option>
+        <option value="name">Nama (A-Z)</option>
+      </select>
+    </div>
+
+    <!-- Create Playlist Button -->
     <button onclick="openCreatePlaylistModal()"
-      class="h-9 px-3.5 rounded-xl text-xs font-semibold text-white bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-500 shadow-md shadow-primary/25 active:scale-[0.98] transition-all flex items-center gap-1.5">
+      class="h-[38px] px-3.5 rounded-lg text-xs sm:text-sm font-semibold text-white bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-500 shadow-md shadow-primary/25 active:scale-[0.98] transition-all flex items-center gap-1.5 flex-shrink-0">
       <i class="ti ti-plus text-sm"></i>
       <span>Create Playlist</span>
     </button>
-  </div>
-</div>
-
-<!-- Unified Search & Filter Toolbar -->
-<div class="bg-dark-800/90 backdrop-blur-md rounded-xl p-2.5 mb-4 border border-gray-700/60 shadow-md shadow-black/20">
-  <div class="flex flex-col sm:flex-row items-center justify-between gap-2.5">
-    <div class="relative w-full sm:flex-1">
-      <input type="text" id="searchPlaylists" placeholder="Cari playlist berdasarkan nama atau deskripsi..."
-        class="w-full bg-dark-750/90 text-white pl-8 pr-4 py-2 border border-gray-700/70 rounded-lg focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary text-xs transition-all placeholder-gray-500">
-      <i class="ti ti-search absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
-    </div>
-    <div class="relative w-full sm:w-48">
-      <select id="sortPlaylists"
-        class="w-full bg-dark-750/90 border border-gray-700/70 text-white pl-3 pr-8 py-2 rounded-lg focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary text-xs cursor-pointer transition-all appearance-none">
-        <option value="newest">Terbaru Diupdate</option>
-        <option value="oldest">Terlama Dibuat</option>
-        <option value="name">Berdasarkan Nama (A-Z)</option>
-      </select>
-      <i class="ti ti-arrows-sort absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none text-xs"></i>
-    </div>
   </div>
 </div>
 
