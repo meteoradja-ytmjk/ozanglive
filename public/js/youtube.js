@@ -628,10 +628,10 @@ function createBroadcastRowHtml(broadcast, index) {
           </div>
         </div>
         
-        <!-- Mobile Row (Single-Line Compact & Elegant) -->
-        <div class="md:hidden px-3 py-2.5 flex items-center justify-between gap-2 bg-dark-800/40 hover:bg-dark-750/50 border-b border-gray-700/50 last:border-b-0 transition-colors">
-          <!-- Left: Checkbox, #Index, Title (Truncated 1-line), Short Stream Key, Privacy Badge -->
-          <div class="flex items-center gap-2 min-w-0 flex-1">
+        <!-- Mobile Row (Slim, Neat, Balanced Left-Right) -->
+        <div class="md:hidden px-3 py-2.5 flex items-center justify-between gap-2.5 bg-dark-800/40 hover:bg-dark-750/50 border-b border-gray-700/50 last:border-b-0 transition-colors">
+          <!-- Left: Checkbox + Info Column (Title on row 1, Date & StreamKey on row 2) -->
+          <div class="flex items-center gap-2.5 min-w-0 flex-1">
             <div class="flex-shrink-0 flex items-center">
               <input type="checkbox" class="broadcast-checkbox w-4 h-4 rounded border-gray-600 bg-dark-700 text-primary focus:ring-primary cursor-pointer"
                 data-broadcast-id="${broadcast.id}"
@@ -640,26 +640,39 @@ function createBroadcastRowHtml(broadcast, index) {
                 onchange="syncCheckboxes(this); updateSelectionCount()">
             </div>
 
-            <span class="text-[10px] font-bold text-primary bg-primary/15 px-1.5 py-0.5 rounded shrink-0">#${index + 1}</span>
+            <div class="flex-1 min-w-0">
+              <!-- Row 1: Badge #Index, Title (Truncated), Privacy Badge -->
+              <div class="flex items-center gap-1.5 min-w-0">
+                <span class="text-[10px] font-bold text-primary bg-primary/15 px-1.5 py-0.5 rounded shrink-0">#${index + 1}</span>
+                <span class="text-xs sm:text-sm font-semibold text-white truncate min-w-0 flex-1 leading-snug" title="${safeTitle}">${safeTitle}</span>
+                <span class="px-1.5 py-0.2 rounded text-[9px] font-bold uppercase tracking-wide shrink-0 ${privacyClass}">
+                  ${broadcast.privacyStatus || 'unlisted'}
+                </span>
+              </div>
 
-            <div class="flex items-center gap-1.5 min-w-0 flex-1">
-              <span class="text-xs sm:text-sm font-medium text-white truncate min-w-0 flex-1" title="${safeTitle}${scheduledTimeStr ? ' • ' + scheduledTimeStr : ''}">${safeTitle}</span>
-              ${broadcast.streamKey ? `
-                <button type="button" onclick="copyStreamKey('${escapeJsString(broadcast.streamKey || '')}', ${index + 1})"
-                  class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-dark-700/80 hover:bg-dark-600 text-[10px] font-mono text-gray-400 hover:text-primary transition-all shrink-0 border border-gray-700/60 cursor-pointer active:scale-95"
-                  title="Salin Stream Key: ${escapeHtml(broadcast.streamKey || '')}">
-                  <i class="ti ti-key text-[10px] text-primary/80"></i>
-                  <span>${broadcast.streamKey.substring(0, 8)}...</span>
-                </button>
-              ` : ''}
-              <span class="px-1.5 py-0.5 rounded text-[9px] font-semibold tracking-wide uppercase shrink-0 ${privacyClass}">
-                ${broadcast.privacyStatus || 'private'}
-              </span>
+              <!-- Row 2: Date/Time + Stream Key (with copy) -->
+              <div class="flex items-center gap-2 text-[11px] text-gray-400 mt-1 min-w-0">
+                ${scheduledTimeStr ? `
+                  <span class="inline-flex items-center gap-1 text-[11px] text-gray-400 shrink-0 font-medium">
+                    <i class="ti ti-calendar-time text-xs text-primary/80 font-loaded"></i>
+                    <span>${scheduledTimeStr}</span>
+                  </span>
+                  <span class="text-gray-600 shrink-0">•</span>
+                ` : ''}
+                ${broadcast.streamKey ? `
+                  <button type="button" onclick="copyStreamKey('${escapeJsString(broadcast.streamKey || '')}', ${index + 1})"
+                    class="inline-flex items-center gap-1 font-mono text-[11px] text-gray-400 hover:text-primary active:text-primary/80 transition-colors truncate max-w-[130px] cursor-pointer"
+                    title="Klik untuk salin: ${escapeHtml(broadcast.streamKey || '')}">
+                    <i class="ti ti-key text-xs text-primary/80 shrink-0 font-loaded"></i>
+                    <span class="truncate">${broadcast.streamKey.substring(0, 10)}...</span>
+                  </button>
+                ` : '<span class="text-gray-500 font-mono text-[10px]">-</span>'}
+              </div>
             </div>
           </div>
 
-          <!-- Right: Compact Action Buttons (Single Row) -->
-          <div class="flex items-center gap-1.5 flex-shrink-0">
+          <!-- Right: Compact Action Buttons (Single Row, Flushed Right) -->
+          <div class="flex items-center gap-1.5 shrink-0">
             <button type="button" data-action="edit" onclick="editBroadcast('${broadcast.id}', ${broadcast.accountId || 'null'}, this)"
               class="w-8 h-8 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 active:bg-blue-500/40 text-blue-400 border border-blue-500/30 flex items-center justify-center transition-all duration-150 active:scale-90 touch-manipulation cursor-pointer shadow-sm select-none" title="Edit">
               <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" /><path d="M13.5 6.5l4 4" /></svg>
