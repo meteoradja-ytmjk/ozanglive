@@ -67,7 +67,8 @@ function formatDuration(seconds) {
 
   /* Grid View Mode */
   .view-mode-grid .video-group-content:not([style*="display: none"]),
-  .view-mode-grid .audio-group-content:not([style*="display: none"]) {
+  .view-mode-grid .audio-group-content:not([style*="display: none"]),
+  .view-mode-grid .standalone-media-container {
     display: grid !important;
     grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)) !important;
     gap: 0.75rem !important;
@@ -75,7 +76,8 @@ function formatDuration(seconds) {
   }
   @media (min-width: 640px) {
     .view-mode-grid .video-group-content:not([style*="display: none"]),
-    .view-mode-grid .audio-group-content:not([style*="display: none"]) {
+    .view-mode-grid .audio-group-content:not([style*="display: none"]),
+    .view-mode-grid .standalone-media-container {
       grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)) !important;
       gap: 1rem !important;
     }
@@ -86,31 +88,33 @@ function formatDuration(seconds) {
     align-items: stretch !important;
     margin-left: 0 !important;
     padding: 0.625rem !important;
-    border-left-width: 1px !important;
-    border-top-width: 3px !important;
     height: 100% !important;
   }
-  .view-mode-grid .video-card > div:first-child {
+  .view-mode-grid .video-card .card-main-row,
+  .view-mode-grid .audio-card .card-main-row {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+  .view-mode-grid .video-card .card-thumb-wrap {
     width: 100% !important;
     height: 110px !important;
-    border-radius: 0.375rem !important;
   }
-  .view-mode-grid .audio-card > div:first-child {
+  .view-mode-grid .audio-card .card-thumb-wrap {
     width: 100% !important;
     height: 80px !important;
-    border-radius: 0.375rem !important;
   }
-  .view-mode-grid .video-card .flex-1,
-  .view-mode-grid .audio-card .flex-1 {
+  .view-mode-grid .video-card .card-info-wrap,
+  .view-mode-grid .audio-card .card-info-wrap {
     width: 100% !important;
     margin-top: 0.5rem !important;
   }
-  .view-mode-grid .video-card .flex.items-center.gap-1,
-  .view-mode-grid .audio-card .flex.items-center.gap-1 {
+  .view-mode-grid .video-card .card-actions-wrap,
+  .view-mode-grid .audio-card .card-actions-wrap {
     margin-top: 0.5rem !important;
     justify-content: flex-end !important;
     border-top: 1px solid rgba(75, 85, 99, 0.3) !important;
     padding-top: 0.375rem !important;
+    width: 100% !important;
   }
 </style>
 
@@ -227,131 +231,220 @@ function formatDuration(seconds) {
     </div>
   <% } else if (videos && videos.length > 0) { %>
     <% 
-    // Function to extract base name (remove numbers, special chars at end)
-    function getBaseName(title) {
-      // Remove file extension
-      let name = title.replace(/\.(mp4|avi|mov|mkv)$/i, '');
-      // Remove trailing numbers, dashes, underscores
-      name = name.replace(/[-_\s]*\d+\s*$/g, '');
-      // Remove patterns like (1), [2], etc
-      name = name.replace(/\s*[\(\[\{]\d+[\)\]\}]\s*$/g, '');
-      // Trim and lowercase for grouping
-      return name.trim().toLowerCase() || title.toLowerCase();
-    }
+    // Separate explicit user folders from standalone videos
+    const videoFoldersByName = {};
+    const standaloneVideos = [];
     
-    // Group videos by base name
-    const videosByName = {};
     videos.forEach(function(video) {
       const explicitFolder = (video.folder_name || '').trim();
-      const baseName = explicitFolder ? explicitFolder.toLowerCase() : getBaseName(video.title);
-      if (!videosByName[baseName]) {
-        videosByName[baseName] = {
-          displayName: explicitFolder || video.title.replace(/[-_\s]*\d+\s*$/g, '').replace(/\s*[\(\[\{]\d+[\)\]\}]\s*$/g, '').trim(),
-          videos: []
-        };
+      if (explicitFolder) {
+        const baseKey = explicitFolder.toLowerCase();
+        if (!videoFoldersByName[baseKey]) {
+          videoFoldersByName[baseKey] = {
+            displayName: explicitFolder,
+            videos: []
+          };
+        }
+        videoFoldersByName[baseKey].videos.push(video);
+      } else {
+        standaloneVideos.push(video);
       }
-      videosByName[baseName].videos.push(video);
     });
     
-    // Sort groups by most recent video in each group
-    const groupKeys = Object.keys(videosByName).sort((a, b) => {
-      const latestA = Math.max(...videosByName[a].videos.map(v => new Date(v.upload_date)));
-      const latestB = Math.max(...videosByName[b].videos.map(v => new Date(v.upload_date)));
+    // Sort folder groups by most recent video
+    const videoFolderKeys = Object.keys(videoFoldersByName).sort((a, b) => {
+      const latestA = Math.max(...videoFoldersByName[a].videos.map(v => new Date(v.upload_date)));
+      const latestB = Math.max(...videoFoldersByName[b].videos.map(v => new Date(v.upload_date)));
       return latestB - latestA;
     });
-    
-    groupKeys.forEach(function(groupKey, groupIndex) {
-      const group = videosByName[groupKey];
+    %>
+
+    <!-- Real Folders (only shown if user created/moved into folders) -->
+    <% videoFolderKeys.forEach(function(groupKey, groupIndex) { 
+      const group = videoFoldersByName[groupKey];
       const groupVideos = group.videos.sort((a, b) => new Date(b.upload_date) - new Date(a.upload_date));
     %>
-      <!-- Video Group -->
       <div class="video-group" data-name="<%= groupKey %>" data-video-ids='<%- JSON.stringify(groupVideos.map(v => v.id)) %>'>
-        <!-- Group Header -->
-        <div class="media-drop-target bg-gray-800/50 rounded-lg p-3 flex items-center justify-between cursor-pointer hover:bg-gray-800/70 transition-colors border border-gray-700/50" onclick="toggleVideoGroup('<%= groupIndex %>')" data-media-type="video" data-folder-name="<%= group.displayName %>">
-          <div class="flex items-center gap-3">
-            <i class="ti ti-chevron-down text-gray-400 transition-transform duration-200" id="videoGroupIcon<%= groupIndex %>"></i>
-            <div>
-              <h3 class="font-medium text-white"><%= group.displayName %></h3>
-              <p class="text-xs text-gray-400"><%= groupVideos.length %> video<%= groupVideos.length > 1 ? 's' : '' %></p>
+        <!-- Folder Header -->
+        <div class="media-drop-target bg-dark-750/90 hover:bg-dark-700/90 rounded-xl p-2.5 sm:p-3 flex items-center justify-between cursor-pointer transition-all border border-gray-700/60 shadow-sm" onclick="toggleVideoGroup('<%= groupIndex %>')" data-media-type="video" data-folder-name="<%= group.displayName %>">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <i class="ti ti-chevron-down text-gray-400 text-sm transition-transform duration-200 shrink-0" id="videoGroupIcon<%= groupIndex %>"></i>
+            <div class="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
+              <i class="ti ti-folder text-base"></i>
+            </div>
+            <div class="min-w-0">
+              <h3 class="font-medium text-xs sm:text-sm text-white truncate"><%= group.displayName %></h3>
+              <p class="text-[11px] text-gray-400"><%= groupVideos.length %> video<%= groupVideos.length > 1 ? 's' : '' %></p>
             </div>
           </div>
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-1 shrink-0">
             <button type="button" onclick="renameMediaFolder(event, 'video')" title="Rename Folder" class="p-1.5 text-gray-400 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors">
-              <i class="ti ti-pencil"></i>
+              <i class="ti ti-pencil text-sm"></i>
             </button>
             <% if (typeof permissions !== 'undefined' && permissions.can_delete_videos) { %>
             <button type="button" onclick="deleteSingleFolder(event, 'video')" title="Hapus Folder" class="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors">
-              <i class="ti ti-trash"></i>
+              <i class="ti ti-trash text-sm"></i>
             </button>
-            <label class="flex items-center gap-2 text-xs text-gray-300 cursor-pointer" onclick="event.stopPropagation()">
+            <label class="flex items-center gap-1.5 text-xs text-gray-300 cursor-pointer pl-1" onclick="event.stopPropagation()">
               <input type="checkbox" class="video-folder-checkbox rounded border-gray-500 bg-dark-700 text-red-500 focus:ring-red-500"
                 data-folder-name="<%= group.displayName %>" data-ids='<%- JSON.stringify(groupVideos.map(v => v.id)) %>'>
-              <span>Select</span>
+              <span class="text-[11px] hidden sm:inline">Select</span>
             </label>
             <% } %>
-            <div class="text-xs text-gray-500">
-              <i class="ti ti-folder"></i>
-            </div>
           </div>
         </div>
         
-        <!-- Group Content -->
-        <div class="video-group-content mt-2 space-y-2" id="videoGroupContent<%= groupIndex %>">
+        <!-- Folder Content -->
+        <div class="video-group-content mt-1.5 space-y-1.5 pl-2 sm:pl-3 border-l-2 border-primary/20 ml-2" id="videoGroupContent<%= groupIndex %>">
           <% groupVideos.forEach(function(video) { %>
-            <div class="video-card bg-gray-800 rounded-xl p-2.5 sm:p-3 flex items-center gap-2.5 sm:gap-3.5 hover:bg-gray-700/50 transition-all ml-1 sm:ml-3 border-l-2 border-primary/40 shadow-sm" data-title="<%= video.title.toLowerCase() %>" data-date="<%= video.upload_date %>" data-id="<%= video.id %>" data-current-folder="<%= group.displayName %>" data-media-type="video">
-              <!-- Thumbnail -->
-              <div class="relative w-16 h-12 sm:w-20 sm:h-14 md:w-24 md:h-16 flex-shrink-0 rounded-lg overflow-hidden group cursor-pointer" onclick="playVideo('<%= video.id %>', '<%= video.title.replace(/'/g, "\\'") %>')">
-                <img src="<%= video.thumbnail_path %>" alt="<%= video.title %>" class="w-full h-full object-cover" loading="lazy">
-                <div class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                  <i class="ti ti-player-play-filled text-white text-base sm:text-lg"></i>
-                </div>
-                <span class="absolute bottom-1 right-1 bg-black/80 text-white text-[10px] px-1 py-0.5 rounded">
-                  <%= formatDuration(video.duration) %>
-                </span>
-              </div>
-              <!-- Info -->
-              <div class="flex-1 min-w-0 pr-1">
-                <h3 class="font-medium text-xs sm:text-sm md:text-base text-white break-words line-clamp-2 leading-snug" title="<%= video.title %>"><%= video.title %></h3>
-                <div class="text-[11px] sm:text-xs text-gray-400 flex items-center flex-wrap gap-x-2 gap-y-0.5 mt-1">
-                  <span class="inline-flex items-center">
-                    <i class="ti ti-video text-primary mr-1 shrink-0"></i>
-                    <span><%= new Date(video.upload_date).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) %></span>
+            <div class="video-card bg-gray-800/90 hover:bg-gray-750 border border-gray-700/60 rounded-xl p-2 sm:p-2.5 flex items-center justify-between gap-2.5 transition-all shadow-sm" data-title="<%= video.title.toLowerCase() %>" data-date="<%= video.upload_date %>" data-id="<%= video.id %>" data-current-folder="<%= group.displayName %>" data-media-type="video">
+              <div class="flex items-center gap-2.5 min-w-0 flex-1 card-main-row">
+                <div class="relative w-12 h-9 sm:w-14 sm:h-10 md:w-16 md:h-11 flex-shrink-0 rounded-lg overflow-hidden bg-black cursor-pointer group card-thumb-wrap" onclick="playVideo('<%= video.id %>', '<%= video.title.replace(/'/g, "\\'") %>')">
+                  <img src="<%= video.thumbnail_path %>" alt="<%= video.title %>" class="w-full h-full object-cover">
+                  <div class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <i class="ti ti-player-play-filled text-white text-xs sm:text-sm"></i>
+                  </div>
+                  <span class="absolute bottom-0.5 right-0.5 bg-black/85 text-white text-[9px] px-1 rounded font-mono leading-tight">
+                    <%= formatDuration(video.duration) %>
                   </span>
-                  <span class="text-gray-600">•</span>
-                  <span><%= formatFileSize(video.file_size) %></span>
-                  <% if (video.resolution) { %>
-                  <span class="text-gray-600">•</span>
-                  <span class="text-gray-400"><%= video.resolution %></span>
-                  <% } %>
+                </div>
+                <div class="min-w-0 flex-1 card-info-wrap">
+                  <h4 class="font-medium text-xs sm:text-sm text-white truncate leading-tight" title="<%= video.title %>"><%= video.title %></h4>
+                  <div class="text-[11px] text-gray-400 truncate flex items-center gap-1.5 mt-0.5 whitespace-nowrap">
+                    <span><%= formatDuration(video.duration) %></span>
+                    <span class="text-gray-600">•</span>
+                    <span><%= formatFileSize(video.file_size) %></span>
+                    <% if (video.resolution) { %>
+                    <span class="text-gray-600 hidden sm:inline">•</span>
+                    <span class="hidden sm:inline"><%= video.resolution %></span>
+                    <% } %>
+                    <span class="text-gray-600 hidden md:inline">•</span>
+                    <span class="hidden md:inline"><%= new Date(video.upload_date).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) %></span>
+                  </div>
                 </div>
               </div>
-              <!-- Actions -->
-              <div class="flex items-center gap-0.5 sm:gap-1 flex-shrink-0">
-                <button class="p-1.5 sm:p-2 text-gray-400 hover:text-white hover:bg-gray-600/50 rounded-lg transition-colors" onclick="playVideo('<%= video.id %>', '<%= video.title.replace(/'/g, "\\'") %>')" title="Play">
-                  <i class="ti ti-player-play text-base sm:text-lg"></i>
+              <div class="flex items-center gap-0.5 sm:gap-1 flex-shrink-0 card-actions-wrap">
+                <button type="button" class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700/60 rounded-lg transition-colors" onclick="playVideo('<%= video.id %>', '<%= video.title.replace(/'/g, "\\'") %>')" title="Play">
+                  <i class="ti ti-player-play text-base"></i>
                 </button>
-                <button class="p-1.5 sm:p-2 text-gray-400 hover:text-cyan-400 hover:bg-cyan-500/10 rounded-lg transition-colors" onclick="openMoveMediaModal('<%= video.id %>', '<%= video.title.replace(/'/g, "\\'") %>', 'video', '<%= (video.folder_name || '').replace(/'/g, "\\'") %>')" title="Pindah ke Folder">
-                  <i class="ti ti-folder-share text-base sm:text-lg"></i>
+                <button type="button" class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-cyan-400 hover:bg-cyan-500/10 rounded-lg transition-colors" onclick="openMoveMediaModal('<%= video.id %>', '<%= video.title.replace(/'/g, "\\'") %>', 'video', '<%= (video.folder_name || '').replace(/'/g, "\\'") %>')" title="Pindah ke Folder">
+                  <i class="ti ti-folder-share text-base"></i>
                 </button>
                 <% if (typeof permissions !== 'undefined' && permissions.can_download_videos) { %>
-                <button class="p-1.5 sm:p-2 text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors" onclick="downloadVideo('<%= video.id %>', '<%= video.title.replace(/'/g, "\\'") %>')" title="Download">
-                  <i class="ti ti-download text-base sm:text-lg"></i>
+                <button type="button" class="w-8 h-8 items-center justify-center text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors hidden sm:flex" onclick="downloadVideo('<%= video.id %>', '<%= video.title.replace(/'/g, "\\'") %>')" title="Download">
+                  <i class="ti ti-download text-base"></i>
                 </button>
                 <% } %>
-                <button class="p-1.5 sm:p-2 text-gray-400 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors" onclick="showRenameDialog('<%= video.id %>', '<%= video.title.replace(/'/g, "\\'") %>')" title="Rename">
-                  <i class="ti ti-pencil text-base sm:text-lg"></i>
+                <button type="button" class="w-8 h-8 items-center justify-center text-gray-400 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors hidden sm:flex" onclick="showRenameDialog('<%= video.id %>', '<%= video.title.replace(/'/g, "\\'") %>')" title="Rename">
+                  <i class="ti ti-pencil text-base"></i>
                 </button>
                 <% if (typeof permissions !== 'undefined' && permissions.can_delete_videos) { %>
-                <button class="p-1.5 sm:p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors" onclick="showDeleteDialog('<%= video.id %>', '<%= video.title.replace(/'/g, "\\'") %>')" title="Delete">
-                  <i class="ti ti-trash text-base sm:text-lg"></i>
+                <button type="button" class="w-8 h-8 items-center justify-center text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors hidden sm:flex" onclick="showDeleteDialog('<%= video.id %>', '<%= video.title.replace(/'/g, "\\'") %>')" title="Delete">
+                  <i class="ti ti-trash text-base"></i>
                 </button>
                 <% } %>
+                <div class="relative sm:hidden">
+                  <button type="button" class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700/60 rounded-lg transition-colors" onclick="toggleCardActionMenu(event, 'vmenu-<%= video.id %>')" title="Menu Lainnya">
+                    <i class="ti ti-dots-vertical text-base"></i>
+                  </button>
+                  <div id="vmenu-<%= video.id %>" class="card-action-menu hidden absolute right-0 top-full mt-1 w-36 bg-dark-800 border border-gray-700 rounded-xl shadow-xl py-1 z-30">
+                    <% if (typeof permissions !== 'undefined' && permissions.can_download_videos) { %>
+                    <button type="button" class="w-full text-left px-3 py-2 text-xs text-gray-300 hover:text-white hover:bg-gray-700/50 flex items-center gap-2" onclick="downloadVideo('<%= video.id %>', '<%= video.title.replace(/'/g, "\\'") %>')">
+                      <i class="ti ti-download text-blue-400"></i> Download
+                    </button>
+                    <% } %>
+                    <button type="button" class="w-full text-left px-3 py-2 text-xs text-gray-300 hover:text-white hover:bg-gray-700/50 flex items-center gap-2" onclick="showRenameDialog('<%= video.id %>', '<%= video.title.replace(/'/g, "\\'") %>')">
+                      <i class="ti ti-pencil text-primary"></i> Rename
+                    </button>
+                    <% if (typeof permissions !== 'undefined' && permissions.can_delete_videos) { %>
+                    <button type="button" class="w-full text-left px-3 py-2 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 flex items-center gap-2" onclick="showDeleteDialog('<%= video.id %>', '<%= video.title.replace(/'/g, "\\'") %>')">
+                      <i class="ti ti-trash"></i> Delete
+                    </button>
+                    <% } %>
+                  </div>
+                </div>
               </div>
             </div>
           <% }); %>
         </div>
       </div>
     <% }); %>
+
+    <!-- Standalone Videos (Files not in any folder: Single Line, No Dropdown Box!) -->
+    <% if (standaloneVideos.length > 0) { %>
+      <div class="standalone-media-container space-y-1.5">
+        <% standaloneVideos.forEach(function(video) { %>
+          <div class="video-card media-card-standalone bg-gray-800/90 hover:bg-gray-750 border border-gray-700/60 rounded-xl p-2 sm:p-2.5 flex items-center justify-between gap-2.5 transition-all shadow-sm" data-title="<%= video.title.toLowerCase() %>" data-date="<%= video.upload_date %>" data-id="<%= video.id %>" data-current-folder="" data-media-type="video">
+            <div class="flex items-center gap-2.5 min-w-0 flex-1 card-main-row">
+              <div class="relative w-12 h-9 sm:w-14 sm:h-10 md:w-16 md:h-11 flex-shrink-0 rounded-lg overflow-hidden bg-black cursor-pointer group card-thumb-wrap" onclick="playVideo('<%= video.id %>', '<%= video.title.replace(/'/g, "\\'") %>')">
+                <img src="<%= video.thumbnail_path %>" alt="<%= video.title %>" class="w-full h-full object-cover">
+                <div class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <i class="ti ti-player-play-filled text-white text-xs sm:text-sm"></i>
+                </div>
+                <span class="absolute bottom-0.5 right-0.5 bg-black/85 text-white text-[9px] px-1 rounded font-mono leading-tight">
+                  <%= formatDuration(video.duration) %>
+                </span>
+              </div>
+              <div class="min-w-0 flex-1 card-info-wrap">
+                <h4 class="font-medium text-xs sm:text-sm text-white truncate leading-tight" title="<%= video.title %>"><%= video.title %></h4>
+                <div class="text-[11px] text-gray-400 truncate flex items-center gap-1.5 mt-0.5 whitespace-nowrap">
+                  <span><%= formatDuration(video.duration) %></span>
+                  <span class="text-gray-600">•</span>
+                  <span><%= formatFileSize(video.file_size) %></span>
+                  <% if (video.resolution) { %>
+                  <span class="text-gray-600 hidden sm:inline">•</span>
+                  <span class="hidden sm:inline"><%= video.resolution %></span>
+                  <% } %>
+                  <span class="text-gray-600 hidden md:inline">•</span>
+                  <span class="hidden md:inline"><%= new Date(video.upload_date).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) %></span>
+                </div>
+              </div>
+            </div>
+            <div class="flex items-center gap-0.5 sm:gap-1 flex-shrink-0 card-actions-wrap">
+              <button type="button" class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700/60 rounded-lg transition-colors" onclick="playVideo('<%= video.id %>', '<%= video.title.replace(/'/g, "\\'") %>')" title="Play">
+                <i class="ti ti-player-play text-base"></i>
+              </button>
+              <button type="button" class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-cyan-400 hover:bg-cyan-500/10 rounded-lg transition-colors" onclick="openMoveMediaModal('<%= video.id %>', '<%= video.title.replace(/'/g, "\\'") %>', 'video', '')" title="Pindah ke Folder">
+                <i class="ti ti-folder-share text-base"></i>
+              </button>
+              <% if (typeof permissions !== 'undefined' && permissions.can_download_videos) { %>
+              <button type="button" class="w-8 h-8 items-center justify-center text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors hidden sm:flex" onclick="downloadVideo('<%= video.id %>', '<%= video.title.replace(/'/g, "\\'") %>')" title="Download">
+                <i class="ti ti-download text-base"></i>
+              </button>
+              <% } %>
+              <button type="button" class="w-8 h-8 items-center justify-center text-gray-400 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors hidden sm:flex" onclick="showRenameDialog('<%= video.id %>', '<%= video.title.replace(/'/g, "\\'") %>')" title="Rename">
+                <i class="ti ti-pencil text-base"></i>
+              </button>
+              <% if (typeof permissions !== 'undefined' && permissions.can_delete_videos) { %>
+              <button type="button" class="w-8 h-8 items-center justify-center text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors hidden sm:flex" onclick="showDeleteDialog('<%= video.id %>', '<%= video.title.replace(/'/g, "\\'") %>')" title="Delete">
+                <i class="ti ti-trash text-base"></i>
+              </button>
+              <% } %>
+              <div class="relative sm:hidden">
+                <button type="button" class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700/60 rounded-lg transition-colors" onclick="toggleCardActionMenu(event, 'vmenu-sa-<%= video.id %>')" title="Menu Lainnya">
+                  <i class="ti ti-dots-vertical text-base"></i>
+                </button>
+                <div id="vmenu-sa-<%= video.id %>" class="card-action-menu hidden absolute right-0 top-full mt-1 w-36 bg-dark-800 border border-gray-700 rounded-xl shadow-xl py-1 z-30">
+                  <% if (typeof permissions !== 'undefined' && permissions.can_download_videos) { %>
+                  <button type="button" class="w-full text-left px-3 py-2 text-xs text-gray-300 hover:text-white hover:bg-gray-700/50 flex items-center gap-2" onclick="downloadVideo('<%= video.id %>', '<%= video.title.replace(/'/g, "\\'") %>')">
+                    <i class="ti ti-download text-blue-400"></i> Download
+                  </button>
+                  <% } %>
+                  <button type="button" class="w-full text-left px-3 py-2 text-xs text-gray-300 hover:text-white hover:bg-gray-700/50 flex items-center gap-2" onclick="showRenameDialog('<%= video.id %>', '<%= video.title.replace(/'/g, "\\'") %>')">
+                    <i class="ti ti-pencil text-primary"></i> Rename
+                  </button>
+                  <% if (typeof permissions !== 'undefined' && permissions.can_delete_videos) { %>
+                  <button type="button" class="w-full text-left px-3 py-2 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 flex items-center gap-2" onclick="showDeleteDialog('<%= video.id %>', '<%= video.title.replace(/'/g, "\\'") %>')">
+                    <i class="ti ti-trash"></i> Delete
+                  </button>
+                  <% } %>
+                </div>
+              </div>
+            </div>
+          </div>
+        <% }); %>
+      </div>
+    <% } %>
   <% } else { %>
     <div class="text-center py-12 bg-gray-800 rounded-lg">
       <div class="text-gray-500 mb-3"><i class="ti ti-video text-5xl"></i></div>
@@ -365,123 +458,190 @@ function formatDuration(seconds) {
 <div id="audioGrid" class="flex flex-col gap-3 <%= activeTab === 'audio' ? 'tab-visible' : 'tab-hidden' %>">
   <% if (audios && audios.length > 0) { %>
     <% 
-    // Function to extract base name for audio
-    function getAudioBaseName(title) {
-      // Remove file extension
-      let name = title.replace(/\.(mp3|wav|aac|m4a|flac)$/i, '');
-      // Remove trailing numbers, dashes, underscores
-      name = name.replace(/[-_\s]*\d+\s*$/g, '');
-      // Remove patterns like (1), [2], etc
-      name = name.replace(/\s*[\(\[\{]\d+[\)\]\}]\s*$/g, '');
-      // Trim and lowercase for grouping
-      return name.trim().toLowerCase() || title.toLowerCase();
-    }
+    // Separate explicit user folders from standalone audios
+    const audioFoldersByName = {};
+    const standaloneAudios = [];
     
-    // Group audios by base name
-    const audiosByName = {};
     audios.forEach(function(audio) {
       const explicitFolder = (audio.folder_name || '').trim();
-      const baseName = explicitFolder ? explicitFolder.toLowerCase() : getAudioBaseName(audio.title);
-      if (!audiosByName[baseName]) {
-        audiosByName[baseName] = {
-          displayName: explicitFolder || audio.title.replace(/[-_\s]*\d+\s*$/g, '').replace(/\s*[\(\[\{]\d+[\)\]\}]\s*$/g, '').trim(),
-          audios: []
-        };
+      if (explicitFolder) {
+        const baseKey = explicitFolder.toLowerCase();
+        if (!audioFoldersByName[baseKey]) {
+          audioFoldersByName[baseKey] = {
+            displayName: explicitFolder,
+            audios: []
+          };
+        }
+        audioFoldersByName[baseKey].audios.push(audio);
+      } else {
+        standaloneAudios.push(audio);
       }
-      audiosByName[baseName].audios.push(audio);
     });
     
-    // Sort groups by most recent audio in each group
-    const audioGroupKeys = Object.keys(audiosByName).sort((a, b) => {
-      const latestA = Math.max(...audiosByName[a].audios.map(v => new Date(v.upload_date)));
-      const latestB = Math.max(...audiosByName[b].audios.map(v => new Date(v.upload_date)));
+    // Sort folder groups by most recent audio
+    const audioFolderKeys = Object.keys(audioFoldersByName).sort((a, b) => {
+      const latestA = Math.max(...audioFoldersByName[a].audios.map(v => new Date(v.upload_date)));
+      const latestB = Math.max(...audioFoldersByName[b].audios.map(v => new Date(v.upload_date)));
       return latestB - latestA;
     });
-    
-    audioGroupKeys.forEach(function(groupKey, groupIndex) {
-      const group = audiosByName[groupKey];
+    %>
+
+    <!-- Real Folders (only shown if user created/moved into folders) -->
+    <% audioFolderKeys.forEach(function(groupKey, groupIndex) { 
+      const group = audioFoldersByName[groupKey];
       const groupAudios = group.audios.sort((a, b) => new Date(b.upload_date) - new Date(a.upload_date));
     %>
-      <!-- Audio Group -->
       <div class="audio-group" data-name="<%= groupKey %>" data-audio-ids='<%- JSON.stringify(groupAudios.map(a => a.id)) %>'>
-        <!-- Group Header -->
-        <div class="media-drop-target bg-gray-800/50 rounded-lg p-3 flex items-center justify-between cursor-pointer hover:bg-gray-800/70 transition-colors border border-gray-700/50" onclick="toggleAudioGroup('<%= groupIndex %>')" data-media-type="audio" data-folder-name="<%= group.displayName %>">
-          <div class="flex items-center gap-3">
-            <i class="ti ti-chevron-down text-gray-400 transition-transform duration-200" id="audioGroupIcon<%= groupIndex %>"></i>
-            <div>
-              <h3 class="font-medium text-white"><%= group.displayName %></h3>
-              <p class="text-xs text-gray-400"><%= groupAudios.length %> audio<%= groupAudios.length > 1 ? 's' : '' %></p>
+        <!-- Folder Header -->
+        <div class="media-drop-target bg-dark-750/90 hover:bg-dark-700/90 rounded-xl p-2.5 sm:p-3 flex items-center justify-between cursor-pointer transition-all border border-gray-700/60 shadow-sm" onclick="toggleAudioGroup('<%= groupIndex %>')" data-media-type="audio" data-folder-name="<%= group.displayName %>">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <i class="ti ti-chevron-down text-gray-400 text-sm transition-transform duration-200 shrink-0" id="audioGroupIcon<%= groupIndex %>"></i>
+            <div class="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400 shrink-0">
+              <i class="ti ti-folder text-base"></i>
+            </div>
+            <div class="min-w-0">
+              <h3 class="font-medium text-xs sm:text-sm text-white truncate"><%= group.displayName %></h3>
+              <p class="text-[11px] text-gray-400"><%= groupAudios.length %> audio<%= groupAudios.length > 1 ? 's' : '' %></p>
             </div>
           </div>
-          <div class="flex items-center gap-2">
-            <button type="button" onclick="renameMediaFolder(event, 'audio')" title="Rename Folder" class="p-1.5 text-gray-400 hover:text-green-400 hover:bg-green-500/10 rounded-lg transition-colors">
-              <i class="ti ti-pencil"></i>
+          <div class="flex items-center gap-1 shrink-0">
+            <button type="button" onclick="renameMediaFolder(event, 'audio')" title="Rename Folder" class="p-1.5 text-gray-400 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-lg transition-colors">
+              <i class="ti ti-pencil text-sm"></i>
             </button>
             <% if (typeof permissions !== 'undefined' && permissions.can_delete_videos) { %>
             <button type="button" onclick="deleteSingleFolder(event, 'audio')" title="Hapus Folder" class="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors">
-              <i class="ti ti-trash"></i>
+              <i class="ti ti-trash text-sm"></i>
             </button>
-            <label class="flex items-center gap-2 text-xs text-gray-300 cursor-pointer" onclick="event.stopPropagation()">
+            <label class="flex items-center gap-1.5 text-xs text-gray-300 cursor-pointer pl-1" onclick="event.stopPropagation()">
               <input type="checkbox" class="audio-folder-checkbox rounded border-gray-500 bg-dark-700 text-red-500 focus:ring-red-500"
                 data-folder-name="<%= group.displayName %>" data-ids='<%- JSON.stringify(groupAudios.map(a => a.id)) %>'>
-              <span>Select</span>
+              <span class="text-[11px] hidden sm:inline">Select</span>
             </label>
             <% } %>
-            <div class="text-xs text-gray-500">
-              <i class="ti ti-folder"></i>
-            </div>
           </div>
         </div>
         
-        <!-- Group Content -->
-        <div class="audio-group-content mt-2 space-y-2" id="audioGroupContent<%= groupIndex %>">
+        <!-- Folder Content -->
+        <div class="audio-group-content mt-1.5 space-y-1.5 pl-2 sm:pl-3 border-l-2 border-emerald-500/20 ml-2" id="audioGroupContent<%= groupIndex %>">
           <% groupAudios.forEach(function(audio) { %>
-            <div class="audio-card bg-gray-800 rounded-xl p-2.5 sm:p-3 flex items-center gap-2.5 sm:gap-3.5 hover:bg-gray-700/50 transition-all ml-1 sm:ml-3 border-l-2 border-green-500/40 shadow-sm" data-title="<%= audio.title.toLowerCase() %>" data-date="<%= audio.upload_date %>" data-id="<%= audio.id %>" data-current-folder="<%= group.displayName %>" data-media-type="audio">
-              <!-- Audio Icon -->
-              <div class="relative w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 flex-shrink-0 rounded-lg bg-gradient-to-br from-green-600/30 to-green-900/30 flex items-center justify-center cursor-pointer group" onclick="playAudio('<%= audio.id %>', '<%= audio.title.replace(/'/g, "\\'") %>')">
-                <i class="ti ti-music text-xl sm:text-2xl md:text-3xl text-green-500"></i>
-                <div class="absolute inset-0 bg-black/40 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                  <i class="ti ti-player-play-filled text-white text-base sm:text-lg"></i>
+            <div class="audio-card bg-gray-800/90 hover:bg-gray-750 border border-gray-700/60 rounded-xl p-2 sm:p-2.5 flex items-center justify-between gap-2.5 transition-all shadow-sm" data-title="<%= audio.title.toLowerCase() %>" data-date="<%= audio.upload_date %>" data-id="<%= audio.id %>" data-current-folder="<%= group.displayName %>" data-media-type="audio">
+              <div class="flex items-center gap-2.5 min-w-0 flex-1 card-main-row">
+                <div class="relative w-10 h-10 sm:w-11 sm:h-11 flex-shrink-0 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center cursor-pointer group card-thumb-wrap" onclick="playAudio('<%= audio.id %>', '<%= audio.title.replace(/'/g, "\\'") %>')">
+                  <i class="ti ti-music text-lg sm:text-xl text-emerald-400"></i>
+                  <div class="absolute inset-0 bg-black/40 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <i class="ti ti-player-play-filled text-white text-xs sm:text-sm"></i>
+                  </div>
+                </div>
+                <div class="min-w-0 flex-1 card-info-wrap">
+                  <h4 class="font-medium text-xs sm:text-sm text-white truncate leading-tight" title="<%= audio.title %>"><%= audio.title %></h4>
+                  <div class="text-[11px] text-gray-400 truncate flex items-center gap-1.5 mt-0.5 whitespace-nowrap">
+                    <span class="uppercase text-emerald-400 font-medium"><%= audio.format %></span>
+                    <span class="text-gray-600">•</span>
+                    <span><%= formatDuration(audio.duration) %></span>
+                    <span class="text-gray-600">•</span>
+                    <span><%= formatFileSize(audio.file_size) %></span>
+                    <span class="text-gray-600 hidden md:inline">•</span>
+                    <span class="hidden md:inline"><%= new Date(audio.upload_date).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) %></span>
+                  </div>
                 </div>
               </div>
-              <!-- Info -->
-              <div class="flex-1 min-w-0 pr-1">
-                <h3 class="font-medium text-xs sm:text-sm md:text-base text-white break-words line-clamp-2 leading-snug" title="<%= audio.title %>"><%= audio.title %></h3>
-                <div class="text-[11px] sm:text-xs text-gray-400 flex items-center flex-wrap gap-x-2 gap-y-0.5 mt-1">
-                  <span class="inline-flex items-center">
-                    <i class="ti ti-music text-green-500 mr-1 shrink-0"></i>
-                    <span class="uppercase text-green-400 font-medium"><%= audio.format %></span>
-                  </span>
-                  <span class="text-gray-600">•</span>
-                  <span><%= formatDuration(audio.duration) %></span>
-                  <span class="text-gray-600">•</span>
-                  <span><%= formatFileSize(audio.file_size) %></span>
-                  <span class="text-gray-600">•</span>
-                  <span><%= new Date(audio.upload_date).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) %></span>
-                </div>
-              </div>
-              <!-- Actions -->
-              <div class="flex items-center gap-0.5 sm:gap-1 flex-shrink-0">
-                <button class="p-1.5 sm:p-2 text-gray-400 hover:text-green-400 hover:bg-green-500/10 rounded-lg transition-colors" onclick="playAudio('<%= audio.id %>', '<%= audio.title.replace(/'/g, "\\'") %>')" title="Play">
-                  <i class="ti ti-player-play text-base sm:text-lg"></i>
+              <div class="flex items-center gap-0.5 sm:gap-1 flex-shrink-0 card-actions-wrap">
+                <button type="button" class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700/60 rounded-lg transition-colors" onclick="playAudio('<%= audio.id %>', '<%= audio.title.replace(/'/g, "\\'") %>')" title="Play">
+                  <i class="ti ti-player-play text-base"></i>
                 </button>
-                <button class="p-1.5 sm:p-2 text-gray-400 hover:text-cyan-400 hover:bg-cyan-500/10 rounded-lg transition-colors" onclick="openMoveMediaModal('<%= audio.id %>', '<%= audio.title.replace(/'/g, "\\'") %>', 'audio', '<%= (audio.folder_name || '').replace(/'/g, "\\'") %>')" title="Pindah ke Folder">
-                  <i class="ti ti-folder-share text-base sm:text-lg"></i>
+                <button type="button" class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-cyan-400 hover:bg-cyan-500/10 rounded-lg transition-colors" onclick="openMoveMediaModal('<%= audio.id %>', '<%= audio.title.replace(/'/g, "\\'") %>', 'audio', '<%= (audio.folder_name || '').replace(/'/g, "\\'") %>')" title="Pindah ke Folder">
+                  <i class="ti ti-folder-share text-base"></i>
                 </button>
-                <button class="p-1.5 sm:p-2 text-gray-400 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors" onclick="showRenameAudioDialog('<%= audio.id %>', '<%= audio.title.replace(/'/g, "\\'") %>')" title="Rename">
-                  <i class="ti ti-pencil text-base sm:text-lg"></i>
+                <button type="button" class="w-8 h-8 items-center justify-center text-gray-400 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors hidden sm:flex" onclick="showRenameAudioDialog('<%= audio.id %>', '<%= audio.title.replace(/'/g, "\\'") %>')" title="Rename">
+                  <i class="ti ti-pencil text-base"></i>
                 </button>
                 <% if (typeof permissions !== 'undefined' && permissions.can_delete_videos) { %>
-                <button class="p-1.5 sm:p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors" onclick="showDeleteAudioDialog('<%= audio.id %>', '<%= audio.title.replace(/'/g, "\\'") %>')" title="Delete">
-                  <i class="ti ti-trash text-base sm:text-lg"></i>
+                <button type="button" class="w-8 h-8 items-center justify-center text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors hidden sm:flex" onclick="showDeleteAudioDialog('<%= audio.id %>', '<%= audio.title.replace(/'/g, "\\'") %>')" title="Delete">
+                  <i class="ti ti-trash text-base"></i>
                 </button>
                 <% } %>
+                <div class="relative sm:hidden">
+                  <button type="button" class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700/60 rounded-lg transition-colors" onclick="toggleCardActionMenu(event, 'amenu-<%= audio.id %>')" title="Menu Lainnya">
+                    <i class="ti ti-dots-vertical text-base"></i>
+                  </button>
+                  <div id="amenu-<%= audio.id %>" class="card-action-menu hidden absolute right-0 top-full mt-1 w-36 bg-dark-800 border border-gray-700 rounded-xl shadow-xl py-1 z-30">
+                    <button type="button" class="w-full text-left px-3 py-2 text-xs text-gray-300 hover:text-white hover:bg-gray-700/50 flex items-center gap-2" onclick="showRenameAudioDialog('<%= audio.id %>', '<%= audio.title.replace(/'/g, "\\'") %>')">
+                      <i class="ti ti-pencil text-primary"></i> Rename
+                    </button>
+                    <% if (typeof permissions !== 'undefined' && permissions.can_delete_videos) { %>
+                    <button type="button" class="w-full text-left px-3 py-2 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 flex items-center gap-2" onclick="showDeleteAudioDialog('<%= audio.id %>', '<%= audio.title.replace(/'/g, "\\'") %>')">
+                      <i class="ti ti-trash"></i> Delete
+                    </button>
+                    <% } %>
+                  </div>
+                </div>
               </div>
             </div>
           <% }); %>
         </div>
       </div>
     <% }); %>
+
+    <!-- Standalone Audios (Files not in any folder: Single Line, No Dropdown Box!) -->
+    <% if (standaloneAudios.length > 0) { %>
+      <div class="standalone-media-container space-y-1.5">
+        <% standaloneAudios.forEach(function(audio) { %>
+          <div class="audio-card media-card-standalone bg-gray-800/90 hover:bg-gray-750 border border-gray-700/60 rounded-xl p-2 sm:p-2.5 flex items-center justify-between gap-2.5 transition-all shadow-sm" data-title="<%= audio.title.toLowerCase() %>" data-date="<%= audio.upload_date %>" data-id="<%= audio.id %>" data-current-folder="" data-media-type="audio">
+            <div class="flex items-center gap-2.5 min-w-0 flex-1 card-main-row">
+              <div class="relative w-10 h-10 sm:w-11 sm:h-11 flex-shrink-0 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center cursor-pointer group card-thumb-wrap" onclick="playAudio('<%= audio.id %>', '<%= audio.title.replace(/'/g, "\\'") %>')">
+                <i class="ti ti-music text-lg sm:text-xl text-emerald-400"></i>
+                <div class="absolute inset-0 bg-black/40 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <i class="ti ti-player-play-filled text-white text-xs sm:text-sm"></i>
+                </div>
+              </div>
+              <div class="min-w-0 flex-1 card-info-wrap">
+                <h4 class="font-medium text-xs sm:text-sm text-white truncate leading-tight" title="<%= audio.title %>"><%= audio.title %></h4>
+                <div class="text-[11px] text-gray-400 truncate flex items-center gap-1.5 mt-0.5 whitespace-nowrap">
+                  <span class="uppercase text-emerald-400 font-medium"><%= audio.format %></span>
+                  <span class="text-gray-600">•</span>
+                  <span><%= formatDuration(audio.duration) %></span>
+                  <span class="text-gray-600">•</span>
+                  <span><%= formatFileSize(audio.file_size) %></span>
+                  <span class="text-gray-600 hidden md:inline">•</span>
+                  <span class="hidden md:inline"><%= new Date(audio.upload_date).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) %></span>
+                </div>
+              </div>
+            </div>
+            <div class="flex items-center gap-0.5 sm:gap-1 flex-shrink-0 card-actions-wrap">
+              <button type="button" class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700/60 rounded-lg transition-colors" onclick="playAudio('<%= audio.id %>', '<%= audio.title.replace(/'/g, "\\'") %>')" title="Play">
+                <i class="ti ti-player-play text-base"></i>
+              </button>
+              <button type="button" class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-cyan-400 hover:bg-cyan-500/10 rounded-lg transition-colors" onclick="openMoveMediaModal('<%= audio.id %>', '<%= audio.title.replace(/'/g, "\\'") %>', 'audio', '')" title="Pindah ke Folder">
+                <i class="ti ti-folder-share text-base"></i>
+              </button>
+              <button type="button" class="w-8 h-8 items-center justify-center text-gray-400 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors hidden sm:flex" onclick="showRenameAudioDialog('<%= audio.id %>', '<%= audio.title.replace(/'/g, "\\'") %>')" title="Rename">
+                <i class="ti ti-pencil text-base"></i>
+              </button>
+              <% if (typeof permissions !== 'undefined' && permissions.can_delete_videos) { %>
+              <button type="button" class="w-8 h-8 items-center justify-center text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors hidden sm:flex" onclick="showDeleteAudioDialog('<%= audio.id %>', '<%= audio.title.replace(/'/g, "\\'") %>')" title="Delete">
+                <i class="ti ti-trash text-base"></i>
+              </button>
+              <% } %>
+              <div class="relative sm:hidden">
+                <button type="button" class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700/60 rounded-lg transition-colors" onclick="toggleCardActionMenu(event, 'amenu-sa-<%= audio.id %>')" title="Menu Lainnya">
+                  <i class="ti ti-dots-vertical text-base"></i>
+                </button>
+                <div id="amenu-sa-<%= audio.id %>" class="card-action-menu hidden absolute right-0 top-full mt-1 w-36 bg-dark-800 border border-gray-700 rounded-xl shadow-xl py-1 z-30">
+                  <button type="button" class="w-full text-left px-3 py-2 text-xs text-gray-300 hover:text-white hover:bg-gray-700/50 flex items-center gap-2" onclick="showRenameAudioDialog('<%= audio.id %>', '<%= audio.title.replace(/'/g, "\\'") %>')">
+                    <i class="ti ti-pencil text-primary"></i> Rename
+                  </button>
+                  <% if (typeof permissions !== 'undefined' && permissions.can_delete_videos) { %>
+                  <button type="button" class="w-full text-left px-3 py-2 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 flex items-center gap-2" onclick="showDeleteAudioDialog('<%= audio.id %>', '<%= audio.title.replace(/'/g, "\\'") %>')">
+                    <i class="ti ti-trash"></i> Delete
+                  </button>
+                  <% } %>
+                </div>
+              </div>
+            </div>
+          </div>
+        <% }); %>
+      </div>
+    <% } %>
   <% } else { %>
     <div class="text-center py-12 bg-gray-800 rounded-lg">
       <div class="text-gray-500 mb-3"><i class="ti ti-music text-5xl"></i></div>
@@ -2238,19 +2398,46 @@ function formatDuration(seconds) {
     }
   }
   
-  // Search functionality - updated for grouping
+  // Toggle 3-dots action menu on mobile cards
+  function toggleCardActionMenu(event, menuId) {
+    event.stopPropagation();
+    const menu = document.getElementById(menuId);
+    if (!menu) return;
+    const isHidden = menu.classList.contains('hidden');
+    // Hide all open menus
+    document.querySelectorAll('.card-action-menu').forEach(m => m.classList.add('hidden'));
+    if (isHidden) {
+      menu.classList.remove('hidden');
+    }
+  }
+
+  // Close menus on outside click
+  document.addEventListener('click', function(e) {
+    if (!e.target.closest('.card-action-menu')) {
+      document.querySelectorAll('.card-action-menu').forEach(m => m.classList.add('hidden'));
+    }
+  });
+
+  // Search functionality - handles both folder groups and standalone cards
   document.getElementById('searchInput').addEventListener('input', function(e) {
-    const query = e.target.value.toLowerCase();
+    const query = e.target.value.toLowerCase().trim();
     
     if (currentTab === 'audio') {
+      // Standalone audio cards
+      const standaloneAudios = document.querySelectorAll('#audioGrid .media-card-standalone');
+      standaloneAudios.forEach(card => {
+        const title = (card.dataset.title || '').toLowerCase();
+        card.style.display = (query === '' || title.includes(query)) ? '' : 'none';
+      });
+
       const audioGroups = document.querySelectorAll('.audio-group');
       audioGroups.forEach((group, groupIndex) => {
         const cards = group.querySelectorAll('.audio-card');
         let hasVisibleCard = false;
         
         cards.forEach(card => {
-          const title = card.dataset.title;
-          const isVisible = title.includes(query);
+          const title = (card.dataset.title || '').toLowerCase();
+          const isVisible = query === '' || title.includes(query);
           card.style.display = isVisible ? '' : 'none';
           if (isVisible) hasVisibleCard = true;
         });
@@ -2269,14 +2456,21 @@ function formatDuration(seconds) {
         }
       });
     } else {
+      // Standalone video cards
+      const standaloneVideos = document.querySelectorAll('#videoGrid .media-card-standalone');
+      standaloneVideos.forEach(card => {
+        const title = (card.dataset.title || '').toLowerCase();
+        card.style.display = (query === '' || title.includes(query)) ? '' : 'none';
+      });
+
       const videoGroups = document.querySelectorAll('.video-group');
       videoGroups.forEach((group, groupIndex) => {
         const cards = group.querySelectorAll('.video-card');
         let hasVisibleCard = false;
         
         cards.forEach(card => {
-          const title = card.dataset.title;
-          const isVisible = title.includes(query);
+          const title = (card.dataset.title || '').toLowerCase();
+          const isVisible = query === '' || title.includes(query);
           card.style.display = isVisible ? '' : 'none';
           if (isVisible) hasVisibleCard = true;
         });
