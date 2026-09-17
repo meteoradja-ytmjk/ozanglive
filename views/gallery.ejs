@@ -64,6 +64,54 @@ function formatDuration(seconds) {
     outline-color: rgba(34, 197, 94, 0.9);
     background-color: rgba(34, 197, 94, 0.14);
   }
+
+  /* Grid View Mode */
+  .view-mode-grid .video-group-content:not([style*="display: none"]),
+  .view-mode-grid .audio-group-content:not([style*="display: none"]) {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)) !important;
+    gap: 0.75rem !important;
+    margin-left: 0 !important;
+  }
+  @media (min-width: 640px) {
+    .view-mode-grid .video-group-content:not([style*="display: none"]),
+    .view-mode-grid .audio-group-content:not([style*="display: none"]) {
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)) !important;
+      gap: 1rem !important;
+    }
+  }
+  .view-mode-grid .video-card,
+  .view-mode-grid .audio-card {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    margin-left: 0 !important;
+    padding: 0.625rem !important;
+    border-left-width: 1px !important;
+    border-top-width: 3px !important;
+    height: 100% !important;
+  }
+  .view-mode-grid .video-card > div:first-child {
+    width: 100% !important;
+    height: 110px !important;
+    border-radius: 0.375rem !important;
+  }
+  .view-mode-grid .audio-card > div:first-child {
+    width: 100% !important;
+    height: 80px !important;
+    border-radius: 0.375rem !important;
+  }
+  .view-mode-grid .video-card .flex-1,
+  .view-mode-grid .audio-card .flex-1 {
+    width: 100% !important;
+    margin-top: 0.5rem !important;
+  }
+  .view-mode-grid .video-card .flex.items-center.gap-1,
+  .view-mode-grid .audio-card .flex.items-center.gap-1 {
+    margin-top: 0.5rem !important;
+    justify-content: flex-end !important;
+    border-top: 1px solid rgba(75, 85, 99, 0.3) !important;
+    padding-top: 0.375rem !important;
+  }
 </style>
 
 <div class="flex flex-col lg:flex-row lg:items-center justify-between mb-6 gap-4">
@@ -123,54 +171,48 @@ function formatDuration(seconds) {
   </button>
 </div>
 
-<!-- Search and Sort (Single Line Modern Toolbar) -->
+<!-- Search and Action Toolbar (Single Line Modern Toolbar) -->
 <div class="bg-gray-800/80 backdrop-blur-sm border border-gray-700/60 rounded-2xl p-3 sm:p-3.5 mb-6 shadow-sm">
   <div class="mb-2.5 flex items-center gap-1.5 text-[11px] sm:text-xs text-gray-400/90 px-0.5">
     <i class="ti ti-info-circle text-primary shrink-0"></i>
-    <span class="truncate">Drag kartu video/audio ke folder tujuan, atau klik pensil untuk rename.</span>
+    <span class="truncate">Drag kartu video/audio ke folder tujuan, atau klik pensil untuk rename folder.</span>
   </div>
   <div class="flex items-center gap-1.5 sm:gap-2.5 w-full">
     <!-- Search Input (takes maximum available space) -->
     <div class="relative flex-1 min-w-0">
       <input type="text" id="searchInput" placeholder="Search media..."
-        class="w-full h-9 sm:h-10 bg-dark-700/90 text-white pl-9 pr-3 text-xs sm:text-sm border border-gray-600/50 rounded-xl focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary placeholder-gray-400 transition-all">
+        class="w-full h-10 bg-dark-700/90 text-white pl-9 pr-3 text-xs sm:text-sm border border-gray-600/50 rounded-xl focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary placeholder-gray-400 transition-all">
       <i class="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm sm:text-base"></i>
     </div>
 
-    <!-- Uniform Control Buttons: All exactly same width & height (w-9 h-9 / w-10 h-10) -->
+    <!-- Actions Toolbar: All buttons strictly same height (h-10) -->
     <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
-      <!-- 1. Sort Button -->
-      <div class="relative w-9 h-9 sm:w-10 sm:h-10 shrink-0" title="Sort: Z to A / A to Z">
-        <select id="sortSelect"
-          class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
-          <option value="newest" selected>Z to A</option>
-          <option value="oldest">A to Z</option>
-        </select>
-        <div class="w-full h-full flex flex-col items-center justify-center bg-dark-700/90 hover:bg-dark-600 border border-gray-600/50 hover:border-gray-500 text-gray-300 hover:text-white rounded-xl transition-all shadow-sm pointer-events-none">
-          <i class="ti ti-arrows-sort text-xs sm:text-sm"></i>
-          <span id="sortIndicator" class="text-[8px] sm:text-[9px] font-bold leading-none text-primary mt-0.5">Z-A</span>
-        </div>
-      </div>
+      <!-- 1. Create Folder Button (Contextual for Active Tab: Video or Audio) -->
+      <button type="button" onclick="createMediaFolder()" id="createFolderBtn" title="Buat Folder Baru"
+        class="h-10 w-10 flex items-center justify-center bg-dark-700/90 hover:bg-dark-600 border border-gray-600/50 hover:border-primary text-primary hover:text-white rounded-xl transition-all active:scale-95 shadow-sm shrink-0">
+        <i class="ti ti-folder-plus text-base"></i>
+      </button>
 
       <!-- 2. Delete Selected Folders Button -->
       <% if (typeof permissions !== 'undefined' && permissions.can_delete_videos) { %>
-      <button onclick="deleteSelectedFolders()" title="Delete Selected Folders"
-        class="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 hover:border-red-500/50 text-red-400 hover:text-red-300 rounded-xl transition-all active:scale-95 shadow-sm shrink-0">
-        <i class="ti ti-trash text-sm sm:text-base"></i>
+      <button type="button" onclick="deleteSelectedFolders()" title="Hapus Folder Terpilih"
+        class="h-10 w-10 flex items-center justify-center bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 hover:border-red-500/50 text-red-400 hover:text-red-300 rounded-xl transition-all active:scale-95 shadow-sm shrink-0">
+        <i class="ti ti-trash text-base"></i>
       </button>
       <% } %>
 
-      <!-- 3. Expand All Folders Button -->
-      <button onclick="expandAllGroups()" title="Expand All Folders"
-        class="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center bg-dark-700/90 hover:bg-dark-600 border border-gray-600/50 hover:border-gray-500 text-gray-300 hover:text-white rounded-xl transition-all active:scale-95 shadow-sm shrink-0">
-        <i class="ti ti-chevrons-down text-sm sm:text-base"></i>
-      </button>
-
-      <!-- 4. Collapse All Folders Button -->
-      <button onclick="collapseAllGroups()" title="Collapse All Folders"
-        class="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center bg-dark-700/90 hover:bg-dark-600 border border-gray-600/50 hover:border-gray-500 text-gray-300 hover:text-white rounded-xl transition-all active:scale-95 shadow-sm shrink-0">
-        <i class="ti ti-chevrons-up text-sm sm:text-base"></i>
-      </button>
+      <!-- 3. Grid / List View Mode Toggle -->
+      <div class="flex items-center h-10 bg-dark-700/90 border border-gray-600/50 rounded-xl p-0.5 shrink-0">
+        <button type="button" onclick="setGalleryViewMode('grid')" id="viewGridBtn" title="Grid View"
+          class="w-8 sm:w-9 h-full flex items-center justify-center rounded-lg text-gray-400 hover:text-white transition-all">
+          <i class="ti ti-layout-grid text-sm sm:text-base"></i>
+        </button>
+        <div class="w-px h-4 bg-gray-600/50"></div>
+        <button type="button" onclick="setGalleryViewMode('list')" id="viewListBtn" title="List View"
+          class="w-8 sm:w-9 h-full flex items-center justify-center rounded-lg text-gray-400 hover:text-white transition-all">
+          <i class="ti ti-list text-sm sm:text-base"></i>
+        </button>
+      </div>
     </div>
   </div>
 </div>
@@ -238,6 +280,9 @@ function formatDuration(seconds) {
               <i class="ti ti-pencil"></i>
             </button>
             <% if (typeof permissions !== 'undefined' && permissions.can_delete_videos) { %>
+            <button type="button" onclick="deleteSingleFolder(event, 'video')" title="Hapus Folder" class="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors">
+              <i class="ti ti-trash"></i>
+            </button>
             <label class="flex items-center gap-2 text-xs text-gray-300 cursor-pointer" onclick="event.stopPropagation()">
               <input type="checkbox" class="video-folder-checkbox rounded border-gray-500 bg-dark-700 text-red-500 focus:ring-red-500"
                 data-folder-name="<%= group.displayName %>" data-ids='<%- JSON.stringify(groupVideos.map(v => v.id)) %>'>
@@ -364,6 +409,9 @@ function formatDuration(seconds) {
               <i class="ti ti-pencil"></i>
             </button>
             <% if (typeof permissions !== 'undefined' && permissions.can_delete_videos) { %>
+            <button type="button" onclick="deleteSingleFolder(event, 'audio')" title="Hapus Folder" class="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors">
+              <i class="ti ti-trash"></i>
+            </button>
             <label class="flex items-center gap-2 text-xs text-gray-300 cursor-pointer" onclick="event.stopPropagation()">
               <input type="checkbox" class="audio-folder-checkbox rounded border-gray-500 bg-dark-700 text-red-500 focus:ring-red-500"
                 data-folder-name="<%= group.displayName %>" data-ids='<%- JSON.stringify(groupAudios.map(a => a.id)) %>'>
@@ -984,7 +1032,12 @@ function formatDuration(seconds) {
       ids = [];
     }
     if (!Array.isArray(ids) || ids.length === 0) {
-      showToast('error', 'Folder tidak punya media untuk di-rename');
+      updateEmptyFolderStorage(type, currentName, folderName);
+      dropTarget.dataset.folderName = folderName;
+      group.dataset.name = folderName.toLowerCase();
+      const titleEl = dropTarget.querySelector('h3');
+      if (titleEl) titleEl.textContent = folderName;
+      showToast('success', 'Folder berhasil di-rename');
       return;
     }
 
@@ -1009,6 +1062,244 @@ function formatDuration(seconds) {
       }
     } catch (error) {
       showToast('error', 'Gagal rename folder');
+    }
+  }
+
+  // Delete single folder (for both populated and empty folders)
+  async function deleteSingleFolder(event, type) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const group = event.currentTarget.closest(type === 'audio' ? '.audio-group' : '.video-group');
+    const dropTarget = group?.querySelector('.media-drop-target');
+    if (!group || !dropTarget) {
+      showToast('error', 'Folder tidak ditemukan');
+      return;
+    }
+
+    const folderName = dropTarget.dataset.folderName || 'Folder';
+    let ids = [];
+    try {
+      ids = JSON.parse(group.dataset[type === 'audio' ? 'audioIds' : 'videoIds'] || '[]');
+    } catch {
+      ids = [];
+    }
+
+    // If empty folder
+    if (ids.length === 0) {
+      if (!confirm(`Hapus folder kosong "${folderName}"?`)) return;
+      removeEmptyFolderStorage(type, folderName);
+      group.remove();
+      showToast('success', `Folder "${folderName}" dihapus`);
+      return;
+    }
+
+    const itemLabel = type === 'audio' ? 'audio' : 'video';
+    if (!confirm(`Hapus folder "${folderName}" beserta ${ids.length} ${itemLabel} di dalamnya?`)) {
+      return;
+    }
+
+    const endpoint = type === 'audio' ? '/api/audios/delete-folder' : '/api/videos/delete-folder';
+    const body = type === 'audio' ? { audioIds: ids } : { videoIds: ids };
+
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': '<%= csrfToken %>'
+        },
+        body: JSON.stringify(body)
+      });
+      const data = await response.json();
+      if (data.success) {
+        removeEmptyFolderStorage(type, folderName);
+        showToast('success', data.message || 'Folder berhasil dihapus');
+        setTimeout(() => location.reload(), 700);
+      } else {
+        showToast('error', data.error || 'Gagal menghapus folder');
+      }
+    } catch (error) {
+      showToast('error', 'Gagal menghapus folder');
+    }
+  }
+
+  // Folder storage helpers for contextual Video/Audio separation
+  function getEmptyFoldersStorage(type) {
+    const key = type === 'audio' ? 'emptyAudioFolders' : 'emptyVideoFolders';
+    try {
+      const data = JSON.parse(localStorage.getItem(key) || '[]');
+      return Array.isArray(data) ? data : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function addEmptyFolderStorage(type, folderName) {
+    const key = type === 'audio' ? 'emptyAudioFolders' : 'emptyVideoFolders';
+    const list = getEmptyFoldersStorage(type);
+    if (!list.some(name => name.toLowerCase() === folderName.toLowerCase())) {
+      list.push(folderName);
+      localStorage.setItem(key, JSON.stringify(list));
+    }
+  }
+
+  function removeEmptyFolderStorage(type, folderName) {
+    const key = type === 'audio' ? 'emptyAudioFolders' : 'emptyVideoFolders';
+    let list = getEmptyFoldersStorage(type);
+    list = list.filter(name => name.toLowerCase() !== (folderName || '').toLowerCase());
+    localStorage.setItem(key, JSON.stringify(list));
+  }
+
+  function updateEmptyFolderStorage(type, oldName, newName) {
+    const key = type === 'audio' ? 'emptyAudioFolders' : 'emptyVideoFolders';
+    const list = getEmptyFoldersStorage(type).map(name => {
+      return name.toLowerCase() === oldName.toLowerCase() ? newName : name;
+    });
+    localStorage.setItem(key, JSON.stringify(list));
+  }
+
+  function renderEmptyFolderDOM(type, folderName) {
+    const isAudio = type === 'audio';
+    const grid = document.getElementById(isAudio ? 'audioGrid' : 'videoGrid');
+    if (!grid) return;
+
+    // Check if folder already rendered
+    const exists = Array.from(grid.querySelectorAll('.media-drop-target')).some(
+      t => (t.dataset.folderName || '').toLowerCase() === folderName.toLowerCase()
+    );
+    if (exists) return;
+
+    const groupDiv = document.createElement('div');
+    groupDiv.className = `${isAudio ? 'audio-group' : 'video-group'} empty-media-folder`;
+    groupDiv.dataset.name = folderName.toLowerCase();
+    groupDiv.dataset[isAudio ? 'audioIds' : 'videoIds'] = '[]';
+
+    const accentBorder = isAudio ? 'border-dashed border-green-500/50 hover:border-green-400' : 'border-dashed border-primary/50 hover:border-primary';
+    const iconColor = isAudio ? 'text-green-400 bg-green-500/10' : 'text-primary bg-primary/10';
+    const subtextColor = isAudio ? 'text-green-400/80' : 'text-primary/80';
+    const renameHover = isAudio ? 'hover:text-green-400 hover:bg-green-500/10' : 'hover:text-primary hover:bg-primary/10';
+
+    groupDiv.innerHTML = `
+      <div class="media-drop-target bg-gray-800/50 rounded-lg p-3 flex items-center justify-between cursor-pointer hover:bg-gray-800/70 transition-colors border ${accentBorder}"
+        data-media-type="${type}" data-folder-name="${folderName}"
+        ondragover="handleMediaDragOver(event)" ondragenter="handleMediaDragEnter(event)" ondragleave="handleMediaDragLeave(event)" ondrop="handleMediaDrop(event)">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg ${iconColor} flex items-center justify-center shrink-0">
+            <i class="ti ti-folder-plus text-base sm:text-lg"></i>
+          </div>
+          <div>
+            <h3 class="font-medium text-white text-sm sm:text-base">${folderName}</h3>
+            <p class="text-xs ${subtextColor}">Folder kosong - drag ${type} ke sini</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-1.5 sm:gap-2">
+          <button type="button" onclick="renameMediaFolder(event, '${type}')" title="Rename Folder"
+            class="p-1.5 text-gray-400 ${renameHover} rounded-lg transition-colors">
+            <i class="ti ti-pencil text-sm sm:text-base"></i>
+          </button>
+          <button type="button" onclick="deleteSingleFolder(event, '${type}')" title="Hapus Folder"
+            class="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors">
+            <i class="ti ti-trash text-sm sm:text-base"></i>
+          </button>
+        </div>
+      </div>
+      <div class="${isAudio ? 'audio-group-content' : 'video-group-content'} mt-2"></div>
+    `;
+
+    const firstGroup = grid.querySelector(isAudio ? '.audio-group' : '.video-group');
+    if (firstGroup) {
+      grid.insertBefore(groupDiv, firstGroup);
+    } else {
+      grid.prepend(groupDiv);
+    }
+  }
+
+  // Create folder contextual to currently active tab (Video vs Audio)
+  function createMediaFolder() {
+    const isAudio = currentTab === 'audio';
+    const type = isAudio ? 'audio' : 'video';
+    const mediaLabel = isAudio ? 'Audio' : 'Video';
+
+    const inputName = prompt(`Nama folder baru untuk ${mediaLabel}:`);
+    if (inputName === null) return;
+
+    const folderName = inputName.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!folderName) {
+      showToast('error', 'Nama folder tidak boleh kosong');
+      return;
+    }
+    if (folderName.length > 120) {
+      showToast('error', 'Nama folder maksimal 120 karakter');
+      return;
+    }
+
+    const grid = document.getElementById(isAudio ? 'audioGrid' : 'videoGrid');
+    if (grid) {
+      const existing = Array.from(grid.querySelectorAll('.media-drop-target')).some(
+        t => (t.dataset.folderName || '').toLowerCase() === folderName.toLowerCase()
+      );
+      if (existing) {
+        showToast('error', `Folder "${folderName}" sudah ada di tab ${mediaLabel}`);
+        return;
+      }
+    }
+
+    addEmptyFolderStorage(type, folderName);
+    renderEmptyFolderDOM(type, folderName);
+    showToast('success', `Folder "${folderName}" berhasil dibuat di ${mediaLabel}`);
+  }
+
+  function initEmptyMediaFolders() {
+    ['video', 'audio'].forEach(type => {
+      const isAudio = type === 'audio';
+      const grid = document.getElementById(isAudio ? 'audioGrid' : 'videoGrid');
+      if (!grid) return;
+
+      const storedList = getEmptyFoldersStorage(type);
+      const cleanedList = [];
+
+      storedList.forEach(folderName => {
+        const existingPopulated = Array.from(grid.querySelectorAll(`.${isAudio ? 'audio-group' : 'video-group'}:not(.empty-media-folder)`)).some(
+          g => (g.querySelector('.media-drop-target')?.dataset.folderName || '').toLowerCase() === folderName.toLowerCase()
+        );
+        if (!existingPopulated) {
+          cleanedList.push(folderName);
+          renderEmptyFolderDOM(type, folderName);
+        }
+      });
+
+      localStorage.setItem(isAudio ? 'emptyAudioFolders' : 'emptyVideoFolders', JSON.stringify(cleanedList));
+    });
+  }
+
+  // View mode management: Grid vs List view
+  function setGalleryViewMode(mode) {
+    const videoGrid = document.getElementById('videoGrid');
+    const audioGrid = document.getElementById('audioGrid');
+    const gridBtn = document.getElementById('viewGridBtn');
+    const listBtn = document.getElementById('viewListBtn');
+
+    if (mode === 'grid') {
+      if (videoGrid) videoGrid.classList.add('view-mode-grid');
+      if (audioGrid) audioGrid.classList.add('view-mode-grid');
+      if (gridBtn) {
+        gridBtn.className = 'w-8 sm:w-9 h-full flex items-center justify-center rounded-lg bg-primary/20 text-primary transition-all font-medium';
+      }
+      if (listBtn) {
+        listBtn.className = 'w-8 sm:w-9 h-full flex items-center justify-center rounded-lg text-gray-400 hover:text-white transition-all';
+      }
+      localStorage.setItem('mediaGalleryViewMode', 'grid');
+    } else {
+      if (videoGrid) videoGrid.classList.remove('view-mode-grid');
+      if (audioGrid) audioGrid.classList.remove('view-mode-grid');
+      if (listBtn) {
+        listBtn.className = 'w-8 sm:w-9 h-full flex items-center justify-center rounded-lg bg-primary/20 text-primary transition-all font-medium';
+      }
+      if (gridBtn) {
+        gridBtn.className = 'w-8 sm:w-9 h-full flex items-center justify-center rounded-lg text-gray-400 hover:text-white transition-all';
+      }
+      localStorage.setItem('mediaGalleryViewMode', 'list');
     }
   }
   
@@ -1765,34 +2056,6 @@ function formatDuration(seconds) {
     }
   });
   
-  // Sort functionality - updated for name-based grouping
-  document.getElementById('sortSelect').addEventListener('change', function(e) {
-    const sortIndicator = document.getElementById('sortIndicator');
-    if (sortIndicator) {
-      sortIndicator.textContent = e.target.value === 'newest' ? 'Z-A' : 'A-Z';
-    }
-    
-    const grid = document.getElementById(currentTab === 'audio' ? 'audioGrid' : 'videoGrid');
-    const groups = Array.from(grid.querySelectorAll(currentTab === 'audio' ? '.audio-group' : '.video-group'));
-    
-    // Sort groups alphabetically by name
-    groups.sort((a, b) => {
-      const nameA = a.dataset.name || '';
-      const nameB = b.dataset.name || '';
-      
-      if (e.target.value === 'newest') {
-        // For newest, we want reverse alphabetical (Z to A)
-        return nameB.localeCompare(nameA);
-      } else {
-        // For oldest, alphabetical (A to Z)
-        return nameA.localeCompare(nameB);
-      }
-    });
-    
-    // Re-append groups in sorted order
-    groups.forEach(group => grid.appendChild(group));
-  });
-  
   // File upload handlers
   document.addEventListener('DOMContentLoaded', function() {
     // Initialize tab display on page load - ensure correct visibility
@@ -1810,11 +2073,10 @@ function formatDuration(seconds) {
     }
     updateActionGroupHighlight(currentTab);
     
-    const sortSelect = document.getElementById('sortSelect');
-    const sortIndicator = document.getElementById('sortIndicator');
-    if (sortSelect && sortIndicator) {
-      sortIndicator.textContent = sortSelect.value === 'newest' ? 'Z-A' : 'A-Z';
-    }
+    // Initialize View Mode (Grid vs List) and empty folders
+    const savedViewMode = localStorage.getItem('mediaGalleryViewMode') || 'list';
+    setGalleryViewMode(savedViewMode);
+    initEmptyMediaFolders();
 
     updateMinimizedVideoStatus();
     updateMinimizedAudioStatus();
