@@ -22,8 +22,8 @@
   <p class="text-gray-400 text-xs sm:text-sm mt-0.5">Kelola susunan video dan audio untuk otomasi live streaming</p>
 </div>
 
-<!-- Single Line Toolbar: Cari playlist (lebih panjang), Terbaru Diupdate & Create Playlist (ukurannya sama) -->
-<div class="flex items-center gap-2.5 sm:gap-3 mb-4 w-full">
+<!-- Single Line Toolbar: Cari playlist (panjang / flex-1), Terbaru Diupdate (tengah / pendek) & Playlist (kanan / pendek) -->
+<div class="flex items-center gap-2 sm:gap-3 mb-4 w-full">
   <!-- 1. Cari Playlist (Lebih panjang / flex-1) -->
   <div class="relative flex-1 min-w-0">
     <input type="text" id="searchPlaylists" placeholder="Cari playlist berdasarkan nama atau deskripsi..."
@@ -31,21 +31,21 @@
     <i class="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
   </div>
 
-  <!-- 2. Terbaru Diupdate (Sort Dropdown) -->
-  <div class="w-40 sm:w-44 flex-shrink-0">
+  <!-- 2. Terbaru Diupdate (Tengah - lebih pendek) -->
+  <div class="w-32 sm:w-36 flex-shrink-0">
     <select id="sortPlaylists"
-      class="w-full h-10 bg-dark-700 border border-gray-600 text-white px-3 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary text-xs sm:text-sm cursor-pointer transition-all">
+      class="w-full h-10 bg-dark-700 border border-gray-600 text-white px-2.5 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary text-xs sm:text-sm cursor-pointer transition-all">
       <option value="newest">Terbaru Diupdate</option>
       <option value="oldest">Terlama Dibuat</option>
       <option value="name">Nama (A-Z)</option>
     </select>
   </div>
 
-  <!-- 3. Create Playlist (Ukuran sama persis dengan Terbaru Diupdate) -->
-  <button onclick="openCreatePlaylistModal()"
-    class="w-40 sm:w-44 h-10 flex-shrink-0 rounded-lg text-xs sm:text-sm font-semibold text-white bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-500 shadow-md shadow-primary/25 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5">
-    <i class="ti ti-plus text-base"></i>
-    <span>Create Playlist</span>
+  <!-- 3. Playlist (Kanan - lebih pendek, icon modern) -->
+  <button onclick="openCreatePlaylistModal()" title="Buat Playlist Baru"
+    class="w-28 sm:w-32 h-10 flex-shrink-0 rounded-lg text-xs sm:text-sm font-semibold text-white bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-500 shadow-md shadow-primary/25 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5">
+    <i class="ti ti-playlist-add text-lg"></i>
+    <span>Playlist</span>
   </button>
 </div>
 
