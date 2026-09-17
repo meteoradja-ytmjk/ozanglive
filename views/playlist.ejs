@@ -2,28 +2,33 @@
 
 <div class="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
   <div>
-    <h2 class="text-2xl font-bold">Playlist Manager</h2>
-    <p class="text-gray-400 text-sm mt-1">Create and manage playlists for streaming</p>
+    <h2 class="text-2xl font-bold tracking-tight text-white flex items-center gap-2.5">
+      <div class="w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+        <i class="ti ti-list-details text-lg"></i>
+      </div>
+      <span>Playlist Manager</span>
+    </h2>
+    <p class="text-gray-400 text-xs sm:text-sm mt-1">Create and manage playlists for streaming</p>
   </div>
   <div class="flex flex-wrap gap-3">
     <button onclick="openCreatePlaylistModal()"
-      class="flex items-center gap-2 bg-primary hover:bg-secondary text-white px-4 py-2 rounded-lg transition-colors">
-      <i class="ti ti-plus"></i>
+      class="h-10 px-4 rounded-xl text-xs sm:text-sm font-semibold text-white bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-500 shadow-md shadow-primary/25 active:scale-[0.98] transition-all flex items-center gap-2">
+      <i class="ti ti-plus text-base"></i>
       <span>Create Playlist</span>
     </button>
   </div>
 </div>
 
-<div class="bg-gray-800 rounded-lg p-4 mb-6">
+<div class="bg-dark-800/90 backdrop-blur-md rounded-2xl p-3 sm:p-4 mb-6 border border-gray-700/60 shadow-lg shadow-black/20">
   <div class="flex flex-row items-center gap-3">
     <div class="relative w-full sm:w-80 md:w-96">
       <input type="text" id="searchPlaylists" placeholder="Search playlists..."
-        class="w-full bg-dark-700 text-white pl-9 pr-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
-      <i class="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+        class="w-full bg-dark-750/90 text-white pl-9 pr-4 py-2.5 border border-gray-700/70 rounded-xl focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 text-xs sm:text-sm transition-all">
+      <i class="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
     </div>
-    <div class="w-32">
+    <div class="w-36">
       <select id="sortPlaylists"
-        class="w-full bg-dark-700 border border-gray-600 text-white px-3 py-2.5 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
+        class="w-full bg-dark-750/90 border border-gray-700/70 text-white px-3 py-2.5 rounded-xl focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 text-xs sm:text-sm cursor-pointer transition-all">
         <option value="newest">Newest</option>
         <option value="oldest">Oldest</option>
         <option value="name">Name</option>
@@ -35,36 +40,36 @@
 <div id="playlistsContainer" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
   <% if (playlists && playlists.length > 0) { %>
     <% playlists.forEach(function(playlist) { %>
-      <div class="bg-gray-800 rounded-lg overflow-hidden shadow-md hover:shadow-lg transition-shadow playlist-card h-32" 
+      <div class="bg-dark-800/90 hover:bg-dark-750 backdrop-blur-md rounded-2xl border border-gray-700/60 hover:border-primary/40 overflow-hidden shadow-lg shadow-black/20 transition-all playlist-card h-36" 
            data-playlist-id="<%= playlist.id %>" 
            data-created-at="<%= playlist.created_at %>" 
            data-updated-at="<%= playlist.updated_at %>">
         <div class="p-4 h-full flex flex-col justify-between">
           <div class="flex flex-col">
             <div class="flex items-start justify-between mb-2">
-              <h3 class="font-semibold text-lg truncate flex-1 pr-2"><%= playlist.name %></h3>
+              <h3 class="font-semibold text-base sm:text-lg text-white truncate flex-1 pr-2" title="<%= playlist.name %>"><%= playlist.name %></h3>
               <div class="flex items-center gap-1 flex-shrink-0">
-                <button class="bg-primary hover:bg-secondary text-white w-8 h-8 flex items-center justify-center rounded-lg transition-colors" onclick="viewPlaylist('<%= playlist.id %>')">
+                <button class="w-8 h-8 flex items-center justify-center rounded-lg bg-primary/15 border border-primary/25 hover:bg-primary/25 text-primary active:scale-95 transition-all" onclick="viewPlaylist('<%= playlist.id %>')" title="View">
                   <i class="ti ti-eye text-sm"></i>
                 </button>
-                <button class="bg-emerald-600 hover:bg-emerald-700 text-white w-8 h-8 flex items-center justify-center rounded-lg transition-colors" onclick="editPlaylist('<%= playlist.id %>')">
+                <button class="w-8 h-8 flex items-center justify-center rounded-lg bg-emerald-500/15 border border-emerald-500/25 hover:bg-emerald-500/25 text-emerald-400 active:scale-95 transition-all" onclick="editPlaylist('<%= playlist.id %>')" title="Edit">
                   <i class="ti ti-pencil text-sm"></i>
                 </button>
-                <button class="bg-red-600 hover:bg-red-700 text-white w-8 h-8 flex items-center justify-center rounded-lg transition-colors" onclick="deletePlaylist('<%= playlist.id %>', '<%= playlist.name %>')">
+                <button class="w-8 h-8 flex items-center justify-center rounded-lg bg-red-500/15 border border-red-500/25 hover:bg-red-500/25 text-red-400 active:scale-95 transition-all" onclick="deletePlaylist('<%= playlist.id %>', '<%= playlist.name.replace(/'/g, "\\'") %>')" title="Delete">
                   <i class="ti ti-trash text-sm"></i>
                 </button>
               </div>
             </div>
-            <p class="text-gray-400 text-sm line-clamp-2"><%= playlist.description || 'No description' %></p>
+            <p class="text-gray-400 text-xs line-clamp-2"><%= playlist.description || 'No description' %></p>
           </div>
           
-          <div class="flex items-center justify-between text-sm text-gray-400 mt-auto">
-            <span class="flex items-center gap-2">
-              <span><i class="ti ti-video mr-1"></i><%= playlist.video_count || 0 %></span>
-              <span><i class="ti ti-music mr-1"></i><%= playlist.audio_count || 0 %></span>
+          <div class="flex items-center justify-between text-xs text-gray-400 mt-auto pt-2 border-t border-gray-700/40">
+            <span class="flex items-center gap-2.5">
+              <span class="flex items-center gap-1"><i class="ti ti-video text-primary"></i><%= playlist.video_count || 0 %></span>
+              <span class="flex items-center gap-1"><i class="ti ti-music text-emerald-400"></i><%= playlist.audio_count || 0 %></span>
             </span>
-            <span class="flex items-center gap-1">
-              <i class="ti ti-<%= (playlist.shuffle || playlist.is_shuffle) ? 'arrows-shuffle' : 'list-numbers' %>"></i>
+            <span class="flex items-center gap-1 px-2 py-0.5 rounded-md bg-dark-700/60 border border-gray-700/50 text-[11px]">
+              <i class="ti ti-<%= (playlist.shuffle || playlist.is_shuffle) ? 'arrows-shuffle text-amber-400' : 'list-numbers text-blue-400' %>"></i>
               <%= (playlist.shuffle || playlist.is_shuffle) ? 'Shuffle' : 'Sequential' %>
             </span>
           </div>
@@ -72,39 +77,46 @@
       </div>
     <% }); %>
   <% } else { %>
-    <div class="col-span-full text-center py-12">
-      <i class="ti ti-playlist text-6xl text-gray-600 mb-4"></i>
-      <h3 class="text-xl font-semibold mb-2">No playlists yet</h3>
-      <p class="text-gray-400 mb-4">Create your first playlist to get started</p>
+    <div class="col-span-full text-center py-12 bg-dark-800/90 rounded-2xl border border-gray-700/60 shadow-lg shadow-black/20 p-8">
+      <div class="w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary mx-auto mb-4">
+        <i class="ti ti-playlist text-3xl"></i>
+      </div>
+      <h3 class="text-xl font-bold text-white mb-2">No playlists yet</h3>
+      <p class="text-gray-400 text-sm mb-6 max-w-sm mx-auto">Create your first playlist to get started with seamless streaming</p>
       <button onclick="openCreatePlaylistModal()" 
-        class="bg-primary hover:bg-secondary text-white px-6 py-3 rounded-lg transition-colors">
-        <i class="ti ti-plus mr-2"></i>
-        Create Playlist
+        class="h-10 px-5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-500 shadow-md shadow-primary/25 active:scale-[0.98] transition-all inline-flex items-center gap-2">
+        <i class="ti ti-plus text-base"></i>
+        <span>Create Playlist</span>
       </button>
     </div>
   <% } %>
 </div>
 
 <div class="mt-6 flex items-center justify-between">
-  <p class="text-sm text-gray-400" id="paginationInfo">Showing 1-<%= Math.min(8, playlists ? playlists.length : 0) %> of <%= playlists ? playlists.length : 0 %> playlists</p>
+  <p class="text-xs sm:text-sm text-gray-400" id="paginationInfo">Showing 1-<%= Math.min(8, playlists ? playlists.length : 0) %> of <%= playlists ? playlists.length : 0 %> playlists</p>
   <div class="flex items-center gap-2" id="paginationControls">
-    <button type="button" class="w-9 h-9 flex items-center justify-center rounded-lg bg-dark-700 hover:bg-dark-600 text-gray-400 hover:text-white transition-colors" id="prevPage" onclick="changePage(-1)">
+    <button type="button" class="w-9 h-9 flex items-center justify-center rounded-xl bg-dark-800/90 border border-gray-700/60 text-gray-400 hover:text-white hover:border-primary/40 shadow-sm transition-all" id="prevPage" onclick="changePage(-1)">
       <i class="ti ti-chevron-left"></i>
     </button>
-    <div id="pageNumbers" class="flex items-center gap-2"></div>
-    <button type="button" class="w-9 h-9 flex items-center justify-center rounded-lg bg-dark-700 hover:bg-dark-600 text-gray-400 hover:text-white transition-colors" id="nextPage" onclick="changePage(1)">
+    <div id="pageNumbers" class="flex items-center gap-1.5"></div>
+    <button type="button" class="w-9 h-9 flex items-center justify-center rounded-xl bg-dark-800/90 border border-gray-700/60 text-gray-400 hover:text-white hover:border-primary/40 shadow-sm transition-all" id="nextPage" onclick="changePage(1)">
       <i class="ti ti-chevron-right"></i>
     </button>
   </div>
 </div>
 
 <!-- Create/Edit Playlist Modal -->
-<div id="playlistModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
-  <div class="bg-gray-800 rounded-lg p-6 w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
-    <div class="flex items-center justify-between mb-6 pb-4 border-b border-gray-700">
-      <h3 id="modalTitle" class="text-xl font-semibold">Create New Playlist</h3>
-      <button onclick="closePlaylistModal()" class="text-gray-400 hover:text-white">
-        <i class="ti ti-x text-xl"></i>
+<div id="playlistModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden items-center justify-center z-50">
+  <div class="bg-dark-800/95 backdrop-blur-xl border border-gray-700/80 rounded-2xl shadow-2xl p-6 w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
+    <div class="flex items-center justify-between mb-6 pb-4 border-b border-gray-700/60">
+      <div class="flex items-center gap-2.5">
+        <div class="w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+          <i class="ti ti-list-details text-lg"></i>
+        </div>
+        <h3 id="modalTitle" class="text-lg sm:text-xl font-bold text-white">Create New Playlist</h3>
+      </div>
+      <button onclick="closePlaylistModal()" class="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700/50 transition-colors">
+        <i class="ti ti-x text-lg"></i>
       </button>
     </div>
     
@@ -113,27 +125,26 @@
       
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <label for="playlistName" class="block text-sm font-medium mb-2">Playlist Name</label>
+          <label for="playlistName" class="block text-xs sm:text-sm font-medium text-white mb-2">Playlist Name <span class="text-red-400">*</span></label>
           <input type="text" id="playlistName" name="name" required placeholder="Enter playlist name..."
-            class="w-full bg-dark-700 text-white px-3 py-2 border border-gray-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
+            class="w-full bg-dark-750/90 text-white px-3.5 py-2.5 border border-gray-700/70 rounded-xl focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 text-xs sm:text-sm transition-all">
         </div>
         
         <div>
             <div class="flex items-center mb-2">
-              <label for="playlistShuffle" class="text-sm font-medium">Playback Mode</label>
+              <label for="playlistShuffle" class="text-xs sm:text-sm font-medium text-white">Playback Mode</label>
               <div class="relative ml-2 group">
                 <i class="ti ti-help-circle text-gray-400 hover:text-primary cursor-help"></i>
-                <div class="absolute left-full top-1/2 -translate-y-1/2 ml-2 hidden group-hover:block w-64 p-3 bg-dark-600 text-xs text-gray-200 rounded-md shadow-lg z-10">
+                <div class="absolute left-full top-1/2 -translate-y-1/2 ml-2 hidden group-hover:block w-64 p-3 bg-dark-700 text-xs text-gray-200 rounded-xl shadow-xl border border-gray-600/50 z-10">
                   <div class="space-y-2">
-                    <div><strong>Sequential:</strong> Video berurutan sesuai urutan dalam playlist</div>
-                    <div><strong>Shuffle:</strong> Video diacak secara random</div>
+                    <div><strong class="text-white">Sequential:</strong> Video berurutan sesuai urutan dalam playlist</div>
+                    <div><strong class="text-white">Shuffle:</strong> Video diacak secara random</div>
                   </div>
-                  <div class="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-dark-600"></div>
                 </div>
               </div>
             </div>
           <select id="playlistShuffle" name="shuffle"
-            class="w-full bg-dark-700 border border-gray-600 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
+            class="w-full bg-dark-750/90 border border-gray-700/70 text-white px-3.5 py-2.5 rounded-xl focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 text-xs sm:text-sm transition-all cursor-pointer">
             <option value="false">Sequential</option>
             <option value="true">Shuffle</option>
           </select>
@@ -141,36 +152,35 @@
       </div>
       
       <div>
-        <label class="block text-sm font-medium mb-3">Select Media</label>
+        <label class="block text-xs sm:text-sm font-medium text-white mb-3">Select Media</label>
         <!-- Single panel: Select Media with checkboxes, shuffle & pin -->
         <div>
           <!-- Tab Buttons -->
-          <div class="flex w-full mb-3 border border-gray-600 rounded-lg overflow-hidden bg-gray-800/50">
+          <div class="flex w-full mb-3 border border-gray-700/60 rounded-xl overflow-hidden bg-dark-750/70 p-1 gap-1">
             <button type="button" id="availableVideosTab" onclick="switchAvailableTab('videos')" 
-              class="flex-1 px-4 py-2 text-sm font-medium text-center border-b-2 border-primary text-primary bg-primary/20">
+              class="flex-1 py-2 text-xs sm:text-sm font-medium text-center rounded-lg transition-all text-white bg-primary shadow-sm">
               <i class="ti ti-video mr-1"></i>Videos
             </button>
-            <div class="w-px bg-gray-600"></div>
             <button type="button" id="availableAudiosTab" onclick="switchAvailableTab('audios')" 
-              class="flex-1 px-4 py-2 text-sm font-medium text-center border-b-2 border-transparent text-gray-400 hover:text-white hover:bg-gray-700/50">
+              class="flex-1 py-2 text-xs sm:text-sm font-medium text-center rounded-lg transition-all text-gray-400 hover:text-white hover:bg-gray-700/50">
               <i class="ti ti-music mr-1"></i>Audios
             </button>
           </div>
 
           <!-- Selected count -->
           <div class="flex items-center justify-end mb-2 px-1">
-            <span class="text-xs text-gray-500" id="selectedMediaCount">0 selected</span>
+            <span class="text-xs text-gray-400" id="selectedMediaCount">0 selected</span>
           </div>
           
           <!-- Videos Panel -->
-          <div id="availableVideosPanel" class="bg-dark-700 rounded-lg border border-gray-600 shadow-lg">
-            <div class="p-2 border-b border-gray-600/50 space-y-2">
+          <div id="availableVideosPanel" class="bg-dark-750/90 rounded-2xl border border-gray-700/60 shadow-lg">
+            <div class="p-2.5 border-b border-gray-700/60 space-y-2">
               <div class="relative">
                 <input type="text" id="searchVideos" placeholder="Search videos..."
-                  class="w-full bg-dark-800 text-white pl-8 pr-4 py-2 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary border border-gray-700">
-                <i class="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                  class="w-full bg-dark-800 text-white pl-8 pr-4 py-2 rounded-xl text-xs sm:text-sm focus:outline-none focus:border-primary border border-gray-700">
+                <i class="ti ti-search absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs sm:text-sm"></i>
               </div>
-              <button type="button" onclick="shuffleSelectedVideos()" class="w-full h-8 flex items-center justify-center gap-2 rounded-lg bg-primary/10 border border-primary/30 hover:bg-primary/20 text-primary text-xs font-medium transition-colors">
+              <button type="button" onclick="shuffleSelectedVideos()" class="w-full h-8 flex items-center justify-center gap-2 rounded-xl bg-primary/10 border border-primary/30 hover:bg-primary/20 text-primary text-xs font-medium transition-all active:scale-[0.99]">
                 <span>&#x1F500;</span> Shuffle Video Order
               </button>
             </div>
@@ -180,14 +190,14 @@
           </div>
           
           <!-- Audios Panel -->
-          <div id="availableAudiosPanel" class="bg-dark-700 rounded-lg border border-gray-600 shadow-lg hidden">
-            <div class="p-2 border-b border-gray-600/50 space-y-2">
+          <div id="availableAudiosPanel" class="bg-dark-750/90 rounded-2xl border border-gray-700/60 shadow-lg hidden">
+            <div class="p-2.5 border-b border-gray-700/60 space-y-2">
               <div class="relative">
                 <input type="text" id="searchAudios" placeholder="Search audios..."
-                  class="w-full bg-dark-800 text-white pl-8 pr-4 py-2 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary border border-gray-700">
-                <i class="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                  class="w-full bg-dark-800 text-white pl-8 pr-4 py-2 rounded-xl text-xs sm:text-sm focus:outline-none focus:border-primary border border-gray-700">
+                <i class="ti ti-search absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs sm:text-sm"></i>
               </div>
-              <button type="button" onclick="shuffleSelectedAudios()" class="w-full h-8 flex items-center justify-center gap-2 rounded-lg bg-green-500/10 border border-green-500/30 hover:bg-green-500/20 text-green-400 text-xs font-medium transition-colors">
+              <button type="button" onclick="shuffleSelectedAudios()" class="w-full h-8 flex items-center justify-center gap-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 hover:bg-emerald-500/20 text-emerald-400 text-xs font-medium transition-all active:scale-[0.99]">
                 <span>&#x1F500;</span> Shuffle Audio Order
               </button>
             </div>
@@ -198,13 +208,13 @@
         </div>
       </div>
       
-      <div class="flex justify-end gap-3 pt-4 border-t border-gray-700">
+      <div class="flex justify-end gap-3 pt-4 border-t border-gray-700/60">
         <button type="button" onclick="closePlaylistModal()" 
-          class="px-4 py-2 text-gray-400 hover:text-white transition-colors">
+          class="px-4 py-2 text-xs sm:text-sm text-gray-400 hover:text-white rounded-xl hover:bg-gray-700/50 transition-colors">
           Cancel
         </button>
         <button type="submit" 
-          class="bg-primary hover:bg-secondary text-white px-6 py-2 rounded-lg transition-colors">
+          class="h-10 px-6 rounded-xl text-xs sm:text-sm font-semibold text-white bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-500 shadow-md shadow-primary/25 active:scale-[0.98] transition-all">
           <span id="submitButtonText">Create Playlist</span>
         </button>
       </div>
@@ -213,40 +223,40 @@
 </div>
 
 <!-- View Playlist Modal -->
-<div id="viewPlaylistModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
-  <div class="bg-gray-800 rounded-lg p-6 w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
-    <div class="flex items-start justify-between mb-6 pb-4 border-b border-gray-700">
+<div id="viewPlaylistModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden items-center justify-center z-50">
+  <div class="bg-dark-800/95 backdrop-blur-xl border border-gray-700/80 rounded-2xl shadow-2xl p-6 w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
+    <div class="flex items-start justify-between mb-6 pb-4 border-b border-gray-700/60">
       <div>
-        <h3 id="viewPlaylistTitle" class="text-xl font-semibold">Playlist Details</h3>
-        <p id="viewPlaylistDescription" class="text-gray-400 text-sm mt-1"></p>
+        <h3 id="viewPlaylistTitle" class="text-lg sm:text-xl font-bold text-white">Playlist Details</h3>
+        <p id="viewPlaylistDescription" class="text-gray-400 text-xs sm:text-sm mt-1"></p>
       </div>
-      <button onclick="closeViewPlaylistModal()" class="text-gray-400 hover:text-white">
-        <i class="ti ti-x text-xl"></i>
+      <button onclick="closeViewPlaylistModal()" class="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700/50 transition-colors">
+        <i class="ti ti-x text-lg"></i>
       </button>
     </div>
     
     <div class="mb-4 flex items-center justify-between">
-      <div class="flex items-center gap-4 text-sm text-gray-400">
-        <span id="viewVideoCount">0 videos</span>
-        <span id="viewPlaybackMode" class="flex items-center gap-1">
-          <i class="ti ti-list-numbers"></i>
+      <div class="flex items-center gap-3 text-xs sm:text-sm text-gray-400">
+        <span id="viewVideoCount" class="px-2.5 py-1 rounded-lg bg-dark-700/80 border border-gray-700/60 text-white font-medium">0 videos</span>
+        <span id="viewPlaybackMode" class="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-dark-700/80 border border-gray-700/60 text-white font-medium">
+          <i class="ti ti-list-numbers text-primary"></i>
           Sequential
         </span>
       </div>
       <div class="flex gap-2">
-        <button id="editPlaylistBtn" class="bg-primary hover:bg-secondary text-white px-4 py-2 rounded-lg text-sm transition-colors">
-          <i class="ti ti-pencil mr-1"></i>
-          Edit
+        <button id="editPlaylistBtn" class="h-9 px-4 rounded-xl text-xs sm:text-sm font-semibold text-white bg-primary hover:bg-secondary shadow-sm active:scale-95 transition-all flex items-center gap-1.5">
+          <i class="ti ti-pencil text-sm"></i>
+          <span>Edit</span>
         </button>
       </div>
     </div>
 
     <!-- Shared preview player (single instance to keep CPU/memory low) -->
-    <div id="previewPlayerWrapper" class="hidden mb-4 bg-dark-800 rounded-lg border border-gray-700 overflow-hidden">
-      <div class="flex items-center justify-between px-3 py-2 border-b border-gray-700 bg-dark-700">
+    <div id="previewPlayerWrapper" class="hidden mb-4 bg-dark-900 rounded-2xl border border-gray-700/70 overflow-hidden shadow-xl">
+      <div class="flex items-center justify-between px-3.5 py-2.5 border-b border-gray-700/60 bg-dark-750">
         <div class="flex items-center gap-2 min-w-0">
           <i id="previewPlayerIcon" class="ti ti-player-play text-primary flex-shrink-0"></i>
-          <span id="previewPlayerTitle" class="text-sm font-medium truncate"></span>
+          <span id="previewPlayerTitle" class="text-xs sm:text-sm font-medium text-white truncate"></span>
         </div>
         <button type="button" onclick="closePreviewPlayer()" class="text-gray-400 hover:text-white flex-shrink-0" title="Close preview">
           <i class="ti ti-x"></i>
