@@ -86,11 +86,17 @@ class Stream {
         `SELECT s.*,
                 COALESCE(v.title, p.name) AS video_title,
                 a.title AS audio_title,
-                CASE WHEN p.id IS NOT NULL THEN 'playlist' ELSE 'video' END AS video_type
+                CASE WHEN p.id IS NOT NULL THEN 'playlist' ELSE 'video' END AS video_type,
+                COALESCE(yc.channel_name, yc_broadcast.channel_name, yc_primary.channel_name, CASE WHEN s.platform = 'YouTube' THEN 'YouTube Channel' ELSE COALESCE(s.platform, 'Custom RTMP') END) AS channel_name,
+                COALESCE(yc.channel_id, yc_broadcast.channel_id, yc_primary.channel_id) AS channel_id
          FROM streams s
          LEFT JOIN videos v ON s.video_id = v.id
          LEFT JOIN playlists p ON s.video_id = p.id
          LEFT JOIN audios a ON s.audio_id = a.id
+         LEFT JOIN youtube_credentials yc ON s.youtube_account_id = yc.id
+         LEFT JOIN youtube_broadcast_settings ybs ON s.youtube_broadcast_id = ybs.broadcast_id
+         LEFT JOIN youtube_credentials yc_broadcast ON ybs.account_id = yc_broadcast.id
+         LEFT JOIN youtube_credentials yc_primary ON s.user_id = yc_primary.user_id AND yc_primary.is_primary = 1
          WHERE s.id = ?`,
         [id],
         (err, row) => {
@@ -129,11 +135,17 @@ class Stream {
                v.bitrate AS video_bitrate,
                v.fps AS video_fps,
                a.title AS audio_title,
-               CASE WHEN p.id IS NOT NULL THEN 'playlist' ELSE 'video' END AS video_type
+               CASE WHEN p.id IS NOT NULL THEN 'playlist' ELSE 'video' END AS video_type,
+               COALESCE(yc.channel_name, yc_broadcast.channel_name, yc_primary.channel_name, CASE WHEN s.platform = 'YouTube' THEN 'YouTube Channel' ELSE COALESCE(s.platform, 'Custom RTMP') END) AS channel_name,
+               COALESCE(yc.channel_id, yc_broadcast.channel_id, yc_primary.channel_id) AS channel_id
         FROM streams s
         LEFT JOIN videos v ON s.video_id = v.id
         LEFT JOIN playlists p ON s.video_id = p.id
         LEFT JOIN audios a ON s.audio_id = a.id
+        LEFT JOIN youtube_credentials yc ON s.youtube_account_id = yc.id
+        LEFT JOIN youtube_broadcast_settings ybs ON s.youtube_broadcast_id = ybs.broadcast_id
+        LEFT JOIN youtube_credentials yc_broadcast ON ybs.account_id = yc_broadcast.id
+        LEFT JOIN youtube_credentials yc_primary ON s.user_id = yc_primary.user_id AND yc_primary.is_primary = 1
       `;
       const params = [];
       const conditions = [];
@@ -652,11 +664,17 @@ class Stream {
                v.bitrate AS video_bitrate,
                v.fps AS video_fps,
                a.title AS audio_title,
-               CASE WHEN p.id IS NOT NULL THEN 'playlist' ELSE 'video' END AS video_type
+               CASE WHEN p.id IS NOT NULL THEN 'playlist' ELSE 'video' END AS video_type,
+               COALESCE(yc.channel_name, yc_broadcast.channel_name, yc_primary.channel_name, CASE WHEN s.platform = 'YouTube' THEN 'YouTube Channel' ELSE COALESCE(s.platform, 'Custom RTMP') END) AS channel_name,
+               COALESCE(yc.channel_id, yc_broadcast.channel_id, yc_primary.channel_id) AS channel_id
         FROM streams s
         LEFT JOIN videos v ON s.video_id = v.id
         LEFT JOIN playlists p ON s.video_id = p.id
         LEFT JOIN audios a ON s.audio_id = a.id
+        LEFT JOIN youtube_credentials yc ON s.youtube_account_id = yc.id
+        LEFT JOIN youtube_broadcast_settings ybs ON s.youtube_broadcast_id = ybs.broadcast_id
+        LEFT JOIN youtube_credentials yc_broadcast ON ybs.account_id = yc_broadcast.id
+        LEFT JOIN youtube_credentials yc_primary ON s.user_id = yc_primary.user_id AND yc_primary.is_primary = 1
         WHERE s.user_id = ?
         AND (
           (s.schedule_type = 'once' AND s.schedule_time IS NOT NULL AND s.schedule_time != '')

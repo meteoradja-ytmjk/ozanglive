@@ -5019,6 +5019,7 @@ app.post('/api/streams', isAuthenticated, autoResolveYouTubeStreamKey, [
       recurring_time: req.body.recurringTime || null,
       // FIXED: Handle all possible truthy values for recurring_enabled
       recurring_enabled: req.body.recurringEnabled === 'true' || req.body.recurringEnabled === true || req.body.recurringEnabled === 'on' || req.body.recurringEnabled === 1,
+      youtube_account_id: req.body.youtubeAccountId ? parseInt(req.body.youtubeAccountId) : null,
       user_id: req.session.userId
     };
 
@@ -5430,6 +5431,9 @@ app.put('/api/streams/:id', isAuthenticated, async (req, res) => {
     }
     if (req.body.useAdvancedSettings !== undefined) {
       updateData.use_advanced_settings = req.body.useAdvancedSettings === 'true' || req.body.useAdvancedSettings === true;
+    }
+    if (req.body.youtubeAccountId !== undefined) {
+      updateData.youtube_account_id = req.body.youtubeAccountId ? parseInt(req.body.youtubeAccountId) : null;
     }
 
     // Handle stream duration (in minutes - new format: hours + minutes)
