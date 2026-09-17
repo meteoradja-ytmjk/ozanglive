@@ -274,14 +274,14 @@
   </div>
 
   <!-- Live Studio Sub-Header Navigation Tab Bar -->
-  <div class="mb-6 bg-dark-800/90 backdrop-blur-md rounded-2xl p-1.5 border border-gray-700/60 shadow-lg flex flex-wrap sm:flex-nowrap gap-1.5 select-none">
+  <div class="mb-6 bg-dark-800/90 backdrop-blur-md rounded-2xl p-1.5 border border-gray-700/60 shadow-lg shadow-black/20 flex flex-wrap sm:flex-nowrap gap-1.5 select-none">
     <button type="button" onclick="switchStudioTab('streams')" id="studio-tab-btn-streams"
-      class="studio-tab-btn flex-1 min-w-[120px] py-2.5 px-4 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all bg-primary text-white shadow-md cursor-pointer touch-manipulation active:scale-[0.98] min-h-[44px]">
+      class="studio-tab-btn flex-1 min-w-[120px] py-2.5 px-4 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all bg-gradient-to-r from-primary to-purple-600 text-white shadow-md shadow-primary/30 cursor-pointer touch-manipulation active:scale-[0.98] min-h-[44px]">
       <i class="ti ti-broadcast text-lg"></i>
       <span>Control Room</span>
     </button>
     <button type="button" onclick="switchStudioTab('broadcasts')" id="studio-tab-btn-broadcasts"
-      class="studio-tab-btn flex-1 min-w-[120px] py-2.5 px-4 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all text-gray-400 hover:text-white hover:bg-dark-700/50 cursor-pointer touch-manipulation active:scale-[0.98] min-h-[44px]">
+      class="studio-tab-btn flex-1 min-w-[120px] py-2.5 px-4 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all text-gray-400 hover:text-white hover:bg-dark-700/60 cursor-pointer touch-manipulation active:scale-[0.98] min-h-[44px]">
       <i class="ti ti-brand-youtube text-lg text-red-500"></i>
       <span>YouTube Studio</span>
     </button>
@@ -292,12 +292,12 @@
 
   <!-- Desktop Stats Cards -->
   <div class="hidden md:grid <%= isAdmin ? 'md:grid-cols-2 lg:grid-cols-4' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' %> gap-6 mb-6">
-    <div class="bg-gray-800 rounded-lg p-6 shadow-md neon-panel neon-bottom-right gradient-border hover-lift particles">
+    <div class="bg-dark-800/90 rounded-2xl p-5 sm:p-6 border border-gray-700/60 shadow-lg shadow-black/20 hover:border-primary/40 transition-all neon-panel neon-bottom-right gradient-border hover-lift particles">
       <div class="neon-inner-glow"></div>
       <div class="flex items-center justify-between relative z-10">
-        <h3 class="text-lg font-semibold">Active Streams</h3>
-        <div class="w-10 h-10 icon-gradient-bg rounded-lg flex items-center justify-center float">
-          <i class="ti ti-antenna-bars-5 text-xl text-primary font-loaded"></i>
+        <h3 class="text-base sm:text-lg font-semibold text-white">Active Streams</h3>
+        <div class="w-10 h-10 rounded-xl bg-primary/15 border border-primary/25 flex items-center justify-center text-primary shadow-sm float">
+          <i class="ti ti-antenna-bars-5 text-xl font-loaded"></i>
         </div>
       </div>
       <p class="text-3xl font-bold mt-2 relative z-10 stat-glow text-primary">
@@ -309,50 +309,50 @@
           <i class="ti ti-alert-circle mr-1"></i>Limit tercapai
         </div>
         <a id="whatsapp-btn-desktop" href="#" target="_blank"
-          class="hidden inline-flex items-center gap-2 px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-sm">
+          class="hidden inline-flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white rounded-xl shadow-md shadow-green-600/25 transition-all text-sm font-medium">
           <i class="ti ti-brand-whatsapp text-lg"></i>
           <span>Tambah Limit</span>
         </a>
       </div>
     </div>
     <% if (isAdmin) { %>
-    <div class="bg-gray-800 rounded-lg p-6 shadow-md neon-panel neon-bottom-left gradient-border hover-lift particles">
+    <div class="bg-dark-800/90 rounded-2xl p-5 sm:p-6 border border-gray-700/60 shadow-lg shadow-black/20 hover:border-sky-500/40 transition-all neon-panel neon-bottom-left gradient-border hover-lift particles">
       <div class="neon-inner-glow"></div>
       <div class="flex items-center justify-between relative z-10">
-        <h3 class="text-lg font-semibold">CPU Usage</h3>
-        <div class="w-10 h-10 icon-gradient-bg-blue rounded-lg flex items-center justify-center float">
-          <i class="ti ti-cpu-2 text-xl text-blue-400 font-loaded"></i>
+        <h3 class="text-base sm:text-lg font-semibold text-white">CPU Usage</h3>
+        <div class="w-10 h-10 rounded-xl bg-sky-500/15 border border-sky-500/25 flex items-center justify-center text-sky-400 shadow-sm float">
+          <i class="ti ti-cpu-2 text-xl font-loaded"></i>
         </div>
       </div>
-      <p class="text-3xl font-bold mt-2 relative z-10"><span id="cpu-usage" class="count-up">0</span>%</p>
-      <div class="w-full bg-gray-700 rounded-full h-2.5 mt-2 relative z-10 overflow-hidden">
-        <div id="cpu-bar" class="h-2.5 rounded-full progress-fade-blue" style="width: 0%"></div>
+      <p class="text-3xl font-bold mt-2 relative z-10 text-white"><span id="cpu-usage" class="count-up text-sky-400">0</span>%</p>
+      <div class="w-full bg-dark-700 rounded-full h-2 mt-2.5 relative z-10 overflow-hidden">
+        <div id="cpu-bar" class="h-2 rounded-full bg-gradient-to-r from-sky-500 to-blue-600 transition-all duration-300" style="width: 0%"></div>
       </div>
     </div>
-    <div class="bg-gray-800 rounded-lg p-6 shadow-md neon-panel neon-top-right gradient-border hover-lift particles">
+    <div class="bg-dark-800/90 rounded-2xl p-5 sm:p-6 border border-gray-700/60 shadow-lg shadow-black/20 hover:border-emerald-500/40 transition-all neon-panel neon-top-right gradient-border hover-lift particles">
       <div class="neon-inner-glow"></div>
       <div class="flex items-center justify-between relative z-10">
-        <h3 class="text-lg font-semibold">Memory</h3>
-        <div class="w-10 h-10 icon-gradient-bg-green rounded-lg flex items-center justify-center float">
-          <i class="ti ti-server-2 text-xl text-green-400 font-loaded"></i>
+        <h3 class="text-base sm:text-lg font-semibold text-white">Memory</h3>
+        <div class="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center text-emerald-400 shadow-sm float">
+          <i class="ti ti-server-2 text-xl font-loaded"></i>
         </div>
       </div>
-      <p class="text-3xl font-bold mt-2 relative z-10">
-        <span id="memory-usage" class="count-up">0 MB</span><span id="memory-total" class="text-sm text-gray-400"> / 0
+      <p class="text-3xl font-bold mt-2 relative z-10 text-white">
+        <span id="memory-usage" class="count-up text-emerald-400">0 MB</span><span id="memory-total" class="text-sm text-gray-400 font-normal"> / 0
           MB</span>
       </p>
-      <div class="w-full bg-gray-700 rounded-full h-2.5 mt-2 relative z-10 overflow-hidden">
-        <div id="memory-bar" class="h-2.5 rounded-full progress-fade-green" style="width: 0%"></div>
+      <div class="w-full bg-dark-700 rounded-full h-2 mt-2.5 relative z-10 overflow-hidden">
+        <div id="memory-bar" class="h-2 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 transition-all duration-300" style="width: 0%"></div>
       </div>
     </div>
-    <div class="bg-gray-800 rounded-lg p-6 shadow-md neon-panel neon-top-left gradient-border hover-lift particles">
+    <div class="bg-dark-800/90 rounded-2xl p-5 sm:p-6 border border-gray-700/60 shadow-lg shadow-black/20 hover:border-orange-500/40 transition-all neon-panel neon-top-left gradient-border hover-lift particles">
       <div class="neon-inner-glow"></div>
       <div class="flex items-center justify-between relative z-10">
-        <h3 class="text-lg font-semibold" id="network-disk-title">Internet Speed</h3>
+        <h3 class="text-base sm:text-lg font-semibold text-white" id="network-disk-title">Internet Speed</h3>
         <div
-          class="w-10 h-10 icon-gradient-bg-orange hover:bg-dark-600 rounded-lg flex items-center justify-center cursor-pointer float"
+          class="w-10 h-10 rounded-xl bg-orange-500/15 border border-orange-500/25 hover:bg-orange-500/25 flex items-center justify-center text-orange-400 cursor-pointer shadow-sm float transition-all"
           onclick="toggleNetworkDiskDisplay('desktop')" title="Click to switch">
-          <i class="ti ti-world-upload text-xl text-orange-400 font-loaded" id="toggle-icon-desktop"></i>
+          <i class="ti ti-world-upload text-xl font-loaded" id="toggle-icon-desktop"></i>
         </div>
       </div>
       <div id="network-content-desktop" class="mt-2 space-y-2 relative z-10">
@@ -366,12 +366,12 @@
         </div>
       </div>
       <div id="disk-content-desktop" class="mt-2 relative z-10" style="display: none;">
-        <p class="text-3xl font-bold">
-          <span id="disk-used" class="count-up">0 GB</span><span id="disk-total" class="text-sm text-gray-400"> / 0
+        <p class="text-3xl font-bold text-white">
+          <span id="disk-used" class="count-up text-orange-400">0 GB</span><span id="disk-total" class="text-sm text-gray-400 font-normal"> / 0
             GB</span>
         </p>
-        <div class="w-full bg-gray-700 rounded-full h-2.5 mt-2 overflow-hidden">
-          <div id="disk-bar" class="h-2.5 rounded-full progress-fade-orange" style="width: 0%"></div>
+        <div class="w-full bg-dark-700 rounded-full h-2 mt-2.5 overflow-hidden">
+          <div id="disk-bar" class="h-2 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 transition-all duration-300" style="width: 0%"></div>
         </div>
       </div>
     </div>
@@ -393,13 +393,20 @@
     <div class="stream-toolbar hidden md:flex items-center justify-between gap-6 mb-6">
       <!-- Left: Title + Clock stacked, width matches clock line -->
       <div class="flex flex-col justify-center shrink-0 min-w-0">
-        <h2 class="text-3xl font-bold leading-tight tracking-tight whitespace-nowrap">Streaming Status</h2>
-        <div class="flex items-center gap-3 text-base text-gray-300 mt-2 whitespace-nowrap">
-          <i class="ti ti-clock text-primary font-loaded text-lg"></i>
-          <span id="realtime-clock" class="font-semibold text-white">--:--:--</span>
-          <span class="text-gray-600">|</span>
-          <i class="ti ti-calendar text-primary font-loaded text-lg"></i>
-          <span id="realtime-date" class="font-semibold text-white">--/--/----</span>
+        <h2 class="text-2xl sm:text-3xl font-bold leading-tight tracking-tight whitespace-nowrap text-white flex items-center gap-2.5">
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shadow-sm shadow-emerald-500/50"></span>
+          <span>Streaming Status</span>
+        </h2>
+        <div class="flex items-center gap-2.5 text-xs sm:text-sm text-gray-400 mt-2 whitespace-nowrap">
+          <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-dark-800/90 border border-gray-700/60 shadow-sm">
+            <i class="ti ti-clock text-primary font-loaded text-sm"></i>
+            <span id="realtime-clock" class="font-semibold text-white font-mono">--:--:--</span>
+          </div>
+          <span class="text-gray-600">•</span>
+          <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-dark-800/90 border border-gray-700/60 shadow-sm">
+            <i class="ti ti-calendar text-primary font-loaded text-sm"></i>
+            <span id="realtime-date" class="font-medium text-gray-300">--/--/----</span>
+          </div>
         </div>
       </div>
       <!-- Right: Control Room Tools & Filter (Pure Monitoring & Operations) -->
@@ -407,24 +414,24 @@
         <!-- All Streams Filter -->
         <div class="relative w-44">
           <select id="streamFilter" onchange="applyStreamFilter(this.value)"
-            class="w-full bg-dark-700 border border-gray-600 text-white pl-9 pr-4 py-2.5 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary appearance-none cursor-pointer text-sm h-[42px]">
+            class="w-full bg-dark-800/90 hover:bg-dark-750 border border-gray-700/60 hover:border-primary/50 text-white pl-9 pr-8 py-2 rounded-xl focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 appearance-none cursor-pointer text-xs sm:text-sm h-10 transition-all shadow-sm">
             <option value="all">All Streams</option>
           </select>
-          <i class="ti ti-filter absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
-          <i class="ti ti-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+          <i class="ti ti-filter absolute left-3 top-1/2 -translate-y-1/2 text-primary text-sm pointer-events-none"></i>
+          <i class="ti ti-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none"></i>
         </div>
 
         <!-- Schedule Dropdown -->
         <div class="relative" id="scheduleDropdown">
           <button onclick="toggleScheduleDropdown()"
-            class="px-3 flex items-center justify-center gap-1.5 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white h-[42px] rounded-lg transition-colors text-sm font-medium"
+            class="h-10 px-3.5 flex items-center justify-center gap-1.5 bg-dark-800/90 hover:bg-dark-750 border border-gray-700/60 hover:border-primary/50 text-gray-200 hover:text-white rounded-xl transition-all text-xs sm:text-sm font-medium shadow-sm active:scale-[0.98]"
             title="Schedule Overview">
-            <i class="ti ti-calendar-event text-primary"></i>
+            <i class="ti ti-calendar-event text-primary text-base"></i>
             <span>Schedule</span>
             <i class="ti ti-chevron-down text-[10px] text-gray-400"></i>
           </button>
           <div id="scheduleDropdownMenu"
-            class="hidden absolute left-1/2 -translate-x-1/2 mt-2 w-48 bg-dark-800/95 backdrop-blur-xl border border-gray-700/80 rounded-2xl shadow-2xl shadow-black/60 p-1.5 space-y-1 z-30">
+            class="hidden absolute left-1/2 -translate-x-1/2 mt-2 w-48 bg-dark-800/95 backdrop-blur-xl border border-gray-700/80 rounded-2xl shadow-2xl shadow-black/80 p-1.5 space-y-1 z-30">
             <button onclick="openScheduleModal('once')"
               class="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl hover:bg-dark-700/70 active:bg-dark-700 transition-all text-center group cursor-pointer">
               <i class="ti ti-calendar text-primary text-base transition-transform group-hover:scale-110"></i>
@@ -446,14 +453,14 @@
         <!-- Backup Dropdown -->
         <div class="relative" id="backupDropdown">
           <button onclick="toggleBackupDropdown()"
-            class="px-3 flex items-center justify-center gap-1.5 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white h-[42px] rounded-lg transition-colors text-sm font-medium"
+            class="h-10 px-3.5 flex items-center justify-center gap-1.5 bg-dark-800/90 hover:bg-dark-750 border border-gray-700/60 hover:border-primary/50 text-gray-200 hover:text-white rounded-xl transition-all text-xs sm:text-sm font-medium shadow-sm active:scale-[0.98]"
             title="Backup & Manage">
-            <i class="ti ti-settings-2 text-gray-300"></i>
+            <i class="ti ti-settings-2 text-gray-300 text-base"></i>
             <span>Manage</span>
             <i class="ti ti-chevron-down text-[10px] text-gray-400"></i>
           </button>
           <div id="backupDropdownMenu"
-            class="hidden absolute left-1/2 -translate-x-1/2 mt-2 w-48 bg-dark-800/95 backdrop-blur-xl border border-gray-700/80 rounded-2xl shadow-2xl shadow-black/60 p-1.5 space-y-1 z-30">
+            class="hidden absolute left-1/2 -translate-x-1/2 mt-2 w-48 bg-dark-800/95 backdrop-blur-xl border border-gray-700/80 rounded-2xl shadow-2xl shadow-black/80 p-1.5 space-y-1 z-30">
             <button onclick="resetAllStreamSettings()"
               class="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl hover:bg-amber-500/10 active:bg-amber-500/20 transition-all text-center group cursor-pointer">
               <i class="ti ti-refresh text-amber-400 text-base transition-transform group-hover:rotate-180 duration-500"></i>
@@ -479,9 +486,9 @@
 
         <!-- Expand / Collapse All -->
         <button type="button" id="toggleAllGroupsBtn" onclick="toggleAllStreamGroups()"
-          class="px-3 flex items-center justify-center gap-1.5 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white h-[42px] rounded-lg transition-colors text-sm font-medium"
+          class="h-10 px-3.5 flex items-center justify-center gap-1.5 bg-dark-800/90 hover:bg-dark-750 border border-gray-700/60 hover:border-primary/50 text-gray-200 hover:text-white rounded-xl transition-all text-xs sm:text-sm font-medium shadow-sm active:scale-[0.98]"
           title="Expand/Collapse All Group">
-          <i class="ti ti-fold-down text-gray-300"></i>
+          <i class="ti ti-fold-down text-gray-300 text-base"></i>
           <span id="toggleAllGroupsLabel">Expand</span>
         </button>
       </div>
@@ -491,38 +498,38 @@
         <div class="mobile-stream-controls relative flex flex-col gap-2 mb-3">
           <div class="relative w-full mobile-stream-filter">
             <select id="streamFilterMobile" onchange="applyStreamFilter(this.value)"
-              class="w-full bg-dark-700 border border-gray-600 text-white pl-9 pr-4 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary appearance-none cursor-pointer text-sm">
+              class="w-full bg-dark-800/90 border border-gray-700/60 text-white pl-9 pr-8 py-2 rounded-xl focus:outline-none focus:border-primary appearance-none cursor-pointer text-xs sm:text-sm h-10 shadow-sm">
               <option value="all">All Streams</option>
             </select>
-            <i class="ti ti-filter absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
-            <i class="ti ti-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+            <i class="ti ti-filter absolute left-3 top-1/2 -translate-y-1/2 text-primary text-sm pointer-events-none"></i>
+            <i class="ti ti-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none"></i>
           </div>
           <div class="mobile-stream-buttons grid grid-cols-3 gap-2 w-full">
             <div class="relative" id="scheduleDropdownMobile">
               <button onclick="toggleScheduleDropdown()"
-                class="w-full flex items-center justify-center gap-1 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white px-2 py-2 rounded-lg transition-colors text-xs overflow-hidden">
+                class="w-full h-9 flex items-center justify-center gap-1.5 bg-dark-800/90 hover:bg-dark-750 border border-gray-700/60 text-gray-200 hover:text-white px-2 rounded-xl transition-all text-xs font-medium overflow-hidden shadow-sm active:scale-[0.98]">
                 <i class="ti ti-calendar-event flex-shrink-0 text-primary"></i>
                 <span class="truncate">Schedule</span>
               </button>
             </div>
             <div class="relative" id="backupDropdownMobile">
               <button onclick="toggleBackupDropdown()"
-                class="w-full flex items-center justify-center gap-1 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white px-2 py-2 rounded-lg transition-colors text-xs overflow-hidden">
-                <i class="ti ti-settings-2 flex-shrink-0"></i>
+                class="w-full h-9 flex items-center justify-center gap-1.5 bg-dark-800/90 hover:bg-dark-750 border border-gray-700/60 text-gray-200 hover:text-white px-2 rounded-xl transition-all text-xs font-medium overflow-hidden shadow-sm active:scale-[0.98]">
+                <i class="ti ti-settings-2 flex-shrink-0 text-gray-300"></i>
                 <span class="truncate">Manage</span>
               </button>
             </div>
             <button type="button" id="toggleAllGroupsBtnMobile" onclick="toggleAllStreamGroups()"
-              class="flex items-center justify-center gap-1 bg-dark-700 hover:bg-dark-600 border border-gray-600 text-white px-2 py-2 rounded-lg transition-colors text-xs overflow-hidden"
+              class="h-9 flex items-center justify-center gap-1.5 bg-dark-800/90 hover:bg-dark-750 border border-gray-700/60 text-gray-200 hover:text-white px-2 rounded-xl transition-all text-xs font-medium overflow-hidden shadow-sm active:scale-[0.98]"
               title="Expand/Collapse All Group">
-              <i class="ti ti-fold-down flex-shrink-0"></i>
+              <i class="ti ti-fold-down flex-shrink-0 text-gray-300"></i>
               <span id="toggleAllGroupsLabelMobile" class="truncate">Expand</span>
             </button>
           </div>
 
           <!-- Mobile Schedule Dropdown Menu -->
           <div id="scheduleDropdownMenuMobile"
-            class="hidden absolute top-full left-1/2 -translate-x-1/2 mt-2 w-48 max-w-[calc(100%-2rem)] bg-dark-800/95 backdrop-blur-xl border border-gray-700/80 rounded-2xl shadow-2xl shadow-black/60 p-1.5 space-y-1 z-30">
+            class="hidden absolute top-full left-1/2 -translate-x-1/2 mt-2 w-48 max-w-[calc(100%-2rem)] bg-dark-800/95 backdrop-blur-xl border border-gray-700/80 rounded-2xl shadow-2xl shadow-black/80 p-1.5 space-y-1 z-30">
             <button onclick="openScheduleModal('once')"
               class="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl hover:bg-dark-700/70 active:bg-dark-700 active:scale-[0.98] transition-all text-center group cursor-pointer">
               <i class="ti ti-calendar text-primary text-base transition-transform group-hover:scale-110"></i>
@@ -542,7 +549,7 @@
 
           <!-- Mobile Manage Dropdown Menu -->
           <div id="backupDropdownMenuMobile"
-            class="hidden absolute top-full left-1/2 -translate-x-1/2 mt-2 w-48 max-w-[calc(100%-2rem)] bg-dark-800/95 backdrop-blur-xl border border-gray-700/80 rounded-2xl shadow-2xl shadow-black/60 p-1.5 space-y-1 z-30">
+            class="hidden absolute top-full left-1/2 -translate-x-1/2 mt-2 w-48 max-w-[calc(100%-2rem)] bg-dark-800/95 backdrop-blur-xl border border-gray-700/80 rounded-2xl shadow-2xl shadow-black/80 p-1.5 space-y-1 z-30">
             <button onclick="resetAllStreamSettings()"
               class="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl hover:bg-amber-500/10 active:bg-amber-500/20 active:scale-[0.98] transition-all text-center group cursor-pointer">
               <i class="ti ti-refresh text-amber-400 text-base transition-transform group-hover:rotate-180 duration-500"></i>
@@ -575,19 +582,19 @@
     <div id="mobile-stream-list" class="block md:hidden space-y-2"></div>
 
     <!-- Desktop Stream Table -->
-    <div class="hidden md:block bg-gray-800 rounded-lg shadow-md overflow-hidden">
+    <div class="hidden md:block bg-dark-800/90 backdrop-blur-md rounded-2xl border border-gray-700/60 shadow-xl overflow-hidden">
       <div class="overflow-x-auto">
         <table class="min-w-full">
-          <thead class="bg-gray-700 sticky top-0 z-9">
+          <thead class="bg-dark-750/90 border-b border-gray-700/60 sticky top-0 z-9">
             <tr>
-              <th class="px-3 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider w-12">No.</th>
-              <th class="px-3 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Stream Name
+              <th class="px-3.5 py-3 text-center text-xs font-semibold text-gray-300 uppercase tracking-wider w-12">No.</th>
+              <th class="px-3.5 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Stream Name
               </th>
-              <th class="px-3 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Platform</th>
-              <th class="px-3 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Schedule</th>
-              <th class="px-3 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Duration</th>
-              <th class="px-3 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Status</th>
-              <th class="px-3 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">Actions</th>
+              <th class="px-3.5 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Platform</th>
+              <th class="px-3.5 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Schedule</th>
+              <th class="px-3.5 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Duration</th>
+              <th class="px-3.5 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Status</th>
+              <th class="px-3.5 py-3 text-right text-xs font-semibold text-gray-300 uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-700">
@@ -609,13 +616,18 @@
   </div>
 
   <!-- New Stream Modal -->
-  <div id="newStreamModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto">
+  <div id="newStreamModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden modal-overlay overflow-y-auto">
     <div class="flex min-h-screen items-center justify-center p-4">
-      <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-lg modal-container flex flex-col max-h-[90vh]">
-        <div class="flex-shrink-0 flex items-center justify-between p-4 sm:px-6 sm:py-6 border-b border-gray-700">
-          <h3 class="text-lg font-semibold">Create New Stream</h3>
-          <button type="button" onclick="closeNewStreamModal()" class="text-gray-400 hover:text-white">
-            <i class="ti ti-x text-xl"></i>
+      <div class="bg-dark-800/95 backdrop-blur-xl border border-gray-700/80 rounded-2xl shadow-2xl w-full max-w-lg modal-container flex flex-col max-h-[90vh]">
+        <div class="flex-shrink-0 flex items-center justify-between p-4 sm:px-6 sm:py-5 border-b border-gray-700/60">
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+              <i class="ti ti-broadcast text-lg"></i>
+            </div>
+            <h3 class="text-base sm:text-lg font-bold text-white">Create New Stream</h3>
+          </div>
+          <button type="button" onclick="closeNewStreamModal()" class="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700/50 transition-colors">
+            <i class="ti ti-x text-lg"></i>
           </button>
         </div>
         <div class="p-4 sm:px-6 pt-1 pb-4 overflow-y-auto flex-grow">
@@ -882,42 +894,42 @@
             </div>
           </form>
         </div>
-        <div class="flex-shrink-0 flex items-center justify-end p-4 sm:px-6 border-t border-gray-700">
+        <div class="flex-shrink-0 flex items-center justify-end p-4 sm:px-6 border-t border-gray-700/60">
           <div class="flex items-center gap-3">
             <button type="button" onclick="closeNewStreamModal()"
-              class="px-5 py-2.5 text-sm font-medium text-gray-300 hover:text-white">Cancel</button>
+              class="px-4 py-2.5 text-sm font-medium text-gray-400 hover:text-white rounded-xl hover:bg-gray-700/50 transition-colors">Cancel</button>
             <button type="submit" form="newStreamForm"
-              class="px-5 py-2.5 text-sm font-medium bg-primary hover:bg-secondary text-white rounded-lg">Create
-              Stream</button>
+              class="h-10 px-5 text-sm font-semibold bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-500 shadow-md shadow-primary/25 active:scale-[0.98] text-white rounded-xl transition-all flex items-center gap-2">
+              <i class="ti ti-check text-base"></i>
+              <span>Create Stream</span>
+            </button>
           </div>
         </div>
       </div>
     </div>
   </div>
 
-
-
   <!-- Schedule Modal -->
-  <div id="scheduleModal" class="fixed inset-0 bg-black/60 z-50 hidden overflow-y-auto">
+  <div id="scheduleModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden overflow-y-auto">
     <div class="flex min-h-screen items-center justify-center p-4">
-      <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-md flex flex-col max-h-[85vh]">
-        <div class="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-gray-700">
+      <div class="bg-dark-800/95 backdrop-blur-xl border border-gray-700/80 rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[85vh]">
+        <div class="flex-shrink-0 flex items-center justify-between px-4 py-3.5 border-b border-gray-700/60">
           <div class="flex items-center gap-3">
-            <h3 class="text-base font-semibold" id="scheduleModalTitle">Schedule</h3>
-            <div class="flex gap-1">
+            <h3 class="text-base font-semibold text-white" id="scheduleModalTitle">Schedule</h3>
+            <div class="flex gap-1 bg-dark-700/80 p-0.5 rounded-lg border border-gray-700/60">
               <button onclick="switchScheduleTab('once')" id="scheduleTabOnce"
-                class="px-2.5 py-1 text-xs rounded-lg bg-primary text-white">Once</button>
+                class="px-2.5 py-1 text-xs rounded-md bg-primary text-white font-medium">Once</button>
               <button onclick="switchScheduleTab('daily')" id="scheduleTabDaily"
-                class="px-2.5 py-1 text-xs rounded-lg bg-dark-700 text-gray-300 hover:bg-dark-600">Daily</button>
+                class="px-2.5 py-1 text-xs rounded-md text-gray-400 hover:text-white transition-colors">Daily</button>
               <button onclick="switchScheduleTab('weekly')" id="scheduleTabWeekly"
-                class="px-2.5 py-1 text-xs rounded-lg bg-dark-700 text-gray-300 hover:bg-dark-600">Weekly</button>
+                class="px-2.5 py-1 text-xs rounded-md text-gray-400 hover:text-white transition-colors">Weekly</button>
             </div>
           </div>
-          <button onclick="closeScheduleModal()" class="text-gray-400 hover:text-white">
-            <i class="ti ti-x text-xl"></i>
+          <button onclick="closeScheduleModal()" class="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700/50 transition-colors">
+            <i class="ti ti-x text-lg"></i>
           </button>
         </div>
-        <div class="p-3 overflow-y-auto flex-grow">
+        <div class="p-4 overflow-y-auto flex-grow">
           <div id="scheduleModalContent">
             <div class="text-center py-6 text-gray-400">
               <i class="ti ti-loader-2 animate-spin text-xl"></i>
@@ -930,13 +942,13 @@
   </div>
 
   <!-- Schedule Edit Modal -->
-  <div id="scheduleEditModal" class="fixed inset-0 bg-black/60 z-[60] hidden overflow-y-auto">
+  <div id="scheduleEditModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] hidden overflow-y-auto">
     <div class="flex min-h-screen items-center justify-center p-4">
-      <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-md flex flex-col max-h-[90vh]">
-        <div class="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-700">
-          <h3 class="text-lg font-semibold">Edit Schedule</h3>
-          <button onclick="closeScheduleEditModal()" class="text-gray-400 hover:text-white">
-            <i class="ti ti-x text-xl"></i>
+      <div class="bg-dark-800/95 backdrop-blur-xl border border-gray-700/80 rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh]">
+        <div class="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-700/60">
+          <h3 class="text-base sm:text-lg font-semibold text-white">Edit Schedule</h3>
+          <button onclick="closeScheduleEditModal()" class="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700/50 transition-colors">
+            <i class="ti ti-x text-lg"></i>
           </button>
         </div>
         <div class="p-4 overflow-y-auto flex-grow">
@@ -1057,10 +1069,14 @@
         const panel = document.getElementById(`studio-panel-${t}`);
         if (!btn || !panel) return;
         if (t === tabName) {
-          btn.className = "studio-tab-btn flex-1 min-w-[120px] py-2.5 px-4 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all bg-primary text-white shadow-md cursor-pointer touch-manipulation active:scale-[0.98] min-h-[44px]";
+          if (t === 'broadcasts') {
+            btn.className = "studio-tab-btn flex-1 min-w-[120px] py-2.5 px-4 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-md shadow-red-600/30 cursor-pointer touch-manipulation active:scale-[0.98] min-h-[44px]";
+          } else {
+            btn.className = "studio-tab-btn flex-1 min-w-[120px] py-2.5 px-4 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all bg-gradient-to-r from-primary to-purple-600 text-white shadow-md shadow-primary/30 cursor-pointer touch-manipulation active:scale-[0.98] min-h-[44px]";
+          }
           panel.classList.remove('hidden');
         } else {
-          btn.className = "studio-tab-btn flex-1 min-w-[120px] py-2.5 px-4 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all text-gray-400 hover:text-white hover:bg-dark-700/50 cursor-pointer touch-manipulation active:scale-[0.98] min-h-[44px]";
+          btn.className = "studio-tab-btn flex-1 min-w-[120px] py-2.5 px-4 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all text-gray-400 hover:text-white hover:bg-dark-700/60 cursor-pointer touch-manipulation active:scale-[0.98] min-h-[44px]";
           panel.classList.add('hidden');
         }
       });
@@ -2327,17 +2343,17 @@
       </td>
       <td class="px-3 py-4 text-right">
         <div class="flex items-center justify-end gap-2">
-          <button onclick="${stream.status === 'live' ? `stopStream('${stream.id}', event)` : `startStream('${stream.id}', event)`}" class="stream-action-btn w-9 h-9 flex items-center justify-center ${stream.status === 'live' ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' : 'bg-green-500/20 text-green-400 hover:bg-green-500/30'} rounded-lg transition-colors" title="${stream.status === 'live' ? 'Stop' : 'Start'}">
+          <button onclick="${stream.status === 'live' ? `stopStream('${stream.id}', event)` : `startStream('${stream.id}', event)`}" class="stream-action-btn w-9 h-9 flex items-center justify-center ${stream.status === 'live' ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30' : 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/30'} rounded-lg shadow-sm transition-all active:scale-95" title="${stream.status === 'live' ? 'Stop' : 'Start'}">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
               ${stream.status === 'live' ? '<rect x="6" y="6" width="12" height="12" rx="2"/>' : '<path d="M8 5v14l11-7z"/>'}
             </svg>
           </button>
-          <button onclick="editStream('${stream.id}', event)" class="stream-action-btn w-9 h-9 flex items-center justify-center bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 rounded-lg transition-colors" title="Edit">
+          <button onclick="editStream('${stream.id}', event)" class="stream-action-btn w-9 h-9 flex items-center justify-center bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 border border-blue-500/30 rounded-lg shadow-sm transition-all active:scale-95" title="Edit">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
             </svg>
           </button>
-          <button onclick="deleteStream('${stream.id}', event)" class="stream-action-btn w-9 h-9 flex items-center justify-center bg-red-500/20 text-red-400 hover:bg-red-500/30 rounded-lg transition-colors" title="Delete">
+          <button onclick="deleteStream('${stream.id}', event)" class="stream-action-btn w-9 h-9 flex items-center justify-center bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30 rounded-lg shadow-sm transition-all active:scale-95" title="Delete">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
             </svg>
@@ -2350,32 +2366,33 @@
         // Mobile list item - simple and clean
         if (mobileContainer) {
           const item = document.createElement('div');
-          item.className = 'bg-gray-800 rounded-lg p-3 flex items-center justify-between';
+          item.className = 'bg-dark-800/90 hover:bg-dark-750 border border-gray-700/60 rounded-xl p-3 flex items-center justify-between gap-2.5 transition-all shadow-sm';
           item.innerHTML = `
-        <div class="flex-1 min-w-0 mr-2">
+        <div class="flex-1 min-w-0 mr-1">
           <div class="flex items-center gap-2 mb-1">
-            <span class="text-xs text-gray-500">#${index}</span>
-            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${statusClass} text-white">
+            <span class="text-[11px] font-mono text-gray-500">#${index}</span>
+            <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold ${statusClass} text-white shadow-xs">
               ${statusText}
             </span>
+            ${youtubeStatusBadge}
           </div>
-          <h4 class="font-medium text-white text-sm truncate">${stream.title}</h4>
-          <p class="text-xs text-gray-400 truncate">${stream.video_title || 'No video'} • ${durationMobileText}</p>
-          ${stream.schedule_type !== 'once' ? `<p class="text-xs text-accent truncate">${scheduleTypeBadge} ${scheduleInfo}</p>` : ''}
+          <h4 class="font-medium text-white text-xs sm:text-sm truncate leading-tight">${escapeHtml(stream.title)}</h4>
+          <p class="text-[11px] text-gray-400 truncate mt-0.5">${escapeHtml(stream.video_title || 'No video')} • ${durationMobileText}</p>
+          ${stream.schedule_type !== 'once' ? `<p class="text-[11px] text-primary truncate mt-0.5">${scheduleTypeBadge} ${scheduleInfo}</p>` : ''}
         </div>
-        <div class="flex items-center gap-1 flex-shrink-0">
-          <button onclick="${stream.status === 'live' ? `stopStream('${stream.id}', event)` : `startStream('${stream.id}', event)`}" class="stream-action-btn w-9 h-9 flex items-center justify-center ${stream.status === 'live' ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'} rounded-lg">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+        <div class="flex items-center gap-1.5 flex-shrink-0">
+          <button onclick="${stream.status === 'live' ? `stopStream('${stream.id}', event)` : `startStream('${stream.id}', event)`}" class="stream-action-btn w-8 h-8 flex items-center justify-center ${stream.status === 'live' ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30' : 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/30'} rounded-lg shadow-xs active:scale-95" title="${stream.status === 'live' ? 'Stop' : 'Start'}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
               ${stream.status === 'live' ? '<rect x="6" y="6" width="12" height="12" rx="2"/>' : '<path d="M8 5v14l11-7z"/>'}
             </svg>
           </button>
-          <button onclick="editStream('${stream.id}', event)" class="stream-action-btn w-9 h-9 flex items-center justify-center bg-blue-500/20 text-blue-400 rounded-lg">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <button onclick="editStream('${stream.id}', event)" class="stream-action-btn w-8 h-8 flex items-center justify-center bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 border border-blue-500/30 rounded-lg shadow-xs active:scale-95" title="Edit">
+            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
             </svg>
           </button>
-          <button onclick="deleteStream('${stream.id}', event)" class="stream-action-btn w-9 h-9 flex items-center justify-center bg-red-500/20 text-red-400 rounded-lg">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <button onclick="deleteStream('${stream.id}', event)" class="stream-action-btn w-8 h-8 flex items-center justify-center bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30 rounded-lg shadow-xs active:scale-95" title="Delete">
+            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
             </svg>
           </button>
