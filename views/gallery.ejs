@@ -175,7 +175,7 @@ function formatDuration(seconds) {
 <div class="bg-gray-800/80 backdrop-blur-sm border border-gray-700/60 rounded-2xl p-3 sm:p-3.5 mb-6 shadow-sm">
   <div class="mb-2.5 flex items-center gap-1.5 text-[11px] sm:text-xs text-gray-400/90 px-0.5">
     <i class="ti ti-info-circle text-primary shrink-0"></i>
-    <span class="truncate">Drag kartu video/audio ke folder tujuan, atau klik pensil untuk rename folder.</span>
+    <span class="truncate">Gunakan tombol folder di kartu media untuk memindahkan file, atau buat folder baru dari toolbar.</span>
   </div>
   <div class="flex items-center gap-1.5 sm:gap-2.5 w-full">
     <!-- Search Input (takes maximum available space) -->
@@ -267,7 +267,7 @@ function formatDuration(seconds) {
       <!-- Video Group -->
       <div class="video-group" data-name="<%= groupKey %>" data-video-ids='<%- JSON.stringify(groupVideos.map(v => v.id)) %>'>
         <!-- Group Header -->
-        <div class="media-drop-target bg-gray-800/50 rounded-lg p-3 flex items-center justify-between cursor-pointer hover:bg-gray-800/70 transition-colors border border-gray-700/50" onclick="toggleVideoGroup('<%= groupIndex %>')" data-media-type="video" data-folder-name="<%= group.displayName %>" ondragover="handleMediaDragOver(event)" ondragenter="handleMediaDragEnter(event)" ondragleave="handleMediaDragLeave(event)" ondrop="handleMediaDrop(event)">
+        <div class="media-drop-target bg-gray-800/50 rounded-lg p-3 flex items-center justify-between cursor-pointer hover:bg-gray-800/70 transition-colors border border-gray-700/50" onclick="toggleVideoGroup('<%= groupIndex %>')" data-media-type="video" data-folder-name="<%= group.displayName %>">
           <div class="flex items-center gap-3">
             <i class="ti ti-chevron-down text-gray-400 transition-transform duration-200" id="videoGroupIcon<%= groupIndex %>"></i>
             <div>
@@ -298,43 +298,52 @@ function formatDuration(seconds) {
         <!-- Group Content -->
         <div class="video-group-content mt-2 space-y-2" id="videoGroupContent<%= groupIndex %>">
           <% groupVideos.forEach(function(video) { %>
-            <div class="video-card bg-gray-800 rounded-lg p-3 flex items-center gap-3 hover:bg-gray-700/50 transition-colors ml-4 border-l-2 border-primary/30" data-title="<%= video.title.toLowerCase() %>" data-date="<%= video.upload_date %>" data-id="<%= video.id %>" data-current-folder="<%= group.displayName %>" data-media-type="video" draggable="true" ondragstart="handleMediaDragStart(event)" ondragend="handleMediaDragEnd(event)">
+            <div class="video-card bg-gray-800 rounded-xl p-2.5 sm:p-3 flex items-center gap-2.5 sm:gap-3.5 hover:bg-gray-700/50 transition-all ml-1 sm:ml-3 border-l-2 border-primary/40 shadow-sm" data-title="<%= video.title.toLowerCase() %>" data-date="<%= video.upload_date %>" data-id="<%= video.id %>" data-current-folder="<%= group.displayName %>" data-media-type="video">
               <!-- Thumbnail -->
-              <div class="relative w-20 h-14 md:w-24 md:h-16 flex-shrink-0 rounded-md overflow-hidden group cursor-pointer" onclick="playVideo('<%= video.id %>', '<%= video.title %>')">
+              <div class="relative w-16 h-12 sm:w-20 sm:h-14 md:w-24 md:h-16 flex-shrink-0 rounded-lg overflow-hidden group cursor-pointer" onclick="playVideo('<%= video.id %>', '<%= video.title.replace(/'/g, "\\'") %>')">
                 <img src="<%= video.thumbnail_path %>" alt="<%= video.title %>" class="w-full h-full object-cover" loading="lazy">
                 <div class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                  <i class="ti ti-player-play-filled text-white text-lg"></i>
+                  <i class="ti ti-player-play-filled text-white text-base sm:text-lg"></i>
                 </div>
                 <span class="absolute bottom-1 right-1 bg-black/80 text-white text-[10px] px-1 py-0.5 rounded">
                   <%= formatDuration(video.duration) %>
                 </span>
               </div>
               <!-- Info -->
-              <div class="flex-1 min-w-0">
-                <h3 class="font-medium text-sm md:text-base truncate text-white"><%= video.title %></h3>
-                <div class="text-xs text-gray-400 flex items-center mt-0.5">
-                  <i class="ti ti-video text-primary mr-1"></i>
-                  <span><%= new Date(video.upload_date).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) %></span>
-                  <span class="mx-1">•</span>
+              <div class="flex-1 min-w-0 pr-1">
+                <h3 class="font-medium text-xs sm:text-sm md:text-base text-white break-words line-clamp-2 leading-snug" title="<%= video.title %>"><%= video.title %></h3>
+                <div class="text-[11px] sm:text-xs text-gray-400 flex items-center flex-wrap gap-x-2 gap-y-0.5 mt-1">
+                  <span class="inline-flex items-center">
+                    <i class="ti ti-video text-primary mr-1 shrink-0"></i>
+                    <span><%= new Date(video.upload_date).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) %></span>
+                  </span>
+                  <span class="text-gray-600">•</span>
                   <span><%= formatFileSize(video.file_size) %></span>
+                  <% if (video.resolution) { %>
+                  <span class="text-gray-600">•</span>
+                  <span class="text-gray-400"><%= video.resolution %></span>
+                  <% } %>
                 </div>
               </div>
               <!-- Actions -->
-              <div class="flex items-center gap-1 flex-shrink-0">
-                <button class="p-2 text-gray-400 hover:text-white hover:bg-gray-600/50 rounded-lg transition-colors" onclick="playVideo('<%= video.id %>', '<%= video.title %>')" title="Play">
-                  <i class="ti ti-player-play text-lg"></i>
+              <div class="flex items-center gap-0.5 sm:gap-1 flex-shrink-0">
+                <button class="p-1.5 sm:p-2 text-gray-400 hover:text-white hover:bg-gray-600/50 rounded-lg transition-colors" onclick="playVideo('<%= video.id %>', '<%= video.title.replace(/'/g, "\\'") %>')" title="Play">
+                  <i class="ti ti-player-play text-base sm:text-lg"></i>
+                </button>
+                <button class="p-1.5 sm:p-2 text-gray-400 hover:text-cyan-400 hover:bg-cyan-500/10 rounded-lg transition-colors" onclick="openMoveMediaModal('<%= video.id %>', '<%= video.title.replace(/'/g, "\\'") %>', 'video', '<%= (video.folder_name || '').replace(/'/g, "\\'") %>')" title="Pindah ke Folder">
+                  <i class="ti ti-folder-share text-base sm:text-lg"></i>
                 </button>
                 <% if (typeof permissions !== 'undefined' && permissions.can_download_videos) { %>
-                <button class="p-2 text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors" onclick="downloadVideo('<%= video.id %>', '<%= video.title %>')" title="Download">
-                  <i class="ti ti-download text-lg"></i>
+                <button class="p-1.5 sm:p-2 text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors" onclick="downloadVideo('<%= video.id %>', '<%= video.title.replace(/'/g, "\\'") %>')" title="Download">
+                  <i class="ti ti-download text-base sm:text-lg"></i>
                 </button>
                 <% } %>
-                <button class="p-2 text-gray-400 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors" onclick="showRenameDialog('<%= video.id %>', '<%= video.title %>')" title="Rename">
-                  <i class="ti ti-pencil text-lg"></i>
+                <button class="p-1.5 sm:p-2 text-gray-400 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors" onclick="showRenameDialog('<%= video.id %>', '<%= video.title.replace(/'/g, "\\'") %>')" title="Rename">
+                  <i class="ti ti-pencil text-base sm:text-lg"></i>
                 </button>
                 <% if (typeof permissions !== 'undefined' && permissions.can_delete_videos) { %>
-                <button class="p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors" onclick="showDeleteDialog('<%= video.id %>', '<%= video.title %>')" title="Delete">
-                  <i class="ti ti-trash text-lg"></i>
+                <button class="p-1.5 sm:p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors" onclick="showDeleteDialog('<%= video.id %>', '<%= video.title.replace(/'/g, "\\'") %>')" title="Delete">
+                  <i class="ti ti-trash text-base sm:text-lg"></i>
                 </button>
                 <% } %>
               </div>
@@ -396,7 +405,7 @@ function formatDuration(seconds) {
       <!-- Audio Group -->
       <div class="audio-group" data-name="<%= groupKey %>" data-audio-ids='<%- JSON.stringify(groupAudios.map(a => a.id)) %>'>
         <!-- Group Header -->
-        <div class="media-drop-target bg-gray-800/50 rounded-lg p-3 flex items-center justify-between cursor-pointer hover:bg-gray-800/70 transition-colors border border-gray-700/50" onclick="toggleAudioGroup('<%= groupIndex %>')" data-media-type="audio" data-folder-name="<%= group.displayName %>" ondragover="handleMediaDragOver(event)" ondragenter="handleMediaDragEnter(event)" ondragleave="handleMediaDragLeave(event)" ondrop="handleMediaDrop(event)">
+        <div class="media-drop-target bg-gray-800/50 rounded-lg p-3 flex items-center justify-between cursor-pointer hover:bg-gray-800/70 transition-colors border border-gray-700/50" onclick="toggleAudioGroup('<%= groupIndex %>')" data-media-type="audio" data-folder-name="<%= group.displayName %>">
           <div class="flex items-center gap-3">
             <i class="ti ti-chevron-down text-gray-400 transition-transform duration-200" id="audioGroupIcon<%= groupIndex %>"></i>
             <div>
@@ -427,40 +436,46 @@ function formatDuration(seconds) {
         <!-- Group Content -->
         <div class="audio-group-content mt-2 space-y-2" id="audioGroupContent<%= groupIndex %>">
           <% groupAudios.forEach(function(audio) { %>
-            <div class="audio-card bg-gray-800 rounded-lg p-3 flex items-center gap-3 hover:bg-gray-700/50 transition-colors ml-4 border-l-2 border-green-500/30" data-title="<%= audio.title.toLowerCase() %>" data-date="<%= audio.upload_date %>" data-id="<%= audio.id %>" data-current-folder="<%= group.displayName %>" data-media-type="audio" draggable="true" ondragstart="handleMediaDragStart(event)" ondragend="handleMediaDragEnd(event)">
+            <div class="audio-card bg-gray-800 rounded-xl p-2.5 sm:p-3 flex items-center gap-2.5 sm:gap-3.5 hover:bg-gray-700/50 transition-all ml-1 sm:ml-3 border-l-2 border-green-500/40 shadow-sm" data-title="<%= audio.title.toLowerCase() %>" data-date="<%= audio.upload_date %>" data-id="<%= audio.id %>" data-current-folder="<%= group.displayName %>" data-media-type="audio">
               <!-- Audio Icon -->
-              <div class="relative w-14 h-14 md:w-16 md:h-16 flex-shrink-0 rounded-lg bg-gradient-to-br from-green-600/30 to-green-900/30 flex items-center justify-center cursor-pointer group" onclick="playAudio('<%= audio.id %>', '<%= audio.title %>')">
-                <i class="ti ti-music text-2xl md:text-3xl text-green-500"></i>
+              <div class="relative w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 flex-shrink-0 rounded-lg bg-gradient-to-br from-green-600/30 to-green-900/30 flex items-center justify-center cursor-pointer group" onclick="playAudio('<%= audio.id %>', '<%= audio.title.replace(/'/g, "\\'") %>')">
+                <i class="ti ti-music text-xl sm:text-2xl md:text-3xl text-green-500"></i>
                 <div class="absolute inset-0 bg-black/40 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                  <i class="ti ti-player-play-filled text-white text-lg"></i>
+                  <i class="ti ti-player-play-filled text-white text-base sm:text-lg"></i>
                 </div>
               </div>
               <!-- Info -->
-              <div class="flex-1 min-w-0">
-                <h3 class="font-medium text-sm md:text-base truncate text-white"><%= audio.title %></h3>
-                <div class="text-xs text-gray-400 flex items-center flex-wrap gap-x-2 mt-0.5">
+              <div class="flex-1 min-w-0 pr-1">
+                <h3 class="font-medium text-xs sm:text-sm md:text-base text-white break-words line-clamp-2 leading-snug" title="<%= audio.title %>"><%= audio.title %></h3>
+                <div class="text-[11px] sm:text-xs text-gray-400 flex items-center flex-wrap gap-x-2 gap-y-0.5 mt-1">
                   <span class="inline-flex items-center">
-                    <i class="ti ti-music text-green-500 mr-1"></i>
+                    <i class="ti ti-music text-green-500 mr-1 shrink-0"></i>
                     <span class="uppercase text-green-400 font-medium"><%= audio.format %></span>
                   </span>
+                  <span class="text-gray-600">•</span>
                   <span><%= formatDuration(audio.duration) %></span>
+                  <span class="text-gray-600">•</span>
                   <span><%= formatFileSize(audio.file_size) %></span>
-                </div>
-                <div class="text-xs text-gray-500 mt-0.5">
-                  <%= new Date(audio.upload_date).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) %>
+                  <span class="text-gray-600">•</span>
+                  <span><%= new Date(audio.upload_date).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) %></span>
                 </div>
               </div>
               <!-- Actions -->
-              <div class="flex items-center gap-1 flex-shrink-0">
-                <button class="p-2 text-gray-400 hover:text-green-400 hover:bg-green-500/10 rounded-lg transition-colors" onclick="playAudio('<%= audio.id %>', '<%= audio.title %>')" title="Play">
-                  <i class="ti ti-player-play text-lg"></i>
+              <div class="flex items-center gap-0.5 sm:gap-1 flex-shrink-0">
+                <button class="p-1.5 sm:p-2 text-gray-400 hover:text-green-400 hover:bg-green-500/10 rounded-lg transition-colors" onclick="playAudio('<%= audio.id %>', '<%= audio.title.replace(/'/g, "\\'") %>')" title="Play">
+                  <i class="ti ti-player-play text-base sm:text-lg"></i>
                 </button>
-                <button class="p-2 text-gray-400 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors" onclick="showRenameAudioDialog('<%= audio.id %>', '<%= audio.title %>')" title="Rename">
-                  <i class="ti ti-pencil text-lg"></i>
+                <button class="p-1.5 sm:p-2 text-gray-400 hover:text-cyan-400 hover:bg-cyan-500/10 rounded-lg transition-colors" onclick="openMoveMediaModal('<%= audio.id %>', '<%= audio.title.replace(/'/g, "\\'") %>', 'audio', '<%= (audio.folder_name || '').replace(/'/g, "\\'") %>')" title="Pindah ke Folder">
+                  <i class="ti ti-folder-share text-base sm:text-lg"></i>
                 </button>
-                <button class="p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors" onclick="showDeleteAudioDialog('<%= audio.id %>', '<%= audio.title %>')" title="Delete">
-                  <i class="ti ti-trash text-lg"></i>
+                <button class="p-1.5 sm:p-2 text-gray-400 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors" onclick="showRenameAudioDialog('<%= audio.id %>', '<%= audio.title.replace(/'/g, "\\'") %>')" title="Rename">
+                  <i class="ti ti-pencil text-base sm:text-lg"></i>
                 </button>
+                <% if (typeof permissions !== 'undefined' && permissions.can_delete_videos) { %>
+                <button class="p-1.5 sm:p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors" onclick="showDeleteAudioDialog('<%= audio.id %>', '<%= audio.title.replace(/'/g, "\\'") %>')" title="Delete">
+                  <i class="ti ti-trash text-base sm:text-lg"></i>
+                </button>
+                <% } %>
               </div>
             </div>
           <% }); %>
@@ -900,80 +915,296 @@ function formatDuration(seconds) {
       </button>
     </div>
   </div>
-</div>
+<!-- Move Media to Folder Modal -->
+<div id="moveMediaModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden transition-opacity flex items-center justify-center p-4">
+  <div class="bg-dark-800 rounded-2xl shadow-2xl w-full max-w-md border border-gray-700/80 overflow-hidden transform transition-all" id="moveMediaModalContent">
+    <!-- Header -->
+    <div class="flex items-center justify-between p-4 sm:p-5 border-b border-gray-700/60 bg-dark-750">
+      <div class="flex items-center gap-2.5">
+        <div id="moveMediaHeaderIconWrap" class="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
+          <i class="ti ti-folder-share text-lg"></i>
+        </div>
+        <div>
+          <h3 class="text-base sm:text-lg font-semibold text-white">Pindah File ke Folder</h3>
+          <p class="text-xs text-gray-400">Pilih folder tujuan untuk media ini</p>
+        </div>
+      </div>
+      <button type="button" onclick="closeMoveMediaModal()" class="rounded-lg w-8 h-8 flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700/50 transition-colors">
+        <i class="ti ti-x text-lg"></i>
+      </button>
+    </div>
 
+    <!-- Body -->
+    <div class="p-4 sm:p-5 space-y-4">
+      <!-- Media Info Card -->
+      <div class="bg-dark-700/70 border border-gray-700/60 rounded-xl p-3 flex items-center gap-3">
+        <div id="moveMediaIconContainer" class="w-10 h-10 rounded-lg bg-dark-600 flex items-center justify-center shrink-0">
+          <i id="moveMediaIcon" class="ti ti-video text-primary text-xl"></i>
+        </div>
+        <div class="min-w-0 flex-1">
+          <p class="text-[11px] text-gray-400 font-medium uppercase tracking-wider">File yang Dipindah</p>
+          <h4 id="moveMediaTitle" class="text-sm font-medium text-white break-words line-clamp-1"></h4>
+          <p class="text-xs text-gray-400 mt-0.5">Folder saat ini: <span id="moveMediaCurrentFolder" class="text-primary font-medium">-</span></p>
+        </div>
+      </div>
+
+      <!-- Choose Destination Folder -->
+      <div>
+        <label class="block text-xs font-medium text-gray-300 mb-1.5">Pilih Folder Tujuan:</label>
+        <div id="moveFolderListContainer" class="max-h-44 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar">
+          <!-- Dynamically populated folder buttons -->
+        </div>
+      </div>
+
+      <!-- Or Create New Folder -->
+      <div class="pt-2 border-t border-gray-700/50">
+        <label class="block text-xs font-medium text-gray-300 mb-1.5">Atau Buat / Ketik Folder Baru:</label>
+        <div class="relative">
+          <input type="text" id="customMoveFolderName" placeholder="Masukkan nama folder baru..."
+            oninput="handleCustomFolderInput()"
+            class="w-full h-10 bg-dark-700/90 text-white pl-9 pr-3 text-xs sm:text-sm border border-gray-600/50 rounded-xl focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary placeholder-gray-400">
+          <i class="ti ti-folder-plus absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-base"></i>
+        </div>
+      </div>
+
+      <!-- Preview automatic rename -->
+      <div class="bg-primary/5 border border-primary/20 rounded-xl p-2.5 flex items-start gap-2 text-xs">
+        <i class="ti ti-info-circle text-primary text-sm mt-0.5 shrink-0"></i>
+        <div class="text-gray-300">
+          <span class="block text-gray-400 text-[11px]">Otomatis rename setelah dipindah:</span>
+          <span id="moveRenamePreview" class="text-primary font-medium text-xs sm:text-sm mt-0.5 block">Pilih folder tujuan di atas</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="p-4 border-t border-gray-700/60 bg-dark-750 flex items-center justify-end gap-2.5">
+      <button type="button" onclick="closeMoveMediaModal()" class="px-4 py-2 rounded-xl text-xs sm:text-sm font-medium text-gray-400 hover:text-white hover:bg-gray-700/50 transition-colors">
+        Batal
+      </button>
+      <button type="button" id="confirmMoveBtn" onclick="confirmMoveMedia()" class="px-5 py-2 rounded-xl text-xs sm:text-sm font-medium text-white bg-primary hover:bg-primary/90 active:scale-95 transition-all shadow-sm shadow-primary/30 flex items-center gap-1.5">
+        <i class="ti ti-folder-check"></i>
+        <span>Pindahkan File</span>
+      </button>
+    </div>
+  </div>
+</div>
 
 <script src="/js/fileQueueManager.js"></script>
 <script src="/js/driveImportQueueManager.js"></script>
 <script>
   let currentTab = '<%= activeTab || "video" %>';
-  let draggedMedia = null;
+  let activeMoveItem = null; // { id, title, type, currentFolder }
+  let selectedMoveFolder = '';
 
-  function getDropTarget(element) {
-    return element?.closest?.('.media-drop-target') || null;
-  }
+  function openMoveMediaModal(id, title, type, currentFolder) {
+    activeMoveItem = { id, title, type, currentFolder: currentFolder || '' };
+    selectedMoveFolder = '';
 
-  function handleMediaDragStart(event) {
-    const card = event.currentTarget;
-    draggedMedia = {
-      id: card.dataset.id,
-      type: card.dataset.mediaType,
-      currentFolder: card.dataset.currentFolder || ''
-    };
-    event.dataTransfer.effectAllowed = 'move';
-    event.dataTransfer.setData('application/json', JSON.stringify(draggedMedia));
-    event.dataTransfer.setData('text/plain', draggedMedia.id);
-    card.classList.add('dragging');
-  }
+    const modal = document.getElementById('moveMediaModal');
+    const titleEl = document.getElementById('moveMediaTitle');
+    const folderEl = document.getElementById('moveMediaCurrentFolder');
+    const iconEl = document.getElementById('moveMediaIcon');
+    const headerIconWrap = document.getElementById('moveMediaHeaderIconWrap');
+    const customInput = document.getElementById('customMoveFolderName');
+    const previewEl = document.getElementById('moveRenamePreview');
+    const confirmBtn = document.getElementById('confirmMoveBtn');
 
-  function handleMediaDragEnd(event) {
-    event.currentTarget.classList.remove('dragging');
-    document.querySelectorAll('.media-drop-target.drag-over').forEach((target) => {
-      target.classList.remove('drag-over');
+    if (titleEl) titleEl.textContent = title;
+    if (folderEl) folderEl.textContent = currentFolder || '(Tanpa Folder)';
+    if (customInput) customInput.value = '';
+    if (previewEl) previewEl.textContent = 'Pilih folder tujuan di atas';
+
+    const isAudio = type === 'audio';
+    if (iconEl) iconEl.className = isAudio ? 'ti ti-music text-green-400 text-xl' : 'ti ti-video text-primary text-xl';
+    if (headerIconWrap) {
+      headerIconWrap.className = isAudio
+        ? 'w-9 h-9 rounded-xl bg-green-500/10 flex items-center justify-center text-green-400 shrink-0'
+        : 'w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0';
+    }
+    if (confirmBtn) {
+      confirmBtn.className = isAudio
+        ? 'px-5 py-2 rounded-xl text-xs sm:text-sm font-medium text-white bg-green-600 hover:bg-green-500 active:scale-95 transition-all shadow-sm shadow-green-600/30 flex items-center gap-1.5'
+        : 'px-5 py-2 rounded-xl text-xs sm:text-sm font-medium text-white bg-primary hover:bg-primary/90 active:scale-95 transition-all shadow-sm shadow-primary/30 flex items-center gap-1.5';
+      confirmBtn.disabled = false;
+      confirmBtn.innerHTML = `<i class="ti ti-folder-check"></i><span>Pindahkan File</span>`;
+    }
+
+    // Collect all available folders for this type
+    const grid = document.getElementById(isAudio ? 'audioGrid' : 'videoGrid');
+    const folderMap = new Map();
+
+    if (grid) {
+      const groups = grid.querySelectorAll(isAudio ? '.audio-group' : '.video-group');
+      groups.forEach(group => {
+        const dropTarget = group.querySelector('.media-drop-target');
+        const folderName = (dropTarget?.dataset.folderName || '').trim();
+        if (folderName) {
+          const count = group.querySelectorAll(isAudio ? '.audio-card' : '.video-card').length;
+          folderMap.set(folderName.toLowerCase(), { displayName: folderName, count });
+        }
+      });
+    }
+
+    // Include empty folders from localStorage
+    const emptyList = getEmptyFoldersStorage(type);
+    emptyList.forEach(name => {
+      if (name && !folderMap.has(name.toLowerCase())) {
+        folderMap.set(name.toLowerCase(), { displayName: name, count: 0 });
+      }
     });
-    draggedMedia = null;
+
+    // Populate list container
+    const listContainer = document.getElementById('moveFolderListContainer');
+    if (listContainer) {
+      listContainer.innerHTML = '';
+      const folders = Array.from(folderMap.values()).sort((a, b) => a.displayName.localeCompare(b.displayName));
+
+      if (folders.length === 0) {
+        listContainer.innerHTML = `<p class="text-xs text-gray-500 italic p-2">Belum ada folder. Masukkan nama folder baru di bawah.</p>`;
+      } else {
+        folders.forEach(f => {
+          const isCurrent = (currentFolder || '').toLowerCase() === f.displayName.toLowerCase();
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = `w-full flex items-center justify-between p-2.5 rounded-xl border text-xs sm:text-sm transition-all ${
+            isCurrent
+              ? 'border-gray-700/50 bg-dark-700/30 text-gray-500 cursor-not-allowed'
+              : 'border-gray-700/70 bg-dark-700/80 hover:bg-dark-600 text-gray-200 hover:text-white hover:border-gray-500'
+          }`;
+          btn.onclick = () => {
+            if (isCurrent) return;
+            selectMoveFolder(f.displayName, f.count);
+          };
+          btn.innerHTML = `
+            <div class="flex items-center gap-2 min-w-0">
+              <i class="ti ti-folder text-base ${isAudio ? 'text-green-400' : 'text-primary'} shrink-0"></i>
+              <span class="font-medium truncate">${f.displayName}</span>
+              ${isCurrent ? '<span class="text-[10px] text-gray-500 font-normal ml-1">(saat ini)</span>' : ''}
+            </div>
+            <span class="text-xs text-gray-400 shrink-0 ml-2">${f.count} item</span>
+          `;
+          btn.dataset.folderName = f.displayName;
+          listContainer.appendChild(btn);
+        });
+      }
+    }
+
+    if (modal) {
+      modal.classList.remove('hidden');
+    }
   }
 
-  function handleMediaDragOver(event) {
-    const target = getDropTarget(event.target);
-    if (!target || !draggedMedia || target.dataset.mediaType !== draggedMedia.type) return;
-    event.preventDefault();
-    event.dataTransfer.dropEffect = 'move';
+  function closeMoveMediaModal() {
+    const modal = document.getElementById('moveMediaModal');
+    if (modal) modal.classList.add('hidden');
+    activeMoveItem = null;
+    selectedMoveFolder = '';
   }
 
-  function handleMediaDragEnter(event) {
-    const target = getDropTarget(event.target);
-    if (!target || !draggedMedia || target.dataset.mediaType !== draggedMedia.type) return;
-    event.preventDefault();
-    target.classList.add('drag-over');
+  function selectMoveFolder(folderName, existingCount = 0) {
+    selectedMoveFolder = folderName;
+    const customInput = document.getElementById('customMoveFolderName');
+    if (customInput) customInput.value = '';
+
+    const container = document.getElementById('moveFolderListContainer');
+    if (container) {
+      container.querySelectorAll('button').forEach(btn => {
+        if (btn.dataset.folderName === folderName) {
+          btn.className = `w-full flex items-center justify-between p-2.5 rounded-xl border text-xs sm:text-sm transition-all border-primary bg-primary/10 text-white font-medium shadow-sm`;
+        } else {
+          const isCurrent = (activeMoveItem?.currentFolder || '').toLowerCase() === (btn.dataset.folderName || '').toLowerCase();
+          btn.className = `w-full flex items-center justify-between p-2.5 rounded-xl border text-xs sm:text-sm transition-all ${
+            isCurrent
+              ? 'border-gray-700/50 bg-dark-700/30 text-gray-500 cursor-not-allowed'
+              : 'border-gray-700/70 bg-dark-700/80 hover:bg-dark-600 text-gray-200 hover:text-white hover:border-gray-500'
+          }`;
+        }
+      });
+    }
+
+    updateMovePreview(folderName, existingCount);
   }
 
-  function handleMediaDragLeave(event) {
-    const target = getDropTarget(event.target);
-    if (!target || target.contains(event.relatedTarget)) return;
-    target.classList.remove('drag-over');
+  function handleCustomFolderInput() {
+    const customInput = document.getElementById('customMoveFolderName');
+    const folderName = (customInput?.value || '').trim();
+    selectedMoveFolder = folderName;
+
+    const container = document.getElementById('moveFolderListContainer');
+    if (container) {
+      container.querySelectorAll('button').forEach(btn => {
+        const isCurrent = (activeMoveItem?.currentFolder || '').toLowerCase() === (btn.dataset.folderName || '').toLowerCase();
+        btn.className = `w-full flex items-center justify-between p-2.5 rounded-xl border text-xs sm:text-sm transition-all ${
+          isCurrent
+            ? 'border-gray-700/50 bg-dark-700/30 text-gray-500 cursor-not-allowed'
+            : 'border-gray-700/70 bg-dark-700/80 hover:bg-dark-600 text-gray-200 hover:text-white hover:border-gray-500'
+        }`;
+      });
+    }
+
+    if (folderName) {
+      updateMovePreview(folderName, 0);
+    } else {
+      const previewEl = document.getElementById('moveRenamePreview');
+      if (previewEl) previewEl.textContent = 'Pilih folder tujuan di atas';
+    }
   }
 
-  async function handleMediaDrop(event) {
-    const target = getDropTarget(event.target);
-    if (!target || !draggedMedia || target.dataset.mediaType !== draggedMedia.type) return;
-    event.preventDefault();
-    event.stopPropagation();
-    target.classList.remove('drag-over');
+  function updateMovePreview(folderName, existingCount) {
+    const previewEl = document.getElementById('moveRenamePreview');
+    if (!previewEl || !folderName) return;
 
-    const folderName = (target.dataset.folderName || '').trim();
-    if (!folderName) {
-      showToast('error', 'Folder tujuan tidak valid');
+    const isAudio = activeMoveItem?.type === 'audio';
+    const grid = document.getElementById(isAudio ? 'audioGrid' : 'videoGrid');
+    let count = existingCount || 0;
+
+    if (grid) {
+      const group = Array.from(grid.querySelectorAll(isAudio ? '.audio-group' : '.video-group')).find(g => {
+        const t = g.querySelector('.media-drop-target');
+        return (t?.dataset.folderName || '').toLowerCase() === folderName.toLowerCase();
+      });
+      if (group) {
+        count = group.querySelectorAll(isAudio ? '.audio-card' : '.video-card').length;
+      }
+    }
+
+    const nextIndex = count + 1;
+    previewEl.innerHTML = `Nama baru otomatis: <strong class="text-white">${folderName} ${nextIndex}</strong>`;
+  }
+
+  async function confirmMoveMedia() {
+    if (!activeMoveItem) return;
+
+    const customInput = document.getElementById('customMoveFolderName');
+    const customName = (customInput?.value || '').trim();
+    const finalFolder = (customName || selectedMoveFolder || '').replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
+
+    if (!finalFolder) {
+      showToast('error', 'Silakan pilih folder tujuan atau masukkan nama folder baru');
       return;
     }
-    if ((draggedMedia.currentFolder || '').toLowerCase() === folderName.toLowerCase()) {
+
+    if (finalFolder.length > 120) {
+      showToast('error', 'Nama folder maksimal 120 karakter');
+      return;
+    }
+
+    if ((activeMoveItem.currentFolder || '').toLowerCase() === finalFolder.toLowerCase()) {
       showToast('error', 'Media sudah berada di folder tersebut');
       return;
     }
 
-    const endpoint = draggedMedia.type === 'audio'
-      ? `/api/audios/${draggedMedia.id}/move`
-      : `/api/videos/${draggedMedia.id}/move`;
+    const isAudio = activeMoveItem.type === 'audio';
+    const endpoint = isAudio
+      ? `/api/audios/${activeMoveItem.id}/move`
+      : `/api/videos/${activeMoveItem.id}/move`;
+
+    const confirmBtn = document.getElementById('confirmMoveBtn');
+    if (confirmBtn) {
+      confirmBtn.disabled = true;
+      confirmBtn.innerHTML = `<i class="ti ti-loader animate-spin"></i><span>Memindahkan...</span>`;
+    }
 
     try {
       const response = await fetch(endpoint, {
@@ -982,17 +1213,28 @@ function formatDuration(seconds) {
           'Content-Type': 'application/json',
           'X-CSRF-Token': '<%= csrfToken %>'
         },
-        body: JSON.stringify({ folderName })
+        body: JSON.stringify({ folderName: finalFolder })
       });
+
       const data = await response.json();
       if (data.success) {
-        showToast('success', data.message || 'Media dipindahkan');
-        setTimeout(() => location.reload(), 700);
+        removeEmptyFolderStorage(activeMoveItem.type, finalFolder);
+        showToast('success', data.message || `File dipindahkan ke folder ${finalFolder}`);
+        closeMoveMediaModal();
+        setTimeout(() => location.reload(), 600);
       } else {
-        showToast('error', data.error || 'Gagal memindahkan media');
+        showToast('error', data.error || 'Gagal memindahkan file');
+        if (confirmBtn) {
+          confirmBtn.disabled = false;
+          confirmBtn.innerHTML = `<i class="ti ti-folder-check"></i><span>Pindahkan File</span>`;
+        }
       }
-    } catch (error) {
-      showToast('error', 'Gagal memindahkan media');
+    } catch (err) {
+      showToast('error', 'Terjadi kesalahan saat memindahkan file');
+      if (confirmBtn) {
+        confirmBtn.disabled = false;
+        confirmBtn.innerHTML = `<i class="ti ti-folder-check"></i><span>Pindahkan File</span>`;
+      }
     }
   }
 
@@ -1182,15 +1424,14 @@ function formatDuration(seconds) {
 
     groupDiv.innerHTML = `
       <div class="media-drop-target bg-gray-800/50 rounded-lg p-3 flex items-center justify-between cursor-pointer hover:bg-gray-800/70 transition-colors border ${accentBorder}"
-        data-media-type="${type}" data-folder-name="${folderName}"
-        ondragover="handleMediaDragOver(event)" ondragenter="handleMediaDragEnter(event)" ondragleave="handleMediaDragLeave(event)" ondrop="handleMediaDrop(event)">
+        data-media-type="${type}" data-folder-name="${folderName}">
         <div class="flex items-center gap-3">
           <div class="w-8 h-8 rounded-lg ${iconColor} flex items-center justify-center shrink-0">
             <i class="ti ti-folder-plus text-base sm:text-lg"></i>
           </div>
           <div>
             <h3 class="font-medium text-white text-sm sm:text-base">${folderName}</h3>
-            <p class="text-xs ${subtextColor}">Folder kosong - drag ${type} ke sini</p>
+            <p class="text-xs ${subtextColor}">Folder kosong - siap menerima file</p>
           </div>
         </div>
         <div class="flex items-center gap-1.5 sm:gap-2">

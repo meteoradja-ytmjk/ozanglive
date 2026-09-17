@@ -3605,8 +3605,49 @@ app.post('/api/videos/:id/move', isAuthenticated, [
     }
 
     const folderName = req.body.folderName.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
-    await Video.update(req.params.id, { folder_name: folderName });
-    res.json({ success: true, message: `Video moved to ${folderName}` });
+    const db = require('./db/database').getDb();
+
+    // Query all other videos in this folder for this user to compute next auto-index
+    const existingVideos = await new Promise((resolve) => {
+      db.all(
+        'SELECT id, title FROM videos WHERE user_id = ? AND LOWER(TRIM(folder_name)) = LOWER(?) AND id != ?',
+        [req.session.userId, folderName, req.params.id],
+        (err, rows) => {
+          if (err) resolve([]);
+          else resolve(rows || []);
+        }
+      );
+    });
+
+    const usedNumbers = new Set();
+    const escaped = folderName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`^${escaped}\\s+(\\d+)$`, 'i');
+    const existingTitlesLower = new Set(existingVideos.map(v => (v.title || '').trim().toLowerCase()));
+
+    existingVideos.forEach(v => {
+      const match = (v.title || '').trim().match(regex);
+      if (match) {
+        usedNumbers.add(parseInt(match[1], 10));
+      }
+    });
+
+    let nextNum = 1;
+    while (usedNumbers.has(nextNum) || existingTitlesLower.has(`${folderName} ${nextNum}`.toLowerCase())) {
+      nextNum++;
+    }
+    const newTitle = `${folderName} ${nextNum}`;
+
+    await Video.update(req.params.id, { 
+      folder_name: folderName,
+      title: newTitle 
+    });
+
+    res.json({ 
+      success: true, 
+      message: `Video berhasil dipindahkan ke folder "${folderName}" dan di-rename menjadi "${newTitle}"`,
+      newTitle,
+      folderName
+    });
   } catch (error) {
     console.error('Error moving video:', error);
     res.status(500).json({ success: false, error: 'Failed to move video' });
@@ -6490,8 +6531,49 @@ app.post('/api/audios/:id/move', isAuthenticated, [
     }
 
     const folderName = req.body.folderName.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
-    await Audio.update(req.params.id, { folder_name: folderName });
-    res.json({ success: true, message: `Audio moved to ${folderName}` });
+    const db = require('./db/database').getDb();
+
+    // Query all other audios in this folder for this user to compute next auto-index
+    const existingAudios = await new Promise((resolve) => {
+      db.all(
+        'SELECT id, title FROM audios WHERE user_id = ? AND LOWER(TRIM(folder_name)) = LOWER(?) AND id != ?',
+        [req.session.userId, folderName, req.params.id],
+        (err, rows) => {
+          if (err) resolve([]);
+          else resolve(rows || []);
+        }
+      );
+    });
+
+    const usedNumbers = new Set();
+    const escaped = folderName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`^${escaped}\\s+(\\d+)$`, 'i');
+    const existingTitlesLower = new Set(existingAudios.map(a => (a.title || '').trim().toLowerCase()));
+
+    existingAudios.forEach(a => {
+      const match = (a.title || '').trim().match(regex);
+      if (match) {
+        usedNumbers.add(parseInt(match[1], 10));
+      }
+    });
+
+    let nextNum = 1;
+    while (usedNumbers.has(nextNum) || existingTitlesLower.has(`${folderName} ${nextNum}`.toLowerCase())) {
+      nextNum++;
+    }
+    const newTitle = `${folderName} ${nextNum}`;
+
+    await Audio.update(req.params.id, { 
+      folder_name: folderName,
+      title: newTitle 
+    });
+
+    res.json({ 
+      success: true, 
+      message: `Audio berhasil dipindahkan ke folder "${folderName}" dan di-rename menjadi "${newTitle}"`,
+      newTitle,
+      folderName
+    });
   } catch (error) {
     console.error('Error moving audio:', error);
     res.status(500).json({ success: false, error: 'Failed to move audio' });
