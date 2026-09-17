@@ -4169,7 +4169,7 @@ function closeCreateBroadcastModal() {
   const modal = document.getElementById('createBroadcastModal');
   if (modal) {
     modal.classList.add('hidden');
-    modal.style.display = 'none';
+    modal.style.setProperty('display', 'none', 'important');
   }
   
   const form = document.getElementById('createBroadcastForm');

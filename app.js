@@ -9769,6 +9769,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
     }
 
     let createdStream = null;
+    let streamStartResult = null;
     try {
       let scheduleDays = null;
       if (req.body.scheduleDays) {
@@ -9868,7 +9869,6 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       createdStream = await Stream.create(streamData);
       console.log('[API] Created associated Stream record:', createdStream.id, 'for broadcast:', broadcast.broadcastId, 'schedule_time:', scheduleIso);
 
-      let streamStartResult = null;
       if (req.body.startImmediately === 'true' && createdStream && req.body.videoId) {
         if (typeof streamingService !== 'undefined' && typeof streamingService.startStream === 'function') {
           try {
