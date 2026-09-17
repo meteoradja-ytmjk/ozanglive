@@ -5859,6 +5859,9 @@ function openEditTemplateModal(template) {
   // Load title folders and pre-select current folder
   loadEditTemplateTitleFolders(template.title_folder_id || null);
   
+  // Load thumbnail folders and pre-select current folder
+  loadEditTemplateThumbnailFolders(template.thumbnail_folder !== undefined ? template.thumbnail_folder : null);
+  
   // Set recurring enabled
   const recurringEnabled = document.getElementById('editRecurringEnabled');
   recurringEnabled.checked = template.recurring_enabled || false;
@@ -6103,7 +6106,14 @@ if (editTemplateForm) {
       const titleFolderId = titleFolderSelect ? (titleFolderSelect.value || null) : null;
       updateData.titleFolderId = titleFolderId;
       
-      console.log('[editTemplate] Updating template with titleFolderId:', titleFolderId);
+      // Get thumbnail folder
+      const thumbnailFolderSelect = document.getElementById('editTemplateThumbnailFolder');
+      if (thumbnailFolderSelect) {
+        const rawFolder = thumbnailFolderSelect.value;
+        updateData.thumbnailFolder = rawFolder === '__ROOT__' ? '' : (rawFolder || null);
+      }
+      
+      console.log('[editTemplate] Updating template with titleFolderId:', titleFolderId, 'thumbnailFolder:', updateData.thumbnailFolder);
       
       if (recurringEnabled) {
         const pattern = document.querySelector('input[name="editRecurringPattern"]:checked')?.value;
@@ -6824,7 +6834,7 @@ function renderRecreateBroadcastList(preservedSchedules = null) {
 
   listEl.innerHTML = broadcasts.map((b, i) => {
     const minDate = new Date(Date.now() + 11 * 60 * 1000);
-    const minDateStr = minDate.toISOString().slice(0, 16);
+    const minDateStr = typeof formatDateTimeLocal === 'function' ? formatDateTimeLocal(minDate) : minDate.toISOString().slice(0, 16);
 
     // Determine folder for this broadcast
     const streamId = b.streamId || template.stream_id;
@@ -6840,7 +6850,10 @@ function renderRecreateBroadcastList(preservedSchedules = null) {
     const folderDisplay = folder !== null ? (folder === '' ? '📁 Root' : `📂 ${folder}`) : '⚠️ No folder';
     const folderClass = folder !== null ? 'text-green-400' : 'text-yellow-400';
 
-    const preset = (preservedSchedules && preservedSchedules[i]) ? preservedSchedules[i] : '';
+    // Sensible default schedule: starts 15 min from now, staggered by 30 min per broadcast
+    const defaultDate = new Date(Date.now() + (15 + i * 30) * 60 * 1000);
+    const defaultDateStr = typeof formatDateTimeLocal === 'function' ? formatDateTimeLocal(defaultDate) : defaultDate.toISOString().slice(0, 16);
+    const preset = (preservedSchedules && preservedSchedules[i]) ? preservedSchedules[i] : defaultDateStr;
     const valueAttr = preset ? ` value="${preset}"` : '';
 
     const deleteBtn = canDelete
@@ -7162,19 +7175,23 @@ if (recreateFromTemplateForm) {
             formData.append('tags', JSON.stringify(broadcast.tags));
           }
           
-          // Always try to reuse the template streamId first.
-          // If invalid for the selected account, API will return an explicit error,
-          // but we avoid silently creating a new stream key.
+          // Only reuse streamId if it belongs to the selected account.
+          // If the stream key does not belong to this account, let YouTube create a new stream key
+          // to prevent "The stream was not found" error.
           const streamId = broadcast.streamId || template.stream_id;
-          if (broadcast.streamId) {
-            formData.append('streamId', broadcast.streamId);
-            console.log('[recreate] Using streamId:', broadcast.streamId);
-          } else if (template.stream_id) {
-            // Fallback to template's stream_id for single broadcast templates
-            formData.append('streamId', template.stream_id);
-            console.log('[recreate] Using template stream_id:', template.stream_id);
+          if (streamId) {
+            if (reusableStreamIds && reusableStreamIds.has(streamId)) {
+              formData.append('streamId', streamId);
+              console.log('[recreate] Reusing valid streamId for selected account:', streamId);
+            } else if (!reusableStreamIds) {
+              // Fallback if streams list couldn't be loaded from server
+              formData.append('streamId', streamId);
+              console.log('[recreate] Stream list unavailable, attempting to pass streamId:', streamId);
+            } else {
+              console.log('[recreate] streamId not present in selected account streams, letting YouTube generate new stream key for channel');
+            }
           } else {
-            console.log('[recreate] No streamId in template - YouTube may create a new stream key');
+            console.log('[recreate] No streamId in template - YouTube will create a new stream key');
           }
           
           // Determine thumbnail folder - priority:

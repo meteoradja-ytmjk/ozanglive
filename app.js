@@ -10399,8 +10399,8 @@ app.post('/api/youtube/templates/multi', isAuthenticated, async (req, res) => {
       categoryId: b.categoryId || '22',
       tags: b.tags || [],
       thumbnailPath: b.thumbnailPath || b.thumbnail_path || null,  // Preserve thumbnail path
-      // IMPORTANT: Use finalThumbnailFolder first, then fallback to broadcast's folder
-      thumbnailFolder: finalThumbnailFolder !== null ? finalThumbnailFolder : (b.thumbnailFolder !== undefined ? b.thumbnailFolder : null),
+      // IMPORTANT: Preserve broadcast's own folder first, fallback to template default folder
+      thumbnailFolder: (b.thumbnailFolder !== undefined && b.thumbnailFolder !== null) ? b.thumbnailFolder : finalThumbnailFolder,
       pinnedThumbnail: b.pinnedThumbnail || null  // Preserve pinned thumbnail
     }));
 
