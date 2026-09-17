@@ -9499,7 +9499,8 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
 
     // Validate scheduled time (at least 10 minutes in future)
     let finalScheduledStartTime = scheduledStartTime;
-    const scheduledDate = new Date(scheduledStartTime);
+    const parsedWibStart = parseWIBDateTimeLocal(scheduledStartTime);
+    const scheduledDate = parsedWibStart || new Date(scheduledStartTime);
     const minTime = new Date(Date.now() + 10 * 60 * 1000);
 
     if (scheduledDate < minTime) {
@@ -9513,6 +9514,8 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
           error: 'Scheduled start time must be at least 10 minutes in the future'
         });
       }
+    } else if (parsedWibStart) {
+      finalScheduledStartTime = parsedWibStart.toISOString();
     }
 
     // Parse tags if provided as JSON string
@@ -9588,14 +9591,16 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       thumbnailFolderDefined: thumbnailFolder !== undefined && thumbnailFolder !== null
     });
 
+    // Safe thumbnail upload helper with 7-second timeout to prevent proxy 504 gateway timeouts
+    const safeUploadThumbnail = (buffer) => Promise.race([
+      youtubeService.uploadThumbnail(accessToken, broadcast.broadcastId, buffer),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Thumbnail upload timed out after 7s')), 7000))
+    ]);
+
     if (req.file) {
       // Handle file upload (highest priority)
       try {
-        const thumbnailResult = await youtubeService.uploadThumbnail(
-          accessToken,
-          broadcast.broadcastId,
-          req.file.buffer
-        );
+        const thumbnailResult = await safeUploadThumbnail(req.file.buffer);
         broadcast.thumbnailUrl = thumbnailResult.thumbnailUrl;
         console.log('[API] Thumbnail uploaded from file upload');
       } catch (thumbErr) {
@@ -9608,11 +9613,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         console.log('[API] Using user-selected thumbnail:', thumbnailPath);
         if (fs.existsSync(fullPath)) {
           const imageBuffer = fs.readFileSync(fullPath);
-          const thumbnailResult = await youtubeService.uploadThumbnail(
-            accessToken,
-            broadcast.broadcastId,
-            imageBuffer
-          );
+          const thumbnailResult = await safeUploadThumbnail(imageBuffer);
           broadcast.thumbnailUrl = thumbnailResult.thumbnailUrl;
           console.log('[API] Thumbnail uploaded from user selection:', thumbnailPath);
 
@@ -9747,11 +9748,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
             console.log('[API] Image buffer size:', imageBuffer.length, 'bytes');
 
             try {
-              const thumbnailResult = await youtubeService.uploadThumbnail(
-                accessToken,
-                broadcast.broadcastId,
-                imageBuffer
-              );
+              const thumbnailResult = await safeUploadThumbnail(imageBuffer);
               broadcast.thumbnailUrl = thumbnailResult.thumbnailUrl;
               console.log('[API] ✅ Thumbnail uploaded successfully to YouTube:', thumbnailResult.thumbnailUrl);
             } catch (uploadErr) {

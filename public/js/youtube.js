@@ -1779,6 +1779,15 @@ async function fetchStreams(accountId = null) {
         option.textContent = `${index + 1}. ${stream.title} (${stream.resolution} @ ${stream.frameRate})`;
         select.appendChild(option);
       });
+
+      // Auto-select first existing stream key if creating a new broadcast (not editing)
+      const isEditing = !!document.getElementById('createBroadcastForm')?.dataset?.editingStreamId;
+      if (!isEditing && select.options.length > 3) {
+        select.selectedIndex = 3;
+        if (typeof onStreamKeyChange === 'function') {
+          onStreamKeyChange(select.value);
+        }
+      }
       
       // Show success indicator
       if (indicator) {
@@ -3991,12 +4000,15 @@ function submitBroadcastAndStartNow() {
     return;
   }
 
-  // Always ensure scheduledStartTime is set to at least 15 minutes ahead so YouTube API accepts the broadcast
+  // Always ensure scheduledStartTime and studioScheduleStartTime are set to at least 15 minutes ahead so YouTube API accepts the broadcast
+  const defaultDate = new Date(Date.now() + 15 * 60 * 1000);
+  const defaultDateStr = typeof formatDateTimeLocal === 'function' ? formatDateTimeLocal(defaultDate) : defaultDate.toISOString().slice(0, 16);
+
   const scheduledInput = document.getElementById('scheduledStartTime');
-  if (scheduledInput) {
-    const defaultDate = new Date(Date.now() + 15 * 60 * 1000);
-    scheduledInput.value = typeof formatDateTimeLocal === 'function' ? formatDateTimeLocal(defaultDate) : defaultDate.toISOString().slice(0, 16);
-  }
+  if (scheduledInput) scheduledInput.value = defaultDateStr;
+
+  const studioStart = document.getElementById('studioScheduleStartTime');
+  if (studioStart) studioStart.value = defaultDateStr;
 
   form.dataset.startImmediately = 'true';
   form.requestSubmit();
@@ -4267,10 +4279,14 @@ if (createBroadcastForm) {
     const isStartNow = createBroadcastForm.dataset.startImmediately === 'true';
     
     const activeBtn = isStartNow ? startNowBtn : createBtn;
+    const otherBtn = isStartNow ? createBtn : startNowBtn;
     const originalText = activeBtn ? activeBtn.innerHTML : '';
     if (activeBtn) {
       activeBtn.innerHTML = '<i class="ti ti-loader animate-spin mr-1"></i> Proses...';
       activeBtn.disabled = true;
+    }
+    if (otherBtn) {
+      otherBtn.disabled = true;
     }
     
     const scheduleType = document.getElementById('studioScheduleType')?.value || 'once';
@@ -4283,6 +4299,7 @@ if (createBroadcastForm) {
           showToast('Silakan tentukan Jam Siaran (WIB) untuk jadwal Setiap Hari!', 'warning');
           document.getElementById('studioRecurringTime')?.focus();
           if (activeBtn) { activeBtn.innerHTML = originalText; activeBtn.disabled = false; }
+          if (otherBtn) { otherBtn.disabled = false; }
           return;
         }
       } else if (scheduleType === 'weekly') {
@@ -4290,6 +4307,7 @@ if (createBroadcastForm) {
           showToast('Silakan tentukan Jam Siaran (WIB) untuk jadwal Mingguan!', 'warning');
           document.getElementById('studioRecurringTime')?.focus();
           if (activeBtn) { activeBtn.innerHTML = originalText; activeBtn.disabled = false; }
+          if (otherBtn) { otherBtn.disabled = false; }
           return;
         }
         if (!studioSelectedDays || studioSelectedDays.length === 0) {
@@ -4297,6 +4315,7 @@ if (createBroadcastForm) {
           const daysSelector = document.getElementById('studioWeeklyDaysSelector');
           if (daysSelector) daysSelector.scrollIntoView({ behavior: 'smooth', block: 'center' });
           if (activeBtn) { activeBtn.innerHTML = originalText; activeBtn.disabled = false; }
+          if (otherBtn) { otherBtn.disabled = false; }
           return;
         }
       }
@@ -4471,12 +4490,12 @@ if (createBroadcastForm) {
           console.log('[CreateBroadcast] Refreshing broadcasts in-place...');
           if (typeof switchStudioTab === 'function') switchStudioTab('broadcasts');
           if (typeof refreshBroadcasts === 'function') {
-            refreshBroadcasts();
+            refreshBroadcasts({ silent: true });
             // Secondary background refresh 3.5s later to ensure any trailing search index updates are reflected
             setTimeout(() => {
               broadcastsCache.data = null;
               broadcastsCache.timestamp = null;
-              refreshBroadcasts();
+              refreshBroadcasts({ silent: true });
             }, 3500);
           }
         } else {
@@ -4496,6 +4515,9 @@ if (createBroadcastForm) {
       if (activeBtn) {
         activeBtn.innerHTML = originalText;
         activeBtn.disabled = false;
+      }
+      if (otherBtn) {
+        otherBtn.disabled = false;
       }
       delete createBroadcastForm.dataset.startImmediately;
     }

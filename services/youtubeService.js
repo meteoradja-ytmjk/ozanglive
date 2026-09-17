@@ -425,16 +425,48 @@ class YouTubeService {
     }
     
     // Bind the stream to the broadcast
-    await youtube.liveBroadcasts.bind({
-      part: 'id,contentDetails',
-      id: broadcast.id,
-      streamId: stream.id
-    });
+    let bindSuccess = false;
+    try {
+      await youtube.liveBroadcasts.bind({
+        part: 'id,contentDetails',
+        id: broadcast.id,
+        streamId: stream.id
+      });
+      bindSuccess = true;
+      console.log('[YouTubeService.createBroadcast] Successfully bound stream:', stream.id);
+    } catch (bindErr) {
+      console.error('[YouTubeService.createBroadcast] Warning: Failed to bind stream to broadcast:', bindErr.message);
+      // If binding an existing stream failed (e.g. stream key busy), try creating a fresh stream and binding once
+      if (streamId) {
+        try {
+          console.log('[YouTubeService.createBroadcast] Fallback: Creating a new stream and binding...');
+          const fallbackStreamRes = await youtube.liveStreams.insert({
+            part: 'snippet,cdn',
+            requestBody: {
+              snippet: { title: `Stream for ${title}` },
+              cdn: { frameRate: '30fps', ingestionType: 'rtmp', resolution: '1080p' }
+            }
+          });
+          stream = fallbackStreamRes.data;
+          await youtube.liveBroadcasts.bind({
+            part: 'id,contentDetails',
+            id: broadcast.id,
+            streamId: stream.id
+          });
+          bindSuccess = true;
+          console.log('[YouTubeService.createBroadcast] Fallback bind successful with new stream:', stream.id);
+        } catch (fallbackErr) {
+          console.error('[YouTubeService.createBroadcast] Fallback stream bind failed:', fallbackErr.message);
+        }
+      }
+    }
     
-    console.log('[YouTubeService.createBroadcast] Bound stream:', stream.id, 'with key:', stream.cdn.ingestionInfo.streamName);
+    const resolvedStreamKey = stream.cdn?.ingestionInfo?.streamName || '';
+    const resolvedRtmpUrl = stream.cdn?.ingestionInfo?.ingestionAddress || 'rtmp://a.rtmp.youtube.com/live2';
+    console.log('[YouTubeService.createBroadcast] Stream resolved:', stream.id, 'key present:', !!resolvedStreamKey);
     
     // Update video category using Videos API (liveBroadcasts API doesn't support categoryId)
-    let actualCategoryId = broadcast.snippet.categoryId || finalCategoryId;
+    let actualCategoryId = broadcast.snippet?.categoryId || finalCategoryId;
     try {
       console.log('[YouTubeService.createBroadcast] Updating video category to:', finalCategoryId);
       const categoryResult = await this.updateVideoCategory(accessToken, broadcast.id, finalCategoryId);
@@ -448,14 +480,14 @@ class YouTubeService {
     return {
       broadcastId: broadcast.id,
       streamId: stream.id,
-      streamKey: stream.cdn.ingestionInfo.streamName,
-      rtmpUrl: stream.cdn.ingestionInfo.ingestionAddress,
-      title: broadcast.snippet.title,
-      description: broadcast.snippet.description,
-      scheduledStartTime: broadcast.snippet.scheduledStartTime,
-      privacyStatus: broadcast.status.privacyStatus,
+      streamKey: resolvedStreamKey,
+      rtmpUrl: resolvedRtmpUrl,
+      title: broadcast.snippet?.title || title,
+      description: broadcast.snippet?.description || description,
+      scheduledStartTime: broadcast.snippet?.scheduledStartTime || startTimeIso,
+      privacyStatus: broadcast.status?.privacyStatus || privacyStatus,
       categoryId: actualCategoryId,
-      thumbnailUrl: broadcast.snippet.thumbnails?.default?.url || ''
+      thumbnailUrl: broadcast.snippet?.thumbnails?.default?.url || ''
     };
   }
 
@@ -1111,99 +1143,38 @@ class YouTubeService {
     
     // First, get the current video to preserve existing values
     const currentResponse = await youtube.videos.list({
-      part: 'snippet,status',
+      part: 'snippet',
       id: videoId
     });
     
     if (!currentResponse.data.items || currentResponse.data.items.length === 0) {
-      throw new Error('Video not found');
+      console.warn('[YouTubeService.updateVideoCategory] Video not yet found in index, skipping category update for:', videoId);
+      return { id: videoId, categoryId };
     }
     
     const current = currentResponse.data.items[0];
-    console.log('[YouTubeService.updateVideoCategory] Current categoryId:', current.snippet.categoryId);
-    console.log('[YouTubeService.updateVideoCategory] Current status:', JSON.stringify(current.status));
     
-    // Build status object with altered content declaration
-    // YouTube uses "containsSyntheticMedia" for the "Altered content" setting
-    // We try multiple possible field names as YouTube API may vary
-    const statusUpdate = {
-      privacyStatus: current.status?.privacyStatus || 'unlisted',
-      selfDeclaredMadeForKids: false,
-      // Primary field for altered content (synthetic media / AI generated)
-      containsSyntheticMedia: true
-    };
-    
-    // Try to update with altered content setting
-    let response;
-    let alteredContentSet = false;
-    
-    try {
-      response = await youtube.videos.update({
-        part: 'snippet,status',
-        requestBody: {
-          id: videoId,
-          snippet: {
-            title: current.snippet.title,
-            description: current.snippet.description || '',
-            categoryId: categoryId,
-            tags: current.snippet.tags || []
-          },
-          status: statusUpdate
+    // Update snippet directly (clean, single-call, avoids 400 status errors)
+    const response = await youtube.videos.update({
+      part: 'snippet',
+      requestBody: {
+        id: videoId,
+        snippet: {
+          title: current.snippet?.title || '',
+          description: current.snippet?.description || '',
+          categoryId: categoryId,
+          tags: current.snippet?.tags || []
         }
-      });
-      alteredContentSet = true;
-      console.log('[YouTubeService.updateVideoCategory] Updated with containsSyntheticMedia: true');
-    } catch (err) {
-      console.log('[YouTubeService.updateVideoCategory] First attempt failed:', err.message);
-      
-      // Try without containsSyntheticMedia if not supported
-      try {
-        response = await youtube.videos.update({
-          part: 'snippet,status',
-          requestBody: {
-            id: videoId,
-            snippet: {
-              title: current.snippet.title,
-              description: current.snippet.description || '',
-              categoryId: categoryId,
-              tags: current.snippet.tags || []
-            },
-            status: {
-              privacyStatus: current.status?.privacyStatus || 'unlisted',
-              selfDeclaredMadeForKids: false
-            }
-          }
-        });
-        console.log('[YouTubeService.updateVideoCategory] Updated without altered content field');
-      } catch (err2) {
-        // Final fallback - just update snippet
-        console.log('[YouTubeService.updateVideoCategory] Status update failed, trying snippet only:', err2.message);
-        response = await youtube.videos.update({
-          part: 'snippet',
-          requestBody: {
-            id: videoId,
-            snippet: {
-              title: current.snippet.title,
-              description: current.snippet.description || '',
-              categoryId: categoryId,
-              tags: current.snippet.tags || []
-            }
-          }
-        });
       }
-    }
+    });
     
     const video = response.data;
-    console.log('[YouTubeService.updateVideoCategory] Updated categoryId:', video.snippet.categoryId);
-    if (video.status) {
-      console.log('[YouTubeService.updateVideoCategory] Updated status:', JSON.stringify(video.status));
-    }
+    console.log('[YouTubeService.updateVideoCategory] Updated categoryId successfully to:', video.snippet?.categoryId);
     
     return {
       id: video.id,
-      title: video.snippet.title,
-      categoryId: video.snippet.categoryId,
-      containsSyntheticMedia: video.status?.containsSyntheticMedia || alteredContentSet
+      title: video.snippet?.title,
+      categoryId: video.snippet?.categoryId
     };
   }
 
