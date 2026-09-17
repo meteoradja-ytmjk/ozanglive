@@ -628,63 +628,50 @@ function createBroadcastRowHtml(broadcast, index) {
           </div>
         </div>
         
-        <!-- Mobile Row (Touch-Friendly Card Layout with Full Title Visibility) -->
-        <div class="md:hidden p-3.5 flex flex-col gap-2.5 bg-dark-800/40 border-b border-gray-700/50 last:border-b-0">
-          <!-- Top: Checkbox, Badge #, Full Title (Visible & Wrapping), Privacy Badge -->
-          <div class="flex items-start gap-2.5 min-w-0">
-            <div class="pt-0.5 flex-shrink-0">
+        <!-- Mobile Row (Single-Line Compact & Elegant) -->
+        <div class="md:hidden px-3 py-2.5 flex items-center justify-between gap-2 bg-dark-800/40 hover:bg-dark-750/50 border-b border-gray-700/50 last:border-b-0 transition-colors">
+          <!-- Left: Checkbox, #Index, Title (Truncated 1-line), Short Stream Key, Privacy Badge -->
+          <div class="flex items-center gap-2 min-w-0 flex-1">
+            <div class="flex-shrink-0 flex items-center">
               <input type="checkbox" class="broadcast-checkbox w-4 h-4 rounded border-gray-600 bg-dark-700 text-primary focus:ring-primary cursor-pointer"
                 data-broadcast-id="${broadcast.id}"
                 data-account-id="${broadcast.accountId || ''}"
                 data-broadcast="${broadcastData}"
                 onchange="syncCheckboxes(this); updateSelectionCount()">
             </div>
-            <div class="flex-1 min-w-0">
-              <div class="flex items-start justify-between gap-2">
-                <div class="flex items-center gap-1.5 flex-wrap min-w-0">
-                  <span class="text-[10px] font-bold text-primary bg-primary/15 px-1.5 py-0.5 rounded flex-shrink-0">#${index + 1}</span>
-                  <span class="text-sm font-semibold text-white break-words leading-tight">${safeTitle}</span>
-                </div>
-                <span class="px-2 py-0.5 rounded text-[10px] font-semibold tracking-wide uppercase flex-shrink-0 ${privacyClass}">
-                  ${broadcast.privacyStatus || 'private'}
-                </span>
-              </div>
-              ${scheduledTimeStr ? `
-                <div class="text-[11px] text-gray-400 flex items-center gap-1 mt-1">
-                  <i class="ti ti-calendar-time text-xs text-primary/80 font-loaded"></i>
-                  <span>${scheduledTimeStr}</span>
-                </div>
+
+            <span class="text-[10px] font-bold text-primary bg-primary/15 px-1.5 py-0.5 rounded shrink-0">#${index + 1}</span>
+
+            <div class="flex items-center gap-1.5 min-w-0 flex-1">
+              <span class="text-xs sm:text-sm font-medium text-white truncate min-w-0 flex-1" title="${safeTitle}${scheduledTimeStr ? ' • ' + scheduledTimeStr : ''}">${safeTitle}</span>
+              ${broadcast.streamKey ? `
+                <button type="button" onclick="copyStreamKey('${escapeJsString(broadcast.streamKey || '')}', ${index + 1})"
+                  class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-dark-700/80 hover:bg-dark-600 text-[10px] font-mono text-gray-400 hover:text-primary transition-all shrink-0 border border-gray-700/60 cursor-pointer active:scale-95"
+                  title="Salin Stream Key: ${escapeHtml(broadcast.streamKey || '')}">
+                  <i class="ti ti-key text-[10px] text-primary/80"></i>
+                  <span>${broadcast.streamKey.substring(0, 8)}...</span>
+                </button>
               ` : ''}
+              <span class="px-1.5 py-0.5 rounded text-[9px] font-semibold tracking-wide uppercase shrink-0 ${privacyClass}">
+                ${broadcast.privacyStatus || 'private'}
+              </span>
             </div>
           </div>
 
-          <!-- Bottom: Stream Key + Action Buttons (Responsive & Touch-Friendly) -->
-          <div class="flex items-center justify-between gap-2 pt-1 border-t border-gray-700/30">
-            <div class="flex items-center gap-1.5 min-w-0 flex-1">
-              <span class="font-mono text-xs text-gray-400 truncate" title="${escapeHtml(broadcast.streamKey || '')}">
-                ${streamKeyDisplay}
-              </span>
-              <button type="button" onclick="copyStreamKey('${escapeJsString(broadcast.streamKey || '')}', ${index + 1})"
-                class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-primary hover:bg-primary/10 active:bg-primary/20 rounded-lg active:scale-90 transition-all touch-manipulation flex-shrink-0 cursor-pointer select-none ${broadcast.streamKey ? '' : 'opacity-40 pointer-events-none'}"
-                title="Copy stream key #${index + 1}">
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8v-2a2 2 0 0 0 -2 -2h-8a2 2 0 0 0 -2 2v8a2 2 0 0 0 2 2h2" /></svg>
-              </button>
-            </div>
-
-            <div class="flex items-center gap-2 flex-shrink-0">
-              <button type="button" data-action="edit" onclick="editBroadcast('${broadcast.id}', ${broadcast.accountId || 'null'}, this)"
-                class="w-9 h-9 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 active:bg-blue-500/40 text-blue-400 border border-blue-500/30 flex items-center justify-center transition-all duration-150 active:scale-90 touch-manipulation cursor-pointer shadow-sm select-none" title="Edit">
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" /><path d="M13.5 6.5l4 4" /></svg>
-              </button>
-              <button type="button" data-action="duplicate" onclick="openDuplicateBroadcastModal('${broadcast.id}', ${broadcast.accountId || 'null'}, this)"
-                class="w-9 h-9 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 active:bg-purple-500/40 text-purple-400 border border-purple-500/30 flex items-center justify-center transition-all duration-150 active:scale-90 touch-manipulation cursor-pointer shadow-sm select-none" title="Duplikat Siaran">
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8v-2a2 2 0 0 0 -2 -2h-8a2 2 0 0 0 -2 2v8a2 2 0 0 0 2 2h2" /></svg>
-              </button>
-              <button type="button" data-action="delete" onclick="deleteBroadcast('${broadcast.id}', null, ${broadcast.accountId || 'null'}, this)"
-                class="w-9 h-9 rounded-lg bg-red-500/15 hover:bg-red-500/25 active:bg-red-500/40 text-red-400 border border-red-500/30 flex items-center justify-center transition-all duration-150 active:scale-90 touch-manipulation cursor-pointer shadow-sm select-none" title="Hapus">
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7l16 0" /><path d="M10 11l0 6" /><path d="M14 11l0 6" /><path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12" /><path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3" /></svg>
-              </button>
-            </div>
+          <!-- Right: Compact Action Buttons (Single Row) -->
+          <div class="flex items-center gap-1.5 flex-shrink-0">
+            <button type="button" data-action="edit" onclick="editBroadcast('${broadcast.id}', ${broadcast.accountId || 'null'}, this)"
+              class="w-8 h-8 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 active:bg-blue-500/40 text-blue-400 border border-blue-500/30 flex items-center justify-center transition-all duration-150 active:scale-90 touch-manipulation cursor-pointer shadow-sm select-none" title="Edit">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" /><path d="M13.5 6.5l4 4" /></svg>
+            </button>
+            <button type="button" data-action="duplicate" onclick="openDuplicateBroadcastModal('${broadcast.id}', ${broadcast.accountId || 'null'}, this)"
+              class="w-8 h-8 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 active:bg-purple-500/40 text-purple-400 border border-purple-500/30 flex items-center justify-center transition-all duration-150 active:scale-90 touch-manipulation cursor-pointer shadow-sm select-none" title="Duplikat Siaran">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8v-2a2 2 0 0 0 -2 -2h-8a2 2 0 0 0 -2 2v8a2 2 0 0 0 2 2h2" /></svg>
+            </button>
+            <button type="button" data-action="delete" onclick="deleteBroadcast('${broadcast.id}', null, ${broadcast.accountId || 'null'}, this)"
+              class="w-8 h-8 rounded-lg bg-red-500/15 hover:bg-red-500/25 active:bg-red-500/40 text-red-400 border border-red-500/30 flex items-center justify-center transition-all duration-150 active:scale-90 touch-manipulation cursor-pointer shadow-sm select-none" title="Hapus">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7l16 0" /><path d="M10 11l0 6" /><path d="M14 11l0 6" /><path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12" /><path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3" /></svg>
+            </button>
           </div>
         </div>
       </div>
