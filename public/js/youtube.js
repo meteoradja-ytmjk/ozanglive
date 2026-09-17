@@ -4166,11 +4166,10 @@ window.openEditStudioModal = function(stream) {
 };
 
 function closeCreateBroadcastModal() {
-  const modal = document.getElementById('createBroadcastModal');
-  if (modal) {
+  document.querySelectorAll('#createBroadcastModal').forEach(modal => {
     modal.classList.add('hidden');
     modal.style.setProperty('display', 'none', 'important');
-  }
+  });
   
   const form = document.getElementById('createBroadcastForm');
   if (form) {
@@ -4189,10 +4188,12 @@ function closeCreateBroadcastModal() {
   const createBtn = document.getElementById('createBroadcastBtn');
   if (createBtn) {
     createBtn.innerHTML = '<i class="ti ti-calendar-event text-sm sm:text-base"></i><span>Jadwal Live</span>';
+    createBtn.disabled = false;
   }
   const startNowBtn = document.getElementById('createAndStartBroadcastBtn');
   if (startNowBtn) {
     startNowBtn.innerHTML = '<i class="ti ti-broadcast text-sm sm:text-base"></i><span>Mulai Live</span>';
+    startNowBtn.disabled = false;
   }
 
   const thumbnailPreview = document.getElementById('thumbnailPreview');
@@ -4263,6 +4264,7 @@ function closeCreateBroadcastModal() {
 
   setStudioScheduleType('once');
 }
+window.closeCreateBroadcastModal = closeCreateBroadcastModal;
 
 // Create / Update Broadcast Form Handler
 const createBroadcastForm = document.getElementById('createBroadcastForm');
