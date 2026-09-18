@@ -4603,6 +4603,84 @@ app.post('/api/render/jobs/:id/retry', isAuthenticated, async (req, res) => {
   }
 });
 
+app.post('/api/render/jobs/:id/save-to-gallery', isAuthenticated, async (req, res) => {
+  try {
+    const job = await RenderJob.findById(req.params.id);
+    const currentUserId = req.session.userId;
+    if (!job || job.user_id !== currentUserId) {
+      return res.status(404).json({ success: false, message: 'Job tidak ditemukan' });
+    }
+    if (!job.output_path) {
+      return res.status(400).json({ success: false, message: 'Output render belum tersedia' });
+    }
+
+    // Check if already registered in videos table for this user
+    const existingVideos = await Video.findAll(currentUserId);
+    const alreadySaved = existingVideos.find(v => v.filepath === job.output_path);
+    if (alreadySaved) {
+      return res.json({
+        success: true,
+        alreadySaved: true,
+        video: alreadySaved,
+        message: 'Video sudah tersimpan di Galeri Media'
+      });
+    }
+
+    const fullPath = path.join(__dirname, 'public', job.output_path);
+    let fileSize = 0;
+    let durationSec = parseInt(job.target_duration_seconds || 0, 10);
+    try {
+      const stats = fs.statSync(fullPath);
+      fileSize = stats.size;
+    } catch (_) {}
+
+    try {
+      const info = await getVideoInfo(fullPath);
+      if (info && info.duration) durationSec = Math.round(info.duration);
+    } catch (_) {}
+
+    const hrs = Math.floor(durationSec / 3600);
+    const mins = Math.floor((durationSec % 3600) / 60);
+    const secs = Math.floor(durationSec % 60);
+    let durationStr = '';
+    if (hrs > 0) {
+      durationStr = `${hrs}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    } else {
+      durationStr = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    }
+
+    let thumbnailRelative = null;
+    try {
+      const thumbName = `thumb-render-${job.id}-${Date.now()}.jpg`;
+      await generateThumbnail(fullPath, thumbName);
+      thumbnailRelative = `/uploads/thumbnails/${thumbName}`;
+    } catch (thumbErr) {
+      console.warn('[Thumbnail] Could not generate thumbnail for render job:', thumbErr.message);
+    }
+
+    const video = await Video.create({
+      title: job.title || `Render ${job.id}`,
+      filepath: job.output_path,
+      thumbnail_path: thumbnailRelative,
+      file_size: fileSize,
+      duration: durationStr,
+      format: 'mp4',
+      resolution: '1920x1080',
+      user_id: currentUserId
+    });
+
+    return res.json({
+      success: true,
+      alreadySaved: false,
+      video,
+      message: 'Video berhasil disimpan ke Galeri Media!'
+    });
+  } catch (error) {
+    console.error('Save render job to gallery error:', error);
+    return res.status(500).json({ success: false, message: error.message || 'Gagal menyimpan ke galeri' });
+  }
+});
+
 app.post('/api/render/jobs/:id/upload', isAuthenticated, async (req, res) => {
   try {
     const job = await RenderJob.findById(req.params.id);

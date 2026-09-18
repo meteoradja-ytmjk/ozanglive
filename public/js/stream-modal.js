@@ -1280,3 +1280,40 @@ function getCsrfToken() {
   const token = document.querySelector('meta[name="csrf-token"]');
   return token ? token.getAttribute('content') : '';
 }
+
+// Auto open stream modal if URL parameter autoStreamVideoId is present
+document.addEventListener('DOMContentLoaded', () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  const autoVideoId = urlParams.get('autoStreamVideoId');
+  if (autoVideoId) {
+    // Remove query param from browser address bar smoothly
+    const cleanUrl = window.location.pathname;
+    window.history.replaceState({}, '', cleanUrl);
+
+    setTimeout(async () => {
+      if (typeof openNewStreamModal === 'function') {
+        openNewStreamModal();
+        try {
+          const resp = await fetch('/api/videos');
+          const data = await resp.json();
+          const videos = (data && data.videos) ? data.videos : (Array.isArray(data) ? data : []);
+          const targetVideo = videos.find(v => String(v.id) === String(autoVideoId));
+          if (targetVideo && typeof selectVideo === 'function') {
+            selectVideo({
+              id: targetVideo.id,
+              name: targetVideo.title,
+              duration: targetVideo.duration || '00:00',
+              resolution: targetVideo.resolution || '1080p',
+              type: 'video'
+            });
+            if (typeof showToast === 'function') {
+              showToast('success', `✓ Video "${targetVideo.title}" otomatis dipilih untuk siaran live!`);
+            }
+          }
+        } catch (e) {
+          console.error('[StreamModal] Error auto-selecting video:', e);
+        }
+      }
+    }, 600);
+  }
+});
