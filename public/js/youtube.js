@@ -3888,15 +3888,19 @@ function setStudioScheduleType(type) {
   const recurringSection = document.getElementById('studioRecurringScheduleSettings');
   const weeklyDays = document.getElementById('studioWeeklyDaysSelector');
 
+  const baseClass = 'py-2 px-1 text-center rounded-lg border transition-all flex flex-col items-center justify-center min-h-[50px]';
+  const inactiveClass = `${baseClass} border-gray-600 bg-dark-700 text-gray-300 hover:border-primary`;
+  const activeClass = `${baseClass} border-primary bg-primary text-white shadow-sm`;
+
   // Reset button styles
   [onceBtn, dailyBtn, weeklyBtn].forEach(b => {
     if (b) {
-      b.className = 'flex-1 px-3 py-2 text-xs font-medium rounded-lg border border-gray-600 bg-dark-700 text-gray-300 hover:border-primary transition-colors';
+      b.className = inactiveClass;
     }
   });
 
   if (type === 'once') {
-    if (onceBtn) onceBtn.className = 'flex-1 px-3 py-2 text-xs font-medium rounded-lg border border-primary bg-primary text-white transition-colors';
+    if (onceBtn) onceBtn.className = activeClass;
     if (onceSection) onceSection.classList.remove('hidden');
     if (recurringSection) recurringSection.classList.add('hidden');
     
@@ -3909,13 +3913,13 @@ function setStudioScheduleType(type) {
       scheduledInput.value = sStart.value;
     }
   } else if (type === 'daily') {
-    if (dailyBtn) dailyBtn.className = 'flex-1 px-3 py-2 text-xs font-medium rounded-lg border border-primary bg-primary text-white transition-colors';
+    if (dailyBtn) dailyBtn.className = activeClass;
     if (onceSection) onceSection.classList.add('hidden');
     if (recurringSection) recurringSection.classList.remove('hidden');
     if (weeklyDays) weeklyDays.classList.add('hidden');
     syncStudioRecurringToScheduledStartTime();
   } else if (type === 'weekly') {
-    if (weeklyBtn) weeklyBtn.className = 'flex-1 px-3 py-2 text-xs font-medium rounded-lg border border-primary bg-primary text-white transition-colors';
+    if (weeklyBtn) weeklyBtn.className = activeClass;
     if (onceSection) onceSection.classList.add('hidden');
     if (recurringSection) recurringSection.classList.remove('hidden');
     if (weeklyDays) weeklyDays.classList.remove('hidden');
