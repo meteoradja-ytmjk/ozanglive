@@ -4253,12 +4253,26 @@ app.get('/api/render/visualizer-types', isAuthenticated, (req, res) => {
 function resolveMediaDiskPath(filepath) {
   if (!filepath) return '';
   if (path.isAbsolute(filepath) && fs.existsSync(filepath)) return filepath;
-  const clean = String(filepath).replace(/^[\\\/]+/, '');
-  const withPublic = path.join(__dirname, 'public', clean);
-  if (fs.existsSync(withPublic)) return withPublic;
-  const direct = path.join(__dirname, clean);
-  if (fs.existsSync(direct)) return direct;
-  return withPublic;
+
+  const normalized = String(filepath).replace(/^[\\\/]+/, '').replace(/\\/g, '/');
+  const cleanNoPublic = normalized.replace(/^public\//, '');
+
+  const candidates = [
+    path.join(__dirname, normalized),
+    path.join(__dirname, 'public', cleanNoPublic),
+    path.join(__dirname, 'public', normalized),
+    path.join(__dirname, cleanNoPublic),
+    path.join(__dirname, '..', normalized),
+    path.join(__dirname, '..', 'public', cleanNoPublic),
+    path.join(__dirname, '..', 'streamflowcustom', 'public', cleanNoPublic),
+    path.join(__dirname, '..', 'streamflowcustom', cleanNoPublic)
+  ];
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return candidate;
+  }
+
+  return path.join(__dirname, 'public', cleanNoPublic);
 }
 
 app.post('/api/render/jobs', isAuthenticated, async (req, res) => {
@@ -4287,12 +4301,14 @@ app.post('/api/render/jobs', isAuthenticated, async (req, res) => {
     } = req.body;
     
     if (!Array.isArray(videoIds) || videoIds.length === 0) {
-      return res.status(400).json({ success: false, message: 'videoIds wajib diisi minimal 1' });
+      return res.status(400).json({ success: false, message: 'Pilih minimal 1 video untuk render' });
     }
     const computedSeconds = (parseInt(durationHours || 0, 10) * 3600) + (parseInt(durationMinutes || 0, 10) * 60);
-    const target = parseInt(targetDurationSeconds, 10) || computedSeconds;
-    if (!followAudioDuration && (!Number.isFinite(target) || target <= 0)) {
-      return res.status(400).json({ success: false, message: 'targetDurationSeconds tidak valid' });
+    const parsedTarget = parseInt(targetDurationSeconds, 10);
+    const target = Number.isFinite(parsedTarget) && parsedTarget > 0 ? parsedTarget : Math.max(0, computedSeconds || 0);
+
+    if (!followAudioDuration && target <= 0) {
+      return res.status(400).json({ success: false, message: 'Durasi render harus lebih dari 0 detik atau aktifkan Follow Audio Duration' });
     }
     if (followAudioDuration && (!Array.isArray(audioIds) || audioIds.length === 0)) {
       return res.status(400).json({ success: false, message: 'Pilih minimal 1 audio jika mengikuti total durasi audio' });
@@ -4304,22 +4320,44 @@ app.post('/api/render/jobs', isAuthenticated, async (req, res) => {
       bitrate: renderBitrate || 'auto'
     };
 
+    const currentUserId = req.session.userId;
+    let isUserAdmin = false;
+    try {
+      const currentUser = currentUserId ? await User.findById(currentUserId) : null;
+      isUserAdmin = currentUser && currentUser.user_role === 'admin';
+    } catch (err) {
+      console.warn('[RenderJob] Error checking user role:', err.message);
+    }
+
     const videos = await Promise.all(videoIds.map((id) => Video.findById(id)));
     const audios = await Promise.all((audioIds || []).map((id) => Audio.findById(id)));
 
-    const currentUserId = req.session.userId;
-    const safeVideos = videos.filter((v) => v && (!currentUserId || v.user_id === currentUserId));
-    const safeAudios = audios.filter((a) => a && (!currentUserId || a.user_id === currentUserId));
+    // Admin can render any media; regular users can render their own or unassigned/sample media
+    const safeVideos = videos.filter((v) => {
+      if (!v) return false;
+      if (isUserAdmin) return true;
+      if (!v.user_id) return true;
+      return String(v.user_id) === String(currentUserId);
+    });
 
-    if (safeVideos.length === 0) return res.status(404).json({ success: false, message: 'Video tidak ditemukan' });
+    const safeAudios = audios.filter((a) => {
+      if (!a) return false;
+      if (isUserAdmin) return true;
+      if (!a.user_id) return true;
+      return String(a.user_id) === String(currentUserId);
+    });
+
+    if (safeVideos.length === 0) {
+      return res.status(404).json({ success: false, message: 'Video yang dipilih tidak ditemukan atau tidak memiliki akses' });
+    }
 
     const job = await RenderJob.create({
-      user_id: currentUserId,
+      user_id: currentUserId ? String(currentUserId) : 'admin',
       title: title || `Render ${new Date().toISOString()}`,
       target_duration_seconds: target,
       video_ids: safeVideos.map((v) => v.id),
       audio_ids: safeAudios.map((a) => a.id),
-      target_account_id: targetAccountId || null,
+      target_account_id: targetAccountId ? targetAccountId : null,
       auto_upload: autoUploadToYoutube ? 1 : 0,
       scheduled_upload_at: scheduledUploadAt || null,
       visualizer_preset: visualizerPreset || 'none',
@@ -4335,8 +4373,8 @@ app.post('/api/render/jobs', isAuthenticated, async (req, res) => {
         const outputPath = path.join(__dirname, 'public', 'uploads', 'videos', outputName);
         fs.mkdirSync(path.dirname(outputPath), { recursive: true });
 
-        const videoPaths = safeVideos.map((v) => resolveMediaDiskPath(v.filepath));
-        const audioPaths = safeAudios.map((a) => resolveMediaDiskPath(a.filepath));
+        const videoPaths = safeVideos.map((v) => resolveMediaDiskPath(v.filepath)).filter(Boolean);
+        const audioPaths = safeAudios.map((a) => resolveMediaDiskPath(a.filepath)).filter(Boolean);
 
         const missingVideos = videoPaths.filter(p => !fs.existsSync(p));
         if (missingVideos.length > 0) {
@@ -4379,7 +4417,7 @@ app.post('/api/render/jobs', isAuthenticated, async (req, res) => {
         const baseUpdate = { status: 'completed', progress: 100, output_path: `/uploads/videos/${outputName}` };
         if (autoUploadToYoutube && targetAccountId) {
           const account = await YouTubeCredentials.findById(targetAccountId);
-          if (account && account.userId === currentUserId) {
+          if (account && (isUserAdmin || String(account.userId) === String(currentUserId))) {
             const doUpload = async () => {
               const accessToken = await youtubeService.getAccessToken(account.clientId, account.clientSecret, account.refreshToken, 0, account.id, 0, account.id);
               const uploadResult = await youtubeService.uploadRegularVideo(accessToken, {
@@ -4409,7 +4447,11 @@ app.post('/api/render/jobs', isAuthenticated, async (req, res) => {
     return res.json({ success: true, jobId: job.id });
   } catch (error) {
     console.error('Error creating render job:', error);
-    return res.status(500).json({ success: false, message: 'Gagal membuat render job' });
+    return res.status(500).json({ 
+      success: false, 
+      message: error.message || 'Gagal membuat render job',
+      error: error.message 
+    });
   }
 });
 
@@ -4465,14 +4507,34 @@ app.post('/api/render/jobs/schedule', isAuthenticated, async (req, res) => {
         } = jobInfo;
         
         const computedSeconds = (parseInt(durationHours || 0, 10) * 3600) + (parseInt(durationMinutes || 0, 10) * 60);
-        const target = parseInt(targetDurationSeconds, 10) || computedSeconds;
+        const parsedTarget = parseInt(targetDurationSeconds, 10);
+        const target = Number.isFinite(parsedTarget) && parsedTarget > 0 ? parsedTarget : Math.max(0, computedSeconds || 0);
         
         const videos = await Promise.all(videoIds.map((id) => Video.findById(id)));
         const audios = await Promise.all((audioIds || []).map((id) => Audio.findById(id)));
         
         const currentUserId = jobInfo.userId;
-        const safeVideos = videos.filter((v) => v && (!currentUserId || v.user_id === currentUserId));
-        const safeAudios = audios.filter((a) => a && (!currentUserId || a.user_id === currentUserId));
+        let isUserAdmin = false;
+        try {
+          const currentUser = currentUserId ? await User.findById(currentUserId) : null;
+          isUserAdmin = currentUser && currentUser.user_role === 'admin';
+        } catch (err) {
+          console.warn('[Schedule] Error checking user role:', err.message);
+        }
+
+        const safeVideos = videos.filter((v) => {
+          if (!v) return false;
+          if (isUserAdmin) return true;
+          if (!v.user_id) return true;
+          return String(v.user_id) === String(currentUserId);
+        });
+
+        const safeAudios = audios.filter((a) => {
+          if (!a) return false;
+          if (isUserAdmin) return true;
+          if (!a.user_id) return true;
+          return String(a.user_id) === String(currentUserId);
+        });
         
         if (safeVideos.length === 0) {
           console.error('[Schedule] No valid videos found for scheduled job');
@@ -4480,12 +4542,12 @@ app.post('/api/render/jobs/schedule', isAuthenticated, async (req, res) => {
         }
         
         const job = await RenderJob.create({
-          user_id: currentUserId,
+          user_id: currentUserId ? String(currentUserId) : 'admin',
           title: title || `Scheduled Render ${new Date().toISOString()}`,
           target_duration_seconds: target,
           video_ids: safeVideos.map((v) => v.id),
           audio_ids: safeAudios.map((a) => a.id),
-          target_account_id: targetAccountId || null,
+          target_account_id: targetAccountId ? targetAccountId : null,
           auto_upload: autoUploadToYoutube ? 1 : 0,
           follow_audio_duration: !!followAudioDuration,
           status: 'queued',
@@ -4566,7 +4628,26 @@ app.post('/api/render/jobs/schedule', isAuthenticated, async (req, res) => {
 
 app.get('/api/render/jobs', isAuthenticated, async (req, res) => {
   try {
-    const jobs = await RenderJob.findAllByUser(req.session.userId);
+    const currentUserId = req.session.userId;
+    let isUserAdmin = false;
+    try {
+      const currentUser = currentUserId ? await User.findById(currentUserId) : null;
+      isUserAdmin = currentUser && currentUser.user_role === 'admin';
+    } catch (err) {
+      console.warn('[RenderJob] Error checking user role:', err.message);
+    }
+
+    let jobs;
+    if (isUserAdmin) {
+      jobs = await new Promise((resolve, reject) => {
+        db.all('SELECT * FROM render_jobs ORDER BY created_at DESC', [], (err, rows) => {
+          if (err) return reject(err);
+          resolve(rows || []);
+        });
+      });
+    } else {
+      jobs = await RenderJob.findAllByUser(currentUserId);
+    }
     return res.json({ success: true, jobs });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Gagal mengambil job' });
@@ -4577,7 +4658,15 @@ app.post('/api/render/jobs/:id/retry', isAuthenticated, async (req, res) => {
   try {
     const original = await RenderJob.findById(req.params.id);
     const currentUserId = req.session.userId;
-    if (!original || original.user_id !== currentUserId) {
+    let isUserAdmin = false;
+    try {
+      const currentUser = currentUserId ? await User.findById(currentUserId) : null;
+      isUserAdmin = currentUser && currentUser.user_role === 'admin';
+    } catch (err) {
+      console.warn('[RenderJob] Error checking user role:', err.message);
+    }
+
+    if (!original || (!isUserAdmin && String(original.user_id) !== String(currentUserId))) {
       return res.status(404).json({ success: false, message: 'Job tidak ditemukan' });
     }
 
@@ -4585,7 +4674,7 @@ app.post('/api/render/jobs/:id/retry', isAuthenticated, async (req, res) => {
     const audioIds = JSON.parse(original.audio_ids || '[]');
 
     const retryJob = await RenderJob.create({
-      user_id: currentUserId,
+      user_id: currentUserId ? String(currentUserId) : 'admin',
       title: `${original.title || 'Render'} (retry)`,
       target_duration_seconds: original.target_duration_seconds,
       video_ids: videoIds,
@@ -4601,8 +4690,18 @@ app.post('/api/render/jobs/:id/retry', isAuthenticated, async (req, res) => {
       try {
         const videos = await Promise.all(videoIds.map((id) => Video.findById(id)));
         const audios = await Promise.all(audioIds.map((id) => Audio.findById(id)));
-        const safeVideos = videos.filter((v) => v && v.user_id === currentUserId);
-        const safeAudios = audios.filter((a) => a && a.user_id === currentUserId);
+        const safeVideos = videos.filter((v) => {
+          if (!v) return false;
+          if (isUserAdmin) return true;
+          if (!v.user_id) return true;
+          return String(v.user_id) === String(currentUserId);
+        });
+        const safeAudios = audios.filter((a) => {
+          if (!a) return false;
+          if (isUserAdmin) return true;
+          if (!a.user_id) return true;
+          return String(a.user_id) === String(currentUserId);
+        });
 
         await RenderJob.update(retryJob.id, { status: 'processing', progress: 10 });
 
@@ -4610,8 +4709,8 @@ app.post('/api/render/jobs/:id/retry', isAuthenticated, async (req, res) => {
         const outputPath = path.join(__dirname, 'public', 'uploads', 'videos', outputName);
         fs.mkdirSync(path.dirname(outputPath), { recursive: true });
 
-        const videoPaths = safeVideos.map((v) => resolveMediaDiskPath(v.filepath));
-        const audioPaths = safeAudios.map((a) => resolveMediaDiskPath(a.filepath));
+        const videoPaths = safeVideos.map((v) => resolveMediaDiskPath(v.filepath)).filter(Boolean);
+        const audioPaths = safeAudios.map((a) => resolveMediaDiskPath(a.filepath)).filter(Boolean);
 
         const missingVideos = videoPaths.filter(p => !fs.existsSync(p));
         if (missingVideos.length > 0) {
@@ -4909,7 +5008,16 @@ app.post('/api/render/jobs/:id/loop', isAuthenticated, async (req, res) => {
 app.get('/api/render/jobs/:id', isAuthenticated, async (req, res) => {
   try {
     const job = await RenderJob.findById(req.params.id);
-    if (!job || job.user_id !== req.session.userId) {
+    const currentUserId = req.session.userId;
+    let isUserAdmin = false;
+    try {
+      const currentUser = currentUserId ? await User.findById(currentUserId) : null;
+      isUserAdmin = currentUser && currentUser.user_role === 'admin';
+    } catch (err) {
+      console.warn('[RenderJob] Error checking user role:', err.message);
+    }
+
+    if (!job || (!isUserAdmin && String(job.user_id) !== String(currentUserId))) {
       return res.status(404).json({ success: false, message: 'Job tidak ditemukan' });
     }
     return res.json({ success: true, job });
@@ -4922,7 +5030,16 @@ app.get('/api/render/jobs/:id', isAuthenticated, async (req, res) => {
 app.delete('/api/render/jobs/:id', isAuthenticated, async (req, res) => {
   try {
     const job = await RenderJob.findById(req.params.id);
-    if (!job || job.user_id !== req.session.userId) {
+    const currentUserId = req.session.userId;
+    let isUserAdmin = false;
+    try {
+      const currentUser = currentUserId ? await User.findById(currentUserId) : null;
+      isUserAdmin = currentUser && currentUser.user_role === 'admin';
+    } catch (err) {
+      console.warn('[RenderJob] Error checking user role:', err.message);
+    }
+
+    if (!job || (!isUserAdmin && String(job.user_id) !== String(currentUserId))) {
       return res.status(404).json({ success: false, message: 'Job tidak ditemukan' });
     }
 

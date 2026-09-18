@@ -2420,22 +2420,32 @@ function getVisualizerSettings() {
   const activeType = document.querySelector('#vizTypeGrid .viz-type-btn.active');
   const activeColor = document.querySelector('#vizColorGrid .viz-color-btn.active');
   
+  const intensityInput = document.getElementById('vizIntensity');
+  const sensitivityInput = document.getElementById('vizSensitivity');
+  const barCountInput = document.getElementById('vizBarCount');
+  const smoothingInput = document.getElementById('vizSmoothing');
+  const mirrorInput = document.getElementById('vizMirror');
+  const glowInput = document.getElementById('vizGlow');
+  const roundBarsInput = document.getElementById('vizRoundBars');
+  const gradientInput = document.getElementById('vizGradient');
+  const reflectionInput = document.getElementById('vizReflection');
+
   return {
-    type: activeType?.dataset.type || 'spectrum',
-    color: activeColor?.dataset.color || 'purple',
-    intensity: parseInt(document.getElementById('vizIntensity').value),
-    sensitivity: parseFloat(document.getElementById('vizSensitivity').value) / 10,
-    barCount: parseInt(document.getElementById('vizBarCount').value),
-    smoothing: parseFloat(document.getElementById('vizSmoothing').value) / 100,
-    mirror: document.getElementById('vizMirror').checked,
-    glow: document.getElementById('vizGlow').checked,
-    roundBars: document.getElementById('vizRoundBars').checked,
-    gradient: document.getElementById('vizGradient').checked,
-    reflection: document.getElementById('vizReflection').checked,
+    type: activeType?.dataset?.type || 'spectrum',
+    color: activeColor?.dataset?.color || 'purple',
+    intensity: intensityInput ? (parseInt(intensityInput.value, 10) || 60) : 60,
+    sensitivity: sensitivityInput ? ((parseFloat(sensitivityInput.value) || 10) / 10) : 1.0,
+    barCount: barCountInput ? (parseInt(barCountInput.value, 10) || 64) : 64,
+    smoothing: smoothingInput ? ((parseFloat(smoothingInput.value) || 80) / 100) : 0.8,
+    mirror: mirrorInput ? Boolean(mirrorInput.checked) : false,
+    glow: glowInput ? Boolean(glowInput.checked) : false,
+    roundBars: roundBarsInput ? Boolean(roundBarsInput.checked) : false,
+    gradient: gradientInput ? Boolean(gradientInput.checked) : false,
+    reflection: reflectionInput ? Boolean(reflectionInput.checked) : false,
     opacity: 0.85,
-    position: vizPosition,
-    height: vizHeightPercent,
-    offsetX: vizOffsetX
+    position: typeof vizPosition !== 'undefined' ? vizPosition : 'bottom',
+    height: typeof vizHeightPercent !== 'undefined' ? vizHeightPercent : 30,
+    offsetX: typeof vizOffsetX !== 'undefined' ? vizOffsetX : 0
   };
 }
 
@@ -2786,17 +2796,21 @@ async function loadJobs(){
 }
 
 if (el.createBtn) {
-  el.createBtn.addEventListener('click',async()=>{
-    try{
-      const titleV=el.title.value;
-      const h=parseInt(el.durationHours.value||0,10);
-      const m=parseInt(el.durationMinutes.value||0,10);
-      const targetDurationSeconds=(h*3600)+(m*60);
-      const videoIds=[...document.querySelectorAll("input[name='video']:checked")].map(i=>i.value);
-      const audioIds=[...document.querySelectorAll("input[name='audio']:checked")].map(i=>i.value);
-      const followAudio=el.followAudioDuration.checked;
-      const muteVideo=el.muteVideoAudio.checked;
-      
+  el.createBtn.addEventListener('click', async () => {
+    const btn = el.createBtn || document.getElementById('createBtn');
+    const origHtml = btn ? btn.innerHTML : '';
+
+    try {
+      const titleV = (document.getElementById('title')?.value || el.title?.value || '').trim();
+      const h = parseInt(document.getElementById('durationHours')?.value || el.durationHours?.value || 0, 10) || 0;
+      const m = parseInt(document.getElementById('durationMinutes')?.value || el.durationMinutes?.value || 0, 10) || 0;
+      const targetDurationSeconds = (h * 3600) + (m * 60);
+      const videoIds = [...document.querySelectorAll("input[name='video']:checked")].map(i => i.value);
+      const audioIds = [...document.querySelectorAll("input[name='audio']:checked")].map(i => i.value);
+      const followAudio = Boolean(document.getElementById('followAudioDuration')?.checked ?? el.followAudioDuration?.checked);
+      const muteVideo = Boolean(document.getElementById('muteVideoAudio')?.checked ?? el.muteVideoAudio?.checked);
+      const targetAccountId = (document.getElementById('targetAccountId')?.value || el.targetAccountId?.value || '').trim();
+
       // Debug logging
       console.log('=== RENDER JOB DEBUG ===');
       console.log('Hours:', h);
@@ -2807,27 +2821,41 @@ if (el.createBtn) {
       console.log('Video IDs:', videoIds);
       console.log('Audio IDs:', audioIds);
       console.log('=======================');
-      
+
       // Validation
-      if(videoIds.length===0)return alert('Pilih minimal 1 video');
-      
-      if(followAudio && audioIds.length===0){
-        return alert('Pilih minimal 1 audio jika menggunakan "Follow Audio Duration"');
+      if (videoIds.length === 0) {
+        if (typeof showToast === 'function') showToast('⚠ Pilih minimal 1 video terlebih dahulu', 'warning');
+        else alert('Pilih minimal 1 video');
+        return;
       }
-      
-      if(!followAudio && targetDurationSeconds===0){
-        return alert('Set durasi minimal 1 menit atau aktifkan "Follow Audio Duration"');
+
+      if (followAudio && audioIds.length === 0) {
+        if (typeof showToast === 'function') showToast('⚠ Pilih minimal 1 audio jika menggunakan "Follow Audio Duration"', 'warning');
+        else alert('Pilih minimal 1 audio jika menggunakan "Follow Audio Duration"');
+        return;
       }
-      
+
+      if (!followAudio && targetDurationSeconds === 0) {
+        if (typeof showToast === 'function') showToast('⚠ Set durasi minimal 1 menit atau aktifkan "Follow Audio Duration"', 'warning');
+        else alert('Set durasi minimal 1 menit atau aktifkan "Follow Audio Duration"');
+        return;
+      }
+
+      // Visual feedback: disable button
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="ti ti-loader-2 animate-spin text-lg md:text-xl"></i><span class="text-xs font-bold">Memulai...</span>';
+      }
+
       const renderData = {
-        title:titleV,
+        title: titleV || `Render ${new Date().toLocaleString('id-ID')}`,
         targetDurationSeconds,
-        durationHours:h,
-        durationMinutes:m,
-        targetAccountId:el.targetAccountId.value,
-        autoUploadToYoutube:false,
-        followAudioDuration:followAudio,
-        muteVideoAudio:el.muteVideoAudio.checked,
+        durationHours: h,
+        durationMinutes: m,
+        targetAccountId: targetAccountId || null,
+        autoUploadToYoutube: false,
+        followAudioDuration: followAudio,
+        muteVideoAudio: muteVideo,
         videoIds,
         audioIds,
         renderQuality: {
@@ -2836,27 +2864,62 @@ if (el.createBtn) {
           bitrate: document.getElementById('renderBitrate')?.value || 'auto'
         },
         visualizerSettings: getVisualizerSettings(),
-        visualizerPreset: vizEnabled ? (document.querySelector('#vizTypeGrid .viz-type-btn.active')?.dataset.type || 'none') : 'none'
+        visualizerPreset: vizEnabled ? (document.querySelector('#vizTypeGrid .viz-type-btn.active')?.dataset?.type || 'none') : 'none'
       };
-      
+
       console.log('Sending render data:', renderData);
-      
-      const resp=await fetch('/api/render/jobs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(renderData)});
-      const data=await resp.json();
-      
+
+      const resp = await fetch('/api/render/jobs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(renderData)
+      });
+
+      let data;
+      const contentType = resp.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        data = await resp.json();
+      } else {
+        const text = await resp.text();
+        throw new Error(text.slice(0, 150) || `HTTP error ${resp.status}`);
+      }
+
       console.log('Server response:', data);
-      
-      if(!resp.ok||!data.success)return alert(data.message||'Gagal');
-      
+
+      if (!resp.ok || !data || !data.success) {
+        const errorMsg = data?.message || data?.error || `Gagal membuat render job (${resp.status})`;
+        if (typeof showToast === 'function') {
+          showToast('✗ ' + errorMsg, 'error');
+        } else {
+          alert(errorMsg);
+        }
+        return;
+      }
+
       // Show notification
-      showNotification('Render Started', followAudio ? 'Render will follow audio duration' : `Render duration: ${h}h ${m}m`);
-      
+      if (typeof showNotification === 'function') {
+        showNotification('Render Started', followAudio ? 'Render will follow audio duration' : `Render duration: ${h}h ${m}m`);
+      }
+      if (typeof showToast === 'function') {
+        showToast('✓ Render berhasil dimulai!');
+      }
+
       loadJobs();
       startSmartRefresh(); // Start auto-refresh for new job
       switchRenderTab('jobs'); // Automatically switch to Jobs tab so user sees progress
-    }catch(err){
+    } catch (err) {
       console.error('Create render job error:', err);
-      alert('Terjadi error saat membuat render job');
+      const errMsg = err?.message || 'Terjadi error saat membuat render job';
+      if (typeof showToast === 'function') {
+        showToast('✗ ' + errMsg, 'error');
+      } else {
+        alert('Gagal render: ' + errMsg);
+      }
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = origHtml;
+      }
     }
   });
 }
@@ -2992,39 +3055,44 @@ async function confirmSchedule() {
     }
     
     // Prepare render data
-    const titleV = el.title.value;
-    const h = parseInt(el.durationHours.value || 0, 10);
-    const m = parseInt(el.durationMinutes.value || 0, 10);
+    const titleV = (document.getElementById('title')?.value || el.title?.value || '').trim();
+    const h = parseInt(document.getElementById('durationHours')?.value || el.durationHours?.value || 0, 10) || 0;
+    const m = parseInt(document.getElementById('durationMinutes')?.value || el.durationMinutes?.value || 0, 10) || 0;
     const targetDurationSeconds = (h * 3600) + (m * 60);
     const videoIds = [...document.querySelectorAll("input[name='video']:checked")].map(i => i.value);
     const audioIds = [...document.querySelectorAll("input[name='audio']:checked")].map(i => i.value);
-    const followAudio = el.followAudioDuration.checked;
+    const followAudio = Boolean(document.getElementById('followAudioDuration')?.checked ?? el.followAudioDuration?.checked);
+    const muteVideo = Boolean(document.getElementById('muteVideoAudio')?.checked ?? el.muteVideoAudio?.checked);
+    const targetAccountId = (document.getElementById('targetAccountId')?.value || el.targetAccountId?.value || '').trim();
     
     // Validation
     if (videoIds.length === 0) {
-      alert('Please select at least 1 video');
+      if (typeof showToast === 'function') showToast('⚠ Pilih minimal 1 video terlebih dahulu', 'warning');
+      else alert('Please select at least 1 video');
       return;
     }
     
     if (followAudio && audioIds.length === 0) {
-      alert('Please select at least 1 audio when using "Follow Audio Duration"');
+      if (typeof showToast === 'function') showToast('⚠ Pilih minimal 1 audio jika menggunakan "Follow Audio Duration"', 'warning');
+      else alert('Please select at least 1 audio when using "Follow Audio Duration"');
       return;
     }
     
     if (!followAudio && targetDurationSeconds === 0) {
-      alert('Set duration to at least 1 minute or enable "Follow Audio Duration"');
+      if (typeof showToast === 'function') showToast('⚠ Set durasi minimal 1 menit atau aktifkan "Follow Audio Duration"', 'warning');
+      else alert('Set duration to at least 1 minute or enable "Follow Audio Duration"');
       return;
     }
     
     const renderData = {
-      title: titleV,
+      title: titleV || `Scheduled Render ${scheduledTime.toLocaleString('id-ID')}`,
       targetDurationSeconds,
       durationHours: h,
       durationMinutes: m,
-      targetAccountId: el.targetAccountId.value,
+      targetAccountId: targetAccountId || null,
       autoUploadToYoutube: false,
       followAudioDuration: followAudio,
-      muteVideoAudio: el.muteVideoAudio.checked,
+      muteVideoAudio: muteVideo,
       videoIds,
       audioIds,
       renderQuality: {
@@ -3032,13 +3100,17 @@ async function confirmSchedule() {
         speedPreset: document.getElementById('renderSpeedPreset')?.value || 'veryfast',
         bitrate: document.getElementById('renderBitrate')?.value || 'auto'
       },
+      visualizerSettings: getVisualizerSettings(),
+      visualizerPreset: vizEnabled ? (document.querySelector('#vizTypeGrid .viz-type-btn.active')?.dataset?.type || 'none') : 'none',
       scheduledAt: scheduledTime.toISOString()
     };
     
     // Disable button
     const btn = document.getElementById('confirmScheduleBtn');
-    btn.disabled = true;
-    btn.innerHTML = '<i class="ti ti-loader animate-spin mr-1"></i>Scheduling...';
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<i class="ti ti-loader animate-spin mr-1"></i>Scheduling...';
+    }
     
     // Create scheduled job
     const resp = await fetch('/api/render/jobs/schedule', {
@@ -3047,25 +3119,41 @@ async function confirmSchedule() {
       body: JSON.stringify(renderData)
     });
     
-    const data = await resp.json();
-    
-    if (!resp.ok || !data.success) {
-      throw new Error(data.message || 'Failed to schedule render');
+    let data;
+    const contentType = resp.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      data = await resp.json();
+    } else {
+      const text = await resp.text();
+      throw new Error(text.slice(0, 150) || `HTTP error ${resp.status}`);
     }
     
-    showToast(`✓ Render scheduled for ${scheduledTime.toLocaleString('id-ID')}`);
+    if (!resp.ok || !data || !data.success) {
+      throw new Error(data?.message || data?.error || 'Failed to schedule render');
+    }
+    
+    if (typeof showToast === 'function') {
+      showToast(`✓ Render scheduled for ${scheduledTime.toLocaleString('id-ID')}`);
+    }
     closeScheduleModal();
     loadJobs();
     switchRenderTab('jobs');
     
   } catch (error) {
     console.error('Schedule error:', error);
-    alert(error.message || 'Failed to schedule render');
-    
+    const msg = error.message || 'Failed to schedule render';
+    if (typeof showToast === 'function') {
+      showToast('✗ ' + msg, 'error');
+    } else {
+      alert(msg);
+    }
+  } finally {
     // Re-enable button
     const btn = document.getElementById('confirmScheduleBtn');
-    btn.disabled = false;
-    btn.innerHTML = '<i class="ti ti-clock-check mr-1"></i>Schedule';
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="ti ti-clock-check mr-1"></i>Schedule';
+    }
   }
 }
 
