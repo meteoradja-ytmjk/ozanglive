@@ -1059,15 +1059,15 @@
             <label class="text-xs text-gray-400 block mb-2">Tipe Jadwal (Schedule Type)</label>
             <div class="flex gap-2">
               <button type="button" onclick="setStudioScheduleType('once')" id="studioScheduleTypeOnce"
-                class="flex-1 px-3 py-2 text-xs font-medium rounded-lg border border-primary bg-primary text-white transition-colors">
+                class="flex-1 px-2 sm:px-3 py-2 text-xs font-medium rounded-lg border border-primary bg-primary text-white transition-colors text-center leading-tight">
                 Sekali (Once)
               </button>
               <button type="button" onclick="setStudioScheduleType('daily')" id="studioScheduleTypeDaily"
-                class="flex-1 px-3 py-2 text-xs font-medium rounded-lg border border-gray-600 bg-dark-700 text-gray-300 hover:border-primary transition-colors">
+                class="flex-1 px-2 sm:px-3 py-2 text-xs font-medium rounded-lg border border-gray-600 bg-dark-700 text-gray-300 hover:border-primary transition-colors text-center leading-tight">
                 Setiap Hari (Daily)
               </button>
               <button type="button" onclick="setStudioScheduleType('weekly')" id="studioScheduleTypeWeekly"
-                class="flex-1 px-3 py-2 text-xs font-medium rounded-lg border border-gray-600 bg-dark-700 text-gray-300 hover:border-primary transition-colors">
+                class="flex-1 px-2 sm:px-3 py-2 text-xs font-medium rounded-lg border border-gray-600 bg-dark-700 text-gray-300 hover:border-primary transition-colors text-center leading-tight">
                 Mingguan (Weekly)
               </button>
             </div>
@@ -1075,7 +1075,7 @@
           </div>
 
           <!-- Once Schedule Settings -->
-          <div id="studioOnceScheduleSettings" class="grid grid-cols-2 gap-4">
+          <div id="studioOnceScheduleSettings" class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label class="text-xs text-gray-400 block mb-1">Mulai Streaming</label>
               <input type="datetime-local" id="studioScheduleStartTime" name="scheduleStartTime"
