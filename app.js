@@ -4250,6 +4250,17 @@ app.get('/api/render/visualizer-types', isAuthenticated, (req, res) => {
   }
 });
 
+function resolveMediaDiskPath(filepath) {
+  if (!filepath) return '';
+  if (path.isAbsolute(filepath) && fs.existsSync(filepath)) return filepath;
+  const clean = String(filepath).replace(/^[\\\/]+/, '');
+  const withPublic = path.join(__dirname, 'public', clean);
+  if (fs.existsSync(withPublic)) return withPublic;
+  const direct = path.join(__dirname, clean);
+  if (fs.existsSync(direct)) return direct;
+  return withPublic;
+}
+
 app.post('/api/render/jobs', isAuthenticated, async (req, res) => {
   try {
     const { 
@@ -4268,7 +4279,11 @@ app.post('/api/render/jobs', isAuthenticated, async (req, res) => {
       advancedAudio,
       watermark,
       overlayVideo,
-      visualizerSettings
+      visualizerSettings,
+      renderQuality,
+      renderResolution,
+      renderSpeedPreset,
+      renderBitrate
     } = req.body;
     
     if (!Array.isArray(videoIds) || videoIds.length === 0) {
@@ -4282,6 +4297,12 @@ app.post('/api/render/jobs', isAuthenticated, async (req, res) => {
     if (followAudioDuration && (!Array.isArray(audioIds) || audioIds.length === 0)) {
       return res.status(400).json({ success: false, message: 'Pilih minimal 1 audio jika mengikuti total durasi audio' });
     }
+
+    const resolvedQuality = renderQuality || {
+      resolution: renderResolution || 'original',
+      speedPreset: renderSpeedPreset || 'veryfast',
+      bitrate: renderBitrate || 'auto'
+    };
 
     const videos = await Promise.all(videoIds.map((id) => Video.findById(id)));
     const audios = await Promise.all((audioIds || []).map((id) => Audio.findById(id)));
@@ -4312,8 +4333,19 @@ app.post('/api/render/jobs', isAuthenticated, async (req, res) => {
         await RenderJob.update(job.id, { status: 'processing', progress: 5 });
         const outputName = `render-${job.id}.mp4`;
         const outputPath = path.join(__dirname, 'public', 'uploads', 'videos', outputName);
-        const videoPaths = safeVideos.map((v) => path.join(__dirname, 'public', v.filepath));
-        const audioPaths = safeAudios.map((a) => path.join(__dirname, 'public', a.filepath));
+        fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+
+        const videoPaths = safeVideos.map((v) => resolveMediaDiskPath(v.filepath));
+        const audioPaths = safeAudios.map((a) => resolveMediaDiskPath(a.filepath));
+
+        const missingVideos = videoPaths.filter(p => !fs.existsSync(p));
+        if (missingVideos.length > 0) {
+          throw new Error(`File video tidak ditemukan di storage: ${missingVideos.map(p => path.basename(p)).join(', ')}`);
+        }
+        const missingAudios = audioPaths.filter(p => !fs.existsSync(p));
+        if (missingAudios.length > 0) {
+          throw new Error(`File audio tidak ditemukan di storage: ${missingAudios.map(p => path.basename(p)).join(', ')}`);
+        }
 
         // Track progress with timestamps for ETA calculation
         const renderStartTime = Date.now();
@@ -4327,6 +4359,7 @@ app.post('/api/render/jobs', isAuthenticated, async (req, res) => {
           visualizerPreset: visualizerPreset || 'none',
           followAudioDuration: !!followAudioDuration,
           muteVideoAudio: !!muteVideoAudio,
+          renderQuality: resolvedQuality,
           advancedAudio: advancedAudio || {},
           watermark: watermark || null,
           overlayVideo: overlayVideo || null,
@@ -4367,7 +4400,9 @@ app.post('/api/render/jobs', isAuthenticated, async (req, res) => {
         }
         await RenderJob.update(job.id, baseUpdate);
       } catch (e) {
-        await RenderJob.update(job.id, { status: 'failed', error_message: e.message });
+        console.error(`[RenderJob ${job.id}] Error:`, e);
+        const errDetail = e.ffmpegStderr ? ` (${e.ffmpegStderr.slice(-250).trim()})` : '';
+        await RenderJob.update(job.id, { status: 'failed', error_message: `${e.message}${errDetail}` });
       }
     });
 
@@ -4425,7 +4460,8 @@ app.post('/api/render/jobs/schedule', isAuthenticated, async (req, res) => {
           targetAccountId, 
           autoUploadToYoutube, 
           followAudioDuration,
-          muteVideoAudio
+          muteVideoAudio,
+          renderQuality
         } = jobInfo;
         
         const computedSeconds = (parseInt(durationHours || 0, 10) * 3600) + (parseInt(durationMinutes || 0, 10) * 60);
@@ -4464,8 +4500,19 @@ app.post('/api/render/jobs/schedule', isAuthenticated, async (req, res) => {
             await RenderJob.update(job.id, { status: 'processing', progress: 10 });
             const outputName = `render-${job.id}.mp4`;
             const outputPath = path.join(__dirname, 'public', 'uploads', 'videos', outputName);
-            const videoPaths = safeVideos.map((v) => path.join(__dirname, 'public', v.filepath));
-            const audioPaths = safeAudios.map((a) => path.join(__dirname, 'public', a.filepath));
+            fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+
+            const videoPaths = safeVideos.map((v) => resolveMediaDiskPath(v.filepath));
+            const audioPaths = safeAudios.map((a) => resolveMediaDiskPath(a.filepath));
+
+            const missingVideos = videoPaths.filter(p => !fs.existsSync(p));
+            if (missingVideos.length > 0) {
+              throw new Error(`File video tidak ditemukan di storage: ${missingVideos.map(p => path.basename(p)).join(', ')}`);
+            }
+            const missingAudios = audioPaths.filter(p => !fs.existsSync(p));
+            if (missingAudios.length > 0) {
+              throw new Error(`File audio tidak ditemukan di storage: ${missingAudios.map(p => path.basename(p)).join(', ')}`);
+            }
             
             await renderLoopVideo({
               videoPaths,
@@ -4475,6 +4522,7 @@ app.post('/api/render/jobs/schedule', isAuthenticated, async (req, res) => {
               visualizerPreset: 'none',
               followAudioDuration: !!followAudioDuration,
               muteVideoAudio: !!muteVideoAudio,
+              renderQuality: renderQuality || { resolution: 'original', speedPreset: 'veryfast', bitrate: 'auto' },
               onProgress: async (progressPercent) => {
                 if (Number.isFinite(progressPercent) && progressPercent > 10) {
                   await RenderJob.update(job.id, { progress: progressPercent });
@@ -4491,7 +4539,8 @@ app.post('/api/render/jobs/schedule', isAuthenticated, async (req, res) => {
             console.log(`[Schedule] Completed scheduled render job ${job.id}`);
           } catch (e) {
             console.error(`[Schedule] Failed to process job ${job.id}:`, e.message);
-            await RenderJob.update(job.id, { status: 'failed', error_message: e.message });
+            const errDetail = e.ffmpegStderr ? ` (${e.ffmpegStderr.slice(-250).trim()})` : '';
+            await RenderJob.update(job.id, { status: 'failed', error_message: `${e.message}${errDetail}` });
           }
         });
         
@@ -4559,8 +4608,19 @@ app.post('/api/render/jobs/:id/retry', isAuthenticated, async (req, res) => {
 
         const outputName = `render-${retryJob.id}.mp4`;
         const outputPath = path.join(__dirname, 'public', 'uploads', 'videos', outputName);
-        const videoPaths = safeVideos.map((v) => path.join(__dirname, 'public', v.filepath));
-        const audioPaths = safeAudios.map((a) => path.join(__dirname, 'public', a.filepath));
+        fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+
+        const videoPaths = safeVideos.map((v) => resolveMediaDiskPath(v.filepath));
+        const audioPaths = safeAudios.map((a) => resolveMediaDiskPath(a.filepath));
+
+        const missingVideos = videoPaths.filter(p => !fs.existsSync(p));
+        if (missingVideos.length > 0) {
+          throw new Error(`File video tidak ditemukan di storage: ${missingVideos.map(p => path.basename(p)).join(', ')}`);
+        }
+        const missingAudios = audioPaths.filter(p => !fs.existsSync(p));
+        if (missingAudios.length > 0) {
+          throw new Error(`File audio tidak ditemukan di storage: ${missingAudios.map(p => path.basename(p)).join(', ')}`);
+        }
 
         await renderLoopVideo({
           videoPaths,
@@ -4569,6 +4629,8 @@ app.post('/api/render/jobs/:id/retry', isAuthenticated, async (req, res) => {
           targetDurationSeconds: original.target_duration_seconds,
           visualizerPreset: original.visualizer_preset || 'none',
           followAudioDuration: !!original.follow_audio_duration,
+          muteVideoAudio: false,
+          renderQuality: { resolution: 'original', speedPreset: 'veryfast', bitrate: 'auto' },
           onProgress: async (progressPercent) => {
             if (Number.isFinite(progressPercent) && progressPercent > 10) {
               await RenderJob.update(retryJob.id, { progress: progressPercent });
@@ -4592,7 +4654,9 @@ app.post('/api/render/jobs/:id/retry', isAuthenticated, async (req, res) => {
         }
         await RenderJob.update(retryJob.id, retryUpdate);
       } catch (e) {
-        await RenderJob.update(retryJob.id, { status: 'failed', error_message: e.message });
+        console.error(`[RetryRenderJob ${retryJob.id}] Error:`, e);
+        const errDetail = e.ffmpegStderr ? ` (${e.ffmpegStderr.slice(-250).trim()})` : '';
+        await RenderJob.update(retryJob.id, { status: 'failed', error_message: `${e.message}${errDetail}` });
       }
     });
 

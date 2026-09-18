@@ -817,6 +817,67 @@ button[onclick*="deleteJob"] {
             </div>
           </div>
           
+          <!-- Video Quality & Resolution Settings -->
+          <div class="mt-4 pt-4 border-t border-gray-700/60">
+            <div class="flex items-center justify-between mb-3">
+              <div class="flex items-center gap-2">
+                <i class="ti ti-adjustments-horizontal text-primary"></i>
+                <span class="text-sm font-semibold text-white">Preset Kualitas & Resolusi Render</span>
+              </div>
+              <span class="text-[11px] text-gray-400">Pilih resolusi & kecepatan encoder</span>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <!-- Resolution Selector -->
+              <div class="bg-dark-750/80 rounded-xl p-3 border border-gray-700/60 hover:border-gray-600 transition-all">
+                <label class="text-xs font-medium text-gray-300 block mb-1.5 flex items-center gap-1.5">
+                  <i class="ti ti-device-desktop text-primary text-xs"></i> Resolusi Target
+                </label>
+                <select id="renderResolution" class="w-full bg-dark-900 border border-gray-700 rounded-lg px-2.5 py-2 text-xs text-white focus:ring-1 focus:ring-primary focus:outline-none cursor-pointer">
+                  <option value="original" selected>Asli (Original / Auto Stream-Copy)</option>
+                  <option value="1080p">1080p (Full HD - 1920x1080)</option>
+                  <option value="720p">720p (HD - 1280x720 - Cepat & Hemat VPS)</option>
+                  <option value="480p">480p (SD - 854x480 - Ringan Kuota)</option>
+                </select>
+                <p class="text-[10px] text-gray-400 mt-1.5 flex items-center gap-1">
+                  <i class="ti ti-info-circle text-[10px] text-primary"></i> 720p me-render 2-3x lebih cepat
+                </p>
+              </div>
+
+              <!-- Speed / Encoder Preset -->
+              <div class="bg-dark-750/80 rounded-xl p-3 border border-gray-700/60 hover:border-gray-600 transition-all">
+                <label class="text-xs font-medium text-gray-300 block mb-1.5 flex items-center gap-1.5">
+                  <i class="ti ti-bolt text-amber-400 text-xs"></i> Kecepatan Encoder
+                </label>
+                <select id="renderSpeedPreset" class="w-full bg-dark-900 border border-gray-700 rounded-lg px-2.5 py-2 text-xs text-white focus:ring-1 focus:ring-primary focus:outline-none cursor-pointer">
+                  <option value="veryfast" selected>Veryfast (Optimal & Seimbang)</option>
+                  <option value="ultrafast">Ultrafast (Kecepatan Maksimal / CPU Rendah)</option>
+                  <option value="fast">Fast (Kualitas Visual Sedikit Lebih Padat)</option>
+                  <option value="medium">Medium (Ukuran File Minimal)</option>
+                </select>
+                <p class="text-[10px] text-gray-400 mt-1.5 flex items-center gap-1">
+                  <i class="ti ti-check text-[10px] text-emerald-400"></i> Sangat disarankan untuk VPS
+                </p>
+              </div>
+
+              <!-- Video Bitrate Quality -->
+              <div class="bg-dark-750/80 rounded-xl p-3 border border-gray-700/60 hover:border-gray-600 transition-all">
+                <label class="text-xs font-medium text-gray-300 block mb-1.5 flex items-center gap-1.5">
+                  <i class="ti ti-chart-bar text-emerald-400 text-xs"></i> Bitrate Kualitas
+                </label>
+                <select id="renderBitrate" class="w-full bg-dark-900 border border-gray-700 rounded-lg px-2.5 py-2 text-xs text-white focus:ring-1 focus:ring-primary focus:outline-none cursor-pointer">
+                  <option value="auto" selected>Otomatis (Sesuai Resolusi)</option>
+                  <option value="5000k">Tinggi (5000 kbps - Visual Tajam)</option>
+                  <option value="3000k">Sedang (3000 kbps - Standar YouTube)</option>
+                  <option value="1800k">Ringan (1800 kbps - Hemat Kuota)</option>
+                </select>
+                <p class="text-[10px] text-gray-400 mt-1.5 flex items-center gap-1">
+                  <i class="ti ti-sparkles text-[10px] text-purple-400"></i> Menyesuaikan bitrate otomatis
+                </p>
+              </div>
+            </div>
+          </div>
+          
         </div>
         
         <!-- Info Messages -->
@@ -2769,6 +2830,11 @@ if (el.createBtn) {
         muteVideoAudio:el.muteVideoAudio.checked,
         videoIds,
         audioIds,
+        renderQuality: {
+          resolution: document.getElementById('renderResolution')?.value || 'original',
+          speedPreset: document.getElementById('renderSpeedPreset')?.value || 'veryfast',
+          bitrate: document.getElementById('renderBitrate')?.value || 'auto'
+        },
         visualizerSettings: getVisualizerSettings(),
         visualizerPreset: vizEnabled ? (document.querySelector('#vizTypeGrid .viz-type-btn.active')?.dataset.type || 'none') : 'none'
       };
@@ -2961,6 +3027,11 @@ async function confirmSchedule() {
       muteVideoAudio: el.muteVideoAudio.checked,
       videoIds,
       audioIds,
+      renderQuality: {
+        resolution: document.getElementById('renderResolution')?.value || 'original',
+        speedPreset: document.getElementById('renderSpeedPreset')?.value || 'veryfast',
+        bitrate: document.getElementById('renderBitrate')?.value || 'auto'
+      },
       scheduledAt: scheduledTime.toISOString()
     };
     
@@ -4195,8 +4266,16 @@ function updateRenderEstimates() {
   if (estAudioDur) estAudioDur.textContent = formatSecondsToHuman(totalAudioSec);
   if (estAudioCnt) estAudioCnt.textContent = `${checkedAudios.length} audio terpilih`;
 
+  const resEl = document.getElementById('renderResolution');
+  const speedEl = document.getElementById('renderSpeedPreset');
+  const resVal = resEl ? resEl.value : 'original';
+  const speedVal = speedEl ? speedEl.value : 'veryfast';
+
   if (estTargetDur) estTargetDur.textContent = formatSecondsToHuman(targetSec);
-  if (estTargetMode) estTargetMode.textContent = isFollowAudio ? 'Ikuti durasi audio' : 'Durasi manual';
+  if (estTargetMode) {
+    const resLabel = resVal === 'original' ? 'Original' : resVal.toUpperCase();
+    estTargetMode.textContent = `${isFollowAudio ? 'Auto Audio' : 'Manual'} • ${resLabel} (${speedVal})`;
+  }
 
   if (estLoopMul && estLoopNotice) {
     if (targetSec > 0 && totalVideoSec > 0) {
@@ -4219,6 +4298,10 @@ function updateRenderEstimates() {
     }
   }
 }
+
+document.getElementById('renderResolution')?.addEventListener('change', updateRenderEstimates);
+document.getElementById('renderSpeedPreset')?.addEventListener('change', updateRenderEstimates);
+document.getElementById('renderBitrate')?.addEventListener('change', updateRenderEstimates);
 
 if (el.durationHours) {
   el.durationHours.addEventListener('input', () => {

@@ -15,6 +15,15 @@ if (ffprobePath) {
 }
 console.log('[FFmpeg] Using:', ffmpegPath);
 
+/**
+ * Format file path safely for FFmpeg concat demuxer file entries.
+ * Converts Windows backslashes to forward slashes and escapes single quotes,
+ * preventing 'Impossible to open: No such file or directory' errors on Windows & Linux.
+ */
+const formatConcatPath = (filePath) => {
+  return String(filePath).replace(/\\/g, '/').replace(/'/g, "'\\''");
+};
+
 const runFfmpeg = (configure, { onProgress, estimatedDurationSec } = {}) => new Promise((resolve, reject) => {
   const cmd = configure(ffmpeg());
   let progressEmitted = false;
@@ -79,6 +88,60 @@ const calcProgress = (timemark, totalDuration, minPct = 5, maxPct = 99) => {
 };
 
 /**
+ * Resolves quality, resolution, and encoder options.
+ * If resolution is 'original' (default), stream copy (-c:v copy) is preserved for ultra-fast rendering.
+ * If a target resolution or custom preset/bitrate is chosen, sets up proper scaling & encoding arguments.
+ */
+function resolveRenderQuality(renderQuality = {}) {
+  const resolution = renderQuality?.resolution || 'original';
+  const speedPreset = renderQuality?.speedPreset || 'veryfast';
+  const bitrate = renderQuality?.bitrate || 'auto';
+
+  const resMap = {
+    '1080p': { width: 1920, height: 1080 },
+    '720p': { width: 1280, height: 720 },
+    '480p': { width: 854, height: 480 }
+  };
+
+  const isOriginal = resolution === 'original';
+  const targetRes = resMap[resolution] || null;
+
+  // Build aspect-ratio safe scaling filter with black padding letterboxes if needed
+  let scaleFilter = null;
+  if (!isOriginal && targetRes) {
+    scaleFilter = `scale=${targetRes.width}:${targetRes.height}:force_original_aspect_ratio=decrease,pad=${targetRes.width}:${targetRes.height}:(ow-iw)/2:(oh-ih)/2,setsar=1`;
+  }
+
+  const getVideoArgs = () => {
+    if (isOriginal) {
+      return ['-c:v', 'copy'];
+    }
+    const args = ['-c:v', 'libx264', '-preset', speedPreset];
+    if (bitrate && bitrate !== 'auto') {
+      const bInt = parseInt(bitrate, 10) || 3000;
+      args.push('-b:v', `${bInt}k`, '-maxrate', `${bInt}k`, '-bufsize', `${bInt * 2}k`);
+    } else {
+      args.push('-crf', '22');
+    }
+    if (scaleFilter) {
+      args.push('-vf', scaleFilter);
+    }
+    args.push('-pix_fmt', 'yuv420p');
+    return args;
+  };
+
+  return {
+    isOriginal,
+    resolution,
+    speedPreset,
+    bitrate,
+    targetRes,
+    scaleFilter,
+    getVideoArgs
+  };
+}
+
+/**
  * Apply audio visualizer overlay to a video+audio combination.
  * OPTIMIZED: Uses single-pass encoding with hardware-friendly settings.
  * 
@@ -88,17 +151,23 @@ const calcProgress = (timemark, totalDuration, minPct = 5, maxPct = 99) => {
  * @param {string} params.outputPath - Final output path
  * @param {number} params.duration - Target duration in seconds
  * @param {Object} params.visualizerSettings - Visualizer configuration from frontend
+ * @param {Object} params.renderQuality - Quality/resolution configuration
  * @param {Function} params.onProgress - Progress callback (0-100)
  * @param {number} params.progressOffset - Starting progress percentage
  * @param {number} params.progressRange - Range of progress for this step
  * @returns {Promise<string>} Output path
  */
-async function applyVisualizerOverlay({ videoPath, audioPath, outputPath, duration, visualizerSettings, onProgress, progressOffset = 0, progressRange = 100 }) {
+async function applyVisualizerOverlay({ videoPath, audioPath, outputPath, duration, visualizerSettings, renderQuality = {}, onProgress, progressOffset = 0, progressRange = 100 }) {
+  const quality = resolveRenderQuality(renderQuality);
   // Get video dimensions for proper sizing
   const videoMeta = await ffprobeAsync(videoPath);
   const videoStream = videoMeta.streams?.find(s => s.codec_type === 'video');
-  const width = videoStream?.width || 1920;
-  const height = videoStream?.height || 1080;
+  let width = videoStream?.width || 1920;
+  let height = videoStream?.height || 1080;
+  if (!quality.isOriginal && quality.targetRes) {
+    width = quality.targetRes.width;
+    height = quality.targetRes.height;
+  }
   const fpsStr = videoStream?.r_frame_rate || '30/1';
   let fps = 30;
   try { 
@@ -110,6 +179,7 @@ async function applyVisualizerOverlay({ videoPath, audioPath, outputPath, durati
   console.log('[VISUALIZER] Applying visualizer overlay');
   console.log('[VISUALIZER] Type:', visualizerSettings.type);
   console.log('[VISUALIZER] Video:', width, 'x', height, '@', fps, 'fps');
+  console.log('[VISUALIZER] Quality preset:', quality.resolution, '| Speed:', quality.speedPreset, '| Bitrate:', quality.bitrate);
   console.log('[VISUALIZER] Duration:', duration, 's');
 
   // Build the FFmpeg filter complex (pass fps so filters render at correct rate)
@@ -122,32 +192,43 @@ async function applyVisualizerOverlay({ videoPath, audioPath, outputPath, durati
 
   console.log('[VISUALIZER] Filter:', filterComplex);
 
+  const outputOptions = [
+    '-filter_complex', filterComplex,
+    '-map', outputMap,
+    '-map', '1:a',
+    '-c:v', 'libx264',
+    '-preset', quality.speedPreset
+  ];
+
+  if (quality.bitrate && quality.bitrate !== 'auto') {
+    const bInt = parseInt(quality.bitrate, 10) || 3000;
+    outputOptions.push('-b:v', `${bInt}k`, '-maxrate', `${bInt}k`, '-bufsize', `${bInt * 2}k`);
+  } else {
+    outputOptions.push('-crf', '22');
+  }
+
+  outputOptions.push(
+    '-pix_fmt', 'yuv420p',
+    '-r', String(fps),
+    '-g', String(fps * 2),
+    '-keyint_min', String(fps),
+    '-sc_threshold', '0',
+    '-c:a', 'aac',
+    '-b:a', '192k',
+    '-ar', '44100',
+    '-ac', '2',
+    '-t', String(duration),
+    '-movflags', '+faststart',
+    '-max_muxing_queue_size', '4096',
+    '-vsync', 'cfr',
+    '-y'
+  );
+
   await runFfmpeg((cmd) => {
     return cmd
       .input(videoPath)
       .input(audioPath)
-      .outputOptions([
-        '-filter_complex', filterComplex,
-        '-map', outputMap,
-        '-map', '1:a',
-        '-c:v', 'libx264',
-        '-preset', 'veryfast',
-        '-crf', '22',
-        '-pix_fmt', 'yuv420p',
-        '-r', String(fps),
-        '-g', String(fps * 2),
-        '-keyint_min', String(fps),
-        '-sc_threshold', '0',
-        '-c:a', 'aac',
-        '-b:a', '192k',
-        '-ar', '44100',
-        '-ac', '2',
-        '-t', String(duration),
-        '-movflags', '+faststart',
-        '-max_muxing_queue_size', '4096',
-        '-vsync', 'cfr',
-        '-y'
-      ])
+      .outputOptions(outputOptions)
       .output(outputPath);
   }, {
     onProgress: (p) => {
@@ -185,7 +266,7 @@ async function applyVisualizerOverlay({ videoPath, audioPath, outputPath, durati
  * @param {Function} params.onProgress - Progress callback
  * @returns {Promise<string>} Output path
  */
-async function renderWithVisualizerSinglePass({ videoPaths, audioPaths, outputPath, duration, visualizerSettings, workDir, onProgress }) {
+async function renderWithVisualizerSinglePass({ videoPaths, audioPaths, outputPath, duration, visualizerSettings, renderQuality = {}, workDir, onProgress }) {
   if (!videoPaths?.length) throw new Error('Video diperlukan');
   if (!audioPaths?.length) throw new Error('Audio diperlukan untuk visualizer');
 
@@ -210,7 +291,7 @@ async function renderWithVisualizerSinglePass({ videoPaths, audioPaths, outputPa
       // Loop video
       const loops = Math.ceil(duration / videoDuration) + 1;
       const concatFile = path.join(workDir, 'video-concat.txt');
-      const lines = Array(loops).fill(`file '${videoPaths[0].replace(/'/g, "'\\''")}'`);
+      const lines = Array(loops).fill(`file '${formatConcatPath(videoPaths[0])}'`);
       fs.writeFileSync(concatFile, lines.join('\n'), 'utf8');
       preparedVideoPath = path.join(workDir, 'video-prepared.mp4');
       console.log('[VIZ-RENDER] Looping video', loops, 'times');
@@ -228,7 +309,7 @@ async function renderWithVisualizerSinglePass({ videoPaths, audioPaths, outputPa
     const loops = Math.ceil(duration / totalDur) + 1;
     const lines = [];
     for (let i = 0; i < loops; i++) {
-      videoPaths.forEach(p => lines.push(`file '${p.replace(/'/g, "'\\''")}'`));
+      videoPaths.forEach(p => lines.push(`file '${formatConcatPath(p)}'`));
     }
     fs.writeFileSync(concatFile, lines.join('\n'), 'utf8');
     preparedVideoPath = path.join(workDir, 'video-prepared.mp4');
@@ -252,7 +333,7 @@ async function renderWithVisualizerSinglePass({ videoPaths, audioPaths, outputPa
     } else {
       const loops = Math.ceil(duration / audioDuration) + 1;
       const concatFile = path.join(workDir, 'audio-concat.txt');
-      const lines = Array(loops).fill(`file '${audioPaths[0].replace(/'/g, "'\\''")}'`);
+      const lines = Array(loops).fill(`file '${formatConcatPath(audioPaths[0])}'`);
       fs.writeFileSync(concatFile, lines.join('\n'), 'utf8');
       preparedAudioPath = path.join(workDir, 'audio-prepared.aac');
       console.log('[VIZ-RENDER] Looping audio', loops, 'times');
@@ -270,7 +351,7 @@ async function renderWithVisualizerSinglePass({ videoPaths, audioPaths, outputPa
     const loops = Math.ceil(duration / totalDur) + 1;
     const lines = [];
     for (let i = 0; i < loops; i++) {
-      audioPaths.forEach(p => lines.push(`file '${p.replace(/'/g, "'\\''")}'`));
+      audioPaths.forEach(p => lines.push(`file '${formatConcatPath(p)}'`));
     }
     fs.writeFileSync(concatFile, lines.join('\n'), 'utf8');
     preparedAudioPath = path.join(workDir, 'audio-prepared.aac');
@@ -292,6 +373,7 @@ async function renderWithVisualizerSinglePass({ videoPaths, audioPaths, outputPa
     outputPath,
     duration,
     visualizerSettings,
+    renderQuality,
     onProgress: (pct) => onProgress?.(40 + Math.round((pct / 100) * 59)),
     progressOffset: 0,
     progressRange: 100
@@ -319,6 +401,7 @@ async function renderLoopVideo({
   visualizerPreset = 'none', 
   followAudioDuration = false,
   muteVideoAudio = false,
+  renderQuality = {},
   advancedAudio = {}, 
   watermark = null,
   overlayVideo = null,
@@ -327,6 +410,12 @@ async function renderLoopVideo({
 }) {
   if (!videoPaths?.length) throw new Error('Minimal 1 video diperlukan');
   
+  // Ensure target output directory exists
+  if (outputPath) {
+    fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+  }
+
+  const quality = resolveRenderQuality(renderQuality);
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ozang-render-'));
   const startTime = Date.now();
   
@@ -383,6 +472,7 @@ async function renderLoopVideo({
           outputPath,
           duration: effectiveTargetDuration,
           visualizerSettings,
+          renderQuality,
           workDir,
           onProgress
         });
@@ -472,6 +562,7 @@ async function renderLoopVideo({
           outputPath: outputPath,
           duration: effectiveTargetDuration,
           visualizerSettings,
+          renderQuality,
           onProgress,
           progressOffset: 0,
           progressRange: 100
@@ -511,7 +602,7 @@ async function renderLoopVideo({
               .input(videoPath)
               .outputOptions([
                 '-t', String(effectiveTargetDuration),
-                '-c:v', 'copy',
+                ...quality.getVideoArgs(),
                 '-an', // Remove audio
                 '-movflags', '+faststart'
               ])
@@ -527,7 +618,7 @@ async function renderLoopVideo({
           console.log('[RENDER] Looping video and removing audio');
           const videoLoops = Math.ceil(effectiveTargetDuration / videoDuration) + 1;
           const videoConcatFile = path.join(workDir, 'video-loop.txt');
-          const videoLines = Array(videoLoops).fill(`file '${videoPath.replace(/'/g, "'\\''")}'`);
+          const videoLines = Array(videoLoops).fill(`file '${formatConcatPath(videoPath)}'`);
           fs.writeFileSync(videoConcatFile, videoLines.join('\n'), 'utf8');
           
           await runFfmpeg((cmd) => {
@@ -536,7 +627,7 @@ async function renderLoopVideo({
               .inputOptions(['-f', 'concat', '-safe', '0'])
               .outputOptions([
                 '-t', String(effectiveTargetDuration),
-                '-c:v', 'copy',
+                ...quality.getVideoArgs(),
                 '-an', // Remove audio
                 '-movflags', '+faststart'
               ])
@@ -602,7 +693,7 @@ async function renderLoopVideo({
             .input(audioPath)
             .outputOptions([
               '-t', String(effectiveTargetDuration),
-              '-c:v', 'copy',
+              ...quality.getVideoArgs(),
               '-c:a', 'aac',
               '-b:a', '192k',
               '-ar', '44100',
@@ -635,10 +726,10 @@ async function renderLoopVideo({
         
         // Create video concat file
         const videoConcatFile = path.join(workDir, 'video-loop.txt');
-        const videoLines = Array(videoLoops).fill(`file '${videoPath.replace(/'/g, "'\\''")}'`);
+        const videoLines = Array(videoLoops).fill(`file '${formatConcatPath(videoPath)}'`);
         fs.writeFileSync(videoConcatFile, videoLines.join('\n'), 'utf8');
         
-        // Loop video with stream copy
+        // Loop video with stream copy or preset encoding
         const loopedVideo = path.join(workDir, 'video-looped.mp4');
         await runFfmpeg((cmd) => {
           return cmd
@@ -646,8 +737,9 @@ async function renderLoopVideo({
             .inputOptions(['-f', 'concat', '-safe', '0'])
             .outputOptions([
               '-t', String(effectiveTargetDuration),
-              '-c:v', 'copy'
-            , '-movflags', '+faststart'])
+              ...quality.getVideoArgs(),
+              '-movflags', '+faststart'
+            ])
             .output(loopedVideo);
         }, {
           onProgress: (p) => {
@@ -700,19 +792,22 @@ async function renderLoopVideo({
         
         // Create audio concat file
         const audioConcatFile = path.join(workDir, 'audio-loop.txt');
-        const audioLines = Array(audioLoops).fill(`file '${audioPath.replace(/'/g, "'\\''")}'`);
+        const audioLines = Array(audioLoops).fill(`file '${formatConcatPath(audioPath)}'`);
         fs.writeFileSync(audioConcatFile, audioLines.join('\n'), 'utf8');
         
-        // Loop audio with stream copy
-        const loopedAudio = path.join(workDir, 'audio-looped.aac');
+        // Loop audio with fast AAC re-encode (guarantees compatibility with mp3/wav/aac and avoids movflags crash)
+        const loopedAudio = path.join(workDir, 'audio-looped.m4a');
         await runFfmpeg((cmd) => {
           return cmd
             .input(audioConcatFile)
             .inputOptions(['-f', 'concat', '-safe', '0'])
             .outputOptions([
               '-t', String(effectiveTargetDuration),
-              '-c:a', 'copy'
-            , '-movflags', '+faststart'])
+              '-c:a', 'aac',
+              '-b:a', '192k',
+              '-ar', '44100',
+              '-ac', '2'
+            ])
             .output(loopedAudio);
         }, {
           onProgress: (p) => {
@@ -732,11 +827,8 @@ async function renderLoopVideo({
             .input(loopedAudio)
             .outputOptions([
               '-t', String(effectiveTargetDuration),
-              '-c:v', 'copy',
-              '-c:a', 'aac',
-              '-b:a', '192k',
-              '-ar', '44100',
-              '-ac', '2',
+              ...quality.getVideoArgs(),
+              '-c:a', 'copy',
               '-map', '0:v:0',
               '-map', '1:a:0'
             , '-movflags', '+faststart'])
@@ -766,8 +858,8 @@ async function renderLoopVideo({
         // Create concat files
         const videoConcatFile = path.join(workDir, 'video-loop.txt');
         const audioConcatFile = path.join(workDir, 'audio-loop.txt');
-        const videoLines = Array(videoLoops).fill(`file '${videoPath.replace(/'/g, "'\\''")}'`);
-        const audioLines = Array(audioLoops).fill(`file '${audioPath.replace(/'/g, "'\\''")}'`);
+        const videoLines = Array(videoLoops).fill(`file '${formatConcatPath(videoPath)}'`);
+        const audioLines = Array(audioLoops).fill(`file '${formatConcatPath(audioPath)}'`);
         fs.writeFileSync(videoConcatFile, videoLines.join('\n'), 'utf8');
         fs.writeFileSync(audioConcatFile, audioLines.join('\n'), 'utf8');
         
@@ -779,8 +871,9 @@ async function renderLoopVideo({
             .inputOptions(['-f', 'concat', '-safe', '0'])
             .outputOptions([
               '-t', String(effectiveTargetDuration),
-              '-c:v', 'copy'
-            , '-movflags', '+faststart'])
+              ...quality.getVideoArgs(),
+              '-movflags', '+faststart'
+            ])
             .output(loopedVideo);
         }, {
           onProgress: (p) => {
@@ -789,16 +882,19 @@ async function renderLoopVideo({
           }
         });
         
-        // Loop audio
-        const loopedAudio = path.join(workDir, 'audio-looped.aac');
+        // Loop audio with AAC encoding (universal support for any format, no container mismatch)
+        const loopedAudio = path.join(workDir, 'audio-looped.m4a');
         await runFfmpeg((cmd) => {
           return cmd
             .input(audioConcatFile)
             .inputOptions(['-f', 'concat', '-safe', '0'])
             .outputOptions([
               '-t', String(effectiveTargetDuration),
-              '-c:a', 'copy'
-            , '-movflags', '+faststart'])
+              '-c:a', 'aac',
+              '-b:a', '192k',
+              '-ar', '44100',
+              '-ac', '2'
+            ])
             .output(loopedAudio);
         }, {
           onProgress: (p) => {
@@ -820,10 +916,7 @@ async function renderLoopVideo({
             .outputOptions([
               '-t', String(effectiveTargetDuration),
               '-c:v', 'copy',
-              '-c:a', 'aac',
-              '-b:a', '192k',
-              '-ar', '44100',
-              '-ac', '2',
+              '-c:a', 'copy',
               '-map', '0:v:0',
               '-map', '1:a:0'
             , '-movflags', '+faststart'])
@@ -880,15 +973,15 @@ async function renderLoopVideo({
       const audioLines = [];
       for (let i = 0; i < audioLoops; i++) {
         audioPaths.forEach(aPath => {
-          audioLines.push(`file '${aPath.replace(/'/g, "'\\''")}'`);
+          audioLines.push(`file '${formatConcatPath(aPath)}'`);
         });
       }
       fs.writeFileSync(audioConcatFile, audioLines.join('\n'), 'utf8');
       console.log('[RENDER] Audio concat file created');
       
-      // Merge audios with stream copy (FAST!)
-      const mergedAudio = path.join(workDir, 'audio-merged.aac');
-      console.log('[RENDER] Step 1/2: Merging audios (stream copy)...');
+      // Merge audios with AAC encoding
+      const mergedAudio = path.join(workDir, 'audio-merged.m4a');
+      console.log('[RENDER] Step 1/2: Merging audios...');
       
       await runFfmpeg((cmd) => {
         return cmd
@@ -896,8 +989,11 @@ async function renderLoopVideo({
           .inputOptions(['-f', 'concat', '-safe', '0'])
           .outputOptions([
             '-t', String(effectiveTargetDuration),
-            '-c:a', 'copy'
-          , '-movflags', '+faststart'])
+            '-c:a', 'aac',
+            '-b:a', '192k',
+            '-ar', '44100',
+            '-ac', '2'
+          ])
           .output(mergedAudio);
       }, {
         onProgress: (p) => {
@@ -920,7 +1016,7 @@ async function renderLoopVideo({
         console.log('[RENDER] Video loops needed:', videoLoops);
         
         const videoConcatFile = path.join(workDir, 'video-loop.txt');
-        const videoLines = Array(videoLoops).fill(`file '${videoPath.replace(/'/g, "'\\''")}'`);
+        const videoLines = Array(videoLoops).fill(`file '${formatConcatPath(videoPath)}'`);
         fs.writeFileSync(videoConcatFile, videoLines.join('\n'), 'utf8');
         
         // Loop video
@@ -931,8 +1027,9 @@ async function renderLoopVideo({
             .inputOptions(['-f', 'concat', '-safe', '0'])
             .outputOptions([
               '-t', String(effectiveTargetDuration),
-              '-c:v', 'copy'
-            , '-movflags', '+faststart'])
+              ...quality.getVideoArgs(),
+              '-movflags', '+faststart'
+            ])
             .output(loopedVideo);
         }, {
           onProgress: (p) => {
@@ -954,10 +1051,7 @@ async function renderLoopVideo({
             .outputOptions([
               '-t', String(effectiveTargetDuration),
               '-c:v', 'copy',
-              '-c:a', 'aac',
-              '-b:a', '192k',
-              '-ar', '44100',
-              '-ac', '2',
+              '-c:a', 'copy',
               '-map', '0:v:0',
               '-map', '1:a:0'
             , '-movflags', '+faststart'])
@@ -983,14 +1077,12 @@ async function renderLoopVideo({
             .input(mergedAudio)
             .outputOptions([
               '-t', String(effectiveTargetDuration),
-              '-c:v', 'copy',
-              '-c:a', 'aac',
-              '-b:a', '192k',
-              '-ar', '44100',
-              '-ac', '2',
+              ...quality.getVideoArgs(),
+              '-c:a', 'copy',
               '-map', '0:v:0',
-              '-map', '1:a:0'
-            , '-movflags', '+faststart'])
+              '-map', '1:a:0',
+              '-movflags', '+faststart'
+            ])
             .output(outputPath);
         }, {
           onProgress: (p) => {
@@ -1032,59 +1124,63 @@ async function renderLoopVideo({
     const videoLines = [];
     for (let i = 0; i < videoLoops; i++) {
       videoPaths.forEach(vPath => {
-        videoLines.push(`file '${vPath.replace(/'/g, "'\\''")}'`);
+        videoLines.push(`file '${formatConcatPath(vPath)}'`);
       });
     }
     const videoConcatContent = videoLines.join('\n');
     fs.writeFileSync(videoConcatFile, videoConcatContent, 'utf8');
     console.log('[RENDER] Video concat file created:', videoConcatFile);
     
-    // Merge videos - try stream copy first (FAST), fallback to re-encode
+    // Merge videos - try stream copy first if original resolution requested, fallback to re-encode
     const mergedVideo = path.join(workDir, 'video-merged.mp4');
     const videoMergeStart = Date.now();
-    console.log('[RENDER] Step 1/3: Merging videos (stream copy)...');
+    console.log('[RENDER] Step 1/3: Merging videos...');
     
     let videoCopySuccess = false;
-    try {
-      await runFfmpeg((cmd) => {
-        const opts = ['-t', String(effectiveTargetDuration), '-c:v', 'copy', '-movflags', '+faststart'];
-        if (muteVideoAudio) {
-          opts.push('-an');
-        } else {
-          opts.push('-c:a', 'copy');
+    if (quality.isOriginal) {
+      try {
+        // Check if source video has audio stream
+        const firstVideoMeta = await ffprobeAsync(videoPaths[0]).catch(() => null);
+        const hasAudioInVideo = firstVideoMeta?.streams?.some(s => s.codec_type === 'audio');
+
+        await runFfmpeg((cmd) => {
+          const opts = ['-t', String(effectiveTargetDuration), '-c:v', 'copy', '-movflags', '+faststart'];
+          if (muteVideoAudio || !hasAudioInVideo) {
+            opts.push('-an');
+          } else {
+            opts.push('-c:a', 'copy');
+          }
+          return cmd
+            .input(videoConcatFile)
+            .inputOptions(['-f', 'concat', '-safe', '0'])
+            .outputOptions(opts)
+            .output(mergedVideo);
+        }, {
+          onProgress: (p) => {
+            const progress = calcProgress(p.timemark, effectiveTargetDuration, 5, 40);
+            console.log(`[RENDER] Video progress: ${progress}% (${p.timemark}/${effectiveTargetDuration}s)`);
+            onProgress?.(progress);
+          }
+        });
+        // Verify output is valid (stream copy can silently produce bad files on mixed codecs)
+        if (fs.existsSync(mergedVideo) && fs.statSync(mergedVideo).size > 10000) {
+          videoCopySuccess = true;
+          console.log('[RENDER] Video stream copy ✓');
         }
-        return cmd
-          .input(videoConcatFile)
-          .inputOptions(['-f', 'concat', '-safe', '0'])
-          .outputOptions(opts)
-          .output(mergedVideo);
-      }, {
-        onProgress: (p) => {
-          const progress = calcProgress(p.timemark, effectiveTargetDuration, 5, 40);
-          console.log(`[RENDER] Video progress: ${progress}% (${p.timemark}/${effectiveTargetDuration}s)`);
-          onProgress?.(progress);
-        }
-      });
-      // Verify output is valid (stream copy can silently produce bad files on mixed codecs)
-      if (fs.existsSync(mergedVideo) && fs.statSync(mergedVideo).size > 10000) {
-        videoCopySuccess = true;
-        console.log('[RENDER] Video stream copy ✓');
+      } catch (copyErr) {
+        console.warn('[RENDER] Stream copy failed, falling back to re-encode:', copyErr.message);
       }
-    } catch (copyErr) {
-      console.warn('[RENDER] Stream copy failed, falling back to re-encode:', copyErr.message);
     }
     
     if (!videoCopySuccess) {
-      // Fallback: re-encode for compatibility (mixed codecs/resolutions)
-      console.log('[RENDER] Step 1/3: Merging videos (re-encode fallback)...');
+      // Re-encode with quality & preset options
+      console.log(`[RENDER] Step 1/3: Merging videos (re-encode - ${quality.resolution} / ${quality.speedPreset})...`);
       if (fs.existsSync(mergedVideo)) fs.unlinkSync(mergedVideo);
       
       await runFfmpeg((cmd) => {
         const outputOptions = [
           '-t', String(effectiveTargetDuration),
-          '-c:v', 'libx264',
-          '-preset', 'veryfast',
-          '-crf', '23',
+          ...quality.getVideoArgs(),
           '-movflags', '+faststart'
         ];
         if (muteVideoAudio) {
@@ -1134,66 +1230,37 @@ async function renderLoopVideo({
       const audioLines = [];
       for (let i = 0; i < audioLoops; i++) {
         audioPaths.forEach(aPath => {
-          audioLines.push(`file '${aPath.replace(/'/g, "'\\''")}'`);
+          audioLines.push(`file '${formatConcatPath(aPath)}'`);
         });
       }
       const audioConcatContent = audioLines.join('\n');
       fs.writeFileSync(audioConcatFile, audioConcatContent, 'utf8');
       console.log('[RENDER] Audio concat file created:', audioConcatFile);
-      console.log('[RENDER] Concat content:\n', audioConcatContent);
       
-      // Merge audios - stream copy first (FAST), fallback to re-encode
-      const mergedAudio = path.join(workDir, 'audio-merged.aac');
+      // Merge audios with AAC encoding
+      const mergedAudio = path.join(workDir, 'audio-merged.m4a');
       const audioMergeStart = Date.now();
-      console.log('[RENDER] Step 2/3: Merging audios (stream copy)...');
+      console.log('[RENDER] Step 2/3: Merging audios...');
       
-      let audioCopySuccess = false;
-      try {
-        await runFfmpeg((cmd) => {
-          return cmd
-            .input(audioConcatFile)
-            .inputOptions(['-f', 'concat', '-safe', '0'])
-            .outputOptions([
-              '-t', String(effectiveTargetDuration),
-              '-c:a', 'copy'
-            , '-movflags', '+faststart'])
-            .output(mergedAudio);
-        }, {
-          onProgress: (p) => {
-            const progress = calcProgress(p.timemark, effectiveTargetDuration, 40, 70);
-            console.log(`[RENDER] Audio progress: ${progress}% (${p.timemark}/${effectiveTargetDuration}s)`);
-            onProgress?.(progress);
-          }
-        });
-        if (fs.existsSync(mergedAudio) && fs.statSync(mergedAudio).size > 1000) {
-          audioCopySuccess = true;
-          console.log('[RENDER] Audio stream copy ✓');
+      await runFfmpeg((cmd) => {
+        return cmd
+          .input(audioConcatFile)
+          .inputOptions(['-f', 'concat', '-safe', '0'])
+          .outputOptions([
+            '-t', String(effectiveTargetDuration),
+            '-c:a', 'aac',
+            '-b:a', '192k',
+            '-ar', '44100',
+            '-ac', '2'
+          ])
+          .output(mergedAudio);
+      }, {
+        onProgress: (p) => {
+          const progress = calcProgress(p.timemark, effectiveTargetDuration, 40, 70);
+          console.log(`[RENDER] Audio progress: ${progress}% (${p.timemark}/${effectiveTargetDuration}s)`);
+          onProgress?.(progress);
         }
-      } catch (copyErr) {
-        console.warn('[RENDER] Audio stream copy failed, falling back to re-encode:', copyErr.message);
-      }
-      
-      if (!audioCopySuccess) {
-        console.log('[RENDER] Step 2/3: Merging audios (re-encode fallback)...');
-        if (fs.existsSync(mergedAudio)) fs.unlinkSync(mergedAudio);
-        await runFfmpeg((cmd) => {
-          return cmd
-            .input(audioConcatFile)
-            .inputOptions(['-f', 'concat', '-safe', '0'])
-            .outputOptions([
-              '-t', String(effectiveTargetDuration),
-              '-c:a', 'aac',
-              '-b:a', '192k'
-            ])
-            .output(mergedAudio);
-        }, {
-          onProgress: (p) => {
-            const progress = calcProgress(p.timemark, effectiveTargetDuration, 40, 70);
-            console.log(`[RENDER] Audio re-encode: ${progress}% (${p.timemark}/${effectiveTargetDuration}s)`);
-            onProgress?.(progress);
-          }
-        });
-      }
+      });
       
       const audioMergeTime = Math.round((Date.now() - audioMergeStart) / 1000);
       console.log(`[RENDER] Audio merged ✓ (${audioMergeTime}s)`);
@@ -1214,10 +1281,7 @@ async function renderLoopVideo({
           .outputOptions([
             '-t', String(effectiveTargetDuration),
             '-c:v', 'copy',
-            '-c:a', 'aac',
-            '-b:a', '192k',
-            '-ar', '44100',
-            '-ac', '2',
+            '-c:a', 'copy',
             '-map', '0:v:0',
             '-map', '1:a:0'
           , '-movflags', '+faststart'])
@@ -1274,6 +1338,10 @@ async function loopVideoFast({ inputPath, outputPath, loopCount, onProgress }) {
   if (!loopCount || loopCount < 2) {
     throw new Error('Loop count must be at least 2');
   }
+
+  if (outputPath) {
+    fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+  }
   
   console.log(`[LOOP] Starting fast loop: ${loopCount}x`);
   
@@ -1287,7 +1355,7 @@ async function loopVideoFast({ inputPath, outputPath, loopCount, onProgress }) {
     
     // Create concat file
     const concatFile = path.join(workDir, 'concat.txt');
-    const concatContent = Array(loopCount).fill(`file '${inputPath.replace(/'/g, "'\\''")}'`).join('\n');
+    const concatContent = Array(loopCount).fill(`file '${formatConcatPath(inputPath)}'`).join('\n');
     fs.writeFileSync(concatFile, concatContent, 'utf8');
     
     // Use concat demuxer with stream copy
