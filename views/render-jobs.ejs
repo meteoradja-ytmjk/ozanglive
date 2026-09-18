@@ -2831,11 +2831,15 @@ if (el.createBtn) {
       }
 
       // Show notification
-      if (typeof showNotification === 'function') {
-        showNotification('Render Started', followAudio ? 'Render will follow audio duration' : `Render duration: ${h}h ${m}m`);
+      try {
+        if (typeof showNotification === 'function') {
+          showNotification('Render Started', followAudio ? 'Render will follow audio duration' : `Render duration: ${h}h ${m}m`);
+        }
+      } catch (notifErr) {
+        console.warn('[Notification] Ignored notification error:', notifErr);
       }
       if (typeof showToast === 'function') {
-        showToast('✓ Render berhasil dimulai!');
+        showToast('✓ Render berhasil dimulai!', 'success');
       }
 
       loadJobs();
@@ -3871,38 +3875,78 @@ async function processUpload() {
 let notificationPermission = false;
 
 async function requestNotificationPermission() {
-  if ('Notification' in window && Notification.permission === 'default') {
-    const permission = await Notification.requestPermission();
-    notificationPermission = permission === 'granted';
-    
-    if (notificationPermission) {
-      showBadge('Notifications enabled!', 'success');
+  try {
+    if ('Notification' in window && Notification.permission === 'default') {
+      const permission = await Notification.requestPermission();
+      notificationPermission = permission === 'granted';
+      
+      if (notificationPermission) {
+        showBadge('Notifications enabled!', 'success');
+      }
+    } else if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      notificationPermission = true;
     }
-  } else if (Notification.permission === 'granted') {
-    notificationPermission = true;
+  } catch (err) {
+    console.warn('[Notification] requestPermission failed or blocked:', err);
   }
 }
 
 function showNotification(title, body) {
-  // Browser notification
-  if (notificationPermission && 'Notification' in window) {
-    new Notification(title, {
-      body: body,
-      icon: '/images/logo.svg',
-      badge: '/images/logo.svg'
-    });
+  // Browser notification (safe against "Illegal constructor" on Android/mobile Chrome)
+  try {
+    if (notificationPermission && 'Notification' in window) {
+      if (navigator.serviceWorker && navigator.serviceWorker.ready) {
+        navigator.serviceWorker.ready.then(function(reg) {
+          if (reg && typeof reg.showNotification === 'function') {
+            reg.showNotification(title, {
+              body: body,
+              icon: '/images/logo.svg',
+              badge: '/images/logo.svg'
+            });
+          }
+        }).catch(function() {
+          try {
+            new Notification(title, {
+              body: body,
+              icon: '/images/logo.svg',
+              badge: '/images/logo.svg'
+            });
+          } catch (e) {
+            // Suppress illegal constructor
+          }
+        });
+      } else {
+        try {
+          new Notification(title, {
+            body: body,
+            icon: '/images/logo.svg',
+            badge: '/images/logo.svg'
+          });
+        } catch (e) {
+          // Suppress illegal constructor on mobile browsers
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[Notification] Browser notification suppressed:', err);
   }
   
-  // In-app toast
-  showToast(title + ': ' + body);
+  // In-app toast (always safe and visual)
+  try {
+    showToast(title + ': ' + body);
+  } catch (e) {}
 }
 
-function showToast(message) {
+function showToast(message, type = 'success') {
+  const isError = type === 'error' || (typeof message === 'string' && (message.startsWith('✗') || message.toLowerCase().includes('failed') || message.toLowerCase().includes('gagal') || message.toLowerCase().includes('error')));
+  const iconClass = isError ? 'ti ti-alert-circle text-red-400' : 'ti ti-check-circle text-primary';
+  const borderClass = isError ? 'border-red-500' : 'border-primary';
+  
   const toast = document.createElement('div');
-  toast.className = 'fixed top-4 right-4 bg-gray-800 border border-primary text-white px-4 py-3 rounded-lg shadow-lg z-50 animate-in';
+  toast.className = `fixed top-4 right-4 bg-gray-800 border ${borderClass} text-white px-4 py-3 rounded-lg shadow-lg z-50 animate-in`;
   toast.innerHTML = `
     <div class="flex items-center gap-2">
-      <i class="ti ti-check-circle text-primary"></i>
+      <i class="${iconClass}"></i>
       <span class="text-sm">${message}</span>
     </div>
   `;
@@ -3910,7 +3954,7 @@ function showToast(message) {
   
   setTimeout(() => {
     toast.remove();
-  }, 3000);
+  }, 4000);
 }
 
 function showBadge(message, type = 'info') {
