@@ -88,60 +88,6 @@ const calcProgress = (timemark, totalDuration, minPct = 5, maxPct = 99) => {
 };
 
 /**
- * Resolves quality, resolution, and encoder options.
- * If resolution is 'original' (default), stream copy (-c:v copy) is preserved for ultra-fast rendering.
- * If a target resolution or custom preset/bitrate is chosen, sets up proper scaling & encoding arguments.
- */
-function resolveRenderQuality(renderQuality = {}) {
-  const resolution = renderQuality?.resolution || 'original';
-  const speedPreset = renderQuality?.speedPreset || 'veryfast';
-  const bitrate = renderQuality?.bitrate || 'auto';
-
-  const resMap = {
-    '1080p': { width: 1920, height: 1080 },
-    '720p': { width: 1280, height: 720 },
-    '480p': { width: 854, height: 480 }
-  };
-
-  const isOriginal = resolution === 'original';
-  const targetRes = resMap[resolution] || null;
-
-  // Build aspect-ratio safe scaling filter with black padding letterboxes if needed
-  let scaleFilter = null;
-  if (!isOriginal && targetRes) {
-    scaleFilter = `scale=${targetRes.width}:${targetRes.height}:force_original_aspect_ratio=decrease,pad=${targetRes.width}:${targetRes.height}:(ow-iw)/2:(oh-ih)/2,setsar=1`;
-  }
-
-  const getVideoArgs = () => {
-    if (isOriginal) {
-      return ['-c:v', 'copy'];
-    }
-    const args = ['-c:v', 'libx264', '-preset', speedPreset];
-    if (bitrate && bitrate !== 'auto') {
-      const bInt = parseInt(bitrate, 10) || 3000;
-      args.push('-b:v', `${bInt}k`, '-maxrate', `${bInt}k`, '-bufsize', `${bInt * 2}k`);
-    } else {
-      args.push('-crf', '22');
-    }
-    if (scaleFilter) {
-      args.push('-vf', scaleFilter);
-    }
-    args.push('-pix_fmt', 'yuv420p');
-    return args;
-  };
-
-  return {
-    isOriginal,
-    resolution,
-    speedPreset,
-    bitrate,
-    targetRes,
-    scaleFilter,
-    getVideoArgs
-  };
-}
-
-/**
  * Apply audio visualizer overlay to a video+audio combination.
  * OPTIMIZED: Uses single-pass encoding with hardware-friendly settings.
  * 
@@ -151,23 +97,17 @@ function resolveRenderQuality(renderQuality = {}) {
  * @param {string} params.outputPath - Final output path
  * @param {number} params.duration - Target duration in seconds
  * @param {Object} params.visualizerSettings - Visualizer configuration from frontend
- * @param {Object} params.renderQuality - Quality/resolution configuration
  * @param {Function} params.onProgress - Progress callback (0-100)
  * @param {number} params.progressOffset - Starting progress percentage
  * @param {number} params.progressRange - Range of progress for this step
  * @returns {Promise<string>} Output path
  */
-async function applyVisualizerOverlay({ videoPath, audioPath, outputPath, duration, visualizerSettings, renderQuality = {}, onProgress, progressOffset = 0, progressRange = 100 }) {
-  const quality = resolveRenderQuality(renderQuality);
+async function applyVisualizerOverlay({ videoPath, audioPath, outputPath, duration, visualizerSettings, onProgress, progressOffset = 0, progressRange = 100 }) {
   // Get video dimensions for proper sizing
   const videoMeta = await ffprobeAsync(videoPath);
   const videoStream = videoMeta.streams?.find(s => s.codec_type === 'video');
-  let width = videoStream?.width || 1920;
-  let height = videoStream?.height || 1080;
-  if (!quality.isOriginal && quality.targetRes) {
-    width = quality.targetRes.width;
-    height = quality.targetRes.height;
-  }
+  const width = videoStream?.width || 1920;
+  const height = videoStream?.height || 1080;
   const fpsStr = videoStream?.r_frame_rate || '30/1';
   let fps = 30;
   try { 
@@ -179,7 +119,6 @@ async function applyVisualizerOverlay({ videoPath, audioPath, outputPath, durati
   console.log('[VISUALIZER] Applying visualizer overlay');
   console.log('[VISUALIZER] Type:', visualizerSettings.type);
   console.log('[VISUALIZER] Video:', width, 'x', height, '@', fps, 'fps');
-  console.log('[VISUALIZER] Quality preset:', quality.resolution, '| Speed:', quality.speedPreset, '| Bitrate:', quality.bitrate);
   console.log('[VISUALIZER] Duration:', duration, 's');
 
   // Build the FFmpeg filter complex (pass fps so filters render at correct rate)
@@ -197,17 +136,8 @@ async function applyVisualizerOverlay({ videoPath, audioPath, outputPath, durati
     '-map', outputMap,
     '-map', '1:a',
     '-c:v', 'libx264',
-    '-preset', quality.speedPreset
-  ];
-
-  if (quality.bitrate && quality.bitrate !== 'auto') {
-    const bInt = parseInt(quality.bitrate, 10) || 3000;
-    outputOptions.push('-b:v', `${bInt}k`, '-maxrate', `${bInt}k`, '-bufsize', `${bInt * 2}k`);
-  } else {
-    outputOptions.push('-crf', '22');
-  }
-
-  outputOptions.push(
+    '-preset', 'veryfast',
+    '-crf', '22',
     '-pix_fmt', 'yuv420p',
     '-r', String(fps),
     '-g', String(fps * 2),
@@ -222,7 +152,7 @@ async function applyVisualizerOverlay({ videoPath, audioPath, outputPath, durati
     '-max_muxing_queue_size', '4096',
     '-vsync', 'cfr',
     '-y'
-  );
+  ];
 
   await runFfmpeg((cmd) => {
     return cmd
@@ -266,7 +196,7 @@ async function applyVisualizerOverlay({ videoPath, audioPath, outputPath, durati
  * @param {Function} params.onProgress - Progress callback
  * @returns {Promise<string>} Output path
  */
-async function renderWithVisualizerSinglePass({ videoPaths, audioPaths, outputPath, duration, visualizerSettings, renderQuality = {}, workDir, onProgress }) {
+async function renderWithVisualizerSinglePass({ videoPaths, audioPaths, outputPath, duration, visualizerSettings, workDir, onProgress }) {
   if (!videoPaths?.length) throw new Error('Video diperlukan');
   if (!audioPaths?.length) throw new Error('Audio diperlukan untuk visualizer');
 
@@ -373,7 +303,6 @@ async function renderWithVisualizerSinglePass({ videoPaths, audioPaths, outputPa
     outputPath,
     duration,
     visualizerSettings,
-    renderQuality,
     onProgress: (pct) => onProgress?.(40 + Math.round((pct / 100) * 59)),
     progressOffset: 0,
     progressRange: 100
@@ -401,7 +330,6 @@ async function renderLoopVideo({
   visualizerPreset = 'none', 
   followAudioDuration = false,
   muteVideoAudio = false,
-  renderQuality = {},
   advancedAudio = {}, 
   watermark = null,
   overlayVideo = null,
@@ -415,7 +343,6 @@ async function renderLoopVideo({
     fs.mkdirSync(path.dirname(outputPath), { recursive: true });
   }
 
-  const quality = resolveRenderQuality(renderQuality);
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ozang-render-'));
   const startTime = Date.now();
   
@@ -472,7 +399,6 @@ async function renderLoopVideo({
           outputPath,
           duration: effectiveTargetDuration,
           visualizerSettings,
-          renderQuality,
           workDir,
           onProgress
         });
@@ -562,7 +488,6 @@ async function renderLoopVideo({
           outputPath: outputPath,
           duration: effectiveTargetDuration,
           visualizerSettings,
-          renderQuality,
           onProgress,
           progressOffset: 0,
           progressRange: 100
@@ -602,7 +527,7 @@ async function renderLoopVideo({
               .input(videoPath)
               .outputOptions([
                 '-t', String(effectiveTargetDuration),
-                ...quality.getVideoArgs(),
+                '-c:v', 'copy',
                 '-an', // Remove audio
                 '-movflags', '+faststart'
               ])
@@ -627,7 +552,7 @@ async function renderLoopVideo({
               .inputOptions(['-f', 'concat', '-safe', '0'])
               .outputOptions([
                 '-t', String(effectiveTargetDuration),
-                ...quality.getVideoArgs(),
+                '-c:v', 'copy',
                 '-an', // Remove audio
                 '-movflags', '+faststart'
               ])
@@ -693,7 +618,7 @@ async function renderLoopVideo({
             .input(audioPath)
             .outputOptions([
               '-t', String(effectiveTargetDuration),
-              ...quality.getVideoArgs(),
+              '-c:v', 'copy',
               '-c:a', 'aac',
               '-b:a', '192k',
               '-ar', '44100',
@@ -729,7 +654,7 @@ async function renderLoopVideo({
         const videoLines = Array(videoLoops).fill(`file '${formatConcatPath(videoPath)}'`);
         fs.writeFileSync(videoConcatFile, videoLines.join('\n'), 'utf8');
         
-        // Loop video with stream copy or preset encoding
+        // Loop video with stream copy
         const loopedVideo = path.join(workDir, 'video-looped.mp4');
         await runFfmpeg((cmd) => {
           return cmd
@@ -737,7 +662,7 @@ async function renderLoopVideo({
             .inputOptions(['-f', 'concat', '-safe', '0'])
             .outputOptions([
               '-t', String(effectiveTargetDuration),
-              ...quality.getVideoArgs(),
+              '-c:v', 'copy',
               '-movflags', '+faststart'
             ])
             .output(loopedVideo);
@@ -827,7 +752,7 @@ async function renderLoopVideo({
             .input(loopedAudio)
             .outputOptions([
               '-t', String(effectiveTargetDuration),
-              ...quality.getVideoArgs(),
+              '-c:v', 'copy',
               '-c:a', 'copy',
               '-map', '0:v:0',
               '-map', '1:a:0'
@@ -871,7 +796,7 @@ async function renderLoopVideo({
             .inputOptions(['-f', 'concat', '-safe', '0'])
             .outputOptions([
               '-t', String(effectiveTargetDuration),
-              ...quality.getVideoArgs(),
+              '-c:v', 'copy',
               '-movflags', '+faststart'
             ])
             .output(loopedVideo);
@@ -1027,7 +952,7 @@ async function renderLoopVideo({
             .inputOptions(['-f', 'concat', '-safe', '0'])
             .outputOptions([
               '-t', String(effectiveTargetDuration),
-              ...quality.getVideoArgs(),
+              '-c:v', 'copy',
               '-movflags', '+faststart'
             ])
             .output(loopedVideo);
@@ -1077,7 +1002,7 @@ async function renderLoopVideo({
             .input(mergedAudio)
             .outputOptions([
               '-t', String(effectiveTargetDuration),
-              ...quality.getVideoArgs(),
+              '-c:v', 'copy',
               '-c:a', 'copy',
               '-map', '0:v:0',
               '-map', '1:a:0',
@@ -1137,50 +1062,51 @@ async function renderLoopVideo({
     console.log('[RENDER] Step 1/3: Merging videos...');
     
     let videoCopySuccess = false;
-    if (quality.isOriginal) {
-      try {
-        // Check if source video has audio stream
-        const firstVideoMeta = await ffprobeAsync(videoPaths[0]).catch(() => null);
-        const hasAudioInVideo = firstVideoMeta?.streams?.some(s => s.codec_type === 'audio');
+    try {
+      // Check if source video has audio stream
+      const firstVideoMeta = await ffprobeAsync(videoPaths[0]).catch(() => null);
+      const hasAudioInVideo = firstVideoMeta?.streams?.some(s => s.codec_type === 'audio');
 
-        await runFfmpeg((cmd) => {
-          const opts = ['-t', String(effectiveTargetDuration), '-c:v', 'copy', '-movflags', '+faststart'];
-          if (muteVideoAudio || !hasAudioInVideo) {
-            opts.push('-an');
-          } else {
-            opts.push('-c:a', 'copy');
-          }
-          return cmd
-            .input(videoConcatFile)
-            .inputOptions(['-f', 'concat', '-safe', '0'])
-            .outputOptions(opts)
-            .output(mergedVideo);
-        }, {
-          onProgress: (p) => {
-            const progress = calcProgress(p.timemark, effectiveTargetDuration, 5, 40);
-            console.log(`[RENDER] Video progress: ${progress}% (${p.timemark}/${effectiveTargetDuration}s)`);
-            onProgress?.(progress);
-          }
-        });
-        // Verify output is valid (stream copy can silently produce bad files on mixed codecs)
-        if (fs.existsSync(mergedVideo) && fs.statSync(mergedVideo).size > 10000) {
-          videoCopySuccess = true;
-          console.log('[RENDER] Video stream copy ✓');
+      await runFfmpeg((cmd) => {
+        const opts = ['-t', String(effectiveTargetDuration), '-c:v', 'copy', '-movflags', '+faststart'];
+        if (muteVideoAudio || !hasAudioInVideo) {
+          opts.push('-an');
+        } else {
+          opts.push('-c:a', 'copy');
         }
-      } catch (copyErr) {
-        console.warn('[RENDER] Stream copy failed, falling back to re-encode:', copyErr.message);
+        return cmd
+          .input(videoConcatFile)
+          .inputOptions(['-f', 'concat', '-safe', '0'])
+          .outputOptions(opts)
+          .output(mergedVideo);
+      }, {
+        onProgress: (p) => {
+          const progress = calcProgress(p.timemark, effectiveTargetDuration, 5, 40);
+          console.log(`[RENDER] Video progress: ${progress}% (${p.timemark}/${effectiveTargetDuration}s)`);
+          onProgress?.(progress);
+        }
+      });
+      // Verify output is valid (stream copy can silently produce bad files on mixed codecs)
+      if (fs.existsSync(mergedVideo) && fs.statSync(mergedVideo).size > 10000) {
+        videoCopySuccess = true;
+        console.log('[RENDER] Video stream copy ✓');
       }
+    } catch (copyErr) {
+      console.warn('[RENDER] Stream copy failed, falling back to re-encode:', copyErr.message);
     }
     
     if (!videoCopySuccess) {
-      // Re-encode with quality & preset options
-      console.log(`[RENDER] Step 1/3: Merging videos (re-encode - ${quality.resolution} / ${quality.speedPreset})...`);
+      // Re-encode fallback with standard reliable settings
+      console.log('[RENDER] Step 1/3: Merging videos (re-encode fallback)...');
       if (fs.existsSync(mergedVideo)) fs.unlinkSync(mergedVideo);
       
       await runFfmpeg((cmd) => {
         const outputOptions = [
           '-t', String(effectiveTargetDuration),
-          ...quality.getVideoArgs(),
+          '-c:v', 'libx264',
+          '-preset', 'veryfast',
+          '-crf', '23',
+          '-pix_fmt', 'yuv420p',
           '-movflags', '+faststart'
         ];
         if (muteVideoAudio) {

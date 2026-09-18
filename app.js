@@ -4293,11 +4293,7 @@ app.post('/api/render/jobs', isAuthenticated, async (req, res) => {
       advancedAudio,
       watermark,
       overlayVideo,
-      visualizerSettings,
-      renderQuality,
-      renderResolution,
-      renderSpeedPreset,
-      renderBitrate
+      visualizerSettings
     } = req.body;
     
     if (!Array.isArray(videoIds) || videoIds.length === 0) {
@@ -4313,12 +4309,6 @@ app.post('/api/render/jobs', isAuthenticated, async (req, res) => {
     if (followAudioDuration && (!Array.isArray(audioIds) || audioIds.length === 0)) {
       return res.status(400).json({ success: false, message: 'Pilih minimal 1 audio jika mengikuti total durasi audio' });
     }
-
-    const resolvedQuality = renderQuality || {
-      resolution: renderResolution || 'original',
-      speedPreset: renderSpeedPreset || 'veryfast',
-      bitrate: renderBitrate || 'auto'
-    };
 
     const currentUserId = req.session.userId;
     let isUserAdmin = false;
@@ -4397,7 +4387,6 @@ app.post('/api/render/jobs', isAuthenticated, async (req, res) => {
           visualizerPreset: visualizerPreset || 'none',
           followAudioDuration: !!followAudioDuration,
           muteVideoAudio: !!muteVideoAudio,
-          renderQuality: resolvedQuality,
           advancedAudio: advancedAudio || {},
           watermark: watermark || null,
           overlayVideo: overlayVideo || null,
@@ -4502,8 +4491,7 @@ app.post('/api/render/jobs/schedule', isAuthenticated, async (req, res) => {
           targetAccountId, 
           autoUploadToYoutube, 
           followAudioDuration,
-          muteVideoAudio,
-          renderQuality
+          muteVideoAudio
         } = jobInfo;
         
         const computedSeconds = (parseInt(durationHours || 0, 10) * 3600) + (parseInt(durationMinutes || 0, 10) * 60);
@@ -4584,7 +4572,6 @@ app.post('/api/render/jobs/schedule', isAuthenticated, async (req, res) => {
               visualizerPreset: 'none',
               followAudioDuration: !!followAudioDuration,
               muteVideoAudio: !!muteVideoAudio,
-              renderQuality: renderQuality || { resolution: 'original', speedPreset: 'veryfast', bitrate: 'auto' },
               onProgress: async (progressPercent) => {
                 if (Number.isFinite(progressPercent) && progressPercent > 10) {
                   await RenderJob.update(job.id, { progress: progressPercent });
@@ -4721,21 +4708,20 @@ app.post('/api/render/jobs/:id/retry', isAuthenticated, async (req, res) => {
           throw new Error(`File audio tidak ditemukan di storage: ${missingAudios.map(p => path.basename(p)).join(', ')}`);
         }
 
-        await renderLoopVideo({
-          videoPaths,
-          audioPaths,
-          outputPath,
-          targetDurationSeconds: original.target_duration_seconds,
-          visualizerPreset: original.visualizer_preset || 'none',
-          followAudioDuration: !!original.follow_audio_duration,
-          muteVideoAudio: false,
-          renderQuality: { resolution: 'original', speedPreset: 'veryfast', bitrate: 'auto' },
-          onProgress: async (progressPercent) => {
-            if (Number.isFinite(progressPercent) && progressPercent > 10) {
-              await RenderJob.update(retryJob.id, { progress: progressPercent });
+          await renderLoopVideo({
+            videoPaths,
+            audioPaths,
+            outputPath,
+            targetDurationSeconds: original.target_duration_seconds,
+            visualizerPreset: original.visualizer_preset || 'none',
+            followAudioDuration: !!original.follow_audio_duration,
+            muteVideoAudio: false,
+            onProgress: async (progressPercent) => {
+              if (Number.isFinite(progressPercent) && progressPercent > 10) {
+                await RenderJob.update(retryJob.id, { progress: progressPercent });
+              }
             }
-          }
-        });
+          });
 
         const retryUpdate = { status: 'completed', progress: 100, output_path: `/uploads/videos/${outputName}` };
         if (original.auto_upload && original.target_account_id) {
