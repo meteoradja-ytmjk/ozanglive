@@ -541,7 +541,7 @@
 
 /* Delete button styling - Make it more visible */
 button[onclick*="deleteJob"] {
-  min-width: 56px;
+  min-width: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2728,39 +2728,45 @@ async function loadJobs(){
       
       ${j.error_message ? `<div class="text-xs text-red-400 bg-red-500/10 border border-red-500/30 rounded-xl p-2.5 mb-3 flex items-center gap-1.5"><i class="ti ti-alert-circle text-base flex-shrink-0"></i><span>${j.error_message}</span></div>` : ''}
       
-      <div class="flex gap-2">
+      <div class="w-full">
         ${j.output_path ? `
-          <div class="grid grid-cols-3 sm:flex sm:flex-wrap gap-1.5 w-full">
-            <a href="${j.output_path}" download class="px-2.5 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 text-xs rounded-xl transition-all font-semibold border border-emerald-500/30 active:scale-95 flex items-center justify-center gap-1" title="Download File Video">
-              <i class="ti ti-download text-sm"></i><span class="hidden sm:inline">Download</span>
+          <div class="grid grid-cols-5 gap-1.5 sm:gap-2 w-full">
+            <a href="${j.output_path}" download class="p-1.5 sm:p-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 rounded-xl transition-all font-semibold border border-emerald-500/30 active:scale-95 flex flex-col sm:flex-row items-center justify-center gap-1 min-w-0 overflow-hidden w-full shadow-sm text-center" title="Download File Video">
+              <i class="ti ti-download text-sm sm:text-base flex-shrink-0"></i>
+              <span class="text-[10px] sm:text-xs font-bold leading-tight truncate block max-w-full">Download</span>
             </a>
-            <button onclick="saveJobToGallery('${j.id}', this)" class="px-2.5 py-2 bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 text-xs rounded-xl transition-all font-semibold border border-purple-500/30 active:scale-95 flex items-center justify-center gap-1" title="Simpan ke Galeri Media">
-              <i class="ti ti-photo-plus text-sm"></i><span class="hidden sm:inline">Galeri</span>
+            <button type="button" onclick="saveJobToGallery('${j.id}', this)" class="p-1.5 sm:p-2 bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 rounded-xl transition-all font-semibold border border-purple-500/30 active:scale-95 flex flex-col sm:flex-row items-center justify-center gap-1 min-w-0 overflow-hidden w-full shadow-sm text-center" title="Simpan ke Galeri Media">
+              <i class="ti ti-photo-plus text-sm sm:text-base flex-shrink-0"></i>
+              <span class="text-[10px] sm:text-xs font-bold leading-tight truncate block max-w-full">Galeri</span>
             </button>
-            <button onclick="streamJobNow('${j.id}', this)" class="px-2.5 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 text-xs rounded-xl transition-all font-semibold border border-blue-500/30 active:scale-95 flex items-center justify-center gap-1" title="Siarkan Langsung ke Live Stream">
-              <i class="ti ti-broadcast text-sm"></i><span class="hidden sm:inline">Live Stream</span>
+            <button type="button" onclick="uploadJob('${j.id}')" class="p-1.5 sm:p-2 bg-primary/20 hover:bg-primary/30 text-primary rounded-xl transition-all font-semibold border border-primary/30 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col sm:flex-row items-center justify-center gap-1 min-w-0 overflow-hidden w-full shadow-sm text-center" id="uploadBtn-${j.id}" title="Upload ke YouTube">
+              <i class="ti ti-upload text-sm sm:text-base flex-shrink-0"></i>
+              <span class="text-[10px] sm:text-xs font-bold leading-tight truncate block max-w-full">Upload</span>
             </button>
-            <button onclick="uploadJob('${j.id}')" class="px-2.5 py-2 bg-primary/20 hover:bg-primary/30 text-primary text-xs rounded-xl transition-all font-semibold border border-primary/30 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1" id="uploadBtn-${j.id}" title="Upload ke YouTube">
-              <i class="ti ti-upload text-sm"></i><span class="hidden sm:inline">Upload</span>
+            <button type="button" onclick="openLoopModal('${j.id}')" class="p-1.5 sm:p-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 rounded-xl transition-all font-semibold border border-amber-500/30 active:scale-95 flex flex-col sm:flex-row items-center justify-center gap-1 min-w-0 overflow-hidden w-full shadow-sm text-center" title="Loop Fast Copy Video">
+              <i class="ti ti-repeat text-sm sm:text-base flex-shrink-0"></i>
+              <span class="text-[10px] sm:text-xs font-bold leading-tight truncate block max-w-full">Loop</span>
             </button>
-            <button onclick="openLoopModal('${j.id}')" class="px-2.5 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 text-xs rounded-xl transition-all font-semibold border border-amber-500/30 active:scale-95 flex items-center justify-center gap-1" title="Loop Fast Copy Video">
-              <i class="ti ti-repeat text-sm"></i><span class="hidden sm:inline">Loop</span>
-            </button>
-            <button onclick="deleteJob('${j.id}', this)" class="px-2.5 py-2 bg-red-500/15 hover:bg-red-500/25 text-red-400 text-xs font-bold tracking-wide rounded-xl transition-all border border-red-500/30 hover:border-red-500/50 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1" title="Delete Job">
-              <i class="ti ti-trash text-sm"></i><span class="hidden sm:inline">DEL</span>
+            <button type="button" onclick="deleteJob('${j.id}', this)" class="p-1.5 sm:p-2 bg-red-500/15 hover:bg-red-500/25 text-red-400 rounded-xl transition-all font-bold border border-red-500/30 hover:border-red-500/50 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col sm:flex-row items-center justify-center gap-1 min-w-0 overflow-hidden w-full shadow-sm text-center" title="Hapus Job & Video">
+              <i class="ti ti-trash text-sm sm:text-base flex-shrink-0"></i>
+              <span class="text-[10px] sm:text-xs font-bold leading-tight truncate block max-w-full">Hapus</span>
             </button>
           </div>
         ` : j.status === 'failed' ? `
-          <button onclick="retryJob('${j.id}', this)" class="flex-1 px-3.5 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 text-xs rounded-xl transition-all font-semibold border border-amber-500/30 active:scale-95 flex items-center justify-center gap-1" title="Retry Render">
-            <i class="ti ti-reload text-sm"></i>Retry
-          </button>
-          <button onclick="deleteJob('${j.id}', this)" class="px-4 py-2 bg-red-500/15 hover:bg-red-500/25 text-red-400 text-xs font-bold tracking-wide rounded-xl transition-all border border-red-500/30 hover:border-red-500/50 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1" title="Delete">
-            <i class="ti ti-trash text-sm"></i>DEL
-          </button>
+          <div class="flex gap-2 w-full">
+            <button onclick="retryJob('${j.id}', this)" class="flex-1 p-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 text-xs rounded-xl transition-all font-semibold border border-amber-500/30 active:scale-95 flex items-center justify-center gap-1.5" title="Retry Render">
+              <i class="ti ti-reload text-sm"></i><span>Coba Lagi</span>
+            </button>
+            <button onclick="deleteJob('${j.id}', this)" class="p-2 px-4 bg-red-500/15 hover:bg-red-500/25 text-red-400 text-xs font-bold rounded-xl transition-all border border-red-500/30 hover:border-red-500/50 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1" title="Hapus Job">
+              <i class="ti ti-trash text-sm"></i><span>Hapus</span>
+            </button>
+          </div>
         ` : `
-          <button onclick="deleteJob('${j.id}', this)" class="flex-1 px-4 py-2 bg-red-500/15 hover:bg-red-500/25 text-red-400 text-xs font-bold tracking-wide rounded-xl transition-all border border-red-500/30 hover:border-red-500/50 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1" title="Delete">
-            <i class="ti ti-trash text-sm"></i>DEL
-          </button>
+          <div class="flex gap-2 w-full">
+            <button onclick="deleteJob('${j.id}', this)" class="flex-1 p-2 bg-red-500/15 hover:bg-red-500/25 text-red-400 text-xs font-bold rounded-xl transition-all border border-red-500/30 hover:border-red-500/50 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1" title="Hapus Job">
+              <i class="ti ti-trash text-sm"></i><span>Hapus</span>
+            </button>
+          </div>
         `}
       </div>
     </div>
