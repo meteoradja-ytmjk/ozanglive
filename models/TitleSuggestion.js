@@ -15,6 +15,8 @@ class TitleSuggestion {
       return Promise.reject(new Error('user_id and title are required'));
     }
 
+    const cleanFolderId = (folder_id && folder_id !== 'null' && folder_id !== 'undefined' && folder_id !== 'unassigned' && folder_id !== 'all' && folder_id !== '') ? folder_id : null;
+
     return new Promise((resolve, reject) => {
       // Get max sort_order for this user
       db.get(
@@ -31,11 +33,11 @@ class TitleSuggestion {
           db.run(
             `INSERT INTO title_suggestions (id, user_id, title, stream_key_id, folder_id, use_count, sort_order, is_pinned)
              VALUES (?, ?, ?, ?, ?, 0, ?, 0)`,
-            [id, user_id, title.trim(), stream_key_id, folder_id, sortOrder],
+            [id, user_id, title.trim(), stream_key_id, cleanFolderId, sortOrder],
             function (err) {
               if (err) {
                 if (err.message.includes('UNIQUE constraint failed')) {
-                  return reject(new Error('Title already exists'));
+                  return reject(new Error('Judul sudah ada di folder ini'));
                 }
                 console.error('Error creating title suggestion:', err.message);
                 return reject(err);
@@ -45,7 +47,7 @@ class TitleSuggestion {
                 user_id, 
                 title: title.trim(), 
                 stream_key_id,
-                folder_id,
+                folder_id: cleanFolderId,
                 use_count: 0, 
                 sort_order: sortOrder,
                 is_pinned: 0
@@ -58,8 +60,9 @@ class TitleSuggestion {
   }
 
   /**
-   * Import multiple title suggestions for a user.
-   * Duplicate titles are skipped so a .txt file can be re-imported safely.
+   * Import multiple title suggestions for a user into a specific folder or unassigned.
+   * Duplicate titles within the same folder are skipped.
+   * Titles in other folders are completely untouched.
    * @param {Object} data - Import data
    * @param {string} data.user_id - User ID
    * @param {Array<string>} data.titles - Titles to import
@@ -78,7 +81,7 @@ class TitleSuggestion {
       return Promise.reject(new Error('titles are required'));
     }
 
-    const cleanFolderId = (folder_id && folder_id !== 'null' && folder_id !== 'undefined' && folder_id !== 'unassigned' && folder_id !== '') ? folder_id : null;
+    const cleanFolderId = (folder_id && folder_id !== 'null' && folder_id !== 'undefined' && folder_id !== 'unassigned' && folder_id !== 'all' && folder_id !== '') ? folder_id : null;
     const cleanStreamKeyId = (stream_key_id && stream_key_id !== 'null' && stream_key_id !== 'undefined' && stream_key_id !== '') ? stream_key_id : null;
 
     const uniqueTitles = [];
@@ -99,72 +102,109 @@ class TitleSuggestion {
     }
 
     return new Promise((resolve, reject) => {
-      db.get(
-        `SELECT MAX(sort_order) as max_order FROM title_suggestions WHERE user_id = ?`,
-        [user_id],
-        (err, row) => {
-          if (err) {
-            console.error('Error getting max sort_order for title import:', err.message);
-            return reject(err);
+      // 1. Fetch existing titles ONLY within the target folder scope (or unassigned scope)
+      let checkSql = 'SELECT LOWER(TRIM(title)) as title_lower FROM title_suggestions WHERE user_id = ?';
+      const checkParams = [user_id];
+      if (cleanFolderId) {
+        checkSql += ' AND folder_id = ?';
+        checkParams.push(cleanFolderId);
+      } else {
+        checkSql += ' AND (folder_id IS NULL OR folder_id = "" OR folder_id = "unassigned")';
+      }
+
+      db.all(checkSql, checkParams, (checkErr, existingRows) => {
+        if (checkErr) {
+          console.error('Error checking existing titles for import:', checkErr.message);
+          return reject(checkErr);
+        }
+
+        const existingSet = new Set((existingRows || []).map(r => r.title_lower));
+
+        // Filter out titles that already exist in this specific folder
+        const toInsert = [];
+        let duplicateInFolderCount = 0;
+
+        uniqueTitles.forEach((t) => {
+          if (existingSet.has(t.toLowerCase())) {
+            duplicateInFolderCount += 1;
+          } else {
+            toInsert.push(t);
           }
+        });
 
-          const insertSql = `INSERT INTO title_suggestions (id, user_id, title, stream_key_id, folder_id, use_count, sort_order, is_pinned)
-             VALUES (?, ?, ?, ?, ?, 0, ?, 0)
-             ON CONFLICT(user_id, title) DO UPDATE SET
-               folder_id = CASE WHEN excluded.folder_id IS NOT NULL THEN excluded.folder_id ELSE title_suggestions.folder_id END,
-               stream_key_id = COALESCE(excluded.stream_key_id, title_suggestions.stream_key_id),
-               updated_at = CURRENT_TIMESTAMP`;
+        const initialSkipped = (titles.length - uniqueTitles.length) + duplicateInFolderCount;
 
-          let sortOrder = row?.max_order || 0;
-          let imported = 0;
-          let skipped = titles.length - uniqueTitles.length;
-
-          db.serialize(() => {
-            db.run('BEGIN TRANSACTION');
-
-            const insertNext = (index) => {
-              if (index >= uniqueTitles.length) {
-                db.run('COMMIT', (commitErr) => {
-                  if (commitErr) {
-                    console.error('Error committing title import:', commitErr.message);
-                    return reject(commitErr);
-                  }
-
-                  resolve({
-                    imported,
-                    skipped,
-                    total: titles.length
-                  });
-                });
-                return;
-              }
-
-              sortOrder += 1;
-              db.run(
-                insertSql,
-                [uuidv4(), user_id, uniqueTitles[index], cleanStreamKeyId, cleanFolderId, sortOrder],
-                function (insertErr) {
-                  if (insertErr) {
-                    db.run('ROLLBACK');
-                    console.error('Error importing title suggestion:', insertErr.message);
-                    return reject(insertErr);
-                  }
-
-                  if (this.changes > 0) {
-                    imported += 1;
-                  } else {
-                    skipped += 1;
-                  }
-
-                  insertNext(index + 1);
-                }
-              );
-            };
-
-            insertNext(0);
+        if (toInsert.length === 0) {
+          return resolve({
+            imported: 0,
+            skipped: titles.length,
+            total: titles.length
           });
         }
-      );
+
+        db.get(
+          `SELECT MAX(sort_order) as max_order FROM title_suggestions WHERE user_id = ?`,
+          [user_id],
+          (err, row) => {
+            if (err) {
+              console.error('Error getting max sort_order for title import:', err.message);
+              return reject(err);
+            }
+
+            const insertSql = `INSERT OR IGNORE INTO title_suggestions (id, user_id, title, stream_key_id, folder_id, use_count, sort_order, is_pinned)
+               VALUES (?, ?, ?, ?, ?, 0, ?, 0)`;
+
+            let sortOrder = row?.max_order || 0;
+            let imported = 0;
+            let skipped = initialSkipped;
+
+            db.serialize(() => {
+              db.run('BEGIN TRANSACTION');
+
+              const insertNext = (index) => {
+                if (index >= toInsert.length) {
+                  db.run('COMMIT', (commitErr) => {
+                    if (commitErr) {
+                      console.error('Error committing title import:', commitErr.message);
+                      return reject(commitErr);
+                    }
+
+                    resolve({
+                      imported,
+                      skipped,
+                      total: titles.length
+                    });
+                  });
+                  return;
+                }
+
+                sortOrder += 1;
+                db.run(
+                  insertSql,
+                  [uuidv4(), user_id, toInsert[index], cleanStreamKeyId, cleanFolderId, sortOrder],
+                  function (insertErr) {
+                    if (insertErr) {
+                      db.run('ROLLBACK');
+                      console.error('Error importing title suggestion:', insertErr.message);
+                      return reject(insertErr);
+                    }
+
+                    if (this.changes > 0) {
+                      imported += 1;
+                    } else {
+                      skipped += 1;
+                    }
+
+                    insertNext(index + 1);
+                  }
+                );
+              };
+
+              insertNext(0);
+            });
+          }
+        );
+      });
     });
   }
 
@@ -268,12 +308,15 @@ class TitleSuggestion {
    */
   static moveToFolder(id, userId, folderId) {
     return new Promise((resolve, reject) => {
-      const cleanFolderId = (folderId && folderId !== 'null' && folderId !== 'undefined' && folderId !== 'unassigned') ? folderId : null;
+      const cleanFolderId = (folderId && folderId !== 'null' && folderId !== 'undefined' && folderId !== 'unassigned' && folderId !== 'all' && folderId !== '') ? folderId : null;
       db.run(
         `UPDATE title_suggestions SET folder_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?`,
         [cleanFolderId, id, userId],
         function(err) {
           if (err) {
+            if (err.message.includes('UNIQUE constraint failed')) {
+              return reject(new Error('Judul yang sama sudah ada di folder tujuan'));
+            }
             console.error('Error moving title to folder:', err.message);
             return reject(err);
           }

@@ -9382,7 +9382,8 @@ async function addNewTitle() {
  * Resolve target folder for title actions.
  */
 function getTitleManagerTargetFolderId() {
-  if (selectedTitleFolderId && selectedTitleFolderId !== 'unassigned') return selectedTitleFolderId;
+  if (selectedTitleFolderId === 'unassigned') return null;
+  if (selectedTitleFolderId && selectedTitleFolderId !== 'all') return selectedTitleFolderId;
   if (titleAutoRotationEnabled && titleRotationFolderId) return titleRotationFolderId;
   return null;
 }

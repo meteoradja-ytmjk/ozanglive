@@ -12406,8 +12406,8 @@ app.post('/api/title-suggestions', isAuthenticated, async (req, res) => {
     res.json({ success: true, title: newTitle });
   } catch (error) {
     console.error('Error creating title suggestion:', error);
-    if (error.message.includes('already exists')) {
-      return res.status(400).json({ success: false, error: 'Title already exists' });
+    if (error.message.includes('already exists') || error.message.includes('sudah ada')) {
+      return res.status(400).json({ success: false, error: error.message });
     }
     res.status(500).json({ success: false, error: 'Failed to create title' });
   }
@@ -12554,7 +12554,9 @@ app.post('/api/title-suggestions/:id/move', isAuthenticated, async (req, res) =>
     }
     res.json({ success: true });
   } catch (error) {
-    console.error('Error moving title to folder:', error);
+    if (error.message.includes('sudah ada') || error.message.includes('already exists')) {
+      return res.status(400).json({ success: false, error: error.message });
+    }
     res.status(500).json({ success: false, error: 'Failed to move title' });
   }
 });

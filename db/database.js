@@ -20,10 +20,16 @@ const REQUIRED_TABLES = [
   'broadcast_templates', 'recurring_schedules', 'branding_settings'
 ];
 
+let dbConnectResolve;
+const dbConnectPromise = new Promise((resolve) => {
+  dbConnectResolve = resolve;
+});
+
 const db = new sqlite3.Database(dbPath, (err) => {
   if (err) {
     console.error('Error connecting to database:', err.message);
     dbInitError = err;
+    dbConnectResolve();
   } else {
     // Optimize SQLite for better performance and stability
     db.serialize(() => {
@@ -38,7 +44,9 @@ const db = new sqlite3.Database(dbPath, (err) => {
       db.run('PRAGMA locking_mode = NORMAL'); // Allow multiple connections
     });
 
-    dbInitPromise = createTables();
+    dbInitPromise = createTables().finally(() => {
+      dbConnectResolve();
+    });
   }
 });
 
@@ -48,6 +56,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
  * @returns {Promise<void>}
  */
 async function waitForDbInit() {
+  await dbConnectPromise;
   if (dbInitError) {
     throw new Error(`Database connection failed: ${dbInitError.message}`);
   }
@@ -499,34 +508,6 @@ async function createCoreTablesAsync() {
   // Add template_id column to existing recurring_schedules table if not exists
   await runTableQuery(`ALTER TABLE recurring_schedules ADD COLUMN template_id TEXT REFERENCES broadcast_templates(id) ON DELETE SET NULL`, 'recurring_schedules.template_id_column', true);
 
-  // Create title_suggestions table for managing potential broadcast titles
-  await runTableQuery(`CREATE TABLE IF NOT EXISTS title_suggestions (
-    id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL,
-    title TEXT NOT NULL,
-    category TEXT DEFAULT 'general',
-    use_count INTEGER DEFAULT 0,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    UNIQUE(user_id, title)
-  )`, 'title_suggestions');
-
-  await runTableQuery(`CREATE INDEX IF NOT EXISTS idx_title_suggestions_user 
-          ON title_suggestions(user_id)`, 'title_suggestions.user_index');
-
-  await runTableQuery(`CREATE INDEX IF NOT EXISTS idx_title_suggestions_category 
-          ON title_suggestions(user_id, category)`, 'title_suggestions.category_index');
-
-  // Add is_pinned column for pinning specific title
-  await runTableQuery(`ALTER TABLE title_suggestions ADD COLUMN is_pinned INTEGER DEFAULT 0`, 'title_suggestions.is_pinned');
-
-  // Add stream_key_id column for binding title to stream key
-  await runTableQuery(`ALTER TABLE title_suggestions ADD COLUMN stream_key_id TEXT`, 'title_suggestions.stream_key_id');
-
-  // Add sort_order column for manual ordering
-  await runTableQuery(`ALTER TABLE title_suggestions ADD COLUMN sort_order INTEGER DEFAULT 0`, 'title_suggestions.sort_order');
-
   // Create title_folders table for organizing titles into folders
   await runTableQuery(`CREATE TABLE IF NOT EXISTS title_folders (
     id TEXT PRIMARY KEY,
@@ -543,11 +524,49 @@ async function createCoreTablesAsync() {
   await runTableQuery(`CREATE INDEX IF NOT EXISTS idx_title_folders_user 
           ON title_folders(user_id)`, 'title_folders.user_index');
 
-  // Add folder_id column to title_suggestions for folder organization
+  // Create title_suggestions table for managing potential broadcast titles
+  await runTableQuery(`CREATE TABLE IF NOT EXISTS title_suggestions (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    category TEXT DEFAULT 'general',
+    use_count INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    is_pinned INTEGER DEFAULT 0,
+    stream_key_id TEXT,
+    sort_order INTEGER DEFAULT 0,
+    folder_id TEXT REFERENCES title_folders(id) ON DELETE SET NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  )`, 'title_suggestions');
+
+  // Add columns if they were missing on older schemas
+  await runTableQuery(`ALTER TABLE title_suggestions ADD COLUMN is_pinned INTEGER DEFAULT 0`, 'title_suggestions.is_pinned');
+  await runTableQuery(`ALTER TABLE title_suggestions ADD COLUMN stream_key_id TEXT`, 'title_suggestions.stream_key_id');
+  await runTableQuery(`ALTER TABLE title_suggestions ADD COLUMN sort_order INTEGER DEFAULT 0`, 'title_suggestions.sort_order');
   await runTableQuery(`ALTER TABLE title_suggestions ADD COLUMN folder_id TEXT REFERENCES title_folders(id) ON DELETE SET NULL`, 'title_suggestions.folder_id');
+
+  // Check and migrate title_suggestions if it still has the old global UNIQUE(user_id, title) constraint
+  await migrateTitleSuggestionsTable();
+
+  await runTableQuery(`CREATE INDEX IF NOT EXISTS idx_title_suggestions_user 
+          ON title_suggestions(user_id)`, 'title_suggestions.user_index');
+
+  await runTableQuery(`CREATE INDEX IF NOT EXISTS idx_title_suggestions_category 
+          ON title_suggestions(user_id, category)`, 'title_suggestions.category_index');
 
   await runTableQuery(`CREATE INDEX IF NOT EXISTS idx_title_suggestions_folder 
           ON title_suggestions(folder_id)`, 'title_suggestions.folder_index');
+
+  // Scoped unique index: title is unique within the same folder
+  await runTableQuery(`CREATE UNIQUE INDEX IF NOT EXISTS idx_title_suggestions_folder_unique 
+          ON title_suggestions(user_id, folder_id, title) 
+          WHERE folder_id IS NOT NULL AND folder_id != ''`, 'title_suggestions.folder_unique_index');
+
+  // Scoped unique index: title is unique for unassigned titles (no folder)
+  await runTableQuery(`CREATE UNIQUE INDEX IF NOT EXISTS idx_title_suggestions_unassigned_unique 
+          ON title_suggestions(user_id, title) 
+          WHERE folder_id IS NULL OR folder_id = ''`, 'title_suggestions.unassigned_unique_index');
 
   // Create youtube_broadcast_settings table for storing broadcast-specific settings
   await runTableQuery(`CREATE TABLE IF NOT EXISTS youtube_broadcast_settings (
@@ -785,6 +804,114 @@ function safeDbRun(sql, params = [], timeoutMs = 30000) {
     });
   });
 }
+
+/**
+ * Migrate title_suggestions table to remove global UNIQUE(user_id, title)
+ * and allow identical titles across different folders.
+ */
+function migrateTitleSuggestionsTable() {
+  return new Promise((resolve) => {
+    db.get("SELECT sql FROM sqlite_master WHERE type='table' AND name='title_suggestions'", (err, row) => {
+      if (err) {
+        console.error('[Migration] Error checking title_suggestions schema:', err.message);
+        return resolve();
+      }
+
+      if (!row || !row.sql) {
+        return resolve();
+      }
+
+      // Check if table contains UNIQUE(user_id, title)
+      const hasOldUniqueConstraint = /UNIQUE\s*\(\s*user_id\s*,\s*title\s*\)/i.test(row.sql);
+      if (!hasOldUniqueConstraint) {
+        return resolve();
+      }
+
+      console.log('[Migration] Migrating title_suggestions to remove global UNIQUE(user_id, title)...');
+
+      db.serialize(() => {
+        db.run('PRAGMA foreign_keys = OFF');
+        db.run('BEGIN TRANSACTION');
+
+        db.run('ALTER TABLE title_suggestions RENAME TO title_suggestions_old', (alterErr) => {
+          if (alterErr) {
+            console.error('[Migration] Failed to rename title_suggestions:', alterErr.message);
+            db.run('ROLLBACK');
+            db.run('PRAGMA foreign_keys = ON');
+            return resolve();
+          }
+
+          const createSql = `CREATE TABLE title_suggestions (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            title TEXT NOT NULL,
+            category TEXT DEFAULT 'general',
+            use_count INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            is_pinned INTEGER DEFAULT 0,
+            stream_key_id TEXT,
+            sort_order INTEGER DEFAULT 0,
+            folder_id TEXT REFERENCES title_folders(id) ON DELETE SET NULL,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+          )`;
+
+          db.run(createSql, (createErr) => {
+            if (createErr) {
+              console.error('[Migration] Failed to create new title_suggestions table:', createErr.message);
+              db.run('ROLLBACK');
+              db.run('PRAGMA foreign_keys = ON');
+              return resolve();
+            }
+
+            const copySql = `INSERT INTO title_suggestions (
+              id, user_id, title, category, use_count, created_at, updated_at, is_pinned, stream_key_id, sort_order, folder_id
+            ) SELECT 
+              id, user_id, title,
+              COALESCE(category, 'general'),
+              COALESCE(use_count, 0),
+              COALESCE(created_at, CURRENT_TIMESTAMP),
+              COALESCE(updated_at, CURRENT_TIMESTAMP),
+              COALESCE(is_pinned, 0),
+              stream_key_id,
+              COALESCE(sort_order, 0),
+              folder_id
+            FROM title_suggestions_old`;
+
+            db.run(copySql, (copyErr) => {
+              if (copyErr) {
+                console.error('[Migration] Failed to copy title_suggestions data:', copyErr.message);
+                db.run('ROLLBACK');
+                db.run('PRAGMA foreign_keys = ON');
+                return resolve();
+              }
+
+              db.run('DROP TABLE title_suggestions_old', (dropErr) => {
+                if (dropErr) {
+                  console.error('[Migration] Failed to drop title_suggestions_old:', dropErr.message);
+                  db.run('ROLLBACK');
+                  db.run('PRAGMA foreign_keys = ON');
+                  return resolve();
+                }
+
+                db.run('COMMIT', (commitErr) => {
+                  db.run('PRAGMA foreign_keys = ON');
+                  if (commitErr) {
+                    console.error('[Migration] Failed to commit migration:', commitErr.message);
+                    return resolve();
+                  }
+                  console.log('[Migration] Successfully migrated title_suggestions table!');
+                  resolve();
+                });
+              });
+            });
+          });
+        });
+      });
+    });
+  });
+}
+
 function checkIfUsersExist() {
   return new Promise((resolve, reject) => {
     // First check if users table exists
