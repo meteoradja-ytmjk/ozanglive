@@ -765,52 +765,51 @@ button[onclick*="deleteJob"] {
                 <span>Preset Durasi Cepat:</span>
                 <span id="currentDurationDisplay" class="text-primary font-semibold">0m</span>
               </div>
-              <div class="flex flex-wrap gap-1.5" id="durationPresetsContainer">
-                <button type="button" onclick="setDurationPreset(0, 15, this)" class="duration-preset-btn px-2.5 py-1 text-xs rounded-lg bg-dark-750 hover:bg-primary/20 text-gray-300 hover:text-primary border border-gray-700/70 transition-all font-medium">15m</button>
-                <button type="button" onclick="setDurationPreset(0, 30, this)" class="duration-preset-btn px-2.5 py-1 text-xs rounded-lg bg-dark-750 hover:bg-primary/20 text-gray-300 hover:text-primary border border-gray-700/70 transition-all font-medium">30m</button>
-                <button type="button" onclick="setDurationPreset(1, 0, this)" class="duration-preset-btn px-2.5 py-1 text-xs rounded-lg bg-dark-750 hover:bg-primary/20 text-gray-300 hover:text-primary border border-gray-700/70 transition-all font-medium">1h</button>
-                <button type="button" onclick="setDurationPreset(2, 0, this)" class="duration-preset-btn px-2.5 py-1 text-xs rounded-lg bg-dark-750 hover:bg-primary/20 text-gray-300 hover:text-primary border border-gray-700/70 transition-all font-medium">2h</button>
-                <button type="button" onclick="setDurationPreset(4, 0, this)" class="duration-preset-btn px-2.5 py-1 text-xs rounded-lg bg-dark-750 hover:bg-primary/20 text-gray-300 hover:text-primary border border-gray-700/70 transition-all font-medium">4h</button>
-                <button type="button" onclick="setDurationPreset(8, 0, this)" class="duration-preset-btn px-2.5 py-1 text-xs rounded-lg bg-dark-750 hover:bg-primary/20 text-gray-300 hover:text-primary border border-gray-700/70 transition-all font-medium">8h</button>
-                <button type="button" onclick="setDurationPreset(0, 0, this)" class="duration-preset-btn px-2 py-1 text-xs rounded-lg bg-dark-750 hover:bg-red-500/20 text-gray-400 hover:text-red-400 border border-gray-700/70 transition-all font-medium" title="Reset durasi">Reset</button>
+              <div class="grid grid-cols-6 gap-1 sm:gap-1.5 w-full" id="durationPresetsContainer">
+                <button type="button" onclick="setDurationPreset(1, 0, this)" class="duration-preset-btn py-1.5 px-1 text-center text-xs rounded-lg bg-dark-750 hover:bg-primary/20 text-gray-300 hover:text-primary border border-gray-700/70 transition-all font-medium whitespace-nowrap truncate">1 Jam</button>
+                <button type="button" onclick="setDurationPreset(2, 0, this)" class="duration-preset-btn py-1.5 px-1 text-center text-xs rounded-lg bg-dark-750 hover:bg-primary/20 text-gray-300 hover:text-primary border border-gray-700/70 transition-all font-medium whitespace-nowrap truncate">2 Jam</button>
+                <button type="button" onclick="setDurationPreset(3, 0, this)" class="duration-preset-btn py-1.5 px-1 text-center text-xs rounded-lg bg-dark-750 hover:bg-primary/20 text-gray-300 hover:text-primary border border-gray-700/70 transition-all font-medium whitespace-nowrap truncate">3 Jam</button>
+                <button type="button" onclick="setDurationPreset(4, 0, this)" class="duration-preset-btn py-1.5 px-1 text-center text-xs rounded-lg bg-dark-750 hover:bg-primary/20 text-gray-300 hover:text-primary border border-gray-700/70 transition-all font-medium whitespace-nowrap truncate">4 Jam</button>
+                <button type="button" onclick="setDurationPreset(5, 0, this)" class="duration-preset-btn py-1.5 px-1 text-center text-xs rounded-lg bg-dark-750 hover:bg-primary/20 text-gray-300 hover:text-primary border border-gray-700/70 transition-all font-medium whitespace-nowrap truncate">5 Jam</button>
+                <button type="button" onclick="setDurationPreset(0, 0, this)" class="duration-preset-btn py-1.5 px-1 text-center text-xs rounded-lg bg-dark-750 hover:bg-red-500/20 text-gray-400 hover:text-red-400 border border-gray-700/70 transition-all font-medium whitespace-nowrap truncate" title="Reset durasi">Reset</button>
               </div>
             </div>
           </div>
           
           <!-- Right Column: Audio Options -->
-          <div class="space-y-3">
-            <div class="flex items-center gap-2 mb-2">
+          <div class="space-y-2">
+            <div class="flex items-center gap-2 mb-1.5">
               <i class="ti ti-settings text-primary"></i>
               <span class="text-sm font-semibold text-white">Audio Options</span>
             </div>
             
-            <div class="space-y-2.5">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <!-- Follow Audio Duration -->
-              <div class="bg-dark-750/80 rounded-xl p-3 border border-gray-700/60 hover:border-gray-600 transition-all">
-                <label class="flex items-center gap-3 cursor-pointer">
+              <div class="bg-dark-750/80 rounded-xl p-3 border border-gray-700/60 hover:border-gray-600 transition-all flex items-center">
+                <label class="flex items-start gap-2.5 cursor-pointer w-full">
                   <input type="checkbox" id="followAudioDuration" 
-                    class="w-5 h-5 rounded-md border-gray-600 text-primary focus:ring-2 focus:ring-primary cursor-pointer flex-shrink-0">
-                  <div class="flex-1">
-                    <div class="flex items-center gap-2">
-                      <i class="ti ti-music text-primary text-sm"></i>
-                      <span class="text-sm font-medium text-white">Follow Audio Duration</span>
+                    class="mt-0.5 w-4 h-4 rounded-md border-gray-600 text-primary focus:ring-2 focus:ring-primary cursor-pointer flex-shrink-0">
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-1.5">
+                      <i class="ti ti-music text-primary text-sm flex-shrink-0"></i>
+                      <span class="text-xs sm:text-sm font-semibold text-white truncate">Follow Audio</span>
                     </div>
-                    <p class="text-xs text-gray-400 mt-0.5">Auto-match total audio length</p>
+                    <p class="text-[11px] text-gray-400 mt-0.5 leading-snug">Samakan total durasi video dengan audio</p>
                   </div>
                 </label>
               </div>
               
               <!-- Mute Video Audio -->
-              <div class="bg-dark-750/80 rounded-xl p-3 border border-gray-700/60 hover:border-gray-600 transition-all">
-                <label class="flex items-center gap-3 cursor-pointer">
+              <div class="bg-dark-750/80 rounded-xl p-3 border border-gray-700/60 hover:border-gray-600 transition-all flex items-center">
+                <label class="flex items-start gap-2.5 cursor-pointer w-full">
                   <input type="checkbox" id="muteVideoAudio" 
-                    class="w-5 h-5 rounded-md border-gray-600 text-red-500 focus:ring-2 focus:ring-red-500 cursor-pointer flex-shrink-0">
-                  <div class="flex-1">
-                    <div class="flex items-center gap-2">
-                      <i class="ti ti-volume-off text-red-400 text-sm"></i>
-                      <span class="text-sm font-medium text-white">Mute Video Audio</span>
+                    class="mt-0.5 w-4 h-4 rounded-md border-gray-600 text-red-500 focus:ring-2 focus:ring-red-500 cursor-pointer flex-shrink-0">
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-1.5">
+                      <i class="ti ti-volume-off text-red-400 text-sm flex-shrink-0"></i>
+                      <span class="text-xs sm:text-sm font-semibold text-white truncate">Mute Video Audio</span>
                     </div>
-                    <p class="text-xs text-gray-400 mt-0.5">Remove original video audio</p>
+                    <p class="text-[11px] text-gray-400 mt-0.5 leading-snug">Hapus suara asli bawaan dari video</p>
                   </div>
                 </label>
               </div>
@@ -977,26 +976,26 @@ button[onclick*="deleteJob"] {
         </div>
       </div>
       <div class="step-content">
-        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5">
-          <button id="createBtn" class="bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-500 text-white px-3 py-3 rounded-xl font-semibold transition-all flex flex-col items-center justify-center gap-1 shadow-lg shadow-primary/25 active:scale-[0.98]">
-            <i class="ti ti-player-play text-lg md:text-xl"></i>
-            <span class="text-xs font-bold">Render</span>
+        <div class="grid grid-cols-5 gap-1.5 sm:gap-2.5 w-full">
+          <button id="createBtn" class="bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-500 text-white p-2 sm:p-3 rounded-xl font-semibold transition-all flex flex-col items-center justify-center gap-1 shadow-lg shadow-primary/25 active:scale-[0.98] min-w-0">
+            <i class="ti ti-player-play text-base sm:text-xl"></i>
+            <span class="text-[10px] sm:text-xs font-bold whitespace-nowrap truncate">Render</span>
           </button>
-          <button id="videoJoinerBtn" type="button" onclick="runVideoJoinerFromRender(this)" class="bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 text-blue-400 px-3 py-3 rounded-xl font-semibold transition-all flex flex-col items-center justify-center gap-1 active:scale-[0.98]" title="Gabungkan video yang dipilih jadi 1 file di gallery">
-            <i class="ti ti-video text-lg md:text-xl"></i>
-            <span class="text-xs font-bold">Video Joiner</span>
+          <button id="videoJoinerBtn" type="button" onclick="runVideoJoinerFromRender(this)" class="bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 text-blue-400 p-2 sm:p-3 rounded-xl font-semibold transition-all flex flex-col items-center justify-center gap-1 active:scale-[0.98] min-w-0" title="Gabungkan video yang dipilih jadi 1 file di gallery">
+            <i class="ti ti-video text-base sm:text-xl"></i>
+            <span class="text-[10px] sm:text-xs font-bold whitespace-nowrap truncate">Video Joiner</span>
           </button>
-          <button id="audioJoinerBtn" type="button" onclick="runAudioJoinerFromRender(this)" class="bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-400 px-3 py-3 rounded-xl font-semibold transition-all flex flex-col items-center justify-center gap-1 active:scale-[0.98]" title="Gabungkan audio yang dipilih jadi 1 file di gallery">
-            <i class="ti ti-music text-lg md:text-xl"></i>
-            <span class="text-xs font-bold">Audio Joiner</span>
+          <button id="audioJoinerBtn" type="button" onclick="runAudioJoinerFromRender(this)" class="bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-400 p-2 sm:p-3 rounded-xl font-semibold transition-all flex flex-col items-center justify-center gap-1 active:scale-[0.98] min-w-0" title="Gabungkan audio yang dipilih jadi 1 file di gallery">
+            <i class="ti ti-music text-base sm:text-xl"></i>
+            <span class="text-[10px] sm:text-xs font-bold whitespace-nowrap truncate">Audio Joiner</span>
           </button>
-          <button id="resetBtn" class="bg-dark-750 hover:bg-dark-700 border border-gray-700/60 text-gray-300 px-3 py-3 rounded-xl font-semibold transition-all flex flex-col items-center justify-center gap-1 active:scale-[0.98]">
-            <i class="ti ti-eraser text-lg md:text-xl"></i>
-            <span class="text-xs font-bold">Reset</span>
+          <button id="resetBtn" class="bg-dark-750 hover:bg-dark-700 border border-gray-700/60 text-gray-300 p-2 sm:p-3 rounded-xl font-semibold transition-all flex flex-col items-center justify-center gap-1 active:scale-[0.98] min-w-0">
+            <i class="ti ti-eraser text-base sm:text-xl"></i>
+            <span class="text-[10px] sm:text-xs font-bold whitespace-nowrap truncate">Reset</span>
           </button>
-          <button onclick="openScheduleModal()" class="bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-400 px-3 py-3 rounded-xl font-semibold transition-all flex flex-col items-center justify-center gap-1 active:scale-[0.98]">
-            <i class="ti ti-clock text-lg md:text-xl"></i>
-            <span class="text-xs font-bold">Schedule</span>
+          <button onclick="openScheduleModal()" class="bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-400 p-2 sm:p-3 rounded-xl font-semibold transition-all flex flex-col items-center justify-center gap-1 active:scale-[0.98] min-w-0">
+            <i class="ti ti-clock text-base sm:text-xl"></i>
+            <span class="text-[10px] sm:text-xs font-bold whitespace-nowrap truncate">Schedule</span>
           </button>
         </div>
       </div>
