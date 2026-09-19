@@ -933,51 +933,45 @@
           </p>
         </div>
 
-        <!-- Dual Stream Toggle (Fitur Dual Stream Live Vertikal / Portrait YouTube) -->
-        <div class="bg-dark-700/50 rounded-lg p-3 border border-gray-700/70">
-          <label class="flex items-center justify-between cursor-pointer group">
-            <div class="flex-1 pr-3">
-              <div class="flex items-center gap-2 mb-1">
-                <i class="ti ti-device-mobile text-cyan-400"></i>
-                <span class="text-xs font-semibold text-white">Dual Stream (Live Vertikal / Portrait)</span>
-                <span class="text-[10px] bg-cyan-500/20 text-cyan-300 px-1.5 py-0.5 rounded border border-cyan-500/30">YouTube Feature</span>
+        <!-- Dual Stream Toggle (Live Vertikal / Portrait) -->
+        <div class="bg-dark-700/50 rounded-lg p-2.5 border border-gray-700/70">
+          <label class="flex items-center justify-between cursor-pointer group select-none">
+            <div class="flex-1 pr-2 min-w-0">
+              <div class="flex items-center gap-1.5 mb-0.5">
+                <i class="ti ti-device-mobile text-cyan-400 text-xs shrink-0"></i>
+                <span class="text-xs font-semibold text-white truncate">Dual Stream (Live Vertikal)</span>
+                <span class="text-[9px] bg-cyan-500/20 text-cyan-300 px-1.5 py-0.2 rounded border border-cyan-500/30 font-medium shrink-0">Shorts</span>
               </div>
-              <p class="text-[11px] text-gray-400">
-                Fitur Dual Stream YouTube untuk mengaktifkan siaran format vertikal (Portrait / Shorts live) berdampingan dengan siaran horizontal di YouTube.
+              <p class="text-[10.5px] text-gray-400 leading-tight">
+                Aktifkan siaran format vertikal di YouTube berdampingan dengan horizontal.
               </p>
             </div>
             <div class="relative ml-2 flex-shrink-0">
               <input type="checkbox" id="dualStreamToggle" name="dualStream" value="true"
                 class="sr-only peer">
-              <div class="w-11 h-6 bg-dark-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500"></div>
+              <div class="w-9 h-5 bg-dark-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-cyan-500"></div>
             </div>
           </label>
         </div>
         
         <!-- Tags Field - Collapsible -->
         <div>
-          <div class="flex items-center justify-between mb-2">
-            <label class="text-sm font-medium text-white flex items-center gap-2">
-              Tags
+          <div class="flex items-center justify-between mb-2 flex-wrap gap-1">
+            <label class="text-sm font-medium text-white flex items-center gap-2 shrink-0">
+              <span>Tags</span>
               <span id="tagsCount" class="text-xs text-gray-400">(0)</span>
-              <span id="tagsAutoFillIndicator" class="hidden text-xs text-green-400" title="Auto-filled from YouTube defaults">
+              <span id="tagsAutoFillIndicator" class="hidden text-xs text-green-400 font-normal" title="Auto-filled from YouTube defaults">
                 <i class="ti ti-sparkles"></i> Auto-filled
               </span>
             </label>
-            <div class="flex items-center gap-1.5">
-              <button type="button" id="copyTagsBtn" onclick="copyAllTagsToClipboard()" 
-                class="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1 bg-emerald-500/10 hover:bg-emerald-500/20 px-2 py-0.5 rounded border border-emerald-500/20 transition-all active:scale-95" 
-                title="Salin semua tag ke clipboard">
-                <i class="ti ti-copy text-xs"></i>
-                <span>Salin Tag</span>
-              </button>
+            <div class="flex items-center gap-1.5 shrink-0">
               <button type="button" id="clearTagsBtn" onclick="clearAllStudioTags()" 
-                class="text-xs text-red-400 hover:text-red-300 flex items-center gap-1 bg-red-500/10 hover:bg-red-500/20 px-2 py-0.5 rounded border border-red-500/20 transition-all active:scale-95" 
+                class="text-xs text-red-400 hover:text-red-300 flex items-center gap-1 bg-red-500/10 hover:bg-red-500/20 px-2 py-0.5 rounded border border-red-500/20 transition-all active:scale-95 cursor-pointer" 
                 title="Hapus semua tag">
                 <i class="ti ti-trash text-xs"></i>
                 <span>Hapus</span>
               </button>
-              <button type="button" id="toggleTagsBtn" onclick="toggleTagsVisibility()" class="text-xs text-primary hover:text-primary/80 flex items-center gap-1 ml-1">
+              <button type="button" id="toggleTagsBtn" onclick="toggleTagsVisibility()" class="text-xs text-primary hover:text-primary/80 flex items-center gap-1 ml-1 cursor-pointer">
                 <span id="toggleTagsText">Show</span>
                 <i id="toggleTagsIcon" class="ti ti-chevron-down text-sm transition-transform"></i>
               </button>
@@ -985,7 +979,7 @@
           </div>
           
           <!-- Collapsed Preview -->
-          <div id="tagsPreview" class="px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg text-xs text-gray-400 truncate">
+          <div id="tagsPreview" class="px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg text-xs text-gray-400 truncate overflow-hidden">
             <span id="tagsPreviewText">No tags added</span>
           </div>
           
@@ -1010,50 +1004,45 @@
           <input type="hidden" id="tagsHidden" name="tags" value="">
         </div>
 
-        <!-- AI USE / Altered Content Setting (On/Off Toggle) -->
-        <div class="bg-dark-700/50 rounded-lg p-3 border border-gray-700/70">
-          <label class="flex items-center justify-between cursor-pointer group">
-            <div class="flex-1 pr-3">
-              <div class="flex items-center gap-2 mb-1">
-                <i class="ti ti-robot text-purple-400"></i>
-                <span class="text-xs font-semibold text-white">AI USE (Konten Buatan AI)</span>
-                <span class="text-[10px] bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded border border-purple-500/30">Altered Content</span>
-              </div>
-              <p class="text-[11px] text-gray-400">
-                Aktifkan jika siaran menggunakan konten sintetis, suara AI, atau video editan AI sesuai kebijakan YouTube.
-              </p>
-            </div>
-            <div class="relative ml-2 flex-shrink-0">
-              <input type="checkbox" id="alteredContentToggle" name="alteredContent" value="true"
-                class="sr-only peer">
-              <div class="w-11 h-6 bg-dark-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
-            </div>
-          </label>
-        </div>
-
         <!-- Auto-start and Auto-stop (hidden, always ON) -->
         <input type="hidden" id="enableAutoStart" name="enableAutoStart" value="true">
         <input type="hidden" id="enableAutoStop" name="enableAutoStop" value="true">
 
-        <!-- Unlist Replay Setting (visible, default ON) -->
-        <div class="bg-dark-700/50 rounded-lg p-4">
-          <label class="flex items-center justify-between cursor-pointer group">
-            <div class="flex-1">
-              <div class="flex items-center gap-2 mb-1">
-                <i class="ti ti-eye-off text-primary"></i>
-                <span class="text-sm font-medium text-white">Unlist replay when stream ends</span>
+        <!-- Grid: AI USE & Unlist Replay (Kiri & Kanan - Tipis & Simpel) -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <!-- AI USE / Altered Content -->
+          <div class="bg-dark-700/50 rounded-lg p-2.5 border border-gray-700/70 flex items-center justify-between">
+            <label for="alteredContentToggle" class="flex-1 pr-2 cursor-pointer select-none min-w-0">
+              <div class="flex items-center gap-1.5 mb-0.5">
+                <i class="ti ti-robot text-purple-400 text-xs shrink-0"></i>
+                <span class="text-xs font-semibold text-white truncate">AI USE</span>
+                <span class="text-[9px] bg-purple-500/20 text-purple-300 px-1 py-0.2 rounded border border-purple-500/30 font-medium shrink-0">Altered</span>
               </div>
-              <p class="text-xs text-gray-500">
-                Automatically change video privacy to unlisted after stream ends
-              </p>
+              <p class="text-[10px] text-gray-400 leading-tight truncate">Konten / suara buatan AI</p>
+            </label>
+            <div class="relative ml-2 flex-shrink-0">
+              <input type="checkbox" id="alteredContentToggle" name="alteredContent" value="true"
+                class="sr-only peer">
+              <div class="w-9 h-5 bg-dark-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-purple-600"></div>
             </div>
-            <div class="relative ml-4 flex-shrink-0">
+          </div>
+
+          <!-- Unlist Replay on End -->
+          <div class="bg-dark-700/50 rounded-lg p-2.5 border border-gray-700/70 flex items-center justify-between">
+            <label for="unlistReplayOnEnd" class="flex-1 pr-2 cursor-pointer select-none min-w-0">
+              <div class="flex items-center gap-1.5 mb-0.5">
+                <i class="ti ti-eye-off text-primary text-xs shrink-0"></i>
+                <span class="text-xs font-semibold text-white truncate">Unlist Replay</span>
+              </div>
+              <p class="text-[10px] text-gray-400 leading-tight truncate">Unlisted saat stream selesai</p>
+            </label>
+            <div class="relative ml-2 flex-shrink-0">
               <input type="checkbox" id="unlistReplayOnEnd" name="unlistReplayOnEnd" value="true" checked
                 class="sr-only peer"
                 onchange="this.value = this.checked ? 'true' : 'false'">
-              <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+              <div class="w-9 h-5 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
             </div>
-          </label>
+          </div>
         </div>
 
         <input type="hidden" id="pinnedThumbnail" name="pinnedThumbnail" value="">
