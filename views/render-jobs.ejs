@@ -777,39 +777,39 @@ button[onclick*="deleteJob"] {
           </div>
           
           <!-- Right Column: Audio Options -->
-          <div class="space-y-2">
-            <div class="flex items-center gap-2 mb-1.5">
+          <div class="flex flex-col justify-between">
+            <div class="flex items-center gap-2 mb-2">
               <i class="ti ti-settings text-primary"></i>
               <span class="text-sm font-semibold text-white">Audio Options</span>
             </div>
             
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              <!-- Follow Audio Duration -->
-              <div class="bg-dark-750/80 rounded-xl p-3 border border-gray-700/60 hover:border-gray-600 transition-all flex items-center">
-                <label class="flex items-start gap-2.5 cursor-pointer w-full">
+            <div class="grid grid-cols-2 gap-2.5 sm:gap-3 flex-1">
+              <!-- Follow Audio Duration (Kiri) -->
+              <div class="bg-dark-750/80 rounded-xl p-3 border border-gray-700/60 hover:border-primary/50 transition-all flex flex-col justify-start">
+                <label class="flex items-start gap-2.5 cursor-pointer w-full h-full">
                   <input type="checkbox" id="followAudioDuration" 
                     class="mt-0.5 w-4 h-4 rounded-md border-gray-600 text-primary focus:ring-2 focus:ring-primary cursor-pointer flex-shrink-0">
                   <div class="flex-1 min-w-0">
-                    <div class="flex items-center gap-1.5">
+                    <div class="flex items-center gap-1.5 mb-1">
                       <i class="ti ti-music text-primary text-sm flex-shrink-0"></i>
                       <span class="text-xs sm:text-sm font-semibold text-white truncate">Follow Audio</span>
                     </div>
-                    <p class="text-[11px] text-gray-400 mt-0.5 leading-snug">Samakan total durasi video dengan audio</p>
+                    <p class="text-[11px] text-gray-400 leading-snug">Samakan total durasi video dengan audio</p>
                   </div>
                 </label>
               </div>
               
-              <!-- Mute Video Audio -->
-              <div class="bg-dark-750/80 rounded-xl p-3 border border-gray-700/60 hover:border-gray-600 transition-all flex items-center">
-                <label class="flex items-start gap-2.5 cursor-pointer w-full">
+              <!-- Mute Video Audio (Kanan) -->
+              <div class="bg-dark-750/80 rounded-xl p-3 border border-gray-700/60 hover:border-red-500/50 transition-all flex flex-col justify-start">
+                <label class="flex items-start gap-2.5 cursor-pointer w-full h-full">
                   <input type="checkbox" id="muteVideoAudio" 
                     class="mt-0.5 w-4 h-4 rounded-md border-gray-600 text-red-500 focus:ring-2 focus:ring-red-500 cursor-pointer flex-shrink-0">
                   <div class="flex-1 min-w-0">
-                    <div class="flex items-center gap-1.5">
+                    <div class="flex items-center gap-1.5 mb-1">
                       <i class="ti ti-volume-off text-red-400 text-sm flex-shrink-0"></i>
-                      <span class="text-xs sm:text-sm font-semibold text-white truncate">Mute Video Audio</span>
+                      <span class="text-xs sm:text-sm font-semibold text-white truncate">Mute Video</span>
                     </div>
-                    <p class="text-[11px] text-gray-400 mt-0.5 leading-snug">Hapus suara asli bawaan dari video</p>
+                    <p class="text-[11px] text-gray-400 leading-snug">Hapus suara asli bawaan dari video</p>
                   </div>
                 </label>
               </div>
@@ -977,25 +977,25 @@ button[onclick*="deleteJob"] {
       </div>
       <div class="step-content">
         <div class="grid grid-cols-5 gap-1.5 sm:gap-2.5 w-full">
-          <button id="createBtn" class="bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-500 text-white p-2 sm:p-3 rounded-xl font-semibold transition-all flex flex-col items-center justify-center gap-1 shadow-lg shadow-primary/25 active:scale-[0.98] min-w-0">
-            <i class="ti ti-player-play text-base sm:text-xl"></i>
-            <span class="text-[10px] sm:text-xs font-bold whitespace-nowrap truncate">Render</span>
+          <button id="createBtn" class="bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-500 text-white p-1.5 sm:p-2.5 rounded-xl font-semibold transition-all flex flex-col items-center justify-center gap-1 shadow-lg shadow-primary/25 active:scale-[0.98] w-full min-w-0 overflow-hidden min-h-[60px] sm:min-h-[70px]">
+            <i class="ti ti-player-play text-base sm:text-lg flex-shrink-0"></i>
+            <span class="text-[10px] sm:text-xs font-bold text-center leading-tight max-w-full px-0.5">Render</span>
           </button>
-          <button id="videoJoinerBtn" type="button" onclick="runVideoJoinerFromRender(this)" class="bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 text-blue-400 p-2 sm:p-3 rounded-xl font-semibold transition-all flex flex-col items-center justify-center gap-1 active:scale-[0.98] min-w-0" title="Gabungkan video yang dipilih jadi 1 file di gallery">
-            <i class="ti ti-video text-base sm:text-xl"></i>
-            <span class="text-[10px] sm:text-xs font-bold whitespace-nowrap truncate">Video Joiner</span>
+          <button id="videoJoinerBtn" type="button" onclick="runVideoJoinerFromRender(this)" class="bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 text-blue-400 p-1.5 sm:p-2.5 rounded-xl font-semibold transition-all flex flex-col items-center justify-center gap-1 active:scale-[0.98] w-full min-w-0 overflow-hidden min-h-[60px] sm:min-h-[70px]" title="Gabungkan video yang dipilih jadi 1 file di gallery">
+            <i class="ti ti-video text-base sm:text-lg flex-shrink-0"></i>
+            <span class="text-[10px] sm:text-xs font-bold text-center leading-tight max-w-full px-0.5">Video Joiner</span>
           </button>
-          <button id="audioJoinerBtn" type="button" onclick="runAudioJoinerFromRender(this)" class="bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-400 p-2 sm:p-3 rounded-xl font-semibold transition-all flex flex-col items-center justify-center gap-1 active:scale-[0.98] min-w-0" title="Gabungkan audio yang dipilih jadi 1 file di gallery">
-            <i class="ti ti-music text-base sm:text-xl"></i>
-            <span class="text-[10px] sm:text-xs font-bold whitespace-nowrap truncate">Audio Joiner</span>
+          <button id="audioJoinerBtn" type="button" onclick="runAudioJoinerFromRender(this)" class="bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-400 p-1.5 sm:p-2.5 rounded-xl font-semibold transition-all flex flex-col items-center justify-center gap-1 active:scale-[0.98] w-full min-w-0 overflow-hidden min-h-[60px] sm:min-h-[70px]" title="Gabungkan audio yang dipilih jadi 1 file di gallery">
+            <i class="ti ti-music text-base sm:text-lg flex-shrink-0"></i>
+            <span class="text-[10px] sm:text-xs font-bold text-center leading-tight max-w-full px-0.5">Audio Joiner</span>
           </button>
-          <button id="resetBtn" class="bg-dark-750 hover:bg-dark-700 border border-gray-700/60 text-gray-300 p-2 sm:p-3 rounded-xl font-semibold transition-all flex flex-col items-center justify-center gap-1 active:scale-[0.98] min-w-0">
-            <i class="ti ti-eraser text-base sm:text-xl"></i>
-            <span class="text-[10px] sm:text-xs font-bold whitespace-nowrap truncate">Reset</span>
+          <button id="resetBtn" class="bg-dark-750 hover:bg-dark-700 border border-gray-700/60 text-gray-300 p-1.5 sm:p-2.5 rounded-xl font-semibold transition-all flex flex-col items-center justify-center gap-1 active:scale-[0.98] w-full min-w-0 overflow-hidden min-h-[60px] sm:min-h-[70px]">
+            <i class="ti ti-eraser text-base sm:text-lg flex-shrink-0"></i>
+            <span class="text-[10px] sm:text-xs font-bold text-center leading-tight max-w-full px-0.5">Reset</span>
           </button>
-          <button onclick="openScheduleModal()" class="bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-400 p-2 sm:p-3 rounded-xl font-semibold transition-all flex flex-col items-center justify-center gap-1 active:scale-[0.98] min-w-0">
-            <i class="ti ti-clock text-base sm:text-xl"></i>
-            <span class="text-[10px] sm:text-xs font-bold whitespace-nowrap truncate">Schedule</span>
+          <button onclick="openScheduleModal()" class="bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-400 p-1.5 sm:p-2.5 rounded-xl font-semibold transition-all flex flex-col items-center justify-center gap-1 active:scale-[0.98] w-full min-w-0 overflow-hidden min-h-[60px] sm:min-h-[70px]">
+            <i class="ti ti-clock text-base sm:text-lg flex-shrink-0"></i>
+            <span class="text-[10px] sm:text-xs font-bold text-center leading-tight max-w-full px-0.5">Schedule</span>
           </button>
         </div>
       </div>
@@ -1251,8 +1251,8 @@ button[onclick*="deleteJob"] {
           <i class="ti ti-list-check text-base"></i>
         </div>
         <div>
-          <h3 class="text-base md:text-lg font-bold text-white">Daftar Render Jobs</h3>
-          <p class="text-xs text-gray-400 hidden sm:block">Status antrean dan proses render yang sedang berjalan</p>
+          <h3 class="text-base md:text-lg font-bold text-white">Daftar Hasil Render</h3>
+          <p class="text-xs text-gray-400 hidden sm:block">Daftar video hasil render dan proses yang berjalan</p>
         </div>
       </div>
       <div class="flex items-center gap-2 self-start sm:self-auto">
@@ -1265,29 +1265,6 @@ button[onclick*="deleteJob"] {
           <span>Refresh</span>
         </button>
       </div>
-    </div>
-
-    <!-- Status Filter Chips -->
-    <div class="flex flex-wrap items-center gap-2 mb-4 pb-2">
-      <button type="button" onclick="filterRenderJobs('all')" id="filterBtn-all" class="job-filter-btn px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border bg-primary/20 text-primary border-primary/40 shadow-sm flex items-center gap-1.5">
-        <span>Semua</span>
-        <span id="badgeCount-all" class="px-1.5 py-0.5 rounded-full bg-primary/30 text-[10px]">0</span>
-      </button>
-      <button type="button" onclick="filterRenderJobs('processing')" id="filterBtn-processing" class="job-filter-btn px-3 py-1.5 rounded-xl text-xs font-medium transition-all border bg-dark-750 text-gray-400 border-gray-700/60 hover:text-white flex items-center gap-1.5">
-        <span class="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></span>
-        <span>Rendering</span>
-        <span id="badgeCount-processing" class="px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 text-[10px]">0</span>
-      </button>
-      <button type="button" onclick="filterRenderJobs('completed')" id="filterBtn-completed" class="job-filter-btn px-3 py-1.5 rounded-xl text-xs font-medium transition-all border bg-dark-750 text-gray-400 border-gray-700/60 hover:text-white flex items-center gap-1.5">
-        <i class="ti ti-check text-green-400 text-xs"></i>
-        <span>Selesai</span>
-        <span id="badgeCount-completed" class="px-1.5 py-0.5 rounded-full bg-green-500/20 text-green-300 text-[10px]">0</span>
-      </button>
-      <button type="button" onclick="filterRenderJobs('failed')" id="filterBtn-failed" class="job-filter-btn px-3 py-1.5 rounded-xl text-xs font-medium transition-all border bg-dark-750 text-gray-400 border-gray-700/60 hover:text-white flex items-center gap-1.5">
-        <i class="ti ti-alert-circle text-red-400 text-xs"></i>
-        <span>Gagal</span>
-        <span id="badgeCount-failed" class="px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-300 text-[10px]">0</span>
-      </button>
     </div>
 
     <div id="jobs">
