@@ -919,7 +919,9 @@ class ScheduleService {
             // IMPORTANT: Always enable auto-start when creating from recurring template
             // This ensures YouTube broadcast starts automatically when stream begins
             enableAutoStart: true,
-            enableAutoStop: true
+            enableAutoStop: true,
+            dualStream: !!(template.dual_stream || b.dualStream),
+            alteredContent: !!(template.altered_content || b.alteredContent)
           };
           
           console.log(`[ScheduleService] Creating broadcast ${i + 1}/${broadcasts.length}: ${title}`);
@@ -958,10 +960,11 @@ class ScheduleService {
                 accountId: template.account_id || null,
                 enableAutoStart: true,
                 enableAutoStop: true,
-                unlistReplayOnEnd: false,
+                unlistReplayOnEnd: template.unlist_replay_on_end !== undefined ? !!template.unlist_replay_on_end : false,
                 originalPrivacyStatus: b.privacyStatus || 'unlisted',
                 thumbnailFolder: thumbnailFolder !== null ? thumbnailFolder : null,
                 templateId: template.id,
+                alteredContent: template.altered_content ? 1 : 0,
                 dualStream: template.dual_stream ? 1 : 0,
                 verticalStreamKey: template.vertical_stream_key || null
               });
@@ -1113,7 +1116,9 @@ class ScheduleService {
           // IMPORTANT: Always enable auto-start when creating from recurring template
           // This ensures YouTube broadcast starts automatically when stream begins
           enableAutoStart: true,
-          enableAutoStop: true
+          enableAutoStop: true,
+          dualStream: !!template.dual_stream,
+          alteredContent: !!template.altered_content
         };
         
         console.log(`[ScheduleService] Creating single broadcast: ${title}`);
@@ -1151,10 +1156,11 @@ class ScheduleService {
             accountId: template.account_id || null,
             enableAutoStart: true,
             enableAutoStop: true,
-            unlistReplayOnEnd: false,
+            unlistReplayOnEnd: template.unlist_replay_on_end !== undefined ? !!template.unlist_replay_on_end : false,
             originalPrivacyStatus: template.privacy_status || 'unlisted',
             thumbnailFolder: thumbnailFolder !== null ? thumbnailFolder : null,
             templateId: template.id,
+            alteredContent: template.altered_content ? 1 : 0,
             dualStream: template.dual_stream ? 1 : 0,
             verticalStreamKey: template.vertical_stream_key || null
           });

@@ -299,22 +299,22 @@ class YouTubeStatusSync {
    * @param {string} reason - Reason for stopping
    */
   async stopStreamAndCleanup(streamId, reason) {
-    // Stop monitoring first
-    this.stopMonitoring(streamId);
-
-    // Get the check info before cleanup
+    // CRITICAL FIX: Get the check info BEFORE stopMonitoring deletes it from activeChecks!
     const check = this.activeChecks.get(streamId);
+
+    // Stop monitoring
+    this.stopMonitoring(streamId);
     
     // Handle unlist replay on end if configured
-    // Use the new unlistReplayService which handles delayed retry logic
-    if (check && check.broadcastId && (reason === 'complete' || reason === 'broadcast_deleted')) {
+    // Use the unlistReplayService which handles delayed retry logic
+    if (check && check.broadcastId) {
       try {
         const YouTubeBroadcastSettings = require('../models/YouTubeBroadcastSettings');
         const settings = await YouTubeBroadcastSettings.findByBroadcastId(check.broadcastId);
         
         // Only schedule unlist if user enabled it
         if (settings && settings.unlistReplayOnEnd) {
-          console.log(`[YouTubeStatusSync] Scheduling unlist for broadcast ${check.broadcastId}`);
+          console.log(`[YouTubeStatusSync] Scheduling unlist for broadcast ${check.broadcastId} (reason: ${reason})`);
           
           const unlistReplayService = require('./unlistReplayService');
           unlistReplayService.scheduleUnlist(check.broadcastId, check.userId);

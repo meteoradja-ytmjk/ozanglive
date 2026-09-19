@@ -5723,8 +5723,9 @@ app.put('/api/streams/:id', isAuthenticated, async (req, res) => {
     }
 
     // Dual Stream (Vertical / Portrait for YouTube Shorts)
+    let isDual = undefined;
     if (req.body.dualStream !== undefined || req.body.dual_stream !== undefined) {
-      const isDual = req.body.dualStream === 'true' || req.body.dualStream === true || req.body.dual_stream === 1 || req.body.dual_stream === '1' || req.body.dual_stream === true;
+      isDual = req.body.dualStream === 'true' || req.body.dualStream === true || req.body.dual_stream === 1 || req.body.dual_stream === '1' || req.body.dual_stream === true;
       updateData.dual_stream = isDual ? 1 : 0;
     }
     if (req.body.verticalStreamKey !== undefined || req.body.vertical_stream_key !== undefined || req.body.backupRtmpUrl !== undefined) {
@@ -5734,6 +5735,42 @@ app.put('/api/streams/:id', isAuthenticated, async (req, res) => {
     }
     if (req.body.tags !== undefined) {
       updateData.tags = Array.isArray(req.body.tags) ? JSON.stringify(req.body.tags) : (req.body.tags || null);
+    }
+
+    // Sync altered_content and unlist_replay_on_end to youtube_broadcast_settings if this stream is bound to a YouTube broadcast
+    if (stream.youtube_broadcast_id) {
+      try {
+        const YouTubeBroadcastSettings = require('./models/YouTubeBroadcastSettings');
+        const existingSettings = await YouTubeBroadcastSettings.findByBroadcastId(stream.youtube_broadcast_id) || {};
+        
+        const finalDual = isDual !== undefined ? isDual : !!existingSettings.dualStream;
+        const finalAltered = (req.body.alteredContent !== undefined || req.body.altered_content !== undefined)
+          ? (req.body.alteredContent === 'true' || req.body.alteredContent === true || req.body.altered_content === 1 || req.body.altered_content === '1' || req.body.altered_content === true)
+          : !!existingSettings.alteredContent;
+        const finalUnlist = (req.body.unlistReplayOnEnd !== undefined || req.body.unlist_replay_on_end !== undefined)
+          ? (req.body.unlistReplayOnEnd === 'true' || req.body.unlistReplayOnEnd === true || req.body.unlist_replay_on_end === 1 || req.body.unlist_replay_on_end === '1' || req.body.unlist_replay_on_end === true)
+          : (existingSettings.unlistReplayOnEnd !== undefined ? existingSettings.unlistReplayOnEnd : true);
+
+        await YouTubeBroadcastSettings.upsert({
+          broadcastId: stream.youtube_broadcast_id,
+          userId: stream.user_id,
+          accountId: stream.youtube_account_id || existingSettings.accountId || null,
+          enableAutoStart: existingSettings.enableAutoStart !== false,
+          enableAutoStop: existingSettings.enableAutoStop !== false,
+          unlistReplayOnEnd: finalUnlist,
+          originalPrivacyStatus: existingSettings.originalPrivacyStatus || 'unlisted',
+          thumbnailFolder: existingSettings.thumbnailFolder,
+          thumbnailIndex: existingSettings.thumbnailIndex,
+          thumbnailPath: existingSettings.thumbnailPath,
+          alteredContent: finalAltered ? 1 : 0,
+          dualStream: finalDual ? 1 : 0,
+          verticalStreamKey: updateData.vertical_stream_key || existingSettings.verticalStreamKey || null,
+          tags: updateData.tags || existingSettings.tags
+        });
+        invalidateBroadcastsCache(req.session.userId);
+      } catch (syncErr) {
+        console.warn('[API Update Stream] Warning syncing youtube_broadcast_settings:', syncErr.message);
+      }
     }
 
     // Handle stream duration (in minutes - new format: hours + minutes)
@@ -9544,6 +9581,81 @@ function invalidateBroadcastsCache(userId) {
 }
 global.invalidateBroadcastsCache = invalidateBroadcastsCache;
 
+// Helper to merge local broadcast settings (dual_stream, altered_content, unlist_replay_on_end, etc.) into YouTube API broadcast objects
+async function attachLocalSettingsToBroadcasts(broadcastsList, userId) {
+  if (!broadcastsList || broadcastsList.length === 0) return broadcastsList;
+  const broadcastIds = broadcastsList.map(b => b && b.id).filter(Boolean);
+  if (broadcastIds.length === 0) return broadcastsList;
+
+  try {
+    const placeholders = broadcastIds.map(() => '?').join(',');
+    const settingsRows = await new Promise((resolve) => {
+      db.all(
+        `SELECT broadcast_id, dual_stream, altered_content, unlist_replay_on_end, vertical_stream_key, thumbnail_folder, thumbnail_path, tags 
+         FROM youtube_broadcast_settings 
+         WHERE broadcast_id IN (${placeholders})`,
+        broadcastIds,
+        (err, rows) => resolve(err ? [] : (rows || []))
+      );
+    });
+
+    const streamRows = await new Promise((resolve) => {
+      db.all(
+        `SELECT youtube_broadcast_id, dual_stream, vertical_stream_key, tags 
+         FROM streams 
+         WHERE youtube_broadcast_id IN (${placeholders})`,
+        broadcastIds,
+        (err, rows) => resolve(err ? [] : (rows || []))
+      );
+    });
+
+    const settingsMap = new Map();
+    settingsRows.forEach(row => {
+      if (row.broadcast_id) {
+        settingsMap.set(row.broadcast_id, {
+          dual_stream: row.dual_stream === 1 || row.dual_stream === '1' || row.dual_stream === true,
+          altered_content: row.altered_content === 1 || row.altered_content === '1' || row.altered_content === true,
+          unlist_replay_on_end: row.unlist_replay_on_end !== 0 && row.unlist_replay_on_end !== '0' && row.unlist_replay_on_end !== false,
+          vertical_stream_key: row.vertical_stream_key || null,
+          thumbnail_folder: row.thumbnail_folder || null,
+          thumbnail_path: row.thumbnail_path || null,
+          tags: row.tags
+        });
+      }
+    });
+
+    streamRows.forEach(s => {
+      if (s.youtube_broadcast_id) {
+        const existing = settingsMap.get(s.youtube_broadcast_id) || {};
+        const isDual = existing.dual_stream || s.dual_stream === 1 || s.dual_stream === '1' || s.dual_stream === true;
+        settingsMap.set(s.youtube_broadcast_id, {
+          ...existing,
+          dual_stream: isDual,
+          vertical_stream_key: existing.vertical_stream_key || s.vertical_stream_key || null
+        });
+      }
+    });
+
+    broadcastsList.forEach(b => {
+      if (!b || !b.id) return;
+      const s = settingsMap.get(b.id) || {};
+      b.dual_stream = s.dual_stream ? 1 : 0;
+      b.dualStream = !!s.dual_stream;
+      b.altered_content = s.altered_content ? 1 : 0;
+      b.alteredContent = !!s.altered_content;
+      b.unlist_replay_on_end = s.unlist_replay_on_end !== undefined ? (s.unlist_replay_on_end ? 1 : 0) : 1;
+      b.unlistReplayOnEnd = s.unlist_replay_on_end !== undefined ? !!s.unlist_replay_on_end : true;
+      if (s.vertical_stream_key) b.vertical_stream_key = s.vertical_stream_key;
+      if (s.thumbnail_folder) b.thumbnailFolder = s.thumbnail_folder;
+      if (s.thumbnail_path) b.thumbnailPath = s.thumbnail_path;
+    });
+  } catch (err) {
+    console.warn('[Broadcasts API] Error attaching local settings:', err.message);
+  }
+
+  return broadcastsList;
+}
+
 app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
   try {
     const accountId = req.query.accountId ? parseInt(req.query.accountId) : null;
@@ -9681,26 +9793,27 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
       );
 
       if (missingLocal.length > 0) {
-        console.log(`[Broadcasts API] Verifying ${missingLocal.length} known broadcast IDs against YouTube API...`);
         const missingIds = missingLocal.map(s => s.youtube_broadcast_id);
+        console.log(`[Broadcasts API] Querying ${missingIds.length} locally recorded broadcast(s) directly from YouTube for account ${credentials.id}...`);
         try {
           const directBroadcasts = await youtubeService.getBroadcastsByIds(accessToken, missingIds);
-          const directIds = new Set();
-          directBroadcasts.forEach(b => {
-            directIds.add(b.id);
-            result.unshift({
-              ...b,
+          const directIds = new Set(directBroadcasts.map(b => b.id));
+          directBroadcasts.forEach(db_item => {
+            const loc = missingLocal.find(s => s.youtube_broadcast_id === db_item.id);
+            result.push({
+              ...db_item,
+              streamId: db_item.streamId || (loc ? loc.stream_key : null),
+              streamKey: db_item.streamKey || (loc ? loc.stream_key : ''),
+              rtmpUrl: db_item.rtmpUrl || (loc ? loc.rtmp_url : 'rtmp://a.rtmp.youtube.com/live2'),
               accountId: credentials.id,
               channelName: credentials.channelName
             });
           });
 
-          // PRUNE STALE BROADCASTS:
-          // If a broadcast was not found on YouTube API, it means it has been deleted on YouTube.com!
-          // We strictly remove it from local DB and DO NOT show it, ensuring 100% sync with YouTube.com.
+          // Prune stale broadcasts
           const notFoundOnYouTube = missingLocal.filter(s => !directIds.has(s.youtube_broadcast_id));
           if (notFoundOnYouTube.length > 0) {
-            console.log(`[Broadcasts API] Pruning ${notFoundOnYouTube.length} broadcast(s) no longer on YouTube.com...`);
+            console.log(`[Broadcasts API] Account ${credentials.id}: pruning ${notFoundOnYouTube.length} stale broadcast(s)`);
             notFoundOnYouTube.forEach(stale => {
               db.run(`DELETE FROM youtube_broadcast_settings WHERE broadcast_id = ?`, [stale.youtube_broadcast_id]);
               db.run(`DELETE FROM streams WHERE youtube_broadcast_id = ?`, [stale.youtube_broadcast_id]);
@@ -9710,6 +9823,9 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
           console.warn('[Broadcasts API] getBroadcastsByIds error:', byIdErr.message);
         }
       }
+      
+      // Attach local settings (dualStream, alteredContent, unlistReplayOnEnd)
+      await attachLocalSettingsToBroadcasts(result, userId);
       
       console.log(`[DEBUG] Final broadcasts for account ${accountId}: ${result.length}`);
       
@@ -9786,26 +9902,27 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
             );
 
             if (missingLocal.length > 0) {
-              console.log(`[Broadcasts API] Account ${account.channelName}: verifying ${missingLocal.length} known broadcast IDs against YouTube...`);
+              const missingIds = missingLocal.map(s => s.youtube_broadcast_id);
+              console.log(`[Broadcasts API] Account ${account.channelName}: querying ${missingIds.length} local broadcast(s) directly...`);
               try {
-                const missingIds = missingLocal.map(s => s.youtube_broadcast_id);
                 const directBroadcasts = await youtubeService.getBroadcastsByIds(accessToken, missingIds);
-                const directIds = new Set();
-                directBroadcasts.forEach(b => {
-                  directIds.add(b.id);
-                  accountBroadcasts.unshift({
-                    ...b,
+                const directIds = new Set(directBroadcasts.map(b => b.id));
+                directBroadcasts.forEach(db_item => {
+                  const loc = missingLocal.find(s => s.youtube_broadcast_id === db_item.id);
+                  accountBroadcasts.push({
+                    ...db_item,
+                    streamId: db_item.streamId || (loc ? loc.stream_key : null),
+                    streamKey: db_item.streamKey || (loc ? loc.stream_key : ''),
+                    rtmpUrl: db_item.rtmpUrl || (loc ? loc.rtmp_url : 'rtmp://a.rtmp.youtube.com/live2'),
                     accountId: account.id,
                     channelName: account.channelName
                   });
                 });
 
-                // PRUNE STALE BROADCASTS:
-                // If it was not returned by YouTube API, it has been deleted on YouTube.com!
-                // Remove from local DB and DO NOT display it.
+                // PRUNE STALE BROADCASTS
                 const notFoundOnYouTube = missingLocal.filter(s => !directIds.has(s.youtube_broadcast_id));
                 if (notFoundOnYouTube.length > 0) {
-                  console.log(`[Broadcasts API] Account ${account.channelName}: pruning ${notFoundOnYouTube.length} stale broadcast(s) no longer on YouTube.com`);
+                  console.log(`[Broadcasts API] Account ${account.channelName}: pruning ${notFoundOnYouTube.length} stale broadcast(s)`);
                   notFoundOnYouTube.forEach(stale => {
                     db.run(`DELETE FROM youtube_broadcast_settings WHERE broadcast_id = ?`, [stale.youtube_broadcast_id]);
                     db.run(`DELETE FROM streams WHERE youtube_broadcast_id = ?`, [stale.youtube_broadcast_id]);
@@ -9838,6 +9955,9 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
           allBroadcasts.push(b);
         }
       });
+      
+      // Attach local settings (dualStream, alteredContent, unlistReplayOnEnd) to all broadcasts
+      await attachLocalSettingsToBroadcasts(allBroadcasts, userId);
       
       console.log(`[DEBUG] Total unique broadcasts fetched: ${allBroadcasts.length}`);
       
@@ -10086,7 +10206,8 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       enableAutoStop: enableAutoStop !== 'false' && enableAutoStop !== false, // Default true
       monetizationEnabled: monetizationEnabled === 'true' || monetizationEnabled === true,
       adFrequency: adFrequency || 'medium',
-      alteredContent: isAlteredContent
+      alteredContent: isAlteredContent,
+      dualStream: isDualStream
     });
 
     // Get thumbnail folder from request
@@ -10444,11 +10565,27 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
   }
 });
 
-// Update YouTube broadcast - supports accountId parameter
+// Update YouTube broadcast - supports accountId parameter and updates settings
 app.put('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
   try {
     const accountId = req.query.accountId ? parseInt(req.query.accountId) : null;
-    const { title, description, scheduledStartTime, privacyStatus, categoryId, thumbnailFolder, thumbnailIndex, thumbnailPath } = req.body;
+    const { 
+      title, 
+      description, 
+      scheduledStartTime, 
+      privacyStatus, 
+      categoryId, 
+      thumbnailFolder, 
+      thumbnailIndex, 
+      thumbnailPath,
+      dualStream,
+      alteredContent,
+      unlistReplayOnEnd,
+      tags 
+    } = req.body;
+
+    const isAlteredContent = alteredContent !== undefined ? (alteredContent === 'true' || alteredContent === true || alteredContent === 1 || alteredContent === '1') : undefined;
+    const isDualStream = dualStream !== undefined ? (dualStream === 'true' || dualStream === true || dualStream === 1 || dualStream === '1') : undefined;
 
     console.log('[API] Update broadcast request:', {
       broadcastId: req.params.id,
@@ -10458,88 +10595,96 @@ app.put('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
       scheduledStartTime,
       privacyStatus,
       categoryId,
-      thumbnailFolder,
-      thumbnailIndex,
-      thumbnailPath
+      dualStream: isDualStream,
+      alteredContent: isAlteredContent,
+      unlistReplayOnEnd
     });
 
     let credentials;
+    let result;
 
     if (accountId) {
       credentials = await YouTubeCredentials.findById(accountId);
       if (!credentials || credentials.userId !== req.session.userId) {
         return res.status(404).json({ success: false, error: 'Account not found' });
       }
+      const accessToken = await youtubeService.getAccessToken(credentials.clientId, credentials.clientSecret, credentials.refreshToken, 0, credentials.id, 0, credentials.id);
+      result = await youtubeService.updateBroadcast(accessToken, req.params.id, {
+        title,
+        description,
+        scheduledStartTime,
+        privacyStatus,
+        categoryId,
+        tags,
+        alteredContent: isAlteredContent
+      });
     } else {
       // Try to find the account that owns this broadcast by checking all accounts
       const accounts = await YouTubeCredentials.findAllByUserId(req.session.userId);
+      let updated = false;
       for (const account of accounts) {
         try {
           const accessToken = await youtubeService.getAccessToken(account.clientId, account.clientSecret, account.refreshToken, 0, account.id, 0, account.id);
-          const result = await youtubeService.updateBroadcast(accessToken, req.params.id, {
+          result = await youtubeService.updateBroadcast(accessToken, req.params.id, {
             title,
             description,
             scheduledStartTime,
             privacyStatus,
-            categoryId
+            categoryId,
+            tags,
+            alteredContent: isAlteredContent
           });
-          console.log('[API] Update broadcast success:', result);
-          invalidateBroadcastsCache(req.session.userId);
-          return res.json({ success: true, broadcast: result });
+          credentials = account;
+          updated = true;
+          break;
         } catch (err) {
-          // Continue to next account if this one doesn't own the broadcast
           continue;
         }
       }
-      return res.status(404).json({ success: false, error: 'Broadcast not found' });
+      if (!updated) {
+        return res.status(404).json({ success: false, error: 'Broadcast not found' });
+      }
     }
-
-    const accessToken = await youtubeService.getAccessToken(credentials.clientId, credentials.clientSecret, credentials.refreshToken, 0, credentials.id, 0, credentials.id);
-
-    const result = await youtubeService.updateBroadcast(accessToken, req.params.id, {
-      title,
-      description,
-      scheduledStartTime,
-      privacyStatus,
-      categoryId
-    });
 
     console.log('[API] Update broadcast success:', result);
 
-    // Update thumbnail folder in broadcast settings if provided
-    if (thumbnailFolder !== undefined) {
-      try {
-        // First try to update existing record
-        const updated = await YouTubeBroadcastSettings.updateThumbnailFolder(req.params.id, thumbnailFolder);
-        if (!updated) {
-          // If no record exists, create one with upsert
-          await YouTubeBroadcastSettings.upsert({
-            broadcastId: req.params.id,
-            userId: req.session.userId,
-            accountId: accountId || null,
-            thumbnailFolder: thumbnailFolder,
-            thumbnailIndex: thumbnailIndex || 0,
-            thumbnailPath: thumbnailPath || null
-          });
-          console.log('[API] Created new broadcast settings with thumbnail folder for:', req.params.id);
-        } else {
-          console.log('[API] Updated thumbnail folder for broadcast:', req.params.id, 'to:', thumbnailFolder || 'root');
+    // Save updated broadcast settings (dualStream, alteredContent, unlistReplayOnEnd, tags, thumbnail)
+    try {
+      const existingSettings = await YouTubeBroadcastSettings.findByBroadcastId(req.params.id) || {};
+      const finalDual = isDualStream !== undefined ? isDualStream : !!existingSettings.dualStream;
+      const finalAltered = isAlteredContent !== undefined ? isAlteredContent : !!existingSettings.alteredContent;
+      const finalUnlist = unlistReplayOnEnd !== undefined 
+        ? (unlistReplayOnEnd === 'true' || unlistReplayOnEnd === true || unlistReplayOnEnd === 1 || unlistReplayOnEnd === '1')
+        : (existingSettings.unlistReplayOnEnd !== undefined ? existingSettings.unlistReplayOnEnd : true);
 
-          // Also update thumbnail index and path if provided
-          if (thumbnailIndex !== undefined || thumbnailPath !== undefined) {
-            await YouTubeBroadcastSettings.updateThumbnailSelection(req.params.id, thumbnailIndex || 0, thumbnailPath || null);
-            console.log('[API] Updated thumbnail selection for broadcast:', req.params.id, 'index:', thumbnailIndex, 'path:', thumbnailPath);
-          }
-        }
+      await YouTubeBroadcastSettings.upsert({
+        broadcastId: req.params.id,
+        userId: req.session.userId,
+        accountId: (credentials ? credentials.id : accountId) || existingSettings.accountId || null,
+        enableAutoStart: existingSettings.enableAutoStart !== false,
+        enableAutoStop: existingSettings.enableAutoStop !== false,
+        unlistReplayOnEnd: finalUnlist,
+        originalPrivacyStatus: privacyStatus || existingSettings.originalPrivacyStatus || 'unlisted',
+        thumbnailFolder: thumbnailFolder !== undefined ? thumbnailFolder : existingSettings.thumbnailFolder,
+        thumbnailIndex: thumbnailIndex !== undefined ? thumbnailIndex : existingSettings.thumbnailIndex,
+        thumbnailPath: thumbnailPath !== undefined ? thumbnailPath : existingSettings.thumbnailPath,
+        alteredContent: finalAltered ? 1 : 0,
+        dualStream: finalDual ? 1 : 0,
+        verticalStreamKey: finalDual ? (req.body.verticalStreamKey || existingSettings.verticalStreamKey || null) : null,
+        tags: tags ? (Array.isArray(tags) ? JSON.stringify(tags) : tags) : existingSettings.tags
+      });
 
-        // NOTE: Do NOT update stream_key_folder_mapping on edit/reschedule
-        // Thumbnail index should only be incremented when creating NEW broadcasts
-        // Editing an existing broadcast should not affect the rotation index
-        console.log('[API] Edit broadcast - NOT updating GLOBAL thumbnail index (only incremented on new broadcast creation)');
-      } catch (settingsErr) {
-        console.error('[API] Error updating thumbnail folder:', settingsErr.message);
-        // Don't fail the request, just log the error
-      }
+      // Update matching streams record if any
+      db.run(
+        `UPDATE streams SET 
+           title = COALESCE(?, title),
+           dual_stream = ?,
+           tags = COALESCE(?, tags)
+         WHERE youtube_broadcast_id = ? AND user_id = ?`,
+        [title || null, finalDual ? 1 : 0, tags ? (Array.isArray(tags) ? JSON.stringify(tags) : tags) : null, req.params.id, req.session.userId]
+      );
+    } catch (settingsErr) {
+      console.warn('[API] Error saving broadcast settings on update:', settingsErr.message);
     }
 
     invalidateBroadcastsCache(req.session.userId);

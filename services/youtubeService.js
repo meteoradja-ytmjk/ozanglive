@@ -367,14 +367,14 @@ class YouTubeService {
    * @param {boolean} [data.alteredContent] - Optional altered content declaration
    * @returns {Promise<{broadcastId: string, streamKey: string, rtmpUrl: string}>}
    */
-  async createBroadcast(accessToken, { title, description, scheduledStartTime, privacyStatus, streamId, tags, categoryId, enableAutoStart, enableAutoStop, monetizationEnabled, adFrequency, alteredContent }) {
+  async createBroadcast(accessToken, { title, description, scheduledStartTime, privacyStatus, streamId, tags, categoryId, enableAutoStart, enableAutoStop, monetizationEnabled, adFrequency, alteredContent, dualStream }) {
     const oauth2Client = new google.auth.OAuth2();
     oauth2Client.setCredentials({ access_token: accessToken });
     
     const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
     
     console.log('[YouTubeService.createBroadcast] Received streamId:', streamId);
-    console.log('[YouTubeService.createBroadcast] Settings: autoStart=%s, autoStop=%s', enableAutoStart, enableAutoStop);
+    console.log('[YouTubeService.createBroadcast] Settings: autoStart=%s, autoStop=%s, dualStream=%s, alteredContent=%s', enableAutoStart, enableAutoStop, !!dualStream, !!alteredContent);
     console.log('[YouTubeService.createBroadcast] Received categoryId:', categoryId);
     
     // Build snippet - Note: categoryId is NOT supported by liveBroadcasts API
@@ -394,8 +394,10 @@ class YouTubeService {
     }
 
     const finalTags = Array.isArray(tags) ? [...tags] : (typeof tags === 'string' ? tags.split(/[\r\n,]+/).map(t => t.trim()).filter(Boolean) : []);
-    if (alteredContent && !finalTags.includes('AlteredOrSyntheticContent')) {
-      finalTags.push('AlteredOrSyntheticContent');
+    if (alteredContent) {
+      ['AlteredOrSyntheticContent', 'AI Generated', 'Synthetic Media'].forEach(t => {
+        if (!finalTags.includes(t)) finalTags.push(t);
+      });
     }
 
     let finalDescription = description || '';
@@ -445,6 +447,18 @@ class YouTubeService {
     
     let stream;
     
+    // Ingestion CDN settings:
+    // If dualStream is enabled, use variable resolution & frameRate so YouTube Studio activates dual-format (vertical/Shorts + horizontal) ingest
+    const cdnConfig = dualStream ? {
+      frameRate: 'variable',
+      ingestionType: 'rtmp',
+      resolution: 'variable'
+    } : {
+      frameRate: '30fps',
+      ingestionType: 'rtmp',
+      resolution: '1080p'
+    };
+
     // Use existing stream or create new one
     if (streamId) {
       console.log('[YouTubeService.createBroadcast] Using existing stream:', streamId);
@@ -455,19 +469,15 @@ class YouTubeService {
       });
       
       if (!streamResponse.data.items || streamResponse.data.items.length === 0) {
-        console.log('[YouTubeService.createBroadcast] Stream not found, creating new one');
+        console.log('[YouTubeService.createBroadcast] Stream not found, creating new one with cdn:', cdnConfig);
         // Stream not found, create a new one
         const newStreamResponse = await youtube.liveStreams.insert({
           part: 'snippet,cdn',
           requestBody: {
             snippet: {
-              title: `Stream for ${title}`
+              title: dualStream ? `Dual Stream for ${title}` : `Stream for ${title}`
             },
-            cdn: {
-              frameRate: '30fps',
-              ingestionType: 'rtmp',
-              resolution: '1080p'
-            }
+            cdn: cdnConfig
           }
         });
         stream = newStreamResponse.data;
@@ -476,19 +486,15 @@ class YouTubeService {
         console.log('[YouTubeService.createBroadcast] Found existing stream:', stream.snippet.title);
       }
     } else {
-      console.log('[YouTubeService.createBroadcast] No streamId provided, creating new stream');
+      console.log('[YouTubeService.createBroadcast] No streamId provided, creating new stream with cdn:', cdnConfig);
       // Create a new stream
       const streamResponse = await youtube.liveStreams.insert({
         part: 'snippet,cdn',
         requestBody: {
           snippet: {
-            title: `Stream for ${title}`
+            title: dualStream ? `Dual Stream for ${title}` : `Stream for ${title}`
           },
-          cdn: {
-            frameRate: '30fps',
-            ingestionType: 'rtmp',
-            resolution: '1080p'
-          }
+          cdn: cdnConfig
         }
       });
       
@@ -1102,13 +1108,13 @@ class YouTubeService {
    * @param {string} [data.categoryId] - Category ID
    * @returns {Promise<Object>} Updated broadcast info
    */
-  async updateBroadcast(accessToken, broadcastId, { title, description, scheduledStartTime, privacyStatus, categoryId }) {
+  async updateBroadcast(accessToken, broadcastId, { title, description, scheduledStartTime, privacyStatus, categoryId, tags, alteredContent }) {
     const oauth2Client = new google.auth.OAuth2();
     oauth2Client.setCredentials({ access_token: accessToken });
     
     const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
     
-    console.log('[YouTubeService.updateBroadcast] Updating broadcast:', broadcastId);
+    console.log('[YouTubeService.updateBroadcast] Updating broadcast:', broadcastId, 'alteredContent:', !!alteredContent);
     console.log('[YouTubeService.updateBroadcast] Input categoryId:', categoryId);
     
     // First, get the current broadcast to preserve existing values
@@ -1131,9 +1137,6 @@ class YouTubeService {
     
     console.log('[YouTubeService.updateBroadcast] Final categoryId:', finalCategoryId);
     
-    // Build update request - preserve all existing values if not provided
-    // Note: categoryId is NOT included here because liveBroadcasts API doesn't support it
-    // Category will be updated separately using Videos API
     let parsedStartTime = current.snippet.scheduledStartTime;
     if (scheduledStartTime) {
       try {
@@ -1144,11 +1147,16 @@ class YouTubeService {
       } catch (e) {}
     }
 
+    let finalDesc = description !== undefined ? description : current.snippet.description;
+    if (alteredContent && !finalDesc.includes('Altered or synthetic content')) {
+      finalDesc = (finalDesc ? finalDesc + '\n\n' : '') + '✨ This content is created or modified with AI / altered or synthetic media.';
+    }
+
     const updateRequest = {
       id: broadcastId,
       snippet: {
         title: title !== undefined && title !== '' ? title : current.snippet.title,
-        description: description !== undefined ? description : current.snippet.description,
+        description: finalDesc,
         scheduledStartTime: parsedStartTime
       },
       status: {
@@ -1156,11 +1164,6 @@ class YouTubeService {
         selfDeclaredMadeForKids: current.status.selfDeclaredMadeForKids || false
       }
     };
-    
-    // Preserve tags if they exist
-    if (current.snippet.tags && current.snippet.tags.length > 0) {
-      updateRequest.snippet.tags = current.snippet.tags;
-    }
     
     console.log('[YouTubeService.updateBroadcast] Update request:', JSON.stringify(updateRequest, null, 2));
     
@@ -1172,18 +1175,15 @@ class YouTubeService {
     
     const broadcast = response.data;
     
-    // Update category using Videos API (liveBroadcasts API doesn't support categoryId properly)
+    // Update category and tags using Videos API
     let actualCategoryId = broadcast.snippet.categoryId || '22';
-    if (categoryId !== undefined && categoryId !== null && categoryId !== '') {
-      try {
-        console.log('[YouTubeService.updateBroadcast] Updating video category to:', finalCategoryId);
-        const categoryResult = await this.updateVideoCategory(accessToken, broadcastId, finalCategoryId);
-        actualCategoryId = categoryResult.categoryId;
-        console.log('[YouTubeService.updateBroadcast] Video category updated successfully to:', actualCategoryId);
-      } catch (categoryError) {
-        console.error('[YouTubeService.updateBroadcast] Failed to update category:', categoryError.message);
-        // Continue anyway, category update is not critical
-      }
+    try {
+      console.log('[YouTubeService.updateBroadcast] Updating video category and metadata via Videos API...');
+      const categoryResult = await this.updateVideoCategory(accessToken, broadcastId, finalCategoryId, tags, finalDesc, alteredContent);
+      actualCategoryId = categoryResult.categoryId;
+      console.log('[YouTubeService.updateBroadcast] Video metadata updated successfully to category:', actualCategoryId);
+    } catch (categoryError) {
+      console.error('[YouTubeService.updateBroadcast] Failed to update category/tags:', categoryError.message);
     }
     
     console.log('[YouTubeService.updateBroadcast] Final categoryId:', actualCategoryId);
@@ -1195,17 +1195,19 @@ class YouTubeService {
       scheduledStartTime: broadcast.snippet.scheduledStartTime,
       privacyStatus: broadcast.status.privacyStatus,
       categoryId: actualCategoryId,
-      thumbnailUrl: broadcast.snippet.thumbnails?.default?.url || ''
+      tags: broadcast.snippet.tags || []
     };
   }
 
   /**
-   * Update video category and settings using Videos API
-   * This is needed because liveBroadcasts API doesn't support categoryId directly
-   * Also attempts to set altered content declaration (synthetic media)
+   * Update video category, tags, and AI disclosure description using Videos API
+   * NOTE: Do NOT send containsSyntheticMedia in status because YouTube Data API v3 rejects it with 400 Bad Request
    * @param {string} accessToken - Access token
    * @param {string} videoId - Video/Broadcast ID
    * @param {string} categoryId - Category ID (e.g., '22' for People & Blogs)
+   * @param {Array<string>|null} tags - Tags list
+   * @param {string|null} description - Video description
+   * @param {boolean} alteredContent - Whether altered/synthetic content is declared
    * @returns {Promise<Object>} Updated video info
    */
   async updateVideoCategory(accessToken, videoId, categoryId, tags = null, description = null, alteredContent = false) {
@@ -1214,7 +1216,7 @@ class YouTubeService {
     
     const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
     
-    console.log('[YouTubeService.updateVideoCategory] Updating video:', videoId, 'to category:', categoryId, 'tags count:', tags ? tags.length : 0);
+    console.log('[YouTubeService.updateVideoCategory] Updating video:', videoId, 'to category:', categoryId, 'tags count:', tags ? (Array.isArray(tags) ? tags.length : 1) : 0, 'alteredContent:', alteredContent);
     
     // First, get the current video to preserve existing values
     const currentResponse = await youtube.videos.list({
@@ -1228,29 +1230,46 @@ class YouTubeService {
     }
     
     const current = currentResponse.data.items[0];
-    const finalTags = (tags && Array.isArray(tags) && tags.length > 0) ? tags : (current.snippet?.tags || []);
+    let finalTags = [];
+    if (tags && Array.isArray(tags)) {
+      finalTags = [...tags];
+    } else if (tags && typeof tags === 'string') {
+      try {
+        const parsed = JSON.parse(tags);
+        finalTags = Array.isArray(parsed) ? parsed : [tags];
+      } catch (e) {
+        finalTags = tags.split(/[\r\n,]+/).map(t => t.trim()).filter(Boolean);
+      }
+    } else {
+      finalTags = current.snippet?.tags || [];
+    }
+
+    // If alteredContent is true, ensure official YouTube AI disclosure tags are present
+    if (alteredContent) {
+      const aiTags = ['AlteredOrSyntheticContent', 'AI Generated', 'Synthetic Media'];
+      aiTags.forEach(t => {
+        if (!finalTags.includes(t)) finalTags.push(t);
+      });
+    }
     
-    // Update snippet and status directly (clean, single-call, avoids 400 status errors)
+    let finalDesc = description !== null ? description : (current.snippet?.description || '');
+    if (alteredContent && !finalDesc.includes('Altered or synthetic content')) {
+      finalDesc = (finalDesc ? finalDesc + '\n\n' : '') + '✨ This content is created or modified with AI / altered or synthetic media.';
+    }
+
+    // Update snippet directly (clean, single-call with part: 'snippet' to avoid 400 status errors)
     const requestBody = {
       id: videoId,
       snippet: {
         title: current.snippet?.title || '',
-        description: description !== null ? description : (current.snippet?.description || ''),
-        categoryId: categoryId,
+        description: finalDesc,
+        categoryId: categoryId || current.snippet?.categoryId || '22',
         tags: finalTags
       }
     };
 
-    if (alteredContent) {
-      requestBody.status = {
-        privacyStatus: current.status?.privacyStatus || 'unlisted',
-        selfDeclaredMadeForKids: current.status?.selfDeclaredMadeForKids || false,
-        containsSyntheticMedia: true
-      };
-    }
-
     const response = await youtube.videos.update({
-      part: alteredContent ? 'snippet,status' : 'snippet',
+      part: 'snippet',
       requestBody
     });
     

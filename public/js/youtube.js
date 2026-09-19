@@ -4301,15 +4301,30 @@ window.openEditStudioModal = function(stream) {
 
   // Dual Stream Toggle (YouTube Feature On/Off)
   const dualToggle = document.getElementById('dualStreamToggle');
-  const hasDualStream = !!(stream.dual_stream && stream.dual_stream !== 0 && stream.dual_stream !== '0');
+  const hasDualStream = !!(stream.dual_stream && stream.dual_stream !== 0 && stream.dual_stream !== '0') || !!(stream.dualStream && stream.dualStream !== 0 && stream.dualStream !== '0');
   if (dualToggle) {
     dualToggle.checked = hasDualStream;
+    dualToggle.value = hasDualStream ? 'true' : 'false';
   }
 
   // AI USE / Altered Content Toggle
   const alteredToggle = document.getElementById('alteredContentToggle');
+  const hasAltered = !!(stream.altered_content && stream.altered_content !== 0 && stream.altered_content !== '0') || !!(stream.alteredContent && stream.alteredContent !== 0 && stream.alteredContent !== '0');
   if (alteredToggle) {
-    alteredToggle.checked = !!(stream.altered_content && stream.altered_content !== 0 && stream.altered_content !== '0');
+    alteredToggle.checked = hasAltered;
+    alteredToggle.value = hasAltered ? 'true' : 'false';
+  }
+
+  // Unlist Replay on End Toggle
+  const unlistToggle = document.getElementById('unlistReplayOnEnd');
+  if (unlistToggle) {
+    const hasUnlist = stream.unlist_replay_on_end !== undefined 
+      ? (stream.unlist_replay_on_end === 1 || stream.unlist_replay_on_end === true || stream.unlist_replay_on_end === '1' || stream.unlist_replay_on_end === 'true')
+      : (stream.unlistReplayOnEnd !== undefined 
+          ? (stream.unlistReplayOnEnd === 1 || stream.unlistReplayOnEnd === true || stream.unlistReplayOnEnd === '1' || stream.unlistReplayOnEnd === 'true')
+          : true);
+    unlistToggle.checked = hasUnlist;
+    unlistToggle.value = hasUnlist ? 'true' : 'false';
   }
 
   // Tags
@@ -4510,6 +4525,11 @@ if (createBroadcastForm) {
           recurringEnabled: document.getElementById('studioRecurringEnabled')?.checked ? 'true' : 'false',
           streamKey: document.getElementById('streamKeySelect')?.value || '',
           dual_stream: document.getElementById('dualStreamToggle')?.checked ? 1 : 0,
+          dualStream: document.getElementById('dualStreamToggle')?.checked ? 1 : 0,
+          altered_content: document.getElementById('alteredContentToggle')?.checked ? 1 : 0,
+          alteredContent: document.getElementById('alteredContentToggle')?.checked ? 1 : 0,
+          unlist_replay_on_end: document.getElementById('unlistReplayOnEnd')?.checked !== false,
+          unlistReplayOnEnd: document.getElementById('unlistReplayOnEnd')?.checked !== false,
           tags: currentTags.length > 0 ? JSON.stringify(currentTags) : null
         };
 
@@ -4524,6 +4544,34 @@ if (createBroadcastForm) {
 
         const data = await res.json();
         if (data.success) {
+          // If broadcast is linked to YouTube, also sync broadcast metadata directly
+          const editingBroadcastId = form.dataset.editingBroadcastId;
+          if (editingBroadcastId) {
+            try {
+              const accountSelect = document.getElementById('accountSelect');
+              const accountId = accountSelect?.value || '';
+              let bUrl = `/api/youtube/broadcasts/${editingBroadcastId}`;
+              if (accountId) bUrl += `?accountId=${accountId}`;
+              await fetch(bUrl, {
+                method: 'PUT',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'X-CSRF-Token': getCsrfToken()
+                },
+                body: JSON.stringify({
+                  title: updatePayload.streamTitle,
+                  description: updatePayload.description,
+                  scheduledStartTime: finalScheduleStartTime,
+                  dualStream: updatePayload.dual_stream,
+                  alteredContent: updatePayload.altered_content,
+                  unlistReplayOnEnd: updatePayload.unlist_replay_on_end,
+                  tags: currentTags
+                })
+              });
+            } catch (syncErr) {
+              console.warn('[EditStudio] Error syncing broadcast to YouTube:', syncErr);
+            }
+          }
           // CRITICAL: Clear broadcasts cache to force refresh from server
           broadcastsCache.data = null;
           broadcastsCache.timestamp = null;
