@@ -1747,30 +1747,32 @@ button[onclick*="deleteJob"] {
           </div>
         </div>
 
-        <!-- Grid: Checkbox Konten AI & Tidak Dibuat Untuk Anak-Anak -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-          <!-- Konten Buatan AI / Sintetis -->
-          <div class="p-3.5 bg-purple-500/10 border border-purple-500/30 rounded-xl hover:border-purple-500/50 transition-all flex flex-col justify-between">
-            <label class="flex items-start gap-2.5 cursor-pointer h-full">
-              <input type="checkbox" id="uploadAlteredContent" class="mt-0.5 w-4 h-4 rounded text-primary bg-dark-900 border-gray-600 focus:ring-primary focus:ring-offset-0 flex-shrink-0">
-              <div class="min-w-0">
-                <span class="font-semibold text-white text-xs block mb-1 flex items-center gap-1.5">
-                  <i class="ti ti-sparkles text-purple-400"></i> Konten Buatan AI
-                </span>
-                <p class="text-[11px] text-gray-300 leading-snug">Centang jika video dibuat atau dimodifikasi secara realistis menggunakan AI (transparansi YouTube).</p>
+        <!-- Grid: Checkbox Konten AI & Tidak Dibuat Untuk Anak-Anak (Simple & Compact Grid) -->
+        <div class="grid grid-cols-2 gap-2.5 mb-4">
+          <!-- Konten Buatan AI -->
+          <div class="bg-dark-750/80 rounded-xl p-2.5 border border-purple-500/30 hover:border-purple-500/50 transition-all flex items-center">
+            <label class="flex items-center gap-2.5 cursor-pointer w-full">
+              <input type="checkbox" id="uploadAlteredContent" class="w-4 h-4 rounded text-primary bg-dark-900 border-gray-600 focus:ring-primary focus:ring-offset-0 flex-shrink-0 cursor-pointer">
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-1.5">
+                  <i class="ti ti-sparkles text-purple-400 text-sm flex-shrink-0"></i>
+                  <span class="text-xs font-semibold text-white truncate">Konten AI</span>
+                </div>
+                <p class="text-[10px] text-gray-400 mt-0.5 truncate">Transparansi AI YouTube</p>
               </div>
             </label>
           </div>
 
           <!-- Tidak Dibuat Untuk Anak-Anak -->
-          <div class="p-3.5 bg-dark-750/80 border border-gray-600/60 rounded-xl hover:border-gray-500 transition-all flex flex-col justify-between">
-            <label class="flex items-start gap-2.5 cursor-pointer h-full">
-              <input type="checkbox" id="uploadNotMadeForKids" checked class="mt-0.5 w-4 h-4 rounded text-primary bg-dark-900 border-gray-600 focus:ring-primary flex-shrink-0">
-              <div class="min-w-0">
-                <span class="font-semibold text-white text-xs block mb-1 flex items-center gap-1.5">
-                  <i class="ti ti-user-check text-emerald-400"></i> Tidak Dibuat untuk Anak-Anak
-                </span>
-                <p class="text-[11px] text-gray-400 leading-snug">Secara default non-COPPA agar fitur komentar, rekomendasi, dan interaksi video aktif maksimal.</p>
+          <div class="bg-dark-750/80 rounded-xl p-2.5 border border-gray-600/60 hover:border-emerald-500/40 transition-all flex items-center">
+            <label class="flex items-center gap-2.5 cursor-pointer w-full">
+              <input type="checkbox" id="uploadNotMadeForKids" checked class="w-4 h-4 rounded text-primary bg-dark-900 border-gray-600 focus:ring-primary flex-shrink-0 cursor-pointer">
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-1.5">
+                  <i class="ti ti-user-check text-emerald-400 text-sm flex-shrink-0"></i>
+                  <span class="text-xs font-semibold text-white truncate">Bukan untuk Anak</span>
+                </div>
+                <p class="text-[10px] text-gray-400 mt-0.5 truncate">Non-COPPA (fitur aktif)</p>
               </div>
             </label>
           </div>
