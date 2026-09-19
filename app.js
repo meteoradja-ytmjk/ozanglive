@@ -54,7 +54,23 @@ const TitleFolder = require('./models/TitleFolder');
 const SystemSettings = require('./models/SystemSettings');
 const YouTubeBroadcastSettings = require('./models/YouTubeBroadcastSettings');
 const scheduleService = require('./services/scheduleService');
-const { renderLoopVideo, loopVideoFast } = require('./utils/renderProcessor');
+const { renderLoopVideo, loopVideoFast, applyVisualizerOverlay, formatConcatPath, runFfmpeg, ffprobeAsync } = require('./utils/renderProcessor');
+const thumbnailUpload = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: (req, file, cb) => {
+    const allowedFormats = ['image/jpeg', 'image/jpg', 'image/png', 'image/pjpeg', 'image/x-png', 'image/webp'];
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    const allowedExts = ['.jpg', '.jpeg', '.png', '.webp'];
+    if (allowedFormats.includes(file.mimetype) || allowedExts.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Hanya file gambar JPG, PNG, dan WebP yang diperbolehkan'), false);
+    }
+  },
+  limits: {
+    fileSize: 2 * 1024 * 1024 // 2MB max
+  }
+});
 const { parseWIBDateTimeLocal } = require('./utils/wibTime');
 const uploadProcessingConcurrency = Math.max(1, parseInt(process.env.UPLOAD_PROCESSING_CONCURRENCY || '1', 10));
 const videoProcessingQueue = new ProcessingQueue({ concurrency: uploadProcessingConcurrency, name: 'video-processing' });
@@ -4830,7 +4846,7 @@ app.post('/api/render/jobs/:id/save-to-gallery', isAuthenticated, async (req, re
   }
 });
 
-app.post('/api/render/jobs/:id/upload', isAuthenticated, async (req, res) => {
+app.post('/api/render/jobs/:id/upload', isAuthenticated, thumbnailUpload.single('thumbnail'), async (req, res) => {
   try {
     const job = await RenderJob.findById(req.params.id);
     if (!job || job.user_id !== req.session.userId) {
@@ -4840,7 +4856,7 @@ app.post('/api/render/jobs/:id/upload', isAuthenticated, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Output render belum tersedia' });
     }
 
-    const { targetAccountId, title, description, tags, categoryId, privacyStatus } = req.body;
+    const { targetAccountId, title, description, tags, categoryId, privacyStatus, alteredContent } = req.body;
     const accountId = targetAccountId || job.target_account_id;
     if (!accountId) {
       return res.status(400).json({ success: false, message: 'Pilih channel target terlebih dahulu' });
@@ -4853,14 +4869,33 @@ app.post('/api/render/jobs/:id/upload', isAuthenticated, async (req, res) => {
 
     const accessToken = await youtubeService.getAccessToken(account.clientId, account.clientSecret, account.refreshToken, 0, account.id, 0, account.id);
     
+    // Parse tags safely
+    let parsedTags = [];
+    if (Array.isArray(tags)) {
+      parsedTags = tags;
+    } else if (typeof tags === 'string') {
+      try {
+        const jsonTags = JSON.parse(tags);
+        parsedTags = Array.isArray(jsonTags) ? jsonTags : tags.split(',').map(t => t.trim()).filter(Boolean);
+      } catch (_) {
+        parsedTags = tags.split(',').map(t => t.trim()).filter(Boolean);
+      }
+    }
+
+    const isAlteredContent = alteredContent === true || alteredContent === 'true' || alteredContent === '1' || alteredContent === 1;
+
     // Build upload options with custom metadata from user
     const uploadOptions = {
       title: title || job.title || `Render ${job.id}`,
       description: description || 'Uploaded from Render Jobs',
       filePath: path.join(__dirname, 'public', job.output_path),
       privacyStatus: privacyStatus || 'unlisted',
-      tags: tags || [],
-      categoryId: categoryId || '22'
+      tags: parsedTags,
+      categoryId: categoryId || '22',
+      madeForKids: false,
+      alteredContent: isAlteredContent,
+      thumbnailBuffer: req.file ? req.file.buffer : null,
+      thumbnailMimeType: req.file ? req.file.mimetype : 'image/jpeg'
     };
     
     console.log('[Upload] Upload options:', {
@@ -4868,7 +4903,9 @@ app.post('/api/render/jobs/:id/upload', isAuthenticated, async (req, res) => {
       description: uploadOptions.description?.substring(0, 100) + '...',
       tags: uploadOptions.tags,
       categoryId: uploadOptions.categoryId,
-      privacyStatus: uploadOptions.privacyStatus
+      privacyStatus: uploadOptions.privacyStatus,
+      alteredContent: uploadOptions.alteredContent,
+      hasThumbnail: !!uploadOptions.thumbnailBuffer
     });
     
     const uploadResult = await youtubeService.uploadRegularVideo(accessToken, uploadOptions);
@@ -4877,7 +4914,7 @@ app.post('/api/render/jobs/:id/upload', isAuthenticated, async (req, res) => {
     return res.json({ success: true, youtubeVideoId: uploadResult?.id || null });
   } catch (error) {
     console.error('Manual upload render job error:', error);
-    return res.status(500).json({ success: false, message: 'Gagal upload ke YouTube' });
+    return res.status(500).json({ success: false, message: error.message || 'Gagal upload ke YouTube' });
   }
 });
 
@@ -6612,50 +6649,101 @@ app.post('/api/audios/joiner', isAuthenticated, [
         normalizedPaths.push(normalizedPath);
       }
 
-      // Step 2: Create concat demuxer file
-      const concatFilePath = path.join(workDir, 'concat-list.txt');
-      const concatContent = normalizedPaths.map(p => {
-        // ffmpeg concat demuxer requires forward slashes or escaped backslashes
-        const safePath = p.replace(/\\/g, '/');
-        return `file '${safePath}'`;
-      }).join('\n');
-      fs.writeFileSync(concatFilePath, concatContent, 'utf8');
-      console.log('[audio-joiner] Concat file created:', concatFilePath);
+      // Step 2: Smooth Join using acrossfade (eliminates dead-air gaps between tracks)
+      let durations = [];
+      try {
+        durations = await Promise.all(normalizedPaths.map(async (p) => {
+          const meta = await ffprobeAsync(p);
+          return Number(meta?.format?.duration || 0);
+        }));
+      } catch (_) {}
 
-      // Step 3: Join using concat demuxer (stream copy — fast since all files are same format now)
-      await new Promise((resolve, reject) => {
-        let stderrBuffer = '';
-        let runCommand = '';
-        
-        ffmpeg()
-          .input(concatFilePath)
-          .inputOptions(['-f', 'concat', '-safe', '0'])
-          .outputOptions([
-            '-c:a', 'copy',
-            '-movflags', '+faststart',
-            '-y'
-          ])
-          .on('start', (commandLine) => {
-            runCommand = commandLine;
-            console.log('[audio-joiner] concat cmd:', commandLine);
-          })
-          .on('stderr', (line) => {
-            stderrBuffer = (stderrBuffer + '\n' + line).slice(-4000);
-          })
-          .on('error', (err) => {
-            const detail = stderrBuffer ? `\nffmpeg stderr (tail):\n${stderrBuffer}` : '';
-            const cmdInfo = runCommand ? `\nffmpeg cmd: ${runCommand}` : '';
-            const wrapped = new Error(`${err.message}${cmdInfo}${detail}`);
-            wrapped.cause = err;
-            console.error('[audio-joiner] concat error:', wrapped.message);
-            reject(wrapped);
-          })
-          .on('end', () => {
-            console.log('[audio-joiner] Concat join completed ✓');
-            resolve();
-          })
-          .save(outputPath);
-      });
+      const minDur = durations.length > 0 ? Math.min(...durations) : 0;
+      const canCrossfade = normalizedPaths.length >= 2 && minDur >= 2.5;
+      let crossfadeSuccess = false;
+
+      if (canCrossfade) {
+        try {
+          const crossfadeDuration = Math.min(1.5, Math.max(0.5, parseFloat((minDur / 3).toFixed(1))));
+          console.log(`[audio-joiner] Attempting smooth acrossfade transition (${crossfadeDuration}s) between ${normalizedPaths.length} tracks...`);
+
+          let filterComplex = '';
+          let lastOut = '0:a';
+          for (let i = 1; i < normalizedPaths.length; i++) {
+            const nextOut = (i === normalizedPaths.length - 1) ? 'outa' : `a${i}`;
+            filterComplex += `[${lastOut}][${i}:a]acrossfade=d=${crossfadeDuration}:c1=tri:c2=tri[${nextOut}];`;
+            lastOut = nextOut;
+          }
+          filterComplex = filterComplex.replace(/;$/, '');
+
+          await new Promise((resolve, reject) => {
+            let stderrBuffer = '';
+            let cmd = ffmpeg();
+            normalizedPaths.forEach(p => {
+              cmd = cmd.input(p);
+            });
+
+            cmd
+              .complexFilter(filterComplex)
+              .outputOptions([
+                '-map', '[outa]',
+                '-c:a', 'aac',
+                '-b:a', '192k',
+                '-ar', String(TARGET_RATE),
+                '-ac', '2',
+                '-movflags', '+faststart',
+                '-y'
+              ])
+              .on('stderr', (line) => { stderrBuffer = (stderrBuffer + '\n' + line).slice(-2000); })
+              .on('error', (err) => {
+                console.warn('[audio-joiner] acrossfade warning, falling back to concat:', err.message);
+                reject(err);
+              })
+              .on('end', () => {
+                console.log('[audio-joiner] Seamless acrossfade completed ✓');
+                resolve();
+              })
+              .save(outputPath);
+          });
+
+          if (fs.existsSync(outputPath) && fs.statSync(outputPath).size > 1000) {
+            crossfadeSuccess = true;
+          }
+        } catch (fadeErr) {
+          console.warn('[audio-joiner] Smooth crossfade failed, will use concat fallback:', fadeErr.message);
+          if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
+        }
+      }
+
+      // Step 3: Fallback to concat demuxer if acrossfade skipped or failed
+      if (!crossfadeSuccess) {
+        console.log('[audio-joiner] Joining via concat demuxer...');
+        const concatFilePath = path.join(workDir, 'concat-list.txt');
+        const concatContent = normalizedPaths.map(p => {
+          const safePath = p.replace(/\\/g, '/');
+          return `file '${safePath}'`;
+        }).join('\n');
+        fs.writeFileSync(concatFilePath, concatContent, 'utf8');
+
+        await new Promise((resolve, reject) => {
+          let stderrBuffer = '';
+          ffmpeg()
+            .input(concatFilePath)
+            .inputOptions(['-f', 'concat', '-safe', '0'])
+            .outputOptions([
+              '-c:a', 'copy',
+              '-movflags', '+faststart',
+              '-y'
+            ])
+            .on('stderr', (line) => { stderrBuffer = (stderrBuffer + '\n' + line).slice(-4000); })
+            .on('error', (err) => reject(err))
+            .on('end', () => {
+              console.log('[audio-joiner] Concat join completed ✓');
+              resolve();
+            })
+            .save(outputPath);
+        });
+      }
 
     } finally {
       // Cleanup temp normalized files
@@ -6712,6 +6800,191 @@ app.post('/api/audios/joiner', isAuthenticated, [
       success: false,
       error: 'Failed to join audio',
       message: firstLine.slice(0, 500)
+    });
+  }
+});
+
+// ==========================================
+// VIDEO JOINER ENDPOINT
+// Joins multiple selected videos into 1 video file in gallery
+// ==========================================
+app.post('/api/videos/joiner', isAuthenticated, [
+  body('videoIds').isArray({ min: 1 }).withMessage('Pilih minimal 1 video'),
+  body('title').optional().isString().trim()
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+
+    const videoIds = (req.body.videoIds || []).filter(id => typeof id === 'string' && id.trim() !== '');
+    if (videoIds.length < 2) {
+      return res.status(400).json({ success: false, error: 'Pilih minimal 2 video untuk digabung' });
+    }
+
+    const isUserAdmin = req.session.userRole === 'admin';
+    const currentUserId = req.session.userId;
+
+    // Load each video, validate ownership, resolve disk path
+    const videoPaths = [];
+    const orderedTitles = [];
+    for (const id of videoIds) {
+      const vid = await Video.findById(id);
+      if (!vid) continue;
+      if (!isUserAdmin && vid.user_id && String(vid.user_id) !== String(currentUserId)) {
+        return res.status(403).json({ success: false, error: 'Tidak memiliki akses ke satu atau lebih video' });
+      }
+      const diskPath = resolveMediaDiskPath(vid.filepath);
+      if (diskPath && fs.existsSync(diskPath)) {
+        videoPaths.push(diskPath);
+        orderedTitles.push(vid.title || path.basename(diskPath));
+      } else {
+        console.warn('[video-joiner] Missing video file on disk:', diskPath);
+      }
+    }
+
+    if (videoPaths.length < 2) {
+      return res.status(400).json({ success: false, error: 'File video tidak lengkap di storage (minimal 2 file)' });
+    }
+
+    // Storage limit check
+    let estimatedSize = 0;
+    videoPaths.forEach(p => {
+      try { estimatedSize += fs.statSync(p).size; } catch (_) {}
+    });
+    const storageLimit = await StorageService.getUserStorageLimit(currentUserId);
+    if (storageLimit && storageLimit > 0) {
+      const checkResult = await StorageService.canUpload(currentUserId, estimatedSize);
+      if (!checkResult.allowed) {
+        return res.status(413).json({
+          success: false,
+          error: 'Storage limit exceeded',
+          message: `Kapasitas penyimpanan tidak cukup. Penggunaan: ${StorageService.formatBytes(checkResult.currentUsage)}, Batas: ${StorageService.formatBytes(checkResult.limit)}`
+        });
+      }
+    }
+
+    const videosDir = path.join(__dirname, 'public', 'uploads', 'videos');
+    fs.mkdirSync(videosDir, { recursive: true });
+    const outputFilename = `video-joined-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.mp4`;
+    const outputPath = path.join(videosDir, outputFilename);
+
+    const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'video-joiner-'));
+
+    try {
+      console.log('[video-joiner] Starting video join for', videoPaths.length, 'videos');
+      const concatFile = path.join(workDir, 'videos.txt');
+      const lines = videoPaths.map(p => `file '${formatConcatPath(p)}'`);
+      fs.writeFileSync(concatFile, lines.join('\n'), 'utf8');
+
+      // Step 1: Try ultra-fast stream copy concat first
+      let copySuccess = false;
+      try {
+        console.log('[video-joiner] Attempting fast stream copy concat...');
+        await runFfmpeg((cmd) => {
+          return cmd
+            .input(concatFile)
+            .inputOptions(['-f', 'concat', '-safe', '0'])
+            .outputOptions(['-c', 'copy', '-movflags', '+faststart'])
+            .output(outputPath);
+        });
+
+        if (fs.existsSync(outputPath) && fs.statSync(outputPath).size > 10000) {
+          copySuccess = true;
+          console.log('[video-joiner] Stream copy concat succeeded ✓');
+        }
+      } catch (copyErr) {
+        console.warn('[video-joiner] Stream copy failed, re-encoding fallback:', copyErr.message);
+      }
+
+      // Step 2: Fallback to re-encode if stream copy fails (e.g. mixed codecs/resolutions)
+      if (!copySuccess) {
+        console.log('[video-joiner] Re-encoding videos with libx264 veryfast...');
+        if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
+
+        await runFfmpeg((cmd) => {
+          return cmd
+            .input(concatFile)
+            .inputOptions(['-f', 'concat', '-safe', '0'])
+            .outputOptions([
+              '-c:v', 'libx264',
+              '-preset', 'veryfast',
+              '-crf', '23',
+              '-pix_fmt', 'yuv420p',
+              '-c:a', 'aac',
+              '-b:a', '192k',
+              '-movflags', '+faststart'
+            ])
+            .output(outputPath);
+        });
+      }
+
+      // Probing output metadata
+      const meta = await ffprobeAsync(outputPath);
+      const durationSeconds = Math.round(Number(meta?.format?.duration || 0));
+      const fileSize = fs.existsSync(outputPath) ? fs.statSync(outputPath).size : 0;
+
+      const hrs = Math.floor(durationSeconds / 3600);
+      const mins = Math.floor((durationSeconds % 3600) / 60);
+      const secs = Math.floor(durationSeconds % 60);
+      const durationStr = hrs > 0 
+        ? `${hrs}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+        : `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+
+      // Generate thumbnail
+      let thumbnailRelative = null;
+      try {
+        const thumbName = `thumb-video-joined-${Date.now()}.jpg`;
+        await generateThumbnail(outputPath, thumbName);
+        thumbnailRelative = `/uploads/thumbnails/${thumbName}`;
+      } catch (thumbErr) {
+        console.warn('[video-joiner] Thumbnail generation warning:', thumbErr.message);
+      }
+
+      const videoTitle = (req.body.title && req.body.title.trim()) 
+        ? req.body.title.trim() 
+        : `video-joined - ${new Date().toLocaleString('id-ID', { hour12: false }).replace(/[\/,: ]/g, '-')}`;
+
+      const videoStream = meta?.streams?.find(s => s.codec_type === 'video');
+      const resolution = videoStream ? `${videoStream.width}x${videoStream.height}` : '1920x1080';
+
+      const newVideo = await Video.create({
+        title: videoTitle,
+        filename: outputFilename,
+        filepath: `/uploads/videos/${outputFilename}`,
+        thumbnail_path: thumbnailRelative,
+        file_size: fileSize,
+        duration: durationStr,
+        format: 'mp4',
+        resolution: resolution,
+        user_id: currentUserId
+      });
+
+      console.log('[video-joiner] Created video gallery record:', newVideo.id);
+
+      return res.json({
+        success: true,
+        message: `Berhasil menggabungkan ${videoPaths.length} video ke galeri!`,
+        video: newVideo,
+        sources: orderedTitles
+      });
+    } finally {
+      // Cleanup workDir
+      try {
+        const tempFiles = fs.readdirSync(workDir);
+        tempFiles.forEach(f => {
+          try { fs.unlinkSync(path.join(workDir, f)); } catch (_) {}
+        });
+        fs.rmdirSync(workDir);
+      } catch (_) {}
+    }
+  } catch (error) {
+    console.error('Error in video joiner:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Gagal menggabungkan video',
+      message: error.message || 'Terjadi kesalahan pada video joiner'
     });
   }
 });
@@ -8616,24 +8889,6 @@ app.get('/api/thumbnails', isAuthenticated, async (req, res) => {
   } catch (error) {
     console.error('Error listing thumbnails:', error);
     res.status(500).json({ success: false, error: 'Failed to list thumbnails' });
-  }
-});
-
-// Thumbnail upload middleware (memory storage)
-const thumbnailUpload = multer({
-  storage: multer.memoryStorage(),
-  fileFilter: (req, file, cb) => {
-    const allowedFormats = ['image/jpeg', 'image/jpg', 'image/png', 'image/pjpeg', 'image/x-png', 'image/webp'];
-    const ext = path.extname(file.originalname || '').toLowerCase();
-    const allowedExts = ['.jpg', '.jpeg', '.png', '.webp'];
-    if (allowedFormats.includes(file.mimetype) || allowedExts.includes(ext)) {
-      cb(null, true);
-    } else {
-      cb(new Error('Hanya file gambar JPG dan PNG yang diperbolehkan'), false);
-    }
-  },
-  limits: {
-    fileSize: 2 * 1024 * 1024 // 2MB max
   }
 });
 

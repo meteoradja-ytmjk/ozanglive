@@ -977,10 +977,14 @@ button[onclick*="deleteJob"] {
         </div>
       </div>
       <div class="step-content">
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5">
           <button id="createBtn" class="bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-500 text-white px-3 py-3 rounded-xl font-semibold transition-all flex flex-col items-center justify-center gap-1 shadow-lg shadow-primary/25 active:scale-[0.98]">
             <i class="ti ti-player-play text-lg md:text-xl"></i>
             <span class="text-xs font-bold">Render</span>
+          </button>
+          <button id="videoJoinerBtn" type="button" onclick="runVideoJoinerFromRender(this)" class="bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 text-blue-400 px-3 py-3 rounded-xl font-semibold transition-all flex flex-col items-center justify-center gap-1 active:scale-[0.98]" title="Gabungkan video yang dipilih jadi 1 file di gallery">
+            <i class="ti ti-video text-lg md:text-xl"></i>
+            <span class="text-xs font-bold">Video Joiner</span>
           </button>
           <button id="audioJoinerBtn" type="button" onclick="runAudioJoinerFromRender(this)" class="bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-400 px-3 py-3 rounded-xl font-semibold transition-all flex flex-col items-center justify-center gap-1 active:scale-[0.98]" title="Gabungkan audio yang dipilih jadi 1 file di gallery">
             <i class="ti ti-music text-lg md:text-xl"></i>
@@ -1720,6 +1724,50 @@ button[onclick*="deleteJob"] {
             <option value="public">Public</option>
           </select>
           <p class="text-xs text-gray-400 mt-1">Video visibility on YouTube</p>
+        </div>
+        
+        <!-- Thumbnail Upload -->
+        <div id="thumbnailField" class="mb-4">
+          <label class="text-sm font-medium text-white block mb-2">
+            <i class="ti ti-photo mr-1"></i>Thumbnail YouTube (Opsional)
+          </label>
+          <div class="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            <label class="cursor-pointer bg-dark-700 hover:bg-dark-650 border border-gray-600 rounded-lg px-4 py-2 text-xs font-semibold text-gray-200 hover:text-white transition-all flex items-center gap-2 shadow-sm">
+              <i class="ti ti-upload"></i>
+              <span>Pilih Gambar Thumbnail</span>
+              <input type="file" id="uploadThumbnailInput" accept="image/jpeg,image/png,image/webp" class="hidden" onchange="handleThumbnailPreview(this)">
+            </label>
+            <span id="thumbnailFileName" class="text-xs text-gray-400">Belum ada file dipilih</span>
+            <button id="clearThumbnailBtn" type="button" onclick="clearThumbnailSelection()" class="text-xs text-red-400 hover:text-red-300 hidden flex items-center gap-1">
+              <i class="ti ti-trash"></i> Hapus
+            </button>
+          </div>
+          <div id="thumbnailPreviewContainer" class="hidden mt-2 relative w-36 aspect-video rounded-lg overflow-hidden border border-gray-600 shadow-md">
+            <img id="thumbnailPreviewImg" src="" class="w-full h-full object-cover" alt="Thumbnail Preview">
+          </div>
+          <p class="text-[11px] text-gray-400 mt-1">Format gambar: JPG, PNG, atau WebP (Rasio 16:9 disarankan, maks 2MB)</p>
+        </div>
+
+        <!-- AI Generated / Altered Content Disclosure -->
+        <div class="mb-4 p-3 bg-purple-500/10 border border-purple-500/30 rounded-xl">
+          <label class="flex items-start gap-3 cursor-pointer">
+            <input type="checkbox" id="uploadAlteredContent" class="mt-0.5 w-4 h-4 rounded text-primary bg-dark-900 border-gray-600 focus:ring-primary focus:ring-offset-0">
+            <div class="text-xs">
+              <span class="font-semibold text-white block mb-0.5"><i class="ti ti-sparkles text-purple-400 mr-1"></i>Konten Buatan AI / Sintetis (Altered or synthetic content)</span>
+              <span class="text-gray-300">Centang opsi ini jika konten video dibuat atau dimodifikasi secara realistis menggunakan kecerdasan buatan (AI) sesuai kebijakan transparansi YouTube.</span>
+            </div>
+          </label>
+        </div>
+
+        <!-- Made for Kids: Tidak Dibuat untuk Anak-Anak -->
+        <div class="mb-4 p-3 bg-dark-700/60 border border-gray-600/50 rounded-xl">
+          <div class="flex items-start gap-3">
+            <input type="checkbox" id="uploadNotMadeForKids" checked disabled class="mt-0.5 w-4 h-4 rounded text-primary bg-dark-900 border-gray-600 focus:ring-primary cursor-not-allowed">
+            <div class="text-xs">
+              <span class="font-semibold text-white block mb-0.5"><i class="ti ti-user-check text-emerald-400 mr-1"></i>Tidak dibuat untuk anak-anak (Not Made for Kids)</span>
+              <span class="text-gray-400">Secara otomatis ditetapkan "Tidak dibuat untuk anak-anak" (COPPA) agar fitur interaksi, komentar, notifikasi, dan rekomendasi YouTube tetap aktif maksimal.</span>
+            </div>
+          </div>
         </div>
         
         <!-- Channel Defaults Loaded Badge -->
@@ -3595,6 +3643,9 @@ async function openUploadModal(jobId) {
     document.getElementById('uploadTags').value = '';
     document.getElementById('uploadCategory').value = '22';
     document.getElementById('uploadPrivacy').value = 'unlisted';
+    clearThumbnailSelection();
+    const aiCheck = document.getElementById('uploadAlteredContent');
+    if (aiCheck) aiCheck.checked = false;
     
     // Hide all fields initially
     document.getElementById('descriptionField').classList.add('hidden');
@@ -3627,11 +3678,43 @@ async function openUploadModal(jobId) {
   }
 }
 
+function handleThumbnailPreview(input) {
+  if (input.files && input.files[0]) {
+    const file = input.files[0];
+    const nameEl = document.getElementById('thumbnailFileName');
+    if (nameEl) nameEl.textContent = file.name;
+    const clearBtn = document.getElementById('clearThumbnailBtn');
+    if (clearBtn) clearBtn.classList.remove('hidden');
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const previewImg = document.getElementById('thumbnailPreviewImg');
+      const previewContainer = document.getElementById('thumbnailPreviewContainer');
+      if (previewImg) previewImg.src = e.target.result;
+      if (previewContainer) previewContainer.classList.remove('hidden');
+    };
+    reader.readAsDataURL(file);
+  }
+}
+
+function clearThumbnailSelection() {
+  const input = document.getElementById('uploadThumbnailInput');
+  if (input) input.value = '';
+  const nameEl = document.getElementById('thumbnailFileName');
+  if (nameEl) nameEl.textContent = 'Belum ada file dipilih';
+  const clearBtn = document.getElementById('clearThumbnailBtn');
+  if (clearBtn) clearBtn.classList.add('hidden');
+  const previewContainer = document.getElementById('thumbnailPreviewContainer');
+  if (previewContainer) previewContainer.classList.add('hidden');
+  const previewImg = document.getElementById('thumbnailPreviewImg');
+  if (previewImg) previewImg.src = '';
+}
+
 function closeUploadModal() {
   document.getElementById('uploadModal').classList.add('hidden');
   currentUploadJobId = null;
   currentUploadJob = null;
   channelDefaults = null;
+  clearThumbnailSelection();
   
   // CRITICAL: Reset uploading flag when modal closes (if not actually uploading)
   if (!isUploading) {
@@ -3801,18 +3884,26 @@ async function processUpload() {
       }
     }, 500);
     
-    // Actual upload request with custom metadata
+    // Build FormData to support metadata + optional thumbnail file
+    const formData = new FormData();
+    formData.append('targetAccountId', channelId);
+    formData.append('title', title);
+    formData.append('description', description);
+    formData.append('tags', tags);
+    formData.append('categoryId', categoryId);
+    formData.append('privacyStatus', privacyStatus);
+    formData.append('alteredContent', document.getElementById('uploadAlteredContent')?.checked ? 'true' : 'false');
+    formData.append('madeForKids', 'false');
+
+    const thumbInput = document.getElementById('uploadThumbnailInput');
+    if (thumbInput && thumbInput.files && thumbInput.files[0]) {
+      formData.append('thumbnail', thumbInput.files[0]);
+    }
+
+    // Actual upload request with custom metadata and optional thumbnail
     const response = await fetch(`/api/render/jobs/${currentUploadJobId}/upload`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        targetAccountId: channelId,
-        title: title,
-        description: description,
-        tags: tags,
-        categoryId: categoryId,
-        privacyStatus: privacyStatus
-      })
+      body: formData
     });
     
     clearInterval(progressInterval);
@@ -3966,6 +4057,60 @@ function showBadge(message, type = 'info') {
   setTimeout(() => {
     badge.remove();
   }, 3000);
+}
+
+/**
+ * Video Joiner button handler (Step 4 of the render flow).
+ * Reads the currently checked videos from the media list, sends them to the
+ * server which joins them into one video file, and inserts
+ * the result into the video gallery.
+ */
+async function runVideoJoinerFromRender(btn) {
+  const videoIds = [...document.querySelectorAll("input[name='video']:checked")].map(i => i.value);
+
+  if (videoIds.length < 2) {
+    showToast('⚠ Pilih minimal 2 video untuk digabung', 'error');
+    return;
+  }
+
+  const userTitle = (window.prompt(
+    'Judul video gabungan (opsional):',
+    `video-joined - ${new Date().toLocaleString('id-ID', { hour12: false }).replace(/[\/,: ]/g, '-')}`
+  ) || '').trim();
+
+  const originalHtml = btn ? btn.innerHTML : null;
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ti ti-loader animate-spin text-base md:text-xl"></i><span class="text-xs">Joining...</span>';
+  }
+
+  try {
+    const res = await fetch('/api/videos/joiner', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ videoIds, title: userTitle })
+    });
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || data.message || 'Gagal menggabungkan video');
+    }
+
+    showToast(`✓ Video joined: ${data.video?.title || 'tersimpan di gallery!'}`, 'success');
+
+    // Refresh media list so the new file is visible immediately
+    if (typeof loadMedia === 'function') {
+      try { await loadMedia(); } catch (_) { /* noop */ }
+    }
+  } catch (err) {
+    console.error('Video joiner error:', err);
+    showToast(`✗ ${err.message || 'Video joiner gagal'}`, 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      if (originalHtml) btn.innerHTML = originalHtml;
+    }
+  }
 }
 
 /**

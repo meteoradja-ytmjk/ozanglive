@@ -48,26 +48,53 @@ class YouTubeService {
     };
   }
 
-  async uploadRegularVideo(accessToken, { title, description, filePath, privacyStatus = 'unlisted', tags = [], categoryId = '22' }) {
+  async uploadRegularVideo(accessToken, { 
+    title, 
+    description, 
+    filePath, 
+    privacyStatus = 'unlisted', 
+    tags = [], 
+    categoryId = '22',
+    madeForKids = false,
+    alteredContent = false,
+    thumbnailBuffer = null,
+    thumbnailMimeType = 'image/jpeg'
+  }) {
     const oauth2Client = new google.auth.OAuth2();
     oauth2Client.setCredentials({ access_token: accessToken });
     const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
     const fs = require('fs');
 
+    const finalTags = Array.isArray(tags) ? [...tags] : (typeof tags === 'string' ? tags.split(',').map(t => t.trim()).filter(Boolean) : []);
+    if (alteredContent && !finalTags.includes('AlteredOrSyntheticContent')) {
+      finalTags.push('AlteredOrSyntheticContent');
+    }
+
+    let finalDescription = description || '';
+    if (alteredContent && !finalDescription.includes('Altered or synthetic content')) {
+      finalDescription = (finalDescription ? finalDescription + '\n\n' : '') + '✨ This content is created or modified with AI / altered or synthetic media.';
+    }
+
     const requestBody = {
       snippet: {
         title: title || 'Rendered Video',
-        description: description || '',
+        description: finalDescription,
         categoryId: categoryId || '22' // Default: People & Blogs
       },
       status: {
-        privacyStatus
+        privacyStatus,
+        selfDeclaredMadeForKids: false
       }
     };
     
+    // Add synthetic media flag if supported by YouTube API
+    if (alteredContent) {
+      requestBody.status.containsSyntheticMedia = true;
+    }
+    
     // Add tags if provided
-    if (tags && tags.length > 0) {
-      requestBody.snippet.tags = tags;
+    if (finalTags.length > 0) {
+      requestBody.snippet.tags = finalTags;
     }
 
     const response = await youtube.videos.insert({
@@ -78,7 +105,28 @@ class YouTubeService {
       }
     });
 
-    return response.data;
+    const videoData = response.data;
+    const videoId = videoData?.id;
+
+    // Upload custom thumbnail if provided
+    if (videoId && thumbnailBuffer && thumbnailBuffer.length > 0) {
+      try {
+        console.log(`[YouTubeService.uploadRegularVideo] Setting custom thumbnail for ${videoId}, size: ${thumbnailBuffer.length} bytes`);
+        const { Readable } = require('stream');
+        await youtube.thumbnails.set({
+          videoId: videoId,
+          media: {
+            mimeType: thumbnailMimeType || 'image/jpeg',
+            body: Readable.from(thumbnailBuffer)
+          }
+        });
+        console.log(`[YouTubeService.uploadRegularVideo] Thumbnail set successfully for ${videoId} ✓`);
+      } catch (thumbError) {
+        console.warn(`[YouTubeService.uploadRegularVideo] Thumbnail upload warning (video was uploaded, but thumbnail failed):`, thumbError.message);
+      }
+    }
+
+    return videoData;
   }
   /**
    * Get access token from refresh token with retry logic

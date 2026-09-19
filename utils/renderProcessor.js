@@ -1318,4 +1318,11 @@ async function loopVideoFast({ inputPath, outputPath, loopCount, onProgress }) {
   }
 }
 
-module.exports = { renderLoopVideo, loopVideoFast, applyVisualizerOverlay };
+module.exports = { 
+  renderLoopVideo, 
+  loopVideoFast, 
+  applyVisualizerOverlay,
+  formatConcatPath,
+  runFfmpeg,
+  ffprobeAsync
+};
