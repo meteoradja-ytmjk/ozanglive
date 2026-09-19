@@ -393,15 +393,25 @@ class YouTubeService {
       startTimeIso = new Date(Date.now() + 15 * 60 * 1000).toISOString();
     }
 
+    const finalTags = Array.isArray(tags) ? [...tags] : (typeof tags === 'string' ? tags.split(/[\r\n,]+/).map(t => t.trim()).filter(Boolean) : []);
+    if (alteredContent && !finalTags.includes('AlteredOrSyntheticContent')) {
+      finalTags.push('AlteredOrSyntheticContent');
+    }
+
+    let finalDescription = description || '';
+    if (alteredContent && !finalDescription.includes('Altered or synthetic content')) {
+      finalDescription = (finalDescription ? finalDescription + '\n\n' : '') + '✨ This content is created or modified with AI / altered or synthetic media.';
+    }
+
     const snippet = {
       title: title,
-      description: description || '',
+      description: finalDescription,
       scheduledStartTime: startTimeIso
     };
     
     // Add tags if provided (YouTube API accepts tags in snippet)
-    if (tags && Array.isArray(tags) && tags.length > 0) {
-      snippet.tags = tags;
+    if (finalTags.length > 0) {
+      snippet.tags = finalTags;
     }
     
     // Build contentDetails with auto-start/stop settings
@@ -524,17 +534,18 @@ class YouTubeService {
     
     const resolvedStreamKey = stream.cdn?.ingestionInfo?.streamName || '';
     const resolvedRtmpUrl = stream.cdn?.ingestionInfo?.ingestionAddress || 'rtmp://a.rtmp.youtube.com/live2';
-    console.log('[YouTubeService.createBroadcast] Stream resolved:', stream.id, 'key present:', !!resolvedStreamKey);
+    const resolvedBackupRtmpUrl = stream.cdn?.ingestionInfo?.backupIngestionAddress || 'rtmp://b.rtmp.youtube.com/live2?backup=1';
+    console.log('[YouTubeService.createBroadcast] Stream resolved:', stream.id, 'key present:', !!resolvedStreamKey, 'backup present:', !!resolvedBackupRtmpUrl);
     
-    // Update video category using Videos API (liveBroadcasts API doesn't support categoryId)
+    // Update video category, tags, and AI synthetic media status using Videos API
     let actualCategoryId = broadcast.snippet?.categoryId || finalCategoryId;
     try {
-      console.log('[YouTubeService.createBroadcast] Updating video category to:', finalCategoryId);
-      const categoryResult = await this.updateVideoCategory(accessToken, broadcast.id, finalCategoryId);
+      console.log('[YouTubeService.createBroadcast] Updating video category to:', finalCategoryId, 'tags:', finalTags.length, 'alteredContent:', !!alteredContent);
+      const categoryResult = await this.updateVideoCategory(accessToken, broadcast.id, finalCategoryId, finalTags, finalDescription, alteredContent);
       actualCategoryId = categoryResult.categoryId;
-      console.log('[YouTubeService.createBroadcast] Video category updated successfully to:', actualCategoryId);
+      console.log('[YouTubeService.createBroadcast] Video metadata updated successfully to:', actualCategoryId);
     } catch (categoryError) {
-      console.error('[YouTubeService.createBroadcast] Failed to update category:', categoryError.message);
+      console.error('[YouTubeService.createBroadcast] Failed to update category/tags:', categoryError.message);
       // Continue anyway, category update is not critical
     }
     
@@ -543,11 +554,14 @@ class YouTubeService {
       streamId: stream.id,
       streamKey: resolvedStreamKey,
       rtmpUrl: resolvedRtmpUrl,
+      backupRtmpUrl: resolvedBackupRtmpUrl,
       title: broadcast.snippet?.title || title,
-      description: broadcast.snippet?.description || description,
+      description: finalDescription,
       scheduledStartTime: broadcast.snippet?.scheduledStartTime || startTimeIso,
       privacyStatus: broadcast.status?.privacyStatus || privacyStatus,
       categoryId: actualCategoryId,
+      tags: finalTags,
+      alteredContent: !!alteredContent,
       thumbnailUrl: broadcast.snippet?.thumbnails?.default?.url || ''
     };
   }
@@ -1194,17 +1208,17 @@ class YouTubeService {
    * @param {string} categoryId - Category ID (e.g., '22' for People & Blogs)
    * @returns {Promise<Object>} Updated video info
    */
-  async updateVideoCategory(accessToken, videoId, categoryId) {
+  async updateVideoCategory(accessToken, videoId, categoryId, tags = null, description = null, alteredContent = false) {
     const oauth2Client = new google.auth.OAuth2();
     oauth2Client.setCredentials({ access_token: accessToken });
     
     const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
     
-    console.log('[YouTubeService.updateVideoCategory] Updating video:', videoId, 'to category:', categoryId);
+    console.log('[YouTubeService.updateVideoCategory] Updating video:', videoId, 'to category:', categoryId, 'tags count:', tags ? tags.length : 0);
     
     // First, get the current video to preserve existing values
     const currentResponse = await youtube.videos.list({
-      part: 'snippet',
+      part: 'snippet,status',
       id: videoId
     });
     
@@ -1214,28 +1228,40 @@ class YouTubeService {
     }
     
     const current = currentResponse.data.items[0];
+    const finalTags = (tags && Array.isArray(tags) && tags.length > 0) ? tags : (current.snippet?.tags || []);
     
-    // Update snippet directly (clean, single-call, avoids 400 status errors)
-    const response = await youtube.videos.update({
-      part: 'snippet',
-      requestBody: {
-        id: videoId,
-        snippet: {
-          title: current.snippet?.title || '',
-          description: current.snippet?.description || '',
-          categoryId: categoryId,
-          tags: current.snippet?.tags || []
-        }
+    // Update snippet and status directly (clean, single-call, avoids 400 status errors)
+    const requestBody = {
+      id: videoId,
+      snippet: {
+        title: current.snippet?.title || '',
+        description: description !== null ? description : (current.snippet?.description || ''),
+        categoryId: categoryId,
+        tags: finalTags
       }
+    };
+
+    if (alteredContent) {
+      requestBody.status = {
+        privacyStatus: current.status?.privacyStatus || 'unlisted',
+        selfDeclaredMadeForKids: current.status?.selfDeclaredMadeForKids || false,
+        containsSyntheticMedia: true
+      };
+    }
+
+    const response = await youtube.videos.update({
+      part: alteredContent ? 'snippet,status' : 'snippet',
+      requestBody
     });
     
     const video = response.data;
-    console.log('[YouTubeService.updateVideoCategory] Updated categoryId successfully to:', video.snippet?.categoryId);
+    console.log('[YouTubeService.updateVideoCategory] Updated video metadata successfully to category:', video.snippet?.categoryId, 'tags count:', video.snippet?.tags?.length || 0);
     
     return {
       id: video.id,
       title: video.snippet?.title,
-      categoryId: video.snippet?.categoryId
+      categoryId: video.snippet?.categoryId,
+      tags: video.snippet?.tags || []
     };
   }
 
@@ -1253,7 +1279,7 @@ class YouTubeService {
     
     // Fetch channel with brandingSettings and status for monetization info
     const channelResponse = await youtube.channels.list({
-      part: 'brandingSettings,status,snippet',
+      part: 'brandingSettings,status,snippet,contentDetails',
       mine: true
     });
     
@@ -1265,22 +1291,67 @@ class YouTubeService {
     const brandingSettings = channel.brandingSettings || {};
     const channelSettings = brandingSettings.channel || {};
     
-    // Try to get defaults from the most recent broadcast
+    // Try to get defaults from the most recent broadcast or recent upload
     let lastBroadcastDefaults = { title: '', description: '', tags: [] };
     try {
       const broadcastsResponse = await youtube.liveBroadcasts.list({
         part: 'snippet',
-        broadcastStatus: 'upcoming',
-        maxResults: 1
+        broadcastStatus: 'all',
+        maxResults: 5
       });
       
       if (broadcastsResponse.data.items && broadcastsResponse.data.items.length > 0) {
-        const lastBroadcast = broadcastsResponse.data.items[0];
-        lastBroadcastDefaults = {
-          title: lastBroadcast.snippet.title || '',
-          description: lastBroadcast.snippet.description || '',
-          tags: lastBroadcast.snippet.tags || []
-        };
+        for (const bc of broadcastsResponse.data.items) {
+          if (!lastBroadcastDefaults.title && bc.snippet?.title) {
+            lastBroadcastDefaults.title = bc.snippet.title;
+            lastBroadcastDefaults.description = bc.snippet.description || '';
+          }
+          // Fetch actual tags from Videos API since liveBroadcasts snippet doesn't include tags
+          if (lastBroadcastDefaults.tags.length === 0 && bc.id) {
+            try {
+              const videoRes = await youtube.videos.list({
+                part: 'snippet',
+                id: bc.id
+              });
+              if (videoRes.data?.items?.[0]?.snippet?.tags?.length > 0) {
+                lastBroadcastDefaults.tags = videoRes.data.items[0].snippet.tags;
+                console.log(`[YouTubeService.getChannelDefaults] Found ${lastBroadcastDefaults.tags.length} tags from broadcast ${bc.id}`);
+                break;
+              }
+            } catch (vErr) {
+              // Ignore
+            }
+          }
+        }
+      }
+
+      // Fallback: If no tags from broadcasts, check uploads playlist
+      if (lastBroadcastDefaults.tags.length === 0 && channel.contentDetails?.relatedPlaylists?.uploads) {
+        try {
+          const uploadsRes = await youtube.playlistItems.list({
+            part: 'snippet,contentDetails',
+            playlistId: channel.contentDetails.relatedPlaylists.uploads,
+            maxResults: 3
+          });
+          if (uploadsRes.data?.items?.length > 0) {
+            const vidIds = uploadsRes.data.items.map(it => it.contentDetails?.videoId).filter(Boolean);
+            if (vidIds.length > 0) {
+              const vidsRes = await youtube.videos.list({
+                part: 'snippet',
+                id: vidIds.join(',')
+              });
+              for (const vItem of (vidsRes.data?.items || [])) {
+                if (vItem.snippet?.tags?.length > 0) {
+                  lastBroadcastDefaults.tags = vItem.snippet.tags;
+                  console.log(`[YouTubeService.getChannelDefaults] Found ${lastBroadcastDefaults.tags.length} tags from recent upload ${vItem.id}`);
+                  break;
+                }
+              }
+            }
+          }
+        } catch (upErr) {
+          // Ignore
+        }
       }
     } catch (err) {
       console.log('[YouTubeService] Could not fetch last broadcast for defaults:', err.message);

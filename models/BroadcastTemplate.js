@@ -10,14 +10,22 @@ class BroadcastTemplate {
   static parseRow(row) {
     if (!row) return null;
     
-    // Parse tags JSON
+    // Parse tags JSON or comma separated string
     if (row.tags) {
-      try {
-        row.tags = JSON.parse(row.tags);
-      } catch (e) {
-        row.tags = [];
+      if (typeof row.tags === 'string') {
+        try {
+          const parsed = JSON.parse(row.tags);
+          row.tags = Array.isArray(parsed) ? parsed : [parsed];
+        } catch (e) {
+          row.tags = row.tags.split(/[\r\n,]+/).map(t => t.trim()).filter(Boolean);
+        }
       }
+    } else {
+      row.tags = [];
     }
+
+    row.altered_content = !!row.altered_content;
+    row.dual_stream = !!row.dual_stream;
     
     // Parse recurring_days JSON
     if (row.recurring_days) {
@@ -98,7 +106,10 @@ class BroadcastTemplate {
       recurring_days = null,
       next_run_at = null,
       channel_name = null,
-      channel_id = null
+      channel_id = null,
+      altered_content = 0,
+      dual_stream = 0,
+      vertical_stream_key = null
     } = templateData;
 
     // Validate required fields
@@ -140,15 +151,16 @@ class BroadcastTemplate {
           thumbnail_index, pinned_thumbnail, stream_key_folder_mapping, stream_id,
           title_index, pinned_title_id, title_folder_id,
           recurring_enabled, recurring_pattern, recurring_time, recurring_days, next_run_at,
-          channel_name, channel_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          channel_name, channel_id, altered_content, dual_stream, vertical_stream_key
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id, user_id, account_id, name.trim(), title, description,
           privacy_status, tagsJson, category_id, thumbnail_path, thumbnail_folder,
           thumbnail_index || 0, pinned_thumbnail, streamKeyFolderMappingJson, stream_id,
           title_index || 0, pinned_title_id, title_folder_id,
           recurring_enabled ? 1 : 0, recurring_pattern, recurring_time, daysJson, next_run_at,
-          channel_name, channel_id
+          channel_name, channel_id, altered_content ? 1 : 0, dual_stream ? 1 : 0,
+          vertical_stream_key ? vertical_stream_key.trim() : null
         ],
         function (err) {
           if (err) {

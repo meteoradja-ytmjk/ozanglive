@@ -345,6 +345,10 @@ async function createCoreTablesAsync() {
   await runTableQuery(`ALTER TABLE streams ADD COLUMN youtube_enable_auto_start INTEGER DEFAULT 1`, 'streams.youtube_enable_auto_start');
   await runTableQuery(`ALTER TABLE streams ADD COLUMN youtube_enable_auto_stop INTEGER DEFAULT 1`, 'streams.youtube_enable_auto_stop');
   await runTableQuery(`ALTER TABLE streams ADD COLUMN youtube_unlist_replay_on_end INTEGER DEFAULT 1`, 'streams.youtube_unlist_replay_on_end');
+  await runTableQuery(`ALTER TABLE streams ADD COLUMN dual_stream INTEGER DEFAULT 0`, 'streams.dual_stream');
+  await runTableQuery(`ALTER TABLE streams ADD COLUMN backup_rtmp_url TEXT`, 'streams.backup_rtmp_url');
+  await runTableQuery(`ALTER TABLE streams ADD COLUMN vertical_stream_key TEXT`, 'streams.vertical_stream_key');
+  await runTableQuery(`ALTER TABLE streams ADD COLUMN tags TEXT`, 'streams.tags');
 
   // Migrate stream_duration_hours to stream_duration_minutes
   await runTableQuery(`UPDATE streams SET stream_duration_minutes = stream_duration_hours * 60 
@@ -473,6 +477,9 @@ async function createCoreTablesAsync() {
   // even if credentials are reconnected with a different account_id.
   await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN channel_name TEXT`, 'broadcast_templates.channel_name');
   await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN channel_id TEXT`, 'broadcast_templates.channel_id');
+  await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN altered_content INTEGER DEFAULT 0`, 'broadcast_templates.altered_content');
+  await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN dual_stream INTEGER DEFAULT 0`, 'broadcast_templates.dual_stream');
+  await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN vertical_stream_key TEXT`, 'broadcast_templates.vertical_stream_key');
 
   // Create recurring_schedules table for scheduled recurring broadcasts
   await runTableQuery(`CREATE TABLE IF NOT EXISTS recurring_schedules (
@@ -600,6 +607,12 @@ async function createCoreTablesAsync() {
 
   // Add thumbnail_path column to youtube_broadcast_settings for storing selected thumbnail path
   await runTableQuery(`ALTER TABLE youtube_broadcast_settings ADD COLUMN thumbnail_path TEXT`, 'youtube_broadcast_settings.thumbnail_path');
+
+  // Add altered_content, tags, and dual_stream columns to youtube_broadcast_settings
+  await runTableQuery(`ALTER TABLE youtube_broadcast_settings ADD COLUMN altered_content INTEGER DEFAULT 0`, 'youtube_broadcast_settings.altered_content');
+  await runTableQuery(`ALTER TABLE youtube_broadcast_settings ADD COLUMN tags TEXT`, 'youtube_broadcast_settings.tags');
+  await runTableQuery(`ALTER TABLE youtube_broadcast_settings ADD COLUMN dual_stream INTEGER DEFAULT 0`, 'youtube_broadcast_settings.dual_stream');
+  await runTableQuery(`ALTER TABLE youtube_broadcast_settings ADD COLUMN vertical_stream_key TEXT`, 'youtube_broadcast_settings.vertical_stream_key');
 
   // Create stream_key_folder_mapping table for storing stream key to thumbnail folder binding
   await runTableQuery(`CREATE TABLE IF NOT EXISTS stream_key_folder_mapping (

@@ -5722,6 +5722,20 @@ app.put('/api/streams/:id', isAuthenticated, async (req, res) => {
       updateData.youtube_account_id = req.body.youtubeAccountId ? parseInt(req.body.youtubeAccountId) : null;
     }
 
+    // Dual Stream (Vertical / Portrait for YouTube Shorts)
+    if (req.body.dualStream !== undefined || req.body.dual_stream !== undefined) {
+      const isDual = req.body.dualStream === 'true' || req.body.dualStream === true || req.body.dual_stream === 1 || req.body.dual_stream === '1' || req.body.dual_stream === true;
+      updateData.dual_stream = isDual ? 1 : 0;
+    }
+    if (req.body.verticalStreamKey !== undefined || req.body.vertical_stream_key !== undefined || req.body.backupRtmpUrl !== undefined) {
+      const vKey = (req.body.verticalStreamKey || req.body.vertical_stream_key || req.body.backupRtmpUrl || '').trim();
+      updateData.vertical_stream_key = vKey || null;
+      updateData.backup_rtmp_url = vKey || null;
+    }
+    if (req.body.tags !== undefined) {
+      updateData.tags = Array.isArray(req.body.tags) ? JSON.stringify(req.body.tags) : (req.body.tags || null);
+    }
+
     // Handle stream duration (in minutes - new format: hours + minutes)
     // IMPORTANT: If user sets duration, this takes priority over end_time
     let hasExplicitDuration = false;
@@ -10026,20 +10040,39 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       finalScheduledStartTime = parsedWibStart.toISOString();
     }
 
-    // Parse tags if provided as JSON string
+    // Parse tags safely from array, JSON string, comma-separated or newline-separated string
     let parsedTags = [];
     if (tags) {
-      try {
-        parsedTags = typeof tags === 'string' ? JSON.parse(tags) : tags;
-      } catch (e) {
-        parsedTags = [];
+      if (Array.isArray(tags)) {
+        parsedTags = tags;
+      } else if (typeof tags === 'string') {
+        const trimmed = tags.trim();
+        if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+          try {
+            const parsed = JSON.parse(trimmed);
+            parsedTags = Array.isArray(parsed) ? parsed : [parsed];
+          } catch (e) {
+            parsedTags = trimmed.replace(/^\[|\]$/g, '').split(',').map(t => t.trim().replace(/^['"]|['"]$/g, ''));
+          }
+        } else if (trimmed.includes(',')) {
+          parsedTags = trimmed.split(',').map(t => t.trim());
+        } else if (trimmed.includes('\n')) {
+          parsedTags = trimmed.split('\n').map(t => t.trim());
+        } else if (trimmed.length > 0) {
+          parsedTags = [trimmed];
+        }
       }
+      parsedTags = parsedTags.map(t => String(t || '').trim()).filter(Boolean);
     }
+
+    const isAlteredContent = alteredContent === 'true' || alteredContent === true || alteredContent === 'on' || alteredContent === 1 || alteredContent === '1';
+    const isDualStream = req.body.dualStream === 'true' || req.body.dualStream === true || req.body.dualStream === 'on' || req.body.dualStream === 1 || req.body.dualStream === '1';
+    const verticalStreamKey = (req.body.verticalStreamKey || req.body.backupRtmpUrl || req.body.secondaryRtmpUrl || '').trim();
 
     const accessToken = await youtubeService.getAccessToken(credentials.clientId, credentials.clientSecret, credentials.refreshToken, 0, credentials.id, 0, credentials.id);
 
     const finalCategoryId = categoryId || '22';
-    console.log('[API] Create broadcast - using categoryId:', finalCategoryId);
+    console.log('[API] Create broadcast - using categoryId:', finalCategoryId, 'dualStream:', isDualStream, 'verticalKey:', !!verticalStreamKey, 'alteredContent:', isAlteredContent);
 
     const broadcast = await youtubeService.createBroadcast(accessToken, {
       title,
@@ -10053,7 +10086,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       enableAutoStop: enableAutoStop !== 'false' && enableAutoStop !== false, // Default true
       monetizationEnabled: monetizationEnabled === 'true' || monetizationEnabled === true,
       adFrequency: adFrequency || 'medium',
-      alteredContent: alteredContent === 'true' || alteredContent === true
+      alteredContent: isAlteredContent
     });
 
     // Get thumbnail folder from request
@@ -10068,7 +10101,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       hasFile: !!req.file
     });
 
-    // Save broadcast settings for later use (e.g., unlist replay on end, thumbnail folder)
+    // Save broadcast settings for later use (e.g., unlist replay on end, thumbnail folder, dual stream, altered content)
     try {
       await YouTubeBroadcastSettings.upsert({
         broadcastId: broadcast.broadcastId,
@@ -10080,9 +10113,13 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         originalPrivacyStatus: privacyStatus || 'unlisted',
         thumbnailFolder: thumbnailFolder !== undefined ? thumbnailFolder : null,
         thumbnailIndex: thumbnailIndex,
-        thumbnailPath: thumbnailPathFromRequest || null
+        thumbnailPath: thumbnailPathFromRequest || null,
+        alteredContent: isAlteredContent ? 1 : 0,
+        dualStream: isDualStream ? 1 : 0,
+        verticalStreamKey: isDualStream ? (verticalStreamKey || null) : null,
+        tags: parsedTags && parsedTags.length > 0 ? JSON.stringify(parsedTags) : null
       });
-      console.log('[API] Saved broadcast settings for:', broadcast.broadcastId, 'thumbnailFolder:', thumbnailFolder, 'thumbnailIndex:', thumbnailIndex, 'thumbnailPath:', thumbnailPathFromRequest);
+      console.log('[API] Saved broadcast settings for:', broadcast.broadcastId, 'dualStream:', isDualStream, 'alteredContent:', isAlteredContent);
     } catch (settingsErr) {
       console.error('[API] Error saving broadcast settings:', settingsErr.message);
       // Don't fail the request, just log the error
@@ -10371,6 +10408,10 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         user_id: req.session.userId,
         youtube_broadcast_id: broadcast.broadcastId,
         youtube_account_id: accountId || (credentials ? credentials.id : null),
+        dual_stream: isDualStream ? 1 : 0,
+        vertical_stream_key: isDualStream ? (verticalStreamKey || null) : null,
+        backup_rtmp_url: isDualStream ? (verticalStreamKey || null) : null,
+        tags: parsedTags && parsedTags.length > 0 ? JSON.stringify(parsedTags) : null,
         status: req.body.startImmediately === 'true' ? 'offline' : (isScheduled ? 'scheduled' : 'offline')
       };
 
@@ -10817,7 +10858,10 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
       recurring_pattern: recurringPattern || null,
       recurring_time: recurringTime || null,
       recurring_days: Array.isArray(recurringDays) ? recurringDays : null,
-      next_run_at: next_run_at
+      next_run_at: next_run_at,
+      altered_content: req.body.alteredContent === 'true' || req.body.alteredContent === true || req.body.alteredContent === 1 || req.body.alteredContent === '1' ? 1 : 0,
+      dual_stream: req.body.dualStream === 'true' || req.body.dualStream === true || req.body.dualStream === 1 || req.body.dualStream === '1' ? 1 : 0,
+      vertical_stream_key: (req.body.verticalStreamKey || req.body.backupRtmpUrl || '').trim() || null
     });
 
     // Only auto-set thumbnail_folder if it was not provided at all (null)
@@ -11360,6 +11404,19 @@ app.put('/api/youtube/templates/:id', isAuthenticated, async (req, res) => {
     if (titleIndex !== undefined) updateData.title_index = titleIndex;
     if (pinnedTitleId !== undefined) updateData.pinned_title_id = pinnedTitleId;
     if (titleFolderId !== undefined) updateData.title_folder_id = titleFolderId;
+
+    if (req.body.alteredContent !== undefined || req.body.altered_content !== undefined) {
+      const isAltered = req.body.alteredContent === 'true' || req.body.alteredContent === true || req.body.altered_content === 1 || req.body.altered_content === '1' || req.body.altered_content === true;
+      updateData.altered_content = isAltered ? 1 : 0;
+    }
+    if (req.body.dualStream !== undefined || req.body.dual_stream !== undefined) {
+      const isDual = req.body.dualStream === 'true' || req.body.dualStream === true || req.body.dual_stream === 1 || req.body.dual_stream === '1' || req.body.dual_stream === true;
+      updateData.dual_stream = isDual ? 1 : 0;
+    }
+    if (req.body.verticalStreamKey !== undefined || req.body.vertical_stream_key !== undefined || req.body.backupRtmpUrl !== undefined) {
+      const vKey = (req.body.verticalStreamKey || req.body.vertical_stream_key || req.body.backupRtmpUrl || '').trim();
+      updateData.vertical_stream_key = vKey || null;
+    }
 
     // Handle recurring schedule fields
     if (recurringEnabled !== undefined) {

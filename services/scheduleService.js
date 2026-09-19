@@ -961,7 +961,9 @@ class ScheduleService {
                 unlistReplayOnEnd: false,
                 originalPrivacyStatus: b.privacyStatus || 'unlisted',
                 thumbnailFolder: thumbnailFolder !== null ? thumbnailFolder : null,
-                templateId: template.id
+                templateId: template.id,
+                dualStream: template.dual_stream ? 1 : 0,
+                verticalStreamKey: template.vertical_stream_key || null
               });
               console.log(`[ScheduleService] Saved broadcast settings for ${result.broadcastId || result.id}, thumbnailFolder: ${thumbnailFolder !== null ? (thumbnailFolder === '' ? 'root' : thumbnailFolder) : 'null'}, templateId: ${template.id}`);
             } catch (settingsErr) {
@@ -1152,7 +1154,9 @@ class ScheduleService {
             unlistReplayOnEnd: false,
             originalPrivacyStatus: template.privacy_status || 'unlisted',
             thumbnailFolder: thumbnailFolder !== null ? thumbnailFolder : null,
-            templateId: template.id
+            templateId: template.id,
+            dualStream: template.dual_stream ? 1 : 0,
+            verticalStreamKey: template.vertical_stream_key || null
           });
           console.log(`[ScheduleService] Saved broadcast settings for ${result.broadcastId || result.id}, thumbnailFolder: ${thumbnailFolder !== null ? (thumbnailFolder === '' ? 'root' : thumbnailFolder) : 'null'}, templateId: ${template.id}`);
         } catch (settingsErr) {

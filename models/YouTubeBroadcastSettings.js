@@ -18,14 +18,22 @@ class YouTubeBroadcastSettings {
       thumbnailFolder = null,
       templateId = null,
       thumbnailIndex = 0,
-      thumbnailPath = null
+      thumbnailPath = null,
+      alteredContent = false,
+      tags = null,
+      dualStream = false,
+      verticalStreamKey = null
     } = data;
+
+    const tagsJson = Array.isArray(tags) ? JSON.stringify(tags) : (tags || null);
+    const alteredContentInt = (alteredContent === true || alteredContent === 1 || alteredContent === 'true') ? 1 : 0;
+    const dualStreamInt = (dualStream === true || dualStream === 1 || dualStream === 'true') ? 1 : 0;
 
     return new Promise((resolve, reject) => {
       db.run(
         `INSERT INTO youtube_broadcast_settings 
-         (broadcast_id, user_id, account_id, enable_auto_start, enable_auto_stop, unlist_replay_on_end, original_privacy_status, thumbnail_folder, template_id, thumbnail_index, thumbnail_path)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         (broadcast_id, user_id, account_id, enable_auto_start, enable_auto_stop, unlist_replay_on_end, original_privacy_status, thumbnail_folder, template_id, thumbnail_index, thumbnail_path, altered_content, tags, dual_stream, vertical_stream_key)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(broadcast_id) DO UPDATE SET
            enable_auto_start = excluded.enable_auto_start,
            enable_auto_stop = excluded.enable_auto_stop,
@@ -34,7 +42,11 @@ class YouTubeBroadcastSettings {
            thumbnail_folder = excluded.thumbnail_folder,
            template_id = excluded.template_id,
            thumbnail_index = excluded.thumbnail_index,
-           thumbnail_path = excluded.thumbnail_path`,
+           thumbnail_path = excluded.thumbnail_path,
+           altered_content = excluded.altered_content,
+           tags = excluded.tags,
+           dual_stream = excluded.dual_stream,
+           vertical_stream_key = excluded.vertical_stream_key`,
         [
           broadcastId,
           userId,
@@ -46,7 +58,11 @@ class YouTubeBroadcastSettings {
           thumbnailFolder,
           templateId,
           thumbnailIndex || 0,
-          thumbnailPath
+          thumbnailPath,
+          alteredContentInt,
+          tagsJson,
+          dualStreamInt,
+          verticalStreamKey || null
         ],
         function(err) {
           if (err) {
@@ -65,7 +81,10 @@ class YouTubeBroadcastSettings {
             thumbnailFolder,
             templateId,
             thumbnailIndex,
-            thumbnailPath
+            thumbnailPath,
+            alteredContent: alteredContentInt === 1,
+            tags: tagsJson,
+            dualStream: dualStreamInt === 1
           });
         }
       );

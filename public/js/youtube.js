@@ -3212,6 +3212,18 @@ function updateTagsPreview() {
   }
 }
 
+// Toggle Dual Stream details (kept safe as no-op)
+function toggleDualStreamDetails(checked) {
+  const details = document.getElementById('dualStreamDetails');
+  if (!details) return;
+  if (checked) {
+    details.classList.remove('hidden');
+  } else {
+    details.classList.add('hidden');
+  }
+}
+window.toggleDualStreamDetails = toggleDualStreamDetails;
+
 // Render tags as chips
 function renderTags() {
   const container = document.getElementById('tagsContainer');
@@ -3241,31 +3253,140 @@ function renderTags() {
     hiddenInput.value = JSON.stringify(currentTags);
   }
   
+  // Update character counter if present
+  const charCountEl = document.getElementById('tagsCharCount');
+  if (charCountEl) {
+    const totalChars = currentTags.join(',').length;
+    charCountEl.textContent = `${totalChars}/500`;
+    if (totalChars > 450) {
+      charCountEl.className = 'text-amber-400 font-medium';
+    } else {
+      charCountEl.className = 'text-gray-400';
+    }
+  }
+
   // Update preview
   updateTagsPreview();
 }
 
-// Add a new tag
-function addTag(tag) {
-  const trimmedTag = tag.trim();
-  if (!trimmedTag) return;
+// Add a new tag (supports multi-tag strings split by comma or newline)
+function addTag(tagText) {
+  if (!tagText) return;
   
-  // Check if tag already exists
-  if (currentTags.includes(trimmedTag)) {
-    showToast('Tag already exists', 'error');
-    return;
+  // Split on comma or newline if user pasted or entered multiple
+  const tagsToAdd = String(tagText)
+    .split(/[\r\n,]+/)
+    .map(t => t.trim())
+    .filter(Boolean);
+
+  if (tagsToAdd.length === 0) return;
+
+  let addedCount = 0;
+  for (const tag of tagsToAdd) {
+    if (currentTags.includes(tag)) {
+      continue;
+    }
+    const currentLen = currentTags.join(',').length;
+    const addedLen = tag.length + (currentTags.length > 0 ? 1 : 0);
+    if (currentLen + addedLen > 500) {
+      showToast('Batas maksimal 500 karakter tag tercapai', 'warning');
+      break;
+    }
+    currentTags.push(tag);
+    addedCount++;
   }
-  
-  // Check total characters limit (500)
-  const totalChars = currentTags.join(',').length + trimmedTag.length + (currentTags.length > 0 ? 1 : 0);
-  if (totalChars > 500) {
-    showToast('Tags exceed 500 character limit', 'error');
-    return;
-  }
-  
-  currentTags.push(trimmedTag);
+
   renderTags();
 }
+
+// Copy all active tags to clipboard
+function copyAllTagsToClipboard() {
+  if (!currentTags || currentTags.length === 0) {
+    showToast('Belum ada tag untuk disalin', 'info');
+    return;
+  }
+  const text = currentTags.join(', ');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => {
+      showToast('✓ ' + currentTags.length + ' Tag berhasil disalin!', 'success');
+    }).catch(() => {
+      fallbackCopyTextToClipboard(text);
+    });
+  } else {
+    fallbackCopyTextToClipboard(text);
+  }
+}
+window.copyAllTagsToClipboard = copyAllTagsToClipboard;
+
+function fallbackCopyTextToClipboard(text) {
+  const textArea = document.createElement('textarea');
+  textArea.value = text;
+  textArea.style.top = '0';
+  textArea.style.left = '0';
+  textArea.style.position = 'fixed';
+  document.body.appendChild(textArea);
+  textArea.focus();
+  textArea.select();
+  try {
+    document.execCommand('copy');
+    showToast('✓ ' + currentTags.length + ' Tag berhasil disalin!', 'success');
+  } catch (err) {
+    showToast('Gagal menyalin tag ke clipboard', 'error');
+  }
+  document.body.removeChild(textArea);
+}
+
+// Clear all tags in Studio
+function clearAllStudioTags() {
+  if (currentTags.length === 0) return;
+  currentTags = [];
+  renderTags();
+  showToast('Semua tag dibersihkan', 'info');
+}
+window.clearAllStudioTags = clearAllStudioTags;
+
+// Safely load tags into studio from Array, JSON string, or comma/newline delimited string
+function loadTagsIntoStudio(tagsInput) {
+  if (!tagsInput) {
+    currentTags = [];
+    renderTags();
+    return;
+  }
+  let tagsList = [];
+  if (Array.isArray(tagsInput)) {
+    tagsList = tagsInput;
+  } else if (typeof tagsInput === 'string') {
+    const trimmed = tagsInput.trim();
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        tagsList = Array.isArray(parsed) ? parsed : [parsed];
+      } catch (e) {
+        tagsList = trimmed.replace(/^\[|\]$/g, '').split(',').map(t => t.trim().replace(/^['"]|['"]$/g, ''));
+      }
+    } else if (trimmed.includes(',')) {
+      tagsList = trimmed.split(',').map(t => t.trim());
+    } else if (trimmed.includes('\n')) {
+      tagsList = trimmed.split('\n').map(t => t.trim());
+    } else if (trimmed.length > 0) {
+      tagsList = [trimmed];
+    }
+  }
+  
+  currentTags = [];
+  tagsList.forEach(t => {
+    const clean = String(t || '').trim();
+    if (clean && !currentTags.includes(clean)) {
+      const currentLen = currentTags.join(',').length;
+      const addedLen = clean.length + (currentTags.length > 0 ? 1 : 0);
+      if (currentLen + addedLen <= 500) {
+        currentTags.push(clean);
+      }
+    }
+  });
+  renderTags();
+}
+window.loadTagsIntoStudio = loadTagsIntoStudio;
 
 // Remove a tag
 function removeTag(tag) {
@@ -3291,15 +3412,24 @@ function escapeJsString(str) {
     .replace(/\r/g, '\\r');
 }
 
-// Initialize tag input handler
+// Initialize tag input handler with comma split and paste support
 function initTagInput() {
   const tagInput = document.getElementById('tagInput');
   if (!tagInput) return;
   
   tagInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' || e.key === ',') {
       e.preventDefault();
       addTag(tagInput.value);
+      tagInput.value = '';
+    }
+  });
+
+  tagInput.addEventListener('paste', (e) => {
+    e.preventDefault();
+    const pastedText = (e.clipboardData || window.clipboardData)?.getData('text');
+    if (pastedText) {
+      addTag(pastedText);
       tagInput.value = '';
     }
   });
@@ -4168,6 +4298,27 @@ window.openEditStudioModal = function(stream) {
       });
     }
   }
+
+  // Dual Stream Toggle (YouTube Feature On/Off)
+  const dualToggle = document.getElementById('dualStreamToggle');
+  const hasDualStream = !!(stream.dual_stream && stream.dual_stream !== 0 && stream.dual_stream !== '0');
+  if (dualToggle) {
+    dualToggle.checked = hasDualStream;
+  }
+
+  // AI USE / Altered Content Toggle
+  const alteredToggle = document.getElementById('alteredContentToggle');
+  if (alteredToggle) {
+    alteredToggle.checked = !!(stream.altered_content && stream.altered_content !== 0 && stream.altered_content !== '0');
+  }
+
+  // Tags
+  if (stream.tags) {
+    loadTagsIntoStudio(stream.tags);
+  } else {
+    currentTags = [];
+    renderTags();
+  }
 };
 
 function closeCreateBroadcastModal() {
@@ -4267,6 +4418,13 @@ function closeCreateBroadcastModal() {
   if (rTime) rTime.value = '';
   if (rEnabled) rEnabled.checked = true;
 
+  // Reset Dual Stream & Altered Content
+  const dualToggle = document.getElementById('dualStreamToggle');
+  if (dualToggle) dualToggle.checked = false;
+
+  const alteredToggle = document.getElementById('alteredContentToggle');
+  if (alteredToggle) alteredToggle.checked = false;
+
   setStudioScheduleType('once');
 }
 window.closeCreateBroadcastModal = closeCreateBroadcastModal;
@@ -4350,7 +4508,9 @@ if (createBroadcastForm) {
           recurringTime: recurringTime,
           scheduleDays: document.getElementById('studioScheduleDays')?.value || '[]',
           recurringEnabled: document.getElementById('studioRecurringEnabled')?.checked ? 'true' : 'false',
-          streamKey: document.getElementById('streamKeySelect')?.value || ''
+          streamKey: document.getElementById('streamKeySelect')?.value || '',
+          dual_stream: document.getElementById('dualStreamToggle')?.checked ? 1 : 0,
+          tags: currentTags.length > 0 ? JSON.stringify(currentTags) : null
         };
 
         const res = await fetch(`/api/streams/${editingStreamId}`, {
@@ -4438,8 +4598,6 @@ if (createBroadcastForm) {
       formData.append('recurringEnabled', recurringEnabled);
       formData.append('startImmediately', isStartNow ? 'true' : 'false');
 
-
-
       // Tags & Category
       if (currentTags.length > 0) {
         formData.append('tags', JSON.stringify(currentTags));
@@ -4447,6 +4605,14 @@ if (createBroadcastForm) {
       const categoryId = document.getElementById('categoryId')?.value;
       formData.append('categoryId', categoryId || '22');
       
+      // Dual Stream (On/Off - Fitur Dual Stream YouTube)
+      const isDualStream = !!document.getElementById('dualStreamToggle')?.checked;
+      formData.append('dualStream', isDualStream ? 'true' : 'false');
+
+      // AI USE / Altered Content (On/Off)
+      const isAlteredContent = !!document.getElementById('alteredContentToggle')?.checked;
+      formData.append('alteredContent', isAlteredContent ? 'true' : 'false');
+
       formData.append('enableAutoStart', 'true');
       formData.append('enableAutoStop', 'true');
       formData.append('unlistReplayOnEnd', document.getElementById('unlistReplayOnEnd')?.checked ? 'true' : 'false');
@@ -6252,9 +6418,25 @@ async function createFromTemplate(templateId) {
       // Note: Category field removed from UI
       
       // Set tags if available
-      if (template.tags && Array.isArray(template.tags)) {
-        currentTags = [...template.tags];
-        renderTags();
+      if (template.tags) {
+        loadTagsIntoStudio(template.tags);
+      }
+
+      // Set Dual Stream (Live Vertikal / Portrait) if template has it
+      if (template.dual_stream !== undefined && template.dual_stream !== null) {
+        const dualToggle = document.getElementById('dualStreamToggle');
+        const hasDual = !!(template.dual_stream && template.dual_stream !== 0 && template.dual_stream !== '0');
+        if (dualToggle) {
+          dualToggle.checked = hasDual;
+        }
+      }
+
+      // Set AI USE if template has it
+      if (template.altered_content !== undefined && template.altered_content !== null) {
+        const alteredToggle = document.getElementById('alteredContentToggle');
+        if (alteredToggle) {
+          alteredToggle.checked = !!(template.altered_content && template.altered_content !== 0 && template.altered_content !== '0');
+        }
       }
       
       showToast('Template loaded. Please set schedule time.', 'info');

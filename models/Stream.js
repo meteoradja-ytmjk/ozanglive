@@ -29,13 +29,20 @@ class Stream {
       youtube_broadcast_id = null,
       youtube_account_id = null,
       youtube_lifecycle_status = null,
+      dual_stream = 0,
+      backup_rtmp_url = null,
+      vertical_stream_key = null,
+      tags = null,
       status,
       user_id
     } = streamData;
     const loop_video_int = loop_video ? 1 : 0;
     const recurring_enabled_int = recurring_enabled ? 1 : 0;
+    const dual_stream_int = dual_stream ? 1 : 0;
+    const vertical_key_val = vertical_stream_key || backup_rtmp_url || null;
     const schedule_days_json = schedule_days ? JSON.stringify(schedule_days) : null;
     const original_settings_json = original_settings ? JSON.stringify(original_settings) : null;
+    const tags_val = Array.isArray(tags) ? JSON.stringify(tags) : (tags || null);
 
     // Determine final status based on schedule type
     let final_status = status;
@@ -50,7 +57,7 @@ class Stream {
     }
     const status_updated_at = new Date().toISOString();
 
-    console.log(`[Stream.create] Creating stream with duration: ${stream_duration_minutes} minutes, broadcast_id: ${youtube_broadcast_id}`);
+    console.log(`[Stream.create] Creating stream with duration: ${stream_duration_minutes} minutes, broadcast_id: ${youtube_broadcast_id}, dual_stream: ${dual_stream_int}, vertical_key: ${!!vertical_key_val}`);
 
     return new Promise((resolve, reject) => {
       db.run(
@@ -60,15 +67,17 @@ class Stream {
           schedule_time, end_time, duration, stream_duration_minutes,
           schedule_type, schedule_days, recurring_time, recurring_enabled,
           original_settings, status, status_updated_at, user_id,
-          youtube_broadcast_id, youtube_account_id, youtube_lifecycle_status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          youtube_broadcast_id, youtube_account_id, youtube_lifecycle_status,
+          dual_stream, backup_rtmp_url, vertical_stream_key, tags
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id, title, video_id, audio_id, rtmp_url, stream_key, platform, platform_icon,
           bitrate, resolution, fps, orientation, loop_video_int,
           schedule_time, end_time, duration, stream_duration_minutes,
           schedule_type, schedule_days_json, recurring_time, recurring_enabled_int,
           original_settings_json, final_status, status_updated_at, user_id,
-          youtube_broadcast_id, youtube_account_id, youtube_lifecycle_status
+          youtube_broadcast_id, youtube_account_id, youtube_lifecycle_status,
+          dual_stream_int, backup_rtmp_url, vertical_key_val, tags_val
         ],
         function (err) {
           if (err) {
