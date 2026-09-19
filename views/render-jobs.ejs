@@ -2642,6 +2642,38 @@ function getJobCombinedBadge(status, jobNumber) {
   }
 }
 
+function getJobNumberBadge(jobNumber) {
+  return `<span class="inline-flex items-center justify-center w-full py-0.5 px-1 rounded-md bg-primary/15 border border-primary/30 text-primary font-black text-[11px] sm:text-xs tracking-tight shadow-sm text-center">#${jobNumber}</span>`;
+}
+
+function getJobStatusBadge(status) {
+  switch(status) {
+    case 'processing':
+      return `<span class="inline-flex items-center justify-center gap-0.5 w-full py-0.5 px-0.5 rounded-md bg-blue-500/15 border border-blue-500/30 text-blue-400 text-[9.5px] sm:text-[10px] font-bold shadow-sm whitespace-nowrap"><span class="w-1.5 h-1.5 bg-blue-400 rounded-full animate-ping"></span><span>Proses</span></span>`;
+    case 'queued': case 'pending':
+      return `<span class="inline-flex items-center justify-center gap-0.5 w-full py-0.5 px-0.5 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-400 text-[9.5px] sm:text-[10px] font-bold shadow-sm whitespace-nowrap"><i class="ti ti-clock text-[10px]"></i><span>Antre</span></span>`;
+    case 'completed':
+      return `<span class="inline-flex items-center justify-center gap-0.5 w-full py-0.5 px-0.5 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[9.5px] sm:text-[10px] font-bold shadow-sm whitespace-nowrap"><i class="ti ti-check text-[10px]"></i><span>Selesai</span></span>`;
+    case 'failed':
+      return `<span class="inline-flex items-center justify-center gap-0.5 w-full py-0.5 px-0.5 rounded-md bg-red-500/15 border border-red-500/30 text-red-400 text-[9.5px] sm:text-[10px] font-bold shadow-sm whitespace-nowrap"><i class="ti ti-x text-[10px]"></i><span>Gagal</span></span>`;
+    default:
+      return `<span class="inline-flex items-center justify-center w-full py-0.5 px-0.5 rounded-md bg-gray-700/40 border border-gray-600/50 text-gray-300 text-[9.5px] sm:text-[10px] font-semibold whitespace-nowrap">${status}</span>`;
+  }
+}
+
+function formatJobDateTime(dateStr) {
+  if (!dateStr) return { date: '', time: '', formatted: '' };
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return { date: '', time: '', formatted: '' };
+    const date = d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
+    const time = d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+    return { date, time, formatted: `${date} • ${time}` };
+  } catch(e) {
+    return { date: '', time: '', formatted: '' };
+  }
+}
+
 function syncRenderJobsViewButtons() {
   const listBtn = document.getElementById('renderViewBtn-list');
   const cardBtn = document.getElementById('renderViewBtn-card');
@@ -2744,16 +2776,23 @@ function filterRenderJobs(filter){
 function renderJobListItem(j, jobNumber, isActive, progress, statusBadge, phaseText, etaText, barColor) {
   const safeTitle = (j.title || 'Job #' + jobNumber).replace(/"/g, '&quot;').replace(/'/g, "\\'");
   const durationStr = j.target_duration_seconds ? Math.round(j.target_duration_seconds/60) + ' mnt' : '-';
-  const dateStr = j.created_at ? formatJobDate(j.created_at) : '';
-  const combinedBadge = getJobCombinedBadge(j.status, jobNumber);
+  const dt = formatJobDateTime(j.created_at);
+  const numberBadge = getJobNumberBadge(jobNumber);
+  const statusBadgeMini = getJobStatusBadge(j.status);
   
   return `
   <div class="render-progress-card ${isActive ? 'active' : ''} p-2.5 sm:p-3.5 bg-dark-800/95 hover:bg-dark-800 border border-gray-700/70 hover:border-gray-600 rounded-2xl transition-all shadow-lg flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 sm:gap-3.5" data-job-id="${j.id}">
     
-    <!-- BARIS 1 (Mobile & Desktop): Media Thumbnail (Kiri) + Info & Nomor Status Gabung (Kanan) -->
-    <div class="flex items-center gap-2.5 sm:gap-3.5 min-w-0 flex-1">
+    <!-- BARIS 1: [1. Nomor & Status Atas-Bawah (Kiri)] + [2. Video Thumbnail (Tengah)] + [3. Nama File & Tanggal Jam (Kanan)] -->
+    <div class="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
       
-      <!-- Thumbnail Video with Play/Maximize -->
+      <!-- 1. KIRI: Penomoran (Atas) dan Status Selesai/Gagal (Bawah) -->
+      <div class="flex flex-col items-center justify-center gap-1 flex-shrink-0 w-[50px] xs:w-[54px] sm:w-[58px]">
+        ${numberBadge}
+        ${statusBadgeMini}
+      </div>
+
+      <!-- 2. TENGAH: Video Hasil Render -->
       ${j.output_path ? `
         <div class="relative group cursor-pointer w-24 xs:w-28 sm:w-36 aspect-video bg-black rounded-xl overflow-hidden border border-gray-700/80 flex-shrink-0 shadow-inner" onclick="openMaximizedVideoPlayer('${j.output_path}', '${safeTitle}')" title="Klik untuk putar player besar">
           <video preload="metadata" src="${j.output_path}" class="w-full h-full object-cover pointer-events-none opacity-85 group-hover:opacity-100 transition-opacity"></video>
@@ -2777,20 +2816,16 @@ function renderJobListItem(j, jobNumber, isActive, progress, statusBadge, phaseT
         </div>
       `}
 
-      <!-- Metadata Info (Nomor + Status jadi 1, Judul, Durasi & Tanggal) -->
+      <!-- 3. KANAN: Nama File, Tanggal dan Jam -->
       <div class="min-w-0 flex-1 flex flex-col justify-center">
-        <!-- 1. Nomor dan Status Selesai Jadi 1 -->
-        <div class="flex items-center gap-1.5 mb-1">
-          ${combinedBadge}
-        </div>
-
-        <!-- 2. Judul Video -->
-        <h4 class="text-xs sm:text-sm font-bold text-white truncate max-w-[170px] xs:max-w-[210px] sm:max-w-xs md:max-w-sm lg:max-w-md leading-tight" title="${safeTitle}">${j.title || 'Untitled Job'}</h4>
+        <!-- Nama File / Judul Video -->
+        <h4 class="text-xs sm:text-sm font-bold text-white truncate max-w-full leading-tight" title="${safeTitle}">${j.title || 'Untitled Job'}</h4>
         
-        <!-- 3. Meta Durasi & Tanggal / Status Proses -->
+        <!-- Tanggal dan Jam + Durasi -->
         <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] sm:text-[11px] text-gray-400 mt-1">
-          <span class="flex items-center gap-1 font-medium"><i class="ti ti-clock text-[11px] text-gray-500"></i>${durationStr}</span>
-          ${dateStr ? `<span class="text-gray-400 flex items-center gap-1">• <i class="ti ti-calendar text-[11px] text-gray-500"></i>${dateStr}</span>` : ''}
+          ${dt.date ? `<span class="flex items-center gap-1 text-gray-300 font-medium"><i class="ti ti-calendar text-[11px] text-primary/80"></i>${dt.date}</span>` : ''}
+          ${dt.time ? `<span class="flex items-center gap-1 text-gray-300 font-medium"><i class="ti ti-clock text-[11px] text-primary/80"></i>${dt.time}</span>` : ''}
+          ${durationStr && durationStr !== '-' ? `<span class="text-gray-400 font-normal hidden xs:inline">• ${durationStr}</span>` : ''}
           ${phaseText ? `<span class="text-primary font-semibold">• ${phaseText}</span>` : ''}
           ${etaText ? `<span class="text-blue-300 font-medium">• ${etaText}</span>` : ''}
         </div>
