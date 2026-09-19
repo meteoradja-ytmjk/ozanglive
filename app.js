@@ -4856,7 +4856,7 @@ app.post('/api/render/jobs/:id/upload', isAuthenticated, thumbnailUpload.single(
       return res.status(400).json({ success: false, message: 'Output render belum tersedia' });
     }
 
-    const { targetAccountId, title, description, tags, categoryId, privacyStatus, alteredContent } = req.body;
+    const { targetAccountId, title, description, tags, categoryId, privacyStatus, alteredContent, publishAt, madeForKids } = req.body;
     const accountId = targetAccountId || job.target_account_id;
     if (!accountId) {
       return res.status(400).json({ success: false, message: 'Pilih channel target terlebih dahulu' });
@@ -4883,6 +4883,7 @@ app.post('/api/render/jobs/:id/upload', isAuthenticated, thumbnailUpload.single(
     }
 
     const isAlteredContent = alteredContent === true || alteredContent === 'true' || alteredContent === '1' || alteredContent === 1;
+    const isMadeForKids = madeForKids === true || madeForKids === 'true' || madeForKids === '1' || madeForKids === 1;
 
     // Build upload options with custom metadata from user
     const uploadOptions = {
@@ -4892,8 +4893,9 @@ app.post('/api/render/jobs/:id/upload', isAuthenticated, thumbnailUpload.single(
       privacyStatus: privacyStatus || 'unlisted',
       tags: parsedTags,
       categoryId: categoryId || '22',
-      madeForKids: false,
+      madeForKids: isMadeForKids,
       alteredContent: isAlteredContent,
+      publishAt: publishAt || null,
       thumbnailBuffer: req.file ? req.file.buffer : null,
       thumbnailMimeType: req.file ? req.file.mimetype : 'image/jpeg'
     };
@@ -4904,7 +4906,9 @@ app.post('/api/render/jobs/:id/upload', isAuthenticated, thumbnailUpload.single(
       tags: uploadOptions.tags,
       categoryId: uploadOptions.categoryId,
       privacyStatus: uploadOptions.privacyStatus,
+      publishAt: uploadOptions.publishAt,
       alteredContent: uploadOptions.alteredContent,
+      madeForKids: uploadOptions.madeForKids,
       hasThumbnail: !!uploadOptions.thumbnailBuffer
     });
     

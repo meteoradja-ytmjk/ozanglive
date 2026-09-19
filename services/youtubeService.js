@@ -57,6 +57,7 @@ class YouTubeService {
     categoryId = '22',
     madeForKids = false,
     alteredContent = false,
+    publishAt = null,
     thumbnailBuffer = null,
     thumbnailMimeType = 'image/jpeg'
   }) {
@@ -82,10 +83,22 @@ class YouTubeService {
         categoryId: categoryId || '22' // Default: People & Blogs
       },
       status: {
-        privacyStatus,
-        selfDeclaredMadeForKids: false
+        privacyStatus: publishAt ? 'private' : privacyStatus,
+        selfDeclaredMadeForKids: !!madeForKids
       }
     };
+
+    // Scheduled publish configuration for YouTube Data API v3
+    if (publishAt) {
+      try {
+        const isoDate = new Date(publishAt).toISOString();
+        requestBody.status.publishAt = isoDate;
+        requestBody.status.privacyStatus = 'private'; // Mandatory when publishAt is set
+        console.log(`[YouTubeService.uploadRegularVideo] Scheduled publish configured for: ${isoDate}`);
+      } catch (scheduleErr) {
+        console.warn('[YouTubeService.uploadRegularVideo] Invalid publishAt format, falling back to privacyStatus:', publishAt, scheduleErr.message);
+      }
+    }
     
     // Add synthetic media flag if supported by YouTube API
     if (alteredContent) {
