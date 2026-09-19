@@ -160,6 +160,9 @@ class YouTubeBroadcastSettings {
             row.templateId = row.template_id;
             row.thumbnailIndex = row.thumbnail_index || 0;
             row.thumbnailPath = row.thumbnail_path;
+            row.alteredContent = row.altered_content === 1;
+            row.dualStream = row.dual_stream === 1;
+            row.verticalStreamKey = row.vertical_stream_key;
           }
           resolve(row);
         }

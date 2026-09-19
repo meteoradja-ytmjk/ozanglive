@@ -5728,6 +5728,15 @@ app.put('/api/streams/:id', isAuthenticated, async (req, res) => {
       isDual = req.body.dualStream === 'true' || req.body.dualStream === true || req.body.dual_stream === 1 || req.body.dual_stream === '1' || req.body.dual_stream === true;
       updateData.dual_stream = isDual ? 1 : 0;
     }
+    if (req.body.alteredContent !== undefined || req.body.altered_content !== undefined) {
+      const isAltered = req.body.alteredContent === 'true' || req.body.alteredContent === true || req.body.altered_content === 1 || req.body.altered_content === '1' || req.body.altered_content === true;
+      updateData.altered_content = isAltered ? 1 : 0;
+    }
+    if (req.body.unlistReplayOnEnd !== undefined || req.body.unlist_replay_on_end !== undefined) {
+      const isUnlist = req.body.unlistReplayOnEnd === 'true' || req.body.unlistReplayOnEnd === true || req.body.unlist_replay_on_end === 1 || req.body.unlist_replay_on_end === '1' || req.body.unlist_replay_on_end === true;
+      updateData.unlist_replay_on_end = isUnlist ? 1 : 0;
+      updateData.youtube_unlist_replay_on_end = isUnlist ? 1 : 0;
+    }
     if (req.body.verticalStreamKey !== undefined || req.body.vertical_stream_key !== undefined || req.body.backupRtmpUrl !== undefined) {
       const vKey = (req.body.verticalStreamKey || req.body.vertical_stream_key || req.body.backupRtmpUrl || '').trim();
       updateData.vertical_stream_key = vKey || null;
@@ -9601,7 +9610,7 @@ async function attachLocalSettingsToBroadcasts(broadcastsList, userId) {
 
     const streamRows = await new Promise((resolve) => {
       db.all(
-        `SELECT youtube_broadcast_id, dual_stream, vertical_stream_key, tags 
+        `SELECT youtube_broadcast_id, dual_stream, altered_content, unlist_replay_on_end, vertical_stream_key, tags 
          FROM streams 
          WHERE youtube_broadcast_id IN (${placeholders})`,
         broadcastIds,
@@ -9628,9 +9637,13 @@ async function attachLocalSettingsToBroadcasts(broadcastsList, userId) {
       if (s.youtube_broadcast_id) {
         const existing = settingsMap.get(s.youtube_broadcast_id) || {};
         const isDual = existing.dual_stream || s.dual_stream === 1 || s.dual_stream === '1' || s.dual_stream === true;
+        const isAltered = existing.altered_content || s.altered_content === 1 || s.altered_content === '1' || s.altered_content === true;
+        const isUnlist = existing.unlist_replay_on_end !== undefined ? existing.unlist_replay_on_end : (s.unlist_replay_on_end !== 0 && s.unlist_replay_on_end !== '0' && s.unlist_replay_on_end !== false);
         settingsMap.set(s.youtube_broadcast_id, {
           ...existing,
           dual_stream: isDual,
+          altered_content: isAltered,
+          unlist_replay_on_end: isUnlist,
           vertical_stream_key: existing.vertical_stream_key || s.vertical_stream_key || null
         });
       }

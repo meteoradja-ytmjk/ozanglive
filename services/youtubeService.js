@@ -483,7 +483,23 @@ class YouTubeService {
         stream = newStreamResponse.data;
       } else {
         stream = streamResponse.data.items[0];
-        console.log('[YouTubeService.createBroadcast] Found existing stream:', stream.snippet.title);
+        console.log('[YouTubeService.createBroadcast] Found existing stream:', stream.snippet.title, 'cdn resolution:', stream.cdn?.resolution);
+        if (dualStream && stream.cdn?.resolution !== 'variable') {
+          try {
+            console.log('[YouTubeService.createBroadcast] Attempting to update existing stream CDN to variable for Dual Stream...');
+            const updateStreamRes = await youtube.liveStreams.update({
+              part: 'cdn',
+              requestBody: {
+                id: stream.id,
+                cdn: cdnConfig
+              }
+            });
+            stream = updateStreamRes.data;
+            console.log('[YouTubeService.createBroadcast] Stream CDN updated to variable successfully');
+          } catch (cdnErr) {
+            console.warn('[YouTubeService.createBroadcast] Note: Stream CDN update to variable skipped:', cdnErr.message);
+          }
+        }
       }
     } else {
       console.log('[YouTubeService.createBroadcast] No streamId provided, creating new stream with cdn:', cdnConfig);
@@ -1257,23 +1273,47 @@ class YouTubeService {
       finalDesc = (finalDesc ? finalDesc + '\n\n' : '') + '✨ This content is created or modified with AI / altered or synthetic media.';
     }
 
-    // Update snippet directly (clean, single-call with part: 'snippet' to avoid 400 status errors)
-    const requestBody = {
-      id: videoId,
-      snippet: {
-        title: current.snippet?.title || '',
-        description: finalDesc,
-        categoryId: categoryId || current.snippet?.categoryId || '22',
-        tags: finalTags
-      }
-    };
+    // Update snippet and status (including containsSyntheticMedia for AI content disclosure)
+    let video;
+    try {
+      const statusPayload = {
+        privacyStatus: current.status?.privacyStatus || 'unlisted',
+        selfDeclaredMadeForKids: current.status?.selfDeclaredMadeForKids !== undefined ? Boolean(current.status.selfDeclaredMadeForKids) : false,
+        containsSyntheticMedia: Boolean(alteredContent)
+      };
+      console.log('[YouTubeService.updateVideoCategory] Updating with part: snippet,status. containsSyntheticMedia:', statusPayload.containsSyntheticMedia);
 
-    const response = await youtube.videos.update({
-      part: 'snippet',
-      requestBody
-    });
-    
-    const video = response.data;
+      const response = await youtube.videos.update({
+        part: 'snippet,status',
+        requestBody: {
+          id: videoId,
+          snippet: {
+            title: current.snippet?.title || '',
+            description: finalDesc,
+            categoryId: categoryId || current.snippet?.categoryId || '22',
+            tags: finalTags
+          },
+          status: statusPayload
+        }
+      });
+      video = response.data;
+      console.log('[YouTubeService.updateVideoCategory] Updated snippet & status successfully! containsSyntheticMedia:', video.status?.containsSyntheticMedia);
+    } catch (statusErr) {
+      console.warn('[YouTubeService.updateVideoCategory] Update with status failed (' + statusErr.message + '), falling back to snippet only');
+      const response = await youtube.videos.update({
+        part: 'snippet',
+        requestBody: {
+          id: videoId,
+          snippet: {
+            title: current.snippet?.title || '',
+            description: finalDesc,
+            categoryId: categoryId || current.snippet?.categoryId || '22',
+            tags: finalTags
+          }
+        }
+      });
+      video = response.data;
+    }
     console.log('[YouTubeService.updateVideoCategory] Updated video metadata successfully to category:', video.snippet?.categoryId, 'tags count:', video.snippet?.tags?.length || 0);
     
     return {

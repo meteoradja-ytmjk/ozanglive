@@ -343,6 +343,24 @@ class Stream {
                 row.schedule_days = [];
               }
             }
+            if (row.unlist_replay_on_end === undefined && row.youtube_unlist_replay_on_end !== undefined) {
+              row.unlist_replay_on_end = row.youtube_unlist_replay_on_end;
+            }
+            if (row.youtube_broadcast_id) {
+              db.get(
+                `SELECT * FROM youtube_broadcast_settings WHERE broadcast_id = ?`,
+                [row.youtube_broadcast_id],
+                (bErr, bRow) => {
+                  if (bRow) {
+                    if (bRow.altered_content !== undefined) row.altered_content = bRow.altered_content;
+                    if (bRow.dual_stream !== undefined) row.dual_stream = bRow.dual_stream;
+                    if (bRow.unlist_replay_on_end !== undefined) row.unlist_replay_on_end = bRow.unlist_replay_on_end;
+                  }
+                  resolve(row);
+                }
+              );
+              return;
+            }
           }
           resolve(row);
         }

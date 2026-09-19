@@ -345,6 +345,8 @@ async function createCoreTablesAsync() {
   await runTableQuery(`ALTER TABLE streams ADD COLUMN youtube_enable_auto_start INTEGER DEFAULT 1`, 'streams.youtube_enable_auto_start');
   await runTableQuery(`ALTER TABLE streams ADD COLUMN youtube_enable_auto_stop INTEGER DEFAULT 1`, 'streams.youtube_enable_auto_stop');
   await runTableQuery(`ALTER TABLE streams ADD COLUMN youtube_unlist_replay_on_end INTEGER DEFAULT 1`, 'streams.youtube_unlist_replay_on_end');
+  await runTableQuery(`ALTER TABLE streams ADD COLUMN unlist_replay_on_end INTEGER DEFAULT 1`, 'streams.unlist_replay_on_end');
+  await runTableQuery(`ALTER TABLE streams ADD COLUMN altered_content INTEGER DEFAULT 0`, 'streams.altered_content');
   await runTableQuery(`ALTER TABLE streams ADD COLUMN dual_stream INTEGER DEFAULT 0`, 'streams.dual_stream');
   await runTableQuery(`ALTER TABLE streams ADD COLUMN backup_rtmp_url TEXT`, 'streams.backup_rtmp_url');
   await runTableQuery(`ALTER TABLE streams ADD COLUMN vertical_stream_key TEXT`, 'streams.vertical_stream_key');
