@@ -148,6 +148,48 @@ function formatDuration(seconds) {
     padding-top: 0.375rem !important;
     width: 100% !important;
   }
+
+  /* Media selection styling */
+  .view-mode-grid .video-card,
+  .view-mode-grid .audio-card {
+    position: relative !important;
+  }
+  .view-mode-grid .media-checkbox-wrap {
+    position: absolute !important;
+    top: 8px !important;
+    left: 8px !important;
+    z-index: 20 !important;
+    background: rgba(15, 23, 42, 0.85) !important;
+    backdrop-filter: blur(4px) !important;
+    border-radius: 8px !important;
+    padding: 3px !important;
+    border: 1px solid rgba(255, 255, 255, 0.18) !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35) !important;
+    line-height: 0 !important;
+  }
+  .video-card.is-selected {
+    border-color: rgba(168, 85, 247, 0.85) !important;
+    background-color: rgba(147, 51, 234, 0.12) !important;
+    box-shadow: 0 0 0 1px rgba(168, 85, 247, 0.4) !important;
+  }
+  .audio-card.is-selected {
+    border-color: rgba(34, 197, 94, 0.85) !important;
+    background-color: rgba(34, 197, 94, 0.12) !important;
+    box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.4) !important;
+  }
+  @keyframes slideUpBatchBar {
+    from {
+      opacity: 0;
+      transform: translate(-50%, 20px);
+    }
+    to {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
+  }
+  .batch-action-bar-anim {
+    animation: slideUpBatchBar 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
 </style>
 
 <div class="flex flex-col lg:flex-row lg:items-center justify-between mb-6 gap-4">
@@ -223,6 +265,13 @@ function formatDuration(seconds) {
 
     <!-- Actions Toolbar: All buttons strictly same height (h-10) -->
     <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+      <!-- 0. Mark All Button (Pilih Semua di Tab Aktif) -->
+      <button type="button" onclick="toggleMarkAllCurrentTab()" id="markAllToolbarBtn" title="Pilih Semua / Batal Pilih (Mark All)"
+        class="h-10 px-2.5 sm:px-3 flex items-center justify-center gap-1.5 bg-dark-700/90 hover:bg-dark-600 border border-gray-600/50 hover:border-primary text-gray-300 hover:text-white rounded-xl transition-all active:scale-95 shadow-sm shrink-0">
+        <i class="ti ti-checkbox text-base text-primary" id="markAllToolbarIcon"></i>
+        <span class="text-xs font-medium hidden md:inline" id="markAllToolbarText">Mark All</span>
+      </button>
+
       <!-- 1. Create Folder Button (Contextual for Active Tab: Video or Audio) -->
       <button type="button" onclick="createMediaFolder()" id="createFolderBtn" title="Buat Folder Baru"
         class="h-10 w-10 flex items-center justify-center bg-dark-700/90 hover:bg-dark-600 border border-gray-600/50 hover:border-primary text-primary hover:text-white rounded-xl transition-all active:scale-95 shadow-sm shrink-0">
@@ -342,6 +391,15 @@ function formatDuration(seconds) {
               data-thumb="<%= video.thumbnail_path %>"
               data-date-str="<%= new Date(video.upload_date).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) %>">
               <div class="flex items-center gap-2.5 min-w-0 flex-1 card-main-row">
+                <div class="shrink-0 flex items-center media-checkbox-wrap" onclick="event.stopPropagation()">
+                  <input type="checkbox" class="media-select-checkbox video-select-checkbox w-4 h-4 rounded border-gray-600 bg-dark-700 text-primary focus:ring-primary cursor-pointer transition-all"
+                    data-id="<%= video.id %>"
+                    data-title="<%= video.title %>"
+                    data-type="video"
+                    data-folder="<%= group.displayName %>"
+                    data-is-standalone="false"
+                    onchange="onMediaCheckChange('video')">
+                </div>
                 <div class="relative w-12 h-9 sm:w-14 sm:h-10 md:w-16 md:h-11 flex-shrink-0 rounded-lg overflow-hidden bg-black cursor-pointer group card-thumb-wrap" onclick="playVideo('<%= video.id %>', '<%= video.title.replace(/'/g, "\\'") %>')">
                   <img src="<%= video.thumbnail_path %>" alt="<%= video.title %>" class="w-full h-full object-cover">
                   <div class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
@@ -422,6 +480,17 @@ function formatDuration(seconds) {
 
     <!-- Standalone Videos (Files not in any folder: Single Line, No Dropdown Box!) -->
     <% if (standaloneVideos.length > 0) { %>
+      <div class="flex items-center justify-between px-1 py-1 text-xs text-gray-400 mt-2 mb-1">
+        <div class="flex items-center gap-1.5 font-medium text-gray-300">
+          <i class="ti ti-cloud-upload text-primary text-sm"></i>
+          <span>File Upload (Tanpa Folder)</span>
+          <span class="text-[11px] bg-dark-700/80 px-2 py-0.5 rounded-full text-gray-400 font-normal border border-gray-700/50"><%= standaloneVideos.length %> video</span>
+        </div>
+        <button type="button" onclick="markAllUploadedMedia('video')" class="text-xs text-primary hover:text-purple-300 flex items-center gap-1 px-2.5 py-1 rounded-lg hover:bg-primary/10 border border-primary/20 hover:border-primary/40 transition-all font-medium">
+          <i class="ti ti-checkall text-sm"></i>
+          <span>Mark All Uploaded</span>
+        </button>
+      </div>
       <div class="standalone-media-container space-y-1.5">
         <% standaloneVideos.forEach(function(video) { %>
           <div class="video-card media-card-standalone bg-gray-800/90 hover:bg-gray-750 border border-gray-700/60 rounded-xl p-2 sm:p-2.5 flex items-center justify-between gap-2.5 transition-all shadow-sm"
@@ -437,6 +506,15 @@ function formatDuration(seconds) {
             data-thumb="<%= video.thumbnail_path %>"
             data-date-str="<%= new Date(video.upload_date).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) %>">
             <div class="flex items-center gap-2.5 min-w-0 flex-1 card-main-row">
+              <div class="shrink-0 flex items-center media-checkbox-wrap" onclick="event.stopPropagation()">
+                <input type="checkbox" class="media-select-checkbox video-select-checkbox w-4 h-4 rounded border-gray-600 bg-dark-700 text-primary focus:ring-primary cursor-pointer transition-all"
+                  data-id="<%= video.id %>"
+                  data-title="<%= video.title %>"
+                  data-type="video"
+                  data-folder=""
+                  data-is-standalone="true"
+                  onchange="onMediaCheckChange('video')">
+              </div>
               <div class="relative w-12 h-9 sm:w-14 sm:h-10 md:w-16 md:h-11 flex-shrink-0 rounded-lg overflow-hidden bg-black cursor-pointer group card-thumb-wrap" onclick="playVideo('<%= video.id %>', '<%= video.title.replace(/'/g, "\\'") %>')">
                 <img src="<%= video.thumbnail_path %>" alt="<%= video.title %>" class="w-full h-full object-cover">
                 <div class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
@@ -604,6 +682,15 @@ function formatDuration(seconds) {
               data-format="<%= (audio.format || 'AUDIO').toUpperCase() %>"
               data-date-str="<%= new Date(audio.upload_date).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) %>">
               <div class="flex items-center gap-2.5 min-w-0 flex-1 card-main-row">
+                <div class="shrink-0 flex items-center media-checkbox-wrap" onclick="event.stopPropagation()">
+                  <input type="checkbox" class="media-select-checkbox audio-select-checkbox w-4 h-4 rounded border-gray-600 bg-dark-700 text-emerald-500 focus:ring-emerald-500 cursor-pointer transition-all"
+                    data-id="<%= audio.id %>"
+                    data-title="<%= audio.title %>"
+                    data-type="audio"
+                    data-folder="<%= group.displayName %>"
+                    data-is-standalone="false"
+                    onchange="onMediaCheckChange('audio')">
+                </div>
                 <div class="relative w-10 h-10 sm:w-11 sm:h-11 flex-shrink-0 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center cursor-pointer group card-thumb-wrap" onclick="playAudio('<%= audio.id %>', '<%= audio.title.replace(/'/g, "\\'") %>')">
                   <i class="ti ti-music text-lg sm:text-xl text-emerald-400"></i>
                   <div class="absolute inset-0 bg-black/40 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
@@ -669,6 +756,17 @@ function formatDuration(seconds) {
 
     <!-- Standalone Audios (Files not in any folder: Single Line, No Dropdown Box!) -->
     <% if (standaloneAudios.length > 0) { %>
+      <div class="flex items-center justify-between px-1 py-1 text-xs text-gray-400 mt-2 mb-1">
+        <div class="flex items-center gap-1.5 font-medium text-gray-300">
+          <i class="ti ti-cloud-upload text-emerald-400 text-sm"></i>
+          <span>File Upload (Tanpa Folder)</span>
+          <span class="text-[11px] bg-dark-700/80 px-2 py-0.5 rounded-full text-gray-400 font-normal border border-gray-700/50"><%= standaloneAudios.length %> audio</span>
+        </div>
+        <button type="button" onclick="markAllUploadedMedia('audio')" class="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1 px-2.5 py-1 rounded-lg hover:bg-emerald-500/10 border border-emerald-500/20 hover:border-emerald-500/40 transition-all font-medium">
+          <i class="ti ti-checkall text-sm"></i>
+          <span>Mark All Uploaded</span>
+        </button>
+      </div>
       <div class="standalone-media-container space-y-1.5">
         <% standaloneAudios.forEach(function(audio) { %>
           <div class="audio-card media-card-standalone bg-gray-800/90 hover:bg-gray-750 border border-gray-700/60 rounded-xl p-2 sm:p-2.5 flex items-center justify-between gap-2.5 transition-all shadow-sm"
@@ -683,6 +781,15 @@ function formatDuration(seconds) {
             data-format="<%= (audio.format || 'AUDIO').toUpperCase() %>"
             data-date-str="<%= new Date(audio.upload_date).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) %>">
             <div class="flex items-center gap-2.5 min-w-0 flex-1 card-main-row">
+              <div class="shrink-0 flex items-center media-checkbox-wrap" onclick="event.stopPropagation()">
+                <input type="checkbox" class="media-select-checkbox audio-select-checkbox w-4 h-4 rounded border-gray-600 bg-dark-700 text-emerald-500 focus:ring-emerald-500 cursor-pointer transition-all"
+                  data-id="<%= audio.id %>"
+                  data-title="<%= audio.title %>"
+                  data-type="audio"
+                  data-folder=""
+                  data-is-standalone="true"
+                  onchange="onMediaCheckChange('audio')">
+              </div>
               <div class="relative w-10 h-10 sm:w-11 sm:h-11 flex-shrink-0 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center cursor-pointer group card-thumb-wrap" onclick="playAudio('<%= audio.id %>', '<%= audio.title.replace(/'/g, "\\'") %>')">
                 <i class="ti ti-music text-lg sm:text-xl text-emerald-400"></i>
                 <div class="absolute inset-0 bg-black/40 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1177,6 +1284,38 @@ function formatDuration(seconds) {
       </button>
     </div>
   </div>
+<!-- Floating Batch Action Bar -->
+<div id="batchActionBar" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 hidden max-w-xl w-[94%] sm:w-auto">
+  <div class="bg-dark-800/95 backdrop-blur-md border border-gray-600/80 rounded-2xl shadow-2xl p-2 sm:p-2.5 flex items-center justify-between gap-2 sm:gap-3 batch-action-bar-anim">
+    <div class="flex items-center gap-2 pl-2 sm:pl-3">
+      <div id="batchBarBadgeIcon" class="w-6 h-6 rounded-lg bg-primary/20 text-primary flex items-center justify-center shrink-0">
+        <i class="ti ti-checkbox text-sm"></i>
+      </div>
+      <span id="batchBarCount" class="text-xs sm:text-sm font-semibold text-white whitespace-nowrap">0 file dipilih</span>
+    </div>
+    
+    <div class="flex items-center gap-1.5 sm:gap-2">
+      <button type="button" onclick="clearAllSelections()" class="h-9 px-2.5 sm:px-3 text-xs font-medium text-gray-300 hover:text-white bg-dark-700 hover:bg-dark-600 rounded-xl transition-all border border-gray-600/50 flex items-center gap-1">
+        <i class="ti ti-x text-sm"></i>
+        <span class="hidden sm:inline">Batal</span>
+      </button>
+      
+      <% if (typeof permissions !== 'undefined' && permissions.can_delete_videos) { %>
+      <button type="button" onclick="deleteBatchSelectedMedia()" class="h-9 px-2.5 sm:px-3 text-xs font-medium text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 rounded-xl transition-all flex items-center gap-1">
+        <i class="ti ti-trash text-sm"></i>
+        <span class="hidden sm:inline">Hapus</span>
+      </button>
+      <% } %>
+
+      <button type="button" onclick="openBatchMoveModal()" id="batchMoveBtn"
+        class="h-9 px-3.5 sm:px-4 text-xs sm:text-sm font-semibold text-white bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-500 active:scale-95 transition-all shadow-md shadow-primary/25 rounded-xl flex items-center gap-1.5">
+        <i class="ti ti-folder-share text-base"></i>
+        <span>Pindahkan ke Folder</span>
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- Move Media to Folder Modal -->
 <div id="moveMediaModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden transition-opacity flex items-center justify-center p-4">
   <div class="bg-dark-800 rounded-2xl shadow-2xl w-full max-w-md border border-gray-700/80 overflow-hidden transform transition-all" id="moveMediaModalContent">
@@ -1187,8 +1326,8 @@ function formatDuration(seconds) {
           <i class="ti ti-folder-share text-lg"></i>
         </div>
         <div>
-          <h3 class="text-base sm:text-lg font-semibold text-white">Pindah File ke Folder</h3>
-          <p class="text-xs text-gray-400">Pilih folder tujuan untuk media ini</p>
+          <h3 id="moveMediaModalHeaderTitle" class="text-base sm:text-lg font-semibold text-white">Pindah File ke Folder</h3>
+          <p id="moveMediaModalHeaderSubtitle" class="text-xs text-gray-400">Pilih folder tujuan untuk media ini</p>
         </div>
       </div>
       <button type="button" onclick="closeMoveMediaModal()" class="rounded-lg w-8 h-8 flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700/50 transition-colors">
@@ -1362,14 +1501,240 @@ function formatDuration(seconds) {
 <script src="/js/driveImportQueueManager.js"></script>
 <script>
   let currentTab = '<%= activeTab || "video" %>';
-  let activeMoveItem = null; // { id, title, type, currentFolder }
+  let activeMoveItem = null; // { id, title, type, currentFolder, isBatch, ids }
   let selectedMoveFolder = '';
 
-  function openMoveMediaModal(id, title, type, currentFolder) {
-    activeMoveItem = { id, title, type, currentFolder: currentFolder || '' };
+  // Selection state tracking
+  const selectedMediaIds = {
+    video: new Set(),
+    audio: new Set()
+  };
+
+  function getActiveTabType() {
+    return currentTab === 'audio' ? 'audio' : 'video';
+  }
+
+  function onMediaCheckChange(type) {
+    const t = type || getActiveTabType();
+    const checkboxes = document.querySelectorAll(`.${t}-select-checkbox`);
+    const set = selectedMediaIds[t];
+    set.clear();
+
+    checkboxes.forEach(cb => {
+      const card = cb.closest(`.${t}-card`);
+      if (cb.checked) {
+        set.add(cb.dataset.id);
+        if (card) card.classList.add('is-selected');
+      } else {
+        if (card) card.classList.remove('is-selected');
+      }
+    });
+
+    updateBatchActionBar();
+    updateMarkAllToolbarBtn();
+  }
+
+  function updateBatchActionBar() {
+    const t = getActiveTabType();
+    const count = selectedMediaIds[t].size;
+    const bar = document.getElementById('batchActionBar');
+    const countEl = document.getElementById('batchBarCount');
+    const badgeIcon = document.getElementById('batchBarBadgeIcon');
+    const moveBtn = document.getElementById('batchMoveBtn');
+
+    if (!bar) return;
+
+    if (count > 0) {
+      bar.classList.remove('hidden');
+      if (countEl) countEl.textContent = `${count} ${t} dipilih`;
+      if (badgeIcon) {
+        badgeIcon.className = t === 'audio'
+          ? 'w-6 h-6 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0'
+          : 'w-6 h-6 rounded-lg bg-primary/20 text-primary flex items-center justify-center shrink-0';
+      }
+      if (moveBtn) {
+        moveBtn.className = t === 'audio'
+          ? 'h-9 px-3.5 sm:px-4 text-xs sm:text-sm font-semibold text-white bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 active:scale-95 transition-all shadow-md shadow-emerald-600/25 rounded-xl flex items-center gap-1.5'
+          : 'h-9 px-3.5 sm:px-4 text-xs sm:text-sm font-semibold text-white bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-500 active:scale-95 transition-all shadow-md shadow-primary/25 rounded-xl flex items-center gap-1.5';
+      }
+    } else {
+      bar.classList.add('hidden');
+    }
+  }
+
+  function updateMarkAllToolbarBtn() {
+    const t = getActiveTabType();
+    const textEl = document.getElementById('markAllToolbarText');
+    const iconEl = document.getElementById('markAllToolbarIcon');
+    const visibleCheckboxes = getVisibleMediaCheckboxes(t);
+    const checkedCount = visibleCheckboxes.filter(cb => cb.checked).length;
+    const allChecked = visibleCheckboxes.length > 0 && checkedCount === visibleCheckboxes.length;
+
+    if (textEl) {
+      textEl.textContent = allChecked ? 'Batal Semua' : 'Mark All';
+    }
+    if (iconEl) {
+      iconEl.className = allChecked
+        ? (t === 'audio' ? 'ti ti-square-x text-base text-emerald-400' : 'ti ti-square-x text-base text-primary')
+        : (t === 'audio' ? 'ti ti-checkbox text-base text-emerald-400' : 'ti ti-checkbox text-base text-primary');
+    }
+  }
+
+  function getVisibleMediaCheckboxes(type) {
+    const t = type || getActiveTabType();
+    const all = Array.from(document.querySelectorAll(`.${t}-select-checkbox`));
+    return all.filter(cb => {
+      const card = cb.closest(`.${t}-card`);
+      if (!card) return false;
+      return card.style.display !== 'none' && card.offsetParent !== null;
+    });
+  }
+
+  function toggleMarkAllCurrentTab() {
+    const t = getActiveTabType();
+    const visibleCheckboxes = getVisibleMediaCheckboxes(t);
+    if (visibleCheckboxes.length === 0) {
+      showToast('error', `Tidak ada ${t} untuk dipilih`);
+      return;
+    }
+
+    const checkedCount = visibleCheckboxes.filter(cb => cb.checked).length;
+    const shouldCheck = checkedCount < visibleCheckboxes.length;
+
+    visibleCheckboxes.forEach(cb => {
+      cb.checked = shouldCheck;
+      const card = cb.closest(`.${t}-card`);
+      if (card) {
+        if (shouldCheck) card.classList.add('is-selected');
+        else card.classList.remove('is-selected');
+      }
+      if (shouldCheck) {
+        selectedMediaIds[t].add(cb.dataset.id);
+      } else {
+        selectedMediaIds[t].delete(cb.dataset.id);
+      }
+    });
+
+    updateBatchActionBar();
+    updateMarkAllToolbarBtn();
+    showToast('success', shouldCheck ? `Menandai ${visibleCheckboxes.length} ${t}` : 'Semua pilihan dibatalkan');
+  }
+
+  function markAllUploadedMedia(type) {
+    const t = type || getActiveTabType();
+    const container = document.querySelector(`#${t}Grid .standalone-media-container`);
+    if (!container) {
+      showToast('error', `Tidak ada file upload tanpa folder`);
+      return;
+    }
+    const standaloneCheckboxes = Array.from(container.querySelectorAll(`.${t}-select-checkbox`)).filter(cb => {
+      const card = cb.closest(`.${t}-card`);
+      return !card || card.style.display !== 'none';
+    });
+
+    if (standaloneCheckboxes.length === 0) {
+      showToast('error', `Tidak ada file upload tanpa folder`);
+      return;
+    }
+
+    const checkedCount = standaloneCheckboxes.filter(cb => cb.checked).length;
+    const shouldCheck = checkedCount < standaloneCheckboxes.length;
+
+    standaloneCheckboxes.forEach(cb => {
+      cb.checked = shouldCheck;
+      const card = cb.closest(`.${t}-card`);
+      if (card) {
+        if (shouldCheck) card.classList.add('is-selected');
+        else card.classList.remove('is-selected');
+      }
+      if (shouldCheck) {
+        selectedMediaIds[t].add(cb.dataset.id);
+      } else {
+        selectedMediaIds[t].delete(cb.dataset.id);
+      }
+    });
+
+    updateBatchActionBar();
+    updateMarkAllToolbarBtn();
+    showToast('success', shouldCheck ? `Menandai ${standaloneCheckboxes.length} file upload ${t}` : 'Batal menandai file upload');
+  }
+
+  function clearAllSelections() {
+    ['video', 'audio'].forEach(t => {
+      selectedMediaIds[t].clear();
+      document.querySelectorAll(`.${t}-select-checkbox`).forEach(cb => {
+        cb.checked = false;
+        const card = cb.closest(`.${t}-card`);
+        if (card) card.classList.remove('is-selected');
+      });
+    });
+    updateBatchActionBar();
+    updateMarkAllToolbarBtn();
+  }
+
+  function openBatchMoveModal() {
+    const t = getActiveTabType();
+    const ids = Array.from(selectedMediaIds[t]);
+    if (ids.length === 0) {
+      showToast('error', `Pilih minimal 1 file untuk dipindahkan`);
+      return;
+    }
+
+    const checkboxes = Array.from(document.querySelectorAll(`.${t}-select-checkbox:checked`));
+    const folders = new Set(checkboxes.map(cb => (cb.dataset.folder || '').trim()).filter(Boolean));
+    const currentFolderDisplay = folders.size === 1 ? Array.from(folders)[0] : (folders.size === 0 ? '(Tanpa Folder)' : '(Berbagai Folder)');
+
+    openMoveMediaModal(null, `${ids.length} ${t} terpilih`, t, currentFolderDisplay, true, ids);
+  }
+
+  async function deleteBatchSelectedMedia() {
+    const t = getActiveTabType();
+    const ids = Array.from(selectedMediaIds[t]);
+    if (ids.length === 0) return;
+
+    const ok = confirm(`Hapus ${ids.length} ${t} terpilih secara permanen?`);
+    if (!ok) return;
+
+    const endpoint = t === 'audio' ? '/api/audios/delete-folder' : '/api/videos/delete-folder';
+    const body = t === 'audio' ? { audioIds: ids } : { videoIds: ids };
+
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': '<%= csrfToken %>'
+        },
+        body: JSON.stringify(body)
+      });
+      const data = await response.json();
+      if (data.success) {
+        showToast('success', `${ids.length} ${t} berhasil dihapus`);
+        clearAllSelections();
+        setTimeout(() => location.reload(), 800);
+      } else {
+        showToast('error', data.error || 'Gagal menghapus file');
+      }
+    } catch (err) {
+      showToast('error', 'Terjadi kesalahan saat menghapus file');
+    }
+  }
+
+  function openMoveMediaModal(id, title, type, currentFolder, isBatch = false, ids = null) {
+    const idsList = isBatch && Array.isArray(ids) ? ids : (id ? [id] : []);
+    activeMoveItem = {
+      id: id || (idsList[0] || null),
+      ids: idsList,
+      isBatch: isBatch || idsList.length > 1,
+      title: title || `${idsList.length} file`,
+      type: type || currentTab,
+      currentFolder: currentFolder || ''
+    };
     selectedMoveFolder = '';
 
     const modal = document.getElementById('moveMediaModal');
+    const modalHeaderTitle = document.getElementById('moveMediaModalHeaderTitle');
+    const modalHeaderSubtitle = document.getElementById('moveMediaModalHeaderSubtitle');
     const titleEl = document.getElementById('moveMediaTitle');
     const folderEl = document.getElementById('moveMediaCurrentFolder');
     const iconEl = document.getElementById('moveMediaIcon');
@@ -1378,12 +1743,31 @@ function formatDuration(seconds) {
     const previewEl = document.getElementById('moveRenamePreview');
     const confirmBtn = document.getElementById('confirmMoveBtn');
 
-    if (titleEl) titleEl.textContent = title;
-    if (folderEl) folderEl.textContent = currentFolder || '(Tanpa Folder)';
+    const isAudio = activeMoveItem.type === 'audio';
+
+    if (modalHeaderTitle) {
+      modalHeaderTitle.textContent = activeMoveItem.isBatch
+        ? `Pindah ${activeMoveItem.ids.length} File ke Folder`
+        : 'Pindah File ke Folder';
+    }
+    if (modalHeaderSubtitle) {
+      modalHeaderSubtitle.textContent = activeMoveItem.isBatch
+        ? `Pilih folder tujuan untuk ${activeMoveItem.ids.length} file terpilih`
+        : 'Pilih folder tujuan untuk media ini';
+    }
+    if (titleEl) {
+      titleEl.textContent = activeMoveItem.isBatch
+        ? `${activeMoveItem.ids.length} file ${isAudio ? 'audio' : 'video'} terpilih`
+        : activeMoveItem.title;
+    }
+    if (folderEl) {
+      folderEl.textContent = activeMoveItem.isBatch
+        ? (currentFolder || 'Tanpa Folder / Berbagai Folder')
+        : (currentFolder || '(Tanpa Folder)');
+    }
     if (customInput) customInput.value = '';
     if (previewEl) previewEl.textContent = 'Pilih folder tujuan di atas';
 
-    const isAudio = type === 'audio';
     if (iconEl) iconEl.className = isAudio ? 'ti ti-music text-green-400 text-xl' : 'ti ti-video text-primary text-xl';
     if (headerIconWrap) {
       headerIconWrap.className = isAudio
@@ -1395,7 +1779,7 @@ function formatDuration(seconds) {
         ? 'px-5 py-2 rounded-xl text-xs sm:text-sm font-medium text-white bg-green-600 hover:bg-green-500 active:scale-95 transition-all shadow-sm shadow-green-600/30 flex items-center gap-1.5'
         : 'px-5 py-2 rounded-xl text-xs sm:text-sm font-medium text-white bg-primary hover:bg-primary/90 active:scale-95 transition-all shadow-sm shadow-primary/30 flex items-center gap-1.5';
       confirmBtn.disabled = false;
-      confirmBtn.innerHTML = `<i class="ti ti-folder-check"></i><span>Pindahkan File</span>`;
+      confirmBtn.innerHTML = `<i class="ti ti-folder-check"></i><span>${activeMoveItem.isBatch ? `Pindahkan ${activeMoveItem.ids.length} File` : 'Pindahkan File'}</span>`;
     }
 
     // Collect all available folders for this type
@@ -1415,7 +1799,7 @@ function formatDuration(seconds) {
     }
 
     // Include empty folders from localStorage
-    const emptyList = getEmptyFoldersStorage(type);
+    const emptyList = getEmptyFoldersStorage(activeMoveItem.type);
     emptyList.forEach(name => {
       if (name && !folderMap.has(name.toLowerCase())) {
         folderMap.set(name.toLowerCase(), { displayName: name, count: 0 });
@@ -1432,7 +1816,7 @@ function formatDuration(seconds) {
         listContainer.innerHTML = `<p class="text-xs text-gray-500 italic p-2">Belum ada folder. Masukkan nama folder baru di bawah.</p>`;
       } else {
         folders.forEach(f => {
-          const isCurrent = (currentFolder || '').toLowerCase() === f.displayName.toLowerCase();
+          const isCurrent = !activeMoveItem.isBatch && (currentFolder || '').toLowerCase() === f.displayName.toLowerCase();
           const btn = document.createElement('button');
           btn.type = 'button';
           btn.className = `w-full flex items-center justify-between p-2.5 rounded-xl border text-xs sm:text-sm transition-all ${
@@ -1481,7 +1865,7 @@ function formatDuration(seconds) {
         if (btn.dataset.folderName === folderName) {
           btn.className = `w-full flex items-center justify-between p-2.5 rounded-xl border text-xs sm:text-sm transition-all border-primary bg-primary/10 text-white font-medium shadow-sm`;
         } else {
-          const isCurrent = (activeMoveItem?.currentFolder || '').toLowerCase() === (btn.dataset.folderName || '').toLowerCase();
+          const isCurrent = !activeMoveItem?.isBatch && (activeMoveItem?.currentFolder || '').toLowerCase() === (btn.dataset.folderName || '').toLowerCase();
           btn.className = `w-full flex items-center justify-between p-2.5 rounded-xl border text-xs sm:text-sm transition-all ${
             isCurrent
               ? 'border-gray-700/50 bg-dark-700/30 text-gray-500 cursor-not-allowed'
@@ -1502,7 +1886,7 @@ function formatDuration(seconds) {
     const container = document.getElementById('moveFolderListContainer');
     if (container) {
       container.querySelectorAll('button').forEach(btn => {
-        const isCurrent = (activeMoveItem?.currentFolder || '').toLowerCase() === (btn.dataset.folderName || '').toLowerCase();
+        const isCurrent = !activeMoveItem?.isBatch && (activeMoveItem?.currentFolder || '').toLowerCase() === (btn.dataset.folderName || '').toLowerCase();
         btn.className = `w-full flex items-center justify-between p-2.5 rounded-xl border text-xs sm:text-sm transition-all ${
           isCurrent
             ? 'border-gray-700/50 bg-dark-700/30 text-gray-500 cursor-not-allowed'
@@ -1538,7 +1922,13 @@ function formatDuration(seconds) {
     }
 
     const nextIndex = count + 1;
-    previewEl.innerHTML = `Nama baru otomatis: <strong class="text-white">${folderName} ${nextIndex}</strong>`;
+    if (activeMoveItem?.isBatch && activeMoveItem?.ids?.length > 1) {
+      const totalCount = activeMoveItem.ids.length;
+      const lastIndex = nextIndex + totalCount - 1;
+      previewEl.innerHTML = `Nama baru otomatis: <strong class="text-white">${folderName} ${nextIndex}</strong> s/d <strong class="text-white">${folderName} ${lastIndex}</strong> (${totalCount} file)`;
+    } else {
+      previewEl.innerHTML = `Nama baru otomatis: <strong class="text-white">${folderName} ${nextIndex}</strong>`;
+    }
   }
 
   async function confirmMoveMedia() {
@@ -1558,15 +1948,29 @@ function formatDuration(seconds) {
       return;
     }
 
-    if ((activeMoveItem.currentFolder || '').toLowerCase() === finalFolder.toLowerCase()) {
+    if (!activeMoveItem.isBatch && (activeMoveItem.currentFolder || '').toLowerCase() === finalFolder.toLowerCase()) {
       showToast('error', 'Media sudah berada di folder tersebut');
       return;
     }
 
     const isAudio = activeMoveItem.type === 'audio';
-    const endpoint = isAudio
-      ? `/api/audios/${activeMoveItem.id}/move`
-      : `/api/videos/${activeMoveItem.id}/move`;
+    const isBatch = activeMoveItem.isBatch || (activeMoveItem.ids && activeMoveItem.ids.length > 1);
+
+    let endpoint;
+    let payload;
+
+    if (isBatch) {
+      endpoint = isAudio ? '/api/audios/batch-move' : '/api/videos/batch-move';
+      payload = {
+        folderName: finalFolder,
+        ids: activeMoveItem.ids
+      };
+    } else {
+      endpoint = isAudio
+        ? `/api/audios/${activeMoveItem.id}/move`
+        : `/api/videos/${activeMoveItem.id}/move`;
+      payload = { folderName: finalFolder };
+    }
 
     const confirmBtn = document.getElementById('confirmMoveBtn');
     if (confirmBtn) {
@@ -1581,7 +1985,7 @@ function formatDuration(seconds) {
           'Content-Type': 'application/json',
           'X-CSRF-Token': '<%= csrfToken %>'
         },
-        body: JSON.stringify({ folderName: finalFolder })
+        body: JSON.stringify(payload)
       });
 
       const data = await response.json();
@@ -1589,19 +1993,20 @@ function formatDuration(seconds) {
         removeEmptyFolderStorage(activeMoveItem.type, finalFolder);
         showToast('success', data.message || `File dipindahkan ke folder ${finalFolder}`);
         closeMoveMediaModal();
+        clearAllSelections();
         setTimeout(() => location.reload(), 600);
       } else {
         showToast('error', data.error || 'Gagal memindahkan file');
         if (confirmBtn) {
           confirmBtn.disabled = false;
-          confirmBtn.innerHTML = `<i class="ti ti-folder-check"></i><span>Pindahkan File</span>`;
+          confirmBtn.innerHTML = `<i class="ti ti-folder-check"></i><span>${isBatch ? `Pindahkan ${activeMoveItem.ids.length} File` : 'Pindahkan File'}</span>`;
         }
       }
     } catch (err) {
       showToast('error', 'Terjadi kesalahan saat memindahkan file');
       if (confirmBtn) {
         confirmBtn.disabled = false;
-        confirmBtn.innerHTML = `<i class="ti ti-folder-check"></i><span>Pindahkan File</span>`;
+        confirmBtn.innerHTML = `<i class="ti ti-folder-check"></i><span>${isBatch ? `Pindahkan ${activeMoveItem.ids.length} File` : 'Pindahkan File'}</span>`;
       }
     }
   }
@@ -2130,6 +2535,8 @@ function formatDuration(seconds) {
     updateActionGroupHighlight(tab);
     updateMinimizedVideoStatus();
     updateMinimizedAudioStatus();
+    updateBatchActionBar();
+    updateMarkAllToolbarBtn();
   }
   
   // Toast notification
@@ -2878,6 +3285,8 @@ function formatDuration(seconds) {
         }
       });
     }
+
+    updateMarkAllToolbarBtn();
   });
   
   // File upload handlers

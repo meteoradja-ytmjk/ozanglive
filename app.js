@@ -3670,6 +3670,98 @@ app.post('/api/videos/:id/move', isAuthenticated, [
   }
 });
 
+app.post('/api/videos/batch-move', isAuthenticated, [
+  body('folderName')
+    .trim()
+    .isLength({ min: 1, max: 120 })
+    .withMessage('Folder tujuan tidak valid'),
+  body('ids')
+    .isArray({ min: 1 })
+    .withMessage('Pilih minimal satu video untuk dipindahkan')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, error: errors.array()[0].msg });
+    }
+
+    const { ids } = req.body;
+    const folderName = req.body.folderName.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const db = require('./db/database').getDb();
+
+    // Verify all requested videos belong to current user
+    const placeholders = ids.map(() => '?').join(',');
+    const userVideos = await new Promise((resolve, reject) => {
+      db.all(
+        `SELECT id, title, folder_name FROM videos WHERE user_id = ? AND id IN (${placeholders})`,
+        [req.session.userId, ...ids],
+        (err, rows) => {
+          if (err) return reject(err);
+          resolve(rows || []);
+        }
+      );
+    });
+
+    if (userVideos.length === 0) {
+      return res.status(404).json({ success: false, error: 'Tidak ada video yang valid untuk dipindahkan' });
+    }
+
+    // Preserve the order of requested ids
+    const videoMap = new Map(userVideos.map(v => [String(v.id), v]));
+    const orderedVideos = ids.map(id => videoMap.get(String(id))).filter(Boolean);
+
+    // Query existing videos in target folder for this user (excluding the ones being moved)
+    const existingVideos = await new Promise((resolve, reject) => {
+      db.all(
+        `SELECT id, title FROM videos WHERE user_id = ? AND LOWER(TRIM(folder_name)) = LOWER(?) AND id NOT IN (${placeholders})`,
+        [req.session.userId, folderName, ...ids],
+        (err, rows) => {
+          if (err) return reject(err);
+          resolve(rows || []);
+        }
+      );
+    });
+
+    const usedNumbers = new Set();
+    const escaped = folderName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`^${escaped}\\s+(\\d+)$`, 'i');
+    const existingTitlesLower = new Set(existingVideos.map(v => (v.title || '').trim().toLowerCase()));
+
+    existingVideos.forEach(v => {
+      const match = (v.title || '').trim().match(regex);
+      if (match) {
+        usedNumbers.add(parseInt(match[1], 10));
+      }
+    });
+
+    let nextNum = 1;
+    for (const v of orderedVideos) {
+      while (usedNumbers.has(nextNum) || existingTitlesLower.has(`${folderName} ${nextNum}`.toLowerCase())) {
+        nextNum++;
+      }
+      const newTitle = `${folderName} ${nextNum}`;
+      usedNumbers.add(nextNum);
+      existingTitlesLower.add(newTitle.toLowerCase());
+
+      await Video.update(v.id, {
+        folder_name: folderName,
+        title: newTitle
+      });
+      nextNum++;
+    }
+
+    res.json({
+      success: true,
+      message: `${orderedVideos.length} video berhasil dipindahkan ke folder "${folderName}"`,
+      movedCount: orderedVideos.length,
+      folderName
+    });
+  } catch (error) {
+    console.error('Error batch moving videos:', error);
+    res.status(500).json({ success: false, error: 'Gagal memindahkan video' });
+  }
+});
+
 app.post('/api/videos/:id/rename', isAuthenticated, [
   body('title').trim().isLength({ min: 1 }).withMessage('Title cannot be empty')
 ], async (req, res) => {
@@ -7163,6 +7255,98 @@ app.post('/api/audios/:id/move', isAuthenticated, [
   } catch (error) {
     console.error('Error moving audio:', error);
     res.status(500).json({ success: false, error: 'Failed to move audio' });
+  }
+});
+
+app.post('/api/audios/batch-move', isAuthenticated, [
+  body('folderName')
+    .trim()
+    .isLength({ min: 1, max: 120 })
+    .withMessage('Folder tujuan tidak valid'),
+  body('ids')
+    .isArray({ min: 1 })
+    .withMessage('Pilih minimal satu audio untuk dipindahkan')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, error: errors.array()[0].msg });
+    }
+
+    const { ids } = req.body;
+    const folderName = req.body.folderName.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const db = require('./db/database').getDb();
+
+    // Verify all requested audios belong to current user
+    const placeholders = ids.map(() => '?').join(',');
+    const userAudios = await new Promise((resolve, reject) => {
+      db.all(
+        `SELECT id, title, folder_name FROM audios WHERE user_id = ? AND id IN (${placeholders})`,
+        [req.session.userId, ...ids],
+        (err, rows) => {
+          if (err) return reject(err);
+          resolve(rows || []);
+        }
+      );
+    });
+
+    if (userAudios.length === 0) {
+      return res.status(404).json({ success: false, error: 'Tidak ada audio yang valid untuk dipindahkan' });
+    }
+
+    // Preserve the order of requested ids
+    const audioMap = new Map(userAudios.map(a => [String(a.id), a]));
+    const orderedAudios = ids.map(id => audioMap.get(String(id))).filter(Boolean);
+
+    // Query existing audios in target folder for this user (excluding the ones being moved)
+    const existingAudios = await new Promise((resolve, reject) => {
+      db.all(
+        `SELECT id, title FROM audios WHERE user_id = ? AND LOWER(TRIM(folder_name)) = LOWER(?) AND id NOT IN (${placeholders})`,
+        [req.session.userId, folderName, ...ids],
+        (err, rows) => {
+          if (err) return reject(err);
+          resolve(rows || []);
+        }
+      );
+    });
+
+    const usedNumbers = new Set();
+    const escaped = folderName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`^${escaped}\\s+(\\d+)$`, 'i');
+    const existingTitlesLower = new Set(existingAudios.map(a => (a.title || '').trim().toLowerCase()));
+
+    existingAudios.forEach(a => {
+      const match = (a.title || '').trim().match(regex);
+      if (match) {
+        usedNumbers.add(parseInt(match[1], 10));
+      }
+    });
+
+    let nextNum = 1;
+    for (const a of orderedAudios) {
+      while (usedNumbers.has(nextNum) || existingTitlesLower.has(`${folderName} ${nextNum}`.toLowerCase())) {
+        nextNum++;
+      }
+      const newTitle = `${folderName} ${nextNum}`;
+      usedNumbers.add(nextNum);
+      existingTitlesLower.add(newTitle.toLowerCase());
+
+      await Audio.update(a.id, {
+        folder_name: folderName,
+        title: newTitle
+      });
+      nextNum++;
+    }
+
+    res.json({
+      success: true,
+      message: `${orderedAudios.length} audio berhasil dipindahkan ke folder "${folderName}"`,
+      movedCount: orderedAudios.length,
+      folderName
+    });
+  } catch (error) {
+    console.error('Error batch moving audios:', error);
+    res.status(500).json({ success: false, error: 'Gagal memindahkan audio' });
   }
 });
 
