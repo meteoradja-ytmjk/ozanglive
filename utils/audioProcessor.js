@@ -51,14 +51,15 @@ async function processAudioForStreaming(inputPath, outputPath = null) {
     
     const args = [
       '-y',                    // Overwrite output
+      '-threads', '0',         // Utilize all available CPU cores for fast encoding
       '-i', inputPath,
-      '-c:a', 'aac',          // AAC codec
-      '-b:a', '128k',         // 128kbps bitrate
-      '-ar', '44100',         // 44.1kHz sample rate
+      '-c:a', 'aac',          // AAC codec standard YouTube
+      '-b:a', '128k',         // 128kbps standard YouTube streaming
+      '-ar', '44100',         // 44.1kHz sample rate standard YouTube
       '-ac', '2',             // Stereo
       '-af', 'aresample=async=1:first_pts=0', // Clean timestamps
       '-fflags', '+genpts',   // Generate clean PTS
-      '-map_metadata', '-1',  // Remove all metadata (can cause issues)
+      '-map_metadata', '-1',  // Remove all metadata
       tempOutput
     ];
     

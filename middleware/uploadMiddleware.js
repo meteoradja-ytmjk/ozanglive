@@ -170,14 +170,15 @@ const imageFilter = (req, file, cb) => {
 const audioStorage = createOptimizedStorage(paths.audios);
 
 const audioFilter = (req, file, cb) => {
-  const allowedFormats = ['audio/mpeg', 'audio/wav', 'audio/aac', 'audio/x-m4a', 'audio/mp4'];
+  const allowedExts = ['.mp3', '.wav', '.aac', '.m4a', '.flac', '.ogg', '.opus', '.wma', '.aiff', '.weba', '.webm', '.mp4', '.mka', '.alac'];
   const fileExt = path.extname(file.originalname).toLowerCase();
-  const allowedExts = ['.mp3', '.wav', '.aac', '.m4a'];
-  if (allowedFormats.includes(file.mimetype) || allowedExts.includes(fileExt)) {
+  if (
+    allowedExts.includes(fileExt) ||
+    (file.mimetype && (file.mimetype.startsWith('audio/') || file.mimetype === 'video/mp4' || file.mimetype === 'video/webm'))
+  ) {
     cb(null, true);
   } else {
-    // BUG FIX #7: Updated error message to include .m4a which is also allowed
-    cb(new Error('Only .mp3, .wav, .aac, and .m4a formats are allowed'), false);
+    cb(new Error('Format file audio tidak didukung. Harap gunakan format audio seperti MP3, WAV, AAC, M4A, FLAC, OGG, OPUS, dll.'), false);
   }
 };
 

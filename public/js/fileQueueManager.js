@@ -110,7 +110,7 @@ class FileQueueManager {
   isValidFile(file) {
     const ext = '.' + file.name.split('.').pop().toLowerCase();
     const isValidExt = this.allowedExtensions.includes(ext);
-    const isValidMime = this.allowedMimeTypes.includes(file.type);
+    const isValidMime = this.allowedMimeTypes.includes(file.type) || (this.fileFieldName === 'audio' && file.type && file.type.startsWith('audio/'));
     return isValidExt || isValidMime;
   }
 

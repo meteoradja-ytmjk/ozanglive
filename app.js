@@ -519,7 +519,6 @@ const queueAudioProcessing = (appInstance, audioId, filePath, filename, skipConv
     const updateData = {};
 
     try {
-      await waitForUploadsToIdle(appInstance);
       if (!skipConversion) {
         const { processAudioForStreaming } = require('./utils/audioProcessor');
         console.log(`[AudioUpload] Processing audio for streaming: ${filename}`);
@@ -535,10 +534,15 @@ const queueAudioProcessing = (appInstance, audioId, filePath, filename, skipConv
           const legacyPath = path.join(__dirname, 'public', filePath);
           try {
             if (!fs.existsSync(legacyPath)) {
-              fs.symlinkSync(currentFilePath, legacyPath);
+              try {
+                fs.symlinkSync(currentFilePath, legacyPath);
+              } catch (symErr) {
+                // Windows fallback when symlink permission is not granted
+                fs.copyFileSync(currentFilePath, legacyPath);
+              }
             }
           } catch (linkErr) {
-            console.error(`[AudioUpload] Failed to create legacy symlink: ${linkErr.message}`);
+            console.warn(`[AudioUpload] Legacy path notice: ${linkErr.message}`);
           }
         }
       }
