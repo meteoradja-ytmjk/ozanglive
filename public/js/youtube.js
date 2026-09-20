@@ -4363,9 +4363,9 @@ function closeCreateBroadcastModal() {
 
   // Restore default titles
   const modalHeader = document.querySelector('#createBroadcastModal h3');
-  if (modalHeader) modalHeader.textContent = 'YouTube Live Studio';
+  if (modalHeader) modalHeader.textContent = 'YouTube Live';
   const modalSubtitle = document.querySelector('#createBroadcastModal p.text-xs.text-gray-400');
-  if (modalSubtitle) modalSubtitle.textContent = 'Buat Broadcast & Siarkan Video Live ke YouTube';
+  if (modalSubtitle) modalSubtitle.textContent = 'Buat Broadcast Live';
 
   const createBtn = document.getElementById('createBroadcastBtn');
   if (createBtn) {
@@ -12293,7 +12293,7 @@ function updateBroadcastModalClock() {
     const month = String(now.toLocaleString('id-ID', { ...options, month: '2-digit' })).padStart(2, '0');
     const year = now.toLocaleString('id-ID', { ...options, year: 'numeric' });
     el.textContent = `${day}/${month}/${year}`;
-    if (icon) icon.className = 'ti ti-calendar text-primary text-sm sm:text-base font-loaded';
+    if (icon) icon.className = 'ti ti-calendar text-primary text-base sm:text-lg font-loaded';
   } else {
     const timeStr = now.toLocaleTimeString('id-ID', {
       ...options,
@@ -12303,7 +12303,7 @@ function updateBroadcastModalClock() {
       hour12: false
     });
     el.textContent = timeStr + ' WIB';
-    if (icon) icon.className = 'ti ti-clock text-primary text-sm sm:text-base font-loaded';
+    if (icon) icon.className = 'ti ti-clock text-primary text-base sm:text-lg font-loaded';
   }
 }
 
