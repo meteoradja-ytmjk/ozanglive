@@ -253,7 +253,7 @@ function formatDuration(seconds) {
 <div class="bg-gray-800/80 backdrop-blur-sm border border-gray-700/60 rounded-2xl p-2.5 sm:p-3.5 mb-6 shadow-sm">
   <div class="mb-2 flex items-center gap-1.5 text-[11px] sm:text-xs text-gray-400/90 px-0.5">
     <i class="ti ti-info-circle text-primary shrink-0"></i>
-    <span class="truncate">Gunakan Mark All untuk memilih file, atau tombol folder di kartu media untuk memindahkan ke folder.</span>
+    <span class="truncate">Gunakan tombol folder di kartu media untuk memindahkan file, atau buat folder baru dari toolbar.</span>
   </div>
   <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2.5 w-full">
     <!-- Search Input (full width on mobile, flexible on desktop) -->
@@ -266,12 +266,6 @@ function formatDuration(seconds) {
     <!-- Actions Toolbar: Neatly aligned row on both mobile and desktop -->
     <div class="flex items-center justify-between sm:justify-end gap-1.5 sm:gap-2 shrink-0">
       <div class="flex items-center gap-1.5 sm:gap-2">
-        <!-- 0. Mark All Button (Pilih Semua di Tab Aktif) -->
-        <button type="button" onclick="toggleMarkAllCurrentTab()" id="markAllToolbarBtn" title="Pilih Semua / Batal Pilih (Mark All)"
-          class="h-9 sm:h-10 px-2.5 sm:px-3 flex items-center justify-center gap-1.5 bg-dark-700/90 hover:bg-dark-600 border border-gray-600/50 hover:border-primary text-gray-200 hover:text-white rounded-xl transition-all active:scale-95 shadow-sm shrink-0 text-xs font-medium">
-          <i class="ti ti-checkbox text-sm sm:text-base text-primary" id="markAllToolbarIcon"></i>
-          <span id="markAllToolbarText">Mark All</span>
-        </button>
 
         <!-- 1. Create Folder Button (Contextual for Active Tab: Video or Audio) -->
         <button type="button" onclick="createMediaFolder()" id="createFolderBtn" title="Buat Folder Baru"
@@ -481,17 +475,26 @@ function formatDuration(seconds) {
       </div>
     <% }); %>
 
-    <!-- Standalone Videos (Files not in any folder: Single Line, No Dropdown Box!) -->
+    <!-- Standalone Videos Sub-Toolbar (File Upload Tanpa Folder) -->
     <% if (standaloneVideos.length > 0) { %>
-      <div class="flex items-center justify-between px-1 py-1 text-xs text-gray-400 mt-2 mb-1">
-        <div class="flex items-center gap-1.5 font-medium text-gray-300">
-          <i class="ti ti-cloud-upload text-primary text-sm"></i>
-          <span>File Upload (Tanpa Folder)</span>
-          <span class="text-[11px] bg-dark-700/80 px-2 py-0.5 rounded-full text-gray-400 font-normal border border-gray-700/50"><%= standaloneVideos.length %> video</span>
+      <div class="flex items-center justify-between gap-2 px-3 py-2 bg-dark-800/80 backdrop-blur-sm border border-gray-700/60 rounded-xl mt-3 mb-2 shadow-sm">
+        <div class="flex items-center gap-2 min-w-0">
+          <div class="w-7 h-7 rounded-lg bg-primary/15 text-primary flex items-center justify-center shrink-0">
+            <i class="ti ti-cloud-upload text-base"></i>
+          </div>
+          <div class="flex items-center gap-1.5 min-w-0">
+            <span class="text-xs sm:text-sm font-semibold text-gray-200 whitespace-nowrap">File Upload</span>
+            <span class="text-[11px] text-gray-400 hidden sm:inline whitespace-nowrap">(Tanpa Folder)</span>
+            <span class="text-[11px] bg-dark-700/90 text-gray-300 px-2 py-0.5 rounded-full font-medium border border-gray-600/40 whitespace-nowrap shrink-0">
+              <%= standaloneVideos.length %> video
+            </span>
+          </div>
         </div>
-        <button type="button" onclick="markAllUploadedMedia('video')" class="text-xs text-primary hover:text-purple-300 flex items-center gap-1 px-2.5 py-1 rounded-lg hover:bg-primary/10 border border-primary/20 hover:border-primary/40 transition-all font-medium">
-          <i class="ti ti-checkall text-sm"></i>
-          <span>Mark All Uploaded</span>
+        <button type="button" onclick="markAllUploadedMedia('video')" id="markAllUploadedVideoBtn"
+          title="Pilih Semua File Upload Video"
+          class="h-8 px-2.5 sm:px-3 text-xs font-medium rounded-lg text-primary hover:text-white bg-primary/10 hover:bg-primary border border-primary/30 hover:border-primary active:scale-95 transition-all shadow-sm flex items-center justify-center gap-1.5 shrink-0 whitespace-nowrap">
+          <i class="ti ti-checkbox text-sm" id="markAllUploadedVideoIcon"></i>
+          <span id="markAllUploadedVideoText">Mark All</span>
         </button>
       </div>
       <div class="standalone-media-container space-y-1.5">
@@ -757,17 +760,26 @@ function formatDuration(seconds) {
       </div>
     <% }); %>
 
-    <!-- Standalone Audios (Files not in any folder: Single Line, No Dropdown Box!) -->
+    <!-- Standalone Audios Sub-Toolbar (File Upload Tanpa Folder) -->
     <% if (standaloneAudios.length > 0) { %>
-      <div class="flex items-center justify-between px-1 py-1 text-xs text-gray-400 mt-2 mb-1">
-        <div class="flex items-center gap-1.5 font-medium text-gray-300">
-          <i class="ti ti-cloud-upload text-emerald-400 text-sm"></i>
-          <span>File Upload (Tanpa Folder)</span>
-          <span class="text-[11px] bg-dark-700/80 px-2 py-0.5 rounded-full text-gray-400 font-normal border border-gray-700/50"><%= standaloneAudios.length %> audio</span>
+      <div class="flex items-center justify-between gap-2 px-3 py-2 bg-dark-800/80 backdrop-blur-sm border border-gray-700/60 rounded-xl mt-3 mb-2 shadow-sm">
+        <div class="flex items-center gap-2 min-w-0">
+          <div class="w-7 h-7 rounded-lg bg-emerald-500/15 text-emerald-400 flex items-center justify-center shrink-0">
+            <i class="ti ti-cloud-upload text-base"></i>
+          </div>
+          <div class="flex items-center gap-1.5 min-w-0">
+            <span class="text-xs sm:text-sm font-semibold text-gray-200 whitespace-nowrap">File Upload</span>
+            <span class="text-[11px] text-gray-400 hidden sm:inline whitespace-nowrap">(Tanpa Folder)</span>
+            <span class="text-[11px] bg-dark-700/90 text-gray-300 px-2 py-0.5 rounded-full font-medium border border-gray-600/40 whitespace-nowrap shrink-0">
+              <%= standaloneAudios.length %> audio
+            </span>
+          </div>
         </div>
-        <button type="button" onclick="markAllUploadedMedia('audio')" class="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1 px-2.5 py-1 rounded-lg hover:bg-emerald-500/10 border border-emerald-500/20 hover:border-emerald-500/40 transition-all font-medium">
-          <i class="ti ti-checkall text-sm"></i>
-          <span>Mark All Uploaded</span>
+        <button type="button" onclick="markAllUploadedMedia('audio')" id="markAllUploadedAudioBtn"
+          title="Pilih Semua File Upload Audio"
+          class="h-8 px-2.5 sm:px-3 text-xs font-medium rounded-lg text-emerald-400 hover:text-white bg-emerald-500/10 hover:bg-emerald-600 border border-emerald-500/30 hover:border-emerald-500 active:scale-95 transition-all shadow-sm flex items-center justify-center gap-1.5 shrink-0 whitespace-nowrap">
+          <i class="ti ti-checkbox text-sm" id="markAllUploadedAudioIcon"></i>
+          <span id="markAllUploadedAudioText">Mark All</span>
         </button>
       </div>
       <div class="standalone-media-container space-y-1.5">
@@ -1570,21 +1582,29 @@ function formatDuration(seconds) {
   }
 
   function updateMarkAllToolbarBtn() {
-    const t = getActiveTabType();
-    const textEl = document.getElementById('markAllToolbarText');
-    const iconEl = document.getElementById('markAllToolbarIcon');
-    const visibleCheckboxes = getVisibleMediaCheckboxes(t);
-    const checkedCount = visibleCheckboxes.filter(cb => cb.checked).length;
-    const allChecked = visibleCheckboxes.length > 0 && checkedCount === visibleCheckboxes.length;
+    ['video', 'audio'].forEach(t => {
+      const textEl = document.getElementById(t === 'audio' ? 'markAllUploadedAudioText' : 'markAllUploadedVideoText');
+      const iconEl = document.getElementById(t === 'audio' ? 'markAllUploadedAudioIcon' : 'markAllUploadedVideoIcon');
+      const container = document.querySelector(`#${t}Grid .standalone-media-container`);
+      if (!container) return;
 
-    if (textEl) {
-      textEl.textContent = allChecked ? 'Batal Semua' : 'Mark All';
-    }
-    if (iconEl) {
-      iconEl.className = allChecked
-        ? (t === 'audio' ? 'ti ti-square-x text-base text-emerald-400' : 'ti ti-square-x text-base text-primary')
-        : (t === 'audio' ? 'ti ti-checkbox text-base text-emerald-400' : 'ti ti-checkbox text-base text-primary');
-    }
+      const standaloneCheckboxes = Array.from(container.querySelectorAll(`.${t}-select-checkbox`)).filter(cb => {
+        const card = cb.closest(`.${t}-card`);
+        return !card || card.style.display !== 'none';
+      });
+
+      if (standaloneCheckboxes.length === 0) return;
+
+      const checkedCount = standaloneCheckboxes.filter(cb => cb.checked).length;
+      const allChecked = checkedCount === standaloneCheckboxes.length;
+
+      if (textEl) {
+        textEl.textContent = allChecked ? 'Batal Pilih' : 'Mark All';
+      }
+      if (iconEl) {
+        iconEl.className = allChecked ? 'ti ti-square-x text-sm' : 'ti ti-checkbox text-sm';
+      }
+    });
   }
 
   function getVisibleMediaCheckboxes(type) {
