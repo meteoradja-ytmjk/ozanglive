@@ -3759,6 +3759,16 @@
       updateRealtimeClock();
     }
 
+    // Broadcast modal clock toggle state (WIB / Tanggal)
+    window.broadcastShowDate = false;
+
+    function toggleBroadcastClock(event) {
+      if (event && event.stopPropagation) event.stopPropagation();
+      window.broadcastShowDate = !window.broadcastShowDate;
+      updateRealtimeClock();
+    }
+    window.toggleBroadcastClock = toggleBroadcastClock;
+
     // Realtime Clock Indonesia (WIB)
     function updateRealtimeClock() {
       const now = new Date();
@@ -3779,21 +3789,39 @@
       const year = now.toLocaleString('id-ID', { ...options, year: 'numeric' });
       const dateStr = `${day}/${month}/${year}`;
 
-      // Desktop
-      document.getElementById('realtime-clock').textContent = timeStr + ' WIB';
-      document.getElementById('realtime-date').textContent = dateStr;
+      // Desktop Control Room
+      const rtClock = document.getElementById('realtime-clock');
+      if (rtClock) rtClock.textContent = timeStr + ' WIB';
+      const rtDate = document.getElementById('realtime-date');
+      if (rtDate) rtDate.textContent = dateStr;
 
-      // Mobile - toggle between clock and date
+      // Mobile Control Room - toggle between clock and date
       const mobileClockEl = document.getElementById('realtime-clock-mobile');
       const mobileClockIcon = document.getElementById('mobileClockIcon');
-      if (mobileShowDate) {
-        mobileClockEl.textContent = dateStr;
-        mobileClockIcon.className = 'ti ti-calendar text-primary font-loaded';
-      } else {
-        mobileClockEl.textContent = timeStr + ' WIB';
-        mobileClockIcon.className = 'ti ti-clock text-primary font-loaded';
+      if (mobileClockEl) {
+        if (mobileShowDate) {
+          mobileClockEl.textContent = dateStr;
+          if (mobileClockIcon) mobileClockIcon.className = 'ti ti-calendar text-primary font-loaded';
+        } else {
+          mobileClockEl.textContent = timeStr + ' WIB';
+          if (mobileClockIcon) mobileClockIcon.className = 'ti ti-clock text-primary font-loaded';
+        }
+      }
+
+      // Broadcast Modal - toggle between clock and date (sama seperti Control Room)
+      const broadcastClockEl = document.getElementById('broadcastClockText');
+      const broadcastClockIcon = document.getElementById('broadcastClockIcon');
+      if (broadcastClockEl) {
+        if (window.broadcastShowDate) {
+          broadcastClockEl.textContent = dateStr;
+          if (broadcastClockIcon) broadcastClockIcon.className = 'ti ti-calendar text-primary font-loaded';
+        } else {
+          broadcastClockEl.textContent = timeStr + ' WIB';
+          if (broadcastClockIcon) broadcastClockIcon.className = 'ti ti-clock text-primary font-loaded';
+        }
       }
     }
+    window.updateRealtimeClock = updateRealtimeClock;
 
     // Reset all streams to original imported settings
     async function resetAllStreamSettings() {

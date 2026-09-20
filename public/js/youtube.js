@@ -3485,6 +3485,17 @@ function openCreateBroadcastModal() {
   modal.classList.remove('hidden');
   modal.style.setProperty('display', 'block', 'important');
   
+  // Refresh realtime WIB clock immediately on open
+  try {
+    if (typeof window.updateRealtimeClock === 'function') {
+      window.updateRealtimeClock();
+    } else if (typeof updateBroadcastModalClock === 'function') {
+      updateBroadcastModalClock();
+    }
+  } catch (e) {
+    console.warn('[openCreateBroadcastModal] Clock update warning:', e);
+  }
+  
   // Set minimum and default datetime to at least 15 minutes from now (formatted for local timezone)
   try {
     const minDate = new Date(Date.now() + 11 * 60 * 1000);
@@ -12263,3 +12274,59 @@ async function submitDuplicateBroadcast(event) {
   }
 }
 window.submitDuplicateBroadcast = submitDuplicateBroadcast;
+
+// Realtime Clock Helper for Broadcast Modal (WIB & Date toggle - matching Control Room)
+let broadcastModalShowDate = false;
+
+function updateBroadcastModalClock() {
+  const el = document.getElementById('broadcastClockText');
+  const icon = document.getElementById('broadcastClockIcon');
+  if (!el) return;
+
+  const now = new Date();
+  const options = { timeZone: 'Asia/Jakarta' };
+
+  const isDate = typeof window.broadcastShowDate !== 'undefined' ? window.broadcastShowDate : broadcastModalShowDate;
+
+  if (isDate) {
+    const day = String(now.toLocaleString('id-ID', { ...options, day: '2-digit' })).padStart(2, '0');
+    const month = String(now.toLocaleString('id-ID', { ...options, month: '2-digit' })).padStart(2, '0');
+    const year = now.toLocaleString('id-ID', { ...options, year: 'numeric' });
+    el.textContent = `${day}/${month}/${year}`;
+    if (icon) icon.className = 'ti ti-calendar text-primary font-loaded';
+  } else {
+    const timeStr = now.toLocaleTimeString('id-ID', {
+      ...options,
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
+    el.textContent = timeStr + ' WIB';
+    if (icon) icon.className = 'ti ti-clock text-primary font-loaded';
+  }
+}
+
+function toggleBroadcastClock(event) {
+  if (event && event.stopPropagation) event.stopPropagation();
+  if (typeof window.updateRealtimeClock === 'function') {
+    window.broadcastShowDate = !window.broadcastShowDate;
+    window.updateRealtimeClock();
+    return;
+  }
+  broadcastModalShowDate = !broadcastModalShowDate;
+  updateBroadcastModalClock();
+}
+
+if (!window.toggleBroadcastClock) {
+  window.toggleBroadcastClock = toggleBroadcastClock;
+}
+window.updateBroadcastModalClock = updateBroadcastModalClock;
+
+if (!window._broadcastClockInterval) {
+  window._broadcastClockInterval = setInterval(() => {
+    if (typeof window.updateRealtimeClock !== 'function') {
+      updateBroadcastModalClock();
+    }
+  }, 1000);
+}
