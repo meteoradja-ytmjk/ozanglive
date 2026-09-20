@@ -12293,7 +12293,7 @@ function updateBroadcastModalClock() {
     const month = String(now.toLocaleString('id-ID', { ...options, month: '2-digit' })).padStart(2, '0');
     const year = now.toLocaleString('id-ID', { ...options, year: 'numeric' });
     el.textContent = `${day}/${month}/${year}`;
-    if (icon) icon.className = 'ti ti-calendar text-primary font-loaded';
+    if (icon) icon.className = 'ti ti-calendar text-primary text-base sm:text-lg font-loaded transition-transform group-hover:scale-110';
   } else {
     const timeStr = now.toLocaleTimeString('id-ID', {
       ...options,
@@ -12303,7 +12303,7 @@ function updateBroadcastModalClock() {
       hour12: false
     });
     el.textContent = timeStr + ' WIB';
-    if (icon) icon.className = 'ti ti-clock text-primary font-loaded';
+    if (icon) icon.className = 'ti ti-clock text-primary text-base sm:text-lg font-loaded transition-transform group-hover:scale-110';
   }
 }
 
