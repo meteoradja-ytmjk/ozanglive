@@ -4460,6 +4460,13 @@ const createBroadcastForm = document.getElementById('createBroadcastForm');
 if (createBroadcastForm) {
   createBroadcastForm.addEventListener('submit', async (e) => {
     e.preventDefault();
+
+    // Prevent double submission from rapid clicks or multiple events
+    if (createBroadcastForm.dataset.submitting === 'true') {
+      console.warn('[CreateBroadcast] Form submission already in progress, skipping duplicate');
+      return;
+    }
+    createBroadcastForm.dataset.submitting = 'true';
     
     const isEditing = !!createBroadcastForm.dataset.editingStreamId;
     const editingStreamId = createBroadcastForm.dataset.editingStreamId;
@@ -4752,6 +4759,7 @@ if (createBroadcastForm) {
         otherBtn.disabled = false;
       }
       delete createBroadcastForm.dataset.startImmediately;
+      delete createBroadcastForm.dataset.submitting;
     }
   });
 }

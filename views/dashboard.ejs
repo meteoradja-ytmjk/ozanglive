@@ -2199,9 +2199,20 @@
         return;
       }
 
-      emptyState.style.display = 'none';
+      // Deduplicate streams by ID and youtube_broadcast_id to guarantee no duplicate cards in control room
+      const seenIds = new Set();
+      const seenBroadcasts = new Set();
+      const uniqueStreams = [];
+      for (const s of streams) {
+        if (!s) continue;
+        if (s.id && seenIds.has(s.id)) continue;
+        if (s.youtube_broadcast_id && seenBroadcasts.has(s.youtube_broadcast_id)) continue;
+        if (s.id) seenIds.add(s.id);
+        if (s.youtube_broadcast_id) seenBroadcasts.add(s.youtube_broadcast_id);
+        uniqueStreams.push(s);
+      }
 
-      const sortedStreams = [...streams].sort((a, b) => {
+      const sortedStreams = uniqueStreams.sort((a, b) => {
         const ga = getStreamCollabKey(a).toLowerCase();
         const gb = getStreamCollabKey(b).toLowerCase();
         if (ga !== gb) return ga.localeCompare(gb);

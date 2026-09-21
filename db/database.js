@@ -413,6 +413,16 @@ async function createCoreTablesAsync() {
     SELECT MIN(id) FROM youtube_credentials GROUP BY user_id
   )`, 'youtube_credentials.primary_migration');
 
+  // Ensure at most one primary account per user (prevent duplicate is_primary flags)
+  await runTableQuery(`UPDATE youtube_credentials SET is_primary = 0 WHERE is_primary = 1 AND id NOT IN (
+    SELECT MIN(id) FROM youtube_credentials WHERE is_primary = 1 GROUP BY user_id
+  )`, 'youtube_credentials.fix_duplicate_primary');
+
+  // Clean up any existing duplicate streams sharing the same youtube_broadcast_id
+  await runTableQuery(`DELETE FROM streams WHERE id NOT IN (
+    SELECT MIN(id) FROM streams GROUP BY youtube_broadcast_id, user_id
+  ) AND youtube_broadcast_id IS NOT NULL AND youtube_broadcast_id != ''`, 'streams.cleanup_duplicate_broadcast_streams');
+
   // Run migration for youtube_credentials table if needed
   await migrateYouTubeCredentialsTableAsync();
 

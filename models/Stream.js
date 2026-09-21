@@ -105,8 +105,14 @@ class Stream {
          LEFT JOIN youtube_credentials yc ON s.youtube_account_id = yc.id
          LEFT JOIN youtube_broadcast_settings ybs ON s.youtube_broadcast_id = ybs.broadcast_id
          LEFT JOIN youtube_credentials yc_broadcast ON ybs.account_id = yc_broadcast.id
-         LEFT JOIN youtube_credentials yc_primary ON s.user_id = yc_primary.user_id AND yc_primary.is_primary = 1
-         WHERE s.id = ?`,
+          LEFT JOIN (
+            SELECT user_id, channel_name, channel_id 
+            FROM youtube_credentials 
+            WHERE is_primary = 1 
+            GROUP BY user_id
+          ) yc_primary ON (s.user_id = yc_primary.user_id OR CAST(s.user_id AS TEXT) = CAST(yc_primary.user_id AS TEXT))
+          WHERE s.id = ?
+          GROUP BY s.id`,
         [id],
         (err, row) => {
           if (err) {
@@ -154,7 +160,12 @@ class Stream {
         LEFT JOIN youtube_credentials yc ON s.youtube_account_id = yc.id
         LEFT JOIN youtube_broadcast_settings ybs ON s.youtube_broadcast_id = ybs.broadcast_id
         LEFT JOIN youtube_credentials yc_broadcast ON ybs.account_id = yc_broadcast.id
-        LEFT JOIN youtube_credentials yc_primary ON s.user_id = yc_primary.user_id AND yc_primary.is_primary = 1
+        LEFT JOIN (
+          SELECT user_id, channel_name, channel_id 
+          FROM youtube_credentials 
+          WHERE is_primary = 1 
+          GROUP BY user_id
+        ) yc_primary ON (s.user_id = yc_primary.user_id OR CAST(s.user_id AS TEXT) = CAST(yc_primary.user_id AS TEXT))
       `;
       const params = [];
       const conditions = [];
@@ -179,7 +190,7 @@ class Stream {
         query += ' WHERE ' + conditions.join(' AND ');
       }
 
-      query += ' ORDER BY s.created_at DESC';
+      query += ' GROUP BY s.id ORDER BY s.created_at DESC';
       db.all(query, params, (err, rows) => {
         if (err) {
           console.error('Error finding streams:', err.message);
@@ -701,13 +712,19 @@ class Stream {
         LEFT JOIN youtube_credentials yc ON s.youtube_account_id = yc.id
         LEFT JOIN youtube_broadcast_settings ybs ON s.youtube_broadcast_id = ybs.broadcast_id
         LEFT JOIN youtube_credentials yc_broadcast ON ybs.account_id = yc_broadcast.id
-        LEFT JOIN youtube_credentials yc_primary ON s.user_id = yc_primary.user_id AND yc_primary.is_primary = 1
+        LEFT JOIN (
+          SELECT user_id, channel_name, channel_id 
+          FROM youtube_credentials 
+          WHERE is_primary = 1 
+          GROUP BY user_id
+        ) yc_primary ON (s.user_id = yc_primary.user_id OR CAST(s.user_id AS TEXT) = CAST(yc_primary.user_id AS TEXT))
         WHERE s.user_id = ?
         AND (
           (s.schedule_type = 'once' AND s.schedule_time IS NOT NULL AND s.schedule_time != '')
           OR (s.schedule_type IN ('daily', 'weekly') AND (s.recurring_enabled = 1 OR s.recurring_enabled = '1' OR s.recurring_enabled = true OR s.recurring_enabled = 'true'))
           OR (s.status = 'scheduled')
         )
+        GROUP BY s.id
         ORDER BY
           CASE s.schedule_type
             WHEN 'once' THEN 1

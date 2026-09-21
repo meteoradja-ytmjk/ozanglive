@@ -10737,8 +10737,23 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         status: req.body.startImmediately === 'true' ? 'offline' : (isScheduled ? 'scheduled' : 'offline')
       };
 
-      createdStream = await Stream.create(streamData);
-      console.log('[API] Created associated Stream record:', createdStream.id, 'for broadcast:', broadcast.broadcastId, 'schedule_time:', scheduleIso);
+      // Check if an associated stream record already exists for this broadcast to prevent duplicates
+      const existingStreamRecord = await new Promise((resolve) => {
+        db.get(
+          'SELECT id FROM streams WHERE youtube_broadcast_id = ? AND (user_id = ? OR CAST(user_id AS TEXT) = CAST(? AS TEXT))',
+          [broadcast.broadcastId, req.session.userId, String(req.session.userId)],
+          (err, row) => resolve(row)
+        );
+      });
+
+      if (existingStreamRecord) {
+        console.log('[API] Stream record already exists for broadcast:', broadcast.broadcastId, 'id:', existingStreamRecord.id, '- reusing to prevent duplicates');
+        await Stream.update(existingStreamRecord.id, streamData);
+        createdStream = await Stream.findById(existingStreamRecord.id);
+      } else {
+        createdStream = await Stream.create(streamData);
+        console.log('[API] Created associated Stream record:', createdStream.id, 'for broadcast:', broadcast.broadcastId, 'schedule_time:', scheduleIso);
+      }
 
       if (req.body.startImmediately === 'true' && createdStream && req.body.videoId) {
         if (typeof streamingService !== 'undefined' && typeof streamingService.startStream === 'function') {
