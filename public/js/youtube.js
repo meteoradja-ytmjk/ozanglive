@@ -7160,6 +7160,25 @@ async function fetchStreamIdsForAccount(accountId) {
   }
 }
 
+/**
+ * Format a Date or date string to local "YYYY-MM-DDTHH:mm"
+ * Never uses UTC so it avoids GMT+7 / local timezone conversion bugs.
+ */
+function formatLocalDateTime(d) {
+  if (!d) return '';
+  const date = (d instanceof Date) ? d : new Date(d);
+  if (isNaN(date.getTime())) return '';
+  const pad = n => String(n).padStart(2, '0');
+  const year = date.getFullYear();
+  const month = pad(date.getMonth() + 1);
+  const day = pad(date.getDate());
+  const hours = pad(date.getHours());
+  const minutes = pad(date.getMinutes());
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+window.formatDateTimeLocal = formatLocalDateTime;
+window.formatLocalDateTime = formatLocalDateTime;
+
 // Open Re-create from Template Modal
 function openRecreateFromTemplateModal(template) {
   window.currentRecreateTemplate = template;
@@ -7212,7 +7231,7 @@ function openRecreateFromTemplateModal(template) {
         streamKey: b.streamKey || template.stream_key,
         thumbnailFolder: b.thumbnailFolder !== undefined ? b.thumbnailFolder : template.thumbnail_folder,
         pinnedThumbnail: b.pinnedThumbnail || b.thumbnailPath || template.pinned_thumbnail,
-        scheduleTime: typeof formatDateTimeLocal === 'function' ? formatDateTimeLocal(defaultDate) : defaultDate.toISOString().slice(0, 16)
+        scheduleTime: formatLocalDateTime(defaultDate)
       });
     });
   } else {
@@ -7236,7 +7255,7 @@ function openRecreateFromTemplateModal(template) {
           streamKey: template.stream_key,
           thumbnailFolder: template.thumbnail_folder,
           pinnedThumbnail: template.pinned_thumbnail,
-          scheduleTime: typeof formatDateTimeLocal === 'function' ? formatDateTimeLocal(slotDate) : slotDate.toISOString().slice(0, 16)
+          scheduleTime: formatLocalDateTime(slotDate)
         });
       });
       window.recreateSlots.sort((a, b) => new Date(a.scheduleTime) - new Date(b.scheduleTime));
@@ -7248,7 +7267,8 @@ function openRecreateFromTemplateModal(template) {
         streamKey: template.stream_key,
         thumbnailFolder: template.thumbnail_folder,
         pinnedThumbnail: template.pinned_thumbnail,
-        scheduleTime: typeof formatDateTimeLocal === 'function' ? formatDateTimeLocal(defaultDate) : defaultDate.toISOString().slice(0, 16)
+        scheduleTime: formatLocalDateTime(defaultDate),
+        isInitial: true
       });
     }
   }
@@ -7287,26 +7307,30 @@ function renderRecreateSlotList() {
   }
 
   const minDate = new Date(Date.now() + 10 * 60 * 1000);
-  const minDateStr = typeof formatDateTimeLocal === 'function' ? formatDateTimeLocal(minDate) : minDate.toISOString().slice(0, 16);
+  const minDateStr = formatLocalDateTime(minDate);
 
   listEl.innerHTML = window.recreateSlots.map((slot, index) => {
     const canDelete = window.recreateSlots.length > 1;
     const deleteBtn = canDelete
       ? `<button type="button" onclick="removeRecreateSlot(${index})"
-           class="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors flex-shrink-0"
+           class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors flex-shrink-0"
            title="Hapus slot jadwal ini">
            <i class="ti ti-trash text-sm"></i>
          </button>`
-      : `<div class="w-7 h-7 flex-shrink-0"></div>`;
+      : `<div class="w-8 h-8 flex-shrink-0"></div>`;
 
     return `
-      <div class="bg-dark-700 rounded-lg px-2.5 py-1.5 border border-gray-700/80 grid grid-cols-[auto_1fr_auto_auto] items-center gap-2 transition-colors hover:border-gray-600">
-        <span class="px-1.5 py-0.5 bg-primary/20 text-primary font-bold text-[10px] rounded flex-shrink-0">#${index + 1}</span>
-        <span class="text-xs text-white font-medium truncate min-w-0" title="${escapeHtml(slot.title)}">${escapeHtml(slot.title)}</span>
-        <input type="datetime-local" name="recreateSchedule[]" required min="${minDateStr}" value="${slot.scheduleTime || ''}"
-          onchange="updateRecreateSlotTime(${index}, this.value)"
-          class="h-7.5 px-2 py-0.5 bg-dark-600 border border-gray-600 rounded-lg text-xs text-white focus:border-primary focus:outline-none [color-scheme:dark]">
-        ${deleteBtn}
+      <div class="bg-dark-700/80 rounded-lg px-2.5 py-1.5 border border-gray-700/80 flex items-center justify-between gap-2 transition-colors hover:border-gray-600">
+        <div class="flex items-center gap-2 min-w-0 flex-1">
+          <span class="px-1.5 py-0.5 bg-primary/20 text-primary font-bold text-[10px] rounded flex-shrink-0">#${index + 1}</span>
+          <span class="text-xs text-white font-medium truncate" title="${escapeHtml(slot.title)}">${escapeHtml(slot.title)}</span>
+        </div>
+        <div class="flex items-center gap-1.5 flex-shrink-0">
+          <input type="datetime-local" name="recreateSchedule[]" required min="${minDateStr}" value="${slot.scheduleTime || ''}"
+            onchange="updateRecreateSlotTime(${index}, this.value)"
+            class="h-8 px-2 bg-dark-600 border border-gray-600 rounded-lg text-xs text-white focus:border-primary focus:outline-none [color-scheme:dark] w-40 sm:w-44">
+          ${deleteBtn}
+        </div>
       </div>
     `;
   }).join('');
@@ -7316,6 +7340,7 @@ function renderRecreateSlotList() {
 function updateRecreateSlotTime(index, value) {
   if (window.recreateSlots && window.recreateSlots[index]) {
     window.recreateSlots[index].scheduleTime = value;
+    delete window.recreateSlots[index].isInitial;
   }
 }
 
@@ -7336,17 +7361,21 @@ function addRecreateSlot() {
     nextDate = new Date(Date.now() + 30 * 60 * 1000);
   }
 
+  if (window.recreateSlots.length > 0) {
+    delete window.recreateSlots[0].isInitial;
+  }
+
   window.recreateSlots.push({
     title: template.title,
     streamId: template.stream_id,
     streamKey: template.stream_key,
     thumbnailFolder: template.thumbnail_folder,
     pinnedThumbnail: template.pinned_thumbnail,
-    scheduleTime: typeof formatDateTimeLocal === 'function' ? formatDateTimeLocal(nextDate) : nextDate.toISOString().slice(0, 16)
+    scheduleTime: formatLocalDateTime(nextDate)
   });
 
   renderRecreateSlotList();
-  showToast(`Slot #${window.recreateSlots.length} berhasil ditambahkan`);
+  showToast(`Slot #${window.recreateSlots.length} berhasil ditambahkan (+2 jam)`);
 }
 
 // Add quick slot from time input
@@ -7367,14 +7396,46 @@ function addRecreatePresetSlot(timeStr) {
   const [hours, minutes] = timeStr.split(':').map(Number);
   if (isNaN(hours) || isNaN(minutes)) return;
 
-  const slotDate = new Date();
-  slotDate.setHours(hours, minutes, 0, 0);
-
-  if (slotDate.getTime() < Date.now() + 10 * 60 * 1000) {
-    slotDate.setDate(slotDate.getDate() + 1);
+  // Base date calculation from existing slots or now
+  let targetDate = new Date();
+  if (window.recreateSlots.length > 0) {
+    const refSlot = window.recreateSlots[window.recreateSlots.length - 1];
+    if (refSlot && refSlot.scheduleTime) {
+      const parsed = new Date(refSlot.scheduleTime);
+      if (!isNaN(parsed.getTime())) {
+        targetDate = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate(), hours, minutes, 0, 0);
+      }
+    }
+  } else {
+    targetDate.setHours(hours, minutes, 0, 0);
   }
 
-  const scheduleTime = typeof formatDateTimeLocal === 'function' ? formatDateTimeLocal(slotDate) : slotDate.toISOString().slice(0, 16);
+  // Advance to tomorrow if target date is in the past (< 10 mins from now)
+  if (targetDate.getTime() < Date.now() + 10 * 60 * 1000) {
+    targetDate.setDate(targetDate.getDate() + 1);
+  }
+
+  const scheduleTime = formatLocalDateTime(targetDate);
+
+  // Avoid duplicate slots at the exact same time
+  const exists = window.recreateSlots.some(s => s.scheduleTime === scheduleTime);
+  if (exists) {
+    showToast(`Slot jam ${timeStr} sudah ada di daftar`, 'warning');
+    return;
+  }
+
+  // If there's only 1 untouched initial slot, set its time directly
+  if (window.recreateSlots.length === 1 && window.recreateSlots[0].isInitial) {
+    window.recreateSlots[0].scheduleTime = scheduleTime;
+    delete window.recreateSlots[0].isInitial;
+    renderRecreateSlotList();
+    showToast(`Jadwal diatur ke ${timeStr}`);
+    return;
+  }
+
+  if (window.recreateSlots.length > 0) {
+    delete window.recreateSlots[0].isInitial;
+  }
 
   window.recreateSlots.push({
     title: template.title,

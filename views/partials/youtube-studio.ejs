@@ -2747,30 +2747,63 @@
           </div>
         </div>
         
-        <!-- 3. Jadwal Bertingkat (Single Line from Left to Right) -->
+        <!-- 3. Jadwal Bertingkat (Multi-slot Schedule Toolbar & Presets) -->
         <div class="border-t border-gray-700/60 pt-2.5 space-y-2">
-          <!-- Single Line: Title & Badge on Left -> Time Input, Tambah Jam, +2 Jam on Right -->
-          <div class="bg-dark-700/70 px-3 py-2 rounded-lg border border-gray-700/70 flex items-center justify-between gap-2 overflow-x-auto">
-            <div class="flex items-center gap-1.5 flex-shrink-0">
-              <i class="ti ti-calendar-time text-primary text-sm"></i>
-              <span class="text-xs font-semibold text-white whitespace-nowrap">Jadwal Bertingkat</span>
-              <span id="recreateSlotCountBadge" class="px-1.5 py-0.5 bg-primary/20 text-primary text-[10px] font-bold rounded flex-shrink-0">1 slot</span>
+          <div class="bg-dark-700/70 p-2.5 rounded-lg border border-gray-700/70 space-y-2">
+            <!-- Row 1: Left (Title & Slot Count) | Right (Time Input + Jam +2 Jam) -->
+            <div class="flex items-center justify-between gap-2 flex-nowrap">
+              <div class="flex items-center gap-1.5 flex-shrink-0">
+                <i class="ti ti-calendar-time text-primary text-sm"></i>
+                <span class="text-xs font-semibold text-white whitespace-nowrap">Jadwal Bertingkat</span>
+                <span id="recreateSlotCountBadge" class="px-1.5 py-0.5 bg-primary/20 text-primary text-[10px] font-bold rounded flex-shrink-0">1 slot</span>
+              </div>
+              
+              <div class="flex items-center gap-1.5 flex-shrink-0">
+                <input type="time" id="recreateQuickTimeInput" value="13:00"
+                  class="h-8 w-20 px-1.5 bg-dark-600 border border-gray-600 rounded-lg text-xs text-white text-center font-medium focus:outline-none focus:border-primary [color-scheme:dark]">
+                <button type="button" onclick="addRecreateQuickSlot()"
+                  class="h-8 px-2.5 bg-primary hover:bg-primary/80 text-white rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1 whitespace-nowrap shadow-sm"
+                  title="Tambah slot dengan jam yang dipilih">
+                  <i class="ti ti-clock-plus text-xs"></i>
+                  <span>+ Jam</span>
+                </button>
+                <button type="button" onclick="addRecreateSlot()"
+                  class="h-8 px-2.5 bg-dark-600 hover:bg-dark-500 text-gray-200 border border-gray-600 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1 whitespace-nowrap"
+                  title="Tambah slot otomatis (+2 jam dari slot terakhir)">
+                  <i class="ti ti-plus text-xs"></i>
+                  <span>+2 Jam</span>
+                </button>
+              </div>
             </div>
-            
-            <div class="flex items-center gap-1.5 flex-shrink-0">
-              <input type="time" id="recreateQuickTimeInput" value="13:00"
-                class="h-8 w-20 px-1.5 bg-dark-600 border border-gray-600 rounded-lg text-xs text-white text-center focus:outline-none focus:border-primary [color-scheme:dark]">
-              <button type="button" onclick="addRecreateQuickSlot()"
-                class="h-8 px-2.5 bg-primary hover:bg-primary/80 text-white rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1 whitespace-nowrap">
-                <i class="ti ti-clock-plus text-xs"></i>
-                <span>+ Jam</span>
-              </button>
-              <button type="button" onclick="addRecreateSlot()"
-                class="h-8 px-2.5 bg-dark-600 hover:bg-dark-500 text-gray-200 border border-gray-600 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1 whitespace-nowrap"
-                title="Tambah slot otomatis (+2 jam dari slot terakhir)">
-                <i class="ti ti-plus text-xs"></i>
-                <span>+2 Jam</span>
-              </button>
+
+            <!-- Row 2: Precision Preset Buttons (08:00, 13:00, 16:30, 19:30) -->
+            <div class="pt-2 border-t border-gray-700/50 flex items-center gap-2">
+              <span class="text-[11px] text-gray-400 font-medium whitespace-nowrap flex items-center gap-1 flex-shrink-0">
+                <i class="ti ti-bolt text-amber-400 text-xs"></i>
+                <span>Preset:</span>
+              </span>
+              <div class="grid grid-cols-4 gap-1.5 flex-1 min-w-0">
+                <button type="button" onclick="addRecreatePresetSlot('08:00')"
+                  class="h-7.5 px-1 bg-dark-600 hover:bg-dark-500 hover:text-white text-gray-300 border border-gray-600/80 rounded-lg text-[11px] font-medium transition-all flex items-center justify-center gap-1">
+                  <span>08:00</span>
+                  <span class="text-[10px] text-gray-400 hidden sm:inline">Pagi</span>
+                </button>
+                <button type="button" onclick="addRecreatePresetSlot('13:00')"
+                  class="h-7.5 px-1 bg-dark-600 hover:bg-dark-500 hover:text-white text-gray-300 border border-gray-600/80 rounded-lg text-[11px] font-medium transition-all flex items-center justify-center gap-1">
+                  <span>13:00</span>
+                  <span class="text-[10px] text-gray-400 hidden sm:inline">Siang</span>
+                </button>
+                <button type="button" onclick="addRecreatePresetSlot('16:30')"
+                  class="h-7.5 px-1 bg-dark-600 hover:bg-dark-500 hover:text-white text-gray-300 border border-gray-600/80 rounded-lg text-[11px] font-medium transition-all flex items-center justify-center gap-1">
+                  <span>16:30</span>
+                  <span class="text-[10px] text-gray-400 hidden sm:inline">Sore</span>
+                </button>
+                <button type="button" onclick="addRecreatePresetSlot('19:30')"
+                  class="h-7.5 px-1 bg-dark-600 hover:bg-dark-500 hover:text-white text-gray-300 border border-gray-600/80 rounded-lg text-[11px] font-medium transition-all flex items-center justify-center gap-1">
+                  <span>19:30</span>
+                  <span class="text-[10px] text-gray-400 hidden sm:inline">Malam</span>
+                </button>
+              </div>
             </div>
           </div>
 
