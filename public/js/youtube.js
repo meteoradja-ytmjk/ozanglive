@@ -7290,26 +7290,23 @@ function renderRecreateSlotList() {
     const canDelete = window.recreateSlots.length > 1;
     const deleteBtn = canDelete
       ? `<button type="button" onclick="removeRecreateSlot(${index})"
-           class="w-6 h-6 flex items-center justify-center text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors flex-shrink-0"
+           class="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors flex-shrink-0"
            title="Hapus slot jadwal ini">
            <i class="ti ti-trash text-sm"></i>
          </button>`
       : '';
 
     return `
-      <div class="bg-dark-700 rounded-lg p-3 border border-gray-700 space-y-2">
-        <div class="flex items-center justify-between gap-2">
-          <div class="flex items-center gap-2 min-w-0 flex-1">
-            <span class="px-2 py-0.5 bg-primary/20 text-primary font-bold text-xs rounded">Slot #${index + 1}</span>
-            <span class="text-xs text-white font-medium truncate">${escapeHtml(slot.title)}</span>
-          </div>
-          ${deleteBtn}
+      <div class="bg-dark-700 rounded-lg px-2.5 py-1.5 border border-gray-700/80 flex items-center justify-between gap-2 transition-colors hover:border-gray-600">
+        <div class="flex items-center gap-1.5 min-w-0 flex-1">
+          <span class="px-1.5 py-0.5 bg-primary/20 text-primary font-bold text-[10px] rounded flex-shrink-0">#${index + 1}</span>
+          <span class="text-xs text-white font-medium truncate max-w-[120px] sm:max-w-[170px]" title="${escapeHtml(slot.title)}">${escapeHtml(slot.title)}</span>
         </div>
-        <div>
-          <label class="text-[11px] text-gray-400 block mb-1">Waktu Siaran (Tanggal & Jam):</label>
+        <div class="flex items-center gap-1.5 flex-shrink-0">
           <input type="datetime-local" name="recreateSchedule[]" required min="${minDateStr}" value="${slot.scheduleTime || ''}"
             onchange="updateRecreateSlotTime(${index}, this.value)"
-            class="w-full px-3 py-1.5 bg-dark-600 border border-gray-600 rounded-lg focus:border-primary focus:outline-none text-xs text-white [color-scheme:dark]">
+            class="px-2 py-1 bg-dark-600 border border-gray-600 rounded text-xs text-white focus:border-primary focus:outline-none [color-scheme:dark]">
+          ${deleteBtn}
         </div>
       </div>
     `;
