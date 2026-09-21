@@ -7344,21 +7344,22 @@ function updateRecreateSlotTime(index, value) {
   }
 }
 
-// Add a new slot bertingkat to recreate modal
-function addRecreateSlot() {
+// Add a new slot bertingkat to recreate modal with customizable hoursToAdd (e.g. 1, 2, 3, 4, 5, 6)
+function addRecreateSlot(hoursToAdd = 2) {
   if (!window.recreateSlots || !window.currentRecreateTemplate) return;
   const template = window.currentRecreateTemplate;
+  const h = Number(hoursToAdd) || 2;
 
   let nextDate;
   if (window.recreateSlots.length > 0) {
     const lastSlot = window.recreateSlots[window.recreateSlots.length - 1];
     const lastTime = new Date(lastSlot.scheduleTime);
     if (!isNaN(lastTime.getTime())) {
-      nextDate = new Date(lastTime.getTime() + 2 * 60 * 60 * 1000); // +2 hours from last slot
+      nextDate = new Date(lastTime.getTime() + h * 60 * 60 * 1000); // +h hours from last slot
     }
   }
   if (!nextDate || isNaN(nextDate.getTime()) || nextDate.getTime() < Date.now() + 10 * 60 * 1000) {
-    nextDate = new Date(Date.now() + 30 * 60 * 1000);
+    nextDate = new Date(Date.now() + (h * 60) * 60 * 1000);
   }
 
   if (window.recreateSlots.length > 0) {
@@ -7375,8 +7376,9 @@ function addRecreateSlot() {
   });
 
   renderRecreateSlotList();
-  showToast(`Slot #${window.recreateSlots.length} berhasil ditambahkan (+2 jam)`);
+  showToast(`Slot #${window.recreateSlots.length} berhasil ditambahkan (+${h} jam)`);
 }
+window.addRecreateSlot = addRecreateSlot;
 
 // Add quick slot from time input
 function addRecreateQuickSlot() {
@@ -7461,6 +7463,9 @@ function removeRecreateSlot(index) {
   renderRecreateSlotList();
   showToast('Slot jadwal dihapus');
 }
+window.addRecreatePresetSlot = addRecreatePresetSlot;
+window.addRecreateQuickSlot = addRecreateQuickSlot;
+window.removeRecreateSlot = removeRecreateSlot;
 
 // Compatibility alias for removeRecreateBroadcast
 function removeRecreateBroadcast(index) {
