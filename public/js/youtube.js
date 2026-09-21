@@ -7264,6 +7264,9 @@ function openRecreateFromTemplateModal(template) {
   
   // Load title rotation settings and check if enabled
   loadRecreateTitleRotationPreview();
+
+  // Load recurring settings from template
+  loadRecreateRecurringSettings(template);
 }
 
 // Render the multi-slot schedule list for the recreate modal
@@ -7273,7 +7276,7 @@ function renderRecreateSlotList() {
 
   const countBadge = document.getElementById('recreateSlotCountBadge');
   if (countBadge) {
-    countBadge.textContent = `${window.recreateSlots.length} slot waktu`;
+    countBadge.textContent = `${window.recreateSlots.length} slot`;
   }
 
   const createBtnText = document.getElementById('recreateBtnText');
@@ -7290,24 +7293,20 @@ function renderRecreateSlotList() {
     const canDelete = window.recreateSlots.length > 1;
     const deleteBtn = canDelete
       ? `<button type="button" onclick="removeRecreateSlot(${index})"
-           class="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors flex-shrink-0"
+           class="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors flex-shrink-0"
            title="Hapus slot jadwal ini">
            <i class="ti ti-trash text-sm"></i>
          </button>`
-      : '';
+      : `<div class="w-7 h-7 flex-shrink-0"></div>`;
 
     return `
-      <div class="bg-dark-700 rounded-lg px-2.5 py-1.5 border border-gray-700/80 flex items-center justify-between gap-2 transition-colors hover:border-gray-600">
-        <div class="flex items-center gap-1.5 min-w-0 flex-1">
-          <span class="px-1.5 py-0.5 bg-primary/20 text-primary font-bold text-[10px] rounded flex-shrink-0">#${index + 1}</span>
-          <span class="text-xs text-white font-medium truncate max-w-[120px] sm:max-w-[170px]" title="${escapeHtml(slot.title)}">${escapeHtml(slot.title)}</span>
-        </div>
-        <div class="flex items-center gap-1.5 flex-shrink-0">
-          <input type="datetime-local" name="recreateSchedule[]" required min="${minDateStr}" value="${slot.scheduleTime || ''}"
-            onchange="updateRecreateSlotTime(${index}, this.value)"
-            class="px-2 py-1 bg-dark-600 border border-gray-600 rounded text-xs text-white focus:border-primary focus:outline-none [color-scheme:dark]">
-          ${deleteBtn}
-        </div>
+      <div class="bg-dark-700 rounded-lg px-2.5 py-1.5 border border-gray-700/80 grid grid-cols-[auto_1fr_auto_auto] items-center gap-2 transition-colors hover:border-gray-600">
+        <span class="px-1.5 py-0.5 bg-primary/20 text-primary font-bold text-[10px] rounded flex-shrink-0">#${index + 1}</span>
+        <span class="text-xs text-white font-medium truncate min-w-0" title="${escapeHtml(slot.title)}">${escapeHtml(slot.title)}</span>
+        <input type="datetime-local" name="recreateSchedule[]" required min="${minDateStr}" value="${slot.scheduleTime || ''}"
+          onchange="updateRecreateSlotTime(${index}, this.value)"
+          class="h-7.5 px-2 py-0.5 bg-dark-600 border border-gray-600 rounded-lg text-xs text-white focus:border-primary focus:outline-none [color-scheme:dark]">
+        ${deleteBtn}
       </div>
     `;
   }).join('');
@@ -7423,6 +7422,78 @@ function closeRecreateFromTemplateModal() {
   
   const preview = document.getElementById('recreateTitleRotationPreview');
   if (preview) preview.classList.add('hidden');
+
+  // Reset recurring schedule checkbox and container
+  const recCheckbox = document.getElementById('recreateRecurringEnabled');
+  if (recCheckbox) recCheckbox.checked = false;
+  const recContainer = document.getElementById('recreateRecurringFieldsContainer');
+  if (recContainer) recContainer.classList.add('hidden');
+}
+
+/**
+ * Toggle recurring schedule in recreate modal
+ */
+function toggleRecreateRecurring(enabled) {
+  const container = document.getElementById('recreateRecurringFieldsContainer');
+  if (container) {
+    if (enabled) container.classList.remove('hidden');
+    else container.classList.add('hidden');
+  }
+}
+
+/**
+ * Toggle recurring days in recreate modal
+ */
+function toggleRecreateRecurringDays(pattern) {
+  const daysContainer = document.getElementById('recreateRecurringDaysContainer');
+  if (daysContainer) {
+    if (pattern === 'weekly') daysContainer.classList.remove('hidden');
+    else daysContainer.classList.add('hidden');
+  }
+}
+
+/**
+ * Load recurring settings from template into recreate modal
+ */
+function loadRecreateRecurringSettings(template) {
+  if (!template) return;
+  const isRecurring = Boolean(template.recurring_enabled);
+  const checkbox = document.getElementById('recreateRecurringEnabled');
+  if (checkbox) checkbox.checked = isRecurring;
+
+  const container = document.getElementById('recreateRecurringFieldsContainer');
+  if (container) {
+    if (isRecurring) container.classList.remove('hidden');
+    else container.classList.add('hidden');
+  }
+
+  const pattern = template.recurring_pattern || 'daily';
+  const patternRadio = document.querySelector(`input[name="recreateRecurringPattern"][value="${pattern}"]`);
+  if (patternRadio) patternRadio.checked = true;
+
+  const daysContainer = document.getElementById('recreateRecurringDaysContainer');
+  if (daysContainer) {
+    if (pattern === 'weekly') daysContainer.classList.remove('hidden');
+    else daysContainer.classList.add('hidden');
+  }
+
+  let days = [];
+  if (Array.isArray(template.recurring_days)) {
+    days = template.recurring_days.map(d => String(d).toLowerCase());
+  } else if (typeof template.recurring_days === 'string' && template.recurring_days) {
+    try {
+      const parsed = JSON.parse(template.recurring_days);
+      if (Array.isArray(parsed)) days = parsed.map(d => String(d).toLowerCase());
+    } catch (_) {
+      days = template.recurring_days.split(/[\s,]+/).map(d => d.toLowerCase());
+    }
+  }
+  if (days.length === 0) days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+
+  const dayCheckboxes = document.querySelectorAll('input[name="recreateRecurringDays"]');
+  dayCheckboxes.forEach(cb => {
+    cb.checked = days.includes(cb.value.toLowerCase());
+  });
 }
 
 /**
@@ -7776,6 +7847,58 @@ if (recreateFromTemplateForm) {
         }
       }
       
+      // Save / Update recurring schedule for this template
+      const recurringCheckbox = document.getElementById('recreateRecurringEnabled');
+      if (recurringCheckbox && template && template.id) {
+        const isRecurring = recurringCheckbox.checked;
+        const patternRadio = document.querySelector('input[name="recreateRecurringPattern"]:checked');
+        const pattern = patternRadio ? patternRadio.value : 'daily';
+
+        // Extract HH:MM times from schedules
+        const timeList = Array.from(new Set(
+          schedules.map(sch => {
+            const parts = sch.split('T');
+            if (parts.length > 1) {
+              return parts[1].slice(0, 5);
+            }
+            return null;
+          }).filter(t => t && /^[0-2]?[0-9]:[0-5][0-9]$/.test(t))
+        )).sort();
+
+        const recurringTimeStr = timeList.length > 0 ? timeList.join(', ') : '13:00';
+
+        let recurringDays = null;
+        if (pattern === 'weekly') {
+          const selectedDays = Array.from(document.querySelectorAll('input[name="recreateRecurringDays"]:checked'))
+            .map(cb => cb.value.toLowerCase());
+          recurringDays = selectedDays.length > 0 ? selectedDays : ['monday'];
+        }
+
+        try {
+          await fetch(`/api/youtube/templates/${template.id}/recurring`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRF-Token': getCsrfToken()
+            },
+            body: JSON.stringify({
+              recurring_enabled: isRecurring,
+              recurring_pattern: pattern,
+              recurring_time: recurringTimeStr,
+              recurring_days: recurringDays
+            })
+          });
+          console.log('[recreate] Updated recurring configuration for template:', template.id, {
+            recurring_enabled: isRecurring,
+            recurring_pattern: pattern,
+            recurring_time: recurringTimeStr,
+            recurring_days: recurringDays
+          });
+        } catch (recErr) {
+          console.error('[recreate] Error saving recurring configuration:', recErr);
+        }
+      }
+
       closeRecreateFromTemplateModal();
       
       // Show results
