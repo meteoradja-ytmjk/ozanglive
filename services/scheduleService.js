@@ -9,7 +9,7 @@ const BroadcastTemplate = require('../models/BroadcastTemplate');
 const TitleSuggestion = require('../models/TitleSuggestion');
 const YouTubeBroadcastSettings = require('../models/YouTubeBroadcastSettings');
 const youtubeService = require('./youtubeService');
-const { calculateNextRun, formatNextRunAt, replaceTitlePlaceholders, isScheduleMissed } = require('../utils/recurringUtils');
+const { calculateNextRun, formatNextRunAt, replaceTitlePlaceholders, isScheduleMissed, parseRecurringTimes } = require('../utils/recurringUtils');
 const { db } = require('../db/database');
 
 /**
@@ -383,14 +383,6 @@ class ScheduleService {
             continue; // Silent skip
           }
           
-          // OPTIMIZED: Only log when action is needed (skip verbose logging for waiting templates)
-          const hasRunToday = this.hasRunToday(template, now);
-          
-          // Skip if already run today (in WIB timezone)
-          if (hasRunToday) {
-            continue; // Silent skip
-          }
-          
           // Check if today is a valid day for this schedule (in WIB)
           let isTodayValid = false;
           
@@ -405,68 +397,61 @@ class ScheduleService {
             continue; // Silent skip - not scheduled for today
           }
           
-          // Parse scheduled time (in WIB)
-          if (!template.recurring_time) {
-            continue; // Silent skip - no time set
+          // Parse all scheduled times (supports schedule bertingkat / multi-time)
+          const times = parseRecurringTimes(template.recurring_time);
+          if (times.length === 0) {
+            continue; // Silent skip - no valid time set
           }
-          
-          const [schedHour, schedMin] = template.recurring_time.split(':').map(Number);
-          
-          // Calculate scheduled time in WIB minutes from midnight
-          const scheduleMinutesWIB = schedHour * 60 + schedMin;
-          const currentMinutesWIB = wibTime.hours * 60 + wibTime.minutes;
-          const timeDiffMinutes = currentMinutesWIB - scheduleMinutesWIB;
-          
-          // EXECUTE CONDITIONS (in order of priority):
-          // 1. Scheduled time has passed today but not run yet - EXECUTE (STRICT 5-minute window)
-          // 2. Scheduled time is coming up within 2 minutes - EXECUTE (early trigger)
-          // 3. next_run_at is overdue - EXECUTE
-          
-          // CRITICAL FIX: Check last_run_at to prevent duplicate execution
-          // If last_run_at is within the last 10 minutes, SKIP (already executed recently)
+
+          // Check if last run was within the last 10 minutes (global debounce)
           if (template.last_run_at) {
             const lastRunTime = new Date(template.last_run_at);
             const timeSinceLastRun = nowMs - lastRunTime.getTime();
             const minutesSinceLastRun = Math.floor(timeSinceLastRun / (1000 * 60));
-            
             if (minutesSinceLastRun < 10) {
               continue; // Silent skip - recently executed
             }
           }
-          
-          // Condition 1: Scheduled time has passed today (0 to 5 minutes ONLY)
-          // CRITICAL FIX: Reduced from 720 minutes to 5 minutes to prevent duplicate execution
-          // This ensures template only executes within a tight window after scheduled time
-          if (timeDiffMinutes >= 0 && timeDiffMinutes <= 5) {
-            console.log(`[ScheduleService] EXEC: "${template.name}" (${timeDiffMinutes}m past schedule)`);
-            await this.executeTemplate(template);
+
+          // Iterate through all configured slots for today
+          let executedSlot = false;
+          for (const slotTime of times) {
+            if (this.hasRunSlot(template, slotTime, now)) {
+              continue; // Already executed for this slot
+            }
+
+            const [schedHour, schedMin] = slotTime.split(':').map(Number);
+            const scheduleMinutesWIB = schedHour * 60 + schedMin;
+            const currentMinutesWIB = wibTime.hours * 60 + wibTime.minutes;
+            const timeDiffMinutes = currentMinutesWIB - scheduleMinutesWIB;
+
+            // Trigger if within window: -2m (early) to +5m (exact/past)
+            if ((timeDiffMinutes >= 0 && timeDiffMinutes <= 5) || (timeDiffMinutes >= -2 && timeDiffMinutes < 0)) {
+              console.log(`[ScheduleService] EXEC: "${template.name}" slot ${slotTime} WIB (${timeDiffMinutes}m from schedule)`);
+              await this.executeTemplate(template);
+              executedSlot = true;
+              break; // Execute one slot per check
+            }
+          }
+
+          if (executedSlot) {
             continue;
           }
-          
-          // Condition 2: Early trigger - within 2 minutes before scheduled time
-          // This helps ensure we don't miss the exact time
-          if (timeDiffMinutes >= -2 && timeDiffMinutes < 0) {
-            console.log(`[ScheduleService] EXEC: "${template.name}" (early trigger, ${Math.abs(timeDiffMinutes)}m before)`);
-            await this.executeTemplate(template);
-            continue;
-          }
-          
-          // Condition 3: Check next_run_at for schedules from previous days
+
+          // Condition: Check next_run_at for overdue schedules
           if (template.next_run_at) {
             const nextRunAt = new Date(template.next_run_at);
             const timeDiffMs = nowMs - nextRunAt.getTime();
             const timeDiffFromNextRun = Math.floor(timeDiffMs / (1000 * 60));
-            
-            // CRITICAL FIX: Reduced execution window from 1440 minutes (24 hours) to 60 minutes (1 hour)
-            // This prevents old schedules from being executed multiple times
+
             // Execute if next_run_at is overdue but within 60 minutes only
             if (timeDiffFromNextRun > 0 && timeDiffFromNextRun <= 60) {
               console.log(`[ScheduleService] EXEC: "${template.name}" (next_run_at overdue ${timeDiffFromNextRun}m)`);
               await this.executeTemplate(template);
               continue;
             }
-            
-            // If overdue by more than 60 minutes, update next_run_at to future (skip execution)
+
+            // If overdue by more than 60 minutes, update next_run_at to future
             if (timeDiffFromNextRun > 60) {
               await this.updateNextRunToFuture(template);
             }
@@ -647,9 +632,48 @@ class ScheduleService {
   }
 
   /**
+  /**
+   * Check if template has already run for a specific slot time today (in WIB timezone)
+   * @param {Object} template - Template object
+   * @param {string} slotTime - Time string HH:MM
+   * @param {Date} now - Current time
+   * @returns {boolean}
+   */
+  hasRunSlot(template, slotTime, now) {
+    if (!template.last_run_at) return false;
+
+    const lastRun = new Date(template.last_run_at);
+    const timeSinceLastRun = now.getTime() - lastRun.getTime();
+    const minutesSinceLastRun = Math.floor(timeSinceLastRun / (1000 * 60));
+
+    // If last run was within the last 10 minutes, always block immediate re-execution
+    if (minutesSinceLastRun < 10) {
+      return true;
+    }
+
+    const nowDateStr = this.getWIBDateString(now);
+    const lastRunDateStr = this.getWIBDateString(lastRun);
+
+    // If last run was on a different day, this slot hasn't run today
+    if (nowDateStr !== lastRunDateStr) {
+      return false;
+    }
+
+    // Check if the last run corresponds to this slot's time
+    const lastRunWib = getWIBTime(lastRun);
+    const [slotH, slotM] = slotTime.split(':').map(Number);
+    const slotMinutes = slotH * 60 + slotM;
+    const lastRunMinutes = lastRunWib.hours * 60 + lastRunWib.minutes;
+    const diff = Math.abs(lastRunMinutes - slotMinutes);
+
+    // If last run was within 25 minutes of this slot time today, treat as already executed
+    return diff <= 25;
+  }
+
+  /**
    * Check if template has already run today (in WIB timezone)
-   * CRITICAL FIX: Added time-based check to prevent duplicate execution within same day
-   * OPTIMIZED: Reduced logging to minimize I/O overhead
+   * For single time: returns true if already run today.
+   * For multi-time schedule bertingkat: returns true only if all slots ran today.
    * @param {Object} template - Template object
    * @param {Date} now - Current time
    * @returns {boolean}
@@ -658,26 +682,23 @@ class ScheduleService {
     if (!template.last_run_at) return false;
     
     const lastRun = new Date(template.last_run_at);
-    
-    // CRITICAL FIX: First check if last run was within the last 10 minutes
-    // This prevents duplicate execution even if date comparison fails
     const timeSinceLastRun = now.getTime() - lastRun.getTime();
     const minutesSinceLastRun = Math.floor(timeSinceLastRun / (1000 * 60));
     
     if (minutesSinceLastRun < 10) {
-      // OPTIMIZED: Only log when blocking execution (important info)
       return true;
     }
+
+    const times = parseRecurringTimes(template.recurring_time);
+    if (times.length > 1) {
+      // Check if all slots have already run today
+      return times.every(slot => this.hasRunSlot(template, slot, now));
+    }
     
-    // Get date strings in WIB for comparison
+    // Single time check
     const nowDateStr = this.getWIBDateString(now);
     const lastRunDateStr = this.getWIBDateString(lastRun);
-    
-    const result = nowDateStr === lastRunDateStr;
-    
-    // OPTIMIZED: No logging here to reduce I/O
-    
-    return result;
+    return nowDateStr === lastRunDateStr;
   }
 
   /**

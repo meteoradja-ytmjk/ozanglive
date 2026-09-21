@@ -116,6 +116,56 @@ function createWIBDate(year, month, day, hours, minutes) {
  * @param {string[]} config.recurring_days - Array of day names for weekly pattern
  * @returns {Object} Validation result { valid: boolean, errors: string[] }
  */
+/**
+ * Parse recurring time string or array into sorted array of valid HH:MM strings
+ * Supports single time "08:00", comma-separated "08:00, 13:00, 19:00", JSON array, or Array
+ * @param {string|string[]} recurringTime
+ * @returns {string[]} Sorted array of valid HH:MM strings
+ */
+function parseRecurringTimes(recurringTime) {
+  if (!recurringTime) return [];
+
+  let rawList = [];
+  if (Array.isArray(recurringTime)) {
+    rawList = recurringTime;
+  } else if (typeof recurringTime === 'string') {
+    const trimmed = recurringTime.trim();
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) rawList = parsed;
+      } catch (e) {
+        rawList = trimmed.replace(/^\[|\]$/g, '').split(/[\s,]+/);
+      }
+    } else {
+      rawList = trimmed.split(/[\s,]+/);
+    }
+  }
+
+  const validTimes = rawList
+    .map(t => typeof t === 'string' ? t.trim() : '')
+    .filter(t => isValidTimeFormat(t));
+
+  // Deduplicate and sort chronologically
+  const unique = Array.from(new Set(validTimes));
+  unique.sort((a, b) => {
+    const [h1, m1] = a.split(':').map(Number);
+    const [h2, m2] = b.split(':').map(Number);
+    return (h1 * 60 + m1) - (h2 * 60 + m2);
+  });
+
+  return unique;
+}
+
+/**
+ * Validate recurring configuration
+ * @param {Object} config - Recurring configuration
+ * @param {boolean} config.recurring_enabled - Whether recurring is enabled
+ * @param {string} config.recurring_pattern - Pattern: 'daily' or 'weekly'
+ * @param {string|string[]} config.recurring_time - Time or multiple times in HH:MM format
+ * @param {string[]} config.recurring_days - Array of day names for weekly pattern
+ * @returns {Object} Validation result { valid: boolean, errors: string[] }
+ */
 function validateRecurringConfig(config) {
   const errors = [];
   const { recurring_enabled, recurring_pattern, recurring_time, recurring_days } = config;
@@ -132,11 +182,10 @@ function validateRecurringConfig(config) {
     errors.push('Recurring pattern must be daily or weekly');
   }
 
-  // Validate time format
-  if (!recurring_time) {
-    errors.push('Recurring time is required');
-  } else if (!isValidTimeFormat(recurring_time)) {
-    errors.push('Recurring time must be in HH:MM format');
+  // Validate time format (supports single time or multi-time schedule bertingkat)
+  const times = parseRecurringTimes(recurring_time);
+  if (times.length === 0) {
+    errors.push('Recurring time is required in HH:MM format (e.g. 08:00 or 08:00, 13:00)');
   }
 
   // Validate days for weekly pattern
@@ -166,7 +215,7 @@ function isValidTimeFormat(time) {
   if (!time || typeof time !== 'string') return false;
   
   const regex = /^([01]?[0-9]|2[0-3]):([0-5][0-9])$/;
-  return regex.test(time);
+  return regex.test(time.trim());
 }
 
 /**
@@ -175,113 +224,110 @@ function isValidTimeFormat(time) {
  * @returns {Object} { hours: number, minutes: number }
  */
 function parseTime(time) {
-  const [hours, minutes] = time.split(':').map(Number);
+  const [hours, minutes] = time.trim().split(':').map(Number);
   return { hours, minutes };
 }
 
 /**
- * Calculate next run time for daily pattern
+ * Calculate next run time for daily pattern with schedule bertingkat support
  * Ensures next_run_at is always in the future
  * Uses WIB timezone for calculation
- * @param {string} time - Time in HH:MM format (WIB)
+ * @param {string|string[]} timeInput - Time or multiple times in HH:MM format (WIB)
  * @param {Date} fromDate - Starting date (default: now)
  * @returns {Date} Next run date (always in the future)
  */
-function calculateNextDailyRun(time, fromDate = new Date()) {
-  const { hours, minutes } = parseTime(time);
-  
+function calculateNextDailyRun(timeInput, fromDate = new Date()) {
+  const times = parseRecurringTimes(timeInput);
+  if (times.length === 0) {
+    throw new Error('No valid time provided for daily schedule');
+  }
+
   // Get current time in WIB
   const wibNow = getWIBTime(fromDate);
-  const now = fromDate;
-  
-  // Calculate scheduled time in minutes from midnight (WIB)
-  const scheduleMinutes = hours * 60 + minutes;
   const currentMinutes = wibNow.hours * 60 + wibNow.minutes;
-  
-  // Determine if we should schedule for today or tomorrow (in WIB)
-  let targetDay = wibNow.dayOfMonth;
-  let targetMonth = wibNow.month;
-  let targetYear = wibNow.year;
-  
-  // If the time has already passed today (or equals current time), schedule for tomorrow
-  if (currentMinutes >= scheduleMinutes) {
-    // Add one day
-    const tempDate = new Date(Date.UTC(targetYear, targetMonth, targetDay + 1));
-    targetYear = tempDate.getUTCFullYear();
-    targetMonth = tempDate.getUTCMonth();
-    targetDay = tempDate.getUTCDate();
+
+  // Look for the next upcoming time TODAY
+  for (const t of times) {
+    const { hours, minutes } = parseTime(t);
+    const scheduleMinutes = hours * 60 + minutes;
+    if (scheduleMinutes > currentMinutes) {
+      return createWIBDate(wibNow.year, wibNow.month, wibNow.dayOfMonth, hours, minutes);
+    }
   }
-  
-  // Create the next run date in WIB
-  const next = createWIBDate(targetYear, targetMonth, targetDay, hours, minutes);
-  
-  return next;
+
+  // If all times today have passed, pick the earliest time TOMORROW
+  const earliestTime = parseTime(times[0]);
+  const tempDate = new Date(Date.UTC(wibNow.year, wibNow.month, wibNow.dayOfMonth + 1));
+  const targetYear = tempDate.getUTCFullYear();
+  const targetMonth = tempDate.getUTCMonth();
+  const targetDay = tempDate.getUTCDate();
+
+  return createWIBDate(targetYear, targetMonth, targetDay, earliestTime.hours, earliestTime.minutes);
 }
 
 /**
- * Calculate next run time for weekly pattern
+ * Calculate next run time for weekly pattern with schedule bertingkat support
  * Ensures next_run_at is always in the future
  * Uses WIB timezone for calculation
- * @param {string} time - Time in HH:MM format (WIB)
+ * @param {string|string[]} timeInput - Time or multiple times in HH:MM format (WIB)
  * @param {string[]} days - Array of day names
  * @param {Date} fromDate - Starting date (default: now)
  * @returns {Date} Next run date (always in the future)
  */
-function calculateNextWeeklyRun(time, days, fromDate = new Date()) {
-  const { hours, minutes } = parseTime(time);
-  
+function calculateNextWeeklyRun(timeInput, days, fromDate = new Date()) {
+  const times = parseRecurringTimes(timeInput);
+  if (times.length === 0) {
+    throw new Error('No valid time provided for weekly schedule');
+  }
+
   // Get current time in WIB
   const wibNow = getWIBTime(fromDate);
   const currentDay = wibNow.day; // 0=Sun, 1=Mon, etc.
-  
+  const currentMinutes = wibNow.hours * 60 + wibNow.minutes;
+
   // Convert day names to day indices and sort
   const dayIndices = days
     .map(day => DAY_INDEX_MAP[day.toLowerCase()])
     .filter(idx => idx !== undefined)
     .sort((a, b) => a - b);
-  
+
   if (dayIndices.length === 0) {
     throw new Error('No valid days provided');
   }
-  
-  // Calculate scheduled time in minutes from midnight (WIB)
-  const scheduleMinutes = hours * 60 + minutes;
-  const currentMinutes = wibNow.hours * 60 + wibNow.minutes;
-  
-  // Check if we can run today (today is scheduled AND time hasn't passed yet)
+
+  // Check if today is scheduled and has an upcoming time slot
   const todayScheduled = dayIndices.includes(currentDay);
-  if (todayScheduled && currentMinutes < scheduleMinutes) {
-    // Schedule for today
-    return createWIBDate(wibNow.year, wibNow.month, wibNow.dayOfMonth, hours, minutes);
+  if (todayScheduled) {
+    for (const t of times) {
+      const { hours, minutes } = parseTime(t);
+      const scheduleMinutes = hours * 60 + minutes;
+      if (scheduleMinutes > currentMinutes) {
+        return createWIBDate(wibNow.year, wibNow.month, wibNow.dayOfMonth, hours, minutes);
+      }
+    }
   }
-  
+
   // Find next scheduled day
-  // First, look for days later this week (after today)
   let daysToAdd = null;
-  
   for (const dayIdx of dayIndices) {
     if (dayIdx > currentDay) {
       daysToAdd = dayIdx - currentDay;
       break;
     }
   }
-  
+
   // If no day found later this week, wrap to next week
-  // Use the first scheduled day of next week
   if (daysToAdd === null) {
-    // Days until end of week + days to first scheduled day
     daysToAdd = (7 - currentDay) + dayIndices[0];
   }
-  
-  // Calculate target date in WIB
+
+  const earliestTime = parseTime(times[0]);
   const tempDate = new Date(Date.UTC(wibNow.year, wibNow.month, wibNow.dayOfMonth + daysToAdd));
   const targetYear = tempDate.getUTCFullYear();
   const targetMonth = tempDate.getUTCMonth();
   const targetDay = tempDate.getUTCDate();
-  
-  const next = createWIBDate(targetYear, targetMonth, targetDay, hours, minutes);
-  
-  return next;
+
+  return createWIBDate(targetYear, targetMonth, targetDay, earliestTime.hours, earliestTime.minutes);
 }
 
 /**
@@ -289,28 +335,28 @@ function calculateNextWeeklyRun(time, days, fromDate = new Date()) {
  * Ensures next_run_at is always in the future
  * @param {Object} config - Recurring configuration
  * @param {string} config.recurring_pattern - Pattern: 'daily' or 'weekly'
- * @param {string} config.recurring_time - Time in HH:MM format
+ * @param {string|string[]} config.recurring_time - Time or multiple times in HH:MM format
  * @param {string[]} config.recurring_days - Array of day names for weekly pattern
  * @param {Date} fromDate - Starting date (default: now)
  * @returns {Date|null} Next run date (always in the future), or null if invalid config
  */
 function calculateNextRun(config, fromDate = new Date()) {
   const { recurring_pattern, recurring_time, recurring_days } = config;
-  
-  // Validate time format
-  if (!recurring_time || !isValidTimeFormat(recurring_time)) {
+
+  const times = parseRecurringTimes(recurring_time);
+  if (times.length === 0) {
     return null;
   }
-  
+
   if (recurring_pattern === 'daily') {
-    return calculateNextDailyRun(recurring_time, fromDate);
+    return calculateNextDailyRun(times, fromDate);
   } else if (recurring_pattern === 'weekly') {
     if (!recurring_days || !Array.isArray(recurring_days) || recurring_days.length === 0) {
       return null;
     }
-    return calculateNextWeeklyRun(recurring_time, recurring_days, fromDate);
+    return calculateNextWeeklyRun(times, recurring_days, fromDate);
   }
-  
+
   return null;
 }
 
@@ -387,6 +433,7 @@ function isScheduleMissed(nextRunAt, now = new Date()) {
 }
 
 module.exports = {
+  parseRecurringTimes,
   validateRecurringConfig,
   isValidTimeFormat,
   parseTime,

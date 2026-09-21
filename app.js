@@ -11717,7 +11717,20 @@ app.put('/api/youtube/templates/:id', isAuthenticated, async (req, res) => {
     const updateData = {};
     if (name !== undefined) updateData.name = name;
     if (title !== undefined) updateData.title = title;
-    if (description !== undefined) updateData.description = description;
+    if (description !== undefined) {
+      updateData.description = description;
+    } else if (template.description && template.description.startsWith('[')) {
+      // Sync multi-broadcast template array with updated title/privacy/folder
+      try {
+        const list = JSON.parse(template.description);
+        if (Array.isArray(list) && list.length > 0) {
+          if (title !== undefined) list[0].title = title;
+          if (privacyStatus !== undefined) list.forEach(b => { b.privacyStatus = privacyStatus; });
+          if (thumbnailFolder !== undefined) list.forEach(b => { b.thumbnailFolder = thumbnailFolder; });
+          updateData.description = JSON.stringify(list);
+        }
+      } catch (e) {}
+    }
     if (privacyStatus !== undefined) updateData.privacy_status = privacyStatus;
     if (tags !== undefined) updateData.tags = tags;
     if (categoryId !== undefined) updateData.category_id = categoryId;

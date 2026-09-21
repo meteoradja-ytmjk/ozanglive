@@ -2425,41 +2425,89 @@
   </div>
 </div>
 
-<!-- Edit Template Modal (Recurring Schedule Only) -->
+<!-- Edit Template Modal (Full Broadcast Editor) -->
 <div id="editTemplateModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay overflow-y-auto">
   <div class="flex min-h-screen items-center justify-center p-4">
-    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-md">
-      <div class="flex items-center justify-between p-6 border-b border-gray-700">
-        <h3 class="text-lg font-semibold">Edit Template</h3>
+    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
+      <div class="flex items-center justify-between p-6 border-b border-gray-700 flex-shrink-0">
+        <h3 class="text-lg font-semibold flex items-center gap-2">
+          <i class="ti ti-edit text-primary"></i>
+          <span>Edit Full Broadcast / Template</span>
+        </h3>
         <button onclick="closeEditTemplateModal()" class="text-gray-400 hover:text-white">
           <i class="ti ti-x text-xl"></i>
         </button>
       </div>
       
-      <form id="editTemplateForm" class="p-6 space-y-4">
+      <form id="editTemplateForm" class="p-6 space-y-4 overflow-y-auto flex-1">
         <input type="hidden" id="editTemplateId">
         
-        <!-- Template Info (Read-only) -->
-        <div class="bg-dark-700 rounded-lg p-4 border border-gray-600">
-          <p class="text-sm text-gray-400 mb-1">Template</p>
-          <p class="text-white font-medium" id="editTemplateName">-</p>
+        <!-- Template Name -->
+        <div>
+          <label class="text-sm font-medium text-white block mb-1">Nama Template</label>
+          <input type="text" id="editTemplateNameInput" name="name" required
+            class="w-full px-4 py-2 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none text-sm text-white"
+            placeholder="Contoh: Jadwal Pagi">
+        </div>
+
+        <!-- YouTube Channel Selector -->
+        <div>
+          <label class="text-sm font-medium text-white block mb-1 flex items-center gap-1.5">
+            <i class="ti ti-brand-youtube text-red-500"></i> YouTube Channel
+          </label>
+          <select id="editTemplateAccountSelect" name="accountId"
+            class="w-full px-4 py-2 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none text-sm text-white">
+            <!-- Dynamically populated with user's connected accounts -->
+          </select>
+        </div>
+
+        <!-- Title -->
+        <div>
+          <label class="text-sm font-medium text-white block mb-1 flex items-center gap-1.5">
+            <i class="ti ti-typography text-primary"></i> Judul Broadcast
+          </label>
+          <input type="text" id="editTemplateTitle" name="title" required
+            class="w-full px-4 py-2 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none text-sm text-white"
+            placeholder="Judul broadcast">
+          <p id="editTemplateMultiTitleNote" class="hidden text-xs text-gray-400 mt-1">
+            <i class="ti ti-info-circle text-primary mr-0.5"></i> Multi-broadcast template: judul broadcast utama.
+          </p>
+        </div>
+
+        <!-- Description -->
+        <div>
+          <label class="text-sm font-medium text-white block mb-1 flex items-center gap-1.5">
+            <i class="ti ti-notes text-primary"></i> Deskripsi
+          </label>
+          <textarea id="editTemplateDescription" name="description" rows="2"
+            class="w-full px-4 py-2 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none text-sm text-white"
+            placeholder="Deskripsi broadcast"></textarea>
+        </div>
+
+        <!-- Privacy Status -->
+        <div>
+          <label class="text-sm font-medium text-white block mb-1 flex items-center gap-1.5">
+            <i class="ti ti-lock text-primary"></i> Status Privasi
+          </label>
+          <select id="editTemplatePrivacy" name="privacyStatus"
+            class="w-full px-4 py-2 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none text-sm text-white">
+            <option value="unlisted">Unlisted (Tidak Publik)</option>
+            <option value="public">Public (Publik)</option>
+            <option value="private">Private (Pribadi)</option>
+          </select>
         </div>
         
         <!-- Thumbnail Folder Section -->
-        <div class="border-t border-gray-700 pt-4">
-          <label class="text-sm font-medium text-white block mb-2 flex items-center gap-2">
+        <div class="border-t border-gray-700 pt-3">
+          <label class="text-sm font-medium text-white block mb-1 flex items-center gap-1.5">
             <i class="ti ti-photo text-primary"></i>
             Thumbnail Folder (Rotasi Thumbnail)
           </label>
           <select id="editTemplateThumbnailFolder" name="thumbnailFolder" onchange="onEditTemplateThumbnailFolderChange(this.value)"
-            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none">
+            class="w-full px-4 py-2 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none text-sm text-white">
             <option value="">-- Tidak ada folder (NULL) --</option>
             <!-- Folders will be loaded dynamically -->
           </select>
-          <p class="text-xs text-gray-500 mt-1">
-            <i class="ti ti-info-circle text-primary mr-1"></i>
-            Pilih folder untuk rotasi thumbnail saat broadcast dijadwalkan ulang.
-          </p>
           <div id="editTemplateThumbnailFolderPreview" class="hidden mt-2 p-2 bg-dark-600 rounded-lg">
             <p class="text-xs text-gray-400 mb-1">Preview folder:</p>
             <div id="editTemplateThumbnailFolderImages" class="flex gap-1 overflow-x-auto"></div>
@@ -2467,109 +2515,111 @@
         </div>
         
         <!-- Title Folder Section -->
-        <div class="border-t border-gray-700 pt-4">
-          <label class="text-sm font-medium text-white block mb-2 flex items-center gap-2">
+        <div class="border-t border-gray-700 pt-3">
+          <label class="text-sm font-medium text-white block mb-1 flex items-center gap-1.5">
             <i class="ti ti-text-caption text-primary"></i>
             Title Folder (Rotasi Judul)
           </label>
           <select id="editTemplateTitleFolder" name="titleFolderId"
-            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none">
+            class="w-full px-4 py-2 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none text-sm text-white">
             <option value="">-- Semua Judul (Tanpa Filter Folder) --</option>
             <!-- Folders will be loaded dynamically -->
           </select>
-          <p class="text-xs text-gray-500 mt-1">
-            <i class="ti ti-info-circle text-primary mr-1"></i>
-            Pilih folder untuk rotasi judul saat broadcast dijadwalkan ulang.
-          </p>
         </div>
         
         <!-- Recurring Schedule Section -->
-        <div class="border-t border-gray-700 pt-4">
-          <div class="flex items-center justify-between mb-3">
-            <label class="text-sm font-medium text-white flex items-center gap-2">
+        <div class="border-t border-gray-700 pt-3">
+          <div class="flex items-center justify-between mb-2">
+            <label class="text-sm font-medium text-white flex items-center gap-1.5">
               <i class="ti ti-repeat text-primary"></i>
               Recurring Schedule
             </label>
             <label class="relative inline-flex items-center cursor-pointer">
               <input type="checkbox" id="editRecurringEnabled" name="recurringEnabled" class="sr-only peer" onchange="toggleEditRecurringFields()">
-              <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+              <div class="w-9 h-5 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
             </label>
           </div>
           
-          <div id="editRecurringFieldsContainer" class="hidden space-y-3">
+          <div id="editRecurringFieldsContainer" class="hidden space-y-3 bg-dark-700/40 p-3 rounded-lg border border-gray-700">
             <div>
-              <label class="text-sm font-medium text-gray-400 block mb-2">Pattern</label>
+              <label class="text-xs font-medium text-gray-400 block mb-1.5">Pola Perulangan</label>
               <div class="flex gap-4">
                 <label class="flex items-center gap-2 cursor-pointer">
                   <input type="radio" name="editRecurringPattern" value="daily" class="w-4 h-4 text-primary bg-dark-700 border-gray-600 focus:ring-primary" onchange="toggleEditDaysSelection()">
-                  <span class="text-sm text-white">Daily</span>
+                  <span class="text-sm text-white">Daily (Setiap Hari)</span>
                 </label>
                 <label class="flex items-center gap-2 cursor-pointer">
                   <input type="radio" name="editRecurringPattern" value="weekly" class="w-4 h-4 text-primary bg-dark-700 border-gray-600 focus:ring-primary" onchange="toggleEditDaysSelection()">
-                  <span class="text-sm text-white">Weekly</span>
+                  <span class="text-sm text-white">Weekly (Hari Tertentu)</span>
                 </label>
               </div>
             </div>
             
+            <!-- Jadwal Bertingkat (Multi-time slots per day) -->
             <div>
-              <label class="text-sm font-medium text-gray-400 block mb-2">Time</label>
-              <input type="time" id="editRecurringTime" name="recurringTime"
-                class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none [color-scheme:dark]">
+              <label class="text-xs font-medium text-gray-400 block mb-1.5">Jam Tayang (Schedule Bertingkat dalam 1 Hari)</label>
+              <div class="flex gap-2 items-center">
+                <input type="time" id="editRecurringTimeInput"
+                  class="flex-1 px-3 py-1.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none text-sm text-white [color-scheme:dark]">
+                <button type="button" onclick="addEditRecurringTimeSlot()"
+                  class="px-3 py-1.5 bg-primary/20 hover:bg-primary/30 text-primary border border-primary/40 rounded-lg text-xs font-medium flex items-center gap-1 transition-colors">
+                  <i class="ti ti-plus"></i> Tambah Jam
+                </button>
+              </div>
+              <input type="hidden" id="editRecurringTime" name="recurringTime">
+              <!-- Chips of scheduled times -->
+              <div id="editRecurringTimeChips" class="flex flex-wrap gap-1.5 mt-2 min-h-[28px]"></div>
+              <p class="text-[11px] text-gray-400 mt-1">
+                <i class="ti ti-clock text-primary mr-0.5"></i> Anda bisa menambahkan beberapa jam (misal 08:00, 13:00, 19:00) untuk live bertingkat dalam 1 hari.
+              </p>
             </div>
             
             <div id="editRecurringDaysContainer" class="hidden">
-              <label class="text-sm font-medium text-gray-400 block mb-2">Days</label>
-              <div class="flex flex-wrap gap-2">
-                <label class="flex items-center gap-1.5 px-3 py-1.5 bg-dark-600 rounded-lg cursor-pointer hover:bg-dark-500 transition-colors">
-                  <input type="checkbox" name="editRecurringDays" value="monday" class="w-4 h-4 text-primary bg-dark-700 border-gray-600 rounded focus:ring-primary">
-                  <span class="text-xs text-white">Mon</span>
+              <label class="text-xs font-medium text-gray-400 block mb-1.5">Pilih Hari</label>
+              <div class="flex flex-wrap gap-1.5">
+                <label class="flex items-center gap-1 px-2.5 py-1 bg-dark-600 rounded-lg cursor-pointer hover:bg-dark-500 transition-colors">
+                  <input type="checkbox" name="editRecurringDays" value="monday" class="w-3.5 h-3.5 text-primary bg-dark-700 border-gray-600 rounded focus:ring-primary">
+                  <span class="text-xs text-white">Sen</span>
                 </label>
-                <label class="flex items-center gap-1.5 px-3 py-1.5 bg-dark-600 rounded-lg cursor-pointer hover:bg-dark-500 transition-colors">
-                  <input type="checkbox" name="editRecurringDays" value="tuesday" class="w-4 h-4 text-primary bg-dark-700 border-gray-600 rounded focus:ring-primary">
-                  <span class="text-xs text-white">Tue</span>
+                <label class="flex items-center gap-1 px-2.5 py-1 bg-dark-600 rounded-lg cursor-pointer hover:bg-dark-500 transition-colors">
+                  <input type="checkbox" name="editRecurringDays" value="tuesday" class="w-3.5 h-3.5 text-primary bg-dark-700 border-gray-600 rounded focus:ring-primary">
+                  <span class="text-xs text-white">Sel</span>
                 </label>
-                <label class="flex items-center gap-1.5 px-3 py-1.5 bg-dark-600 rounded-lg cursor-pointer hover:bg-dark-500 transition-colors">
-                  <input type="checkbox" name="editRecurringDays" value="wednesday" class="w-4 h-4 text-primary bg-dark-700 border-gray-600 rounded focus:ring-primary">
-                  <span class="text-xs text-white">Wed</span>
+                <label class="flex items-center gap-1 px-2.5 py-1 bg-dark-600 rounded-lg cursor-pointer hover:bg-dark-500 transition-colors">
+                  <input type="checkbox" name="editRecurringDays" value="wednesday" class="w-3.5 h-3.5 text-primary bg-dark-700 border-gray-600 rounded focus:ring-primary">
+                  <span class="text-xs text-white">Rab</span>
                 </label>
-                <label class="flex items-center gap-1.5 px-3 py-1.5 bg-dark-600 rounded-lg cursor-pointer hover:bg-dark-500 transition-colors">
-                  <input type="checkbox" name="editRecurringDays" value="thursday" class="w-4 h-4 text-primary bg-dark-700 border-gray-600 rounded focus:ring-primary">
-                  <span class="text-xs text-white">Thu</span>
+                <label class="flex items-center gap-1 px-2.5 py-1 bg-dark-600 rounded-lg cursor-pointer hover:bg-dark-500 transition-colors">
+                  <input type="checkbox" name="editRecurringDays" value="thursday" class="w-3.5 h-3.5 text-primary bg-dark-700 border-gray-600 rounded focus:ring-primary">
+                  <span class="text-xs text-white">Kam</span>
                 </label>
-                <label class="flex items-center gap-1.5 px-3 py-1.5 bg-dark-600 rounded-lg cursor-pointer hover:bg-dark-500 transition-colors">
-                  <input type="checkbox" name="editRecurringDays" value="friday" class="w-4 h-4 text-primary bg-dark-700 border-gray-600 rounded focus:ring-primary">
-                  <span class="text-xs text-white">Fri</span>
+                <label class="flex items-center gap-1 px-2.5 py-1 bg-dark-600 rounded-lg cursor-pointer hover:bg-dark-500 transition-colors">
+                  <input type="checkbox" name="editRecurringDays" value="friday" class="w-3.5 h-3.5 text-primary bg-dark-700 border-gray-600 rounded focus:ring-primary">
+                  <span class="text-xs text-white">Jum</span>
                 </label>
-                <label class="flex items-center gap-1.5 px-3 py-1.5 bg-dark-600 rounded-lg cursor-pointer hover:bg-dark-500 transition-colors">
-                  <input type="checkbox" name="editRecurringDays" value="saturday" class="w-4 h-4 text-primary bg-dark-700 border-gray-600 rounded focus:ring-primary">
-                  <span class="text-xs text-white">Sat</span>
+                <label class="flex items-center gap-1 px-2.5 py-1 bg-dark-600 rounded-lg cursor-pointer hover:bg-dark-500 transition-colors">
+                  <input type="checkbox" name="editRecurringDays" value="saturday" class="w-3.5 h-3.5 text-primary bg-dark-700 border-gray-600 rounded focus:ring-primary">
+                  <span class="text-xs text-white">Sab</span>
                 </label>
-                <label class="flex items-center gap-1.5 px-3 py-1.5 bg-dark-600 rounded-lg cursor-pointer hover:bg-dark-500 transition-colors">
-                  <input type="checkbox" name="editRecurringDays" value="sunday" class="w-4 h-4 text-primary bg-dark-700 border-gray-600 rounded focus:ring-primary">
-                  <span class="text-xs text-white">Sun</span>
+                <label class="flex items-center gap-1 px-2.5 py-1 bg-dark-600 rounded-lg cursor-pointer hover:bg-dark-500 transition-colors">
+                  <input type="checkbox" name="editRecurringDays" value="sunday" class="w-3.5 h-3.5 text-primary bg-dark-700 border-gray-600 rounded focus:ring-primary">
+                  <span class="text-xs text-white">Min</span>
                 </label>
               </div>
-              <p id="editRecurringDaysError" class="hidden text-xs text-red-400 mt-1">Please select at least one day</p>
-            </div>
-            
-            <div class="bg-dark-600/50 rounded-lg p-3 border border-gray-600/50">
-              <p class="text-xs text-gray-400">
-                <i class="ti ti-info-circle text-primary mr-1"></i>
-                When enabled, broadcasts will be automatically created based on this schedule.
-              </p>
+              <p id="editRecurringDaysError" class="hidden text-xs text-red-400 mt-1">Pilih minimal 1 hari</p>
             </div>
           </div>
         </div>
         
-        <div class="pt-4 flex gap-3">
+        <div class="pt-4 flex gap-3 border-t border-gray-700">
           <button type="button" onclick="closeEditTemplateModal()"
-            class="flex-1 bg-dark-700 hover:bg-dark-600 text-white px-4 py-2.5 rounded-lg transition-colors">
-            Cancel
+            class="flex-1 bg-dark-700 hover:bg-dark-600 text-white px-4 py-2.5 rounded-lg transition-colors text-sm">
+            Batal
           </button>
           <button type="submit" id="updateTemplateBtn"
-            class="flex-1 bg-primary hover:bg-primary/80 text-white px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
-            <i class="ti ti-check"></i>
-            <span>Save Changes</span>
+            class="flex-1 bg-primary hover:bg-primary/80 text-white px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm font-medium">
+            <i class="ti ti-device-floppy"></i>
+            <span>Simpan Perubahan</span>
           </button>
         </div>
       </form>
@@ -2648,8 +2698,20 @@
       </div>
       
       <form id="recreateFromTemplateForm" class="p-6 space-y-4">
-        <div class="bg-dark-700 rounded-lg p-3 border border-gray-600 mb-4">
-          <p class="text-sm text-gray-400">Template: <span id="recreateTemplateName" class="text-white font-medium">-</span></p>
+        <div class="bg-dark-700 rounded-lg p-3 border border-gray-600 mb-4 flex items-center justify-between">
+          <div class="min-w-0 flex-1 pr-2">
+            <p class="text-sm text-gray-400 truncate">Template: <span id="recreateTemplateName" class="text-white font-medium">-</span></p>
+            <div id="recreateTemplateAccountBadge" class="text-xs text-gray-400 flex items-center gap-1.5 mt-1">
+              <i class="ti ti-brand-youtube text-red-500"></i>
+              <span id="recreateTemplateAccountName" class="text-gray-300 font-medium truncate">-</span>
+            </div>
+          </div>
+          <button type="button" onclick="editCurrentRecreateTemplate()"
+            class="px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors flex-shrink-0"
+            title="Edit judul, channel, thumbnail, privasi, atau jadwal">
+            <i class="ti ti-edit"></i>
+            <span>Edit Full Broadcast</span>
+          </button>
         </div>
         
         <!-- Account Selector (shown when original account is disconnected) -->

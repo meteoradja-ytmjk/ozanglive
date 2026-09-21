@@ -5533,15 +5533,11 @@ function renderTemplateList(templates) {
           <i class="ti ti-brand-youtube"></i>
           ${escapeHtml(template.channel_name || 'Disconnected Channel')}
         </span>`;
-    const recreateActionLabel = 'Pilih Channel';
-    const recreateActionTitle = 'Pilih channel yang terhubung';
-    const recreateActionIcon = accountInvalid ? 'ti-link' : 'ti-route';
-    const recreateActionDesktopClass = accountInvalid
-      ? 'px-3 py-1.5 bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 rounded-lg transition-colors text-sm flex items-center gap-1'
-      : 'px-3 py-1.5 bg-green-500/10 hover:bg-green-500/20 text-green-400 rounded-lg transition-colors text-sm flex items-center gap-1';
-    const recreateActionMobileClass = accountInvalid
-      ? 'w-8 h-8 flex items-center justify-center text-orange-400 hover:bg-orange-500/20 rounded transition-colors'
-      : 'w-8 h-8 flex items-center justify-center text-green-400 hover:bg-green-500/20 rounded transition-colors';
+    const recreateActionLabel = 'Rebroadcast';
+    const recreateActionTitle = 'Jadwalkan ulang broadcast dari template ini';
+    const recreateActionIcon = 'ti-broadcast';
+    const recreateActionDesktopClass = 'px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-lg transition-colors text-sm flex items-center gap-1.5 font-medium';
+    const recreateActionMobileClass = 'px-2 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded transition-colors text-xs flex items-center gap-1';
     
     const div = document.createElement('div');
     div.className = 'template-list-item';
@@ -5577,10 +5573,6 @@ function renderTemplateList(templates) {
             <i class="ti ${recreateActionIcon}"></i>
             <span>${recreateActionLabel}</span>
           </button>
-          <button onclick="editTemplate('${template.id}')"
-            class="px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-lg transition-colors text-sm flex items-center gap-1" title="Edit">
-            <i class="ti ti-edit"></i>
-          </button>
           <button onclick="deleteTemplate('${template.id}', '${escapeJsString(template.name)}')"
             class="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors text-sm flex items-center gap-1" title="Delete">
             <i class="ti ti-trash"></i>
@@ -5598,18 +5590,15 @@ function renderTemplateList(templates) {
         ${accountInvalid ? `<span class="px-1 py-0.5 bg-orange-500/20 text-orange-400 text-[10px] rounded flex-shrink-0" title="Account disconnected"><i class="ti ti-alert-triangle text-[8px]"></i></span>` : ''}
         ${hasRecurring ? `<span class="px-1.5 py-0.5 bg-green-500/20 text-green-400 text-[10px] rounded flex-shrink-0"><i class="ti ti-repeat text-[8px]"></i></span>` : ''}
         ${isMulti ? `<span class="px-1.5 py-0.5 bg-primary/20 text-primary text-[10px] rounded flex-shrink-0">${broadcastCount}</span>` : ''}
-        <div class="flex items-center gap-0.5 flex-shrink-0">
+        <div class="flex items-center gap-1 flex-shrink-0">
           <button onclick="recreateFromTemplate('${template.id}')"
             class="${recreateActionMobileClass}" title="${recreateActionTitle}">
-            <i class="ti ${recreateActionIcon} text-sm"></i>
-          </button>
-          <button onclick="editTemplate('${template.id}')"
-            class="w-8 h-8 flex items-center justify-center text-blue-400 hover:bg-blue-500/20 rounded transition-colors" title="Edit">
-            <i class="ti ti-edit text-sm"></i>
+            <i class="ti ${recreateActionIcon} text-xs"></i>
+            <span>Rebroadcast</span>
           </button>
           <button onclick="deleteTemplate('${template.id}', '${escapeJsString(template.name)}')"
-            class="w-8 h-8 flex items-center justify-center text-red-400 hover:bg-red-500/20 rounded transition-colors" title="Delete">
-            <i class="ti ti-trash text-sm"></i>
+            class="w-7 h-7 flex items-center justify-center text-red-400 hover:bg-red-500/20 rounded transition-colors" title="Delete">
+            <i class="ti ti-trash text-xs"></i>
           </button>
         </div>
       </div>
@@ -6103,12 +6092,131 @@ async function editTemplate(templateId) {
 }
 
 // Open Edit Template Modal (Recurring Schedule Only)
-function openEditTemplateModal(template) {
-  document.getElementById('editTemplateId').value = template.id;
-  document.getElementById('editTemplateName').textContent = template.name;
-  
-  // Store template data for later use
+// ============================================
+// SCHEDULE BERTINGKAT & EDIT TEMPLATE LOGIC
+// ============================================
+
+window.editRecurringTimesList = [];
+window.editingFromRecreateModal = false;
+
+// Render chips for multi-time slots in edit template modal
+function renderEditRecurringTimeChips() {
+  const container = document.getElementById('editRecurringTimeChips');
+  const hiddenInput = document.getElementById('editRecurringTime');
+  if (!container) return;
+
+  if (!Array.isArray(window.editRecurringTimesList) || window.editRecurringTimesList.length === 0) {
+    container.innerHTML = '<span class="text-xs text-gray-500 italic">Belum ada jam yang ditambahkan</span>';
+    if (hiddenInput) hiddenInput.value = '';
+    return;
+  }
+
+  container.innerHTML = window.editRecurringTimesList.map(time => `
+    <span class="inline-flex items-center gap-1 px-2.5 py-1 bg-primary/20 text-primary border border-primary/40 rounded-lg text-xs font-mono font-medium">
+      <i class="ti ti-clock text-[10px]"></i>
+      ${escapeHtml(time)}
+      <button type="button" onclick="removeEditRecurringTimeSlot('${escapeJsString(time)}')"
+        class="w-4 h-4 rounded-full flex items-center justify-center hover:bg-red-500/20 hover:text-red-400 transition-colors ml-1 text-sm font-bold"
+        title="Hapus jam ini">
+        &times;
+      </button>
+    </span>
+  `).join('');
+
+  if (hiddenInput) {
+    hiddenInput.value = window.editRecurringTimesList.join(', ');
+  }
+}
+
+// Add a time slot to schedule bertingkat
+function addEditRecurringTimeSlot() {
+  const input = document.getElementById('editRecurringTimeInput');
+  if (!input || !input.value) {
+    showToast('Pilih jam terlebih dahulu', 'warning');
+    return;
+  }
+  const val = input.value.trim();
+  if (!/^[0-2]?[0-9]:[0-5][0-9]$/.test(val)) {
+    showToast('Format jam tidak valid', 'error');
+    return;
+  }
+  if (!Array.isArray(window.editRecurringTimesList)) {
+    window.editRecurringTimesList = [];
+  }
+  if (!window.editRecurringTimesList.includes(val)) {
+    window.editRecurringTimesList.push(val);
+    window.editRecurringTimesList.sort((a, b) => {
+      const [h1, m1] = a.split(':').map(Number);
+      const [h2, m2] = b.split(':').map(Number);
+      return (h1 * 60 + m1) - (h2 * 60 + m2);
+    });
+    renderEditRecurringTimeChips();
+    input.value = '';
+    showToast(`Jam ${val} ditambahkan`);
+  } else {
+    showToast(`Jam ${val} sudah ada di daftar`, 'warning');
+  }
+}
+
+// Remove a time slot from schedule bertingkat
+function removeEditRecurringTimeSlot(time) {
+  if (!Array.isArray(window.editRecurringTimesList)) return;
+  window.editRecurringTimesList = window.editRecurringTimesList.filter(t => t !== time);
+  renderEditRecurringTimeChips();
+}
+
+// Open Edit Template Modal (Full Broadcast Editor)
+async function openEditTemplateModal(template) {
   window.currentEditTemplate = template;
+  
+  const idInput = document.getElementById('editTemplateId');
+  if (idInput) idInput.value = template.id;
+
+  const nameInput = document.getElementById('editTemplateNameInput');
+  if (nameInput) nameInput.value = template.name || '';
+
+  const titleInput = document.getElementById('editTemplateTitle');
+  if (titleInput) titleInput.value = template.title || '';
+
+  const descInput = document.getElementById('editTemplateDescription');
+  if (descInput) {
+    descInput.value = (template.description && !template.description.startsWith('[')) ? template.description : '';
+  }
+
+  const privacySelect = document.getElementById('editTemplatePrivacy');
+  if (privacySelect) privacySelect.value = template.privacy_status || 'unlisted';
+
+  // Multi-broadcast note
+  const multiNote = document.getElementById('editTemplateMultiTitleNote');
+  if (multiNote) {
+    if (template.isMultiBroadcast || (template.description && template.description.startsWith('['))) {
+      multiNote.classList.remove('hidden');
+    } else {
+      multiNote.classList.add('hidden');
+    }
+  }
+
+  // Populate Accounts dropdown
+  const accountSelect = document.getElementById('editTemplateAccountSelect');
+  if (accountSelect) {
+    accountSelect.innerHTML = '<option value="">Memuat channel...</option>';
+    try {
+      const res = await fetch('/api/youtube/accounts', { headers: { 'X-CSRF-Token': getCsrfToken() } });
+      const d = await res.json();
+      const accounts = (d.success && Array.isArray(d.accounts) && d.accounts.length > 0)
+        ? d.accounts
+        : (template.available_accounts || []);
+      if (accounts.length > 0) {
+        accountSelect.innerHTML = accounts.map(acc =>
+          `<option value="${acc.id}" ${String(acc.id) === String(template.account_id) ? 'selected' : ''}>${escapeHtml(acc.channelName || 'YouTube Channel')}${acc.isPrimary ? ' (Primary)' : ''}</option>`
+        ).join('');
+      } else {
+        accountSelect.innerHTML = `<option value="${template.account_id}" selected>${escapeHtml(template.channel_name || 'Current Channel')}</option>`;
+      }
+    } catch (e) {
+      accountSelect.innerHTML = `<option value="${template.account_id}" selected>${escapeHtml(template.channel_name || 'Current Channel')}</option>`;
+    }
+  }
   
   // Load title folders and pre-select current folder
   loadEditTemplateTitleFolders(template.title_folder_id || null);
@@ -6118,28 +6226,33 @@ function openEditTemplateModal(template) {
   
   // Set recurring enabled
   const recurringEnabled = document.getElementById('editRecurringEnabled');
-  recurringEnabled.checked = template.recurring_enabled || false;
+  if (recurringEnabled) recurringEnabled.checked = template.recurring_enabled || false;
   
   // Show/hide recurring fields
   const container = document.getElementById('editRecurringFieldsContainer');
-  if (template.recurring_enabled) {
-    container.classList.remove('hidden');
-  } else {
-    container.classList.add('hidden');
+  if (container) {
+    if (template.recurring_enabled) {
+      container.classList.remove('hidden');
+    } else {
+      container.classList.add('hidden');
+    }
   }
   
-  // Reset pattern radios first
+  // Reset pattern radios and set current
   document.querySelectorAll('input[name="editRecurringPattern"]').forEach(radio => radio.checked = false);
-  
-  // Set pattern (default to 'daily' if not set but recurring is enabled)
   const pattern = template.recurring_pattern || 'daily';
   const patternRadio = document.querySelector(`input[name="editRecurringPattern"][value="${pattern}"]`);
   if (patternRadio) patternRadio.checked = true;
   
-  // Set time (reset if not set)
-  document.getElementById('editRecurringTime').value = template.recurring_time || '';
+  // Set multi-time slots for schedule bertingkat
+  window.editRecurringTimesList = [];
+  if (template.recurring_time) {
+    const rawTimes = template.recurring_time.split(/[\s,]+/).filter(Boolean);
+    window.editRecurringTimesList = rawTimes.filter(t => /^[0-2]?[0-9]:[0-5][0-9]$/.test(t));
+  }
+  renderEditRecurringTimeChips();
   
-  // Reset and set days
+  // Reset and set days for weekly
   document.querySelectorAll('input[name="editRecurringDays"]').forEach(cb => cb.checked = false);
   if (template.recurring_days && Array.isArray(template.recurring_days)) {
     template.recurring_days.forEach(day => {
@@ -6150,14 +6263,17 @@ function openEditTemplateModal(template) {
   
   // Show/hide days container based on pattern
   const daysContainer = document.getElementById('editRecurringDaysContainer');
-  if (pattern === 'weekly') {
-    daysContainer.classList.remove('hidden');
-  } else {
-    daysContainer.classList.add('hidden');
+  if (daysContainer) {
+    if (pattern === 'weekly') {
+      daysContainer.classList.remove('hidden');
+    } else {
+      daysContainer.classList.add('hidden');
+    }
   }
   
   // Hide error message
-  document.getElementById('editRecurringDaysError').classList.add('hidden');
+  const daysError = document.getElementById('editRecurringDaysError');
+  if (daysError) daysError.classList.add('hidden');
   
   const modal = document.getElementById('editTemplateModal');
   if (modal) {
@@ -6172,9 +6288,19 @@ function closeEditTemplateModal() {
     modal.classList.add('hidden');
     modal.style.display = 'none';
   }
-  document.getElementById('editTemplateForm').reset();
-  // Clear stored template data
+  const form = document.getElementById('editTemplateForm');
+  if (form) form.reset();
   window.currentEditTemplate = null;
+  window.editRecurringTimesList = [];
+}
+
+// Trigger editing full broadcast from inside recreate modal
+function editCurrentRecreateTemplate() {
+  const template = window.currentRecreateTemplate;
+  if (!template) return;
+  window.editingFromRecreateModal = true;
+  closeRecreateFromTemplateModal();
+  openEditTemplateModal(template);
 }
 
 // Load title folders for edit template modal
@@ -6336,7 +6462,7 @@ function toggleEditDaysSelection() {
   }
 }
 
-// Edit Template Form Handler
+// Edit Template Form Handler (Full Broadcast)
 const editTemplateForm = document.getElementById('editTemplateForm');
 if (editTemplateForm) {
   editTemplateForm.addEventListener('submit', async (e) => {
@@ -6344,7 +6470,7 @@ if (editTemplateForm) {
     
     const updateBtn = document.getElementById('updateTemplateBtn');
     const originalText = updateBtn.innerHTML;
-    updateBtn.innerHTML = '<i class="ti ti-loader animate-spin"></i> Saving...';
+    updateBtn.innerHTML = '<i class="ti ti-loader animate-spin"></i> Menyimpan...';
     updateBtn.disabled = true;
     
     try {
@@ -6354,6 +6480,22 @@ if (editTemplateForm) {
       const updateData = {
         recurringEnabled: recurringEnabled
       };
+      
+      // Full broadcast fields
+      const nameInput = document.getElementById('editTemplateNameInput');
+      if (nameInput && nameInput.value.trim()) updateData.name = nameInput.value.trim();
+
+      const accountSelect = document.getElementById('editTemplateAccountSelect');
+      if (accountSelect && accountSelect.value) updateData.accountId = parseInt(accountSelect.value);
+
+      const titleInput = document.getElementById('editTemplateTitle');
+      if (titleInput && titleInput.value.trim()) updateData.title = titleInput.value.trim();
+
+      const descInput = document.getElementById('editTemplateDescription');
+      if (descInput) updateData.description = descInput.value;
+
+      const privacySelect = document.getElementById('editTemplatePrivacy');
+      if (privacySelect && privacySelect.value) updateData.privacyStatus = privacySelect.value;
       
       // Get title folder ID
       const titleFolderSelect = document.getElementById('editTemplateTitleFolder');
@@ -6367,23 +6509,28 @@ if (editTemplateForm) {
         updateData.thumbnailFolder = rawFolder === '__ROOT__' ? '' : (rawFolder || null);
       }
       
-      console.log('[editTemplate] Updating template with titleFolderId:', titleFolderId, 'thumbnailFolder:', updateData.thumbnailFolder);
+      console.log('[editTemplate] Updating full template:', updateData);
       
       if (recurringEnabled) {
         const pattern = document.querySelector('input[name="editRecurringPattern"]:checked')?.value;
-        const time = document.getElementById('editRecurringTime').value;
+        let timesString = '';
+        if (Array.isArray(window.editRecurringTimesList) && window.editRecurringTimesList.length > 0) {
+          timesString = window.editRecurringTimesList.join(', ');
+        } else {
+          timesString = document.getElementById('editRecurringTime')?.value || '';
+        }
         
         if (!pattern) {
-          showToast('Please select a pattern', 'error');
+          showToast('Pilih pola perulangan (Daily atau Weekly)', 'error');
           return;
         }
-        if (!time) {
-          showToast('Please set a time', 'error');
+        if (!timesString) {
+          showToast('Tambahkan minimal 1 jam untuk jadwal live', 'error');
           return;
         }
         
         updateData.recurringPattern = pattern;
-        updateData.recurringTime = time;
+        updateData.recurringTime = timesString;
         
         if (pattern === 'weekly') {
           const days = Array.from(document.querySelectorAll('input[name="editRecurringDays"]:checked'))
@@ -6391,23 +6538,20 @@ if (editTemplateForm) {
           
           if (days.length === 0) {
             document.getElementById('editRecurringDaysError').classList.remove('hidden');
-            showToast('Please select at least one day', 'error');
+            showToast('Pilih minimal 1 hari untuk jadwal mingguan', 'error');
             return;
           }
           
           updateData.recurringDays = days;
         } else {
-          // For daily pattern, explicitly clear recurring_days
           updateData.recurringDays = null;
         }
       } else {
-        // When disabling recurring, clear all recurring fields
         updateData.recurringPattern = null;
         updateData.recurringTime = null;
         updateData.recurringDays = null;
       }
       
-      // Use main template update endpoint to save both thumbnailFolder and recurring config
       const response = await fetch(`/api/youtube/templates/${templateId}`, {
         method: 'PUT',
         headers: {
@@ -6420,16 +6564,21 @@ if (editTemplateForm) {
       const data = await response.json();
       
       if (data.success) {
-        showToast('Template updated successfully!');
+        showToast('Template & Broadcast berhasil diperbarui!');
         closeEditTemplateModal();
-        // Refresh template library if open
-        loadTemplates();
+        if (window.editingFromRecreateModal) {
+          window.editingFromRecreateModal = false;
+          // Re-open recreate modal with updated data
+          recreateFromTemplate(templateId);
+        } else {
+          loadTemplates();
+        }
       } else {
-        showToast(data.error || 'Failed to update template', 'error');
+        showToast(data.error || 'Gagal memperbarui template', 'error');
       }
     } catch (error) {
       console.error('Error:', error);
-      showToast('An error occurred', 'error');
+      showToast('Terjadi kesalahan saat menyimpan', 'error');
     } finally {
       updateBtn.innerHTML = originalText;
       updateBtn.disabled = false;
@@ -7014,66 +7163,79 @@ async function fetchStreamIdsForAccount(accountId) {
 function openRecreateFromTemplateModal(template) {
   window.currentRecreateTemplate = template;
   
-  document.getElementById('recreateTemplateName').textContent = template.name;
+  const templateNameEl = document.getElementById('recreateTemplateName');
+  if (templateNameEl) {
+    templateNameEl.textContent = template.name;
+  }
   
-  // Always show channel selector so user can efficiently switch to any connected channel
+  // Set account name badge
+  const accountNameEl = document.getElementById('recreateTemplateAccountName');
+  if (accountNameEl) {
+    accountNameEl.textContent = template.channel_name || template.channelName || (template.account_id ? `Account #${template.account_id}` : 'YouTube Channel');
+  }
+
   const accountSelectorContainer = document.getElementById('recreateAccountSelector');
-  if (accountSelectorContainer) {
-    const createBtn = document.getElementById('recreateBtn');
-    const availableAccounts = Array.isArray(template.available_accounts) ? template.available_accounts : [];
+  const createBtn = document.getElementById('recreateBtn');
+  const isDisconnected = template.account_valid === false;
 
-    if (availableAccounts.length > 0) {
-      const selectedAccount = availableAccounts.find(acc => String(acc.id) === String(template.account_id));
-      const defaultAccount = selectedAccount || availableAccounts.find(acc => acc.isPrimary) || availableAccounts[0];
-      const isDisconnected = template.account_valid === false;
-      const titleText = isDisconnected
-        ? 'Akun YouTube template sudah terputus'
-        : 'Pilih channel tujuan untuk re-create';
-      const titleClass = isDisconnected ? 'text-orange-400' : 'text-primary';
-      const noteHtml = isDisconnected
-        ? '<p class="text-xs text-gray-400 mt-1">Silakan pilih channel yang masih terhubung untuk lanjut membuat broadcast.</p>'
-        : '<p class="text-xs text-gray-400 mt-1">Jika nama channel template tidak sesuai, pilih channel yang benar di bawah.</p>';
+  if (isDisconnected) {
+    // Only prompt user to select a channel if the original template account was disconnected
+    if (accountSelectorContainer) {
+      const availableAccounts = Array.isArray(template.available_accounts) ? template.available_accounts : [];
 
-      accountSelectorContainer.innerHTML = `
-        <div class="bg-dark-700/60 border border-gray-600 rounded-lg p-3 mb-4">
-          <div class="flex items-start gap-2">
-            <i class="ti ti-brand-youtube text-red-400 mt-0.5"></i>
-            <div class="flex-1">
-              <p class="text-sm ${titleClass} font-medium">${titleText}</p>
-              ${noteHtml}
+      if (availableAccounts.length > 0) {
+        const defaultAccount = availableAccounts.find(acc => acc.isPrimary) || availableAccounts[0];
+        accountSelectorContainer.innerHTML = `
+          <div class="bg-dark-700/60 border border-orange-500/40 rounded-lg p-3 mb-4">
+            <div class="flex items-start gap-2">
+              <i class="ti ti-alert-triangle text-orange-400 mt-0.5"></i>
+              <div class="flex-1">
+                <p class="text-sm text-orange-400 font-medium">Akun YouTube template sudah terputus</p>
+                <p class="text-xs text-gray-400 mt-1">Silakan pilih channel yang masih terhubung untuk lanjut membuat broadcast.</p>
+              </div>
+            </div>
+            <select id="recreateAccountSelect" class="w-full mt-3 px-3 py-2 bg-dark-600 border border-gray-600 rounded-lg focus:border-primary focus:outline-none text-sm">
+              ${availableAccounts.map(acc => 
+                `<option value="${acc.id}" ${String(acc.id) === String(defaultAccount.id) ? 'selected' : ''}>${escapeHtml(acc.channelName || 'YouTube Channel')}${acc.isPrimary ? ' (Primary)' : ''}</option>`
+              ).join('')}
+            </select>
+          </div>
+        `;
+        accountSelectorContainer.classList.remove('hidden');
+
+        if (createBtn) {
+          createBtn.disabled = false;
+          createBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        }
+      } else {
+        accountSelectorContainer.innerHTML = `
+          <div class="bg-red-500/10 border border-red-500/30 rounded-lg p-3 mb-4">
+            <div class="flex items-start gap-2">
+              <i class="ti ti-alert-circle text-red-400 mt-0.5"></i>
+              <div class="flex-1">
+                <p class="text-sm text-red-400 font-medium">No YouTube account connected</p>
+                <p class="text-xs text-gray-400 mt-1">Please connect a YouTube account first before re-creating broadcasts.</p>
+              </div>
             </div>
           </div>
-          <select id="recreateAccountSelect" class="w-full mt-3 px-3 py-2 bg-dark-600 border border-gray-600 rounded-lg focus:border-primary focus:outline-none text-sm">
-            ${availableAccounts.map(acc => 
-              `<option value="${acc.id}" ${String(acc.id) === String(defaultAccount.id) ? 'selected' : ''}>${escapeHtml(acc.channelName || 'YouTube Channel')}${acc.isPrimary ? ' (Primary)' : ''}</option>`
-            ).join('')}
-          </select>
-        </div>
-      `;
-      accountSelectorContainer.classList.remove('hidden');
+        `;
+        accountSelectorContainer.classList.remove('hidden');
 
-      if (createBtn) {
-        createBtn.disabled = false;
-        createBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        if (createBtn) {
+          createBtn.disabled = true;
+          createBtn.classList.add('opacity-50', 'cursor-not-allowed');
+        }
       }
-    } else {
-      accountSelectorContainer.innerHTML = `
-        <div class="bg-red-500/10 border border-red-500/30 rounded-lg p-3 mb-4">
-          <div class="flex items-start gap-2">
-            <i class="ti ti-alert-circle text-red-400 mt-0.5"></i>
-            <div class="flex-1">
-              <p class="text-sm text-red-400 font-medium">No YouTube account connected</p>
-              <p class="text-xs text-gray-400 mt-1">Please connect a YouTube account first before re-creating broadcasts.</p>
-            </div>
-          </div>
-        </div>
-      `;
-      accountSelectorContainer.classList.remove('hidden');
-
-      if (createBtn) {
-        createBtn.disabled = true;
-        createBtn.classList.add('opacity-50', 'cursor-not-allowed');
-      }
+    }
+  } else {
+    // Channel is valid: do NOT force the user to re-select channel
+    if (accountSelectorContainer) {
+      accountSelectorContainer.innerHTML = '';
+      accountSelectorContainer.classList.add('hidden');
+    }
+    if (createBtn) {
+      createBtn.disabled = false;
+      createBtn.classList.remove('opacity-50', 'cursor-not-allowed');
     }
   }
   
@@ -7399,12 +7561,15 @@ if (recreateFromTemplateForm) {
         return;
       }
       
-      // Get selected account ID from recreate modal (always available when accounts exist)
+      // Determine account ID: default to saved template.account_id, or fallback selector if account was disconnected
       let accountId = template.account_id;
+      const accountSelectorContainer = document.getElementById('recreateAccountSelector');
       const accountSelect = document.getElementById('recreateAccountSelect');
-      if (accountSelect && accountSelect.value) {
+      if (accountSelectorContainer && !accountSelectorContainer.classList.contains('hidden') && accountSelect && accountSelect.value) {
         accountId = parseInt(accountSelect.value);
-        console.log('[recreate] Using selected account ID:', accountId, '(template account:', template.account_id, ')');
+        console.log('[recreate] Using selected fallback account ID:', accountId, '(original template account:', template.account_id, ')');
+      } else {
+        console.log('[recreate] Using saved template account ID:', accountId);
       }
       
       // Fetch account stream IDs once, so we only reuse template streamId when still available
@@ -7487,6 +7652,13 @@ if (recreateFromTemplateForm) {
           
           // Always send thumbnailFolder for rotation (empty string = root folder)
           formData.append('thumbnailFolder', thumbnailFolder);
+
+          // If pinned thumbnail or explicit thumbnailPath exists on broadcast or template, forward it
+          const pinnedThumbnail = broadcast.pinnedThumbnail || broadcast.thumbnailPath || template.pinned_thumbnail;
+          if (pinnedThumbnail) {
+            formData.append('thumbnailPath', pinnedThumbnail);
+            console.log('[recreate] Forwarding pinned thumbnail:', pinnedThumbnail);
+          }
           
           // Send streamId - backend will get thumbnail index from database
           // No need to fetch index here, backend handles it
