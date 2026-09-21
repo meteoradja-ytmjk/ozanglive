@@ -1063,7 +1063,7 @@
     <%- include('partials/youtube-studio') %>
   </div>
 
-  <script src="/js/youtube.js?v=1.4.1" defer></script>
+  <script src="/js/youtube.js?v=1.4.2" defer></script>
   <script>
     window.dashboardAccounts = <%- JSON.stringify((accounts || []).map(a => ({ id: a.id, channelName: a.channelName || a.channel_name || 'YouTube Channel', channelId: a.channelId || a.channel_id }))) %>;
     function switchStudioTab(tabName) {

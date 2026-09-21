@@ -7423,58 +7423,77 @@ function closeRecreateFromTemplateModal() {
   const preview = document.getElementById('recreateTitleRotationPreview');
   if (preview) preview.classList.add('hidden');
 
-  // Reset recurring schedule checkbox and container
-  const recCheckbox = document.getElementById('recreateRecurringEnabled');
-  if (recCheckbox) recCheckbox.checked = false;
-  const recContainer = document.getElementById('recreateRecurringFieldsContainer');
-  if (recContainer) recContainer.classList.add('hidden');
+  // Reset recurring schedule mode to 'none'
+  setRecreateRecurringMode('none');
 }
+window.closeRecreateFromTemplateModal = closeRecreateFromTemplateModal;
 
 /**
- * Toggle recurring schedule in recreate modal
+ * Toggle recurring mode in recreate modal: 'none' | 'daily' | 'weekly'
+ */
+function setRecreateRecurringMode(mode) {
+  const input = document.getElementById('recreateRecurringPatternInput');
+  if (input) input.value = mode;
+
+  const btnNone = document.getElementById('recreateRecBtnNone');
+  const btnDaily = document.getElementById('recreateRecBtnDaily');
+  const btnWeekly = document.getElementById('recreateRecBtnWeekly');
+  const daysContainer = document.getElementById('recreateRecurringDaysContainer');
+
+  const activeClasses = ['bg-primary', 'text-white', 'border-primary', 'shadow-sm'];
+  const inactiveClasses = ['bg-dark-600', 'text-gray-300', 'border-gray-600'];
+
+  const setBtnStyle = (btn, isActive) => {
+    if (!btn) return;
+    if (isActive) {
+      btn.classList.add(...activeClasses);
+      btn.classList.remove(...inactiveClasses);
+    } else {
+      btn.classList.remove(...activeClasses);
+      btn.classList.add(...inactiveClasses);
+    }
+  };
+
+  setBtnStyle(btnNone, mode === 'none');
+  setBtnStyle(btnDaily, mode === 'daily');
+  setBtnStyle(btnWeekly, mode === 'weekly');
+
+  if (daysContainer) {
+    if (mode === 'weekly') {
+      daysContainer.classList.remove('hidden');
+    } else {
+      daysContainer.classList.add('hidden');
+    }
+  }
+}
+window.setRecreateRecurringMode = setRecreateRecurringMode;
+
+/**
+ * Compatibility aliases for recurring toggles
  */
 function toggleRecreateRecurring(enabled) {
-  const container = document.getElementById('recreateRecurringFieldsContainer');
-  if (container) {
-    if (enabled) container.classList.remove('hidden');
-    else container.classList.add('hidden');
-  }
+  setRecreateRecurringMode(enabled ? 'daily' : 'none');
 }
 
-/**
- * Toggle recurring days in recreate modal
- */
 function toggleRecreateRecurringDays(pattern) {
-  const daysContainer = document.getElementById('recreateRecurringDaysContainer');
-  if (daysContainer) {
-    if (pattern === 'weekly') daysContainer.classList.remove('hidden');
-    else daysContainer.classList.add('hidden');
-  }
+  setRecreateRecurringMode(pattern || 'daily');
 }
 
 /**
  * Load recurring settings from template into recreate modal
  */
 function loadRecreateRecurringSettings(template) {
-  if (!template) return;
-  const isRecurring = Boolean(template.recurring_enabled);
-  const checkbox = document.getElementById('recreateRecurringEnabled');
-  if (checkbox) checkbox.checked = isRecurring;
-
-  const container = document.getElementById('recreateRecurringFieldsContainer');
-  if (container) {
-    if (isRecurring) container.classList.remove('hidden');
-    else container.classList.add('hidden');
+  if (!template) {
+    setRecreateRecurringMode('none');
+    return;
   }
+  const isRecurring = Boolean(template.recurring_enabled);
+  const pattern = (template.recurring_pattern === 'weekly') ? 'weekly' : 'daily';
 
-  const pattern = template.recurring_pattern || 'daily';
-  const patternRadio = document.querySelector(`input[name="recreateRecurringPattern"][value="${pattern}"]`);
-  if (patternRadio) patternRadio.checked = true;
-
-  const daysContainer = document.getElementById('recreateRecurringDaysContainer');
-  if (daysContainer) {
-    if (pattern === 'weekly') daysContainer.classList.remove('hidden');
-    else daysContainer.classList.add('hidden');
+  if (isRecurring) {
+    setRecreateRecurringMode(pattern);
+  } else {
+    setRecreateRecurringMode('none');
   }
 
   let days = [];
@@ -7488,13 +7507,16 @@ function loadRecreateRecurringSettings(template) {
       days = template.recurring_days.split(/[\s,]+/).map(d => d.toLowerCase());
     }
   }
-  if (days.length === 0) days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+  if (days.length === 0) {
+    days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+  }
 
   const dayCheckboxes = document.querySelectorAll('input[name="recreateRecurringDays"]');
   dayCheckboxes.forEach(cb => {
     cb.checked = days.includes(cb.value.toLowerCase());
   });
 }
+window.loadRecreateRecurringSettings = loadRecreateRecurringSettings;
 
 /**
  * Toggle title rotation for recreate
@@ -7848,11 +7870,11 @@ if (recreateFromTemplateForm) {
       }
       
       // Save / Update recurring schedule for this template
-      const recurringCheckbox = document.getElementById('recreateRecurringEnabled');
-      if (recurringCheckbox && template && template.id) {
-        const isRecurring = recurringCheckbox.checked;
-        const patternRadio = document.querySelector('input[name="recreateRecurringPattern"]:checked');
-        const pattern = patternRadio ? patternRadio.value : 'daily';
+      if (template && template.id) {
+        const patternInput = document.getElementById('recreateRecurringPatternInput');
+        const patternVal = patternInput ? patternInput.value : 'none';
+        const isRecurring = (patternVal === 'daily' || patternVal === 'weekly');
+        const pattern = isRecurring ? patternVal : 'daily';
 
         // Extract HH:MM times from schedules
         const timeList = Array.from(new Set(
@@ -7871,7 +7893,7 @@ if (recreateFromTemplateForm) {
         if (pattern === 'weekly') {
           const selectedDays = Array.from(document.querySelectorAll('input[name="recreateRecurringDays"]:checked'))
             .map(cb => cb.value.toLowerCase());
-          recurringDays = selectedDays.length > 0 ? selectedDays : ['monday'];
+          recurringDays = selectedDays.length > 0 ? selectedDays : ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
         }
 
         try {
