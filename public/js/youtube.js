@@ -5561,13 +5561,6 @@ function renderTemplateList(templates) {
           ${recurringHtmlDesktop}
         </div>
         <div class="flex items-center gap-2 flex-shrink-0">
-          ${hasRecurring ? `
-          <button onclick="runTemplateNow('${template.id}', '${escapeJsString(template.name)}')"
-            class="px-3 py-1.5 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 rounded-lg transition-colors text-sm flex items-center gap-1" title="Run Schedule Now">
-            <i class="ti ti-player-play"></i>
-            <span>Run</span>
-          </button>
-          ` : ''}
           <button onclick="recreateFromTemplate('${template.id}')"
             class="${recreateActionDesktopClass}" title="${recreateActionTitle}">
             <i class="ti ${recreateActionIcon}"></i>
@@ -7165,82 +7158,95 @@ function openRecreateFromTemplateModal(template) {
   
   const templateNameEl = document.getElementById('recreateTemplateName');
   if (templateNameEl) {
-    templateNameEl.textContent = template.name;
+    templateNameEl.textContent = template.name || 'Template';
   }
   
-  // Set account name badge
+  // Set account name badge (purely informative, no dropdown)
   const accountNameEl = document.getElementById('recreateTemplateAccountName');
   if (accountNameEl) {
     accountNameEl.textContent = template.channel_name || template.channelName || (template.account_id ? `Account #${template.account_id}` : 'YouTube Channel');
   }
 
-  const accountSelectorContainer = document.getElementById('recreateAccountSelector');
-  const createBtn = document.getElementById('recreateBtn');
-  const isDisconnected = template.account_valid === false;
+  // Set title badge
+  const titleBadge = document.getElementById('recreateTemplateTitle');
+  if (titleBadge) {
+    titleBadge.textContent = template.title || '-';
+  }
 
-  if (isDisconnected) {
-    // Only prompt user to select a channel if the original template account was disconnected
-    if (accountSelectorContainer) {
-      const availableAccounts = Array.isArray(template.available_accounts) ? template.available_accounts : [];
-
-      if (availableAccounts.length > 0) {
-        const defaultAccount = availableAccounts.find(acc => acc.isPrimary) || availableAccounts[0];
-        accountSelectorContainer.innerHTML = `
-          <div class="bg-dark-700/60 border border-orange-500/40 rounded-lg p-3 mb-4">
-            <div class="flex items-start gap-2">
-              <i class="ti ti-alert-triangle text-orange-400 mt-0.5"></i>
-              <div class="flex-1">
-                <p class="text-sm text-orange-400 font-medium">Akun YouTube template sudah terputus</p>
-                <p class="text-xs text-gray-400 mt-1">Silakan pilih channel yang masih terhubung untuk lanjut membuat broadcast.</p>
-              </div>
-            </div>
-            <select id="recreateAccountSelect" class="w-full mt-3 px-3 py-2 bg-dark-600 border border-gray-600 rounded-lg focus:border-primary focus:outline-none text-sm">
-              ${availableAccounts.map(acc => 
-                `<option value="${acc.id}" ${String(acc.id) === String(defaultAccount.id) ? 'selected' : ''}>${escapeHtml(acc.channelName || 'YouTube Channel')}${acc.isPrimary ? ' (Primary)' : ''}</option>`
-              ).join('')}
-            </select>
-          </div>
-        `;
-        accountSelectorContainer.classList.remove('hidden');
-
-        if (createBtn) {
-          createBtn.disabled = false;
-          createBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-        }
-      } else {
-        accountSelectorContainer.innerHTML = `
-          <div class="bg-red-500/10 border border-red-500/30 rounded-lg p-3 mb-4">
-            <div class="flex items-start gap-2">
-              <i class="ti ti-alert-circle text-red-400 mt-0.5"></i>
-              <div class="flex-1">
-                <p class="text-sm text-red-400 font-medium">No YouTube account connected</p>
-                <p class="text-xs text-gray-400 mt-1">Please connect a YouTube account first before re-creating broadcasts.</p>
-              </div>
-            </div>
-          </div>
-        `;
-        accountSelectorContainer.classList.remove('hidden');
-
-        if (createBtn) {
-          createBtn.disabled = true;
-          createBtn.classList.add('opacity-50', 'cursor-not-allowed');
-        }
-      }
-    }
-  } else {
-    // Channel is valid: do NOT force the user to re-select channel
-    if (accountSelectorContainer) {
-      accountSelectorContainer.innerHTML = '';
-      accountSelectorContainer.classList.add('hidden');
-    }
-    if (createBtn) {
-      createBtn.disabled = false;
-      createBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+  // Set thumbnail info badge
+  const thumbBadge = document.getElementById('recreateTemplateThumbnailInfo');
+  if (thumbBadge) {
+    if (template.pinned_thumbnail) {
+      thumbBadge.textContent = 'Thumbnail: Pinned';
+    } else if (template.thumbnail_folder !== null && template.thumbnail_folder !== undefined) {
+      thumbBadge.textContent = `Folder: ${template.thumbnail_folder === '' || template.thumbnail_folder === '__ROOT__' ? 'Root' : template.thumbnail_folder}`;
+    } else {
+      thumbBadge.textContent = 'Folder: Root';
     }
   }
-  
-  // Render broadcast list with schedule inputs
-  renderRecreateBroadcastList();
+
+  const createBtn = document.getElementById('recreateBtn');
+  if (createBtn) {
+    createBtn.disabled = false;
+    createBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+  }
+
+  // Initialize slots list (Jadwal Bertingkat)
+  window.recreateSlots = [];
+
+  if (Array.isArray(template.broadcasts) && template.broadcasts.length > 1) {
+    // Multi-broadcast template: initialize each broadcast
+    template.broadcasts.forEach((b, i) => {
+      const defaultDate = new Date(Date.now() + (15 + i * 30) * 60 * 1000);
+      window.recreateSlots.push({
+        title: b.title || template.title,
+        streamId: b.streamId || template.stream_id,
+        streamKey: b.streamKey || template.stream_key,
+        thumbnailFolder: b.thumbnailFolder !== undefined ? b.thumbnailFolder : template.thumbnail_folder,
+        pinnedThumbnail: b.pinnedThumbnail || b.thumbnailPath || template.pinned_thumbnail,
+        scheduleTime: typeof formatDateTimeLocal === 'function' ? formatDateTimeLocal(defaultDate) : defaultDate.toISOString().slice(0, 16)
+      });
+    });
+  } else {
+    // Single broadcast template: initialize slots based on recurring_time if present, or 1 slot
+    let times = [];
+    if (template.recurring_time) {
+      times = template.recurring_time.split(/[\s,]+/).filter(t => /^[0-2]?[0-9]:[0-5][0-9]$/.test(t));
+    }
+
+    if (times.length > 0) {
+      times.forEach(t => {
+        const [h, m] = t.split(':').map(Number);
+        const slotDate = new Date();
+        slotDate.setHours(h, m, 0, 0);
+        if (slotDate.getTime() < Date.now() + 10 * 60 * 1000) {
+          slotDate.setDate(slotDate.getDate() + 1);
+        }
+        window.recreateSlots.push({
+          title: template.title,
+          streamId: template.stream_id,
+          streamKey: template.stream_key,
+          thumbnailFolder: template.thumbnail_folder,
+          pinnedThumbnail: template.pinned_thumbnail,
+          scheduleTime: typeof formatDateTimeLocal === 'function' ? formatDateTimeLocal(slotDate) : slotDate.toISOString().slice(0, 16)
+        });
+      });
+      window.recreateSlots.sort((a, b) => new Date(a.scheduleTime) - new Date(b.scheduleTime));
+    } else {
+      const defaultDate = new Date(Date.now() + 15 * 60 * 1000);
+      window.recreateSlots.push({
+        title: template.title,
+        streamId: template.stream_id,
+        streamKey: template.stream_key,
+        thumbnailFolder: template.thumbnail_folder,
+        pinnedThumbnail: template.pinned_thumbnail,
+        scheduleTime: typeof formatDateTimeLocal === 'function' ? formatDateTimeLocal(defaultDate) : defaultDate.toISOString().slice(0, 16)
+      });
+    }
+  }
+
+  // Render slots list
+  renderRecreateSlotList();
   
   const modal = document.getElementById('recreateFromTemplateModal');
   if (modal) {
@@ -7252,104 +7258,148 @@ function openRecreateFromTemplateModal(template) {
   loadRecreateTitleRotationPreview();
 }
 
-// Render (or re-render) the per-broadcast schedule list for the recreate-from-template modal.
-// Pass preservedSchedules (array of datetime-local values by index) to keep user-entered times on re-render.
-function renderRecreateBroadcastList(preservedSchedules = null) {
-  const template = window.currentRecreateTemplate;
-  if (!template) return;
+// Render the multi-slot schedule list for the recreate modal
+function renderRecreateSlotList() {
   const listEl = document.getElementById('recreateBroadcastList');
-  if (!listEl) return;
+  if (!listEl || !window.recreateSlots) return;
 
-  const broadcasts = template.broadcasts || [template];
-  const mapping = template.stream_key_folder_mapping || {};
-  const canDelete = broadcasts.length > 1;
+  const countBadge = document.getElementById('recreateSlotCountBadge');
+  if (countBadge) {
+    countBadge.textContent = `${window.recreateSlots.length} slot waktu`;
+  }
 
-  listEl.innerHTML = broadcasts.map((b, i) => {
-    const minDate = new Date(Date.now() + 11 * 60 * 1000);
-    const minDateStr = typeof formatDateTimeLocal === 'function' ? formatDateTimeLocal(minDate) : minDate.toISOString().slice(0, 16);
+  const createBtnText = document.getElementById('recreateBtnText');
+  if (createBtnText) {
+    createBtnText.textContent = window.recreateSlots.length > 1 
+      ? `Buat ${window.recreateSlots.length} Siaran Bertingkat` 
+      : 'Buat Siaran Terjadwal';
+  }
 
-    // Determine folder for this broadcast
-    const streamId = b.streamId || template.stream_id;
-    let folder = null;
-    if (streamId && mapping[streamId] !== undefined) {
-      folder = mapping[streamId];
-    } else if (b.thumbnailFolder !== null && b.thumbnailFolder !== undefined) {
-      folder = b.thumbnailFolder;
-    } else if (template.thumbnail_folder !== null && template.thumbnail_folder !== undefined) {
-      folder = template.thumbnail_folder;
-    }
+  const minDate = new Date(Date.now() + 10 * 60 * 1000);
+  const minDateStr = typeof formatDateTimeLocal === 'function' ? formatDateTimeLocal(minDate) : minDate.toISOString().slice(0, 16);
 
-    const folderDisplay = folder !== null ? (folder === '' ? '📁 Root' : `📂 ${folder}`) : '⚠️ No folder';
-    const folderClass = folder !== null ? 'text-green-400' : 'text-yellow-400';
-
-    // Sensible default schedule: starts 15 min from now, staggered by 30 min per broadcast
-    const defaultDate = new Date(Date.now() + (15 + i * 30) * 60 * 1000);
-    const defaultDateStr = typeof formatDateTimeLocal === 'function' ? formatDateTimeLocal(defaultDate) : defaultDate.toISOString().slice(0, 16);
-    const preset = (preservedSchedules && preservedSchedules[i]) ? preservedSchedules[i] : defaultDateStr;
-    const valueAttr = preset ? ` value="${preset}"` : '';
-
+  listEl.innerHTML = window.recreateSlots.map((slot, index) => {
+    const canDelete = window.recreateSlots.length > 1;
     const deleteBtn = canDelete
-      ? `<button type="button" onclick="removeRecreateBroadcast(${i})"
+      ? `<button type="button" onclick="removeRecreateSlot(${index})"
            class="w-6 h-6 flex items-center justify-center text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors flex-shrink-0"
-           title="Hapus jadwal ini dari daftar">
+           title="Hapus slot jadwal ini">
            <i class="ti ti-trash text-sm"></i>
          </button>`
       : '';
 
     return `
-      <div class="bg-dark-700 rounded-lg p-3 space-y-2">
-        <div class="flex items-start justify-between gap-2">
-          <span class="font-medium text-sm text-white flex-1 min-w-0">${i + 1}. ${escapeHtml(b.title)}</span>
-          <div class="flex items-center gap-2 flex-shrink-0">
-            <span class="text-xs ${folderClass}">${folderDisplay}</span>
-            ${deleteBtn}
+      <div class="bg-dark-700 rounded-lg p-3 border border-gray-700 space-y-2">
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2 min-w-0 flex-1">
+            <span class="px-2 py-0.5 bg-primary/20 text-primary font-bold text-xs rounded">Slot #${index + 1}</span>
+            <span class="text-xs text-white font-medium truncate">${escapeHtml(slot.title)}</span>
           </div>
+          ${deleteBtn}
         </div>
-        ${b.streamKey ? `<div class="text-xs text-gray-400 font-mono truncate">Key: ${escapeHtml(b.streamKey)}</div>` : ''}
         <div>
-          <label class="text-xs text-gray-400 block mb-1">Schedule Time</label>
-          <input type="datetime-local" name="recreateSchedule[]" required min="${minDateStr}"${valueAttr}
-            class="w-full px-3 py-2 bg-dark-600 border border-gray-600 rounded-lg focus:border-primary focus:outline-none text-sm [color-scheme:dark]">
+          <label class="text-[11px] text-gray-400 block mb-1">Waktu Siaran (Tanggal & Jam):</label>
+          <input type="datetime-local" name="recreateSchedule[]" required min="${minDateStr}" value="${slot.scheduleTime || ''}"
+            onchange="updateRecreateSlotTime(${index}, this.value)"
+            class="w-full px-3 py-1.5 bg-dark-600 border border-gray-600 rounded-lg focus:border-primary focus:outline-none text-xs text-white [color-scheme:dark]">
         </div>
       </div>
     `;
   }).join('');
 }
 
-// Remove a single broadcast/schedule from the recreate list (does NOT touch the saved template).
-function removeRecreateBroadcast(index) {
-  const template = window.currentRecreateTemplate;
-  if (!template) return;
+// Update schedule time for a slot in window.recreateSlots
+function updateRecreateSlotTime(index, value) {
+  if (window.recreateSlots && window.recreateSlots[index]) {
+    window.recreateSlots[index].scheduleTime = value;
+  }
+}
 
-  const broadcasts = template.broadcasts || [template];
-  if (broadcasts.length <= 1) {
-    showToast('Minimal harus ada 1 broadcast', 'error');
+// Add a new slot bertingkat to recreate modal
+function addRecreateSlot() {
+  if (!window.recreateSlots || !window.currentRecreateTemplate) return;
+  const template = window.currentRecreateTemplate;
+
+  let nextDate;
+  if (window.recreateSlots.length > 0) {
+    const lastSlot = window.recreateSlots[window.recreateSlots.length - 1];
+    const lastTime = new Date(lastSlot.scheduleTime);
+    if (!isNaN(lastTime.getTime())) {
+      nextDate = new Date(lastTime.getTime() + 2 * 60 * 60 * 1000); // +2 hours from last slot
+    }
+  }
+  if (!nextDate || isNaN(nextDate.getTime()) || nextDate.getTime() < Date.now() + 10 * 60 * 1000) {
+    nextDate = new Date(Date.now() + 30 * 60 * 1000);
+  }
+
+  window.recreateSlots.push({
+    title: template.title,
+    streamId: template.stream_id,
+    streamKey: template.stream_key,
+    thumbnailFolder: template.thumbnail_folder,
+    pinnedThumbnail: template.pinned_thumbnail,
+    scheduleTime: typeof formatDateTimeLocal === 'function' ? formatDateTimeLocal(nextDate) : nextDate.toISOString().slice(0, 16)
+  });
+
+  renderRecreateSlotList();
+  showToast(`Slot #${window.recreateSlots.length} berhasil ditambahkan`);
+}
+
+// Add quick slot from time input
+function addRecreateQuickSlot() {
+  const timeInput = document.getElementById('recreateQuickTimeInput');
+  if (!timeInput || !timeInput.value) {
+    showToast('Pilih jam terlebih dahulu', 'error');
     return;
   }
+  addRecreatePresetSlot(timeInput.value);
+}
 
-  // Preserve schedule values the user already typed, then drop the removed index
-  const listEl = document.getElementById('recreateBroadcastList');
-  const preserved = Array.from(listEl.querySelectorAll('input[name="recreateSchedule[]"]')).map(inp => inp.value);
-  preserved.splice(index, 1);
+// Add preset time slot (e.g. '08:00', '13:00')
+function addRecreatePresetSlot(timeStr) {
+  if (!window.recreateSlots || !window.currentRecreateTemplate) return;
+  const template = window.currentRecreateTemplate;
 
-  // Remove from the in-memory broadcasts array (only multi-broadcast templates have the array)
-  if (Array.isArray(template.broadcasts)) {
-    template.broadcasts.splice(index, 1);
+  const [hours, minutes] = timeStr.split(':').map(Number);
+  if (isNaN(hours) || isNaN(minutes)) return;
+
+  const slotDate = new Date();
+  slotDate.setHours(hours, minutes, 0, 0);
+
+  if (slotDate.getTime() < Date.now() + 10 * 60 * 1000) {
+    slotDate.setDate(slotDate.getDate() + 1);
   }
 
-  // Keep the title-rotation array aligned by index if it exists
-  if (Array.isArray(window.recreateNextTitles) && window.recreateNextTitles.length) {
-    window.recreateNextTitles.splice(index, 1);
+  const scheduleTime = typeof formatDateTimeLocal === 'function' ? formatDateTimeLocal(slotDate) : slotDate.toISOString().slice(0, 16);
+
+  window.recreateSlots.push({
+    title: template.title,
+    streamId: template.stream_id,
+    streamKey: template.stream_key,
+    thumbnailFolder: template.thumbnail_folder,
+    pinnedThumbnail: template.pinned_thumbnail,
+    scheduleTime: scheduleTime
+  });
+
+  window.recreateSlots.sort((a, b) => new Date(a.scheduleTime) - new Date(b.scheduleTime));
+  renderRecreateSlotList();
+  showToast(`Slot jam ${timeStr} ditambahkan`);
+}
+
+// Remove slot at index
+function removeRecreateSlot(index) {
+  if (!window.recreateSlots || window.recreateSlots.length <= 1) {
+    showToast('Minimal harus ada 1 slot jadwal', 'error');
+    return;
   }
+  window.recreateSlots.splice(index, 1);
+  renderRecreateSlotList();
+  showToast('Slot jadwal dihapus');
+}
 
-  renderRecreateBroadcastList(preserved);
-
-  // Refresh rotated-title overlay if rotation is enabled
-  if (window.recreateUseTitleRotation) {
-    updateRecreateBroadcastTitles();
-  }
-
-  showToast('Jadwal broadcast dihapus dari daftar');
+// Compatibility alias for removeRecreateBroadcast
+function removeRecreateBroadcast(index) {
+  removeRecreateSlot(index);
 }
 
 function closeRecreateFromTemplateModal() {
@@ -7359,6 +7409,7 @@ function closeRecreateFromTemplateModal() {
     modal.style.display = 'none';
   }
   window.currentRecreateTemplate = null;
+  window.recreateSlots = [];
   window.recreateUseTitleRotation = false;
   
   // Reset title rotation checkbox
@@ -7549,119 +7600,107 @@ if (recreateFromTemplateForm) {
       const scheduleInputs = document.querySelectorAll('input[name="recreateSchedule[]"]');
       const schedules = Array.from(scheduleInputs).map(input => input.value).filter(v => v);
       
-      const broadcasts = template.broadcasts || [template];
+      const slots = (window.recreateSlots && window.recreateSlots.length > 0)
+        ? window.recreateSlots
+        : (template.broadcasts || [template]);
       const useTitleRotation = window.recreateUseTitleRotation && window.recreateNextTitles && window.recreateNextTitles.length > 0;
       
       console.log('[recreate] Template stream_key_folder_mapping:', template.stream_key_folder_mapping);
-      console.log('[recreate] Broadcasts:', broadcasts.map(b => ({ title: b.title, streamId: b.streamId, thumbnailFolder: b.thumbnailFolder })));
+      console.log('[recreate] Slots count:', slots.length, 'Schedules count:', schedules.length);
       console.log('[recreate] Use title rotation:', useTitleRotation);
       
-      if (schedules.length !== broadcasts.length) {
-        showToast('Please set schedule time for all broadcasts', 'error');
+      if (schedules.length === 0 || schedules.length !== slots.length) {
+        showToast('Mohon tentukan waktu siaran untuk semua slot jadwal', 'error');
         return;
       }
+
+      // Sync schedules into slots
+      schedules.forEach((sch, idx) => {
+        if (slots[idx]) slots[idx].scheduleTime = sch;
+      });
       
-      // Determine account ID: default to saved template.account_id, or fallback selector if account was disconnected
-      let accountId = template.account_id;
-      const accountSelectorContainer = document.getElementById('recreateAccountSelector');
-      const accountSelect = document.getElementById('recreateAccountSelect');
-      if (accountSelectorContainer && !accountSelectorContainer.classList.contains('hidden') && accountSelect && accountSelect.value) {
-        accountId = parseInt(accountSelect.value);
-        console.log('[recreate] Using selected fallback account ID:', accountId, '(original template account:', template.account_id, ')');
-      } else {
-        console.log('[recreate] Using saved template account ID:', accountId);
+      // Account ID: directly use saved template account ID
+      const accountId = template.account_id;
+      if (!accountId) {
+        showToast('Akun YouTube pada template tidak valid', 'error');
+        return;
       }
+      console.log('[recreate] Using saved template account ID:', accountId);
       
       // Fetch account stream IDs once, so we only reuse template streamId when still available
       const reusableStreamIds = await fetchStreamIdsForAccount(accountId);
 
-      // Create broadcasts one by one
-      const results = { total: broadcasts.length, success: 0, failed: 0, errors: [] };
+      // Create broadcasts one by one for each slot
+      const results = { total: slots.length, success: 0, failed: 0, errors: [] };
       const usedTitleIds = []; // Track used title IDs for incrementing use count
       
-      for (let i = 0; i < broadcasts.length; i++) {
-        const broadcast = broadcasts[i];
+      for (let i = 0; i < slots.length; i++) {
+        const slot = slots[i];
         const schedule = schedules[i];
         
         // Determine title - use rotated title if enabled
-        let finalTitle = broadcast.title;
+        let finalTitle = slot.title || template.title;
         if (useTitleRotation && window.recreateNextTitles[i]) {
           finalTitle = window.recreateNextTitles[i].title;
           usedTitleIds.push(window.recreateNextTitles[i].id);
-          console.log(`[recreate] Broadcast ${i + 1} using rotated title: "${finalTitle}"`);
+          console.log(`[recreate] Slot ${i + 1} using rotated title: "${finalTitle}"`);
         }
         
         try {
           const formData = new FormData();
           formData.append('accountId', accountId);
           formData.append('title', finalTitle);
-          formData.append('description', broadcast.description || '');
+          formData.append('description', slot.description || template.description || '');
           formData.append('scheduledStartTime', schedule);
-          formData.append('privacyStatus', broadcast.privacyStatus || 'unlisted');
-          // Note: Category field removed, backend uses default value
+          formData.append('privacyStatus', slot.privacyStatus || template.privacy_status || 'unlisted');
           
           // IMPORTANT: Always enable auto-start when re-creating from template
-          // This ensures YouTube broadcast starts automatically when stream begins
           formData.append('enableAutoStart', 'true');
           formData.append('enableAutoStop', 'true');
           formData.append('unlistReplayOnEnd', 'true');
           
-          if (broadcast.tags && broadcast.tags.length > 0) {
-            formData.append('tags', JSON.stringify(broadcast.tags));
+          const tags = slot.tags || template.tags;
+          if (tags && tags.length > 0) {
+            formData.append('tags', typeof tags === 'string' ? tags : JSON.stringify(tags));
           }
           
-          // Only reuse streamId if it belongs to the selected account.
-          // If the stream key does not belong to this account, let YouTube create a new stream key
-          // to prevent "The stream was not found" error.
-          const streamId = broadcast.streamId || template.stream_id;
+          // Stream ID reuse
+          const streamId = slot.streamId || template.stream_id;
           if (streamId) {
             if (reusableStreamIds && reusableStreamIds.has(streamId)) {
               formData.append('streamId', streamId);
               console.log('[recreate] Reusing valid streamId for selected account:', streamId);
             } else if (!reusableStreamIds) {
-              // Fallback if streams list couldn't be loaded from server
               formData.append('streamId', streamId);
               console.log('[recreate] Stream list unavailable, attempting to pass streamId:', streamId);
             } else {
-              console.log('[recreate] streamId not present in selected account streams, letting YouTube generate new stream key for channel');
+              console.log('[recreate] streamId not present in account streams, YouTube will generate new key');
             }
-          } else {
-            console.log('[recreate] No streamId in template - YouTube will create a new stream key');
           }
           
           // Determine thumbnail folder - priority:
-          // 1. Stream key folder mapping (binding stream key to folder)
-          // 2. Broadcast-specific thumbnailFolder
+          // 1. Stream key folder mapping
+          // 2. Slot-specific thumbnailFolder
           // 3. Template thumbnail_folder
           // 4. Default to root folder ('') for rotation
-          let thumbnailFolder = '';  // Default to root folder for rotation
+          let thumbnailFolder = '';
           
-          // First check stream_key_folder_mapping for this stream key
           if (streamId && template.stream_key_folder_mapping && template.stream_key_folder_mapping[streamId] !== undefined) {
             thumbnailFolder = template.stream_key_folder_mapping[streamId];
-            console.log('[recreate] Using stream key folder mapping:', streamId, '->', thumbnailFolder || 'root');
-          } else if (broadcast.thumbnailFolder !== null && broadcast.thumbnailFolder !== undefined) {
-            thumbnailFolder = broadcast.thumbnailFolder;
-            console.log('[recreate] Using broadcast thumbnail folder:', thumbnailFolder || 'root');
+          } else if (slot.thumbnailFolder !== null && slot.thumbnailFolder !== undefined) {
+            thumbnailFolder = slot.thumbnailFolder;
           } else if (template.thumbnail_folder !== null && template.thumbnail_folder !== undefined) {
             thumbnailFolder = template.thumbnail_folder;
-            console.log('[recreate] Using template thumbnail folder:', thumbnailFolder || 'root');
-          } else {
-            console.log('[recreate] Using default root folder for thumbnail rotation');
           }
           
-          // Always send thumbnailFolder for rotation (empty string = root folder)
           formData.append('thumbnailFolder', thumbnailFolder);
 
-          // If pinned thumbnail or explicit thumbnailPath exists on broadcast or template, forward it
-          const pinnedThumbnail = broadcast.pinnedThumbnail || broadcast.thumbnailPath || template.pinned_thumbnail;
+          // If pinned thumbnail or explicit thumbnailPath exists, forward it
+          const pinnedThumbnail = slot.pinnedThumbnail || slot.thumbnailPath || template.pinned_thumbnail;
           if (pinnedThumbnail) {
             formData.append('thumbnailPath', pinnedThumbnail);
             console.log('[recreate] Forwarding pinned thumbnail:', pinnedThumbnail);
           }
-          
-          // Send streamId - backend will get thumbnail index from database
-          // No need to fetch index here, backend handles it
           
           const response = await fetch('/api/youtube/broadcasts', {
             method: 'POST',
@@ -7736,10 +7775,10 @@ if (recreateFromTemplateForm) {
       
       // Show results
       if (results.failed === 0) {
-        showToast(`Successfully created ${results.success} broadcast(s)!`);
+        showToast(`Berhasil menjadwalkan ${results.success} siaran bertingkat!`);
         setTimeout(() => { window.location.href = '/dashboard?tab=broadcasts'; }, 1000);
       } else {
-        showToast(`Created ${results.success}/${results.total} broadcasts. ${results.failed} failed.`, 'error');
+        showToast(`Berhasil ${results.success}/${results.total} siaran. ${results.failed} gagal.`, 'error');
         console.error('Failed broadcasts:', results.errors);
         setTimeout(() => { window.location.href = '/dashboard?tab=broadcasts'; }, 2000);
       }
