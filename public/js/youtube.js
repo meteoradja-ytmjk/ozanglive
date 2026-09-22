@@ -7313,20 +7313,54 @@ function renderRecreateSlotList() {
     const canDelete = window.recreateSlots.length > 1;
     const deleteBtn = canDelete
       ? `<button type="button" onclick="removeRecreateSlot(${index})"
-           class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors flex-shrink-0"
+           class="h-7 w-7 flex items-center justify-center text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors flex-shrink-0"
            title="Hapus slot jadwal ini">
            <i class="ti ti-trash text-sm"></i>
          </button>`
       : '';
 
+    const isEditing = Boolean(slot._isEditingTitle);
+
+    const titleArea = isEditing
+      ? `<div class="flex items-center gap-1.5 w-full">
+           <input type="text" id="slotTitleInput_${index}" value="${escapeHtml(slot.title || '')}"
+             class="h-7 px-2 bg-dark-600 border border-primary rounded text-xs text-white flex-1 min-w-0 focus:outline-none focus:ring-1 focus:ring-primary"
+             placeholder="Masukkan judul siaran..."
+             onkeydown="if(event.key==='Enter'){event.preventDefault();saveRecreateSlotTitle(${index})}else if(event.key==='Escape'){event.preventDefault();cancelEditRecreateSlotTitle(${index})}">
+           <button type="button" onclick="saveRecreateSlotTitle(${index})" class="h-7 px-2 bg-primary hover:bg-primary/80 text-white rounded text-xs flex items-center gap-1 flex-shrink-0" title="Simpan judul">
+             <i class="ti ti-check text-xs"></i>
+           </button>
+           <button type="button" onclick="cancelEditRecreateSlotTitle(${index})" class="h-7 px-2 bg-dark-600 hover:bg-dark-500 text-gray-300 rounded text-xs flex items-center gap-1 flex-shrink-0" title="Batal">
+             <i class="ti ti-x text-xs"></i>
+           </button>
+         </div>`
+      : `<div class="flex items-center justify-between gap-2 w-full">
+           <div class="flex items-center gap-1.5 min-w-0 flex-1">
+             <span class="px-1.5 py-0.5 bg-primary/20 text-primary font-bold text-[10px] rounded flex-shrink-0">#${index + 1}</span>
+             <span class="text-xs text-white font-medium truncate" title="${escapeHtml(slot.title || '')}">${escapeHtml(slot.title || '')}</span>
+           </div>
+           <div class="flex items-center gap-1 flex-shrink-0">
+             <button type="button" onclick="editRecreateSlotTitle(${index})"
+               class="h-7 px-2 flex items-center justify-center gap-1 text-gray-300 hover:text-white bg-dark-600 hover:bg-dark-500 border border-gray-600/80 rounded-lg text-xs transition-colors"
+               title="Edit judul siaran slot #${index + 1}">
+               <i class="ti ti-edit text-xs text-primary"></i>
+               <span class="text-[11px]">Edit Judul</span>
+             </button>
+             ${deleteBtn}
+           </div>
+         </div>`;
+
     return `
-      <div class="bg-dark-700/80 rounded-lg px-2.5 py-1.5 border border-gray-700/80 flex items-center gap-2 transition-colors hover:border-gray-600">
-        <span class="px-1.5 py-0.5 bg-primary/20 text-primary font-bold text-[10px] rounded flex-shrink-0">#${index + 1}</span>
-        <span class="text-xs text-white font-medium truncate min-w-0 flex-1" title="${escapeHtml(slot.title)}">${escapeHtml(slot.title)}</span>
-        <input type="datetime-local" name="recreateSchedule[]" required min="${minDateStr}" value="${slot.scheduleTime || ''}"
-          onchange="updateRecreateSlotTime(${index}, this.value)"
-          class="h-8 px-2 bg-dark-600 border border-gray-600 rounded-lg text-xs text-white focus:border-primary focus:outline-none [color-scheme:dark] flex-shrink-0" style="width: 11rem;">
-        ${deleteBtn}
+      <div class="bg-dark-700/80 rounded-lg p-2 sm:p-2.5 border border-gray-700/80 space-y-1.5 transition-colors hover:border-gray-600">
+        <!-- Baris 1: Nomor Slot, Judul, Tombol Edit & Tombol Hapus -->
+        ${titleArea}
+        
+        <!-- Baris 2: Waktu Siaran (Full Width, jam & menit terlihat jelas tanpa terpotong) -->
+        <div class="w-full">
+          <input type="datetime-local" name="recreateSchedule[]" required min="${minDateStr}" value="${slot.scheduleTime || ''}"
+            onchange="updateRecreateSlotTime(${index}, this.value)"
+            class="h-8 w-full px-2.5 bg-dark-600 border border-gray-600 rounded-lg text-xs font-semibold text-white focus:border-primary focus:outline-none [color-scheme:dark]">
+        </div>
       </div>
     `;
   }).join('');
@@ -7462,6 +7496,48 @@ function removeRecreateSlot(index) {
 window.addRecreatePresetSlot = addRecreatePresetSlot;
 window.addRecreateQuickSlot = addRecreateQuickSlot;
 window.removeRecreateSlot = removeRecreateSlot;
+
+// Edit slot title functions
+function editRecreateSlotTitle(index) {
+  if (!window.recreateSlots || !window.recreateSlots[index]) return;
+  window.recreateSlots[index]._isEditingTitle = true;
+  renderRecreateSlotList();
+  setTimeout(() => {
+    const input = document.getElementById(`slotTitleInput_${index}`);
+    if (input) {
+      input.focus();
+      input.select();
+    }
+  }, 50);
+}
+
+function saveRecreateSlotTitle(index) {
+  if (!window.recreateSlots || !window.recreateSlots[index]) return;
+  const input = document.getElementById(`slotTitleInput_${index}`);
+  if (input) {
+    const newTitle = input.value.trim();
+    if (newTitle) {
+      window.recreateSlots[index].title = newTitle;
+      window.recreateSlots[index].customTitle = true;
+      if (window.recreateNextTitles && window.recreateNextTitles[index]) {
+        window.recreateNextTitles[index].title = newTitle;
+      }
+      showToast('Judul slot berhasil diperbarui');
+    }
+  }
+  delete window.recreateSlots[index]._isEditingTitle;
+  renderRecreateSlotList();
+}
+
+function cancelEditRecreateSlotTitle(index) {
+  if (!window.recreateSlots || !window.recreateSlots[index]) return;
+  delete window.recreateSlots[index]._isEditingTitle;
+  renderRecreateSlotList();
+}
+
+window.editRecreateSlotTitle = editRecreateSlotTitle;
+window.saveRecreateSlotTitle = saveRecreateSlotTitle;
+window.cancelEditRecreateSlotTitle = cancelEditRecreateSlotTitle;
 
 // Compatibility alias for removeRecreateBroadcast
 function removeRecreateBroadcast(index) {
@@ -7798,9 +7874,9 @@ if (recreateFromTemplateForm) {
         const slot = slots[i];
         const schedule = schedules[i];
         
-        // Determine title - use rotated title if enabled
+        // Determine title - use rotated title if enabled (unless manually edited)
         let finalTitle = slot.title || template.title;
-        if (useTitleRotation && window.recreateNextTitles[i]) {
+        if (!slot.customTitle && useTitleRotation && window.recreateNextTitles[i]) {
           finalTitle = window.recreateNextTitles[i].title;
           usedTitleIds.push(window.recreateNextTitles[i].id);
           console.log(`[recreate] Slot ${i + 1} using rotated title: "${finalTitle}"`);
