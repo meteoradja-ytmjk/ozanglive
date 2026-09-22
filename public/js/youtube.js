@@ -7313,9 +7313,9 @@ function renderRecreateSlotList() {
     const canDelete = window.recreateSlots.length > 1;
     const deleteBtn = canDelete
       ? `<button type="button" onclick="removeRecreateSlot(${index})"
-           class="h-7 w-7 flex items-center justify-center text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors flex-shrink-0"
+           class="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg border border-gray-600/70 hover:border-red-500/50 transition-colors flex-shrink-0"
            title="Hapus slot jadwal ini">
-           <i class="ti ti-trash text-sm"></i>
+           <i class="ti ti-trash text-xs"></i>
          </button>`
       : '';
 
@@ -7324,42 +7324,45 @@ function renderRecreateSlotList() {
     const titleArea = isEditing
       ? `<div class="flex items-center gap-1.5 w-full">
            <input type="text" id="slotTitleInput_${index}" value="${escapeHtml(slot.title || '')}"
-             class="h-7 px-2 bg-dark-600 border border-primary rounded text-xs text-white flex-1 min-w-0 focus:outline-none focus:ring-1 focus:ring-primary"
+             class="h-7 px-2 bg-dark-600 border border-primary rounded-lg text-xs text-white flex-1 min-w-0 focus:outline-none focus:ring-1 focus:ring-primary"
              placeholder="Masukkan judul siaran..."
              onkeydown="if(event.key==='Enter'){event.preventDefault();saveRecreateSlotTitle(${index})}else if(event.key==='Escape'){event.preventDefault();cancelEditRecreateSlotTitle(${index})}">
-           <button type="button" onclick="saveRecreateSlotTitle(${index})" class="h-7 px-2 bg-primary hover:bg-primary/80 text-white rounded text-xs flex items-center gap-1 flex-shrink-0" title="Simpan judul">
+           <button type="button" onclick="saveRecreateSlotTitle(${index})" class="w-7 h-7 flex items-center justify-center bg-primary hover:bg-primary/80 text-white rounded-lg flex-shrink-0 transition-colors" title="Simpan judul">
              <i class="ti ti-check text-xs"></i>
            </button>
-           <button type="button" onclick="cancelEditRecreateSlotTitle(${index})" class="h-7 px-2 bg-dark-600 hover:bg-dark-500 text-gray-300 rounded text-xs flex items-center gap-1 flex-shrink-0" title="Batal">
+           <button type="button" onclick="cancelEditRecreateSlotTitle(${index})" class="w-7 h-7 flex items-center justify-center bg-dark-600 hover:bg-dark-500 text-gray-300 border border-gray-600 rounded-lg flex-shrink-0 transition-colors" title="Batal">
              <i class="ti ti-x text-xs"></i>
            </button>
          </div>`
-      : `<div class="flex items-center justify-between gap-2 w-full">
-           <div class="flex items-center gap-1.5 min-w-0 flex-1">
-             <span class="px-1.5 py-0.5 bg-primary/20 text-primary font-bold text-[10px] rounded flex-shrink-0">#${index + 1}</span>
-             <span class="text-xs text-white font-medium truncate" title="${escapeHtml(slot.title || '')}">${escapeHtml(slot.title || '')}</span>
+      : `<div class="flex items-start justify-between gap-2 w-full">
+           <div class="flex items-start gap-1.5 min-w-0 flex-1">
+             <span class="px-1.5 py-0.5 bg-primary/20 text-primary font-bold text-[10px] rounded mt-0.5 flex-shrink-0">#${index + 1}</span>
+             <div class="text-xs text-white font-medium break-words leading-relaxed flex-1" title="${escapeHtml(slot.title || '')}">${escapeHtml(slot.title || '')}</div>
            </div>
-           <div class="flex items-center gap-1 flex-shrink-0">
+           <div class="flex items-center gap-1 flex-shrink-0 mt-0.5">
              <button type="button" onclick="editRecreateSlotTitle(${index})"
-               class="h-7 px-2 flex items-center justify-center gap-1 text-gray-300 hover:text-white bg-dark-600 hover:bg-dark-500 border border-gray-600/80 rounded-lg text-xs transition-colors"
+               class="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-primary hover:bg-primary/10 rounded-lg border border-gray-600/70 hover:border-primary/50 transition-colors"
                title="Edit judul siaran slot #${index + 1}">
-               <i class="ti ti-edit text-xs text-primary"></i>
-               <span class="text-[11px]">Edit Judul</span>
+               <i class="ti ti-edit text-xs"></i>
              </button>
              ${deleteBtn}
            </div>
          </div>`;
 
     return `
-      <div class="bg-dark-700/80 rounded-lg p-2 sm:p-2.5 border border-gray-700/80 space-y-1.5 transition-colors hover:border-gray-600">
-        <!-- Baris 1: Nomor Slot, Judul, Tombol Edit & Tombol Hapus -->
+      <div class="bg-dark-700/80 rounded-lg p-2.5 border border-gray-700/80 space-y-2 transition-colors hover:border-gray-600">
+        <!-- Baris 1: Nomor Slot, Judul Lengkap (tanpa terpotong), Tombol Edit & Hapus yang seragam -->
         ${titleArea}
         
-        <!-- Baris 2: Waktu Siaran (Full Width, jam & menit terlihat jelas tanpa terpotong) -->
-        <div class="w-full">
+        <!-- Baris 2: Waktu Siaran (Rapi, Berlabel, Mengisi Ruang Tanpa Kekosongan) -->
+        <div class="flex items-center gap-2 pt-1 border-t border-gray-700/50">
+          <div class="flex items-center gap-1.5 text-gray-400 text-xs flex-shrink-0">
+            <i class="ti ti-calendar-time text-primary text-xs"></i>
+            <span class="text-[11px] font-medium text-gray-300">Waktu Siaran:</span>
+          </div>
           <input type="datetime-local" name="recreateSchedule[]" required min="${minDateStr}" value="${slot.scheduleTime || ''}"
             onchange="updateRecreateSlotTime(${index}, this.value)"
-            class="h-8 w-full px-2.5 bg-dark-600 border border-gray-600 rounded-lg text-xs font-semibold text-white focus:border-primary focus:outline-none [color-scheme:dark]">
+            class="h-7 flex-1 min-w-0 px-2 bg-dark-600 border border-gray-600 rounded-lg text-xs font-semibold text-white focus:border-primary focus:outline-none [color-scheme:dark]">
         </div>
       </div>
     `;
