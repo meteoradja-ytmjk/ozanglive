@@ -7525,6 +7525,55 @@ function calculateUpcomingDateTimeForSlot(timeStr, pattern = 'daily', days = nul
   return formatLocalDateTime(candidateTomorrow);
 }
 
+/**
+ * Format string datetime (YYYY-MM-DDTHH:mm)
+ * Menjadi tampilan tanggal singkat (D/M/YY) dan jam terlihat jelas (HH.mm)
+ * Contoh: 2026-09-12T09:00 -> { dateStr: '12/9/26', timeStr: '09.00' }
+ */
+function formatShortDateTimeDisplay(dtStr) {
+  if (!dtStr) {
+    const now = new Date();
+    return {
+      dateStr: `${now.getDate()}/${now.getMonth() + 1}/${String(now.getFullYear()).slice(-2)}`,
+      timeStr: `${String(now.getHours()).padStart(2, '0')}.${String(now.getMinutes()).padStart(2, '0')}`
+    };
+  }
+
+  // Parse YYYY-MM-DDTHH:mm string directly to prevent timezone skew
+  if (typeof dtStr === 'string' && dtStr.includes('T')) {
+    const [dPart, tPart] = dtStr.split('T');
+    const dParts = dPart ? dPart.split('-') : [];
+    if (dParts.length === 3 && dParts[0] && dParts[1] && dParts[2]) {
+      const year = dParts[0].slice(-2);
+      const month = parseInt(dParts[1], 10);
+      const day = parseInt(dParts[2], 10);
+      const cleanTime = (tPart || '00:00').slice(0, 5).replace(':', '.');
+      if (!isNaN(day) && !isNaN(month)) {
+        return {
+          dateStr: `${day}/${month}/${year}`,
+          timeStr: cleanTime
+        };
+      }
+    }
+  }
+
+  const d = new Date(dtStr);
+  if (!isNaN(d.getTime())) {
+    const day = d.getDate();
+    const month = d.getMonth() + 1;
+    const year = String(d.getFullYear()).slice(-2);
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    return {
+      dateStr: `${day}/${month}/${year}`,
+      timeStr: `${hours}.${minutes}`
+    };
+  }
+
+  return { dateStr: '--/--/--', timeStr: '--.--' };
+}
+window.formatShortDateTimeDisplay = formatShortDateTimeDisplay;
+
 // Render the multi-slot schedule list for the recreate modal (Grouped per Broadcast)
 function renderRecreateSlotList() {
   const listEl = document.getElementById('recreateBroadcastList');
@@ -7666,11 +7715,27 @@ function renderRecreateSlotList() {
           </div>
         `;
       } else {
+        const compactDt = formatShortDateTimeDisplay(t.scheduleTime);
         timeInputHtml = `
           <div class="flex items-center gap-1.5 flex-1 justify-end min-w-0">
-            <input type="datetime-local" id="group_${groupIndex}_datetime_${timeIndex}" name="groupDateTime_${groupIndex}[]" required min="${minDateStr}" value="${t.scheduleTime || ''}"
-              onchange="updateGroupSlotTime(${groupIndex}, ${timeIndex}, this.value, false)"
-              class="h-7 w-full max-w-[155px] sm:max-w-[190px] px-1.5 bg-dark-600 border border-gray-600 rounded-lg text-[11px] sm:text-xs font-semibold text-white focus:border-primary focus:outline-none [color-scheme:dark]">
+            <div class="recreate-datetime-pill relative inline-flex items-center gap-1 sm:gap-1.5 h-7 px-2 sm:px-2.5 bg-dark-600 hover:bg-dark-500 border border-gray-600 hover:border-primary/60 rounded-lg cursor-pointer transition-colors shadow-sm select-none"
+                 onclick="openRecreateDateTimePicker(this)"
+                 title="Klik untuk memilih tanggal dan jam siaran">
+              <i class="ti ti-calendar text-gray-400 text-[11px] sm:text-xs flex-shrink-0 pointer-events-none"></i>
+              <!-- Tanggal singkat: 12/9/26 -->
+              <span class="recreate-date-text text-gray-300 font-mono text-[11px] sm:text-xs tracking-tight flex-shrink-0 whitespace-nowrap pointer-events-none">${compactDt.dateStr}</span>
+              <!-- Titik pemisah -->
+              <span class="text-gray-400 font-bold text-xs flex-shrink-0 pointer-events-none leading-none">.</span>
+              <!-- Jam jelas menonjol: 09.00 -->
+              <span class="recreate-time-text text-primary font-mono text-xs sm:text-[13px] font-bold tracking-wider flex-shrink-0 whitespace-nowrap pointer-events-none">${compactDt.timeStr}</span>
+              <i class="ti ti-clock text-primary/70 text-[10px] sm:text-xs ml-0.5 flex-shrink-0 pointer-events-none"></i>
+
+              <!-- Native input overlay for picking & form submission -->
+              <input type="datetime-local" id="group_${groupIndex}_datetime_${timeIndex}" name="groupDateTime_${groupIndex}[]" required min="${minDateStr}" value="${t.scheduleTime || ''}"
+                onchange="handleRecreateDateTimeChange(${groupIndex}, ${timeIndex}, this)"
+                oninput="handleRecreateDateTimeChange(${groupIndex}, ${timeIndex}, this)"
+                class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 [color-scheme:dark]">
+            </div>
             ${deleteTimeBtn}
           </div>
         `;
@@ -7832,6 +7897,35 @@ function updateGroupSlotTime(groupIndex, timeIndex, value, isTimeOnly = false) {
 }
 window.updateGroupSlotTime = updateGroupSlotTime;
 
+// Open native date-time picker when pill is clicked
+function openRecreateDateTimePicker(container) {
+  if (!container) return;
+  const input = container.querySelector('input[type="datetime-local"]');
+  if (!input) return;
+  if (typeof input.showPicker === 'function') {
+    try {
+      input.showPicker();
+      return;
+    } catch (e) {}
+  }
+}
+window.openRecreateDateTimePicker = openRecreateDateTimePicker;
+
+// Handle real-time change for compact date-time pill
+function handleRecreateDateTimeChange(groupIndex, timeIndex, inputEl) {
+  const val = inputEl.value;
+  updateGroupSlotTime(groupIndex, timeIndex, val, false);
+  const container = inputEl.closest('.recreate-datetime-pill');
+  if (container) {
+    const compact = formatShortDateTimeDisplay(val);
+    const dateSpan = container.querySelector('.recreate-date-text');
+    const timeSpan = container.querySelector('.recreate-time-text');
+    if (dateSpan) dateSpan.textContent = compact.dateStr;
+    if (timeSpan) timeSpan.textContent = compact.timeStr;
+  }
+}
+window.handleRecreateDateTimeChange = handleRecreateDateTimeChange;
+
 // Edit group title functions
 function editRecreateGroupTitle(groupIndex) {
   if (window.recreateBroadcastGroups && window.recreateBroadcastGroups[groupIndex]) {
@@ -7987,6 +8081,19 @@ function setRecreateRecurringMode(mode) {
     } else {
       daysContainer.classList.add('hidden');
     }
+  }
+
+  // When switching to 'Sekali Saja', ensure each slot has a valid upcoming datetime
+  if (mode === 'none' && Array.isArray(window.recreateBroadcastGroups)) {
+    window.recreateBroadcastGroups.forEach(grp => {
+      (grp.times || []).forEach(t => {
+        const timeVal = t.timeOnly || (t.scheduleTime && t.scheduleTime.includes('T') ? t.scheduleTime.split('T')[1].slice(0, 5) : '09:00');
+        if (!t.scheduleTime || new Date(t.scheduleTime).getTime() < Date.now() + 5 * 60 * 1000) {
+          t.scheduleTime = calculateUpcomingDateTimeForSlot(timeVal, 'none');
+        }
+        t.timeOnly = t.scheduleTime.split('T')[1].slice(0, 5);
+      });
+    });
   }
 
   // Instantly re-render slot list so time/datetime inputs switch dynamically
