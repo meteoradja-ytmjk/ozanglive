@@ -7658,10 +7658,10 @@ function renderRecreateSlotList() {
           timeVal = t.scheduleTime.split('T')[1].slice(0, 5);
         }
         timeInputHtml = `
-          <div class="flex items-center gap-1.5 justify-end">
+          <div class="flex items-center gap-1.5 justify-end flex-shrink-0">
             <input type="time" id="group_${groupIndex}_time_${timeIndex}" name="groupTime_${groupIndex}[]" required value="${timeVal}"
               onchange="updateGroupSlotTime(${groupIndex}, ${timeIndex}, this.value, true)"
-              class="h-7 w-[100px] px-2 bg-dark-600 border border-gray-600 rounded-lg text-xs font-semibold text-white text-center focus:border-primary focus:outline-none [color-scheme:dark]">
+              class="h-7 w-[95px] sm:w-[110px] px-1.5 bg-dark-600 border border-gray-600 rounded-lg text-xs font-semibold text-white text-center focus:border-primary focus:outline-none [color-scheme:dark]">
             ${deleteTimeBtn}
           </div>
         `;
@@ -7670,23 +7670,23 @@ function renderRecreateSlotList() {
           <div class="flex items-center gap-1.5 flex-1 justify-end min-w-0">
             <input type="datetime-local" id="group_${groupIndex}_datetime_${timeIndex}" name="groupDateTime_${groupIndex}[]" required min="${minDateStr}" value="${t.scheduleTime || ''}"
               onchange="updateGroupSlotTime(${groupIndex}, ${timeIndex}, this.value, false)"
-              class="h-7 flex-1 max-w-[190px] px-2 bg-dark-600 border border-gray-600 rounded-lg text-xs font-semibold text-white focus:border-primary focus:outline-none [color-scheme:dark]">
+              class="h-7 w-full max-w-[155px] sm:max-w-[190px] px-1.5 bg-dark-600 border border-gray-600 rounded-lg text-[11px] sm:text-xs font-semibold text-white focus:border-primary focus:outline-none [color-scheme:dark]">
             ${deleteTimeBtn}
           </div>
         `;
       }
 
       const badgeHtml = isRecurring
-        ? `<span class="text-[10px] text-green-400 bg-green-500/10 border border-green-500/20 px-1.5 py-0.5 rounded font-normal flex items-center gap-0.5">
+        ? `<span class="text-[10px] text-green-400 bg-green-500/10 border border-green-500/20 px-1.5 py-0.5 rounded font-normal flex items-center gap-0.5 whitespace-nowrap">
              <i class="ti ${badgeIcon} text-[10px]"></i> ${badgeText}
            </span>`
-        : `<span class="text-[10px] text-blue-400 bg-blue-500/10 border border-blue-500/20 px-1.5 py-0.5 rounded font-normal">
+        : `<span class="text-[10px] text-blue-400 bg-blue-500/10 border border-blue-500/20 px-1.5 py-0.5 rounded font-normal whitespace-nowrap">
              Sekali
            </span>`;
 
       return `
-        <div class="flex items-center justify-between gap-2 bg-dark-700/60 px-2.5 py-1.5 rounded-lg border border-gray-600/40">
-          <div class="flex items-center gap-2 text-xs text-gray-300 flex-shrink-0">
+        <div class="flex items-center justify-between gap-1.5 sm:gap-2 bg-dark-700/60 px-2 sm:px-2.5 py-1.5 rounded-lg border border-gray-600/40 flex-nowrap w-full">
+          <div class="flex items-center gap-1.5 text-xs text-gray-300 flex-shrink-0 whitespace-nowrap">
             <span class="text-[11px] font-medium text-gray-300">Jam ${timeIndex + 1}:</span>
             ${badgeHtml}
           </div>
@@ -7698,18 +7698,18 @@ function renderRecreateSlotList() {
     globalSlotOffset += (group.times || []).length;
 
     return `
-      <div id="groupCard_${groupIndex}" class="bg-dark-700/80 rounded-xl p-3 border border-gray-700/80 space-y-2.5 transition-colors hover:border-gray-600 shadow-sm">
+      <div id="groupCard_${groupIndex}" class="bg-dark-700/80 rounded-xl p-2.5 sm:p-3 border border-gray-700/80 space-y-2.5 transition-colors hover:border-gray-600 shadow-sm">
         <!-- Baris 1: Header Siaran, Judul Lengkap, Edit & Hapus Siaran -->
         ${titleContentHtml}
 
         <!-- Baris 2: Sub-kontainer Jam Tayang Khusus Siaran Ini -->
-        <div class="bg-dark-800/60 rounded-lg p-2.5 border border-gray-700/50 space-y-2">
-          <div class="flex items-center justify-between text-xs text-gray-400 px-0.5">
-            <span class="flex items-center gap-1 font-medium text-gray-300">
-              <i class="ti ti-clock text-primary text-xs"></i>
-              <span>Jam Tayang Siaran #${groupIndex + 1}:</span>
+        <div class="bg-dark-800/60 rounded-lg p-2 sm:p-2.5 border border-gray-700/50 space-y-2">
+          <div class="flex items-center justify-between text-xs text-gray-400 px-0.5 flex-nowrap w-full">
+            <span class="flex items-center gap-1 font-medium text-gray-300 truncate">
+              <i class="ti ti-clock text-primary text-xs flex-shrink-0"></i>
+              <span class="truncate">Jam Tayang Siaran #${groupIndex + 1}:</span>
             </span>
-            <span class="text-[10px] text-gray-400 font-mono">${(group.times || []).length} jadwal</span>
+            <span class="text-[10px] text-gray-400 font-mono flex-shrink-0 whitespace-nowrap ml-1">${(group.times || []).length} jadwal</span>
           </div>
 
           <!-- List Waktu Slot -->
@@ -7717,28 +7717,25 @@ function renderRecreateSlotList() {
             ${timesHtml}
           </div>
 
-          <!-- Tombol Tambah Jam Khusus Siaran Ini -->
-          <div class="flex items-center justify-between gap-2 pt-1 border-t border-gray-700/40 flex-wrap">
-            <div class="flex items-center gap-1">
-              <span class="text-[10px] text-gray-400 mr-0.5">Cepat:</span>
-              <button type="button" onclick="addQuickTimeToGroup(${groupIndex}, 1)"
-                class="px-2 py-0.5 bg-dark-600 hover:bg-dark-500 hover:text-white text-gray-300 text-[10px] rounded border border-gray-600/70 font-medium transition-colors"
-                title="Tambah jam +1 jam dari jadwal terakhir">+1j</button>
-              <button type="button" onclick="addQuickTimeToGroup(${groupIndex}, 2)"
-                class="px-2 py-0.5 bg-dark-600 hover:bg-dark-500 hover:text-white text-gray-300 text-[10px] rounded border border-gray-600/70 font-medium transition-colors"
-                title="Tambah jam +2 jam dari jadwal terakhir">+2j</button>
-              <button type="button" onclick="addQuickTimeToGroup(${groupIndex}, 3)"
-                class="px-2 py-0.5 bg-dark-600 hover:bg-dark-500 hover:text-white text-gray-300 text-[10px] rounded border border-gray-600/70 font-medium transition-colors"
-                title="Tambah jam +3 jam dari jadwal terakhir">+3j</button>
-              <button type="button" onclick="addQuickTimeToGroup(${groupIndex}, 4)"
-                class="px-2 py-0.5 bg-dark-600 hover:bg-dark-500 hover:text-white text-gray-300 text-[10px] rounded border border-gray-600/70 font-medium transition-colors"
-                title="Tambah jam +4 jam dari jadwal terakhir">+4j</button>
-            </div>
+          <!-- Tombol Cepat dan Tambah Jam: STRICT SINGLE LINE (Tanpa ruang kosong, tanpa terputus) -->
+          <div class="flex items-center gap-1 sm:gap-1.5 pt-1.5 border-t border-gray-700/40 w-full flex-nowrap">
+            <button type="button" onclick="addQuickTimeToGroup(${groupIndex}, 1)"
+              class="h-7 flex-1 min-w-0 bg-dark-600 hover:bg-dark-500 hover:text-white text-gray-200 border border-gray-600/70 rounded-lg text-xs font-semibold transition-colors flex items-center justify-center whitespace-nowrap active:scale-95"
+              title="Tambah jam +1 jam dari jadwal terakhir">+1j</button>
+            <button type="button" onclick="addQuickTimeToGroup(${groupIndex}, 2)"
+              class="h-7 flex-1 min-w-0 bg-dark-600 hover:bg-dark-500 hover:text-white text-gray-200 border border-gray-600/70 rounded-lg text-xs font-semibold transition-colors flex items-center justify-center whitespace-nowrap active:scale-95"
+              title="Tambah jam +2 jam dari jadwal terakhir">+2j</button>
+            <button type="button" onclick="addQuickTimeToGroup(${groupIndex}, 3)"
+              class="h-7 flex-1 min-w-0 bg-dark-600 hover:bg-dark-500 hover:text-white text-gray-200 border border-gray-600/70 rounded-lg text-xs font-semibold transition-colors flex items-center justify-center whitespace-nowrap active:scale-95"
+              title="Tambah jam +3 jam dari jadwal terakhir">+3j</button>
+            <button type="button" onclick="addQuickTimeToGroup(${groupIndex}, 4)"
+              class="h-7 flex-1 min-w-0 bg-dark-600 hover:bg-dark-500 hover:text-white text-gray-200 border border-gray-600/70 rounded-lg text-xs font-semibold transition-colors flex items-center justify-center whitespace-nowrap active:scale-95"
+              title="Tambah jam +4 jam dari jadwal terakhir">+4j</button>
             <button type="button" onclick="addCustomTimeToGroup(${groupIndex})"
-              class="h-6 px-2.5 bg-primary/15 hover:bg-primary/25 text-primary border border-primary/30 rounded-lg text-[11px] font-semibold transition-colors flex items-center gap-1 ml-auto"
+              class="h-7 flex-[1.8] min-w-0 px-2 bg-primary/20 hover:bg-primary/30 text-primary border border-primary/40 rounded-lg text-[11px] sm:text-xs font-semibold transition-colors flex items-center justify-center gap-1 whitespace-nowrap active:scale-95 flex-shrink-0"
               title="Tambah jadwal jam baru untuk siaran ini">
               <i class="ti ti-plus text-xs"></i>
-              <span>Tambah Jam</span>
+              <span class="truncate">Tambah Jam</span>
             </button>
           </div>
         </div>
