@@ -8463,37 +8463,103 @@ app.get('/api/youtube/credentials/:id', isAuthenticated, async (req, res) => {
   }
 });
 
-// Get channel defaults for a specific account
-app.get('/api/youtube/channel/:id/defaults', isAuthenticated, async (req, res) => {
-  try {
-    const accountId = parseInt(req.params.id);
-    const account = await YouTubeCredentials.findById(accountId);
-    
-    if (!account || account.userId !== req.session.userId) {
-      return res.status(404).json({ success: false, message: 'Account not found' });
-    }
-    
-    let defaults = null;
+// Helper to resolve channel defaults with strict channel isolation and YouTube API prioritized
+async function resolveChannelDefaults(account, userId) {
+  let defaults = {
+    title: '',
+    description: '',
+    tags: [],
+    categoryId: '22',
+    privacyStatus: 'public',
+    monetizationEnabled: false,
+    alteredContent: false
+  };
 
-    // 1. Check broadcast_templates table first for this specific account
+  // 1. PRIMARY: Fetch authentic channel defaults directly from YouTube API for this account
+  try {
+    const accessToken = await youtubeService.getAccessToken(
+      account.clientId,
+      account.clientSecret,
+      account.refreshToken,
+      0,
+      account.id
+    );
+    const ytDefaults = await youtubeService.getChannelDefaults(accessToken);
+    if (ytDefaults) {
+      if (ytDefaults.title) defaults.title = ytDefaults.title;
+      if (ytDefaults.description) defaults.description = ytDefaults.description;
+      if (Array.isArray(ytDefaults.tags) && ytDefaults.tags.length > 0) defaults.tags = ytDefaults.tags;
+      if (ytDefaults.categoryId) defaults.categoryId = ytDefaults.categoryId;
+      if (ytDefaults.privacyStatus) defaults.privacyStatus = ytDefaults.privacyStatus;
+      if (ytDefaults.monetizationEnabled !== undefined) defaults.monetizationEnabled = ytDefaults.monetizationEnabled;
+      if (ytDefaults.alteredContent !== undefined) defaults.alteredContent = ytDefaults.alteredContent;
+    }
+  } catch (ytErr) {
+    console.warn(`[channel-defaults] YouTube API fetch warning for account ${account.id} (${account.channelName}):`, ytErr.message);
+  }
+
+  // 2. FALLBACK 1: If title, description, or tags are missing, check recent streams for THIS account
+  if (!defaults.title || !defaults.description || defaults.tags.length === 0) {
     try {
-      const templateRow = await new Promise((resolve) => {
+      const streamRow = await new Promise((resolve) => {
         db.get(
           `SELECT title, description, tags, category_id, privacy_status 
-           FROM broadcast_templates 
-           WHERE account_id = ? AND user_id = ? AND description IS NOT NULL AND description != '' 
-           ORDER BY updated_at DESC, id DESC LIMIT 1`,
-          [account.id, req.session.userId],
+           FROM streams 
+           WHERE youtube_account_id = ? AND user_id = ? 
+           ORDER BY id DESC LIMIT 1`,
+          [account.id, userId],
           (err, row) => resolve(row || null)
         );
       });
 
-      if (templateRow && templateRow.description) {
+      if (streamRow) {
+        if (!defaults.title && streamRow.title) defaults.title = streamRow.title;
+        if (!defaults.description && streamRow.description) defaults.description = streamRow.description;
+        if (defaults.tags.length === 0 && streamRow.tags) {
+          try {
+            const parsed = JSON.parse(streamRow.tags);
+            if (Array.isArray(parsed) && parsed.length > 0) defaults.tags = parsed;
+          } catch (e) {
+            defaults.tags = streamRow.tags.split(/[\r\n,]+/).map(t => t.trim()).filter(Boolean);
+          }
+        }
+        if (!defaults.categoryId && streamRow.category_id) defaults.categoryId = streamRow.category_id;
+        if (!defaults.privacyStatus && streamRow.privacy_status) defaults.privacyStatus = streamRow.privacy_status;
+      }
+    } catch (dbErr) {
+      console.warn(`[channel-defaults] Local DB streams fallback warning for account ${account.id}:`, dbErr.message);
+    }
+  }
+
+  // 3. FALLBACK 2: Only check broadcast_templates if description is still missing,
+  // AND strictly ensure the template actually matches this account's channel to prevent cross-account leak
+  if (!defaults.description) {
+    try {
+      const templateRow = await new Promise((resolve) => {
+        db.get(
+          `SELECT title, description, tags, category_id, privacy_status, channel_id, channel_name 
+           FROM broadcast_templates 
+           WHERE account_id = ? AND user_id = ? AND description IS NOT NULL AND description != '' 
+           ORDER BY updated_at DESC, id DESC LIMIT 1`,
+          [account.id, userId],
+          (err, row) => resolve(row || null)
+        );
+      });
+
+      let isMatchingChannel = true;
+      if (templateRow) {
+        if (templateRow.channel_id && account.channelId && templateRow.channel_id !== account.channelId) {
+          isMatchingChannel = false;
+        } else if (templateRow.channel_name && account.channelName && templateRow.channel_name.toLowerCase().trim() !== account.channelName.toLowerCase().trim()) {
+          isMatchingChannel = false;
+        }
+      }
+
+      if (templateRow && templateRow.description && isMatchingChannel) {
         let desc = templateRow.description;
         let title = templateRow.title;
         let parsedTags = [];
 
-        // Handle multi-broadcast JSON templates
         if (desc.trim().startsWith('[')) {
           try {
             const list = JSON.parse(desc);
@@ -8504,9 +8570,7 @@ app.get('/api/youtube/channel/:id/defaults', isAuthenticated, async (req, res) =
                 parsedTags = Array.isArray(list[0].tags) ? list[0].tags : list[0].tags.split(/[\r\n,]+/).map(t => t.trim()).filter(Boolean);
               }
             }
-          } catch (e) {
-            // Keep raw if JSON parse fails
-          }
+          } catch (e) {}
         } else {
           try {
             parsedTags = templateRow.tags ? JSON.parse(templateRow.tags) : [];
@@ -8515,94 +8579,41 @@ app.get('/api/youtube/channel/:id/defaults', isAuthenticated, async (req, res) =
           }
         }
 
-        defaults = {
-          title: title || '',
-          description: desc || '',
-          tags: parsedTags,
-          monetizationEnabled: false,
-          alteredContent: false,
-          categoryId: templateRow.category_id || '22',
-          privacyStatus: templateRow.privacy_status || 'public'
-        };
+        if (!defaults.description && desc) defaults.description = desc;
+        if (!defaults.title && title) defaults.title = title;
+        if (defaults.tags.length === 0 && parsedTags.length > 0) defaults.tags = parsedTags;
+        if (!defaults.categoryId && templateRow.category_id) defaults.categoryId = templateRow.category_id;
+        if (!defaults.privacyStatus && templateRow.privacy_status) defaults.privacyStatus = templateRow.privacy_status;
       }
     } catch (tmplErr) {
-      console.warn('[channel/:id/defaults] Broadcast templates lookup warning:', tmplErr.message);
+      console.warn(`[channel-defaults] Broadcast templates fallback warning for account ${account.id}:`, tmplErr.message);
     }
+  }
 
-    // 2. Try YouTube API for this account
-    if (!defaults || !defaults.description) {
-      try {
-        const accessToken = await youtubeService.getAccessToken(account.clientId, account.clientSecret, account.refreshToken, 0, account.id);
-        const ytDefaults = await youtubeService.getChannelDefaults(accessToken);
-        if (ytDefaults) {
-          if (!defaults) {
-            defaults = ytDefaults;
-          } else {
-            if (!defaults.description && ytDefaults.description) defaults.description = ytDefaults.description;
-            if (!defaults.title && ytDefaults.title) defaults.title = ytDefaults.title;
-            if ((!defaults.tags || defaults.tags.length === 0) && ytDefaults.tags?.length > 0) defaults.tags = ytDefaults.tags;
-            if (ytDefaults.categoryId) defaults.categoryId = ytDefaults.categoryId;
-            if (ytDefaults.monetizationEnabled !== undefined) defaults.monetizationEnabled = ytDefaults.monetizationEnabled;
-          }
-        }
-      } catch (ytErr) {
-        console.warn('[channel/:id/defaults] YouTube API fetch warning:', ytErr.message);
-      }
+  return defaults;
+}
+
+// Get channel defaults for a specific account
+app.get('/api/youtube/channel/:id/defaults', isAuthenticated, async (req, res) => {
+  try {
+    const accountId = parseInt(req.params.id);
+    const account = await YouTubeCredentials.findById(accountId);
+    
+    if (!account || account.userId !== req.session.userId) {
+      return res.status(404).json({ success: false, message: 'Account not found' });
     }
     
-    // 3. Fallback for title from streams table if title is still empty
-    if (!defaults || !defaults.title) {
-      try {
-        const streamRow = await new Promise((resolve) => {
-          db.get(
-            `SELECT title FROM streams 
-             WHERE youtube_account_id = ? AND user_id = ? 
-               AND title IS NOT NULL AND title != '' 
-             ORDER BY id DESC LIMIT 1`,
-            [account.id, req.session.userId],
-            (err, row) => resolve(row || null)
-          );
-        });
-
-        if (streamRow && streamRow.title) {
-          if (!defaults) {
-            defaults = {
-              title: streamRow.title,
-              description: '',
-              tags: [],
-              monetizationEnabled: false,
-              alteredContent: false,
-              categoryId: '22',
-              privacyStatus: 'public'
-            };
-          } else if (!defaults.title) {
-            defaults.title = streamRow.title;
-          }
-        }
-      } catch (dbErr) {
-        console.warn('[channel/:id/defaults] Local DB streams fallback warning:', dbErr.message);
-      }
-    }
+    const defaults = await resolveChannelDefaults(account, req.session.userId);
 
     res.json({
       success: true,
-      defaults: {
-        title: (defaults && defaults.title) || '',
-        description: (defaults && defaults.description) || '',
-        tags: (defaults && defaults.tags) || [],
-        categoryId: (defaults && defaults.categoryId) || '22',
-        privacyStatus: (defaults && defaults.privacyStatus) || 'public',
-        monetizationEnabled: (defaults && defaults.monetizationEnabled) || false,
-        alteredContent: (defaults && defaults.alteredContent) || false
-      }
+      defaults,
+      accountId: account.id,
+      channelName: account.channelName
     });
   } catch (error) {
     console.error('Error fetching channel defaults:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Failed to fetch channel defaults',
-      error: error.message 
-    });
+    res.status(500).json({ success: false, message: 'Failed to fetch channel defaults' });
   }
 });
 
@@ -9851,120 +9862,7 @@ app.get('/api/youtube/channel-defaults', isAuthenticated, async (req, res) => {
       });
     }
 
-    let defaults = null;
-
-    // 1. Check broadcast_templates table first for this specific account
-    try {
-      const templateRow = await new Promise((resolve) => {
-        db.get(
-          `SELECT title, description, tags, category_id, privacy_status 
-           FROM broadcast_templates 
-           WHERE account_id = ? AND user_id = ? AND description IS NOT NULL AND description != '' 
-           ORDER BY updated_at DESC, id DESC LIMIT 1`,
-          [credentials.id, req.session.userId],
-          (err, row) => resolve(row || null)
-        );
-      });
-
-      if (templateRow && templateRow.description) {
-        let desc = templateRow.description;
-        let title = templateRow.title;
-        let parsedTags = [];
-
-        // Handle multi-broadcast JSON templates
-        if (desc.trim().startsWith('[')) {
-          try {
-            const list = JSON.parse(desc);
-            if (Array.isArray(list) && list.length > 0) {
-              desc = list[0].description || '';
-              if (!title && list[0].title) title = list[0].title;
-              if (list[0].tags) {
-                parsedTags = Array.isArray(list[0].tags) ? list[0].tags : list[0].tags.split(/[\r\n,]+/).map(t => t.trim()).filter(Boolean);
-              }
-            }
-          } catch (e) {
-            // Keep raw if JSON parse fails
-          }
-        } else {
-          try {
-            parsedTags = templateRow.tags ? JSON.parse(templateRow.tags) : [];
-          } catch (e) {
-            parsedTags = templateRow.tags ? templateRow.tags.split(/[\r\n,]+/).map(t => t.trim()).filter(Boolean) : [];
-          }
-        }
-
-        defaults = {
-          title: title || '',
-          description: desc || '',
-          tags: parsedTags,
-          monetizationEnabled: false,
-          alteredContent: false,
-          categoryId: templateRow.category_id || '22',
-          privacyStatus: templateRow.privacy_status || 'public'
-        };
-      }
-    } catch (tmplErr) {
-      console.warn('[channel-defaults] Broadcast templates lookup warning:', tmplErr.message);
-    }
-
-    // 2. Try YouTube API for this account
-    if (!defaults || !defaults.description) {
-      try {
-        const accessToken = await youtubeService.getAccessToken(credentials.clientId, credentials.clientSecret, credentials.refreshToken, 0, credentials.id);
-        const ytDefaults = await youtubeService.getChannelDefaults(accessToken);
-        if (ytDefaults) {
-          if (!defaults) {
-            defaults = ytDefaults;
-          } else {
-            if (!defaults.description && ytDefaults.description) defaults.description = ytDefaults.description;
-            if (!defaults.title && ytDefaults.title) defaults.title = ytDefaults.title;
-            if ((!defaults.tags || defaults.tags.length === 0) && ytDefaults.tags?.length > 0) defaults.tags = ytDefaults.tags;
-            if (ytDefaults.categoryId) defaults.categoryId = ytDefaults.categoryId;
-            if (ytDefaults.monetizationEnabled !== undefined) defaults.monetizationEnabled = ytDefaults.monetizationEnabled;
-          }
-        }
-      } catch (ytErr) {
-        console.warn('[channel-defaults] YouTube API fetch warning for account ' + credentials.id + ':', ytErr.message);
-      }
-    }
-
-    // 3. Fallback for title from streams table if title is still empty
-    if (!defaults || !defaults.title) {
-      try {
-        const streamRow = await new Promise((resolve) => {
-          db.get(
-            `SELECT title FROM streams 
-             WHERE youtube_account_id = ? AND user_id = ? 
-               AND title IS NOT NULL AND title != '' 
-             ORDER BY id DESC LIMIT 1`,
-            [credentials.id, req.session.userId],
-            (err, row) => resolve(row || null)
-          );
-        });
-
-        if (streamRow && streamRow.title) {
-          if (!defaults) {
-            defaults = {
-              title: streamRow.title,
-              description: '',
-              tags: [],
-              monetizationEnabled: false,
-              alteredContent: false,
-              categoryId: '22',
-              privacyStatus: 'public'
-            };
-          } else if (!defaults.title) {
-            defaults.title = streamRow.title;
-          }
-        }
-      } catch (dbErr) {
-        console.warn('[channel-defaults] Local DB streams fallback warning:', dbErr.message);
-      }
-    }
-
-    if (!defaults) {
-      defaults = { title: '', description: '', tags: [], categoryId: '22', privacyStatus: 'public' };
-    }
+    const defaults = await resolveChannelDefaults(credentials, req.session.userId);
 
     res.json({ success: true, defaults, accountId: credentials.id, channelName: credentials.channelName });
   } catch (error) {

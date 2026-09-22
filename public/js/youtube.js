@@ -1858,6 +1858,15 @@ function onAccountChange(accountId, force = true) {
       delete form.dataset.skipDefaults;
       delete form.dataset.isReusing;
       delete form.dataset.isTemplate;
+
+      // Cleanly reset inputs and hide indicators when switching account to prevent stale cross-channel data
+      const titleInput = document.getElementById('broadcastTitle');
+      const descInput = document.getElementById('broadcastDescription');
+      if (titleInput) titleInput.value = '';
+      if (descInput) descInput.value = '';
+      currentTags = [];
+      if (typeof renderTags === 'function') renderTags();
+      if (typeof hideAutoFillIndicators === 'function') hideAutoFillIndicators();
     }
 
     // Show loading feedback
@@ -3123,14 +3132,17 @@ async function fetchChannelDefaults(accountId = null, force = false) {
     
     const data = await response.json();
     
+    // Guard against race conditions: only populate if the selected account is still the requested one
+    const currentAccountSelect = document.getElementById('accountSelect');
+    if (accountId && currentAccountSelect && currentAccountSelect.value && String(currentAccountSelect.value) !== String(accountId)) {
+      console.log(`[fetchChannelDefaults] Response for account ${accountId} ignored because active account is ${currentAccountSelect.value}`);
+      return;
+    }
+
     if (data.success && data.defaults) {
-      // Guard against race conditions: only populate if the selected account is still the requested one
-      const currentAccountSelect = document.getElementById('accountSelect');
-      if (accountId && currentAccountSelect && currentAccountSelect.value && String(currentAccountSelect.value) !== String(accountId)) {
-        console.log(`[fetchChannelDefaults] Response for account ${accountId} ignored because active account is ${currentAccountSelect.value}`);
-        return;
-      }
       populateFormWithDefaults(data.defaults, force);
+    } else {
+      hideAutoFillIndicators();
     }
   } catch (error) {
     console.error('Error fetching channel defaults:', error);
