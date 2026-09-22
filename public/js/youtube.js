@@ -1848,10 +1848,18 @@ function restorePreferredAccount(selectId) {
 }
 
 // Handle account change in create broadcast modal
-function onAccountChange(accountId) {
+function onAccountChange(accountId, force = true) {
   if (accountId) {
     savePreferredAccount('accountSelect', accountId);
     
+    // Clear skipDefaults if user explicitly selected/changed account
+    const form = document.getElementById('createBroadcastForm');
+    if (force && form && !form.dataset.editingStreamId) {
+      delete form.dataset.skipDefaults;
+      delete form.dataset.isReusing;
+      delete form.dataset.isTemplate;
+    }
+
     // Show loading feedback
     const streamKeySelect = document.getElementById('streamKeySelect');
     if (streamKeySelect) {
@@ -1860,9 +1868,10 @@ function onAccountChange(accountId) {
     
     // Fetch data in parallel
     fetchStreams(accountId);
-    fetchChannelDefaults(accountId);
+    fetchChannelDefaults(accountId, force);
   }
 }
+window.onAccountChange = onAccountChange;
 
 // Handle stream key change - auto-select bound folder if exists
 async function onStreamKeyChange(streamKeyId) {
@@ -3090,7 +3099,7 @@ function previewAndUploadThumbnail(input) {
 let currentTags = [];
 
 // Fetch channel defaults for auto-fill
-async function fetchChannelDefaults(accountId = null) {
+async function fetchChannelDefaults(accountId = null, force = false) {
   const tagsLoading = document.getElementById('tagsLoading');
   const titleLoading = document.getElementById('titleLoading');
   const descriptionLoading = document.getElementById('descriptionLoading');
@@ -3115,7 +3124,7 @@ async function fetchChannelDefaults(accountId = null) {
     const data = await response.json();
     
     if (data.success && data.defaults) {
-      populateFormWithDefaults(data.defaults);
+      populateFormWithDefaults(data.defaults, force);
     }
   } catch (error) {
     console.error('Error fetching channel defaults:', error);
@@ -3129,6 +3138,7 @@ async function fetchChannelDefaults(accountId = null) {
     if (descriptionLoading) descriptionLoading.classList.add('hidden');
   }
 }
+window.fetchChannelDefaults = fetchChannelDefaults;
 
 // Hide all auto-fill indicators
 function hideAutoFillIndicators() {
@@ -3140,37 +3150,57 @@ function hideAutoFillIndicators() {
 }
 
 // Populate form with defaults from YouTube
-function populateFormWithDefaults(defaults) {
+function populateFormWithDefaults(defaults, force = false) {
+  const form = document.getElementById('createBroadcastForm');
+  // If form is explicitly in skip mode or editing existing stream, don't auto-fill
+  if (form && (form.dataset.skipDefaults === 'true' || form.dataset.editingStreamId)) {
+    return;
+  }
+
   // Populate title if available
   const titleInput = document.getElementById('broadcastTitle');
-  if (defaults.title && titleInput && !titleInput.value) {
-    titleInput.value = defaults.title;
-    const indicator = document.getElementById('titleAutoFillIndicator');
-    if (indicator) indicator.classList.remove('hidden');
+  const titleIndicator = document.getElementById('titleAutoFillIndicator');
+  if (titleInput) {
+    if (force || !titleInput.value) {
+      if (defaults.title) {
+        titleInput.value = defaults.title;
+        if (titleIndicator) titleIndicator.classList.remove('hidden');
+      } else if (force) {
+        if (titleIndicator) titleIndicator.classList.add('hidden');
+      }
+    }
   }
   
   // Populate description if available
   const descInput = document.getElementById('broadcastDescription');
-  if (defaults.description && descInput && !descInput.value) {
-    descInput.value = defaults.description;
-    const indicator = document.getElementById('descriptionAutoFillIndicator');
-    if (indicator) indicator.classList.remove('hidden');
+  const descIndicator = document.getElementById('descriptionAutoFillIndicator');
+  if (descInput) {
+    if (force || !descInput.value) {
+      if (defaults.description) {
+        descInput.value = defaults.description;
+        if (descIndicator) descIndicator.classList.remove('hidden');
+      } else if (force) {
+        descInput.value = '';
+        if (descIndicator) descIndicator.classList.add('hidden');
+      }
+    }
   }
   
   // Populate tags
-  if (defaults.tags && defaults.tags.length > 0) {
-    currentTags = [...defaults.tags];
-    renderTags();
-    const indicator = document.getElementById('tagsAutoFillIndicator');
-    if (indicator) indicator.classList.remove('hidden');
+  const tagsIndicator = document.getElementById('tagsAutoFillIndicator');
+  if (force || currentTags.length === 0) {
+    if (defaults.tags && defaults.tags.length > 0) {
+      currentTags = [...defaults.tags];
+      renderTags();
+      if (tagsIndicator) tagsIndicator.classList.remove('hidden');
+    } else if (force) {
+      currentTags = [];
+      renderTags();
+      if (tagsIndicator) tagsIndicator.classList.add('hidden');
+    }
   }
-  
-  // Note: Category field has been removed from UI
-  // Default category (Gaming - 20) is used internally by backend
-  
-  // Note: Monetization, Ad Frequency, and Altered Content settings 
-  // are not supported by YouTube API and must be set in YouTube Studio
 }
+window.populateFormWithDefaults = populateFormWithDefaults;
 
 // Toggle tags visibility
 function toggleTagsVisibility() {
@@ -3541,12 +3571,22 @@ function openCreateBroadcastModal() {
   const indicator = document.getElementById('currentFolderIndicator');
   if (indicator) indicator.classList.add('hidden');
   
+  // Cleanly reset title/description for fresh broadcast creation if not in edit or reuse mode
+  const form = document.getElementById('createBroadcastForm');
+  if (form && !form.dataset.editingStreamId && !form.dataset.skipDefaults) {
+    const titleInput = document.getElementById('broadcastTitle');
+    const descInput = document.getElementById('broadcastDescription');
+    if (titleInput) titleInput.value = '';
+    if (descInput) descInput.value = '';
+    hideAutoFillIndicators();
+  }
+
   // Fetch streams, thumbnails, folders, and channel defaults for selected account
   try {
     if (typeof fetchStreams === 'function') fetchStreams(accountId);
     if (typeof fetchThumbnailFolders === 'function') fetchThumbnailFolders();
     if (typeof fetchThumbnails === 'function') fetchThumbnails(null);
-    if (typeof fetchChannelDefaults === 'function') fetchChannelDefaults(accountId);
+    if (typeof fetchChannelDefaults === 'function') fetchChannelDefaults(accountId, true);
   } catch (e) {
     console.warn('[openCreateBroadcastModal] Fetch warning:', e);
   }
@@ -4358,6 +4398,9 @@ function closeCreateBroadcastModal() {
     delete form.dataset.startImmediately;
     delete form.dataset.editingStreamId;
     delete form.dataset.editingBroadcastId;
+    delete form.dataset.skipDefaults;
+    delete form.dataset.isReusing;
+    delete form.dataset.isTemplate;
     form.reset();
   }
 
@@ -5233,6 +5276,11 @@ if (editBroadcastForm) {
 
 // Reuse Broadcast - opens create modal with pre-filled data and handles thumbnail rotation
 async function reuseBroadcast(broadcastId, accountId) {
+  const form = document.getElementById('createBroadcastForm');
+  if (form) {
+    form.dataset.skipDefaults = 'true';
+    form.dataset.isReusing = 'true';
+  }
   // Open create modal
   openCreateBroadcastModal();
   
@@ -5258,8 +5306,8 @@ async function reuseBroadcast(broadcastId, accountId) {
         const accountSelect = document.getElementById('accountSelect');
         if (accountSelect) {
           accountSelect.value = accountId;
-          // Trigger account change to load stream keys
-          onAccountChange(accountId);
+          // Trigger account change to load stream keys without overwriting reuse data
+          onAccountChange(accountId, false);
         }
         
         // Clear scheduled time - user must set new time
@@ -6600,6 +6648,11 @@ async function createFromTemplate(templateId) {
     
     if (data.success && data.template) {
       closeTemplateLibraryModal();
+      const form = document.getElementById('createBroadcastForm');
+      if (form) {
+        form.dataset.skipDefaults = 'true';
+        form.dataset.isTemplate = 'true';
+      }
       openCreateBroadcastModal();
       
       // Pre-fill form with template data
@@ -6617,7 +6670,7 @@ async function createFromTemplate(templateId) {
         }
 
         if (accountSelect.value) {
-          onAccountChange(accountSelect.value);
+          onAccountChange(accountSelect.value, false);
         }
       }
 

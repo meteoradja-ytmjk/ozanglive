@@ -8473,21 +8473,64 @@ app.get('/api/youtube/channel/:id/defaults', isAuthenticated, async (req, res) =
       return res.status(404).json({ success: false, message: 'Account not found' });
     }
     
-    // Get access token
-    const accessToken = await youtubeService.getAccessToken(account.clientId, account.clientSecret, account.refreshToken, 0, account.id, 0, account.id);
+    let defaults = null;
+    try {
+      const accessToken = await youtubeService.getAccessToken(account.clientId, account.clientSecret, account.refreshToken, 0, account.id, 0, account.id);
+      defaults = await youtubeService.getChannelDefaults(accessToken);
+    } catch (ytErr) {
+      console.warn('[channel/:id/defaults] YouTube API fetch warning:', ytErr.message);
+    }
     
-    // Get channel defaults
-    const defaults = await youtubeService.getChannelDefaults(accessToken);
-    
+    if (!defaults || !defaults.description) {
+      try {
+        const localRow = await new Promise((resolve) => {
+          db.get(
+            `SELECT title, description, tags FROM streams 
+             WHERE (youtube_account_id = ? OR (user_id = ? AND youtube_account_id IS NULL)) 
+               AND description IS NOT NULL AND description != '' 
+             ORDER BY id DESC LIMIT 1`,
+            [account.id, req.session.userId],
+            (err, row) => resolve(row || null)
+          );
+        });
+
+        if (localRow) {
+          let parsedTags = [];
+          try {
+            parsedTags = localRow.tags ? JSON.parse(localRow.tags) : [];
+          } catch (e) {
+            parsedTags = localRow.tags ? localRow.tags.split(',').map(t => t.trim()).filter(Boolean) : [];
+          }
+          if (!defaults) {
+            defaults = {
+              title: localRow.title || '',
+              description: localRow.description || '',
+              tags: parsedTags,
+              monetizationEnabled: false,
+              alteredContent: false,
+              categoryId: '22'
+            };
+          } else if (!defaults.description && localRow.description) {
+            defaults.description = localRow.description;
+            if ((!defaults.tags || defaults.tags.length === 0) && parsedTags.length > 0) {
+              defaults.tags = parsedTags;
+            }
+          }
+        }
+      } catch (dbErr) {
+        console.warn('[channel/:id/defaults] Local DB fallback warning:', dbErr.message);
+      }
+    }
+
     res.json({
       success: true,
       defaults: {
-        title: defaults.title || '',
-        description: defaults.description || '',
-        tags: defaults.tags || [],
-        categoryId: defaults.categoryId || '22',
-        monetizationEnabled: defaults.monetizationEnabled || false,
-        alteredContent: defaults.alteredContent || false
+        title: (defaults && defaults.title) || '',
+        description: (defaults && defaults.description) || '',
+        tags: (defaults && defaults.tags) || [],
+        categoryId: (defaults && defaults.categoryId) || '22',
+        monetizationEnabled: (defaults && defaults.monetizationEnabled) || false,
+        alteredContent: (defaults && defaults.alteredContent) || false
       }
     });
   } catch (error) {
@@ -9745,9 +9788,60 @@ app.get('/api/youtube/channel-defaults', isAuthenticated, async (req, res) => {
       });
     }
 
-    const accessToken = await youtubeService.getAccessToken(credentials.clientId, credentials.clientSecret, credentials.refreshToken, 0, credentials.id, 0, credentials.id);
+    let defaults = null;
+    try {
+      const accessToken = await youtubeService.getAccessToken(credentials.clientId, credentials.clientSecret, credentials.refreshToken, 0, credentials.id, 0, credentials.id);
+      defaults = await youtubeService.getChannelDefaults(accessToken);
+    } catch (ytErr) {
+      console.warn('[channel-defaults] YouTube API fetch warning:', ytErr.message);
+    }
 
-    const defaults = await youtubeService.getChannelDefaults(accessToken);
+    // If defaults missing or description empty, check local DB fallback
+    if (!defaults || !defaults.description) {
+      try {
+        const localRow = await new Promise((resolve) => {
+          db.get(
+            `SELECT title, description, tags FROM streams 
+             WHERE (youtube_account_id = ? OR (user_id = ? AND youtube_account_id IS NULL)) 
+               AND description IS NOT NULL AND description != '' 
+             ORDER BY id DESC LIMIT 1`,
+            [credentials.id, req.session.userId],
+            (err, row) => resolve(row || null)
+          );
+        });
+
+        if (localRow) {
+          let parsedTags = [];
+          try {
+            parsedTags = localRow.tags ? JSON.parse(localRow.tags) : [];
+          } catch (e) {
+            parsedTags = localRow.tags ? localRow.tags.split(',').map(t => t.trim()).filter(Boolean) : [];
+          }
+          if (!defaults) {
+            defaults = {
+              title: localRow.title || '',
+              description: localRow.description || '',
+              tags: parsedTags,
+              monetizationEnabled: false,
+              alteredContent: false,
+              categoryId: '22'
+            };
+          } else if (!defaults.description && localRow.description) {
+            defaults.description = localRow.description;
+            if ((!defaults.tags || defaults.tags.length === 0) && parsedTags.length > 0) {
+              defaults.tags = parsedTags;
+            }
+          }
+        }
+      } catch (dbErr) {
+        console.warn('[channel-defaults] Local DB fallback warning:', dbErr.message);
+      }
+    }
+
+    if (!defaults) {
+      defaults = { title: '', description: '', tags: [], categoryId: '22' };
+    }
+
     res.json({ success: true, defaults, accountId: credentials.id });
   } catch (error) {
     console.error('Error fetching channel defaults:', error);

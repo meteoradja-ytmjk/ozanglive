@@ -1363,34 +1363,44 @@ class YouTubeService {
         for (const bc of broadcastsResponse.data.items) {
           if (!lastBroadcastDefaults.title && bc.snippet?.title) {
             lastBroadcastDefaults.title = bc.snippet.title;
-            lastBroadcastDefaults.description = bc.snippet.description || '';
           }
-          // Fetch actual tags from Videos API since liveBroadcasts snippet doesn't include tags
-          if (lastBroadcastDefaults.tags.length === 0 && bc.id) {
+          if (!lastBroadcastDefaults.description && bc.snippet?.description) {
+            lastBroadcastDefaults.description = bc.snippet.description;
+          }
+          // Fetch actual tags and full description from Videos API if needed
+          if (bc.id && (lastBroadcastDefaults.tags.length === 0 || !lastBroadcastDefaults.description)) {
             try {
               const videoRes = await youtube.videos.list({
                 part: 'snippet',
                 id: bc.id
               });
-              if (videoRes.data?.items?.[0]?.snippet?.tags?.length > 0) {
-                lastBroadcastDefaults.tags = videoRes.data.items[0].snippet.tags;
-                console.log(`[YouTubeService.getChannelDefaults] Found ${lastBroadcastDefaults.tags.length} tags from broadcast ${bc.id}`);
-                break;
+              const vSnippet = videoRes.data?.items?.[0]?.snippet;
+              if (vSnippet) {
+                if (lastBroadcastDefaults.tags.length === 0 && vSnippet.tags?.length > 0) {
+                  lastBroadcastDefaults.tags = vSnippet.tags;
+                  console.log(`[YouTubeService.getChannelDefaults] Found ${lastBroadcastDefaults.tags.length} tags from broadcast ${bc.id}`);
+                }
+                if (!lastBroadcastDefaults.description && vSnippet.description) {
+                  lastBroadcastDefaults.description = vSnippet.description;
+                }
               }
             } catch (vErr) {
               // Ignore
             }
           }
+          if (lastBroadcastDefaults.title && lastBroadcastDefaults.description && lastBroadcastDefaults.tags.length > 0) {
+            break;
+          }
         }
       }
 
-      // Fallback: If no tags from broadcasts, check uploads playlist
-      if (lastBroadcastDefaults.tags.length === 0 && channel.contentDetails?.relatedPlaylists?.uploads) {
+      // Fallback: If no tags or description from broadcasts, check uploads playlist
+      if ((lastBroadcastDefaults.tags.length === 0 || !lastBroadcastDefaults.description) && channel.contentDetails?.relatedPlaylists?.uploads) {
         try {
           const uploadsRes = await youtube.playlistItems.list({
             part: 'snippet,contentDetails',
             playlistId: channel.contentDetails.relatedPlaylists.uploads,
-            maxResults: 3
+            maxResults: 5
           });
           if (uploadsRes.data?.items?.length > 0) {
             const vidIds = uploadsRes.data.items.map(it => it.contentDetails?.videoId).filter(Boolean);
@@ -1400,9 +1410,17 @@ class YouTubeService {
                 id: vidIds.join(',')
               });
               for (const vItem of (vidsRes.data?.items || [])) {
-                if (vItem.snippet?.tags?.length > 0) {
+                if (!lastBroadcastDefaults.title && vItem.snippet?.title) {
+                  lastBroadcastDefaults.title = vItem.snippet.title;
+                }
+                if (!lastBroadcastDefaults.description && vItem.snippet?.description) {
+                  lastBroadcastDefaults.description = vItem.snippet.description;
+                }
+                if (lastBroadcastDefaults.tags.length === 0 && vItem.snippet?.tags?.length > 0) {
                   lastBroadcastDefaults.tags = vItem.snippet.tags;
                   console.log(`[YouTubeService.getChannelDefaults] Found ${lastBroadcastDefaults.tags.length} tags from recent upload ${vItem.id}`);
+                }
+                if (lastBroadcastDefaults.tags.length > 0 && lastBroadcastDefaults.description) {
                   break;
                 }
               }
@@ -1421,10 +1439,10 @@ class YouTubeService {
       ? channelSettings.keywords.split(/[,\s]+/).map(t => t.trim().replace(/^"|"$/g, '')).filter(t => t)
       : [];
     
-    // Return combined defaults - prefer last broadcast values, fallback to channel settings
+    // Return combined defaults - prefer last broadcast values, fallback to channel settings or snippet
     return {
-      title: lastBroadcastDefaults.title || channelSettings.title || '',
-      description: lastBroadcastDefaults.description || channelSettings.description || '',
+      title: lastBroadcastDefaults.title || channelSettings.title || channel.snippet?.title || '',
+      description: lastBroadcastDefaults.description || channelSettings.description || channel.snippet?.description || '',
       tags: lastBroadcastDefaults.tags.length > 0 ? lastBroadcastDefaults.tags : channelKeywords,
       monetizationEnabled: channel.status?.isLinked || false,
       alteredContent: false, // YouTube API doesn't expose this default, user must set
