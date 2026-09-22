@@ -3124,6 +3124,12 @@ async function fetchChannelDefaults(accountId = null, force = false) {
     const data = await response.json();
     
     if (data.success && data.defaults) {
+      // Guard against race conditions: only populate if the selected account is still the requested one
+      const currentAccountSelect = document.getElementById('accountSelect');
+      if (accountId && currentAccountSelect && currentAccountSelect.value && String(currentAccountSelect.value) !== String(accountId)) {
+        console.log(`[fetchChannelDefaults] Response for account ${accountId} ignored because active account is ${currentAccountSelect.value}`);
+        return;
+      }
       populateFormWithDefaults(data.defaults, force);
     }
   } catch (error) {
@@ -3166,6 +3172,7 @@ function populateFormWithDefaults(defaults, force = false) {
         titleInput.value = defaults.title;
         if (titleIndicator) titleIndicator.classList.remove('hidden');
       } else if (force) {
+        titleInput.value = '';
         if (titleIndicator) titleIndicator.classList.add('hidden');
       }
     }
@@ -3198,6 +3205,18 @@ function populateFormWithDefaults(defaults, force = false) {
       renderTags();
       if (tagsIndicator) tagsIndicator.classList.add('hidden');
     }
+  }
+
+  // Populate category if available
+  const categorySelect = document.getElementById('categoryId');
+  if (categorySelect && defaults.categoryId) {
+    categorySelect.value = String(defaults.categoryId);
+  }
+
+  // Populate privacy if available
+  const privacySelect = document.getElementById('privacyStatus');
+  if (privacySelect && defaults.privacyStatus) {
+    privacySelect.value = defaults.privacyStatus;
   }
 }
 window.populateFormWithDefaults = populateFormWithDefaults;
@@ -3560,8 +3579,11 @@ function openCreateBroadcastModal() {
     console.warn('[openCreateBroadcastModal] Gallery setup warning:', e);
   }
 
-  // Get selected account ID
+  // Get selected account ID (restore preferred account if exists)
   const accountSelect = document.getElementById('accountSelect');
+  if (accountSelect && typeof restorePreferredAccount === 'function') {
+    restorePreferredAccount('accountSelect');
+  }
   const accountId = accountSelect ? accountSelect.value : null;
   
   // Reset thumbnail folder to root
