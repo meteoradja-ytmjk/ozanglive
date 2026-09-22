@@ -5542,6 +5542,8 @@ function closeTemplateLibraryModal() {
 }
 
 // Load templates from API
+window.allTemplatesCache = [];
+
 async function loadTemplates() {
   const loading = document.getElementById('templateListLoading');
   const empty = document.getElementById('templateListEmpty');
@@ -5560,10 +5562,13 @@ async function loadTemplates() {
     
     const data = await response.json();
     
-    if (data.success && data.templates && data.templates.length > 0) {
-      renderTemplateList(data.templates);
-      content.classList.remove('hidden');
+    if (data.success && Array.isArray(data.templates) && data.templates.length > 0) {
+      window.allTemplatesCache = data.templates;
+      populateTemplateChannelFilter(data.templates);
+      filterTemplatesBySelectedChannel();
     } else {
+      window.allTemplatesCache = [];
+      populateTemplateChannelFilter([]);
       empty.classList.remove('hidden');
     }
   } catch (error) {
@@ -5574,6 +5579,63 @@ async function loadTemplates() {
     loading.classList.add('hidden');
   }
 }
+
+function populateTemplateChannelFilter(templates) {
+  const select = document.getElementById('templateChannelFilterSelect');
+  if (!select) return;
+
+  const currentVal = select.value || 'all';
+  const channels = new Map();
+  templates.forEach(t => {
+    if (t.account_id) {
+      const name = t.channel_name || t.channelName || `Account #${t.account_id}`;
+      channels.set(String(t.account_id), name);
+    }
+  });
+
+  select.innerHTML = '<option value="all">Semua Channel</option>';
+  channels.forEach((name, id) => {
+    const opt = document.createElement('option');
+    opt.value = id;
+    opt.textContent = name;
+    select.appendChild(opt);
+  });
+
+  if (channels.has(currentVal)) {
+    select.value = currentVal;
+  } else {
+    select.value = 'all';
+  }
+}
+
+function filterTemplatesByChannel(channelId) {
+  filterTemplatesBySelectedChannel(channelId);
+}
+window.filterTemplatesByChannel = filterTemplatesByChannel;
+
+function filterTemplatesBySelectedChannel(forcedChannelId) {
+  const select = document.getElementById('templateChannelFilterSelect');
+  const selectedChannel = forcedChannelId !== undefined ? forcedChannelId : (select ? select.value : 'all');
+  const templates = window.allTemplatesCache || [];
+  const empty = document.getElementById('templateListEmpty');
+  const content = document.getElementById('templateListContent');
+
+  let filtered = templates;
+  if (selectedChannel && selectedChannel !== 'all') {
+    filtered = templates.filter(t => String(t.account_id) === String(selectedChannel));
+  }
+
+  if (filtered.length > 0) {
+    renderTemplateList(filtered);
+    content.classList.remove('hidden');
+    empty.classList.add('hidden');
+  } else {
+    if (content) content.innerHTML = '';
+    if (content) content.classList.add('hidden');
+    if (empty) empty.classList.remove('hidden');
+  }
+}
+window.filterTemplatesBySelectedChannel = filterTemplatesBySelectedChannel;
 
 // Render template list
 function renderTemplateList(templates) {
@@ -7307,42 +7369,58 @@ function openRecreateFromTemplateModal(template) {
 
   // Initialize slots list (Jadwal Bertingkat)
   window.recreateSlots = [];
+  window.recreateNextTitles = [];
 
-  if (Array.isArray(template.broadcasts) && template.broadcasts.length > 1) {
-    // Multi-broadcast template: initialize each broadcast
+  // Parse recurring times if available
+  let recurringTimes = [];
+  if (template.recurring_time) {
+    recurringTimes = template.recurring_time.split(/[\s,]+/).filter(t => /^[0-2]?[0-9]:[0-5][0-9]$/.test(t));
+  }
+
+  const parseSlotTime = (timeStr, fallbackMinutes = 15) => {
+    if (timeStr && /^[0-2]?[0-9]:[0-5][0-9]$/.test(timeStr)) {
+      const [h, m] = timeStr.split(':').map(Number);
+      const d = new Date();
+      d.setHours(h, m, 0, 0);
+      if (d.getTime() < Date.now() + 10 * 60 * 1000) {
+        d.setDate(d.getDate() + 1);
+      }
+      return formatLocalDateTime(d);
+    }
+    return formatLocalDateTime(new Date(Date.now() + fallbackMinutes * 60 * 1000));
+  };
+
+  if (Array.isArray(template.broadcasts) && template.broadcasts.length > 0) {
+    // Multi-broadcast template: initialize each broadcast preserving stream keys and folders
     template.broadcasts.forEach((b, i) => {
-      const defaultDate = new Date(Date.now() + (15 + i * 30) * 60 * 1000);
+      const scheduledTimeStr = recurringTimes[i] 
+        ? parseSlotTime(recurringTimes[i], 15 + i * 30)
+        : parseSlotTime(null, 15 + i * 30);
+
       window.recreateSlots.push({
         title: b.title || template.title,
+        originalTitle: b.title || template.title,
         streamId: b.streamId || template.stream_id,
         streamKey: b.streamKey || template.stream_key,
         thumbnailFolder: b.thumbnailFolder !== undefined ? b.thumbnailFolder : template.thumbnail_folder,
         pinnedThumbnail: b.pinnedThumbnail || b.thumbnailPath || template.pinned_thumbnail,
-        scheduleTime: formatLocalDateTime(defaultDate)
+        scheduleTime: scheduledTimeStr,
+        customTitle: false
       });
     });
   } else {
-    // Single broadcast template: initialize slots based on recurring_time if present, or 1 slot
-    let times = [];
-    if (template.recurring_time) {
-      times = template.recurring_time.split(/[\s,]+/).filter(t => /^[0-2]?[0-9]:[0-5][0-9]$/.test(t));
-    }
-
-    if (times.length > 0) {
-      times.forEach(t => {
-        const [h, m] = t.split(':').map(Number);
-        const slotDate = new Date();
-        slotDate.setHours(h, m, 0, 0);
-        if (slotDate.getTime() < Date.now() + 10 * 60 * 1000) {
-          slotDate.setDate(slotDate.getDate() + 1);
-        }
+    // Single broadcast template: initialize slots based on recurring_time if present, or 1 default slot
+    if (recurringTimes.length > 0) {
+      recurringTimes.forEach(t => {
         window.recreateSlots.push({
           title: template.title,
+          originalTitle: template.title,
           streamId: template.stream_id,
           streamKey: template.stream_key,
           thumbnailFolder: template.thumbnail_folder,
           pinnedThumbnail: template.pinned_thumbnail,
-          scheduleTime: formatLocalDateTime(slotDate)
+          scheduleTime: parseSlotTime(t, 15),
+          customTitle: false
         });
       });
       window.recreateSlots.sort((a, b) => new Date(a.scheduleTime) - new Date(b.scheduleTime));
@@ -7350,11 +7428,13 @@ function openRecreateFromTemplateModal(template) {
       const defaultDate = new Date(Date.now() + 15 * 60 * 1000);
       window.recreateSlots.push({
         title: template.title,
+        originalTitle: template.title,
         streamId: template.stream_id,
         streamKey: template.stream_key,
         thumbnailFolder: template.thumbnail_folder,
         pinnedThumbnail: template.pinned_thumbnail,
         scheduleTime: formatLocalDateTime(defaultDate),
+        customTitle: false,
         isInitial: true
       });
     }
@@ -7408,40 +7488,76 @@ function renderRecreateSlotList() {
 
     const isEditing = Boolean(slot._isEditingTitle);
 
-    const titleArea = isEditing
-      ? `<div class="flex items-center gap-1.5 w-full">
-           <input type="text" id="slotTitleInput_${index}" value="${escapeHtml(slot.title || '')}"
-             class="h-7 px-2 bg-dark-600 border border-primary rounded-lg text-xs text-white flex-1 min-w-0 focus:outline-none focus:ring-1 focus:ring-primary"
-             placeholder="Masukkan judul siaran..."
-             onkeydown="if(event.key==='Enter'){event.preventDefault();saveRecreateSlotTitle(${index})}else if(event.key==='Escape'){event.preventDefault();cancelEditRecreateSlotTitle(${index})}">
-           <button type="button" onclick="saveRecreateSlotTitle(${index})" class="w-7 h-7 flex items-center justify-center bg-primary hover:bg-primary/80 text-white rounded-lg flex-shrink-0 transition-colors" title="Simpan judul">
-             <i class="ti ti-check text-xs"></i>
-           </button>
-           <button type="button" onclick="cancelEditRecreateSlotTitle(${index})" class="w-7 h-7 flex items-center justify-center bg-dark-600 hover:bg-dark-500 text-gray-300 border border-gray-600 rounded-lg flex-shrink-0 transition-colors" title="Batal">
-             <i class="ti ti-x text-xs"></i>
-           </button>
-         </div>`
-      : `<div class="flex items-start justify-between gap-2 w-full">
-           <div class="flex items-start gap-1.5 min-w-0 flex-1">
-             <span class="px-1.5 py-0.5 bg-primary/20 text-primary font-bold text-[10px] rounded mt-0.5 flex-shrink-0">#${index + 1}</span>
-             <div class="text-xs text-white font-medium break-words leading-relaxed flex-1" title="${escapeHtml(slot.title || '')}">${escapeHtml(slot.title || '')}</div>
-           </div>
-           <div class="flex items-center gap-1 flex-shrink-0 mt-0.5">
-             <button type="button" onclick="editRecreateSlotTitle(${index})"
-               class="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-primary hover:bg-primary/10 rounded-lg border border-gray-600/70 hover:border-primary/50 transition-colors"
-               title="Edit judul siaran slot #${index + 1}">
-               <i class="ti ti-edit text-xs"></i>
-             </button>
-             ${deleteBtn}
-           </div>
-         </div>`;
+    // Title rotation resolution
+    const isRotated = Boolean(window.recreateUseTitleRotation && Array.isArray(window.recreateNextTitles) && window.recreateNextTitles[index] && window.recreateNextTitles[index].title);
+    const rotatedTitle = isRotated ? window.recreateNextTitles[index].title : null;
+    const originalTitle = slot.originalTitle || slot.title || '';
+    const currentTitle = slot.title || originalTitle;
+
+    let titleContentHtml = '';
+    if (isEditing) {
+      titleContentHtml = `
+        <div class="flex items-center gap-1.5 w-full">
+          <input type="text" id="slotTitleInput_${index}" value="${escapeHtml(slot.title || '')}"
+            class="h-7 px-2 bg-dark-600 border border-primary rounded-lg text-xs text-white flex-1 min-w-0 focus:outline-none focus:ring-1 focus:ring-primary"
+            placeholder="Masukkan judul siaran..."
+            onkeydown="if(event.key==='Enter'){event.preventDefault();saveRecreateSlotTitle(${index})}else if(event.key==='Escape'){event.preventDefault();cancelEditRecreateSlotTitle(${index})}">
+          <button type="button" onclick="saveRecreateSlotTitle(${index})" class="w-7 h-7 flex items-center justify-center bg-primary hover:bg-primary/80 text-white rounded-lg flex-shrink-0 transition-colors" title="Simpan judul">
+            <i class="ti ti-check text-xs"></i>
+          </button>
+          <button type="button" onclick="cancelEditRecreateSlotTitle(${index})" class="w-7 h-7 flex items-center justify-center bg-dark-600 hover:bg-dark-500 text-gray-300 border border-gray-600 rounded-lg flex-shrink-0 transition-colors" title="Batal">
+            <i class="ti ti-x text-xs"></i>
+          </button>
+        </div>`;
+    } else {
+      let titleDisplayBody = '';
+      if (slot.customTitle) {
+        titleDisplayBody = `
+          <div class="flex items-center gap-1.5 flex-wrap min-w-0 flex-1">
+            <span class="text-xs text-white font-medium break-words leading-relaxed">${escapeHtml(slot.title)}</span>
+            <span class="text-[10px] text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1 py-0.2 rounded font-normal flex-shrink-0">Kustom</span>
+          </div>`;
+      } else if (isRotated) {
+        titleDisplayBody = `
+          <div class="space-y-0.5 min-w-0 flex-1">
+            <div class="text-xs text-primary font-semibold break-words leading-relaxed flex items-center gap-1" title="Judul dari Rotasi Judul">
+              <i class="ti ti-rotate-clockwise text-xs flex-shrink-0"></i>
+              <span>${escapeHtml(rotatedTitle)}</span>
+            </div>
+            <div class="text-[10px] text-gray-400 truncate" title="Judul asli template: ${escapeHtml(originalTitle)}">
+              Asli: <span class="text-gray-300">${escapeHtml(originalTitle)}</span>
+            </div>
+          </div>`;
+      } else {
+        titleDisplayBody = `
+          <div class="text-xs text-white font-medium break-words leading-relaxed flex-1" title="${escapeHtml(currentTitle)}">
+            ${escapeHtml(currentTitle)}
+          </div>`;
+      }
+
+      titleContentHtml = `
+        <div class="flex items-start justify-between gap-2 w-full">
+          <div class="flex items-start gap-1.5 min-w-0 flex-1">
+            <span class="px-1.5 py-0.5 bg-primary/20 text-primary font-bold text-[10px] rounded mt-0.5 flex-shrink-0">#${index + 1}</span>
+            ${titleDisplayBody}
+          </div>
+          <div class="flex items-center gap-1 flex-shrink-0 mt-0.5">
+            <button type="button" onclick="editRecreateSlotTitle(${index})"
+              class="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-primary hover:bg-primary/10 rounded-lg border border-gray-600/70 hover:border-primary/50 transition-colors"
+              title="Edit judul siaran slot #${index + 1}">
+              <i class="ti ti-edit text-xs"></i>
+            </button>
+            ${deleteBtn}
+          </div>
+        </div>`;
+    }
 
     return `
-      <div class="bg-dark-700/80 rounded-lg p-2.5 border border-gray-700/80 space-y-2 transition-colors hover:border-gray-600">
-        <!-- Baris 1: Nomor Slot, Judul Lengkap (tanpa terpotong), Tombol Edit & Hapus yang seragam -->
-        ${titleArea}
+      <div id="slotCard_${index}" class="recreate-slot-card bg-dark-700/80 rounded-lg p-2.5 border border-gray-700/80 space-y-2 transition-colors hover:border-gray-600">
+        <!-- Baris 1: Nomor Slot, Judul Lengkap, Tombol Edit & Hapus -->
+        ${titleContentHtml}
         
-        <!-- Baris 2: Waktu Siaran (Rapi, Berlabel, Mengisi Ruang Tanpa Kekosongan) -->
+        <!-- Baris 2: Waktu Siaran -->
         <div class="flex items-center gap-2 pt-1 border-t border-gray-700/50">
           <div class="flex items-center gap-1.5 text-gray-400 text-xs flex-shrink-0">
             <i class="ti ti-calendar-time text-primary text-xs"></i>
@@ -7465,7 +7581,7 @@ function updateRecreateSlotTime(index, value) {
 }
 
 // Add a new slot bertingkat to recreate modal with customizable hoursToAdd (e.g. 1, 2, 3, 4, 5, 6)
-function addRecreateSlot(hoursToAdd = 2) {
+async function addRecreateSlot(hoursToAdd = 2) {
   if (!window.recreateSlots || !window.currentRecreateTemplate) return;
   const template = window.currentRecreateTemplate;
   const h = Number(hoursToAdd) || 2;
@@ -7486,16 +7602,27 @@ function addRecreateSlot(hoursToAdd = 2) {
     delete window.recreateSlots[0].isInitial;
   }
 
+  // Round-robin selection across multi-broadcasts if available
+  const newIndex = window.recreateSlots.length;
+  const bList = (Array.isArray(template.broadcasts) && template.broadcasts.length > 0) ? template.broadcasts : null;
+  const sourceB = bList ? bList[newIndex % bList.length] : template;
+
   window.recreateSlots.push({
-    title: template.title,
-    streamId: template.stream_id,
-    streamKey: template.stream_key,
-    thumbnailFolder: template.thumbnail_folder,
-    pinnedThumbnail: template.pinned_thumbnail,
-    scheduleTime: formatLocalDateTime(nextDate)
+    title: sourceB.title || template.title,
+    originalTitle: sourceB.title || template.title,
+    streamId: sourceB.streamId || template.stream_id,
+    streamKey: sourceB.streamKey || template.stream_key,
+    thumbnailFolder: sourceB.thumbnailFolder !== undefined ? sourceB.thumbnailFolder : template.thumbnail_folder,
+    pinnedThumbnail: sourceB.pinnedThumbnail || sourceB.thumbnailPath || template.pinned_thumbnail,
+    scheduleTime: formatLocalDateTime(nextDate),
+    customTitle: false
   });
 
-  renderRecreateSlotList();
+  if (window.recreateUseTitleRotation) {
+    await loadRecreateTitleRotationPreview();
+  } else {
+    renderRecreateSlotList();
+  }
   showToast(`Slot #${window.recreateSlots.length} berhasil ditambahkan (+${h} jam)`);
 }
 window.addRecreateSlot = addRecreateSlot;
@@ -7511,7 +7638,7 @@ function addRecreateQuickSlot() {
 }
 
 // Add preset time slot (e.g. '08:00', '13:00')
-function addRecreatePresetSlot(timeStr) {
+async function addRecreatePresetSlot(timeStr) {
   if (!window.recreateSlots || !window.currentRecreateTemplate) return;
   const template = window.currentRecreateTemplate;
 
@@ -7559,28 +7686,44 @@ function addRecreatePresetSlot(timeStr) {
     delete window.recreateSlots[0].isInitial;
   }
 
+  // Round-robin selection across multi-broadcasts if available
+  const newIndex = window.recreateSlots.length;
+  const bList = (Array.isArray(template.broadcasts) && template.broadcasts.length > 0) ? template.broadcasts : null;
+  const sourceB = bList ? bList[newIndex % bList.length] : template;
+
   window.recreateSlots.push({
-    title: template.title,
-    streamId: template.stream_id,
-    streamKey: template.stream_key,
-    thumbnailFolder: template.thumbnail_folder,
-    pinnedThumbnail: template.pinned_thumbnail,
-    scheduleTime: scheduleTime
+    title: sourceB.title || template.title,
+    originalTitle: sourceB.title || template.title,
+    streamId: sourceB.streamId || template.stream_id,
+    streamKey: sourceB.streamKey || template.stream_key,
+    thumbnailFolder: sourceB.thumbnailFolder !== undefined ? sourceB.thumbnailFolder : template.thumbnail_folder,
+    pinnedThumbnail: sourceB.pinnedThumbnail || sourceB.thumbnailPath || template.pinned_thumbnail,
+    scheduleTime: scheduleTime,
+    customTitle: false
   });
 
   window.recreateSlots.sort((a, b) => new Date(a.scheduleTime) - new Date(b.scheduleTime));
-  renderRecreateSlotList();
+
+  if (window.recreateUseTitleRotation) {
+    await loadRecreateTitleRotationPreview();
+  } else {
+    renderRecreateSlotList();
+  }
   showToast(`Slot jam ${timeStr} ditambahkan`);
 }
 
 // Remove slot at index
-function removeRecreateSlot(index) {
+async function removeRecreateSlot(index) {
   if (!window.recreateSlots || window.recreateSlots.length <= 1) {
     showToast('Minimal harus ada 1 slot jadwal', 'error');
     return;
   }
   window.recreateSlots.splice(index, 1);
-  renderRecreateSlotList();
+  if (window.recreateUseTitleRotation) {
+    await loadRecreateTitleRotationPreview();
+  } else {
+    renderRecreateSlotList();
+  }
   showToast('Slot jadwal dihapus');
 }
 window.addRecreatePresetSlot = addRecreatePresetSlot;
@@ -7609,9 +7752,6 @@ function saveRecreateSlotTitle(index) {
     if (newTitle) {
       window.recreateSlots[index].title = newTitle;
       window.recreateSlots[index].customTitle = true;
-      if (window.recreateNextTitles && window.recreateNextTitles[index]) {
-        window.recreateNextTitles[index].title = newTitle;
-      }
       showToast('Judul slot berhasil diperbarui');
     }
   }
@@ -7771,18 +7911,27 @@ async function toggleRecreateTitleRotation(enabled) {
  * Load title rotation preview for recreate modal
  */
 async function loadRecreateTitleRotationPreview() {
+  const template = window.currentRecreateTemplate;
+  if (!template) return;
+
   try {
-    // Get title rotation settings
-    const settingsResponse = await fetch('/api/title-rotation/settings', {
-      headers: { 'X-CSRF-Token': getCsrfToken() }
-    });
-    const settings = await settingsResponse.json();
-    
-    // Store settings for later use
-    window.recreateTitleRotationSettings = settings;
-    
-    if (settings.success && settings.enabled) {
-      // Auto-enable checkbox if user has title rotation enabled
+    // Get user title rotation settings
+    let userSettings = { enabled: false, folderId: null, currentIndex: 0 };
+    try {
+      const settingsResponse = await fetch('/api/title-rotation/settings', {
+        headers: { 'X-CSRF-Token': getCsrfToken() }
+      });
+      const data = await settingsResponse.json();
+      if (data && data.success) {
+        userSettings = data;
+      }
+    } catch (e) {
+      console.warn('[recreate] Could not load user title rotation settings:', e);
+    }
+    window.recreateTitleRotationSettings = userSettings;
+
+    // Check if user has title rotation enabled globally
+    if (userSettings.enabled) {
       const checkbox = document.getElementById('recreateUseTitleRotation');
       if (checkbox && !checkbox.checked) {
         checkbox.checked = true;
@@ -7791,69 +7940,63 @@ async function loadRecreateTitleRotationPreview() {
         if (preview) preview.classList.remove('hidden');
       }
     }
-    
-    // Use currentIndex from settings (this is the user-selected start position)
-    const currentIndex = settings.currentIndex || 0;
-    
-    // Get next title starting from currentIndex
-    let url = `/api/title-rotation/next?currentIndex=${currentIndex}`;
-    if (settings.folderId) {
-      url += `&folderId=${encodeURIComponent(settings.folderId)}`;
-    }
-    
-    const response = await fetch(url, {
-      headers: { 'X-CSRF-Token': getCsrfToken() }
-    });
-    const data = await response.json();
-    
+
+    // Channel & Template Isolation: prioritize template title_folder_id and title_index!
+    const folderId = (template.title_folder_id !== undefined && template.title_folder_id !== null && template.title_folder_id !== '')
+      ? template.title_folder_id
+      : (userSettings.folderId || null);
+
+    const startIndex = (template.title_folder_id && template.title_index !== undefined && template.title_index !== null)
+      ? template.title_index
+      : (userSettings.currentIndex || 0);
+
+    const slotCount = Math.max(window.recreateSlots ? window.recreateSlots.length : 1, 1);
+    window.recreateNextTitles = await getNextTitlesForRecreate(startIndex, folderId, slotCount);
+
     const titleEl = document.getElementById('recreateNextTitle');
-    if (data.success && data.title) {
+    if (window.recreateNextTitles.length > 0 && window.recreateNextTitles[0]) {
       if (titleEl) {
-        titleEl.textContent = data.title.title;
-        titleEl.title = data.title.title;
+        titleEl.textContent = window.recreateNextTitles[0].title;
+        titleEl.title = window.recreateNextTitles[0].title;
       }
-      // Get all titles for all broadcasts starting from currentIndex
-      window.recreateNextTitles = await getNextTitlesForRecreate(currentIndex, settings.folderId);
     } else {
-      if (titleEl) titleEl.textContent = 'Tidak ada judul';
-      window.recreateNextTitles = [];
+      if (titleEl) titleEl.textContent = 'Tidak ada judul dalam folder rotasi';
     }
+
+    // Refresh slot cards so rotated titles are immediately visible!
+    renderRecreateSlotList();
   } catch (error) {
     console.error('Error loading title rotation preview:', error);
   }
 }
 
 /**
- * Get next titles for all broadcasts in recreate
+ * Get next titles for all slots in recreate
  */
-async function getNextTitlesForRecreate(startIndex, folderId) {
-  const template = window.currentRecreateTemplate;
-  if (!template) return [];
-  
-  const broadcasts = template.broadcasts || [template];
+async function getNextTitlesForRecreate(startIndex, folderId, count = 1) {
   const titles = [];
   let currentIndex = startIndex;
-  
-  for (let i = 0; i < broadcasts.length; i++) {
+
+  for (let i = 0; i < count; i++) {
     try {
       let url = `/api/title-rotation/next?currentIndex=${currentIndex}`;
       if (folderId) {
         url += `&folderId=${encodeURIComponent(folderId)}`;
       }
-      
+
       const response = await fetch(url, {
         headers: { 'X-CSRF-Token': getCsrfToken() }
       });
       const data = await response.json();
-      
+
       if (data.success && data.title) {
         titles.push({
           id: data.title.id,
           title: data.title.title,
           currentIndex: currentIndex,
-          nextIndex: data.nextIndex  // Store nextIndex for updating rotation after use
+          nextIndex: data.nextIndex
         });
-        currentIndex = data.nextIndex;  // Move to next index for next broadcast
+        currentIndex = data.nextIndex;
       } else {
         titles.push(null);
       }
@@ -7861,10 +8004,9 @@ async function getNextTitlesForRecreate(startIndex, folderId) {
       titles.push(null);
     }
   }
-  
-  // Store the final nextIndex for updating after all broadcasts are created
+
+  // Store final nextIndex
   window.recreateFinalNextIndex = currentIndex;
-  
   return titles;
 }
 
@@ -7872,42 +8014,14 @@ async function getNextTitlesForRecreate(startIndex, folderId) {
  * Update broadcast list with rotated titles
  */
 function updateRecreateBroadcastTitles() {
-  const template = window.currentRecreateTemplate;
-  if (!template || !window.recreateNextTitles) return;
-  
-  const broadcasts = template.broadcasts || [template];
-  const listEl = document.getElementById('recreateBroadcastList');
-  if (!listEl) return;
-  
-  const items = listEl.querySelectorAll('.bg-dark-700');
-  items.forEach((item, i) => {
-    const titleSpan = item.querySelector('.font-medium');
-    if (titleSpan && window.recreateNextTitles[i]) {
-      const originalTitle = broadcasts[i].title;
-      const rotatedTitle = window.recreateNextTitles[i].title;
-      titleSpan.innerHTML = `${i + 1}. <span class="text-primary">${escapeHtml(rotatedTitle)}</span> <span class="text-xs text-gray-500">(was: ${escapeHtml(originalTitle)})</span>`;
-    }
-  });
+  renderRecreateSlotList();
 }
 
 /**
  * Reset broadcast list to original titles
  */
 function resetRecreateBroadcastTitles() {
-  const template = window.currentRecreateTemplate;
-  if (!template) return;
-  
-  const broadcasts = template.broadcasts || [template];
-  const listEl = document.getElementById('recreateBroadcastList');
-  if (!listEl) return;
-  
-  const items = listEl.querySelectorAll('.bg-dark-700');
-  items.forEach((item, i) => {
-    const titleSpan = item.querySelector('.font-medium');
-    if (titleSpan) {
-      titleSpan.textContent = `${i + 1}. ${broadcasts[i].title}`;
-    }
-  });
+  renderRecreateSlotList();
 }
 
 // Re-create Form Handler
@@ -7979,6 +8093,9 @@ if (recreateFromTemplateForm) {
           formData.append('description', slot.description || template.description || '');
           formData.append('scheduledStartTime', schedule);
           formData.append('privacyStatus', slot.privacyStatus || template.privacy_status || 'unlisted');
+          if (template.id) {
+            formData.append('templateId', template.id);
+          }
           
           // IMPORTANT: Always enable auto-start when re-creating from template
           formData.append('enableAutoStart', 'true');
@@ -8062,7 +8179,6 @@ if (recreateFromTemplateForm) {
           }
           
           // Update rotation index to the next position after all used titles
-          // Use the final nextIndex that was calculated when getting titles
           const newRotationIndex = window.recreateFinalNextIndex || 0;
           
           await fetch('/api/title-rotation/update-index', {
@@ -8074,7 +8190,24 @@ if (recreateFromTemplateForm) {
             body: JSON.stringify({ newIndex: newRotationIndex })
           });
           
-          console.log('[recreate] Updated title rotation index to:', newRotationIndex);
+          console.log('[recreate] Updated user title rotation index to:', newRotationIndex);
+
+          // Channel isolation: also update template title_index if template has title_folder_id!
+          if (template && template.id && template.title_folder_id) {
+            try {
+              await fetch(`/api/youtube/templates/${template.id}`, {
+                method: 'PUT',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'X-CSRF-Token': getCsrfToken()
+                },
+                body: JSON.stringify({ titleIndex: newRotationIndex })
+              });
+              console.log('[recreate] Updated template title_index to:', newRotationIndex);
+            } catch (tmplErr) {
+              console.warn('[recreate] Failed to update template title_index:', tmplErr);
+            }
+          }
         } catch (err) {
           console.error('[recreate] Failed to update title rotation:', err);
         }

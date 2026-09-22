@@ -415,7 +415,8 @@ class ScheduleService {
 
           // Iterate through all configured slots for today
           let executedSlot = false;
-          for (const slotTime of times) {
+          for (let slotIndex = 0; slotIndex < times.length; slotIndex++) {
+            const slotTime = times[slotIndex];
             if (this.hasRunSlot(template, slotTime, now)) {
               continue; // Already executed for this slot
             }
@@ -427,8 +428,8 @@ class ScheduleService {
 
             // Trigger if within window: -2m (early) to +5m (exact/past)
             if ((timeDiffMinutes >= 0 && timeDiffMinutes <= 5) || (timeDiffMinutes >= -2 && timeDiffMinutes < 0)) {
-              console.log(`[ScheduleService] EXEC: "${template.name}" slot ${slotTime} WIB (${timeDiffMinutes}m from schedule)`);
-              await this.executeTemplate(template);
+              console.log(`[ScheduleService] EXEC: "${template.name}" slot ${slotTime} WIB (${timeDiffMinutes}m from schedule) [slot #${slotIndex + 1}/${times.length}]`);
+              await this.executeTemplate(template, 0, slotIndex);
               executedSlot = true;
               break; // Execute one slot per check
             }
@@ -761,8 +762,9 @@ class ScheduleService {
    * CRITICAL FIX: Added database-level duplicate check before execution
    * @param {Object} template - Template object with recurring config
    * @param {number} retryCount - Current retry count
+   * @param {number|null} targetSlotIndex - Specific slot index to execute (for multi-broadcast 1-to-1 execution)
    */
-  async executeTemplate(template, retryCount = 0) {
+  async executeTemplate(template, retryCount = 0, targetSlotIndex = null) {
     const maxRetries = 3;
     const now = new Date();
     
@@ -876,7 +878,19 @@ class ScheduleService {
       const results = [];
       
       if (broadcasts.length > 0) {
-        // Multi-broadcast template - create all broadcasts
+        // Multi-broadcast template - check if executing a specific slot or batch
+        const recurringTimes = parseRecurringTimes(template.recurring_time);
+        let targetBroadcasts = broadcasts;
+        let isSingleSlotMode = false;
+        let broadcastOffset = 0;
+
+        if (targetSlotIndex !== null && broadcasts.length > 1 && recurringTimes.length === broadcasts.length && broadcasts[targetSlotIndex]) {
+          targetBroadcasts = [broadcasts[targetSlotIndex]];
+          isSingleSlotMode = true;
+          broadcastOffset = targetSlotIndex;
+          console.log(`[ScheduleService] Single-slot execution mode: running broadcast #${targetSlotIndex + 1}/${broadcasts.length} ("${targetBroadcasts[0].title}") for slot ${recurringTimes[targetSlotIndex]} WIB`);
+        }
+
         // Check user title rotation settings first
         let titleFolderId = template.title_folder_id || null;
         let currentTitleIndex = template.title_index || 0;
@@ -892,8 +906,9 @@ class ScheduleService {
           }
         }
         
-        for (let i = 0; i < broadcasts.length; i++) {
-          const b = broadcasts[i];
+        for (let i = 0; i < targetBroadcasts.length; i++) {
+          const b = targetBroadcasts[i];
+          const broadcastIndex = isSingleSlotMode ? broadcastOffset : i;
           
           // Get title from rotation
           let finalTitle = b.title;
@@ -905,7 +920,7 @@ class ScheduleService {
           
           if (titleResult.title) {
             finalTitle = titleResult.title.title;
-            console.log(`[ScheduleService] Broadcast ${i + 1} using rotated title: "${finalTitle}" (index: ${titleResult.currentPosition}/${titleResult.totalCount})`);
+            console.log(`[ScheduleService] Broadcast ${broadcastIndex + 1} using rotated title: "${finalTitle}" (index: ${titleResult.currentPosition}/${titleResult.totalCount})`);
             
             // Update index for next broadcast (only if not pinned)
             if (!titleResult.isPinned) {
@@ -923,11 +938,13 @@ class ScheduleService {
           const title = replaceTitlePlaceholders(finalTitle, now);
           const description = b.description ? replaceTitlePlaceholders(b.description, now) : '';
           
-          // Calculate scheduled start time (10 + i*2 minutes from now to stagger)
-          const scheduledStartTime = new Date(now.getTime() + (10 + i * 2) * 60 * 1000);
+          // Calculate scheduled start time
+          const scheduledStartTime = isSingleSlotMode
+            ? new Date(now.getTime() + 10 * 60 * 1000)
+            : new Date(now.getTime() + (10 + i * 2) * 60 * 1000);
           
           // Log broadcast privacy status for debugging
-          console.log(`[ScheduleService] Broadcast ${i + 1} privacyStatus from template: ${b.privacyStatus}`);
+          console.log(`[ScheduleService] Broadcast ${broadcastIndex + 1} privacyStatus from template: ${b.privacyStatus}`);
           
           const broadcastData = {
             title,
@@ -945,7 +962,7 @@ class ScheduleService {
             alteredContent: !!(template.altered_content || b.alteredContent)
           };
           
-          console.log(`[ScheduleService] Creating broadcast ${i + 1}/${broadcasts.length}: ${title}`);
+          console.log(`[ScheduleService] Creating broadcast ${broadcastIndex + 1}/${broadcasts.length}: ${title}`);
           console.log(`[ScheduleService] Using privacyStatus: ${broadcastData.privacyStatus}`);
           console.log(`[ScheduleService] Using streamId: ${b.streamId || 'none (will create new)'}`);
           
