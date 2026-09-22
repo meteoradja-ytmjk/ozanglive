@@ -7396,6 +7396,7 @@ function openRecreateFromTemplateModal(template) {
       const scheduledTimeStr = recurringTimes[i] 
         ? parseSlotTime(recurringTimes[i], 15 + i * 30)
         : parseSlotTime(null, 15 + i * 30);
+      const timeOnlyStr = recurringTimes[i] || (scheduledTimeStr && scheduledTimeStr.includes('T') ? scheduledTimeStr.split('T')[1].slice(0, 5) : '13:00');
 
       window.recreateSlots.push({
         title: b.title || template.title,
@@ -7405,6 +7406,7 @@ function openRecreateFromTemplateModal(template) {
         thumbnailFolder: b.thumbnailFolder !== undefined ? b.thumbnailFolder : template.thumbnail_folder,
         pinnedThumbnail: b.pinnedThumbnail || b.thumbnailPath || template.pinned_thumbnail,
         scheduleTime: scheduledTimeStr,
+        timeOnly: timeOnlyStr,
         customTitle: false
       });
     });
@@ -7420,12 +7422,14 @@ function openRecreateFromTemplateModal(template) {
           thumbnailFolder: template.thumbnail_folder,
           pinnedThumbnail: template.pinned_thumbnail,
           scheduleTime: parseSlotTime(t, 15),
+          timeOnly: t,
           customTitle: false
         });
       });
       window.recreateSlots.sort((a, b) => new Date(a.scheduleTime) - new Date(b.scheduleTime));
     } else {
       const defaultDate = new Date(Date.now() + 15 * 60 * 1000);
+      const defaultDateStr = formatLocalDateTime(defaultDate);
       window.recreateSlots.push({
         title: template.title,
         originalTitle: template.title,
@@ -7433,7 +7437,8 @@ function openRecreateFromTemplateModal(template) {
         streamKey: template.stream_key,
         thumbnailFolder: template.thumbnail_folder,
         pinnedThumbnail: template.pinned_thumbnail,
-        scheduleTime: formatLocalDateTime(defaultDate),
+        scheduleTime: defaultDateStr,
+        timeOnly: defaultDateStr.split('T')[1].slice(0, 5),
         customTitle: false,
         isInitial: true
       });
@@ -7457,6 +7462,43 @@ function openRecreateFromTemplateModal(template) {
 }
 
 // Render the multi-slot schedule list for the recreate modal
+/**
+ * Calculate upcoming future date-time for a time slot
+ * Ensures scheduled start time is never in the past for YouTube API
+ */
+function calculateUpcomingDateTimeForSlot(timeStr, pattern = 'daily', days = null) {
+  const [h, m] = (timeStr || '13:00').split(':').map(Number);
+  const now = new Date();
+
+  if (pattern === 'weekly' && Array.isArray(days) && days.length > 0) {
+    const dayMap = { sunday: 0, minggu: 0, monday: 1, senin: 1, tuesday: 2, selasa: 2, wednesday: 3, rabu: 3, thursday: 4, kamis: 4, friday: 5, jumat: 5, saturday: 6, sabtu: 6 };
+    const targetDayIndices = days.map(d => dayMap[d.toLowerCase()]).filter(x => x !== undefined);
+
+    for (let offset = 0; offset <= 14; offset++) {
+      const candidate = new Date(now.getTime() + offset * 24 * 60 * 60 * 1000);
+      candidate.setHours(h, m, 0, 0);
+      if (targetDayIndices.includes(candidate.getDay())) {
+        if (candidate.getTime() > now.getTime() + 5 * 60 * 1000) {
+          return formatLocalDateTime(candidate);
+        }
+      }
+    }
+  }
+
+  // Daily or fallback: try today first
+  const candidateToday = new Date(now);
+  candidateToday.setHours(h, m, 0, 0);
+  if (candidateToday.getTime() > now.getTime() + 5 * 60 * 1000) {
+    return formatLocalDateTime(candidateToday);
+  }
+
+  // If time has passed today, schedule for tomorrow
+  const candidateTomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  candidateTomorrow.setHours(h, m, 0, 0);
+  return formatLocalDateTime(candidateTomorrow);
+}
+
+// Render the multi-slot schedule list for the recreate modal
 function renderRecreateSlotList() {
   const listEl = document.getElementById('recreateBroadcastList');
   if (!listEl || !window.recreateSlots) return;
@@ -7475,6 +7517,11 @@ function renderRecreateSlotList() {
 
   const minDate = new Date(Date.now() + 10 * 60 * 1000);
   const minDateStr = formatLocalDateTime(minDate);
+
+  // Check recurring mode: 'daily' | 'weekly' | 'none'
+  const patternInput = document.getElementById('recreateRecurringPatternInput');
+  const currentMode = patternInput ? patternInput.value : 'none';
+  const isRecurring = (currentMode === 'daily' || currentMode === 'weekly');
 
   listEl.innerHTML = window.recreateSlots.map((slot, index) => {
     const canDelete = window.recreateSlots.length > 1;
@@ -7552,30 +7599,81 @@ function renderRecreateSlotList() {
         </div>`;
     }
 
+    // Time Control: In recurring mode (Daily/Weekly), disable date and show ONLY time input
+    let timeControlHtml = '';
+    if (isRecurring) {
+      let timeVal = '13:00';
+      if (slot.timeOnly) {
+        timeVal = slot.timeOnly;
+      } else if (slot.scheduleTime && slot.scheduleTime.includes('T')) {
+        timeVal = slot.scheduleTime.split('T')[1].slice(0, 5);
+      } else if (slot.scheduleTime && /^[0-2]?[0-9]:[0-5][0-9]$/.test(slot.scheduleTime)) {
+        timeVal = slot.scheduleTime;
+      }
+
+      const badgeText = currentMode === 'daily' ? 'Harian' : 'Mingguan';
+      const badgeIcon = currentMode === 'daily' ? 'ti-calendar' : 'ti-calendar-event';
+
+      timeControlHtml = `
+        <div class="flex items-center justify-between gap-2 pt-1 border-t border-gray-700/50">
+          <div class="flex items-center gap-1.5 text-gray-300 text-xs flex-shrink-0">
+            <i class="ti ti-clock text-primary text-xs"></i>
+            <span class="text-[11px] font-medium text-gray-200">Jam Tayang (WIB):</span>
+            <span class="text-[10px] text-green-400 bg-green-500/10 border border-green-500/20 px-1.5 py-0.5 rounded font-normal flex items-center gap-0.5">
+              <i class="ti ${badgeIcon} text-[10px]"></i> ${badgeText}
+            </span>
+          </div>
+          <div class="flex items-center gap-1.5 flex-1 max-w-[130px] justify-end">
+            <input type="time" id="slotTimeInput_${index}" name="recreateScheduleTime[]" required value="${timeVal}"
+              onchange="updateRecreateSlotTime(${index}, this.value, true)"
+              class="h-7 w-full px-2 bg-dark-600 border border-gray-600 rounded-lg text-xs font-semibold text-white text-center focus:border-primary focus:outline-none [color-scheme:dark]">
+          </div>
+        </div>
+      `;
+    } else {
+      timeControlHtml = `
+        <div class="flex items-center gap-2 pt-1 border-t border-gray-700/50">
+          <div class="flex items-center gap-1.5 text-gray-400 text-xs flex-shrink-0">
+            <i class="ti ti-calendar-time text-primary text-xs"></i>
+            <span class="text-[11px] font-medium text-gray-300">Waktu Siaran:</span>
+            <span class="text-[10px] text-blue-400 bg-blue-500/10 border border-blue-500/20 px-1 py-0.2 rounded font-normal">Sekali</span>
+          </div>
+          <input type="datetime-local" id="slotDateTimeInput_${index}" name="recreateSchedule[]" required min="${minDateStr}" value="${slot.scheduleTime || ''}"
+            onchange="updateRecreateSlotTime(${index}, this.value, false)"
+            class="h-7 flex-1 min-w-0 px-2 bg-dark-600 border border-gray-600 rounded-lg text-xs font-semibold text-white focus:border-primary focus:outline-none [color-scheme:dark]">
+        </div>
+      `;
+    }
+
     return `
       <div id="slotCard_${index}" class="recreate-slot-card bg-dark-700/80 rounded-lg p-2.5 border border-gray-700/80 space-y-2 transition-colors hover:border-gray-600">
         <!-- Baris 1: Nomor Slot, Judul Lengkap, Tombol Edit & Hapus -->
         ${titleContentHtml}
         
-        <!-- Baris 2: Waktu Siaran -->
-        <div class="flex items-center gap-2 pt-1 border-t border-gray-700/50">
-          <div class="flex items-center gap-1.5 text-gray-400 text-xs flex-shrink-0">
-            <i class="ti ti-calendar-time text-primary text-xs"></i>
-            <span class="text-[11px] font-medium text-gray-300">Waktu Siaran:</span>
-          </div>
-          <input type="datetime-local" name="recreateSchedule[]" required min="${minDateStr}" value="${slot.scheduleTime || ''}"
-            onchange="updateRecreateSlotTime(${index}, this.value)"
-            class="h-7 flex-1 min-w-0 px-2 bg-dark-600 border border-gray-600 rounded-lg text-xs font-semibold text-white focus:border-primary focus:outline-none [color-scheme:dark]">
-        </div>
+        <!-- Baris 2: Waktu / Jam Siaran -->
+        ${timeControlHtml}
       </div>
     `;
   }).join('');
 }
 
 // Update schedule time for a slot in window.recreateSlots
-function updateRecreateSlotTime(index, value) {
+function updateRecreateSlotTime(index, value, isTimeOnly = false) {
   if (window.recreateSlots && window.recreateSlots[index]) {
-    window.recreateSlots[index].scheduleTime = value;
+    if (isTimeOnly) {
+      const now = new Date();
+      let datePrefix = formatLocalDateTime(now).split('T')[0];
+      if (window.recreateSlots[index].scheduleTime && window.recreateSlots[index].scheduleTime.includes('T')) {
+        datePrefix = window.recreateSlots[index].scheduleTime.split('T')[0];
+      }
+      window.recreateSlots[index].scheduleTime = `${datePrefix}T${value}`;
+      window.recreateSlots[index].timeOnly = value;
+    } else {
+      window.recreateSlots[index].scheduleTime = value;
+      if (value && value.includes('T')) {
+        window.recreateSlots[index].timeOnly = value.split('T')[1].slice(0, 5);
+      }
+    }
     delete window.recreateSlots[index].isInitial;
   }
 }
@@ -7607,6 +7705,7 @@ async function addRecreateSlot(hoursToAdd = 2) {
   const bList = (Array.isArray(template.broadcasts) && template.broadcasts.length > 0) ? template.broadcasts : null;
   const sourceB = bList ? bList[newIndex % bList.length] : template;
 
+  const nextDateStr = formatLocalDateTime(nextDate);
   window.recreateSlots.push({
     title: sourceB.title || template.title,
     originalTitle: sourceB.title || template.title,
@@ -7614,7 +7713,8 @@ async function addRecreateSlot(hoursToAdd = 2) {
     streamKey: sourceB.streamKey || template.stream_key,
     thumbnailFolder: sourceB.thumbnailFolder !== undefined ? sourceB.thumbnailFolder : template.thumbnail_folder,
     pinnedThumbnail: sourceB.pinnedThumbnail || sourceB.thumbnailPath || template.pinned_thumbnail,
-    scheduleTime: formatLocalDateTime(nextDate),
+    scheduleTime: nextDateStr,
+    timeOnly: nextDateStr.split('T')[1].slice(0, 5),
     customTitle: false
   });
 
@@ -7676,6 +7776,7 @@ async function addRecreatePresetSlot(timeStr) {
   // If there's only 1 untouched initial slot, set its time directly
   if (window.recreateSlots.length === 1 && window.recreateSlots[0].isInitial) {
     window.recreateSlots[0].scheduleTime = scheduleTime;
+    window.recreateSlots[0].timeOnly = timeStr;
     delete window.recreateSlots[0].isInitial;
     renderRecreateSlotList();
     showToast(`Jadwal diatur ke ${timeStr}`);
@@ -7699,6 +7800,7 @@ async function addRecreatePresetSlot(timeStr) {
     thumbnailFolder: sourceB.thumbnailFolder !== undefined ? sourceB.thumbnailFolder : template.thumbnail_folder,
     pinnedThumbnail: sourceB.pinnedThumbnail || sourceB.thumbnailPath || template.pinned_thumbnail,
     scheduleTime: scheduleTime,
+    timeOnly: timeStr,
     customTitle: false
   });
 
@@ -7833,6 +7935,9 @@ function setRecreateRecurringMode(mode) {
       daysContainer.classList.add('hidden');
     }
   }
+
+  // Instantly re-render slot list so time/datetime inputs switch dynamically
+  renderRecreateSlotList();
 }
 window.setRecreateRecurringMode = setRecreateRecurringMode;
 
@@ -8037,12 +8142,53 @@ if (recreateFromTemplateForm) {
     
     try {
       const template = window.currentRecreateTemplate;
-      const scheduleInputs = document.querySelectorAll('input[name="recreateSchedule[]"]');
-      const schedules = Array.from(scheduleInputs).map(input => input.value).filter(v => v);
+      const patternInput = document.getElementById('recreateRecurringPatternInput');
+      const patternVal = patternInput ? patternInput.value : 'none';
+      const isRecurring = (patternVal === 'daily' || patternVal === 'weekly');
       
       const slots = (window.recreateSlots && window.recreateSlots.length > 0)
         ? window.recreateSlots
         : (template.broadcasts || [template]);
+
+      // Collect selected recurring days if weekly
+      let selectedWeeklyDays = [];
+      if (patternVal === 'weekly') {
+        selectedWeeklyDays = Array.from(document.querySelectorAll('input[name="recreateRecurringDays"]:checked'))
+          .map(cb => cb.value.toLowerCase());
+        if (selectedWeeklyDays.length === 0) {
+          selectedWeeklyDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+        }
+      }
+
+      // Collect schedules for all slots
+      const schedules = [];
+      for (let idx = 0; idx < slots.length; idx++) {
+        const slot = slots[idx];
+        let sched = '';
+
+        if (isRecurring) {
+          const timeInput = document.getElementById(`slotTimeInput_${idx}`);
+          let timeVal = (timeInput && timeInput.value) ? timeInput.value : (slot.timeOnly || '');
+          if (!timeVal && slot.scheduleTime && slot.scheduleTime.includes('T')) {
+            timeVal = slot.scheduleTime.split('T')[1].slice(0, 5);
+          }
+          if (!timeVal) timeVal = '13:00';
+
+          slot.timeOnly = timeVal;
+          // Calculate valid upcoming start time for YouTube API
+          sched = calculateUpcomingDateTimeForSlot(timeVal, patternVal, selectedWeeklyDays);
+          slot.scheduleTime = sched;
+        } else {
+          const dtInput = document.getElementById(`slotDateTimeInput_${idx}`);
+          sched = (dtInput && dtInput.value) ? dtInput.value : slot.scheduleTime;
+          slot.scheduleTime = sched;
+        }
+
+        if (sched) {
+          schedules.push(sched);
+        }
+      }
+
       const useTitleRotation = window.recreateUseTitleRotation && window.recreateNextTitles && window.recreateNextTitles.length > 0;
       
       console.log('[recreate] Template stream_key_folder_mapping:', template.stream_key_folder_mapping);
@@ -8053,11 +8199,6 @@ if (recreateFromTemplateForm) {
         showToast('Mohon tentukan waktu siaran untuk semua slot jadwal', 'error');
         return;
       }
-
-      // Sync schedules into slots
-      schedules.forEach((sch, idx) => {
-        if (slots[idx]) slots[idx].scheduleTime = sch;
-      });
       
       // Account ID: directly use saved template account ID
       const accountId = template.account_id;
@@ -8237,15 +8378,18 @@ if (recreateFromTemplateForm) {
         const isRecurring = (patternVal === 'daily' || patternVal === 'weekly');
         const pattern = isRecurring ? patternVal : 'daily';
 
-        // Extract HH:MM times from schedules
+        // Extract HH:MM times from slots or schedules
         const timeList = Array.from(new Set(
-          schedules.map(sch => {
-            const parts = sch.split('T');
-            if (parts.length > 1) {
-              return parts[1].slice(0, 5);
+          slots.map(s => {
+            if (s.timeOnly) return s.timeOnly;
+            if (s.scheduleTime && s.scheduleTime.includes('T')) {
+              return s.scheduleTime.split('T')[1].slice(0, 5);
             }
             return null;
-          }).filter(t => t && /^[0-2]?[0-9]:[0-5][0-9]$/.test(t))
+          }).concat(schedules.map(sch => {
+            const parts = sch.split('T');
+            return parts.length > 1 ? parts[1].slice(0, 5) : null;
+          })).filter(t => t && /^[0-2]?[0-9]:[0-5][0-9]$/.test(t))
         )).sort();
 
         const recurringTimeStr = timeList.length > 0 ? timeList.join(', ') : '13:00';
