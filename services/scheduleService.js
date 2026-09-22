@@ -268,6 +268,7 @@ class ScheduleService {
     this.checkInterval = null;
     this.initialized = false;
     this.executingTemplates = new Set(); // Track templates currently being executed to prevent duplicates
+    this.executedSlots = new Set(); // Track executed slots: `${templateId}_${wibDateStr}_${slotTime}`
   }
 
   /**
@@ -292,11 +293,12 @@ class ScheduleService {
       
       for (const template of templates) {
         // Check for missed schedules on startup
-        if (this.shouldExecuteMissed(template, now)) {
+        const missed = this.shouldExecuteMissed(template, now);
+        if (missed && missed.shouldRun) {
           console.log(`[ScheduleService] Found missed schedule for template: ${template.name}`);
           missedCount++;
           try {
-            await this.executeTemplate(template);
+            await this.executeTemplate(template, 0, missed.slotIndex);
             console.log(`[ScheduleService] Executed missed schedule for: ${template.name}`);
           } catch (error) {
             console.error(`[ScheduleService] Failed to execute missed schedule for ${template.name}:`, error.message);
@@ -397,20 +399,17 @@ class ScheduleService {
             continue; // Silent skip - not scheduled for today
           }
           
+          // Housekeeping: remove old executed slots from previous days
+          for (const key of this.executedSlots) {
+            if (!key.includes(wibDateStr)) {
+              this.executedSlots.delete(key);
+            }
+          }
+
           // Parse all scheduled times (supports schedule bertingkat / multi-time)
           const times = parseRecurringTimes(template.recurring_time);
           if (times.length === 0) {
             continue; // Silent skip - no valid time set
-          }
-
-          // Check if last run was within the last 10 minutes (global debounce)
-          if (template.last_run_at) {
-            const lastRunTime = new Date(template.last_run_at);
-            const timeSinceLastRun = nowMs - lastRunTime.getTime();
-            const minutesSinceLastRun = Math.floor(timeSinceLastRun / (1000 * 60));
-            if (minutesSinceLastRun < 10) {
-              continue; // Silent skip - recently executed
-            }
           }
 
           // Iterate through all configured slots for today
@@ -429,6 +428,8 @@ class ScheduleService {
             // Trigger if within window: -2m (early) to +5m (exact/past)
             if ((timeDiffMinutes >= 0 && timeDiffMinutes <= 5) || (timeDiffMinutes >= -2 && timeDiffMinutes < 0)) {
               console.log(`[ScheduleService] EXEC: "${template.name}" slot ${slotTime} WIB (${timeDiffMinutes}m from schedule) [slot #${slotIndex + 1}/${times.length}]`);
+              const slotKey = `${template.id}_${wibDateStr}_${slotTime}`;
+              this.executedSlots.add(slotKey);
               await this.executeTemplate(template, 0, slotIndex);
               executedSlot = true;
               break; // Execute one slot per check
@@ -448,7 +449,11 @@ class ScheduleService {
             // Execute if next_run_at is overdue but within 60 minutes only
             if (timeDiffFromNextRun > 0 && timeDiffFromNextRun <= 60) {
               console.log(`[ScheduleService] EXEC: "${template.name}" (next_run_at overdue ${timeDiffFromNextRun}m)`);
-              await this.executeTemplate(template);
+              // Find matching slot for next_run_at if possible
+              const nextRunWib = getWIBTime(nextRunAt);
+              const nextRunTimeStr = `${String(nextRunWib.hours).padStart(2, '0')}:${String(nextRunWib.minutes).padStart(2, '0')}`;
+              const overdueSlotIndex = times.indexOf(nextRunTimeStr);
+              await this.executeTemplate(template, 0, overdueSlotIndex >= 0 ? overdueSlotIndex : null);
               continue;
             }
 
@@ -473,33 +478,17 @@ class ScheduleService {
   /**
    * Check if a missed schedule should be executed
    * Uses WIB timezone for all comparisons
-   * CRITICAL FIX: Reduced execution windows to prevent duplicate execution
+   * Returns { shouldRun: true, slotIndex: number|null } or null
    * @param {Object} template - Template object with recurring config
    * @param {Date} now - Current time
-   * @returns {boolean}
+   * @returns {Object|null}
    */
   shouldExecuteMissed(template, now) {
-    // CRITICAL FIX: Check last_run_at first to prevent duplicate execution
-    // If last_run_at is within the last 10 minutes, SKIP
-    if (template.last_run_at) {
-      const lastRunTime = new Date(template.last_run_at);
-      const timeSinceLastRun = now.getTime() - lastRunTime.getTime();
-      const minutesSinceLastRun = Math.floor(timeSinceLastRun / (1000 * 60));
-      
-      if (minutesSinceLastRun < 10) {
-        console.log(`[ScheduleService] SKIP missed check: Last run was ${minutesSinceLastRun} minutes ago (< 10 min cooldown)`);
-        return false;
-      }
-    }
-    
-    // If already run today (in WIB), skip
     if (this.hasRunToday(template, now)) {
-      return false;
+      return null;
     }
     
     const wibTime = getWIBTime(now);
-    
-    // Check if today is a valid day for this schedule (in WIB)
     const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
     const todayWIB = dayNames[wibTime.day];
     let isTodayValid = false;
@@ -511,21 +500,23 @@ class ScheduleService {
       isTodayValid = scheduledDays.includes(todayWIB);
     }
     
-    // Check if scheduled time has passed today (in WIB)
+    // Check if scheduled time has passed today (within 60 minutes) in WIB
     if (isTodayValid && template.recurring_time) {
-      const [schedHour, schedMin] = template.recurring_time.split(':').map(Number);
-      const scheduleMinutesWIB = schedHour * 60 + schedMin;
-      const currentMinutesWIB = wibTime.hours * 60 + wibTime.minutes;
-      const timeDiffMinutes = currentMinutesWIB - scheduleMinutesWIB;
-      
-      // CRITICAL FIX: Reduced from 720 minutes (12 hours) to 60 minutes (1 hour)
-      // If scheduled time has passed today (within 60 minutes only), execute
-      if (timeDiffMinutes >= 0 && timeDiffMinutes <= 60) {
-        console.log(`[ScheduleService] Detected missed schedule for template: ${template.name}`);
-        console.log(`[ScheduleService]   Scheduled: ${template.recurring_time} WIB`);
-        console.log(`[ScheduleService]   Current: ${String(wibTime.hours).padStart(2,'0')}:${String(wibTime.minutes).padStart(2,'0')} WIB`);
-        console.log(`[ScheduleService]   Missed by: ${timeDiffMinutes} minutes`);
-        return true;
+      const times = parseRecurringTimes(template.recurring_time);
+      for (let slotIndex = 0; slotIndex < times.length; slotIndex++) {
+        const slotTime = times[slotIndex];
+        if (this.hasRunSlot(template, slotTime, now)) {
+          continue;
+        }
+        const [schedHour, schedMin] = slotTime.split(':').map(Number);
+        const scheduleMinutesWIB = schedHour * 60 + schedMin;
+        const currentMinutesWIB = wibTime.hours * 60 + wibTime.minutes;
+        const timeDiffMinutes = currentMinutesWIB - scheduleMinutesWIB;
+        
+        if (timeDiffMinutes >= 0 && timeDiffMinutes <= 60) {
+          console.log(`[ScheduleService] Detected missed schedule for template: ${template.name}, slot: ${slotTime} WIB (slot #${slotIndex + 1})`);
+          return { shouldRun: true, slotIndex };
+        }
       }
     }
     
@@ -535,22 +526,17 @@ class ScheduleService {
       const overdueMs = now.getTime() - nextRunAt.getTime();
       const overdueMinutes = Math.floor(overdueMs / (1000 * 60));
       
-      // CRITICAL FIX: Reduced from 1440 minutes (24 hours) to 60 minutes (1 hour)
-      // If next_run_at is overdue but less than 60 minutes
       if (overdueMinutes > 0 && overdueMinutes <= 60) {
-        console.log(`[ScheduleService] Detected OVERDUE schedule for template: ${template.name}`);
-        console.log(`[ScheduleService]   next_run_at: ${template.next_run_at}`);
-        console.log(`[ScheduleService]   Overdue by: ${overdueMinutes} minutes`);
-        return true;
+        console.log(`[ScheduleService] Detected OVERDUE schedule for template: ${template.name}, next_run_at: ${template.next_run_at}`);
+        return { shouldRun: true, slotIndex: null };
       } else if (overdueMinutes > 60) {
         console.log(`[ScheduleService] Skipping very old schedule for template: ${template.name} (overdue ${overdueMinutes} min > 60 min)`);
-        // Update next_run_at to future date
         this.updateNextRunToFuture(template);
-        return false;
+        return null;
       }
     }
     
-    return false;
+    return null;
   }
 
   /**
@@ -585,54 +571,34 @@ class ScheduleService {
   shouldExecute(template, now) {
     if (!template.recurring_time) return false;
     
-    const [schedHour, schedMin] = template.recurring_time.split(':').map(Number);
-    
-    // Get current time in WIB
+    const times = parseRecurringTimes(template.recurring_time);
+    if (times.length === 0) return false;
+
     const wibTime = getWIBTime(now);
-    
-    // Calculate time difference in minutes (WIB)
-    const scheduleMinutesWIB = schedHour * 60 + schedMin;
     const currentMinutesWIB = wibTime.hours * 60 + wibTime.minutes;
-    const timeDiffMinutes = currentMinutesWIB - scheduleMinutesWIB;
     
-    // Trigger if within 0-5 minutes of scheduled time
-    // This means: current time is AT or UP TO 5 minutes AFTER scheduled time
-    if (timeDiffMinutes < 0 || timeDiffMinutes > 5) {
-      return false;
-    }
-    
-    // For daily, always execute at the right time
-    if (template.recurring_pattern === 'daily') {
-      const shouldRun = !this.hasRunToday(template, now);
-      if (shouldRun) {
-        console.log(`[ScheduleService] Daily trigger: ${String(schedHour).padStart(2,'0')}:${String(schedMin).padStart(2,'0')} WIB`);
-        console.log(`[ScheduleService]   Current: ${String(wibTime.hours).padStart(2,'0')}:${String(wibTime.minutes).padStart(2,'0')} WIB, diff: ${timeDiffMinutes} min`);
-      }
-      return shouldRun;
-    }
-    
-    // For weekly, check if today is a scheduled day (in WIB)
     if (template.recurring_pattern === 'weekly') {
       const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
       const todayWIB = dayNames[wibTime.day];
       const scheduledDays = (template.recurring_days || []).map(d => d.toLowerCase());
-      
       if (!scheduledDays.includes(todayWIB)) {
         return false;
       }
-      
-      const shouldRun = !this.hasRunToday(template, now);
-      if (shouldRun) {
-        console.log(`[ScheduleService] Weekly trigger: ${String(schedHour).padStart(2,'0')}:${String(schedMin).padStart(2,'0')} WIB (${todayWIB})`);
-        console.log(`[ScheduleService]   Current: ${String(wibTime.hours).padStart(2,'0')}:${String(wibTime.minutes).padStart(2,'0')} WIB, diff: ${timeDiffMinutes} min`);
+    }
+
+    for (const slotTime of times) {
+      if (this.hasRunSlot(template, slotTime, now)) continue;
+      const [schedHour, schedMin] = slotTime.split(':').map(Number);
+      const scheduleMinutesWIB = schedHour * 60 + schedMin;
+      const timeDiffMinutes = currentMinutesWIB - scheduleMinutesWIB;
+      if (timeDiffMinutes >= 0 && timeDiffMinutes <= 5) {
+        return true;
       }
-      return shouldRun;
     }
     
     return false;
   }
 
-  /**
   /**
    * Check if template has already run for a specific slot time today (in WIB timezone)
    * @param {Object} template - Template object
@@ -641,18 +607,17 @@ class ScheduleService {
    * @returns {boolean}
    */
   hasRunSlot(template, slotTime, now) {
-    if (!template.last_run_at) return false;
+    const nowDateStr = this.getWIBDateString(now);
+    const slotKey = `${template.id}_${nowDateStr}_${slotTime}`;
 
-    const lastRun = new Date(template.last_run_at);
-    const timeSinceLastRun = now.getTime() - lastRun.getTime();
-    const minutesSinceLastRun = Math.floor(timeSinceLastRun / (1000 * 60));
-
-    // If last run was within the last 10 minutes, always block immediate re-execution
-    if (minutesSinceLastRun < 10) {
+    // Fast-path: Check in-memory slot execution cache first
+    if (this.executedSlots && this.executedSlots.has(slotKey)) {
       return true;
     }
 
-    const nowDateStr = this.getWIBDateString(now);
+    if (!template.last_run_at) return false;
+
+    const lastRun = new Date(template.last_run_at);
     const lastRunDateStr = this.getWIBDateString(lastRun);
 
     // If last run was on a different day, this slot hasn't run today
@@ -660,15 +625,20 @@ class ScheduleService {
       return false;
     }
 
-    // Check if the last run corresponds to this slot's time
+    // Check if the last run corresponds to this slot's time (fallback after restart)
     const lastRunWib = getWIBTime(lastRun);
     const [slotH, slotM] = slotTime.split(':').map(Number);
     const slotMinutes = slotH * 60 + slotM;
     const lastRunMinutes = lastRunWib.hours * 60 + lastRunWib.minutes;
     const diff = Math.abs(lastRunMinutes - slotMinutes);
 
-    // If last run was within 25 minutes of this slot time today, treat as already executed
-    return diff <= 25;
+    // If last run was within 15 minutes of this slot time today, treat as already executed
+    if (diff <= 15) {
+      if (this.executedSlots) this.executedSlots.add(slotKey);
+      return true;
+    }
+
+    return false;
   }
 
   /**
@@ -681,24 +651,16 @@ class ScheduleService {
    */
   hasRunToday(template, now) {
     if (!template.last_run_at) return false;
-    
-    const lastRun = new Date(template.last_run_at);
-    const timeSinceLastRun = now.getTime() - lastRun.getTime();
-    const minutesSinceLastRun = Math.floor(timeSinceLastRun / (1000 * 60));
-    
-    if (minutesSinceLastRun < 10) {
-      return true;
-    }
 
     const times = parseRecurringTimes(template.recurring_time);
-    if (times.length > 1) {
+    if (times.length > 0) {
       // Check if all slots have already run today
       return times.every(slot => this.hasRunSlot(template, slot, now));
     }
     
-    // Single time check
+    // Fallback single time check
     const nowDateStr = this.getWIBDateString(now);
-    const lastRunDateStr = this.getWIBDateString(lastRun);
+    const lastRunDateStr = this.getWIBDateString(new Date(template.last_run_at));
     return nowDateStr === lastRunDateStr;
   }
 

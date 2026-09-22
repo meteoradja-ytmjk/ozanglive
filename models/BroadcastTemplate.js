@@ -27,13 +27,20 @@ class BroadcastTemplate {
     row.altered_content = !!row.altered_content;
     row.dual_stream = !!row.dual_stream;
     
-    // Parse recurring_days JSON
+    // Parse recurring_days JSON or comma-separated string
     if (row.recurring_days) {
-      try {
-        row.recurring_days = JSON.parse(row.recurring_days);
-      } catch (e) {
+      if (typeof row.recurring_days === 'string') {
+        try {
+          const parsed = JSON.parse(row.recurring_days);
+          row.recurring_days = Array.isArray(parsed) ? parsed : [parsed];
+        } catch (e) {
+          row.recurring_days = row.recurring_days.split(/[\s,]+/).map(d => d.trim().toLowerCase()).filter(Boolean);
+        }
+      } else if (!Array.isArray(row.recurring_days)) {
         row.recurring_days = [];
       }
+    } else {
+      row.recurring_days = [];
     }
     
     // Parse stream_key_folder_mapping JSON

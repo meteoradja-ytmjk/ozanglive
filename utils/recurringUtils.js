@@ -3,15 +3,18 @@
  */
 
 const VALID_PATTERNS = ['daily', 'weekly'];
-const VALID_DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+const VALID_DAYS = [
+  'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
+  'senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu', 'minggu'
+];
 const DAY_INDEX_MAP = {
-  'sunday': 0,
-  'monday': 1,
-  'tuesday': 2,
-  'wednesday': 3,
-  'thursday': 4,
-  'friday': 5,
-  'saturday': 6
+  'sunday': 0, 'minggu': 0,
+  'monday': 1, 'senin': 1,
+  'tuesday': 2, 'selasa': 2,
+  'wednesday': 3, 'rabu': 3,
+  'thursday': 4, 'kamis': 4,
+  'friday': 5, 'jumat': 5,
+  'saturday': 6, 'sabtu': 6
 };
 
 /**
