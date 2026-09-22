@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
   <% if (typeof csrfToken !=='undefined' ) { %>
     <meta name="csrf-token" content="<%= csrfToken %>">
     <% } %>
@@ -61,26 +61,6 @@
             }
           }
         }
-      </script>
-      <script>
-          // CRITICAL: Ensure universal root scrolling works across all browsers immediately
-          (function () {
-            function initScroll() {
-              if (document.documentElement) {
-                document.documentElement.style.setProperty('overflow-y', 'auto');
-                document.documentElement.style.setProperty('overflow-x', 'hidden');
-              }
-              if (document.body) {
-                document.body.style.setProperty('overflow-x', 'hidden');
-                document.body.style.setProperty('touch-action', 'pan-y');
-                document.body.style.setProperty('-webkit-overflow-scrolling', 'touch');
-              }
-            }
-            initScroll();
-            if (document.readyState === 'loading') {
-              document.addEventListener('DOMContentLoaded', initScroll);
-            }
-          })();
       </script>
       <script src="/js/stream-modal.js?v=1.0.9" defer></script>
       <script src="/js/tab-optimizer.js" defer></script>
@@ -337,21 +317,22 @@
   html {
     overflow-x: hidden;
     overflow-y: auto !important;
-    height: 100%;
+    height: auto !important;
+    min-height: 100%;
     -webkit-text-size-adjust: 100%;
-    touch-action: manipulation;
+    scroll-behavior: smooth;
   }
 
   body {
     width: 100%;
-    overflow-x: hidden;
-    min-height: 100%;
+    height: auto !important;
     min-height: 100vh;
     min-height: 100dvh;
     position: relative;
     margin: 0;
     padding: 0;
-    touch-action: pan-y;
+    overflow-x: hidden;
+    overflow-y: visible !important;
     -webkit-overflow-scrolling: touch;
   }
 
@@ -476,15 +457,17 @@
   @media (max-width: 1023px) {
     html {
       overflow-y: auto !important;
-      height: 100%;
+      height: auto !important;
     }
 
     body {
       padding-top: 64px;
       padding-bottom: 0 !important;
-      min-height: 100%;
+      min-height: 100vh;
+      min-height: 100dvh;
+      height: auto !important;
+      overflow-y: visible !important;
       position: relative !important;
-      touch-action: pan-y;
     }
 
     .mobile-safe-wrapper {
@@ -542,68 +525,33 @@
   }
 
   document.addEventListener('DOMContentLoaded', () => {
-    // Universal Scroll Guardian: Prevents stuck overflow:hidden on ALL screen sizes and browsers
-    function isAnyModalOpen() {
-      const modalElements = document.querySelectorAll(
-        '#newStreamModal, #scheduleModal, #scheduleEditModal, ' +
-        '#autoPilotCampaignModal, #youtubeGuideModal, #recreateModal, #qris-modal, ' +
-        '#audioUploadModalContent, #videoUploadModalContent, #moveMediaModalContent, ' +
-        '.modal-overlay, .modal'
-      );
-      for (let i = 0; i < modalElements.length; i++) {
-        const el = modalElements[i];
-        if (el && !el.classList.contains('hidden') && el.style.display !== 'none') {
-          const rect = el.getBoundingClientRect();
-          if (rect.width > 0 && rect.height > 0) {
-            return true;
-          }
-        }
-      }
-      return false;
-    }
+    // 1. Ensure scroll is cleanly unlocked on page load
+    document.body.style.removeProperty('overflow');
+    document.documentElement.style.removeProperty('overflow');
 
-    function ensureScrollRestored() {
-      if (!isAnyModalOpen()) {
-        if (document.body.style.overflow === 'hidden') {
-          document.body.style.removeProperty('overflow');
-        }
-        if (document.body.style.overflowY) {
-          document.body.style.removeProperty('overflow-y');
-        }
-        if (document.documentElement.style.overflow === 'hidden') {
-          document.documentElement.style.removeProperty('overflow');
-        }
-        document.documentElement.style.overflowY = 'auto';
-        document.body.style.touchAction = 'pan-y';
-      }
-    }
-
-    // Always ensure scrolling is unblocked on page load
-    ensureScrollRestored();
-
-    // Re-check periodically during first 3 seconds after page load to prevent initial freeze
-    const initialCheckInterval = setInterval(ensureScrollRestored, 600);
-    setTimeout(() => clearInterval(initialCheckInterval), 3500);
-
-    // Watch for style changes on body to ensure overflow:hidden never gets stuck when modal closes
-    const observer = new MutationObserver(() => {
-      if (!isAnyModalOpen()) {
-        if (document.body.style.overflow === 'hidden' || document.documentElement.style.overflow === 'hidden') {
-          ensureScrollRestored();
-        }
-      }
-    });
-
-    // Start observing body for style changes
-    observer.observe(document.body, {
-      attributes: true,
-      attributeFilter: ['style', 'class']
-    });
-
-    // Global Escape key handler to ensure scroll restoration
+    // 2. Global Escape key handler to ensure scroll restoration
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
-        setTimeout(ensureScrollRestored, 150);
+        document.body.style.removeProperty('overflow');
+        document.documentElement.style.removeProperty('overflow');
+      }
+    });
+
+    // 3. Fallback click handler on modal close triggers/overlays
+    document.addEventListener('click', (e) => {
+      if (e.target.closest('[onclick*="Modal"], [onclick*="modal"], [data-close-modal], .modal-overlay')) {
+        setTimeout(() => {
+          const hasOpenModal = document.querySelector(
+            '#newStreamModal.active, #newStreamModal:not(.hidden), ' +
+            '#scheduleModal:not(.hidden), #scheduleEditModal:not(.hidden), ' +
+            '#autoPilotCampaignModal:not(.hidden), #youtubeGuideModal:not(.hidden), ' +
+            '#recreateModal:not(.hidden), #qris-modal.flex:not(.hidden)'
+          );
+          if (!hasOpenModal) {
+            document.body.style.removeProperty('overflow');
+            document.documentElement.style.removeProperty('overflow');
+          }
+        }, 250);
       }
     });
 
