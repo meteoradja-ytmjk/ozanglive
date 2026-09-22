@@ -201,16 +201,10 @@
     }
   }
 
-  // Optimasi untuk mobile: prevent double-tap zoom
+  // Safe handling for touch interaction (avoiding blocking touchend events)
   function preventDoubleTapZoom() {
-    let lastTouchEnd = 0;
-    document.addEventListener('touchend', function (e) {
-      const now = Date.now();
-      if (now - lastTouchEnd <= 300) {
-        e.preventDefault();
-      }
-      lastTouchEnd = now;
-    }, { passive: false });
+    // Left empty: modern browsers handle zoom constraints via viewport meta tags and touch-action: manipulation.
+    // Blocking touchend with e.preventDefault() was freezing touch scrolling on multiple browsers.
   }
 
   // Smooth scroll ke top saat pindah halaman

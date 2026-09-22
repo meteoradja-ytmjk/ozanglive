@@ -243,6 +243,7 @@ body {
   /* Ensure proper touch scrolling */
   html, body {
     overflow-x: hidden;
+    overflow-y: auto;
     -webkit-overflow-scrolling: touch;
   }
   

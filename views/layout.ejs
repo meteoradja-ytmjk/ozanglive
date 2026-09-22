@@ -63,35 +63,23 @@
         }
       </script>
       <script>
-          // CRITICAL: Force scroll enabled IMMEDIATELY (runs before page loads)
+          // CRITICAL: Ensure universal root scrolling works across all browsers immediately
           (function () {
-            function applyScrollStyles(target) {
-              if (!target) return;
-              target.style.setProperty('overflow-y', 'auto', 'important');
-              target.style.setProperty('overflow-x', 'hidden', 'important');
-            }
-
-            function forceScroll() {
-              if (window.innerWidth < 1024) {
-                applyScrollStyles(document.documentElement);
-                applyScrollStyles(document.body);
-                if (document.body) {
-                  document.body.style.setProperty('-webkit-overflow-scrolling', 'touch');
-                  document.body.style.setProperty('touch-action', 'pan-y');
-                }
+            function initScroll() {
+              if (document.documentElement) {
+                document.documentElement.style.setProperty('overflow-y', 'auto');
+                document.documentElement.style.setProperty('overflow-x', 'hidden');
+              }
+              if (document.body) {
+                document.body.style.setProperty('overflow-y', 'auto');
+                document.body.style.setProperty('overflow-x', 'hidden');
+                document.body.style.setProperty('-webkit-overflow-scrolling', 'touch');
               }
             }
-
-            // Run immediately
-            forceScroll();
-
-            // Run when DOM is ready
+            initScroll();
             if (document.readyState === 'loading') {
-              document.addEventListener('DOMContentLoaded', forceScroll);
+              document.addEventListener('DOMContentLoaded', initScroll);
             }
-
-            // Run periodically to catch any changes
-            setInterval(forceScroll, 500);
           })();
       </script>
       <script src="/js/stream-modal.js?v=1.0.9" defer></script>
@@ -147,8 +135,7 @@
       <% } %>
 </head>
 
-<body class="bg-dark-900 text-white font-inter"
-  style="overflow-y: scroll !important; overflow-x: hidden !important; -webkit-overflow-scrolling: touch;">
+<body class="bg-dark-900 text-white font-inter">
   <!-- Mobile Header -->
   <div
     class="lg:hidden fixed top-0 left-0 right-0 h-16 bg-dark-800 shadow-lg flex items-center justify-between px-4 z-30">
@@ -173,7 +160,7 @@
     </div>
   </div>
 
-  <div class="flex mobile-safe-wrapper">
+  <div class="block w-full mobile-safe-wrapper">
     <!-- Desktop Sidebar -->
     <div class="hidden lg:flex lg:fixed lg:flex-col w-20 h-screen pt-2 bg-dark-800 shadow-lg overflow-visible z-20">
       <!-- Logo meluap keluar sidebar -->
@@ -346,31 +333,49 @@
 
 </html>
 <style>
-  /* Mobile viewport fix */
+  /* Universal viewport & scroll settings across all browsers (Desktop, Tablet, Mobile, PWA) */
   html {
     overflow-x: hidden;
+    overflow-y: auto !important;
+    height: auto;
+    min-height: 100%;
+    -webkit-text-size-adjust: 100%;
   }
 
   body {
     width: 100%;
-    overflow-x: hidden !important;
+    overflow-x: hidden;
     overflow-y: auto !important;
-    -webkit-overflow-scrolling: touch;
+    min-height: 100vh;
+    min-height: 100dvh;
     position: relative;
-    touch-action: pan-y;
+    margin: 0;
+    padding: 0;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Safe wrapper for content flow without flexbox height traps */
+  .mobile-safe-wrapper {
+    display: block !important;
+    width: 100%;
+    overflow: visible !important;
+    min-height: 100%;
   }
 
   /* Main content wrapper */
   .main-content-wrapper {
     width: 100%;
+    overflow: visible !important;
   }
 
   .mobile-scroll-view {
-    overflow-y: visible;
+    overflow-y: visible !important;
   }
 
   .main-container {
     min-height: 100vh;
+    min-height: 100dvh;
+    overflow: visible !important;
   }
 
   @media (min-width: 1024px) {
@@ -477,10 +482,10 @@
       padding-top: 64px;
       padding-bottom: 0 !important;
       min-height: 100vh;
+      min-height: 100dvh;
       height: auto !important;
       overflow-y: auto !important;
       position: relative !important;
-      touch-action: pan-y;
     }
 
     .mobile-safe-wrapper {
@@ -503,6 +508,7 @@
 
     .main-container {
       min-height: 100vh;
+      min-height: 100dvh;
       overflow: visible !important;
       display: block !important;
     }
@@ -516,13 +522,6 @@
     /* Force scrollable */
     * {
       -webkit-overflow-scrolling: touch;
-    }
-  }
-
-  /* Fix for iOS Safari */
-  @supports (-webkit-touch-callout: none) {
-    body {
-      min-height: -webkit-fill-available;
     }
   }
 </style>
@@ -544,42 +543,66 @@
   }
 
   document.addEventListener('DOMContentLoaded', () => {
-    // CRITICAL: Ensure scroll is always enabled on page load
-    // This prevents stuck overflow:hidden from modals
-    function forceScrollEnabled() {
-      // Remove any inline overflow styles
-      document.body.style.removeProperty('overflow');
-      document.documentElement.style.removeProperty('overflow');
+    // Universal Scroll Guardian: Prevents stuck overflow:hidden on ALL screen sizes and browsers
+    function isAnyModalOpen() {
+      const modalElements = document.querySelectorAll(
+        '#newStreamModal, #scheduleModal, #scheduleEditModal, ' +
+        '#autoPilotCampaignModal, #youtubeGuideModal, #recreateModal, #qris-modal, ' +
+        '#audioUploadModalContent, #videoUploadModalContent, #moveMediaModalContent, ' +
+        '.modal-overlay, .modal'
+      );
+      for (let i = 0; i < modalElements.length; i++) {
+        const el = modalElements[i];
+        if (el && !el.classList.contains('hidden') && el.style.display !== 'none') {
+          const rect = el.getBoundingClientRect();
+          if (rect.width > 0 && rect.height > 0) {
+            return true;
+          }
+        }
+      }
+      return false;
+    }
 
-      // Force scroll to be enabled
-      if (window.innerWidth < 1024) {
-        // Mobile: ensure scroll is always enabled
-        document.body.style.setProperty('overflow-y', 'auto', 'important');
-        document.body.style.setProperty('overflow-x', 'hidden', 'important');
-        document.body.style.setProperty('touch-action', 'pan-y');
+    function ensureScrollRestored() {
+      if (!isAnyModalOpen()) {
+        if (document.body.style.overflow === 'hidden') {
+          document.body.style.removeProperty('overflow');
+        }
+        if (document.documentElement.style.overflow === 'hidden') {
+          document.documentElement.style.removeProperty('overflow');
+        }
+        document.body.style.overflowY = 'auto';
+        document.documentElement.style.overflowY = 'auto';
       }
     }
 
-    // Force scroll on load
-    forceScrollEnabled();
+    // Always ensure scrolling is unblocked on page load
+    ensureScrollRestored();
 
-    // Monitor for any changes to body overflow and fix them
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
-          const bodyOverflow = document.body.style.overflow;
-          if (bodyOverflow === 'hidden' && window.innerWidth < 1024) {
-            // On mobile, if something sets overflow to hidden, wait a bit then restore scroll
-            setTimeout(forceScrollEnabled, 100);
-          }
+    // Re-check periodically during first 3 seconds after page load to prevent initial freeze
+    const initialCheckInterval = setInterval(ensureScrollRestored, 600);
+    setTimeout(() => clearInterval(initialCheckInterval), 3500);
+
+    // Watch for style changes on body to ensure overflow:hidden never gets stuck when modal closes
+    const observer = new MutationObserver(() => {
+      if (!isAnyModalOpen()) {
+        if (document.body.style.overflow === 'hidden' || document.documentElement.style.overflow === 'hidden') {
+          ensureScrollRestored();
         }
-      });
+      }
     });
 
     // Start observing body for style changes
     observer.observe(document.body, {
       attributes: true,
-      attributeFilter: ['style']
+      attributeFilter: ['style', 'class']
+    });
+
+    // Global Escape key handler to ensure scroll restoration
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        setTimeout(ensureScrollRestored, 150);
+      }
     });
 
     // Desktop profile dropdown
