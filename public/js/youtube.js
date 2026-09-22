@@ -7317,20 +7317,16 @@ function renderRecreateSlotList() {
            title="Hapus slot jadwal ini">
            <i class="ti ti-trash text-sm"></i>
          </button>`
-      : `<div class="w-8 h-8 flex-shrink-0"></div>`;
+      : '';
 
     return `
-      <div class="bg-dark-700/80 rounded-lg px-2.5 py-1.5 border border-gray-700/80 flex items-center justify-between gap-2 transition-colors hover:border-gray-600">
-        <div class="flex items-center gap-2 min-w-0 flex-1">
-          <span class="px-1.5 py-0.5 bg-primary/20 text-primary font-bold text-[10px] rounded flex-shrink-0">#${index + 1}</span>
-          <span class="text-xs text-white font-medium truncate" title="${escapeHtml(slot.title)}">${escapeHtml(slot.title)}</span>
-        </div>
-        <div class="flex items-center gap-1.5 flex-shrink-0">
-          <input type="datetime-local" name="recreateSchedule[]" required min="${minDateStr}" value="${slot.scheduleTime || ''}"
-            onchange="updateRecreateSlotTime(${index}, this.value)"
-            class="h-8 px-2 bg-dark-600 border border-gray-600 rounded-lg text-xs text-white focus:border-primary focus:outline-none [color-scheme:dark] w-40 sm:w-44">
-          ${deleteBtn}
-        </div>
+      <div class="bg-dark-700/80 rounded-lg px-2.5 py-1.5 border border-gray-700/80 flex items-center gap-2 transition-colors hover:border-gray-600">
+        <span class="px-1.5 py-0.5 bg-primary/20 text-primary font-bold text-[10px] rounded flex-shrink-0">#${index + 1}</span>
+        <span class="text-xs text-white font-medium truncate min-w-0 flex-1" title="${escapeHtml(slot.title)}">${escapeHtml(slot.title)}</span>
+        <input type="datetime-local" name="recreateSchedule[]" required min="${minDateStr}" value="${slot.scheduleTime || ''}"
+          onchange="updateRecreateSlotTime(${index}, this.value)"
+          class="h-8 px-2 bg-dark-600 border border-gray-600 rounded-lg text-xs text-white focus:border-primary focus:outline-none [color-scheme:dark] flex-shrink-0" style="width: 11rem;">
+        ${deleteBtn}
       </div>
     `;
   }).join('');

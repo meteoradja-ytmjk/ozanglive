@@ -2507,9 +2507,9 @@
               
               <div class="flex items-center gap-1.5 flex-shrink-0">
                 <input type="time" id="recreateQuickTimeInput" value="13:00"
-                  class="h-8 w-20 px-1.5 bg-dark-600 border border-gray-600 rounded-lg text-xs text-white text-center font-medium focus:outline-none focus:border-primary [color-scheme:dark]">
+                  class="h-8 w-24 px-2 bg-dark-600 border border-gray-600 rounded-lg text-xs font-semibold text-white text-center tracking-wide focus:outline-none focus:border-primary [color-scheme:dark]">
                 <button type="button" onclick="addRecreateQuickSlot()"
-                  class="h-8 px-2.5 bg-primary hover:bg-primary/80 text-white rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1 whitespace-nowrap shadow-sm"
+                  class="h-8 px-2.5 sm:px-3 bg-primary hover:bg-primary/80 text-white rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1 whitespace-nowrap shadow-sm"
                   title="Tambah slot dengan jam kustom yang dipilih">
                   <i class="ti ti-clock-plus text-xs"></i>
                   <span>+ Jam</span>
@@ -2517,49 +2517,43 @@
               </div>
             </div>
 
-            <!-- Row 2: Preset +1 Jam sampai +6 Jam (Single Line Grid 6 Cols) -->
-            <div class="pt-2 border-t border-gray-700/50 flex items-center gap-2">
-              <span class="text-[11px] text-gray-400 font-medium whitespace-nowrap flex items-center gap-1 flex-shrink-0">
-                <i class="ti ti-plus text-primary text-xs"></i>
-                <span>Preset:</span>
-              </span>
-              <div class="grid grid-cols-6 gap-1.5 flex-1 min-w-0">
-                <button type="button" onclick="addRecreateSlot(1)"
-                  class="h-7.5 px-0.5 bg-dark-600 hover:bg-dark-500 hover:text-white text-gray-300 border border-gray-600/80 rounded-lg text-[11px] font-medium transition-all flex items-center justify-center"
-                  title="Tambah slot +1 jam dari slot terakhir">
-                  <span>+1 Jam</span>
-                </button>
-                <button type="button" onclick="addRecreateSlot(2)"
-                  class="h-7.5 px-0.5 bg-dark-600 hover:bg-dark-500 hover:text-white text-gray-300 border border-gray-600/80 rounded-lg text-[11px] font-medium transition-all flex items-center justify-center"
-                  title="Tambah slot +2 jam dari slot terakhir">
-                  <span>+2 Jam</span>
-                </button>
-                <button type="button" onclick="addRecreateSlot(3)"
-                  class="h-7.5 px-0.5 bg-dark-600 hover:bg-dark-500 hover:text-white text-gray-300 border border-gray-600/80 rounded-lg text-[11px] font-medium transition-all flex items-center justify-center"
-                  title="Tambah slot +3 jam dari slot terakhir">
-                  <span>+3 Jam</span>
-                </button>
-                <button type="button" onclick="addRecreateSlot(4)"
-                  class="h-7.5 px-0.5 bg-dark-600 hover:bg-dark-500 hover:text-white text-gray-300 border border-gray-600/80 rounded-lg text-[11px] font-medium transition-all flex items-center justify-center"
-                  title="Tambah slot +4 jam dari slot terakhir">
-                  <span>+4 Jam</span>
-                </button>
-                <button type="button" onclick="addRecreateSlot(5)"
-                  class="h-7.5 px-0.5 bg-dark-600 hover:bg-dark-500 hover:text-white text-gray-300 border border-gray-600/80 rounded-lg text-[11px] font-medium transition-all flex items-center justify-center"
-                  title="Tambah slot +5 jam dari slot terakhir">
-                  <span>+5 Jam</span>
-                </button>
-                <button type="button" onclick="addRecreateSlot(6)"
-                  class="h-7.5 px-0.5 bg-dark-600 hover:bg-dark-500 hover:text-white text-gray-300 border border-gray-600/80 rounded-lg text-[11px] font-medium transition-all flex items-center justify-center"
-                  title="Tambah slot +6 jam dari slot terakhir">
-                  <span>+6 Jam</span>
-                </button>
-              </div>
+            <!-- Preset +1 Jam sampai +6 Jam -->
+            <div class="grid grid-cols-6 gap-1.5 w-full">
+              <button type="button" onclick="addRecreateSlot(1)"
+                class="h-8 w-full bg-dark-600 hover:bg-dark-500 hover:text-white text-gray-300 border border-gray-600/80 rounded-lg text-[11px] sm:text-xs font-medium transition-all flex items-center justify-center whitespace-nowrap"
+                title="Tambah slot +1 jam dari slot terakhir">
+                +1 Jam
+              </button>
+              <button type="button" onclick="addRecreateSlot(2)"
+                class="h-8 w-full bg-dark-600 hover:bg-dark-500 hover:text-white text-gray-300 border border-gray-600/80 rounded-lg text-[11px] sm:text-xs font-medium transition-all flex items-center justify-center whitespace-nowrap"
+                title="Tambah slot +2 jam dari slot terakhir">
+                +2 Jam
+              </button>
+              <button type="button" onclick="addRecreateSlot(3)"
+                class="h-8 w-full bg-dark-600 hover:bg-dark-500 hover:text-white text-gray-300 border border-gray-600/80 rounded-lg text-[11px] sm:text-xs font-medium transition-all flex items-center justify-center whitespace-nowrap"
+                title="Tambah slot +3 jam dari slot terakhir">
+                +3 Jam
+              </button>
+              <button type="button" onclick="addRecreateSlot(4)"
+                class="h-8 w-full bg-dark-600 hover:bg-dark-500 hover:text-white text-gray-300 border border-gray-600/80 rounded-lg text-[11px] sm:text-xs font-medium transition-all flex items-center justify-center whitespace-nowrap"
+                title="Tambah slot +4 jam dari slot terakhir">
+                +4 Jam
+              </button>
+              <button type="button" onclick="addRecreateSlot(5)"
+                class="h-8 w-full bg-dark-600 hover:bg-dark-500 hover:text-white text-gray-300 border border-gray-600/80 rounded-lg text-[11px] sm:text-xs font-medium transition-all flex items-center justify-center whitespace-nowrap"
+                title="Tambah slot +5 jam dari slot terakhir">
+                +5 Jam
+              </button>
+              <button type="button" onclick="addRecreateSlot(6)"
+                class="h-8 w-full bg-dark-600 hover:bg-dark-500 hover:text-white text-gray-300 border border-gray-600/80 rounded-lg text-[11px] sm:text-xs font-medium transition-all flex items-center justify-center whitespace-nowrap"
+                title="Tambah slot +6 jam dari slot terakhir">
+                +6 Jam
+              </button>
             </div>
           </div>
 
           <!-- Slot list (Grid Layout per slot item) -->
-          <div id="recreateBroadcastList" class="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+          <div id="recreateBroadcastList" class="space-y-2 max-h-56 overflow-y-auto pr-1">
             <!-- Broadcast items with schedule inputs rendered here -->
           </div>
         </div>
