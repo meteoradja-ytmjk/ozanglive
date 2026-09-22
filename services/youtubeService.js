@@ -1351,22 +1351,34 @@ class YouTubeService {
     const channelSettings = brandingSettings.channel || {};
     
     // Try to get defaults from the most recent broadcast or recent upload
-    let lastBroadcastDefaults = { title: '', description: '', tags: [] };
+    let lastBroadcastDefaults = { title: '', description: '', tags: [], categoryId: null };
     try {
-      const broadcastsResponse = await youtube.liveBroadcasts.list({
-        part: 'snippet',
-        broadcastStatus: 'all',
-        maxResults: 5
-      });
+      // 1. Fetch live broadcasts with mine: true across all and completed statuses
+      const broadcastQueries = [
+        youtube.liveBroadcasts.list({ part: 'snippet', mine: true, broadcastStatus: 'all', maxResults: 10 }),
+        youtube.liveBroadcasts.list({ part: 'snippet', mine: true, broadcastStatus: 'completed', maxResults: 10 })
+      ];
       
-      if (broadcastsResponse.data.items && broadcastsResponse.data.items.length > 0) {
-        for (const bc of broadcastsResponse.data.items) {
+      const settledBroadcasts = await Promise.allSettled(broadcastQueries);
+      const allBroadcastItems = [];
+      for (const res of settledBroadcasts) {
+        if (res.status === 'fulfilled' && res.value?.data?.items) {
+          allBroadcastItems.push(...res.value.data.items);
+        }
+      }
+
+      if (allBroadcastItems.length > 0) {
+        for (const bc of allBroadcastItems) {
           if (!lastBroadcastDefaults.title && bc.snippet?.title) {
             lastBroadcastDefaults.title = bc.snippet.title;
           }
-          if (!lastBroadcastDefaults.description && bc.snippet?.description) {
-            lastBroadcastDefaults.description = bc.snippet.description;
+          if (!lastBroadcastDefaults.description && bc.snippet?.description && bc.snippet.description.trim()) {
+            lastBroadcastDefaults.description = bc.snippet.description.trim();
           }
+          if (bc.snippet?.categoryId && !lastBroadcastDefaults.categoryId) {
+            lastBroadcastDefaults.categoryId = bc.snippet.categoryId;
+          }
+
           // Fetch actual tags and full description from Videos API if needed
           if (bc.id && (lastBroadcastDefaults.tags.length === 0 || !lastBroadcastDefaults.description)) {
             try {
@@ -1380,12 +1392,15 @@ class YouTubeService {
                   lastBroadcastDefaults.tags = vSnippet.tags;
                   console.log(`[YouTubeService.getChannelDefaults] Found ${lastBroadcastDefaults.tags.length} tags from broadcast ${bc.id}`);
                 }
-                if (!lastBroadcastDefaults.description && vSnippet.description) {
-                  lastBroadcastDefaults.description = vSnippet.description;
+                if (!lastBroadcastDefaults.description && vSnippet.description && vSnippet.description.trim()) {
+                  lastBroadcastDefaults.description = vSnippet.description.trim();
+                }
+                if (!lastBroadcastDefaults.categoryId && vSnippet.categoryId) {
+                  lastBroadcastDefaults.categoryId = vSnippet.categoryId;
                 }
               }
             } catch (vErr) {
-              // Ignore
+              // Ignore individual video fetch error
             }
           }
           if (lastBroadcastDefaults.title && lastBroadcastDefaults.description && lastBroadcastDefaults.tags.length > 0) {
@@ -1394,13 +1409,56 @@ class YouTubeService {
         }
       }
 
-      // Fallback: If no tags or description from broadcasts, check uploads playlist
+      // 2. Search for the channel's most recent videos/streams via search.list if description still empty
+      if (!lastBroadcastDefaults.description || lastBroadcastDefaults.tags.length === 0) {
+        try {
+          const searchRes = await youtube.search.list({
+            part: 'snippet',
+            forMine: true,
+            type: 'video',
+            order: 'date',
+            maxResults: 10
+          });
+          
+          if (searchRes.data?.items && searchRes.data.items.length > 0) {
+            const vidIds = searchRes.data.items.map(it => it.id?.videoId).filter(Boolean);
+            if (vidIds.length > 0) {
+              const vidsRes = await youtube.videos.list({
+                part: 'snippet',
+                id: vidIds.join(',')
+              });
+              for (const vItem of (vidsRes.data?.items || [])) {
+                if (!lastBroadcastDefaults.title && vItem.snippet?.title) {
+                  lastBroadcastDefaults.title = vItem.snippet.title;
+                }
+                if (!lastBroadcastDefaults.description && vItem.snippet?.description && vItem.snippet.description.trim()) {
+                  lastBroadcastDefaults.description = vItem.snippet.description.trim();
+                }
+                if (lastBroadcastDefaults.tags.length === 0 && vItem.snippet?.tags?.length > 0) {
+                  lastBroadcastDefaults.tags = vItem.snippet.tags;
+                  console.log(`[YouTubeService.getChannelDefaults] Found ${lastBroadcastDefaults.tags.length} tags from recent video ${vItem.id}`);
+                }
+                if (!lastBroadcastDefaults.categoryId && vItem.snippet?.categoryId) {
+                  lastBroadcastDefaults.categoryId = vItem.snippet.categoryId;
+                }
+                if (lastBroadcastDefaults.tags.length > 0 && lastBroadcastDefaults.description) {
+                  break;
+                }
+              }
+            }
+          }
+        } catch (sErr) {
+          // Ignore search error
+        }
+      }
+
+      // 3. Fallback: Check uploads playlist if description still empty
       if ((lastBroadcastDefaults.tags.length === 0 || !lastBroadcastDefaults.description) && channel.contentDetails?.relatedPlaylists?.uploads) {
         try {
           const uploadsRes = await youtube.playlistItems.list({
             part: 'snippet,contentDetails',
             playlistId: channel.contentDetails.relatedPlaylists.uploads,
-            maxResults: 5
+            maxResults: 10
           });
           if (uploadsRes.data?.items?.length > 0) {
             const vidIds = uploadsRes.data.items.map(it => it.contentDetails?.videoId).filter(Boolean);
@@ -1413,12 +1471,15 @@ class YouTubeService {
                 if (!lastBroadcastDefaults.title && vItem.snippet?.title) {
                   lastBroadcastDefaults.title = vItem.snippet.title;
                 }
-                if (!lastBroadcastDefaults.description && vItem.snippet?.description) {
-                  lastBroadcastDefaults.description = vItem.snippet.description;
+                if (!lastBroadcastDefaults.description && vItem.snippet?.description && vItem.snippet.description.trim()) {
+                  lastBroadcastDefaults.description = vItem.snippet.description.trim();
                 }
                 if (lastBroadcastDefaults.tags.length === 0 && vItem.snippet?.tags?.length > 0) {
                   lastBroadcastDefaults.tags = vItem.snippet.tags;
                   console.log(`[YouTubeService.getChannelDefaults] Found ${lastBroadcastDefaults.tags.length} tags from recent upload ${vItem.id}`);
+                }
+                if (!lastBroadcastDefaults.categoryId && vItem.snippet?.categoryId) {
+                  lastBroadcastDefaults.categoryId = vItem.snippet.categoryId;
                 }
                 if (lastBroadcastDefaults.tags.length > 0 && lastBroadcastDefaults.description) {
                   break;
@@ -1446,7 +1507,7 @@ class YouTubeService {
       tags: lastBroadcastDefaults.tags.length > 0 ? lastBroadcastDefaults.tags : channelKeywords,
       monetizationEnabled: channel.status?.isLinked || false,
       alteredContent: false, // YouTube API doesn't expose this default, user must set
-      categoryId: channelSettings.defaultCategory || '22' // Default to People & Blogs category
+      categoryId: lastBroadcastDefaults.categoryId || channelSettings.defaultCategory || '22' // Default to People & Blogs category
     };
   }
 

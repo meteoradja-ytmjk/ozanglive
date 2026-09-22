@@ -8489,15 +8489,35 @@ app.get('/api/youtube/channel/:id/defaults', isAuthenticated, async (req, res) =
       });
 
       if (templateRow && templateRow.description) {
+        let desc = templateRow.description;
+        let title = templateRow.title;
         let parsedTags = [];
-        try {
-          parsedTags = templateRow.tags ? JSON.parse(templateRow.tags) : [];
-        } catch (e) {
-          parsedTags = templateRow.tags ? templateRow.tags.split(',').map(t => t.trim()).filter(Boolean) : [];
+
+        // Handle multi-broadcast JSON templates
+        if (desc.trim().startsWith('[')) {
+          try {
+            const list = JSON.parse(desc);
+            if (Array.isArray(list) && list.length > 0) {
+              desc = list[0].description || '';
+              if (!title && list[0].title) title = list[0].title;
+              if (list[0].tags) {
+                parsedTags = Array.isArray(list[0].tags) ? list[0].tags : list[0].tags.split(/[\r\n,]+/).map(t => t.trim()).filter(Boolean);
+              }
+            }
+          } catch (e) {
+            // Keep raw if JSON parse fails
+          }
+        } else {
+          try {
+            parsedTags = templateRow.tags ? JSON.parse(templateRow.tags) : [];
+          } catch (e) {
+            parsedTags = templateRow.tags ? templateRow.tags.split(/[\r\n,]+/).map(t => t.trim()).filter(Boolean) : [];
+          }
         }
+
         defaults = {
-          title: templateRow.title || '',
-          description: templateRow.description || '',
+          title: title || '',
+          description: desc || '',
           tags: parsedTags,
           monetizationEnabled: false,
           alteredContent: false,
@@ -8530,46 +8550,37 @@ app.get('/api/youtube/channel/:id/defaults', isAuthenticated, async (req, res) =
       }
     }
     
-    // 3. Check previous streams for THIS SPECIFIC ACCOUNT ONLY (never leak across accounts)
-    if (!defaults || !defaults.description) {
+    // 3. Fallback for title from streams table if title is still empty
+    if (!defaults || !defaults.title) {
       try {
-        const localRow = await new Promise((resolve) => {
+        const streamRow = await new Promise((resolve) => {
           db.get(
-            `SELECT title, description, tags, category_id, privacy_status FROM streams 
+            `SELECT title FROM streams 
              WHERE youtube_account_id = ? AND user_id = ? 
-               AND description IS NOT NULL AND description != '' 
+               AND title IS NOT NULL AND title != '' 
              ORDER BY id DESC LIMIT 1`,
             [account.id, req.session.userId],
             (err, row) => resolve(row || null)
           );
         });
 
-        if (localRow && localRow.description) {
-          let parsedTags = [];
-          try {
-            parsedTags = localRow.tags ? JSON.parse(localRow.tags) : [];
-          } catch (e) {
-            parsedTags = localRow.tags ? localRow.tags.split(',').map(t => t.trim()).filter(Boolean) : [];
-          }
+        if (streamRow && streamRow.title) {
           if (!defaults) {
             defaults = {
-              title: localRow.title || '',
-              description: localRow.description || '',
-              tags: parsedTags,
+              title: streamRow.title,
+              description: '',
+              tags: [],
               monetizationEnabled: false,
               alteredContent: false,
-              categoryId: localRow.category_id || '22',
-              privacyStatus: localRow.privacy_status || 'public'
+              categoryId: '22',
+              privacyStatus: 'public'
             };
-          } else if (!defaults.description && localRow.description) {
-            defaults.description = localRow.description;
-            if ((!defaults.tags || defaults.tags.length === 0) && parsedTags.length > 0) {
-              defaults.tags = parsedTags;
-            }
+          } else if (!defaults.title) {
+            defaults.title = streamRow.title;
           }
         }
       } catch (dbErr) {
-        console.warn('[channel/:id/defaults] Local DB fallback warning:', dbErr.message);
+        console.warn('[channel/:id/defaults] Local DB streams fallback warning:', dbErr.message);
       }
     }
 
@@ -9856,15 +9867,35 @@ app.get('/api/youtube/channel-defaults', isAuthenticated, async (req, res) => {
       });
 
       if (templateRow && templateRow.description) {
+        let desc = templateRow.description;
+        let title = templateRow.title;
         let parsedTags = [];
-        try {
-          parsedTags = templateRow.tags ? JSON.parse(templateRow.tags) : [];
-        } catch (e) {
-          parsedTags = templateRow.tags ? templateRow.tags.split(',').map(t => t.trim()).filter(Boolean) : [];
+
+        // Handle multi-broadcast JSON templates
+        if (desc.trim().startsWith('[')) {
+          try {
+            const list = JSON.parse(desc);
+            if (Array.isArray(list) && list.length > 0) {
+              desc = list[0].description || '';
+              if (!title && list[0].title) title = list[0].title;
+              if (list[0].tags) {
+                parsedTags = Array.isArray(list[0].tags) ? list[0].tags : list[0].tags.split(/[\r\n,]+/).map(t => t.trim()).filter(Boolean);
+              }
+            }
+          } catch (e) {
+            // Keep raw if JSON parse fails
+          }
+        } else {
+          try {
+            parsedTags = templateRow.tags ? JSON.parse(templateRow.tags) : [];
+          } catch (e) {
+            parsedTags = templateRow.tags ? templateRow.tags.split(/[\r\n,]+/).map(t => t.trim()).filter(Boolean) : [];
+          }
         }
+
         defaults = {
-          title: templateRow.title || '',
-          description: templateRow.description || '',
+          title: title || '',
+          description: desc || '',
           tags: parsedTags,
           monetizationEnabled: false,
           alteredContent: false,
@@ -9897,46 +9928,37 @@ app.get('/api/youtube/channel-defaults', isAuthenticated, async (req, res) => {
       }
     }
 
-    // 3. Check previous streams for THIS SPECIFIC ACCOUNT ONLY (never leak across accounts)
-    if (!defaults || !defaults.description) {
+    // 3. Fallback for title from streams table if title is still empty
+    if (!defaults || !defaults.title) {
       try {
-        const localRow = await new Promise((resolve) => {
+        const streamRow = await new Promise((resolve) => {
           db.get(
-            `SELECT title, description, tags, category_id, privacy_status FROM streams 
+            `SELECT title FROM streams 
              WHERE youtube_account_id = ? AND user_id = ? 
-               AND description IS NOT NULL AND description != '' 
+               AND title IS NOT NULL AND title != '' 
              ORDER BY id DESC LIMIT 1`,
             [credentials.id, req.session.userId],
             (err, row) => resolve(row || null)
           );
         });
 
-        if (localRow && localRow.description) {
-          let parsedTags = [];
-          try {
-            parsedTags = localRow.tags ? JSON.parse(localRow.tags) : [];
-          } catch (e) {
-            parsedTags = localRow.tags ? localRow.tags.split(',').map(t => t.trim()).filter(Boolean) : [];
-          }
+        if (streamRow && streamRow.title) {
           if (!defaults) {
             defaults = {
-              title: localRow.title || '',
-              description: localRow.description || '',
-              tags: parsedTags,
+              title: streamRow.title,
+              description: '',
+              tags: [],
               monetizationEnabled: false,
               alteredContent: false,
-              categoryId: localRow.category_id || '22',
-              privacyStatus: localRow.privacy_status || 'public'
+              categoryId: '22',
+              privacyStatus: 'public'
             };
-          } else if (!defaults.description && localRow.description) {
-            defaults.description = localRow.description;
-            if ((!defaults.tags || defaults.tags.length === 0) && parsedTags.length > 0) {
-              defaults.tags = parsedTags;
-            }
+          } else if (!defaults.title) {
+            defaults.title = streamRow.title;
           }
         }
       } catch (dbErr) {
-        console.warn('[channel-defaults] Local DB fallback warning:', dbErr.message);
+        console.warn('[channel-defaults] Local DB streams fallback warning:', dbErr.message);
       }
     }
 
