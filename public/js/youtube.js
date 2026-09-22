@@ -7367,7 +7367,8 @@ function openRecreateFromTemplateModal(template) {
     createBtn.classList.remove('opacity-50', 'cursor-not-allowed');
   }
 
-  // Initialize slots list (Jadwal Bertingkat)
+  // Initialize broadcast groups (Opsi B: Pengelompokan Berjenjang per Broadcast)
+  window.recreateBroadcastGroups = [];
   window.recreateSlots = [];
   window.recreateNextTitles = [];
 
@@ -7391,61 +7392,62 @@ function openRecreateFromTemplateModal(template) {
   };
 
   if (Array.isArray(template.broadcasts) && template.broadcasts.length > 0) {
-    // Multi-broadcast template: initialize each broadcast preserving stream keys and folders
+    // Multi-broadcast template: initialize each broadcast as an independent group
     template.broadcasts.forEach((b, i) => {
       const scheduledTimeStr = recurringTimes[i] 
         ? parseSlotTime(recurringTimes[i], 15 + i * 30)
         : parseSlotTime(null, 15 + i * 30);
       const timeOnlyStr = recurringTimes[i] || (scheduledTimeStr && scheduledTimeStr.includes('T') ? scheduledTimeStr.split('T')[1].slice(0, 5) : '13:00');
 
-      window.recreateSlots.push({
+      window.recreateBroadcastGroups.push({
         title: b.title || template.title,
         originalTitle: b.title || template.title,
         streamId: b.streamId || template.stream_id,
         streamKey: b.streamKey || template.stream_key,
         thumbnailFolder: b.thumbnailFolder !== undefined ? b.thumbnailFolder : template.thumbnail_folder,
         pinnedThumbnail: b.pinnedThumbnail || b.thumbnailPath || template.pinned_thumbnail,
-        scheduleTime: scheduledTimeStr,
-        timeOnly: timeOnlyStr,
-        customTitle: false
+        customTitle: false,
+        times: [
+          {
+            scheduleTime: scheduledTimeStr,
+            timeOnly: timeOnlyStr
+          }
+        ]
       });
     });
   } else {
-    // Single broadcast template: initialize slots based on recurring_time if present, or 1 default slot
+    // Single broadcast template: initialize times list based on recurring_time if present, or 1 default slot
+    let groupTimes = [];
     if (recurringTimes.length > 0) {
-      recurringTimes.forEach(t => {
-        window.recreateSlots.push({
-          title: template.title,
-          originalTitle: template.title,
-          streamId: template.stream_id,
-          streamKey: template.stream_key,
-          thumbnailFolder: template.thumbnail_folder,
-          pinnedThumbnail: template.pinned_thumbnail,
-          scheduleTime: parseSlotTime(t, 15),
-          timeOnly: t,
-          customTitle: false
-        });
-      });
-      window.recreateSlots.sort((a, b) => new Date(a.scheduleTime) - new Date(b.scheduleTime));
+      groupTimes = recurringTimes.map(t => ({
+        scheduleTime: parseSlotTime(t, 15),
+        timeOnly: t
+      })).sort((a, b) => new Date(a.scheduleTime) - new Date(b.scheduleTime));
     } else {
       const defaultDate = new Date(Date.now() + 15 * 60 * 1000);
       const defaultDateStr = formatLocalDateTime(defaultDate);
-      window.recreateSlots.push({
-        title: template.title,
-        originalTitle: template.title,
-        streamId: template.stream_id,
-        streamKey: template.stream_key,
-        thumbnailFolder: template.thumbnail_folder,
-        pinnedThumbnail: template.pinned_thumbnail,
-        scheduleTime: defaultDateStr,
-        timeOnly: defaultDateStr.split('T')[1].slice(0, 5),
-        customTitle: false,
-        isInitial: true
-      });
+      groupTimes = [
+        {
+          scheduleTime: defaultDateStr,
+          timeOnly: defaultDateStr.split('T')[1].slice(0, 5)
+        }
+      ];
     }
+
+    window.recreateBroadcastGroups.push({
+      title: template.title,
+      originalTitle: template.title,
+      streamId: template.stream_id,
+      streamKey: template.stream_key,
+      thumbnailFolder: template.thumbnail_folder,
+      pinnedThumbnail: template.pinned_thumbnail,
+      customTitle: false,
+      times: groupTimes
+    });
   }
 
   // Render slots list
+  syncRecreateSlotsFromGroups();
   renderRecreateSlotList();
   
   const modal = document.getElementById('recreateFromTemplateModal');
@@ -7460,6 +7462,31 @@ function openRecreateFromTemplateModal(template) {
   // Load recurring settings from template
   loadRecreateRecurringSettings(template);
 }
+
+// Synchronize flattened slots from groups for backwards compatibility
+function syncRecreateSlotsFromGroups() {
+  window.recreateSlots = [];
+  if (Array.isArray(window.recreateBroadcastGroups)) {
+    window.recreateBroadcastGroups.forEach((group, gIdx) => {
+      (group.times || []).forEach((t, tIdx) => {
+        window.recreateSlots.push({
+          groupIndex: gIdx,
+          timeIndex: tIdx,
+          title: group.title,
+          originalTitle: group.originalTitle,
+          streamId: group.streamId,
+          streamKey: group.streamKey,
+          thumbnailFolder: group.thumbnailFolder,
+          pinnedThumbnail: group.pinnedThumbnail,
+          customTitle: group.customTitle,
+          scheduleTime: t.scheduleTime,
+          timeOnly: t.timeOnly
+        });
+      });
+    });
+  }
+}
+window.syncRecreateSlotsFromGroups = syncRecreateSlotsFromGroups;
 
 // Render the multi-slot schedule list for the recreate modal
 /**
@@ -7498,20 +7525,30 @@ function calculateUpcomingDateTimeForSlot(timeStr, pattern = 'daily', days = nul
   return formatLocalDateTime(candidateTomorrow);
 }
 
-// Render the multi-slot schedule list for the recreate modal
+// Render the multi-slot schedule list for the recreate modal (Grouped per Broadcast)
 function renderRecreateSlotList() {
   const listEl = document.getElementById('recreateBroadcastList');
-  if (!listEl || !window.recreateSlots) return;
+  if (!listEl || !window.recreateBroadcastGroups) return;
 
-  const countBadge = document.getElementById('recreateSlotCountBadge');
-  if (countBadge) {
-    countBadge.textContent = `${window.recreateSlots.length} slot`;
+  syncRecreateSlotsFromGroups();
+
+  const totalBroadcasts = window.recreateBroadcastGroups.length;
+  const totalSlots = window.recreateSlots.length;
+
+  const bCountBadge = document.getElementById('recreateBroadcastCountBadge');
+  if (bCountBadge) {
+    bCountBadge.textContent = `${totalBroadcasts} Siaran`;
+  }
+
+  const slotCountBadge = document.getElementById('recreateSlotCountBadge');
+  if (slotCountBadge) {
+    slotCountBadge.textContent = `${totalSlots} Jadwal`;
   }
 
   const createBtnText = document.getElementById('recreateBtnText');
   if (createBtnText) {
-    createBtnText.textContent = window.recreateSlots.length > 1 
-      ? `Buat ${window.recreateSlots.length} Siaran Bertingkat` 
+    createBtnText.textContent = totalSlots > 1 
+      ? `Buat ${totalSlots} Siaran Terjadwal` 
       : 'Buat Siaran Terjadwal';
   }
 
@@ -7522,47 +7559,51 @@ function renderRecreateSlotList() {
   const patternInput = document.getElementById('recreateRecurringPatternInput');
   const currentMode = patternInput ? patternInput.value : 'none';
   const isRecurring = (currentMode === 'daily' || currentMode === 'weekly');
+  const badgeText = currentMode === 'daily' ? 'Harian' : (currentMode === 'weekly' ? 'Mingguan' : 'Sekali');
+  const badgeIcon = currentMode === 'daily' ? 'ti-calendar' : (currentMode === 'weekly' ? 'ti-calendar-event' : 'ti-clock');
 
-  listEl.innerHTML = window.recreateSlots.map((slot, index) => {
-    const canDelete = window.recreateSlots.length > 1;
-    const deleteBtn = canDelete
-      ? `<button type="button" onclick="removeRecreateSlot(${index})"
+  let globalSlotOffset = 0;
+
+  listEl.innerHTML = window.recreateBroadcastGroups.map((group, groupIndex) => {
+    const canDeleteGroup = window.recreateBroadcastGroups.length > 1;
+    const deleteGroupBtn = canDeleteGroup
+      ? `<button type="button" onclick="removeRecreateBroadcastGroup(${groupIndex})"
            class="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg border border-gray-600/70 hover:border-red-500/50 transition-colors flex-shrink-0"
-           title="Hapus slot jadwal ini">
+           title="Hapus siaran ini dari daftar template">
            <i class="ti ti-trash text-xs"></i>
          </button>`
       : '';
 
-    const isEditing = Boolean(slot._isEditingTitle);
+    const isEditingTitle = Boolean(group._isEditingTitle);
+    const originalTitle = group.originalTitle || group.title || '';
+    const currentTitle = group.title || originalTitle;
 
-    // Title rotation resolution
-    const isRotated = Boolean(window.recreateUseTitleRotation && Array.isArray(window.recreateNextTitles) && window.recreateNextTitles[index] && window.recreateNextTitles[index].title);
-    const rotatedTitle = isRotated ? window.recreateNextTitles[index].title : null;
-    const originalTitle = slot.originalTitle || slot.title || '';
-    const currentTitle = slot.title || originalTitle;
+    // Check title rotation preview for this group's first slot
+    const isRotated = Boolean(window.recreateUseTitleRotation && Array.isArray(window.recreateNextTitles) && window.recreateNextTitles[globalSlotOffset] && window.recreateNextTitles[globalSlotOffset].title);
+    const rotatedTitle = isRotated ? window.recreateNextTitles[globalSlotOffset].title : null;
 
     let titleContentHtml = '';
-    if (isEditing) {
+    if (isEditingTitle) {
       titleContentHtml = `
         <div class="flex items-center gap-1.5 w-full">
-          <input type="text" id="slotTitleInput_${index}" value="${escapeHtml(slot.title || '')}"
+          <input type="text" id="groupTitleInput_${groupIndex}" value="${escapeHtml(group.title || '')}"
             class="h-7 px-2 bg-dark-600 border border-primary rounded-lg text-xs text-white flex-1 min-w-0 focus:outline-none focus:ring-1 focus:ring-primary"
             placeholder="Masukkan judul siaran..."
-            onkeydown="if(event.key==='Enter'){event.preventDefault();saveRecreateSlotTitle(${index})}else if(event.key==='Escape'){event.preventDefault();cancelEditRecreateSlotTitle(${index})}">
-          <button type="button" onclick="saveRecreateSlotTitle(${index})" class="w-7 h-7 flex items-center justify-center bg-primary hover:bg-primary/80 text-white rounded-lg flex-shrink-0 transition-colors" title="Simpan judul">
+            onkeydown="if(event.key==='Enter'){event.preventDefault();saveRecreateGroupTitle(${groupIndex})}else if(event.key==='Escape'){event.preventDefault();cancelEditRecreateGroupTitle(${groupIndex})}">
+          <button type="button" onclick="saveRecreateGroupTitle(${groupIndex})" class="w-7 h-7 flex items-center justify-center bg-primary hover:bg-primary/80 text-white rounded-lg flex-shrink-0 transition-colors" title="Simpan judul">
             <i class="ti ti-check text-xs"></i>
           </button>
-          <button type="button" onclick="cancelEditRecreateSlotTitle(${index})" class="w-7 h-7 flex items-center justify-center bg-dark-600 hover:bg-dark-500 text-gray-300 border border-gray-600 rounded-lg flex-shrink-0 transition-colors" title="Batal">
+          <button type="button" onclick="cancelEditRecreateGroupTitle(${groupIndex})" class="w-7 h-7 flex items-center justify-center bg-dark-600 hover:bg-dark-500 text-gray-300 border border-gray-600 rounded-lg flex-shrink-0 transition-colors" title="Batal">
             <i class="ti ti-x text-xs"></i>
           </button>
         </div>`;
     } else {
       let titleDisplayBody = '';
-      if (slot.customTitle) {
+      if (group.customTitle) {
         titleDisplayBody = `
           <div class="flex items-center gap-1.5 flex-wrap min-w-0 flex-1">
-            <span class="text-xs text-white font-medium break-words leading-relaxed">${escapeHtml(slot.title)}</span>
-            <span class="text-[10px] text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1 py-0.2 rounded font-normal flex-shrink-0">Kustom</span>
+            <span class="text-xs text-white font-semibold break-words leading-relaxed">${escapeHtml(group.title)}</span>
+            <span class="text-[10px] text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.2 rounded font-normal flex-shrink-0">Kustom</span>
           </div>`;
       } else if (isRotated) {
         titleDisplayBody = `
@@ -7577,304 +7618,318 @@ function renderRecreateSlotList() {
           </div>`;
       } else {
         titleDisplayBody = `
-          <div class="text-xs text-white font-medium break-words leading-relaxed flex-1" title="${escapeHtml(currentTitle)}">
+          <div class="text-xs text-white font-semibold break-words leading-relaxed flex-1" title="${escapeHtml(currentTitle)}">
             ${escapeHtml(currentTitle)}
           </div>`;
       }
 
       titleContentHtml = `
         <div class="flex items-start justify-between gap-2 w-full">
-          <div class="flex items-start gap-1.5 min-w-0 flex-1">
-            <span class="px-1.5 py-0.5 bg-primary/20 text-primary font-bold text-[10px] rounded mt-0.5 flex-shrink-0">#${index + 1}</span>
+          <div class="flex items-start gap-2 min-w-0 flex-1">
+            <span class="px-2 py-0.5 bg-primary/20 text-primary font-bold text-[11px] rounded mt-0.5 flex-shrink-0">#${groupIndex + 1}</span>
             ${titleDisplayBody}
           </div>
           <div class="flex items-center gap-1 flex-shrink-0 mt-0.5">
-            <button type="button" onclick="editRecreateSlotTitle(${index})"
+            <button type="button" onclick="editRecreateGroupTitle(${groupIndex})"
               class="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-primary hover:bg-primary/10 rounded-lg border border-gray-600/70 hover:border-primary/50 transition-colors"
-              title="Edit judul siaran slot #${index + 1}">
+              title="Edit judul siaran #${groupIndex + 1}">
               <i class="ti ti-edit text-xs"></i>
             </button>
-            ${deleteBtn}
+            ${deleteGroupBtn}
           </div>
         </div>`;
     }
 
-    // Time Control: In recurring mode (Daily/Weekly), disable date and show ONLY time input
-    let timeControlHtml = '';
-    if (isRecurring) {
-      let timeVal = '13:00';
-      if (slot.timeOnly) {
-        timeVal = slot.timeOnly;
-      } else if (slot.scheduleTime && slot.scheduleTime.includes('T')) {
-        timeVal = slot.scheduleTime.split('T')[1].slice(0, 5);
-      } else if (slot.scheduleTime && /^[0-2]?[0-9]:[0-5][0-9]$/.test(slot.scheduleTime)) {
-        timeVal = slot.scheduleTime;
+    // Render scheduled times for this group
+    const timesHtml = (group.times || []).map((t, timeIndex) => {
+      const canDeleteTime = (group.times || []).length > 1;
+      const deleteTimeBtn = canDeleteTime
+        ? `<button type="button" onclick="removeTimeFromGroup(${groupIndex}, ${timeIndex})"
+             class="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded border border-gray-600/60 hover:border-red-500/40 transition-colors flex-shrink-0"
+             title="Hapus jam tayang ini">
+             <i class="ti ti-trash text-[11px]"></i>
+           </button>`
+        : '';
+
+      let timeInputHtml = '';
+      if (isRecurring) {
+        let timeVal = t.timeOnly || '13:00';
+        if (!timeVal && t.scheduleTime && t.scheduleTime.includes('T')) {
+          timeVal = t.scheduleTime.split('T')[1].slice(0, 5);
+        }
+        timeInputHtml = `
+          <div class="flex items-center gap-1.5 justify-end">
+            <input type="time" id="group_${groupIndex}_time_${timeIndex}" name="groupTime_${groupIndex}[]" required value="${timeVal}"
+              onchange="updateGroupSlotTime(${groupIndex}, ${timeIndex}, this.value, true)"
+              class="h-7 w-[100px] px-2 bg-dark-600 border border-gray-600 rounded-lg text-xs font-semibold text-white text-center focus:border-primary focus:outline-none [color-scheme:dark]">
+            ${deleteTimeBtn}
+          </div>
+        `;
+      } else {
+        timeInputHtml = `
+          <div class="flex items-center gap-1.5 flex-1 justify-end min-w-0">
+            <input type="datetime-local" id="group_${groupIndex}_datetime_${timeIndex}" name="groupDateTime_${groupIndex}[]" required min="${minDateStr}" value="${t.scheduleTime || ''}"
+              onchange="updateGroupSlotTime(${groupIndex}, ${timeIndex}, this.value, false)"
+              class="h-7 flex-1 max-w-[190px] px-2 bg-dark-600 border border-gray-600 rounded-lg text-xs font-semibold text-white focus:border-primary focus:outline-none [color-scheme:dark]">
+            ${deleteTimeBtn}
+          </div>
+        `;
       }
 
-      const badgeText = currentMode === 'daily' ? 'Harian' : 'Mingguan';
-      const badgeIcon = currentMode === 'daily' ? 'ti-calendar' : 'ti-calendar-event';
+      const badgeHtml = isRecurring
+        ? `<span class="text-[10px] text-green-400 bg-green-500/10 border border-green-500/20 px-1.5 py-0.5 rounded font-normal flex items-center gap-0.5">
+             <i class="ti ${badgeIcon} text-[10px]"></i> ${badgeText}
+           </span>`
+        : `<span class="text-[10px] text-blue-400 bg-blue-500/10 border border-blue-500/20 px-1.5 py-0.5 rounded font-normal">
+             Sekali
+           </span>`;
 
-      timeControlHtml = `
-        <div class="flex items-center justify-between gap-2 pt-1 border-t border-gray-700/50">
-          <div class="flex items-center gap-1.5 text-gray-300 text-xs flex-shrink-0">
-            <i class="ti ti-clock text-primary text-xs"></i>
-            <span class="text-[11px] font-medium text-gray-200">Jam Tayang (WIB):</span>
-            <span class="text-[10px] text-green-400 bg-green-500/10 border border-green-500/20 px-1.5 py-0.5 rounded font-normal flex items-center gap-0.5">
-              <i class="ti ${badgeIcon} text-[10px]"></i> ${badgeText}
-            </span>
+      return `
+        <div class="flex items-center justify-between gap-2 bg-dark-700/60 px-2.5 py-1.5 rounded-lg border border-gray-600/40">
+          <div class="flex items-center gap-2 text-xs text-gray-300 flex-shrink-0">
+            <span class="text-[11px] font-medium text-gray-300">Jam ${timeIndex + 1}:</span>
+            ${badgeHtml}
           </div>
-          <div class="flex items-center gap-1.5 flex-1 max-w-[130px] justify-end">
-            <input type="time" id="slotTimeInput_${index}" name="recreateScheduleTime[]" required value="${timeVal}"
-              onchange="updateRecreateSlotTime(${index}, this.value, true)"
-              class="h-7 w-full px-2 bg-dark-600 border border-gray-600 rounded-lg text-xs font-semibold text-white text-center focus:border-primary focus:outline-none [color-scheme:dark]">
-          </div>
+          ${timeInputHtml}
         </div>
       `;
-    } else {
-      timeControlHtml = `
-        <div class="flex items-center gap-2 pt-1 border-t border-gray-700/50">
-          <div class="flex items-center gap-1.5 text-gray-400 text-xs flex-shrink-0">
-            <i class="ti ti-calendar-time text-primary text-xs"></i>
-            <span class="text-[11px] font-medium text-gray-300">Waktu Siaran:</span>
-            <span class="text-[10px] text-blue-400 bg-blue-500/10 border border-blue-500/20 px-1 py-0.2 rounded font-normal">Sekali</span>
-          </div>
-          <input type="datetime-local" id="slotDateTimeInput_${index}" name="recreateSchedule[]" required min="${minDateStr}" value="${slot.scheduleTime || ''}"
-            onchange="updateRecreateSlotTime(${index}, this.value, false)"
-            class="h-7 flex-1 min-w-0 px-2 bg-dark-600 border border-gray-600 rounded-lg text-xs font-semibold text-white focus:border-primary focus:outline-none [color-scheme:dark]">
-        </div>
-      `;
-    }
+    }).join('');
+
+    globalSlotOffset += (group.times || []).length;
 
     return `
-      <div id="slotCard_${index}" class="recreate-slot-card bg-dark-700/80 rounded-lg p-2.5 border border-gray-700/80 space-y-2 transition-colors hover:border-gray-600">
-        <!-- Baris 1: Nomor Slot, Judul Lengkap, Tombol Edit & Hapus -->
+      <div id="groupCard_${groupIndex}" class="bg-dark-700/80 rounded-xl p-3 border border-gray-700/80 space-y-2.5 transition-colors hover:border-gray-600 shadow-sm">
+        <!-- Baris 1: Header Siaran, Judul Lengkap, Edit & Hapus Siaran -->
         ${titleContentHtml}
-        
-        <!-- Baris 2: Waktu / Jam Siaran -->
-        ${timeControlHtml}
+
+        <!-- Baris 2: Sub-kontainer Jam Tayang Khusus Siaran Ini -->
+        <div class="bg-dark-800/60 rounded-lg p-2.5 border border-gray-700/50 space-y-2">
+          <div class="flex items-center justify-between text-xs text-gray-400 px-0.5">
+            <span class="flex items-center gap-1 font-medium text-gray-300">
+              <i class="ti ti-clock text-primary text-xs"></i>
+              <span>Jam Tayang Siaran #${groupIndex + 1}:</span>
+            </span>
+            <span class="text-[10px] text-gray-400 font-mono">${(group.times || []).length} jadwal</span>
+          </div>
+
+          <!-- List Waktu Slot -->
+          <div class="space-y-1.5">
+            ${timesHtml}
+          </div>
+
+          <!-- Tombol Tambah Jam Khusus Siaran Ini -->
+          <div class="flex items-center justify-between gap-2 pt-1 border-t border-gray-700/40 flex-wrap">
+            <div class="flex items-center gap-1">
+              <span class="text-[10px] text-gray-400 mr-0.5">Cepat:</span>
+              <button type="button" onclick="addQuickTimeToGroup(${groupIndex}, 1)"
+                class="px-2 py-0.5 bg-dark-600 hover:bg-dark-500 hover:text-white text-gray-300 text-[10px] rounded border border-gray-600/70 font-medium transition-colors"
+                title="Tambah jam +1 jam dari jadwal terakhir">+1j</button>
+              <button type="button" onclick="addQuickTimeToGroup(${groupIndex}, 2)"
+                class="px-2 py-0.5 bg-dark-600 hover:bg-dark-500 hover:text-white text-gray-300 text-[10px] rounded border border-gray-600/70 font-medium transition-colors"
+                title="Tambah jam +2 jam dari jadwal terakhir">+2j</button>
+              <button type="button" onclick="addQuickTimeToGroup(${groupIndex}, 3)"
+                class="px-2 py-0.5 bg-dark-600 hover:bg-dark-500 hover:text-white text-gray-300 text-[10px] rounded border border-gray-600/70 font-medium transition-colors"
+                title="Tambah jam +3 jam dari jadwal terakhir">+3j</button>
+              <button type="button" onclick="addQuickTimeToGroup(${groupIndex}, 4)"
+                class="px-2 py-0.5 bg-dark-600 hover:bg-dark-500 hover:text-white text-gray-300 text-[10px] rounded border border-gray-600/70 font-medium transition-colors"
+                title="Tambah jam +4 jam dari jadwal terakhir">+4j</button>
+            </div>
+            <button type="button" onclick="addCustomTimeToGroup(${groupIndex})"
+              class="h-6 px-2.5 bg-primary/15 hover:bg-primary/25 text-primary border border-primary/30 rounded-lg text-[11px] font-semibold transition-colors flex items-center gap-1 ml-auto"
+              title="Tambah jadwal jam baru untuk siaran ini">
+              <i class="ti ti-plus text-xs"></i>
+              <span>Tambah Jam</span>
+            </button>
+          </div>
+        </div>
       </div>
     `;
   }).join('');
 }
 
-// Update schedule time for a slot in window.recreateSlots
-function updateRecreateSlotTime(index, value, isTimeOnly = false) {
-  if (window.recreateSlots && window.recreateSlots[index]) {
-    if (isTimeOnly) {
-      const now = new Date();
-      let datePrefix = formatLocalDateTime(now).split('T')[0];
-      if (window.recreateSlots[index].scheduleTime && window.recreateSlots[index].scheduleTime.includes('T')) {
-        datePrefix = window.recreateSlots[index].scheduleTime.split('T')[0];
-      }
-      window.recreateSlots[index].scheduleTime = `${datePrefix}T${value}`;
-      window.recreateSlots[index].timeOnly = value;
-    } else {
-      window.recreateSlots[index].scheduleTime = value;
-      if (value && value.includes('T')) {
-        window.recreateSlots[index].timeOnly = value.split('T')[1].slice(0, 5);
-      }
-    }
-    delete window.recreateSlots[index].isInitial;
-  }
-}
-
-// Add a new slot bertingkat to recreate modal with customizable hoursToAdd (e.g. 1, 2, 3, 4, 5, 6)
-async function addRecreateSlot(hoursToAdd = 2) {
-  if (!window.recreateSlots || !window.currentRecreateTemplate) return;
-  const template = window.currentRecreateTemplate;
+// Add quick time to group
+function addQuickTimeToGroup(groupIndex, hoursToAdd = 2) {
+  if (!window.recreateBroadcastGroups || !window.recreateBroadcastGroups[groupIndex]) return;
+  const group = window.recreateBroadcastGroups[groupIndex];
   const h = Number(hoursToAdd) || 2;
 
   let nextDate;
-  if (window.recreateSlots.length > 0) {
-    const lastSlot = window.recreateSlots[window.recreateSlots.length - 1];
-    const lastTime = new Date(lastSlot.scheduleTime);
-    if (!isNaN(lastTime.getTime())) {
-      nextDate = new Date(lastTime.getTime() + h * 60 * 60 * 1000); // +h hours from last slot
+  if (group.times && group.times.length > 0) {
+    const lastT = group.times[group.times.length - 1];
+    if (lastT && lastT.scheduleTime) {
+      const parsed = new Date(lastT.scheduleTime);
+      if (!isNaN(parsed.getTime())) {
+        nextDate = new Date(parsed.getTime() + h * 60 * 60 * 1000);
+      }
     }
   }
   if (!nextDate || isNaN(nextDate.getTime()) || nextDate.getTime() < Date.now() + 10 * 60 * 1000) {
-    nextDate = new Date(Date.now() + (h * 60) * 60 * 1000);
+    nextDate = new Date(Date.now() + h * 60 * 60 * 1000);
   }
 
-  if (window.recreateSlots.length > 0) {
-    delete window.recreateSlots[0].isInitial;
-  }
+  const dtStr = formatLocalDateTime(nextDate);
+  const timeOnlyStr = dtStr.split('T')[1].slice(0, 5);
 
-  // Round-robin selection across multi-broadcasts if available
-  const newIndex = window.recreateSlots.length;
-  const bList = (Array.isArray(template.broadcasts) && template.broadcasts.length > 0) ? template.broadcasts : null;
-  const sourceB = bList ? bList[newIndex % bList.length] : template;
-
-  const nextDateStr = formatLocalDateTime(nextDate);
-  window.recreateSlots.push({
-    title: sourceB.title || template.title,
-    originalTitle: sourceB.title || template.title,
-    streamId: sourceB.streamId || template.stream_id,
-    streamKey: sourceB.streamKey || template.stream_key,
-    thumbnailFolder: sourceB.thumbnailFolder !== undefined ? sourceB.thumbnailFolder : template.thumbnail_folder,
-    pinnedThumbnail: sourceB.pinnedThumbnail || sourceB.thumbnailPath || template.pinned_thumbnail,
-    scheduleTime: nextDateStr,
-    timeOnly: nextDateStr.split('T')[1].slice(0, 5),
-    customTitle: false
+  group.times.push({
+    scheduleTime: dtStr,
+    timeOnly: timeOnlyStr
   });
+  group.times.sort((a, b) => new Date(a.scheduleTime) - new Date(b.scheduleTime));
 
-  if (window.recreateUseTitleRotation) {
-    await loadRecreateTitleRotationPreview();
-  } else {
-    renderRecreateSlotList();
-  }
-  showToast(`Slot #${window.recreateSlots.length} berhasil ditambahkan (+${h} jam)`);
+  renderRecreateSlotList();
+  showToast(`Jam ${timeOnlyStr} (+${h} jam) ditambahkan ke Siaran #${groupIndex + 1}`);
 }
-window.addRecreateSlot = addRecreateSlot;
+window.addQuickTimeToGroup = addQuickTimeToGroup;
 
-// Add quick slot from time input
-function addRecreateQuickSlot() {
-  const timeInput = document.getElementById('recreateQuickTimeInput');
-  if (!timeInput || !timeInput.value) {
-    showToast('Pilih jam terlebih dahulu', 'error');
+function addCustomTimeToGroup(groupIndex) {
+  addQuickTimeToGroup(groupIndex, 2);
+}
+window.addCustomTimeToGroup = addCustomTimeToGroup;
+
+// Remove time from group
+function removeTimeFromGroup(groupIndex, timeIndex) {
+  if (!window.recreateBroadcastGroups || !window.recreateBroadcastGroups[groupIndex]) return;
+  const group = window.recreateBroadcastGroups[groupIndex];
+  if (!group.times || group.times.length <= 1) {
+    showToast('Minimal harus ada 1 jadwal untuk siaran ini', 'warning');
     return;
   }
-  addRecreatePresetSlot(timeInput.value);
+  group.times.splice(timeIndex, 1);
+  renderRecreateSlotList();
 }
+window.removeTimeFromGroup = removeTimeFromGroup;
 
-// Add preset time slot (e.g. '08:00', '13:00')
-async function addRecreatePresetSlot(timeStr) {
-  if (!window.recreateSlots || !window.currentRecreateTemplate) return;
-  const template = window.currentRecreateTemplate;
+// Remove entire broadcast group
+function removeRecreateBroadcastGroup(groupIndex) {
+  if (!window.recreateBroadcastGroups || window.recreateBroadcastGroups.length <= 1) {
+    showToast('Minimal harus ada 1 siaran dalam template', 'error');
+    return;
+  }
+  window.recreateBroadcastGroups.splice(groupIndex, 1);
+  renderRecreateSlotList();
+  showToast('Siaran dihapus dari daftar');
+}
+window.removeRecreateBroadcastGroup = removeRecreateBroadcastGroup;
 
-  const [hours, minutes] = timeStr.split(':').map(Number);
-  if (isNaN(hours) || isNaN(minutes)) return;
-
-  // Base date calculation from existing slots or now
-  let targetDate = new Date();
-  if (window.recreateSlots.length > 0) {
-    const refSlot = window.recreateSlots[window.recreateSlots.length - 1];
-    if (refSlot && refSlot.scheduleTime) {
-      const parsed = new Date(refSlot.scheduleTime);
-      if (!isNaN(parsed.getTime())) {
-        targetDate = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate(), hours, minutes, 0, 0);
+// Update group slot time
+function updateGroupSlotTime(groupIndex, timeIndex, value, isTimeOnly = false) {
+  if (window.recreateBroadcastGroups && window.recreateBroadcastGroups[groupIndex]) {
+    const group = window.recreateBroadcastGroups[groupIndex];
+    if (group.times && group.times[timeIndex]) {
+      if (isTimeOnly) {
+        const now = new Date();
+        let datePrefix = formatLocalDateTime(now).split('T')[0];
+        if (group.times[timeIndex].scheduleTime && group.times[timeIndex].scheduleTime.includes('T')) {
+          datePrefix = group.times[timeIndex].scheduleTime.split('T')[0];
+        }
+        group.times[timeIndex].scheduleTime = `${datePrefix}T${value}`;
+        group.times[timeIndex].timeOnly = value;
+      } else {
+        group.times[timeIndex].scheduleTime = value;
+        if (value && value.includes('T')) {
+          group.times[timeIndex].timeOnly = value.split('T')[1].slice(0, 5);
+        }
       }
     }
-  } else {
-    targetDate.setHours(hours, minutes, 0, 0);
   }
-
-  // Advance to tomorrow if target date is in the past (< 10 mins from now)
-  if (targetDate.getTime() < Date.now() + 10 * 60 * 1000) {
-    targetDate.setDate(targetDate.getDate() + 1);
-  }
-
-  const scheduleTime = formatLocalDateTime(targetDate);
-
-  // Avoid duplicate slots at the exact same time
-  const exists = window.recreateSlots.some(s => s.scheduleTime === scheduleTime);
-  if (exists) {
-    showToast(`Slot jam ${timeStr} sudah ada di daftar`, 'warning');
-    return;
-  }
-
-  // If there's only 1 untouched initial slot, set its time directly
-  if (window.recreateSlots.length === 1 && window.recreateSlots[0].isInitial) {
-    window.recreateSlots[0].scheduleTime = scheduleTime;
-    window.recreateSlots[0].timeOnly = timeStr;
-    delete window.recreateSlots[0].isInitial;
-    renderRecreateSlotList();
-    showToast(`Jadwal diatur ke ${timeStr}`);
-    return;
-  }
-
-  if (window.recreateSlots.length > 0) {
-    delete window.recreateSlots[0].isInitial;
-  }
-
-  // Round-robin selection across multi-broadcasts if available
-  const newIndex = window.recreateSlots.length;
-  const bList = (Array.isArray(template.broadcasts) && template.broadcasts.length > 0) ? template.broadcasts : null;
-  const sourceB = bList ? bList[newIndex % bList.length] : template;
-
-  window.recreateSlots.push({
-    title: sourceB.title || template.title,
-    originalTitle: sourceB.title || template.title,
-    streamId: sourceB.streamId || template.stream_id,
-    streamKey: sourceB.streamKey || template.stream_key,
-    thumbnailFolder: sourceB.thumbnailFolder !== undefined ? sourceB.thumbnailFolder : template.thumbnail_folder,
-    pinnedThumbnail: sourceB.pinnedThumbnail || sourceB.thumbnailPath || template.pinned_thumbnail,
-    scheduleTime: scheduleTime,
-    timeOnly: timeStr,
-    customTitle: false
-  });
-
-  window.recreateSlots.sort((a, b) => new Date(a.scheduleTime) - new Date(b.scheduleTime));
-
-  if (window.recreateUseTitleRotation) {
-    await loadRecreateTitleRotationPreview();
-  } else {
-    renderRecreateSlotList();
-  }
-  showToast(`Slot jam ${timeStr} ditambahkan`);
 }
+window.updateGroupSlotTime = updateGroupSlotTime;
 
-// Remove slot at index
-async function removeRecreateSlot(index) {
-  if (!window.recreateSlots || window.recreateSlots.length <= 1) {
-    showToast('Minimal harus ada 1 slot jadwal', 'error');
-    return;
+// Edit group title functions
+function editRecreateGroupTitle(groupIndex) {
+  if (window.recreateBroadcastGroups && window.recreateBroadcastGroups[groupIndex]) {
+    window.recreateBroadcastGroups[groupIndex]._isEditingTitle = true;
+    renderRecreateSlotList();
+    setTimeout(() => {
+      const input = document.getElementById(`groupTitleInput_${groupIndex}`);
+      if (input) {
+        input.focus();
+        input.select();
+      }
+    }, 50);
   }
-  window.recreateSlots.splice(index, 1);
-  if (window.recreateUseTitleRotation) {
-    await loadRecreateTitleRotationPreview();
-  } else {
+}
+window.editRecreateGroupTitle = editRecreateGroupTitle;
+
+function saveRecreateGroupTitle(groupIndex) {
+  if (window.recreateBroadcastGroups && window.recreateBroadcastGroups[groupIndex]) {
+    const input = document.getElementById(`groupTitleInput_${groupIndex}`);
+    if (input && input.value.trim()) {
+      window.recreateBroadcastGroups[groupIndex].title = input.value.trim();
+      window.recreateBroadcastGroups[groupIndex].customTitle = true;
+      showToast('Judul siaran berhasil diperbarui');
+    }
+    delete window.recreateBroadcastGroups[groupIndex]._isEditingTitle;
     renderRecreateSlotList();
   }
-  showToast('Slot jadwal dihapus');
 }
-window.addRecreatePresetSlot = addRecreatePresetSlot;
-window.addRecreateQuickSlot = addRecreateQuickSlot;
-window.removeRecreateSlot = removeRecreateSlot;
+window.saveRecreateGroupTitle = saveRecreateGroupTitle;
 
-// Edit slot title functions
+function cancelEditRecreateGroupTitle(groupIndex) {
+  if (window.recreateBroadcastGroups && window.recreateBroadcastGroups[groupIndex]) {
+    delete window.recreateBroadcastGroups[groupIndex]._isEditingTitle;
+    renderRecreateSlotList();
+  }
+}
+window.cancelEditRecreateGroupTitle = cancelEditRecreateGroupTitle;
+
+// Compatibility aliases
+function updateRecreateSlotTime(index, value, isTimeOnly = false) {
+  syncRecreateSlotsFromGroups();
+  const slot = window.recreateSlots[index];
+  if (slot) {
+    updateGroupSlotTime(slot.groupIndex, slot.timeIndex, value, isTimeOnly);
+  }
+}
+function addRecreateSlot(hoursToAdd = 2) {
+  if (window.recreateBroadcastGroups && window.recreateBroadcastGroups.length > 0) {
+    addQuickTimeToGroup(window.recreateBroadcastGroups.length - 1, hoursToAdd);
+  }
+}
+function addRecreateQuickSlot() {
+  if (window.recreateBroadcastGroups && window.recreateBroadcastGroups.length > 0) {
+    addQuickTimeToGroup(0, 2);
+  }
+}
+function addRecreatePresetSlot(timeStr) {
+  if (window.recreateBroadcastGroups && window.recreateBroadcastGroups.length > 0) {
+    addQuickTimeToGroup(0, 2);
+  }
+}
+function removeRecreateSlot(index) {
+  syncRecreateSlotsFromGroups();
+  const slot = window.recreateSlots[index];
+  if (slot) {
+    removeTimeFromGroup(slot.groupIndex, slot.timeIndex);
+  }
+}
 function editRecreateSlotTitle(index) {
-  if (!window.recreateSlots || !window.recreateSlots[index]) return;
-  window.recreateSlots[index]._isEditingTitle = true;
-  renderRecreateSlotList();
-  setTimeout(() => {
-    const input = document.getElementById(`slotTitleInput_${index}`);
-    if (input) {
-      input.focus();
-      input.select();
-    }
-  }, 50);
+  syncRecreateSlotsFromGroups();
+  const slot = window.recreateSlots[index];
+  if (slot) editRecreateGroupTitle(slot.groupIndex);
 }
-
 function saveRecreateSlotTitle(index) {
-  if (!window.recreateSlots || !window.recreateSlots[index]) return;
-  const input = document.getElementById(`slotTitleInput_${index}`);
-  if (input) {
-    const newTitle = input.value.trim();
-    if (newTitle) {
-      window.recreateSlots[index].title = newTitle;
-      window.recreateSlots[index].customTitle = true;
-      showToast('Judul slot berhasil diperbarui');
-    }
-  }
-  delete window.recreateSlots[index]._isEditingTitle;
-  renderRecreateSlotList();
+  syncRecreateSlotsFromGroups();
+  const slot = window.recreateSlots[index];
+  if (slot) saveRecreateGroupTitle(slot.groupIndex);
 }
-
 function cancelEditRecreateSlotTitle(index) {
-  if (!window.recreateSlots || !window.recreateSlots[index]) return;
-  delete window.recreateSlots[index]._isEditingTitle;
-  renderRecreateSlotList();
+  syncRecreateSlotsFromGroups();
+  const slot = window.recreateSlots[index];
+  if (slot) cancelEditRecreateGroupTitle(slot.groupIndex);
 }
-
-window.editRecreateSlotTitle = editRecreateSlotTitle;
-window.saveRecreateSlotTitle = saveRecreateSlotTitle;
-window.cancelEditRecreateSlotTitle = cancelEditRecreateSlotTitle;
-
-// Compatibility alias for removeRecreateBroadcast
 function removeRecreateBroadcast(index) {
   removeRecreateSlot(index);
 }
+
+window.addRecreateSlot = addRecreateSlot;
+window.addRecreatePresetSlot = addRecreatePresetSlot;
+window.addRecreateQuickSlot = addRecreateQuickSlot;
+window.removeRecreateSlot = removeRecreateSlot;
+window.editRecreateSlotTitle = editRecreateSlotTitle;
+window.saveRecreateSlotTitle = saveRecreateSlotTitle;
+window.cancelEditRecreateSlotTitle = cancelEditRecreateSlotTitle;
+window.removeRecreateBroadcast = removeRecreateBroadcast;
 
 function closeRecreateFromTemplateModal() {
   const modal = document.getElementById('recreateFromTemplateModal');
@@ -7883,6 +7938,7 @@ function closeRecreateFromTemplateModal() {
     modal.style.display = 'none';
   }
   window.currentRecreateTemplate = null;
+  window.recreateBroadcastGroups = [];
   window.recreateSlots = [];
   window.recreateUseTitleRotation = false;
   
@@ -8146,10 +8202,6 @@ if (recreateFromTemplateForm) {
       const patternVal = patternInput ? patternInput.value : 'none';
       const isRecurring = (patternVal === 'daily' || patternVal === 'weekly');
       
-      const slots = (window.recreateSlots && window.recreateSlots.length > 0)
-        ? window.recreateSlots
-        : (template.broadcasts || [template]);
-
       // Collect selected recurring days if weekly
       let selectedWeeklyDays = [];
       if (patternVal === 'weekly') {
@@ -8160,34 +8212,61 @@ if (recreateFromTemplateForm) {
         }
       }
 
-      // Collect schedules for all slots
-      const schedules = [];
-      for (let idx = 0; idx < slots.length; idx++) {
-        const slot = slots[idx];
-        let sched = '';
+      // Collect broadcasts to create from window.recreateBroadcastGroups
+      const broadcastsToCreate = [];
+      const groups = (window.recreateBroadcastGroups && window.recreateBroadcastGroups.length > 0)
+        ? window.recreateBroadcastGroups
+        : [];
 
-        if (isRecurring) {
-          const timeInput = document.getElementById(`slotTimeInput_${idx}`);
-          let timeVal = (timeInput && timeInput.value) ? timeInput.value : (slot.timeOnly || '');
-          if (!timeVal && slot.scheduleTime && slot.scheduleTime.includes('T')) {
-            timeVal = slot.scheduleTime.split('T')[1].slice(0, 5);
+      for (let gIdx = 0; gIdx < groups.length; gIdx++) {
+        const grp = groups[gIdx];
+        const times = grp.times || [];
+
+        for (let tIdx = 0; tIdx < times.length; tIdx++) {
+          const t = times[tIdx];
+          let finalSched = '';
+
+          if (isRecurring) {
+            const timeInput = document.getElementById(`group_${gIdx}_time_${tIdx}`);
+            let timeVal = (timeInput && timeInput.value) ? timeInput.value : (t.timeOnly || '');
+            if (!timeVal && t.scheduleTime && t.scheduleTime.includes('T')) {
+              timeVal = t.scheduleTime.split('T')[1].slice(0, 5);
+            }
+            if (!timeVal) timeVal = '13:00';
+
+            t.timeOnly = timeVal;
+            // Calculate valid upcoming start time for YouTube API
+            finalSched = calculateUpcomingDateTimeForSlot(timeVal, patternVal, selectedWeeklyDays);
+            t.scheduleTime = finalSched;
+          } else {
+            const dtInput = document.getElementById(`group_${gIdx}_datetime_${tIdx}`);
+            finalSched = (dtInput && dtInput.value) ? dtInput.value : t.scheduleTime;
+            t.scheduleTime = finalSched;
           }
-          if (!timeVal) timeVal = '13:00';
 
-          slot.timeOnly = timeVal;
-          // Calculate valid upcoming start time for YouTube API
-          sched = calculateUpcomingDateTimeForSlot(timeVal, patternVal, selectedWeeklyDays);
-          slot.scheduleTime = sched;
-        } else {
-          const dtInput = document.getElementById(`slotDateTimeInput_${idx}`);
-          sched = (dtInput && dtInput.value) ? dtInput.value : slot.scheduleTime;
-          slot.scheduleTime = sched;
-        }
-
-        if (sched) {
-          schedules.push(sched);
+          if (finalSched) {
+            broadcastsToCreate.push({
+              title: grp.title || template.title,
+              originalTitle: grp.originalTitle || template.title,
+              customTitle: grp.customTitle,
+              streamId: grp.streamId || template.stream_id,
+              streamKey: grp.streamKey || template.stream_key,
+              thumbnailFolder: grp.thumbnailFolder !== undefined ? grp.thumbnailFolder : template.thumbnail_folder,
+              pinnedThumbnail: grp.pinnedThumbnail || template.pinned_thumbnail,
+              scheduleTime: finalSched,
+              timeOnly: t.timeOnly,
+              description: grp.description || template.description || '',
+              privacyStatus: grp.privacyStatus || template.privacy_status || 'unlisted',
+              tags: grp.tags || template.tags,
+              groupIndex: gIdx,
+              timeIndex: tIdx
+            });
+          }
         }
       }
+
+      const slots = broadcastsToCreate;
+      const schedules = broadcastsToCreate.map(b => b.scheduleTime);
 
       const useTitleRotation = window.recreateUseTitleRotation && window.recreateNextTitles && window.recreateNextTitles.length > 0;
       
@@ -8197,6 +8276,8 @@ if (recreateFromTemplateForm) {
       
       if (schedules.length === 0 || schedules.length !== slots.length) {
         showToast('Mohon tentukan waktu siaran untuk semua slot jadwal', 'error');
+        createBtn.innerHTML = originalText;
+        createBtn.disabled = false;
         return;
       }
       
