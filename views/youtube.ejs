@@ -717,7 +717,15 @@
                       try {
                         const d = new Date(broadcast.scheduledStartTime);
                         if (!isNaN(d.getTime())) {
-                          scheduledDateStr = d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+                          scheduledDateStr = d.toLocaleDateString('id-ID', {
+                            timeZone: 'Asia/Jakarta',
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: false
+                          }) + ' WIB';
                         }
                       } catch (e) {}
                     %>
@@ -880,7 +888,7 @@
         </div>
         
         <div>
-          <label class="text-sm font-medium text-white block mb-2">Scheduled Start Time <span class="text-red-400">*</span></label>
+          <label class="text-sm font-medium text-white block mb-2">Jadwal Mulai Stream (WIB) <span class="text-red-400">*</span></label>
           <input type="datetime-local" id="scheduledStartTime" name="scheduledStartTime" required
             class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none [color-scheme:dark]">
           <p class="text-xs text-gray-500 mt-1">Must be at least 10 minutes in the future</p>
@@ -1528,7 +1536,7 @@
         </div>
         
         <div>
-          <label class="text-sm font-medium text-white block mb-2">Scheduled Start Time <span class="text-red-400">*</span></label>
+          <label class="text-sm font-medium text-white block mb-2">Jadwal Mulai Stream (WIB) <span class="text-red-400">*</span></label>
           <input type="datetime-local" id="editScheduledStartTime" name="scheduledStartTime" required
             class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none [color-scheme:dark]">
         </div>
@@ -1849,7 +1857,7 @@
         <div>
           <div class="flex items-center justify-between mb-1.5">
             <label class="text-xs font-semibold text-gray-200">
-              Waktu Mulai Siaran <span class="text-red-400">*</span>
+              Waktu Mulai Siaran (WIB) <span class="text-red-400">*</span>
             </label>
             <span class="text-[11px] text-gray-400 font-normal">Pilih Cepat:</span>
           </div>

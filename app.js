@@ -71,7 +71,7 @@ const thumbnailUpload = multer({
     fileSize: 2 * 1024 * 1024 // 2MB max
   }
 });
-const { parseWIBDateTimeLocal } = require('./utils/wibTime');
+const { parseWIBDateTimeLocal, formatWIBDisplay, formatWIBTimeOnly, formatWIBDateTimeLocal } = require('./utils/wibTime');
 const uploadProcessingConcurrency = Math.max(1, parseInt(process.env.UPLOAD_PROCESSING_CONCURRENCY || '1', 10));
 const videoProcessingQueue = new ProcessingQueue({ concurrency: uploadProcessingConcurrency, name: 'video-processing' });
 const audioProcessingQueue = new ProcessingQueue({ concurrency: uploadProcessingConcurrency, name: 'audio-processing' });
@@ -664,19 +664,7 @@ app.locals.helpers = {
     }
   },
   formatDateTime: function (isoString) {
-    if (!isoString) return '--';
-
-    const utcDate = new Date(isoString);
-
-    return utcDate.toLocaleString('en-US', {
-      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false
-    });
+    return formatWIBDisplay(isoString);
   },
   formatDuration: function (seconds) {
     if (!seconds) return '--';
@@ -686,14 +674,7 @@ app.locals.helpers = {
     return `${hours}:${minutes}:${secs}`;
   },
   formatTime: function (isoString) {
-    if (!isoString) return '--';
-    const date = new Date(isoString);
-    return date.toLocaleTimeString('en-US', {
-      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false
-    });
+    return formatWIBTimeOnly(isoString);
   }
 };
 // Validate SESSION_SECRET exists and generate secure fallback if not
@@ -11635,7 +11616,10 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       let endIso = null;
       let sDate = null;
       let eDate = null;
-      if (rawStartTime) {
+      if (req.body.startImmediately === 'true') {
+        scheduleIso = finalScheduledStartTime;
+        sDate = new Date(finalScheduledStartTime);
+      } else if (rawStartTime) {
         sDate = parseWIBDateTimeLocal(rawStartTime);
         if (sDate) scheduleIso = sDate.toISOString();
       }
@@ -11782,6 +11766,14 @@ app.put('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
       unlistReplayOnEnd
     });
 
+    let finalScheduledStartTime = scheduledStartTime;
+    if (scheduledStartTime) {
+      const pDate = parseWIBDateTimeLocal(scheduledStartTime);
+      if (pDate && !isNaN(pDate.getTime())) {
+        finalScheduledStartTime = pDate.toISOString();
+      }
+    }
+
     let credentials;
     let result;
 
@@ -11794,7 +11786,7 @@ app.put('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
       result = await youtubeService.updateBroadcast(accessToken, req.params.id, {
         title,
         description,
-        scheduledStartTime,
+        scheduledStartTime: finalScheduledStartTime,
         privacyStatus,
         categoryId,
         tags,
@@ -11810,7 +11802,7 @@ app.put('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
           result = await youtubeService.updateBroadcast(accessToken, req.params.id, {
             title,
             description,
-            scheduledStartTime,
+            scheduledStartTime: finalScheduledStartTime,
             privacyStatus,
             categoryId,
             tags,
@@ -11860,14 +11852,15 @@ app.put('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
         tags: tags ? (Array.isArray(tags) ? JSON.stringify(tags) : tags) : existingSettings.tags
       });
 
-      // Update matching streams record if any
+      // Update matching streams record if any (including schedule_time in WIB/UTC)
       db.run(
         `UPDATE streams SET 
            title = COALESCE(?, title),
+           schedule_time = COALESCE(?, schedule_time),
            dual_stream = ?,
            tags = COALESCE(?, tags)
          WHERE youtube_broadcast_id = ? AND user_id = ?`,
-        [title || null, finalDual ? 1 : 0, tags ? (Array.isArray(tags) ? JSON.stringify(tags) : tags) : null, req.params.id, req.session.userId]
+        [title || null, finalScheduledStartTime || null, finalDual ? 1 : 0, tags ? (Array.isArray(tags) ? JSON.stringify(tags) : tags) : null, req.params.id, req.session.userId]
       );
     } catch (settingsErr) {
       console.warn('[API] Error saving broadcast settings on update:', settingsErr.message);

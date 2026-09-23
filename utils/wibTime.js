@@ -97,17 +97,34 @@ function createWIBDate(year, month, day, hours, minutes, seconds = 0) {
 /**
  * Parse string datetime-local ("YYYY-MM-DDTHH:MM") sebagai waktu WIB → Date UTC.
  * INI ADALAH FUNGSI KRITIS — pengganti `new Date(year, m-1, d, h, m)` yang bergantung TZ server.
+ * Mendukung format:
+ * - "YYYY-MM-DDTHH:MM" atau "YYYY-MM-DDTHH:MM:SS"
+ * - "YYYY-MM-DD HH:MM" atau "YYYY-MM-DD HH:MM:SS"
+ * - ISO string yang sudah memiliki offset atau 'Z' (tetap menghasilkan UTC Date yang valid)
  * 
- * @param {string} dateTimeString - "YYYY-MM-DDTHH:MM" atau "YYYY-MM-DDTHH:MM:SS"
+ * @param {string} dateTimeString - String input waktu
  * @returns {Date|null} Date dalam UTC, atau null bila format invalid
  */
 function parseWIBDateTimeLocal(dateTimeString) {
   if (!dateTimeString || typeof dateTimeString !== 'string') return null;
-  const [datePart, timePart] = dateTimeString.split('T');
-  if (!datePart || !timePart) return null;
+  const str = dateTimeString.trim();
+
+  // Jika string sudah memiliki indikator timezone eksplisit (misal Z atau +07:00 / -05:00)
+  if (/(?:Z|[+-]\d{2}:?\d{2})$/i.test(str)) {
+    const d = new Date(str);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  // Pisahkan komponen tanggal dan waktu
+  const delimiter = str.includes('T') ? 'T' : (str.includes(' ') ? ' ' : null);
+  if (!delimiter) return null;
+
+  const [datePart, rawTimePart] = str.split(delimiter);
+  if (!datePart || !rawTimePart) return null;
 
   const dateParts = datePart.split('-').map(Number);
-  const timeParts = timePart.split(':').map(Number);
+  const timeClean = rawTimePart.split('.')[0];
+  const timeParts = timeClean.split(':').map(Number);
   if (dateParts.length !== 3 || timeParts.length < 2) return null;
 
   const [year, month, day] = dateParts;
@@ -134,6 +151,46 @@ function formatWIBDateTimeLocal(dateOrIso) {
 }
 
 /**
+ * Format Date object / ISO string ke tampilan WIB yang ramah pengguna.
+ * Contoh: "24 Sep 2026, 14:30 WIB"
+ * @param {Date|string} dateOrIso
+ * @param {object} [options]
+ * @returns {string}
+ */
+function formatWIBDisplay(dateOrIso, options = {}) {
+  if (!dateOrIso) return '--';
+  const date = (dateOrIso instanceof Date) ? dateOrIso : new Date(dateOrIso);
+  if (isNaN(date.getTime())) return '--';
+  return date.toLocaleString('id-ID', {
+    timeZone: WIB_TIMEZONE,
+    day: options.day || 'numeric',
+    month: options.month || 'short',
+    year: options.year !== undefined ? options.year : 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  }) + ' WIB';
+}
+
+/**
+ * Format Date object / ISO string ke waktu WIB (jam:menit) saja.
+ * Contoh: "14:30 WIB"
+ * @param {Date|string} dateOrIso
+ * @returns {string}
+ */
+function formatWIBTimeOnly(dateOrIso) {
+  if (!dateOrIso) return '--';
+  const date = (dateOrIso instanceof Date) ? dateOrIso : new Date(dateOrIso);
+  if (isNaN(date.getTime())) return '--';
+  return date.toLocaleTimeString('id-ID', {
+    timeZone: WIB_TIMEZONE,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  }) + ' WIB';
+}
+
+/**
  * Total menit sejak tengah malam dalam WIB.
  * @param {Date} [date=new Date()]
  * @returns {number}
@@ -150,5 +207,7 @@ module.exports = {
   createWIBDate,
   parseWIBDateTimeLocal,
   formatWIBDateTimeLocal,
+  formatWIBDisplay,
+  formatWIBTimeOnly,
   getWIBMinutesSinceMidnight,
 };

@@ -585,7 +585,15 @@ function createBroadcastRowHtml(broadcast, index) {
       try {
         const d = new Date(broadcast.scheduledStartTime);
         if (!isNaN(d.getTime())) {
-          scheduledTimeStr = d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+          scheduledTimeStr = d.toLocaleDateString('id-ID', {
+            timeZone: 'Asia/Jakarta',
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+          }) + ' WIB';
         }
       } catch (e) {}
     }
@@ -1015,13 +1023,15 @@ function createBroadcastCard(broadcast) {
   } catch (e) {}
   
   const scheduledDate = new Date(broadcast.scheduledStartTime);
-  const formattedDate = scheduledDate.toLocaleString('id-ID', {
+  const formattedDate = !isNaN(scheduledDate.getTime()) ? (scheduledDate.toLocaleString('id-ID', {
+    timeZone: 'Asia/Jakarta',
     day: '2-digit',
     month: 'short',
     year: 'numeric',
     hour: '2-digit',
-    minute: '2-digit'
-  });
+    minute: '2-digit',
+    hour12: false
+  }) + ' WIB') : '--';
   
   const statusBadge = getStatusBadge(broadcast.lifeCycleStatus);
   const privacyBadge = getPrivacyBadge(broadcast.privacyStatus);
@@ -5318,14 +5328,14 @@ async function openEditBroadcastModal(broadcast) {
   window.editBroadcastStreamId = broadcast.streamId || null;
   console.log('[openEditBroadcastModal] Stream ID:', window.editBroadcastStreamId);
   
-  // Format datetime for input
+  // Format datetime for input (strictly in WIB)
   const dateEl = document.getElementById('editScheduledStartTime');
   if (dateEl) {
     if (broadcast.scheduledStartTime) {
       try {
-        const date = new Date(broadcast.scheduledStartTime);
-        const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
-        dateEl.value = localDate.toISOString().slice(0, 16);
+        dateEl.value = typeof formatDateTimeLocal === 'function' 
+          ? formatDateTimeLocal(broadcast.scheduledStartTime)
+          : '';
       } catch (e) {
         dateEl.value = '';
       }

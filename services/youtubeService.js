@@ -1,4 +1,5 @@
 const { google } = require('googleapis');
+const { parseWIBDateTimeLocal } = require('../utils/wibTime');
 
 // YouTube OAuth scopes needed for broadcast management
 const YOUTUBE_SCOPES = [
@@ -385,7 +386,7 @@ class YouTubeService {
     
     let startTimeIso;
     try {
-      const parsedDate = scheduledStartTime ? new Date(scheduledStartTime) : null;
+      const parsedDate = scheduledStartTime ? (parseWIBDateTimeLocal(scheduledStartTime) || new Date(scheduledStartTime)) : null;
       startTimeIso = (parsedDate && !isNaN(parsedDate.getTime())) 
         ? parsedDate.toISOString() 
         : new Date(Date.now() + 15 * 60 * 1000).toISOString();
@@ -1156,7 +1157,7 @@ class YouTubeService {
     let parsedStartTime = current.snippet.scheduledStartTime;
     if (scheduledStartTime) {
       try {
-        const d = new Date(scheduledStartTime);
+        const d = parseWIBDateTimeLocal(scheduledStartTime) || new Date(scheduledStartTime);
         if (!isNaN(d.getTime())) {
           parsedStartTime = d.toISOString();
         }
