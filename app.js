@@ -6424,17 +6424,21 @@ async function savePlaylistMediaToGallery(playlistId, userId) {
   }
 
   // Helper function to build seamless joined audio (with silence trimming & acrossfade)
+  // Guaranteed YouTube Live standard: AAC-LC, 128kbps, 44.1kHz, 2 channels (stereo), clean PTS
   const buildSeamlessAudio = async (srcAudioPaths, targetOutPath) => {
     if (srcAudioPaths.length === 1) {
-      // 1 audio: convert to clean standard AAC 44.1k stereo
+      // 1 audio: convert to clean standard AAC 44.1k stereo 128k (YouTube standard)
       await runFfmpeg((cmd) => {
         return cmd
           .input(srcAudioPaths[0])
           .outputOptions([
             '-c:a', 'aac',
-            '-b:a', '192k',
+            '-profile:a', 'aac_low',
+            '-b:a', '128k',
             '-ar', '44100',
             '-ac', '2',
+            '-af', 'aresample=async=1:first_pts=0',
+            '-fflags', '+genpts',
             '-vn',
             '-movflags', '+faststart',
             '-y'
@@ -6467,9 +6471,11 @@ async function savePlaylistMediaToGallery(playlistId, userId) {
               ])
               .outputOptions([
                 '-c:a', 'aac',
-                '-b:a', '192k',
+                '-profile:a', 'aac_low',
+                '-b:a', '128k',
                 '-ar', String(TARGET_RATE),
                 '-ac', '2',
+                '-af', 'aresample=async=1:first_pts=0',
                 '-vn',
                 '-y'
               ])
@@ -6487,9 +6493,11 @@ async function savePlaylistMediaToGallery(playlistId, userId) {
               .input(inp)
               .outputOptions([
                 '-c:a', 'aac',
-                '-b:a', '192k',
+                '-profile:a', 'aac_low',
+                '-b:a', '128k',
                 '-ar', String(TARGET_RATE),
                 '-ac', '2',
+                '-af', 'aresample=async=1:first_pts=0',
                 '-vn',
                 '-y'
               ])
@@ -6532,9 +6540,12 @@ async function savePlaylistMediaToGallery(playlistId, userId) {
               .outputOptions([
                 '-map', '[outa]',
                 '-c:a', 'aac',
-                '-b:a', '192k',
+                '-profile:a', 'aac_low',
+                '-b:a', '128k',
                 '-ar', String(TARGET_RATE),
                 '-ac', '2',
+                '-af', 'aresample=async=1:first_pts=0',
+                '-fflags', '+genpts',
                 '-movflags', '+faststart',
                 '-y'
               ])
@@ -6562,7 +6573,12 @@ async function savePlaylistMediaToGallery(playlistId, userId) {
             .input(concatTxt)
             .inputOptions(['-f', 'concat', '-safe', '0'])
             .outputOptions([
-              '-c:a', 'copy',
+              '-c:a', 'aac',
+              '-profile:a', 'aac_low',
+              '-b:a', '128k',
+              '-ar', '44100',
+              '-ac', '2',
+              '-af', 'aresample=async=1:first_pts=0',
               '-movflags', '+faststart',
               '-y'
             ])
@@ -6578,13 +6594,22 @@ async function savePlaylistMediaToGallery(playlistId, userId) {
     }
   };
 
-  // Helper function to build joined video (multi-video concat)
+  // Helper function to build joined video (multi-video concat with YouTube Live AAC audio)
   const buildJoinedVideo = async (srcVideoPaths, targetOutPath) => {
     if (srcVideoPaths.length === 1) {
       await runFfmpeg((cmd) => {
         return cmd
           .input(srcVideoPaths[0])
-          .outputOptions(['-c', 'copy', '-movflags', '+faststart', '-y'])
+          .outputOptions([
+            '-c:v', 'copy',
+            '-c:a', 'aac',
+            '-profile:a', 'aac_low',
+            '-b:a', '128k',
+            '-ar', '44100',
+            '-ac', '2',
+            '-movflags', '+faststart',
+            '-y'
+          ])
           .output(targetOutPath);
       });
       return targetOutPath;
@@ -6602,7 +6627,16 @@ async function savePlaylistMediaToGallery(playlistId, userId) {
           return cmd
             .input(concatTxt)
             .inputOptions(['-f', 'concat', '-safe', '0'])
-            .outputOptions(['-c', 'copy', '-movflags', '+faststart', '-y'])
+            .outputOptions([
+              '-c:v', 'copy',
+              '-c:a', 'aac',
+              '-profile:a', 'aac_low',
+              '-b:a', '128k',
+              '-ar', '44100',
+              '-ac', '2',
+              '-movflags', '+faststart',
+              '-y'
+            ])
             .output(targetOutPath);
         });
         if (fs.existsSync(targetOutPath) && fs.statSync(targetOutPath).size > 10000) {
@@ -6624,7 +6658,10 @@ async function savePlaylistMediaToGallery(playlistId, userId) {
               '-crf', '23',
               '-pix_fmt', 'yuv420p',
               '-c:a', 'aac',
-              '-b:a', '192k',
+              '-profile:a', 'aac_low',
+              '-b:a', '128k',
+              '-ar', '44100',
+              '-ac', '2',
               '-movflags', '+faststart',
               '-y'
             ])
@@ -6639,11 +6676,11 @@ async function savePlaylistMediaToGallery(playlistId, userId) {
     }
   };
 
-  // CASE 1: Audio Only -> Save to Audio Gallery
+  // CASE 1: Audio Only -> Save to Audio Gallery (as AAC standard) AND ready-to-stream Video Gallery
   if (videoPaths.length === 0 && audioPaths.length > 0) {
     const audiosDir = path.join(__dirname, 'public', 'uploads', 'audios');
     fs.mkdirSync(audiosDir, { recursive: true });
-    const outputFilename = `playlist-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.m4a`;
+    const outputFilename = `playlist-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.aac`;
     const outputPath = path.join(audiosDir, outputFilename);
 
     await buildSeamlessAudio(audioPaths, outputPath);
@@ -6657,19 +6694,77 @@ async function savePlaylistMediaToGallery(playlistId, userId) {
       filepath: `/uploads/audios/${outputFilename}`,
       file_size: fileSize,
       duration: duration,
-      format: 'M4A',
+      format: 'AAC',
       user_id: userId
     });
+
+    // Also generate a ready-to-livestream 720p 30fps MP4 video with YouTube AAC standard audio
+    let videoRecord = null;
+    try {
+      const videosDir = path.join(__dirname, 'public', 'uploads', 'videos');
+      fs.mkdirSync(videosDir, { recursive: true });
+      const videoFilename = `playlist-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.mp4`;
+      const videoOutputPath = path.join(videosDir, videoFilename);
+
+      await runFfmpeg((cmd) => {
+        return cmd
+          .input('color=c=black:s=1280x720:r=30')
+          .inputOptions(['-f', 'lavfi'])
+          .input(outputPath)
+          .outputOptions([
+            '-c:v', 'libx264',
+            '-preset', 'veryfast',
+            '-tune', 'stillimage',
+            '-b:v', '1500k',
+            '-pix_fmt', 'yuv420p',
+            '-g', '60',
+            '-c:a', 'copy',
+            '-shortest',
+            '-movflags', '+faststart',
+            '-y'
+          ])
+          .output(videoOutputPath);
+      });
+
+      const hrs = Math.floor(duration / 3600);
+      const mins = Math.floor((duration % 3600) / 60);
+      const secs = Math.floor(duration % 60);
+      const durationStr = hrs > 0 
+        ? `${hrs}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+        : `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+
+      let thumbnailRelative = null;
+      try {
+        const thumbName = `thumb-playlist-${Date.now()}.jpg`;
+        await generateThumbnail(videoOutputPath, thumbName);
+        thumbnailRelative = `/uploads/thumbnails/${thumbName}`;
+      } catch (_) {}
+
+      videoRecord = await Video.create({
+        title: galleryTitle,
+        filename: videoFilename,
+        filepath: `/uploads/videos/${videoFilename}`,
+        thumbnail_path: thumbnailRelative,
+        file_size: fs.existsSync(videoOutputPath) ? fs.statSync(videoOutputPath).size : 0,
+        duration: durationStr,
+        format: 'mp4',
+        resolution: '1280x720',
+        user_id: userId
+      });
+    } catch (vErr) {
+      console.warn('[Playlist Gallery] Warning creating video wrapper for audio-only playlist:', vErr.message);
+    }
 
     return {
       success: true,
       type: 'audio',
-      message: `Berhasil menyimpan playlist audio ke Galeri: "${galleryTitle}"`,
-      item: audioRecord
+      message: `Berhasil menyimpan playlist audio AAC Standar YouTube ke Galeri: "${galleryTitle}"`,
+      item: audioRecord,
+      videoItem: videoRecord
     };
   }
 
-  // CASE 2: Video Only -> Save to Video Gallery
+  // CASE 2: Video Only -> Save to Video Gallery with YouTube Live standard AAC audio
   if (videoPaths.length > 0 && audioPaths.length === 0) {
     const videosDir = path.join(__dirname, 'public', 'uploads', 'videos');
     fs.mkdirSync(videosDir, { recursive: true });
@@ -6713,12 +6808,12 @@ async function savePlaylistMediaToGallery(playlistId, userId) {
     return {
       success: true,
       type: 'video',
-      message: `Berhasil menyimpan playlist video ke Galeri: "${galleryTitle}"`,
+      message: `Berhasil menyimpan playlist video (AAC Standar YouTube) ke Galeri: "${galleryTitle}"`,
       item: videoRecord
     };
   }
 
-  // CASE 3: Combined Video + Audio -> Save to Video Gallery
+  // CASE 3: Combined Video + Audio -> Save to Video Gallery with YouTube Live standard AAC audio
   if (videoPaths.length > 0 && audioPaths.length > 0) {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pl-combo-'));
     try {
@@ -6751,7 +6846,11 @@ async function savePlaylistMediaToGallery(playlistId, userId) {
             '-map', '1:a:0',
             '-c:v', 'copy',
             '-c:a', 'aac',
-            '-b:a', '192k',
+            '-profile:a', 'aac_low',
+            '-b:a', '128k',
+            '-ar', '44100',
+            '-ac', '2',
+            '-af', 'aresample=async=1:first_pts=0',
             '-shortest',
             '-movflags', '+faststart',
             '-y'
@@ -6794,7 +6893,7 @@ async function savePlaylistMediaToGallery(playlistId, userId) {
       return {
         success: true,
         type: 'video',
-        message: `Berhasil menyimpan gabungan video + audio playlist ke Galeri: "${galleryTitle}"`,
+        message: `Berhasil menyimpan gabungan video + audio playlist (AAC Standar YouTube) ke Galeri: "${galleryTitle}"`,
         item: videoRecord
       };
     } finally {
