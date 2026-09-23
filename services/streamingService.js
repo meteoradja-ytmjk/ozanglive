@@ -1258,18 +1258,39 @@ async function buildFFmpegArgs(stream, durationOverrideSeconds = null, reconnect
     throw new Error('Video file not found on disk. Please check paths and file existence.');
   }
   
-  // Check if audio is selected
+  // Check if audio is selected (supports single audio or audio playlist)
   let audioPath = null;
   if (stream.audio_id) {
-    const audio = await Audio.findById(stream.audio_id);
-    if (!audio) {
-      throw new Error(`Audio not found for audio_id: ${stream.audio_id}`);
-    }
-    audioPath = resolvePublicMediaPath(audio.filepath);
-    if (!fs.existsSync(audioPath)) {
-      console.error(`[StreamingService] CRITICAL: Audio file not found on disk.`);
-      console.error(`[StreamingService] Checked path: ${audioPath}`);
-      throw new Error('Audio file not found on disk. Please check paths and file existence.');
+    const Playlist = require('../models/Playlist');
+    const audioPlaylist = await Playlist.findByIdWithMedia(stream.audio_id).catch(() => null);
+    if (audioPlaylist && Array.isArray(audioPlaylist.audios) && audioPlaylist.audios.length > 0) {
+      const audioPaths = [];
+      audioPlaylist.audios.forEach((a) => {
+        const ap = resolvePublicMediaPath(a.filepath);
+        if (fs.existsSync(ap)) audioPaths.push(ap);
+      });
+      if (audioPaths.length === 0) {
+        throw new Error('All audio files in selected audio playlist are missing on disk.');
+      }
+      if (audioPaths.length === 1) {
+        audioPath = audioPaths[0];
+      } else {
+        const mergedAudioFile = path.join(projectRoot, 'temp', `stream_${stream.id}_audio_merged.m4a`);
+        try { if (fs.existsSync(mergedAudioFile)) fs.unlinkSync(mergedAudioFile); } catch (_) {}
+        audioPath = await prerenderGaplessAudio(audioPaths, mergedAudioFile);
+        if (!audioPath) audioPath = audioPaths[0];
+      }
+    } else {
+      const audio = await Audio.findById(stream.audio_id);
+      if (!audio) {
+        throw new Error(`Audio not found for audio_id: ${stream.audio_id}`);
+      }
+      audioPath = resolvePublicMediaPath(audio.filepath);
+      if (!fs.existsSync(audioPath)) {
+        console.error(`[StreamingService] CRITICAL: Audio file not found on disk.`);
+        console.error(`[StreamingService] Checked path: ${audioPath}`);
+        throw new Error('Audio file not found on disk. Please check paths and file existence.');
+      }
     }
   }
   
@@ -2212,6 +2233,7 @@ async function stopStream(streamId) {
     const tempConcatFile = path.join(__dirname, '..', 'temp', `playlist_${streamId}.txt`);
     const tempAudioConcatFile = path.join(__dirname, '..', 'temp', `playlist_${streamId}_audio.txt`);
     const tempMergedAudioFile = path.join(__dirname, '..', 'temp', `playlist_${streamId}_audio_merged.m4a`);
+    const tempStreamMergedAudioFile = path.join(__dirname, '..', 'temp', `stream_${streamId}_audio_merged.m4a`);
     try {
       if (fs.existsSync(tempConcatFile)) {
         fs.unlinkSync(tempConcatFile);
@@ -2224,6 +2246,10 @@ async function stopStream(streamId) {
       if (fs.existsSync(tempMergedAudioFile)) {
         fs.unlinkSync(tempMergedAudioFile);
         console.log(`[StreamingService] Cleaned up merged playlist audio file: ${tempMergedAudioFile}`);
+      }
+      if (fs.existsSync(tempStreamMergedAudioFile)) {
+        fs.unlinkSync(tempStreamMergedAudioFile);
+        console.log(`[StreamingService] Cleaned up stream merged audio file: ${tempStreamMergedAudioFile}`);
       }
     } catch (cleanupError) {
       console.error(`[StreamingService] Error cleaning up temporary file: ${cleanupError.message}`);

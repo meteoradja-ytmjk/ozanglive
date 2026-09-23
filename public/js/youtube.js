@@ -3968,27 +3968,34 @@ function displayFilteredStudioAudios(audios) {
   }
 
   const createAudioBtn = (a) => {
+    const isPlaylist = a.type === 'playlist' || a.is_playlist || a.format === 'playlist';
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'w-full flex items-center gap-3 p-2 rounded-lg hover:bg-dark-700/80 transition-colors text-left border border-transparent hover:border-gray-600/50';
     btn.onclick = () => selectStudioAudio(a);
     btn.innerHTML = `
-      <div class="w-8 h-8 bg-dark-900 rounded flex-shrink-0 flex items-center justify-center border border-gray-700">
-        <i class="ti ti-music text-primary text-xs"></i>
+      <div class="w-8 h-8 ${isPlaylist ? 'bg-purple-950/70 border-purple-800' : 'bg-dark-900 border-gray-700'} rounded flex-shrink-0 flex items-center justify-center border">
+        <i class="${isPlaylist ? 'ti ti-playlist text-purple-400' : 'ti ti-music text-primary'} text-xs"></i>
       </div>
       <div class="flex-1 min-w-0">
-        <p class="text-xs font-medium text-white truncate">${a.title || a.name}</p>
-        <p class="text-[10px] text-gray-400">${a.duration || 'Audio'}</p>
+        <div class="flex items-center gap-1.5">
+          ${isPlaylist ? '<span class="px-1 py-0.2 rounded bg-purple-900/80 text-purple-300 text-[9px] font-semibold uppercase shrink-0">Playlist</span>' : ''}
+          <p class="text-xs font-medium text-white truncate">${a.title || a.name}</p>
+        </div>
+        <p class="text-[10px] text-gray-400">${a.duration || (isPlaylist ? 'Playlist Gapless' : 'Audio')}</p>
       </div>
     `;
     return btn;
   };
 
+  const audioPlaylists = [];
   const foldersMap = {};
   const rootAudios = [];
 
   audios.forEach(a => {
-    if (a.folder_name && a.folder_name.trim()) {
+    if (a.type === 'playlist' || a.is_playlist || a.format === 'playlist') {
+      audioPlaylists.push(a);
+    } else if (a.folder_name && a.folder_name.trim()) {
       const fName = a.folder_name.trim();
       if (!foldersMap[fName]) foldersMap[fName] = [];
       foldersMap[fName].push(a);
@@ -3997,6 +4004,27 @@ function displayFilteredStudioAudios(audios) {
     }
   });
 
+  // 1. Playlists Group
+  if (audioPlaylists.length > 0) {
+    const plBox = document.createElement('div');
+    plBox.className = 'rounded-lg border border-purple-900/60 overflow-hidden mb-2 bg-[#0f172a]';
+    plBox.innerHTML = `
+      <div class="flex items-center justify-between px-3 py-2 bg-purple-950/70 hover:bg-purple-900/60 cursor-pointer transition-colors" onclick="toggleStudioFolderGroup('studio-audio-pl-group')">
+        <div class="flex items-center gap-2">
+          <i class="ti ti-playlist text-purple-400 text-sm"></i>
+          <span class="text-xs font-bold text-purple-200">Playlists Audio</span>
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-purple-900 text-purple-200 font-medium">${audioPlaylists.length}</span>
+        </div>
+        <i class="ti ti-chevron-down text-purple-300 text-xs transition-transform" id="icon-studio-audio-pl-group"></i>
+      </div>
+      <div id="studio-audio-pl-group" class="p-1 space-y-1 bg-[#0f172a]"></div>
+    `;
+    const plList = plBox.querySelector('#studio-audio-pl-group');
+    audioPlaylists.forEach(p => plList.appendChild(createAudioBtn(p)));
+    container.appendChild(plBox);
+  }
+
+  // 2. Folders
   const folderNames = Object.keys(foldersMap).sort();
   folderNames.forEach((fName, fIdx) => {
     const fAudios = foldersMap[fName];
@@ -4019,8 +4047,9 @@ function displayFilteredStudioAudios(audios) {
     container.appendChild(fBox);
   });
 
+  // 3. Root / Uncategorized Audios
   if (rootAudios.length > 0) {
-    if (folderNames.length > 0) {
+    if (folderNames.length > 0 || audioPlaylists.length > 0) {
       const rBox = document.createElement('div');
       rBox.className = 'rounded-lg border border-gray-700/60 overflow-hidden mb-2 bg-[#0f172a]';
       rBox.innerHTML = `
@@ -4045,11 +4074,13 @@ function displayFilteredStudioAudios(audios) {
 
 function selectStudioAudio(audio) {
   studioSelectedAudioData = audio;
+  const isPlaylist = audio.type === 'playlist' || audio.is_playlist || audio.format === 'playlist';
   const folderPrefix = audio.folder_name ? `[${audio.folder_name}] ` : '';
+  const displayText = isPlaylist ? `[Playlist] ${audio.title || audio.name}` : `${folderPrefix}${audio.title || audio.name}`;
   const label = document.getElementById('studioSelectedAudio');
   const input = document.getElementById('studioSelectedAudioId');
   const clearBtn = document.getElementById('studioClearAudioBtn');
-  if (label) label.textContent = `${folderPrefix}${audio.title || audio.name}`;
+  if (label) label.textContent = displayText;
   if (input) input.value = audio.id;
   if (clearBtn) clearBtn.classList.remove('hidden');
 

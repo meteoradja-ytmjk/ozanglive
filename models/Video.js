@@ -5,7 +5,7 @@ const { db } = require('../db/database');
 class Video {
   static async create(data) {
     return new Promise((resolve, reject) => {
-      const id = uuidv4();
+      const id = data.id || uuidv4();
       const now = new Date().toISOString();
       db.run(
         `INSERT INTO videos (
@@ -86,7 +86,7 @@ class Video {
               console.error('Error deleting video from database:', err.message);
               return reject(err);
             }
-            if (video.filepath) {
+            if (video.filepath && video.format !== 'playlist') {
               const fullPath = path.join(process.cwd(), 'public', video.filepath);
               try {
                 if (fs.existsSync(fullPath)) {
@@ -96,7 +96,7 @@ class Video {
                 console.error('Error deleting video file:', fileErr);
               }
             }
-            if (video.thumbnail_path) {
+            if (video.thumbnail_path && video.format !== 'playlist') {
               const thumbnailPath = path.join(process.cwd(), 'public', video.thumbnail_path);
               try {
                 if (fs.existsSync(thumbnailPath)) {

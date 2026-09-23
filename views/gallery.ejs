@@ -400,7 +400,12 @@ function formatDuration(seconds) {
                   </span>
                 </div>
                 <div class="min-w-0 flex-1 card-info-wrap">
-                  <h4 class="font-medium text-xs sm:text-sm text-white truncate leading-tight" title="<%= video.title %>"><%= video.title %></h4>
+                  <h4 class="font-medium text-xs sm:text-sm text-white truncate leading-tight flex items-center gap-1.5" title="<%= video.title %>">
+                    <% if (video.format === 'playlist') { %>
+                      <span class="px-1.5 py-0.5 rounded bg-purple-900/80 text-purple-300 text-[10px] font-semibold border border-purple-600/50 uppercase shrink-0">Playlist</span>
+                    <% } %>
+                    <span class="truncate"><%= video.title %></span>
+                  </h4>
                   <div class="text-[11px] text-gray-400 truncate flex items-center gap-1.5 mt-0.5 whitespace-nowrap">
                     <span><%= formatDuration(video.duration) %></span>
                     <span class="text-gray-600">•</span>
@@ -524,7 +529,12 @@ function formatDuration(seconds) {
                 </span>
               </div>
               <div class="min-w-0 flex-1 card-info-wrap">
-                <h4 class="font-medium text-xs sm:text-sm text-white truncate leading-tight" title="<%= video.title %>"><%= video.title %></h4>
+                <h4 class="font-medium text-xs sm:text-sm text-white truncate leading-tight flex items-center gap-1.5" title="<%= video.title %>">
+                  <% if (video.format === 'playlist') { %>
+                    <span class="px-1.5 py-0.5 rounded bg-purple-900/80 text-purple-300 text-[10px] font-semibold border border-purple-600/50 uppercase shrink-0">Playlist</span>
+                  <% } %>
+                  <span class="truncate"><%= video.title %></span>
+                </h4>
                 <div class="text-[11px] text-gray-400 truncate flex items-center gap-1.5 mt-0.5 whitespace-nowrap">
                   <span><%= formatDuration(video.duration) %></span>
                   <span class="text-gray-600">•</span>
@@ -690,16 +700,21 @@ function formatDuration(seconds) {
                     data-is-standalone="false"
                     onchange="onMediaCheckChange('audio')">
                 </div>
-                <div class="relative w-10 h-10 sm:w-11 sm:h-11 flex-shrink-0 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center cursor-pointer group card-thumb-wrap" onclick="playAudio('<%= audio.id %>', '<%= audio.title.replace(/'/g, "\\'") %>')">
-                  <i class="ti ti-music text-lg sm:text-xl text-emerald-400"></i>
+                <div class="relative w-10 h-10 sm:w-11 sm:h-11 flex-shrink-0 rounded-lg <%= audio.format === 'playlist' ? 'bg-purple-500/10 border border-purple-500/20' : 'bg-emerald-500/10 border border-emerald-500/20' %> flex items-center justify-center cursor-pointer group card-thumb-wrap" onclick="playAudio('<%= audio.id %>', '<%= audio.title.replace(/'/g, "\\'") %>')">
+                  <i class="<%= audio.format === 'playlist' ? 'ti ti-playlist text-purple-400' : 'ti ti-music text-emerald-400' %> text-lg sm:text-xl"></i>
                   <div class="absolute inset-0 bg-black/40 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                     <i class="ti ti-player-play-filled text-white text-xs sm:text-sm"></i>
                   </div>
                 </div>
                 <div class="min-w-0 flex-1 card-info-wrap">
-                  <h4 class="font-medium text-xs sm:text-sm text-white truncate leading-tight" title="<%= audio.title %>"><%= audio.title %></h4>
+                  <h4 class="font-medium text-xs sm:text-sm text-white truncate leading-tight flex items-center gap-1.5" title="<%= audio.title %>">
+                    <% if (audio.format === 'playlist') { %>
+                      <span class="px-1.5 py-0.5 rounded bg-purple-900/80 text-purple-300 text-[10px] font-semibold border border-purple-600/50 uppercase shrink-0">Playlist</span>
+                    <% } %>
+                    <span class="truncate"><%= audio.title %></span>
+                  </h4>
                   <div class="text-[11px] text-gray-400 truncate flex items-center gap-1.5 mt-0.5 whitespace-nowrap">
-                    <span class="uppercase text-emerald-400 font-medium"><%= audio.format %></span>
+                    <span class="uppercase <%= audio.format === 'playlist' ? 'text-purple-400' : 'text-emerald-400' %> font-medium"><%= audio.format %></span>
                     <span class="text-gray-600">•</span>
                     <span><%= formatDuration(audio.duration) %></span>
                     <span class="text-gray-600">•</span>
@@ -798,16 +813,21 @@ function formatDuration(seconds) {
                   data-is-standalone="true"
                   onchange="onMediaCheckChange('audio')">
               </div>
-              <div class="relative w-10 h-10 sm:w-11 sm:h-11 flex-shrink-0 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center cursor-pointer group card-thumb-wrap" onclick="playAudio('<%= audio.id %>', '<%= audio.title.replace(/'/g, "\\'") %>')">
-                <i class="ti ti-music text-lg sm:text-xl text-emerald-400"></i>
+              <div class="relative w-10 h-10 sm:w-11 sm:h-11 flex-shrink-0 rounded-lg <%= audio.format === 'playlist' ? 'bg-purple-500/10 border border-purple-500/20' : 'bg-emerald-500/10 border border-emerald-500/20' %> flex items-center justify-center cursor-pointer group card-thumb-wrap" onclick="playAudio('<%= audio.id %>', '<%= audio.title.replace(/'/g, "\\'") %>')">
+                <i class="<%= audio.format === 'playlist' ? 'ti ti-playlist text-purple-400' : 'ti ti-music text-emerald-400' %> text-lg sm:text-xl"></i>
                 <div class="absolute inset-0 bg-black/40 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                   <i class="ti ti-player-play-filled text-white text-xs sm:text-sm"></i>
                 </div>
               </div>
               <div class="min-w-0 flex-1 card-info-wrap">
-                <h4 class="font-medium text-xs sm:text-sm text-white truncate leading-tight" title="<%= audio.title %>"><%= audio.title %></h4>
+                <h4 class="font-medium text-xs sm:text-sm text-white truncate leading-tight flex items-center gap-1.5" title="<%= audio.title %>">
+                  <% if (audio.format === 'playlist') { %>
+                    <span class="px-1.5 py-0.5 rounded bg-purple-900/80 text-purple-300 text-[10px] font-semibold border border-purple-600/50 uppercase shrink-0">Playlist</span>
+                  <% } %>
+                  <span class="truncate"><%= audio.title %></span>
+                </h4>
                 <div class="text-[11px] text-gray-400 truncate flex items-center gap-1.5 mt-0.5 whitespace-nowrap">
-                  <span class="uppercase text-emerald-400 font-medium"><%= audio.format %></span>
+                  <span class="uppercase <%= audio.format === 'playlist' ? 'text-purple-400' : 'text-emerald-400' %> font-medium"><%= audio.format %></span>
                   <span class="text-gray-600">•</span>
                   <span><%= formatDuration(audio.duration) %></span>
                   <span class="text-gray-600">•</span>

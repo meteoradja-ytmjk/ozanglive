@@ -1543,6 +1543,7 @@ app.get('/gallery', isAuthenticated, canViewVideos, async (req, res) => {
     const audios = await Audio.findAll(req.session.userId);
 
     videos.forEach((video) => {
+      if (video.format === 'playlist') return;
       const thumbnailDiskPath = video.thumbnail_path
         ? path.join(__dirname, 'public', video.thumbnail_path)
         : null;
@@ -1555,6 +1556,7 @@ app.get('/gallery', isAuthenticated, canViewVideos, async (req, res) => {
     });
 
     audios.forEach((audio) => {
+      if (audio.format === 'playlist') return;
       const needsDuration = !audio.duration || audio.duration === 0;
       if (needsDuration) {
         queueAudioMetadataRefresh(req.app, audio);
@@ -3801,6 +3803,9 @@ app.get('/stream/:videoId', isAuthenticated, async (req, res) => {
       return res.status(403).send('You do not have permission to access this video');
     }
     const videoPath = path.join(__dirname, 'public', video.filepath);
+    if (!fs.existsSync(videoPath)) {
+      return res.status(404).send('Video file not found');
+    }
     const stat = fs.statSync(videoPath);
     const fileSize = stat.size;
     const range = req.headers.range;
@@ -4322,8 +4327,16 @@ app.get('/api/stream/content', isAuthenticated, async (req, res) => {
       };
     });
 
+    // Exclude playlist entries from formattedVideos to prevent duplicate listing with formattedPlaylists
+    const nonPlaylistVideos = formattedVideos.filter(v => {
+      const orig = videos.find(o => o.id === v.id);
+      return orig?.format !== 'playlist';
+    });
+
     const playlists = await Playlist.findAll(req.session.userId);
-    const formattedPlaylists = playlists.map(playlist => {
+    // Only video-only and video+audio playlists appear in video selector
+    const videoPlaylists = playlists.filter(p => Number(p.video_count || 0) > 0);
+    const formattedPlaylists = videoPlaylists.map(playlist => {
       let durationLabel = '0 items';
       const vCount = Number(playlist.video_count || 0);
       const aCount = Number(playlist.audio_count || 0);
@@ -4344,7 +4357,7 @@ app.get('/api/stream/content', isAuthenticated, async (req, res) => {
       };
     });
 
-    const allContent = [...formattedPlaylists, ...formattedVideos];
+    const allContent = [...formattedPlaylists, ...nonPlaylistVideos];
 
     res.json(allContent);
   } catch (error) {
@@ -5222,7 +5235,26 @@ app.get('/api/stream/audios', isAuthenticated, async (req, res) => {
         folder_name: audio.folder_name || null
       };
     });
-    res.json(formattedAudios);
+    const nonPlaylistAudios = formattedAudios.filter(a => {
+      const orig = audios.find(o => o.id === a.id);
+      return orig?.format !== 'playlist';
+    });
+
+    const playlists = await Playlist.findAll(req.session.userId);
+    // Audio-only playlists appear in audio selector
+    const audioPlaylists = playlists.filter(p => Number(p.audio_count || 0) > 0 && Number(p.video_count || 0) === 0);
+    const formattedAudioPlaylists = audioPlaylists.map(p => ({
+      id: p.id,
+      title: `[Playlist] ${p.name}`,
+      name: p.name,
+      duration: `${p.audio_count} audios`,
+      format: 'playlist',
+      type: 'playlist',
+      is_playlist: true,
+      folder_name: 'Playlists'
+    }));
+
+    res.json([...formattedAudioPlaylists, ...nonPlaylistAudios]);
   } catch (error) {
     console.error('Error fetching audios for stream:', error);
     res.status(500).json({ error: 'Failed to load audios' });
@@ -6388,6 +6420,106 @@ app.get(['/api/playlists', '/api/audio-playlists'], isAuthenticated, async (req,
 });
 
 /**
+ * Synchronize a playlist into gallery tables (instant virtual metadata, no heavy FFmpeg pre-render):
+ * - Audio saja -> Saved to audios table (Galeri Audio)
+ * - Video saja -> Saved to videos table (Galeri Video)
+ * - Video + Audio -> Saved to videos table (Galeri Video)
+ */
+async function syncPlaylistToGallery(playlistId, userId) {
+  try {
+    const fullPlaylist = await Playlist.findByIdWithMedia(playlistId);
+    if (!fullPlaylist) return null;
+
+    const videos = Array.isArray(fullPlaylist.videos) ? fullPlaylist.videos : [];
+    const audios = Array.isArray(fullPlaylist.audios) ? fullPlaylist.audios : [];
+
+    const cleanName = (fullPlaylist.name || 'Playlist').trim();
+    const galleryTitle = cleanName.toLowerCase().startsWith('playlist')
+      ? cleanName
+      : `playlist - ${cleanName}`;
+
+    // Clean up previous virtual entries for this playlist ID
+    await new Promise((resolve) => {
+      db.run('DELETE FROM videos WHERE id = ? AND format = "playlist"', [playlistId], () => resolve());
+    });
+    await new Promise((resolve) => {
+      db.run('DELETE FROM audios WHERE id = ? AND format = "playlist"', [playlistId], () => resolve());
+    });
+
+    if (videos.length === 0 && audios.length === 0) {
+      return null;
+    }
+
+    // CASE 1: Audio Saja -> Simpan ke Galeri Audio
+    if (videos.length === 0 && audios.length > 0) {
+      let totalDuration = 0;
+      audios.forEach((a) => {
+        if (a && a.duration) totalDuration += Number(a.duration) || 0;
+      });
+      const firstAudio = audios[0];
+      const audioRecord = await Audio.create({
+        id: playlistId,
+        title: galleryTitle,
+        filepath: firstAudio ? firstAudio.filepath : '',
+        file_size: 0,
+        duration: totalDuration,
+        format: 'playlist',
+        user_id: userId
+      });
+      return { type: 'audio', item: audioRecord };
+    }
+
+    // CASE 2: Video Saja ATAU Video + Audio -> Simpan ke Galeri Video
+    if (videos.length > 0) {
+      let totalDuration = 0;
+      videos.forEach((v) => {
+        if (v && v.duration) totalDuration += Number(v.duration) || 0;
+      });
+      const firstVideo = videos[0];
+      const videoRecord = await Video.create({
+        id: playlistId,
+        title: galleryTitle,
+        filepath: firstVideo ? firstVideo.filepath : '',
+        thumbnail_path: firstVideo?.thumbnail_path || '/images/playlist-thumbnail.svg',
+        file_size: 0,
+        duration: totalDuration,
+        format: 'playlist',
+        resolution: firstVideo?.resolution || '1280x720',
+        user_id: userId
+      });
+      return { type: 'video', item: videoRecord };
+    }
+
+    return null;
+  } catch (err) {
+    console.error(`[Playlist Gallery Sync] Error syncing playlist ${playlistId}:`, err);
+    return null;
+  }
+}
+
+async function syncAllPlaylistsToGallery() {
+  try {
+    const playlists = await new Promise((resolve) => {
+      db.all('SELECT id, user_id FROM playlists', [], (err, rows) => {
+        if (err) return resolve([]);
+        resolve(rows || []);
+      });
+    });
+    for (const pl of playlists) {
+      await syncPlaylistToGallery(pl.id, pl.user_id);
+    }
+    console.log(`[Playlist Gallery Sync] Synchronized ${playlists.length} playlist(s) into gallery.`);
+  } catch (err) {
+    console.error('[Playlist Gallery Sync] Error synchronizing all playlists:', err);
+  }
+}
+
+// Auto-sync existing playlists on load
+setTimeout(() => {
+  syncAllPlaylistsToGallery().catch(() => {});
+}, 3000);
+
+/**
  * Automatically joins & saves playlist media to Gallery:
  * 1. Audio only: smooth normalization + silence trimming + musical acrossfade (~1.5s) -> M4A in Audio Gallery (audios)
  * 2. Video only: fast stream-copy / re-encode concat -> MP4 in Video Gallery (videos)
@@ -6938,12 +7070,13 @@ app.post('/api/playlists', isAuthenticated, [
       }
     }
 
-    // Virtual playlist: Instant save to database without heavy pre-rendering.
-    // The playlist is immediately ready as live streaming source.
+    // Sync to gallery: Audio saja -> Galeri Audio, Video saja & Video+Audio -> Galeri Video
+    await syncPlaylistToGallery(playlist.id, req.session.userId);
+
     res.json({
       success: true,
       playlist,
-      message: 'Playlist berhasil dibuat dan siap untuk live streaming!'
+      message: 'Playlist berhasil dibuat dan tersimpan di galeri!'
     });
   } catch (error) {
     console.error('Error creating playlist:', error);
@@ -7036,6 +7169,9 @@ app.put('/api/playlists/:id', isAuthenticated, [
       }
     }
 
+    // Sync updated playlist to gallery
+    await syncPlaylistToGallery(req.params.id, req.session.userId);
+
     res.json({ success: true, playlist: updatedPlaylist });
   } catch (error) {
     console.error('Error updating playlist:', error);
@@ -7054,6 +7190,12 @@ app.delete('/api/playlists/:id', isAuthenticated, async (req, res) => {
     }
 
     await Playlist.delete(req.params.id);
+    await new Promise((resolve) => {
+      db.run('DELETE FROM videos WHERE id = ?', [req.params.id], () => resolve());
+    });
+    await new Promise((resolve) => {
+      db.run('DELETE FROM audios WHERE id = ?', [req.params.id], () => resolve());
+    });
     res.json({ success: true, message: 'Playlist deleted successfully' });
   } catch (error) {
     console.error('Error deleting playlist:', error);

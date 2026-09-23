@@ -6,7 +6,7 @@ const { db } = require('../db/database');
 class Audio {
   static async create(data) {
     return new Promise((resolve, reject) => {
-      const id = uuidv4();
+      const id = data.id || uuidv4();
       const now = new Date().toISOString();
       db.run(
         `INSERT INTO audios (
@@ -90,7 +90,7 @@ class Audio {
               console.error('Error deleting audio from database:', err.message);
               return reject(err);
             }
-            if (audio.filepath) {
+            if (audio.filepath && audio.format !== 'playlist') {
               const fullPath = path.join(process.cwd(), 'public', audio.filepath);
               try {
                 if (fs.existsSync(fullPath)) {
