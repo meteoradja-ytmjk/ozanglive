@@ -684,6 +684,12 @@ async function createCoreTablesAsync() {
   await runTableQuery(`ALTER TABLE youtube_broadcast_settings ADD COLUMN dual_stream INTEGER DEFAULT 0`, 'youtube_broadcast_settings.dual_stream');
   await runTableQuery(`ALTER TABLE youtube_broadcast_settings ADD COLUMN vertical_stream_key TEXT`, 'youtube_broadcast_settings.vertical_stream_key');
 
+  // Add title, description, category_id, and privacy_status columns to youtube_broadcast_settings for per-account defaults
+  await runTableQuery(`ALTER TABLE youtube_broadcast_settings ADD COLUMN title TEXT`, 'youtube_broadcast_settings.title');
+  await runTableQuery(`ALTER TABLE youtube_broadcast_settings ADD COLUMN description TEXT`, 'youtube_broadcast_settings.description');
+  await runTableQuery(`ALTER TABLE youtube_broadcast_settings ADD COLUMN category_id TEXT`, 'youtube_broadcast_settings.category_id');
+  await runTableQuery(`ALTER TABLE youtube_broadcast_settings ADD COLUMN privacy_status TEXT`, 'youtube_broadcast_settings.privacy_status');
+
   // Create stream_key_folder_mapping table for storing stream key to thumbnail folder binding
   await runTableQuery(`CREATE TABLE IF NOT EXISTS stream_key_folder_mapping (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

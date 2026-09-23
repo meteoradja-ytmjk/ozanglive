@@ -3232,14 +3232,22 @@ function populateFormWithDefaults(defaults, force = false) {
 
   // Populate category if available
   const categorySelect = document.getElementById('categoryId');
-  if (categorySelect && defaults.categoryId) {
-    categorySelect.value = String(defaults.categoryId);
+  if (categorySelect) {
+    if (defaults.categoryId) {
+      categorySelect.value = String(defaults.categoryId);
+    } else if (force) {
+      categorySelect.value = '22';
+    }
   }
 
   // Populate privacy if available
   const privacySelect = document.getElementById('privacyStatus');
-  if (privacySelect && defaults.privacyStatus) {
-    privacySelect.value = defaults.privacyStatus;
+  if (privacySelect) {
+    if (defaults.privacyStatus) {
+      privacySelect.value = defaults.privacyStatus;
+    } else if (force) {
+      privacySelect.value = 'public';
+    }
   }
 }
 window.populateFormWithDefaults = populateFormWithDefaults;
@@ -3540,7 +3548,7 @@ function formatDateTimeLocal(isoString) {
 window.formatDateTimeLocal = formatDateTimeLocal;
 
 // Create Broadcast Modal
-function openCreateBroadcastModal() {
+function openCreateBroadcastModal(options = {}) {
   if (typeof switchStudioTab === 'function') {
     const broadcastsPanel = document.getElementById('studio-panel-broadcasts');
     if (broadcastsPanel && broadcastsPanel.classList.contains('hidden')) {
@@ -3631,11 +3639,18 @@ function openCreateBroadcastModal() {
   
   // Cleanly reset title/description for fresh broadcast creation if not in edit or reuse mode
   const form = document.getElementById('createBroadcastForm');
-  if (form && !form.dataset.editingStreamId && !form.dataset.skipDefaults) {
+  const isReusingOrTemplate = options.isReusing || options.isTemplate || (form && (form.dataset.isReusing === 'true' || form.dataset.isTemplate === 'true'));
+
+  if (form && !form.dataset.editingStreamId && !isReusingOrTemplate) {
+    delete form.dataset.skipDefaults;
+    delete form.dataset.isReusing;
+    delete form.dataset.isTemplate;
     const titleInput = document.getElementById('broadcastTitle');
     const descInput = document.getElementById('broadcastDescription');
     if (titleInput) titleInput.value = '';
     if (descInput) descInput.value = '';
+    currentTags = [];
+    if (typeof renderTags === 'function') renderTags();
     hideAutoFillIndicators();
   }
 
@@ -3644,7 +3659,9 @@ function openCreateBroadcastModal() {
     if (typeof fetchStreams === 'function') fetchStreams(accountId);
     if (typeof fetchThumbnailFolders === 'function') fetchThumbnailFolders();
     if (typeof fetchThumbnails === 'function') fetchThumbnails(null);
-    if (typeof fetchChannelDefaults === 'function') fetchChannelDefaults(accountId, true);
+    if (!isReusingOrTemplate && typeof fetchChannelDefaults === 'function') {
+      fetchChannelDefaults(accountId, true);
+    }
   } catch (e) {
     console.warn('[openCreateBroadcastModal] Fetch warning:', e);
   }
@@ -5505,7 +5522,7 @@ async function reuseBroadcast(broadcastId, accountId) {
     form.dataset.isReusing = 'true';
   }
   // Open create modal
-  openCreateBroadcastModal();
+  openCreateBroadcastModal({ isReusing: true });
   
   // Fetch broadcast details and pre-fill
   try {
@@ -7006,7 +7023,7 @@ async function createFromTemplate(templateId) {
         form.dataset.skipDefaults = 'true';
         form.dataset.isTemplate = 'true';
       }
-      openCreateBroadcastModal();
+      openCreateBroadcastModal({ isTemplate: true });
       
       // Pre-fill form with template data
       const template = data.template;

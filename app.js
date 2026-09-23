@@ -8507,36 +8507,29 @@ async function resolveChannelDefaults(account, userId) {
     console.warn(`[channel-defaults] YouTube API fetch warning for account ${account.id} (${account.channelName}):`, ytErr.message);
   }
 
-  // 2. FALLBACK 1: If title, description, or tags are missing, check recent streams for THIS account
+  // 2. FALLBACK 1: If title, description, or tags are missing, check recent broadcast settings for THIS account
   if (!defaults.title || !defaults.description || defaults.tags.length === 0) {
     try {
-      const streamRow = await new Promise((resolve) => {
-        db.get(
-          `SELECT title, description, tags, category_id, privacy_status 
-           FROM streams 
-           WHERE youtube_account_id = ? AND user_id = ? 
-           ORDER BY id DESC LIMIT 1`,
-          [account.id, userId],
-          (err, row) => resolve(row || null)
-        );
-      });
+      const settingRow = await YouTubeBroadcastSettings.findLatestByAccountId(account.id, userId);
 
-      if (streamRow) {
-        if (!defaults.title && streamRow.title) defaults.title = streamRow.title;
-        if (!defaults.description && streamRow.description) defaults.description = streamRow.description;
-        if (defaults.tags.length === 0 && streamRow.tags) {
+      if (settingRow) {
+        if (!defaults.title && settingRow.title) defaults.title = settingRow.title;
+        if (!defaults.description && settingRow.description) defaults.description = settingRow.description;
+        if (defaults.tags.length === 0 && settingRow.tags) {
           try {
-            const parsed = JSON.parse(streamRow.tags);
+            const parsed = JSON.parse(settingRow.tags);
             if (Array.isArray(parsed) && parsed.length > 0) defaults.tags = parsed;
           } catch (e) {
-            defaults.tags = streamRow.tags.split(/[\r\n,]+/).map(t => t.trim()).filter(Boolean);
+            defaults.tags = settingRow.tags.split(/[\r\n,]+/).map(t => t.trim()).filter(Boolean);
           }
         }
-        if (!defaults.categoryId && streamRow.category_id) defaults.categoryId = streamRow.category_id;
-        if (!defaults.privacyStatus && streamRow.privacy_status) defaults.privacyStatus = streamRow.privacy_status;
+        if (!defaults.categoryId && settingRow.category_id) defaults.categoryId = settingRow.category_id;
+        if (!defaults.privacyStatus && (settingRow.privacy_status || settingRow.original_privacy_status)) {
+          defaults.privacyStatus = settingRow.privacy_status || settingRow.original_privacy_status;
+        }
       }
     } catch (dbErr) {
-      console.warn(`[channel-defaults] Local DB streams fallback warning for account ${account.id}:`, dbErr.message);
+      console.warn(`[channel-defaults] Local DB settings fallback warning for account ${account.id}:`, dbErr.message);
     }
   }
 
@@ -8546,53 +8539,59 @@ async function resolveChannelDefaults(account, userId) {
     try {
       const templateRow = await new Promise((resolve) => {
         db.get(
-          `SELECT title, description, tags, category_id, privacy_status, channel_id, channel_name 
+          `SELECT title, description, tags, category_id, privacy_status, channel_id, channel_name, account_id 
            FROM broadcast_templates 
-           WHERE account_id = ? AND user_id = ? AND description IS NOT NULL AND description != '' 
+           WHERE account_id = ? AND (user_id = ? OR CAST(user_id AS TEXT) = CAST(? AS TEXT)) 
+             AND description IS NOT NULL AND description != '' 
            ORDER BY updated_at DESC, id DESC LIMIT 1`,
-          [account.id, userId],
+          [account.id, userId, userId],
           (err, row) => resolve(row || null)
         );
       });
 
-      let isMatchingChannel = true;
-      if (templateRow) {
-        if (templateRow.channel_id && account.channelId && templateRow.channel_id !== account.channelId) {
-          isMatchingChannel = false;
-        } else if (templateRow.channel_name && account.channelName && templateRow.channel_name.toLowerCase().trim() !== account.channelName.toLowerCase().trim()) {
-          isMatchingChannel = false;
+      if (templateRow && templateRow.description) {
+        // Enforce strict channel match: cannot leak if channel_id or channel_name differs
+        let isMatchingChannel = false;
+        const matchesChannelId = templateRow.channel_id && account.channelId && templateRow.channel_id === account.channelId;
+        const matchesChannelName = templateRow.channel_name && account.channelName && templateRow.channel_name.toLowerCase().trim() === account.channelName.toLowerCase().trim();
+        const matchesAccountStrict = templateRow.account_id && Number(templateRow.account_id) === Number(account.id);
+
+        if (matchesChannelId || matchesChannelName) {
+          isMatchingChannel = true;
+        } else if (matchesAccountStrict && !templateRow.channel_id && !templateRow.channel_name) {
+          isMatchingChannel = true;
         }
-      }
 
-      if (templateRow && templateRow.description && isMatchingChannel) {
-        let desc = templateRow.description;
-        let title = templateRow.title;
-        let parsedTags = [];
+        if (isMatchingChannel) {
+          let desc = templateRow.description;
+          let title = templateRow.title;
+          let parsedTags = [];
 
-        if (desc.trim().startsWith('[')) {
-          try {
-            const list = JSON.parse(desc);
-            if (Array.isArray(list) && list.length > 0) {
-              desc = list[0].description || '';
-              if (!title && list[0].title) title = list[0].title;
-              if (list[0].tags) {
-                parsedTags = Array.isArray(list[0].tags) ? list[0].tags : list[0].tags.split(/[\r\n,]+/).map(t => t.trim()).filter(Boolean);
+          if (desc.trim().startsWith('[')) {
+            try {
+              const list = JSON.parse(desc);
+              if (Array.isArray(list) && list.length > 0) {
+                desc = list[0].description || '';
+                if (!title && list[0].title) title = list[0].title;
+                if (list[0].tags) {
+                  parsedTags = Array.isArray(list[0].tags) ? list[0].tags : list[0].tags.split(/[\r\n,]+/).map(t => t.trim()).filter(Boolean);
+                }
               }
+            } catch (e) {}
+          } else {
+            try {
+              parsedTags = templateRow.tags ? JSON.parse(templateRow.tags) : [];
+            } catch (e) {
+              parsedTags = templateRow.tags ? templateRow.tags.split(/[\r\n,]+/).map(t => t.trim()).filter(Boolean) : [];
             }
-          } catch (e) {}
-        } else {
-          try {
-            parsedTags = templateRow.tags ? JSON.parse(templateRow.tags) : [];
-          } catch (e) {
-            parsedTags = templateRow.tags ? templateRow.tags.split(/[\r\n,]+/).map(t => t.trim()).filter(Boolean) : [];
           }
-        }
 
-        if (!defaults.description && desc) defaults.description = desc;
-        if (!defaults.title && title) defaults.title = title;
-        if (defaults.tags.length === 0 && parsedTags.length > 0) defaults.tags = parsedTags;
-        if (!defaults.categoryId && templateRow.category_id) defaults.categoryId = templateRow.category_id;
-        if (!defaults.privacyStatus && templateRow.privacy_status) defaults.privacyStatus = templateRow.privacy_status;
+          if (!defaults.description && desc) defaults.description = desc;
+          if (!defaults.title && title) defaults.title = title;
+          if (defaults.tags.length === 0 && parsedTags.length > 0) defaults.tags = parsedTags;
+          if (!defaults.categoryId && templateRow.category_id) defaults.categoryId = templateRow.category_id;
+          if (!defaults.privacyStatus && templateRow.privacy_status) defaults.privacyStatus = templateRow.privacy_status;
+        }
       }
     } catch (tmplErr) {
       console.warn(`[channel-defaults] Broadcast templates fallback warning for account ${account.id}:`, tmplErr.message);
@@ -8608,7 +8607,7 @@ app.get('/api/youtube/channel/:id/defaults', isAuthenticated, async (req, res) =
     const accountId = parseInt(req.params.id);
     const account = await YouTubeCredentials.findById(accountId);
     
-    if (!account || account.userId !== req.session.userId) {
+    if (!account || String(account.userId) !== String(req.session.userId)) {
       return res.status(404).json({ success: false, message: 'Account not found' });
     }
     
@@ -9857,7 +9856,7 @@ app.get('/api/youtube/channel-defaults', isAuthenticated, async (req, res) => {
 
     if (accountId) {
       credentials = await YouTubeCredentials.findById(accountId);
-      if (!credentials || credentials.userId !== req.session.userId) {
+      if (!credentials || String(credentials.userId) !== String(req.session.userId)) {
         return res.status(404).json({ success: false, error: 'Account not found' });
       }
     } else {
@@ -10616,7 +10615,11 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       await YouTubeBroadcastSettings.upsert({
         broadcastId: broadcast.broadcastId,
         userId: req.session.userId,
-        accountId: accountId || null,
+        accountId: accountId || credentials?.id || null,
+        title: title || '',
+        description: description || '',
+        categoryId: finalCategoryId,
+        privacyStatus: privacyStatus || 'unlisted',
         enableAutoStart: enableAutoStart === 'true' || enableAutoStart === true,
         enableAutoStop: enableAutoStop === 'true' || enableAutoStop === true,
         unlistReplayOnEnd: unlistReplayOnEnd === 'true' || unlistReplayOnEnd === true,
@@ -11148,6 +11151,10 @@ app.put('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
         broadcastId: req.params.id,
         userId: req.session.userId,
         accountId: (credentials ? credentials.id : accountId) || existingSettings.accountId || null,
+        title: title !== undefined ? title : existingSettings.title,
+        description: description !== undefined ? description : existingSettings.description,
+        categoryId: categoryId !== undefined ? categoryId : existingSettings.categoryId,
+        privacyStatus: privacyStatus || existingSettings.privacyStatus || existingSettings.originalPrivacyStatus || 'unlisted',
         enableAutoStart: existingSettings.enableAutoStart !== false,
         enableAutoStop: existingSettings.enableAutoStop !== false,
         unlistReplayOnEnd: finalUnlist,
