@@ -1019,7 +1019,7 @@ document.getElementById('playlistForm').addEventListener('submit', function(e) {
   const originalBtnHtml = submitBtn ? submitBtn.innerHTML : null;
   if (submitBtn) {
     submitBtn.disabled = true;
-    submitBtn.innerHTML = '<i class="ti ti-loader animate-spin mr-1.5"></i><span>Menyimpan ke Galeri...</span>';
+    submitBtn.innerHTML = '<i class="ti ti-loader animate-spin mr-1.5"></i><span>Menyimpan Playlist...</span>';
   }
   
   const formData = new FormData(this);
@@ -1044,10 +1044,10 @@ document.getElementById('playlistForm').addEventListener('submit', function(e) {
   .then(response => response.json())
   .then(data => {
     if (data.success) {
-      const msg = data.galleryResult?.message || (currentPlaylistId ? 'Playlist berhasil diperbarui' : 'Playlist berhasil dibuat & disimpan ke Galeri!');
+      const msg = data.message || (currentPlaylistId ? 'Playlist berhasil diperbarui' : 'Playlist berhasil dibuat & siap untuk live streaming!');
       showToast(msg, 'success');
       closePlaylistModal();
-      setTimeout(() => location.reload(), 900);
+      setTimeout(() => location.reload(), 600);
     } else {
       showToast(data.message || data.error || 'Gagal menyimpan playlist', 'error');
       if (submitBtn) {

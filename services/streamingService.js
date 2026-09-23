@@ -833,9 +833,11 @@ function prerenderGaplessAudio(audioPaths, outputFile) {
       '-filter_complex', filter,
       '-map', '[aout]',
       '-c:a', 'aac',
-      '-b:a', '192k',
+      '-profile:a', 'aac_low',
+      '-b:a', '128k',
       '-ar', '44100',
       '-ac', '2',
+      '-af', 'aresample=async=1:first_pts=0',
       '-movflags', '+faststart',
       '-y',
       outputFile
@@ -868,9 +870,11 @@ function prerenderGaplessAudio(audioPaths, outputFile) {
           '-filter_complex', fallbackFilter,
           '-map', '[aout]',
           '-c:a', 'aac',
-          '-b:a', '192k',
+          '-profile:a', 'aac_low',
+          '-b:a', '128k',
           '-ar', '44100',
           '-ac', '2',
+          '-af', 'aresample=async=1:first_pts=0',
           '-movflags', '+faststart',
           '-y',
           outputFile
@@ -947,8 +951,11 @@ async function buildFFmpegArgsForAudioOnlyPlaylist(stream, playlist, durationSec
     '-pix_fmt', 'yuv420p',
     '-g', '60',
     '-c:a', 'aac',
-    '-b:a', '192k',
+    '-profile:a', 'aac_low',
+    '-b:a', '128k',
     '-ar', '44100',
+    '-ac', '2',
+    '-af', 'aresample=async=1:first_pts=0',
     '-map', '0:v:0',
     '-map', '1:a:0',
     '-f', 'flv',
@@ -1192,9 +1199,11 @@ async function buildFFmpegArgsForPlaylist(stream, playlist, durationOverrideSeco
     '-s', resolution,
     '-r', fps.toString(),
     '-c:a', 'aac',
+    '-profile:a', 'aac_low',
     '-b:a', '128k',
     '-ar', '44100',
-    '-ac', '2'
+    '-ac', '2',
+    '-af', 'aresample=async=1:first_pts=0'
   );
 
   // CRITICAL: -t must be placed BEFORE -f flv and output URL

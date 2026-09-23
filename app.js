@@ -6938,19 +6938,12 @@ app.post('/api/playlists', isAuthenticated, [
       }
     }
 
-    // Automatic save to gallery
-    let galleryResult = null;
-    try {
-      galleryResult = await savePlaylistMediaToGallery(playlist.id, req.session.userId);
-    } catch (saveErr) {
-      console.warn('[Playlist Gallery] Warning auto-saving to gallery:', saveErr.message);
-    }
-
+    // Virtual playlist: Instant save to database without heavy pre-rendering.
+    // The playlist is immediately ready as live streaming source.
     res.json({
       success: true,
       playlist,
-      galleryResult,
-      message: galleryResult?.message || 'Playlist berhasil dibuat'
+      message: 'Playlist berhasil dibuat dan siap untuk live streaming!'
     });
   } catch (error) {
     console.error('Error creating playlist:', error);
