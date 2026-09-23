@@ -89,6 +89,7 @@ class BroadcastTemplate {
     row.schedule_type = row.schedule_type || 'once';
     row.video_id = row.video_id || null;
     row.audio_id = row.audio_id || null;
+    row.stream_key = row.stream_key || row.stream_id || null;
 
     // Parse description for multi-broadcast templates
     if (row.description && typeof row.description === 'string' && row.description.trim().startsWith('[')) {
@@ -98,6 +99,7 @@ class BroadcastTemplate {
           row.isMultiBroadcast = true;
           row.broadcasts = broadcasts.map(b => ({
             ...b,
+            streamKey: b.streamKey || b.stream_key || row.stream_key || row.stream_id || '',
             durationHours: b.durationHours !== undefined ? (parseInt(b.durationHours) || 0) : row.duration_hours,
             durationMinutes: b.durationMinutes !== undefined ? (parseInt(b.durationMinutes) || 0) : row.duration_minutes,
             streamDurationMinutes: b.streamDurationMinutes !== undefined 
@@ -137,6 +139,7 @@ class BroadcastTemplate {
       pinned_thumbnail = null,
       stream_key_folder_mapping = null,
       stream_id = null,
+      stream_key = null,
       // Title rotation fields
       title_index = 0,
       pinned_title_id = null,
@@ -208,8 +211,8 @@ class BroadcastTemplate {
           recurring_enabled, recurring_pattern, recurring_time, recurring_days, next_run_at,
           channel_name, channel_id, altered_content, dual_stream, vertical_stream_key,
           duration_hours, duration_minutes, stream_duration_minutes, loop_video,
-          video_id, audio_id, schedule_type
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          video_id, audio_id, schedule_type, stream_key
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id, user_id, account_id, name.trim(), title, description,
           privacy_status, tagsJson, category_id, thumbnail_path, thumbnail_folder,
@@ -219,7 +222,7 @@ class BroadcastTemplate {
           channel_name, channel_id, altered_content ? 1 : 0, dual_stream ? 1 : 0,
           vertical_stream_key ? vertical_stream_key.trim() : null,
           finalDurationHours, finalDurationMinutes, totalDurationMins, loopVideoInt,
-          video_id || null, audio_id || null, schedule_type || 'once'
+          video_id || null, audio_id || null, schedule_type || 'once', stream_key || null
         ],
         function (err) {
           if (err) {
@@ -245,6 +248,7 @@ class BroadcastTemplate {
             pinned_thumbnail,
             stream_key_folder_mapping: stream_key_folder_mapping || {},
             stream_id,
+            stream_key: stream_key || stream_id || null,
             title_index: title_index || 0,
             pinned_title_id,
             title_folder_id,

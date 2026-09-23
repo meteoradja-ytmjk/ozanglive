@@ -6346,9 +6346,22 @@ if (saveAsTemplateForm) {
       });
       
       // Parse broadcast duration and stream settings
-      const durMins = parseInt(broadcast.streamDurationMinutes) || parseInt(broadcast.stream_duration_minutes) || parseInt(broadcast.duration) || 0;
-      const durHours = parseInt(broadcast.streamDurationHours) || parseInt(broadcast.stream_duration_hours) || Math.floor(durMins / 60);
-      const remMins = durMins % 60;
+      let durMins = parseInt(broadcast.streamDurationMinutes) || parseInt(broadcast.stream_duration_minutes) || parseInt(broadcast.duration) || 0;
+      let durHours = parseInt(broadcast.streamDurationHours) || parseInt(broadcast.stream_duration_hours) || Math.floor(durMins / 60);
+      let remMins = durMins % 60;
+
+      // Fallback: check DOM row dataset if durMins is 0
+      if (durMins === 0) {
+        const rowEl = document.querySelector(`.broadcast-row[data-broadcast-id="${broadcastId}"]`);
+        if (rowEl && rowEl.dataset && rowEl.dataset.broadcast) {
+          try {
+            const rowData = JSON.parse(rowEl.dataset.broadcast);
+            durMins = parseInt(rowData.streamDurationMinutes) || parseInt(rowData.duration) || 0;
+            durHours = parseInt(rowData.streamDurationHours) || Math.floor(durMins / 60);
+            remMins = durMins % 60;
+          } catch (e) {}
+        }
+      }
 
       // Create template from broadcast - include ALL data for reuse
       const templateData = {
@@ -6363,6 +6376,7 @@ if (saveAsTemplateForm) {
         thumbnailPath: broadcast.thumbnailPath || null,
         thumbnailFolder: currentThumbnailFolder || null,  // Save current thumbnail folder selection
         streamId: broadcast.streamId || null,  // Save stream ID for reuse
+        streamKey: broadcast.streamKey || '',  // Save stream key for reuse
         durationHours: durHours,
         durationMinutes: remMins,
         streamDurationMinutes: durMins,
@@ -7628,35 +7642,18 @@ function openRecreateFromTemplateModal(template) {
     }
   }
 
-  // Populate duration info badge and controls
+  // Populate duration info badge
   const totalTemplateMins = parseInt(template.stream_duration_minutes) || parseInt(template.duration) || ((parseInt(template.duration_hours) || 0) * 60 + (parseInt(template.duration_minutes) || 0));
   const tHours = parseInt(template.duration_hours) || Math.floor(totalTemplateMins / 60);
   const tMins = parseInt(template.duration_minutes) || (totalTemplateMins % 60);
 
   const durBadgeEl = document.getElementById('recreateTemplateDurationBadgeText');
-  const durSummaryEl = document.getElementById('recreateDurationSummaryText');
   let durationLabel = 'Tanpa Batas';
   if (totalTemplateMins > 0 || tHours > 0 || tMins > 0) {
     durationLabel = `${tHours > 0 ? tHours + ' Jam ' : ''}${tMins > 0 ? tMins + ' Mnt' : (tHours === 0 ? '0 Mnt' : '')}`.trim();
   }
   if (durBadgeEl) {
     durBadgeEl.textContent = `Durasi: ${durationLabel}`;
-  }
-  if (durSummaryEl) {
-    durSummaryEl.textContent = totalTemplateMins > 0 ? `Target: ${durationLabel}` : 'Berdasarkan Template';
-  }
-
-  const hoursInput = document.getElementById('recreateStreamDurationHours');
-  if (hoursInput) {
-    hoursInput.value = tHours || 0;
-  }
-  const minsInput = document.getElementById('recreateStreamDurationMinutes');
-  if (minsInput) {
-    minsInput.value = tMins || 0;
-  }
-  const loopToggle = document.getElementById('recreateLoopVideo');
-  if (loopToggle) {
-    loopToggle.checked = template.loop_video !== false;
   }
 
   const createBtn = document.getElementById('recreateBtn');
@@ -8744,25 +8741,34 @@ if (recreateFromTemplateForm) {
           formData.append('enableAutoStop', 'true');
           formData.append('unlistReplayOnEnd', 'true');
 
-          // Append duration & stream settings from modal controls / slot / template
-          const hoursInput = document.getElementById('recreateStreamDurationHours');
-          const minsInput = document.getElementById('recreateStreamDurationMinutes');
-          const loopVideoInput = document.getElementById('recreateLoopVideo');
+          // Durasi dan Loop Video diwariskan 100% otomatis dari slot/template
+          let durationHours = slot.durationHours !== undefined ? parseInt(slot.durationHours, 10) : parseInt(template.duration_hours, 10);
+          let durationMinutes = slot.durationMinutes !== undefined ? parseInt(slot.durationMinutes, 10) : parseInt(template.duration_minutes, 10);
+          let totalSlotMinutes = parseInt(slot.streamDurationMinutes, 10) || parseInt(template.stream_duration_minutes, 10) || 0;
 
-          let durationHours = hoursInput ? parseInt(hoursInput.value, 10) : NaN;
-          let durationMinutes = minsInput ? parseInt(minsInput.value, 10) : NaN;
-          if (isNaN(durationHours)) {
-            durationHours = slot.durationHours !== undefined ? slot.durationHours : (template.duration_hours || 0);
-          }
-          if (isNaN(durationMinutes)) {
-            durationMinutes = slot.durationMinutes !== undefined ? slot.durationMinutes : (template.duration_minutes || 0);
+          if (totalSlotMinutes === 0 && (!isNaN(durationHours) || !isNaN(durationMinutes))) {
+            totalSlotMinutes = ((parseInt(durationHours, 10) || 0) * 60) + (parseInt(durationMinutes, 10) || 0);
           }
 
-          const loopVideo = loopVideoInput ? (loopVideoInput.checked ? 'true' : 'false') : (template.loop_video !== false ? 'true' : 'false');
+          if ((isNaN(durationHours) || isNaN(durationMinutes)) && totalSlotMinutes > 0) {
+            durationHours = Math.floor(totalSlotMinutes / 60);
+            durationMinutes = totalSlotMinutes % 60;
+          }
+
+          const isLoop = (slot.loopVideo !== undefined) 
+            ? (slot.loopVideo !== false && slot.loopVideo !== 0 && slot.loopVideo !== '0') 
+            : (template.loop_video !== false && template.loop_video !== 0 && template.loop_video !== '0');
 
           formData.append('streamDurationHours', String(durationHours || 0));
           formData.append('streamDurationMinutes', String(durationMinutes || 0));
-          formData.append('loopVideo', loopVideo);
+          formData.append('streamTotalMinutes', String(totalSlotMinutes || 0));
+          formData.append('loopVideo', isLoop ? 'true' : 'false');
+
+          // Pass streamKey directly so it is accurately preserved
+          const inheritedStreamKey = slot.streamKey || template.stream_key || '';
+          if (inheritedStreamKey) {
+            formData.append('streamKey', inheritedStreamKey);
+          }
 
           const slotScheduleType = patternVal === 'daily' ? 'daily' : (patternVal === 'weekly' ? 'weekly' : (template.schedule_type || 'once'));
           formData.append('scheduleType', slotScheduleType);

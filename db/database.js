@@ -501,8 +501,9 @@ async function createCoreTablesAsync() {
   await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN video_id TEXT`, 'broadcast_templates.video_id');
   await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN audio_id TEXT`, 'broadcast_templates.audio_id');
   await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN schedule_type TEXT DEFAULT 'once'`, 'broadcast_templates.schedule_type');
+  await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN stream_key TEXT`, 'broadcast_templates.stream_key');
 
-  // Auto-recovery migration: populate duration for saved templates from matching streams
+  // Auto-recovery migration: populate duration and stream_key for saved templates from matching streams
   try {
     await runTableQuery(`
       UPDATE broadcast_templates
@@ -528,6 +529,24 @@ async function createCoreTablesAsync() {
           duration_minutes = CAST(stream_duration_minutes % 60 AS INTEGER)
       WHERE stream_duration_minutes > 0 AND (duration_hours IS NULL OR duration_hours = 0) AND (duration_minutes IS NULL OR duration_minutes = 0)
     `, 'broadcast_templates.auto_recover_hours_minutes');
+
+    await runTableQuery(`
+      UPDATE broadcast_templates
+      SET stream_key = (
+        SELECT s.stream_key FROM streams s
+        WHERE s.user_id = broadcast_templates.user_id
+          AND (s.stream_key = broadcast_templates.stream_id OR s.title = broadcast_templates.title)
+          AND s.stream_key IS NOT NULL AND s.stream_key != ''
+        ORDER BY s.id DESC LIMIT 1
+      )
+      WHERE (stream_key IS NULL OR stream_key = '')
+        AND EXISTS (
+          SELECT 1 FROM streams s
+          WHERE s.user_id = broadcast_templates.user_id
+            AND (s.stream_key = broadcast_templates.stream_id OR s.title = broadcast_templates.title)
+            AND s.stream_key IS NOT NULL AND s.stream_key != ''
+        )
+    `, 'broadcast_templates.auto_recover_stream_key');
   } catch (recoverErr) {
     console.warn('[DB] Auto-recovery for template duration warning:', recoverErr.message);
   }
