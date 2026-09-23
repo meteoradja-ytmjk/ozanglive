@@ -9923,7 +9923,8 @@ async function attachLocalSettingsToBroadcasts(broadcastsList, userId) {
 
     const streamRows = await new Promise((resolve) => {
       db.all(
-        `SELECT youtube_broadcast_id, dual_stream, altered_content, unlist_replay_on_end, vertical_stream_key, tags 
+        `SELECT youtube_broadcast_id, dual_stream, altered_content, unlist_replay_on_end, vertical_stream_key, tags,
+                stream_duration_hours, stream_duration_minutes, duration, loop_video, video_id, audio_id, schedule_type, recurring_time, schedule_days
          FROM streams 
          WHERE youtube_broadcast_id IN (${placeholders})`,
         broadcastIds,
@@ -9952,12 +9953,24 @@ async function attachLocalSettingsToBroadcasts(broadcastsList, userId) {
         const isDual = existing.dual_stream || s.dual_stream === 1 || s.dual_stream === '1' || s.dual_stream === true;
         const isAltered = existing.altered_content || s.altered_content === 1 || s.altered_content === '1' || s.altered_content === true;
         const isUnlist = existing.unlist_replay_on_end !== undefined ? existing.unlist_replay_on_end : (s.unlist_replay_on_end !== 0 && s.unlist_replay_on_end !== '0' && s.unlist_replay_on_end !== false);
+        const durationMins = parseInt(s.stream_duration_minutes) || ((parseInt(s.stream_duration_hours) || 0) * 60);
+        const durationHours = parseInt(s.stream_duration_hours) || Math.floor(durationMins / 60);
+        const durationMinutes = durationMins % 60;
         settingsMap.set(s.youtube_broadcast_id, {
           ...existing,
           dual_stream: isDual,
           altered_content: isAltered,
           unlist_replay_on_end: isUnlist,
-          vertical_stream_key: existing.vertical_stream_key || s.vertical_stream_key || null
+          vertical_stream_key: existing.vertical_stream_key || s.vertical_stream_key || null,
+          stream_duration_hours: durationHours,
+          stream_duration_minutes: durationMins,
+          duration: durationMins,
+          loop_video: s.loop_video !== 0 && s.loop_video !== '0' && s.loop_video !== false,
+          video_id: s.video_id || null,
+          audio_id: s.audio_id || null,
+          schedule_type: s.schedule_type || 'once',
+          recurring_time: s.recurring_time || null,
+          schedule_days: s.schedule_days || null
         });
       }
     });
@@ -9974,6 +9987,18 @@ async function attachLocalSettingsToBroadcasts(broadcastsList, userId) {
       if (s.vertical_stream_key) b.vertical_stream_key = s.vertical_stream_key;
       if (s.thumbnail_folder) b.thumbnailFolder = s.thumbnail_folder;
       if (s.thumbnail_path) b.thumbnailPath = s.thumbnail_path;
+      b.stream_duration_hours = s.stream_duration_hours || 0;
+      b.streamDurationHours = s.stream_duration_hours || 0;
+      b.stream_duration_minutes = s.stream_duration_minutes || 0;
+      b.streamDurationMinutes = s.stream_duration_minutes || 0;
+      b.duration = s.duration || s.stream_duration_minutes || 0;
+      b.loop_video = s.loop_video !== false;
+      b.loopVideo = s.loop_video !== false;
+      b.videoId = s.video_id || null;
+      b.audioId = s.audio_id || null;
+      b.scheduleType = s.schedule_type || 'once';
+      b.recurringTime = s.recurring_time || null;
+      b.scheduleDays = s.schedule_days || null;
     });
   } catch (err) {
     console.warn('[Broadcasts API] Error attaching local settings:', err.message);
@@ -10774,9 +10799,73 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         }
       }
 
-      const hours = parseInt(req.body.streamDurationHours) || 0;
-      const minutes = parseInt(req.body.streamDurationMinutes) || 0;
+      let hours = parseInt(req.body.streamDurationHours) || 0;
+      let minutes = parseInt(req.body.streamDurationMinutes) || 0;
       let totalMinutes = (hours * 60) + minutes;
+      let loopVideo = req.body.loopVideo !== undefined ? (req.body.loopVideo === 'true' || req.body.loopVideo === true) : true;
+      let videoId = req.body.videoId || null;
+      let audioId = req.body.audioId || null;
+      let scheduleType = req.body.scheduleType || 'once';
+
+      // If created from a template, inherit duration and stream settings from template
+      const templateId = req.body.templateId;
+      if (templateId) {
+        try {
+          const template = await BroadcastTemplate.findById(templateId);
+          if (template) {
+            console.log('[API] Broadcast created from template:', template.id, 'stream_duration_minutes:', template.stream_duration_minutes);
+            if (totalMinutes === 0 && template.stream_duration_minutes > 0) {
+              totalMinutes = template.stream_duration_minutes;
+              hours = template.duration_hours || Math.floor(totalMinutes / 60);
+              minutes = totalMinutes % 60;
+              console.log(`[API] ✅ Inherited duration from template: ${totalMinutes} mins (${hours}h ${minutes}m)`);
+            }
+            if (req.body.loopVideo === undefined && template.loop_video !== undefined) {
+              loopVideo = template.loop_video;
+            }
+            if (!videoId && template.video_id) {
+              videoId = template.video_id;
+            }
+            if (!audioId && template.audio_id) {
+              audioId = template.audio_id;
+            }
+            if (req.body.scheduleType === undefined && template.schedule_type) {
+              scheduleType = template.schedule_type;
+            }
+          }
+        } catch (tErr) {
+          console.warn('[API] Warning looking up template for broadcast duration:', tErr.message);
+        }
+      }
+
+      // Fallback: if totalMinutes is still 0, search previous streams for user by streamId or title
+      if (totalMinutes === 0 && (streamId || broadcast.title || title)) {
+        try {
+          const prevStream = await new Promise((resolve) => {
+            db.get(
+              `SELECT stream_duration_hours, stream_duration_minutes, loop_video, video_id, audio_id, schedule_type
+               FROM streams
+               WHERE user_id = ? AND (stream_key = ? OR title = ? OR title = ?) AND stream_duration_minutes > 0
+               ORDER BY id DESC LIMIT 1`,
+              [req.session.userId, streamId || '', broadcast.title || '', title || ''],
+              (err, row) => resolve(row)
+            );
+          });
+          if (prevStream && prevStream.stream_duration_minutes > 0) {
+            totalMinutes = prevStream.stream_duration_minutes;
+            hours = prevStream.stream_duration_hours || Math.floor(totalMinutes / 60);
+            minutes = totalMinutes % 60;
+            if (req.body.loopVideo === undefined && prevStream.loop_video !== undefined) {
+              loopVideo = prevStream.loop_video !== 0 && prevStream.loop_video !== false;
+            }
+            if (!videoId && prevStream.video_id) videoId = prevStream.video_id;
+            if (!audioId && prevStream.audio_id) audioId = prevStream.audio_id;
+            console.log(`[API] ✅ Fallback inherited duration from previous stream: ${totalMinutes} mins (${hours}h ${minutes}m)`);
+          }
+        } catch (prevErr) {
+          console.warn('[API] Warning looking up previous stream for duration:', prevErr.message);
+        }
+      }
 
       // Resolve stream key value from broadcast or credentials/streamId
       let finalStreamKey = broadcast.streamKey || '';
@@ -10807,11 +10896,11 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         if (eDate) endIso = eDate.toISOString();
       }
 
-      const scheduleType = req.body.scheduleType || 'once';
-
       // If user provided start and end times but left duration hours/minutes at 0, calculate duration from difference (ONLY for 'once')
       if (scheduleType === 'once' && totalMinutes === 0 && sDate && eDate && eDate > sDate) {
         totalMinutes = Math.round((eDate.getTime() - sDate.getTime()) / (1000 * 60));
+        hours = Math.floor(totalMinutes / 60);
+        minutes = totalMinutes % 60;
         console.log(`[API] Calculated duration from start/end times: ${totalMinutes} minutes`);
       }
 
@@ -10836,8 +10925,8 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
 
       const streamData = {
         title: broadcast.title || title,
-        video_id: req.body.videoId || null,
-        audio_id: req.body.audioId || null,
+        video_id: videoId,
+        audio_id: audioId,
         rtmp_url: broadcast.rtmpUrl || 'rtmp://a.rtmp.youtube.com/live2',
         stream_key: finalStreamKey || (streamId ? String(streamId) : ''),
         platform: 'YouTube',
@@ -10846,7 +10935,8 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         resolution: '1280x720',
         fps: 30,
         orientation: 'horizontal',
-        loop_video: req.body.loopVideo === 'true' || req.body.loopVideo === true,
+        loop_video: loopVideo,
+        stream_duration_hours: hours,
         stream_duration_minutes: totalMinutes > 0 ? totalMinutes : null,
         duration: totalMinutes > 0 ? totalMinutes : null,
         schedule_type: scheduleType,
@@ -11240,7 +11330,9 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
       thumbnailPath, thumbnailFolder, pinnedThumbnail, streamKeyFolderMapping,
       streamId, accountId, titleIndex, pinnedTitleId, titleFolderId,
       // Recurring schedule fields
-      recurringEnabled, recurringPattern, recurringTime, recurringDays
+      recurringEnabled, recurringPattern, recurringTime, recurringDays,
+      // Duration & stream settings
+      durationHours, durationMinutes, streamDurationMinutes, loopVideo, videoId, audioId, scheduleType
     } = req.body;
 
     console.log('[create-template] Received streamId:', streamId);
@@ -11263,6 +11355,44 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
     const credentials = await YouTubeCredentials.findById(parseInt(accountId));
     if (!credentials || credentials.userId !== req.session.userId) {
       return res.status(404).json({ success: false, error: 'Account not found' });
+    }
+
+    // Auto-populate duration from stream if not provided
+    let dHours = parseInt(durationHours) || 0;
+    let dMins = parseInt(durationMinutes) || 0;
+    let totalDurationMins = parseInt(streamDurationMinutes) || ((dHours * 60) + dMins);
+    let loopVid = loopVideo !== undefined ? (loopVideo === 'true' || loopVideo === true || loopVideo === 1 || loopVideo === '1') : true;
+    let vidId = videoId || null;
+    let audId = audioId || null;
+    let schedType = scheduleType || 'once';
+
+    if (totalDurationMins === 0 && (streamId || title)) {
+      try {
+        const streamRecord = await new Promise((resolve) => {
+          db.get(
+            `SELECT stream_duration_hours, stream_duration_minutes, loop_video, video_id, audio_id, schedule_type
+             FROM streams
+             WHERE user_id = ? AND (stream_key = ? OR title = ?) AND stream_duration_minutes > 0
+             ORDER BY id DESC LIMIT 1`,
+            [req.session.userId, streamId || '', title || ''],
+            (err, row) => resolve(row)
+          );
+        });
+        if (streamRecord && streamRecord.stream_duration_minutes > 0) {
+          totalDurationMins = streamRecord.stream_duration_minutes;
+          dHours = streamRecord.stream_duration_hours || Math.floor(totalDurationMins / 60);
+          dMins = totalDurationMins % 60;
+          if (loopVideo === undefined && streamRecord.loop_video !== undefined) {
+            loopVid = streamRecord.loop_video !== 0 && streamRecord.loop_video !== false;
+          }
+          if (!vidId && streamRecord.video_id) vidId = streamRecord.video_id;
+          if (!audId && streamRecord.audio_id) audId = streamRecord.audio_id;
+          if (schedType === 'once' && streamRecord.schedule_type) schedType = streamRecord.schedule_type;
+          console.log(`[create-template] Auto-populated duration from stream: ${totalDurationMins} mins (${dHours}h ${dMins}m)`);
+        }
+      } catch (lookupErr) {
+        console.warn('[create-template] Stream lookup warning:', lookupErr.message);
+      }
     }
 
     // Parse stream key folder mapping if provided
@@ -11350,7 +11480,14 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
       next_run_at: next_run_at,
       altered_content: req.body.alteredContent === 'true' || req.body.alteredContent === true || req.body.alteredContent === 1 || req.body.alteredContent === '1' ? 1 : 0,
       dual_stream: req.body.dualStream === 'true' || req.body.dualStream === true || req.body.dualStream === 1 || req.body.dualStream === '1' ? 1 : 0,
-      vertical_stream_key: (req.body.verticalStreamKey || req.body.backupRtmpUrl || '').trim() || null
+      vertical_stream_key: (req.body.verticalStreamKey || req.body.backupRtmpUrl || '').trim() || null,
+      duration_hours: dHours,
+      duration_minutes: dMins,
+      stream_duration_minutes: totalDurationMins,
+      loop_video: loopVid ? 1 : 0,
+      video_id: vidId,
+      audio_id: audId,
+      schedule_type: schedType
     });
 
     // Only auto-set thumbnail_folder if it was not provided at all (null)
@@ -11372,7 +11509,7 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
       }
     }
 
-    console.log('[create-template] Created template with stream_id:', template.stream_id, 'thumbnail_folder:', template.thumbnail_folder, 'pinned_thumbnail:', template.pinned_thumbnail, 'title_index:', template.title_index, 'pinned_title_id:', template.pinned_title_id);
+    console.log('[create-template] Created template with stream_id:', template.stream_id, 'duration:', template.stream_duration_minutes, 'loop_video:', template.loop_video);
     console.log('[create-template] Recurring config saved:', { recurring_enabled: template.recurring_enabled, recurring_pattern: template.recurring_pattern, recurring_time: template.recurring_time, next_run_at: template.next_run_at });
 
     res.json({ success: true, template });
@@ -11416,40 +11553,68 @@ app.post('/api/youtube/templates/multi', isAuthenticated, async (req, res) => {
     }
 
     // IMPORTANT: Handle thumbnailFolder correctly
-    // - undefined means not provided
-    // - empty string "" means root folder (intentionally selected)
-    // - non-empty string means specific folder name
     const finalThumbnailFolder = thumbnailFolder !== undefined ? thumbnailFolder : null;
 
-    console.log('[templates/multi] thumbnailFolder processing:', {
-      received: thumbnailFolder,
-      type: typeof thumbnailFolder,
-      final: finalThumbnailFolder
-    });
+    // Ensure each broadcast has streamId, thumbnailPath, and duration preserved
+    const broadcastsWithStreamId = await Promise.all(broadcasts.map(async b => {
+      let bMins = parseInt(b.streamDurationMinutes) || (((parseInt(b.durationHours) || 0) * 60) + (parseInt(b.durationMinutes) || 0));
+      let bHours = parseInt(b.durationHours) || Math.floor(bMins / 60);
+      let bMinutes = parseInt(b.durationMinutes) || (bMins % 60);
+      let bLoop = b.loopVideo !== undefined ? (b.loopVideo !== false && b.loopVideo !== 0 && b.loopVideo !== '0') : true;
+      let bVideoId = b.videoId || null;
+      let bAudioId = b.audioId || null;
 
-    // Ensure each broadcast has streamId, thumbnailPath, and thumbnailFolder preserved
-    const broadcastsWithStreamId = broadcasts.map(b => ({
-      title: b.title,
-      description: b.description || '',
-      privacyStatus: b.privacyStatus || 'unlisted',
-      streamId: b.streamId || null,  // Preserve stream ID
-      streamKey: b.streamKey || '',
-      categoryId: b.categoryId || '22',
-      tags: b.tags || [],
-      thumbnailPath: b.thumbnailPath || b.thumbnail_path || null,  // Preserve thumbnail path
-      // IMPORTANT: Preserve broadcast's own folder first, fallback to template default folder
-      thumbnailFolder: (b.thumbnailFolder !== undefined && b.thumbnailFolder !== null) ? b.thumbnailFolder : finalThumbnailFolder,
-      pinnedThumbnail: b.pinnedThumbnail || null  // Preserve pinned thumbnail
+      // Auto-lookup duration from stream if not provided
+      if (bMins === 0 && (b.streamId || b.streamKey || b.title)) {
+        try {
+          const sRow = await new Promise((resolve) => {
+            db.get(
+              `SELECT stream_duration_hours, stream_duration_minutes, loop_video, video_id, audio_id
+               FROM streams
+               WHERE user_id = ? AND (stream_key = ? OR stream_key = ? OR title = ?) AND stream_duration_minutes > 0
+               ORDER BY id DESC LIMIT 1`,
+              [req.session.userId, b.streamId || '', b.streamKey || '', b.title || ''],
+              (err, row) => resolve(row)
+            );
+          });
+          if (sRow && sRow.stream_duration_minutes > 0) {
+            bMins = sRow.stream_duration_minutes;
+            bHours = sRow.stream_duration_hours || Math.floor(bMins / 60);
+            bMinutes = bMins % 60;
+            if (b.loopVideo === undefined && sRow.loop_video !== undefined) {
+              bLoop = sRow.loop_video !== 0 && sRow.loop_video !== false;
+            }
+            if (!bVideoId && sRow.video_id) bVideoId = sRow.video_id;
+            if (!bAudioId && sRow.audio_id) bAudioId = sRow.audio_id;
+          }
+        } catch (mLookupErr) {}
+      }
+
+      return {
+        title: b.title,
+        description: b.description || '',
+        privacyStatus: b.privacyStatus || 'unlisted',
+        streamId: b.streamId || null,  // Preserve stream ID
+        streamKey: b.streamKey || '',
+        categoryId: b.categoryId || '22',
+        tags: b.tags || [],
+        thumbnailPath: b.thumbnailPath || b.thumbnail_path || null,  // Preserve thumbnail path
+        thumbnailFolder: (b.thumbnailFolder !== undefined && b.thumbnailFolder !== null) ? b.thumbnailFolder : finalThumbnailFolder,
+        pinnedThumbnail: b.pinnedThumbnail || null,  // Preserve pinned thumbnail
+        durationHours: bHours,
+        durationMinutes: bMinutes,
+        streamDurationMinutes: bMins,
+        loopVideo: bLoop,
+        videoId: bVideoId,
+        audioId: bAudioId,
+        scheduleType: b.scheduleType || 'once'
+      };
     }));
 
-    console.log('[templates/multi] Saving broadcasts with data:', broadcastsWithStreamId.map(b => ({
-      title: b.title,
-      streamId: b.streamId,
-      thumbnailPath: b.thumbnailPath,
-      thumbnailFolder: b.thumbnailFolder,
-      pinnedThumbnail: b.pinnedThumbnail,
-      privacyStatus: b.privacyStatus
-    })));
+    const topDurationMins = broadcastsWithStreamId[0]?.streamDurationMinutes || 0;
+    const topDurationHours = Math.floor(topDurationMins / 60);
+    const topDurationMinutes = topDurationMins % 60;
+    const topLoopVideo = broadcastsWithStreamId[0]?.loopVideo !== false;
 
     // Create template with broadcasts data stored as JSON
     const template = await BroadcastTemplate.create({
@@ -11468,7 +11633,14 @@ app.post('/api/youtube/templates/multi', isAuthenticated, async (req, res) => {
       thumbnail_index: 0,
       pinned_thumbnail: null,
       stream_key_folder_mapping: parsedMapping,
-      stream_id: broadcasts[0].streamId || null  // Save first broadcast's stream_id
+      stream_id: broadcasts[0].streamId || null,  // Save first broadcast's stream_id
+      duration_hours: topDurationHours,
+      duration_minutes: topDurationMinutes,
+      stream_duration_minutes: topDurationMins,
+      loop_video: topLoopVideo ? 1 : 0,
+      video_id: broadcastsWithStreamId[0]?.videoId || null,
+      audio_id: broadcastsWithStreamId[0]?.audioId || null,
+      schedule_type: broadcastsWithStreamId[0]?.scheduleType || 'once'
     });
 
     res.json({ success: true, template, broadcastCount: broadcasts.length });
@@ -12211,6 +12383,32 @@ app.post('/api/youtube/templates/:id/create-broadcast', isAuthenticated, async (
       console.error('[create-broadcast-from-template] Error saving broadcast settings:', settingsErr.message);
     }
 
+    // Also create Stream record to preserve duration, loop_video, and stream settings
+    try {
+      const templateDuration = template.stream_duration_minutes || (template.duration_hours * 60 + (template.duration_minutes || 0)) || null;
+      await Stream.create({
+        title: broadcast.title,
+        video_id: template.video_id || null,
+        audio_id: template.audio_id || null,
+        rtmp_url: broadcast.rtmpUrl || 'rtmp://a.rtmp.youtube.com/live2',
+        stream_key: broadcast.streamKey || '',
+        platform: 'YouTube',
+        platform_icon: 'ti-brand-youtube',
+        loop_video: template.loop_video !== false,
+        stream_duration_hours: template.duration_hours || (templateDuration ? Math.floor(templateDuration / 60) : 0),
+        stream_duration_minutes: templateDuration,
+        duration: templateDuration,
+        schedule_type: template.schedule_type || 'once',
+        schedule_time: new Date(scheduledStartTime).toISOString(),
+        user_id: req.session.userId,
+        youtube_broadcast_id: broadcast.id || broadcast.broadcastId,
+        youtube_account_id: template.account_id || null,
+        status: 'scheduled'
+      });
+    } catch (streamErr) {
+      console.error('[create-broadcast-from-template] Error creating stream record:', streamErr.message);
+    }
+
     console.log('[create-broadcast-from-template] Created broadcast with streamKey:', broadcast.streamKey);
 
     // Upload thumbnail if template has one
@@ -12339,6 +12537,32 @@ app.post('/api/youtube/templates/:id/bulk-create', isAuthenticated, async (req, 
           } catch (thumbError) {
             console.error('Error uploading thumbnail for bulk create:', thumbError);
           }
+        }
+
+        // Also create Stream record to preserve duration, loop_video, and stream settings
+        try {
+          const templateDuration = template.stream_duration_minutes || (template.duration_hours * 60 + (template.duration_minutes || 0)) || null;
+          await Stream.create({
+            title: broadcast.title,
+            video_id: template.video_id || null,
+            audio_id: template.audio_id || null,
+            rtmp_url: broadcast.rtmpUrl || 'rtmp://a.rtmp.youtube.com/live2',
+            stream_key: broadcast.streamKey || '',
+            platform: 'YouTube',
+            platform_icon: 'ti-brand-youtube',
+            loop_video: template.loop_video !== false,
+            stream_duration_hours: template.duration_hours || (templateDuration ? Math.floor(templateDuration / 60) : 0),
+            stream_duration_minutes: templateDuration,
+            duration: templateDuration,
+            schedule_type: template.schedule_type || 'once',
+            schedule_time: new Date(schedule).toISOString(),
+            user_id: req.session.userId,
+            youtube_broadcast_id: broadcast.broadcastId,
+            youtube_account_id: template.account_id || null,
+            status: 'scheduled'
+          });
+        } catch (streamErr) {
+          console.error('[bulk-create] Error creating stream record:', streamErr.message);
         }
 
         results.success++;

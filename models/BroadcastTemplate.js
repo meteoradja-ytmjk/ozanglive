@@ -76,6 +76,41 @@ class BroadcastTemplate {
     if (row.thumbnail_index === undefined || row.thumbnail_index === null) {
       row.thumbnail_index = 0;
     }
+
+    // Duration and stream settings
+    row.duration_hours = parseInt(row.duration_hours) || 0;
+    row.duration_minutes = parseInt(row.duration_minutes) || 0;
+    row.stream_duration_minutes = parseInt(row.stream_duration_minutes) || ((row.duration_hours * 60) + row.duration_minutes);
+    if (row.stream_duration_minutes > 0 && row.duration_hours === 0 && row.duration_minutes === 0) {
+      row.duration_hours = Math.floor(row.stream_duration_minutes / 60);
+      row.duration_minutes = row.stream_duration_minutes % 60;
+    }
+    row.loop_video = row.loop_video !== 0 && row.loop_video !== '0' && row.loop_video !== false;
+    row.schedule_type = row.schedule_type || 'once';
+    row.video_id = row.video_id || null;
+    row.audio_id = row.audio_id || null;
+
+    // Parse description for multi-broadcast templates
+    if (row.description && typeof row.description === 'string' && row.description.trim().startsWith('[')) {
+      try {
+        const broadcasts = JSON.parse(row.description);
+        if (Array.isArray(broadcasts)) {
+          row.isMultiBroadcast = true;
+          row.broadcasts = broadcasts.map(b => ({
+            ...b,
+            durationHours: b.durationHours !== undefined ? (parseInt(b.durationHours) || 0) : row.duration_hours,
+            durationMinutes: b.durationMinutes !== undefined ? (parseInt(b.durationMinutes) || 0) : row.duration_minutes,
+            streamDurationMinutes: b.streamDurationMinutes !== undefined 
+              ? (parseInt(b.streamDurationMinutes) || 0) 
+              : (b.durationHours !== undefined ? ((parseInt(b.durationHours) || 0) * 60 + (parseInt(b.durationMinutes) || 0)) : row.stream_duration_minutes),
+            loopVideo: b.loopVideo !== undefined ? (b.loopVideo !== false && b.loopVideo !== 0 && b.loopVideo !== '0') : row.loop_video,
+            videoId: b.videoId || row.video_id || null,
+            audioId: b.audioId || row.audio_id || null,
+            scheduleType: b.scheduleType || row.schedule_type || 'once'
+          }));
+        }
+      } catch (e) {}
+    }
     
     return row;
   }
@@ -116,7 +151,15 @@ class BroadcastTemplate {
       channel_id = null,
       altered_content = 0,
       dual_stream = 0,
-      vertical_stream_key = null
+      vertical_stream_key = null,
+      // Duration & stream configuration
+      duration_hours = 0,
+      duration_minutes = 0,
+      stream_duration_minutes = 0,
+      loop_video = 1,
+      video_id = null,
+      audio_id = null,
+      schedule_type = 'once'
     } = templateData;
 
     // Validate required fields
@@ -150,6 +193,11 @@ class BroadcastTemplate {
     const streamKeyFolderMappingJson = stream_key_folder_mapping ? 
       (typeof stream_key_folder_mapping === 'string' ? stream_key_folder_mapping : JSON.stringify(stream_key_folder_mapping)) : null;
 
+    const totalDurationMins = parseInt(stream_duration_minutes) || ((parseInt(duration_hours) || 0) * 60 + (parseInt(duration_minutes) || 0));
+    const finalDurationHours = totalDurationMins > 0 ? Math.floor(totalDurationMins / 60) : (parseInt(duration_hours) || 0);
+    const finalDurationMinutes = totalDurationMins > 0 ? (totalDurationMins % 60) : (parseInt(duration_minutes) || 0);
+    const loopVideoInt = (loop_video !== false && loop_video !== 0 && loop_video !== '0') ? 1 : 0;
+
     return new Promise((resolve, reject) => {
       db.run(
         `INSERT INTO broadcast_templates (
@@ -158,8 +206,10 @@ class BroadcastTemplate {
           thumbnail_index, pinned_thumbnail, stream_key_folder_mapping, stream_id,
           title_index, pinned_title_id, title_folder_id,
           recurring_enabled, recurring_pattern, recurring_time, recurring_days, next_run_at,
-          channel_name, channel_id, altered_content, dual_stream, vertical_stream_key
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          channel_name, channel_id, altered_content, dual_stream, vertical_stream_key,
+          duration_hours, duration_minutes, stream_duration_minutes, loop_video,
+          video_id, audio_id, schedule_type
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id, user_id, account_id, name.trim(), title, description,
           privacy_status, tagsJson, category_id, thumbnail_path, thumbnail_folder,
@@ -167,7 +217,9 @@ class BroadcastTemplate {
           title_index || 0, pinned_title_id, title_folder_id,
           recurring_enabled ? 1 : 0, recurring_pattern, recurring_time, daysJson, next_run_at,
           channel_name, channel_id, altered_content ? 1 : 0, dual_stream ? 1 : 0,
-          vertical_stream_key ? vertical_stream_key.trim() : null
+          vertical_stream_key ? vertical_stream_key.trim() : null,
+          finalDurationHours, finalDurationMinutes, totalDurationMins, loopVideoInt,
+          video_id || null, audio_id || null, schedule_type || 'once'
         ],
         function (err) {
           if (err) {
@@ -203,6 +255,16 @@ class BroadcastTemplate {
             next_run_at,
             channel_name,
             channel_id,
+            altered_content: altered_content ? 1 : 0,
+            dual_stream: dual_stream ? 1 : 0,
+            vertical_stream_key: vertical_stream_key ? vertical_stream_key.trim() : null,
+            duration_hours: finalDurationHours,
+            duration_minutes: finalDurationMinutes,
+            stream_duration_minutes: totalDurationMins,
+            loop_video: loopVideoInt === 1,
+            video_id: video_id || null,
+            audio_id: audio_id || null,
+            schedule_type: schedule_type || 'once',
             last_run_at: null,
             created_at: new Date().toISOString()
           });
@@ -229,7 +291,40 @@ class BroadcastTemplate {
             console.error('Error finding broadcast template:', err.message);
             return reject(err);
           }
-          resolve(BroadcastTemplate.parseRow(row));
+          if (!row) {
+            return resolve(null);
+          }
+          const parsed = BroadcastTemplate.parseRow(row);
+          // If duration is missing, attempt fallback lookup from streams table
+          if ((!parsed.stream_duration_minutes || parsed.stream_duration_minutes === 0) && (parsed.stream_id || parsed.title)) {
+            db.get(
+              `SELECT stream_duration_hours, stream_duration_minutes, loop_video, video_id, audio_id, schedule_type
+               FROM streams
+               WHERE user_id = ? AND (stream_key = ? OR title = ?) AND stream_duration_minutes > 0
+               ORDER BY id DESC LIMIT 1`,
+              [parsed.user_id, parsed.stream_id || '', parsed.title || ''],
+              (streamErr, sRow) => {
+                if (!streamErr && sRow && sRow.stream_duration_minutes > 0) {
+                  parsed.stream_duration_minutes = sRow.stream_duration_minutes;
+                  parsed.duration_hours = sRow.stream_duration_hours || Math.floor(sRow.stream_duration_minutes / 60);
+                  parsed.duration_minutes = sRow.stream_duration_minutes % 60;
+                  if (sRow.loop_video !== undefined) parsed.loop_video = sRow.loop_video !== 0 && sRow.loop_video !== false;
+                  if (sRow.video_id) parsed.video_id = sRow.video_id;
+                  if (sRow.audio_id) parsed.audio_id = sRow.audio_id;
+                  // Asynchronously persist to template so future lookups are immediate
+                  db.run(
+                    `UPDATE broadcast_templates 
+                     SET stream_duration_minutes = ?, duration_hours = ?, duration_minutes = ?, loop_video = ?
+                     WHERE id = ?`,
+                    [parsed.stream_duration_minutes, parsed.duration_hours, parsed.duration_minutes, parsed.loop_video ? 1 : 0, parsed.id]
+                  );
+                }
+                resolve(parsed);
+              }
+            );
+          } else {
+            resolve(parsed);
+          }
         }
       );
     });
@@ -305,6 +400,12 @@ class BroadcastTemplate {
       } else if (key === 'recurring_enabled') {
         fields.push(`${key} = ?`);
         values.push(value ? 1 : 0);
+      } else if (key === 'loop_video') {
+        fields.push(`${key} = ?`);
+        values.push((value !== false && value !== 0 && value !== '0') ? 1 : 0);
+      } else if (key === 'duration_hours' || key === 'duration_minutes' || key === 'stream_duration_minutes') {
+        fields.push(`${key} = ?`);
+        values.push(parseInt(value) || 0);
       } else if (key === 'name' && typeof value === 'string') {
         if (!value.trim()) {
           throw new Error('Template name cannot be empty');

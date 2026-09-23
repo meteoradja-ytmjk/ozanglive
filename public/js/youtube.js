@@ -544,6 +544,10 @@ function createChannelGroup(channelName, group, channelIndex) {
 // Create broadcast row HTML
 function createBroadcastRowHtml(broadcast, index) {
   try {
+    // Safely parse duration
+    const durationHours = parseInt(broadcast.streamDurationHours) || parseInt(broadcast.stream_duration_hours) || 0;
+    const durationMinutes = parseInt(broadcast.streamDurationMinutes) || parseInt(broadcast.stream_duration_minutes) || parseInt(broadcast.duration) || 0;
+
     // Safely stringify broadcast data
     const broadcastData = JSON.stringify({
       id: broadcast.id,
@@ -555,7 +559,14 @@ function createBroadcastRowHtml(broadcast, index) {
       streamKey: broadcast.streamKey || "",
       categoryId: broadcast.categoryId || "22",
       tags: broadcast.tags || [],
-      thumbnailPath: broadcast.thumbnailPath || null
+      thumbnailPath: broadcast.thumbnailPath || null,
+      streamDurationHours: durationHours,
+      streamDurationMinutes: durationMinutes,
+      duration: durationMinutes,
+      loopVideo: broadcast.loopVideo !== false && broadcast.loop_video !== false,
+      videoId: broadcast.videoId || null,
+      audioId: broadcast.audioId || null,
+      scheduleType: broadcast.scheduleType || 'once'
     }).replace(/"/g, '&quot;');
     
     const privacyClass = 
@@ -6255,6 +6266,25 @@ function openSaveAsTemplateModal(broadcastId, accountId, title, privacyStatus) {
   document.getElementById('saveTemplateAccountId').value = accountId;
   document.getElementById('previewTitle').textContent = resolvedTitle;
   document.getElementById('previewPrivacy').textContent = privacyStatus || '-';
+
+  // Format and show duration in preview
+  const prevDurEl = document.getElementById('previewDuration');
+  if (prevDurEl) {
+    let durText = 'Tak terbatas';
+    if (row && row.dataset.broadcast) {
+      try {
+        const bData = JSON.parse(row.dataset.broadcast);
+        const mins = parseInt(bData.streamDurationMinutes) || parseInt(bData.duration) || 0;
+        const hrs = parseInt(bData.streamDurationHours) || Math.floor(mins / 60);
+        const remMins = mins % 60;
+        if (mins > 0 || hrs > 0) {
+          durText = `${hrs > 0 ? hrs + ' Jam ' : ''}${remMins > 0 ? remMins + ' Menit' : (hrs === 0 ? '0 Menit' : '')}`.trim();
+        }
+      } catch (e) {}
+    }
+    prevDurEl.textContent = durText;
+  }
+
   modal.classList.remove('hidden');
   modal.style.display = 'block';
 }
@@ -6315,10 +6345,16 @@ if (saveAsTemplateForm) {
         thumbnailPath: broadcast.thumbnailPath
       });
       
+      // Parse broadcast duration and stream settings
+      const durMins = parseInt(broadcast.streamDurationMinutes) || parseInt(broadcast.stream_duration_minutes) || parseInt(broadcast.duration) || 0;
+      const durHours = parseInt(broadcast.streamDurationHours) || parseInt(broadcast.stream_duration_hours) || Math.floor(durMins / 60);
+      const remMins = durMins % 60;
+
       // Create template from broadcast - include ALL data for reuse
       const templateData = {
         name: name,
         accountId: accountId,
+        broadcastId: broadcast.id,
         title: broadcast.title,
         description: broadcast.description || '',
         privacyStatus: broadcast.privacyStatus || 'unlisted',
@@ -6326,7 +6362,14 @@ if (saveAsTemplateForm) {
         categoryId: broadcast.categoryId || '22',
         thumbnailPath: broadcast.thumbnailPath || null,
         thumbnailFolder: currentThumbnailFolder || null,  // Save current thumbnail folder selection
-        streamId: broadcast.streamId || null  // Save stream ID for reuse
+        streamId: broadcast.streamId || null,  // Save stream ID for reuse
+        durationHours: durHours,
+        durationMinutes: remMins,
+        streamDurationMinutes: durMins,
+        loopVideo: broadcast.loopVideo !== false && broadcast.loop_video !== false,
+        videoId: broadcast.videoId || broadcast.video_id || null,
+        audioId: broadcast.audioId || broadcast.audio_id || null,
+        scheduleType: broadcast.scheduleType || broadcast.schedule_type || 'once'
       };
       
       console.log('[saveAsTemplate] Sending templateData:', {
@@ -6518,6 +6561,18 @@ async function openEditTemplateModal(template) {
       multiNote.classList.add('hidden');
     }
   }
+
+  // Populate duration fields in edit modal
+  const editDurHoursInput = document.getElementById('editTemplateDurationHours');
+  const editDurMinsInput = document.getElementById('editTemplateDurationMinutes');
+  const editLoopCheckbox = document.getElementById('editTemplateLoopVideo');
+  const editTotalMins = parseInt(template.stream_duration_minutes) || parseInt(template.duration) || ((parseInt(template.duration_hours) || 0) * 60 + (parseInt(template.duration_minutes) || 0));
+  const editHours = parseInt(template.duration_hours) || Math.floor(editTotalMins / 60);
+  const editMins = parseInt(template.duration_minutes) || (editTotalMins % 60);
+
+  if (editDurHoursInput) editDurHoursInput.value = editHours || 0;
+  if (editDurMinsInput) editDurMinsInput.value = editMins || 0;
+  if (editLoopCheckbox) editLoopCheckbox.checked = template.loop_video !== false;
 
   // Populate Accounts dropdown
   const accountSelect = document.getElementById('editTemplateAccountSelect');
@@ -6831,6 +6886,16 @@ if (editTemplateForm) {
         const rawFolder = thumbnailFolderSelect.value;
         updateData.thumbnailFolder = rawFolder === '__ROOT__' ? '' : (rawFolder || null);
       }
+
+      // Duration fields
+      const durHoursVal = parseInt(document.getElementById('editTemplateDurationHours')?.value, 10) || 0;
+      const durMinsVal = parseInt(document.getElementById('editTemplateDurationMinutes')?.value, 10) || 0;
+      const loopVideoVal = document.getElementById('editTemplateLoopVideo')?.checked !== false;
+
+      updateData.durationHours = durHoursVal;
+      updateData.durationMinutes = durMinsVal;
+      updateData.streamDurationMinutes = (durHoursVal * 60) + durMinsVal;
+      updateData.loopVideo = loopVideoVal;
       
       console.log('[editTemplate] Updating full template:', updateData);
       
@@ -7384,24 +7449,48 @@ if (multiSaveTemplateForm) {
       console.log('[multiSaveTemplate] Default folder:', defaultFolder);
       
       // Create template with all broadcast data
+      const firstB = broadcasts[0] || {};
+      const firstMins = parseInt(firstB.streamDurationMinutes) || parseInt(firstB.stream_duration_minutes) || parseInt(firstB.duration) || 0;
+      const firstHours = parseInt(firstB.streamDurationHours) || parseInt(firstB.stream_duration_hours) || Math.floor(firstMins / 60);
+      const firstRemMins = firstMins % 60;
+
       const templateData = {
         name: templateName,
         accountId: broadcasts[0].accountId,
         thumbnailFolder: defaultFolder,
         streamKeyFolderMapping: Object.keys(streamKeyFolderMapping).length > 0 ? streamKeyFolderMapping : null,
-        broadcasts: broadcasts.map(b => ({
-          title: b.title,
-          description: b.description || '',
-          privacyStatus: b.privacyStatus || 'unlisted',
-          streamId: b.streamId || null,
-          streamKey: b.streamKey || '',
-          categoryId: b.categoryId || '22',
-          tags: b.tags || [],
-          thumbnailPath: b.thumbnailPath || null,
-          pinnedThumbnail: b.pinnedThumbnail || null,
-          // Use folder from broadcast settings
-          thumbnailFolder: broadcastFolders[b.id] !== undefined ? broadcastFolders[b.id] : defaultFolder
-        }))
+        durationHours: firstHours,
+        durationMinutes: firstRemMins,
+        streamDurationMinutes: firstMins,
+        loopVideo: firstB.loopVideo !== false && firstB.loop_video !== false,
+        videoId: firstB.videoId || firstB.video_id || null,
+        audioId: firstB.audioId || firstB.audio_id || null,
+        scheduleType: firstB.scheduleType || firstB.schedule_type || 'once',
+        broadcasts: broadcasts.map(b => {
+          const bMins = parseInt(b.streamDurationMinutes) || parseInt(b.stream_duration_minutes) || parseInt(b.duration) || 0;
+          const bHours = parseInt(b.streamDurationHours) || parseInt(b.stream_duration_hours) || Math.floor(bMins / 60);
+          const bRemMins = bMins % 60;
+          return {
+            broadcastId: b.id,
+            title: b.title,
+            description: b.description || '',
+            privacyStatus: b.privacyStatus || 'unlisted',
+            streamId: b.streamId || null,
+            streamKey: b.streamKey || '',
+            categoryId: b.categoryId || '22',
+            tags: b.tags || [],
+            thumbnailPath: b.thumbnailPath || null,
+            pinnedThumbnail: b.pinnedThumbnail || null,
+            thumbnailFolder: broadcastFolders[b.id] !== undefined ? broadcastFolders[b.id] : defaultFolder,
+            durationHours: bHours,
+            durationMinutes: bRemMins,
+            streamDurationMinutes: bMins,
+            loopVideo: b.loopVideo !== false && b.loop_video !== false,
+            videoId: b.videoId || b.video_id || null,
+            audioId: b.audioId || b.audio_id || null,
+            scheduleType: b.scheduleType || b.schedule_type || 'once'
+          };
+        })
       };
       
       console.log('[multiSaveTemplate] Saving template:', {
@@ -7539,6 +7628,37 @@ function openRecreateFromTemplateModal(template) {
     }
   }
 
+  // Populate duration info badge and controls
+  const totalTemplateMins = parseInt(template.stream_duration_minutes) || parseInt(template.duration) || ((parseInt(template.duration_hours) || 0) * 60 + (parseInt(template.duration_minutes) || 0));
+  const tHours = parseInt(template.duration_hours) || Math.floor(totalTemplateMins / 60);
+  const tMins = parseInt(template.duration_minutes) || (totalTemplateMins % 60);
+
+  const durBadgeEl = document.getElementById('recreateTemplateDurationBadgeText');
+  const durSummaryEl = document.getElementById('recreateDurationSummaryText');
+  let durationLabel = 'Tanpa Batas';
+  if (totalTemplateMins > 0 || tHours > 0 || tMins > 0) {
+    durationLabel = `${tHours > 0 ? tHours + ' Jam ' : ''}${tMins > 0 ? tMins + ' Mnt' : (tHours === 0 ? '0 Mnt' : '')}`.trim();
+  }
+  if (durBadgeEl) {
+    durBadgeEl.textContent = `Durasi: ${durationLabel}`;
+  }
+  if (durSummaryEl) {
+    durSummaryEl.textContent = totalTemplateMins > 0 ? `Target: ${durationLabel}` : 'Berdasarkan Template';
+  }
+
+  const hoursInput = document.getElementById('recreateStreamDurationHours');
+  if (hoursInput) {
+    hoursInput.value = tHours || 0;
+  }
+  const minsInput = document.getElementById('recreateStreamDurationMinutes');
+  if (minsInput) {
+    minsInput.value = tMins || 0;
+  }
+  const loopToggle = document.getElementById('recreateLoopVideo');
+  if (loopToggle) {
+    loopToggle.checked = template.loop_video !== false;
+  }
+
   const createBtn = document.getElementById('recreateBtn');
   if (createBtn) {
     createBtn.disabled = false;
@@ -7584,6 +7704,12 @@ function openRecreateFromTemplateModal(template) {
         streamKey: b.streamKey || template.stream_key,
         thumbnailFolder: b.thumbnailFolder !== undefined ? b.thumbnailFolder : template.thumbnail_folder,
         pinnedThumbnail: b.pinnedThumbnail || b.thumbnailPath || template.pinned_thumbnail,
+        durationHours: b.durationHours !== undefined ? b.durationHours : tHours,
+        durationMinutes: b.durationMinutes !== undefined ? b.durationMinutes : tMins,
+        streamDurationMinutes: b.streamDurationMinutes !== undefined ? b.streamDurationMinutes : totalTemplateMins,
+        loopVideo: b.loopVideo !== undefined ? b.loopVideo : (template.loop_video !== false),
+        videoId: b.videoId || template.video_id || null,
+        audioId: b.audioId || template.audio_id || null,
         customTitle: false,
         times: [
           {
@@ -7619,6 +7745,12 @@ function openRecreateFromTemplateModal(template) {
       streamKey: template.stream_key,
       thumbnailFolder: template.thumbnail_folder,
       pinnedThumbnail: template.pinned_thumbnail,
+      durationHours: tHours,
+      durationMinutes: tMins,
+      streamDurationMinutes: totalTemplateMins,
+      loopVideo: template.loop_video !== false,
+      videoId: template.video_id || null,
+      audioId: template.audio_id || null,
       customTitle: false,
       times: groupTimes
     });
@@ -8535,6 +8667,12 @@ if (recreateFromTemplateForm) {
               streamKey: grp.streamKey || template.stream_key,
               thumbnailFolder: grp.thumbnailFolder !== undefined ? grp.thumbnailFolder : template.thumbnail_folder,
               pinnedThumbnail: grp.pinnedThumbnail || template.pinned_thumbnail,
+              durationHours: grp.durationHours,
+              durationMinutes: grp.durationMinutes,
+              streamDurationMinutes: grp.streamDurationMinutes,
+              loopVideo: grp.loopVideo,
+              videoId: grp.videoId,
+              audioId: grp.audioId,
               scheduleTime: finalSched,
               timeOnly: t.timeOnly,
               description: grp.description || template.description || '',
@@ -8605,6 +8743,38 @@ if (recreateFromTemplateForm) {
           formData.append('enableAutoStart', 'true');
           formData.append('enableAutoStop', 'true');
           formData.append('unlistReplayOnEnd', 'true');
+
+          // Append duration & stream settings from modal controls / slot / template
+          const hoursInput = document.getElementById('recreateStreamDurationHours');
+          const minsInput = document.getElementById('recreateStreamDurationMinutes');
+          const loopVideoInput = document.getElementById('recreateLoopVideo');
+
+          let durationHours = hoursInput ? parseInt(hoursInput.value, 10) : NaN;
+          let durationMinutes = minsInput ? parseInt(minsInput.value, 10) : NaN;
+          if (isNaN(durationHours)) {
+            durationHours = slot.durationHours !== undefined ? slot.durationHours : (template.duration_hours || 0);
+          }
+          if (isNaN(durationMinutes)) {
+            durationMinutes = slot.durationMinutes !== undefined ? slot.durationMinutes : (template.duration_minutes || 0);
+          }
+
+          const loopVideo = loopVideoInput ? (loopVideoInput.checked ? 'true' : 'false') : (template.loop_video !== false ? 'true' : 'false');
+
+          formData.append('streamDurationHours', String(durationHours || 0));
+          formData.append('streamDurationMinutes', String(durationMinutes || 0));
+          formData.append('loopVideo', loopVideo);
+
+          const slotScheduleType = patternVal === 'daily' ? 'daily' : (patternVal === 'weekly' ? 'weekly' : (template.schedule_type || 'once'));
+          formData.append('scheduleType', slotScheduleType);
+
+          const videoId = slot.videoId || template.video_id;
+          if (videoId) {
+            formData.append('videoId', String(videoId));
+          }
+          const audioId = slot.audioId || template.audio_id;
+          if (audioId) {
+            formData.append('audioId', String(audioId));
+          }
           
           const tags = slot.tags || template.tags;
           if (tags && tags.length > 0) {

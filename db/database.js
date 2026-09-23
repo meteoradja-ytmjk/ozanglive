@@ -493,6 +493,45 @@ async function createCoreTablesAsync() {
   await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN dual_stream INTEGER DEFAULT 0`, 'broadcast_templates.dual_stream');
   await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN vertical_stream_key TEXT`, 'broadcast_templates.vertical_stream_key');
 
+  // Add duration and stream configuration columns to broadcast_templates
+  await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN duration_hours INTEGER DEFAULT 0`, 'broadcast_templates.duration_hours');
+  await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN duration_minutes INTEGER DEFAULT 0`, 'broadcast_templates.duration_minutes');
+  await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN stream_duration_minutes INTEGER DEFAULT 0`, 'broadcast_templates.stream_duration_minutes');
+  await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN loop_video INTEGER DEFAULT 1`, 'broadcast_templates.loop_video');
+  await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN video_id TEXT`, 'broadcast_templates.video_id');
+  await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN audio_id TEXT`, 'broadcast_templates.audio_id');
+  await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN schedule_type TEXT DEFAULT 'once'`, 'broadcast_templates.schedule_type');
+
+  // Auto-recovery migration: populate duration for saved templates from matching streams
+  try {
+    await runTableQuery(`
+      UPDATE broadcast_templates
+      SET stream_duration_minutes = (
+        SELECT s.stream_duration_minutes FROM streams s
+        WHERE s.user_id = broadcast_templates.user_id
+          AND (s.stream_key = broadcast_templates.stream_id OR s.title = broadcast_templates.title)
+          AND s.stream_duration_minutes > 0
+        ORDER BY s.id DESC LIMIT 1
+      )
+      WHERE (stream_duration_minutes IS NULL OR stream_duration_minutes = 0)
+        AND EXISTS (
+          SELECT 1 FROM streams s
+          WHERE s.user_id = broadcast_templates.user_id
+            AND (s.stream_key = broadcast_templates.stream_id OR s.title = broadcast_templates.title)
+            AND s.stream_duration_minutes > 0
+        )
+    `, 'broadcast_templates.auto_recover_duration');
+
+    await runTableQuery(`
+      UPDATE broadcast_templates
+      SET duration_hours = CAST(stream_duration_minutes / 60 AS INTEGER),
+          duration_minutes = CAST(stream_duration_minutes % 60 AS INTEGER)
+      WHERE stream_duration_minutes > 0 AND (duration_hours IS NULL OR duration_hours = 0) AND (duration_minutes IS NULL OR duration_minutes = 0)
+    `, 'broadcast_templates.auto_recover_hours_minutes');
+  } catch (recoverErr) {
+    console.warn('[DB] Auto-recovery for template duration warning:', recoverErr.message);
+  }
+
   // Create recurring_schedules table for scheduled recurring broadcasts
   await runTableQuery(`CREATE TABLE IF NOT EXISTS recurring_schedules (
     id TEXT PRIMARY KEY,
