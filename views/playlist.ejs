@@ -90,6 +90,13 @@
           <span class="flex items-center gap-1 text-gray-300"><i class="ti ti-video text-primary text-xs"></i><%= playlist.video_count || 0 %></span>
           <span class="text-gray-600">•</span>
           <span class="flex items-center gap-1 text-gray-300"><i class="ti ti-music text-emerald-400 text-xs"></i><%= playlist.audio_count || 0 %></span>
+          <% if (Number(playlist.video_count || 0) > 0 && Number(playlist.audio_count || 0) > 0) { %>
+            <span class="ml-1 px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 text-[10px] font-semibold border border-purple-500/30">Video+Audio</span>
+          <% } else if (Number(playlist.video_count || 0) > 0) { %>
+            <span class="ml-1 px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 text-[10px] font-semibold border border-blue-500/30">Video Saja</span>
+          <% } else if (Number(playlist.audio_count || 0) > 0) { %>
+            <span class="ml-1 px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-semibold border border-emerald-500/30">Audio Saja</span>
+          <% } %>
         </div>
         
         <!-- Right: Action Buttons Dock (Single Line) -->
@@ -99,6 +106,12 @@
             title="Open playlist details">
             <i class="ti ti-eye text-sm"></i>
             <span class="hidden md:inline">Open</span>
+          </button>
+
+          <button class="w-8 h-8 flex items-center justify-center rounded-lg bg-dark-750/90 hover:bg-purple-500/20 text-gray-400 hover:text-purple-400 border border-gray-700/60 hover:border-purple-500/30 active:scale-95 transition-all" 
+            onclick="manualSaveToGallery('<%= playlist.id %>', this)" 
+            title="Simpan / Render ke Galeri Media">
+            <i class="ti ti-photo-plus text-sm"></i>
           </button>
           
           <button class="w-8 h-8 flex items-center justify-center rounded-lg bg-dark-750/90 hover:bg-emerald-500/20 text-gray-400 hover:text-emerald-400 border border-gray-700/60 hover:border-emerald-500/30 active:scale-95 transition-all" 
@@ -285,6 +298,10 @@
         </span>
       </div>
       <div class="flex gap-2">
+        <button id="saveToGalleryBtn" class="h-9 px-4 rounded-xl text-xs sm:text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-500 shadow-sm active:scale-95 transition-all flex items-center gap-1.5" title="Simpan / Render playlist ini ke Galeri">
+          <i class="ti ti-device-floppy text-sm"></i>
+          <span>Simpan ke Galeri</span>
+        </button>
         <button id="editPlaylistBtn" class="h-9 px-4 rounded-xl text-xs sm:text-sm font-semibold text-white bg-primary hover:bg-secondary shadow-sm active:scale-95 transition-all flex items-center gap-1.5">
           <i class="ti ti-pencil text-sm"></i>
           <span>Edit</span>
@@ -829,6 +846,13 @@ function viewPlaylist(playlistId) {
           closeViewPlaylistModal();
           editPlaylist(playlistId);
         };
+
+        const saveToGalBtn = document.getElementById('saveToGalleryBtn');
+        if (saveToGalBtn) {
+          saveToGalBtn.onclick = () => {
+            manualSaveToGallery(playlistId, saveToGalBtn);
+          };
+        }
         
         document.getElementById('viewPlaylistModal').classList.remove('hidden');
         document.getElementById('viewPlaylistModal').classList.add('flex');
@@ -950,8 +974,53 @@ function streamPlaylist(playlistId) {
   window.location.href = `/dashboard?playlist=${playlistId}`;
 }
 
+function manualSaveToGallery(playlistId, btn) {
+  if (!playlistId) return;
+  const originalHtml = btn ? btn.innerHTML : null;
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ti ti-loader animate-spin mr-1"></i>Menyimpan...';
+  }
+  showToast('Memproses penggabungan & penyimpanan ke Galeri...', 'info');
+
+  fetch(`/api/playlists/${playlistId}/save-to-gallery`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' }
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data.success) {
+        showToast(data.message || 'Berhasil disimpan ke Galeri!', 'success');
+      } else {
+        showToast(data.message || data.error || 'Gagal menyimpan ke Galeri', 'error');
+      }
+    })
+    .catch(err => {
+      console.error('Save to gallery error:', err);
+      showToast('Gagal menyimpan ke Galeri', 'error');
+    })
+    .finally(() => {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+      }
+    });
+}
+
 document.getElementById('playlistForm').addEventListener('submit', function(e) {
   e.preventDefault();
+
+  if (selectedVideos.length === 0 && selectedAudios.length === 0) {
+    showToast('Pilih minimal 1 video atau 1 audio untuk playlist ini!', 'error');
+    return;
+  }
+  
+  const submitBtn = this.querySelector('button[type="submit"]');
+  const originalBtnHtml = submitBtn ? submitBtn.innerHTML : null;
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="ti ti-loader animate-spin mr-1.5"></i><span>Menyimpan ke Galeri...</span>';
+  }
   
   const formData = new FormData(this);
   const playlistData = {
@@ -975,16 +1044,25 @@ document.getElementById('playlistForm').addEventListener('submit', function(e) {
   .then(response => response.json())
   .then(data => {
     if (data.success) {
-      showToast(currentPlaylistId ? 'Playlist updated successfully' : 'Playlist created successfully', 'success');
+      const msg = data.galleryResult?.message || (currentPlaylistId ? 'Playlist berhasil diperbarui' : 'Playlist berhasil dibuat & disimpan ke Galeri!');
+      showToast(msg, 'success');
       closePlaylistModal();
-      location.reload();
+      setTimeout(() => location.reload(), 900);
     } else {
-      showToast(data.message || 'Error saving playlist', 'error');
+      showToast(data.message || data.error || 'Gagal menyimpan playlist', 'error');
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalBtnHtml;
+      }
     }
   })
   .catch(error => {
     console.error('Error saving playlist:', error);
     showToast('Error saving playlist', 'error');
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = originalBtnHtml;
+    }
   });
 });
 

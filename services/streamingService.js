@@ -814,9 +814,20 @@ function prerenderGaplessAudio(audioPaths, outputFile) {
       args.push('-i', p);
     });
 
-    // concat filter joins decoded PCM streams sample-accurately
-    const filter = audioPaths.map((_, i) => `[${i}:a:0]`).join('') +
-      `concat=n=${audioPaths.length}:v=0:a=1[aout]`;
+    // Use smooth acrossfade filter (1.5s overlap) when 2 or more tracks
+    let filter = '';
+    if (audioPaths.length >= 2) {
+      let lastOut = '0:a';
+      for (let i = 1; i < audioPaths.length; i++) {
+        const nextOut = (i === audioPaths.length - 1) ? 'aout' : `a${i}`;
+        filter += `[${lastOut}][${i}:a]acrossfade=d=1.5:c1=tri:c2=tri[${nextOut}];`;
+        lastOut = nextOut;
+      }
+      filter = filter.replace(/;$/, '');
+    } else {
+      filter = audioPaths.map((_, i) => `[${i}:a:0]`).join('') +
+        `concat=n=${audioPaths.length}:v=0:a=1[aout]`;
+    }
 
     args.push(
       '-filter_complex', filter,
@@ -846,17 +857,113 @@ function prerenderGaplessAudio(audioPaths, outputFile) {
       if (code === 0 && fs.existsSync(outputFile) && fs.statSync(outputFile).size > 0) {
         resolve(outputFile);
       } else {
-        console.error(`[StreamingService] prerenderGaplessAudio failed (exit=${code}). Last stderr:\n${stderrTail}`);
+        console.error(`[StreamingService] prerenderGaplessAudio with acrossfade failed (exit=${code}). Attempting simple concat fallback...`);
+        // Fallback: standard concat filter without acrossfade
         try { if (fs.existsSync(outputFile)) fs.unlinkSync(outputFile); } catch (_) { /* noop */ }
-        resolve(null);
+        
+        const fallbackArgs = [];
+        audioPaths.forEach((p) => { fallbackArgs.push('-i', p); });
+        const fallbackFilter = audioPaths.map((_, i) => `[${i}:a:0]`).join('') + `concat=n=${audioPaths.length}:v=0:a=1[aout]`;
+        fallbackArgs.push(
+          '-filter_complex', fallbackFilter,
+          '-map', '[aout]',
+          '-c:a', 'aac',
+          '-b:a', '192k',
+          '-ar', '44100',
+          '-ac', '2',
+          '-movflags', '+faststart',
+          '-y',
+          outputFile
+        );
+        const fbProc = spawn(ffmpegPath, fallbackArgs, { stdio: ['ignore', 'ignore', 'ignore'] });
+        fbProc.on('close', (fbCode) => {
+          if (fbCode === 0 && fs.existsSync(outputFile) && fs.statSync(outputFile).size > 0) {
+            resolve(outputFile);
+          } else {
+            try { if (fs.existsSync(outputFile)) fs.unlinkSync(outputFile); } catch (_) {}
+            resolve(null);
+          }
+        });
+        fbProc.on('error', () => resolve(null));
       }
     });
   });
 }
 
+async function buildFFmpegArgsForAudioOnlyPlaylist(stream, playlist, durationSeconds, reconnecting = false) {
+  const projectRoot = path.resolve(__dirname, '..');
+  const rtmpUrl = `${stream.rtmp_url.replace(/\/$/, '')}/${stream.stream_key}`;
+
+  const playlistAudios = (!reconnecting && (playlist.is_shuffle || playlist.shuffle))
+    ? [...playlist.audios].sort(() => Math.random() - 0.5)
+    : playlist.audios;
+
+  const audioPaths = [];
+  playlistAudios.forEach((audio) => {
+    const audioPath = resolvePublicMediaPath(audio.filepath);
+    if (fs.existsSync(audioPath)) {
+      audioPaths.push(audioPath);
+    }
+  });
+
+  if (audioPaths.length === 0) {
+    throw new Error('All playlist audio files are missing on disk.');
+  }
+
+  let gaplessAudioFile = null;
+  if (audioPaths.length === 1) {
+    gaplessAudioFile = audioPaths[0];
+  } else {
+    const mergedAudioFile = path.join(projectRoot, 'temp', `playlist_${stream.id}_audio_merged.m4a`);
+    try { if (fs.existsSync(mergedAudioFile)) fs.unlinkSync(mergedAudioFile); } catch (_) {}
+    const merged = await prerenderGaplessAudio(audioPaths, mergedAudioFile);
+    gaplessAudioFile = merged || audioPaths[0];
+  }
+
+  const shouldLoop = (stream.loop_video !== false && stream.loop_video !== 0 && stream.loop_video !== 'false') || (durationSeconds && durationSeconds > 0);
+
+  const args = ['-re'];
+
+  // Input 0: generated 1280x720 30fps black video canvas for RTMP live
+  args.push('-f', 'lavfi', '-i', 'color=c=black:s=1280x720:r=30');
+
+  // Input 1: audio file
+  if (shouldLoop) {
+    args.push('-stream_loop', '-1');
+  }
+  args.push('-i', gaplessAudioFile);
+
+  if (durationSeconds && durationSeconds > 0) {
+    args.push('-t', String(durationSeconds));
+  }
+
+  args.push(
+    '-c:v', 'libx264',
+    '-preset', 'veryfast',
+    '-tune', 'stillimage',
+    '-b:v', '1500k',
+    '-maxrate', '2000k',
+    '-bufsize', '4000k',
+    '-pix_fmt', 'yuv420p',
+    '-g', '60',
+    '-c:a', 'aac',
+    '-b:a', '192k',
+    '-ar', '44100',
+    '-map', '0:v:0',
+    '-map', '1:a:0',
+    '-f', 'flv',
+    rtmpUrl
+  );
+
+  return args;
+}
+
 // BUG FIX #8: Added reconnecting param so shuffle is NOT re-randomized on reconnect
 async function buildFFmpegArgsForPlaylist(stream, playlist, durationOverrideSeconds = null, reconnecting = false) {
-  if (!playlist.videos || playlist.videos.length === 0) {
+  const hasVideos = Array.isArray(playlist.videos) && playlist.videos.length > 0;
+  const hasAudios = Array.isArray(playlist.audios) && playlist.audios.length > 0;
+
+  if (!hasVideos && !hasAudios) {
     throw new Error(`Playlist is empty for playlist_id: ${stream.video_id}`);
   }
   
@@ -887,6 +994,11 @@ async function buildFFmpegArgsForPlaylist(stream, playlist, durationOverrideSeco
   } else {
     console.log('[StreamingService] No duration set for playlist - stream will run until playlist ends or loop exhausts');
   }
+
+  // If playlist has only audios (0 videos), use audio-only playlist streaming
+  if (!hasVideos && hasAudios) {
+    return await buildFFmpegArgsForAudioOnlyPlaylist(stream, playlist, durationSeconds, reconnecting);
+  }
   
   // BUG FIX #8: Only shuffle on first start; reconnect uses same order to avoid viewer-visible jumps
   const playlistVideos = (!reconnecting && (playlist.is_shuffle || playlist.shuffle))
@@ -913,6 +1025,9 @@ async function buildFFmpegArgsForPlaylist(stream, playlist, durationOverrideSeco
   }
 
   if (videoPaths.length === 0) {
+    if (hasAudios) {
+      return await buildFFmpegArgsForAudioOnlyPlaylist(stream, playlist, durationSeconds, reconnecting);
+    }
     throw new Error('All playlist video files are missing on disk. Please re-upload or remove missing videos from this playlist.');
   }
 

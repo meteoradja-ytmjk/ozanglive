@@ -4324,12 +4324,19 @@ app.get('/api/stream/content', isAuthenticated, async (req, res) => {
 
     const playlists = await Playlist.findAll(req.session.userId);
     const formattedPlaylists = playlists.map(playlist => {
+      let durationLabel = '0 items';
+      const vCount = Number(playlist.video_count || 0);
+      const aCount = Number(playlist.audio_count || 0);
+      if (vCount > 0 && aCount > 0) durationLabel = `${vCount} vids, ${aCount} auds`;
+      else if (vCount > 0) durationLabel = `${vCount} ${vCount === 1 ? 'video' : 'videos'}`;
+      else if (aCount > 0) durationLabel = `${aCount} ${aCount === 1 ? 'audio' : 'audios'}`;
+
       return {
         id: playlist.id,
         name: playlist.name,
         thumbnail: '/images/playlist-thumbnail.svg',
         resolution: 'Playlist',
-        duration: `${playlist.video_count || 0} videos`,
+        duration: durationLabel,
         url: `/playlist/${playlist.id}`,
         type: 'playlist',
         description: playlist.description,
@@ -6380,6 +6387,426 @@ app.get(['/api/playlists', '/api/audio-playlists'], isAuthenticated, async (req,
   }
 });
 
+/**
+ * Automatically joins & saves playlist media to Gallery:
+ * 1. Audio only: smooth normalization + silence trimming + musical acrossfade (~1.5s) -> M4A in Audio Gallery (audios)
+ * 2. Video only: fast stream-copy / re-encode concat -> MP4 in Video Gallery (videos)
+ * 3. Video + Audio: joined video + seamless joined audio muxed -> MP4 in Video Gallery (videos)
+ *
+ * All saved files receive the prefix "playlist - <Playlist Name>".
+ */
+async function savePlaylistMediaToGallery(playlistId, userId) {
+  const fullPlaylist = await Playlist.findByIdWithMedia(playlistId);
+  if (!fullPlaylist) throw new Error('Playlist tidak ditemukan');
+
+  const videos = Array.isArray(fullPlaylist.videos) ? fullPlaylist.videos : [];
+  const audios = Array.isArray(fullPlaylist.audios) ? fullPlaylist.audios : [];
+
+  if (videos.length === 0 && audios.length === 0) {
+    return { success: false, message: 'Playlist tidak memiliki media untuk disimpan' };
+  }
+
+  const cleanName = (fullPlaylist.name || 'Playlist').trim();
+  const galleryTitle = `playlist - ${cleanName}`;
+
+  // Resolve video disk paths
+  const videoPaths = [];
+  for (const v of videos) {
+    const p = resolveMediaDiskPath(v.filepath);
+    if (p && fs.existsSync(p)) videoPaths.push(p);
+  }
+
+  // Resolve audio disk paths
+  const audioPaths = [];
+  for (const a of audios) {
+    const p = resolveMediaDiskPath(a.filepath);
+    if (p && fs.existsSync(p)) audioPaths.push(p);
+  }
+
+  // Helper function to build seamless joined audio (with silence trimming & acrossfade)
+  const buildSeamlessAudio = async (srcAudioPaths, targetOutPath) => {
+    if (srcAudioPaths.length === 1) {
+      // 1 audio: convert to clean standard AAC 44.1k stereo
+      await runFfmpeg((cmd) => {
+        return cmd
+          .input(srcAudioPaths[0])
+          .outputOptions([
+            '-c:a', 'aac',
+            '-b:a', '192k',
+            '-ar', '44100',
+            '-ac', '2',
+            '-vn',
+            '-movflags', '+faststart',
+            '-y'
+          ])
+          .output(targetOutPath);
+      });
+      return targetOutPath;
+    }
+
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pl-audio-'));
+    try {
+      const TARGET_RATE = 44100;
+      const normalizedPaths = [];
+
+      for (let i = 0; i < srcAudioPaths.length; i++) {
+        const inp = srcAudioPaths[i];
+        const normPath = path.join(tempDir, `norm-${i}.m4a`);
+
+        // Normalizing + removing dead silence at start and end for zero gaps
+        let silSuccess = false;
+        try {
+          await runFfmpeg((cmd) => {
+            return cmd
+              .input(inp)
+              .audioFilters([
+                'silenceremove=start_periods=1:start_duration=0.05:start_threshold=-50dB',
+                'areverse',
+                'silenceremove=start_periods=1:start_duration=0.05:start_threshold=-50dB',
+                'areverse'
+              ])
+              .outputOptions([
+                '-c:a', 'aac',
+                '-b:a', '192k',
+                '-ar', String(TARGET_RATE),
+                '-ac', '2',
+                '-vn',
+                '-y'
+              ])
+              .output(normPath);
+          });
+          if (fs.existsSync(normPath) && fs.statSync(normPath).size > 1000) {
+            silSuccess = true;
+          }
+        } catch (_) {}
+
+        if (!silSuccess) {
+          // Standard fallback normalization without silenceremove
+          await runFfmpeg((cmd) => {
+            return cmd
+              .input(inp)
+              .outputOptions([
+                '-c:a', 'aac',
+                '-b:a', '192k',
+                '-ar', String(TARGET_RATE),
+                '-ac', '2',
+                '-vn',
+                '-y'
+              ])
+              .output(normPath);
+          });
+        }
+        normalizedPaths.push(normPath);
+      }
+
+      // Step 2: Musical acrossfade (1.5s overlap)
+      let durations = [];
+      try {
+        durations = await Promise.all(normalizedPaths.map(async (p) => {
+          const meta = await ffprobeAsync(p);
+          return Number(meta?.format?.duration || 0);
+        }));
+      } catch (_) {}
+
+      const minDur = durations.length > 0 ? Math.min(...durations) : 0;
+      const canCrossfade = normalizedPaths.length >= 2 && minDur >= 2.0;
+      let crossfadeDone = false;
+
+      if (canCrossfade) {
+        try {
+          const crossfadeDuration = Math.min(1.5, Math.max(0.4, parseFloat((minDur / 3).toFixed(1))));
+          let filterComplex = '';
+          let lastOut = '0:a';
+          for (let i = 1; i < normalizedPaths.length; i++) {
+            const nextOut = (i === normalizedPaths.length - 1) ? 'outa' : `a${i}`;
+            filterComplex += `[${lastOut}][${i}:a]acrossfade=d=${crossfadeDuration}:c1=tri:c2=tri[${nextOut}];`;
+            lastOut = nextOut;
+          }
+          filterComplex = filterComplex.replace(/;$/, '');
+
+          let cmd = ffmpeg();
+          normalizedPaths.forEach(p => { cmd = cmd.input(p); });
+          await new Promise((resolve, reject) => {
+            cmd
+              .complexFilter(filterComplex)
+              .outputOptions([
+                '-map', '[outa]',
+                '-c:a', 'aac',
+                '-b:a', '192k',
+                '-ar', String(TARGET_RATE),
+                '-ac', '2',
+                '-movflags', '+faststart',
+                '-y'
+              ])
+              .on('error', reject)
+              .on('end', resolve)
+              .save(targetOutPath);
+          });
+
+          if (fs.existsSync(targetOutPath) && fs.statSync(targetOutPath).size > 1000) {
+            crossfadeDone = true;
+          }
+        } catch (crossErr) {
+          console.warn('[Playlist Gallery] Acrossfade fallback to concat:', crossErr.message);
+        }
+      }
+
+      // Concat fallback if acrossfade skipped or failed
+      if (!crossfadeDone) {
+        const concatTxt = path.join(tempDir, 'concat-list.txt');
+        const lines = normalizedPaths.map(p => `file '${formatConcatPath(p)}'`);
+        fs.writeFileSync(concatTxt, lines.join('\n'), 'utf8');
+
+        await runFfmpeg((cmd) => {
+          return cmd
+            .input(concatTxt)
+            .inputOptions(['-f', 'concat', '-safe', '0'])
+            .outputOptions([
+              '-c:a', 'copy',
+              '-movflags', '+faststart',
+              '-y'
+            ])
+            .output(targetOutPath);
+        });
+      }
+
+      return targetOutPath;
+    } finally {
+      try {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      } catch (_) {}
+    }
+  };
+
+  // Helper function to build joined video (multi-video concat)
+  const buildJoinedVideo = async (srcVideoPaths, targetOutPath) => {
+    if (srcVideoPaths.length === 1) {
+      await runFfmpeg((cmd) => {
+        return cmd
+          .input(srcVideoPaths[0])
+          .outputOptions(['-c', 'copy', '-movflags', '+faststart', '-y'])
+          .output(targetOutPath);
+      });
+      return targetOutPath;
+    }
+
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pl-video-'));
+    try {
+      const concatTxt = path.join(tempDir, 'videos.txt');
+      const lines = srcVideoPaths.map(p => `file '${formatConcatPath(p)}'`);
+      fs.writeFileSync(concatTxt, lines.join('\n'), 'utf8');
+
+      let copySuccess = false;
+      try {
+        await runFfmpeg((cmd) => {
+          return cmd
+            .input(concatTxt)
+            .inputOptions(['-f', 'concat', '-safe', '0'])
+            .outputOptions(['-c', 'copy', '-movflags', '+faststart', '-y'])
+            .output(targetOutPath);
+        });
+        if (fs.existsSync(targetOutPath) && fs.statSync(targetOutPath).size > 10000) {
+          copySuccess = true;
+        }
+      } catch (err) {
+        console.warn('[Playlist Gallery] Video stream-copy concat failed, re-encoding fallback:', err.message);
+      }
+
+      if (!copySuccess) {
+        if (fs.existsSync(targetOutPath)) fs.unlinkSync(targetOutPath);
+        await runFfmpeg((cmd) => {
+          return cmd
+            .input(concatTxt)
+            .inputOptions(['-f', 'concat', '-safe', '0'])
+            .outputOptions([
+              '-c:v', 'libx264',
+              '-preset', 'veryfast',
+              '-crf', '23',
+              '-pix_fmt', 'yuv420p',
+              '-c:a', 'aac',
+              '-b:a', '192k',
+              '-movflags', '+faststart',
+              '-y'
+            ])
+            .output(targetOutPath);
+        });
+      }
+      return targetOutPath;
+    } finally {
+      try {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      } catch (_) {}
+    }
+  };
+
+  // CASE 1: Audio Only -> Save to Audio Gallery
+  if (videoPaths.length === 0 && audioPaths.length > 0) {
+    const audiosDir = path.join(__dirname, 'public', 'uploads', 'audios');
+    fs.mkdirSync(audiosDir, { recursive: true });
+    const outputFilename = `playlist-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.m4a`;
+    const outputPath = path.join(audiosDir, outputFilename);
+
+    await buildSeamlessAudio(audioPaths, outputPath);
+
+    const meta = await ffprobeAsync(outputPath).catch(() => null);
+    const duration = meta?.format?.duration ? Math.round(parseFloat(meta.format.duration)) : 0;
+    const fileSize = fs.existsSync(outputPath) ? fs.statSync(outputPath).size : 0;
+
+    const audioRecord = await Audio.create({
+      title: galleryTitle,
+      filepath: `/uploads/audios/${outputFilename}`,
+      file_size: fileSize,
+      duration: duration,
+      format: 'M4A',
+      user_id: userId
+    });
+
+    return {
+      success: true,
+      type: 'audio',
+      message: `Berhasil menyimpan playlist audio ke Galeri: "${galleryTitle}"`,
+      item: audioRecord
+    };
+  }
+
+  // CASE 2: Video Only -> Save to Video Gallery
+  if (videoPaths.length > 0 && audioPaths.length === 0) {
+    const videosDir = path.join(__dirname, 'public', 'uploads', 'videos');
+    fs.mkdirSync(videosDir, { recursive: true });
+    const outputFilename = `playlist-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.mp4`;
+    const outputPath = path.join(videosDir, outputFilename);
+
+    await buildJoinedVideo(videoPaths, outputPath);
+
+    const meta = await ffprobeAsync(outputPath).catch(() => null);
+    const durationSeconds = Math.round(Number(meta?.format?.duration || 0));
+    const fileSize = fs.existsSync(outputPath) ? fs.statSync(outputPath).size : 0;
+    const hrs = Math.floor(durationSeconds / 3600);
+    const mins = Math.floor((durationSeconds % 3600) / 60);
+    const secs = Math.floor(durationSeconds % 60);
+    const durationStr = hrs > 0 
+      ? `${hrs}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+      : `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+
+    let thumbnailRelative = null;
+    try {
+      const thumbName = `thumb-playlist-${Date.now()}.jpg`;
+      await generateThumbnail(outputPath, thumbName);
+      thumbnailRelative = `/uploads/thumbnails/${thumbName}`;
+    } catch (_) {}
+
+    const videoStream = meta?.streams?.find(s => s.codec_type === 'video');
+    const resolution = videoStream ? `${videoStream.width}x${videoStream.height}` : '1280x720';
+
+    const videoRecord = await Video.create({
+      title: galleryTitle,
+      filename: outputFilename,
+      filepath: `/uploads/videos/${outputFilename}`,
+      thumbnail_path: thumbnailRelative,
+      file_size: fileSize,
+      duration: durationStr,
+      format: 'mp4',
+      resolution: resolution,
+      user_id: userId
+    });
+
+    return {
+      success: true,
+      type: 'video',
+      message: `Berhasil menyimpan playlist video ke Galeri: "${galleryTitle}"`,
+      item: videoRecord
+    };
+  }
+
+  // CASE 3: Combined Video + Audio -> Save to Video Gallery
+  if (videoPaths.length > 0 && audioPaths.length > 0) {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pl-combo-'));
+    try {
+      const tempVideo = path.join(tempDir, 'temp-video.mp4');
+      const tempAudio = path.join(tempDir, 'temp-audio.m4a');
+
+      await buildJoinedVideo(videoPaths, tempVideo);
+      await buildSeamlessAudio(audioPaths, tempAudio);
+
+      const videosDir = path.join(__dirname, 'public', 'uploads', 'videos');
+      fs.mkdirSync(videosDir, { recursive: true });
+      const outputFilename = `playlist-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.mp4`;
+      const outputPath = path.join(videosDir, outputFilename);
+
+      const videoMeta = await ffprobeAsync(tempVideo).catch(() => null);
+      const audioMeta = await ffprobeAsync(tempAudio).catch(() => null);
+      const videoDur = Number(videoMeta?.format?.duration || 0);
+      const audioDur = Number(audioMeta?.format?.duration || 0);
+
+      await runFfmpeg((cmd) => {
+        cmd.input(tempVideo);
+        if (audioDur < videoDur - 1) {
+          cmd.input(tempAudio).inputOptions(['-stream_loop', '-1']);
+        } else {
+          cmd.input(tempAudio);
+        }
+        return cmd
+          .outputOptions([
+            '-map', '0:v:0',
+            '-map', '1:a:0',
+            '-c:v', 'copy',
+            '-c:a', 'aac',
+            '-b:a', '192k',
+            '-shortest',
+            '-movflags', '+faststart',
+            '-y'
+          ])
+          .output(outputPath);
+      });
+
+      const meta = await ffprobeAsync(outputPath).catch(() => null);
+      const durationSeconds = Math.round(Number(meta?.format?.duration || 0));
+      const fileSize = fs.existsSync(outputPath) ? fs.statSync(outputPath).size : 0;
+      const hrs = Math.floor(durationSeconds / 3600);
+      const mins = Math.floor((durationSeconds % 3600) / 60);
+      const secs = Math.floor(durationSeconds % 60);
+      const durationStr = hrs > 0 
+        ? `${hrs}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+        : `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+
+      let thumbnailRelative = null;
+      try {
+        const thumbName = `thumb-playlist-${Date.now()}.jpg`;
+        await generateThumbnail(outputPath, thumbName);
+        thumbnailRelative = `/uploads/thumbnails/${thumbName}`;
+      } catch (_) {}
+
+      const videoStream = meta?.streams?.find(s => s.codec_type === 'video');
+      const resolution = videoStream ? `${videoStream.width}x${videoStream.height}` : '1280x720';
+
+      const videoRecord = await Video.create({
+        title: galleryTitle,
+        filename: outputFilename,
+        filepath: `/uploads/videos/${outputFilename}`,
+        thumbnail_path: thumbnailRelative,
+        file_size: fileSize,
+        duration: durationStr,
+        format: 'mp4',
+        resolution: resolution,
+        user_id: userId
+      });
+
+      return {
+        success: true,
+        type: 'video',
+        message: `Berhasil menyimpan gabungan video + audio playlist ke Galeri: "${galleryTitle}"`,
+        item: videoRecord
+      };
+    } finally {
+      try {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      } catch (_) {}
+    }
+  }
+
+  return { success: false, message: 'Tidak ada media yang valid untuk disimpan' };
+}
+
 app.post('/api/playlists', isAuthenticated, [
   body('name').trim().isLength({ min: 1 }).withMessage('Playlist name is required')
 ], async (req, res) => {
@@ -6412,10 +6839,41 @@ app.post('/api/playlists', isAuthenticated, [
       }
     }
 
-    res.json({ success: true, playlist });
+    // Automatic save to gallery
+    let galleryResult = null;
+    try {
+      galleryResult = await savePlaylistMediaToGallery(playlist.id, req.session.userId);
+    } catch (saveErr) {
+      console.warn('[Playlist Gallery] Warning auto-saving to gallery:', saveErr.message);
+    }
+
+    res.json({
+      success: true,
+      playlist,
+      galleryResult,
+      message: galleryResult?.message || 'Playlist berhasil dibuat'
+    });
   } catch (error) {
     console.error('Error creating playlist:', error);
     res.status(500).json({ success: false, error: 'Failed to create playlist' });
+  }
+});
+
+app.post('/api/playlists/:id/save-to-gallery', isAuthenticated, async (req, res) => {
+  try {
+    const playlist = await Playlist.findById(req.params.id);
+    if (!playlist) {
+      return res.status(404).json({ success: false, error: 'Playlist tidak ditemukan' });
+    }
+    if (playlist.user_id !== req.session.userId && req.session.userRole !== 'admin') {
+      return res.status(403).json({ success: false, error: 'Tidak memiliki akses' });
+    }
+
+    const result = await savePlaylistMediaToGallery(req.params.id, req.session.userId);
+    res.json(result);
+  } catch (error) {
+    console.error('Error saving playlist to gallery:', error);
+    res.status(500).json({ success: false, error: error.message || 'Gagal menyimpan playlist ke galeri' });
   }
 });
 
