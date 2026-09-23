@@ -1,6 +1,11 @@
 const { spawn, exec } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const projectRoot = path.resolve(__dirname, '..');
+const tempDir = path.join(projectRoot, 'temp');
+if (!fs.existsSync(tempDir)) {
+  try { fs.mkdirSync(tempDir, { recursive: true }); } catch (_) {}
+}
 const { getFFmpegPath } = require('../utils/ffmpegPath');
 const schedulerService = require('./schedulerService');
 const LiveLimitService = require('./liveLimitService');
@@ -809,6 +814,11 @@ function prerenderGaplessAudio(audioPaths, outputFile) {
       return resolve(null);
     }
 
+    const outDir = path.dirname(outputFile);
+    if (!fs.existsSync(outDir)) {
+      try { fs.mkdirSync(outDir, { recursive: true }); } catch (_) {}
+    }
+
     const args = [];
     audioPaths.forEach((p) => {
       args.push('-i', p);
@@ -1264,8 +1274,15 @@ async function buildFFmpegArgs(stream, durationOverrideSeconds = null, reconnect
     const Playlist = require('../models/Playlist');
     const audioPlaylist = await Playlist.findByIdWithMedia(stream.audio_id).catch(() => null);
     if (audioPlaylist && Array.isArray(audioPlaylist.audios) && audioPlaylist.audios.length > 0) {
+      let playlistAudios = [...audioPlaylist.audios];
+      if (audioPlaylist.play_mode === 'shuffle' && !reconnecting) {
+        for (let i = playlistAudios.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [playlistAudios[i], playlistAudios[j]] = [playlistAudios[j], playlistAudios[i]];
+        }
+      }
       const audioPaths = [];
-      audioPlaylist.audios.forEach((a) => {
+      playlistAudios.forEach((a) => {
         const ap = resolvePublicMediaPath(a.filepath);
         if (fs.existsSync(ap)) audioPaths.push(ap);
       });
@@ -1277,8 +1294,14 @@ async function buildFFmpegArgs(stream, durationOverrideSeconds = null, reconnect
       } else {
         const mergedAudioFile = path.join(projectRoot, 'temp', `stream_${stream.id}_audio_merged.m4a`);
         try { if (fs.existsSync(mergedAudioFile)) fs.unlinkSync(mergedAudioFile); } catch (_) {}
+        console.log(`[StreamingService] Merging ${audioPaths.length} tracks from audio playlist "${audioPlaylist.name}" for stream ${stream.id}...`);
         audioPath = await prerenderGaplessAudio(audioPaths, mergedAudioFile);
-        if (!audioPath) audioPath = audioPaths[0];
+        if (!audioPath) {
+          console.warn(`[StreamingService] Gapless audio merge failed or returned null, falling back to first track: ${audioPaths[0]}`);
+          audioPath = audioPaths[0];
+        } else {
+          console.log(`[StreamingService] Successfully merged gapless audio playlist to: ${audioPath}`);
+        }
       }
     } else {
       const audio = await Audio.findById(stream.audio_id);
