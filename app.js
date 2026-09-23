@@ -5856,12 +5856,16 @@ app.put('/api/streams/:id', isAuthenticated, async (req, res) => {
           ? (req.body.unlistReplayOnEnd === 'true' || req.body.unlistReplayOnEnd === true || req.body.unlist_replay_on_end === 1 || req.body.unlist_replay_on_end === '1' || req.body.unlist_replay_on_end === true)
           : (existingSettings.unlistReplayOnEnd !== undefined ? existingSettings.unlistReplayOnEnd : true);
 
+        const finalAutoStop = (req.body.enableAutoStop !== undefined || req.body.enable_auto_stop !== undefined)
+          ? (req.body.enableAutoStop === 'true' || req.body.enableAutoStop === true || req.body.enable_auto_stop === true || req.body.enable_auto_stop === 'true')
+          : (existingSettings.enableAutoStop === true);
+
         await YouTubeBroadcastSettings.upsert({
           broadcastId: stream.youtube_broadcast_id,
           userId: stream.user_id,
           accountId: stream.youtube_account_id || existingSettings.accountId || null,
           enableAutoStart: existingSettings.enableAutoStart !== false,
-          enableAutoStop: existingSettings.enableAutoStop !== false,
+          enableAutoStop: finalAutoStop,
           unlistReplayOnEnd: finalUnlist,
           originalPrivacyStatus: existingSettings.originalPrivacyStatus || 'unlisted',
           thumbnailFolder: existingSettings.thumbnailFolder,
@@ -6040,6 +6044,11 @@ app.put('/api/streams/:id', isAuthenticated, async (req, res) => {
     // If schedule_type is 'once' and no schedule_time is set, status should be 'offline'
     const finalScheduleType = updateData.schedule_type || stream.schedule_type;
     const finalScheduleTime = updateData.schedule_time !== undefined ? updateData.schedule_time : stream.schedule_time;
+
+    // For recurring schedules (daily/weekly), end_time must be null so it does not conflict
+    if (finalScheduleType === 'daily' || finalScheduleType === 'weekly') {
+      updateData.end_time = null;
+    }
 
     if (finalScheduleType === 'once') {
       if (finalScheduleTime) {
@@ -10520,7 +10529,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       tags: parsedTags,
       categoryId: finalCategoryId,
       enableAutoStart: enableAutoStart === 'true' || enableAutoStart === true,
-      enableAutoStop: enableAutoStop !== 'false' && enableAutoStop !== false, // Default true
+      enableAutoStop: enableAutoStop === 'true' || enableAutoStop === true, // Default to false for anti-endlive protection
       monetizationEnabled: monetizationEnabled === 'true' || monetizationEnabled === true,
       adFrequency: adFrequency || 'medium',
       alteredContent: isAlteredContent,
@@ -10546,7 +10555,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         userId: req.session.userId,
         accountId: accountId || null,
         enableAutoStart: enableAutoStart === 'true' || enableAutoStart === true,
-        enableAutoStop: enableAutoStop !== 'false' && enableAutoStop !== false,
+        enableAutoStop: enableAutoStop === 'true' || enableAutoStop === true,
         unlistReplayOnEnd: unlistReplayOnEnd === 'true' || unlistReplayOnEnd === true,
         originalPrivacyStatus: privacyStatus || 'unlisted',
         thumbnailFolder: thumbnailFolder !== undefined ? thumbnailFolder : null,
@@ -10798,13 +10807,13 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         if (eDate) endIso = eDate.toISOString();
       }
 
-      // If user provided start and end times but left duration hours/minutes at 0, calculate duration from difference
-      if (totalMinutes === 0 && sDate && eDate && eDate > sDate) {
+      const scheduleType = req.body.scheduleType || 'once';
+
+      // If user provided start and end times but left duration hours/minutes at 0, calculate duration from difference (ONLY for 'once')
+      if (scheduleType === 'once' && totalMinutes === 0 && sDate && eDate && eDate > sDate) {
         totalMinutes = Math.round((eDate.getTime() - sDate.getTime()) / (1000 * 60));
         console.log(`[API] Calculated duration from start/end times: ${totalMinutes} minutes`);
       }
-
-      const scheduleType = req.body.scheduleType || 'once';
 
       // For daily/weekly, if schedule_time is null, compute the next scheduled run in WIB
       if ((scheduleType === 'daily' || scheduleType === 'weekly') && !scheduleIso && req.body.recurringTime) {
@@ -10819,6 +10828,9 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
           console.log(`[API] Set initial schedule_time for ${scheduleType} stream: ${scheduleIso}`);
         }
       }
+
+      // Recurring streams MUST NOT store a static end_time in DB
+      const finalEndTime = scheduleType === 'once' ? endIso : null;
 
       const isScheduled = (scheduleType === 'daily' || scheduleType === 'weekly') || (scheduleIso !== null);
 
@@ -10839,7 +10851,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         duration: totalMinutes > 0 ? totalMinutes : null,
         schedule_type: scheduleType,
         schedule_time: scheduleIso,
-        end_time: endIso,
+        end_time: finalEndTime,
         schedule_days: scheduleDays,
         recurring_time: req.body.recurringTime || null,
         recurring_enabled: req.body.recurringEnabled === 'true' || req.body.recurringEnabled === true || req.body.recurringEnabled === 'on' ? 1 : 0,

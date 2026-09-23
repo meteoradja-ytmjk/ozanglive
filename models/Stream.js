@@ -255,12 +255,14 @@ class Stream {
       );
     });
   }
-  static updateStatus(id, status, userId, options = {}) {
+  static async updateStatus(id, status, userId, options = {}) {
     const status_updated_at = new Date().toISOString();
     const { startTimeOverride = null, endTimeOverride = null, preserveStartTime = false } = options;
     let start_time = null;
     let end_time = null;
     let clear_start_time = false;
+    let clear_end_time = false;
+    let next_schedule_time = options.nextScheduleTime || null;
 
     if (status === 'live') {
       if (preserveStartTime) {
@@ -272,15 +274,29 @@ class Stream {
     } else if (status === 'offline') {
       end_time = endTimeOverride || new Date().toISOString();
     } else if (status === 'scheduled') {
-      // FIXED: Clear start_time when status changes to 'scheduled'
-      // This is important for recurring streams to prevent duration check
-      // from using old start_time values
+      // Clear start_time and end_time when status changes to 'scheduled'
+      // to prevent stale duration checks or expired timestamps on subsequent runs
       clear_start_time = true;
+      clear_end_time = true;
+
+      // For recurring streams (daily/weekly), automatically compute the next scheduled run
+      if (!next_schedule_time) {
+        try {
+          const stream = await Stream.findById(id);
+          if (stream && (stream.schedule_type === 'daily' || stream.schedule_type === 'weekly')) {
+            const nextDate = Stream.getNextScheduledTime(stream);
+            if (nextDate) {
+              next_schedule_time = nextDate.toISOString();
+              console.log(`[Stream.updateStatus] Computed next schedule_time for stream ${id}: ${next_schedule_time}`);
+            }
+          }
+        } catch (e) {
+          console.warn(`[Stream.updateStatus] Warning computing next schedule_time for stream ${id}:`, e.message);
+        }
+      }
     }
 
-    // FIXED: Always update by id only to avoid user_id mismatch issues
-    // The user_id check was causing status updates to fail when scheduler starts streams
-    // FIXED: Clear start_time when status is 'scheduled' to prevent stale duration checks
+    // Always update by id only to avoid user_id mismatch issues
     const query = `UPDATE streams SET
         status = ?,
         status_updated_at = ?,
@@ -289,11 +305,31 @@ class Stream {
           WHEN ? IS NOT NULL THEN ?
           ELSE start_time
         END,
-        end_time = CASE WHEN ? IS NOT NULL THEN ? ELSE end_time END,
+        end_time = CASE
+          WHEN ? = 1 THEN NULL
+          WHEN ? IS NOT NULL THEN ?
+          ELSE end_time
+        END,
+        schedule_time = CASE
+          WHEN ? IS NOT NULL THEN ?
+          ELSE schedule_time
+        END,
         updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`;
 
-    const params = [status, status_updated_at, clear_start_time ? 1 : 0, start_time, start_time, end_time, end_time, id];
+    const params = [
+      status,
+      status_updated_at,
+      clear_start_time ? 1 : 0,
+      start_time,
+      start_time,
+      clear_end_time ? 1 : 0,
+      end_time,
+      end_time,
+      next_schedule_time,
+      next_schedule_time,
+      id
+    ];
 
     return new Promise((resolve, reject) => {
       db.run(query, params,
@@ -306,7 +342,7 @@ class Stream {
           if (this.changes === 0) {
             console.warn(`[Stream.updateStatus] WARNING: No rows updated for stream ${id} to status '${status}'`);
           } else {
-            console.log(`[Stream.updateStatus] Updated stream ${id} to status '${status}'${clear_start_time ? ' (start_time cleared)' : ''}, rows affected: ${this.changes}`);
+            console.log(`[Stream.updateStatus] Updated stream ${id} to status '${status}'${clear_start_time ? ' (start_time cleared)' : ''}${clear_end_time ? ' (end_time cleared)' : ''}${next_schedule_time ? ' (next schedule: ' + next_schedule_time + ')' : ''}, rows affected: ${this.changes}`);
           }
 
           resolve({
@@ -314,7 +350,8 @@ class Stream {
             status,
             status_updated_at,
             start_time: clear_start_time ? null : start_time,
-            end_time,
+            end_time: clear_end_time ? null : end_time,
+            schedule_time: next_schedule_time,
             updated: this.changes > 0
           });
         }

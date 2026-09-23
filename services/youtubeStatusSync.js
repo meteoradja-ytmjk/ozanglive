@@ -274,10 +274,15 @@ class YouTubeStatusSync {
       if (result.lifeCycleStatus === 'complete' || result.lifeCycleStatus === 'revoked') {
         // Check if RTMP health monitor thinks stream should still be running
         if (this.rtmpHealthMonitor) {
-          const healthStatus = this.rtmpHealthMonitor.getMonitorStatus(streamId);
-          if (healthStatus && healthStatus.remainingMs && healthStatus.remainingMs > 60000) {
-            // Stream should still be running - let RTMP health monitor handle reconnect
-            console.log(`[YouTubeStatusSync] Broadcast ended but ${Math.round(healthStatus.remainingMs / 60000)} min remaining - allowing reconnect`);
+          const timeStatus = typeof this.rtmpHealthMonitor.getStreamTimeStatus === 'function'
+            ? this.rtmpHealthMonitor.getStreamTimeStatus(streamId)
+            : null;
+          const monitor = this.rtmpHealthMonitor.monitoredStreams?.get(streamId);
+          const isUnlimited = monitor?.isUnlimited || (timeStatus && timeStatus.remainingMs === null && timeStatus.shouldBeRunning);
+
+          if (isUnlimited || (timeStatus && timeStatus.shouldBeRunning && (timeStatus.remainingMs === null || timeStatus.remainingMs > 15000))) {
+            const remText = isUnlimited ? 'unlimited mode' : `${Math.round((timeStatus.remainingMs || 0) / 1000)}s remaining`;
+            console.log(`[YouTubeStatusSync] Broadcast ended (${result.lifeCycleStatus}) but stream should still be running (${remText}) - allowing reconnect`);
             return;
           }
         }

@@ -559,14 +559,9 @@ function getStatusAfterStreamEnd(stream) {
 function isUnlimitedStream(stream) {
   if (!stream) return false;
   
-  // Unlimited mode ONLY applies to 'once' schedule (or no schedule set)
-  // Daily and weekly schedules have recurring intervals and must not be treated as unlimited
-  const isOnce = !stream.schedule_type || stream.schedule_type === 'once';
-  if (!isOnce) return false;
-
-  // Check if duration is set
   const hasDuration = stream.stream_duration_minutes && stream.stream_duration_minutes > 0;
-  const hasEndTime = stream.end_time && new Date(stream.end_time) > new Date();
+  const isOnce = !stream.schedule_type || stream.schedule_type === 'once';
+  const hasEndTime = isOnce && stream.end_time && new Date(stream.end_time) > new Date();
   
   // User must have loop_video enabled (not false and not 0) for unlimited live
   const loopEnabled = stream.loop_video !== false && stream.loop_video !== 0;
@@ -1092,6 +1087,7 @@ async function buildFFmpegArgsForPlaylist(stream, playlist, durationOverrideSeco
     args.push('-t', durationSeconds.toString());
   }
 
+  args.push('-flvflags', 'no_duration_filesize');
   args.push('-f', 'flv');
   args.push(rtmpUrl);
   console.log(
@@ -1209,6 +1205,7 @@ function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds
   const shouldLoopVideo = (loopVideo !== false && loopVideo !== 0 && loopVideo !== 'false') || (durationSeconds && durationSeconds > 0);
   if (shouldLoopVideo) {
     args.push('-stream_loop', '-1');
+    args.push('-fflags', '+genpts');
   }
   args.push('-i', videoPath);
   
@@ -1230,6 +1227,7 @@ function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds
     console.log(`[StreamingService] Audio-merge: duration limit set to ${durationSeconds} seconds (${durationSeconds / 60} minutes)`);
   }
   
+  args.push('-flvflags', 'no_duration_filesize');
   args.push('-f', 'flv');
   args.push(rtmpUrl);
   console.log(`[StreamingService] Audio-merge: copy video, AAC audio (loop=${shouldLoopVideo}, duration=${durationSeconds ? durationSeconds + 's' : 'unlimited'})`);
@@ -1252,6 +1250,7 @@ function buildFFmpegArgsVideoOnly(videoPath, rtmpUrl, durationSeconds, loopVideo
   const shouldLoopVideo = (loopVideo !== false && loopVideo !== 0 && loopVideo !== 'false') || (durationSeconds && durationSeconds > 0);
   if (shouldLoopVideo) {
     args.push('-stream_loop', '-1');
+    args.push('-fflags', '+genpts');
   }
   args.push('-i', videoPath);
   args.push('-c', 'copy');
@@ -1264,6 +1263,7 @@ function buildFFmpegArgsVideoOnly(videoPath, rtmpUrl, durationSeconds, loopVideo
     console.log(`[StreamingService] Video-only: duration limit set to ${durationSeconds} seconds (${durationSeconds / 60} minutes)`);
   }
   
+  args.push('-flvflags', 'no_duration_filesize');
   args.push('-f', 'flv');
   args.push(rtmpUrl);
   console.log(`[StreamingService] Video-only: minimal copy (loop=${shouldLoopVideo}, duration=${durationSeconds ? durationSeconds + 's' : 'unlimited'})`);

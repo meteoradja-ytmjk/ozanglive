@@ -3570,6 +3570,19 @@ function openCreateBroadcastModal() {
         scheduledInput.value = defaultDateStr;
       }
     }
+    const studioStart = document.getElementById('studioScheduleStartTime');
+    if (studioStart) {
+      studioStart.min = minDateStr;
+      if (!studioStart.value) {
+        studioStart.value = scheduledInput ? scheduledInput.value : defaultDateStr;
+      }
+    }
+    const autoStopToggle = document.getElementById('studioEnableAutoStopToggle');
+    if (autoStopToggle) {
+      autoStopToggle.checked = false;
+    }
+    if (typeof updateAutoStopBadge === 'function') updateAutoStopBadge();
+    if (typeof updateStudioDurationSummary === 'function') updateStudioDurationSummary();
   } catch (e) {
     console.warn('[openCreateBroadcastModal] Date setup warning:', e);
   }
@@ -4091,6 +4104,110 @@ function syncStudioRecurringToScheduledStartTime() {
   if (studioStart) studioStart.value = formattedVal;
 }
 
+function updateStudioDurationSummary() {
+  const type = document.getElementById('studioScheduleType')?.value || 'once';
+  const hours = parseInt(document.getElementById('studioStreamDurationHours')?.value || 0, 10) || 0;
+  const minutes = parseInt(document.getElementById('studioStreamDurationMinutes')?.value || 0, 10) || 0;
+  const totalMinutes = hours * 60 + minutes;
+  const summaryText = document.getElementById('studioDurationSummaryText');
+  if (!summaryText) return;
+
+  if (type === 'once') {
+    const eVal = document.getElementById('studioScheduleEndTime')?.value;
+    if (totalMinutes > 0) {
+      let eStr = '';
+      if (eVal) {
+        const eDate = new Date(eVal);
+        if (!isNaN(eDate.getTime())) {
+          eStr = ' (Selesai pukul ' + String(eDate.getHours()).padStart(2, '0') + ':' + String(eDate.getMinutes()).padStart(2, '0') + ' WIB)';
+        }
+      }
+      summaryText.textContent = 'Durasi: ' + (hours > 0 ? hours + ' Jam ' : '') + (minutes > 0 ? minutes + ' Menit' : '') + eStr + ' • Server akan menutup siaran secara otomatis.';
+    } else {
+      summaryText.textContent = 'Mode Unlimited: Siaran berjalan tanpa batas (loop terus hingga dihentikan manual).';
+    }
+  } else if (type === 'daily') {
+    const rTime = document.getElementById('studioRecurringTime')?.value || '--:--';
+    summaryText.textContent = 'Setiap Hari (Daily): Mulai setiap ' + rTime + ' WIB' + (totalMinutes > 0 ? ' selama ' + (hours > 0 ? hours + ' Jam ' : '') + (minutes > 0 ? minutes + ' Menit' : '') : ' (Unlimited / loop video)') + '.';
+  } else if (type === 'weekly') {
+    const dayNames = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+    const selectedNames = (studioSelectedDays || []).slice().sort((a, b) => a - b).map(d => dayNames[d]).join(', ');
+    const rTime = document.getElementById('studioRecurringTime')?.value || '--:--';
+    summaryText.textContent = 'Mingguan (Weekly): [' + (selectedNames || 'Pilih Hari') + '] pukul ' + rTime + ' WIB' + (totalMinutes > 0 ? ' selama ' + (hours > 0 ? hours + ' Jam ' : '') + (minutes > 0 ? minutes + ' Menit' : '') : ' (Unlimited / loop video)') + '.';
+  }
+}
+window.updateStudioDurationSummary = updateStudioDurationSummary;
+
+function updateAutoStopBadge() {
+  const toggle = document.getElementById('studioEnableAutoStopToggle');
+  const badge = document.getElementById('autoStopBadge');
+  if (!badge) return;
+
+  if (toggle && toggle.checked) {
+    badge.textContent = 'Auto-Stop Aktif (YouTube)';
+    badge.className = 'text-[9px] bg-amber-500/20 text-amber-300 px-1.5 py-0.2 rounded border border-amber-500/30 font-medium shrink-0';
+  } else {
+    badge.textContent = 'Proteksi Aktif (Anti Endlive)';
+    badge.className = 'text-[9px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.2 rounded border border-emerald-500/30 font-medium shrink-0';
+  }
+}
+window.updateAutoStopBadge = updateAutoStopBadge;
+
+function syncEndTimeFromDuration() {
+  const type = document.getElementById('studioScheduleType')?.value || 'once';
+  if (type !== 'once') {
+    updateStudioDurationSummary();
+    return;
+  }
+
+  const startVal = document.getElementById('studioScheduleStartTime')?.value || document.getElementById('scheduledStartTime')?.value;
+  const hours = parseInt(document.getElementById('studioStreamDurationHours')?.value || 0, 10) || 0;
+  const minutes = parseInt(document.getElementById('studioStreamDurationMinutes')?.value || 0, 10) || 0;
+  const totalMinutes = hours * 60 + minutes;
+  const endInput = document.getElementById('studioScheduleEndTime');
+
+  if (endInput) {
+    if (totalMinutes > 0 && startVal) {
+      const startDate = new Date(startVal);
+      if (!isNaN(startDate.getTime())) {
+        const endDate = new Date(startDate.getTime() + totalMinutes * 60 * 1000);
+        endInput.value = typeof formatDateTimeLocal === 'function' ? formatDateTimeLocal(endDate) : endDate.toISOString().slice(0, 16);
+      }
+    } else if (totalMinutes === 0) {
+      endInput.value = '';
+    }
+  }
+  updateStudioDurationSummary();
+}
+window.syncEndTimeFromDuration = syncEndTimeFromDuration;
+
+function syncDurationFromEndTimes() {
+  const type = document.getElementById('studioScheduleType')?.value || 'once';
+  if (type !== 'once') {
+    updateStudioDurationSummary();
+    return;
+  }
+
+  const startVal = document.getElementById('studioScheduleStartTime')?.value || document.getElementById('scheduledStartTime')?.value;
+  const endVal = document.getElementById('studioScheduleEndTime')?.value;
+
+  if (startVal && endVal) {
+    const startDate = new Date(startVal);
+    const endDate = new Date(endVal);
+    if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime()) && endDate > startDate) {
+      const diffMinutes = Math.round((endDate.getTime() - startDate.getTime()) / (60 * 1000));
+      const hours = Math.floor(diffMinutes / 60);
+      const minutes = diffMinutes % 60;
+      const hInput = document.getElementById('studioStreamDurationHours');
+      const mInput = document.getElementById('studioStreamDurationMinutes');
+      if (hInput) hInput.value = hours > 0 ? hours : '';
+      if (mInput) mInput.value = minutes > 0 ? minutes : '';
+    }
+  }
+  updateStudioDurationSummary();
+}
+window.syncDurationFromEndTimes = syncDurationFromEndTimes;
+
 function setStudioScheduleType(type) {
   const hiddenInput = document.getElementById('studioScheduleType');
   if (hiddenInput) hiddenInput.value = type;
@@ -4127,19 +4244,29 @@ function setStudioScheduleType(type) {
     } else if (sStart && scheduledInput && sStart.value) {
       scheduledInput.value = sStart.value;
     }
+    syncEndTimeFromDuration();
   } else if (type === 'daily') {
     if (dailyBtn) dailyBtn.className = activeClass;
     if (onceSection) onceSection.classList.add('hidden');
     if (recurringSection) recurringSection.classList.remove('hidden');
     if (weeklyDays) weeklyDays.classList.add('hidden');
+    
+    // Reset once end time when switching to recurring
+    const sEnd = document.getElementById('studioScheduleEndTime');
+    if (sEnd) sEnd.value = '';
     syncStudioRecurringToScheduledStartTime();
   } else if (type === 'weekly') {
     if (weeklyBtn) weeklyBtn.className = activeClass;
     if (onceSection) onceSection.classList.add('hidden');
     if (recurringSection) recurringSection.classList.remove('hidden');
     if (weeklyDays) weeklyDays.classList.remove('hidden');
+    
+    // Reset once end time when switching to recurring
+    const sEnd = document.getElementById('studioScheduleEndTime');
+    if (sEnd) sEnd.value = '';
     syncStudioRecurringToScheduledStartTime();
   }
+  updateStudioDurationSummary();
 }
 
 let studioSelectedDays = [];
@@ -4164,6 +4291,7 @@ function toggleStudioDay(dayIndex) {
   const daysInput = document.getElementById('studioScheduleDays');
   if (daysInput) daysInput.value = JSON.stringify(studioSelectedDays);
   syncStudioRecurringToScheduledStartTime();
+  updateStudioDurationSummary();
 }
 
 // Sync listeners for studio schedule inputs
@@ -4171,8 +4299,8 @@ function toggleStudioDay(dayIndex) {
   const initScheduleSyncListeners = () => {
     const rTimeInput = document.getElementById('studioRecurringTime');
     if (rTimeInput) {
-      rTimeInput.addEventListener('input', syncStudioRecurringToScheduledStartTime);
-      rTimeInput.addEventListener('change', syncStudioRecurringToScheduledStartTime);
+      rTimeInput.addEventListener('input', () => { syncStudioRecurringToScheduledStartTime(); updateStudioDurationSummary(); });
+      rTimeInput.addEventListener('change', () => { syncStudioRecurringToScheduledStartTime(); updateStudioDurationSummary(); });
     }
 
     const studioStart = document.getElementById('studioScheduleStartTime');
@@ -4181,19 +4309,50 @@ function toggleStudioDay(dayIndex) {
       studioStart.addEventListener('input', () => {
         const type = document.getElementById('studioScheduleType')?.value || 'once';
         if (type === 'once' && studioStart.value) scheduledInput.value = studioStart.value;
+        syncEndTimeFromDuration();
       });
       studioStart.addEventListener('change', () => {
         const type = document.getElementById('studioScheduleType')?.value || 'once';
         if (type === 'once' && studioStart.value) scheduledInput.value = studioStart.value;
+        syncEndTimeFromDuration();
       });
       scheduledInput.addEventListener('input', () => {
         const type = document.getElementById('studioScheduleType')?.value || 'once';
         if (type === 'once' && scheduledInput.value) studioStart.value = scheduledInput.value;
+        syncEndTimeFromDuration();
       });
       scheduledInput.addEventListener('change', () => {
         const type = document.getElementById('studioScheduleType')?.value || 'once';
         if (type === 'once' && scheduledInput.value) studioStart.value = scheduledInput.value;
+        syncEndTimeFromDuration();
       });
+    }
+
+    const hoursInput = document.getElementById('studioStreamDurationHours');
+    const minutesInput = document.getElementById('studioStreamDurationMinutes');
+    if (hoursInput) {
+      hoursInput.addEventListener('input', syncEndTimeFromDuration);
+      hoursInput.addEventListener('change', syncEndTimeFromDuration);
+    }
+    if (minutesInput) {
+      minutesInput.addEventListener('input', syncEndTimeFromDuration);
+      minutesInput.addEventListener('change', syncEndTimeFromDuration);
+    }
+
+    const endInput = document.getElementById('studioScheduleEndTime');
+    if (endInput) {
+      endInput.addEventListener('input', syncDurationFromEndTimes);
+      endInput.addEventListener('change', syncDurationFromEndTimes);
+    }
+
+    const autoStopToggle = document.getElementById('studioEnableAutoStopToggle');
+    if (autoStopToggle) {
+      autoStopToggle.addEventListener('change', updateAutoStopBadge);
+    }
+
+    const loopToggle = document.getElementById('studioLoopVideoToggle');
+    if (loopToggle) {
+      loopToggle.addEventListener('change', updateStudioDurationSummary);
     }
   };
 
@@ -4419,6 +4578,15 @@ window.openEditStudioModal = function(stream) {
     currentTags = [];
     renderTags();
   }
+
+  // Auto-Stop YouTube Protection Toggle
+  const autoStopToggle = document.getElementById('studioEnableAutoStopToggle');
+  if (autoStopToggle) {
+    const isAutoStop = !!(stream.enable_auto_stop || stream.enableAutoStop);
+    autoStopToggle.checked = isAutoStop;
+  }
+  if (typeof updateAutoStopBadge === 'function') updateAutoStopBadge();
+  if (typeof updateStudioDurationSummary === 'function') updateStudioDurationSummary();
 };
 
 function closeCreateBroadcastModal() {
@@ -4528,7 +4696,12 @@ function closeCreateBroadcastModal() {
   const alteredToggle = document.getElementById('alteredContentToggle');
   if (alteredToggle) alteredToggle.checked = false;
 
+  const autoStopToggle = document.getElementById('studioEnableAutoStopToggle');
+  if (autoStopToggle) autoStopToggle.checked = false;
+  if (typeof updateAutoStopBadge === 'function') updateAutoStopBadge();
+
   setStudioScheduleType('once');
+  if (typeof updateStudioDurationSummary === 'function') updateStudioDurationSummary();
 }
 window.closeCreateBroadcastModal = closeCreateBroadcastModal;
 
@@ -4604,6 +4777,7 @@ if (createBroadcastForm) {
           finalScheduleStartTime = document.getElementById('scheduledStartTime')?.value || '';
         }
 
+        const isAutoStop = document.getElementById('studioEnableAutoStopToggle')?.checked ? 'true' : 'false';
         const updatePayload = {
           streamTitle: document.getElementById('broadcastTitle').value,
           description: document.getElementById('broadcastDescription').value,
@@ -4614,7 +4788,9 @@ if (createBroadcastForm) {
           loopVideo: document.getElementById('studioLoopVideoToggle')?.checked ? 'true' : 'false',
           scheduleType: scheduleType,
           scheduleStartTime: finalScheduleStartTime,
-          scheduleEndTime: document.getElementById('studioScheduleEndTime')?.value || '',
+          scheduleEndTime: scheduleType === 'once' ? (document.getElementById('studioScheduleEndTime')?.value || '') : '',
+          enableAutoStop: isAutoStop,
+          enable_auto_stop: isAutoStop === 'true',
           recurringTime: recurringTime,
           scheduleDays: document.getElementById('studioScheduleDays')?.value || '[]',
           recurringEnabled: document.getElementById('studioRecurringEnabled')?.checked ? 'true' : 'false',
@@ -4726,7 +4902,7 @@ if (createBroadcastForm) {
       const durationHours = document.getElementById('studioStreamDurationHours')?.value || '0';
       const durationMinutes = document.getElementById('studioStreamDurationMinutes')?.value || '0';
       const loopVideo = document.getElementById('studioLoopVideoToggle')?.checked ? 'true' : 'false';
-      const scheduleEndTime = document.getElementById('studioScheduleEndTime')?.value || '';
+      const scheduleEndTime = scheduleType === 'once' ? (document.getElementById('studioScheduleEndTime')?.value || '') : '';
       const scheduleDays = document.getElementById('studioScheduleDays')?.value || '[]';
       const recurringEnabled = document.getElementById('studioRecurringEnabled')?.checked ? 'true' : 'false';
 
@@ -4756,8 +4932,10 @@ if (createBroadcastForm) {
       const isAlteredContent = !!document.getElementById('alteredContentToggle')?.checked;
       formData.append('alteredContent', isAlteredContent ? 'true' : 'false');
 
+      const isAutoStop = document.getElementById('studioEnableAutoStopToggle')?.checked ? 'true' : 'false';
       formData.append('enableAutoStart', 'true');
-      formData.append('enableAutoStop', 'true');
+      formData.append('enableAutoStop', isAutoStop);
+      formData.append('enable_auto_stop', isAutoStop);
       formData.append('unlistReplayOnEnd', document.getElementById('unlistReplayOnEnd')?.checked ? 'true' : 'false');
       
       // Thumbnail
