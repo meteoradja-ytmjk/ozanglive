@@ -105,9 +105,11 @@ class YouTubeStatusSync {
    * @param {string} streamId - Local stream ID
    * @param {string} userId - User ID
    * @param {string} streamKey - YouTube stream key
+   * @param {number|string} [accountId] - Optional YouTube account ID
+   * @param {string} [broadcastId] - Optional known YouTube broadcast ID
    * @returns {Promise<boolean>} True if monitoring started successfully
    */
-  async startMonitoring(streamId, userId, streamKey) {
+  async startMonitoring(streamId, userId, streamKey, accountId = null, broadcastId = null) {
     try {
       // Check if already monitoring
       if (this.activeChecks.has(streamId)) {
@@ -121,8 +123,14 @@ class YouTubeStatusSync {
         return false;
       }
 
-      // Get user's YouTube credentials
-      const credentials = await YouTubeCredentials.findByUserId(userId);
+      // Get user's YouTube credentials (prefer specific accountId if provided)
+      let credentials = null;
+      if (accountId) {
+        credentials = await YouTubeCredentials.findById(accountId);
+      }
+      if (!credentials && userId) {
+        credentials = await YouTubeCredentials.findByUserId(userId);
+      }
       if (!credentials) {
         console.log(`[YouTubeStatusSync] No YouTube credentials for user ${userId}, skipping monitoring`);
         return false;
@@ -131,24 +139,33 @@ class YouTubeStatusSync {
       // Get access token
       let accessToken;
       try {
-        accessToken = await youtubeService.getAccessToken(
-          credentials.client_id,
-          credentials.client_secret,
-          credentials.refresh_token
-        );
+        const cId = credentials.clientId || credentials.client_id;
+        const cSec = credentials.clientSecret || credentials.client_secret;
+        const rTok = credentials.refreshToken || credentials.refresh_token;
+        accessToken = await youtubeService.getAccessToken(cId, cSec, rTok, 0, credentials.id);
       } catch (err) {
         console.error(`[YouTubeStatusSync] Failed to get access token for user ${userId}:`, err.message);
         return false;
       }
 
-      // Find matching broadcast by stream key
-      const broadcast = await youtubeService.findBroadcastByStreamKey(accessToken, streamKey);
-      if (!broadcast) {
-        console.log(`[YouTubeStatusSync] No matching broadcast found for stream key, continuing without sync`);
+      // Resolve broadcast
+      let resolvedBroadcastId = broadcastId;
+      let initialStatus = 'live';
+
+      if (!resolvedBroadcastId && streamKey) {
+        const broadcast = await youtubeService.findBroadcastByStreamKey(accessToken, streamKey);
+        if (broadcast) {
+          resolvedBroadcastId = broadcast.broadcastId;
+          initialStatus = broadcast.lifeCycleStatus || 'live';
+        }
+      }
+
+      if (!resolvedBroadcastId) {
+        console.log(`[YouTubeStatusSync] No matching broadcast found for stream ${streamId}, continuing without sync`);
         return false;
       }
 
-      console.log(`[YouTubeStatusSync] Found broadcast ${broadcast.broadcastId} for stream ${streamId}, status: ${broadcast.lifeCycleStatus}`);
+      console.log(`[YouTubeStatusSync] Found broadcast ${resolvedBroadcastId} for stream ${streamId}, status: ${initialStatus}`);
 
       // Start polling interval
       const intervalId = setInterval(async () => {
@@ -158,15 +175,15 @@ class YouTubeStatusSync {
       // Store monitoring state
       this.activeChecks.set(streamId, {
         intervalId,
-        broadcastId: broadcast.broadcastId,
+        broadcastId: resolvedBroadcastId,
         userId,
         credentials,
-        lastStatus: broadcast.lifeCycleStatus,
+        lastStatus: initialStatus,
         lastChecked: new Date(),
         disconnectedAt: null
       });
 
-      console.log(`[YouTubeStatusSync] Started monitoring stream ${streamId} (broadcast: ${broadcast.broadcastId})`);
+      console.log(`[YouTubeStatusSync] Started monitoring stream ${streamId} (broadcast: ${resolvedBroadcastId})`);
       return true;
     } catch (error) {
       console.error(`[YouTubeStatusSync] Error starting monitoring for stream ${streamId}:`, error.message);
@@ -366,6 +383,16 @@ class YouTubeStatusSync {
    */
   isMonitoring(streamId) {
     return this.activeChecks.has(streamId);
+  }
+
+  /**
+   * Get broadcast ID for a monitored stream
+   * @param {string} streamId - Local stream ID
+   * @returns {string|null}
+   */
+  getBroadcastId(streamId) {
+    const check = this.activeChecks.get(streamId);
+    return check ? check.broadcastId : null;
   }
 
   /**

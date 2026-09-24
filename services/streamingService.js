@@ -86,6 +86,111 @@ async function handleUnlistReplayOnEnd(stream) {
 }
 
 /**
+ * End YouTube live broadcast when stream ends or is stopped manually.
+ * Transitions broadcast to 'complete' on YouTube so YouTube Studio / dashboard
+ * stops running and goes offline immediately.
+ * @param {Object} stream - Stream object from database
+ * @param {string} [broadcastIdHint] - Optional broadcastId if already known
+ * @returns {Promise<Object>}
+ */
+async function endYouTubeBroadcastForStream(stream, broadcastIdHint) {
+  if (!stream) return { success: false, error: 'No stream provided' };
+
+  // Determine if stream is YouTube-related
+  const isYouTube = stream.platform === 'YouTube' || Boolean(stream.youtube_broadcast_id) || Boolean(broadcastIdHint);
+  if (!isYouTube) {
+    return { success: false, error: 'Not a YouTube stream' };
+  }
+
+  try {
+    let broadcastId = broadcastIdHint || stream.youtube_broadcast_id;
+    if (!broadcastId && typeof youtubeStatusSync !== 'undefined' && typeof youtubeStatusSync.getBroadcastId === 'function') {
+      broadcastId = youtubeStatusSync.getBroadcastId(stream.id);
+    }
+
+    // Resolve YouTube credentials
+    const YouTubeCredentials = require('../models/YouTubeCredentials');
+    let credentials = null;
+
+    if (stream.youtube_account_id) {
+      credentials = await YouTubeCredentials.findById(stream.youtube_account_id);
+    }
+    if (!credentials && stream.user_id) {
+      credentials = await YouTubeCredentials.findByUserId(stream.user_id);
+    }
+    if (!credentials && stream.user_id) {
+      const allCreds = await YouTubeCredentials.findAllByUserId(stream.user_id);
+      if (allCreds && allCreds.length > 0) {
+        credentials = allCreds[0];
+      }
+    }
+
+    if (!credentials) {
+      console.warn(`[StreamingService] Cannot end YouTube broadcast: No YouTube credentials found for user ${stream.user_id}`);
+      return { success: false, error: 'No YouTube credentials' };
+    }
+
+    const youtubeService = require('./youtubeService');
+    const clientId = credentials.clientId || credentials.client_id;
+    const clientSecret = credentials.clientSecret || credentials.client_secret;
+    const refreshToken = credentials.refreshToken || credentials.refresh_token;
+
+    const accessToken = await youtubeService.getAccessTokenSafe(
+      clientId,
+      clientSecret,
+      refreshToken,
+      credentials.id
+    );
+
+    if (!accessToken) {
+      console.warn(`[StreamingService] Cannot end YouTube broadcast: Failed to obtain access token for credentials ${credentials.id}`);
+      return { success: false, error: 'Failed to obtain access token' };
+    }
+
+    // If still no broadcastId, try searching by stream_key
+    if (!broadcastId && stream.stream_key) {
+      try {
+        console.log(`[StreamingService] Searching broadcast by stream key for stream ${stream.id}...`);
+        const found = await youtubeService.findBroadcastByStreamKey(accessToken, stream.stream_key);
+        if (found && found.broadcastId) {
+          broadcastId = found.broadcastId;
+          try {
+            await Stream.update(stream.id, { youtube_broadcast_id: broadcastId });
+            stream.youtube_broadcast_id = broadcastId;
+          } catch (updateErr) {
+            // ignore
+          }
+        }
+      } catch (findErr) {
+        console.warn(`[StreamingService] Error finding broadcast by stream key: ${findErr.message}`);
+      }
+    }
+
+    if (!broadcastId) {
+      console.log(`[StreamingService] No YouTube broadcastId found to end for stream ${stream.id}`);
+      return { success: false, error: 'No broadcast ID found' };
+    }
+
+    console.log(`[StreamingService] Ending YouTube broadcast ${broadcastId} for stream ${stream.id}...`);
+    const endResult = await youtubeService.endBroadcast(accessToken, broadcastId);
+    console.log(`[StreamingService] End YouTube broadcast result for ${broadcastId}:`, endResult);
+
+    try {
+      if (endResult && endResult.lifeCycleStatus) {
+        await Stream.update(stream.id, { youtube_lifecycle_status: endResult.lifeCycleStatus });
+      }
+    } catch (statusUpdateErr) {
+      // ignore
+    }
+
+    return endResult;
+  } catch (error) {
+    console.error(`[StreamingService] Error ending YouTube broadcast for stream ${stream?.id}:`, error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
  * Clean up stale entries from Maps to prevent memory leaks
  * Only removes entries for streams that are no longer active
  * ENHANCED: Added hard limits to prevent unbounded growth
@@ -1728,7 +1833,7 @@ async function startStream(streamId) {
       try {
         youtubeStatusSync.setStreamingService(module.exports);
         youtubeStatusSync.setRTMPHealthMonitor(rtmpHealthMonitor);
-        await youtubeStatusSync.startMonitoring(streamId, stream.user_id, stream.stream_key);
+        await youtubeStatusSync.startMonitoring(streamId, stream.user_id, stream.stream_key, stream.youtube_account_id, stream.youtube_broadcast_id);
       } catch (ytErr) {
         console.log(`[StreamingService] YouTube status sync not started: ${ytErr.message}`);
         // Continue without sync - not critical
@@ -1824,6 +1929,10 @@ async function startStream(streamId) {
               await Stream.updateStatus(streamId, newStatus, streamData.user_id);
               const updatedStream = await Stream.findById(streamId);
               await saveStreamHistory(updatedStream);
+
+              // End YouTube broadcast so YouTube Studio / dashboard stops immediately
+              await endYouTubeBroadcastForStream(streamData);
+              await handleUnlistReplayOnEnd(streamData);
             }
             if (typeof schedulerService !== 'undefined' && schedulerService.cancelStreamTermination) {
               schedulerService.handleStreamStopped(streamId);
@@ -2176,6 +2285,12 @@ async function startStream(streamId) {
 }
 async function stopStream(streamId) {
   try {
+    // CRITICAL: Retrieve broadcastIdHint BEFORE stopping monitoring if activeChecks has it
+    let broadcastIdHint = null;
+    if (typeof youtubeStatusSync !== 'undefined' && typeof youtubeStatusSync.getBroadcastId === 'function') {
+      broadcastIdHint = youtubeStatusSync.getBroadcastId(streamId);
+    }
+
     // Stop YouTube status sync monitoring first
     youtubeStatusSync.stopMonitoring(streamId);
     
@@ -2218,6 +2333,9 @@ async function stopStream(streamId) {
         const updatedStream = await Stream.findById(streamId);
         await saveStreamHistory(updatedStream);
         
+        // End YouTube broadcast so YouTube Studio / dashboard stops immediately
+        await endYouTubeBroadcastForStream(stream, broadcastIdHint);
+
         // Handle unlist replay on end for YouTube streams
         await handleUnlistReplayOnEnd(stream);
         
@@ -2285,6 +2403,9 @@ async function stopStream(streamId) {
       const updatedStream = await Stream.findById(streamId);
       await saveStreamHistory(updatedStream);
       
+      // End YouTube broadcast so YouTube Studio / dashboard stops immediately
+      await endYouTubeBroadcastForStream(stream, broadcastIdHint);
+
       // Handle unlist replay on end for YouTube streams
       await handleUnlistReplayOnEnd(stream);
     }
@@ -2626,6 +2747,7 @@ module.exports = {
   // YouTube status sync exports
   getYouTubeStatus,
   isYouTubeMonitored,
+  endYouTubeBroadcastForStream,
   // RTMP health monitor exports
   getRTMPHealthStatus,
   isRTMPHealthMonitored,

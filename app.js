@@ -6309,6 +6309,18 @@ app.post('/api/streams/:id/stop', isAuthenticated, async (req, res) => {
     const finalStatus = isRecurring ? 'scheduled' : 'offline';
 
     await Stream.updateStatus(streamId, finalStatus, req.session.userId);
+
+    // If stream is associated with YouTube, ensure broadcast on YouTube is ended as well
+    if (stream.youtube_broadcast_id || stream.platform === 'YouTube') {
+      try {
+        if (typeof streamingService.endYouTubeBroadcastForStream === 'function') {
+          await streamingService.endYouTubeBroadcastForStream(stream);
+        }
+      } catch (ytErr) {
+        console.warn('[API Stop Stream] Error ending YouTube broadcast for non-live stream:', ytErr.message);
+      }
+    }
+
     const updatedStream = await Stream.getStreamWithVideo(streamId);
     return res.json({ success: true, stream: updatedStream });
   } catch (error) {
@@ -11950,6 +11962,85 @@ app.delete('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
     return res.json({ 
       success: true, 
       message: 'Broadcast removed' 
+    });
+  }
+});
+
+// End / Stop YouTube broadcast endpoint
+app.post('/api/youtube/broadcasts/:id/end', isAuthenticated, async (req, res) => {
+  const broadcastId = req.params.id;
+  const userId = req.session.userId;
+  const accountId = req.body.accountId || (req.query.accountId ? parseInt(req.query.accountId) : null);
+
+  try {
+    // 1. Check if there is an active stream associated with this broadcast and stop it
+    const associatedStream = await new Promise((resolve) => {
+      db.get(
+        'SELECT * FROM streams WHERE youtube_broadcast_id = ? AND (user_id = ? OR CAST(user_id AS TEXT) = CAST(? AS TEXT))',
+        [broadcastId, userId, String(userId)],
+        (err, row) => resolve(row)
+      );
+    });
+
+    if (associatedStream) {
+      console.log(`[API End Broadcast] Stopping associated stream ${associatedStream.id} for broadcast ${broadcastId}`);
+      try {
+        await streamingService.stopStream(associatedStream.id);
+      } catch (streamStopErr) {
+        console.warn(`[API End Broadcast] Warning stopping stream: ${streamStopErr.message}`);
+      }
+    }
+
+    // 2. Find YouTube credentials
+    let accountsToTry = [];
+    if (accountId) {
+      const credentials = await YouTubeCredentials.findById(accountId);
+      if (credentials && String(credentials.userId) === String(userId)) {
+        accountsToTry.push(credentials);
+      }
+    }
+    if (associatedStream && associatedStream.youtube_account_id) {
+      const cred = await YouTubeCredentials.findById(associatedStream.youtube_account_id);
+      if (cred && !accountsToTry.some(a => a.id === cred.id)) {
+        accountsToTry.push(cred);
+      }
+    }
+    if (accountsToTry.length === 0) {
+      accountsToTry = await YouTubeCredentials.findAllByUserId(userId);
+    }
+
+    let endResult = null;
+    for (const account of accountsToTry) {
+      try {
+        const accessToken = await youtubeService.getAccessTokenSafe(account.clientId, account.clientSecret, account.refreshToken, account.id);
+        if (accessToken) {
+          endResult = await youtubeService.endBroadcast(accessToken, broadcastId);
+          if (endResult && endResult.success) {
+            break;
+          }
+        }
+      } catch (err) {
+        console.warn(`[API End Broadcast] Account ${account.id} failed:`, err.message);
+      }
+    }
+
+    // 3. Update associated stream status to offline
+    if (associatedStream) {
+      await Stream.updateStatus(associatedStream.id, 'offline', userId);
+    }
+
+    invalidateBroadcastsCache(userId);
+
+    return res.json({
+      success: true,
+      message: 'Broadcast ended successfully on YouTube',
+      result: endResult
+    });
+  } catch (error) {
+    console.error('Error ending broadcast:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to end broadcast'
     });
   }
 });

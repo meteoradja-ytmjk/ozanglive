@@ -1071,6 +1071,70 @@ class YouTubeService {
   }
 
   /**
+   * End a live broadcast on YouTube (transition to 'complete')
+   * This immediately ends the live stream on YouTube Studio / dashboard.
+   * @param {string} accessToken - Access token
+   * @param {string} broadcastId - Broadcast ID to end
+   * @returns {Promise<{success: boolean, lifeCycleStatus?: string, alreadyComplete?: boolean, message?: string, error?: string}>}
+   */
+  async endBroadcast(accessToken, broadcastId) {
+    if (!accessToken || !broadcastId) {
+      return { success: false, error: 'Missing accessToken or broadcastId' };
+    }
+
+    const oauth2Client = new google.auth.OAuth2();
+    oauth2Client.setCredentials({ access_token: accessToken });
+    const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+
+    try {
+      console.log(`[YouTubeService.endBroadcast] Checking status for broadcast ${broadcastId}...`);
+      const statusRes = await youtube.liveBroadcasts.list({
+        part: 'id,status',
+        id: broadcastId
+      });
+
+      const item = statusRes.data?.items?.[0];
+      if (!item) {
+        console.warn(`[YouTubeService.endBroadcast] Broadcast ${broadcastId} not found on YouTube`);
+        return { success: false, error: 'Broadcast not found' };
+      }
+
+      const lifeCycleStatus = item.status?.lifeCycleStatus;
+      console.log(`[YouTubeService.endBroadcast] Current lifeCycleStatus for ${broadcastId}: ${lifeCycleStatus}`);
+
+      if (lifeCycleStatus === 'complete' || lifeCycleStatus === 'completed') {
+        console.log(`[YouTubeService.endBroadcast] Broadcast ${broadcastId} is already complete.`);
+        return { success: true, lifeCycleStatus: 'complete', alreadyComplete: true };
+      }
+
+      // If active / live / testing / liveStarting / testStarting, transition to complete
+      if (['live', 'testing', 'liveStarting', 'testStarting'].includes(lifeCycleStatus)) {
+        console.log(`[YouTubeService.endBroadcast] Transitioning broadcast ${broadcastId} from '${lifeCycleStatus}' to 'complete'...`);
+        const transitionRes = await youtube.liveBroadcasts.transition({
+          part: 'id,status',
+          id: broadcastId,
+          broadcastStatus: 'complete'
+        });
+        const finalStatus = transitionRes.data?.status?.lifeCycleStatus || 'complete';
+        console.log(`[YouTubeService.endBroadcast] Successfully ended broadcast ${broadcastId} on YouTube. Status: ${finalStatus}`);
+        return { success: true, lifeCycleStatus: finalStatus };
+      }
+
+      // If lifeCycleStatus is 'ready' or 'created' (upcoming / never went live)
+      console.log(`[YouTubeService.endBroadcast] Broadcast ${broadcastId} is in '${lifeCycleStatus}' state (not live on YouTube).`);
+      return { success: true, lifeCycleStatus: lifeCycleStatus || 'unknown', message: 'Broadcast was not live on YouTube' };
+    } catch (err) {
+      const errMsg = err.message || '';
+      console.warn(`[YouTubeService.endBroadcast] Error transitioning broadcast ${broadcastId}:`, errMsg);
+      // If error indicates already complete or redundant transition, treat as success
+      if (errMsg.includes('redundantTransition') || errMsg.includes('already complete') || errMsg.includes('complete')) {
+        return { success: true, lifeCycleStatus: 'complete', alreadyComplete: true };
+      }
+      return { success: false, error: errMsg };
+    }
+  }
+
+  /**
    * Delete a broadcast
    * @param {string} accessToken - Access token
    * @param {string} broadcastId - Broadcast ID to delete
