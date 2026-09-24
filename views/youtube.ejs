@@ -2588,9 +2588,9 @@
       </div>
       
       <form id="recreateFromTemplateForm" class="p-4 space-y-3">
-        <!-- 1. Saved Template Info Bar (Grid Layout) -->
-        <div class="bg-dark-700/80 rounded-lg px-3 py-2 border border-gray-700/80 grid grid-cols-[1fr_auto] items-center gap-2">
-          <div class="flex items-center gap-2 min-w-0 text-xs overflow-hidden">
+        <!-- 1. Saved Template Info Bar (Flex Layout) -->
+        <div class="bg-dark-700/80 rounded-lg px-3 py-2 border border-gray-700/80 flex items-center gap-2">
+          <div class="flex items-center gap-2 min-w-0 text-xs overflow-hidden flex-1">
             <span class="flex items-center gap-1 text-red-400 font-semibold truncate flex-shrink-0">
               <i class="ti ti-brand-youtube text-red-500"></i>
               <span id="recreateTemplateAccountName" class="truncate max-w-[130px] sm:max-w-[160px]">-</span>
@@ -2608,12 +2608,6 @@
               <span id="recreateTemplateTitle">-</span>
             </span>
           </div>
-          <button type="button" onclick="editCurrentRecreateTemplate()"
-            class="h-7 px-2.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-lg text-xs font-medium flex items-center justify-center gap-1 transition-colors flex-shrink-0"
-            title="Edit judul, channel, thumbnail, privasi, atau jadwal broadcast ini">
-            <i class="ti ti-edit text-xs"></i>
-            <span>Edit Full</span>
-          </button>
         </div>
         
         <!-- 2. Title Rotation (Full text, never cut off) -->
@@ -2749,6 +2743,205 @@
           </button>
         </div>
       </form>
+    </div>
+  </div>
+</div>
+
+<!-- Recreate Slot Full Edit Modal (Per Broadcast Slot Editor) -->
+<div id="recreateSlotEditModal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-[60] hidden modal-overlay overflow-y-auto">
+  <div class="flex min-h-screen items-center justify-center p-3 sm:p-4">
+    <div class="bg-dark-800 rounded-xl shadow-2xl border border-gray-700/80 w-full max-w-xl max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+      
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between px-5 py-3.5 border-b border-gray-700/80 bg-dark-900/50 flex-shrink-0">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div class="w-8 h-8 rounded-lg bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-blue-400 flex-shrink-0">
+            <i class="ti ti-edit text-base"></i>
+          </div>
+          <div class="min-w-0">
+            <h3 class="text-sm font-bold text-white flex items-center gap-1.5 truncate">
+              <span id="recreateSlotEditHeaderTitle">Edit Full Siaran #1</span>
+            </h3>
+            <p class="text-[11px] text-gray-400 truncate">Atur judul, rotasi, thumbnail, stream key, media & durasi khusus siaran ini</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeRecreateSlotEditModal()" class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-white rounded-lg hover:bg-dark-700 transition-colors flex-shrink-0" title="Tutup">
+          <i class="ti ti-x text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body (Scrollable) -->
+      <div class="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1 text-xs">
+        <input type="hidden" id="recreateSlotEditGroupIndex" value="">
+
+        <!-- 1. Judul & Title Rotation -->
+        <div class="bg-dark-700/50 rounded-xl p-3.5 border border-gray-700/70 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-white uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+              <i class="ti ti-typography text-primary text-sm"></i> 1. Judul & Rotasi Judul
+            </span>
+          </div>
+
+          <div>
+            <label class="text-[11px] font-medium text-gray-300 block mb-1">Judul Siaran</label>
+            <input type="text" id="recreateSlotEditTitleInput"
+              class="w-full px-3 py-2 bg-dark-800 border border-gray-600 rounded-lg text-white text-xs focus:border-primary focus:outline-none transition-colors"
+              placeholder="Masukkan judul live streaming...">
+          </div>
+
+          <!-- Title Rotation Toggle -->
+          <div class="bg-dark-800/80 rounded-lg p-2.5 border border-gray-700/60 flex items-center justify-between gap-2">
+            <div class="min-w-0">
+              <div class="flex items-center gap-1.5">
+                <i class="ti ti-rotate-clockwise text-primary text-xs"></i>
+                <span class="font-semibold text-white text-xs">Gunakan Rotasi Judul (Title Rotation)</span>
+              </div>
+              <p class="text-[10px] text-gray-400 mt-0.5 leading-tight">
+                Aktifkan jika ingin judul otomatis berganti dari daftar rotasi judul saat streaming dibuat.
+              </p>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
+              <input type="checkbox" id="recreateSlotEditRotationToggle" class="sr-only peer" onchange="toggleRecreateSlotRotation(this.checked)">
+              <div class="w-9 h-5 bg-dark-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+            </label>
+          </div>
+        </div>
+
+        <!-- 2. Folder Thumbnail & Stream Key YouTube -->
+        <div class="bg-dark-700/50 rounded-xl p-3.5 border border-gray-700/70 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-white uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+              <i class="ti ti-key text-amber-400 text-sm"></i> 2. Folder Thumbnail & Stream Key
+            </span>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <!-- Folder Thumbnail -->
+            <div>
+              <label class="text-[11px] font-medium text-gray-300 block mb-1">
+                Folder Thumbnail
+              </label>
+              <select id="recreateSlotEditThumbnailFolderSelect"
+                class="w-full px-2.5 py-2 bg-dark-800 border border-gray-600 rounded-lg text-white text-xs focus:border-primary focus:outline-none transition-colors">
+                <option value="__KEEP__">-- Gunakan Default Template --</option>
+                <option value="__ROOT__">📁 Root (Folder Utama)</option>
+              </select>
+            </div>
+
+            <!-- YouTube Stream Key Selection -->
+            <div>
+              <label class="text-[11px] font-medium text-gray-300 block mb-1">
+                Pilih Stream Key YouTube
+              </label>
+              <select id="recreateSlotEditStreamKeySelect" onchange="handleRecreateSlotStreamKeySelect(this.value)"
+                class="w-full px-2.5 py-2 bg-dark-800 border border-gray-600 rounded-lg text-white text-xs focus:border-primary focus:outline-none transition-colors">
+                <option value="">🔑 Buat Stream Key Baru Otomatis</option>
+                <option value="__MANUAL__">✏️ Ketik Stream Key Manual...</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Manual / Custom Stream Key Input -->
+          <div id="recreateSlotEditManualStreamKeyBox" class="space-y-1">
+            <label class="text-[11px] font-medium text-gray-400 block">Stream Key Teks / Custom</label>
+            <input type="text" id="recreateSlotEditCustomStreamKey"
+              class="w-full px-3 py-2 bg-dark-800 border border-gray-600 rounded-lg text-white font-mono text-xs focus:border-primary focus:outline-none transition-colors"
+              placeholder="Ketik atau paste stream key YouTube (xxxx-xxxx-xxxx-xxxx)...">
+          </div>
+        </div>
+
+        <!-- 3. Media Video & Audio -->
+        <div class="bg-dark-700/50 rounded-xl p-3.5 border border-gray-700/70 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-white uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+              <i class="ti ti-video text-blue-400 text-sm"></i> 3. Sumber Media (Video & Audio)
+            </span>
+          </div>
+
+          <div class="space-y-3">
+            <!-- Video Selector Dropdown -->
+            <div>
+              <label class="text-[11px] font-medium text-gray-300 block mb-1">
+                Pilih Video dari Galeri
+              </label>
+              <select id="recreateSlotEditVideoSelect"
+                class="w-full px-2.5 py-2 bg-dark-800 border border-gray-600 rounded-lg text-white text-xs focus:border-primary focus:outline-none transition-colors">
+                <option value="">-- Tetap Gunakan Video Template --</option>
+              </select>
+            </div>
+
+            <!-- Audio Selector Dropdown -->
+            <div>
+              <label class="text-[11px] font-medium text-gray-300 block mb-1">
+                Audio Pengganti <span class="text-gray-400 text-[10px]">(Opsional - Menggantikan suara video)</span>
+              </label>
+              <select id="recreateSlotEditAudioSelect"
+                class="w-full px-2.5 py-2 bg-dark-800 border border-gray-600 rounded-lg text-white text-xs focus:border-primary focus:outline-none transition-colors">
+                <option value="">Audio Asli dari Video (Default)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. Pengaturan Durasi Lengkap & Loop Video -->
+        <div class="bg-dark-700/50 rounded-xl p-3.5 border border-gray-700/70 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-white uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+              <i class="ti ti-clock text-emerald-400 text-sm"></i> 4. Durasi & Loop Video (Lengkap)
+            </span>
+          </div>
+
+          <div class="grid grid-cols-3 gap-2.5 sm:gap-3 items-end">
+            <!-- Durasi Jam -->
+            <div>
+              <label class="text-[11px] text-gray-300 block mb-1 font-medium">Durasi (Jam)</label>
+              <input type="number" id="recreateSlotEditDurationHours" min="0" placeholder="0"
+                oninput="updateRecreateSlotDurationSummary()"
+                class="w-full px-2.5 py-2 bg-dark-800 border border-gray-600 rounded-lg text-white text-xs text-center font-bold focus:border-primary focus:outline-none transition-colors">
+            </div>
+
+            <!-- Durasi Menit -->
+            <div>
+              <label class="text-[11px] text-gray-300 block mb-1 font-medium">Durasi (Menit)</label>
+              <input type="number" id="recreateSlotEditDurationMinutes" min="0" max="59" placeholder="0"
+                oninput="updateRecreateSlotDurationSummary()"
+                class="w-full px-2.5 py-2 bg-dark-800 border border-gray-600 rounded-lg text-white text-xs text-center font-bold focus:border-primary focus:outline-none transition-colors">
+            </div>
+
+            <!-- Loop Video Toggle -->
+            <div class="flex flex-col justify-end">
+              <div class="flex items-center justify-between bg-dark-800 px-2.5 py-1.5 rounded-lg border border-gray-600 h-[38px]">
+                <span class="text-[11px] text-gray-300 font-medium">Loop</span>
+                <label class="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" id="recreateSlotEditLoopToggle" class="sr-only peer" checked onchange="updateRecreateSlotDurationSummary()">
+                  <div class="w-8 h-4.5 bg-dark-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-primary"></div>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Realtime Duration Summary Banner -->
+          <div id="recreateSlotDurationSummaryBanner" class="p-2.5 rounded-lg bg-blue-500/10 border border-blue-500/30 text-xs text-blue-200 flex items-center gap-2">
+            <i class="ti ti-info-circle text-blue-400 text-sm flex-shrink-0"></i>
+            <span id="recreateSlotDurationSummaryText" class="leading-relaxed">Mode Unlimited: Siaran berjalan tanpa batas (loop terus hingga dihentikan manual).</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="flex items-center justify-end gap-2.5 px-5 py-3 border-t border-gray-700/80 bg-dark-900/60 flex-shrink-0">
+        <button type="button" onclick="closeRecreateSlotEditModal()"
+          class="h-8.5 px-4 bg-dark-700 hover:bg-dark-600 text-gray-300 hover:text-white rounded-lg text-xs font-medium transition-colors">
+          Batal
+        </button>
+        <button type="button" onclick="saveRecreateSlotFullEdit()"
+          class="h-8.5 px-4 bg-primary hover:bg-primary/90 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-md shadow-primary/20">
+          <i class="ti ti-check text-xs"></i>
+          <span>Simpan Perubahan</span>
+        </button>
+      </div>
+
     </div>
   </div>
 </div>

@@ -7953,16 +7953,19 @@ function openRecreateFromTemplateModal(template) {
       window.recreateBroadcastGroups.push({
         title: b.title || template.title,
         originalTitle: b.title || template.title,
-        streamId: b.streamId || template.stream_id,
-        streamKey: b.streamKey || template.stream_key,
+        streamId: b.streamId || template.stream_id || null,
+        streamKey: b.streamKey || template.stream_key || '',
         thumbnailFolder: b.thumbnailFolder !== undefined ? b.thumbnailFolder : template.thumbnail_folder,
         pinnedThumbnail: b.pinnedThumbnail || b.thumbnailPath || template.pinned_thumbnail,
-        durationHours: b.durationHours !== undefined ? b.durationHours : tHours,
-        durationMinutes: b.durationMinutes !== undefined ? b.durationMinutes : tMins,
-        streamDurationMinutes: b.streamDurationMinutes !== undefined ? b.streamDurationMinutes : totalTemplateMins,
-        loopVideo: b.loopVideo !== undefined ? b.loopVideo : (template.loop_video !== false),
+        durationHours: b.durationHours !== undefined ? (parseInt(b.durationHours, 10) || 0) : tHours,
+        durationMinutes: b.durationMinutes !== undefined ? (parseInt(b.durationMinutes, 10) || 0) : tMins,
+        streamDurationMinutes: b.streamDurationMinutes !== undefined ? (parseInt(b.streamDurationMinutes, 10) || 0) : totalTemplateMins,
+        loopVideo: b.loopVideo !== undefined ? (b.loopVideo !== false && b.loopVideo !== 0 && b.loopVideo !== '0') : (template.loop_video !== false),
         videoId: b.videoId || template.video_id || null,
+        videoName: b.videoName || b.videoTitle || null,
         audioId: b.audioId || template.audio_id || null,
+        audioName: b.audioName || b.audioTitle || null,
+        useTitleRotation: true,
         customTitle: false,
         times: [
           {
@@ -7994,8 +7997,8 @@ function openRecreateFromTemplateModal(template) {
     window.recreateBroadcastGroups.push({
       title: template.title,
       originalTitle: template.title,
-      streamId: template.stream_id,
-      streamKey: template.stream_key,
+      streamId: template.stream_id || null,
+      streamKey: template.stream_key || '',
       thumbnailFolder: template.thumbnail_folder,
       pinnedThumbnail: template.pinned_thumbnail,
       durationHours: tHours,
@@ -8003,11 +8006,17 @@ function openRecreateFromTemplateModal(template) {
       streamDurationMinutes: totalTemplateMins,
       loopVideo: template.loop_video !== false,
       videoId: template.video_id || null,
+      videoName: template.video_title || template.video_name || null,
       audioId: template.audio_id || null,
+      audioName: template.audio_title || template.audio_name || null,
+      useTitleRotation: true,
       customTitle: false,
       times: groupTimes
     });
   }
+
+  // Preload studio media async for instant name displays and quick picking
+  preloadStudioMediaForRecreate();
 
   // Render slots list
   syncRecreateSlotsFromGroups();
@@ -8042,6 +8051,15 @@ function syncRecreateSlotsFromGroups() {
           thumbnailFolder: group.thumbnailFolder,
           pinnedThumbnail: group.pinnedThumbnail,
           customTitle: group.customTitle,
+          useTitleRotation: group.useTitleRotation,
+          durationHours: group.durationHours,
+          durationMinutes: group.durationMinutes,
+          streamDurationMinutes: group.streamDurationMinutes,
+          loopVideo: group.loopVideo,
+          videoId: group.videoId,
+          videoName: group.videoName,
+          audioId: group.audioId,
+          audioName: group.audioName,
           scheduleTime: t.scheduleTime,
           timeOnly: t.timeOnly
         });
@@ -8241,11 +8259,17 @@ function renderRecreateSlotList() {
             <span class="px-2 py-0.5 bg-primary/20 text-primary font-bold text-[11px] rounded mt-0.5 flex-shrink-0">#${groupIndex + 1}</span>
             ${titleDisplayBody}
           </div>
-          <div class="flex items-center gap-1 flex-shrink-0 mt-0.5">
+          <div class="flex items-center gap-1.5 flex-shrink-0 mt-0.5">
+            <button type="button" onclick="openRecreateGroupFullEditor(${groupIndex})"
+              class="h-7 px-2.5 bg-blue-500/15 hover:bg-blue-500/25 text-blue-400 border border-blue-500/35 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-colors flex-shrink-0 shadow-xs active:scale-95"
+              title="Edit Full Siaran #${groupIndex + 1}: Judul, Rotasi, Thumbnail, Stream Key, Media & Durasi">
+              <i class="ti ti-edit text-xs"></i>
+              <span>Edit Full</span>
+            </button>
             <button type="button" onclick="editRecreateGroupTitle(${groupIndex})"
               class="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-primary hover:bg-primary/10 rounded-lg border border-gray-600/70 hover:border-primary/50 transition-colors"
               title="Edit judul siaran #${groupIndex + 1}">
-              <i class="ti ti-edit text-xs"></i>
+              <i class="ti ti-typography text-xs"></i>
             </button>
             ${deleteGroupBtn}
           </div>
@@ -8325,10 +8349,47 @@ function renderRecreateSlotList() {
 
     globalSlotOffset += (group.times || []).length;
 
+    // Duration and configuration info for this group
+    const grpHours = parseInt(group.durationHours, 10) || 0;
+    const grpMins = parseInt(group.durationMinutes, 10) || 0;
+    const grpTotalMins = parseInt(group.streamDurationMinutes, 10) || (grpHours * 60 + grpMins);
+    let grpDurText = 'Tanpa Batas';
+    if (grpTotalMins > 0 || grpHours > 0 || grpMins > 0) {
+      grpDurText = `${grpHours > 0 ? grpHours + 'j ' : ''}${grpMins > 0 ? grpMins + 'm' : (grpHours === 0 ? '0m' : '')}`.trim();
+    }
+    const grpLoopText = (group.loopVideo !== false && group.loopVideo !== 0 && group.loopVideo !== '0') ? 'Loop' : 'No-Loop';
+    const grpRotText = (group.useTitleRotation !== false && !group.customTitle) ? 'Rotasi ON' : 'Judul Tetap';
+    const grpStreamKeyText = group.streamKey ? (group.streamKey.length > 8 ? group.streamKey.slice(0, 4) + '...' + group.streamKey.slice(-4) : group.streamKey) : (group.streamId ? 'Stream #' + group.streamId : 'Stream Auto');
+    const grpThumbText = (group.thumbnailFolder === '' || group.thumbnailFolder === '__ROOT__') ? 'Root' : (group.thumbnailFolder || 'Default');
+    const grpVideoText = group.videoName || getStudioVideoName(group.videoId) || 'Video Template';
+    const grpAudioText = group.audioName || getStudioAudioName(group.audioId) || 'Audio Asli';
+
     return `
       <div id="groupCard_${groupIndex}" class="bg-dark-700/80 rounded-xl p-2.5 sm:p-3 border border-gray-700/80 space-y-2.5 transition-colors hover:border-gray-600 shadow-sm">
         <!-- Baris 1: Header Siaran, Judul Lengkap, Edit & Hapus Siaran -->
         ${titleContentHtml}
+
+        <!-- Baris 1.5: Info Ringkasan Spesifik Siaran Ini (Durasi, Media, Key, Thumbnail, Rotasi) -->
+        <div class="flex items-center gap-1.5 flex-wrap text-[10px] sm:text-[10.5px] px-2 py-1.5 rounded-lg bg-dark-800/80 border border-gray-700/60">
+          <span class="px-1.5 py-0.5 rounded bg-dark-700 border border-gray-600/50 text-amber-300 flex items-center gap-1 font-medium" title="Durasi Siaran: ${grpDurText} (${grpLoopText})">
+            <i class="ti ti-clock text-xs text-amber-400"></i> ${grpDurText} • ${grpLoopText}
+          </span>
+          <span class="px-1.5 py-0.5 rounded bg-dark-700 border border-gray-600/50 text-blue-300 flex items-center gap-1 truncate max-w-[135px]" title="Video: ${escapeHtml(grpVideoText)}">
+            <i class="ti ti-movie text-xs text-blue-400"></i> <span class="truncate">${escapeHtml(grpVideoText)}</span>
+          </span>
+          <span class="px-1.5 py-0.5 rounded bg-dark-700 border border-gray-600/50 text-purple-300 flex items-center gap-1 truncate max-w-[125px]" title="Audio: ${escapeHtml(grpAudioText)}">
+            <i class="ti ti-music text-xs text-purple-400"></i> <span class="truncate">${escapeHtml(grpAudioText)}</span>
+          </span>
+          <span class="px-1.5 py-0.5 rounded bg-dark-700 border border-gray-600/50 text-emerald-300 flex items-center gap-1 font-mono text-[10px]" title="Stream Key: ${escapeHtml(group.streamKey || 'Auto')}">
+            <i class="ti ti-key text-xs text-emerald-400"></i> ${escapeHtml(grpStreamKeyText)}
+          </span>
+          <span class="px-1.5 py-0.5 rounded bg-dark-700 border border-gray-600/50 text-cyan-300 flex items-center gap-1 truncate max-w-[110px]" title="Folder Thumbnail: ${escapeHtml(grpThumbText)}">
+            <i class="ti ti-folder text-xs text-cyan-400"></i> <span class="truncate">${escapeHtml(grpThumbText)}</span>
+          </span>
+          <span class="px-1.5 py-0.5 rounded bg-dark-700 border border-gray-600/50 ${group.useTitleRotation !== false && !group.customTitle ? 'text-primary' : 'text-gray-300'} flex items-center gap-1" title="Status Rotasi Judul">
+            <i class="ti ti-rotate-clockwise text-xs"></i> ${grpRotText}
+          </span>
+        </div>
 
         <!-- Baris 2: Sub-kontainer Jam Tayang Khusus Siaran Ini -->
         <div class="bg-dark-800/60 rounded-lg p-2 sm:p-2.5 border border-gray-700/50 space-y-2">
@@ -8526,6 +8587,474 @@ function cancelEditRecreateGroupTitle(groupIndex) {
   }
 }
 window.cancelEditRecreateGroupTitle = cancelEditRecreateGroupTitle;
+
+// ==========================================
+// Recreate Modal: Per-Broadcast Full Slot Editor
+// ==========================================
+let recreateCachedThumbnailFolders = null;
+let recreateCachedStreams = null;
+
+async function preloadStudioMediaForRecreate() {
+  try {
+    if (!window.allStudioVideos) {
+      const resV = await fetch('/api/stream/content');
+      window.allStudioVideos = await resV.json();
+    }
+    if (!window.allStudioAudios) {
+      const resA = await fetch('/api/stream/audios');
+      window.allStudioAudios = await resA.json();
+    }
+    // Re-render to resolve video and audio names if list is already open
+    if (window.recreateBroadcastGroups && window.recreateBroadcastGroups.length > 0) {
+      renderRecreateSlotList();
+    }
+  } catch (e) {
+    console.warn('[recreate] Preloading media warning:', e);
+  }
+}
+window.preloadStudioMediaForRecreate = preloadStudioMediaForRecreate;
+
+function getStudioVideoName(videoId) {
+  if (!videoId) return null;
+  if (Array.isArray(window.allStudioVideos)) {
+    const v = window.allStudioVideos.find(x => String(x.id) === String(videoId));
+    if (v) return (v.folder_name ? `[${v.folder_name}] ` : '') + (v.name || v.title);
+  }
+  return `Video #${videoId}`;
+}
+window.getStudioVideoName = getStudioVideoName;
+
+function getStudioAudioName(audioId) {
+  if (!audioId) return null;
+  if (Array.isArray(window.allStudioAudios)) {
+    const a = window.allStudioAudios.find(x => String(x.id) === String(audioId));
+    if (a) return (a.folder_name ? `[${a.folder_name}] ` : '') + (a.title || a.name);
+  }
+  return `Audio #${audioId}`;
+}
+window.getStudioAudioName = getStudioAudioName;
+
+async function openRecreateGroupFullEditor(groupIndex) {
+  if (!window.recreateBroadcastGroups || !window.recreateBroadcastGroups[groupIndex]) return;
+  const group = window.recreateBroadcastGroups[groupIndex];
+  const template = window.currentRecreateTemplate || {};
+
+  const modal = document.getElementById('recreateSlotEditModal');
+  if (!modal) return;
+
+  const idxInput = document.getElementById('recreateSlotEditGroupIndex');
+  if (idxInput) idxInput.value = groupIndex;
+  
+  const headerTitle = document.getElementById('recreateSlotEditHeaderTitle');
+  if (headerTitle) {
+    headerTitle.textContent = `Edit Full Siaran #${groupIndex + 1}`;
+  }
+
+  // 1. Judul & Title Rotation
+  const titleInput = document.getElementById('recreateSlotEditTitleInput');
+  if (titleInput) {
+    titleInput.value = group.title || group.originalTitle || template.title || '';
+  }
+
+  const rotToggle = document.getElementById('recreateSlotEditRotationToggle');
+  if (rotToggle) {
+    const isRot = (group.useTitleRotation !== false && !group.customTitle);
+    rotToggle.checked = isRot;
+  }
+
+  // 2. Durasi Jam & Menit & Loop
+  const durHInput = document.getElementById('recreateSlotEditDurationHours');
+  const durMInput = document.getElementById('recreateSlotEditDurationMinutes');
+  const loopToggle = document.getElementById('recreateSlotEditLoopToggle');
+
+  const h = group.durationHours !== undefined ? parseInt(group.durationHours, 10) : (parseInt(template.duration_hours, 10) || 0);
+  const m = group.durationMinutes !== undefined ? parseInt(group.durationMinutes, 10) : (parseInt(template.duration_minutes, 10) || 0);
+  const isLoop = group.loopVideo !== undefined ? (group.loopVideo !== false && group.loopVideo !== 0 && group.loopVideo !== '0') : (template.loop_video !== false);
+
+  if (durHInput) durHInput.value = isNaN(h) ? 0 : h;
+  if (durMInput) durMInput.value = isNaN(m) ? 0 : m;
+  if (loopToggle) loopToggle.checked = isLoop;
+  updateRecreateSlotDurationSummary();
+
+  // 3. Custom Stream Key Input
+  const customKeyInput = document.getElementById('recreateSlotEditCustomStreamKey');
+  if (customKeyInput) {
+    customKeyInput.value = group.streamKey || template.stream_key || '';
+  }
+
+  // Show modal immediately
+  modal.classList.remove('hidden');
+  modal.style.display = 'block';
+
+  // Load dropdown options async
+  loadRecreateSlotThumbnailFolders(group.thumbnailFolder !== undefined ? group.thumbnailFolder : template.thumbnail_folder);
+  loadRecreateSlotStreams(template.account_id, group.streamId || template.stream_id, group.streamKey || template.stream_key);
+  loadRecreateSlotVideos(group.videoId || template.video_id);
+  loadRecreateSlotAudios(group.audioId || template.audio_id);
+}
+window.openRecreateGroupFullEditor = openRecreateGroupFullEditor;
+
+function closeRecreateSlotEditModal() {
+  const modal = document.getElementById('recreateSlotEditModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+  }
+}
+window.closeRecreateSlotEditModal = closeRecreateSlotEditModal;
+
+function updateRecreateSlotDurationSummary() {
+  const hInput = document.getElementById('recreateSlotEditDurationHours');
+  const mInput = document.getElementById('recreateSlotEditDurationMinutes');
+  const loopToggle = document.getElementById('recreateSlotEditLoopToggle');
+  const summaryEl = document.getElementById('recreateSlotDurationSummaryText');
+  if (!summaryEl) return;
+
+  const h = parseInt(hInput?.value, 10) || 0;
+  const m = parseInt(mInput?.value, 10) || 0;
+  const isLoop = loopToggle ? loopToggle.checked : true;
+  const total = (h * 60) + m;
+
+  if (total === 0) {
+    summaryEl.textContent = 'Mode Unlimited: Siaran berjalan tanpa batas (loop terus hingga dihentikan manual).';
+  } else {
+    const durParts = [];
+    if (h > 0) durParts.push(`${h} Jam`);
+    if (m > 0) durParts.push(`${m} Menit`);
+    summaryEl.textContent = `Durasi Siaran: ${durParts.join(' ')} (Total ${total} Menit) • Loop Video: ${isLoop ? 'Aktif' : 'Mati'}`;
+  }
+}
+window.updateRecreateSlotDurationSummary = updateRecreateSlotDurationSummary;
+
+function toggleRecreateSlotRotation(checked) {
+  // Real-time rotation toggle indicator
+}
+window.toggleRecreateSlotRotation = toggleRecreateSlotRotation;
+
+function handleRecreateSlotStreamKeySelect(val) {
+  const select = document.getElementById('recreateSlotEditStreamKeySelect');
+  const customKeyInput = document.getElementById('recreateSlotEditCustomStreamKey');
+  if (!select || !customKeyInput) return;
+
+  if (val === '__MANUAL__') {
+    customKeyInput.focus();
+    return;
+  }
+  if (!val) {
+    customKeyInput.value = '';
+    return;
+  }
+
+  const selectedOpt = select.options[select.selectedIndex];
+  if (selectedOpt && selectedOpt.dataset.streamKey) {
+    customKeyInput.value = selectedOpt.dataset.streamKey;
+  }
+}
+window.handleRecreateSlotStreamKeySelect = handleRecreateSlotStreamKeySelect;
+
+async function loadRecreateSlotThumbnailFolders(selectedFolder) {
+  const select = document.getElementById('recreateSlotEditThumbnailFolderSelect');
+  if (!select) return;
+
+  try {
+    if (!recreateCachedThumbnailFolders) {
+      const res = await fetch('/api/thumbnail-folders', {
+        headers: { 'X-CSRF-Token': getCsrfToken() }
+      });
+      const data = await res.json();
+      if (data.success && Array.isArray(data.folders)) {
+        recreateCachedThumbnailFolders = data.folders;
+      } else {
+        recreateCachedThumbnailFolders = [];
+      }
+    }
+
+    select.innerHTML = `
+      <option value="__KEEP__">-- Gunakan Default Template --</option>
+      <option value="__ROOT__">📁 Root (Folder Utama)</option>
+    `;
+
+    recreateCachedThumbnailFolders.forEach(f => {
+      const opt = document.createElement('option');
+      opt.value = f.name;
+      opt.textContent = `📂 ${f.name} (${f.count || 0} thumbnails)`;
+      select.appendChild(opt);
+    });
+
+    if (selectedFolder === '' || selectedFolder === '__ROOT__') {
+      select.value = '__ROOT__';
+    } else if (selectedFolder && selectedFolder !== '__KEEP__') {
+      select.value = selectedFolder;
+    } else {
+      select.value = '__KEEP__';
+    }
+  } catch (err) {
+    console.error('Error loading thumbnail folders for recreate slot:', err);
+  }
+}
+
+async function loadRecreateSlotStreams(accountId, selectedStreamId, currentStreamKey) {
+  const select = document.getElementById('recreateSlotEditStreamKeySelect');
+  if (!select) return;
+
+  try {
+    select.innerHTML = `
+      <option value="">🔑 Buat Stream Key Baru Otomatis</option>
+      <option value="__MANUAL__">✏️ Ketik Stream Key Manual...</option>
+    `;
+
+    if (!accountId) return;
+
+    let streams = recreateCachedStreams;
+    if (!streams) {
+      const res = await fetch(`/api/youtube/streams?accountId=${accountId}`, {
+        headers: { 'X-CSRF-Token': getCsrfToken() }
+      });
+      const data = await res.json();
+      if (data.success && Array.isArray(data.streams)) {
+        streams = data.streams;
+        recreateCachedStreams = streams;
+      }
+    }
+
+    if (Array.isArray(streams) && streams.length > 0) {
+      const optGroup = document.createElement('optgroup');
+      optGroup.label = 'Stream Keys Akun YouTube';
+      streams.forEach((s, idx) => {
+        const opt = document.createElement('option');
+        opt.value = s.id;
+        const keyVal = s.streamKey || s.cdn?.ingestionInfo?.streamName || '';
+        opt.dataset.streamKey = keyVal;
+        opt.textContent = `${idx + 1}. ${s.title || 'Stream'} (${s.resolution || 'Auto'} @ ${s.frameRate || ''})`;
+        optGroup.appendChild(opt);
+      });
+      select.appendChild(optGroup);
+    }
+
+    if (selectedStreamId) {
+      select.value = selectedStreamId;
+    } else if (currentStreamKey) {
+      let matched = false;
+      for (let i = 0; i < select.options.length; i++) {
+        if (select.options[i].dataset?.streamKey === currentStreamKey) {
+          select.selectedIndex = i;
+          matched = true;
+          break;
+        }
+      }
+      if (!matched && currentStreamKey) {
+        select.value = '__MANUAL__';
+      }
+    }
+  } catch (err) {
+    console.error('Error loading streams for recreate slot:', err);
+  }
+}
+
+async function loadRecreateSlotVideos(selectedVideoId) {
+  const select = document.getElementById('recreateSlotEditVideoSelect');
+  if (!select) return;
+
+  try {
+    if (!window.allStudioVideos) {
+      const res = await fetch('/api/stream/content');
+      const content = await res.json();
+      window.allStudioVideos = content;
+    }
+
+    select.innerHTML = '<option value="">-- Tetap Gunakan Video Template --</option>';
+
+    if (Array.isArray(window.allStudioVideos) && window.allStudioVideos.length > 0) {
+      const playlists = [];
+      const foldersMap = {};
+      const rootVideos = [];
+
+      window.allStudioVideos.forEach(v => {
+        if (v.type === 'playlist') playlists.push(v);
+        else if (v.folder_name && v.folder_name.trim()) {
+          const f = v.folder_name.trim();
+          if (!foldersMap[f]) foldersMap[f] = [];
+          foldersMap[f].push(v);
+        } else {
+          rootVideos.push(v);
+        }
+      });
+
+      if (playlists.length > 0) {
+        const plGroup = document.createElement('optgroup');
+        plGroup.label = 'Playlists';
+        playlists.forEach(pl => {
+          const opt = document.createElement('option');
+          opt.value = pl.id;
+          opt.textContent = `📋 [Playlist] ${pl.name} (${pl.duration || ''})`;
+          plGroup.appendChild(opt);
+        });
+        select.appendChild(plGroup);
+      }
+
+      Object.keys(foldersMap).sort().forEach(folder => {
+        const grp = document.createElement('optgroup');
+        grp.label = `📁 Folder: ${folder}`;
+        foldersMap[folder].forEach(v => {
+          const opt = document.createElement('option');
+          opt.value = v.id;
+          opt.textContent = `🎬 ${v.name || v.title} (${v.resolution || ''} • ${v.duration || ''})`;
+          grp.appendChild(opt);
+        });
+        select.appendChild(grp);
+      });
+
+      if (rootVideos.length > 0) {
+        const rGrp = document.createElement('optgroup');
+        rGrp.label = 'Root Videos';
+        rootVideos.forEach(v => {
+          const opt = document.createElement('option');
+          opt.value = v.id;
+          opt.textContent = `🎬 ${v.name || v.title} (${v.resolution || ''} • ${v.duration || ''})`;
+          rGrp.appendChild(opt);
+        });
+        select.appendChild(rGrp);
+      }
+    }
+
+    if (selectedVideoId) {
+      select.value = String(selectedVideoId);
+    }
+  } catch (err) {
+    console.error('Error loading videos for recreate slot:', err);
+  }
+}
+
+async function loadRecreateSlotAudios(selectedAudioId) {
+  const select = document.getElementById('recreateSlotEditAudioSelect');
+  if (!select) return;
+
+  try {
+    if (!window.allStudioAudios) {
+      const res = await fetch('/api/stream/audios');
+      const audios = await res.json();
+      window.allStudioAudios = audios;
+    }
+
+    select.innerHTML = '<option value="">Audio Asli dari Video (Default)</option>';
+
+    if (Array.isArray(window.allStudioAudios) && window.allStudioAudios.length > 0) {
+      const audioGrp = document.createElement('optgroup');
+      audioGrp.label = 'Audio Pengganti';
+      window.allStudioAudios.forEach(a => {
+        const opt = document.createElement('option');
+        opt.value = a.id;
+        const fPrefix = a.folder_name ? `[${a.folder_name}] ` : '';
+        opt.textContent = `🎵 ${fPrefix}${a.title || a.name}`;
+        audioGrp.appendChild(opt);
+      });
+      select.appendChild(audioGrp);
+    }
+
+    if (selectedAudioId) {
+      select.value = String(selectedAudioId);
+    }
+  } catch (err) {
+    console.error('Error loading audios for recreate slot:', err);
+  }
+}
+
+function saveRecreateSlotFullEdit() {
+  const idxStr = document.getElementById('recreateSlotEditGroupIndex')?.value;
+  const groupIndex = parseInt(idxStr, 10);
+  if (isNaN(groupIndex) || !window.recreateBroadcastGroups || !window.recreateBroadcastGroups[groupIndex]) {
+    showToast('Slot siaran tidak valid', 'error');
+    return;
+  }
+
+  const group = window.recreateBroadcastGroups[groupIndex];
+
+  // 1. Judul & Title Rotation
+  const titleInput = document.getElementById('recreateSlotEditTitleInput');
+  const rotToggle = document.getElementById('recreateSlotEditRotationToggle');
+  const newTitle = titleInput ? titleInput.value.trim() : '';
+  const useRotation = rotToggle ? rotToggle.checked : true;
+
+  group.title = newTitle || group.originalTitle;
+  group.useTitleRotation = useRotation;
+  group.customTitle = (!useRotation && newTitle !== '' && newTitle !== group.originalTitle);
+
+  // 2. Thumbnail Folder
+  const thumbSelect = document.getElementById('recreateSlotEditThumbnailFolderSelect');
+  if (thumbSelect) {
+    const tVal = thumbSelect.value;
+    if (tVal === '__KEEP__') {
+      // Keep template default
+    } else if (tVal === '__ROOT__') {
+      group.thumbnailFolder = '';
+    } else {
+      group.thumbnailFolder = tVal;
+    }
+  }
+
+  // 3. Stream Key
+  const streamSelect = document.getElementById('recreateSlotEditStreamKeySelect');
+  const customKeyInput = document.getElementById('recreateSlotEditCustomStreamKey');
+  const streamVal = streamSelect ? streamSelect.value : '';
+  const customKey = customKeyInput ? customKeyInput.value.trim() : '';
+
+  if (streamVal === '__MANUAL__') {
+    group.streamId = null;
+    group.streamKey = customKey;
+  } else if (streamVal) {
+    group.streamId = streamVal;
+    const selectedOpt = streamSelect.options[streamSelect.selectedIndex];
+    group.streamKey = customKey || selectedOpt?.dataset?.streamKey || '';
+  } else {
+    group.streamId = null;
+    group.streamKey = customKey;
+  }
+
+  // 4. Media Video & Audio
+  const videoSelect = document.getElementById('recreateSlotEditVideoSelect');
+  if (videoSelect) {
+    const vVal = videoSelect.value;
+    if (vVal) {
+      group.videoId = vVal;
+      const vOpt = videoSelect.options[videoSelect.selectedIndex];
+      group.videoName = vOpt ? vOpt.text.replace(/^[🎬📋\s]+/, '') : `Video #${vVal}`;
+    }
+  }
+
+  const audioSelect = document.getElementById('recreateSlotEditAudioSelect');
+  if (audioSelect) {
+    const aVal = audioSelect.value;
+    group.audioId = aVal || null;
+    if (aVal) {
+      const aOpt = audioSelect.options[audioSelect.selectedIndex];
+      group.audioName = aOpt ? aOpt.text.replace(/^[🎵\s]+/, '') : `Audio #${aVal}`;
+    } else {
+      group.audioName = null;
+    }
+  }
+
+  // 5. Durasi Lengkap & Loop Video
+  const durHInput = document.getElementById('recreateSlotEditDurationHours');
+  const durMInput = document.getElementById('recreateSlotEditDurationMinutes');
+  const loopToggle = document.getElementById('recreateSlotEditLoopToggle');
+
+  const h = parseInt(durHInput?.value, 10) || 0;
+  const m = parseInt(durMInput?.value, 10) || 0;
+  const isLoop = loopToggle ? loopToggle.checked : true;
+
+  group.durationHours = h;
+  group.durationMinutes = m;
+  group.streamDurationMinutes = (h * 60) + m;
+  group.loopVideo = isLoop;
+
+  // Tutup modal, sinkronkan slot, dan refresh render tampilan card
+  closeRecreateSlotEditModal();
+  syncRecreateSlotsFromGroups();
+  renderRecreateSlotList();
+
+  showToast(`Pengaturan Siaran #${groupIndex + 1} berhasil disimpan!`);
+}
+window.saveRecreateSlotFullEdit = saveRecreateSlotFullEdit;
 
 // Compatibility aliases
 function updateRecreateSlotTime(index, value, isTimeOnly = false) {
@@ -8916,8 +9445,9 @@ if (recreateFromTemplateForm) {
               title: grp.title || template.title,
               originalTitle: grp.originalTitle || template.title,
               customTitle: grp.customTitle,
-              streamId: grp.streamId || template.stream_id,
-              streamKey: grp.streamKey || template.stream_key,
+              useTitleRotation: grp.useTitleRotation,
+              streamId: grp.streamId !== undefined ? grp.streamId : template.stream_id,
+              streamKey: grp.streamKey !== undefined ? grp.streamKey : (template.stream_key || ''),
               thumbnailFolder: grp.thumbnailFolder !== undefined ? grp.thumbnailFolder : template.thumbnail_folder,
               pinnedThumbnail: grp.pinnedThumbnail || template.pinned_thumbnail,
               durationHours: grp.durationHours,
@@ -8973,9 +9503,9 @@ if (recreateFromTemplateForm) {
         const slot = slots[i];
         const schedule = schedules[i];
         
-        // Determine title - use rotated title if enabled (unless manually edited)
+        // Determine title - use rotated title if enabled (unless manually edited or rotation disabled for this slot)
         let finalTitle = slot.title || template.title;
-        if (!slot.customTitle && useTitleRotation && window.recreateNextTitles[i]) {
+        if (!slot.customTitle && slot.useTitleRotation !== false && useTitleRotation && window.recreateNextTitles[i]) {
           finalTitle = window.recreateNextTitles[i].title;
           usedTitleIds.push(window.recreateNextTitles[i].id);
           console.log(`[recreate] Slot ${i + 1} using rotated title: "${finalTitle}"`);
@@ -9021,7 +9551,7 @@ if (recreateFromTemplateForm) {
           formData.append('loopVideo', isLoop ? 'true' : 'false');
 
           // Pass streamKey directly so it is accurately preserved
-          const inheritedStreamKey = slot.streamKey || template.stream_key || '';
+          const inheritedStreamKey = slot.streamKey !== undefined ? slot.streamKey : (template.stream_key || '');
           if (inheritedStreamKey) {
             formData.append('streamKey', inheritedStreamKey);
           }
@@ -9053,7 +9583,7 @@ if (recreateFromTemplateForm) {
           }
           
           // Stream ID reuse
-          const streamId = slot.streamId || template.stream_id;
+          const streamId = slot.streamId !== undefined ? slot.streamId : template.stream_id;
           if (streamId) {
             if (reusableStreamIds && reusableStreamIds.has(streamId)) {
               formData.append('streamId', streamId);
@@ -9067,16 +9597,16 @@ if (recreateFromTemplateForm) {
           }
           
           // Determine thumbnail folder - priority:
-          // 1. Stream key folder mapping
-          // 2. Slot-specific thumbnailFolder
+          // 1. Slot-specific thumbnailFolder (jika diubah di Edit Full)
+          // 2. Stream key folder mapping
           // 3. Template thumbnail_folder
           // 4. Default to root folder ('') for rotation
           let thumbnailFolder = '';
           
-          if (streamId && template.stream_key_folder_mapping && template.stream_key_folder_mapping[streamId] !== undefined) {
+          if (slot.thumbnailFolder !== null && slot.thumbnailFolder !== undefined && slot.thumbnailFolder !== '__KEEP__') {
+            thumbnailFolder = (slot.thumbnailFolder === '__ROOT__' ? '' : slot.thumbnailFolder);
+          } else if (streamId && template.stream_key_folder_mapping && template.stream_key_folder_mapping[streamId] !== undefined) {
             thumbnailFolder = template.stream_key_folder_mapping[streamId];
-          } else if (slot.thumbnailFolder !== null && slot.thumbnailFolder !== undefined) {
-            thumbnailFolder = slot.thumbnailFolder;
           } else if (template.thumbnail_folder !== null && template.thumbnail_folder !== undefined) {
             thumbnailFolder = template.thumbnail_folder;
           }
