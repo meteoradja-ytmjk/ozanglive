@@ -2588,24 +2588,21 @@
       </div>
       
       <form id="recreateFromTemplateForm" class="p-4 space-y-3">
-        <!-- 1. Saved Template Info Bar (Flex Layout) -->
-        <div class="bg-dark-700/80 rounded-lg px-3 py-2 border border-gray-700/80 flex items-center gap-2">
-          <div class="flex items-center gap-2 min-w-0 text-xs overflow-hidden flex-1">
-            <span class="flex items-center gap-1 text-red-400 font-semibold truncate flex-shrink-0">
-              <i class="ti ti-brand-youtube text-red-500"></i>
-              <span id="recreateTemplateAccountName" class="truncate max-w-[130px] sm:max-w-[160px]">-</span>
-            </span>
-            <span class="text-gray-600 flex-shrink-0">•</span>
-            <span id="recreateTemplateName" class="font-medium text-white truncate max-w-[110px] sm:max-w-[140px]" title="Nama Template">-</span>
-            <span class="text-gray-600 flex-shrink-0 hidden sm:inline">•</span>
-            <span id="recreateTemplateThumbnailInfo" class="text-emerald-400 text-[11px] truncate flex-shrink-0 hidden sm:inline">Thumbnail Tersimpan</span>
-            <span class="text-gray-600 flex-shrink-0 hidden md:inline">•</span>
-            <span id="recreateTemplateDurationInfo" class="text-amber-400 text-[11px] font-medium truncate flex-shrink-0">
-              <i class="ti ti-clock text-xs"></i> <span id="recreateTemplateDurationBadgeText">Durasi: -</span>
-            </span>
-            <span class="text-gray-600 flex-shrink-0 hidden md:inline">•</span>
-            <span class="text-gray-400 truncate flex-1 min-w-0 hidden md:inline" title="Judul">
-              <span id="recreateTemplateTitle">-</span>
+        <!-- 1. Channel Info Bar (Clean & Professional) -->
+        <div class="bg-dark-700/70 rounded-xl px-3.5 py-2.5 border border-gray-700/80 flex items-center justify-between gap-3 shadow-xs">
+          <div class="flex items-center gap-3 min-w-0 flex-1">
+            <div class="w-8 h-8 rounded-lg bg-red-500/10 border border-red-500/25 flex items-center justify-center text-red-500 flex-shrink-0 shadow-xs">
+              <i class="ti ti-brand-youtube text-lg"></i>
+            </div>
+            <div class="min-w-0 flex-1">
+              <span class="text-[10px] text-gray-400 font-semibold uppercase tracking-wider block leading-tight">Channel YouTube</span>
+              <span id="recreateTemplateAccountName" class="text-sm font-bold text-white truncate block leading-snug" title="Target Channel YouTube">-</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-1.5 flex-shrink-0">
+            <span class="px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium rounded-lg flex items-center gap-1.5 shadow-xs">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span>Channel Terhubung</span>
             </span>
           </div>
         </div>
