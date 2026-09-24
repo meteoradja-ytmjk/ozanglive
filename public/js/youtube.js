@@ -8209,7 +8209,7 @@ function renderRecreateSlotList() {
     const currentTitle = group.title || originalTitle;
 
     // Check title rotation preview for this group's first slot
-    const isRotated = Boolean(window.recreateUseTitleRotation && Array.isArray(window.recreateNextTitles) && window.recreateNextTitles[globalSlotOffset] && window.recreateNextTitles[globalSlotOffset].title);
+    const isRotated = Boolean(group.useTitleRotation !== false && !group.customTitle && Array.isArray(window.recreateNextTitles) && window.recreateNextTitles[globalSlotOffset] && window.recreateNextTitles[globalSlotOffset].title);
     const rotatedTitle = isRotated ? window.recreateNextTitles[globalSlotOffset].title : null;
 
     let titleContentHtml = '';
@@ -9289,13 +9289,13 @@ async function loadRecreateTitleRotationPreview() {
 
     // Check if user has title rotation enabled globally
     if (userSettings.enabled) {
+      window.recreateUseTitleRotation = true;
       const checkbox = document.getElementById('recreateUseTitleRotation');
       if (checkbox && !checkbox.checked) {
         checkbox.checked = true;
-        window.recreateUseTitleRotation = true;
-        const preview = document.getElementById('recreateTitleRotationPreview');
-        if (preview) preview.classList.remove('hidden');
       }
+      const preview = document.getElementById('recreateTitleRotationPreview');
+      if (preview) preview.classList.remove('hidden');
     }
 
     // Channel & Template Isolation: prioritize template title_folder_id and title_index!
@@ -9471,11 +9471,11 @@ if (recreateFromTemplateForm) {
       const slots = broadcastsToCreate;
       const schedules = broadcastsToCreate.map(b => b.scheduleTime);
 
-      const useTitleRotation = window.recreateUseTitleRotation && window.recreateNextTitles && window.recreateNextTitles.length > 0;
+      const hasRotatedTitles = Boolean(window.recreateNextTitles && window.recreateNextTitles.length > 0);
       
       console.log('[recreate] Template stream_key_folder_mapping:', template.stream_key_folder_mapping);
       console.log('[recreate] Slots count:', slots.length, 'Schedules count:', schedules.length);
-      console.log('[recreate] Use title rotation:', useTitleRotation);
+      console.log('[recreate] Has rotated titles available:', hasRotatedTitles);
       
       if (schedules.length === 0 || schedules.length !== slots.length) {
         showToast('Mohon tentukan waktu siaran untuk semua slot jadwal', 'error');
@@ -9505,7 +9505,7 @@ if (recreateFromTemplateForm) {
         
         // Determine title - use rotated title if enabled (unless manually edited or rotation disabled for this slot)
         let finalTitle = slot.title || template.title;
-        if (!slot.customTitle && slot.useTitleRotation !== false && useTitleRotation && window.recreateNextTitles[i]) {
+        if (!slot.customTitle && slot.useTitleRotation !== false && hasRotatedTitles && window.recreateNextTitles[i]) {
           finalTitle = window.recreateNextTitles[i].title;
           usedTitleIds.push(window.recreateNextTitles[i].id);
           console.log(`[recreate] Slot ${i + 1} using rotated title: "${finalTitle}"`);
