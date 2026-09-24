@@ -425,12 +425,12 @@ function shouldTriggerDaily(stream, currentTime = new Date()) {
 
   const timeDiff = currentTotalMinutes - scheduleMinutes;
   
-  // Trigger window: 0 to 1 minute after the scheduled time.
-  // 30s polling means we will catch the minute boundary reliably without firing early.
-  const shouldTrigger = timeDiff >= 0 && timeDiff <= 1;
+  // Trigger window: 0 to 3 minutes after the scheduled time.
+  // TRIGGER_COOLDOWN_MS (5 min) prevents duplicate executions.
+  const shouldTrigger = timeDiff >= 0 && timeDiff <= 3;
   
   if (shouldTrigger) {
-    console.log(`[Scheduler] Daily trigger window matched: ${schedHours}:${String(schedMinutes).padStart(2,'0')} WIB`);
+    console.log(`[Scheduler] Daily trigger window matched: ${schedHours}:${String(schedMinutes).padStart(2,'0')} WIB (diff: ${timeDiff}m)`);
   }
   
   return shouldTrigger;
@@ -455,19 +455,41 @@ function shouldTriggerWeekly(stream, currentTime = new Date()) {
 
   const wibTime = getWIBTime(currentTime);
 
-  // Check if current day (in WIB) is in schedule
-  if (!scheduleDays.includes(wibTime.day)) return false;
+  const dayNameToNum = {
+    'sunday': 0, 'sun': 0, 'minggu': 0,
+    'monday': 1, 'mon': 1, 'senin': 1,
+    'tuesday': 2, 'tue': 2, 'selasa': 2,
+    'wednesday': 3, 'wed': 3, 'rabu': 3,
+    'thursday': 4, 'thu': 4, 'kamis': 4,
+    'friday': 5, 'fri': 5, 'jumat': 5,
+    'saturday': 6, 'sat': 6, 'sabtu': 6
+  };
+
+  // Check if current day (in WIB) is in schedule, normalizing string names and numbers
+  const isTodayScheduled = scheduleDays.some(d => {
+    if (typeof d === 'number') return d === wibTime.day;
+    if (typeof d === 'string') {
+      const lower = d.trim().toLowerCase();
+      if (dayNameToNum[lower] !== undefined) return dayNameToNum[lower] === wibTime.day;
+      const parsed = parseInt(d, 10);
+      if (!isNaN(parsed)) return parsed === wibTime.day;
+    }
+    return false;
+  });
+
+  if (!isTodayScheduled) return false;
 
   const [schedHours, schedMinutes] = stream.recurring_time.split(':').map(Number);
   const scheduleMinutes = schedHours * 60 + schedMinutes;
   const currentTotalMinutes = wibTime.hours * 60 + wibTime.minutes;
   const timeDiff = currentTotalMinutes - scheduleMinutes;
 
-  const shouldTrigger = timeDiff >= 0 && timeDiff <= 1;
+  // Trigger window: 0 to 3 minutes after the scheduled time
+  const shouldTrigger = timeDiff >= 0 && timeDiff <= 3;
   
   if (shouldTrigger) {
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    console.log(`[Scheduler] Weekly trigger window matched: ${schedHours}:${String(schedMinutes).padStart(2,'0')} WIB (${dayNames[wibTime.day]})`);
+    console.log(`[Scheduler] Weekly trigger window matched: ${schedHours}:${String(schedMinutes).padStart(2,'0')} WIB (${dayNames[wibTime.day]}, diff: ${timeDiff}m)`);
   }
   
   return shouldTrigger;

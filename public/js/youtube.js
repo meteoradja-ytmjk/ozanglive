@@ -565,8 +565,14 @@ function createBroadcastRowHtml(broadcast, index) {
       duration: durationMinutes,
       loopVideo: broadcast.loopVideo !== false && broadcast.loop_video !== false,
       videoId: broadcast.videoId || null,
+      videoTitle: broadcast.videoTitle || null,
       audioId: broadcast.audioId || null,
-      scheduleType: broadcast.scheduleType || 'once'
+      audioTitle: broadcast.audioTitle || null,
+      scheduleType: broadcast.scheduleType || 'once',
+      recurringTime: broadcast.recurringTime || null,
+      scheduleDays: broadcast.scheduleDays || null,
+      recurringEnabled: broadcast.recurringEnabled || false,
+      scheduledStartTime: broadcast.scheduledStartTime || null
     }).replace(/"/g, '&quot;');
     
     const privacyClass = 
@@ -631,10 +637,14 @@ function createBroadcastRowHtml(broadcast, index) {
               <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8v-2a2 2 0 0 0 -2 -2h-8a2 2 0 0 0 -2 2v8a2 2 0 0 0 2 2h2" /></svg>
             </button>
           </div>
-          <div class="w-36 flex items-center justify-center gap-2">
+          <div class="w-44 flex items-center justify-center gap-1.5">
             <button type="button" data-action="edit" onclick="editBroadcast('${broadcast.id}', ${broadcast.accountId || 'null'}, this)"
               class="w-8.5 h-8.5 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 active:bg-blue-500/40 text-blue-400 border border-blue-500/30 flex items-center justify-center transition-all duration-150 hover:scale-105 active:scale-90 touch-manipulation cursor-pointer shadow-sm select-none" title="Edit">
               <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" /><path d="M13.5 6.5l4 4" /></svg>
+            </button>
+            <button type="button" data-action="template" onclick="openSaveAsTemplateModal('${broadcast.id}', ${broadcast.accountId || 'null'}, '${safeTitleJs}', '${broadcast.privacyStatus || 'unlisted'}')"
+              class="w-8.5 h-8.5 rounded-lg bg-yellow-500/15 hover:bg-yellow-500/25 active:bg-yellow-500/40 text-yellow-400 border border-yellow-500/30 flex items-center justify-center transition-all duration-150 hover:scale-105 active:scale-90 touch-manipulation cursor-pointer shadow-sm select-none" title="Save as Template">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h6a2 2 0 0 1 2 2v14l-5 -3l-5 3v-14a2 2 0 0 1 2 -2" /></svg>
             </button>
             <button type="button" data-action="duplicate" onclick="openDuplicateBroadcastModal('${broadcast.id}', ${broadcast.accountId || 'null'}, this)"
               class="w-8.5 h-8.5 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 active:bg-purple-500/40 text-purple-400 border border-purple-500/30 flex items-center justify-center transition-all duration-150 hover:scale-105 active:scale-90 touch-manipulation cursor-pointer shadow-sm select-none" title="Duplikat Siaran">
@@ -696,6 +706,10 @@ function createBroadcastRowHtml(broadcast, index) {
             <button type="button" data-action="edit" onclick="editBroadcast('${broadcast.id}', ${broadcast.accountId || 'null'}, this)"
               class="w-7 h-7 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 active:bg-blue-500/40 text-blue-400 border border-blue-500/30 flex items-center justify-center transition-all duration-150 active:scale-90 touch-manipulation cursor-pointer shadow-sm select-none" title="Edit">
               <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" /><path d="M13.5 6.5l4 4" /></svg>
+            </button>
+            <button type="button" data-action="template" onclick="openSaveAsTemplateModal('${broadcast.id}', ${broadcast.accountId || 'null'}, '${safeTitleJs}', '${broadcast.privacyStatus || 'unlisted'}')"
+              class="w-7 h-7 rounded-lg bg-yellow-500/15 hover:bg-yellow-500/25 active:bg-yellow-500/40 text-yellow-400 border border-yellow-500/30 flex items-center justify-center transition-all duration-150 active:scale-90 touch-manipulation cursor-pointer shadow-sm select-none" title="Save as Template">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h6a2 2 0 0 1 2 2v14l-5 -3l-5 3v-14a2 2 0 0 1 2 -2" /></svg>
             </button>
             <button type="button" data-action="duplicate" onclick="openDuplicateBroadcastModal('${broadcast.id}', ${broadcast.accountId || 'null'}, this)"
               class="w-7 h-7 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 active:bg-purple-500/40 text-purple-400 border border-purple-500/30 flex items-center justify-center transition-all duration-150 active:scale-90 touch-manipulation cursor-pointer shadow-sm select-none" title="Duplikat Siaran">
@@ -1017,7 +1031,20 @@ function createBroadcastCard(broadcast) {
       streamKey: broadcast.streamKey || '',
       categoryId: broadcast.categoryId || '22',
       tags: broadcast.tags || [],
-      thumbnailPath: broadcast.thumbnailPath || null
+      thumbnailPath: broadcast.thumbnailPath || null,
+      streamDurationHours: broadcast.streamDurationHours || 0,
+      streamDurationMinutes: broadcast.streamDurationMinutes || broadcast.duration || 0,
+      duration: broadcast.streamDurationMinutes || broadcast.duration || 0,
+      loopVideo: broadcast.loopVideo !== false && broadcast.loop_video !== false,
+      videoId: broadcast.videoId || null,
+      videoTitle: broadcast.videoTitle || null,
+      audioId: broadcast.audioId || null,
+      audioTitle: broadcast.audioTitle || null,
+      scheduleType: broadcast.scheduleType || 'once',
+      recurringTime: broadcast.recurringTime || null,
+      scheduleDays: broadcast.scheduleDays || null,
+      recurringEnabled: broadcast.recurringEnabled || false,
+      scheduledStartTime: broadcast.scheduledStartTime || null
     }).replace(/"/g, '&quot;');
     div.setAttribute('data-broadcast', broadcastData);
   } catch (e) {}
@@ -6354,6 +6381,26 @@ if (createTemplateForm) {
   });
 }
 
+function toggleSaveTemplateScheduleFields(type) {
+  const timeContainer = document.getElementById('saveTemplateRecurringTimeContainer');
+  const daysContainer = document.getElementById('saveTemplateRecurringDaysContainer');
+  if (timeContainer) {
+    if (type === 'daily' || type === 'weekly') {
+      timeContainer.classList.remove('hidden');
+    } else {
+      timeContainer.classList.add('hidden');
+    }
+  }
+  if (daysContainer) {
+    if (type === 'weekly') {
+      daysContainer.classList.remove('hidden');
+    } else {
+      daysContainer.classList.add('hidden');
+    }
+  }
+}
+window.toggleSaveTemplateScheduleFields = toggleSaveTemplateScheduleFields;
+
 // Save as Template Modal
 function openSaveAsTemplateModal(broadcastId, accountId, title, privacyStatus) {
   const modal = document.getElementById('saveAsTemplateModal');
@@ -6365,23 +6412,113 @@ function openSaveAsTemplateModal(broadcastId, accountId, title, privacyStatus) {
   document.getElementById('previewTitle').textContent = resolvedTitle;
   document.getElementById('previewPrivacy').textContent = privacyStatus || '-';
 
+  // Read existing data from row data-broadcast
+  let bData = {};
+  if (row && row.dataset && row.dataset.broadcast) {
+    try {
+      bData = JSON.parse(row.dataset.broadcast);
+    } catch (e) {}
+  }
+
   // Format and show duration in preview
   const prevDurEl = document.getElementById('previewDuration');
   if (prevDurEl) {
     let durText = 'Tak terbatas';
-    if (row && row.dataset.broadcast) {
-      try {
-        const bData = JSON.parse(row.dataset.broadcast);
-        const mins = parseInt(bData.streamDurationMinutes) || parseInt(bData.duration) || 0;
-        const hrs = parseInt(bData.streamDurationHours) || Math.floor(mins / 60);
-        const remMins = mins % 60;
-        if (mins > 0 || hrs > 0) {
-          durText = `${hrs > 0 ? hrs + ' Jam ' : ''}${remMins > 0 ? remMins + ' Menit' : (hrs === 0 ? '0 Menit' : '')}`.trim();
-        }
-      } catch (e) {}
+    const mins = parseInt(bData.streamDurationMinutes) || parseInt(bData.duration) || 0;
+    const hrs = parseInt(bData.streamDurationHours) || Math.floor(mins / 60);
+    const remMins = mins % 60;
+    if (mins > 0 || hrs > 0) {
+      durText = `${hrs > 0 ? hrs + ' Jam ' : ''}${remMins > 0 ? remMins + ' Menit' : (hrs === 0 ? '0 Menit' : '')}`.trim();
     }
     prevDurEl.textContent = durText;
   }
+
+  // Populate streamKey & media info
+  const streamKeyInput = document.getElementById('saveTemplateStreamKey');
+  if (streamKeyInput) {
+    streamKeyInput.value = bData.streamKey || '';
+  }
+
+  const streamIdInput = document.getElementById('saveTemplateStreamId');
+  if (streamIdInput) {
+    streamIdInput.value = bData.streamId || '';
+  }
+
+  const videoIdInput = document.getElementById('saveTemplateVideoId');
+  if (videoIdInput) {
+    videoIdInput.value = bData.videoId || '';
+  }
+
+  const audioIdInput = document.getElementById('saveTemplateAudioId');
+  if (audioIdInput) {
+    audioIdInput.value = bData.audioId || '';
+  }
+
+  // Video title lookup
+  let vTitle = bData.videoTitle || '';
+  if (!vTitle && bData.videoId && Array.isArray(window.allStudioVideos)) {
+    const foundVid = window.allStudioVideos.find(v => String(v.id) === String(bData.videoId));
+    if (foundVid) vTitle = foundVid.title;
+  }
+  const videoTitleEl = document.getElementById('saveTemplateVideoTitle');
+  if (videoTitleEl) {
+    videoTitleEl.textContent = vTitle || (bData.videoId ? `Video #${bData.videoId}` : 'Tidak ada video dipilih');
+    videoTitleEl.title = videoTitleEl.textContent;
+  }
+
+  // Audio title lookup
+  let aTitle = bData.audioTitle || '';
+  if (!aTitle && bData.audioId && Array.isArray(window.allStudioAudios)) {
+    const foundAud = window.allStudioAudios.find(a => String(a.id) === String(bData.audioId));
+    if (foundAud) aTitle = foundAud.title;
+  }
+  const audioTitleEl = document.getElementById('saveTemplateAudioTitle');
+  if (audioTitleEl) {
+    audioTitleEl.textContent = aTitle || (bData.audioId ? `Audio #${bData.audioId}` : 'Audio bawaan video / default');
+    audioTitleEl.title = audioTitleEl.textContent;
+  }
+
+  // Schedule setup
+  const schedSelect = document.getElementById('saveTemplateScheduleType');
+  const initialSchedType = (bData.scheduleType === 'daily' || bData.scheduleType === 'weekly') ? bData.scheduleType : 'once';
+  if (schedSelect) {
+    schedSelect.value = initialSchedType;
+  }
+
+  // Jam Siaran
+  const timeInput = document.getElementById('saveTemplateRecurringTime');
+  if (timeInput) {
+    if (bData.recurringTime) {
+      timeInput.value = bData.recurringTime;
+    } else if (bData.scheduledStartTime) {
+      try {
+        const d = new Date(bData.scheduledStartTime);
+        if (!isNaN(d.getTime())) {
+          const h = String(d.getHours()).padStart(2, '0');
+          const m = String(d.getMinutes()).padStart(2, '0');
+          timeInput.value = `${h}:${m}`;
+        }
+      } catch (e) {}
+    } else {
+      timeInput.value = '13:00';
+    }
+  }
+
+  // Hari Siaran
+  const daysCheckboxes = document.querySelectorAll('input[name="saveTemplateDays"]');
+  let activeDays = bData.scheduleDays;
+  if (typeof activeDays === 'string') {
+    try { activeDays = JSON.parse(activeDays); } catch (e) { activeDays = [activeDays]; }
+  }
+  if (!Array.isArray(activeDays) || activeDays.length === 0) {
+    activeDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+  }
+  const activeDaysLower = activeDays.map(d => String(d).toLowerCase());
+  daysCheckboxes.forEach(cb => {
+    cb.checked = activeDaysLower.includes(cb.value.toLowerCase());
+  });
+
+  toggleSaveTemplateScheduleFields(initialSchedType);
 
   modal.classList.remove('hidden');
   modal.style.display = 'block';
@@ -6428,8 +6565,6 @@ if (saveAsTemplateForm) {
         throw new Error('Failed to fetch broadcast details');
       }
       
-      console.log('[saveAsTemplate] All broadcasts:', broadcastData.broadcasts.map(b => ({ id: b.id, title: b.title, streamId: b.streamId, streamKey: b.streamKey })));
-      
       const broadcast = broadcastData.broadcasts.find(b => b.id === broadcastId);
       if (!broadcast) {
         throw new Error('Broadcast not found');
@@ -6439,7 +6574,7 @@ if (saveAsTemplateForm) {
         id: broadcast.id, 
         title: broadcast.title, 
         streamId: broadcast.streamId, 
-        streamKey: broadcast.streamKey,
+        streamKey: broadcast.streamKey ? '***' : 'none',
         thumbnailPath: broadcast.thumbnailPath
       });
       
@@ -6449,19 +6584,48 @@ if (saveAsTemplateForm) {
       let remMins = durMins % 60;
 
       // Fallback: check DOM row dataset if durMins is 0
-      if (durMins === 0) {
-        const rowEl = document.querySelector(`.broadcast-row[data-broadcast-id="${broadcastId}"]`);
-        if (rowEl && rowEl.dataset && rowEl.dataset.broadcast) {
-          try {
-            const rowData = JSON.parse(rowEl.dataset.broadcast);
+      const rowEl = document.querySelector(`.broadcast-row[data-broadcast-id="${broadcastId}"]`);
+      let rowData = {};
+      if (rowEl && rowEl.dataset && rowEl.dataset.broadcast) {
+        try {
+          rowData = JSON.parse(rowEl.dataset.broadcast);
+          if (durMins === 0) {
             durMins = parseInt(rowData.streamDurationMinutes) || parseInt(rowData.duration) || 0;
             durHours = parseInt(rowData.streamDurationHours) || Math.floor(durMins / 60);
             remMins = durMins % 60;
-          } catch (e) {}
+          }
+        } catch (e) {}
+      }
+
+      // Gather form inputs
+      const streamKeyInput = document.getElementById('saveTemplateStreamKey');
+      const resolvedStreamKey = streamKeyInput ? streamKeyInput.value.trim() : (broadcast.streamKey || rowData.streamKey || '');
+
+      const schedTypeInput = document.getElementById('saveTemplateScheduleType');
+      const chosenSchedType = schedTypeInput ? schedTypeInput.value : (broadcast.scheduleType || rowData.scheduleType || 'once');
+      const isRecurring = (chosenSchedType === 'daily' || chosenSchedType === 'weekly');
+
+      let chosenRecurringTime = null;
+      if (isRecurring) {
+        chosenRecurringTime = document.getElementById('saveTemplateRecurringTime')?.value || '13:00';
+      }
+
+      let chosenDays = null;
+      if (chosenSchedType === 'weekly') {
+        chosenDays = Array.from(document.querySelectorAll('input[name="saveTemplateDays"]:checked'))
+          .map(cb => cb.value.toLowerCase());
+        if (chosenDays.length === 0) {
+          chosenDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
         }
       }
 
-      // Create template from broadcast - include ALL data for reuse
+      const videoIdInput = document.getElementById('saveTemplateVideoId');
+      const chosenVideoId = (videoIdInput && videoIdInput.value) ? videoIdInput.value : (broadcast.videoId || rowData.videoId || broadcast.video_id || null);
+
+      const audioIdInput = document.getElementById('saveTemplateAudioId');
+      const chosenAudioId = (audioIdInput && audioIdInput.value) ? audioIdInput.value : (broadcast.audioId || rowData.audioId || broadcast.audio_id || null);
+
+      // Create template from broadcast - include ALL data for reuse and automatic live streaming
       const templateData = {
         name: name,
         accountId: accountId,
@@ -6473,21 +6637,26 @@ if (saveAsTemplateForm) {
         categoryId: broadcast.categoryId || '22',
         thumbnailPath: broadcast.thumbnailPath || null,
         thumbnailFolder: currentThumbnailFolder || null,  // Save current thumbnail folder selection
-        streamId: broadcast.streamId || null,  // Save stream ID for reuse
-        streamKey: broadcast.streamKey || '',  // Save stream key for reuse
+        streamId: broadcast.streamId || rowData.streamId || null,  // Save stream ID for reuse
+        streamKey: resolvedStreamKey,  // Save stream key for reuse
         durationHours: durHours,
         durationMinutes: remMins,
         streamDurationMinutes: durMins,
         loopVideo: broadcast.loopVideo !== false && broadcast.loop_video !== false,
-        videoId: broadcast.videoId || broadcast.video_id || null,
-        audioId: broadcast.audioId || broadcast.audio_id || null,
-        scheduleType: broadcast.scheduleType || broadcast.schedule_type || 'once'
+        videoId: chosenVideoId,
+        audioId: chosenAudioId,
+        scheduleType: chosenSchedType,
+        recurringEnabled: isRecurring,
+        recurringPattern: isRecurring ? (chosenSchedType === 'weekly' ? 'weekly' : 'daily') : null,
+        recurringTime: chosenRecurringTime,
+        recurringDays: chosenDays
       };
       
       console.log('[saveAsTemplate] Sending templateData:', {
         ...templateData,
-        privacyStatus: templateData.privacyStatus,
-        thumbnailFolder: templateData.thumbnailFolder
+        streamKey: templateData.streamKey ? '***' : 'none',
+        recurringTime: templateData.recurringTime,
+        recurringDays: templateData.recurringDays
       });
       
       const response = await fetch('/api/youtube/templates', {
@@ -6502,7 +6671,7 @@ if (saveAsTemplateForm) {
       const data = await response.json();
       
       if (data.success) {
-        console.log('[saveAsTemplate] Template saved successfully with stream_id:', data.template?.stream_id, 'thumbnail_folder:', data.template?.thumbnail_folder);
+        console.log('[saveAsTemplate] Template saved successfully with stream_id:', data.template?.stream_id, 'recurring_enabled:', data.template?.recurring_enabled);
         showToast('Template saved successfully!');
         closeSaveAsTemplateModal();
       } else {
@@ -8859,6 +9028,15 @@ if (recreateFromTemplateForm) {
 
           const slotScheduleType = patternVal === 'daily' ? 'daily' : (patternVal === 'weekly' ? 'weekly' : (template.schedule_type || 'once'));
           formData.append('scheduleType', slotScheduleType);
+
+          if (patternVal === 'daily' || patternVal === 'weekly') {
+            formData.append('recurringEnabled', 'true');
+            formData.append('recurringPattern', slotScheduleType);
+            formData.append('recurringTime', slot.timeOnly || template.recurring_time || '13:00');
+            if (patternVal === 'weekly') {
+              formData.append('scheduleDays', JSON.stringify(selectedWeeklyDays));
+            }
+          }
 
           const videoId = slot.videoId || template.video_id;
           if (videoId) {

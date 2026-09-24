@@ -9,6 +9,8 @@ const BroadcastTemplate = require('../models/BroadcastTemplate');
 const TitleSuggestion = require('../models/TitleSuggestion');
 const YouTubeBroadcastSettings = require('../models/YouTubeBroadcastSettings');
 const youtubeService = require('./youtubeService');
+const Stream = require('../models/Stream');
+const streamingService = require('./streamingService');
 const { calculateNextRun, formatNextRunAt, replaceTitlePlaceholders, isScheduleMissed, parseRecurringTimes } = require('../utils/recurringUtils');
 const { db } = require('../db/database');
 
@@ -972,6 +974,67 @@ class ScheduleService {
             } catch (settingsErr) {
               console.error(`[ScheduleService] Failed to save broadcast settings:`, settingsErr.message);
             }
+
+            // Create Stream record so streamingService/schedulerService can stream the media automatically!
+            const resolvedStreamKey = result.streamKey || b.streamKey || template.stream_key || (b.streamId ? String(b.streamId) : '');
+            const resolvedRtmpUrl = result.rtmpUrl || b.rtmpUrl || 'rtmp://a.rtmp.youtube.com/live2';
+            const resolvedVideoId = b.videoId || template.video_id || null;
+            const resolvedAudioId = b.audioId || template.audio_id || null;
+            
+            try {
+              const streamData = {
+                title: title,
+                video_id: resolvedVideoId,
+                audio_id: resolvedAudioId,
+                rtmp_url: resolvedRtmpUrl,
+                stream_key: resolvedStreamKey,
+                platform: 'YouTube',
+                platform_icon: 'ti-brand-youtube',
+                bitrate: 2500,
+                resolution: '1280x720',
+                fps: 30,
+                orientation: 'horizontal',
+                loop_video: template.loop_video !== false,
+                stream_duration_hours: template.duration_hours || 0,
+                stream_duration_minutes: template.stream_duration_minutes || null,
+                duration: template.stream_duration_minutes || null,
+                schedule_type: template.schedule_type || template.recurring_pattern || 'daily',
+                schedule_time: now.toISOString(),
+                end_time: null,
+                schedule_days: template.recurring_days || null,
+                recurring_time: template.recurring_time || null,
+                recurring_enabled: 1,
+                user_id: template.user_id,
+                youtube_broadcast_id: result.broadcastId || result.id,
+                youtube_account_id: template.account_id || null,
+                dual_stream: (template.dual_stream || b.dualStream) ? 1 : 0,
+                vertical_stream_key: b.verticalStreamKey || template.vertical_stream_key || null,
+                backup_rtmp_url: b.verticalStreamKey || template.vertical_stream_key || null,
+                tags: template.tags && template.tags.length > 0 ? (typeof template.tags === 'string' ? template.tags : JSON.stringify(template.tags)) : null,
+                status: 'scheduled'
+              };
+
+              const createdStream = await Stream.create(streamData);
+              console.log(`[ScheduleService] Created Stream record #${createdStream.id} for multi-broadcast ${result.broadcastId || result.id}`);
+
+              if (createdStream && createdStream.video_id) {
+                try {
+                  console.log(`[ScheduleService] Automatically starting live stream #${createdStream.id} for template "${template.name}"...`);
+                  const startRes = await streamingService.startStream(createdStream.id);
+                  if (startRes && startRes.success) {
+                    console.log(`[ScheduleService] ✅ Live stream #${createdStream.id} successfully started!`);
+                  } else {
+                    console.warn(`[ScheduleService] ⚠️ Live stream #${createdStream.id} start returned:`, startRes?.error);
+                  }
+                } catch (startErr) {
+                  console.error(`[ScheduleService] Failed to auto-start stream #${createdStream.id}:`, startErr.message);
+                }
+              } else {
+                console.warn(`[ScheduleService] Multi-broadcast item #${i + 1} has no video_id! Live streaming could not be started automatically.`);
+              }
+            } catch (streamCreateErr) {
+              console.error(`[ScheduleService] Error creating Stream record for multi-broadcast:`, streamCreateErr.message);
+            }
             
             // Upload thumbnail - use sequential selection from folder with GLOBAL index
             // GLOBAL index ensures consistent rotation across all stream keys
@@ -1167,6 +1230,65 @@ class ScheduleService {
           console.log(`[ScheduleService] Saved broadcast settings for ${result.broadcastId || result.id}, thumbnailFolder: ${thumbnailFolder !== null ? (thumbnailFolder === '' ? 'root' : thumbnailFolder) : 'null'}, templateId: ${template.id}`);
         } catch (settingsErr) {
           console.error(`[ScheduleService] Failed to save broadcast settings:`, settingsErr.message);
+        }
+
+        // Create Stream record so streamingService/schedulerService can stream the media automatically!
+        const resolvedStreamKey = result.streamKey || template.stream_key || (template.stream_id ? String(template.stream_id) : '');
+        const resolvedRtmpUrl = result.rtmpUrl || 'rtmp://a.rtmp.youtube.com/live2';
+        
+        try {
+          const streamData = {
+            title: title,
+            video_id: template.video_id || null,
+            audio_id: template.audio_id || null,
+            rtmp_url: resolvedRtmpUrl,
+            stream_key: resolvedStreamKey,
+            platform: 'YouTube',
+            platform_icon: 'ti-brand-youtube',
+            bitrate: 2500,
+            resolution: '1280x720',
+            fps: 30,
+            orientation: 'horizontal',
+            loop_video: template.loop_video !== false,
+            stream_duration_hours: template.duration_hours || 0,
+            stream_duration_minutes: template.stream_duration_minutes || null,
+            duration: template.stream_duration_minutes || null,
+            schedule_type: template.schedule_type || template.recurring_pattern || 'daily',
+            schedule_time: now.toISOString(),
+            end_time: null,
+            schedule_days: template.recurring_days || null,
+            recurring_time: template.recurring_time || null,
+            recurring_enabled: 1,
+            user_id: template.user_id,
+            youtube_broadcast_id: result.broadcastId || result.id,
+            youtube_account_id: template.account_id || null,
+            dual_stream: template.dual_stream ? 1 : 0,
+            vertical_stream_key: template.vertical_stream_key || null,
+            backup_rtmp_url: template.vertical_stream_key || null,
+            tags: template.tags && template.tags.length > 0 ? (typeof template.tags === 'string' ? template.tags : JSON.stringify(template.tags)) : null,
+            status: 'scheduled'
+          };
+
+          const createdStream = await Stream.create(streamData);
+          console.log(`[ScheduleService] Created Stream record #${createdStream.id} for broadcast ${result.broadcastId || result.id}`);
+
+          if (createdStream && createdStream.video_id) {
+            try {
+              console.log(`[ScheduleService] Automatically starting live stream #${createdStream.id} for template "${template.name}"...`);
+              const startRes = await streamingService.startStream(createdStream.id);
+              if (startRes && startRes.success) {
+                console.log(`[ScheduleService] ✅ Live stream #${createdStream.id} successfully started!`);
+              } else {
+                console.warn(`[ScheduleService] ⚠️ Live stream #${createdStream.id} start returned:`, startRes?.error);
+              }
+            } catch (startErr) {
+              console.error(`[ScheduleService] Failed to auto-start stream #${createdStream.id}:`, startErr.message);
+            }
+          } else {
+            console.warn(`[ScheduleService] Template "${template.name}" has no video_id! Live streaming could not be started automatically.`);
+          }
+        } catch (streamCreateErr) {
+          console.error(`[ScheduleService] Error creating Stream record:`, streamCreateErr.message);
         }
         
         // Upload thumbnail - use sequential selection from folder with GLOBAL index

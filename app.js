@@ -10607,10 +10607,14 @@ async function attachLocalSettingsToBroadcasts(broadcastsList, userId) {
 
     const streamRows = await new Promise((resolve) => {
       db.all(
-        `SELECT youtube_broadcast_id, dual_stream, altered_content, unlist_replay_on_end, vertical_stream_key, tags,
-                stream_duration_hours, stream_duration_minutes, duration, loop_video, video_id, audio_id, schedule_type, recurring_time, schedule_days
-         FROM streams 
-         WHERE youtube_broadcast_id IN (${placeholders})`,
+        `SELECT s.youtube_broadcast_id, s.stream_key, s.stream_id, s.dual_stream, s.altered_content, s.unlist_replay_on_end, s.vertical_stream_key, s.tags,
+                s.stream_duration_hours, s.stream_duration_minutes, s.duration, s.loop_video, s.video_id, s.audio_id, s.schedule_type, s.recurring_time, s.schedule_days,
+                s.recurring_enabled, s.schedule_time,
+                v.title AS video_title, a.title AS audio_title
+         FROM streams s
+         LEFT JOIN videos v ON s.video_id = v.id
+         LEFT JOIN audios a ON s.audio_id = a.id
+         WHERE s.youtube_broadcast_id IN (${placeholders})`,
         broadcastIds,
         (err, rows) => resolve(err ? [] : (rows || []))
       );
@@ -10646,15 +10650,21 @@ async function attachLocalSettingsToBroadcasts(broadcastsList, userId) {
           altered_content: isAltered,
           unlist_replay_on_end: isUnlist,
           vertical_stream_key: existing.vertical_stream_key || s.vertical_stream_key || null,
+          stream_key: s.stream_key || null,
+          stream_id: s.stream_id || null,
           stream_duration_hours: durationHours,
           stream_duration_minutes: durationMins,
           duration: durationMins,
           loop_video: s.loop_video !== 0 && s.loop_video !== '0' && s.loop_video !== false,
           video_id: s.video_id || null,
+          video_title: s.video_title || null,
           audio_id: s.audio_id || null,
+          audio_title: s.audio_title || null,
           schedule_type: s.schedule_type || 'once',
           recurring_time: s.recurring_time || null,
-          schedule_days: s.schedule_days || null
+          schedule_days: s.schedule_days || null,
+          recurring_enabled: s.recurring_enabled !== undefined ? (s.recurring_enabled === 1 || s.recurring_enabled === true || s.recurring_enabled === '1') : false,
+          scheduled_start_time: s.schedule_time || null
         });
       }
     });
@@ -10662,11 +10672,15 @@ async function attachLocalSettingsToBroadcasts(broadcastsList, userId) {
     // Fallback: ambil streams user yang memiliki durasi untuk pencocokan jika ada broadcast tanpa setting
     const userFallbackStreams = await new Promise((resolve) => {
       db.all(
-        `SELECT stream_key, title, dual_stream, altered_content, unlist_replay_on_end, vertical_stream_key,
-                stream_duration_hours, stream_duration_minutes, duration, loop_video, video_id, audio_id, schedule_type, recurring_time, schedule_days
-         FROM streams 
-         WHERE (user_id = ? OR CAST(user_id AS TEXT) = CAST(? AS TEXT)) AND stream_duration_minutes > 0
-         ORDER BY id DESC`,
+        `SELECT s.stream_key, s.stream_id, s.title, s.dual_stream, s.altered_content, s.unlist_replay_on_end, s.vertical_stream_key,
+                s.stream_duration_hours, s.stream_duration_minutes, s.duration, s.loop_video, s.video_id, s.audio_id, s.schedule_type, s.recurring_time, s.schedule_days,
+                s.recurring_enabled, s.schedule_time,
+                v.title AS video_title, a.title AS audio_title
+         FROM streams s
+         LEFT JOIN videos v ON s.video_id = v.id
+         LEFT JOIN audios a ON s.audio_id = a.id
+         WHERE (s.user_id = ? OR CAST(s.user_id AS TEXT) = CAST(? AS TEXT)) AND s.stream_duration_minutes > 0
+         ORDER BY s.id DESC`,
         [userId, String(userId)],
         (err, rows) => resolve(err ? [] : (rows || []))
       );
@@ -10691,11 +10705,17 @@ async function attachLocalSettingsToBroadcasts(broadcastsList, userId) {
             stream_duration_minutes: dMins,
             duration: dMins,
             loop_video: matched.loop_video !== 0 && matched.loop_video !== '0' && matched.loop_video !== false,
+            stream_key: s.stream_key || matched.stream_key || null,
+            stream_id: s.stream_id || matched.stream_id || null,
             video_id: s.video_id || matched.video_id || null,
+            video_title: s.video_title || matched.video_title || null,
             audio_id: s.audio_id || matched.audio_id || null,
+            audio_title: s.audio_title || matched.audio_title || null,
             schedule_type: s.schedule_type || matched.schedule_type || 'once',
             recurring_time: s.recurring_time || matched.recurring_time || null,
-            schedule_days: s.schedule_days || matched.schedule_days || null
+            schedule_days: s.schedule_days || matched.schedule_days || null,
+            recurring_enabled: s.recurring_enabled !== undefined ? s.recurring_enabled : (matched.recurring_enabled === 1 || matched.recurring_enabled === true || matched.recurring_enabled === '1'),
+            scheduled_start_time: s.scheduled_start_time || matched.schedule_time || null
           };
         }
       }
@@ -10716,11 +10736,19 @@ async function attachLocalSettingsToBroadcasts(broadcastsList, userId) {
       b.duration = s.duration || s.stream_duration_minutes || 0;
       b.loop_video = s.loop_video !== false;
       b.loopVideo = s.loop_video !== false;
+      if (!b.streamKey && s.stream_key) b.streamKey = s.stream_key;
+      if (!b.streamId && s.stream_id) b.streamId = s.stream_id;
       b.videoId = s.video_id || null;
+      b.videoTitle = s.video_title || null;
       b.audioId = s.audio_id || null;
+      b.audioTitle = s.audio_title || null;
       b.scheduleType = s.schedule_type || 'once';
       b.recurringTime = s.recurring_time || null;
       b.scheduleDays = s.schedule_days || null;
+      b.recurringEnabled = !!s.recurring_enabled;
+      if (s.scheduled_start_time && !b.scheduledStartTime) {
+        b.scheduledStartTime = s.scheduled_start_time;
+      }
     });
   } catch (err) {
     console.warn('[Broadcasts API] Error attaching local settings:', err.message);
@@ -11648,11 +11676,27 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         console.log(`[API] Calculated duration from start/end times: ${totalMinutes} minutes`);
       }
 
+      const isRecurring = (scheduleType === 'daily' || scheduleType === 'weekly');
+      const recurringEnabledVal = (req.body.recurringEnabled === 'true' || req.body.recurringEnabled === true || req.body.recurringEnabled === 'on' || req.body.recurringEnabled === 1 || req.body.recurringEnabled === '1' || isRecurring) ? 1 : 0;
+
+      let finalRecurringTime = req.body.recurringTime || null;
+      if (!finalRecurringTime && isRecurring && sDate) {
+        try {
+          finalRecurringTime = formatWIBTimeOnly(sDate);
+        } catch (e) {}
+      }
+      if (!finalRecurringTime && templateObj && templateObj.recurring_time) {
+        finalRecurringTime = templateObj.recurring_time;
+      }
+      if (!scheduleDays && templateObj && templateObj.recurring_days) {
+        scheduleDays = templateObj.recurring_days;
+      }
+
       // For daily/weekly, if schedule_time is null, compute the next scheduled run in WIB
-      if ((scheduleType === 'daily' || scheduleType === 'weekly') && !scheduleIso && req.body.recurringTime) {
+      if (isRecurring && !scheduleIso && finalRecurringTime) {
         const tempStream = {
           schedule_type: scheduleType,
-          recurring_time: req.body.recurringTime,
+          recurring_time: finalRecurringTime,
           schedule_days: scheduleDays
         };
         const nextDate = Stream.getNextScheduledTime(tempStream);
@@ -11665,7 +11709,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       // Recurring streams MUST NOT store a static end_time in DB
       const finalEndTime = scheduleType === 'once' ? endIso : null;
 
-      const isScheduled = (scheduleType === 'daily' || scheduleType === 'weekly') || (scheduleIso !== null);
+      const isScheduled = isRecurring || (scheduleIso !== null);
 
       const streamData = {
         title: broadcast.title || title,
@@ -11687,8 +11731,8 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         schedule_time: scheduleIso,
         end_time: finalEndTime,
         schedule_days: scheduleDays,
-        recurring_time: req.body.recurringTime || null,
-        recurring_enabled: req.body.recurringEnabled === 'true' || req.body.recurringEnabled === true || req.body.recurringEnabled === 'on' ? 1 : 0,
+        recurring_time: finalRecurringTime,
+        recurring_enabled: recurringEnabledVal,
         user_id: req.session.userId,
         youtube_broadcast_id: broadcast.broadcastId,
         youtube_account_id: accountId || (credentials ? credentials.id : null),
@@ -12161,24 +12205,70 @@ app.post('/api/youtube/broadcasts/:id/thumbnail', isAuthenticated, handleThumbna
 // Create new broadcast template
 app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
   try {
-    const {
+    let {
       name, title, description, privacyStatus, tags, categoryId,
       thumbnailPath, thumbnailFolder, pinnedThumbnail, streamKeyFolderMapping,
-      streamId, accountId, titleIndex, pinnedTitleId, titleFolderId,
+      streamId, streamKey, accountId, titleIndex, pinnedTitleId, titleFolderId,
       // Recurring schedule fields
       recurringEnabled, recurringPattern, recurringTime, recurringDays,
       // Duration & stream settings
-      durationHours, durationMinutes, streamDurationMinutes, loopVideo, videoId, audioId, scheduleType
+      durationHours, durationMinutes, streamDurationMinutes, loopVideo, videoId, audioId, scheduleType,
+      broadcastId
     } = req.body;
 
-    console.log('[create-template] Received streamId:', streamId);
+    console.log('[create-template] Received streamId:', streamId, 'streamKey:', streamKey ? '***' : 'none');
     console.log('[create-template] Received thumbnailFolder:', thumbnailFolder);
     console.log('[create-template] Received pinnedThumbnail:', pinnedThumbnail);
     console.log('[create-template] Received streamKeyFolderMapping:', streamKeyFolderMapping);
     console.log('[create-template] Received titleIndex:', titleIndex);
     console.log('[create-template] Received pinnedTitleId:', pinnedTitleId);
     console.log('[create-template] Received titleFolderId:', titleFolderId);
-    console.log('[create-template] Received recurring config:', { recurringEnabled, recurringPattern, recurringTime, recurringDays });
+    console.log('[create-template] Received recurring config:', { recurringEnabled, recurringPattern, recurringTime, recurringDays, scheduleType });
+
+    // Fallback: If broadcastId is provided, pull missing fields directly from streams table
+    if (broadcastId) {
+      try {
+        const streamByBId = await new Promise((resolve) => {
+          db.get(
+            `SELECT stream_key, stream_id, video_id, audio_id, schedule_type, recurring_time, schedule_days, recurring_enabled,
+                    stream_duration_hours, stream_duration_minutes, duration, loop_video, vertical_stream_key, dual_stream, altered_content, tags
+             FROM streams
+             WHERE youtube_broadcast_id = ?
+             ORDER BY id DESC LIMIT 1`,
+            [broadcastId],
+            (err, row) => resolve(row)
+          );
+        });
+        if (streamByBId) {
+          if (!streamKey && streamByBId.stream_key) streamKey = streamByBId.stream_key;
+          if (!streamId && (streamByBId.stream_id || streamByBId.stream_key)) streamId = streamByBId.stream_id || streamByBId.stream_key;
+          if (!videoId && streamByBId.video_id) videoId = streamByBId.video_id;
+          if (!audioId && streamByBId.audio_id) audioId = streamByBId.audio_id;
+          if ((!scheduleType || scheduleType === 'once') && streamByBId.schedule_type) scheduleType = streamByBId.schedule_type;
+          if (!recurringTime && streamByBId.recurring_time) recurringTime = streamByBId.recurring_time;
+          if (!recurringDays && streamByBId.schedule_days) {
+            try {
+              recurringDays = typeof streamByBId.schedule_days === 'string' ? JSON.parse(streamByBId.schedule_days) : streamByBId.schedule_days;
+            } catch (e) {
+              recurringDays = [streamByBId.schedule_days];
+            }
+          }
+          if (recurringEnabled === undefined && streamByBId.recurring_enabled) {
+            recurringEnabled = !!streamByBId.recurring_enabled;
+          }
+          if (!streamDurationMinutes && (streamByBId.stream_duration_minutes || streamByBId.duration)) {
+            streamDurationMinutes = streamByBId.stream_duration_minutes || streamByBId.duration;
+            durationHours = streamByBId.stream_duration_hours || Math.floor(streamDurationMinutes / 60);
+            durationMinutes = streamDurationMinutes % 60;
+          }
+          if (loopVideo === undefined && streamByBId.loop_video !== undefined) {
+            loopVideo = streamByBId.loop_video !== 0 && streamByBId.loop_video !== false;
+          }
+        }
+      } catch (bLookupErr) {
+        console.warn('[create-template] broadcastId lookup error:', bLookupErr.message);
+      }
+    }
 
     if (!name || !title || !accountId) {
       return res.status(400).json({
@@ -12202,15 +12292,15 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
     let audId = audioId || null;
     let schedType = scheduleType || 'once';
 
-    if (totalDurationMins === 0 && (streamId || title)) {
+    if (totalDurationMins === 0 && (streamId || streamKey || title)) {
       try {
         const streamRecord = await new Promise((resolve) => {
           db.get(
-            `SELECT stream_duration_hours, stream_duration_minutes, loop_video, video_id, audio_id, schedule_type
+            `SELECT stream_duration_hours, stream_duration_minutes, loop_video, video_id, audio_id, schedule_type, stream_key
              FROM streams
-             WHERE user_id = ? AND (stream_key = ? OR title = ?) AND stream_duration_minutes > 0
+             WHERE user_id = ? AND (stream_key = ? OR stream_key = ? OR title = ?) AND stream_duration_minutes > 0
              ORDER BY id DESC LIMIT 1`,
-            [req.session.userId, streamId || '', title || ''],
+            [req.session.userId, streamId || '', streamKey || '', title || ''],
             (err, row) => resolve(row)
           );
         });
@@ -12224,11 +12314,20 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
           if (!vidId && streamRecord.video_id) vidId = streamRecord.video_id;
           if (!audId && streamRecord.audio_id) audId = streamRecord.audio_id;
           if (schedType === 'once' && streamRecord.schedule_type) schedType = streamRecord.schedule_type;
+          if (!streamKey && streamRecord.stream_key) streamKey = streamRecord.stream_key;
           console.log(`[create-template] Auto-populated duration from stream: ${totalDurationMins} mins (${dHours}h ${dMins}m)`);
         }
       } catch (lookupErr) {
         console.warn('[create-template] Stream lookup warning:', lookupErr.message);
       }
+    }
+
+    // Auto-enable recurring for daily/weekly if user selected it
+    if ((schedType === 'daily' || schedType === 'weekly') && (recurringEnabled === undefined || recurringEnabled === null)) {
+      recurringEnabled = true;
+    }
+    if (recurringEnabled && !recurringPattern) {
+      recurringPattern = schedType === 'weekly' ? 'weekly' : 'daily';
     }
 
     // Parse stream key folder mapping if provided
@@ -12277,9 +12376,6 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
     }
 
     // IMPORTANT: Handle thumbnailFolder correctly
-    // - undefined or null means not provided -> will be auto-set below
-    // - empty string "" means root folder (intentionally selected)
-    // - non-empty string means specific folder name
     const finalThumbnailFolder = thumbnailFolder !== undefined ? thumbnailFolder : null;
 
     console.log('[create-template] thumbnailFolder processing:', {
@@ -12287,6 +12383,8 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
       type: typeof thumbnailFolder,
       final: finalThumbnailFolder
     });
+
+    const finalStreamKey = (streamKey || req.body.streamKey || streamId || '').trim() || null;
 
     const template = await BroadcastTemplate.create({
       user_id: req.session.userId,
@@ -12300,12 +12398,12 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
       tags: tags || null,
       category_id: categoryId || '22',
       thumbnail_path: thumbnailPath || null,
-      thumbnail_folder: finalThumbnailFolder,  // Use processed value - empty string is valid!
+      thumbnail_folder: finalThumbnailFolder,
       thumbnail_index: 0,
       pinned_thumbnail: pinnedThumbnail || null,
       stream_key_folder_mapping: parsedMapping,
       stream_id: streamId || null,
-      stream_key: (req.body.streamKey || streamId || '').trim() || null,
+      stream_key: finalStreamKey,
       title_index: titleIndex || 0,
       pinned_title_id: pinnedTitleId || null,
       title_folder_id: titleFolderId || null,
@@ -12327,8 +12425,17 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
       schedule_type: schedType
     });
 
+    // Reload in scheduleService immediately if recurring is enabled
+    if (template && template.id) {
+      try {
+        await scheduleService.reloadTemplate(template.id);
+        console.log(`[create-template] Reloaded template ${template.id} in scheduleService`);
+      } catch (reloadErr) {
+        console.warn('[create-template] Failed to reload template in scheduleService:', reloadErr.message);
+      }
+    }
+
     // Only auto-set thumbnail_folder if it was not provided at all (null)
-    // Do NOT auto-set if it's empty string (root folder was intentionally selected)
     if (template.thumbnail_folder === null) {
       try {
         const thumbnailDir = path.join(__dirname, 'public', 'thumbnails');
@@ -12857,9 +12964,11 @@ app.put('/api/youtube/templates/:id', isAuthenticated, async (req, res) => {
     const {
       name, title, description, privacyStatus, tags, categoryId,
       thumbnailPath, thumbnailFolder, pinnedThumbnail, streamKeyFolderMapping,
-      streamId, accountId, titleIndex, pinnedTitleId, titleFolderId,
+      streamId, streamKey, accountId, titleIndex, pinnedTitleId, titleFolderId,
       // Recurring schedule fields
-      recurringEnabled, recurringPattern, recurringTime, recurringDays
+      recurringEnabled, recurringPattern, recurringTime, recurringDays,
+      // Media & stream settings
+      durationHours, durationMinutes, streamDurationMinutes, loopVideo, videoId, audioId, scheduleType
     } = req.body;
 
     console.log('[update-template] Received thumbnailFolder:', thumbnailFolder);
@@ -12903,6 +13012,14 @@ app.put('/api/youtube/templates/:id', isAuthenticated, async (req, res) => {
       }
     }
     if (streamId !== undefined) updateData.stream_id = streamId;
+    if (streamKey !== undefined) updateData.stream_key = (streamKey || '').trim() || null;
+    if (videoId !== undefined) updateData.video_id = videoId || null;
+    if (audioId !== undefined) updateData.audio_id = audioId || null;
+    if (scheduleType !== undefined) updateData.schedule_type = scheduleType;
+    if (durationHours !== undefined) updateData.duration_hours = parseInt(durationHours) || 0;
+    if (durationMinutes !== undefined) updateData.duration_minutes = parseInt(durationMinutes) || 0;
+    if (streamDurationMinutes !== undefined) updateData.stream_duration_minutes = parseInt(streamDurationMinutes) || 0;
+    if (loopVideo !== undefined) updateData.loop_video = (loopVideo === 'true' || loopVideo === true || loopVideo === 1 || loopVideo === '1') ? 1 : 0;
     if (accountId !== undefined) {
       const parsedAccountId = parseInt(accountId);
       const targetAccount = await YouTubeCredentials.findById(parsedAccountId);
@@ -12980,6 +13097,13 @@ app.put('/api/youtube/templates/:id', isAuthenticated, async (req, res) => {
 
     console.log('[update-template] Updated template:', req.params.id, 'recurring_enabled:', updateData.recurring_enabled, 'next_run_at:', updateData.next_run_at);
 
+    // Sync with scheduleService
+    try {
+      await scheduleService.reloadTemplate(req.params.id);
+    } catch (reloadErr) {
+      console.warn('[update-template] Failed to reload in scheduleService:', reloadErr.message);
+    }
+
     res.json({ success: true, template: result });
   } catch (error) {
     console.error('Error updating broadcast template:', error);
@@ -12998,6 +13122,10 @@ app.delete('/api/youtube/templates/:id', isAuthenticated, async (req, res) => {
     if (!result.deleted) {
       return res.status(404).json({ success: false, error: 'Template not found' });
     }
+
+    try {
+      scheduleService.cancelJob(req.params.id);
+    } catch (cancelErr) {}
 
     res.json({ success: true });
   } catch (error) {
@@ -13023,51 +13151,58 @@ app.put('/api/youtube/templates/:id/recurring', isAuthenticated, async (req, res
       return res.status(403).json({ success: false, error: 'Access denied' });
     }
 
-    // Normalize recurring_days: ensure it's an array or null
-    const normalizedDays = Array.isArray(recurring_days) ? recurring_days : null;
+    // Prepare update data
+    const updateData = {
+      recurring_enabled: !!recurring_enabled
+    };
 
-    // Validate recurring configuration
-    const { validateRecurringConfig, calculateNextRun, formatNextRunAt } = require('./utils/recurringUtils');
-    const validation = validateRecurringConfig({
-      recurring_enabled,
-      recurring_pattern,
-      recurring_time,
-      recurring_days: normalizedDays
-    });
-
-    if (!validation.valid) {
-      return res.status(400).json({
-        success: false,
-        error: validation.errors.join(', ')
-      });
-    }
-
-    // Calculate next_run_at if enabling
-    let next_run_at = null;
     if (recurring_enabled) {
+      const { validateRecurringConfig, calculateNextRun, formatNextRunAt } = require('./utils/recurringUtils');
+
+      // Normalize recurring_days
+      const normalizedDays = Array.isArray(recurring_days) ? recurring_days : null;
+
+      const validation = validateRecurringConfig({
+        recurring_enabled,
+        recurring_pattern,
+        recurring_time,
+        recurring_days: normalizedDays
+      });
+
+      if (!validation.valid) {
+        return res.status(400).json({
+          success: false,
+          error: validation.errors.join(', ')
+        });
+      }
+
+      updateData.recurring_pattern = recurring_pattern;
+      updateData.recurring_time = recurring_time;
+      updateData.recurring_days = normalizedDays;
+
+      // Calculate next run time
       const nextRun = calculateNextRun({
         recurring_pattern,
         recurring_time,
         recurring_days: normalizedDays
       });
       if (nextRun) {
-        next_run_at = formatNextRunAt(nextRun);
+        updateData.next_run_at = formatNextRunAt(nextRun);
       }
+    } else {
+      updateData.recurring_pattern = null;
+      updateData.recurring_time = null;
+      updateData.recurring_days = null;
+      updateData.next_run_at = null;
     }
 
-    // Update template
-    const result = await BroadcastTemplate.updateRecurring(req.params.id, {
-      recurring_enabled,
-      recurring_pattern,
-      recurring_time,
-      recurring_days: normalizedDays,
-      next_run_at
-    });
+    const updatedTemplate = await BroadcastTemplate.update(req.params.id, updateData);
 
-    res.json({
-      success: true,
-      template: result
-    });
+    try {
+      await scheduleService.reloadTemplate(req.params.id);
+    } catch (rErr) {}
+
+    res.json({ success: true, template: updatedTemplate });
   } catch (error) {
     console.error('Error updating template recurring:', error);
     res.status(500).json({

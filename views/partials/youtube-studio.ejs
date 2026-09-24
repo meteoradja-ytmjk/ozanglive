@@ -2189,43 +2189,141 @@
 <!-- Save as Template Modal -->
 <div id="saveAsTemplateModal" class="fixed inset-0 bg-black/50 z-50 hidden modal-overlay">
   <div class="flex min-h-screen items-center justify-center p-4">
-    <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-md">
-      <div class="flex items-center justify-between p-6 border-b border-gray-700">
-        <h3 class="text-lg font-semibold">Save as Template</h3>
-        <button onclick="closeSaveAsTemplateModal()" class="text-gray-400 hover:text-white">
+    <div class="bg-dark-800 rounded-xl shadow-2xl w-full max-w-lg border border-gray-700/80 overflow-hidden">
+      <div class="flex items-center justify-between p-4 sm:p-5 border-b border-gray-700 bg-dark-750">
+        <div class="flex items-center gap-2">
+          <i class="ti ti-bookmark text-primary text-xl font-loaded"></i>
+          <h3 class="text-base sm:text-lg font-semibold text-white">Save as Template</h3>
+        </div>
+        <button onclick="closeSaveAsTemplateModal()" class="text-gray-400 hover:text-white transition-colors p-1">
           <i class="ti ti-x text-xl"></i>
         </button>
       </div>
       
-      <form id="saveAsTemplateForm" class="p-6 space-y-4">
+      <form id="saveAsTemplateForm" class="p-4 sm:p-5 space-y-4 max-h-[85vh] overflow-y-auto">
         <input type="hidden" id="saveTemplateBroadcastId">
         <input type="hidden" id="saveTemplateAccountId">
+        <input type="hidden" id="saveTemplateVideoId">
+        <input type="hidden" id="saveTemplateAudioId">
+        <input type="hidden" id="saveTemplateStreamId">
         
         <div>
-          <label class="text-sm font-medium text-white block mb-2">Template Name <span class="text-red-400">*</span></label>
+          <label class="text-xs font-semibold text-gray-200 block mb-1">Nama Template <span class="text-red-400">*</span></label>
           <input type="text" id="saveTemplateName" name="name" required
-            class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none"
-            placeholder="Enter template name">
+            class="w-full px-3.5 py-2 bg-dark-700 border border-gray-600 rounded-lg text-sm text-white focus:border-primary focus:outline-none transition-colors"
+            placeholder="Contoh: Live Harian 24 Jam">
+        </div>
+
+        <!-- Media Confirmation (Video & Audio) -->
+        <div class="bg-dark-700/70 p-3 rounded-lg border border-gray-600/70 space-y-2">
+          <div class="flex items-center justify-between text-xs text-gray-300 font-semibold border-b border-gray-600/50 pb-1.5">
+            <span class="flex items-center gap-1.5"><i class="ti ti-folder text-primary font-loaded"></i>Media Siaran Terpilih</span>
+            <span class="text-[10px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/30">Otomatis Terhubung</span>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+            <div class="bg-dark-800 p-2.5 rounded-lg border border-gray-700">
+              <span class="text-gray-400 block text-[11px] mb-1 flex items-center gap-1"><i class="ti ti-video text-blue-400 font-loaded"></i>Video:</span>
+              <span id="saveTemplateVideoTitle" class="text-white font-medium truncate block text-xs" title="-">-</span>
+            </div>
+            <div class="bg-dark-800 p-2.5 rounded-lg border border-gray-700">
+              <span class="text-gray-400 block text-[11px] mb-1 flex items-center gap-1"><i class="ti ti-music text-purple-400 font-loaded"></i>Audio:</span>
+              <span id="saveTemplateAudioTitle" class="text-white font-medium truncate block text-xs" title="-">-</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Stream Key Section -->
+        <div>
+          <label class="text-xs font-semibold text-gray-200 block mb-1 flex items-center justify-between">
+            <span class="flex items-center gap-1"><i class="ti ti-key text-yellow-400 font-loaded"></i>Stream Key YouTube</span>
+            <span class="text-[10px] text-gray-400">Tersimpan dari broadcast</span>
+          </label>
+          <input type="text" id="saveTemplateStreamKey"
+            class="w-full px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg font-mono text-xs text-primary focus:border-primary focus:outline-none transition-colors"
+            placeholder="Stream key...">
+        </div>
+
+        <!-- Schedule Mode (Once, Daily, Weekly) -->
+        <div class="space-y-3 bg-dark-700/50 p-3 rounded-lg border border-gray-600/50">
+          <div>
+            <label class="text-xs font-semibold text-gray-200 block mb-1 flex items-center gap-1">
+              <i class="ti ti-calendar-time text-primary font-loaded"></i>Jadwal Live Otomatis
+            </label>
+            <select id="saveTemplateScheduleType" onchange="toggleSaveTemplateScheduleFields(this.value)"
+              class="w-full px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg text-xs text-white focus:border-primary focus:outline-none transition-colors">
+              <option value="once">Sekali Siar (Once)</option>
+              <option value="daily">Harian (Daily - Otomatis Siar Setiap Hari)</option>
+              <option value="weekly">Mingguan (Weekly - Siar pada Hari Pilihan)</option>
+            </select>
+          </div>
+
+          <!-- Recurring Time Input (Shown for Daily & Weekly) -->
+          <div id="saveTemplateRecurringTimeContainer" class="hidden">
+            <label class="text-xs font-medium text-gray-300 block mb-1 flex items-center gap-1">
+              <i class="ti ti-clock text-amber-400 font-loaded"></i>Jam Mulai Siaran (WIB)
+            </label>
+            <input type="time" id="saveTemplateRecurringTime"
+              class="w-full px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg text-xs text-white focus:border-primary focus:outline-none"
+              value="13:00">
+            <p class="text-[11px] text-gray-400 mt-1">Live streaming dan YouTube broadcast akan otomatis berjalan pada jam ini.</p>
+          </div>
+
+          <!-- Recurring Days Input (Shown for Weekly) -->
+          <div id="saveTemplateRecurringDaysContainer" class="hidden">
+            <label class="text-xs font-medium text-gray-300 block mb-1.5 flex items-center gap-1">
+              <i class="ti ti-calendar-event text-emerald-400 font-loaded"></i>Pilih Hari Siaran
+            </label>
+            <div class="grid grid-cols-4 sm:grid-cols-7 gap-1 text-xs">
+              <label class="flex items-center gap-1 bg-dark-800 p-1.5 rounded cursor-pointer hover:bg-dark-600 border border-gray-700 text-gray-300">
+                <input type="checkbox" name="saveTemplateDays" value="monday" class="accent-primary" checked>
+                <span class="text-[11px]">Sen</span>
+              </label>
+              <label class="flex items-center gap-1 bg-dark-800 p-1.5 rounded cursor-pointer hover:bg-dark-600 border border-gray-700 text-gray-300">
+                <input type="checkbox" name="saveTemplateDays" value="tuesday" class="accent-primary" checked>
+                <span class="text-[11px]">Sel</span>
+              </label>
+              <label class="flex items-center gap-1 bg-dark-800 p-1.5 rounded cursor-pointer hover:bg-dark-600 border border-gray-700 text-gray-300">
+                <input type="checkbox" name="saveTemplateDays" value="wednesday" class="accent-primary" checked>
+                <span class="text-[11px]">Rab</span>
+              </label>
+              <label class="flex items-center gap-1 bg-dark-800 p-1.5 rounded cursor-pointer hover:bg-dark-600 border border-gray-700 text-gray-300">
+                <input type="checkbox" name="saveTemplateDays" value="thursday" class="accent-primary" checked>
+                <span class="text-[11px]">Kam</span>
+              </label>
+              <label class="flex items-center gap-1 bg-dark-800 p-1.5 rounded cursor-pointer hover:bg-dark-600 border border-gray-700 text-gray-300">
+                <input type="checkbox" name="saveTemplateDays" value="friday" class="accent-primary" checked>
+                <span class="text-[11px]">Jum</span>
+              </label>
+              <label class="flex items-center gap-1 bg-dark-800 p-1.5 rounded cursor-pointer hover:bg-dark-600 border border-gray-700 text-gray-300">
+                <input type="checkbox" name="saveTemplateDays" value="saturday" class="accent-primary" checked>
+                <span class="text-[11px]">Sab</span>
+              </label>
+              <label class="flex items-center gap-1 bg-dark-800 p-1.5 rounded cursor-pointer hover:bg-dark-600 border border-gray-700 text-gray-300">
+                <input type="checkbox" name="saveTemplateDays" value="sunday" class="accent-primary" checked>
+                <span class="text-[11px]">Min</span>
+              </label>
+            </div>
+          </div>
         </div>
         
-        <div id="saveTemplatePreview" class="bg-dark-700 rounded-lg p-4 border border-gray-600">
-          <p class="text-sm text-gray-400 mb-2">Settings to save:</p>
-          <div class="text-xs text-gray-500 space-y-1">
-            <p><span class="text-gray-400">Title:</span> <span id="previewTitle">-</span></p>
-            <p><span class="text-gray-400">Privacy:</span> <span id="previewPrivacy">-</span></p>
+        <div id="saveTemplatePreview" class="bg-dark-700 rounded-lg p-3 border border-gray-600/80">
+          <p class="text-xs text-gray-400 mb-1.5 font-medium">Ringkasan Pengaturan:</p>
+          <div class="text-xs text-gray-400 space-y-1">
+            <p class="truncate"><span class="text-gray-400">Judul Siaran:</span> <span id="previewTitle" class="text-white font-medium">-</span></p>
+            <p><span class="text-gray-400">Privasi:</span> <span id="previewPrivacy" class="text-white uppercase font-medium">-</span></p>
             <p><span class="text-gray-400">Durasi:</span> <span id="previewDuration" class="text-amber-400 font-medium">-</span></p>
           </div>
         </div>
         
         <div class="pt-2 flex gap-3">
           <button type="button" onclick="closeSaveAsTemplateModal()"
-            class="flex-1 bg-dark-700 hover:bg-dark-600 text-white px-4 py-2.5 rounded-lg transition-colors">
-            Cancel
+            class="flex-1 bg-dark-700 hover:bg-dark-600 text-white px-4 py-2.5 rounded-lg text-sm transition-colors font-medium">
+            Batal
           </button>
           <button type="submit" id="saveTemplateBtn"
-            class="flex-1 bg-primary hover:bg-primary/80 text-white px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
+            class="flex-1 bg-primary hover:bg-primary/80 text-white px-4 py-2.5 rounded-lg text-sm transition-colors flex items-center justify-center gap-2 font-medium shadow-lg shadow-primary/20">
             <i class="ti ti-device-floppy"></i>
-            <span>Save Template</span>
+            <span>Simpan Template</span>
           </button>
         </div>
       </form>
