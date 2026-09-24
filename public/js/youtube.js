@@ -3533,10 +3533,37 @@ function initTagInput() {
   });
 }
 
-// Safe date-time formatter for local WIB
+// Safe date-time formatter and parser for strict WIB (Asia/Jakarta / GMT+7)
+function parseWibDateTime(val) {
+  if (!val) return null;
+  if (val instanceof Date) return val;
+  let s = String(val).trim();
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(s)) {
+    s += ':00+07:00';
+  } else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(s)) {
+    s += '+07:00';
+  }
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+window.parseWibDateTime = parseWibDateTime;
+
 function formatDateTimeLocal(isoString) {
   if (!isoString) return '';
-  const date = new Date(isoString);
+  let date;
+  if (isoString instanceof Date) {
+    date = isoString;
+  } else if (typeof isoString === 'string') {
+    let s = isoString.trim();
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(s)) {
+      s += ':00+07:00';
+    } else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(s)) {
+      s += '+07:00';
+    }
+    date = new Date(s);
+  } else {
+    date = new Date(isoString);
+  }
   if (isNaN(date.getTime())) return '';
   try {
     const fmt = new Intl.DateTimeFormat('en-CA', {
@@ -3586,28 +3613,34 @@ function openCreateBroadcastModal(options = {}) {
     console.warn('[openCreateBroadcastModal] Clock update warning:', e);
   }
   
-  // Set minimum and default datetime to at least 15 minutes from now (formatted for local timezone)
+  // Set minimum and default datetime strictly in real-time WIB (Asia/Jakarta)
   try {
-    const minDate = new Date(Date.now() + 11 * 60 * 1000);
-    const defaultDate = new Date(Date.now() + 15 * 60 * 1000);
-    const minDateStr = typeof formatDateTimeLocal === 'function' ? formatDateTimeLocal(minDate) : minDate.toISOString().slice(0, 16);
-    const defaultDateStr = typeof formatDateTimeLocal === 'function' ? formatDateTimeLocal(defaultDate) : defaultDate.toISOString().slice(0, 16);
+    const form = document.getElementById('createBroadcastForm');
+    const isEditing = form && !!form.dataset.editingStreamId;
+    const isReusingOrTemplate = options.isReusing || options.isTemplate || (form && (form.dataset.isReusing === 'true' || form.dataset.isTemplate === 'true'));
+
+    const nowMs = Date.now();
+    const minDate = new Date(nowMs + 11 * 60 * 1000);
+    const defaultDate = new Date(nowMs + 15 * 60 * 1000);
+    const minDateStr = formatDateTimeLocal(minDate);
+    const defaultDateStr = formatDateTimeLocal(defaultDate);
+
     const scheduledInput = document.getElementById('scheduledStartTime');
     if (scheduledInput) {
       scheduledInput.min = minDateStr;
-      if (!scheduledInput.value) {
-        scheduledInput.value = defaultDateStr;
+      if (!isEditing && !isReusingOrTemplate) {
+        scheduledInput.value = options.scheduledStartTime ? formatDateTimeLocal(options.scheduledStartTime) : defaultDateStr;
       }
     }
     const studioStart = document.getElementById('studioScheduleStartTime');
     if (studioStart) {
       studioStart.min = minDateStr;
-      if (!studioStart.value) {
-        studioStart.value = scheduledInput ? scheduledInput.value : defaultDateStr;
+      if (!isEditing && !isReusingOrTemplate) {
+        studioStart.value = options.scheduledStartTime ? formatDateTimeLocal(options.scheduledStartTime) : (scheduledInput ? scheduledInput.value : defaultDateStr);
       }
     }
     const autoStopToggle = document.getElementById('studioEnableAutoStopToggle');
-    if (autoStopToggle) {
+    if (autoStopToggle && !isEditing) {
       autoStopToggle.checked = false;
     }
     if (typeof updateAutoStopBadge === 'function') updateAutoStopBadge();
@@ -4186,9 +4219,11 @@ function updateStudioDurationSummary() {
     if (totalMinutes > 0) {
       let eStr = '';
       if (eVal) {
-        const eDate = new Date(eVal);
-        if (!isNaN(eDate.getTime())) {
-          eStr = ' (Selesai pukul ' + String(eDate.getHours()).padStart(2, '0') + ':' + String(eDate.getMinutes()).padStart(2, '0') + ' WIB)';
+        const eDate = parseWibDateTime(eVal);
+        if (eDate && !isNaN(eDate.getTime())) {
+          const eFormatted = formatDateTimeLocal(eDate);
+          const timeOnly = eFormatted.slice(11, 16);
+          eStr = ` (Selesai pukul ${timeOnly} WIB)`;
         }
       }
       summaryText.textContent = 'Durasi: ' + (hours > 0 ? hours + ' Jam ' : '') + (minutes > 0 ? minutes + ' Menit' : '') + eStr + ' • Server akan menutup siaran secara otomatis.';
@@ -4237,10 +4272,10 @@ function syncEndTimeFromDuration() {
 
   if (endInput) {
     if (totalMinutes > 0 && startVal) {
-      const startDate = new Date(startVal);
-      if (!isNaN(startDate.getTime())) {
+      const startDate = parseWibDateTime(startVal);
+      if (startDate && !isNaN(startDate.getTime())) {
         const endDate = new Date(startDate.getTime() + totalMinutes * 60 * 1000);
-        endInput.value = typeof formatDateTimeLocal === 'function' ? formatDateTimeLocal(endDate) : endDate.toISOString().slice(0, 16);
+        endInput.value = formatDateTimeLocal(endDate);
       }
     } else if (totalMinutes === 0) {
       endInput.value = '';
@@ -4261,9 +4296,9 @@ function syncDurationFromEndTimes() {
   const endVal = document.getElementById('studioScheduleEndTime')?.value;
 
   if (startVal && endVal) {
-    const startDate = new Date(startVal);
-    const endDate = new Date(endVal);
-    if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime()) && endDate > startDate) {
+    const startDate = parseWibDateTime(startVal);
+    const endDate = parseWibDateTime(endVal);
+    if (startDate && endDate && !isNaN(startDate.getTime()) && !isNaN(endDate.getTime()) && endDate > startDate) {
       const diffMinutes = Math.round((endDate.getTime() - startDate.getTime()) / (60 * 1000));
       const hours = Math.floor(diffMinutes / 60);
       const minutes = diffMinutes % 60;
@@ -4308,10 +4343,12 @@ function setStudioScheduleType(type) {
     // Sync times for once
     const scheduledInput = document.getElementById('scheduledStartTime');
     const sStart = document.getElementById('studioScheduleStartTime');
-    if (sStart && scheduledInput && !sStart.value && scheduledInput.value) {
-      sStart.value = scheduledInput.value;
-    } else if (sStart && scheduledInput && sStart.value) {
-      scheduledInput.value = sStart.value;
+    if (sStart && scheduledInput) {
+      if (scheduledInput.value) {
+        sStart.value = scheduledInput.value;
+      } else if (sStart.value) {
+        scheduledInput.value = sStart.value;
+      }
     }
     syncEndTimeFromDuration();
   } else if (type === 'daily') {
@@ -4747,6 +4784,9 @@ function closeCreateBroadcastModal() {
   if (minutesInput) minutesInput.value = '';
   const loopToggle = document.getElementById('studioLoopVideoToggle');
   if (loopToggle) loopToggle.checked = true;
+
+  const scheduledInput = document.getElementById('scheduledStartTime');
+  if (scheduledInput) scheduledInput.value = '';
 
   const sStart = document.getElementById('studioScheduleStartTime');
   const sEnd = document.getElementById('studioScheduleEndTime');
@@ -7649,22 +7689,11 @@ async function fetchStreamIdsForAccount(accountId) {
 }
 
 /**
- * Format a Date or date string to local "YYYY-MM-DDTHH:mm"
- * Never uses UTC so it avoids GMT+7 / local timezone conversion bugs.
+ * Format a Date or date string to WIB "YYYY-MM-DDTHH:mm"
  */
 function formatLocalDateTime(d) {
-  if (!d) return '';
-  const date = (d instanceof Date) ? d : new Date(d);
-  if (isNaN(date.getTime())) return '';
-  const pad = n => String(n).padStart(2, '0');
-  const year = date.getFullYear();
-  const month = pad(date.getMonth() + 1);
-  const day = pad(date.getDate());
-  const hours = pad(date.getHours());
-  const minutes = pad(date.getMinutes());
-  return `${year}-${month}-${day}T${hours}:${minutes}`;
+  return formatDateTimeLocal(d);
 }
-window.formatDateTimeLocal = formatLocalDateTime;
 window.formatLocalDateTime = formatLocalDateTime;
 
 // Open Re-create from Template Modal
