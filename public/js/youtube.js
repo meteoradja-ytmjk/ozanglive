@@ -6028,136 +6028,126 @@ window.filterTemplatesBySelectedChannel = filterTemplatesBySelectedChannel;
 function renderTemplateList(templates) {
   const content = document.getElementById('templateListContent');
   content.innerHTML = '';
+  content.className = 'space-y-3';
   
   templates.forEach((template, index) => {
     const isMulti = template.isMultiBroadcast && template.broadcasts && template.broadcasts.length > 1;
     const broadcastCount = isMulti ? template.broadcasts.length : 1;
-    const hasRecurring = template.recurring_enabled;
-    const hasThumbnailFolder = template.thumbnail_folder !== null && template.thumbnail_folder !== undefined;
+    const hasRecurring = Boolean(template.recurring_enabled);
     const hasPinnedThumbnail = template.pinned_thumbnail !== null && template.pinned_thumbnail !== undefined && template.pinned_thumbnail !== '';
     const accountInvalid = template.account_valid === false;
     const channelLabel = template.channel_name
       || template.channelName
       || (template.account_id ? `Disconnected account #${template.account_id}` : 'Unknown Channel');
     
-    // Build recurring info HTML for desktop
-    let recurringHtmlDesktop = '';
+    let patternText = '';
+    let nextRunText = '';
     if (hasRecurring) {
-      const patternText = formatRecurringPattern(template.recurring_pattern, template.recurring_days, template.recurring_time);
-      const nextRunText = formatNextRun(template.next_run_at);
-      recurringHtmlDesktop = `
-        <div class="flex items-center gap-2 mt-2 text-xs flex-wrap">
-          <span class="px-2 py-0.5 bg-emerald-500/15 text-emerald-300 border border-emerald-500/25 rounded-md flex items-center gap-1 font-medium shadow-2xs">
-            <i class="ti ti-repeat text-emerald-400"></i>
-            ${escapeHtml(patternText)}
-          </span>
-          <span class="text-gray-400 flex items-center gap-1">
-            <i class="ti ti-clock text-gray-500"></i>
-            Jadwal Berikutnya: <span class="text-gray-200 font-medium">${escapeHtml(nextRunText)}</span>
-          </span>
-          <span class="text-[11px] text-emerald-400/80 font-normal">
-            (Siaran dibuat otomatis di background saat jam tiba)
-          </span>
-        </div>
-      `;
+      patternText = formatRecurringPattern(template.recurring_pattern, template.recurring_days, template.recurring_time);
+      nextRunText = formatNextRun(template.next_run_at);
     }
     
-    // Thumbnail folder badge - show mode info (only for pinned)
+    // Thumbnail badge - show mode info (only for pinned)
     let thumbnailBadge = '';
     if (hasPinnedThumbnail) {
-      thumbnailBadge = `<span class="px-1.5 py-0.5 bg-green-500/20 text-green-400 text-xs rounded flex items-center gap-0.5" title="Pinned thumbnail"><i class="ti ti-pin-filled text-[10px]"></i> Pin</span>`;
+      thumbnailBadge = `<span class="px-2 py-0.5 bg-green-500/20 text-green-400 text-[11px] rounded-full flex items-center gap-1 font-medium border border-green-500/30 flex-shrink-0" title="Pinned thumbnail"><i class="ti ti-pin-filled text-[10px]"></i> Pin</span>`;
     }
     
     // Channel display with warning if account is invalid
     const channelDisplay = accountInvalid 
-      ? `<span class="text-xs text-orange-400 flex items-center gap-1" title="YouTube account disconnected. Select a new account when re-creating.">
-          <i class="ti ti-alert-triangle"></i>
-          ${escapeHtml(template.channel_name || 'Disconnected Channel')}
+      ? `<span class="text-xs text-orange-400 flex items-center gap-1 font-medium" title="YouTube account disconnected. Select a new account when re-creating.">
+          <i class="ti ti-alert-triangle text-xs"></i>
+          <span class="truncate max-w-[120px] sm:max-w-[160px]">${escapeHtml(channelLabel)}</span>
         </span>`
-      : `<span class="text-xs text-red-400 flex items-center gap-1">
-          <i class="ti ti-brand-youtube"></i>
-          ${escapeHtml(template.channel_name || 'Disconnected Channel')}
+      : `<span class="text-xs text-red-400 flex items-center gap-1 font-medium">
+          <i class="ti ti-brand-youtube text-sm"></i>
+          <span class="truncate max-w-[120px] sm:max-w-[160px]">${escapeHtml(channelLabel)}</span>
         </span>`;
-    const recreateActionLabel = 'Rebroadcast';
-    const recreateActionTitle = 'Jadwalkan ulang broadcast dari template ini';
-    const recreateActionIcon = 'ti-broadcast';
-    const recreateActionDesktopClass = 'px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-lg transition-colors text-sm flex items-center gap-1.5 font-medium cursor-pointer';
-    const recreateActionMobileClass = 'px-2 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded transition-colors text-xs flex items-center gap-1';
-    
+
     const div = document.createElement('div');
-    div.className = 'template-list-item';
+    div.className = `template-list-item bg-dark-700/80 hover:bg-dark-700 border border-gray-700/60 hover:border-gray-600/80 rounded-xl p-3 sm:p-3.5 transition-all shadow-xs flex flex-col gap-2.5 ${accountInvalid ? 'border-orange-500/40' : ''}`;
     div.innerHTML = `
-      <!-- Desktop Layout -->
-      <div class="hidden md:flex items-start justify-between gap-4 bg-dark-700 rounded-lg p-4 ${accountInvalid ? 'border border-orange-500/30' : ''}">
-        <div class="flex-1 min-w-0">
-          <div class="flex items-center gap-2 flex-wrap">
-            <h4 class="font-medium text-white truncate">${escapeHtml(template.name)}</h4>
-            ${isMulti ? `<span class="px-1.5 py-0.5 bg-primary/20 text-primary text-xs rounded">${broadcastCount} broadcasts</span>` : ''}
-            ${hasRecurring ? `
-              <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shadow-xs" title="Jadwal otomatis aktif - siaran dibuat otomatis oleh server saat jam tiba">
-                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                <span>Jadwal Otomatis Aktif</span>
-              </span>` : ''}
-            ${thumbnailBadge}
-          </div>
-          <p class="text-sm text-gray-400 truncate">${escapeHtml(template.title)}</p>
-          <div class="flex items-center gap-2 mt-1">
+      <!-- Baris 1: Identitas Template & Tombol Aksi Utama (Full Width, Seimbang) -->
+      <div class="flex items-center justify-between gap-3 w-full">
+        <!-- Sisi Kiri: Index + Nama Template + Badges + Channel -->
+        <div class="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
+          <span class="w-6 h-6 rounded-md bg-dark-600/90 text-primary font-bold text-xs flex items-center justify-center flex-shrink-0 border border-gray-600/50 shadow-2xs">
+            ${index + 1}
+          </span>
+          <h4 class="font-semibold text-white text-sm truncate max-w-[180px] sm:max-w-xs md:max-w-sm" title="${escapeHtml(template.name)}">
+            ${escapeHtml(template.name)}
+          </h4>
+          ${isMulti ? `<span class="px-2 py-0.5 bg-primary/15 text-primary border border-primary/25 text-[11px] font-medium rounded-full flex-shrink-0">${broadcastCount} broadcasts</span>` : ''}
+          ${hasRecurring ? `
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex-shrink-0 shadow-2xs" title="Jadwal otomatis aktif - siaran dibuat otomatis oleh server saat jam tiba">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span class="hidden sm:inline">Jadwal Otomatis</span>
+              <span class="sm:hidden">Auto</span>
+            </span>` : ''}
+          ${thumbnailBadge}
+          <div class="hidden sm:flex items-center flex-shrink-0">
             ${channelDisplay}
-            <span class="text-xs text-gray-500">
-              ${new Date(template.created_at).toLocaleDateString()}
-            </span>
           </div>
-          ${recurringHtmlDesktop}
         </div>
-        <div class="flex items-center gap-2 flex-shrink-0">
+
+        <!-- Sisi Kanan: Action Buttons (Right-aligned, sleek, responsive) -->
+        <div class="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
           ${hasRecurring ? `
           <button onclick="removeTemplateRecurringSchedule('${template.id}', '${escapeJsString(template.name)}')"
-            class="px-2.5 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 hover:text-amber-300 border border-amber-500/30 rounded-lg transition-colors text-xs flex items-center gap-1.5 font-medium cursor-pointer shadow-xs"
+            class="h-8 px-2 sm:px-2.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 hover:text-amber-300 border border-amber-500/30 rounded-lg transition-all text-xs flex items-center gap-1.5 font-medium cursor-pointer shadow-xs active:scale-95 flex-shrink-0"
             title="Hapus / Nonaktifkan penjadwalan otomatis untuk template ini">
             <i class="ti ti-calendar-off text-sm"></i>
-            <span>Hapus Jadwal Otomatis</span>
+            <span class="hidden md:inline">Hapus Jadwal</span>
           </button>` : ''}
           <button onclick="recreateFromTemplate('${template.id}')"
-            class="${recreateActionDesktopClass}" title="${recreateActionTitle}">
-            <i class="ti ${recreateActionIcon}"></i>
-            <span>${recreateActionLabel}</span>
-          </button>
-          <button onclick="deleteTemplate('${template.id}', '${escapeJsString(template.name)}')"
-            class="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors text-sm flex items-center gap-1 cursor-pointer" title="Delete">
-            <i class="ti ti-trash"></i>
-          </button>
-        </div>
-      </div>
-      
-      <!-- Mobile Layout - Simple List -->
-      <div class="md:hidden flex items-center gap-2 px-3 py-2.5 bg-dark-700/50 hover:bg-dark-700 rounded-lg transition-colors ${accountInvalid ? 'border border-orange-500/30' : ''}">
-        <span class="text-primary font-semibold text-xs w-5 flex-shrink-0">${index + 1}</span>
-        <div class="flex-1 min-w-0">
-          <div class="flex items-center gap-1.5">
-            <p class="text-sm text-white truncate font-medium">${escapeHtml(template.name)}</p>
-            ${hasRecurring ? `<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse flex-shrink-0" title="Jadwal Otomatis Aktif"></span>` : ''}
-          </div>
-          <p class="text-[10px] text-gray-500 truncate">${escapeHtml(template.title)}</p>
-        </div>
-        ${accountInvalid ? `<span class="px-1 py-0.5 bg-orange-500/20 text-orange-400 text-[10px] rounded flex-shrink-0" title="Account disconnected"><i class="ti ti-alert-triangle text-[8px]"></i></span>` : ''}
-        ${hasRecurring ? `<span class="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 text-[10px] rounded flex-shrink-0 font-medium">Auto</span>` : ''}
-        ${isMulti ? `<span class="px-1.5 py-0.5 bg-primary/20 text-primary text-[10px] rounded flex-shrink-0">${broadcastCount}</span>` : ''}
-        <div class="flex items-center gap-1 flex-shrink-0">
-          ${hasRecurring ? `
-          <button onclick="removeTemplateRecurringSchedule('${template.id}', '${escapeJsString(template.name)}')"
-            class="w-7 h-7 flex items-center justify-center text-amber-400 hover:bg-amber-500/20 rounded transition-colors"
-            title="Hapus Jadwal Otomatis">
-            <i class="ti ti-calendar-off text-xs"></i>
-          </button>` : ''}
-          <button onclick="recreateFromTemplate('${template.id}')"
-            class="${recreateActionMobileClass}" title="${recreateActionTitle}">
-            <i class="ti ${recreateActionIcon} text-xs"></i>
+            class="h-8 px-3 bg-red-600/15 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/30 rounded-lg transition-all text-xs flex items-center gap-1.5 font-semibold cursor-pointer shadow-xs active:scale-95 flex-shrink-0"
+            title="Jadwalkan ulang broadcast dari template ini">
+            <i class="ti ti-broadcast text-sm"></i>
             <span>Rebroadcast</span>
           </button>
           <button onclick="deleteTemplate('${template.id}', '${escapeJsString(template.name)}')"
-            class="w-7 h-7 flex items-center justify-center text-red-400 hover:bg-red-500/20 rounded transition-colors" title="Delete">
-            <i class="ti ti-trash text-xs"></i>
+            class="w-8 h-8 flex items-center justify-center bg-dark-600/80 hover:bg-red-500/20 text-gray-400 hover:text-red-400 border border-gray-600/50 hover:border-red-500/30 rounded-lg transition-all cursor-pointer flex-shrink-0 active:scale-95"
+            title="Hapus Template">
+            <i class="ti ti-trash text-sm"></i>
           </button>
+        </div>
+      </div>
+
+      <!-- Baris 2: Sub-bar Konten Video & Status Penjadwalan (Full Width, Tanpa Ruang Kosong) -->
+      <div class="bg-dark-800/80 rounded-lg px-3 py-1.5 sm:py-2 border border-gray-700/50 flex items-center justify-between gap-3 text-xs w-full">
+        <!-- Sisi Kiri: Judul Siaran & Tanggal Buat -->
+        <div class="flex items-center gap-2 min-w-0 flex-1">
+          <i class="ti ti-video text-gray-400 flex-shrink-0"></i>
+          <span class="text-gray-300 font-medium truncate" title="${escapeHtml(template.title)}">
+            ${escapeHtml(template.title)}
+          </span>
+          <span class="text-gray-600 flex-shrink-0 hidden sm:inline">•</span>
+          <span class="text-gray-500 text-[11px] flex-shrink-0 hidden sm:flex items-center gap-1">
+            <i class="ti ti-calendar text-gray-600"></i>
+            ${new Date(template.created_at).toLocaleDateString()}
+          </span>
+          <div class="sm:hidden flex items-center flex-shrink-0">
+            ${channelDisplay}
+          </div>
+        </div>
+
+        <!-- Sisi Kanan: Status Jadwal / Next Run -->
+        <div class="flex items-center gap-2 flex-shrink-0 text-right">
+          ${hasRecurring ? `
+            <span class="px-2 py-0.5 bg-emerald-500/15 text-emerald-300 border border-emerald-500/25 rounded-md font-medium flex items-center gap-1 shadow-2xs text-[11px] sm:text-xs">
+              <i class="ti ti-repeat text-emerald-400"></i>
+              <span>${escapeHtml(patternText)}</span>
+            </span>
+            <span class="text-gray-400 hidden sm:flex items-center gap-1 text-[11px]">
+              <i class="ti ti-clock text-gray-500"></i>
+              Berikutnya: <span class="text-gray-200 font-medium">${escapeHtml(nextRunText)}</span>
+            </span>
+          ` : `
+            <span class="text-gray-500 flex items-center gap-1.5 text-[11px]">
+              <i class="ti ti-calendar-off text-gray-600"></i>
+              <span>Sekali Siaran</span>
+            </span>
+          `}
         </div>
       </div>
     `;
@@ -9315,23 +9305,21 @@ function setRecreateRecurringMode(mode) {
     }
   }
 
-  const recurringOnlyContainer = document.getElementById('recreateRecurringOnlyContainer');
+  const recreateActionGrid = document.getElementById('recreateActionGrid');
+  const recreateSaveRecurringOnlyBtn = document.getElementById('recreateSaveRecurringOnlyBtn');
   const btnText = document.getElementById('recreateBtnText');
+  const actionHelper = document.getElementById('recreateActionHelperSpan');
 
-  if (recurringOnlyContainer) {
-    if (mode === 'daily' || mode === 'weekly') {
-      recurringOnlyContainer.classList.remove('hidden');
-    } else {
-      recurringOnlyContainer.classList.add('hidden');
-    }
-  }
-
-  if (btnText) {
-    if (mode === 'daily' || mode === 'weekly') {
-      btnText.textContent = 'Buat Siaran Sekarang';
-    } else {
-      btnText.textContent = 'Buat Siaran Terjadwal';
-    }
+  if (mode === 'daily' || mode === 'weekly') {
+    if (recreateSaveRecurringOnlyBtn) recreateSaveRecurringOnlyBtn.classList.remove('hidden');
+    if (recreateActionGrid) recreateActionGrid.className = 'grid grid-cols-2 gap-2 sm:gap-2.5 w-full';
+    if (btnText) btnText.textContent = 'Buat Siaran Sekarang';
+    if (actionHelper) actionHelper.textContent = 'Pilih: simpan jadwal di server atau buat siaran langsung di YouTube sekarang.';
+  } else {
+    if (recreateSaveRecurringOnlyBtn) recreateSaveRecurringOnlyBtn.classList.add('hidden');
+    if (recreateActionGrid) recreateActionGrid.className = 'grid grid-cols-1 w-full';
+    if (btnText) btnText.textContent = 'Buat Siaran Terjadwal';
+    if (actionHelper) actionHelper.textContent = 'Siaran akan langsung didaftarkan ke YouTube Studio.';
   }
 
   // When switching to 'Sekali Saja', ensure each slot has a valid upcoming datetime

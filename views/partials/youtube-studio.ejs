@@ -3001,30 +3001,31 @@
           </div>
         </div>
         
-        <!-- 5. Modal Action Buttons -->
-        <div class="pt-2 space-y-2">
-          <!-- Opsi 2: Tombol Aktifkan Jadwal Otomatis Saja (hanya tampil jika mode Daily atau Weekly) -->
-          <div id="recreateRecurringOnlyContainer" class="hidden">
+        <!-- 5. Modal Action Buttons (Rapi 2 Baris, Tanpa Ruang Kosong) -->
+        <div class="pt-2.5 border-t border-gray-700/60 space-y-2">
+          <!-- Baris 1: Tombol Aksi Utama (Grid 2 Kolom Seimbang saat Recurring, atau 1 Kolom saat Sekali Saja) -->
+          <div id="recreateActionGrid" class="grid grid-cols-2 gap-2 sm:gap-2.5 w-full">
             <button type="button" id="recreateSaveRecurringOnlyBtn" onclick="handleRecreateSaveRecurringOnly()"
-              class="w-full h-9.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white px-3.5 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-2 shadow-md shadow-indigo-600/20 cursor-pointer">
-              <i class="ti ti-calendar-time text-base"></i>
-              <span>Aktifkan Jadwal Otomatis Saja</span>
-              <span class="text-[10px] bg-white/20 px-1.5 py-0.5 rounded text-white/95 font-normal tracking-wide">Tanpa Buat di YouTube Sekarang</span>
-            </button>
-            <p class="text-[10px] text-gray-400 text-center mt-1">
-              <i class="ti ti-info-circle text-[11px] text-primary"></i> Siaran YouTube baru akan dibuat otomatis oleh server saat jam tayang tiba.
-            </p>
-          </div>
-
-          <div class="grid grid-cols-2 gap-2 sm:gap-3">
-            <button type="button" onclick="closeRecreateFromTemplateModal()"
-              class="h-9 bg-dark-700 hover:bg-dark-600 text-gray-300 hover:text-white px-3 sm:px-4 rounded-lg text-xs font-medium transition-colors flex items-center justify-center cursor-pointer">
-              Batal
+              class="h-9 px-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-1.5 shadow-md shadow-indigo-600/20 cursor-pointer active:scale-95">
+              <i class="ti ti-calendar-time text-sm flex-shrink-0"></i>
+              <span class="truncate">Aktifkan Jadwal Otomatis</span>
             </button>
             <button type="submit" id="recreateBtn"
-              class="h-9 bg-red-600 hover:bg-red-500 text-white px-3 sm:px-4 rounded-lg text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 shadow-lg shadow-red-600/20 cursor-pointer">
-              <i class="ti ti-broadcast text-sm"></i>
-              <span id="recreateBtnText">Buat Siaran Sekarang</span>
+              class="h-9 px-3 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-1.5 shadow-md shadow-red-600/20 cursor-pointer active:scale-95">
+              <i class="ti ti-broadcast text-sm flex-shrink-0"></i>
+              <span id="recreateBtnText" class="truncate">Buat Siaran Sekarang</span>
+            </button>
+          </div>
+
+          <!-- Baris 2: Keterangan Status di Kiri & Tombol Batal di Kanan -->
+          <div class="flex items-center justify-between gap-3 pt-0.5">
+            <p class="text-[11px] text-gray-400 truncate flex items-center gap-1.5 min-w-0 flex-1">
+              <i class="ti ti-info-circle text-primary text-xs flex-shrink-0"></i>
+              <span id="recreateActionHelperSpan" class="truncate">Pilih: simpan jadwal di server atau buat siaran langsung di YouTube sekarang.</span>
+            </p>
+            <button type="button" onclick="closeRecreateFromTemplateModal()"
+              class="h-7.5 px-3 bg-dark-700 hover:bg-dark-600 text-gray-400 hover:text-white rounded-lg text-xs font-medium transition-colors flex items-center justify-center cursor-pointer flex-shrink-0">
+              Batal
             </button>
           </div>
         </div>
