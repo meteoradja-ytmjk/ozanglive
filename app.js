@@ -10901,30 +10901,34 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
           const directIds = new Set(directBroadcasts.map(b => b.id));
           directBroadcasts.forEach(db_item => {
             const loc = missingLocal.find(s => s.youtube_broadcast_id === db_item.id);
-            result.push({
-              ...db_item,
-              streamId: db_item.streamId || (loc ? loc.stream_key : null),
-              streamKey: db_item.streamKey || (loc ? loc.stream_key : ''),
-              rtmpUrl: db_item.rtmpUrl || (loc ? loc.rtmp_url : 'rtmp://a.rtmp.youtube.com/live2'),
-              accountId: credentials.id,
-              channelName: credentials.channelName
-            });
+            if (!result.some(b => (b.id || b.broadcastId) === db_item.id)) {
+              result.push({
+                ...db_item,
+                streamId: db_item.streamId || (loc ? loc.stream_key : null),
+                streamKey: db_item.streamKey || (loc ? loc.stream_key : ''),
+                rtmpUrl: db_item.rtmpUrl || (loc ? loc.rtmp_url : 'rtmp://a.rtmp.youtube.com/live2'),
+                accountId: credentials.id,
+                channelName: credentials.channelName
+              });
+            }
           });
-
-          // Prune stale broadcasts
-          const notFoundOnYouTube = missingLocal.filter(s => !directIds.has(s.youtube_broadcast_id));
-          if (notFoundOnYouTube.length > 0) {
-            console.log(`[Broadcasts API] Account ${credentials.id}: pruning ${notFoundOnYouTube.length} stale broadcast(s)`);
-            notFoundOnYouTube.forEach(stale => {
-              db.run(`DELETE FROM youtube_broadcast_settings WHERE broadcast_id = ?`, [stale.youtube_broadcast_id]);
-              db.run(`DELETE FROM streams WHERE youtube_broadcast_id = ?`, [stale.youtube_broadcast_id]);
-            });
-          }
         } catch (byIdErr) {
           console.warn('[Broadcasts API] getBroadcastsByIds error:', byIdErr.message);
         }
       }
       
+      // Deduplicate result by broadcast ID
+      const seenResultIds = new Set();
+      const dedupedResult = [];
+      result.forEach(b => {
+        const bId = b && (b.id || b.broadcastId || b.youtube_broadcast_id);
+        if (bId && !seenResultIds.has(bId)) {
+          seenResultIds.add(bId);
+          dedupedResult.push(b);
+        }
+      });
+      result = dedupedResult;
+
       // Attach local settings (dualStream, alteredContent, unlistReplayOnEnd)
       await attachLocalSettingsToBroadcasts(result, userId);
       
@@ -11010,25 +11014,17 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
                 const directIds = new Set(directBroadcasts.map(b => b.id));
                 directBroadcasts.forEach(db_item => {
                   const loc = missingLocal.find(s => s.youtube_broadcast_id === db_item.id);
-                  accountBroadcasts.push({
-                    ...db_item,
-                    streamId: db_item.streamId || (loc ? loc.stream_key : null),
-                    streamKey: db_item.streamKey || (loc ? loc.stream_key : ''),
-                    rtmpUrl: db_item.rtmpUrl || (loc ? loc.rtmp_url : 'rtmp://a.rtmp.youtube.com/live2'),
-                    accountId: account.id,
-                    channelName: account.channelName
-                  });
+                  if (!accountBroadcasts.some(b => (b.id || b.broadcastId) === db_item.id)) {
+                    accountBroadcasts.push({
+                      ...db_item,
+                      streamId: db_item.streamId || (loc ? loc.stream_key : null),
+                      streamKey: db_item.streamKey || (loc ? loc.stream_key : ''),
+                      rtmpUrl: db_item.rtmpUrl || (loc ? loc.rtmp_url : 'rtmp://a.rtmp.youtube.com/live2'),
+                      accountId: account.id,
+                      channelName: account.channelName
+                    });
+                  }
                 });
-
-                // PRUNE STALE BROADCASTS
-                const notFoundOnYouTube = missingLocal.filter(s => !directIds.has(s.youtube_broadcast_id));
-                if (notFoundOnYouTube.length > 0) {
-                  console.log(`[Broadcasts API] Account ${account.channelName}: pruning ${notFoundOnYouTube.length} stale broadcast(s)`);
-                  notFoundOnYouTube.forEach(stale => {
-                    db.run(`DELETE FROM youtube_broadcast_settings WHERE broadcast_id = ?`, [stale.youtube_broadcast_id]);
-                    db.run(`DELETE FROM streams WHERE youtube_broadcast_id = ?`, [stale.youtube_broadcast_id]);
-                  });
-                }
               } catch (directErr) {
                 console.warn(`[Broadcasts API] Account ${account.channelName} direct ID query warning:`, directErr.message);
               }
@@ -11051,9 +11047,11 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
       const seenIds = new Set();
       const allBroadcasts = [];
       broadcastArrays.flat().forEach(b => {
-        if (b && b.id && !seenIds.has(b.id)) {
-          seenIds.add(b.id);
-          allBroadcasts.push(b);
+        if (!b) return;
+        const bId = b.id || b.broadcastId || b.youtube_broadcast_id;
+        if (bId && !seenIds.has(bId)) {
+          seenIds.add(bId);
+          allBroadcasts.push({ ...b, id: bId });
         }
       });
       
@@ -11242,15 +11240,40 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
 
     // Validate scheduled time (at least 10 minutes in future)
     let finalScheduledStartTime = scheduledStartTime;
-    const parsedWibStart = parseWIBDateTimeLocal(scheduledStartTime);
-    const scheduledDate = parsedWibStart || new Date(scheduledStartTime);
+    const isRecurringReq = req.body.scheduleType === 'daily' || req.body.scheduleType === 'weekly';
     const minTime = new Date(Date.now() + 10 * 60 * 1000);
+
+    // If recurring schedule, calculate next scheduled run in WIB
+    if (isRecurringReq && req.body.recurringTime) {
+      let scheduleDaysParsed = null;
+      if (req.body.scheduleDays) {
+        try {
+          scheduleDaysParsed = typeof req.body.scheduleDays === 'string' ? JSON.parse(req.body.scheduleDays) : req.body.scheduleDays;
+        } catch (e) {}
+      }
+      const nextDate = Stream.getNextScheduledTime({
+        schedule_type: req.body.scheduleType,
+        recurring_time: req.body.recurringTime,
+        schedule_days: scheduleDaysParsed
+      });
+      if (nextDate && nextDate >= minTime) {
+        finalScheduledStartTime = nextDate.toISOString();
+        console.log(`[API] Auto-computed upcoming scheduledStartTime for ${req.body.scheduleType} schedule: ${finalScheduledStartTime}`);
+      }
+    }
+
+    const parsedWibStart = parseWIBDateTimeLocal(finalScheduledStartTime);
+    const scheduledDate = parsedWibStart || new Date(finalScheduledStartTime);
 
     if (scheduledDate < minTime) {
       if (req.body.startImmediately === 'true') {
         // Automatically adjust to 15 minutes ahead so YouTube API accepts immediate live without 400 error
         finalScheduledStartTime = new Date(Date.now() + 15 * 60 * 1000).toISOString();
         console.log('[API] Auto-adjusted scheduledStartTime for immediate start:', finalScheduledStartTime);
+      } else if (isRecurringReq) {
+        // Automatically adjust recurring schedule to at least 15m ahead so YouTube API accepts
+        finalScheduledStartTime = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+        console.log('[API] Auto-adjusted recurring scheduledStartTime to 15m ahead:', finalScheduledStartTime);
       } else {
         return res.status(400).json({
           success: false,
@@ -11692,18 +11715,29 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         scheduleDays = templateObj.recurring_days;
       }
 
-      // For daily/weekly, if schedule_time is null, compute the next scheduled run in WIB
-      if (isRecurring && !scheduleIso && finalRecurringTime) {
-        const tempStream = {
-          schedule_type: scheduleType,
-          recurring_time: finalRecurringTime,
-          schedule_days: scheduleDays
-        };
-        const nextDate = Stream.getNextScheduledTime(tempStream);
-        if (nextDate) {
-          scheduleIso = nextDate.toISOString();
-          console.log(`[API] Set initial schedule_time for ${scheduleType} stream: ${scheduleIso}`);
+      // For daily/weekly, compute the next scheduled run in WIB
+      if (isRecurring) {
+        if (!scheduleIso && finalRecurringTime) {
+          const tempStream = {
+            schedule_type: scheduleType,
+            recurring_time: finalRecurringTime,
+            schedule_days: scheduleDays
+          };
+          const nextDate = Stream.getNextScheduledTime(tempStream);
+          if (nextDate) {
+            scheduleIso = nextDate.toISOString();
+            console.log(`[API] Set initial schedule_time for ${scheduleType} stream: ${scheduleIso}`);
+          }
         }
+        if (!scheduleIso && finalScheduledStartTime) {
+          scheduleIso = finalScheduledStartTime;
+        }
+      }
+
+      // Format schedule_days cleanly for DB
+      let scheduleDaysFormatted = null;
+      if (scheduleDays) {
+        scheduleDaysFormatted = typeof scheduleDays === 'string' ? scheduleDays : JSON.stringify(scheduleDays);
       }
 
       // Recurring streams MUST NOT store a static end_time in DB
@@ -11730,7 +11764,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         schedule_type: scheduleType,
         schedule_time: scheduleIso,
         end_time: finalEndTime,
-        schedule_days: scheduleDays,
+        schedule_days: scheduleDaysFormatted,
         recurring_time: finalRecurringTime,
         recurring_enabled: recurringEnabledVal,
         user_id: req.session.userId,

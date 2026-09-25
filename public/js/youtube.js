@@ -415,9 +415,20 @@ function renderBroadcastsGrouped(broadcasts, accounts, accountErrors) {
   }
   console.log('[renderBroadcastsGrouped] Account map:', accountMap);
   
-  // Group broadcasts by channel
+  // Group broadcasts by channel with strict broadcast ID deduplication
+  const seenBroadcastIds = new Set();
   const groupedBroadcasts = {};
   broadcasts.forEach(broadcast => {
+    if (!broadcast) return;
+    const bId = broadcast.id || broadcast.broadcastId || broadcast.youtube_broadcast_id;
+    if (bId) {
+      if (seenBroadcastIds.has(bId)) {
+        console.log('[renderBroadcastsGrouped] Skipping duplicate broadcast ID:', bId);
+        return;
+      }
+      seenBroadcastIds.add(bId);
+    }
+    
     // PRIORITY: Use channelName from broadcast first, then fallback to accountMap
     let channelName = broadcast.channelName || accountMap[broadcast.accountId];
     
@@ -4175,7 +4186,14 @@ function syncStudioRecurringToScheduledStartTime() {
 
   const rTimeInput = document.getElementById('studioRecurringTime');
   const scheduledInput = document.getElementById('scheduledStartTime');
-  if (!rTimeInput || !scheduledInput || !rTimeInput.value) return;
+  if (!rTimeInput || !scheduledInput) return;
+  if (!rTimeInput.value) {
+    const nowMs = Date.now();
+    const wibDefault = new Date(nowMs + 7 * 60 * 60 * 1000 + 30 * 60 * 1000);
+    const defH = String(wibDefault.getUTCHours()).padStart(2, '0');
+    const defM = String(wibDefault.getUTCMinutes()).padStart(2, '0');
+    rTimeInput.value = `${defH}:${defM}`;
+  }
 
   const [hours, minutes] = rTimeInput.value.split(':').map(Number);
   if (isNaN(hours) || isNaN(minutes)) return;
@@ -5015,9 +5033,16 @@ if (createBroadcastForm) {
       formData.append('description', document.getElementById('broadcastDescription').value);
 
       // Determine proper scheduledStartTime for YouTube broadcast
+      if (scheduleType === 'daily' || scheduleType === 'weekly') {
+        if (typeof syncStudioRecurringToScheduledStartTime === 'function') {
+          syncStudioRecurringToScheduledStartTime();
+        }
+      }
       let topStartTime = document.getElementById('scheduledStartTime')?.value || '';
       let studioStartTime = document.getElementById('studioScheduleStartTime')?.value || '';
       if (scheduleType === 'once' && studioStartTime) {
+        topStartTime = studioStartTime;
+      } else if (scheduleType !== 'once' && !topStartTime && studioStartTime) {
         topStartTime = studioStartTime;
       }
       formData.append('scheduledStartTime', topStartTime);
@@ -5118,7 +5143,10 @@ if (createBroadcastForm) {
         // Refresh broadcasts immediately in-place if already on dashboard, or redirect
         if (window.location.pathname === '/dashboard') {
           console.log('[CreateBroadcast] Refreshing broadcasts in-place...');
-          if (typeof switchStudioTab === 'function') switchStudioTab('broadcasts');
+          const broadcastsPanel = document.getElementById('studio-panel-broadcasts');
+          if (broadcastsPanel && broadcastsPanel.classList.contains('hidden')) {
+            if (typeof switchStudioTab === 'function') switchStudioTab('broadcasts');
+          }
           if (typeof refreshBroadcasts === 'function') {
             refreshBroadcasts({ silent: true });
             // Secondary background refresh 3.5s later to ensure any trailing search index updates are reflected

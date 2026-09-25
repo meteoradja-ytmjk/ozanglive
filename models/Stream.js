@@ -40,8 +40,8 @@ class Stream {
     const recurring_enabled_int = recurring_enabled ? 1 : 0;
     const dual_stream_int = dual_stream ? 1 : 0;
     const vertical_key_val = vertical_stream_key || backup_rtmp_url || null;
-    const schedule_days_json = schedule_days ? JSON.stringify(schedule_days) : null;
-    const original_settings_json = original_settings ? JSON.stringify(original_settings) : null;
+    const schedule_days_json = schedule_days ? (typeof schedule_days === 'string' ? schedule_days : JSON.stringify(schedule_days)) : null;
+    const original_settings_json = original_settings ? (typeof original_settings === 'string' ? original_settings : JSON.stringify(original_settings)) : null;
     const tags_val = Array.isArray(tags) ? JSON.stringify(tags) : (tags || null);
 
     // Determine final status based on schedule type
@@ -219,9 +219,12 @@ class Stream {
     const fields = [];
     const values = [];
     Object.entries(streamData).forEach(([key, value]) => {
-      if (key === 'loop_video' && typeof value === 'boolean') {
+      if (typeof value === 'boolean') {
         fields.push(`${key} = ?`);
         values.push(value ? 1 : 0);
+      } else if (value !== null && typeof value === 'object') {
+        fields.push(`${key} = ?`);
+        values.push(JSON.stringify(value));
       } else {
         fields.push(`${key} = ?`);
         values.push(value);
