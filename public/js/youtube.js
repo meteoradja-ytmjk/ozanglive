@@ -2,6 +2,37 @@
  * YouTube Sync Client-Side JavaScript
  */
 
+if (typeof window.refreshStudioAndControlRoom !== 'function') {
+  window.refreshStudioAndControlRoom = function() {
+    if (typeof window.refreshControlRoom === 'function') {
+      window.refreshControlRoom();
+    } else if (typeof window.loadStreams === 'function') {
+      window.loadStreams();
+      if (typeof window.loadLiveLimitInfo === 'function') window.loadLiveLimitInfo();
+    }
+    if (typeof broadcastsCache !== 'undefined' && broadcastsCache) {
+      broadcastsCache.data = null;
+      broadcastsCache.timestamp = null;
+    }
+    if (typeof refreshBroadcasts === 'function') {
+      refreshBroadcasts({ silent: true });
+    }
+    if (typeof refreshLiveStats === 'function') {
+      refreshLiveStats();
+    }
+    setTimeout(() => {
+      if (typeof window.refreshControlRoom === 'function') {
+        window.refreshControlRoom();
+      } else if (typeof window.loadStreams === 'function') {
+        window.loadStreams();
+      }
+      if (typeof refreshBroadcasts === 'function') {
+        refreshBroadcasts({ silent: true });
+      }
+    }, 2500);
+  };
+}
+
 // Toggle Connected Accounts collapsible
 function toggleConnectedAccounts() {
   console.log('[Collapsible] Toggle function called');
@@ -5014,7 +5045,12 @@ if (createBroadcastForm) {
           }
           showToast('✓ Pengaturan siaran berhasil diperbarui!');
           closeCreateBroadcastModal();
-          setTimeout(() => { window.location.href = '/dashboard?tab=broadcasts'; }, 500);
+          if (typeof window.refreshStudioAndControlRoom === 'function') {
+            window.refreshStudioAndControlRoom();
+          } else {
+            if (typeof window.loadStreams === 'function') window.loadStreams();
+            if (typeof refreshBroadcasts === 'function') refreshBroadcasts({ silent: true });
+          }
         } else {
           showToast(data.error || 'Gagal memperbarui stream', 'error');
         }
@@ -5140,26 +5176,28 @@ if (createBroadcastForm) {
         }
         closeCreateBroadcastModal();
         
-        // Refresh broadcasts immediately in-place if already on dashboard, or redirect
-        if (window.location.pathname === '/dashboard') {
-          console.log('[CreateBroadcast] Refreshing broadcasts in-place...');
-          const broadcastsPanel = document.getElementById('studio-panel-broadcasts');
-          if (broadcastsPanel && broadcastsPanel.classList.contains('hidden')) {
-            if (typeof switchStudioTab === 'function') switchStudioTab('broadcasts');
-          }
-          if (typeof refreshBroadcasts === 'function') {
-            refreshBroadcasts({ silent: true });
-            // Secondary background refresh 3.5s later to ensure any trailing search index updates are reflected
+        // Auto refresh Control Room & YouTube Studio in background seamlessly (no page reload)
+        const isOnDashboard = window.location.pathname === '/dashboard' || 
+                              window.location.pathname === '/' || 
+                              document.getElementById('studio-panel-streams') !== null;
+
+        if (isOnDashboard) {
+          console.log('[CreateBroadcast] Auto-refreshing Control Room & Studio in background...');
+          if (typeof window.refreshStudioAndControlRoom === 'function') {
+            window.refreshStudioAndControlRoom();
+          } else {
+            if (typeof window.loadStreams === 'function') window.loadStreams();
+            if (typeof window.loadLiveLimitInfo === 'function') window.loadLiveLimitInfo();
+            if (typeof refreshBroadcasts === 'function') refreshBroadcasts({ silent: true });
             setTimeout(() => {
-              broadcastsCache.data = null;
-              broadcastsCache.timestamp = null;
-              refreshBroadcasts({ silent: true });
-            }, 3500);
+              if (typeof window.loadStreams === 'function') window.loadStreams();
+              if (typeof refreshBroadcasts === 'function') refreshBroadcasts({ silent: true });
+            }, 2500);
           }
         } else {
           setTimeout(() => {
-            console.log('[CreateBroadcast] Navigating to YouTube Studio tab...');
-            window.location.href = '/dashboard?tab=broadcasts';
+            console.log('[CreateBroadcast] Navigating to dashboard...');
+            window.location.href = '/dashboard';
           }, 800);
         }
       } else {
@@ -5288,6 +5326,8 @@ async function deleteBroadcast(broadcastId, title = null, accountId = null, trig
       if (typeof broadcastsCache !== 'undefined' && broadcastsCache && broadcastsCache.data) {
         broadcastsCache.data = broadcastsCache.data.filter(b => String(b.id) !== String(broadcastId));
       }
+      if (typeof window.loadStreams === 'function') window.loadStreams();
+      if (typeof window.loadLiveLimitInfo === 'function') window.loadLiveLimitInfo();
     } else {
       showToast(data.error || 'Failed to delete broadcast', 'error');
       _restoreDeleteButtons(delButtons);
@@ -5635,7 +5675,12 @@ if (editBroadcastForm) {
       if (data.success) {
         showToast('Broadcast updated successfully!');
         closeEditBroadcastModal();
-        setTimeout(() => { window.location.href = '/dashboard?tab=broadcasts'; }, 1200);
+        if (typeof window.refreshStudioAndControlRoom === 'function') {
+          window.refreshStudioAndControlRoom();
+        } else {
+          if (typeof window.loadStreams === 'function') window.loadStreams();
+          if (typeof refreshBroadcasts === 'function') refreshBroadcasts({ silent: true });
+        }
       } else {
         showToast(data.error || 'Failed to update broadcast', 'error');
       }
@@ -9762,11 +9807,16 @@ if (recreateFromTemplateForm) {
       // Show results
       if (results.failed === 0) {
         showToast(`Berhasil menjadwalkan ${results.success} siaran bertingkat!`);
-        setTimeout(() => { window.location.href = '/dashboard?tab=broadcasts'; }, 1000);
       } else {
         showToast(`Berhasil ${results.success}/${results.total} siaran. ${results.failed} gagal.`, 'error');
         console.error('Failed broadcasts:', results.errors);
-        setTimeout(() => { window.location.href = '/dashboard?tab=broadcasts'; }, 2000);
+      }
+      
+      if (typeof window.refreshStudioAndControlRoom === 'function') {
+        window.refreshStudioAndControlRoom();
+      } else {
+        if (typeof window.loadStreams === 'function') window.loadStreams();
+        if (typeof refreshBroadcasts === 'function') refreshBroadcasts({ silent: true });
       }
       
     } catch (error) {
@@ -14444,15 +14494,16 @@ async function submitDuplicateBroadcast(event) {
       showToast('Siaran berhasil diduplikat!', 'success');
       closeDuplicateBroadcastModal();
       
-      // Clear cache and refresh list
-      if (typeof broadcastsCache !== 'undefined' && broadcastsCache) {
-        broadcastsCache.data = null;
-        broadcastsCache.timestamp = null;
-      }
-      if (typeof refreshBroadcasts === 'function') {
-        refreshBroadcasts();
+      // Clear cache and refresh list in background
+      if (typeof window.refreshStudioAndControlRoom === 'function') {
+        window.refreshStudioAndControlRoom();
       } else {
-        setTimeout(() => window.location.reload(), 800);
+        if (typeof broadcastsCache !== 'undefined' && broadcastsCache) {
+          broadcastsCache.data = null;
+          broadcastsCache.timestamp = null;
+        }
+        if (typeof window.loadStreams === 'function') window.loadStreams();
+        if (typeof refreshBroadcasts === 'function') refreshBroadcasts({ silent: true });
       }
     } else {
       showToast(data.error || 'Gagal menduplikat siaran', 'error');

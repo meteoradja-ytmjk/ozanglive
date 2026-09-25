@@ -1094,6 +1094,9 @@
       if (tabName === 'broadcasts') {
         if (typeof refreshLiveStats === 'function') refreshLiveStats();
         if (typeof lazyLoadBroadcasts === 'function') lazyLoadBroadcasts();
+      } else if (tabName === 'streams') {
+        if (typeof window.loadStreams === 'function') window.loadStreams();
+        if (typeof window.loadLiveLimitInfo === 'function') window.loadLiveLimitInfo();
       }
     }
 
@@ -2013,6 +2016,63 @@
         console.error('Error loading live limit info:', error);
       }
     }
+    window.loadLiveLimitInfo = loadLiveLimitInfo;
+
+    // Background auto-refresh for Control Room
+    window.refreshControlRoom = async function() {
+      try {
+        console.log('[ControlRoom] Auto-refreshing Control Room streams in background...');
+        if (typeof window.loadStreams === 'function') {
+          await window.loadStreams();
+        }
+        if (typeof window.loadLiveLimitInfo === 'function') {
+          await window.loadLiveLimitInfo();
+        }
+        <% if (isAdmin) { %>
+        if (typeof loadSystemStats === 'function') {
+          loadSystemStats();
+        }
+        <% } %>
+      } catch (err) {
+        console.warn('[ControlRoom] Error during background refresh:', err);
+      }
+    };
+
+    // Unified background refresh for both Control Room & YouTube Studio
+    window.refreshStudioAndControlRoom = function() {
+      console.log('[Dashboard] Auto-refreshing Control Room & YouTube Studio in background...');
+      // 1. Refresh Control Room in background immediately
+      if (typeof window.refreshControlRoom === 'function') {
+        window.refreshControlRoom();
+      } else if (typeof window.loadStreams === 'function') {
+        window.loadStreams();
+        if (typeof window.loadLiveLimitInfo === 'function') window.loadLiveLimitInfo();
+      }
+
+      // 2. Clear cache and refresh YouTube Studio
+      if (typeof broadcastsCache !== 'undefined' && broadcastsCache) {
+        broadcastsCache.data = null;
+        broadcastsCache.timestamp = null;
+      }
+      if (typeof refreshBroadcasts === 'function') {
+        refreshBroadcasts({ silent: true });
+      }
+      if (typeof refreshLiveStats === 'function') {
+        refreshLiveStats();
+      }
+
+      // 3. Secondary background sync after 2.5s to ensure backend DB & API state have settled
+      setTimeout(() => {
+        if (typeof window.refreshControlRoom === 'function') {
+          window.refreshControlRoom();
+        } else if (typeof window.loadStreams === 'function') {
+          window.loadStreams();
+        }
+        if (typeof refreshBroadcasts === 'function') {
+          refreshBroadcasts({ silent: true });
+        }
+      }, 2500);
+    };
 
     // System Stats
     async function loadSystemStats() {
@@ -3754,16 +3814,27 @@
       // ULTRA OPTIMIZED: Refresh stats every 2 minutes (was 60s) - CPU usage is cached
       setInterval(loadSystemStats, 120000);
       <% } %>
-      // SMART POLLING: Faster refresh when streams are live (30s), slower when idle (90s)
+      // SMART POLLING: Responsive refresh in background (10s when active, 25s when idle)
       let streamPollInterval = null;
       function startSmartPolling() {
         if (streamPollInterval) clearInterval(streamPollInterval);
         const hasLiveStreams = document.querySelectorAll('.bg-green-500').length > 0;
-        const interval = hasLiveStreams ? 30000 : 90000;
-        streamPollInterval = setInterval(loadStreams, interval);
+        const interval = hasLiveStreams ? 10000 : 25000;
+        streamPollInterval = setInterval(() => {
+          loadStreams();
+          loadLiveLimitInfo();
+        }, interval);
       }
-      setInterval(startSmartPolling, 60000); // Re-evaluate polling speed every minute
+      setInterval(startSmartPolling, 30000);
       startSmartPolling();
+
+      // Automatically refresh Control Room when returning to the tab
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'visible') {
+          loadStreams();
+          loadLiveLimitInfo();
+        }
+      });
       // ULTRA OPTIMIZED: Refresh live limit info every 3 minutes (was 2 min)
       setInterval(loadLiveLimitInfo, 180000);
       // Update clock every second (minimal CPU impact)
