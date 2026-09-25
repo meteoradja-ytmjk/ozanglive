@@ -8263,23 +8263,21 @@ function renderRecreateSlotList() {
             </div>
           </div>
 
-          <!-- Line 2: Tombol Aksi (Edit Full di Kiri & Tombol Lain di Kanan, Ukuran Rapi & Seimbang) -->
-          <div class="grid grid-cols-2 gap-2 w-full">
+          <!-- Line 2: Tombol Aksi (Edit Full dan Edit Judul Ukuran Sama Rata) -->
+          <div class="flex items-center gap-2 w-full">
             <button type="button" onclick="openRecreateGroupFullEditor(${groupIndex})"
-              class="h-8 px-3 bg-blue-500/15 hover:bg-blue-500/25 text-blue-400 border border-blue-500/35 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-xs active:scale-95"
+              class="flex-1 min-w-0 h-8 px-3 bg-blue-500/15 hover:bg-blue-500/25 text-blue-400 border border-blue-500/35 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-xs active:scale-95"
               title="Edit Full Siaran #${groupIndex + 1}: Judul, Rotasi, Thumbnail, Stream Key, Media & Durasi">
-              <i class="ti ti-edit text-xs"></i>
+              <i class="ti ti-edit text-xs flex-shrink-0"></i>
               <span class="truncate">Edit Full</span>
             </button>
-            <div class="flex items-center gap-1.5 w-full">
-              <button type="button" onclick="editRecreateGroupTitle(${groupIndex})"
-                class="flex-1 h-8 px-2.5 bg-dark-600 hover:bg-dark-500 text-gray-300 hover:text-white border border-gray-600/70 hover:border-gray-500 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-xs active:scale-95"
-                title="Edit judul siaran #${groupIndex + 1}">
-                <i class="ti ti-typography text-xs"></i>
-                <span class="truncate">Edit Judul</span>
-              </button>
-              ${deleteGroupBtn}
-            </div>
+            <button type="button" onclick="editRecreateGroupTitle(${groupIndex})"
+              class="flex-1 min-w-0 h-8 px-3 bg-dark-600 hover:bg-dark-500 text-gray-300 hover:text-white border border-gray-600/70 hover:border-gray-500 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-xs active:scale-95"
+              title="Edit judul siaran #${groupIndex + 1}">
+              <i class="ti ti-typography text-xs flex-shrink-0"></i>
+              <span class="truncate">Edit Judul</span>
+            </button>
+            ${deleteGroupBtn}
           </div>
         </div>`;
     }
