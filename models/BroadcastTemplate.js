@@ -108,7 +108,9 @@ class BroadcastTemplate {
             loopVideo: b.loopVideo !== undefined ? (b.loopVideo !== false && b.loopVideo !== 0 && b.loopVideo !== '0') : row.loop_video,
             videoId: b.videoId || row.video_id || null,
             audioId: b.audioId || row.audio_id || null,
-            scheduleType: b.scheduleType || row.schedule_type || 'once'
+            scheduleType: b.scheduleType || row.schedule_type || 'once',
+            thumbnailFolder: (b.thumbnailFolder !== undefined && b.thumbnailFolder !== null) ? b.thumbnailFolder : row.thumbnail_folder,
+            pinnedThumbnail: (b.pinnedThumbnail || b.thumbnailPath || row.pinned_thumbnail || row.thumbnail_path || null)
           }));
         }
       } catch (e) {}
@@ -285,9 +287,15 @@ class BroadcastTemplate {
   static findById(id) {
     return new Promise((resolve, reject) => {
       db.get(
-        `SELECT bt.*, COALESCE(yc.channel_name, bt.channel_name) AS channel_name
+        `SELECT bt.*, 
+                COALESCE(yc.channel_name, bt.channel_name) AS channel_name,
+                COALESCE(v.title, p.name) AS video_title,
+                a.title AS audio_title
          FROM broadcast_templates bt
          LEFT JOIN youtube_credentials yc ON bt.account_id = yc.id
+         LEFT JOIN videos v ON bt.video_id = v.id
+         LEFT JOIN playlists p ON bt.video_id = p.id
+         LEFT JOIN audios a ON bt.audio_id = a.id
          WHERE bt.id = ?`,
         [id],
         (err, row) => {
@@ -299,28 +307,53 @@ class BroadcastTemplate {
             return resolve(null);
           }
           const parsed = BroadcastTemplate.parseRow(row);
-          // If duration is missing, attempt fallback lookup from streams table
-          if ((!parsed.stream_duration_minutes || parsed.stream_duration_minutes === 0) && (parsed.stream_id || parsed.title)) {
+          // If duration or video/audio/stream settings are missing, attempt fallback lookup from streams table
+          const needsFallback = (!parsed.stream_duration_minutes || parsed.stream_duration_minutes === 0) || !parsed.video_id || !parsed.stream_key;
+          if (needsFallback && (parsed.stream_id || parsed.title)) {
             db.get(
-              `SELECT stream_duration_hours, stream_duration_minutes, loop_video, video_id, audio_id, schedule_type
-               FROM streams
-               WHERE user_id = ? AND (stream_key = ? OR title = ?) AND stream_duration_minutes > 0
-               ORDER BY id DESC LIMIT 1`,
+              `SELECT s.stream_duration_hours, s.stream_duration_minutes, s.loop_video, s.video_id, s.audio_id, s.schedule_type, s.stream_key,
+                      COALESCE(v.title, p.name) AS video_title, a.title AS audio_title
+               FROM streams s
+               LEFT JOIN videos v ON s.video_id = v.id
+               LEFT JOIN playlists p ON s.video_id = p.id
+               LEFT JOIN audios a ON s.audio_id = a.id
+               WHERE s.user_id = ? AND (s.stream_key = ? OR s.title = ?)
+               ORDER BY s.id DESC LIMIT 1`,
               [parsed.user_id, parsed.stream_id || '', parsed.title || ''],
               (streamErr, sRow) => {
-                if (!streamErr && sRow && sRow.stream_duration_minutes > 0) {
-                  parsed.stream_duration_minutes = sRow.stream_duration_minutes;
-                  parsed.duration_hours = sRow.stream_duration_hours || Math.floor(sRow.stream_duration_minutes / 60);
-                  parsed.duration_minutes = sRow.stream_duration_minutes % 60;
+                if (!streamErr && sRow) {
+                  if ((!parsed.stream_duration_minutes || parsed.stream_duration_minutes === 0) && sRow.stream_duration_minutes > 0) {
+                    parsed.stream_duration_minutes = sRow.stream_duration_minutes;
+                    parsed.duration_hours = sRow.stream_duration_hours || Math.floor(sRow.stream_duration_minutes / 60);
+                    parsed.duration_minutes = sRow.stream_duration_minutes % 60;
+                  }
                   if (sRow.loop_video !== undefined) parsed.loop_video = sRow.loop_video !== 0 && sRow.loop_video !== false;
-                  if (sRow.video_id) parsed.video_id = sRow.video_id;
-                  if (sRow.audio_id) parsed.audio_id = sRow.audio_id;
+                  if (!parsed.video_id && sRow.video_id) {
+                    parsed.video_id = sRow.video_id;
+                    parsed.video_title = sRow.video_title || parsed.video_title;
+                  }
+                  if (!parsed.audio_id && sRow.audio_id) {
+                    parsed.audio_id = sRow.audio_id;
+                    parsed.audio_title = sRow.audio_title || parsed.audio_title;
+                  }
+                  if (!parsed.stream_key && sRow.stream_key) parsed.stream_key = sRow.stream_key;
+
                   // Asynchronously persist to template so future lookups are immediate
                   db.run(
                     `UPDATE broadcast_templates 
-                     SET stream_duration_minutes = ?, duration_hours = ?, duration_minutes = ?, loop_video = ?
+                     SET stream_duration_minutes = ?, duration_hours = ?, duration_minutes = ?, loop_video = ?,
+                         video_id = COALESCE(video_id, ?), audio_id = COALESCE(audio_id, ?), stream_key = COALESCE(stream_key, ?)
                      WHERE id = ?`,
-                    [parsed.stream_duration_minutes, parsed.duration_hours, parsed.duration_minutes, parsed.loop_video ? 1 : 0, parsed.id]
+                    [
+                      parsed.stream_duration_minutes || 0,
+                      parsed.duration_hours || 0,
+                      parsed.duration_minutes || 0,
+                      parsed.loop_video ? 1 : 0,
+                      parsed.video_id || null,
+                      parsed.audio_id || null,
+                      parsed.stream_key || null,
+                      parsed.id
+                    ]
                   );
                 }
                 resolve(parsed);

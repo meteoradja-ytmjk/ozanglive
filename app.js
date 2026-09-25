@@ -11238,27 +11238,48 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       });
     }
 
+    // Preload template & slot settings if created from template
+    const templateId = req.body.templateId;
+    let templateObj = null;
+    let matchedSlot = null;
+    if (templateId) {
+      try {
+        templateObj = await BroadcastTemplate.findById(templateId);
+        if (templateObj) {
+          if (Array.isArray(templateObj.broadcasts) && templateObj.broadcasts.length > 0) {
+            matchedSlot = templateObj.broadcasts.find(b => b.title === title) || templateObj.broadcasts[0];
+          }
+        }
+      } catch (tErr) {
+        console.warn('[API] Warning pre-loading template:', tErr.message);
+      }
+    }
+
     // Validate scheduled time (at least 10 minutes in future)
     let finalScheduledStartTime = scheduledStartTime;
-    const isRecurringReq = req.body.scheduleType === 'daily' || req.body.scheduleType === 'weekly';
+    const reqScheduleType = req.body.scheduleType || (matchedSlot ? matchedSlot.scheduleType : null) || (templateObj ? templateObj.schedule_type : null) || 'once';
+    const reqRecurringTime = req.body.recurringTime || (templateObj ? templateObj.recurring_time : null);
+    const reqScheduleDays = req.body.scheduleDays || (templateObj ? templateObj.recurring_days : null);
+    const isRecurringReq = reqScheduleType === 'daily' || reqScheduleType === 'weekly';
+    const isFromTemplate = !!templateId;
     const minTime = new Date(Date.now() + 10 * 60 * 1000);
 
     // If recurring schedule, calculate next scheduled run in WIB
-    if (isRecurringReq && req.body.recurringTime) {
+    if (isRecurringReq && reqRecurringTime) {
       let scheduleDaysParsed = null;
-      if (req.body.scheduleDays) {
+      if (reqScheduleDays) {
         try {
-          scheduleDaysParsed = typeof req.body.scheduleDays === 'string' ? JSON.parse(req.body.scheduleDays) : req.body.scheduleDays;
+          scheduleDaysParsed = typeof reqScheduleDays === 'string' ? JSON.parse(reqScheduleDays) : reqScheduleDays;
         } catch (e) {}
       }
       const nextDate = Stream.getNextScheduledTime({
-        schedule_type: req.body.scheduleType,
-        recurring_time: req.body.recurringTime,
+        schedule_type: reqScheduleType,
+        recurring_time: reqRecurringTime,
         schedule_days: scheduleDaysParsed
       });
       if (nextDate && nextDate >= minTime) {
         finalScheduledStartTime = nextDate.toISOString();
-        console.log(`[API] Auto-computed upcoming scheduledStartTime for ${req.body.scheduleType} schedule: ${finalScheduledStartTime}`);
+        console.log(`[API] Auto-computed upcoming scheduledStartTime for ${reqScheduleType} schedule: ${finalScheduledStartTime}`);
       }
     }
 
@@ -11270,10 +11291,10 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         // Automatically adjust to 15 minutes ahead so YouTube API accepts immediate live without 400 error
         finalScheduledStartTime = new Date(Date.now() + 15 * 60 * 1000).toISOString();
         console.log('[API] Auto-adjusted scheduledStartTime for immediate start:', finalScheduledStartTime);
-      } else if (isRecurringReq) {
-        // Automatically adjust recurring schedule to at least 15m ahead so YouTube API accepts
+      } else if (isRecurringReq || isFromTemplate) {
+        // Automatically adjust recurring or template schedule to at least 15m ahead so YouTube API accepts
         finalScheduledStartTime = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-        console.log('[API] Auto-adjusted recurring scheduledStartTime to 15m ahead:', finalScheduledStartTime);
+        console.log('[API] Auto-adjusted scheduledStartTime to 15m ahead:', finalScheduledStartTime);
       } else {
         return res.status(400).json({
           success: false,
@@ -11308,6 +11329,10 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       }
       parsedTags = parsedTags.map(t => String(t || '').trim()).filter(Boolean);
     }
+    if (parsedTags.length === 0 && templateObj && templateObj.tags) {
+      parsedTags = Array.isArray(templateObj.tags) ? templateObj.tags : [templateObj.tags];
+      parsedTags = parsedTags.map(t => String(t || '').trim()).filter(Boolean);
+    }
 
     const isAlteredContent = alteredContent === 'true' || alteredContent === true || alteredContent === 'on' || alteredContent === 1 || alteredContent === '1';
     const isDualStream = req.body.dualStream === 'true' || req.body.dualStream === true || req.body.dualStream === 'on' || req.body.dualStream === 1 || req.body.dualStream === '1';
@@ -11315,15 +11340,16 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
 
     const accessToken = await youtubeService.getAccessToken(credentials.clientId, credentials.clientSecret, credentials.refreshToken, 0, credentials.id, 0, credentials.id);
 
-    const finalCategoryId = categoryId || '22';
-    console.log('[API] Create broadcast - using categoryId:', finalCategoryId, 'dualStream:', isDualStream, 'verticalKey:', !!verticalStreamKey, 'alteredContent:', isAlteredContent);
+    const finalCategoryId = categoryId || (templateObj ? templateObj.category_id : null) || '22';
+    const resolvedStreamId = streamId || (matchedSlot ? (matchedSlot.streamId || matchedSlot.streamKey) : null) || (templateObj ? (templateObj.stream_id || templateObj.stream_key) : null) || null;
+    console.log('[API] Create broadcast - using categoryId:', finalCategoryId, 'dualStream:', isDualStream, 'verticalKey:', !!verticalStreamKey, 'alteredContent:', isAlteredContent, 'streamId:', resolvedStreamId);
 
     const broadcast = await youtubeService.createBroadcast(accessToken, {
       title,
       description: description || '',
       scheduledStartTime: finalScheduledStartTime,
       privacyStatus: privacyStatus || 'unlisted',
-      streamId: streamId || null,
+      streamId: resolvedStreamId,
       tags: parsedTags,
       categoryId: finalCategoryId,
       enableAutoStart: enableAutoStart === 'true' || enableAutoStart === true,
@@ -11334,10 +11360,24 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       dualStream: isDualStream
     });
 
-    // Get thumbnail folder from request
-    const thumbnailFolder = req.body.thumbnailFolder;
+    // Get thumbnail folder from request or inherit from template/slot
+    let thumbnailFolder = req.body.thumbnailFolder;
+    if ((thumbnailFolder === undefined || thumbnailFolder === null) && (matchedSlot || templateObj)) {
+      if (matchedSlot && matchedSlot.thumbnailFolder !== undefined && matchedSlot.thumbnailFolder !== null) {
+        thumbnailFolder = matchedSlot.thumbnailFolder === '__ROOT__' ? '' : matchedSlot.thumbnailFolder;
+      } else if (templateObj && templateObj.thumbnail_folder !== undefined && templateObj.thumbnail_folder !== null) {
+        thumbnailFolder = templateObj.thumbnail_folder;
+      }
+    }
     const thumbnailIndex = parseInt(req.body.thumbnailIndex) || 0;
-    const thumbnailPathFromRequest = req.body.thumbnailPath;
+    let thumbnailPathFromRequest = req.body.thumbnailPath;
+    if (!thumbnailPathFromRequest && (matchedSlot || templateObj)) {
+      if (matchedSlot && (matchedSlot.pinnedThumbnail || matchedSlot.thumbnailPath)) {
+        thumbnailPathFromRequest = matchedSlot.pinnedThumbnail || matchedSlot.thumbnailPath;
+      } else if (templateObj && (templateObj.pinned_thumbnail || templateObj.thumbnail_path)) {
+        thumbnailPathFromRequest = templateObj.pinned_thumbnail || templateObj.thumbnail_path;
+      }
+    }
 
     console.log('[API] Create broadcast - thumbnail settings:', {
       thumbnailFolder: thumbnailFolder,
@@ -11585,45 +11625,79 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       let scheduleType = req.body.scheduleType || 'once';
 
       // If created from a template, inherit duration and stream settings from template
-      const templateId = req.body.templateId;
-      let templateObj = null;
-      if (templateId) {
+      if (!templateObj && templateId) {
         try {
           templateObj = await BroadcastTemplate.findById(templateId);
-          if (templateObj) {
-            console.log('[API] Broadcast created from template:', templateObj.id, 'stream_duration_minutes:', templateObj.stream_duration_minutes);
-            if (totalMinutes === 0 && templateObj.stream_duration_minutes > 0) {
-              totalMinutes = templateObj.stream_duration_minutes;
-              hours = templateObj.duration_hours || Math.floor(totalMinutes / 60);
+        } catch (tErr) {
+          console.warn('[API] Warning looking up template for broadcast settings:', tErr.message);
+        }
+      }
+
+      if (templateObj) {
+        if (!matchedSlot && Array.isArray(templateObj.broadcasts) && templateObj.broadcasts.length > 0) {
+          matchedSlot = templateObj.broadcasts.find(b => b.title === title || b.title === broadcast.title) || templateObj.broadcasts[0];
+        }
+
+        if (totalMinutes === 0) {
+          if (matchedSlot) {
+            totalMinutes = parseInt(matchedSlot.streamDurationMinutes) || (((parseInt(matchedSlot.durationHours) || 0) * 60) + (parseInt(matchedSlot.durationMinutes) || 0));
+            if (totalMinutes > 0) {
+              hours = parseInt(matchedSlot.durationHours) || Math.floor(totalMinutes / 60);
               minutes = totalMinutes % 60;
-              console.log(`[API] ✅ Inherited duration from template: ${totalMinutes} mins (${hours}h ${minutes}m)`);
-            } else if (totalMinutes === 0 && Array.isArray(templateObj.broadcasts) && templateObj.broadcasts.length > 0) {
-              // Multi-broadcast template slot matching
-              const matchedSlot = templateObj.broadcasts.find(b => b.title === title || b.title === broadcast.title) || templateObj.broadcasts[0];
-              if (matchedSlot) {
-                totalMinutes = parseInt(matchedSlot.streamDurationMinutes) || (((parseInt(matchedSlot.durationHours) || 0) * 60) + (parseInt(matchedSlot.durationMinutes) || 0));
-                if (totalMinutes > 0) {
-                  hours = parseInt(matchedSlot.durationHours) || Math.floor(totalMinutes / 60);
-                  minutes = totalMinutes % 60;
-                  console.log(`[API] ✅ Inherited duration from multi-broadcast template slot: ${totalMinutes} mins (${hours}h ${minutes}m)`);
-                }
-              }
-            }
-            if (req.body.loopVideo === undefined && templateObj.loop_video !== undefined) {
-              loopVideo = templateObj.loop_video;
-            }
-            if (!videoId && templateObj.video_id) {
-              videoId = templateObj.video_id;
-            }
-            if (!audioId && templateObj.audio_id) {
-              audioId = templateObj.audio_id;
-            }
-            if (req.body.scheduleType === undefined && templateObj.schedule_type) {
-              scheduleType = templateObj.schedule_type;
+              console.log(`[API] ✅ Inherited duration from multi-broadcast template slot: ${totalMinutes} mins (${hours}h ${minutes}m)`);
             }
           }
-        } catch (tErr) {
-          console.warn('[API] Warning looking up template for broadcast duration:', tErr.message);
+          if (totalMinutes === 0 && templateObj.stream_duration_minutes > 0) {
+            totalMinutes = templateObj.stream_duration_minutes;
+            hours = templateObj.duration_hours || Math.floor(totalMinutes / 60);
+            minutes = totalMinutes % 60;
+            console.log(`[API] ✅ Inherited duration from template: ${totalMinutes} mins (${hours}h ${minutes}m)`);
+          }
+        }
+
+        // Inherit loop_video
+        if (req.body.loopVideo === undefined) {
+          if (matchedSlot && matchedSlot.loopVideo !== undefined) {
+            loopVideo = matchedSlot.loopVideo !== false && matchedSlot.loopVideo !== 0 && matchedSlot.loopVideo !== '0';
+          } else if (templateObj.loop_video !== undefined) {
+            loopVideo = templateObj.loop_video !== 0 && templateObj.loop_video !== '0' && templateObj.loop_video !== false;
+          }
+        }
+
+        // Inherit videoId
+        if (!videoId) {
+          if (matchedSlot && matchedSlot.videoId) {
+            videoId = matchedSlot.videoId;
+          } else if (templateObj.video_id) {
+            videoId = templateObj.video_id;
+          }
+        }
+
+        // Inherit audioId
+        if (!audioId) {
+          if (matchedSlot && matchedSlot.audioId) {
+            audioId = matchedSlot.audioId;
+          } else if (templateObj.audio_id) {
+            audioId = templateObj.audio_id;
+          }
+        }
+
+        // Inherit scheduleType if not provided
+        if (req.body.scheduleType === undefined) {
+          if (matchedSlot && matchedSlot.scheduleType) {
+            scheduleType = matchedSlot.scheduleType;
+          } else if (templateObj.schedule_type) {
+            scheduleType = templateObj.schedule_type;
+          }
+        }
+
+        // Inherit stream key if not provided
+        if (!req.body.streamKey) {
+          if (matchedSlot && (matchedSlot.streamKey || matchedSlot.streamId)) {
+            req.body.streamKey = matchedSlot.streamKey || matchedSlot.streamId;
+          } else if (templateObj.stream_key || templateObj.stream_id) {
+            req.body.streamKey = templateObj.stream_key || templateObj.stream_id;
+          }
         }
       }
 
@@ -12297,6 +12371,26 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
           }
           if (loopVideo === undefined && streamByBId.loop_video !== undefined) {
             loopVideo = streamByBId.loop_video !== 0 && streamByBId.loop_video !== false;
+          }
+        }
+
+        const settingsByBId = await new Promise((resolve) => {
+          db.get(
+            `SELECT thumbnail_folder, thumbnail_path, tags, dual_stream, altered_content, vertical_stream_key
+             FROM youtube_broadcast_settings
+             WHERE broadcast_id = ?
+             ORDER BY id DESC LIMIT 1`,
+            [broadcastId],
+            (err, row) => resolve(row)
+          );
+        });
+        if (settingsByBId) {
+          if ((thumbnailFolder === undefined || thumbnailFolder === null) && settingsByBId.thumbnail_folder !== undefined) {
+            thumbnailFolder = settingsByBId.thumbnail_folder;
+          }
+          if (!pinnedThumbnail && !thumbnailPath && settingsByBId.thumbnail_path) {
+            pinnedThumbnail = settingsByBId.thumbnail_path;
+            thumbnailPath = settingsByBId.thumbnail_path;
           }
         }
       } catch (bLookupErr) {

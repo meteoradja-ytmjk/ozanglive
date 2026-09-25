@@ -651,16 +651,42 @@ class Stream {
     }
 
     if (stream.schedule_type === 'weekly') {
-      const scheduleDays = Array.isArray(stream.schedule_days)
-        ? stream.schedule_days
-        : (stream.schedule_days ? JSON.parse(stream.schedule_days) : []);
+      let rawDays = stream.schedule_days;
+      if (typeof rawDays === 'string') {
+        try { rawDays = JSON.parse(rawDays); } catch (e) { rawDays = rawDays.split(/[\s,]+/); }
+      }
+      if (!Array.isArray(rawDays) || rawDays.length === 0) {
+        return null;
+      }
 
-      if (scheduleDays.length === 0) {
+      const dayNameToNum = {
+        'sunday': 0, 'sun': 0, 'minggu': 0, 'min': 0, '0': 0,
+        'monday': 1, 'mon': 1, 'senin': 1, 'sen': 1, '1': 1,
+        'tuesday': 2, 'tue': 2, 'selasa': 2, 'sel': 2, '2': 2,
+        'wednesday': 3, 'wed': 3, 'rabu': 3, 'rab': 3, '3': 3,
+        'thursday': 4, 'thu': 4, 'kamis': 4, 'kam': 4, '4': 4,
+        'friday': 5, 'fri': 5, 'jumat': 5, 'jum': 5, '5': 5,
+        'saturday': 6, 'sat': 6, 'sabtu': 6, 'sab': 6, '6': 6
+      };
+
+      const normalizedDayNums = [];
+      rawDays.forEach(d => {
+        if (typeof d === 'number' && d >= 0 && d <= 6) {
+          if (!normalizedDayNums.includes(d)) normalizedDayNums.push(d);
+        } else if (typeof d === 'string') {
+          const lower = d.trim().toLowerCase();
+          if (dayNameToNum[lower] !== undefined && !normalizedDayNums.includes(dayNameToNum[lower])) {
+            normalizedDayNums.push(dayNameToNum[lower]);
+          }
+        }
+      });
+
+      if (normalizedDayNums.length === 0) {
         return null;
       }
 
       // Sort days for easier processing
-      const sortedDays = [...scheduleDays].sort((a, b) => a - b);
+      const sortedDays = normalizedDayNums.sort((a, b) => a - b);
 
       // Use WIB day and time for comparison
       const currentDayWIB = wibNow.day;

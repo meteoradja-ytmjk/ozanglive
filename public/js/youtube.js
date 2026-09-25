@@ -6707,9 +6707,9 @@ if (saveAsTemplateForm) {
         description: broadcast.description || '',
         privacyStatus: broadcast.privacyStatus || 'unlisted',
         tags: broadcast.tags || null,
-        categoryId: broadcast.categoryId || '22',
-        thumbnailPath: broadcast.thumbnailPath || null,
-        thumbnailFolder: currentThumbnailFolder || null,  // Save current thumbnail folder selection
+        thumbnailPath: broadcast.thumbnailPath || rowData.thumbnailPath || null,
+        pinnedThumbnail: broadcast.pinnedThumbnail || broadcast.thumbnailPath || rowData.thumbnailPath || null,
+        thumbnailFolder: (broadcast.thumbnailFolder !== undefined && broadcast.thumbnailFolder !== null) ? broadcast.thumbnailFolder : (rowData.thumbnailFolder !== undefined ? rowData.thumbnailFolder : (currentThumbnailFolder || null)),
         streamId: broadcast.streamId || rowData.streamId || null,  // Save stream ID for reuse
         streamKey: resolvedStreamKey,  // Save stream key for reuse
         durationHours: durHours,
@@ -8029,15 +8029,15 @@ function openRecreateFromTemplateModal(template) {
         streamId: b.streamId || template.stream_id || null,
         streamKey: b.streamKey || template.stream_key || '',
         thumbnailFolder: b.thumbnailFolder !== undefined ? b.thumbnailFolder : template.thumbnail_folder,
-        pinnedThumbnail: b.pinnedThumbnail || b.thumbnailPath || template.pinned_thumbnail,
+        pinnedThumbnail: b.pinnedThumbnail || b.thumbnailPath || template.pinned_thumbnail || template.thumbnail_path || null,
         durationHours: b.durationHours !== undefined ? (parseInt(b.durationHours, 10) || 0) : tHours,
         durationMinutes: b.durationMinutes !== undefined ? (parseInt(b.durationMinutes, 10) || 0) : tMins,
         streamDurationMinutes: b.streamDurationMinutes !== undefined ? (parseInt(b.streamDurationMinutes, 10) || 0) : totalTemplateMins,
         loopVideo: b.loopVideo !== undefined ? (b.loopVideo !== false && b.loopVideo !== 0 && b.loopVideo !== '0') : (template.loop_video !== false),
-        videoId: b.videoId || template.video_id || null,
-        videoName: b.videoName || b.videoTitle || null,
-        audioId: b.audioId || template.audio_id || null,
-        audioName: b.audioName || b.audioTitle || null,
+        videoId: b.videoId || b.video_id || template.video_id || null,
+        videoName: b.videoName || b.videoTitle || template.video_title || template.video_name || null,
+        audioId: b.audioId || b.audio_id || template.audio_id || null,
+        audioName: b.audioName || b.audioTitle || template.audio_title || template.audio_name || null,
         useTitleRotation: true,
         customTitle: false,
         times: [
@@ -8072,12 +8072,12 @@ function openRecreateFromTemplateModal(template) {
       originalTitle: template.title,
       streamId: template.stream_id || null,
       streamKey: template.stream_key || '',
-      thumbnailFolder: template.thumbnail_folder,
-      pinnedThumbnail: template.pinned_thumbnail,
+      thumbnailFolder: template.thumbnail_folder !== undefined ? template.thumbnail_folder : null,
+      pinnedThumbnail: template.pinned_thumbnail || template.thumbnail_path || null,
       durationHours: tHours,
       durationMinutes: tMins,
       streamDurationMinutes: totalTemplateMins,
-      loopVideo: template.loop_video !== false,
+      loopVideo: template.loop_video !== false && template.loop_video !== 0 && template.loop_video !== '0',
       videoId: template.video_id || null,
       videoName: template.video_title || template.video_name || null,
       audioId: template.audio_id || null,
@@ -8150,17 +8150,20 @@ window.syncRecreateSlotsFromGroups = syncRecreateSlotsFromGroups;
 function calculateUpcomingDateTimeForSlot(timeStr, pattern = 'daily', days = null) {
   const [h, m] = (timeStr || '13:00').split(':').map(Number);
   const now = new Date();
+  const minFutureMs = 12 * 60 * 1000; // Minimum 12 minutes in future to satisfy YouTube API (>=10m requirement)
 
   if (pattern === 'weekly' && Array.isArray(days) && days.length > 0) {
     const dayMap = { sunday: 0, minggu: 0, monday: 1, senin: 1, tuesday: 2, selasa: 2, wednesday: 3, rabu: 3, thursday: 4, kamis: 4, friday: 5, jumat: 5, saturday: 6, sabtu: 6 };
-    const targetDayIndices = days.map(d => dayMap[d.toLowerCase()]).filter(x => x !== undefined);
+    const targetDayIndices = days.map(d => dayMap[String(d).toLowerCase()]).filter(x => x !== undefined);
 
-    for (let offset = 0; offset <= 14; offset++) {
-      const candidate = new Date(now.getTime() + offset * 24 * 60 * 60 * 1000);
-      candidate.setHours(h, m, 0, 0);
-      if (targetDayIndices.includes(candidate.getDay())) {
-        if (candidate.getTime() > now.getTime() + 5 * 60 * 1000) {
-          return formatLocalDateTime(candidate);
+    if (targetDayIndices.length > 0) {
+      for (let offset = 0; offset <= 14; offset++) {
+        const candidate = new Date(now.getTime() + offset * 24 * 60 * 60 * 1000);
+        candidate.setHours(h, m, 0, 0);
+        if (targetDayIndices.includes(candidate.getDay())) {
+          if (candidate.getTime() > now.getTime() + minFutureMs) {
+            return formatLocalDateTime(candidate);
+          }
         }
       }
     }
@@ -8169,11 +8172,11 @@ function calculateUpcomingDateTimeForSlot(timeStr, pattern = 'daily', days = nul
   // Daily or fallback: try today first
   const candidateToday = new Date(now);
   candidateToday.setHours(h, m, 0, 0);
-  if (candidateToday.getTime() > now.getTime() + 5 * 60 * 1000) {
+  if (candidateToday.getTime() > now.getTime() + minFutureMs) {
     return formatLocalDateTime(candidateToday);
   }
 
-  // If time has passed today, schedule for tomorrow
+  // If time has passed today (or is less than 12m away), schedule for tomorrow
   const candidateTomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
   candidateTomorrow.setHours(h, m, 0, 0);
   return formatLocalDateTime(candidateTomorrow);
@@ -8326,6 +8329,32 @@ function renderRecreateSlotList() {
           </div>`;
       }
 
+      // Compute metadata badges for this broadcast group
+      const totalGroupMins = parseInt(group.streamDurationMinutes, 10) || (((parseInt(group.durationHours, 10) || 0) * 60) + (parseInt(group.durationMinutes, 10) || 0));
+      const gHours = parseInt(group.durationHours, 10) || Math.floor(totalGroupMins / 60);
+      const gMins = parseInt(group.durationMinutes, 10) || (totalGroupMins % 60);
+      let durText = 'Unlimited';
+      if (totalGroupMins > 0 || gHours > 0 || gMins > 0) {
+        durText = `${gHours > 0 ? gHours + 'j ' : ''}${gMins > 0 ? gMins + 'm' : (gHours === 0 ? '0m' : '')}`.trim();
+      }
+      const isLoopActive = group.loopVideo !== false && group.loopVideo !== 0 && group.loopVideo !== '0';
+
+      let videoBadgeText = group.videoName || (group.videoId ? getStudioVideoName(group.videoId) : 'Video Template');
+      let audioBadgeText = group.audioName || (group.audioId ? getStudioAudioName(group.audioId) : null);
+
+      let streamKeyBadge = 'Auto Key';
+      if (group.streamKey) {
+        const sk = String(group.streamKey).trim();
+        streamKeyBadge = sk.length > 8 ? `${sk.slice(0, 4)}...${sk.slice(-4)}` : sk;
+      }
+
+      let thumbBadgeText = 'Root';
+      if (group.pinnedThumbnail) {
+        thumbBadgeText = 'Pinned';
+      } else if (group.thumbnailFolder !== undefined && group.thumbnailFolder !== null) {
+        thumbBadgeText = (group.thumbnailFolder === '' || group.thumbnailFolder === '__ROOT__') ? 'Root' : group.thumbnailFolder;
+      }
+
       titleContentHtml = `
         <div class="space-y-2.5 w-full">
           <!-- Line 1: Judul Full (Lebar Penuh Tanpa Tertekan) -->
@@ -8333,6 +8362,31 @@ function renderRecreateSlotList() {
             <span class="px-2 py-0.5 bg-primary/20 text-primary font-bold text-[11px] rounded mt-0.5 flex-shrink-0">#${groupIndex + 1}</span>
             <div class="min-w-0 flex-1">
               ${titleDisplayBody}
+              <!-- Metadata Badges Bar: Video/Audio, Durasi, Stream Key, Thumbnail -->
+              <div class="flex items-center gap-1.5 flex-wrap text-[10px] mt-1.5">
+                <span class="px-1.5 py-0.5 bg-dark-600/80 rounded border border-gray-600/50 flex items-center gap-1 text-gray-300 truncate max-w-[150px]" title="Video: ${escapeHtml(videoBadgeText)}">
+                  <i class="ti ti-video text-blue-400 text-xs"></i>
+                  <span class="truncate">${escapeHtml(videoBadgeText)}</span>
+                </span>
+                ${audioBadgeText ? `
+                <span class="px-1.5 py-0.5 bg-dark-600/80 rounded border border-gray-600/50 flex items-center gap-1 text-amber-300 truncate max-w-[130px]" title="Audio: ${escapeHtml(audioBadgeText)}">
+                  <i class="ti ti-music text-amber-400 text-xs"></i>
+                  <span class="truncate">${escapeHtml(audioBadgeText)}</span>
+                </span>` : ''}
+                <span class="px-1.5 py-0.5 bg-dark-600/80 rounded border border-gray-600/50 flex items-center gap-1 text-emerald-300" title="Durasi: ${durText} (Loop: ${isLoopActive ? 'Aktif' : 'Mati'})">
+                  <i class="ti ti-clock text-emerald-400 text-xs"></i>
+                  <span>${durText}</span>
+                  ${isLoopActive ? '<i class="ti ti-repeat text-[9px] text-emerald-400" title="Loop aktif"></i>' : ''}
+                </span>
+                <span class="px-1.5 py-0.5 bg-dark-600/80 rounded border border-gray-600/50 flex items-center gap-1 text-purple-300 font-mono" title="Stream Key: ${escapeHtml(group.streamKey || 'Auto')}">
+                  <i class="ti ti-key text-purple-400 text-xs"></i>
+                  <span>${escapeHtml(streamKeyBadge)}</span>
+                </span>
+                <span class="px-1.5 py-0.5 bg-dark-600/80 rounded border border-gray-600/50 flex items-center gap-1 text-yellow-300" title="Thumbnail: ${escapeHtml(thumbBadgeText)}">
+                  <i class="ti ti-photo text-yellow-400 text-xs"></i>
+                  <span class="truncate max-w-[90px]">${escapeHtml(thumbBadgeText)}</span>
+                </span>
+              </div>
             </div>
           </div>
 
@@ -9222,7 +9276,7 @@ function setRecreateRecurringMode(mode) {
     window.recreateBroadcastGroups.forEach(grp => {
       (grp.times || []).forEach(t => {
         const timeVal = t.timeOnly || (t.scheduleTime && t.scheduleTime.includes('T') ? t.scheduleTime.split('T')[1].slice(0, 5) : '09:00');
-        if (!t.scheduleTime || new Date(t.scheduleTime).getTime() < Date.now() + 5 * 60 * 1000) {
+        if (!t.scheduleTime || new Date(t.scheduleTime).getTime() < Date.now() + 12 * 60 * 1000) {
           t.scheduleTime = calculateUpcomingDateTimeForSlot(timeVal, 'none');
         }
         t.timeOnly = t.scheduleTime.split('T')[1].slice(0, 5);
@@ -9479,6 +9533,11 @@ if (recreateFromTemplateForm) {
           } else {
             const dtInput = document.getElementById(`group_${gIdx}_datetime_${tIdx}`);
             finalSched = (dtInput && dtInput.value) ? dtInput.value : t.scheduleTime;
+            // Auto-adjust past or near-past start times for 'once' so YouTube doesn't reject
+            if (!finalSched || new Date(finalSched).getTime() < Date.now() + 10 * 60 * 1000) {
+              const timeVal = t.timeOnly || (finalSched && finalSched.includes('T') ? finalSched.split('T')[1].slice(0, 5) : '13:00');
+              finalSched = calculateUpcomingDateTimeForSlot(timeVal, 'none');
+            }
             t.scheduleTime = finalSched;
           }
 
@@ -9491,13 +9550,13 @@ if (recreateFromTemplateForm) {
               streamId: grp.streamId !== undefined ? grp.streamId : template.stream_id,
               streamKey: grp.streamKey !== undefined ? grp.streamKey : (template.stream_key || ''),
               thumbnailFolder: grp.thumbnailFolder !== undefined ? grp.thumbnailFolder : template.thumbnail_folder,
-              pinnedThumbnail: grp.pinnedThumbnail || template.pinned_thumbnail,
+              pinnedThumbnail: grp.pinnedThumbnail || template.pinned_thumbnail || template.thumbnail_path || null,
               durationHours: grp.durationHours,
               durationMinutes: grp.durationMinutes,
               streamDurationMinutes: grp.streamDurationMinutes,
               loopVideo: grp.loopVideo,
-              videoId: grp.videoId,
-              audioId: grp.audioId,
+              videoId: grp.videoId || template.video_id || null,
+              audioId: grp.audioId || template.audio_id || null,
               scheduleTime: finalSched,
               timeOnly: t.timeOnly,
               description: grp.description || template.description || '',
@@ -9598,16 +9657,18 @@ if (recreateFromTemplateForm) {
             formData.append('streamKey', inheritedStreamKey);
           }
 
-          const slotScheduleType = patternVal === 'daily' ? 'daily' : (patternVal === 'weekly' ? 'weekly' : (template.schedule_type || 'once'));
+          const slotScheduleType = (patternVal === 'daily' || patternVal === 'weekly') ? patternVal : 'once';
           formData.append('scheduleType', slotScheduleType);
 
-          if (patternVal === 'daily' || patternVal === 'weekly') {
+          if (slotScheduleType === 'daily' || slotScheduleType === 'weekly') {
             formData.append('recurringEnabled', 'true');
             formData.append('recurringPattern', slotScheduleType);
             formData.append('recurringTime', slot.timeOnly || template.recurring_time || '13:00');
-            if (patternVal === 'weekly') {
+            if (slotScheduleType === 'weekly') {
               formData.append('scheduleDays', JSON.stringify(selectedWeeklyDays));
             }
+          } else {
+            formData.append('recurringEnabled', 'false');
           }
 
           const videoId = slot.videoId || template.video_id;
@@ -9656,7 +9717,7 @@ if (recreateFromTemplateForm) {
           formData.append('thumbnailFolder', thumbnailFolder);
 
           // If pinned thumbnail or explicit thumbnailPath exists, forward it
-          const pinnedThumbnail = slot.pinnedThumbnail || slot.thumbnailPath || template.pinned_thumbnail;
+          const pinnedThumbnail = slot.pinnedThumbnail || slot.thumbnailPath || template.pinned_thumbnail || template.thumbnail_path;
           if (pinnedThumbnail) {
             formData.append('thumbnailPath', pinnedThumbnail);
             console.log('[recreate] Forwarding pinned thumbnail:', pinnedThumbnail);
@@ -9685,7 +9746,7 @@ if (recreateFromTemplateForm) {
       }
       
       // If title rotation was used and broadcasts were created successfully, update use counts and rotation index
-      if (useTitleRotation && results.success > 0 && usedTitleIds.length > 0) {
+      if (results.success > 0 && usedTitleIds.length > 0) {
         try {
           // Increment use count for each used title
           for (const titleId of usedTitleIds) {
