@@ -8198,8 +8198,8 @@ function renderRecreateSlotList() {
     const canDeleteGroup = window.recreateBroadcastGroups.length > 1;
     const deleteGroupBtn = canDeleteGroup
       ? `<button type="button" onclick="removeRecreateBroadcastGroup(${groupIndex})"
-           class="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg border border-gray-600/70 hover:border-red-500/50 transition-colors flex-shrink-0"
-           title="Hapus siaran ini dari daftar template">
+           class="h-8 w-8 flex items-center justify-center text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg border border-gray-600/70 hover:border-red-500/50 transition-colors flex-shrink-0 active:scale-95"
+           title="Hapus siaran #${groupIndex + 1} dari daftar template">
            <i class="ti ti-trash text-xs"></i>
          </button>`
       : '';
@@ -8217,13 +8217,13 @@ function renderRecreateSlotList() {
       titleContentHtml = `
         <div class="flex items-center gap-1.5 w-full">
           <input type="text" id="groupTitleInput_${groupIndex}" value="${escapeHtml(group.title || '')}"
-            class="h-7 px-2 bg-dark-600 border border-primary rounded-lg text-xs text-white flex-1 min-w-0 focus:outline-none focus:ring-1 focus:ring-primary"
+            class="h-8 px-2.5 bg-dark-600 border border-primary rounded-lg text-xs text-white flex-1 min-w-0 focus:outline-none focus:ring-1 focus:ring-primary"
             placeholder="Masukkan judul siaran..."
             onkeydown="if(event.key==='Enter'){event.preventDefault();saveRecreateGroupTitle(${groupIndex})}else if(event.key==='Escape'){event.preventDefault();cancelEditRecreateGroupTitle(${groupIndex})}">
-          <button type="button" onclick="saveRecreateGroupTitle(${groupIndex})" class="w-7 h-7 flex items-center justify-center bg-primary hover:bg-primary/80 text-white rounded-lg flex-shrink-0 transition-colors" title="Simpan judul">
+          <button type="button" onclick="saveRecreateGroupTitle(${groupIndex})" class="w-8 h-8 flex items-center justify-center bg-primary hover:bg-primary/80 text-white rounded-lg flex-shrink-0 transition-colors active:scale-95" title="Simpan judul">
             <i class="ti ti-check text-xs"></i>
           </button>
-          <button type="button" onclick="cancelEditRecreateGroupTitle(${groupIndex})" class="w-7 h-7 flex items-center justify-center bg-dark-600 hover:bg-dark-500 text-gray-300 border border-gray-600 rounded-lg flex-shrink-0 transition-colors" title="Batal">
+          <button type="button" onclick="cancelEditRecreateGroupTitle(${groupIndex})" class="w-8 h-8 flex items-center justify-center bg-dark-600 hover:bg-dark-500 text-gray-300 border border-gray-600 rounded-lg flex-shrink-0 transition-colors active:scale-95" title="Batal">
             <i class="ti ti-x text-xs"></i>
           </button>
         </div>`;
@@ -8254,24 +8254,32 @@ function renderRecreateSlotList() {
       }
 
       titleContentHtml = `
-        <div class="flex items-start justify-between gap-2 w-full">
-          <div class="flex items-start gap-2 min-w-0 flex-1">
+        <div class="space-y-2.5 w-full">
+          <!-- Line 1: Judul Full (Lebar Penuh Tanpa Tertekan) -->
+          <div class="flex items-start gap-2 w-full">
             <span class="px-2 py-0.5 bg-primary/20 text-primary font-bold text-[11px] rounded mt-0.5 flex-shrink-0">#${groupIndex + 1}</span>
-            ${titleDisplayBody}
+            <div class="min-w-0 flex-1">
+              ${titleDisplayBody}
+            </div>
           </div>
-          <div class="flex items-center gap-1.5 flex-shrink-0 mt-0.5">
+
+          <!-- Line 2: Tombol Aksi (Edit Full di Kiri & Tombol Lain di Kanan, Ukuran Rapi & Seimbang) -->
+          <div class="grid grid-cols-2 gap-2 w-full">
             <button type="button" onclick="openRecreateGroupFullEditor(${groupIndex})"
-              class="h-7 px-2.5 bg-blue-500/15 hover:bg-blue-500/25 text-blue-400 border border-blue-500/35 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-colors flex-shrink-0 shadow-xs active:scale-95"
+              class="h-8 px-3 bg-blue-500/15 hover:bg-blue-500/25 text-blue-400 border border-blue-500/35 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-xs active:scale-95"
               title="Edit Full Siaran #${groupIndex + 1}: Judul, Rotasi, Thumbnail, Stream Key, Media & Durasi">
               <i class="ti ti-edit text-xs"></i>
-              <span>Edit Full</span>
+              <span class="truncate">Edit Full</span>
             </button>
-            <button type="button" onclick="editRecreateGroupTitle(${groupIndex})"
-              class="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-primary hover:bg-primary/10 rounded-lg border border-gray-600/70 hover:border-primary/50 transition-colors"
-              title="Edit judul siaran #${groupIndex + 1}">
-              <i class="ti ti-typography text-xs"></i>
-            </button>
-            ${deleteGroupBtn}
+            <div class="flex items-center gap-1.5 w-full">
+              <button type="button" onclick="editRecreateGroupTitle(${groupIndex})"
+                class="flex-1 h-8 px-2.5 bg-dark-600 hover:bg-dark-500 text-gray-300 hover:text-white border border-gray-600/70 hover:border-gray-500 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-xs active:scale-95"
+                title="Edit judul siaran #${groupIndex + 1}">
+                <i class="ti ti-typography text-xs"></i>
+                <span class="truncate">Edit Judul</span>
+              </button>
+              ${deleteGroupBtn}
+            </div>
           </div>
         </div>`;
     }
@@ -8349,49 +8357,12 @@ function renderRecreateSlotList() {
 
     globalSlotOffset += (group.times || []).length;
 
-    // Duration and configuration info for this group
-    const grpHours = parseInt(group.durationHours, 10) || 0;
-    const grpMins = parseInt(group.durationMinutes, 10) || 0;
-    const grpTotalMins = parseInt(group.streamDurationMinutes, 10) || (grpHours * 60 + grpMins);
-    let grpDurText = 'Tanpa Batas';
-    if (grpTotalMins > 0 || grpHours > 0 || grpMins > 0) {
-      grpDurText = `${grpHours > 0 ? grpHours + 'j ' : ''}${grpMins > 0 ? grpMins + 'm' : (grpHours === 0 ? '0m' : '')}`.trim();
-    }
-    const grpLoopText = (group.loopVideo !== false && group.loopVideo !== 0 && group.loopVideo !== '0') ? 'Loop' : 'No-Loop';
-    const grpRotText = (group.useTitleRotation !== false && !group.customTitle) ? 'Rotasi ON' : 'Judul Tetap';
-    const grpStreamKeyText = group.streamKey ? (group.streamKey.length > 8 ? group.streamKey.slice(0, 4) + '...' + group.streamKey.slice(-4) : group.streamKey) : (group.streamId ? 'Stream #' + group.streamId : 'Stream Auto');
-    const grpThumbText = (group.thumbnailFolder === '' || group.thumbnailFolder === '__ROOT__') ? 'Root' : (group.thumbnailFolder || 'Default');
-    const grpVideoText = group.videoName || getStudioVideoName(group.videoId) || 'Video Template';
-    const grpAudioText = group.audioName || getStudioAudioName(group.audioId) || 'Audio Asli';
-
     return `
       <div id="groupCard_${groupIndex}" class="bg-dark-700/80 rounded-xl p-2.5 sm:p-3 border border-gray-700/80 space-y-2.5 transition-colors hover:border-gray-600 shadow-sm">
-        <!-- Baris 1: Header Siaran, Judul Lengkap, Edit & Hapus Siaran -->
+        <!-- Baris 1 & 2: Header Siaran (Judul Full) & Tombol Aksi (Edit Full & Lainnya) -->
         ${titleContentHtml}
 
-        <!-- Baris 1.5: Info Ringkasan Spesifik Siaran Ini (Durasi, Media, Key, Thumbnail, Rotasi) -->
-        <div class="flex items-center gap-1.5 flex-wrap text-[10px] sm:text-[10.5px] px-2 py-1.5 rounded-lg bg-dark-800/80 border border-gray-700/60">
-          <span class="px-1.5 py-0.5 rounded bg-dark-700 border border-gray-600/50 text-amber-300 flex items-center gap-1 font-medium" title="Durasi Siaran: ${grpDurText} (${grpLoopText})">
-            <i class="ti ti-clock text-xs text-amber-400"></i> ${grpDurText} • ${grpLoopText}
-          </span>
-          <span class="px-1.5 py-0.5 rounded bg-dark-700 border border-gray-600/50 text-blue-300 flex items-center gap-1 truncate max-w-[135px]" title="Video: ${escapeHtml(grpVideoText)}">
-            <i class="ti ti-movie text-xs text-blue-400"></i> <span class="truncate">${escapeHtml(grpVideoText)}</span>
-          </span>
-          <span class="px-1.5 py-0.5 rounded bg-dark-700 border border-gray-600/50 text-purple-300 flex items-center gap-1 truncate max-w-[125px]" title="Audio: ${escapeHtml(grpAudioText)}">
-            <i class="ti ti-music text-xs text-purple-400"></i> <span class="truncate">${escapeHtml(grpAudioText)}</span>
-          </span>
-          <span class="px-1.5 py-0.5 rounded bg-dark-700 border border-gray-600/50 text-emerald-300 flex items-center gap-1 font-mono text-[10px]" title="Stream Key: ${escapeHtml(group.streamKey || 'Auto')}">
-            <i class="ti ti-key text-xs text-emerald-400"></i> ${escapeHtml(grpStreamKeyText)}
-          </span>
-          <span class="px-1.5 py-0.5 rounded bg-dark-700 border border-gray-600/50 text-cyan-300 flex items-center gap-1 truncate max-w-[110px]" title="Folder Thumbnail: ${escapeHtml(grpThumbText)}">
-            <i class="ti ti-folder text-xs text-cyan-400"></i> <span class="truncate">${escapeHtml(grpThumbText)}</span>
-          </span>
-          <span class="px-1.5 py-0.5 rounded bg-dark-700 border border-gray-600/50 ${group.useTitleRotation !== false && !group.customTitle ? 'text-primary' : 'text-gray-300'} flex items-center gap-1" title="Status Rotasi Judul">
-            <i class="ti ti-rotate-clockwise text-xs"></i> ${grpRotText}
-          </span>
-        </div>
-
-        <!-- Baris 2: Sub-kontainer Jam Tayang Khusus Siaran Ini -->
+        <!-- Baris Sub-kontainer Jam Tayang Khusus Siaran Ini -->
         <div class="bg-dark-800/60 rounded-lg p-2 sm:p-2.5 border border-gray-700/50 space-y-2">
           <div class="flex items-center justify-between text-xs text-gray-400 px-0.5 flex-nowrap w-full">
             <span class="flex items-center gap-1 font-medium text-gray-300 truncate">
