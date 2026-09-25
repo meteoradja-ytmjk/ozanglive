@@ -9271,6 +9271,25 @@ function setRecreateRecurringMode(mode) {
     }
   }
 
+  const recurringOnlyContainer = document.getElementById('recreateRecurringOnlyContainer');
+  const btnText = document.getElementById('recreateBtnText');
+
+  if (recurringOnlyContainer) {
+    if (mode === 'daily' || mode === 'weekly') {
+      recurringOnlyContainer.classList.remove('hidden');
+    } else {
+      recurringOnlyContainer.classList.add('hidden');
+    }
+  }
+
+  if (btnText) {
+    if (mode === 'daily' || mode === 'weekly') {
+      btnText.textContent = 'Buat Siaran Sekarang';
+    } else {
+      btnText.textContent = 'Buat Siaran Terjadwal';
+    }
+  }
+
   // When switching to 'Sekali Saja', ensure each slot has a valid upcoming datetime
   if (mode === 'none' && Array.isArray(window.recreateBroadcastGroups)) {
     window.recreateBroadcastGroups.forEach(grp => {
@@ -9288,6 +9307,138 @@ function setRecreateRecurringMode(mode) {
   renderRecreateSlotList();
 }
 window.setRecreateRecurringMode = setRecreateRecurringMode;
+
+/**
+ * Opsi 2: Simpan & Aktifkan Jadwal Otomatis Saja
+ * Tidak membuat siaran di YouTube sekarang.
+ * Sistem background scheduler akan membuat siaran di YouTube otomatis saat jam tayang tiba.
+ */
+async function handleRecreateSaveRecurringOnly() {
+  const template = window.currentRecreateTemplate;
+  if (!template || !template.id) {
+    showToast('Template tidak valid', 'error');
+    return;
+  }
+
+  const patternInput = document.getElementById('recreateRecurringPatternInput');
+  const patternVal = patternInput ? patternInput.value : 'none';
+  if (patternVal !== 'daily' && patternVal !== 'weekly') {
+    showToast('Silakan pilih mode Harian atau Mingguan terlebih dahulu', 'warning');
+    return;
+  }
+
+  const saveBtn = document.getElementById('recreateSaveRecurringOnlyBtn');
+  const originalHtml = saveBtn ? saveBtn.innerHTML : '';
+  if (saveBtn) {
+    saveBtn.innerHTML = '<i class="ti ti-loader animate-spin"></i> Menyimpan Jadwal...';
+    saveBtn.disabled = true;
+  }
+
+  try {
+    // Collect time list from groups/slots
+    const groups = window.recreateBroadcastGroups || [];
+    const timeSet = new Set();
+
+    for (let gIdx = 0; gIdx < groups.length; gIdx++) {
+      const times = groups[gIdx].times || [];
+      for (let tIdx = 0; tIdx < times.length; tIdx++) {
+        const timeInput = document.getElementById(`group_${gIdx}_time_${tIdx}`);
+        let timeVal = (timeInput && timeInput.value) ? timeInput.value : (times[tIdx].timeOnly || '');
+        if (!timeVal && times[tIdx].scheduleTime && times[tIdx].scheduleTime.includes('T')) {
+          timeVal = times[tIdx].scheduleTime.split('T')[1].slice(0, 5);
+        }
+        if (timeVal && /^[0-2]?[0-9]:[0-5][0-9]$/.test(timeVal)) {
+          timeSet.add(timeVal);
+        }
+      }
+    }
+
+    const timeList = Array.from(timeSet).sort();
+    const recurringTimeStr = timeList.length > 0 ? timeList.join(', ') : (template.recurring_time || '13:00');
+
+    let recurringDays = null;
+    if (patternVal === 'weekly') {
+      const selectedDays = Array.from(document.querySelectorAll('input[name="recreateRecurringDays"]:checked'))
+        .map(cb => cb.value.toLowerCase());
+      recurringDays = selectedDays.length > 0 ? selectedDays : ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+    }
+
+    // 1. Update recurring configuration
+    const res = await fetch(`/api/youtube/templates/${template.id}/recurring`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getCsrfToken()
+      },
+      body: JSON.stringify({
+        recurring_enabled: true,
+        recurring_pattern: patternVal,
+        recurring_time: recurringTimeStr,
+        recurring_days: recurringDays
+      })
+    });
+
+    const data = await res.json();
+    if (!data.success) {
+      throw new Error(data.error || 'Gagal menyimpan jadwal berulang');
+    }
+
+    // 2. Also update template broadcast slots if any slot settings were modified in the modal
+    if (groups.length > 0 && template.isMultiBroadcast) {
+      const updatedBroadcasts = groups.map((grp) => ({
+        title: grp.title || template.title,
+        originalTitle: grp.originalTitle || template.title,
+        description: grp.description || '',
+        streamId: grp.streamId !== undefined ? grp.streamId : template.stream_id,
+        streamKey: grp.streamKey !== undefined ? grp.streamKey : (template.stream_key || ''),
+        thumbnailFolder: grp.thumbnailFolder !== undefined ? grp.thumbnailFolder : template.thumbnail_folder,
+        pinnedThumbnail: grp.pinnedThumbnail || null,
+        durationHours: grp.durationHours !== undefined ? grp.durationHours : 0,
+        durationMinutes: grp.durationMinutes !== undefined ? grp.durationMinutes : 0,
+        streamDurationMinutes: grp.streamDurationMinutes || (((grp.durationHours || 0) * 60) + (grp.durationMinutes || 0)),
+        loopVideo: grp.loopVideo !== false,
+        videoId: grp.videoId || template.video_id || null,
+        audioId: grp.audioId || template.audio_id || null,
+        privacyStatus: grp.privacyStatus || template.privacy_status || 'unlisted'
+      }));
+
+      try {
+        await fetch(`/api/youtube/templates/${template.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': getCsrfToken()
+          },
+          body: JSON.stringify({
+            description: JSON.stringify(updatedBroadcasts)
+          })
+        });
+      } catch (slotUpdateErr) {
+        console.warn('[recreate] Non-fatal error updating slot description:', slotUpdateErr);
+      }
+    }
+
+    closeRecreateFromTemplateModal();
+    showToast(`Jadwal otomatis ${patternVal === 'weekly' ? 'Mingguan' : 'Harian'} berhasil diaktifkan! Siaran YouTube baru akan dibuat otomatis oleh server saat jam tayang tiba.`, 'success');
+
+    // Refresh studio/templates
+    if (typeof window.refreshStudioAndControlRoom === 'function') {
+      window.refreshStudioAndControlRoom();
+    } else {
+      if (typeof window.loadTemplates === 'function') window.loadTemplates();
+      if (typeof refreshBroadcasts === 'function') refreshBroadcasts({ silent: true });
+    }
+  } catch (err) {
+    console.error('[recreate] Error saving recurring only:', err);
+    showToast(err.message || 'Gagal mengaktifkan jadwal otomatis', 'error');
+  } finally {
+    if (saveBtn) {
+      saveBtn.innerHTML = originalHtml;
+      saveBtn.disabled = false;
+    }
+  }
+}
+window.handleRecreateSaveRecurringOnly = handleRecreateSaveRecurringOnly;
 
 /**
  * Compatibility aliases for recurring toggles
