@@ -13385,6 +13385,10 @@ app.post('/api/youtube/templates/:id/recurring/toggle', isAuthenticated, async (
     // Toggle recurring
     const result = await BroadcastTemplate.toggleRecurring(req.params.id, enabled, next_run_at);
 
+    try {
+      await scheduleService.reloadTemplate(req.params.id);
+    } catch (rErr) {}
+
     res.json({
       success: true,
       recurring_enabled: enabled,

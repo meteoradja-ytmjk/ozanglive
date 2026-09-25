@@ -2859,6 +2859,30 @@
       </div>
       
       <form id="recreateFromTemplateForm" class="p-4 space-y-3">
+        <!-- Alert Info Jadwal Otomatis Aktif (Dinamis) -->
+        <div id="recreateActiveScheduleAlert" class="hidden bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3 flex items-start justify-between gap-3 shadow-xs">
+          <div class="flex items-start gap-2.5 min-w-0 flex-1">
+            <div class="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <i class="ti ti-calendar-time text-base"></i>
+            </div>
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-xs font-bold text-white">Jadwal Otomatis Sedang Aktif</span>
+                <span class="px-1.5 py-0.2 bg-emerald-500/20 text-emerald-300 text-[10px] rounded font-medium animate-pulse">Auto-Pilot</span>
+              </div>
+              <p id="recreateActiveScheduleDesc" class="text-[11px] text-gray-300 mt-0.5 leading-relaxed">
+                Template ini otomatis membuat siaran di server saat jam tayang tiba.
+              </p>
+            </div>
+          </div>
+          <button type="button" onclick="cancelRecreateAutoSchedule()" 
+            class="px-2.5 py-1.5 bg-red-500/15 hover:bg-red-500/25 text-red-400 hover:text-red-300 border border-red-500/30 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 flex-shrink-0 cursor-pointer shadow-xs active:scale-95"
+            title="Hentikan jadwal otomatis untuk template ini">
+            <i class="ti ti-calendar-off text-xs"></i>
+            <span>Hapus Jadwal</span>
+          </button>
+        </div>
+
         <!-- 1. Channel Info Bar (Clean & Professional) -->
         <div class="bg-dark-700/70 rounded-xl px-3.5 py-2.5 border border-gray-700/80 flex items-center justify-between gap-3 shadow-xs">
           <div class="flex items-center gap-3 min-w-0 flex-1">

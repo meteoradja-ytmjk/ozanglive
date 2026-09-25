@@ -6046,12 +6046,18 @@ function renderTemplateList(templates) {
       const patternText = formatRecurringPattern(template.recurring_pattern, template.recurring_days, template.recurring_time);
       const nextRunText = formatNextRun(template.next_run_at);
       recurringHtmlDesktop = `
-        <div class="flex items-center gap-2 mt-2 text-xs">
-          <span class="px-2 py-0.5 bg-green-500/20 text-green-400 rounded flex items-center gap-1">
-            <i class="ti ti-repeat"></i>
+        <div class="flex items-center gap-2 mt-2 text-xs flex-wrap">
+          <span class="px-2 py-0.5 bg-emerald-500/15 text-emerald-300 border border-emerald-500/25 rounded-md flex items-center gap-1 font-medium shadow-2xs">
+            <i class="ti ti-repeat text-emerald-400"></i>
             ${escapeHtml(patternText)}
           </span>
-          <span class="text-gray-500">Next: ${escapeHtml(nextRunText)}</span>
+          <span class="text-gray-400 flex items-center gap-1">
+            <i class="ti ti-clock text-gray-500"></i>
+            Jadwal Berikutnya: <span class="text-gray-200 font-medium">${escapeHtml(nextRunText)}</span>
+          </span>
+          <span class="text-[11px] text-emerald-400/80 font-normal">
+            (Siaran dibuat otomatis di background saat jam tiba)
+          </span>
         </div>
       `;
     }
@@ -6075,7 +6081,7 @@ function renderTemplateList(templates) {
     const recreateActionLabel = 'Rebroadcast';
     const recreateActionTitle = 'Jadwalkan ulang broadcast dari template ini';
     const recreateActionIcon = 'ti-broadcast';
-    const recreateActionDesktopClass = 'px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-lg transition-colors text-sm flex items-center gap-1.5 font-medium';
+    const recreateActionDesktopClass = 'px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-lg transition-colors text-sm flex items-center gap-1.5 font-medium cursor-pointer';
     const recreateActionMobileClass = 'px-2 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded transition-colors text-xs flex items-center gap-1';
     
     const div = document.createElement('div');
@@ -6087,7 +6093,11 @@ function renderTemplateList(templates) {
           <div class="flex items-center gap-2 flex-wrap">
             <h4 class="font-medium text-white truncate">${escapeHtml(template.name)}</h4>
             ${isMulti ? `<span class="px-1.5 py-0.5 bg-primary/20 text-primary text-xs rounded">${broadcastCount} broadcasts</span>` : ''}
-            ${hasRecurring ? `<span class="recurring-badge px-1.5 py-0.5 bg-green-500/20 text-green-400 text-xs rounded flex items-center gap-0.5"><i class="ti ti-repeat text-[10px]"></i> Auto</span>` : ''}
+            ${hasRecurring ? `
+              <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shadow-xs" title="Jadwal otomatis aktif - siaran dibuat otomatis oleh server saat jam tiba">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span>Jadwal Otomatis Aktif</span>
+              </span>` : ''}
             ${thumbnailBadge}
           </div>
           <p class="text-sm text-gray-400 truncate">${escapeHtml(template.title)}</p>
@@ -6100,13 +6110,20 @@ function renderTemplateList(templates) {
           ${recurringHtmlDesktop}
         </div>
         <div class="flex items-center gap-2 flex-shrink-0">
+          ${hasRecurring ? `
+          <button onclick="removeTemplateRecurringSchedule('${template.id}', '${escapeJsString(template.name)}')"
+            class="px-2.5 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 hover:text-amber-300 border border-amber-500/30 rounded-lg transition-colors text-xs flex items-center gap-1.5 font-medium cursor-pointer shadow-xs"
+            title="Hapus / Nonaktifkan penjadwalan otomatis untuk template ini">
+            <i class="ti ti-calendar-off text-sm"></i>
+            <span>Hapus Jadwal Otomatis</span>
+          </button>` : ''}
           <button onclick="recreateFromTemplate('${template.id}')"
             class="${recreateActionDesktopClass}" title="${recreateActionTitle}">
             <i class="ti ${recreateActionIcon}"></i>
             <span>${recreateActionLabel}</span>
           </button>
           <button onclick="deleteTemplate('${template.id}', '${escapeJsString(template.name)}')"
-            class="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors text-sm flex items-center gap-1" title="Delete">
+            class="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors text-sm flex items-center gap-1 cursor-pointer" title="Delete">
             <i class="ti ti-trash"></i>
           </button>
         </div>
@@ -6116,13 +6133,22 @@ function renderTemplateList(templates) {
       <div class="md:hidden flex items-center gap-2 px-3 py-2.5 bg-dark-700/50 hover:bg-dark-700 rounded-lg transition-colors ${accountInvalid ? 'border border-orange-500/30' : ''}">
         <span class="text-primary font-semibold text-xs w-5 flex-shrink-0">${index + 1}</span>
         <div class="flex-1 min-w-0">
-          <p class="text-sm text-white truncate">${escapeHtml(template.name)}</p>
+          <div class="flex items-center gap-1.5">
+            <p class="text-sm text-white truncate font-medium">${escapeHtml(template.name)}</p>
+            ${hasRecurring ? `<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse flex-shrink-0" title="Jadwal Otomatis Aktif"></span>` : ''}
+          </div>
           <p class="text-[10px] text-gray-500 truncate">${escapeHtml(template.title)}</p>
         </div>
         ${accountInvalid ? `<span class="px-1 py-0.5 bg-orange-500/20 text-orange-400 text-[10px] rounded flex-shrink-0" title="Account disconnected"><i class="ti ti-alert-triangle text-[8px]"></i></span>` : ''}
-        ${hasRecurring ? `<span class="px-1.5 py-0.5 bg-green-500/20 text-green-400 text-[10px] rounded flex-shrink-0"><i class="ti ti-repeat text-[8px]"></i></span>` : ''}
+        ${hasRecurring ? `<span class="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 text-[10px] rounded flex-shrink-0 font-medium">Auto</span>` : ''}
         ${isMulti ? `<span class="px-1.5 py-0.5 bg-primary/20 text-primary text-[10px] rounded flex-shrink-0">${broadcastCount}</span>` : ''}
         <div class="flex items-center gap-1 flex-shrink-0">
+          ${hasRecurring ? `
+          <button onclick="removeTemplateRecurringSchedule('${template.id}', '${escapeJsString(template.name)}')"
+            class="w-7 h-7 flex items-center justify-center text-amber-400 hover:bg-amber-500/20 rounded transition-colors"
+            title="Hapus Jadwal Otomatis">
+            <i class="ti ti-calendar-off text-xs"></i>
+          </button>` : ''}
           <button onclick="recreateFromTemplate('${template.id}')"
             class="${recreateActionMobileClass}" title="${recreateActionTitle}">
             <i class="ti ${recreateActionIcon} text-xs"></i>
@@ -8106,6 +8132,24 @@ function openRecreateFromTemplateModal(template) {
 
   // Load recurring settings from template
   loadRecreateRecurringSettings(template);
+
+  // Update active schedule alert banner in modal
+  const scheduleAlert = document.getElementById('recreateActiveScheduleAlert');
+  const scheduleDesc = document.getElementById('recreateActiveScheduleDesc');
+  if (scheduleAlert && scheduleDesc) {
+    if (template.recurring_enabled) {
+      const pName = template.recurring_pattern === 'weekly' ? 'Mingguan (Weekly)' : 'Harian (Daily)';
+      let daysStr = '';
+      if (template.recurring_pattern === 'weekly' && template.recurring_days) {
+        const daysArr = Array.isArray(template.recurring_days) ? template.recurring_days : [template.recurring_days];
+        daysStr = ` • Hari: <span class="text-white font-semibold">${daysArr.join(', ')}</span>`;
+      }
+      scheduleDesc.innerHTML = `Template ini disetel: <span class="text-white font-semibold">${pName}</span> • Jam: <span class="text-white font-semibold">${template.recurring_time || '13:00'}</span>${daysStr}. Siaran YouTube akan dibuat otomatis oleh server saat jam tayang tiba.`;
+      scheduleAlert.classList.remove('hidden');
+    } else {
+      scheduleAlert.classList.add('hidden');
+    }
+  }
 }
 
 // Synchronize flattened slots from groups for backwards compatibility
@@ -9439,6 +9483,93 @@ async function handleRecreateSaveRecurringOnly() {
   }
 }
 window.handleRecreateSaveRecurringOnly = handleRecreateSaveRecurringOnly;
+
+/**
+ * Hapus / Nonaktifkan penjadwalan otomatis langsung dari modal Rebroadcast
+ */
+async function cancelRecreateAutoSchedule() {
+  const template = window.currentRecreateTemplate;
+  if (!template || !template.id) return;
+
+  if (!confirm(`Hapus dan nonaktifkan penjadwalan otomatis untuk template "${template.name || 'ini'}"?\n\nSiaran tidak akan lagi dibuat otomatis di latar belakang.`)) {
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/youtube/templates/${template.id}/recurring`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getCsrfToken()
+      },
+      body: JSON.stringify({
+        recurring_enabled: false
+      })
+    });
+    const data = await res.json();
+    if (data.success) {
+      template.recurring_enabled = false;
+      template.recurring_pattern = null;
+      template.recurring_time = null;
+      template.recurring_days = null;
+
+      const alertEl = document.getElementById('recreateActiveScheduleAlert');
+      if (alertEl) alertEl.classList.add('hidden');
+
+      setRecreateRecurringMode('none');
+      showToast('Penjadwalan otomatis berhasil dinonaktifkan!', 'success');
+
+      if (typeof window.refreshStudioAndControlRoom === 'function') {
+        window.refreshStudioAndControlRoom();
+      } else if (typeof window.loadTemplates === 'function') {
+        window.loadTemplates();
+      }
+    } else {
+      showToast(data.error || 'Gagal menonaktifkan jadwal', 'error');
+    }
+  } catch (err) {
+    showToast('Gagal menonaktifkan jadwal', 'error');
+  }
+}
+window.cancelRecreateAutoSchedule = cancelRecreateAutoSchedule;
+
+/**
+ * Hapus / Nonaktifkan penjadwalan otomatis dari kartu daftar template
+ */
+async function removeTemplateRecurringSchedule(templateId, templateName) {
+  if (!confirm(`Hapus dan nonaktifkan penjadwalan otomatis untuk template "${templateName}"?\n\nSiaran tidak akan lagi dibuat otomatis di latar belakang.`)) {
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/youtube/templates/${templateId}/recurring`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getCsrfToken()
+      },
+      body: JSON.stringify({
+        recurring_enabled: false
+      })
+    });
+
+    const data = await res.json();
+    if (data.success) {
+      showToast(`Penjadwalan otomatis untuk "${templateName}" berhasil dihapus!`, 'success');
+      if (typeof window.refreshStudioAndControlRoom === 'function') {
+        window.refreshStudioAndControlRoom();
+      } else if (typeof window.loadTemplates === 'function') {
+        window.loadTemplates();
+      }
+    } else {
+      showToast(data.error || 'Gagal menonaktifkan jadwal otomatis', 'error');
+    }
+  } catch (err) {
+    console.error('Error removing recurring schedule:', err);
+    showToast('Gagal menonaktifkan jadwal otomatis', 'error');
+  }
+}
+window.removeTemplateRecurringSchedule = removeTemplateRecurringSchedule;
 
 /**
  * Compatibility aliases for recurring toggles
