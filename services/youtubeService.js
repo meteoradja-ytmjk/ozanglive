@@ -463,14 +463,20 @@ class YouTubeService {
     // Use existing stream or create new one
     if (streamId) {
       console.log('[YouTubeService.createBroadcast] Using existing stream:', streamId);
-      // Fetch existing stream info
-      const streamResponse = await youtube.liveStreams.list({
-        part: 'snippet,cdn',
-        id: streamId
-      });
+      // Fetch existing stream info safely
+      let streamResponse = null;
+      try {
+        streamResponse = await youtube.liveStreams.list({
+          part: 'snippet,cdn',
+          id: streamId
+        });
+      } catch (listErr) {
+        console.warn('[YouTubeService.createBroadcast] Warning: Failed to query existing stream with id "' + streamId + '":', listErr.message);
+        streamResponse = null;
+      }
       
-      if (!streamResponse.data.items || streamResponse.data.items.length === 0) {
-        console.log('[YouTubeService.createBroadcast] Stream not found, creating new one with cdn:', cdnConfig);
+      if (!streamResponse || !streamResponse.data?.items || streamResponse.data.items.length === 0) {
+        console.log('[YouTubeService.createBroadcast] Stream not found or invalid, creating new one with cdn:', cdnConfig);
         // Stream not found, create a new one
         const newStreamResponse = await youtube.liveStreams.insert({
           part: 'snippet,cdn',
@@ -484,7 +490,7 @@ class YouTubeService {
         stream = newStreamResponse.data;
       } else {
         stream = streamResponse.data.items[0];
-        console.log('[YouTubeService.createBroadcast] Found existing stream:', stream.snippet.title, 'cdn resolution:', stream.cdn?.resolution);
+        console.log('[YouTubeService.createBroadcast] Found existing stream:', stream.snippet?.title, 'cdn resolution:', stream.cdn?.resolution);
         if (dualStream && stream.cdn?.resolution !== 'variable') {
           try {
             console.log('[YouTubeService.createBroadcast] Attempting to update existing stream CDN to variable for Dual Stream...');
@@ -530,15 +536,15 @@ class YouTubeService {
       console.log('[YouTubeService.createBroadcast] Successfully bound stream:', stream.id);
     } catch (bindErr) {
       console.error('[YouTubeService.createBroadcast] Warning: Failed to bind stream to broadcast:', bindErr.message);
-      // If binding an existing stream failed (e.g. stream key busy), try creating a fresh stream and binding once
+      // If binding an existing stream failed (e.g. stream key busy or already bound to another broadcast), try creating a fresh stream and binding once
       if (streamId) {
         try {
-          console.log('[YouTubeService.createBroadcast] Fallback: Creating a new stream and binding...');
+          console.log('[YouTubeService.createBroadcast] Fallback: Creating a new stream with cdnConfig and binding...');
           const fallbackStreamRes = await youtube.liveStreams.insert({
             part: 'snippet,cdn',
             requestBody: {
-              snippet: { title: `Stream for ${title}` },
-              cdn: { frameRate: '30fps', ingestionType: 'rtmp', resolution: '1080p' }
+              snippet: { title: dualStream ? `Dual Stream for ${title}` : `Stream for ${title}` },
+              cdn: cdnConfig
             }
           });
           stream = fallbackStreamRes.data;

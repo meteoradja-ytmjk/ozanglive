@@ -11326,7 +11326,13 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
     const accessToken = await youtubeService.getAccessToken(credentials.clientId, credentials.clientSecret, credentials.refreshToken, 0, credentials.id, 0, credentials.id);
 
     const finalCategoryId = categoryId || (templateObj ? templateObj.category_id : null) || '22';
-    const resolvedStreamId = streamId || (matchedSlot ? (matchedSlot.streamId || matchedSlot.streamKey) : null) || (templateObj ? (templateObj.stream_id || templateObj.stream_key) : null) || null;
+    // Only resolve streamId if it is a real stream ID, never fallback to streamKey
+    let resolvedStreamId = streamId || (matchedSlot ? matchedSlot.streamId : null) || (templateObj ? templateObj.stream_id : null) || null;
+    const currentStreamKey = req.body.streamKey || (matchedSlot ? (matchedSlot.streamKey || matchedSlot.stream_key) : null) || (templateObj ? (templateObj.stream_key || templateObj.streamKey) : null);
+    if (resolvedStreamId && currentStreamKey && resolvedStreamId.trim() === currentStreamKey.trim()) {
+      console.log('[API] resolvedStreamId matches streamKey, treating as new stream creation');
+      resolvedStreamId = null;
+    }
     console.log('[API] Create broadcast - using categoryId:', finalCategoryId, 'dualStream:', isDualStream, 'verticalKey:', !!verticalStreamKey, 'alteredContent:', isAlteredContent, 'streamId:', resolvedStreamId);
 
     const broadcast = await youtubeService.createBroadcast(accessToken, {
@@ -11392,7 +11398,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         dualStream: isDualStream ? 1 : 0,
         verticalStreamKey: isDualStream ? (verticalStreamKey || null) : null,
         tags: parsedTags && parsedTags.length > 0 ? JSON.stringify(parsedTags) : null,
-        templateId: templateId ? parseInt(templateId, 10) : null
+        templateId: templateId ? String(templateId) : null
       });
       console.log('[API] Saved broadcast settings for:', broadcast.broadcastId, 'dualStream:', isDualStream, 'alteredContent:', isAlteredContent);
     } catch (settingsErr) {
@@ -12357,7 +12363,9 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
         });
         if (streamByBId) {
           if (!streamKey && streamByBId.stream_key) streamKey = streamByBId.stream_key;
-          if (!streamId && (streamByBId.stream_id || streamByBId.stream_key)) streamId = streamByBId.stream_id || streamByBId.stream_key;
+          if (!streamId && streamByBId.stream_id && (!streamByBId.stream_key || streamByBId.stream_id.trim() !== streamByBId.stream_key.trim())) {
+            streamId = streamByBId.stream_id;
+          }
           if (!videoId && streamByBId.video_id) videoId = streamByBId.video_id;
           if (!audioId && streamByBId.audio_id) audioId = streamByBId.audio_id;
           if ((!scheduleType || scheduleType === 'once') && streamByBId.schedule_type) scheduleType = streamByBId.schedule_type;
@@ -12520,7 +12528,8 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
       final: finalThumbnailFolder
     });
 
-    const finalStreamKey = (streamKey || req.body.streamKey || streamId || '').trim() || null;
+    const finalStreamKey = (streamKey || req.body.streamKey || '').trim() || null;
+    const finalStreamId = (streamId && finalStreamKey && streamId.trim() === finalStreamKey.trim()) ? null : (streamId || null);
 
     const template = await BroadcastTemplate.create({
       user_id: req.session.userId,
@@ -12538,7 +12547,7 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
       thumbnail_index: 0,
       pinned_thumbnail: pinnedThumbnail || null,
       stream_key_folder_mapping: parsedMapping,
-      stream_id: streamId || null,
+      stream_id: finalStreamId,
       stream_key: finalStreamKey,
       title_index: titleIndex || 0,
       pinned_title_id: pinnedTitleId || null,
@@ -13041,9 +13050,12 @@ app.get('/api/youtube/templates/:id', isAuthenticated, async (req, res) => {
 
     // Parse broadcasts from description if it's a multi-broadcast template
     try {
-      if (template.description && template.description.startsWith('[')) {
-        template.broadcasts = JSON.parse(template.description);
-        template.isMultiBroadcast = true;
+      if (template.description && typeof template.description === 'string' && template.description.trim().startsWith('[')) {
+        const parsedBroadcasts = JSON.parse(template.description);
+        if (Array.isArray(parsedBroadcasts) && parsedBroadcasts.length > 0 && typeof parsedBroadcasts[0] === 'object' && parsedBroadcasts[0] !== null && ('title' in parsedBroadcasts[0] || 'streamKey' in parsedBroadcasts[0] || 'streamId' in parsedBroadcasts[0])) {
+          template.broadcasts = parsedBroadcasts;
+          template.isMultiBroadcast = true;
+        }
       }
     } catch (e) {
       // Not a multi-broadcast template, keep description as is

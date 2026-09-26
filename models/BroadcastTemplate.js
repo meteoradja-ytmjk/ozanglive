@@ -89,17 +89,17 @@ class BroadcastTemplate {
     row.schedule_type = row.schedule_type || 'once';
     row.video_id = row.video_id || null;
     row.audio_id = row.audio_id || null;
-    row.stream_key = row.stream_key || row.stream_id || null;
+    row.stream_key = row.stream_key || null;
 
     // Parse description for multi-broadcast templates
     if (row.description && typeof row.description === 'string' && row.description.trim().startsWith('[')) {
       try {
         const broadcasts = JSON.parse(row.description);
-        if (Array.isArray(broadcasts)) {
+        if (Array.isArray(broadcasts) && broadcasts.length > 0 && typeof broadcasts[0] === 'object' && broadcasts[0] !== null && ('title' in broadcasts[0] || 'streamKey' in broadcasts[0] || 'streamId' in broadcasts[0])) {
           row.isMultiBroadcast = true;
           row.broadcasts = broadcasts.map(b => ({
             ...b,
-            streamKey: b.streamKey || b.stream_key || row.stream_key || row.stream_id || '',
+            streamKey: b.streamKey || b.stream_key || row.stream_key || '',
             durationHours: b.durationHours !== undefined ? (parseInt(b.durationHours) || 0) : row.duration_hours,
             durationMinutes: b.durationMinutes !== undefined ? (parseInt(b.durationMinutes) || 0) : row.duration_minutes,
             streamDurationMinutes: b.streamDurationMinutes !== undefined 
@@ -309,7 +309,7 @@ class BroadcastTemplate {
           const parsed = BroadcastTemplate.parseRow(row);
           // If duration or video/audio/stream settings are missing, attempt fallback lookup from streams table
           const needsFallback = (!parsed.stream_duration_minutes || parsed.stream_duration_minutes === 0) || !parsed.video_id || !parsed.stream_key;
-          if (needsFallback && (parsed.stream_id || parsed.title)) {
+          if (needsFallback && (parsed.stream_key || parsed.stream_id || parsed.title)) {
             db.get(
               `SELECT s.stream_duration_hours, s.stream_duration_minutes, s.loop_video, s.video_id, s.audio_id, s.schedule_type, s.stream_key,
                       COALESCE(v.title, p.name) AS video_title, a.title AS audio_title
@@ -317,9 +317,9 @@ class BroadcastTemplate {
                LEFT JOIN videos v ON s.video_id = v.id
                LEFT JOIN playlists p ON s.video_id = p.id
                LEFT JOIN audios a ON s.audio_id = a.id
-               WHERE s.user_id = ? AND (s.stream_key = ? OR s.title = ?)
+               WHERE s.user_id = ? AND (s.stream_key = ? OR s.stream_key = ? OR s.title = ?)
                ORDER BY s.id DESC LIMIT 1`,
-              [parsed.user_id, parsed.stream_id || '', parsed.title || ''],
+              [parsed.user_id, parsed.stream_key || '', parsed.stream_id || '', parsed.title || ''],
               (streamErr, sRow) => {
                 if (!streamErr && sRow) {
                   if ((!parsed.stream_duration_minutes || parsed.stream_duration_minutes === 0) && sRow.stream_duration_minutes > 0) {

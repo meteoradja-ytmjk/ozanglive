@@ -6684,22 +6684,49 @@ if (saveAsTemplateForm) {
       
       console.log('[saveAsTemplate] Fetching broadcast details for:', broadcastId);
       
+      // Fallback: check DOM row dataset
+      const rowEl = document.querySelector(`.broadcast-row[data-broadcast-id="${broadcastId}"]`);
+      let rowData = {};
+      if (rowEl && rowEl.dataset && rowEl.dataset.broadcast) {
+        try {
+          rowData = JSON.parse(rowEl.dataset.broadcast);
+        } catch (e) {}
+      }
+
       // Fetch broadcast details first
-      const broadcastResponse = await fetch(`/api/youtube/broadcasts?accountId=${accountId}`, {
-        headers: {
-          'X-CSRF-Token': getCsrfToken()
+      let broadcast = null;
+      try {
+        const broadcastResponse = await fetch(`/api/youtube/broadcasts?accountId=${accountId}`, {
+          headers: {
+            'X-CSRF-Token': getCsrfToken()
+          }
+        });
+        const broadcastData = await broadcastResponse.json();
+        if (broadcastData.success && Array.isArray(broadcastData.broadcasts)) {
+          broadcast = broadcastData.broadcasts.find(b => b.id === broadcastId);
         }
-      });
-      
-      const broadcastData = await broadcastResponse.json();
-      
-      if (!broadcastData.success) {
-        throw new Error('Failed to fetch broadcast details');
+      } catch (fetchErr) {
+        console.warn('[saveAsTemplate] Error querying broadcast list from API:', fetchErr.message);
       }
       
-      const broadcast = broadcastData.broadcasts.find(b => b.id === broadcastId);
+      // Fallback: If not found in API response (e.g. YouTube API indexing lag right after broadcast creation), use rowData from DOM
       if (!broadcast) {
-        throw new Error('Broadcast not found');
+        console.log('[saveAsTemplate] Broadcast not in API response, falling back to rowData from table row');
+        broadcast = {
+          id: broadcastId,
+          title: document.getElementById('previewTitle')?.textContent?.trim() || rowData.title || '',
+          description: rowData.description || '',
+          privacyStatus: document.getElementById('previewPrivacy')?.textContent?.trim()?.toLowerCase() || rowData.privacyStatus || 'unlisted',
+          streamId: rowData.streamId || null,
+          streamKey: rowData.streamKey || '',
+          thumbnailPath: rowData.thumbnailPath || null,
+          thumbnailFolder: rowData.thumbnailFolder || null,
+          tags: rowData.tags || null,
+          videoId: rowData.videoId || null,
+          audioId: rowData.audioId || null,
+          duration: rowData.duration || rowData.streamDurationMinutes || 0,
+          loopVideo: rowData.loopVideo !== false
+        };
       }
       
       console.log('[saveAsTemplate] Found broadcast:', { 
@@ -6715,18 +6742,10 @@ if (saveAsTemplateForm) {
       let durHours = parseInt(broadcast.streamDurationHours) || parseInt(broadcast.stream_duration_hours) || Math.floor(durMins / 60);
       let remMins = durMins % 60;
 
-      // Fallback: check DOM row dataset if durMins is 0
-      const rowEl = document.querySelector(`.broadcast-row[data-broadcast-id="${broadcastId}"]`);
-      let rowData = {};
-      if (rowEl && rowEl.dataset && rowEl.dataset.broadcast) {
-        try {
-          rowData = JSON.parse(rowEl.dataset.broadcast);
-          if (durMins === 0) {
-            durMins = parseInt(rowData.streamDurationMinutes) || parseInt(rowData.duration) || 0;
-            durHours = parseInt(rowData.streamDurationHours) || Math.floor(durMins / 60);
-            remMins = durMins % 60;
-          }
-        } catch (e) {}
+      if (durMins === 0 && rowData) {
+        durMins = parseInt(rowData.streamDurationMinutes) || parseInt(rowData.duration) || 0;
+        durHours = parseInt(rowData.streamDurationHours) || Math.floor(durMins / 60);
+        remMins = durMins % 60;
       }
 
       // Gather form inputs
@@ -6760,6 +6779,10 @@ if (saveAsTemplateForm) {
       const titleFolderInput = document.getElementById('saveTemplateTitleFolder');
       const chosenTitleFolderId = (titleFolderInput && titleFolderInput.value) ? titleFolderInput.value : (broadcast.title_folder_id || rowData.title_folder_id || null);
 
+      // Ensure streamId is only used if it is not identical to streamKey
+      const rawStreamId = broadcast.streamId || rowData.streamId || null;
+      const validStreamId = (rawStreamId && resolvedStreamKey && rawStreamId.trim() !== resolvedStreamKey.trim()) ? rawStreamId.trim() : null;
+
       // Create template from broadcast - include ALL data for reuse and automatic live streaming
       const templateData = {
         name: name,
@@ -6773,7 +6796,7 @@ if (saveAsTemplateForm) {
         thumbnailPath: broadcast.thumbnailPath || rowData.thumbnailPath || null,
         pinnedThumbnail: broadcast.pinnedThumbnail || broadcast.thumbnailPath || rowData.thumbnailPath || null,
         thumbnailFolder: (broadcast.thumbnailFolder !== undefined && broadcast.thumbnailFolder !== null) ? broadcast.thumbnailFolder : (rowData.thumbnailFolder !== undefined ? rowData.thumbnailFolder : (currentThumbnailFolder || null)),
-        streamId: broadcast.streamId || rowData.streamId || null,  // Save stream ID for reuse
+        streamId: validStreamId,  // Save stream ID only if valid and distinct from key
         streamKey: resolvedStreamKey,  // Save stream key for reuse
         durationHours: durHours,
         durationMinutes: remMins,
@@ -10196,15 +10219,17 @@ if (recreateFromTemplateForm) {
             formData.append('tags', typeof tags === 'string' ? tags : JSON.stringify(tags));
           }
           
-          // Stream ID reuse
-          const streamId = slot.streamId !== undefined ? slot.streamId : template.stream_id;
-          if (streamId) {
-            if (reusableStreamIds && reusableStreamIds.has(streamId)) {
-              formData.append('streamId', streamId);
-              console.log('[recreate] Reusing valid streamId for selected account:', streamId);
+          // Stream ID reuse: Only pass streamId if it is a real YouTube stream ID (not streamKey) and present in reusableStreamIds
+          const candidateStreamId = slot.streamId !== undefined ? slot.streamId : template.stream_id;
+          const candidateStreamKey = slot.streamKey !== undefined ? slot.streamKey : (template.stream_key || '');
+          const isKeyNotId = candidateStreamId && candidateStreamKey && candidateStreamId.trim() === candidateStreamKey.trim();
+          
+          if (candidateStreamId && !isKeyNotId) {
+            if (reusableStreamIds && reusableStreamIds.has(candidateStreamId)) {
+              formData.append('streamId', candidateStreamId);
+              console.log('[recreate] Reusing valid streamId for selected account:', candidateStreamId);
             } else if (!reusableStreamIds) {
-              formData.append('streamId', streamId);
-              console.log('[recreate] Stream list unavailable, attempting to pass streamId:', streamId);
+              console.log('[recreate] Stream list unavailable, omitting streamId so YouTube generates new stream');
             } else {
               console.log('[recreate] streamId not present in account streams, YouTube will generate new key');
             }
@@ -10380,7 +10405,10 @@ if (recreateFromTemplateForm) {
       if (results.failed === 0) {
         showToast(`Berhasil menjadwalkan ${results.success} siaran bertingkat!`);
       } else {
-        showToast(`Berhasil ${results.success}/${results.total} siaran. ${results.failed} gagal.`, 'error');
+        const errorDetails = results.errors.map(e => e.error).filter(Boolean);
+        const uniqueErrors = Array.from(new Set(errorDetails));
+        const detailedMsg = uniqueErrors.length > 0 ? `: ${uniqueErrors.join(' | ')}` : '';
+        showToast(`Gagal menjadwalkan siaran (${results.failed}/${results.total} gagal)${detailedMsg}`, 'error');
         console.error('Failed broadcasts:', results.errors);
       }
       
