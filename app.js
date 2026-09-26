@@ -1018,12 +1018,11 @@ app.use('/uploads/avatars', (req, res, next) => {
   } else {
     next();
   }
-// Rate limiting disabled by user request (unlimited login attempts)
+});
+
+// Rate limiting and artificial delay disabled for maximum efficiency and unlimited attempts
 const loginLimiter = (req, res, next) => next();
-const loginDelayMiddleware = async (req, res, next) => {
-  await new Promise(resolve => setTimeout(resolve, 1000));
-  next();
-};
+const loginDelayMiddleware = (req, res, next) => next();
 app.get('/login', async (req, res) => {
   // Prevent caching of login page
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
