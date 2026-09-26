@@ -1120,27 +1120,21 @@
             </label>
           </div>
 
-          <!-- Schedule Type Selector -->
-          <div>
-            <label class="text-xs text-gray-400 block mb-2 font-medium">Tipe Jadwal (Schedule Type)</label>
-            <div class="grid grid-cols-3 gap-2">
-              <button type="button" onclick="setStudioScheduleType('once')" id="studioScheduleTypeOnce"
-                class="py-2 px-1 text-center rounded-lg border border-primary bg-primary text-white transition-all flex flex-col items-center justify-center min-h-[50px] shadow-sm">
-                <span class="text-xs font-semibold leading-tight">Sekali</span>
-                <span class="text-[10px] opacity-80 leading-tight mt-0.5">(Once)</span>
-              </button>
-              <button type="button" onclick="setStudioScheduleType('daily')" id="studioScheduleTypeDaily"
-                class="py-2 px-1 text-center rounded-lg border border-gray-600 bg-dark-700 text-gray-300 hover:border-primary transition-all flex flex-col items-center justify-center min-h-[50px]">
-                <span class="text-xs font-semibold leading-tight">Setiap Hari</span>
-                <span class="text-[10px] opacity-80 leading-tight mt-0.5">(Daily)</span>
-              </button>
-              <button type="button" onclick="setStudioScheduleType('weekly')" id="studioScheduleTypeWeekly"
-                class="py-2 px-1 text-center rounded-lg border border-gray-600 bg-dark-700 text-gray-300 hover:border-primary transition-all flex flex-col items-center justify-center min-h-[50px]">
-                <span class="text-xs font-semibold leading-tight">Mingguan</span>
-                <span class="text-[10px] opacity-80 leading-tight mt-0.5">(Weekly)</span>
-              </button>
+          <!-- Schedule Section (Single Broadcast Event) -->
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <label class="text-xs text-gray-300 font-semibold flex items-center gap-1.5">
+                <i class="ti ti-calendar-time text-primary"></i> Waktu Siaran (Sekali Tayang)
+              </label>
+              <span class="text-[10px] text-gray-400 bg-dark-700/80 px-2 py-0.5 rounded-full border border-gray-600/70">Single Event</span>
             </div>
             <input type="hidden" id="studioScheduleType" name="scheduleType" value="once">
+            <!-- Hidden elements to preserve full backward compatibility with existing JS handlers -->
+            <div class="hidden">
+              <button type="button" id="studioScheduleTypeOnce"></button>
+              <button type="button" id="studioScheduleTypeDaily"></button>
+              <button type="button" id="studioScheduleTypeWeekly"></button>
+            </div>
           </div>
 
           <!-- Once Schedule Settings -->
@@ -1161,6 +1155,30 @@
               <input type="datetime-local" id="studioScheduleEndTime" name="scheduleEndTime"
                 class="w-full px-2 sm:px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg text-xs sm:text-sm text-white [color-scheme:dark] focus:border-primary focus:outline-none">
             </div>
+          </div>
+
+          <!-- Auto-Pilot Template Recommendation Banner -->
+          <div class="p-3 bg-gradient-to-r from-purple-950/40 via-purple-900/20 to-primary/10 border border-purple-500/30 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-inner">
+            <div class="flex items-start gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-purple-500/20 border border-purple-500/40 flex items-center justify-center shrink-0 mt-0.5">
+                <i class="ti ti-robot text-purple-400 text-base"></i>
+              </div>
+              <div>
+                <div class="text-xs font-semibold text-white flex items-center gap-1.5">
+                  <span>Mau Siaran Rutin Harian / Mingguan?</span>
+                  <span class="text-[9px] bg-purple-500/30 text-purple-300 border border-purple-500/40 px-1.5 py-0.2 rounded font-medium">Auto-Pilot</span>
+                </div>
+                <p class="text-[11px] text-gray-400 mt-0.5 leading-snug">
+                  Gunakan <strong>Template</strong> agar bot otomatis membuat event YouTube baru, rotasi judul, & rotasi thumbnail setiap hari.
+                </p>
+              </div>
+            </div>
+            <button type="button" onclick="closeCreateBroadcastModal(); if (typeof openTemplateLibraryModal === 'function') { openTemplateLibraryModal(); } else if (typeof openCreateTemplateModal === 'function') { openCreateTemplateModal(); }"
+              class="w-full sm:w-auto px-3 py-1.5 bg-purple-600/30 hover:bg-purple-600/50 active:bg-purple-600/60 text-purple-200 hover:text-white border border-purple-500/40 rounded-lg text-xs font-medium whitespace-nowrap transition-all flex items-center justify-center gap-1.5 shrink-0">
+              <i class="ti ti-template text-xs"></i>
+              <span>Buka Template</span>
+              <i class="ti ti-arrow-right text-[10px]"></i>
+            </button>
           </div>
 
           <!-- Recurring Schedule Settings (Daily/Weekly) -->
@@ -2260,15 +2278,21 @@
         <!-- Schedule Mode (Once, Daily, Weekly) -->
         <div class="space-y-3 bg-dark-700/50 p-3 rounded-lg border border-gray-600/50">
           <div>
-            <label class="text-xs font-semibold text-gray-200 block mb-1 flex items-center gap-1">
-              <i class="ti ti-calendar-time text-primary font-loaded"></i>Jadwal Live Otomatis
-            </label>
+            <div class="flex items-center justify-between mb-1">
+              <label class="text-xs font-semibold text-gray-200 flex items-center gap-1">
+                <i class="ti ti-robot text-purple-400 font-loaded"></i>Mode Otomasi Template
+              </label>
+              <span class="text-[10px] text-purple-300 bg-purple-500/20 px-2 py-0.5 rounded border border-purple-500/30 font-medium">Auto-Pilot Center</span>
+            </div>
             <select id="saveTemplateScheduleType" onchange="toggleSaveTemplateScheduleFields(this.value)"
               class="w-full px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg text-xs text-white focus:border-primary focus:outline-none transition-colors">
-              <option value="once">Sekali Siar (Once)</option>
-              <option value="daily">Harian (Daily - Otomatis Siar Setiap Hari)</option>
-              <option value="weekly">Mingguan (Weekly - Siar pada Hari Pilihan)</option>
+              <option value="once">Manual / Preset (Jalankan Kapan Saja via 1-Klik "Run Now")</option>
+              <option value="daily">⚡ Auto-Pilot Harian (Otomatis Buat Event & Live Setiap Hari)</option>
+              <option value="weekly">⚡ Auto-Pilot Mingguan (Otomatis Buat Event pada Hari Pilihan)</option>
             </select>
+            <p class="text-[11px] text-gray-400 mt-1 leading-snug">
+              Pilih <strong>Auto-Pilot (Harian/Mingguan)</strong> agar bot otomatis membuat siaran YouTube baru, rotasi judul, dan rotasi thumbnail sesuai jadwal.
+            </p>
           </div>
 
           <!-- Recurring Time Input (Shown for Daily & Weekly) -->
