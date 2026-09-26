@@ -1943,6 +1943,18 @@
             placeholder="Contoh: Live Harian 24 Jam">
         </div>
 
+        <!-- Folder Tujuan Judul (Title Folder) -->
+        <div>
+          <label class="text-xs font-semibold text-gray-200 block mb-1 flex items-center justify-between">
+            <span class="flex items-center gap-1"><i class="ti ti-folder text-sky-400 font-loaded"></i>Folder Tujuan Judul (Rotasi Judul)</span>
+            <span class="text-[10px] text-gray-400">Pilih folder daftar judul</span>
+          </label>
+          <select id="saveTemplateTitleFolder"
+            class="w-full px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg text-xs text-white focus:border-primary focus:outline-none transition-colors">
+            <option value="">-- Semua Judul (Tanpa Filter Folder) --</option>
+          </select>
+        </div>
+
         <!-- Media Confirmation (Video & Audio) -->
         <div class="bg-dark-700/70 p-3 rounded-lg border border-gray-600/70 space-y-2">
           <div class="flex items-center justify-between text-xs text-gray-300 font-semibold border-b border-gray-600/50 pb-1.5">
@@ -2631,6 +2643,25 @@
           </div>
         </div>
 
+        <!-- 2. Template Metadata Badges Bar (Folder Tujuan Judul, Folder Thumbnail, Privasi, Durasi) -->
+        <div class="bg-dark-900/50 rounded-xl px-3 py-2 border border-gray-700/60 flex items-center gap-1.5 flex-wrap text-xs">
+          <span id="recreateTemplateTitleFolderInfo" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-400 text-[11px] font-medium" title="Folder Tujuan Judul untuk rotasi judul">
+            <i class="ti ti-folder text-sky-400 text-xs"></i>
+            <span>Folder Judul: Semua</span>
+          </span>
+          <span id="recreateTemplateThumbnailInfo" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 text-[11px] font-medium" title="Folder Thumbnail">
+            <i class="ti ti-photo text-yellow-400 text-xs"></i>
+            <span>Folder: Root</span>
+          </span>
+          <span id="recreateTemplatePrivacyInfo" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-300 text-[11px] font-medium" title="Status Privasi Default">
+            <i class="ti ti-lock text-purple-400 text-xs"></i>
+            <span>Privasi: UNLISTED</span>
+          </span>
+          <span id="recreateTemplateDurationBadgeText" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-[11px] font-medium" title="Durasi Siaran">
+            <i class="ti ti-clock text-emerald-400 text-xs"></i>
+            <span>Durasi: Tanpa Batas</span>
+          </span>
+        </div>
         
         <!-- 3. Daftar Siaran & Jam Tayang (Pengelompokan Berjenjang per Broadcast) -->
         <div class="border-t border-gray-700/60 pt-2.5 space-y-2">
@@ -2821,13 +2852,52 @@
               <div class="w-9 h-5 bg-dark-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
             </label>
           </div>
+
+          <!-- Folder Tujuan Judul Dropdown -->
+          <div class="pt-1">
+            <label class="text-[11px] font-medium text-gray-300 block mb-1 flex items-center gap-1">
+              <i class="ti ti-folder text-sky-400 text-xs"></i> Folder Tujuan Judul (Rotasi Judul)
+            </label>
+            <select id="recreateSlotEditTitleFolderSelect"
+              class="w-full px-2.5 py-2 bg-dark-800 border border-gray-600 rounded-lg text-white text-xs focus:border-primary focus:outline-none transition-colors">
+              <option value="__KEEP__">-- Gunakan Default Template --</option>
+              <option value="">-- Semua Judul (Tanpa Filter Folder) --</option>
+            </select>
+            <p class="text-[10px] text-gray-400 mt-1">Pilih folder judul sumber rotasi saat siaran live dijadwalkan.</p>
+          </div>
         </div>
 
-        <!-- 2. Folder Thumbnail & Stream Key YouTube -->
+        <!-- 2. Status Privasi & Deskripsi Siaran -->
         <div class="bg-dark-700/50 rounded-xl p-3.5 border border-gray-700/70 space-y-3">
           <div class="flex items-center justify-between">
             <span class="font-bold text-white uppercase tracking-wider text-[11px] flex items-center gap-1.5">
-              <i class="ti ti-key text-amber-400 text-sm"></i> 2. Folder Thumbnail & Stream Key
+              <i class="ti ti-lock text-purple-400 text-sm"></i> 2. Status Privasi & Deskripsi Siaran
+            </span>
+          </div>
+
+          <div>
+            <label class="text-[11px] font-medium text-gray-300 block mb-1">Status Privasi YouTube</label>
+            <select id="recreateSlotEditPrivacySelect"
+              class="w-full px-2.5 py-2 bg-dark-800 border border-gray-600 rounded-lg text-white text-xs focus:border-primary focus:outline-none transition-colors">
+              <option value="public">🌐 Publik (Public - Terbuka untuk Semua Penonton)</option>
+              <option value="unlisted">👁️ Tidak Publik (Unlisted - Hanya yang Memiliki Link)</option>
+              <option value="private">🔒 Pribadi (Private - Hanya Pemilik Akun)</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="text-[11px] font-medium text-gray-300 block mb-1">Deskripsi Broadcast</label>
+            <textarea id="recreateSlotEditDescriptionInput" rows="3"
+              class="w-full px-3 py-2 bg-dark-800 border border-gray-600 rounded-lg text-white text-xs focus:border-primary focus:outline-none transition-colors"
+              placeholder="Tuliskan deskripsi siaran live YouTube..."></textarea>
+          </div>
+        </div>
+
+        <!-- 3. Folder Thumbnail & Stream Key YouTube -->
+        <div class="bg-dark-700/50 rounded-xl p-3.5 border border-gray-700/70 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-white uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+              <i class="ti ti-key text-amber-400 text-sm"></i> 3. Folder Thumbnail & Stream Key
             </span>
           </div>
 
@@ -2866,11 +2936,11 @@
           </div>
         </div>
 
-        <!-- 3. Media Video & Audio -->
+        <!-- 4. Media Video & Audio -->
         <div class="bg-dark-700/50 rounded-xl p-3.5 border border-gray-700/70 space-y-3">
           <div class="flex items-center justify-between">
             <span class="font-bold text-white uppercase tracking-wider text-[11px] flex items-center gap-1.5">
-              <i class="ti ti-video text-blue-400 text-sm"></i> 3. Sumber Media (Video & Audio)
+              <i class="ti ti-video text-blue-400 text-sm"></i> 4. Sumber Media (Video & Audio)
             </span>
           </div>
 
@@ -2899,11 +2969,11 @@
           </div>
         </div>
 
-        <!-- 4. Pengaturan Durasi Lengkap & Loop Video -->
+        <!-- 5. Pengaturan Durasi Lengkap & Loop Video -->
         <div class="bg-dark-700/50 rounded-xl p-3.5 border border-gray-700/70 space-y-3">
           <div class="flex items-center justify-between">
             <span class="font-bold text-white uppercase tracking-wider text-[11px] flex items-center gap-1.5">
-              <i class="ti ti-clock text-emerald-400 text-sm"></i> 4. Durasi & Loop Video (Lengkap)
+              <i class="ti ti-clock text-emerald-400 text-sm"></i> 5. Durasi & Loop Video (Lengkap)
             </span>
           </div>
 

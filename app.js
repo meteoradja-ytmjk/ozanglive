@@ -11391,7 +11391,8 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         alteredContent: isAlteredContent ? 1 : 0,
         dualStream: isDualStream ? 1 : 0,
         verticalStreamKey: isDualStream ? (verticalStreamKey || null) : null,
-        tags: parsedTags && parsedTags.length > 0 ? JSON.stringify(parsedTags) : null
+        tags: parsedTags && parsedTags.length > 0 ? JSON.stringify(parsedTags) : null,
+        templateId: templateId ? parseInt(templateId, 10) : null
       });
       console.log('[API] Saved broadcast settings for:', broadcast.broadcastId, 'dualStream:', isDualStream, 'alteredContent:', isAlteredContent);
     } catch (settingsErr) {
@@ -11863,6 +11864,28 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
             console.error('[API] Error starting stream engine immediately:', startErr.message);
             streamStartResult = { success: false, error: startErr.message };
           }
+        }
+      }
+      if (templateId) {
+        try {
+          const nowDate = new Date();
+          let executedTimeStr = null;
+          if (finalScheduledStartTime && typeof finalScheduledStartTime === 'string' && finalScheduledStartTime.includes('T')) {
+            const parsedTime = parseWIBDateTimeLocal(finalScheduledStartTime);
+            if (parsedTime) {
+              executedTimeStr = `${String(parsedTime.getHours()).padStart(2, '0')}:${String(parsedTime.getMinutes()).padStart(2, '0')}`;
+            }
+          }
+          if (!executedTimeStr && req.body.recurringTime) {
+            executedTimeStr = String(req.body.recurringTime).slice(0, 5);
+          }
+          if (executedTimeStr && typeof scheduleService !== 'undefined' && typeof scheduleService.markSlotExecuted === 'function') {
+            scheduleService.markSlotExecuted(templateId, executedTimeStr, nowDate);
+          }
+          await BroadcastTemplate.update(templateId, { last_run_at: nowDate.toISOString() });
+          console.log(`[API] Marked template ${templateId} executed at ${executedTimeStr || 'now'} to prevent duplicate execution by background scheduler`);
+        } catch (markErr) {
+          console.warn('[API] Warning marking template executed:', markErr.message);
         }
       }
     } catch (streamErr) {

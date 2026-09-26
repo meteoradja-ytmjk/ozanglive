@@ -644,6 +644,25 @@ class ScheduleService {
   }
 
   /**
+   * Mark a slot as manually executed (e.g. from frontend rebroadcast)
+   * Prevents schedule checker from running this slot again today
+   * @param {string} templateId - Template ID
+   * @param {string} slotTime - Time in HH:MM format
+   * @param {Date} now - Current time
+   */
+  markSlotExecuted(templateId, slotTime, now = new Date()) {
+    if (!slotTime) return;
+    const nowDateStr = this.getWIBDateString(now);
+    const cleanTime = String(slotTime).slice(0, 5);
+    const slotKey = `${templateId}_${nowDateStr}_${cleanTime}`;
+    if (!this.executedSlots) {
+      this.executedSlots = new Set();
+    }
+    this.executedSlots.add(slotKey);
+    console.log(`[ScheduleService] Manually marked slot as executed: ${slotKey}`);
+  }
+
+  /**
    * Check if template has already run today (in WIB timezone)
    * For single time: returns true if already run today.
    * For multi-time schedule bertingkat: returns true only if all slots ran today.

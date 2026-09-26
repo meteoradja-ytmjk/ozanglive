@@ -614,7 +614,9 @@ function createBroadcastRowHtml(broadcast, index) {
       recurringTime: broadcast.recurringTime || null,
       scheduleDays: broadcast.scheduleDays || null,
       recurringEnabled: broadcast.recurringEnabled || false,
-      scheduledStartTime: broadcast.scheduledStartTime || null
+      scheduledStartTime: broadcast.scheduledStartTime || null,
+      titleFolderId: broadcast.titleFolderId || broadcast.title_folder_id || null,
+      thumbnailFolder: broadcast.thumbnailFolder || broadcast.thumbnail_folder || null
     }).replace(/"/g, '&quot;');
     
     const privacyClass = 
@@ -6501,6 +6503,33 @@ function toggleSaveTemplateScheduleFields(type) {
 }
 window.toggleSaveTemplateScheduleFields = toggleSaveTemplateScheduleFields;
 
+// Load title folders for Save as Template Modal
+async function loadSaveTemplateTitleFolders(selectedFolderId = null) {
+  const select = document.getElementById('saveTemplateTitleFolder');
+  if (!select) return;
+  try {
+    const response = await fetch('/api/title-folders', {
+      headers: { 'X-CSRF-Token': getCsrfToken() }
+    });
+    const data = await response.json();
+    select.innerHTML = '<option value="">-- Semua Judul (Tanpa Filter Folder) --</option>';
+    if (data.success && Array.isArray(data.folders)) {
+      window.titleFolders = data.folders;
+      data.folders.forEach(folder => {
+        const option = document.createElement('option');
+        option.value = folder.id;
+        option.textContent = `📂 ${folder.name} (${folder.title_count || 0} judul)`;
+        select.appendChild(option);
+      });
+    }
+    if (selectedFolderId) {
+      select.value = selectedFolderId;
+    }
+  } catch (error) {
+    console.error('Error loading title folders for save template:', error);
+  }
+}
+
 // Save as Template Modal
 function openSaveAsTemplateModal(broadcastId, accountId, title, privacyStatus) {
   const modal = document.getElementById('saveAsTemplateModal');
@@ -6519,6 +6548,9 @@ function openSaveAsTemplateModal(broadcastId, accountId, title, privacyStatus) {
       bData = JSON.parse(row.dataset.broadcast);
     } catch (e) {}
   }
+
+  // Load title folders and preselect if broadcast has folder
+  loadSaveTemplateTitleFolders(bData.titleFolderId || bData.title_folder_id || null);
 
   // Format and show duration in preview
   const prevDurEl = document.getElementById('previewDuration');
@@ -6725,6 +6757,9 @@ if (saveAsTemplateForm) {
       const audioIdInput = document.getElementById('saveTemplateAudioId');
       const chosenAudioId = (audioIdInput && audioIdInput.value) ? audioIdInput.value : (broadcast.audioId || rowData.audioId || broadcast.audio_id || null);
 
+      const titleFolderInput = document.getElementById('saveTemplateTitleFolder');
+      const chosenTitleFolderId = (titleFolderInput && titleFolderInput.value) ? titleFolderInput.value : (broadcast.title_folder_id || rowData.title_folder_id || null);
+
       // Create template from broadcast - include ALL data for reuse and automatic live streaming
       const templateData = {
         name: name,
@@ -6733,6 +6768,7 @@ if (saveAsTemplateForm) {
         title: broadcast.title,
         description: broadcast.description || '',
         privacyStatus: broadcast.privacyStatus || 'unlisted',
+        titleFolderId: chosenTitleFolderId || null,
         tags: broadcast.tags || null,
         thumbnailPath: broadcast.thumbnailPath || rowData.thumbnailPath || null,
         pinnedThumbnail: broadcast.pinnedThumbnail || broadcast.thumbnailPath || rowData.thumbnailPath || null,
@@ -7986,6 +8022,42 @@ function openRecreateFromTemplateModal(template) {
     titleBadge.textContent = template.title || '-';
   }
 
+  // Set title folder info badge
+  const titleFolderBadge = document.getElementById('recreateTemplateTitleFolderInfo');
+  if (titleFolderBadge) {
+    let folderLabel = 'Semua';
+    if (template.title_folder_name) {
+      folderLabel = template.title_folder_name;
+    } else if (template.title_folder_id && Array.isArray(window.titleFolders)) {
+      const f = window.titleFolders.find(x => String(x.id) === String(template.title_folder_id));
+      if (f) folderLabel = f.name;
+    }
+    titleFolderBadge.innerHTML = `<i class="ti ti-folder text-sky-400 text-xs"></i><span>Folder Judul: ${escapeHtml(folderLabel)}</span>`;
+  }
+
+  // Set privacy info badge
+  const privacyBadge = document.getElementById('recreateTemplatePrivacyInfo');
+  if (privacyBadge) {
+    const priv = (template.privacy_status || template.privacyStatus || 'unlisted').toUpperCase();
+    privacyBadge.innerHTML = `<i class="ti ti-lock text-purple-400 text-xs"></i><span>Privasi: ${escapeHtml(priv)}</span>`;
+  }
+
+  // Pre-fetch title folders for name resolving & dropdowns if not loaded
+  if (!window.titleFolders) {
+    fetch('/api/title-folders', { headers: { 'X-CSRF-Token': getCsrfToken() } })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && Array.isArray(data.folders)) {
+          window.titleFolders = data.folders;
+          if (template.title_folder_id && titleFolderBadge) {
+            const f = window.titleFolders.find(x => String(x.id) === String(template.title_folder_id));
+            if (f) titleFolderBadge.innerHTML = `<i class="ti ti-folder text-sky-400 text-xs"></i><span>Folder Judul: ${escapeHtml(f.name)}</span>`;
+          }
+          renderRecreateSlotList();
+        }
+      }).catch(() => {});
+  }
+
   // Set thumbnail info badge
   const thumbBadge = document.getElementById('recreateTemplateThumbnailInfo');
   if (thumbBadge) {
@@ -8023,10 +8095,25 @@ function openRecreateFromTemplateModal(template) {
   window.recreateSlots = [];
   window.recreateNextTitles = [];
 
-  // Parse recurring times if available
+  // Helper to extract clean text description (if stored as stringified JSON in multi-broadcast)
+  const extractCleanDescription = (descInput, itemIndex = 0) => {
+    if (!descInput) return '';
+    if (typeof descInput === 'string' && descInput.trim().startsWith('[')) {
+      try {
+        const parsed = JSON.parse(descInput);
+        if (Array.isArray(parsed) && parsed[itemIndex]) {
+          return parsed[itemIndex].description || '';
+        }
+      } catch (_) {}
+    }
+    return typeof descInput === 'string' ? descInput : '';
+  };
+
+  // Parse recurring times if available and deduplicate
   let recurringTimes = [];
   if (template.recurring_time) {
-    recurringTimes = template.recurring_time.split(/[\s,]+/).filter(t => /^[0-2]?[0-9]:[0-5][0-9]$/.test(t));
+    const rawTimes = template.recurring_time.split(/[\s,]+/).filter(t => /^[0-2]?[0-9]:[0-5][0-9]$/.test(t));
+    recurringTimes = Array.from(new Set(rawTimes));
   }
 
   const parseSlotTime = (timeStr, fallbackMinutes = 15) => {
@@ -8050,6 +8137,10 @@ function openRecreateFromTemplateModal(template) {
         : parseSlotTime(null, 15 + i * 30);
       const timeOnlyStr = recurringTimes[i] || (scheduledTimeStr && scheduledTimeStr.includes('T') ? scheduledTimeStr.split('T')[1].slice(0, 5) : '13:00');
 
+      const bDesc = b.description !== undefined ? b.description : extractCleanDescription(template.description, i);
+      const bPrivacy = b.privacyStatus || b.privacy_status || template.privacy_status || template.privacyStatus || 'unlisted';
+      const bTitleFolderId = (b.titleFolderId !== undefined ? b.titleFolderId : (b.title_folder_id !== undefined ? b.title_folder_id : (template.title_folder_id || null)));
+
       window.recreateBroadcastGroups.push({
         title: b.title || template.title,
         originalTitle: b.title || template.title,
@@ -8065,6 +8156,9 @@ function openRecreateFromTemplateModal(template) {
         videoName: b.videoName || b.videoTitle || template.video_title || template.video_name || null,
         audioId: b.audioId || b.audio_id || template.audio_id || null,
         audioName: b.audioName || b.audioTitle || template.audio_title || template.audio_name || null,
+        description: bDesc,
+        privacyStatus: bPrivacy,
+        titleFolderId: bTitleFolderId,
         useTitleRotation: true,
         customTitle: false,
         times: [
@@ -8076,23 +8170,31 @@ function openRecreateFromTemplateModal(template) {
       });
     });
   } else {
-    // Single broadcast template: initialize times list based on recurring_time if present, or 1 default slot
+    // Single broadcast template:
+    // IMPORTANT: If recurring is NOT active on template, strictly create ONLY 1 slot!
+    // Never auto-expand leftover comma-separated times if user is scheduling once.
     let groupTimes = [];
-    if (recurringTimes.length > 0) {
+    if (template.recurring_enabled && recurringTimes.length > 0) {
       groupTimes = recurringTimes.map(t => ({
         scheduleTime: parseSlotTime(t, 15),
         timeOnly: t
       })).sort((a, b) => new Date(a.scheduleTime) - new Date(b.scheduleTime));
     } else {
-      const defaultDate = new Date(Date.now() + 15 * 60 * 1000);
-      const defaultDateStr = formatLocalDateTime(defaultDate);
+      // Single broadcast without active recurring: strictly 1 slot
+      const initialTimeStr = recurringTimes.length > 0 ? recurringTimes[0] : null;
+      const initialSched = parseSlotTime(initialTimeStr, 15);
+      const initialTimeOnly = initialTimeStr || (initialSched && initialSched.includes('T') ? initialSched.split('T')[1].slice(0, 5) : '13:00');
       groupTimes = [
         {
-          scheduleTime: defaultDateStr,
-          timeOnly: defaultDateStr.split('T')[1].slice(0, 5)
+          scheduleTime: initialSched,
+          timeOnly: initialTimeOnly
         }
       ];
     }
+
+    const singleDesc = extractCleanDescription(template.description, 0);
+    const singlePrivacy = template.privacy_status || template.privacyStatus || 'unlisted';
+    const singleTitleFolderId = template.title_folder_id || null;
 
     window.recreateBroadcastGroups.push({
       title: template.title,
@@ -8109,6 +8211,9 @@ function openRecreateFromTemplateModal(template) {
       videoName: template.video_title || template.video_name || null,
       audioId: template.audio_id || null,
       audioName: template.audio_title || template.audio_name || null,
+      description: singleDesc,
+      privacyStatus: singlePrivacy,
+      titleFolderId: singleTitleFolderId,
       useTitleRotation: true,
       customTitle: false,
       times: groupTimes
@@ -8178,6 +8283,9 @@ function syncRecreateSlotsFromGroups() {
           videoName: group.videoName,
           audioId: group.audioId,
           audioName: group.audioName,
+          description: group.description,
+          privacyStatus: group.privacyStatus,
+          titleFolderId: group.titleFolderId,
           scheduleTime: t.scheduleTime,
           timeOnly: t.timeOnly
         });
@@ -8400,6 +8508,25 @@ function renderRecreateSlotList() {
         thumbBadgeText = (group.thumbnailFolder === '' || group.thumbnailFolder === '__ROOT__') ? 'Root' : group.thumbnailFolder;
       }
 
+      // Privacy status badge
+      const slotPrivacy = (group.privacyStatus || template.privacy_status || template.privacyStatus || 'unlisted').toUpperCase();
+      const privacyBadgeClass = slotPrivacy === 'PUBLIC' 
+        ? 'text-emerald-300 border-emerald-500/40 bg-emerald-500/10' 
+        : (slotPrivacy === 'PRIVATE' ? 'text-rose-300 border-rose-500/40 bg-rose-500/10' : 'text-purple-300 border-purple-500/40 bg-purple-500/10');
+
+      // Title Folder badge
+      let slotTitleFolderText = 'Semua Judul';
+      const slotTfId = group.titleFolderId !== undefined ? group.titleFolderId : (template.title_folder_id || null);
+      if (slotTfId && Array.isArray(window.titleFolders)) {
+        const foundTf = window.titleFolders.find(f => String(f.id) === String(slotTfId));
+        if (foundTf) slotTitleFolderText = foundTf.name;
+      } else if (template.title_folder_name && (!slotTfId || slotTfId === template.title_folder_id)) {
+        slotTitleFolderText = template.title_folder_name;
+      }
+
+      // Description presence indicator
+      const hasSlotDesc = Boolean((group.description || template.description || '').trim());
+
       titleContentHtml = `
         <div class="space-y-2.5 w-full">
           <!-- Line 1: Judul Full (Lebar Penuh Tanpa Tertekan) -->
@@ -8407,7 +8534,7 @@ function renderRecreateSlotList() {
             <span class="px-2 py-0.5 bg-primary/20 text-primary font-bold text-[11px] rounded mt-0.5 flex-shrink-0">#${groupIndex + 1}</span>
             <div class="min-w-0 flex-1">
               ${titleDisplayBody}
-              <!-- Metadata Badges Bar: Video/Audio, Durasi, Stream Key, Thumbnail -->
+              <!-- Metadata Badges Bar: Video/Audio, Durasi, Stream Key, Thumbnail, Privasi, Folder Judul, Deskripsi -->
               <div class="flex items-center gap-1.5 flex-wrap text-[10px] mt-1.5">
                 <span class="px-1.5 py-0.5 bg-dark-600/80 rounded border border-gray-600/50 flex items-center gap-1 text-gray-300 truncate max-w-[150px]" title="Video: ${escapeHtml(videoBadgeText)}">
                   <i class="ti ti-video text-blue-400 text-xs"></i>
@@ -8430,6 +8557,18 @@ function renderRecreateSlotList() {
                 <span class="px-1.5 py-0.5 bg-dark-600/80 rounded border border-gray-600/50 flex items-center gap-1 text-yellow-300" title="Thumbnail: ${escapeHtml(thumbBadgeText)}">
                   <i class="ti ti-photo text-yellow-400 text-xs"></i>
                   <span class="truncate max-w-[90px]">${escapeHtml(thumbBadgeText)}</span>
+                </span>
+                <span class="px-1.5 py-0.5 rounded border flex items-center gap-1 font-semibold ${privacyBadgeClass}" title="Status Privasi YouTube: ${slotPrivacy}">
+                  <i class="ti ti-lock text-xs"></i>
+                  <span>${slotPrivacy}</span>
+                </span>
+                <span class="px-1.5 py-0.5 bg-sky-500/10 rounded border border-sky-500/30 flex items-center gap-1 text-sky-300 truncate max-w-[130px]" title="Folder Tujuan Judul: ${escapeHtml(slotTitleFolderText)}">
+                  <i class="ti ti-folder text-sky-400 text-xs"></i>
+                  <span class="truncate">${escapeHtml(slotTitleFolderText)}</span>
+                </span>
+                <span class="px-1.5 py-0.5 bg-dark-600/80 rounded border border-gray-600/50 flex items-center gap-1 ${hasSlotDesc ? 'text-teal-300' : 'text-gray-500'}" title="${hasSlotDesc ? 'Deskripsi Broadcast Tersedia' : 'Tidak ada deskripsi broadcast'}">
+                  <i class="ti ti-file-text text-xs ${hasSlotDesc ? 'text-teal-400' : 'text-gray-500'}"></i>
+                  <span>${hasSlotDesc ? 'Deskripsi' : 'No Desc'}</span>
                 </span>
               </div>
             </div>
@@ -8775,6 +8914,49 @@ function getStudioAudioName(audioId) {
 }
 window.getStudioAudioName = getStudioAudioName;
 
+// Load title folders for recreate slot editor modal
+async function loadRecreateSlotTitleFolders(selectedFolderId = null) {
+  const select = document.getElementById('recreateSlotEditTitleFolderSelect');
+  if (!select) return;
+
+  try {
+    if (!window.titleFolders) {
+      const res = await fetch('/api/title-folders', {
+        headers: { 'X-CSRF-Token': getCsrfToken() }
+      });
+      const data = await res.json();
+      if (data.success && Array.isArray(data.folders)) {
+        window.titleFolders = data.folders;
+      } else {
+        window.titleFolders = [];
+      }
+    }
+
+    select.innerHTML = `
+      <option value="__KEEP__">-- Gunakan Default Template --</option>
+      <option value="">-- Semua Judul (Tanpa Filter Folder) --</option>
+    `;
+
+    (window.titleFolders || []).forEach(f => {
+      const opt = document.createElement('option');
+      opt.value = f.id;
+      opt.textContent = `📂 ${f.name} (${f.title_count || 0} judul)`;
+      select.appendChild(opt);
+    });
+
+    if (selectedFolderId === null || selectedFolderId === undefined || selectedFolderId === '__KEEP__') {
+      select.value = '__KEEP__';
+    } else if (selectedFolderId === '') {
+      select.value = '';
+    } else {
+      select.value = String(selectedFolderId);
+    }
+  } catch (err) {
+    console.error('Error loading title folders for recreate slot:', err);
+  }
+}
+window.loadRecreateSlotTitleFolders = loadRecreateSlotTitleFolders;
+
 async function openRecreateGroupFullEditor(groupIndex) {
   if (!window.recreateBroadcastGroups || !window.recreateBroadcastGroups[groupIndex]) return;
   const group = window.recreateBroadcastGroups[groupIndex];
@@ -8803,7 +8985,21 @@ async function openRecreateGroupFullEditor(groupIndex) {
     rotToggle.checked = isRot;
   }
 
-  // 2. Durasi Jam & Menit & Loop
+  // 1b. Folder Tujuan Judul (Title Folder)
+  loadRecreateSlotTitleFolders(group.titleFolderId !== undefined ? group.titleFolderId : (template.title_folder_id || '__KEEP__'));
+
+  // 2. Status Privasi & Deskripsi Siaran
+  const privSelect = document.getElementById('recreateSlotEditPrivacySelect');
+  if (privSelect) {
+    privSelect.value = group.privacyStatus || template.privacy_status || template.privacyStatus || 'unlisted';
+  }
+
+  const descInput = document.getElementById('recreateSlotEditDescriptionInput');
+  if (descInput) {
+    descInput.value = group.description !== undefined ? group.description : (template.description || '');
+  }
+
+  // 5. Durasi Jam & Menit & Loop
   const durHInput = document.getElementById('recreateSlotEditDurationHours');
   const durMInput = document.getElementById('recreateSlotEditDurationMinutes');
   const loopToggle = document.getElementById('recreateSlotEditLoopToggle');
@@ -9120,7 +9316,30 @@ function saveRecreateSlotFullEdit() {
   group.useTitleRotation = useRotation;
   group.customTitle = (!useRotation && newTitle !== '' && newTitle !== group.originalTitle);
 
-  // 2. Thumbnail Folder
+  // 1b. Folder Tujuan Judul (Title Folder)
+  const titleFolderSelect = document.getElementById('recreateSlotEditTitleFolderSelect');
+  if (titleFolderSelect) {
+    const tfVal = titleFolderSelect.value;
+    if (tfVal === '__KEEP__') {
+      const template = window.currentRecreateTemplate || {};
+      group.titleFolderId = template.title_folder_id || null;
+    } else {
+      group.titleFolderId = tfVal || null;
+    }
+  }
+
+  // 2. Status Privasi & Deskripsi Siaran
+  const privSelect = document.getElementById('recreateSlotEditPrivacySelect');
+  if (privSelect) {
+    group.privacyStatus = privSelect.value || 'unlisted';
+  }
+
+  const descInput = document.getElementById('recreateSlotEditDescriptionInput');
+  if (descInput) {
+    group.description = descInput.value;
+  }
+
+  // 3. Thumbnail Folder
   const thumbSelect = document.getElementById('recreateSlotEditThumbnailFolderSelect');
   if (thumbSelect) {
     const tVal = thumbSelect.value;
@@ -9764,6 +9983,12 @@ if (recreateFromTemplateForm) {
   recreateFromTemplateForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     
+    if (window._isRecreatingBroadcast) {
+      console.warn('[recreate] Already creating broadcast, ignoring duplicate submit');
+      return;
+    }
+    window._isRecreatingBroadcast = true;
+
     const createBtn = document.getElementById('recreateBtn');
     const originalText = createBtn.innerHTML;
     createBtn.innerHTML = '<i class="ti ti-loader animate-spin"></i> Creating...';
@@ -9840,8 +10065,9 @@ if (recreateFromTemplateForm) {
               audioId: grp.audioId || template.audio_id || null,
               scheduleTime: finalSched,
               timeOnly: t.timeOnly,
-              description: grp.description || template.description || '',
+              description: grp.description !== undefined ? grp.description : (template.description || ''),
               privacyStatus: grp.privacyStatus || template.privacy_status || 'unlisted',
+              titleFolderId: grp.titleFolderId !== undefined ? grp.titleFolderId : (template.title_folder_id || null),
               tags: grp.tags || template.tags,
               groupIndex: gIdx,
               timeIndex: tIdx
@@ -9897,11 +10123,15 @@ if (recreateFromTemplateForm) {
           const formData = new FormData();
           formData.append('accountId', accountId);
           formData.append('title', finalTitle);
-          formData.append('description', slot.description || template.description || '');
+          formData.append('description', slot.description !== undefined ? slot.description : (template.description || ''));
           formData.append('scheduledStartTime', schedule);
           formData.append('privacyStatus', slot.privacyStatus || template.privacy_status || 'unlisted');
           if (template.id) {
             formData.append('templateId', template.id);
+          }
+          const finalTitleFolderId = slot.titleFolderId !== undefined ? slot.titleFolderId : (template.title_folder_id || null);
+          if (finalTitleFolderId) {
+            formData.append('titleFolderId', finalTitleFolderId);
           }
           
           // IMPORTANT: Always enable auto-start when re-creating from template
@@ -10165,6 +10395,7 @@ if (recreateFromTemplateForm) {
       console.error('Error:', error);
       showToast('An error occurred', 'error');
     } finally {
+      window._isRecreatingBroadcast = false;
       createBtn.innerHTML = originalText;
       createBtn.disabled = false;
     }
