@@ -8306,21 +8306,43 @@ function openRecreateFromTemplateModal(template) {
     console.warn('[recreate] loadRecreateRecurringSettings error:', err);
   }
 
-  // Update active schedule alert banner in modal
+  // Update active schedule alert banner in modal (simple compact bar matching Image 2)
   const scheduleAlert = document.getElementById('recreateActiveScheduleAlert');
   const scheduleDesc = document.getElementById('recreateActiveScheduleDesc');
-  if (scheduleAlert && scheduleDesc) {
+  const scheduleChannelName = document.getElementById('recreateScheduleChannelName');
+  const scheduleTimeDisplay = document.getElementById('recreateScheduleTimeDisplay');
+  const channelInfoBar = document.getElementById('recreateChannelInfoBar');
+
+  if (scheduleAlert) {
     if (template.recurring_enabled) {
-      const pName = template.recurring_pattern === 'weekly' ? 'Mingguan (Weekly)' : 'Harian (Daily)';
-      let daysStr = '';
+      // 1. Channel name at top-left
+      const chName = template.channel_name || template.channelName || (template.account_id ? `Account #${template.account_id}` : 'YouTube Channel');
+      if (scheduleChannelName) {
+        scheduleChannelName.textContent = chName;
+      }
+
+      // 2. Schedule times & days
+      let timeText = template.recurring_time || '13:00';
       if (template.recurring_pattern === 'weekly' && template.recurring_days) {
         const daysArr = Array.isArray(template.recurring_days) ? template.recurring_days : [template.recurring_days];
-        daysStr = ` • Hari: <span class="text-white font-semibold">${daysArr.join(', ')}</span>`;
+        const dayMap = { monday: 'Sen', tuesday: 'Sel', wednesday: 'Rab', thursday: 'Kam', friday: 'Jum', saturday: 'Sab', sunday: 'Min' };
+        const shortDays = daysArr.map(d => dayMap[d.toLowerCase()] || d).join(', ');
+        timeText = `${timeText} (${shortDays})`;
       }
-      scheduleDesc.innerHTML = `Template ini disetel: <span class="text-white font-semibold">${pName}</span> • Jam: <span class="text-white font-semibold">${template.recurring_time || '13:00'}</span>${daysStr}. Siaran YouTube akan dibuat otomatis oleh server saat jam tayang tiba.`;
+      if (scheduleTimeDisplay) {
+        scheduleTimeDisplay.textContent = timeText;
+      }
+
+      // Backward compatibility element
+      if (scheduleDesc) {
+        scheduleDesc.textContent = `${chName} • ${timeText}`;
+      }
+
       scheduleAlert.classList.remove('hidden');
+      if (channelInfoBar) channelInfoBar.classList.add('hidden');
     } else {
       scheduleAlert.classList.add('hidden');
+      if (channelInfoBar) channelInfoBar.classList.remove('hidden');
     }
   }
 }
@@ -9754,6 +9776,8 @@ async function cancelRecreateAutoSchedule() {
 
       const alertEl = document.getElementById('recreateActiveScheduleAlert');
       if (alertEl) alertEl.classList.add('hidden');
+      const channelBar = document.getElementById('recreateChannelInfoBar');
+      if (channelBar) channelBar.classList.remove('hidden');
 
       setRecreateRecurringMode('none');
       showToast('Penjadwalan otomatis berhasil dinonaktifkan!', 'success');
