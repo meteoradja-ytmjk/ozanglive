@@ -7987,10 +7987,11 @@ async function recreateFromTemplate(templateId) {
       showToast(data.error || 'Failed to load template', 'error');
     }
   } catch (error) {
-    console.error('Error:', error);
-    showToast('An error occurred', 'error');
+    console.error('Error in recreateFromTemplate:', error);
+    showToast('Terjadi kesalahan saat memuat template siaran', 'error');
   }
 }
+window.recreateFromTemplate = recreateFromTemplate;
 
 // Get set of stream IDs for an account, used to safely reuse stream key during re-create
 async function fetchStreamIdsForAccount(accountId) {
@@ -8132,11 +8133,24 @@ function openRecreateFromTemplateModal(template) {
     return typeof descInput === 'string' ? descInput : '';
   };
 
-  // Parse recurring times if available and deduplicate
+  // Parse recurring times if available and deduplicate (safely handle Array, JSON string, or text)
   let recurringTimes = [];
   if (template.recurring_time) {
-    const rawTimes = template.recurring_time.split(/[\s,]+/).filter(t => /^[0-2]?[0-9]:[0-5][0-9]$/.test(t));
-    recurringTimes = Array.from(new Set(rawTimes));
+    let rawTimes = [];
+    if (Array.isArray(template.recurring_time)) {
+      rawTimes = template.recurring_time.map(t => String(t).trim());
+    } else if (typeof template.recurring_time === 'string') {
+      try {
+        if (template.recurring_time.trim().startsWith('[')) {
+          const parsed = JSON.parse(template.recurring_time);
+          if (Array.isArray(parsed)) rawTimes = parsed.map(t => String(t).trim());
+        }
+      } catch (_) {}
+      if (rawTimes.length === 0) {
+        rawTimes = template.recurring_time.split(/[\s,]+/);
+      }
+    }
+    recurringTimes = Array.from(new Set(rawTimes.filter(t => /^[0-2]?[0-9]:[0-5][0-9]$/.test(t))));
   }
 
   const parseSlotTime = (timeStr, fallbackMinutes = 15) => {
@@ -8243,24 +8257,37 @@ function openRecreateFromTemplateModal(template) {
     });
   }
 
-  // Preload studio media async for instant name displays and quick picking
-  preloadStudioMediaForRecreate();
-
-  // Render slots list
-  syncRecreateSlotsFromGroups();
-  renderRecreateSlotList();
-  
+  // Open modal FIRST so it's guaranteed visible even before async operations
   const modal = document.getElementById('recreateFromTemplateModal');
   if (modal) {
     modal.classList.remove('hidden');
     modal.style.display = 'block';
   }
+
+  // Preload studio media async for instant name displays and quick picking
+  try {
+    preloadStudioMediaForRecreate();
+  } catch (err) {
+    console.warn('[recreate] preloadStudioMediaForRecreate error:', err);
+  }
+
+  // Render slots list
+  syncRecreateSlotsFromGroups();
+  renderRecreateSlotList();
   
   // Load title rotation settings and check if enabled
-  loadRecreateTitleRotationPreview();
+  try {
+    loadRecreateTitleRotationPreview();
+  } catch (err) {
+    console.warn('[recreate] loadRecreateTitleRotationPreview error:', err);
+  }
 
   // Load recurring settings from template
-  loadRecreateRecurringSettings(template);
+  try {
+    loadRecreateRecurringSettings(template);
+  } catch (err) {
+    console.warn('[recreate] loadRecreateRecurringSettings error:', err);
+  }
 
   // Update active schedule alert banner in modal
   const scheduleAlert = document.getElementById('recreateActiveScheduleAlert');
@@ -8280,6 +8307,7 @@ function openRecreateFromTemplateModal(template) {
     }
   }
 }
+window.openRecreateFromTemplateModal = openRecreateFromTemplateModal;
 
 // Synchronize flattened slots from groups for backwards compatibility
 function syncRecreateSlotsFromGroups() {
@@ -8411,6 +8439,8 @@ window.formatShortDateTimeDisplay = formatShortDateTimeDisplay;
 function renderRecreateSlotList() {
   const listEl = document.getElementById('recreateBroadcastList');
   if (!listEl || !window.recreateBroadcastGroups) return;
+
+  const template = window.currentRecreateTemplate || {};
 
   syncRecreateSlotsFromGroups();
 
