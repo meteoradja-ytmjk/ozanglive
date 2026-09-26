@@ -8547,51 +8547,6 @@ function renderRecreateSlotList() {
           </div>`;
       }
 
-      // Compute metadata badges for this broadcast group
-      const totalGroupMins = parseInt(group.streamDurationMinutes, 10) || (((parseInt(group.durationHours, 10) || 0) * 60) + (parseInt(group.durationMinutes, 10) || 0));
-      const gHours = parseInt(group.durationHours, 10) || Math.floor(totalGroupMins / 60);
-      const gMins = parseInt(group.durationMinutes, 10) || (totalGroupMins % 60);
-      let durText = 'Unlimited';
-      if (totalGroupMins > 0 || gHours > 0 || gMins > 0) {
-        durText = `${gHours > 0 ? gHours + 'j ' : ''}${gMins > 0 ? gMins + 'm' : (gHours === 0 ? '0m' : '')}`.trim();
-      }
-      const isLoopActive = group.loopVideo !== false && group.loopVideo !== 0 && group.loopVideo !== '0';
-
-      let videoBadgeText = group.videoName || (group.videoId ? getStudioVideoName(group.videoId) : 'Video Template');
-      let audioBadgeText = group.audioName || (group.audioId ? getStudioAudioName(group.audioId) : null);
-
-      let streamKeyBadge = 'Auto Key';
-      if (group.streamKey) {
-        const sk = String(group.streamKey).trim();
-        streamKeyBadge = sk.length > 8 ? `${sk.slice(0, 4)}...${sk.slice(-4)}` : sk;
-      }
-
-      let thumbBadgeText = 'Root';
-      if (group.pinnedThumbnail) {
-        thumbBadgeText = 'Pinned';
-      } else if (group.thumbnailFolder !== undefined && group.thumbnailFolder !== null) {
-        thumbBadgeText = (group.thumbnailFolder === '' || group.thumbnailFolder === '__ROOT__') ? 'Root' : group.thumbnailFolder;
-      }
-
-      // Privacy status badge
-      const slotPrivacy = (group.privacyStatus || template.privacy_status || template.privacyStatus || 'unlisted').toUpperCase();
-      const privacyBadgeClass = slotPrivacy === 'PUBLIC' 
-        ? 'text-emerald-300 border-emerald-500/40 bg-emerald-500/10' 
-        : (slotPrivacy === 'PRIVATE' ? 'text-rose-300 border-rose-500/40 bg-rose-500/10' : 'text-purple-300 border-purple-500/40 bg-purple-500/10');
-
-      // Title Folder badge
-      let slotTitleFolderText = 'Semua Judul';
-      const slotTfId = group.titleFolderId !== undefined ? group.titleFolderId : (template.title_folder_id || null);
-      if (slotTfId && Array.isArray(window.titleFolders)) {
-        const foundTf = window.titleFolders.find(f => String(f.id) === String(slotTfId));
-        if (foundTf) slotTitleFolderText = foundTf.name;
-      } else if (template.title_folder_name && (!slotTfId || slotTfId === template.title_folder_id)) {
-        slotTitleFolderText = template.title_folder_name;
-      }
-
-      // Description presence indicator
-      const hasSlotDesc = Boolean((group.description || template.description || '').trim());
-
       titleContentHtml = `
         <div class="space-y-2.5 w-full">
           <!-- Line 1: Judul Full (Lebar Penuh Tanpa Tertekan) -->
@@ -8599,43 +8554,6 @@ function renderRecreateSlotList() {
             <span class="px-2 py-0.5 bg-primary/20 text-primary font-bold text-[11px] rounded mt-0.5 flex-shrink-0">#${groupIndex + 1}</span>
             <div class="min-w-0 flex-1">
               ${titleDisplayBody}
-              <!-- Metadata Badges Bar: Video/Audio, Durasi, Stream Key, Thumbnail, Privasi, Folder Judul, Deskripsi -->
-              <div class="flex items-center gap-1.5 flex-wrap text-[10px] mt-1.5">
-                <span class="px-1.5 py-0.5 bg-dark-600/80 rounded border border-gray-600/50 flex items-center gap-1 text-gray-300 truncate max-w-[150px]" title="Video: ${escapeHtml(videoBadgeText)}">
-                  <i class="ti ti-video text-blue-400 text-xs"></i>
-                  <span class="truncate">${escapeHtml(videoBadgeText)}</span>
-                </span>
-                ${audioBadgeText ? `
-                <span class="px-1.5 py-0.5 bg-dark-600/80 rounded border border-gray-600/50 flex items-center gap-1 text-amber-300 truncate max-w-[130px]" title="Audio: ${escapeHtml(audioBadgeText)}">
-                  <i class="ti ti-music text-amber-400 text-xs"></i>
-                  <span class="truncate">${escapeHtml(audioBadgeText)}</span>
-                </span>` : ''}
-                <span class="px-1.5 py-0.5 bg-dark-600/80 rounded border border-gray-600/50 flex items-center gap-1 text-emerald-300" title="Durasi: ${durText} (Loop: ${isLoopActive ? 'Aktif' : 'Mati'})">
-                  <i class="ti ti-clock text-emerald-400 text-xs"></i>
-                  <span>${durText}</span>
-                  ${isLoopActive ? '<i class="ti ti-repeat text-[9px] text-emerald-400" title="Loop aktif"></i>' : ''}
-                </span>
-                <span class="px-1.5 py-0.5 bg-dark-600/80 rounded border border-gray-600/50 flex items-center gap-1 text-purple-300 font-mono" title="Stream Key: ${escapeHtml(group.streamKey || 'Auto')}">
-                  <i class="ti ti-key text-purple-400 text-xs"></i>
-                  <span>${escapeHtml(streamKeyBadge)}</span>
-                </span>
-                <span class="px-1.5 py-0.5 bg-dark-600/80 rounded border border-gray-600/50 flex items-center gap-1 text-yellow-300" title="Thumbnail: ${escapeHtml(thumbBadgeText)}">
-                  <i class="ti ti-photo text-yellow-400 text-xs"></i>
-                  <span class="truncate max-w-[90px]">${escapeHtml(thumbBadgeText)}</span>
-                </span>
-                <span class="px-1.5 py-0.5 rounded border flex items-center gap-1 font-semibold ${privacyBadgeClass}" title="Status Privasi YouTube: ${slotPrivacy}">
-                  <i class="ti ti-lock text-xs"></i>
-                  <span>${slotPrivacy}</span>
-                </span>
-                <span class="px-1.5 py-0.5 bg-sky-500/10 rounded border border-sky-500/30 flex items-center gap-1 text-sky-300 truncate max-w-[130px]" title="Folder Tujuan Judul: ${escapeHtml(slotTitleFolderText)}">
-                  <i class="ti ti-folder text-sky-400 text-xs"></i>
-                  <span class="truncate">${escapeHtml(slotTitleFolderText)}</span>
-                </span>
-                <span class="px-1.5 py-0.5 bg-dark-600/80 rounded border border-gray-600/50 flex items-center gap-1 ${hasSlotDesc ? 'text-teal-300' : 'text-gray-500'}" title="${hasSlotDesc ? 'Deskripsi Broadcast Tersedia' : 'Tidak ada deskripsi broadcast'}">
-                  <i class="ti ti-file-text text-xs ${hasSlotDesc ? 'text-teal-400' : 'text-gray-500'}"></i>
-                  <span>${hasSlotDesc ? 'Deskripsi' : 'No Desc'}</span>
-                </span>
-              </div>
             </div>
           </div>
 
