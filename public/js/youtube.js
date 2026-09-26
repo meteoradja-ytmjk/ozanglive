@@ -3783,12 +3783,21 @@ function openCreateBroadcastModal(options = {}) {
 }
 window.openCreateBroadcastModal = openCreateBroadcastModal;
 
-// Load title folders for create & studio modals
+// Load title folders for create & studio modals (supports hidden inputs and select dropdowns)
 async function loadStudioTitleFolders(selectedFolderId = null, targetSelectId = null) {
-  const selects = targetSelectId
+  const elements = targetSelectId
     ? [document.getElementById(targetSelectId)].filter(Boolean)
     : [document.getElementById('broadcastTitleFolder'), document.getElementById('editBroadcastTitleFolder')].filter(Boolean);
-  if (selects.length === 0) return;
+  if (elements.length === 0) return;
+
+  elements.forEach(el => {
+    if (el.tagName === 'INPUT') {
+      el.value = (selectedFolderId !== undefined && selectedFolderId !== null) ? String(selectedFolderId) : '';
+    }
+  });
+
+  const selectDropdowns = elements.filter(el => el.tagName === 'SELECT');
+  if (selectDropdowns.length === 0) return;
 
   try {
     if (!window.titleFolders) {
@@ -3803,7 +3812,7 @@ async function loadStudioTitleFolders(selectedFolderId = null, targetSelectId = 
       }
     }
 
-    selects.forEach(select => {
+    selectDropdowns.forEach(select => {
       select.innerHTML = '<option value="">-- Tanpa Folder / Root --</option>';
       (window.titleFolders || []).forEach(f => {
         const opt = document.createElement('option');
