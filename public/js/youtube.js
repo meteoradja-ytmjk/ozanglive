@@ -8131,6 +8131,11 @@ function openRecreateFromTemplateModal(template) {
   window.recreateSlots = [];
   window.recreateNextTitles = [];
 
+  const totalTemplateMins = parseInt(template.stream_duration_minutes, 10) ||
+    (((parseInt(template.duration_hours, 10) || 0) * 60) + (parseInt(template.duration_minutes, 10) || 0)) || 0;
+  const tHours = parseInt(template.duration_hours, 10) || Math.floor(totalTemplateMins / 60) || 0;
+  const tMins = parseInt(template.duration_minutes, 10) || (totalTemplateMins % 60) || 0;
+
   // Helper to extract clean text description (if stored as stringified JSON in multi-broadcast)
   const extractCleanDescription = (descInput, itemIndex = 0) => {
     if (!descInput) return '';
@@ -10145,6 +10150,8 @@ if (recreateFromTemplateForm) {
           if (template.id) {
             formData.append('templateId', template.id);
           }
+          formData.append('slotIndex', String(i));
+          formData.append('originalTitle', slot.originalTitle || slot.title || '');
           const finalTitleFolderId = slot.titleFolderId !== undefined ? slot.titleFolderId : (template.title_folder_id || null);
           if (finalTitleFolderId) {
             formData.append('titleFolderId', finalTitleFolderId);
@@ -10190,7 +10197,15 @@ if (recreateFromTemplateForm) {
           if (slotScheduleType === 'daily' || slotScheduleType === 'weekly') {
             formData.append('recurringEnabled', 'true');
             formData.append('recurringPattern', slotScheduleType);
-            formData.append('recurringTime', slot.timeOnly || template.recurring_time || '13:00');
+            let slotRecTime = slot.timeOnly;
+            if (!slotRecTime && slot.scheduleTime && slot.scheduleTime.includes('T')) {
+              slotRecTime = slot.scheduleTime.split('T')[1].slice(0, 5);
+            }
+            if (!slotRecTime && template.recurring_time) {
+              const parsedT = String(template.recurring_time).split(/[\s,]+/).filter(t => /^[0-2]?[0-9]:[0-5][0-9]$/.test(t));
+              slotRecTime = parsedT[i] || parsedT[0] || '13:00';
+            }
+            formData.append('recurringTime', slotRecTime || '13:00');
             if (slotScheduleType === 'weekly') {
               formData.append('scheduleDays', JSON.stringify(selectedWeeklyDays));
             }

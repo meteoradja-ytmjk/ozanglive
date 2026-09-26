@@ -456,8 +456,8 @@ class ScheduleService {
               const nextRunWib = getWIBTime(nextRunAt);
               const nextRunTimeStr = `${String(nextRunWib.hours).padStart(2, '0')}:${String(nextRunWib.minutes).padStart(2, '0')}`;
 
-              // PREVENT DOUBLE BROADCAST: If this slot or template has already run today, advance next_run_at and skip
-              if (this.hasRunSlot(template, nextRunTimeStr, now) || this.hasRunToday(template, now)) {
+              // PREVENT DOUBLE BROADCAST: If this slot has already run today, advance next_run_at and skip
+              if (this.hasRunSlot(template, nextRunTimeStr, now)) {
                 console.log(`[ScheduleService] SKIPPED overdue check: "${template.name}" slot ${nextRunTimeStr} already executed today.`);
                 await this.updateNextRunToFuture(template);
                 continue;
@@ -641,14 +641,16 @@ class ScheduleService {
     }
 
     // Check if the last run corresponds to this slot's time (fallback after restart)
+    const allTimes = parseRecurringTimes(template.recurring_time);
+    const maxDiff = allTimes.length > 1 ? 3 : 5;
     const lastRunWib = getWIBTime(lastRun);
     const [slotH, slotM] = slotTime.split(':').map(Number);
     const slotMinutes = slotH * 60 + slotM;
     const lastRunMinutes = lastRunWib.hours * 60 + lastRunWib.minutes;
     const diff = Math.abs(lastRunMinutes - slotMinutes);
 
-    // If last run was within 30 minutes of this slot time today, treat as already executed
-    if (diff <= 30) {
+    // If last run was within maxDiff minutes of this slot time today, treat as already executed
+    if (diff <= maxDiff) {
       if (this.executedSlots) this.executedSlots.add(slotKey);
       return true;
     }
@@ -672,7 +674,6 @@ class ScheduleService {
       this.executedSlots = new Set();
     }
     this.executedSlots.add(slotKey);
-    this.executedSlots.add(`${templateId}_${nowDateStr}_TODAY`);
     console.log(`[ScheduleService] Manually marked slot as executed: ${slotKey}`);
   }
 
@@ -792,17 +793,21 @@ class ScheduleService {
     }
     
     // CRITICAL FIX 2: Database-level duplicate check - verify last_run_at before execution
-    // This prevents duplicate execution even if multiple processes are running
+    // For multi-slot schedules, use 2-minute cooldown so distinct slots can run without false blocks
     try {
+      const recurringTimes = parseRecurringTimes(template.recurring_time);
+      const isMultiSlot = recurringTimes.length > 1;
+      const cooldownMinutes = isMultiSlot ? 2 : 15;
+      const recentWindow = isMultiSlot ? '-2 minutes' : '-15 minutes';
+
       const freshTemplate = await BroadcastTemplate.findById(template.id);
       if (freshTemplate && freshTemplate.last_run_at) {
         const lastRunTime = new Date(freshTemplate.last_run_at);
         const timeSinceLastRun = now.getTime() - lastRunTime.getTime();
         const minutesSinceLastRun = Math.floor(timeSinceLastRun / (1000 * 60));
         
-        if (minutesSinceLastRun < 15) {
-          console.log(`[ScheduleService] BLOCKED: Template "${template.name}" was executed ${minutesSinceLastRun} minutes ago (< 15 min cooldown)`);
-          await this.updateNextRunToFuture(template);
+        if (minutesSinceLastRun < cooldownMinutes) {
+          console.log(`[ScheduleService] BLOCKED: Template "${template.name}" was executed ${minutesSinceLastRun} minutes ago (< ${cooldownMinutes} min cooldown)`);
           return { error: 'RECENTLY_EXECUTED', template: template.name, minutesAgo: minutesSinceLastRun };
         }
       }
@@ -812,15 +817,14 @@ class ScheduleService {
         db.get(
           `SELECT broadcast_id FROM youtube_broadcast_settings 
            WHERE template_id = ? 
-             AND created_at >= datetime('now', '-15 minutes')
+             AND created_at >= datetime('now', '${recentWindow}')
            LIMIT 1`,
           [template.id],
           (err, row) => resolve(row)
         );
       });
       if (recentBroadcast) {
-        console.log(`[ScheduleService] BLOCKED: Broadcast ${recentBroadcast.broadcast_id} was already created for template "${template.name}" within 15 minutes`);
-        await this.updateNextRunToFuture(template);
+        console.log(`[ScheduleService] BLOCKED: Broadcast ${recentBroadcast.broadcast_id} was already created for template "${template.name}" within ${cooldownMinutes} minutes`);
         return { error: 'RECENTLY_CREATED', template: template.name, broadcastId: recentBroadcast.broadcast_id };
       }
     } catch (dbError) {
@@ -919,12 +923,15 @@ class ScheduleService {
         let isSingleSlotMode = false;
         let broadcastOffset = 0;
 
-        if (targetSlotIndex !== null && broadcasts[targetSlotIndex]) {
+        // Only enter single-slot mode if template has multiple recurring times configured
+        if (targetSlotIndex !== null && broadcasts[targetSlotIndex] && recurringTimes.length > 1) {
           targetBroadcasts = [broadcasts[targetSlotIndex]];
           isSingleSlotMode = true;
           broadcastOffset = targetSlotIndex;
           const slotLabel = recurringTimes[targetSlotIndex] ? `${recurringTimes[targetSlotIndex]} WIB` : `slot #${targetSlotIndex + 1}`;
           console.log(`[ScheduleService] Single-slot execution mode: running broadcast #${targetSlotIndex + 1}/${broadcasts.length} ("${targetBroadcasts[0].title}") for ${slotLabel}`);
+        } else {
+          console.log(`[ScheduleService] Batch execution mode: running all ${broadcasts.length} broadcasts for template "${template.name}"`);
         }
 
         // Check user title rotation settings first

@@ -11244,7 +11244,18 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         templateObj = await BroadcastTemplate.findById(templateId);
         if (templateObj) {
           if (Array.isArray(templateObj.broadcasts) && templateObj.broadcasts.length > 0) {
-            matchedSlot = templateObj.broadcasts.find(b => b.title === title) || templateObj.broadcasts[0];
+            const slotIdx = req.body.slotIndex !== undefined ? parseInt(req.body.slotIndex, 10) : -1;
+            if (!isNaN(slotIdx) && slotIdx >= 0 && slotIdx < templateObj.broadcasts.length) {
+              matchedSlot = templateObj.broadcasts[slotIdx];
+            } else if (req.body.originalTitle) {
+              matchedSlot = templateObj.broadcasts.find(b => b.title === req.body.originalTitle);
+            }
+            if (!matchedSlot) {
+              matchedSlot = templateObj.broadcasts.find(b => b.title === title || b.title === broadcast.title);
+            }
+            if (!matchedSlot) {
+              matchedSlot = templateObj.broadcasts[0];
+            }
           }
         }
       } catch (tErr) {
@@ -11797,6 +11808,11 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       if (!finalRecurringTime && templateObj && templateObj.recurring_time) {
         finalRecurringTime = templateObj.recurring_time;
       }
+      if (finalRecurringTime && typeof finalRecurringTime === 'string' && finalRecurringTime.includes(',')) {
+        const parts = finalRecurringTime.split(/[\s,]+/).filter(t => /^[0-2]?[0-9]:[0-5][0-9]$/.test(t));
+        const slotIdx = req.body.slotIndex !== undefined ? parseInt(req.body.slotIndex, 10) : 0;
+        finalRecurringTime = parts[slotIdx] || parts[0] || finalRecurringTime;
+      }
       if (!scheduleDays && templateObj && templateObj.recurring_days) {
         scheduleDays = templateObj.recurring_days;
       }
@@ -11907,9 +11923,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
             executedTimeStr = String(req.body.recurringTime).slice(0, 5);
           }
           if (typeof scheduleService !== 'undefined') {
-            if (typeof scheduleService.markAllSlotsExecuted === 'function') {
-              scheduleService.markAllSlotsExecuted(templateId, templateObj?.recurring_time || req.body.recurringTime || executedTimeStr, nowDate);
-            } else if (executedTimeStr && typeof scheduleService.markSlotExecuted === 'function') {
+            if (executedTimeStr && typeof scheduleService.markSlotExecuted === 'function') {
               scheduleService.markSlotExecuted(templateId, executedTimeStr, nowDate);
             }
           }

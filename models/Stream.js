@@ -639,18 +639,29 @@ class Stream {
       return null;
     }
 
+    const rawTimes = String(stream.recurring_time).split(/[\s,]+/).filter(t => /^[0-2]?[0-9]:[0-5][0-9]$/.test(t));
+    if (rawTimes.length === 0) {
+      return null;
+    }
+
     const now = new Date();
     const wibNow = this.getWIBTime(now);
-    const [hours, minutes] = stream.recurring_time.split(':').map(Number);
     const monthIndex = wibNow.month - 1; // 0-indexed month for createWIBDate
+    const currentTimeWIB = wibNow.hours * 60 + wibNow.minutes;
 
     if (stream.schedule_type === 'daily') {
-      const currentTimeWIB = wibNow.hours * 60 + wibNow.minutes;
-      const scheduleTimeWIB = hours * 60 + minutes;
+      // Find the first upcoming time today
+      for (const t of rawTimes) {
+        const [h, m] = t.split(':').map(Number);
+        const scheduleTimeWIB = h * 60 + m;
+        if (scheduleTimeWIB > currentTimeWIB) {
+          return createWIBDate(wibNow.year, monthIndex, wibNow.dayOfMonth, h, m, 0);
+        }
+      }
 
-      // If time has passed today in WIB, schedule for tomorrow
-      const dayOffset = (scheduleTimeWIB <= currentTimeWIB) ? 1 : 0;
-      return createWIBDate(wibNow.year, monthIndex, wibNow.dayOfMonth + dayOffset, hours, minutes, 0);
+      // If all times passed today, pick earliest time tomorrow
+      const [firstH, firstM] = rawTimes[0].split(':').map(Number);
+      return createWIBDate(wibNow.year, monthIndex, wibNow.dayOfMonth + 1, firstH, firstM, 0);
     }
 
     if (stream.schedule_type === 'weekly') {
@@ -690,27 +701,33 @@ class Stream {
 
       // Sort days for easier processing
       const sortedDays = normalizedDayNums.sort((a, b) => a - b);
-
-      // Use WIB day and time for comparison
       const currentDayWIB = wibNow.day;
-      const currentTimeWIB = wibNow.hours * 60 + wibNow.minutes;
-      const scheduleTimeWIB = hours * 60 + minutes;
 
       // Find next occurrence based on WIB day
       for (let i = 0; i < 7; i++) {
         const checkDay = (currentDayWIB + i) % 7;
         if (sortedDays.includes(checkDay)) {
-          // If it's today in WIB but time has passed, continue to next day
-          if (i === 0 && scheduleTimeWIB <= currentTimeWIB) {
-            continue;
+          if (i === 0) {
+            // Check if any slot is still upcoming today
+            for (const t of rawTimes) {
+              const [h, m] = t.split(':').map(Number);
+              const schedMinutes = h * 60 + m;
+              if (schedMinutes > currentTimeWIB) {
+                return createWIBDate(wibNow.year, monthIndex, wibNow.dayOfMonth, h, m, 0);
+              }
+            }
+            continue; // All slots passed today, look for next day
           }
-          return createWIBDate(wibNow.year, monthIndex, wibNow.dayOfMonth + i, hours, minutes, 0);
+
+          // Future day: pick earliest slot
+          const [firstH, firstM] = rawTimes[0].split(':').map(Number);
+          return createWIBDate(wibNow.year, monthIndex, wibNow.dayOfMonth + i, firstH, firstM, 0);
         }
       }
 
-      // If no day found in current week loop, get first day of next week
-      const daysUntilNext = (7 - currentDayWIB + sortedDays[0]) % 7 || 7;
-      return createWIBDate(wibNow.year, monthIndex, wibNow.dayOfMonth + daysUntilNext, hours, minutes, 0);
+      // Fallback to earliest slot in 7 days
+      const [firstH, firstM] = rawTimes[0].split(':').map(Number);
+      return createWIBDate(wibNow.year, monthIndex, wibNow.dayOfMonth + 7, firstH, firstM, 0);
     }
 
     return null;
