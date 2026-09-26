@@ -9,150 +9,193 @@
   <link rel="alternate icon" href="<%= typeof branding !== 'undefined' && branding.favicon_path ? branding.favicon_path : '/images/favicon.ico' %>" type="image/x-icon">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.30.0/tabler-icons.min.css">
   <link rel="stylesheet" href="/css/styles.css">
   <style>
-    /* Mobile fixes for signup */
-    html, body {
+    body {
+      font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      background-color: #070611;
       overflow-x: hidden;
-      overflow-y: auto;
-      width: 100%;
-      min-height: 100%;
-      -webkit-overflow-scrolling: touch;
+      min-height: 100vh;
     }
-    input { font-size: 16px !important; }
+    input { font-size: 15px !important; }
+    
+    /* Neon Glow Effects */
+    .neon-card {
+      background: rgba(14, 12, 28, 0.92);
+      border: 1px solid rgba(139, 92, 246, 0.28);
+      box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.9), 0 0 40px -10px rgba(124, 58, 237, 0.22);
+      backdrop-filter: blur(20px);
+    }
+    .neon-input-wrap {
+      border: 1.8px solid rgba(139, 92, 246, 0.75);
+      background: rgba(9, 7, 22, 0.85);
+      box-shadow: 0 0 16px rgba(139, 92, 246, 0.12);
+      transition: all 0.25s ease;
+    }
+    .neon-input-wrap:focus-within {
+      border-color: #a855f7;
+      box-shadow: 0 0 22px rgba(168, 85, 247, 0.45), inset 0 0 10px rgba(168, 85, 247, 0.15);
+      transform: translateY(-1px);
+    }
+    .neon-btn {
+      background: linear-gradient(135deg, #a855f7 0%, #8b5cf6 45%, #7c3aed 75%, #6366f1 100%);
+      box-shadow: 0 4px 25px 0px rgba(168, 85, 247, 0.6), inset 0 1px 1px rgba(255, 255, 255, 0.25);
+      transition: all 0.25s ease;
+    }
+    .neon-btn:hover {
+      filter: brightness(1.12);
+      box-shadow: 0 6px 32px 2px rgba(168, 85, 247, 0.8), inset 0 1px 2px rgba(255, 255, 255, 0.4);
+      transform: translateY(-1px);
+    }
+    .neon-btn:active {
+      transform: scale(0.99);
+    }
   </style>
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        fontFamily: {
-          'inter': ['Inter', 'sans-serif'],
-          'sans': ['Inter', 'system-ui', 'sans-serif']
-        },
-        extend: {
-          colors: {
-            'primary': '<%= typeof branding !== "undefined" && branding.primary_color ? branding.primary_color : "#8B5CF6" %>',
-            'secondary': '<%= typeof branding !== "undefined" && branding.secondary_color ? branding.secondary_color : "#7C3AED" %>',
-            'accent': '<%= typeof branding !== "undefined" && branding.accent_color ? branding.accent_color : "#A78BFA" %>',
-            'dark': {
-              '900': '#0F172A',
-              '800': '#1E293B',
-              '700': '#334155',
-              '600': '#475569',
-              '500': '#64748B',
-              '400': '#94A3B8',
-              '100': '#F1F5F9',
-            }
-          }
-        }
-      }
-    }
-  </script>
 </head>
-<body class="bg-dark-900 text-white font-inter min-h-screen">
-  <div class="min-h-screen flex flex-col">
-    <div class="flex-1 flex items-center justify-center px-4 py-6 sm:px-6 sm:py-10">
-      <div class="w-full max-w-lg bg-dark-800 rounded-xl shadow-xl p-6 sm:p-8">
-      
-        <div class="text-center mb-8">
-          <div class="flex justify-center mb-4">
-            <img src="<%= typeof branding !== 'undefined' && branding.logo_path ? branding.logo_path : '/images/logo_mobile.svg' %>" 
-                 alt="<%= typeof branding !== 'undefined' && branding.app_name ? branding.app_name : 'MonsterLive' %> Logo" 
-                 class="h-12 max-w-[200px] object-contain">
-          </div>
-          <h1 class="text-2xl font-bold">Create Account</h1>
-          <p class="text-gray-400 mt-1">Join streaming membership</p>
-        </div>
+<body class="text-white min-h-screen relative flex items-center justify-center p-4 sm:p-6 select-none selection:bg-purple-500 selection:text-white">
 
-        <% if (typeof error !=='undefined' && error) { %>
-          <div class="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded mb-6">
-            <p><i class="ti ti-alert-circle mr-2"></i>
-              <%= error %>
-            </p>
-          </div>
-          <% } %>
+  <!-- Ambient Background Glows -->
+  <div class="fixed inset-0 pointer-events-none overflow-hidden z-0">
+    <div class="absolute -top-40 -right-40 w-96 h-96 bg-purple-600/15 rounded-full blur-[120px]"></div>
+    <div class="absolute -bottom-40 -left-40 w-96 h-96 bg-indigo-600/15 rounded-full blur-[120px]"></div>
+    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[550px] h-[550px] bg-purple-900/10 rounded-full blur-[140px]"></div>
 
-      <% if (success) { %>
-        <div id="success-message" class="bg-green-500/10 border border-green-500/20 text-green-400 px-4 py-3 rounded-lg mb-6">
-          <div class="flex items-center">
-            <i class="ti ti-check-circle mr-2"></i>
-            <span><%= success %></span>
-          </div>
+    <!-- Neon Wave Graphics (Left Bottom & Right Edge) -->
+    <!-- Left Bottom Waves -->
+    <svg class="absolute bottom-0 left-0 w-80 sm:w-[420px] opacity-40 sm:opacity-50 pointer-events-none" viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="neonGrad1" x1="0%" y1="100%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#a855f7" stop-opacity="0.9" />
+          <stop offset="100%" stop-color="#6366f1" stop-opacity="0.1" />
+        </linearGradient>
+      </defs>
+      <path d="M-50 480 C 80 440, 160 380, 220 300 C 270 230, 290 140, 290 40" stroke="url(#neonGrad1)" stroke-width="1.8" />
+      <path d="M-50 510 C 100 460, 180 390, 250 290 C 310 200, 330 90, 330 -10" stroke="url(#neonGrad1)" stroke-width="1.6" opacity="0.8" />
+      <path d="M-50 540 C 120 480, 210 400, 280 280 C 340 180, 360 50, 360 -40" stroke="url(#neonGrad1)" stroke-width="1.4" opacity="0.6" />
+      <path d="M-50 570 C 140 500, 230 410, 310 270 C 370 150, 390 10, 390 -70" stroke="url(#neonGrad1)" stroke-width="1.2" opacity="0.4" />
+      <path d="M-50 600 C 160 520, 250 420, 340 260 C 400 130, 420 -30, 420 -100" stroke="url(#neonGrad1)" stroke-width="1" opacity="0.3" />
+    </svg>
+
+    <!-- Right Edge Waves -->
+    <svg class="absolute top-1/4 right-0 w-72 sm:w-[380px] opacity-40 sm:opacity-50 pointer-events-none translate-x-12" viewBox="0 0 500 700" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="neonGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#c084fc" stop-opacity="0.9" />
+          <stop offset="100%" stop-color="#7c3aed" stop-opacity="0.1" />
+        </linearGradient>
+      </defs>
+      <path d="M450 0 C 350 140, 290 280, 280 440 C 275 520, 290 620, 350 700" stroke="url(#neonGrad2)" stroke-width="1.8" />
+      <path d="M480 20 C 380 160, 320 300, 310 460 C 305 540, 320 640, 380 720" stroke="url(#neonGrad2)" stroke-width="1.6" opacity="0.8" />
+      <path d="M510 40 C 410 180, 350 320, 340 480 C 335 560, 350 660, 410 740" stroke="url(#neonGrad2)" stroke-width="1.4" opacity="0.6" />
+      <path d="M540 60 C 440 200, 380 340, 370 500 C 365 580, 380 680, 440 760" stroke="url(#neonGrad2)" stroke-width="1.2" opacity="0.4" />
+    </svg>
+  </div>
+
+  <!-- Sign Up Card Container -->
+  <div class="w-full max-w-[480px] z-10 py-6">
+    <div class="neon-card rounded-[28px] p-6 sm:p-9 relative">
+
+      <!-- Branding / Logo & Header -->
+      <div class="flex flex-col items-center justify-center mb-6">
+        <img src="<%= typeof branding !== 'undefined' && branding.logo_path ? branding.logo_path : '/images/logo_mobile.svg' %>" 
+             alt="<%= typeof branding !== 'undefined' && branding.app_name ? branding.app_name : 'MonsterLive' %> Logo" 
+             class="h-14 max-w-[200px] object-contain drop-shadow-[0_0_20px_rgba(168,85,247,0.35)] hover:scale-105 transition-transform duration-300">
+        <h1 class="text-xl sm:text-2xl font-bold mt-3 text-white tracking-tight">Create Account</h1>
+        <p class="text-gray-400 text-xs sm:text-sm mt-1">Join streaming membership</p>
+      </div>
+
+      <!-- Flash Messages -->
+      <% if (typeof error !== 'undefined' && error) { %>
+        <div class="bg-red-950/40 border border-red-500/40 text-red-300 px-4 py-3 rounded-2xl mb-6 shadow-[0_0_15px_rgba(239,68,68,0.15)] flex items-center gap-2 text-sm">
+          <i class="ti ti-alert-circle text-lg text-red-400 shrink-0"></i>
+          <span><%= error %></span>
         </div>
       <% } %>
 
-            <form id="signupForm" action="/signup" method="post" enctype="multipart/form-data" class="space-y-6">
-              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-              <input type="hidden" name="user_role" value="member">
-              <input type="hidden" name="status" value="inactive">
-              
-              <div class="flex flex-col items-center justify-center">
-                <div class="relative group">
-                  <div id="avatar-preview"
-                    class="w-28 h-28 rounded-full bg-dark-700 border-2 border-gray-600 group-hover:border-primary flex items-center justify-center text-gray-400 overflow-hidden transition-colors">
-                    <i class="ti ti-user text-4xl"></i>
-                  </div>
-                  <div class="absolute bottom-0 right-0">
-                    <label for="avatar-upload"
-                      class="flex items-center justify-center w-8 h-8 rounded-full bg-primary cursor-pointer shadow-lg">
-                      <i class="ti ti-camera text-white"></i>
-                    </label>
-                    <input id="avatar-upload" name="avatar" type="file" accept="image/*" class="hidden"
-                      onchange="previewAvatar(event)">
-                  </div>
-                </div>
-                <p class="text-xs text-gray-400 mt-2">Upload a profile picture</p>
-              </div>
-              
-              <div>
-                <label for="username" class="text-sm font-medium block mb-2">Username</label>
-                <div class="relative">
-                  <input type="text" id="username" name="username"
-                    class="w-full pl-10 pr-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:ring-1 focus:ring-primary"
-                    placeholder="Choose a username" required>
-                  <i class="ti ti-user absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
-                </div>
-              </div>
-              
-              <div>
-                <label for="password" class="text-sm font-medium block mb-2">Password</label>
-                <div class="relative">
-                  <input type="password" id="password" name="password"
-                    class="w-full pl-10 pr-12 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:ring-1 focus:ring-primary"
-                    placeholder="Create a password" required minlength="6" onkeyup="checkPasswordStrength()">
-                  <i class="ti ti-lock absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
-                  <button type="button" onclick="togglePasswordVisibility('password', 'passwordToggle')"
-                    class="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center text-gray-400 hover:text-white transition-colors">
-                    <i class="ti ti-eye text-base" id="passwordToggle"></i>
-                  </button>
-                </div>
-                <div id="passwordStrength" class="mt-2 text-xs hidden">
-                  <div class="flex space-x-1 mb-1">
-                    <div class="h-1 flex-1 bg-gray-600 rounded" id="strength1"></div>
-                    <div class="h-1 flex-1 bg-gray-600 rounded" id="strength2"></div>
-                    <div class="h-1 flex-1 bg-gray-600 rounded" id="strength3"></div>
-                    <div class="h-1 flex-1 bg-gray-600 rounded" id="strength4"></div>
-                  </div>
-                  <span id="strengthText" class="text-gray-400">Password strength</span>
-                </div>
-              </div>
+      <% if (success) { %>
+        <div id="success-message" class="bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 px-4 py-3 rounded-2xl mb-6 shadow-[0_0_15px_rgba(16,185,129,0.15)] flex items-center gap-2 text-sm">
+          <i class="ti ti-check-circle text-lg text-emerald-400 shrink-0"></i>
+          <span><%= success %></span>
+        </div>
+      <% } %>
 
-              <button type="submit" id="submitBtn"
-                class="w-full bg-primary hover:bg-secondary text-white py-2.5 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                Create Account
-              </button>
-            </form>
-
-            <div class="text-center mt-6">
-              <p class="text-gray-400 text-sm">
-                Already have an account? 
-                <a href="/login" class="text-primary hover:text-accent transition-colors">Sign in</a>
-              </p>
+      <form id="signupForm" action="/signup" method="post" enctype="multipart/form-data" class="space-y-4">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <input type="hidden" name="user_role" value="member">
+        <input type="hidden" name="status" value="inactive">
+        
+        <!-- Avatar Upload -->
+        <div class="flex flex-col items-center justify-center pb-2">
+          <div class="relative group cursor-pointer">
+            <div id="avatar-preview"
+              class="w-24 h-24 rounded-full bg-[#090716] border-2 border-purple-500/70 group-hover:border-purple-400 flex items-center justify-center text-purple-400 overflow-hidden shadow-[0_0_20px_rgba(147,51,234,0.25)] group-hover:shadow-[0_0_25px_rgba(168,85,247,0.45)] transition-all duration-300">
+              <i class="ti ti-user text-3xl"></i>
             </div>
+            <label for="avatar-upload"
+              class="absolute bottom-0 right-0 flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-r from-purple-500 to-indigo-500 cursor-pointer shadow-lg hover:brightness-110 active:scale-95 transition-all border border-white/20">
+              <i class="ti ti-camera text-white text-sm"></i>
+            </label>
+            <input id="avatar-upload" name="avatar" type="file" accept="image/*" class="hidden"
+              onchange="previewAvatar(event)">
+          </div>
+          <p class="text-xs text-gray-400 mt-2">Upload profile picture (optional)</p>
+        </div>
+
+        <!-- Username Input -->
+        <div class="relative">
+          <div class="neon-input-wrap rounded-2xl flex items-center px-4 py-3.5">
+            <i class="ti ti-user text-purple-400 text-xl mr-3 shrink-0"></i>
+            <input type="text" id="username" name="username"
+              class="w-full bg-transparent text-white placeholder-gray-500 outline-none text-sm sm:text-base selection:bg-purple-500"
+              placeholder="Choose a username" autocomplete="username" required>
+          </div>
+        </div>
+
+        <!-- Password Input -->
+        <div class="relative">
+          <div class="neon-input-wrap rounded-2xl flex items-center px-4 py-3.5">
+            <i class="ti ti-lock text-purple-400 text-xl mr-3 shrink-0"></i>
+            <input type="password" id="password" name="password"
+              class="w-full bg-transparent text-white placeholder-gray-500 outline-none text-sm sm:text-base selection:bg-purple-500 pr-2"
+              placeholder="Create a password (min. 6 chars)" autocomplete="new-password" required minlength="6" onkeyup="checkPasswordStrength()">
+            <button type="button" onclick="togglePasswordVisibility('password', 'passwordToggle')" aria-label="Toggle password visibility"
+              class="text-purple-400/70 hover:text-purple-300 active:scale-95 transition-all p-1 cursor-pointer">
+              <i class="ti ti-eye text-xl" id="passwordToggle"></i>
+            </button>
+          </div>
+          
+          <!-- Password Strength Indicator -->
+          <div id="passwordStrength" class="mt-2 px-1 text-xs hidden">
+            <div class="flex space-x-1.5 mb-1.5">
+              <div class="h-1.5 flex-1 bg-white/10 rounded-full transition-all duration-300" id="strength1"></div>
+              <div class="h-1.5 flex-1 bg-white/10 rounded-full transition-all duration-300" id="strength2"></div>
+              <div class="h-1.5 flex-1 bg-white/10 rounded-full transition-all duration-300" id="strength3"></div>
+              <div class="h-1.5 flex-1 bg-white/10 rounded-full transition-all duration-300" id="strength4"></div>
+            </div>
+            <span id="strengthText" class="text-gray-400 font-medium">Password strength</span>
+          </div>
+        </div>
+
+        <!-- Submit Button -->
+        <div class="pt-2">
+          <button type="submit" id="submitBtn"
+            class="neon-btn w-full text-white py-3.5 px-6 rounded-2xl font-bold text-base tracking-wide flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+            <span>Create Account</span>
+          </button>
+        </div>
+      </form>
+
+      <!-- Footer / Switch to Login -->
+      <div class="text-center mt-6">
+        <p class="text-gray-400 text-sm">
+          Already have an account? 
+          <a href="/login" class="text-purple-400 hover:text-purple-300 font-semibold hover:underline transition-colors ml-1">Sign in</a>
+        </p>
       </div>
+
     </div>
   </div>
 
@@ -213,26 +256,25 @@
         const element = document.getElementById(bar);
         if (index < strength) {
           if (strength <= 1) {
-            element.className = 'h-1 flex-1 bg-red-500 rounded';
+            element.className = 'h-1.5 flex-1 bg-red-500 rounded-full shadow-[0_0_8px_rgba(239,68,68,0.6)]';
           } else if (strength <= 2) {
-            element.className = 'h-1 flex-1 bg-yellow-500 rounded';
+            element.className = 'h-1.5 flex-1 bg-amber-400 rounded-full shadow-[0_0_8px_rgba(251,191,36,0.6)]';
           } else if (strength <= 3) {
-            element.className = 'h-1 flex-1 bg-violet-500 rounded';
+            element.className = 'h-1.5 flex-1 bg-purple-400 rounded-full shadow-[0_0_8px_rgba(192,132,252,0.6)]';
           } else {
-            element.className = 'h-1 flex-1 bg-green-500 rounded';
+            element.className = 'h-1.5 flex-1 bg-emerald-400 rounded-full shadow-[0_0_8px_rgba(52,211,153,0.6)]';
           }
         } else {
-          element.className = 'h-1 flex-1 bg-gray-600 rounded';
+          element.className = 'h-1.5 flex-1 bg-white/10 rounded-full';
         }
       });
       
       const strengthLabels = ['Weak', 'Fair', 'Good', 'Strong'];
-      const strengthColors = ['text-red-400', 'text-yellow-400', 'text-violet-400', 'text-green-400'];
+      const strengthColors = ['text-red-400', 'text-amber-400', 'text-purple-300', 'text-emerald-400'];
       
-      strengthText.textContent = strengthLabels[strength - 1] || 'Very Weak';
-      strengthText.className = strengthColors[strength - 1] || 'text-red-400';
+      strengthText.textContent = 'Password strength: ' + (strengthLabels[strength - 1] || 'Very Weak');
+      strengthText.className = (strengthColors[strength - 1] || 'text-red-400') + ' font-medium';
     }
-
   </script>
 </body>
 </html>
