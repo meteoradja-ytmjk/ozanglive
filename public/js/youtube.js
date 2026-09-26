@@ -3773,6 +3773,7 @@ function openCreateBroadcastModal(options = {}) {
     if (typeof fetchStreams === 'function') fetchStreams(accountId);
     if (typeof fetchThumbnailFolders === 'function') fetchThumbnailFolders();
     if (typeof fetchThumbnails === 'function') fetchThumbnails(null);
+    if (typeof loadStudioTitleFolders === 'function') loadStudioTitleFolders(options.titleFolderId || null);
     if (!isReusingOrTemplate && typeof fetchChannelDefaults === 'function') {
       fetchChannelDefaults(accountId, true);
     }
@@ -3781,6 +3782,47 @@ function openCreateBroadcastModal(options = {}) {
   }
 }
 window.openCreateBroadcastModal = openCreateBroadcastModal;
+
+// Load title folders for create & studio modals
+async function loadStudioTitleFolders(selectedFolderId = null, targetSelectId = null) {
+  const selects = targetSelectId
+    ? [document.getElementById(targetSelectId)].filter(Boolean)
+    : [document.getElementById('broadcastTitleFolder'), document.getElementById('editBroadcastTitleFolder')].filter(Boolean);
+  if (selects.length === 0) return;
+
+  try {
+    if (!window.titleFolders) {
+      const res = await fetch('/api/title-folders', {
+        headers: { 'X-CSRF-Token': getCsrfToken() }
+      });
+      const data = await res.json();
+      if (data.success && Array.isArray(data.folders)) {
+        window.titleFolders = data.folders;
+      } else {
+        window.titleFolders = [];
+      }
+    }
+
+    selects.forEach(select => {
+      select.innerHTML = '<option value="">-- Tanpa Folder / Root --</option>';
+      (window.titleFolders || []).forEach(f => {
+        const opt = document.createElement('option');
+        opt.value = f.id;
+        opt.textContent = `📂 ${f.name} (${f.title_count || 0} judul)`;
+        select.appendChild(opt);
+      });
+
+      if (selectedFolderId) {
+        select.value = String(selectedFolderId);
+      } else if (!select.value) {
+        select.value = '';
+      }
+    });
+  } catch (err) {
+    console.error('Error loading title folders for broadcast modal:', err);
+  }
+}
+window.loadStudioTitleFolders = loadStudioTitleFolders;
 
 function openThumbnailManager() {
   openCreateBroadcastModal();
@@ -5097,6 +5139,10 @@ if (createBroadcastForm) {
       if (videoId) formData.append('videoId', videoId);
       if (audioId) formData.append('audioId', audioId);
 
+      // Title Folder input
+      const titleFolderId = document.getElementById('broadcastTitleFolder')?.value;
+      if (titleFolderId) formData.append('titleFolderId', titleFolderId);
+
       // Duration and Schedule fields
       const durationHours = document.getElementById('studioStreamDurationHours')?.value || '0';
       const durationMinutes = document.getElementById('studioStreamDurationMinutes')?.value || '0';
@@ -5460,6 +5506,11 @@ async function openEditBroadcastModal(broadcast) {
   if (categorySelect) {
     categorySelect.value = broadcast.categoryId || '22';
   }
+
+  // Load and select title folder
+  try {
+    loadStudioTitleFolders(broadcast.titleFolderId || broadcast.title_folder_id || null, 'editBroadcastTitleFolder');
+  } catch (tfErr) {}
   
   // Store stream key ID for thumbnail rotation
   window.editBroadcastStreamId = broadcast.streamId || null;
@@ -6777,7 +6828,7 @@ if (saveAsTemplateForm) {
       const chosenAudioId = (audioIdInput && audioIdInput.value) ? audioIdInput.value : (broadcast.audioId || rowData.audioId || broadcast.audio_id || null);
 
       const titleFolderInput = document.getElementById('saveTemplateTitleFolder');
-      const chosenTitleFolderId = (titleFolderInput && titleFolderInput.value) ? titleFolderInput.value : (broadcast.title_folder_id || rowData.title_folder_id || null);
+      const chosenTitleFolderId = (titleFolderInput && titleFolderInput.value) ? titleFolderInput.value : (broadcast.titleFolderId || broadcast.title_folder_id || rowData.titleFolderId || rowData.title_folder_id || null);
 
       // Ensure streamId is only used if it is not identical to streamKey
       const rawStreamId = broadcast.streamId || rowData.streamId || null;
@@ -7898,6 +7949,7 @@ if (multiSaveTemplateForm) {
         name: templateName,
         accountId: broadcasts[0].accountId,
         thumbnailFolder: defaultFolder,
+        titleFolderId: firstB.titleFolderId || firstB.title_folder_id || null,
         streamKeyFolderMapping: Object.keys(streamKeyFolderMapping).length > 0 ? streamKeyFolderMapping : null,
         durationHours: firstHours,
         durationMinutes: firstRemMins,
@@ -7928,6 +7980,7 @@ if (multiSaveTemplateForm) {
             loopVideo: b.loopVideo !== false && b.loop_video !== false,
             videoId: b.videoId || b.video_id || null,
             audioId: b.audioId || b.audio_id || null,
+            titleFolderId: b.titleFolderId || b.title_folder_id || null,
             scheduleType: b.scheduleType || b.schedule_type || 'once'
           };
         })
@@ -8961,7 +9014,14 @@ function getStudioAudioName(audioId) {
   if (!audioId) return null;
   if (Array.isArray(window.allStudioAudios)) {
     const a = window.allStudioAudios.find(x => String(x.id) === String(audioId));
-    if (a) return (a.folder_name ? `[${a.folder_name}] ` : '') + (a.title || a.name);
+    if (a) {
+      if (a.type === 'playlist' || a.format === 'playlist' || a.is_playlist) {
+        const cleanName = a.name || (a.title ? a.title.replace(/^\[Playlist\]\s*/i, '') : '');
+        return `[Playlist] ${cleanName}`;
+      }
+      const fPrefix = (a.folder_name && a.folder_name !== 'Playlists') ? `[${a.folder_name}] ` : '';
+      return `${fPrefix}${a.title || a.name}`;
+    }
   }
   return `Audio #${audioId}`;
 }
@@ -9329,16 +9389,42 @@ async function loadRecreateSlotAudios(selectedAudioId) {
     select.innerHTML = '<option value="">Audio Asli dari Video (Default)</option>';
 
     if (Array.isArray(window.allStudioAudios) && window.allStudioAudios.length > 0) {
-      const audioGrp = document.createElement('optgroup');
-      audioGrp.label = 'Audio Pengganti';
+      const audioPlaylists = [];
+      const singleAudios = [];
+
       window.allStudioAudios.forEach(a => {
-        const opt = document.createElement('option');
-        opt.value = a.id;
-        const fPrefix = a.folder_name ? `[${a.folder_name}] ` : '';
-        opt.textContent = `🎵 ${fPrefix}${a.title || a.name}`;
-        audioGrp.appendChild(opt);
+        if (a.type === 'playlist' || a.format === 'playlist' || a.is_playlist) {
+          audioPlaylists.push(a);
+        } else {
+          singleAudios.push(a);
+        }
       });
-      select.appendChild(audioGrp);
+
+      if (audioPlaylists.length > 0) {
+        const plGrp = document.createElement('optgroup');
+        plGrp.label = 'Audio Playlists';
+        audioPlaylists.forEach(pl => {
+          const opt = document.createElement('option');
+          opt.value = pl.id;
+          const cleanName = pl.name || (pl.title ? pl.title.replace(/^\[Playlist\]\s*/i, '') : '');
+          opt.textContent = `📋 [Playlist] ${cleanName} (${pl.duration || ''})`;
+          plGrp.appendChild(opt);
+        });
+        select.appendChild(plGrp);
+      }
+
+      if (singleAudios.length > 0) {
+        const audioGrp = document.createElement('optgroup');
+        audioGrp.label = 'Audio Galeri';
+        singleAudios.forEach(a => {
+          const opt = document.createElement('option');
+          opt.value = a.id;
+          const fPrefix = (a.folder_name && a.folder_name !== 'Playlists') ? `[${a.folder_name}] ` : '';
+          opt.textContent = `🎵 ${fPrefix}${a.title || a.name}`;
+          audioGrp.appendChild(opt);
+        });
+        select.appendChild(audioGrp);
+      }
     }
 
     if (selectedAudioId) {
@@ -12707,6 +12793,16 @@ async function selectTitle(id, title) {
     input.value = title;
   }
   
+  // Sync selected title folder if available
+  try {
+    const item = (typeof titleSuggestions !== 'undefined' && Array.isArray(titleSuggestions)) ? titleSuggestions.find(t => String(t.id) === String(id)) : null;
+    const folderId = (item && item.folder_id) ? item.folder_id : (typeof currentTitleFolderId !== 'undefined' ? currentTitleFolderId : '');
+    const folderSelect = titleManagerContext === 'edit' ? document.getElementById('editBroadcastTitleFolder') : document.getElementById('broadcastTitleFolder');
+    if (folderSelect && folderId !== undefined && folderId !== null) {
+      folderSelect.value = String(folderId);
+    }
+  } catch (tfErr) {}
+  
   // Increment use count
   try {
     await fetch(`/api/title-suggestions/${id}/use`, {
@@ -12882,6 +12978,17 @@ async function selectTitleFromDropdown(id, title, context = 'edit') {
   document.getElementById(inputId).value = title;
   document.getElementById(dropdownId).classList.add('hidden');
   
+  // Sync selected title folder if available
+  try {
+    const item = (typeof titleSuggestions !== 'undefined' && Array.isArray(titleSuggestions)) ? titleSuggestions.find(t => String(t.id) === String(id)) : null;
+    if (item && item.folder_id !== undefined) {
+      const folderSelect = context === 'edit' ? document.getElementById('editBroadcastTitleFolder') : document.getElementById('broadcastTitleFolder');
+      if (folderSelect) {
+        folderSelect.value = item.folder_id || '';
+      }
+    }
+  } catch (tfErr) {}
+  
   // Increment use count
   try {
     await fetch(`/api/title-suggestions/${id}/use`, {
@@ -13000,7 +13107,8 @@ if (originalEditBroadcastForm) {
         scheduledStartTime: document.getElementById('editScheduledStartTime').value,
         privacyStatus: document.getElementById('editPrivacyStatus').value,
         categoryId: categoryId,
-        thumbnailFolder: thumbnailFolder  // Include thumbnail folder in update
+        thumbnailFolder: thumbnailFolder, // Include thumbnail folder in update
+        titleFolderId: document.getElementById('editBroadcastTitleFolder')?.value || null
       };
       
       console.log('[EditBroadcast] Update data:', updateData);

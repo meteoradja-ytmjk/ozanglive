@@ -106,8 +106,9 @@ class BroadcastTemplate {
               ? (parseInt(b.streamDurationMinutes) || 0) 
               : (b.durationHours !== undefined ? ((parseInt(b.durationHours) || 0) * 60 + (parseInt(b.durationMinutes) || 0)) : row.stream_duration_minutes),
             loopVideo: b.loopVideo !== undefined ? (b.loopVideo !== false && b.loopVideo !== 0 && b.loopVideo !== '0') : row.loop_video,
-            videoId: b.videoId || row.video_id || null,
-            audioId: b.audioId || row.audio_id || null,
+            videoId: b.videoId || b.video_id || row.video_id || null,
+            audioId: b.audioId || b.audio_id || row.audio_id || null,
+            titleFolderId: b.titleFolderId !== undefined ? b.titleFolderId : (b.title_folder_id || row.title_folder_id || null),
             scheduleType: b.scheduleType || row.schedule_type || 'once',
             thumbnailFolder: (b.thumbnailFolder !== undefined && b.thumbnailFolder !== null) ? b.thumbnailFolder : row.thumbnail_folder,
             pinnedThumbnail: (b.pinnedThumbnail || b.thumbnailPath || row.pinned_thumbnail || row.thumbnail_path || null)

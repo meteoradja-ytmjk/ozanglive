@@ -26,7 +26,10 @@ class YouTubeBroadcastSettings {
       alteredContent = false,
       tags = null,
       dualStream = false,
-      verticalStreamKey = null
+      verticalStreamKey = null,
+      titleFolderId = null,
+      audioId = null,
+      videoId = null
     } = data;
 
     const tagsJson = Array.isArray(tags) ? JSON.stringify(tags) : (tags || null);
@@ -36,8 +39,8 @@ class YouTubeBroadcastSettings {
     return new Promise((resolve, reject) => {
       db.run(
         `INSERT INTO youtube_broadcast_settings 
-         (broadcast_id, user_id, account_id, title, description, category_id, privacy_status, enable_auto_start, enable_auto_stop, unlist_replay_on_end, original_privacy_status, thumbnail_folder, template_id, thumbnail_index, thumbnail_path, altered_content, tags, dual_stream, vertical_stream_key)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         (broadcast_id, user_id, account_id, title, description, category_id, privacy_status, enable_auto_start, enable_auto_stop, unlist_replay_on_end, original_privacy_status, thumbnail_folder, template_id, thumbnail_index, thumbnail_path, altered_content, tags, dual_stream, vertical_stream_key, title_folder_id, audio_id, video_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(broadcast_id) DO UPDATE SET
            account_id = COALESCE(excluded.account_id, youtube_broadcast_settings.account_id),
            title = COALESCE(excluded.title, youtube_broadcast_settings.title),
@@ -55,7 +58,10 @@ class YouTubeBroadcastSettings {
            altered_content = excluded.altered_content,
            tags = excluded.tags,
            dual_stream = excluded.dual_stream,
-           vertical_stream_key = excluded.vertical_stream_key`,
+           vertical_stream_key = excluded.vertical_stream_key,
+           title_folder_id = COALESCE(excluded.title_folder_id, youtube_broadcast_settings.title_folder_id),
+           audio_id = COALESCE(excluded.audio_id, youtube_broadcast_settings.audio_id),
+           video_id = COALESCE(excluded.video_id, youtube_broadcast_settings.video_id)`,
         [
           broadcastId,
           userId,
@@ -75,7 +81,10 @@ class YouTubeBroadcastSettings {
           alteredContentInt,
           tagsJson,
           dualStreamInt,
-          verticalStreamKey || null
+          verticalStreamKey || null,
+          titleFolderId || null,
+          audioId || null,
+          videoId || null
         ],
         function(err) {
           if (err) {
@@ -101,7 +110,10 @@ class YouTubeBroadcastSettings {
             thumbnailPath,
             alteredContent: alteredContentInt === 1,
             tags: tagsJson,
-            dualStream: dualStreamInt === 1
+            dualStream: dualStreamInt === 1,
+            titleFolderId,
+            audioId,
+            videoId
           });
         }
       );
@@ -180,6 +192,9 @@ class YouTubeBroadcastSettings {
             row.alteredContent = row.altered_content === 1;
             row.dualStream = row.dual_stream === 1;
             row.verticalStreamKey = row.vertical_stream_key;
+            row.titleFolderId = row.title_folder_id || null;
+            row.audioId = row.audio_id || null;
+            row.videoId = row.video_id || null;
           }
           resolve(row);
         }

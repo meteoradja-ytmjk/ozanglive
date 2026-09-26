@@ -10582,7 +10582,8 @@ async function attachLocalSettingsToBroadcasts(broadcastsList, userId) {
     const placeholders = broadcastIds.map(() => '?').join(',');
     const settingsRows = await new Promise((resolve) => {
       db.all(
-        `SELECT broadcast_id, dual_stream, altered_content, unlist_replay_on_end, vertical_stream_key, thumbnail_folder, thumbnail_path, tags 
+        `SELECT broadcast_id, dual_stream, altered_content, unlist_replay_on_end, vertical_stream_key, thumbnail_folder, thumbnail_path, tags,
+                title_folder_id, audio_id, video_id
          FROM youtube_broadcast_settings 
          WHERE broadcast_id IN (${placeholders})`,
         broadcastIds,
@@ -10594,11 +10595,13 @@ async function attachLocalSettingsToBroadcasts(broadcastsList, userId) {
       db.all(
         `SELECT s.youtube_broadcast_id, s.stream_key, s.stream_id, s.dual_stream, s.altered_content, s.unlist_replay_on_end, s.vertical_stream_key, s.tags,
                 s.stream_duration_hours, s.stream_duration_minutes, s.duration, s.loop_video, s.video_id, s.audio_id, s.schedule_type, s.recurring_time, s.schedule_days,
-                s.recurring_enabled, s.schedule_time,
-                v.title AS video_title, a.title AS audio_title
+                s.recurring_enabled, s.schedule_time, s.title_folder_id,
+                v.title AS video_title,
+                COALESCE(a.title, pl.name) AS audio_title
          FROM streams s
          LEFT JOIN videos v ON s.video_id = v.id
          LEFT JOIN audios a ON s.audio_id = a.id
+         LEFT JOIN playlists pl ON s.audio_id = pl.id
          WHERE s.youtube_broadcast_id IN (${placeholders})`,
         broadcastIds,
         (err, rows) => resolve(err ? [] : (rows || []))
@@ -10615,7 +10618,10 @@ async function attachLocalSettingsToBroadcasts(broadcastsList, userId) {
           vertical_stream_key: row.vertical_stream_key || null,
           thumbnail_folder: row.thumbnail_folder || null,
           thumbnail_path: row.thumbnail_path || null,
-          tags: row.tags
+          tags: row.tags,
+          title_folder_id: row.title_folder_id || null,
+          audio_id: row.audio_id || null,
+          video_id: row.video_id || null
         });
       }
     });
@@ -10641,10 +10647,11 @@ async function attachLocalSettingsToBroadcasts(broadcastsList, userId) {
           stream_duration_minutes: durationMins,
           duration: durationMins,
           loop_video: s.loop_video !== 0 && s.loop_video !== '0' && s.loop_video !== false,
-          video_id: s.video_id || null,
+          video_id: s.video_id || existing.video_id || null,
           video_title: s.video_title || null,
-          audio_id: s.audio_id || null,
+          audio_id: s.audio_id || existing.audio_id || null,
           audio_title: s.audio_title || null,
+          title_folder_id: s.title_folder_id || existing.title_folder_id || null,
           schedule_type: s.schedule_type || 'once',
           recurring_time: s.recurring_time || null,
           schedule_days: s.schedule_days || null,
@@ -10659,11 +10666,13 @@ async function attachLocalSettingsToBroadcasts(broadcastsList, userId) {
       db.all(
         `SELECT s.stream_key, s.stream_id, s.title, s.dual_stream, s.altered_content, s.unlist_replay_on_end, s.vertical_stream_key,
                 s.stream_duration_hours, s.stream_duration_minutes, s.duration, s.loop_video, s.video_id, s.audio_id, s.schedule_type, s.recurring_time, s.schedule_days,
-                s.recurring_enabled, s.schedule_time,
-                v.title AS video_title, a.title AS audio_title
+                s.recurring_enabled, s.schedule_time, s.title_folder_id,
+                v.title AS video_title,
+                COALESCE(a.title, pl.name) AS audio_title
          FROM streams s
          LEFT JOIN videos v ON s.video_id = v.id
          LEFT JOIN audios a ON s.audio_id = a.id
+         LEFT JOIN playlists pl ON s.audio_id = pl.id
          WHERE (s.user_id = ? OR CAST(s.user_id AS TEXT) = CAST(? AS TEXT)) AND s.stream_duration_minutes > 0
          ORDER BY s.id DESC`,
         [userId, String(userId)],
@@ -10696,6 +10705,7 @@ async function attachLocalSettingsToBroadcasts(broadcastsList, userId) {
             video_title: s.video_title || matched.video_title || null,
             audio_id: s.audio_id || matched.audio_id || null,
             audio_title: s.audio_title || matched.audio_title || null,
+            title_folder_id: s.title_folder_id || matched.title_folder_id || null,
             schedule_type: s.schedule_type || matched.schedule_type || 'once',
             recurring_time: s.recurring_time || matched.recurring_time || null,
             schedule_days: s.schedule_days || matched.schedule_days || null,
@@ -10727,6 +10737,8 @@ async function attachLocalSettingsToBroadcasts(broadcastsList, userId) {
       b.videoTitle = s.video_title || null;
       b.audioId = s.audio_id || null;
       b.audioTitle = s.audio_title || null;
+      b.titleFolderId = s.title_folder_id || null;
+      b.title_folder_id = s.title_folder_id || null;
       b.scheduleType = s.schedule_type || 'once';
       b.recurringTime = s.recurring_time || null;
       b.scheduleDays = s.schedule_days || null;
@@ -11377,6 +11389,11 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       hasFile: !!req.file
     });
 
+    // Get titleFolderId from request or inherit from template/slot
+    const finalTitleFolderId = req.body.titleFolderId || (matchedSlot ? (matchedSlot.titleFolderId || matchedSlot.title_folder_id) : null) || (templateObj ? templateObj.title_folder_id : null) || null;
+    const finalAudioId = req.body.audioId || (matchedSlot ? (matchedSlot.audioId || matchedSlot.audio_id) : null) || (templateObj ? templateObj.audio_id : null) || null;
+    const finalVideoId = req.body.videoId || (matchedSlot ? (matchedSlot.videoId || matchedSlot.video_id) : null) || (templateObj ? templateObj.video_id : null) || null;
+
     // Save broadcast settings for later use (e.g., unlist replay on end, thumbnail folder, dual stream, altered content)
     try {
       await YouTubeBroadcastSettings.upsert({
@@ -11398,9 +11415,12 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         dualStream: isDualStream ? 1 : 0,
         verticalStreamKey: isDualStream ? (verticalStreamKey || null) : null,
         tags: parsedTags && parsedTags.length > 0 ? JSON.stringify(parsedTags) : null,
-        templateId: templateId ? String(templateId) : null
+        templateId: templateId ? String(templateId) : null,
+        titleFolderId: finalTitleFolderId,
+        audioId: finalAudioId,
+        videoId: finalVideoId
       });
-      console.log('[API] Saved broadcast settings for:', broadcast.broadcastId, 'dualStream:', isDualStream, 'alteredContent:', isAlteredContent);
+      console.log('[API] Saved broadcast settings for:', broadcast.broadcastId, 'dualStream:', isDualStream, 'alteredContent:', isAlteredContent, 'titleFolderId:', finalTitleFolderId);
     } catch (settingsErr) {
       console.error('[API] Error saving broadcast settings:', settingsErr.message);
       // Don't fail the request, just log the error
@@ -11815,6 +11835,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         title: broadcast.title || title,
         video_id: videoId,
         audio_id: audioId,
+        title_folder_id: finalTitleFolderId,
         rtmp_url: broadcast.rtmpUrl || 'rtmp://a.rtmp.youtube.com/live2',
         stream_key: finalStreamKey || (streamId ? String(streamId) : ''),
         platform: 'YouTube',
@@ -12054,18 +12075,22 @@ app.put('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
         alteredContent: finalAltered ? 1 : 0,
         dualStream: finalDual ? 1 : 0,
         verticalStreamKey: finalDual ? (req.body.verticalStreamKey || existingSettings.verticalStreamKey || null) : null,
-        tags: tags ? (Array.isArray(tags) ? JSON.stringify(tags) : tags) : existingSettings.tags
+        tags: tags ? (Array.isArray(tags) ? JSON.stringify(tags) : tags) : existingSettings.tags,
+        titleFolderId: req.body.titleFolderId !== undefined ? req.body.titleFolderId : existingSettings.titleFolderId,
+        audioId: req.body.audioId !== undefined ? req.body.audioId : existingSettings.audioId,
+        videoId: req.body.videoId !== undefined ? req.body.videoId : existingSettings.videoId
       });
 
-      // Update matching streams record if any (including schedule_time in WIB/UTC)
+      // Update matching streams record if any (including schedule_time in WIB/UTC, title_folder_id)
       db.run(
         `UPDATE streams SET 
            title = COALESCE(?, title),
            schedule_time = COALESCE(?, schedule_time),
            dual_stream = ?,
-           tags = COALESCE(?, tags)
+           tags = COALESCE(?, tags),
+           title_folder_id = COALESCE(?, title_folder_id)
          WHERE youtube_broadcast_id = ? AND user_id = ?`,
-        [title || null, finalScheduledStartTime || null, finalDual ? 1 : 0, tags ? (Array.isArray(tags) ? JSON.stringify(tags) : tags) : null, req.params.id, req.session.userId]
+        [title || null, finalScheduledStartTime || null, finalDual ? 1 : 0, tags ? (Array.isArray(tags) ? JSON.stringify(tags) : tags) : null, req.body.titleFolderId || null, req.params.id, req.session.userId]
       );
     } catch (settingsErr) {
       console.warn('[API] Error saving broadcast settings on update:', settingsErr.message);
@@ -12380,7 +12405,7 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
         const streamByBId = await new Promise((resolve) => {
           db.get(
             `SELECT stream_key, stream_id, video_id, audio_id, schedule_type, recurring_time, schedule_days, recurring_enabled,
-                    stream_duration_hours, stream_duration_minutes, duration, loop_video, vertical_stream_key, dual_stream, altered_content, tags
+                    stream_duration_hours, stream_duration_minutes, duration, loop_video, vertical_stream_key, dual_stream, altered_content, tags, title_folder_id
              FROM streams
              WHERE youtube_broadcast_id = ?
              ORDER BY id DESC LIMIT 1`,
@@ -12395,6 +12420,7 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
           }
           if (!videoId && streamByBId.video_id) videoId = streamByBId.video_id;
           if (!audioId && streamByBId.audio_id) audioId = streamByBId.audio_id;
+          if (!titleFolderId && streamByBId.title_folder_id) titleFolderId = streamByBId.title_folder_id;
           if ((!scheduleType || scheduleType === 'once') && streamByBId.schedule_type) scheduleType = streamByBId.schedule_type;
           if (!recurringTime && streamByBId.recurring_time) recurringTime = streamByBId.recurring_time;
           if (!recurringDays && streamByBId.schedule_days) {
@@ -12419,7 +12445,8 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
 
         const settingsByBId = await new Promise((resolve) => {
           db.get(
-            `SELECT thumbnail_folder, thumbnail_path, tags, dual_stream, altered_content, vertical_stream_key
+            `SELECT thumbnail_folder, thumbnail_path, tags, dual_stream, altered_content, vertical_stream_key,
+                    title_folder_id, audio_id, video_id
              FROM youtube_broadcast_settings
              WHERE broadcast_id = ?
              ORDER BY id DESC LIMIT 1`,
@@ -12434,6 +12461,15 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
           if (!pinnedThumbnail && !thumbnailPath && settingsByBId.thumbnail_path) {
             pinnedThumbnail = settingsByBId.thumbnail_path;
             thumbnailPath = settingsByBId.thumbnail_path;
+          }
+          if (!titleFolderId && settingsByBId.title_folder_id) {
+            titleFolderId = settingsByBId.title_folder_id;
+          }
+          if (!audioId && settingsByBId.audio_id) {
+            audioId = settingsByBId.audio_id;
+          }
+          if (!videoId && settingsByBId.video_id) {
+            videoId = settingsByBId.video_id;
           }
         }
       } catch (bLookupErr) {
@@ -12677,31 +12713,64 @@ app.post('/api/youtube/templates/multi', isAuthenticated, async (req, res) => {
       let bHours = parseInt(b.durationHours) || Math.floor(bMins / 60);
       let bMinutes = parseInt(b.durationMinutes) || (bMins % 60);
       let bLoop = b.loopVideo !== undefined ? (b.loopVideo !== false && b.loopVideo !== 0 && b.loopVideo !== '0') : true;
-      let bVideoId = b.videoId || null;
-      let bAudioId = b.audioId || null;
+      let bVideoId = b.videoId || b.video_id || null;
+      let bAudioId = b.audioId || b.audio_id || null;
+      let bTitleFolderId = b.titleFolderId !== undefined ? b.titleFolderId : (b.title_folder_id || null);
 
-      // Auto-lookup duration from stream if not provided
-      if (bMins === 0 && (b.streamId || b.streamKey || b.title)) {
+      // Auto-lookup duration and settings from stream/broadcast if broadcastId or title present
+      if (b.broadcastId || (bMins === 0 && (b.streamId || b.streamKey || b.title))) {
         try {
           const sRow = await new Promise((resolve) => {
-            db.get(
-              `SELECT stream_duration_hours, stream_duration_minutes, loop_video, video_id, audio_id
-               FROM streams
-               WHERE user_id = ? AND (stream_key = ? OR stream_key = ? OR title = ?) AND stream_duration_minutes > 0
-               ORDER BY id DESC LIMIT 1`,
-              [req.session.userId, b.streamId || '', b.streamKey || '', b.title || ''],
-              (err, row) => resolve(row)
-            );
+            if (b.broadcastId) {
+              db.get(
+                `SELECT stream_duration_hours, stream_duration_minutes, loop_video, video_id, audio_id, title_folder_id
+                 FROM streams
+                 WHERE youtube_broadcast_id = ?
+                 ORDER BY id DESC LIMIT 1`,
+                [b.broadcastId],
+                (err, row) => resolve(row)
+              );
+            } else {
+              db.get(
+                `SELECT stream_duration_hours, stream_duration_minutes, loop_video, video_id, audio_id, title_folder_id
+                 FROM streams
+                 WHERE user_id = ? AND (stream_key = ? OR stream_key = ? OR title = ?) AND stream_duration_minutes > 0
+                 ORDER BY id DESC LIMIT 1`,
+                [req.session.userId, b.streamId || '', b.streamKey || '', b.title || ''],
+                (err, row) => resolve(row)
+              );
+            }
           });
-          if (sRow && sRow.stream_duration_minutes > 0) {
-            bMins = sRow.stream_duration_minutes;
-            bHours = sRow.stream_duration_hours || Math.floor(bMins / 60);
-            bMinutes = bMins % 60;
+          if (sRow) {
+            if (bMins === 0 && sRow.stream_duration_minutes > 0) {
+              bMins = sRow.stream_duration_minutes;
+              bHours = sRow.stream_duration_hours || Math.floor(bMins / 60);
+              bMinutes = bMins % 60;
+            }
             if (b.loopVideo === undefined && sRow.loop_video !== undefined) {
               bLoop = sRow.loop_video !== 0 && sRow.loop_video !== false;
             }
             if (!bVideoId && sRow.video_id) bVideoId = sRow.video_id;
             if (!bAudioId && sRow.audio_id) bAudioId = sRow.audio_id;
+            if (!bTitleFolderId && sRow.title_folder_id) bTitleFolderId = sRow.title_folder_id;
+          }
+
+          if (b.broadcastId) {
+            const ybsRow = await new Promise((resolve) => {
+              db.get(
+                `SELECT title_folder_id, audio_id, video_id
+                 FROM youtube_broadcast_settings
+                 WHERE broadcast_id = ?
+                 ORDER BY id DESC LIMIT 1`,
+                [b.broadcastId],
+                (err, row) => resolve(row)
+              );
+            });
+            if (ybsRow) {
+              if (!bTitleFolderId && ybsRow.title_folder_id) bTitleFolderId = ybsRow.title_folder_id;
+              if (!bAudioId && ybsRow.audio_id) bAudioId = ybsRow.audio_id;
+              if (!bVideoId && ybsRow.video_id) bVideoId = ybsRow.video_id;
+            }
           }
         } catch (mLookupErr) {}
       }
@@ -12723,6 +12792,7 @@ app.post('/api/youtube/templates/multi', isAuthenticated, async (req, res) => {
         loopVideo: bLoop,
         videoId: bVideoId,
         audioId: bAudioId,
+        titleFolderId: bTitleFolderId || null,
         scheduleType: b.scheduleType || 'once'
       };
     }));
@@ -12751,6 +12821,7 @@ app.post('/api/youtube/templates/multi', isAuthenticated, async (req, res) => {
       stream_key_folder_mapping: parsedMapping,
       stream_id: broadcasts[0].streamId || null,  // Save first broadcast's stream_id
       stream_key: broadcasts[0].streamKey || broadcasts[0].streamId || null,
+      title_folder_id: broadcastsWithStreamId[0]?.titleFolderId || null,
       duration_hours: topDurationHours,
       duration_minutes: topDurationMinutes,
       stream_duration_minutes: topDurationMins,

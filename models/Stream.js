@@ -33,6 +33,7 @@ class Stream {
       backup_rtmp_url = null,
       vertical_stream_key = null,
       tags = null,
+      title_folder_id = null,
       status,
       user_id
     } = streamData;
@@ -68,8 +69,8 @@ class Stream {
           schedule_type, schedule_days, recurring_time, recurring_enabled,
           original_settings, status, status_updated_at, user_id,
           youtube_broadcast_id, youtube_account_id, youtube_lifecycle_status,
-          dual_stream, backup_rtmp_url, vertical_stream_key, tags
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          dual_stream, backup_rtmp_url, vertical_stream_key, tags, title_folder_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id, title, video_id, audio_id, rtmp_url, stream_key, platform, platform_icon,
           bitrate, resolution, fps, orientation, loop_video_int,
@@ -77,7 +78,7 @@ class Stream {
           schedule_type, schedule_days_json, recurring_time, recurring_enabled_int,
           original_settings_json, final_status, status_updated_at, user_id,
           youtube_broadcast_id, youtube_account_id, youtube_lifecycle_status,
-          dual_stream_int, backup_rtmp_url, vertical_key_val, tags_val
+          dual_stream_int, backup_rtmp_url, vertical_key_val, tags_val, title_folder_id
         ],
         function (err) {
           if (err) {
@@ -94,7 +95,7 @@ class Stream {
       db.get(
         `SELECT s.*,
                 COALESCE(v.title, p.name) AS video_title,
-                a.title AS audio_title,
+                COALESCE(a.title, pla.name) AS audio_title,
                 CASE WHEN p.id IS NOT NULL THEN 'playlist' ELSE 'video' END AS video_type,
                 COALESCE(yc.channel_name, yc_broadcast.channel_name, yc_primary.channel_name, CASE WHEN s.platform = 'YouTube' THEN 'YouTube Channel' ELSE COALESCE(s.platform, 'Custom RTMP') END) AS channel_name,
                 COALESCE(yc.channel_id, yc_broadcast.channel_id, yc_primary.channel_id) AS channel_id
@@ -102,6 +103,7 @@ class Stream {
          LEFT JOIN videos v ON s.video_id = v.id
          LEFT JOIN playlists p ON s.video_id = p.id
          LEFT JOIN audios a ON s.audio_id = a.id
+         LEFT JOIN playlists pla ON s.audio_id = pla.id
          LEFT JOIN youtube_credentials yc ON s.youtube_account_id = yc.id
          LEFT JOIN youtube_broadcast_settings ybs ON s.youtube_broadcast_id = ybs.broadcast_id
          LEFT JOIN youtube_credentials yc_broadcast ON ybs.account_id = yc_broadcast.id
@@ -149,7 +151,7 @@ class Stream {
                v.resolution AS video_resolution,
                v.bitrate AS video_bitrate,
                v.fps AS video_fps,
-               a.title AS audio_title,
+               COALESCE(a.title, pla.name) AS audio_title,
                CASE WHEN p.id IS NOT NULL THEN 'playlist' ELSE 'video' END AS video_type,
                COALESCE(yc.channel_name, yc_broadcast.channel_name, yc_primary.channel_name, CASE WHEN s.platform = 'YouTube' THEN 'YouTube Channel' ELSE COALESCE(s.platform, 'Custom RTMP') END) AS channel_name,
                COALESCE(yc.channel_id, yc_broadcast.channel_id, yc_primary.channel_id) AS channel_id
@@ -157,6 +159,7 @@ class Stream {
         LEFT JOIN videos v ON s.video_id = v.id
         LEFT JOIN playlists p ON s.video_id = p.id
         LEFT JOIN audios a ON s.audio_id = a.id
+        LEFT JOIN playlists pla ON s.audio_id = pla.id
         LEFT JOIN youtube_credentials yc ON s.youtube_account_id = yc.id
         LEFT JOIN youtube_broadcast_settings ybs ON s.youtube_broadcast_id = ybs.broadcast_id
         LEFT JOIN youtube_credentials yc_broadcast ON ybs.account_id = yc_broadcast.id

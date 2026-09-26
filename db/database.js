@@ -351,6 +351,7 @@ async function createCoreTablesAsync() {
   await runTableQuery(`ALTER TABLE streams ADD COLUMN backup_rtmp_url TEXT`, 'streams.backup_rtmp_url');
   await runTableQuery(`ALTER TABLE streams ADD COLUMN vertical_stream_key TEXT`, 'streams.vertical_stream_key');
   await runTableQuery(`ALTER TABLE streams ADD COLUMN tags TEXT`, 'streams.tags');
+  await runTableQuery(`ALTER TABLE streams ADD COLUMN title_folder_id TEXT`, 'streams.title_folder_id');
 
   // Migrate stream_duration_hours to stream_duration_minutes
   await runTableQuery(`UPDATE streams SET stream_duration_minutes = stream_duration_hours * 60 
@@ -689,6 +690,9 @@ async function createCoreTablesAsync() {
   await runTableQuery(`ALTER TABLE youtube_broadcast_settings ADD COLUMN description TEXT`, 'youtube_broadcast_settings.description');
   await runTableQuery(`ALTER TABLE youtube_broadcast_settings ADD COLUMN category_id TEXT`, 'youtube_broadcast_settings.category_id');
   await runTableQuery(`ALTER TABLE youtube_broadcast_settings ADD COLUMN privacy_status TEXT`, 'youtube_broadcast_settings.privacy_status');
+  await runTableQuery(`ALTER TABLE youtube_broadcast_settings ADD COLUMN title_folder_id TEXT`, 'youtube_broadcast_settings.title_folder_id');
+  await runTableQuery(`ALTER TABLE youtube_broadcast_settings ADD COLUMN audio_id TEXT`, 'youtube_broadcast_settings.audio_id');
+  await runTableQuery(`ALTER TABLE youtube_broadcast_settings ADD COLUMN video_id TEXT`, 'youtube_broadcast_settings.video_id');
 
   // Create stream_key_folder_mapping table for storing stream key to thumbnail folder binding
   await runTableQuery(`CREATE TABLE IF NOT EXISTS stream_key_folder_mapping (
