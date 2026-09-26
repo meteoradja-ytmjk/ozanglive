@@ -11885,11 +11885,38 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
           if (!executedTimeStr && req.body.recurringTime) {
             executedTimeStr = String(req.body.recurringTime).slice(0, 5);
           }
-          if (executedTimeStr && typeof scheduleService !== 'undefined' && typeof scheduleService.markSlotExecuted === 'function') {
-            scheduleService.markSlotExecuted(templateId, executedTimeStr, nowDate);
+          if (typeof scheduleService !== 'undefined') {
+            if (typeof scheduleService.markAllSlotsExecuted === 'function') {
+              scheduleService.markAllSlotsExecuted(templateId, templateObj?.recurring_time || req.body.recurringTime || executedTimeStr, nowDate);
+            } else if (executedTimeStr && typeof scheduleService.markSlotExecuted === 'function') {
+              scheduleService.markSlotExecuted(templateId, executedTimeStr, nowDate);
+            }
           }
-          await BroadcastTemplate.update(templateId, { last_run_at: nowDate.toISOString() });
-          console.log(`[API] Marked template ${templateId} executed at ${executedTimeStr || 'now'} to prevent duplicate execution by background scheduler`);
+
+          // Calculate next run time so next_run_at is moved to future and doesn't trigger overdue check
+          let nextRunIso = null;
+          try {
+            const { calculateNextRun, formatNextRunAt } = require('./utils/recurringUtils');
+            const pattern = templateObj?.recurring_pattern || req.body.recurringPattern || 'daily';
+            const rTime = templateObj?.recurring_time || req.body.recurringTime || executedTimeStr;
+            let rDays = templateObj?.recurring_days || req.body.scheduleDays;
+            if (typeof rDays === 'string') {
+              try { rDays = JSON.parse(rDays); } catch (_) {}
+            }
+            if (rTime) {
+              const nRun = calculateNextRun({
+                recurring_pattern: pattern,
+                recurring_time: rTime,
+                recurring_days: rDays
+              });
+              if (nRun) nextRunIso = formatNextRunAt(nRun);
+            }
+          } catch (nErr) {}
+
+          const updateFields = { last_run_at: nowDate.toISOString() };
+          if (nextRunIso) updateFields.next_run_at = nextRunIso;
+          await BroadcastTemplate.update(templateId, updateFields);
+          console.log(`[API] Marked template ${templateId} executed at ${executedTimeStr || 'now'}, next_run_at set to: ${nextRunIso || 'none'} to prevent duplicate execution by background scheduler`);
         } catch (markErr) {
           console.warn('[API] Warning marking template executed:', markErr.message);
         }

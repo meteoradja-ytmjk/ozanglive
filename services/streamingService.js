@@ -191,6 +191,135 @@ async function endYouTubeBroadcastForStream(stream, broadcastIdHint) {
 }
 
 /**
+ * Synchronize stream_key and rtmp_url from YouTube broadcast's bound liveStream before starting FFmpeg.
+ * This guarantees that FFmpeg is pushing video to the EXACT stream key YouTube Studio is expecting.
+ * @param {Object} stream - Stream model instance
+ */
+async function syncYouTubeStreamKeyBeforeStart(stream) {
+  if (!stream || !stream.youtube_broadcast_id) return;
+  try {
+    const YouTubeCredentials = require('../models/YouTubeCredentials');
+    let credentials = null;
+    if (stream.youtube_account_id) {
+      credentials = await YouTubeCredentials.findById(stream.youtube_account_id);
+    }
+    if (!credentials && stream.user_id) {
+      credentials = await YouTubeCredentials.findByUserId(stream.user_id);
+    }
+    if (!credentials) return;
+
+    const youtubeService = require('./youtubeService');
+    const clientId = credentials.clientId || credentials.client_id;
+    const clientSecret = credentials.clientSecret || credentials.client_secret;
+    const refreshToken = credentials.refreshToken || credentials.refresh_token;
+
+    const accessToken = await youtubeService.getAccessTokenSafe(clientId, clientSecret, refreshToken, credentials.id);
+    if (!accessToken) return;
+
+    const broadcast = await youtubeService.getBroadcastDetails(accessToken, stream.youtube_broadcast_id);
+    const boundStreamId = broadcast?.contentDetails?.boundStreamId;
+    if (!boundStreamId) return;
+
+    const boundStream = await youtubeService.getBoundStreamDetails(accessToken, boundStreamId);
+    if (boundStream && boundStream.streamKey) {
+      const liveKey = boundStream.streamKey.trim();
+      const liveRtmp = (boundStream.rtmpUrl || 'rtmp://a.rtmp.youtube.com/live2').trim();
+      if (stream.stream_key !== liveKey || (liveRtmp && stream.rtmp_url !== liveRtmp)) {
+        console.log(`[StreamingService] Synchronized stream #${stream.id} stream key from YouTube broadcast ${stream.youtube_broadcast_id}: old="${stream.stream_key ? '***' : 'none'}" -> new="${liveKey ? '***' : 'none'}"`);
+        stream.stream_key = liveKey;
+        if (liveRtmp) stream.rtmp_url = liveRtmp;
+        await Stream.update(stream.id, {
+          stream_key: liveKey,
+          rtmp_url: liveRtmp
+        }).catch(() => {});
+      }
+    }
+  } catch (err) {
+    console.warn(`[StreamingService] Warning in syncYouTubeStreamKeyBeforeStart for stream ${stream.id}:`, err.message);
+  }
+}
+
+/**
+ * Ensure YouTube live broadcast is truly synchronized and transitions to 'live' on YouTube Studio / YouTube.com.
+ * Runs asynchronously after FFmpeg starts pushing RTMP data.
+ * @param {Object} stream - Stream object
+ * @param {string} [broadcastIdHint] - Optional broadcastId
+ */
+async function ensureYouTubeBroadcastLive(stream, broadcastIdHint) {
+  if (!stream) return;
+  const isYouTube = stream.platform === 'YouTube' || Boolean(stream.youtube_broadcast_id) || Boolean(broadcastIdHint);
+  if (!isYouTube) return;
+
+  const streamId = stream.id;
+  let broadcastId = broadcastIdHint || stream.youtube_broadcast_id;
+
+  try {
+    const YouTubeCredentials = require('../models/YouTubeCredentials');
+    let credentials = null;
+    if (stream.youtube_account_id) {
+      credentials = await YouTubeCredentials.findById(stream.youtube_account_id);
+    }
+    if (!credentials && stream.user_id) {
+      credentials = await YouTubeCredentials.findByUserId(stream.user_id);
+    }
+    if (!credentials) {
+      console.warn(`[StreamingService.ensureLive] No YouTube credentials found for stream #${streamId}`);
+      return;
+    }
+
+    const youtubeService = require('./youtubeService');
+    const clientId = credentials.clientId || credentials.client_id;
+    const clientSecret = credentials.clientSecret || credentials.client_secret;
+    const refreshToken = credentials.refreshToken || credentials.refresh_token;
+
+    const accessToken = await youtubeService.getAccessTokenSafe(clientId, clientSecret, refreshToken, credentials.id);
+    if (!accessToken) {
+      console.warn(`[StreamingService.ensureLive] Failed to obtain access token for stream #${streamId}`);
+      return;
+    }
+
+    // If still no broadcastId, try finding by stream_key
+    if (!broadcastId && stream.stream_key) {
+      const found = await youtubeService.findBroadcastByStreamKey(accessToken, stream.stream_key);
+      if (found && found.broadcastId) {
+        broadcastId = found.broadcastId;
+        stream.youtube_broadcast_id = broadcastId;
+        await Stream.update(streamId, { youtube_broadcast_id: broadcastId }).catch(() => {});
+      }
+    }
+
+    if (!broadcastId) {
+      console.log(`[StreamingService.ensureLive] No YouTube broadcastId found for stream #${streamId} - streaming directly to RTMP key`);
+      return;
+    }
+
+    console.log(`[StreamingService.ensureLive] Initializing YouTube Studio live synchronization for stream #${streamId} (broadcast: ${broadcastId})...`);
+    addStreamLog(streamId, `[YouTube] Menghubungkan ke YouTube Studio (${broadcastId})...`);
+
+    // Give FFmpeg 5 seconds to establish RTMP handshake and send initial keyframes
+    await new Promise(r => setTimeout(r, 5000));
+
+    // Poll and transition broadcast to 'live'
+    const liveResult = await youtubeService.startBroadcastLive(accessToken, broadcastId, 7, 4000);
+
+    if (liveResult && liveResult.success) {
+      console.log(`[StreamingService.ensureLive] ✅ Stream #${streamId} broadcast ${broadcastId} is verified LIVE on YouTube.com!`);
+      addStreamLog(streamId, `[YouTube] ✅ Siaran SINKRON LIVE di dashboard YouTube Studio!`);
+      await Stream.update(streamId, { youtube_lifecycle_status: 'live' }).catch(() => {});
+    } else {
+      console.warn(`[StreamingService.ensureLive] ⚠️ YouTube broadcast status for ${broadcastId}: ${liveResult?.lifeCycleStatus || 'unknown'}, note: ${liveResult?.error || 'transition pending'}`);
+      addStreamLog(streamId, `[YouTube] Status siaran YouTube: ${liveResult?.lifeCycleStatus || 'live starting'}`);
+      if (liveResult?.lifeCycleStatus) {
+        await Stream.update(streamId, { youtube_lifecycle_status: liveResult.lifeCycleStatus }).catch(() => {});
+      }
+    }
+  } catch (err) {
+    console.error(`[StreamingService.ensureLive] Error during YouTube Studio sync for stream #${streamId}:`, err.message);
+    addStreamLog(streamId, `[YouTube] Sinkronisasi dashboard YouTube: ${err.message}`);
+  }
+}
+
+/**
  * Clean up stale entries from Maps to prevent memory leaks
  * Only removes entries for streams that are no longer active
  * ENHANCED: Added hard limits to prevent unbounded growth
@@ -1666,6 +1795,15 @@ async function startStream(streamId) {
       }
     }
     
+    // BUG FIX: Synchronize stream key from YouTube broadcast if linked, ensuring FFmpeg pushes to the exact key
+    if (stream.platform === 'YouTube' && stream.youtube_broadcast_id) {
+      try {
+        await syncYouTubeStreamKeyBeforeStart(stream);
+      } catch (keySyncErr) {
+        console.warn(`[StreamingService] Stream key pre-sync warning for stream #${streamId}:`, keySyncErr.message);
+      }
+    }
+
     // BUG FIX #8: Pass reconnecting so playlist does NOT re-shuffle on reconnect
     const ffmpegArgs = await buildFFmpegArgs(stream, durationOverrideSeconds, reconnecting);
     const fullCommand = `${ffmpegPath} ${ffmpegArgs.join(' ')}`;
@@ -1838,6 +1976,12 @@ async function startStream(streamId) {
         console.log(`[StreamingService] YouTube status sync not started: ${ytErr.message}`);
         // Continue without sync - not critical
       }
+
+      // CRITICAL FIX: Actively verify and transition YouTube broadcast to LIVE on YouTube.com dashboard
+      // Runs in background with retry so it doesn't block the start response
+      ensureYouTubeBroadcastLive(stream, stream.youtube_broadcast_id).catch(syncErr => {
+        console.warn(`[StreamingService] Background YouTube live sync warning:`, syncErr.message);
+      });
     }
     
     // Start RTMP health monitoring for auto-reconnect
@@ -2748,6 +2892,8 @@ module.exports = {
   getYouTubeStatus,
   isYouTubeMonitored,
   endYouTubeBroadcastForStream,
+  ensureYouTubeBroadcastLive,
+  syncYouTubeStreamKeyBeforeStart,
   // RTMP health monitor exports
   getRTMPHealthStatus,
   isRTMPHealthMonitored,
