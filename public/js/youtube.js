@@ -8108,26 +8108,6 @@ function openRecreateFromTemplateModal(template) {
     titleBadge.textContent = template.title || '-';
   }
 
-  // Set title folder info badge
-  const titleFolderBadge = document.getElementById('recreateTemplateTitleFolderInfo');
-  if (titleFolderBadge) {
-    let folderLabel = 'Semua';
-    if (template.title_folder_name) {
-      folderLabel = template.title_folder_name;
-    } else if (template.title_folder_id && Array.isArray(window.titleFolders)) {
-      const f = window.titleFolders.find(x => String(x.id) === String(template.title_folder_id));
-      if (f) folderLabel = f.name;
-    }
-    titleFolderBadge.innerHTML = `<i class="ti ti-folder text-sky-400 text-xs"></i><span>Folder Judul: ${escapeHtml(folderLabel)}</span>`;
-  }
-
-  // Set privacy info badge
-  const privacyBadge = document.getElementById('recreateTemplatePrivacyInfo');
-  if (privacyBadge) {
-    const priv = (template.privacy_status || template.privacyStatus || 'unlisted').toUpperCase();
-    privacyBadge.innerHTML = `<i class="ti ti-lock text-purple-400 text-xs"></i><span>Privasi: ${escapeHtml(priv)}</span>`;
-  }
-
   // Pre-fetch title folders for name resolving & dropdowns if not loaded
   if (!window.titleFolders) {
     fetch('/api/title-folders', { headers: { 'X-CSRF-Token': getCsrfToken() } })
@@ -8135,39 +8115,9 @@ function openRecreateFromTemplateModal(template) {
       .then(data => {
         if (data.success && Array.isArray(data.folders)) {
           window.titleFolders = data.folders;
-          if (template.title_folder_id && titleFolderBadge) {
-            const f = window.titleFolders.find(x => String(x.id) === String(template.title_folder_id));
-            if (f) titleFolderBadge.innerHTML = `<i class="ti ti-folder text-sky-400 text-xs"></i><span>Folder Judul: ${escapeHtml(f.name)}</span>`;
-          }
           renderRecreateSlotList();
         }
       }).catch(() => {});
-  }
-
-  // Set thumbnail info badge
-  const thumbBadge = document.getElementById('recreateTemplateThumbnailInfo');
-  if (thumbBadge) {
-    if (template.pinned_thumbnail) {
-      thumbBadge.textContent = 'Thumbnail: Pinned';
-    } else if (template.thumbnail_folder !== null && template.thumbnail_folder !== undefined) {
-      thumbBadge.textContent = `Folder: ${template.thumbnail_folder === '' || template.thumbnail_folder === '__ROOT__' ? 'Root' : template.thumbnail_folder}`;
-    } else {
-      thumbBadge.textContent = 'Folder: Root';
-    }
-  }
-
-  // Populate duration info badge
-  const totalTemplateMins = parseInt(template.stream_duration_minutes) || parseInt(template.duration) || ((parseInt(template.duration_hours) || 0) * 60 + (parseInt(template.duration_minutes) || 0));
-  const tHours = parseInt(template.duration_hours) || Math.floor(totalTemplateMins / 60);
-  const tMins = parseInt(template.duration_minutes) || (totalTemplateMins % 60);
-
-  const durBadgeEl = document.getElementById('recreateTemplateDurationBadgeText');
-  let durationLabel = 'Tanpa Batas';
-  if (totalTemplateMins > 0 || tHours > 0 || tMins > 0) {
-    durationLabel = `${tHours > 0 ? tHours + ' Jam ' : ''}${tMins > 0 ? tMins + ' Mnt' : (tHours === 0 ? '0 Mnt' : '')}`.trim();
-  }
-  if (durBadgeEl) {
-    durBadgeEl.textContent = `Durasi: ${durationLabel}`;
   }
 
   const createBtn = document.getElementById('recreateBtn');
