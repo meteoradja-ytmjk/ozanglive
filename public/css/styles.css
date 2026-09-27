@@ -24,43 +24,36 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 4rem;
-  width: 4rem;
+  height: 3.75rem;
+  width: 3.75rem;
   margin: 0 auto;
-  margin-bottom: 0.75rem;
-  color: white;
+  margin-bottom: 0.5rem;
+  color: #94a3b8;
   border-radius: 0.75rem;
   transition-property: all;
   transition-timing-function: linear;
-  transition-duration: 300ms;
+  transition-duration: 200ms;
   cursor: pointer;
 }
 
-/* Desktop Logo Styling - POJOK KIRI ATAS, UKURAN PAS */
+/* Desktop Logo Styling - Clean Header Sizing */
 .desktop-logo-container {
-  position: absolute;
-  top: 0.25rem;
-  left: 0.5rem;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: flex-start;
-  z-index: 50;
-  overflow: visible;
 }
 
 .desktop-logo {
-  height: 90px;
+  height: 36px;
   width: auto;
-  max-width: none;
+  max-width: 220px;
   object-fit: contain;
-  object-position: left top;
-  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.3));
-  transition: transform 0.3s ease;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+  transition: transform 0.2s ease;
 }
 
 .desktop-logo:hover {
-  transform: scale(1.05);
-  transform-origin: left top;
+  transform: scale(1.02);
 }
 
 .sidebar-icon:hover {
