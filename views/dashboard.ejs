@@ -476,6 +476,12 @@
               <i class="ti ti-upload text-blue-400 text-base transition-transform group-hover:-translate-y-0.5"></i>
               <span class="text-sm font-medium text-gray-200 group-hover:text-blue-300">Import</span>
             </button>
+            <button onclick="cleanCompletedStreams()"
+              class="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl hover:bg-purple-500/10 active:bg-purple-500/20 transition-all text-center group cursor-pointer"
+              title="Bersihkan stream template yang sudah selesai">
+              <i class="ti ti-broom text-purple-400 text-base transition-transform group-hover:scale-110"></i>
+              <span class="text-sm font-medium text-gray-200 group-hover:text-purple-300">Clean Completed</span>
+            </button>
             <button onclick="deleteAllStreams()"
               class="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl hover:bg-red-500/10 active:bg-red-500/20 transition-all text-center group cursor-pointer">
               <i class="ti ti-trash text-red-400 text-base transition-transform group-hover:scale-110"></i>
@@ -558,6 +564,12 @@
                 class="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl hover:bg-blue-500/10 active:bg-blue-500/20 active:scale-[0.98] transition-all text-center group cursor-pointer">
                 <i class="ti ti-upload text-blue-400 text-base transition-transform group-hover:-translate-y-0.5"></i>
                 <span class="text-sm font-medium text-gray-200 group-hover:text-blue-300">Import</span>
+              </button>
+              <button onclick="cleanCompletedStreams()"
+                class="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl hover:bg-purple-500/10 active:bg-purple-500/20 active:scale-[0.98] transition-all text-center group cursor-pointer"
+                title="Bersihkan stream template yang sudah selesai">
+                <i class="ti ti-broom text-purple-400 text-base transition-transform group-hover:scale-110"></i>
+                <span class="text-sm font-medium text-gray-200 group-hover:text-purple-300">Clean Completed</span>
               </button>
               <button onclick="deleteAllStreams()"
                 class="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl hover:bg-red-500/10 active:bg-red-500/20 active:scale-[0.98] transition-all text-center group cursor-pointer">
@@ -2375,10 +2387,13 @@
         row.className = 'hover:bg-dark-700/50 transition-colors';
 
         // Status badge colors
+        const isCompleted = stream.status === 'completed';
         const statusClass = stream.status === 'live' ? 'bg-green-500' :
-          stream.status === 'scheduled' ? 'bg-yellow-500' : 'bg-gray-500';
+          stream.status === 'scheduled' ? 'bg-yellow-500' :
+          isCompleted ? 'bg-purple-600' : 'bg-gray-500';
         const statusText = stream.status === 'live' ? 'Live' :
-          stream.status === 'scheduled' ? 'Scheduled' : 'Offline';
+          stream.status === 'scheduled' ? 'Scheduled' :
+          isCompleted ? 'Selesai' : 'Offline';
 
         // YouTube status badge (only for live YouTube streams)
         let youtubeStatusBadge = '';
@@ -2460,11 +2475,20 @@
       </td>
       <td class="px-3 py-4 text-right">
         <div class="flex items-center justify-end gap-2">
-          <button onclick="${stream.status === 'live' ? `stopStream('${stream.id}', event)` : `startStream('${stream.id}', event)`}" class="stream-action-btn w-9 h-9 flex items-center justify-center ${stream.status === 'live' ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30' : 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/30'} rounded-lg shadow-sm transition-all active:scale-95" title="${stream.status === 'live' ? 'Stop' : 'Start'}">
+          ${stream.status === 'live' ? `
+          <button onclick="stopStream('${stream.id}', event)" class="stream-action-btn w-9 h-9 flex items-center justify-center bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30 rounded-lg shadow-sm transition-all active:scale-95" title="Stop">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-              ${stream.status === 'live' ? '<rect x="6" y="6" width="12" height="12" rx="2"/>' : '<path d="M8 5v14l11-7z"/>'}
+              <rect x="6" y="6" width="12" height="12" rx="2"/>
             </svg>
-          </button>
+          </button>` : isCompleted ? `
+          <div class="w-9 h-9 flex items-center justify-center bg-purple-500/15 text-purple-400 border border-purple-500/30 rounded-lg" title="Selesai (Otomatis hilang dalam 2 menit)">
+            <i class="ti ti-check text-base"></i>
+          </div>` : `
+          <button onclick="startStream('${stream.id}', event)" class="stream-action-btn w-9 h-9 flex items-center justify-center bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/30 rounded-lg shadow-sm transition-all active:scale-95" title="Start">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M8 5v14l11-7z"/>
+            </svg>
+          </button>`}
           <button onclick="editStream('${stream.id}', event)" class="stream-action-btn w-9 h-9 flex items-center justify-center bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 border border-blue-500/30 rounded-lg shadow-sm transition-all active:scale-95" title="Edit">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
@@ -2498,11 +2522,20 @@
           ${stream.schedule_type !== 'once' ? `<p class="text-[11px] text-primary truncate mt-0.5">${scheduleTypeBadge} ${scheduleInfo}</p>` : ''}
         </div>
         <div class="flex items-center gap-1.5 flex-shrink-0">
-          <button onclick="${stream.status === 'live' ? `stopStream('${stream.id}', event)` : `startStream('${stream.id}', event)`}" class="stream-action-btn w-8 h-8 flex items-center justify-center ${stream.status === 'live' ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30' : 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/30'} rounded-lg shadow-xs active:scale-95" title="${stream.status === 'live' ? 'Stop' : 'Start'}">
+          ${stream.status === 'live' ? `
+          <button onclick="stopStream('${stream.id}', event)" class="stream-action-btn w-8 h-8 flex items-center justify-center bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30 rounded-lg shadow-xs active:scale-95" title="Stop">
             <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
-              ${stream.status === 'live' ? '<rect x="6" y="6" width="12" height="12" rx="2"/>' : '<path d="M8 5v14l11-7z"/>'}
+              <rect x="6" y="6" width="12" height="12" rx="2"/>
             </svg>
-          </button>
+          </button>` : isCompleted ? `
+          <div class="w-8 h-8 flex items-center justify-center bg-purple-500/15 text-purple-400 border border-purple-500/30 rounded-lg text-xs" title="Selesai (Otomatis hilang dalam 2 menit)">
+            <i class="ti ti-check text-sm"></i>
+          </div>` : `
+          <button onclick="startStream('${stream.id}', event)" class="stream-action-btn w-8 h-8 flex items-center justify-center bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/30 rounded-lg shadow-xs active:scale-95" title="Start">
+            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M8 5v14l11-7z"/>
+            </svg>
+          </button>`}
           <button onclick="editStream('${stream.id}', event)" class="stream-action-btn w-8 h-8 flex items-center justify-center bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 border border-blue-500/30 rounded-lg shadow-xs active:scale-95" title="Edit">
             <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
@@ -3721,6 +3754,54 @@
         loadLiveLimitInfo();
       } catch (error) {
         console.error('Error deleting streams:', error);
+      }
+    }
+
+    // ============================================
+    // CLEAN COMPLETED STREAMS FUNCTION
+    // ============================================
+
+    async function cleanCompletedStreams() {
+      // Close dropdowns
+      const menuDesktop = document.getElementById('backupDropdownMenu');
+      const menuMobile = document.getElementById('backupDropdownMenuMobile');
+      if (menuDesktop) menuDesktop.classList.add('hidden');
+      if (menuMobile) menuMobile.classList.add('hidden');
+
+      if (!confirm('Bersihkan semua stream template yang sudah selesai dari Control Room?\n\nRiwayat lengkap tetap aman tersimpan di menu Stream History.')) {
+        return;
+      }
+
+      try {
+        if (typeof showCenterToast === 'function') {
+          showCenterToast('info', 'Sedang membersihkan stream selesai...', 1500);
+        }
+
+        const response = await fetch('/api/streams/cleanup-completed', { method: 'POST' });
+        const data = await response.json();
+
+        if (data.success) {
+          const msg = `Berhasil membersihkan ${data.deletedCount || 0} stream selesai`;
+          if (typeof showCenterToast === 'function') {
+            showCenterToast('success', msg, 3000);
+          } else if (typeof showToast === 'function') {
+            showToast(msg, 'success');
+          }
+          await loadStreams();
+          await loadLiveLimitInfo();
+        } else {
+          const errMsg = data.error || 'Gagal membersihkan stream';
+          if (typeof showCenterToast === 'function') {
+            showCenterToast('error', errMsg, 4000);
+          } else if (typeof showToast === 'function') {
+            showToast(errMsg, 'error');
+          }
+        }
+      } catch (err) {
+        console.error('Error cleaning completed streams:', err);
+        if (typeof showCenterToast === 'function') {
+          showCenterToast('error', 'Terjadi kesalahan saat membersihkan stream', 4000);
+        }
       }
     }
 

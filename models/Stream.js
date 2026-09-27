@@ -34,6 +34,7 @@ class Stream {
       vertical_stream_key = null,
       tags = null,
       title_folder_id = null,
+      template_id = null,
       status,
       user_id
     } = streamData;
@@ -58,7 +59,7 @@ class Stream {
     }
     const status_updated_at = new Date().toISOString();
 
-    console.log(`[Stream.create] Creating stream with duration: ${stream_duration_minutes} minutes, broadcast_id: ${youtube_broadcast_id}, dual_stream: ${dual_stream_int}, vertical_key: ${!!vertical_key_val}`);
+    console.log(`[Stream.create] Creating stream with duration: ${stream_duration_minutes} minutes, broadcast_id: ${youtube_broadcast_id}, dual_stream: ${dual_stream_int}, vertical_key: ${!!vertical_key_val}, template_id: ${template_id}`);
 
     return new Promise((resolve, reject) => {
       db.run(
@@ -69,8 +70,8 @@ class Stream {
           schedule_type, schedule_days, recurring_time, recurring_enabled,
           original_settings, status, status_updated_at, user_id,
           youtube_broadcast_id, youtube_account_id, youtube_lifecycle_status,
-          dual_stream, backup_rtmp_url, vertical_stream_key, tags, title_folder_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          dual_stream, backup_rtmp_url, vertical_stream_key, tags, title_folder_id, template_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id, title, video_id, audio_id, rtmp_url, stream_key, platform, platform_icon,
           bitrate, resolution, fps, orientation, loop_video_int,
@@ -78,7 +79,7 @@ class Stream {
           schedule_type, schedule_days_json, recurring_time, recurring_enabled_int,
           original_settings_json, final_status, status_updated_at, user_id,
           youtube_broadcast_id, youtube_account_id, youtube_lifecycle_status,
-          dual_stream_int, backup_rtmp_url, vertical_key_val, tags_val, title_folder_id
+          dual_stream_int, backup_rtmp_url, vertical_key_val, tags_val, title_folder_id, template_id
         ],
         function (err) {
           if (err) {
@@ -246,19 +247,19 @@ class Stream {
       });
     });
   }
-  static delete(id, userId) {
+  static delete(id, userId = null) {
     return new Promise((resolve, reject) => {
-      db.run(
-        'DELETE FROM streams WHERE id = ? AND user_id = ?',
-        [id, userId],
-        function (err) {
-          if (err) {
-            console.error('Error deleting stream:', err.message);
-            return reject(err);
-          }
-          resolve({ success: true, deleted: this.changes > 0 });
+      const sql = userId 
+        ? 'DELETE FROM streams WHERE id = ? AND user_id = ?' 
+        : 'DELETE FROM streams WHERE id = ?';
+      const params = userId ? [id, userId] : [id];
+      db.run(sql, params, function (err) {
+        if (err) {
+          console.error('Error deleting stream:', err.message);
+          return reject(err);
         }
-      );
+        resolve({ success: true, deleted: this.changes > 0 });
+      });
     });
   }
   static async updateStatus(id, status, userId, options = {}) {
@@ -277,7 +278,7 @@ class Stream {
       } else {
         start_time = startTimeOverride || new Date().toISOString();
       }
-    } else if (status === 'offline') {
+    } else if (status === 'offline' || status === 'completed') {
       end_time = endTimeOverride || new Date().toISOString();
     } else if (status === 'scheduled') {
       // Clear start_time and end_time when status changes to 'scheduled'

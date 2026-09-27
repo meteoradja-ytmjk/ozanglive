@@ -352,6 +352,23 @@ async function createCoreTablesAsync() {
   await runTableQuery(`ALTER TABLE streams ADD COLUMN vertical_stream_key TEXT`, 'streams.vertical_stream_key');
   await runTableQuery(`ALTER TABLE streams ADD COLUMN tags TEXT`, 'streams.tags');
   await runTableQuery(`ALTER TABLE streams ADD COLUMN title_folder_id TEXT`, 'streams.title_folder_id');
+  await runTableQuery(`ALTER TABLE streams ADD COLUMN template_id TEXT`, 'streams.template_id');
+
+  // Backfill template_id for streams previously created by templates
+  await runTableQuery(`UPDATE streams 
+    SET template_id = (
+      SELECT template_id FROM youtube_broadcast_settings 
+      WHERE youtube_broadcast_settings.broadcast_id = streams.youtube_broadcast_id 
+        AND template_id IS NOT NULL AND template_id != ''
+      LIMIT 1
+    )
+    WHERE (template_id IS NULL OR template_id = '') 
+      AND youtube_broadcast_id IS NOT NULL AND youtube_broadcast_id != '' 
+      AND EXISTS (
+        SELECT 1 FROM youtube_broadcast_settings 
+        WHERE youtube_broadcast_settings.broadcast_id = streams.youtube_broadcast_id 
+          AND template_id IS NOT NULL AND template_id != ''
+      )`, 'streams.backfill_template_id');
 
   // Migrate stream_duration_hours to stream_duration_minutes
   await runTableQuery(`UPDATE streams SET stream_duration_minutes = stream_duration_hours * 60 

@@ -6104,6 +6104,21 @@ app.delete('/api/streams/all', isAuthenticated, async (req, res) => {
   }
 });
 
+// Clean completed streams from templates for current user
+app.post('/api/streams/cleanup-completed', isAuthenticated, async (req, res) => {
+  try {
+    const result = await streamingService.cleanupAllCompletedTemplateStreams(req.session.userId);
+    res.json({ 
+      success: true, 
+      deletedCount: result.deletedCount, 
+      message: `Cleaned up ${result.deletedCount} completed template stream(s)` 
+    });
+  } catch (error) {
+    console.error('Error cleaning up completed streams:', error);
+    res.status(500).json({ success: false, error: 'Failed to clean up completed streams' });
+  }
+});
+
 app.delete('/api/streams/:id', isAuthenticated, async (req, res) => {
   try {
     const stream = await Stream.findById(req.params.id);
@@ -6121,7 +6136,7 @@ app.delete('/api/streams/:id', isAuthenticated, async (req, res) => {
   }
 });
 app.post('/api/streams/:id/status', isAuthenticated, [
-  body('status').isIn(['live', 'offline', 'scheduled']).withMessage('Invalid status')
+  body('status').isIn(['live', 'offline', 'scheduled', 'completed']).withMessage('Invalid status')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -15896,6 +15911,18 @@ async function startServer() {
     } catch (error) {
       console.error('[Startup] Error initializing YouTube task scheduler:', error.message);
       // Don't crash - scheduler can be retried
+    }
+
+    // Auto-cleanup any old completed template streams to keep Control Room clean
+    try {
+      if (typeof streamingService.cleanupAllCompletedTemplateStreams === 'function') {
+        const cleanupRes = await streamingService.cleanupAllCompletedTemplateStreams();
+        if (cleanupRes && cleanupRes.deletedCount > 0) {
+          console.log(`[Startup] Auto-cleaned ${cleanupRes.deletedCount} old completed template stream(s) from Control Room`);
+        }
+      }
+    } catch (cleanupStartupErr) {
+      console.warn('[Startup] Warning during initial template streams cleanup:', cleanupStartupErr.message);
     }
 
     console.log('[Startup] Skipping initial sync - status will be managed by events');

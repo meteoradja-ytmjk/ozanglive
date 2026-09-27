@@ -1129,6 +1129,7 @@ class ScheduleService {
                 vertical_stream_key: b.verticalStreamKey || template.vertical_stream_key || null,
                 backup_rtmp_url: b.verticalStreamKey || template.vertical_stream_key || null,
                 tags: template.tags && template.tags.length > 0 ? (typeof template.tags === 'string' ? template.tags : JSON.stringify(template.tags)) : null,
+                template_id: template.id,
                 status: 'scheduled'
               };
 
@@ -1398,6 +1399,7 @@ class ScheduleService {
             vertical_stream_key: template.vertical_stream_key || null,
             backup_rtmp_url: template.vertical_stream_key || null,
             tags: template.tags && template.tags.length > 0 ? (typeof template.tags === 'string' ? template.tags : JSON.stringify(template.tags)) : null,
+            template_id: template.id,
             status: 'scheduled'
           };
 
