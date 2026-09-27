@@ -167,7 +167,7 @@ function getCsrfToken() {
   return '';
 }
 
-// Show toast notification (slim, modern, rata kanan-kiri responsif)
+// Show toast notification (compact glowing pill, centered, 2 seconds duration, no icons)
 function showToast(message, type = 'success') {
   // Support both (type, message) and (message, type) argument orders
   if (['success', 'error', 'info', 'warning'].includes(message) && type && !['success', 'error', 'info', 'warning'].includes(type)) {
@@ -177,69 +177,48 @@ function showToast(message, type = 'success') {
   }
   if (!message) return;
 
-  // Remove existing toast if any to prevent overlapping
+  // Remove existing toast immediately so there is never overlap
   const existingToast = document.getElementById('globalAppToast');
   if (existingToast) {
     existingToast.remove();
   }
 
-  let iconClass = 'ti ti-check text-emerald-400';
-  let iconBg = 'bg-emerald-500/20 border-emerald-500/30';
-  let borderClass = 'border-emerald-500/40 shadow-emerald-950/40';
-  let bgClass = 'bg-[#0b1d16]/95';
+  // Glow styles definition (pure modern cyber/emerald glow, subtle neon borders)
+  let glowStyle = 'background: rgba(8, 26, 18, 0.94); border: 1px solid rgba(16, 185, 129, 0.65); box-shadow: 0 0 22px rgba(16, 185, 129, 0.38), 0 0 45px rgba(16, 185, 129, 0.15), inset 0 0 12px rgba(16, 185, 129, 0.1); color: #ecfdf5;';
 
   if (type === 'error') {
-    iconClass = 'ti ti-alert-circle text-red-400';
-    iconBg = 'bg-red-500/20 border-red-500/30';
-    borderClass = 'border-red-500/40 shadow-red-950/40';
-    bgClass = 'bg-[#220c11]/95';
+    glowStyle = 'background: rgba(30, 10, 14, 0.94); border: 1px solid rgba(239, 68, 68, 0.65); box-shadow: 0 0 22px rgba(239, 68, 68, 0.38), 0 0 45px rgba(239, 68, 68, 0.15), inset 0 0 12px rgba(239, 68, 68, 0.1); color: #fef2f2;';
   } else if (type === 'warning') {
-    iconClass = 'ti ti-alert-triangle text-amber-400';
-    iconBg = 'bg-amber-500/20 border-amber-500/30';
-    borderClass = 'border-amber-500/40 shadow-amber-950/40';
-    bgClass = 'bg-[#22180c]/95';
+    glowStyle = 'background: rgba(30, 18, 7, 0.94); border: 1px solid rgba(245, 158, 11, 0.65); box-shadow: 0 0 22px rgba(245, 158, 11, 0.38), 0 0 45px rgba(245, 158, 11, 0.15), inset 0 0 12px rgba(245, 158, 11, 0.1); color: #fffbeb;';
   } else if (type === 'info') {
-    iconClass = 'ti ti-info-circle text-blue-400';
-    iconBg = 'bg-blue-500/20 border-blue-500/30';
-    borderClass = 'border-blue-500/40 shadow-blue-950/40';
-    bgClass = 'bg-[#0c1626]/95';
+    glowStyle = 'background: rgba(10, 20, 36, 0.94); border: 1px solid rgba(59, 130, 246, 0.65); box-shadow: 0 0 22px rgba(59, 130, 246, 0.38), 0 0 45px rgba(59, 130, 246, 0.15), inset 0 0 12px rgba(59, 130, 246, 0.1); color: #eff6ff;';
   }
 
   const toast = document.createElement('div');
   toast.id = 'globalAppToast';
-  // Rata kanan-kiri di mobile (left-4 right-4), ramping, dan centered di desktop
-  toast.className = `fixed bottom-6 left-4 right-4 sm:left-1/2 sm:-translate-x-1/2 sm:w-auto sm:max-w-xl mx-auto z-[99999] pointer-events-auto transition-all duration-300 ease-out transform translate-y-3 opacity-0`;
+  // Floating in the center, compact width, no stretching left-right, pointer-events-none
+  toast.className = 'fixed bottom-12 sm:bottom-16 left-1/2 -translate-x-1/2 z-[99999] pointer-events-none transition-all duration-250 ease-out transform scale-90 opacity-0 w-max max-w-[88vw] sm:max-w-md';
   
   toast.innerHTML = `
-    <div class="${bgClass} backdrop-blur-xl border ${borderClass} text-white px-3.5 sm:px-4 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl shadow-2xl flex items-center justify-between gap-3 w-full">
-      <div class="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
-        <div class="w-6 h-6 sm:w-7 sm:h-7 rounded-lg ${iconBg} border flex items-center justify-center shrink-0">
-          <i class="${iconClass} text-xs sm:text-sm font-bold"></i>
-        </div>
-        <div class="text-xs sm:text-sm text-gray-100 font-medium leading-snug flex-1 break-words">${message}</div>
-      </div>
-      <button type="button" onclick="this.closest('#globalAppToast').remove()" class="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors shrink-0 leading-none" title="Tutup">
-        <i class="ti ti-x text-xs sm:text-sm"></i>
-      </button>
+    <div style="${glowStyle}" class="backdrop-blur-xl px-5 py-2 sm:px-6 sm:py-2.5 rounded-full text-center text-xs sm:text-sm font-medium tracking-wide leading-snug break-words">
+      ${message}
     </div>
   `;
 
   document.body.appendChild(toast);
 
-  // Trigger smooth enter animation
+  // Trigger smooth enter animation (scale up + fade in)
   requestAnimationFrame(() => {
-    toast.classList.remove('translate-y-3', 'opacity-0');
-    toast.classList.add('translate-y-0', 'opacity-100');
+    toast.classList.remove('scale-90', 'opacity-0');
+    toast.classList.add('scale-100', 'opacity-100');
   });
 
-  // Auto-dismiss after 4 seconds
-  const hideTimeout = setTimeout(() => {
-    toast.classList.remove('translate-y-0', 'opacity-100');
-    toast.classList.add('translate-y-3', 'opacity-0');
-    setTimeout(() => toast.remove(), 300);
-  }, 4000);
-
-  toast.addEventListener('mouseenter', () => clearTimeout(hideTimeout));
+  // Disappear after exactly 2 seconds (2000ms)
+  setTimeout(() => {
+    toast.classList.remove('scale-100', 'opacity-100');
+    toast.classList.add('scale-90', 'opacity-0');
+    setTimeout(() => toast.remove(), 250);
+  }, 2000);
 }
 window.showToast = showToast;
 
