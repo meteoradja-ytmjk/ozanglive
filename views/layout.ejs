@@ -142,47 +142,48 @@
 
   <div class="block w-full mobile-safe-wrapper">
     <!-- Desktop Sidebar -->
-    <div class="hidden lg:flex lg:fixed lg:flex-col w-20 h-screen bg-dark-800 border-r border-gray-700/60 shadow-lg z-20">
-      <!-- Sidebar Top Brand Icon (Aligned with Desktop Header h-14) -->
-      <div class="h-14 flex items-center justify-center border-b border-gray-700/60 shrink-0">
-        <a href="/dashboard" class="flex items-center justify-center hover:opacity-90 transition-opacity" title="<%= typeof branding !== 'undefined' ? branding.app_name : 'StreamFlow' %>">
-          <img src="<%= typeof branding !== 'undefined' ? (branding.favicon_path || '/images/logo.svg') : '/images/logo.svg' %>" alt="<%= typeof branding !== 'undefined' ? branding.app_name : 'StreamFlow' %>" class="h-8 w-8 object-contain">
-        </a>
+    <div class="hidden lg:flex lg:fixed lg:flex-col w-20 h-screen pt-2 bg-dark-800 shadow-lg overflow-visible z-20">
+      <!-- Logo meluap keluar sidebar -->
+      <div class="desktop-logo-container">
+        <img src="<%= typeof branding !== 'undefined' ? branding.logo_path : '/images/logo_mobile.svg' %>" alt="<%= typeof branding !== 'undefined' ? branding.app_name : 'StreamFlow' %> Logo" class="desktop-logo">
       </div>
-      <div class="flex-1 overflow-y-auto py-2">
-        <a href="/dashboard" class="sidebar-icon group <%= active === 'dashboard' || active === 'youtube' ? 'bg-primary text-white' : '' %>">
+      <!-- Spacer untuk logo - UKURAN PAS -->
+      <div class="h-28 mb-3"></div>
+      <div class="flex-1 overflow-hidden">
+        <a href="/dashboard" class="sidebar-icon group <%= active === 'dashboard' || active === 'youtube' ? 'bg-primary' : '' %>">
           <i class="ti ti-broadcast text-xl"></i>
           <span class="text-xs mt-1">Live Studio</span>
           <span class="sidebar-tooltip group-hover:scale-100">Live Studio Hub</span>
         </a>
-        <a href="/gallery" class="sidebar-icon group <%= active === 'gallery' ? 'bg-primary text-white' : '' %>">
+        <a href="/gallery" class="sidebar-icon group <%= active === 'gallery' ? 'bg-primary' : '' %>">
           <i class="ti ti-folder-filled text-xl"></i>
           <span class="text-xs mt-1">Gallery</span>
           <span class="sidebar-tooltip group-hover:scale-100">Video Gallery</span>
         </a>
-        <a href="/playlist" class="sidebar-icon group <%= active === 'playlist' ? 'bg-primary text-white' : '' %>">
+        <a href="/playlist" class="sidebar-icon group <%= active === 'playlist' ? 'bg-primary' : '' %>">
           <i class="ti ti-list-details text-xl"></i>
           <span class="text-xs mt-1">Playlist</span>
           <span class="sidebar-tooltip group-hover:scale-100">Playlist Manager</span>
         </a>
-        <a href="/render-jobs" class="sidebar-icon group <%= active === 'render-jobs' ? 'bg-primary text-white' : '' %>">
+        <a href="/render-jobs" class="sidebar-icon group <%= active === 'render-jobs' ? 'bg-primary' : '' %>">
           <i class="ti ti-movie text-xl"></i>
           <span class="text-xs mt-1">Render</span>
           <span class="sidebar-tooltip group-hover:scale-100">Render Jobs</span>
         </a>
         <% if (req.session && req.session.user_role==='admin' ) { %>
-          <a href="/users" class="sidebar-icon group <%= active === 'users' ? 'bg-primary text-white' : '' %>">
+          <a href="/users" class="sidebar-icon group <%= active === 'users' ? 'bg-primary' : '' %>">
             <i class="ti ti-users-group text-xl"></i>
             <span class="text-xs mt-1">Users</span>
             <span class="sidebar-tooltip group-hover:scale-100">User Management</span>
           </a>
           <% } %>
       </div>
-      <div class="mt-auto shrink-0 border-t border-gray-700/60">
+      <div class="mt-auto overflow-hidden">
+        <div class="h-px bg-gray-700 w-full"></div>
         <div class="relative" id="profile-menu-container">
-          <div class="h-16 flex items-center justify-center px-3 hover:bg-dark-700/50 transition-colors">
+          <div class="h-20 flex items-center justify-center px-3 py-4 hover:bg-dark-700/50 transition-colors">
             <button id="profile-menu-button"
-              class="w-10 h-10 rounded-full flex items-center justify-center overflow-hidden ring-2 ring-gray-700 hover:ring-primary transition-all">
+              class="w-12 h-12 rounded-full flex items-center justify-center overflow-hidden ring-2 ring-gray-700 hover:ring-primary transition-all">
               <%- helpers.getAvatar(req) %>
             </button>
           </div>
@@ -212,26 +213,21 @@
     <div class="w-full lg:w-[calc(100%-5rem)] lg:ml-20 main-container">
       <!-- Desktop Header -->
       <div
-        class="hidden lg:fixed lg:flex top-0 right-0 left-20 items-center justify-between h-14 px-6 bg-dark-800 border-b border-gray-700/60 shadow-md z-10">
-        <div class="flex items-center gap-3 min-w-0">
-          <img src="<%= typeof branding !== 'undefined' ? branding.logo_path : '/images/logo_mobile.svg' %>" alt="<%= typeof branding !== 'undefined' ? branding.app_name : 'StreamFlow' %> Logo" class="h-9 w-auto max-h-9 object-contain">
-        </div>
-        <div class="flex items-center gap-3 shrink-0">
-          <% if (typeof branding !== 'undefined' && branding.whatsapp_number) { %>
-          <a href="https://wa.me/<%= branding.whatsapp_number %>" target="_blank"
-            class="flex items-center justify-center h-8 w-8 rounded-lg bg-green-500/10 hover:bg-green-500/20 text-green-400 hover:text-green-300 transition-all border border-green-500/20"
-            title="WhatsApp">
-            <i class="ti ti-brand-whatsapp text-xl"></i>
-          </a>
-          <% } %>
-          <% if (typeof branding !== 'undefined' && branding.qris_image_path) { %>
-          <a href="#" onclick="showQrisModal(); return false;"
-            class="flex items-center justify-center h-8 w-8 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 hover:text-blue-300 transition-all border border-blue-500/20"
-            title="Pembayaran QRIS">
-            <i class="ti ti-qrcode text-xl"></i>
-          </a>
-          <% } %>
-        </div>
+        class="hidden lg:fixed lg:flex top-0 right-0 left-20 items-center justify-end h-14 px-6 bg-dark-800 shadow-md z-10 gap-3">
+        <% if (typeof branding !== 'undefined' && branding.whatsapp_number) { %>
+        <a href="https://wa.me/<%= branding.whatsapp_number %>" target="_blank"
+          class="flex items-center justify-center h-7 text-green-500 hover:text-green-400 transition-colors"
+          title="WhatsApp">
+          <i class="ti ti-brand-whatsapp text-2xl"></i>
+        </a>
+        <% } %>
+        <% if (typeof branding !== 'undefined' && branding.qris_image_path) { %>
+        <a href="#" onclick="showQrisModal(); return false;"
+          class="flex items-center justify-center h-7 text-blue-400 hover:text-blue-300 transition-colors"
+          title="Pembayaran QRIS">
+          <i class="ti ti-qrcode text-2xl"></i>
+        </a>
+        <% } %>
       </div>
 
       <!-- Page Content -->
@@ -381,8 +377,32 @@
     z-index: 100;
     min-width: 220px;
     border-radius: 8px;
-    bottom: 72px;
+    bottom: 80px;
     left: 15px;
+  }
+
+  /* Desktop logo overflow styling - POJOK KIRI ATAS, UKURAN PAS */
+  .desktop-logo-container {
+    position: absolute !important;
+    top: 4px;
+    left: 8px;
+    overflow: visible !important;
+    width: auto !important;
+    height: auto !important;
+    z-index: 50;
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-start;
+  }
+
+  .desktop-logo {
+    position: relative;
+    width: auto !important;
+    height: 90px !important;
+    max-width: none !important;
+    object-fit: contain !important;
+    object-position: left top !important;
+    filter: drop-shadow(2px 2px 4px rgba(0, 0, 0, 0.3));
   }
 
   #profile-dropdown.hidden {
