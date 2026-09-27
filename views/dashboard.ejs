@@ -1824,14 +1824,18 @@
       }
     };
 
-    // Toast Notification Function - redirects to center toast (supports both (type, message) and (message, type))
+    // Toast Notification Function - redirects to center glow toast (supports both (type, message) and (message, type))
     function showToast(type, message) {
       if (['success', 'error', 'info', 'warning'].includes(message)) {
         const temp = type;
         type = message;
         message = temp;
       }
-      showCenterToast(type || 'info', message || '', 5000);
+      if (typeof window.showToast === 'function') {
+        window.showToast(message, type);
+      } else {
+        showCenterToast(type || 'info', message || '', 2000);
+      }
     }
 
     // Center Toast Notification Function
@@ -1846,13 +1850,19 @@
       return `https://wa.me/${whatsappNumber}?text=${message}`;
     }
 
-    function showCenterToast(type, message, duration = 3000, options = {}) {
+    function showCenterToast(type, message, duration = 2000, options = {}) {
+      // If window.showToast is available and not showing whatsapp action button, use the ultra-modern glow toast
+      if (typeof window.showToast === 'function' && !options.showWhatsapp) {
+        window.showToast(message, type);
+        return;
+      }
+
       const toast = document.getElementById('center-toast');
       const toastIcon = document.getElementById('center-toast-icon');
       const toastMessage = document.getElementById('center-toast-message');
       const toastWhatsapp = document.getElementById('center-toast-whatsapp');
 
-      if (!toast || !toastIcon || !toastMessage) {
+      if (!toast || !toastMessage) {
         console.log('Center toast elements not found:', message);
         return;
       }
@@ -1862,16 +1872,38 @@
         clearTimeout(centerToastTimeout);
       }
 
-      // Set icon based on type (font-loaded required for Tabler icons to show immediately)
-      if (type === 'success') {
-        toastIcon.className = 'ti ti-check font-loaded';
-      } else if (type === 'error') {
-        toastIcon.className = 'ti ti-x font-loaded';
-      } else if (type === 'warning') {
-        toastIcon.className = 'ti ti-alert-triangle font-loaded';
+      // No icons for modern clean look (no checkmark, no X)
+      if (toastIcon) {
+        toastIcon.style.display = 'none';
+        toastIcon.style.visibility = 'hidden';
+        toastIcon.className = '';
       }
-      toastIcon.style.display = 'block';
-      toastIcon.style.visibility = 'visible';
+
+      // Clean leading icons from message if present
+      let cleanMessage = typeof message === 'string' ? message.replace(/^[\s✓✔✗✕✖✨]+/, '').trim() : message;
+      toastMessage.textContent = cleanMessage;
+
+      // Adjust dynamic glow border/background based on type
+      const contentEl = toast.querySelector('.center-toast-content');
+      if (contentEl) {
+        if (type === 'error') {
+          contentEl.style.background = 'rgba(28, 8, 12, 0.95)';
+          contentEl.style.borderColor = 'rgba(239, 68, 68, 0.7)';
+          contentEl.style.boxShadow = '0 0 25px rgba(239, 68, 68, 0.45), 0 0 50px rgba(239, 68, 68, 0.18)';
+        } else if (type === 'warning') {
+          contentEl.style.background = 'rgba(28, 16, 6, 0.95)';
+          contentEl.style.borderColor = 'rgba(245, 158, 11, 0.7)';
+          contentEl.style.boxShadow = '0 0 25px rgba(245, 158, 11, 0.45), 0 0 50px rgba(245, 158, 11, 0.18)';
+        } else if (type === 'info') {
+          contentEl.style.background = 'rgba(8, 18, 32, 0.95)';
+          contentEl.style.borderColor = 'rgba(59, 130, 246, 0.7)';
+          contentEl.style.boxShadow = '0 0 25px rgba(59, 130, 246, 0.45), 0 0 50px rgba(59, 130, 246, 0.18)';
+        } else {
+          contentEl.style.background = 'rgba(6, 22, 16, 0.95)';
+          contentEl.style.borderColor = 'rgba(16, 185, 129, 0.7)';
+          contentEl.style.boxShadow = '0 0 25px rgba(16, 185, 129, 0.45), 0 0 50px rgba(16, 185, 129, 0.18)';
+        }
+      }
 
       // Set message
       toastMessage.textContent = message;

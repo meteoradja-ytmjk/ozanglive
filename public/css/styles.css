@@ -474,31 +474,33 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  padding: 1rem 1.5rem;
-  background: linear-gradient(135deg, #1a1a1a 0%, #0d0d0d 100%);
-  border-radius: 0.75rem;
-  box-shadow: 0 15px 30px -8px rgba(0, 0, 0, 0.9), 0 0 20px rgba(251, 191, 36, 0.3);
-  border: 2px solid #FBBF24;
+  padding: 0.85rem 1.25rem;
+  background: rgba(6, 22, 16, 0.95);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-radius: 1rem;
+  box-shadow: 0 0 25px rgba(16, 185, 129, 0.45), 0 0 50px rgba(16, 185, 129, 0.18), inset 0 0 14px rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.7);
   text-align: center;
-  min-width: 200px;
-  max-width: 80vw;
+  width: 270px;
+  max-width: 85vw;
 }
 
-/* Center toast icon - always hidden by default */
+/* Center toast icon - permanently hidden for sleek clean look */
 #center-toast-icon {
   display: none !important;
   visibility: hidden !important;
   opacity: 0 !important;
-  color: #FBBF24;
-  font-size: 1.5rem;
+  width: 0 !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
-/* Show icon only when toast has animate-in class */
 .center-toast.animate-in #center-toast-icon {
-  display: block !important;
-  visibility: visible !important;
-  opacity: 1 !important;
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
 }
 
 .center-toast-content span,

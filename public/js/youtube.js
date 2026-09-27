@@ -167,7 +167,7 @@ function getCsrfToken() {
   return '';
 }
 
-// Show toast notification (compact glowing pill, centered, 2 seconds duration, no icons)
+// Show toast notification (compact glowing card, centered in viewport, 2 seconds duration, no icons)
 function showToast(message, type = 'success') {
   // Support both (type, message) and (message, type) argument orders
   if (['success', 'error', 'info', 'warning'].includes(message) && type && !['success', 'error', 'info', 'warning'].includes(type)) {
@@ -177,6 +177,9 @@ function showToast(message, type = 'success') {
   }
   if (!message) return;
 
+  // Clean any leading icons or symbols (e.g. "✓ ", "✨ ") to keep it 100% clean modern text
+  let cleanMessage = typeof message === 'string' ? message.replace(/^[\s✓✔✗✕✖✨]+/, '').trim() : message;
+
   // Remove existing toast immediately so there is never overlap
   const existingToast = document.getElementById('globalAppToast');
   if (existingToast) {
@@ -184,24 +187,24 @@ function showToast(message, type = 'success') {
   }
 
   // Glow styles definition (pure modern cyber/emerald glow, subtle neon borders)
-  let glowStyle = 'background: rgba(8, 26, 18, 0.94); border: 1px solid rgba(16, 185, 129, 0.65); box-shadow: 0 0 22px rgba(16, 185, 129, 0.38), 0 0 45px rgba(16, 185, 129, 0.15), inset 0 0 12px rgba(16, 185, 129, 0.1); color: #ecfdf5;';
+  let glowStyle = 'background: rgba(6, 22, 16, 0.95); border: 1px solid rgba(16, 185, 129, 0.7); box-shadow: 0 0 25px rgba(16, 185, 129, 0.45), 0 0 50px rgba(16, 185, 129, 0.18), inset 0 0 14px rgba(16, 185, 129, 0.12); color: #ecfdf5;';
 
   if (type === 'error') {
-    glowStyle = 'background: rgba(30, 10, 14, 0.94); border: 1px solid rgba(239, 68, 68, 0.65); box-shadow: 0 0 22px rgba(239, 68, 68, 0.38), 0 0 45px rgba(239, 68, 68, 0.15), inset 0 0 12px rgba(239, 68, 68, 0.1); color: #fef2f2;';
+    glowStyle = 'background: rgba(28, 8, 12, 0.95); border: 1px solid rgba(239, 68, 68, 0.7); box-shadow: 0 0 25px rgba(239, 68, 68, 0.45), 0 0 50px rgba(239, 68, 68, 0.18), inset 0 0 14px rgba(239, 68, 68, 0.12); color: #fef2f2;';
   } else if (type === 'warning') {
-    glowStyle = 'background: rgba(30, 18, 7, 0.94); border: 1px solid rgba(245, 158, 11, 0.65); box-shadow: 0 0 22px rgba(245, 158, 11, 0.38), 0 0 45px rgba(245, 158, 11, 0.15), inset 0 0 12px rgba(245, 158, 11, 0.1); color: #fffbeb;';
+    glowStyle = 'background: rgba(28, 16, 6, 0.95); border: 1px solid rgba(245, 158, 11, 0.7); box-shadow: 0 0 25px rgba(245, 158, 11, 0.45), 0 0 50px rgba(245, 158, 11, 0.18), inset 0 0 14px rgba(245, 158, 11, 0.12); color: #fffbeb;';
   } else if (type === 'info') {
-    glowStyle = 'background: rgba(10, 20, 36, 0.94); border: 1px solid rgba(59, 130, 246, 0.65); box-shadow: 0 0 22px rgba(59, 130, 246, 0.38), 0 0 45px rgba(59, 130, 246, 0.15), inset 0 0 12px rgba(59, 130, 246, 0.1); color: #eff6ff;';
+    glowStyle = 'background: rgba(8, 18, 32, 0.95); border: 1px solid rgba(59, 130, 246, 0.7); box-shadow: 0 0 25px rgba(59, 130, 246, 0.45), 0 0 50px rgba(59, 130, 246, 0.18), inset 0 0 14px rgba(59, 130, 246, 0.12); color: #eff6ff;';
   }
 
   const toast = document.createElement('div');
   toast.id = 'globalAppToast';
-  // Floating in the center, compact width, no stretching left-right, pointer-events-none
-  toast.className = 'fixed bottom-12 sm:bottom-16 left-1/2 -translate-x-1/2 z-[99999] pointer-events-none transition-all duration-250 ease-out transform scale-90 opacity-0 w-max max-w-[88vw] sm:max-w-md';
+  // Murni di tengah layar (top-1/2 left-1/2), ramping dan tidak memanjang (w-[260px] sm:w-[290px])
+  toast.className = 'fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[99999] pointer-events-none transition-all duration-250 ease-out transform scale-90 opacity-0 w-[260px] sm:w-[290px] max-w-[85vw]';
   
   toast.innerHTML = `
-    <div style="${glowStyle}" class="backdrop-blur-xl px-5 py-2 sm:px-6 sm:py-2.5 rounded-full text-center text-xs sm:text-sm font-medium tracking-wide leading-snug break-words">
-      ${message}
+    <div style="${glowStyle}" class="backdrop-blur-xl px-5 py-3 sm:px-6 sm:py-3.5 rounded-2xl text-center text-xs sm:text-sm font-semibold tracking-wide leading-snug break-words shadow-2xl">
+      ${cleanMessage}
     </div>
   `;
 
