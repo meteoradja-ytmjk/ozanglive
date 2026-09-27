@@ -352,89 +352,164 @@ class TitleSuggestion {
 
   /**
    * Get next title in rotation for a user
+  /**
+   * Get next title in rotation
    * @param {string} userId - User ID
    * @param {number} currentIndex - Current title index
    * @param {string} folderId - Optional folder ID to filter titles ('unassigned' for titles without folder)
+   * @param {boolean} ignorePinned - If true, ignores pinned title and performs sequential rotation
    * @returns {Promise<{title: Object|null, nextIndex: number, isPinned: boolean, totalCount: number, currentPosition: number}>} Next title and index
    */
-  static async getNextTitle(userId, currentIndex = 0, folderId = null) {
+  static async getNextTitle(userId, currentIndex = 0, folderId = null, ignorePinned = false) {
     return new Promise((resolve, reject) => {
       const cleanFolderId = (folderId && folderId !== 'null' && folderId !== 'undefined' && folderId !== 'all') ? folderId : null;
       const isUnassigned = folderId === 'unassigned';
 
-      // First check for pinned title (optionally in folder)
-      let pinnedQuery = `SELECT * FROM title_suggestions WHERE user_id = ? AND is_pinned = 1`;
-      const pinnedParams = [userId];
-      
-      if (isUnassigned) {
-        pinnedQuery += ` AND (folder_id IS NULL OR folder_id = '' OR folder_id = 'unassigned')`;
-      } else if (cleanFolderId) {
-        pinnedQuery += ` AND folder_id = ?`;
-        pinnedParams.push(cleanFolderId);
-      }
-      pinnedQuery += ` LIMIT 1`;
-      
-      db.get(pinnedQuery, pinnedParams, (err, pinnedTitle) => {
-        if (err) {
-          console.error('Error finding pinned title:', err.message);
-          return reject(err);
-        }
-        
-        // If pinned title exists, always use it
-        if (pinnedTitle) {
-          return resolve({ 
-            title: pinnedTitle, 
-            nextIndex: currentIndex, 
-            isPinned: true,
-            totalCount: 1,
-            currentPosition: 1
-          });
-        }
-        
-        // Get all titles for this user (optionally filtered by folder), ordered by sort_order
-        let query = `SELECT * FROM title_suggestions WHERE user_id = ?`;
-        const params = [userId];
+      // Check for pinned title ONLY when not explicitly ignored
+      if (!ignorePinned) {
+        let pinnedQuery = `SELECT * FROM title_suggestions WHERE user_id = ? AND is_pinned = 1`;
+        const pinnedParams = [userId];
         
         if (isUnassigned) {
-          query += ` AND (folder_id IS NULL OR folder_id = '' OR folder_id = 'unassigned')`;
+          pinnedQuery += ` AND (folder_id IS NULL OR folder_id = '' OR folder_id = 'unassigned')`;
         } else if (cleanFolderId) {
-          query += ` AND folder_id = ?`;
-          params.push(cleanFolderId);
+          pinnedQuery += ` AND folder_id = ?`;
+          pinnedParams.push(cleanFolderId);
         }
-        query += ` ORDER BY sort_order ASC, created_at ASC, id ASC`;
+        pinnedQuery += ` LIMIT 1`;
         
-        db.all(query, params, (err, titles) => {
+        db.get(pinnedQuery, pinnedParams, (err, pinnedTitle) => {
           if (err) {
-            console.error('Error finding titles:', err.message);
+            console.error('Error finding pinned title:', err.message);
             return reject(err);
           }
           
-          if (!titles || titles.length === 0) {
+          // If pinned title exists, use it
+          if (pinnedTitle) {
             return resolve({ 
-              title: null, 
-              nextIndex: 0, 
-              isPinned: false, 
-              totalCount: 0, 
-              currentPosition: 0 
+              title: pinnedTitle, 
+              nextIndex: currentIndex, 
+              isPinned: true,
+              totalCount: 1,
+              currentPosition: 1
             });
           }
-          
-          // Calculate actual index (wrap around)
-          const validIndex = (typeof currentIndex === 'number' && !isNaN(currentIndex) && currentIndex >= 0) ? currentIndex : 0;
-          const actualIndex = validIndex % titles.length;
-          const selectedTitle = titles[actualIndex];
-          const nextIndex = (actualIndex + 1) % titles.length;
-          
-          resolve({ 
-            title: selectedTitle, 
-            nextIndex, 
-            isPinned: false,
-            totalCount: titles.length,
-            currentPosition: actualIndex + 1
-          });
+
+          // Otherwise proceed with sequential selection
+          TitleSuggestion._selectByIndex(userId, currentIndex, cleanFolderId, isUnassigned, resolve, reject);
         });
+      } else {
+        TitleSuggestion._selectByIndex(userId, currentIndex, cleanFolderId, isUnassigned, resolve, reject);
+      }
+    });
+  }
+
+  /**
+   * Helper to select title by index
+   */
+  static _selectByIndex(userId, currentIndex, cleanFolderId, isUnassigned, resolve, reject) {
+    let query = `SELECT * FROM title_suggestions WHERE user_id = ?`;
+    const params = [userId];
+    
+    if (isUnassigned) {
+      query += ` AND (folder_id IS NULL OR folder_id = '' OR folder_id = 'unassigned')`;
+    } else if (cleanFolderId) {
+      query += ` AND folder_id = ?`;
+      params.push(cleanFolderId);
+    }
+    query += ` ORDER BY sort_order ASC, created_at ASC, id ASC`;
+    
+    db.all(query, params, (err, titles) => {
+      if (err) {
+        console.error('Error finding titles:', err.message);
+        return reject(err);
+      }
+      
+      if (!titles || titles.length === 0) {
+        return resolve({ 
+          title: null, 
+          nextIndex: 0, 
+          isPinned: false, 
+          totalCount: 0, 
+          currentPosition: 0 
+        });
+      }
+      
+      const validIndex = (typeof currentIndex === 'number' && !isNaN(currentIndex) && currentIndex >= 0) ? currentIndex : 0;
+      const actualIndex = validIndex % titles.length;
+      const selectedTitle = titles[actualIndex];
+      const nextIndex = (actualIndex + 1) % titles.length;
+      
+      resolve({ 
+        title: selectedTitle, 
+        nextIndex, 
+        isPinned: false, 
+        totalCount: titles.length, 
+        currentPosition: actualIndex + 1 
       });
     });
+  }
+
+  /**
+   * Get all titles in a folder (or unassigned/all) ordered by sort_order
+   * @param {string} userId - User ID
+   * @param {string|null} folderId - Folder ID
+   * @returns {Promise<Array>}
+   */
+  static async getTitlesByFolder(userId, folderId = null) {
+    return new Promise((resolve, reject) => {
+      const cleanFolderId = (folderId && folderId !== 'null' && folderId !== 'undefined' && folderId !== 'all') ? folderId : null;
+      const isUnassigned = folderId === 'unassigned';
+      let query = `SELECT * FROM title_suggestions WHERE user_id = ?`;
+      const params = [userId];
+
+      if (isUnassigned) {
+        query += ` AND (folder_id IS NULL OR folder_id = '' OR folder_id = 'unassigned')`;
+      } else if (cleanFolderId) {
+        query += ` AND folder_id = ?`;
+        params.push(cleanFolderId);
+      }
+      query += ` ORDER BY sort_order ASC, created_at ASC, id ASC`;
+
+      db.all(query, params, (err, titles) => {
+        if (err) return reject(err);
+        resolve(titles || []);
+      });
+    });
+  }
+
+  /**
+   * Calculate continuation rotation index following template's initial titles
+   * @param {string} userId - User ID
+   * @param {string|null} folderId - Folder ID
+   * @param {Array<string>} existingTitles - Titles from initial template creation
+   * @returns {Promise<number>} Continuation index
+   */
+  static async getContinuationIndex(userId, folderId = null, existingTitles = []) {
+    try {
+      const titles = await TitleSuggestion.getTitlesByFolder(userId, folderId);
+      if (!titles || titles.length === 0) return 0;
+      if (!Array.isArray(existingTitles) || existingTitles.length === 0) return 0;
+
+      const normalizedExisting = existingTitles.map(t => String(t || '').trim().toLowerCase()).filter(Boolean);
+      if (normalizedExisting.length === 0) return 0;
+
+      let highestIndex = -1;
+      for (let i = 0; i < titles.length; i++) {
+        const titleLower = String(titles[i].title || '').trim().toLowerCase();
+        if (normalizedExisting.includes(titleLower)) {
+          highestIndex = i;
+        }
+      }
+
+      if (highestIndex >= 0) {
+        return (highestIndex + 1) % titles.length;
+      }
+      return 0;
+    } catch (err) {
+      console.warn('[TitleSuggestion] Error calculating continuation index:', err.message);
+      return 0;
+    }
   }
 
   /**

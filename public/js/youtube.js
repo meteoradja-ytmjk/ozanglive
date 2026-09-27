@@ -9492,6 +9492,9 @@ function saveRecreateSlotFullEdit() {
   closeRecreateSlotEditModal();
   syncRecreateSlotsFromGroups();
   renderRecreateSlotList();
+  if (typeof loadRecreateTitleRotationPreview === 'function') {
+    loadRecreateTitleRotationPreview();
+  }
 
   showToast(`Pengaturan Siaran #${groupIndex + 1} berhasil disimpan!`);
 }
@@ -9732,6 +9735,7 @@ async function handleRecreateSaveRecurringOnly() {
         title: grp.title || template.title,
         originalTitle: grp.originalTitle || template.title,
         description: grp.description || '',
+        titleFolderId: grp.titleFolderId !== undefined ? grp.titleFolderId : (template.title_folder_id || null),
         streamId: grp.streamId !== undefined ? grp.streamId : template.stream_id,
         streamKey: grp.streamKey !== undefined ? grp.streamKey : (template.stream_key || ''),
         thumbnailFolder: grp.thumbnailFolder !== undefined ? grp.thumbnailFolder : template.thumbnail_folder,
@@ -9746,6 +9750,25 @@ async function handleRecreateSaveRecurringOnly() {
       }));
 
       try {
+        const updateBody = {
+          description: JSON.stringify(updatedBroadcasts)
+        };
+        if (window.recreateFinalNextIndex !== undefined && window.recreateFinalNextIndex !== null) {
+          updateBody.titleIndex = window.recreateFinalNextIndex;
+        }
+        await fetch(`/api/youtube/templates/${template.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': getCsrfToken()
+          },
+          body: JSON.stringify(updateBody)
+        });
+      } catch (slotUpdateErr) {
+        console.warn('[recreate] Non-fatal error updating slot description:', slotUpdateErr);
+      }
+    } else if (template.id && window.recreateFinalNextIndex !== undefined && window.recreateFinalNextIndex !== null) {
+      try {
         await fetch(`/api/youtube/templates/${template.id}`, {
           method: 'PUT',
           headers: {
@@ -9753,11 +9776,11 @@ async function handleRecreateSaveRecurringOnly() {
             'X-CSRF-Token': getCsrfToken()
           },
           body: JSON.stringify({
-            description: JSON.stringify(updatedBroadcasts)
+            titleIndex: window.recreateFinalNextIndex
           })
         });
-      } catch (slotUpdateErr) {
-        console.warn('[recreate] Non-fatal error updating slot description:', slotUpdateErr);
+      } catch (tmplErr) {
+        console.warn('[recreate] Non-fatal error updating template titleIndex:', tmplErr);
       }
     }
 
@@ -9977,17 +10000,69 @@ async function loadRecreateTitleRotationPreview() {
       if (preview) preview.classList.remove('hidden');
     }
 
-    // Channel & Template Isolation: prioritize template title_folder_id and title_index!
-    const folderId = (template.title_folder_id !== undefined && template.title_folder_id !== null && template.title_folder_id !== '')
+    // Default template folder and start index
+    const defaultFolderId = (template.title_folder_id !== undefined && template.title_folder_id !== null && template.title_folder_id !== '')
       ? template.title_folder_id
       : (userSettings.folderId || null);
 
-    const startIndex = (template.title_folder_id && template.title_index !== undefined && template.title_index !== null)
+    const defaultStartIndex = (template.title_folder_id && template.title_index !== undefined && template.title_index !== null)
       ? template.title_index
       : (userSettings.currentIndex || 0);
 
-    const slotCount = Math.max(window.recreateSlots ? window.recreateSlots.length : 1, 1);
-    window.recreateNextTitles = await getNextTitlesForRecreate(startIndex, folderId, slotCount);
+    // Collect all existing titles from template to allow smart continuation
+    const templateTitles = [];
+    if (Array.isArray(template.broadcasts)) {
+      template.broadcasts.forEach(b => {
+        if (b.title) templateTitles.push(b.title);
+        if (b.originalTitle && b.originalTitle !== b.title) templateTitles.push(b.originalTitle);
+      });
+    }
+    if (template.title && !templateTitles.includes(template.title)) {
+      templateTitles.push(template.title);
+    }
+
+    // Sync slots to get accurate count and per-group/slot titleFolderId
+    syncRecreateSlotsFromGroups();
+    const slots = (window.recreateSlots && window.recreateSlots.length > 0)
+      ? window.recreateSlots
+      : [{ title: template.title, titleFolderId: defaultFolderId }];
+
+    // Group slot indices by folderId so each folder gets a continuous, distinct sequence of titles
+    const folderSlotsMap = new Map();
+    slots.forEach((slot, sIdx) => {
+      const fId = (slot.titleFolderId !== undefined && slot.titleFolderId !== null && slot.titleFolderId !== '')
+        ? slot.titleFolderId
+        : defaultFolderId;
+      const key = fId || '__NONE__';
+      if (!folderSlotsMap.has(key)) {
+        folderSlotsMap.set(key, { folderId: fId, indices: [] });
+      }
+      folderSlotsMap.get(key).indices.push(sIdx);
+    });
+
+    const resultTitles = new Array(slots.length).fill(null);
+    let primaryFinalNextIndex = defaultStartIndex;
+
+    for (const entry of folderSlotsMap.values()) {
+      const fId = entry.folderId;
+      const indices = entry.indices;
+      const count = indices.length;
+      const sIndex = (fId === template.title_folder_id && template.title_index !== undefined && template.title_index !== null)
+        ? template.title_index
+        : ((fId === userSettings.folderId) ? (userSettings.currentIndex || 0) : 0);
+
+      const seqTitles = await getNextTitlesForRecreate(sIndex, fId, count, templateTitles);
+      indices.forEach((sIdx, seqIdx) => {
+        resultTitles[sIdx] = seqTitles[seqIdx] || null;
+      });
+
+      if (!template.title_folder_id || fId === template.title_folder_id) {
+        primaryFinalNextIndex = window.recreateFinalNextIndex;
+      }
+    }
+
+    window.recreateNextTitles = resultTitles;
+    window.recreateFinalNextIndex = primaryFinalNextIndex;
 
     const titleEl = document.getElementById('recreateNextTitle');
     if (window.recreateNextTitles.length > 0 && window.recreateNextTitles[0]) {
@@ -10007,15 +10082,40 @@ async function loadRecreateTitleRotationPreview() {
 }
 
 /**
- * Get next titles for all slots in recreate
+ * Get next titles for all slots in recreate with sequential continuation
  */
-async function getNextTitlesForRecreate(startIndex, folderId, count = 1) {
+async function getNextTitlesForRecreate(startIndex, folderId, count = 1, templateTitles = []) {
+  try {
+    const res = await fetch('/api/title-rotation/sequence', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getCsrfToken()
+      },
+      body: JSON.stringify({
+        folderId,
+        startIndex,
+        count,
+        templateTitles,
+        ignorePinned: true
+      })
+    });
+    const data = await res.json();
+    if (data.success && Array.isArray(data.titles)) {
+      window.recreateFinalNextIndex = data.nextIndex;
+      return data.titles;
+    }
+  } catch (err) {
+    console.warn('[recreate] /api/title-rotation/sequence failed, falling back to sequential GET:', err);
+  }
+
+  // Fallback sequential GET
   const titles = [];
   let currentIndex = startIndex;
 
   for (let i = 0; i < count; i++) {
     try {
-      let url = `/api/title-rotation/next?currentIndex=${currentIndex}`;
+      let url = `/api/title-rotation/next?currentIndex=${currentIndex}&ignorePinned=true`;
       if (folderId) {
         url += `&folderId=${encodeURIComponent(folderId)}`;
       }
@@ -10376,16 +10476,20 @@ if (recreateFromTemplateForm) {
           
           console.log('[recreate] Updated user title rotation index to:', newRotationIndex);
 
-          // Channel isolation: also update template title_index if template has title_folder_id!
-          if (template && template.id && template.title_folder_id) {
+          // Channel isolation: also update template title_index
+          if (template && template.id) {
             try {
+              const tmplUpdateBody = { titleIndex: newRotationIndex };
+              if (!template.title_folder_id && window.recreateTitleRotationSettings && window.recreateTitleRotationSettings.folderId) {
+                tmplUpdateBody.titleFolderId = window.recreateTitleRotationSettings.folderId;
+              }
               await fetch(`/api/youtube/templates/${template.id}`, {
                 method: 'PUT',
                 headers: {
                   'Content-Type': 'application/json',
                   'X-CSRF-Token': getCsrfToken()
                 },
-                body: JSON.stringify({ titleIndex: newRotationIndex })
+                body: JSON.stringify(tmplUpdateBody)
               });
               console.log('[recreate] Updated template title_index to:', newRotationIndex);
             } catch (tmplErr) {

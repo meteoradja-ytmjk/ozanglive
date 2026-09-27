@@ -948,27 +948,41 @@ class ScheduleService {
             console.log(`[ScheduleService] Multi-broadcast using user title rotation: folder=${titleFolderId || 'all'}, index=${currentTitleIndex}`);
           }
         }
+
+        // Smart continuation: If template title_index is 0 or null, continue after initial template titles
+        if ((currentTitleIndex === 0 || currentTitleIndex === null) && broadcasts && broadcasts.length > 0) {
+          try {
+            const templateTitles = broadcasts.map(b => b.title).filter(Boolean);
+            const contIndex = await TitleSuggestion.getContinuationIndex(template.user_id, titleFolderId, templateTitles);
+            if (contIndex > 0) {
+              currentTitleIndex = contIndex;
+              console.log(`[ScheduleService] Auto-advanced title rotation start index to ${contIndex} following template initial titles`);
+            }
+          } catch (contErr) {
+            console.warn('[ScheduleService] Error computing continuation index:', contErr.message);
+          }
+        }
         
         for (let i = 0; i < targetBroadcasts.length; i++) {
           const b = targetBroadcasts[i];
           const broadcastIndex = isSingleSlotMode ? broadcastOffset : i;
+          const bFolderId = b.titleFolderId || titleFolderId;
           
-          // Get title from rotation
+          // Get title from rotation - ignorePinned true so all broadcasts get unique sequential titles
           let finalTitle = b.title;
           const titleResult = await this.getNextTitleForBroadcast(
             template.user_id,
             currentTitleIndex,
-            titleFolderId
+            bFolderId,
+            true // ignorePinned for distinct sequential titles across streamkeys
           );
           
           if (titleResult.title) {
             finalTitle = titleResult.title.title;
             console.log(`[ScheduleService] Broadcast ${broadcastIndex + 1} using rotated title: "${finalTitle}" (index: ${titleResult.currentPosition}/${titleResult.totalCount})`);
             
-            // Update index for next broadcast (only if not pinned)
-            if (!titleResult.isPinned) {
-              currentTitleIndex = titleResult.nextIndex;
-            }
+            // Advance index for next broadcast
+            currentTitleIndex = titleResult.nextIndex;
             
             // Increment use count
             try {
@@ -1196,11 +1210,23 @@ class ScheduleService {
             console.log(`[ScheduleService] Using user title rotation settings: folder=${titleFolderId || 'all'}, index=${titleIndex}`);
           }
         }
+
+        // Smart continuation for single broadcast template if title_index is 0:
+        if ((titleIndex === 0 || titleIndex === null) && template.title) {
+          try {
+            const contIndex = await TitleSuggestion.getContinuationIndex(template.user_id, titleFolderId, [template.title]);
+            if (contIndex > 0) {
+              titleIndex = contIndex;
+              console.log(`[ScheduleService] Auto-advanced single template title start index to ${contIndex}`);
+            }
+          } catch (contErr) {}
+        }
         
         const titleResult = await this.getNextTitleForBroadcast(
           template.user_id,
           titleIndex,
-          titleFolderId
+          titleFolderId,
+          true // ignorePinned for true rotation
         );
         
         if (titleResult.title) {
@@ -1633,12 +1659,13 @@ class ScheduleService {
    * @param {string} userId - User ID
    * @param {number} currentIndex - Current title index
    * @param {string} folderId - Optional folder ID to filter titles
+   * @param {boolean} ignorePinned - Optional flag to ignore pinned title for true sequential rotation
    * @returns {Promise<{title: Object|null, nextIndex: number, isPinned: boolean, totalCount: number, currentPosition: number}>}
    */
-  async getNextTitleForBroadcast(userId, currentIndex = 0, folderId = null) {
+  async getNextTitleForBroadcast(userId, currentIndex = 0, folderId = null, ignorePinned = false) {
     try {
       // Use TitleSuggestion.getNextTitle for sequential rotation with optional folder filter
-      const result = await TitleSuggestion.getNextTitle(userId, currentIndex, folderId);
+      const result = await TitleSuggestion.getNextTitle(userId, currentIndex, folderId, ignorePinned);
       
       if (result.title) {
         return {

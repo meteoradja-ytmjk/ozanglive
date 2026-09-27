@@ -10434,7 +10434,8 @@ app.get('/api/youtube/broadcast-settings/:broadcastId', isAuthenticated, async (
           enableAutoStop: settings.enableAutoStop,
           unlistReplayOnEnd: settings.unlistReplayOnEnd,
           thumbnailIndex: settings.thumbnailIndex || 0,
-          thumbnailPath: settings.thumbnailPath || null
+          thumbnailPath: settings.thumbnailPath || null,
+          titleFolderId: settings.title_folder_id || null
         },
         found: true
       });
@@ -12816,6 +12817,19 @@ app.post('/api/youtube/templates/multi', isAuthenticated, async (req, res) => {
     const topDurationMinutes = topDurationMins % 60;
     const topLoopVideo = broadcastsWithStreamId[0]?.loopVideo !== false;
 
+    // Resolve titleFolderId and continuation index from template broadcasts
+    const multiTitleFolderId = req.body.titleFolderId || broadcastsWithStreamId[0]?.titleFolderId || null;
+    let initialTitleIndex = 0;
+    if (multiTitleFolderId && broadcastsWithStreamId.length > 0) {
+      try {
+        const existingTitles = broadcastsWithStreamId.map(b => b.title).filter(Boolean);
+        initialTitleIndex = await TitleSuggestion.getContinuationIndex(req.session.userId, multiTitleFolderId, existingTitles);
+        console.log(`[templates/multi] Computed initial title continuation index: ${initialTitleIndex} for folder: ${multiTitleFolderId}`);
+      } catch (contErr) {
+        console.warn('[templates/multi] Error computing continuation index:', contErr.message);
+      }
+    }
+
     // Create template with broadcasts data stored as JSON
     const template = await BroadcastTemplate.create({
       user_id: req.session.userId,
@@ -12835,7 +12849,8 @@ app.post('/api/youtube/templates/multi', isAuthenticated, async (req, res) => {
       stream_key_folder_mapping: parsedMapping,
       stream_id: broadcasts[0].streamId || null,  // Save first broadcast's stream_id
       stream_key: broadcasts[0].streamKey || broadcasts[0].streamId || null,
-      title_folder_id: broadcastsWithStreamId[0]?.titleFolderId || null,
+      title_folder_id: multiTitleFolderId,
+      title_index: initialTitleIndex || 0,
       duration_hours: topDurationHours,
       duration_minutes: topDurationMinutes,
       stream_duration_minutes: topDurationMins,
@@ -14697,6 +14712,7 @@ app.get('/api/title-rotation/next', isAuthenticated, async (req, res) => {
     const folderId = (rawFolderId && rawFolderId !== 'null' && rawFolderId !== 'undefined' && rawFolderId !== 'all' && rawFolderId !== '') ? rawFolderId : null;
     const hasCurrentIndex = req.query.currentIndex !== undefined && req.query.currentIndex !== '' && !isNaN(parseInt(req.query.currentIndex));
     const currentIndex = hasCurrentIndex ? parseInt(req.query.currentIndex) : null;
+    const ignorePinned = req.query.ignorePinned === 'true' || req.query.ignorePinned === '1';
 
     // Use provided currentIndex or get from settings
     let indexToUse = currentIndex;
@@ -14708,7 +14724,8 @@ app.get('/api/title-rotation/next', isAuthenticated, async (req, res) => {
     const result = await TitleSuggestion.getNextTitle(
       req.session.userId,
       indexToUse,
-      folderId
+      folderId,
+      ignorePinned
     );
 
     res.json({
@@ -14722,6 +14739,65 @@ app.get('/api/title-rotation/next', isAuthenticated, async (req, res) => {
   } catch (error) {
     console.error('Error getting next rotation title:', error);
     res.status(500).json({ success: false, error: 'Failed to get next title' });
+  }
+});
+
+// Generate title rotation sequence for multiple broadcasts/streamkeys with smart continuation
+app.post('/api/title-rotation/sequence', isAuthenticated, async (req, res) => {
+  try {
+    const { folderId, startIndex, count = 1, templateTitles = [], ignorePinned = true } = req.body;
+    const cleanFolderId = (folderId && folderId !== 'null' && folderId !== 'undefined' && folderId !== 'all') ? folderId : null;
+    const titles = await TitleSuggestion.getTitlesByFolder(req.session.userId, cleanFolderId);
+
+    if (!titles || titles.length === 0) {
+      return res.json({ success: true, sequence: [], startIndex: 0, finalNextIndex: 0, totalCount: 0 });
+    }
+
+    let start = (startIndex !== undefined && startIndex !== null && startIndex !== '' && !isNaN(parseInt(startIndex)))
+      ? parseInt(startIndex)
+      : null;
+
+    // If start index is not provided or is 0, auto-detect continuation after initial template titles
+    if ((start === null || start === 0) && Array.isArray(templateTitles) && templateTitles.length > 0) {
+      const contIdx = await TitleSuggestion.getContinuationIndex(req.session.userId, cleanFolderId, templateTitles);
+      if (contIdx > 0 || start === null) {
+        start = contIdx;
+        console.log(`[title-rotation/sequence] Auto-advanced start to continuation index ${start} following template titles`);
+      }
+    }
+
+    if (start === null || isNaN(start) || start < 0) {
+      const userSettings = await getUserTitleRotationSettings(req.session.userId);
+      start = userSettings.currentIndex || 0;
+    }
+
+    const requestedCount = Math.max(parseInt(count) || 1, 1);
+    const resultSequence = [];
+    let cur = start;
+
+    for (let i = 0; i < requestedCount; i++) {
+      const actualIdx = cur % titles.length;
+      resultSequence.push({
+        id: titles[actualIdx].id,
+        title: titles[actualIdx].title,
+        currentIndex: actualIdx,
+        nextIndex: (actualIdx + 1) % titles.length,
+        totalCount: titles.length,
+        currentPosition: actualIdx + 1
+      });
+      cur = (actualIdx + 1) % titles.length;
+    }
+
+    res.json({
+      success: true,
+      sequence: resultSequence,
+      startIndex: start,
+      finalNextIndex: cur,
+      totalCount: titles.length
+    });
+  } catch (error) {
+    console.error('Error generating title rotation sequence:', error);
+    res.status(500).json({ success: false, error: 'Failed to generate title rotation sequence' });
   }
 });
 
