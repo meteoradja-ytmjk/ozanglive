@@ -11464,7 +11464,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       } catch (thumbErr) {
         console.error('Error uploading thumbnail:', thumbErr.message);
       }
-    } else if (thumbnailPath) {
+    } else if (thumbnailPath && (thumbnailFolder === undefined || thumbnailFolder === null || req.body.isCustomThumbnail === 'true')) {
       // Handle gallery selection (user explicitly selected a thumbnail - second priority)
       try {
         const fullPath = path.join(__dirname, 'public', thumbnailPath);
@@ -11531,24 +11531,29 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
 
         const db = require('./db/database').getDb();
 
-        // Get global index for this user + folder combination
-        const globalMapping = await new Promise((resolve) => {
-          db.get(`SELECT thumbnail_index FROM stream_key_folder_mapping 
-                  WHERE user_id = ? AND stream_key_id = ?`,
-            [req.session.userId, globalStreamKeyId], (err, row) => {
-              if (err) {
-                console.error('[API] Error getting global folder mapping:', err.message);
-              }
-              resolve(row);
-            });
-        });
-
-        if (globalMapping) {
-          currentIndex = globalMapping.thumbnail_index || 0;
-          console.log('[API] Got GLOBAL thumbnail index for folder "' + currentFolder + '":', currentIndex);
+        if (req.body.thumbnailIndex !== undefined && req.body.thumbnailIndex !== '' && !isNaN(parseInt(req.body.thumbnailIndex))) {
+          currentIndex = parseInt(req.body.thumbnailIndex);
+          console.log('[API] Using explicit thumbnailIndex from request body:', currentIndex);
         } else {
-          console.log('[API] No global index for folder "' + currentFolder + '", starting from 0');
-          currentIndex = 0;
+          // Get global index for this user + folder combination
+          const globalMapping = await new Promise((resolve) => {
+            db.get(`SELECT thumbnail_index FROM stream_key_folder_mapping 
+                    WHERE user_id = ? AND stream_key_id = ?`,
+              [req.session.userId, globalStreamKeyId], (err, row) => {
+                if (err) {
+                  console.error('[API] Error getting global folder mapping:', err.message);
+                }
+                resolve(row);
+              });
+          });
+
+          if (globalMapping) {
+            currentIndex = globalMapping.thumbnail_index || 0;
+            console.log('[API] Got GLOBAL thumbnail index for folder "' + currentFolder + '":', currentIndex);
+          } else {
+            console.log('[API] No global index for folder "' + currentFolder + '", checking template index or 0');
+            currentIndex = (templateObj && templateObj.thumbnail_index) ? templateObj.thumbnail_index : 0;
+          }
         }
 
         // Rotation mode: select next thumbnail in order
@@ -11581,6 +11586,15 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
                 }
               });
             });
+
+            if (templateObj && templateObj.id) {
+              try {
+                await BroadcastTemplate.updateThumbnailIndex(templateObj.id, result.newIndex);
+                console.log(`[API] ✅ Updated template ${templateObj.id} thumbnail_index to:`, result.newIndex);
+              } catch (tIndexErr) {
+                console.warn('[API] Failed to update template thumbnail_index:', tIndexErr.message);
+              }
+            }
           } else {
             console.log('[API] ⚠️ NOT saving thumbnail index - newIndex:', result.newIndex);
           }
@@ -12474,7 +12488,9 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
             thumbnailFolder = settingsByBId.thumbnail_folder;
           }
           if (!pinnedThumbnail && !thumbnailPath && settingsByBId.thumbnail_path) {
-            pinnedThumbnail = settingsByBId.thumbnail_path;
+            if (!thumbnailFolder && !settingsByBId.thumbnail_folder) {
+              pinnedThumbnail = settingsByBId.thumbnail_path;
+            }
             thumbnailPath = settingsByBId.thumbnail_path;
           }
           if (!titleFolderId && settingsByBId.title_folder_id) {
@@ -12609,6 +12625,20 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
     const finalStreamKey = (streamKey || req.body.streamKey || '').trim() || null;
     const finalStreamId = (streamId && finalStreamKey && streamId.trim() === finalStreamKey.trim()) ? null : (streamId || null);
 
+    let initialThumbnailIndex = 0;
+    if (finalThumbnailFolder) {
+      try {
+        initialThumbnailIndex = await scheduleService.getThumbnailContinuationIndex(
+          req.session.userId,
+          finalThumbnailFolder,
+          thumbnailPath ? [thumbnailPath] : []
+        );
+        console.log(`[create-template] Computed initial thumbnail continuation index: ${initialThumbnailIndex} for folder: ${finalThumbnailFolder}`);
+      } catch (err) {
+        console.warn('[create-template] Error computing thumbnail continuation index:', err.message);
+      }
+    }
+
     const template = await BroadcastTemplate.create({
       user_id: req.session.userId,
       account_id: parseInt(accountId),
@@ -12622,7 +12652,7 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
       category_id: categoryId || '22',
       thumbnail_path: thumbnailPath || null,
       thumbnail_folder: finalThumbnailFolder,
-      thumbnail_index: 0,
+      thumbnail_index: initialThumbnailIndex || 0,
       pinned_thumbnail: pinnedThumbnail || null,
       stream_key_folder_mapping: parsedMapping,
       stream_id: finalStreamId,
@@ -12830,6 +12860,19 @@ app.post('/api/youtube/templates/multi', isAuthenticated, async (req, res) => {
       }
     }
 
+    // Resolve thumbnailFolder and continuation index from template broadcasts
+    const multiThumbnailFolder = thumbnailFolder !== undefined ? thumbnailFolder : (broadcastsWithStreamId[0]?.thumbnailFolder || null);
+    let initialThumbnailIndex = 0;
+    if (multiThumbnailFolder && broadcastsWithStreamId.length > 0) {
+      try {
+        const existingThumbnails = broadcastsWithStreamId.map(b => b.thumbnailPath || b.thumbnail).filter(Boolean);
+        initialThumbnailIndex = await scheduleService.getThumbnailContinuationIndex(req.session.userId, multiThumbnailFolder, existingThumbnails);
+        console.log(`[templates/multi] Computed initial thumbnail continuation index: ${initialThumbnailIndex} for folder: ${multiThumbnailFolder}`);
+      } catch (contErr) {
+        console.warn('[templates/multi] Error computing thumbnail continuation index:', contErr.message);
+      }
+    }
+
     // Create template with broadcasts data stored as JSON
     const template = await BroadcastTemplate.create({
       user_id: req.session.userId,
@@ -12843,8 +12886,8 @@ app.post('/api/youtube/templates/multi', isAuthenticated, async (req, res) => {
       tags: broadcasts[0].tags || null,
       category_id: broadcasts[0].categoryId || '22',
       thumbnail_path: null,
-      thumbnail_folder: thumbnailFolder !== undefined ? thumbnailFolder : null,  // Save thumbnail folder for sequential selection
-      thumbnail_index: 0,
+      thumbnail_folder: multiThumbnailFolder,  // Save thumbnail folder for sequential selection
+      thumbnail_index: initialThumbnailIndex || 0,
       pinned_thumbnail: null,
       stream_key_folder_mapping: parsedMapping,
       stream_id: broadcasts[0].streamId || null,  // Save first broadcast's stream_id
@@ -13238,7 +13281,7 @@ app.put('/api/youtube/templates/:id', isAuthenticated, async (req, res) => {
 
     const {
       name, title, description, privacyStatus, tags, categoryId,
-      thumbnailPath, thumbnailFolder, pinnedThumbnail, streamKeyFolderMapping,
+      thumbnailPath, thumbnailFolder, pinnedThumbnail, thumbnailIndex, streamKeyFolderMapping,
       streamId, streamKey, accountId, titleIndex, pinnedTitleId, titleFolderId,
       // Recurring schedule fields
       recurringEnabled, recurringPattern, recurringTime, recurringDays,
@@ -13273,6 +13316,9 @@ app.put('/api/youtube/templates/:id', isAuthenticated, async (req, res) => {
     if (categoryId !== undefined) updateData.category_id = categoryId;
     if (thumbnailPath !== undefined) updateData.thumbnail_path = thumbnailPath;
     if (thumbnailFolder !== undefined) updateData.thumbnail_folder = thumbnailFolder;
+    if (thumbnailIndex !== undefined || req.body.thumbnail_index !== undefined) {
+      updateData.thumbnail_index = parseInt(thumbnailIndex !== undefined ? thumbnailIndex : req.body.thumbnail_index) || 0;
+    }
     if (pinnedThumbnail !== undefined) updateData.pinned_thumbnail = pinnedThumbnail;
     if (streamKeyFolderMapping !== undefined) {
       // Parse if string, otherwise use as-is
@@ -14798,6 +14844,71 @@ app.post('/api/title-rotation/sequence', isAuthenticated, async (req, res) => {
   } catch (error) {
     console.error('Error generating title rotation sequence:', error);
     res.status(500).json({ success: false, error: 'Failed to generate title rotation sequence' });
+  }
+});
+
+// Generate sequential thumbnails for multi-broadcast / recreate template with continuation
+app.post('/api/thumbnail-rotation/sequence', isAuthenticated, async (req, res) => {
+  try {
+    const { folderName, startIndex, count, templateThumbnails } = req.body;
+    const cleanFolder = (folderName === '__ROOT__' || folderName === '__KEEP__') ? '' : (folderName || '');
+
+    const thumbnails = scheduleService.getThumbnailsInFolder(req.session.userId, cleanFolder);
+    if (!thumbnails || thumbnails.length === 0) {
+      return res.json({ success: true, sequence: [], startIndex: 0, finalNextIndex: 0, totalCount: 0 });
+    }
+
+    let start = (startIndex !== undefined && startIndex !== null && startIndex !== '' && !isNaN(parseInt(startIndex)))
+      ? parseInt(startIndex)
+      : null;
+
+    // If start index is not provided or is 0, auto-detect continuation after initial template thumbnails
+    if ((start === null || start === 0) && Array.isArray(templateThumbnails) && templateThumbnails.length > 0) {
+      const contIdx = scheduleService.getThumbnailContinuationIndex(req.session.userId, cleanFolder, templateThumbnails);
+      if (contIdx > 0 || start === null) {
+        start = contIdx;
+        console.log(`[thumbnail-rotation/sequence] Auto-advanced start to continuation index ${start} following template thumbnails`);
+      }
+    }
+
+    if (start === null || isNaN(start) || start < 0) {
+      const globalStreamKeyId = '__GLOBAL__' + cleanFolder;
+      const db = require('./db/database').getDb();
+      const row = await new Promise((resolve) => {
+        db.get('SELECT thumbnail_index FROM stream_key_folder_mapping WHERE user_id = ? AND stream_key_id = ?',
+          [req.session.userId, globalStreamKeyId], (err, r) => resolve(r));
+      });
+      start = row ? (row.thumbnail_index || 0) : 0;
+    }
+
+    const requestedCount = Math.max(parseInt(count) || 1, 1);
+    const resultSequence = [];
+    let cur = start;
+
+    for (let i = 0; i < requestedCount; i++) {
+      const actualIdx = cur % thumbnails.length;
+      resultSequence.push({
+        filename: thumbnails[actualIdx].filename,
+        path: thumbnails[actualIdx].path,
+        url: thumbnails[actualIdx].url,
+        currentIndex: actualIdx,
+        nextIndex: (actualIdx + 1) % thumbnails.length,
+        totalCount: thumbnails.length,
+        currentPosition: actualIdx + 1
+      });
+      cur = (actualIdx + 1) % thumbnails.length;
+    }
+
+    res.json({
+      success: true,
+      sequence: resultSequence,
+      startIndex: start,
+      finalNextIndex: cur,
+      totalCount: thumbnails.length
+    });
+  } catch (error) {
+    console.error('Error generating thumbnail rotation sequence:', error);
+    res.status(500).json({ success: false, error: 'Failed to generate thumbnail rotation sequence' });
   }
 });
 

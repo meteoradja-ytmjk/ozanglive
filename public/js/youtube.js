@@ -8168,6 +8168,7 @@ function openRecreateFromTemplateModal(template) {
   window.recreateBroadcastGroups = [];
   window.recreateSlots = [];
   window.recreateNextTitles = [];
+  window.recreateNextThumbnails = [];
 
   const totalTemplateMins = parseInt(template.stream_duration_minutes, 10) ||
     (((parseInt(template.duration_hours, 10) || 0) * 60) + (parseInt(template.duration_minutes, 10) || 0)) || 0;
@@ -8232,14 +8233,17 @@ function openRecreateFromTemplateModal(template) {
       const bDesc = b.description !== undefined ? b.description : extractCleanDescription(template.description, i);
       const bPrivacy = b.privacyStatus || b.privacy_status || template.privacy_status || template.privacyStatus || 'unlisted';
       const bTitleFolderId = (b.titleFolderId !== undefined ? b.titleFolderId : (b.title_folder_id !== undefined ? b.title_folder_id : (template.title_folder_id || null)));
+      const bThumbFolder = b.thumbnailFolder !== undefined ? b.thumbnailFolder : template.thumbnail_folder;
+      const bPinnedThumb = b.pinnedThumbnail || (bThumbFolder ? null : (b.thumbnailPath || template.pinned_thumbnail || null));
 
       window.recreateBroadcastGroups.push({
         title: b.title || template.title,
         originalTitle: b.title || template.title,
         streamId: b.streamId || template.stream_id || null,
         streamKey: b.streamKey || template.stream_key || '',
-        thumbnailFolder: b.thumbnailFolder !== undefined ? b.thumbnailFolder : template.thumbnail_folder,
-        pinnedThumbnail: b.pinnedThumbnail || b.thumbnailPath || template.pinned_thumbnail || template.thumbnail_path || null,
+        thumbnailFolder: bThumbFolder,
+        pinnedThumbnail: bPinnedThumb,
+        thumbnailPath: b.thumbnailPath || template.thumbnail_path || null,
         durationHours: b.durationHours !== undefined ? (parseInt(b.durationHours, 10) || 0) : tHours,
         durationMinutes: b.durationMinutes !== undefined ? (parseInt(b.durationMinutes, 10) || 0) : tMins,
         streamDurationMinutes: b.streamDurationMinutes !== undefined ? (parseInt(b.streamDurationMinutes, 10) || 0) : totalTemplateMins,
@@ -8288,13 +8292,17 @@ function openRecreateFromTemplateModal(template) {
     const singlePrivacy = template.privacy_status || template.privacyStatus || 'unlisted';
     const singleTitleFolderId = template.title_folder_id || null;
 
+    const sThumbFolder = template.thumbnail_folder !== undefined ? template.thumbnail_folder : null;
+    const sPinnedThumb = template.pinned_thumbnail || (!sThumbFolder ? (template.thumbnail_path || null) : null);
+
     window.recreateBroadcastGroups.push({
       title: template.title,
       originalTitle: template.title,
       streamId: template.stream_id || null,
       streamKey: template.stream_key || '',
-      thumbnailFolder: template.thumbnail_folder !== undefined ? template.thumbnail_folder : null,
-      pinnedThumbnail: template.pinned_thumbnail || template.thumbnail_path || null,
+      thumbnailFolder: sThumbFolder,
+      pinnedThumbnail: sPinnedThumb,
+      thumbnailPath: template.thumbnail_path || null,
       durationHours: tHours,
       durationMinutes: tMins,
       streamDurationMinutes: totalTemplateMins,
@@ -8335,6 +8343,13 @@ function openRecreateFromTemplateModal(template) {
     loadRecreateTitleRotationPreview();
   } catch (err) {
     console.warn('[recreate] loadRecreateTitleRotationPreview error:', err);
+  }
+
+  // Load thumbnail rotation preview
+  try {
+    loadRecreateThumbnailRotationPreview();
+  } catch (err) {
+    console.warn('[recreate] loadRecreateThumbnailRotationPreview error:', err);
   }
 
   // Load recurring settings from template
@@ -8401,6 +8416,7 @@ function syncRecreateSlotsFromGroups() {
           streamKey: group.streamKey,
           thumbnailFolder: group.thumbnailFolder,
           pinnedThumbnail: group.pinnedThumbnail,
+          thumbnailPath: group.thumbnailPath,
           customTitle: group.customTitle,
           useTitleRotation: group.useTitleRotation,
           durationHours: group.durationHours,
@@ -8571,6 +8587,37 @@ function renderRecreateSlotList() {
     const isRotated = Boolean(group.useTitleRotation !== false && !group.customTitle && Array.isArray(window.recreateNextTitles) && window.recreateNextTitles[globalSlotOffset] && window.recreateNextTitles[globalSlotOffset].title);
     const rotatedTitle = isRotated ? window.recreateNextTitles[globalSlotOffset].title : null;
 
+    // Check thumbnail rotation preview for this group's first slot
+    const rotatedThumb = (Array.isArray(window.recreateNextThumbnails) && window.recreateNextThumbnails[globalSlotOffset])
+      ? window.recreateNextThumbnails[globalSlotOffset]
+      : null;
+    const resolvedThumbFolder = (group.thumbnailFolder !== undefined && group.thumbnailFolder !== null && group.thumbnailFolder !== '__KEEP__')
+      ? (group.thumbnailFolder === '__ROOT__' ? '' : group.thumbnailFolder)
+      : (template.thumbnail_folder !== undefined ? template.thumbnail_folder : null);
+
+    let thumbnailBadgeHtml = '';
+    if (group.pinnedThumbnail) {
+      thumbnailBadgeHtml = `
+        <div class="mt-1 flex items-center gap-1 text-[10px] text-amber-400 font-mono">
+          <i class="ti ti-pin text-[11px]"></i>
+          <span>Thumbnail Dipin</span>
+        </div>`;
+    } else if (rotatedThumb && rotatedThumb.filename) {
+      const folderLabel = resolvedThumbFolder || 'Root';
+      thumbnailBadgeHtml = `
+        <div class="mt-1 flex items-center gap-1.5 text-[10px] text-emerald-400 font-mono truncate" title="Thumbnail Rotasi: Folder ${escapeHtml(folderLabel)} • Urutan #${rotatedThumb.currentIndex + 1} (${escapeHtml(rotatedThumb.filename)})">
+          <i class="ti ti-photo text-[11px] text-emerald-400 flex-shrink-0"></i>
+          <span class="truncate">📁 ${escapeHtml(folderLabel)} • <span class="text-white font-bold">#${rotatedThumb.currentIndex + 1}</span> (${escapeHtml(rotatedThumb.filename)})</span>
+        </div>`;
+    } else if (resolvedThumbFolder !== null && resolvedThumbFolder !== undefined) {
+      const folderLabel = resolvedThumbFolder || 'Root';
+      thumbnailBadgeHtml = `
+        <div class="mt-1 flex items-center gap-1.5 text-[10px] text-gray-400 font-mono truncate">
+          <i class="ti ti-photo text-[11px] flex-shrink-0"></i>
+          <span class="truncate">📁 Folder: ${escapeHtml(folderLabel)}</span>
+        </div>`;
+    }
+
     let titleContentHtml = '';
     if (isEditingTitle) {
       titleContentHtml = `
@@ -8619,6 +8666,7 @@ function renderRecreateSlotList() {
             <span class="px-2 py-0.5 bg-primary/20 text-primary font-bold text-[11px] rounded mt-0.5 flex-shrink-0">#${groupIndex + 1}</span>
             <div class="min-w-0 flex-1">
               ${titleDisplayBody}
+              ${thumbnailBadgeHtml}
             </div>
           </div>
 
@@ -9495,6 +9543,9 @@ function saveRecreateSlotFullEdit() {
   if (typeof loadRecreateTitleRotationPreview === 'function') {
     loadRecreateTitleRotationPreview();
   }
+  if (typeof loadRecreateThumbnailRotationPreview === 'function') {
+    loadRecreateThumbnailRotationPreview();
+  }
 
   showToast(`Pengaturan Siaran #${groupIndex + 1} berhasil disimpan!`);
 }
@@ -10160,6 +10211,125 @@ function resetRecreateBroadcastTitles() {
   renderRecreateSlotList();
 }
 
+/**
+ * Load thumbnail rotation preview for recreate modal
+ */
+async function loadRecreateThumbnailRotationPreview() {
+  const template = window.currentRecreateTemplate;
+  if (!template) return;
+
+  try {
+    const defaultFolder = template.thumbnail_folder !== undefined ? template.thumbnail_folder : null;
+    const defaultStartIndex = (template.thumbnail_index !== undefined && template.thumbnail_index !== null)
+      ? template.thumbnail_index
+      : 0;
+
+    // Collect all existing thumbnails from template broadcasts to allow smart continuation
+    const templateThumbnails = [];
+    if (Array.isArray(template.broadcasts)) {
+      template.broadcasts.forEach(b => {
+        if (b.thumbnailPath) templateThumbnails.push(b.thumbnailPath);
+        if (b.thumbnail) templateThumbnails.push(b.thumbnail);
+        if (b.pinnedThumbnail) templateThumbnails.push(b.pinnedThumbnail);
+      });
+    }
+    if (template.thumbnail_path && !templateThumbnails.includes(template.thumbnail_path)) {
+      templateThumbnails.push(template.thumbnail_path);
+    }
+    if (template.pinned_thumbnail && !templateThumbnails.includes(template.pinned_thumbnail)) {
+      templateThumbnails.push(template.pinned_thumbnail);
+    }
+
+    // Sync slots to get accurate count and per-group/slot thumbnailFolder
+    syncRecreateSlotsFromGroups();
+    const slots = (window.recreateSlots && window.recreateSlots.length > 0)
+      ? window.recreateSlots
+      : [{ thumbnailFolder: defaultFolder, pinnedThumbnail: template.pinned_thumbnail }];
+
+    // Group slot indices by thumbnailFolder so each folder gets a continuous, distinct sequence of thumbnails
+    const folderSlotsMap = new Map();
+    slots.forEach((slot, sIdx) => {
+      // If slot has pinned thumbnail, it won't rotate
+      if (slot.pinnedThumbnail) return;
+
+      const fFolder = (slot.thumbnailFolder !== undefined && slot.thumbnailFolder !== null && slot.thumbnailFolder !== '__KEEP__')
+        ? (slot.thumbnailFolder === '__ROOT__' ? '' : slot.thumbnailFolder)
+        : defaultFolder;
+
+      // Only rotate if folder is defined (or empty string for root folder)
+      if (fFolder === null || fFolder === undefined) return;
+
+      const key = fFolder;
+      if (!folderSlotsMap.has(key)) {
+        folderSlotsMap.set(key, { folderName: fFolder, indices: [] });
+      }
+      folderSlotsMap.get(key).indices.push(sIdx);
+    });
+
+    const resultThumbnails = new Array(slots.length).fill(null);
+    let primaryFinalNextThumbIndex = defaultStartIndex;
+
+    for (const entry of folderSlotsMap.values()) {
+      const fFolder = entry.folderName;
+      const indices = entry.indices;
+      const count = indices.length;
+      const sIndex = (fFolder === template.thumbnail_folder && template.thumbnail_index !== undefined && template.thumbnail_index !== null)
+        ? template.thumbnail_index
+        : 0;
+
+      const seqThumbs = await getNextThumbnailsForRecreate(sIndex, fFolder, count, templateThumbnails);
+      indices.forEach((sIdx, seqIdx) => {
+        resultThumbnails[sIdx] = seqThumbs[seqIdx] || null;
+      });
+
+      if (template.thumbnail_folder === undefined || fFolder === template.thumbnail_folder) {
+        primaryFinalNextThumbIndex = window.recreateFinalNextThumbnailIndex;
+      }
+    }
+
+    window.recreateNextThumbnails = resultThumbnails;
+    window.recreateFinalNextThumbnailIndex = primaryFinalNextThumbIndex;
+
+    // Refresh slot cards so rotated thumbnail badges are immediately visible!
+    renderRecreateSlotList();
+  } catch (error) {
+    console.error('Error loading thumbnail rotation preview:', error);
+  }
+}
+window.loadRecreateThumbnailRotationPreview = loadRecreateThumbnailRotationPreview;
+
+/**
+ * Get next thumbnails for slots in recreate with sequential continuation
+ */
+async function getNextThumbnailsForRecreate(startIndex, folderName, count = 1, templateThumbnails = []) {
+  try {
+    const res = await fetch('/api/thumbnail-rotation/sequence', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getCsrfToken()
+      },
+      body: JSON.stringify({
+        folderName,
+        startIndex,
+        count,
+        templateThumbnails,
+        ignorePinned: true
+      })
+    });
+    const data = await res.json();
+    if (data.success && Array.isArray(data.thumbnails)) {
+      window.recreateFinalNextThumbnailIndex = data.nextIndex;
+      return data.thumbnails;
+    }
+  } catch (err) {
+    console.warn('[recreate] /api/thumbnail-rotation/sequence failed:', err);
+  }
+
+  return new Array(count).fill(null);
+}
+window.getNextThumbnailsForRecreate = getNextThumbnailsForRecreate;
+
 // Re-create Form Handler
 const recreateFromTemplateForm = document.getElementById('recreateFromTemplateForm');
 if (recreateFromTemplateForm) {
@@ -10414,19 +10584,27 @@ if (recreateFromTemplateForm) {
           
           if (slot.thumbnailFolder !== null && slot.thumbnailFolder !== undefined && slot.thumbnailFolder !== '__KEEP__') {
             thumbnailFolder = (slot.thumbnailFolder === '__ROOT__' ? '' : slot.thumbnailFolder);
-          } else if (streamId && template.stream_key_folder_mapping && template.stream_key_folder_mapping[streamId] !== undefined) {
-            thumbnailFolder = template.stream_key_folder_mapping[streamId];
+          } else if (candidateStreamId && template.stream_key_folder_mapping && template.stream_key_folder_mapping[candidateStreamId] !== undefined) {
+            thumbnailFolder = template.stream_key_folder_mapping[candidateStreamId];
           } else if (template.thumbnail_folder !== null && template.thumbnail_folder !== undefined) {
             thumbnailFolder = template.thumbnail_folder;
           }
           
           formData.append('thumbnailFolder', thumbnailFolder);
 
-          // If pinned thumbnail or explicit thumbnailPath exists, forward it
-          const pinnedThumbnail = slot.pinnedThumbnail || slot.thumbnailPath || template.pinned_thumbnail || template.thumbnail_path;
-          if (pinnedThumbnail) {
-            formData.append('thumbnailPath', pinnedThumbnail);
-            console.log('[recreate] Forwarding pinned thumbnail:', pinnedThumbnail);
+          const slotRotatedThumb = (window.recreateNextThumbnails && window.recreateNextThumbnails[i]) ? window.recreateNextThumbnails[i] : null;
+
+          if (slot.pinnedThumbnail) {
+            formData.append('thumbnailPath', slot.pinnedThumbnail);
+            formData.append('isCustomThumbnail', 'true');
+            console.log('[recreate] Forwarding custom/pinned thumbnail:', slot.pinnedThumbnail);
+          } else if (slotRotatedThumb && slotRotatedThumb.path) {
+            formData.append('thumbnailIndex', String(slotRotatedThumb.currentIndex));
+            formData.append('thumbnailPath', slotRotatedThumb.path);
+            console.log(`[recreate] Slot ${i + 1} using rotated thumbnail #${slotRotatedThumb.currentIndex + 1}: ${slotRotatedThumb.filename}`);
+          } else if (slot.thumbnailPath && !thumbnailFolder) {
+            formData.append('thumbnailPath', slot.thumbnailPath);
+            console.log('[recreate] Forwarding fallback thumbnailPath:', slot.thumbnailPath);
           }
           
           const response = await fetch('/api/youtube/broadcasts', {
@@ -10498,6 +10676,26 @@ if (recreateFromTemplateForm) {
           }
         } catch (err) {
           console.error('[recreate] Failed to update title rotation:', err);
+        }
+      }
+
+      // If thumbnail rotation was used and broadcasts were created successfully, update template thumbnail_index
+      if (results.success > 0 && window.recreateFinalNextThumbnailIndex !== undefined) {
+        try {
+          const newThumbIndex = window.recreateFinalNextThumbnailIndex;
+          if (template && template.id) {
+            await fetch(`/api/youtube/templates/${template.id}`, {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': getCsrfToken()
+              },
+              body: JSON.stringify({ thumbnailIndex: newThumbIndex })
+            });
+            console.log('[recreate] Updated template thumbnail_index to:', newThumbIndex);
+          }
+        } catch (thumbRotErr) {
+          console.warn('[recreate] Failed to update template thumbnail_index:', thumbRotErr);
         }
       }
       

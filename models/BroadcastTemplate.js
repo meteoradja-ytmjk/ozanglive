@@ -111,7 +111,8 @@ class BroadcastTemplate {
             titleFolderId: b.titleFolderId !== undefined ? b.titleFolderId : (b.title_folder_id || row.title_folder_id || null),
             scheduleType: b.scheduleType || row.schedule_type || 'once',
             thumbnailFolder: (b.thumbnailFolder !== undefined && b.thumbnailFolder !== null) ? b.thumbnailFolder : row.thumbnail_folder,
-            pinnedThumbnail: (b.pinnedThumbnail || b.thumbnailPath || row.pinned_thumbnail || row.thumbnail_path || null)
+            thumbnailPath: b.thumbnailPath || b.thumbnail_path || null,
+            pinnedThumbnail: (b.pinnedThumbnail || null)
           }));
         }
       } catch (e) {}
