@@ -8125,6 +8125,86 @@ function formatLocalDateTime(d) {
 }
 window.formatLocalDateTime = formatLocalDateTime;
 
+/**
+ * Dapatkan komponen waktu WIB (UTC+7) terlepas dari timezone komputer / browser pengguna
+ */
+function getBrowserWIBParts(date = new Date()) {
+  try {
+    const fmt = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Jakarta',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      weekday: 'short', hour12: false
+    });
+    const parts = fmt.formatToParts(date);
+    const get = (t) => (parts.find(p => p.type === t) || {}).value;
+    const dayMap = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+    let hours = parseInt(get('hour'), 10);
+    if (hours === 24) hours = 0;
+    return {
+      year: parseInt(get('year'), 10),
+      month: parseInt(get('month'), 10),
+      day: parseInt(get('day'), 10),
+      hours: hours,
+      minutes: parseInt(get('minute'), 10),
+      dayOfWeek: dayMap[get('weekday')] ?? 0
+    };
+  } catch (e) {
+    const wib = new Date(date.getTime() + 7 * 60 * 60 * 1000);
+    return {
+      year: wib.getUTCFullYear(),
+      month: wib.getUTCMonth() + 1,
+      day: wib.getUTCDate(),
+      hours: wib.getUTCHours(),
+      minutes: wib.getUTCMinutes(),
+      dayOfWeek: wib.getUTCDay()
+    };
+  }
+}
+window.getBrowserWIBParts = getBrowserWIBParts;
+
+/**
+ * Calculate upcoming future date-time for a time slot
+ * Ensures scheduled start time is never in the past for YouTube API
+ * PRESERVES exact WIB hours and minutes without browser timezone shifting
+ */
+function calculateUpcomingDateTimeForSlot(timeStr, pattern = 'daily', days = null) {
+  const [h, m] = (timeStr || '13:00').split(':').map(Number);
+  const pad = n => String(n).padStart(2, '0');
+  const now = new Date();
+  const minFutureMs = 12 * 60 * 1000;
+  const wibNow = getBrowserWIBParts(now);
+
+  if (pattern === 'weekly' && Array.isArray(days) && days.length > 0) {
+    const dayMap = { sunday: 0, minggu: 0, monday: 1, senin: 1, tuesday: 2, selasa: 2, wednesday: 3, rabu: 3, thursday: 4, kamis: 4, friday: 5, jumat: 5, saturday: 6, sabtu: 6 };
+    const targetDayIndices = days.map(d => dayMap[String(d).toLowerCase()]).filter(x => x !== undefined);
+
+    if (targetDayIndices.length > 0) {
+      for (let offset = 0; offset <= 14; offset++) {
+        const candidateUtc = new Date(Date.UTC(wibNow.year, wibNow.month - 1, wibNow.day + offset, h - 7, m, 0, 0));
+        const candidateParts = getBrowserWIBParts(candidateUtc);
+        if (targetDayIndices.includes(candidateParts.dayOfWeek)) {
+          if (candidateUtc.getTime() > now.getTime() + minFutureMs) {
+            return `${candidateParts.year}-${pad(candidateParts.month)}-${pad(candidateParts.day)}T${pad(h)}:${pad(m)}`;
+          }
+        }
+      }
+    }
+  }
+
+  // Daily or fallback: try today first
+  const todayUtc = new Date(Date.UTC(wibNow.year, wibNow.month - 1, wibNow.day, h - 7, m, 0, 0));
+  if (todayUtc.getTime() > now.getTime() + minFutureMs) {
+    return `${wibNow.year}-${pad(wibNow.month)}-${pad(wibNow.day)}T${pad(h)}:${pad(m)}`;
+  }
+
+  // If time has passed today, schedule for tomorrow preserving exact hour & minute
+  const tomUtc = new Date(Date.UTC(wibNow.year, wibNow.month - 1, wibNow.day + 1, h - 7, m, 0, 0));
+  const tomParts = getBrowserWIBParts(tomUtc);
+  return `${tomParts.year}-${pad(tomParts.month)}-${pad(tomParts.day)}T${pad(h)}:${pad(m)}`;
+}
+window.calculateUpcomingDateTimeForSlot = calculateUpcomingDateTimeForSlot;
+
 // Open Re-create from Template Modal
 function openRecreateFromTemplateModal(template) {
   window.currentRecreateTemplate = template;
@@ -8211,13 +8291,7 @@ function openRecreateFromTemplateModal(template) {
 
   const parseSlotTime = (timeStr, fallbackMinutes = 15) => {
     if (timeStr && /^[0-2]?[0-9]:[0-5][0-9]$/.test(timeStr)) {
-      const [h, m] = timeStr.split(':').map(Number);
-      const d = new Date();
-      d.setHours(h, m, 0, 0);
-      if (d.getTime() < Date.now() + 10 * 60 * 1000) {
-        d.setDate(d.getDate() + 1);
-      }
-      return formatLocalDateTime(d);
+      return calculateUpcomingDateTimeForSlot(timeStr, 'daily');
     }
     return formatLocalDateTime(new Date(Date.now() + fallbackMinutes * 60 * 1000));
   };
@@ -8440,44 +8514,6 @@ function syncRecreateSlotsFromGroups() {
 window.syncRecreateSlotsFromGroups = syncRecreateSlotsFromGroups;
 
 // Render the multi-slot schedule list for the recreate modal
-/**
- * Calculate upcoming future date-time for a time slot
- * Ensures scheduled start time is never in the past for YouTube API
- */
-function calculateUpcomingDateTimeForSlot(timeStr, pattern = 'daily', days = null) {
-  const [h, m] = (timeStr || '13:00').split(':').map(Number);
-  const now = new Date();
-  const minFutureMs = 12 * 60 * 1000; // Minimum 12 minutes in future to satisfy YouTube API (>=10m requirement)
-
-  if (pattern === 'weekly' && Array.isArray(days) && days.length > 0) {
-    const dayMap = { sunday: 0, minggu: 0, monday: 1, senin: 1, tuesday: 2, selasa: 2, wednesday: 3, rabu: 3, thursday: 4, kamis: 4, friday: 5, jumat: 5, saturday: 6, sabtu: 6 };
-    const targetDayIndices = days.map(d => dayMap[String(d).toLowerCase()]).filter(x => x !== undefined);
-
-    if (targetDayIndices.length > 0) {
-      for (let offset = 0; offset <= 14; offset++) {
-        const candidate = new Date(now.getTime() + offset * 24 * 60 * 60 * 1000);
-        candidate.setHours(h, m, 0, 0);
-        if (targetDayIndices.includes(candidate.getDay())) {
-          if (candidate.getTime() > now.getTime() + minFutureMs) {
-            return formatLocalDateTime(candidate);
-          }
-        }
-      }
-    }
-  }
-
-  // Daily or fallback: try today first
-  const candidateToday = new Date(now);
-  candidateToday.setHours(h, m, 0, 0);
-  if (candidateToday.getTime() > now.getTime() + minFutureMs) {
-    return formatLocalDateTime(candidateToday);
-  }
-
-  // If time has passed today (or is less than 12m away), schedule for tomorrow
-  const candidateTomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-  candidateTomorrow.setHours(h, m, 0, 0);
-  return formatLocalDateTime(candidateTomorrow);
-}
 
 /**
  * Format string datetime (YYYY-MM-DDTHH:mm)
@@ -8879,13 +8915,15 @@ function updateGroupSlotTime(groupIndex, timeIndex, value, isTimeOnly = false) {
     const group = window.recreateBroadcastGroups[groupIndex];
     if (group.times && group.times[timeIndex]) {
       if (isTimeOnly) {
-        const now = new Date();
-        let datePrefix = formatLocalDateTime(now).split('T')[0];
-        if (group.times[timeIndex].scheduleTime && group.times[timeIndex].scheduleTime.includes('T')) {
-          datePrefix = group.times[timeIndex].scheduleTime.split('T')[0];
-        }
-        group.times[timeIndex].scheduleTime = `${datePrefix}T${value}`;
         group.times[timeIndex].timeOnly = value;
+        const patternInput = document.getElementById('recreateRecurringPatternInput');
+        const pattern = patternInput ? patternInput.value : 'daily';
+        let selectedWeeklyDays = [];
+        if (pattern === 'weekly') {
+          const checkedDays = Array.from(document.querySelectorAll('input[name="recreateWeeklyDays"]:checked')).map(cb => cb.value);
+          if (checkedDays.length > 0) selectedWeeklyDays = checkedDays;
+        }
+        group.times[timeIndex].scheduleTime = calculateUpcomingDateTimeForSlot(value, pattern, selectedWeeklyDays);
       } else {
         group.times[timeIndex].scheduleTime = value;
         if (value && value.includes('T')) {

@@ -1190,13 +1190,47 @@ class YouTubeService {
       }
 
       console.log(`[YouTubeService.transitionBroadcast] Transitioning broadcast ${broadcastId} from '${lifeCycleStatus}' to '${target}'...`);
-      const transitionRes = await youtube.liveBroadcasts.transition({
-        part: 'id,status',
-        id: broadcastId,
-        broadcastStatus: target
-      });
+      let transitionRes;
+      try {
+        transitionRes = await youtube.liveBroadcasts.transition({
+          part: 'id,status',
+          id: broadcastId,
+          broadcastStatus: target
+        });
+      } catch (tErr) {
+        const tErrMsg = tErr.message || '';
+        if (tErrMsg.includes('redundantTransition') || tErrMsg.includes('already live')) {
+          return { success: true, lifeCycleStatus: 'live', alreadyLive: true };
+        }
+        // If auto-start prevents manual transition, disable autoStart and retry
+        if (tErrMsg.toLowerCase().includes('auto-start') || tErrMsg.toLowerCase().includes('autostart')) {
+          console.log(`[YouTubeService.transitionBroadcast] Auto-start prevented transition for ${broadcastId}. Disabling auto-start to force transition...`);
+          try {
+            await youtube.liveBroadcasts.update({
+              part: 'id,snippet,contentDetails',
+              requestBody: {
+                id: broadcastId,
+                snippet: item.snippet,
+                contentDetails: {
+                  ...item.contentDetails,
+                  enableAutoStart: false
+                }
+              }
+            });
+            transitionRes = await youtube.liveBroadcasts.transition({
+              part: 'id,status',
+              id: broadcastId,
+              broadcastStatus: target
+            });
+          } catch (autoErr) {
+            throw autoErr;
+          }
+        } else {
+          throw tErr;
+        }
+      }
 
-      const finalStatus = transitionRes.data?.status?.lifeCycleStatus || target;
+      const finalStatus = transitionRes?.data?.status?.lifeCycleStatus || target;
       console.log(`[YouTubeService.transitionBroadcast] Successfully transitioned broadcast ${broadcastId} to '${finalStatus}'`);
 
       if (finalStatus === 'testing' && targetStatus === 'live') {
@@ -1284,10 +1318,10 @@ class YouTubeService {
    * Poll and ensure YouTube broadcast transitions to live once RTMP stream is receiving data
    * @param {string} accessToken
    * @param {string} broadcastId
-   * @param {number} [maxAttempts=7]
+   * @param {number} [maxAttempts=15]
    * @param {number} [delayMs=4000]
    */
-  async startBroadcastLive(accessToken, broadcastId, maxAttempts = 7, delayMs = 4000) {
+  async startBroadcastLive(accessToken, broadcastId, maxAttempts = 15, delayMs = 4000) {
     if (!accessToken || !broadcastId) {
       return { success: false, error: 'Missing accessToken or broadcastId' };
     }

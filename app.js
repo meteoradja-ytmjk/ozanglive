@@ -71,7 +71,7 @@ const thumbnailUpload = multer({
     fileSize: 2 * 1024 * 1024 // 2MB max
   }
 });
-const { parseWIBDateTimeLocal, formatWIBDisplay, formatWIBTimeOnly, formatWIBDateTimeLocal } = require('./utils/wibTime');
+const { parseWIBDateTimeLocal, formatWIBDisplay, formatWIBTimeOnly, formatWIBDateTimeLocal, getWIBTime, createWIBDate } = require('./utils/wibTime');
 const uploadProcessingConcurrency = Math.max(1, parseInt(process.env.UPLOAD_PROCESSING_CONCURRENCY || '1', 10));
 const videoProcessingQueue = new ProcessingQueue({ concurrency: uploadProcessingConcurrency, name: 'video-processing' });
 const audioProcessingQueue = new ProcessingQueue({ concurrency: uploadProcessingConcurrency, name: 'audio-processing' });
@@ -11288,8 +11288,12 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
     const isFromTemplate = !!templateId;
     const minTime = new Date(Date.now() + 10 * 60 * 1000);
 
-    // If recurring schedule, calculate next scheduled run in WIB
-    if (isRecurringReq && reqRecurringTime) {
+    // Parse scheduledStartTime sent from client (either WIB datetime-local or ISO string)
+    let parsedWibStart = parseWIBDateTimeLocal(finalScheduledStartTime);
+    let scheduledDate = parsedWibStart || (finalScheduledStartTime ? new Date(finalScheduledStartTime) : null);
+
+    // Only fallback to Stream.getNextScheduledTime IF scheduledStartTime was NOT provided or invalid
+    if ((!scheduledDate || isNaN(scheduledDate.getTime())) && isRecurringReq && reqRecurringTime) {
       let scheduleDaysParsed = null;
       if (reqScheduleDays) {
         try {
@@ -11301,32 +11305,86 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         recurring_time: reqRecurringTime,
         schedule_days: scheduleDaysParsed
       });
-      if (nextDate && nextDate >= minTime) {
+      if (nextDate) {
+        scheduledDate = nextDate;
+        parsedWibStart = nextDate;
         finalScheduledStartTime = nextDate.toISOString();
         console.log(`[API] Auto-computed upcoming scheduledStartTime for ${reqScheduleType} schedule: ${finalScheduledStartTime}`);
       }
     }
 
-    const parsedWibStart = parseWIBDateTimeLocal(finalScheduledStartTime);
-    const scheduledDate = parsedWibStart || new Date(finalScheduledStartTime);
-
-    if (scheduledDate < minTime) {
+    if (!scheduledDate || isNaN(scheduledDate.getTime()) || scheduledDate < minTime) {
       if (req.body.startImmediately === 'true') {
         // Automatically adjust to 15 minutes ahead so YouTube API accepts immediate live without 400 error
         finalScheduledStartTime = new Date(Date.now() + 15 * 60 * 1000).toISOString();
         console.log('[API] Auto-adjusted scheduledStartTime for immediate start:', finalScheduledStartTime);
       } else if (isRecurringReq || isFromTemplate) {
-        // Automatically adjust recurring or template schedule to at least 15m ahead so YouTube API accepts
-        finalScheduledStartTime = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-        console.log('[API] Auto-adjusted scheduledStartTime to 15m ahead:', finalScheduledStartTime);
+        // FIX: For recurring schedules or templates where the input slot time has already passed today,
+        // ROLL OVER to tomorrow (or the next scheduled weekly day) PRESERVING the exact same WIB hour & minute!
+        // DO NOT overwrite the time with Date.now() + 15m.
+        let targetHours = 13;
+        let targetMinutes = 0;
+
+        if (req.body.recurringTime && /^[0-2]?[0-9]:[0-5][0-9]$/.test(String(req.body.recurringTime).trim())) {
+          const [h, m] = String(req.body.recurringTime).trim().split(':').map(Number);
+          targetHours = h;
+          targetMinutes = m;
+        } else if (scheduledDate && !isNaN(scheduledDate.getTime())) {
+          const origWib = getWIBTime(scheduledDate);
+          targetHours = origWib.hours;
+          targetMinutes = origWib.minutes;
+        } else if (finalScheduledStartTime && String(finalScheduledStartTime).includes('T')) {
+          const timePart = String(finalScheduledStartTime).split('T')[1].slice(0, 5);
+          if (/^[0-2]?[0-9]:[0-5][0-9]$/.test(timePart)) {
+            const [h, m] = timePart.split(':').map(Number);
+            targetHours = h;
+            targetMinutes = m;
+          }
+        }
+
+        const wibNow = getWIBTime(new Date());
+        let candidateDate = null;
+
+        if (reqScheduleType === 'weekly' && reqScheduleDays) {
+          let daysArr = reqScheduleDays;
+          if (typeof daysArr === 'string') {
+            try { daysArr = JSON.parse(daysArr); } catch (_) { daysArr = [daysArr]; }
+          }
+          const dayMap = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 };
+          const targetDayIndices = Array.isArray(daysArr) ? daysArr.map(d => dayMap[String(d).toLowerCase()]).filter(x => x !== undefined) : [];
+
+          for (let offset = 0; offset <= 14; offset++) {
+            const testDate = createWIBDate(wibNow.year, wibNow.month, wibNow.dayOfMonth + offset, targetHours, targetMinutes, 0);
+            const testWib = getWIBTime(testDate);
+            if (targetDayIndices.length === 0 || targetDayIndices.includes(testWib.day)) {
+              if (testDate >= minTime) {
+                candidateDate = testDate;
+                break;
+              }
+            }
+          }
+        }
+
+        if (!candidateDate) {
+          const testToday = createWIBDate(wibNow.year, wibNow.month, wibNow.dayOfMonth, targetHours, targetMinutes, 0);
+          if (testToday >= minTime) {
+            candidateDate = testToday;
+          } else {
+            // Already passed today, roll over to tomorrow at the exact same hour/minute
+            candidateDate = createWIBDate(wibNow.year, wibNow.month, wibNow.dayOfMonth + 1, targetHours, targetMinutes, 0);
+          }
+        }
+
+        finalScheduledStartTime = candidateDate.toISOString();
+        console.log(`[API] Rolled over past time slot preserving WIB time (${targetHours.toString().padStart(2, '0')}:${targetMinutes.toString().padStart(2, '0')}): ${finalScheduledStartTime}`);
       } else {
         return res.status(400).json({
           success: false,
           error: 'Scheduled start time must be at least 10 minutes in the future'
         });
       }
-    } else if (parsedWibStart) {
-      finalScheduledStartTime = parsedWibStart.toISOString();
+    } else {
+      finalScheduledStartTime = scheduledDate.toISOString();
     }
 
     // Parse tags safely from array, JSON string, comma-separated or newline-separated string
@@ -11946,7 +12004,8 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
           if (finalScheduledStartTime && typeof finalScheduledStartTime === 'string' && finalScheduledStartTime.includes('T')) {
             const parsedTime = parseWIBDateTimeLocal(finalScheduledStartTime);
             if (parsedTime) {
-              executedTimeStr = `${String(parsedTime.getHours()).padStart(2, '0')}:${String(parsedTime.getMinutes()).padStart(2, '0')}`;
+              const wib = getWIBTime(parsedTime);
+              executedTimeStr = `${String(wib.hours).padStart(2, '0')}:${String(wib.minutes).padStart(2, '0')}`;
             }
           }
           if (!executedTimeStr && req.body.recurringTime) {

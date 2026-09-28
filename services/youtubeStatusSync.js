@@ -11,6 +11,7 @@
  */
 
 const YouTubeCredentials = require('../models/YouTubeCredentials');
+const Stream = require('../models/Stream');
 const youtubeService = require('./youtubeService');
 
 // Status display mapping (Indonesian)
@@ -283,6 +284,32 @@ class YouTubeStatusSync {
       // Log status change
       if (previousStatus !== result.lifeCycleStatus) {
         console.log(`[YouTubeStatusSync] Stream ${streamId} broadcast status changed: ${previousStatus} -> ${result.lifeCycleStatus}`);
+      }
+
+      // AUTO-RECOVERY: If stream is active locally but YouTube broadcast is stuck in 'ready'/'created'/'upcoming'/'testing'
+      if (['ready', 'created', 'upcoming', 'testing'].includes(result.lifeCycleStatus)) {
+        const now = Date.now();
+        const lastTransitionAttempt = check.lastTransitionAttempt || 0;
+        // Attempt transition every 30 seconds if still stuck
+        if (now - lastTransitionAttempt >= 30000) {
+          check.lastTransitionAttempt = now;
+          check.transitionAttempts = (check.transitionAttempts || 0) + 1;
+
+          if (check.transitionAttempts <= 15) {
+            console.log(`[YouTubeStatusSync] 🔄 Stream #${streamId} active locally but YouTube broadcast #${check.broadcastId} is '${result.lifeCycleStatus}'. Pushing transition to LIVE (attempt ${check.transitionAttempts}/15)...`);
+            try {
+              const transRes = await youtubeService.transitionBroadcast(accessToken, check.broadcastId, 'live');
+              if (transRes && transRes.success && transRes.lifeCycleStatus === 'live') {
+                console.log(`[YouTubeStatusSync] ✅ Auto-recovered broadcast #${check.broadcastId} to LIVE on YouTube Studio!`);
+                check.lastStatus = 'live';
+                result.lifeCycleStatus = 'live';
+                await Stream.update(streamId, { youtube_lifecycle_status: 'live' }).catch(() => {});
+              }
+            } catch (tErr) {
+              console.warn(`[YouTubeStatusSync] Auto-recovery transition error for stream #${streamId}:`, tErr.message);
+            }
+          }
+        }
       }
 
       // Check if broadcast ended - but only stop if it's a definitive end

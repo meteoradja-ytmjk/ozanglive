@@ -299,8 +299,8 @@ async function ensureYouTubeBroadcastLive(stream, broadcastIdHint) {
     // Give FFmpeg 5 seconds to establish RTMP handshake and send initial keyframes
     await new Promise(r => setTimeout(r, 5000));
 
-    // Poll and transition broadcast to 'live'
-    const liveResult = await youtubeService.startBroadcastLive(accessToken, broadcastId, 7, 4000);
+    // Poll and transition broadcast to 'live' (15 attempts x 4s = 60s max)
+    const liveResult = await youtubeService.startBroadcastLive(accessToken, broadcastId, 15, 4000);
 
     if (liveResult && liveResult.success) {
       console.log(`[StreamingService.ensureLive] ✅ Stream #${streamId} broadcast ${broadcastId} is verified LIVE on YouTube.com!`);
