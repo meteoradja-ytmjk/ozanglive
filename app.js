@@ -11318,10 +11318,9 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         // Automatically adjust to 15 minutes ahead so YouTube API accepts immediate live without 400 error
         finalScheduledStartTime = new Date(Date.now() + 15 * 60 * 1000).toISOString();
         console.log('[API] Auto-adjusted scheduledStartTime for immediate start:', finalScheduledStartTime);
-      } else if (isRecurringReq || isFromTemplate) {
-        // FIX: For recurring schedules or templates where the input slot time has already passed today,
+      } else if (isRecurringReq) {
+        // FIX: For recurring schedules (daily/weekly) where the input slot time has already passed today,
         // ROLL OVER to tomorrow (or the next scheduled weekly day) PRESERVING the exact same WIB hour & minute!
-        // DO NOT overwrite the time with Date.now() + 15m.
         let targetHours = 13;
         let targetMinutes = 0;
 
@@ -11377,6 +11376,12 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
 
         finalScheduledStartTime = candidateDate.toISOString();
         console.log(`[API] Rolled over past time slot preserving WIB time (${targetHours.toString().padStart(2, '0')}:${targetMinutes.toString().padStart(2, '0')}): ${finalScheduledStartTime}`);
+      } else if (isFromTemplate || reqScheduleType === 'once' || reqScheduleType === 'none') {
+        // FIX: For once / template rebroadcasts where the slot time has passed today,
+        // schedule 12 minutes ahead TODAY so YouTube Studio accepts it and goes live today
+        const autoDate = new Date(Date.now() + 12 * 60 * 1000);
+        finalScheduledStartTime = autoDate.toISOString();
+        console.log(`[API] Rebroadcast template / once schedule auto-adjusted to 12 minutes ahead today: ${finalScheduledStartTime}`);
       } else {
         return res.status(400).json({
           success: false,

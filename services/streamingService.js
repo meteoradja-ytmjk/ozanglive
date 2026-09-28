@@ -191,6 +191,163 @@ async function endYouTubeBroadcastForStream(stream, broadcastIdHint) {
 }
 
 /**
+ * Ensure stream has an active, upcoming or live YouTube broadcast (not 'complete' or deleted).
+ * For recurring daily streams or rebroadcasts, once a YouTube broadcast transitions to 'complete',
+ * it CANNOT be reused. This function detects completed/revoked/missing broadcasts and automatically
+ * finds an upcoming broadcast or creates a fresh upcoming broadcast for today's session,
+ * binding it to the same stream key.
+ * @param {Object} stream - Stream model instance
+ */
+async function ensureFreshYouTubeBroadcastForStream(stream) {
+  if (!stream) return;
+  const isYouTube = stream.platform === 'YouTube' || Boolean(stream.youtube_broadcast_id);
+  if (!isYouTube) return;
+
+  try {
+    const YouTubeCredentials = require('../models/YouTubeCredentials');
+    let credentials = null;
+    if (stream.youtube_account_id) {
+      credentials = await YouTubeCredentials.findById(stream.youtube_account_id);
+    }
+    if (!credentials && stream.user_id) {
+      credentials = await YouTubeCredentials.findByUserId(stream.user_id);
+    }
+    if (!credentials && stream.user_id) {
+      const allCreds = await YouTubeCredentials.findAllByUserId(stream.user_id);
+      if (allCreds && allCreds.length > 0) credentials = allCreds[0];
+    }
+    if (!credentials) return;
+
+    const youtubeService = require('./youtubeService');
+    const clientId = credentials.clientId || credentials.client_id;
+    const clientSecret = credentials.clientSecret || credentials.client_secret;
+    const refreshToken = credentials.refreshToken || credentials.refresh_token;
+
+    const accessToken = await youtubeService.getAccessTokenSafe(clientId, clientSecret, refreshToken, credentials.id);
+    if (!accessToken) return;
+
+    let needsNewBroadcast = false;
+    let oldStatus = null;
+
+    if (stream.youtube_broadcast_id) {
+      const currentBroadcast = await youtubeService.getBroadcastDetails(accessToken, stream.youtube_broadcast_id);
+      if (!currentBroadcast) {
+        console.log(`[StreamingService] Broadcast ${stream.youtube_broadcast_id} not found on YouTube. Needs fresh broadcast.`);
+        needsNewBroadcast = true;
+      } else {
+        oldStatus = currentBroadcast.status?.lifeCycleStatus;
+        if (oldStatus === 'complete' || oldStatus === 'completed' || oldStatus === 'revoked') {
+          console.log(`[StreamingService] Broadcast ${stream.youtube_broadcast_id} is in terminal state '${oldStatus}'. Needs fresh broadcast for today.`);
+          needsNewBroadcast = true;
+        } else {
+          // Broadcast is valid and upcoming / live / ready / testing / created
+          return;
+        }
+      }
+    } else {
+      // Platform is YouTube but has no broadcastId linked
+      needsNewBroadcast = true;
+    }
+
+    if (!needsNewBroadcast) return;
+
+    console.log(`[StreamingService] Resolving fresh YouTube broadcast for stream #${stream.id} ("${stream.title}")...`);
+    addStreamLog(stream.id, `[YouTube] Mempersiapkan siaran YouTube baru untuk sesi live saat ini...`);
+
+    // 1. Try finding an existing upcoming broadcast on this channel that matches this stream or key
+    let matchingBroadcast = null;
+    try {
+      const upcomingList = await youtubeService.listBroadcasts(accessToken, 'upcoming');
+      if (Array.isArray(upcomingList) && upcomingList.length > 0) {
+        // First match by stream key if available
+        if (stream.stream_key) {
+          for (const item of upcomingList) {
+            const bId = item.id;
+            const bDetails = await youtubeService.getBroadcastDetails(accessToken, bId);
+            const bStreamId = bDetails?.contentDetails?.boundStreamId;
+            if (bStreamId) {
+              const bStream = await youtubeService.getBoundStreamDetails(accessToken, bStreamId);
+              if (bStream && bStream.streamKey && bStream.streamKey.trim() === stream.stream_key.trim()) {
+                matchingBroadcast = item;
+                break;
+              }
+            }
+          }
+        }
+        // Second match by title if not found by stream key
+        if (!matchingBroadcast && stream.title) {
+          const streamTitleClean = stream.title.trim().toLowerCase();
+          matchingBroadcast = upcomingList.find(b => {
+            const t = (b.snippet?.title || '').trim().toLowerCase();
+            return t === streamTitleClean;
+          });
+        }
+      }
+    } catch (findErr) {
+      console.warn(`[StreamingService] Warning looking for upcoming broadcasts:`, findErr.message);
+    }
+
+    if (matchingBroadcast) {
+      console.log(`[StreamingService] Re-linked stream #${stream.id} to existing upcoming broadcast: ${matchingBroadcast.id}`);
+      addStreamLog(stream.id, `[YouTube] Terhubung ke siaran upcoming di YouTube Studio: ${matchingBroadcast.id}`);
+      stream.youtube_broadcast_id = matchingBroadcast.id;
+      stream.youtube_lifecycle_status = 'ready';
+      await Stream.update(stream.id, {
+        youtube_broadcast_id: matchingBroadcast.id,
+        youtube_lifecycle_status: 'ready'
+      }).catch(() => {});
+      return;
+    }
+
+    // 2. No matching upcoming broadcast found; automatically create a fresh broadcast!
+    console.log(`[StreamingService] Creating a new fresh YouTube broadcast for stream #${stream.id}...`);
+    let parsedTags = [];
+    if (stream.tags) {
+      try {
+        parsedTags = typeof stream.tags === 'string' ? JSON.parse(stream.tags) : stream.tags;
+      } catch (_) {
+        parsedTags = String(stream.tags).split(',').map(t => t.trim()).filter(Boolean);
+      }
+    }
+
+    const scheduledStartTime = new Date(Date.now() + 12 * 60 * 1000).toISOString();
+
+    const created = await youtubeService.createBroadcast(accessToken, {
+      title: stream.title || 'Live Stream',
+      description: stream.description || '',
+      scheduledStartTime,
+      privacyStatus: stream.privacy_status || 'unlisted',
+      streamId: stream.stream_id || undefined,
+      tags: parsedTags,
+      categoryId: stream.category_id || '24',
+      enableAutoStart: true,
+      enableAutoStop: true,
+      dualStream: false
+    });
+
+    if (created && created.broadcastId) {
+      console.log(`[StreamingService] ✅ Successfully created fresh YouTube broadcast ${created.broadcastId} for stream #${stream.id}`);
+      addStreamLog(stream.id, `[YouTube] ✅ Siaran baru dibuat otomatis (${created.broadcastId}), siap tayang di YouTube Studio!`);
+
+      stream.youtube_broadcast_id = created.broadcastId;
+      stream.youtube_lifecycle_status = 'ready';
+      if (created.streamKey) stream.stream_key = created.streamKey;
+      if (created.rtmpUrl) stream.rtmp_url = created.rtmpUrl;
+
+      await Stream.update(stream.id, {
+        youtube_broadcast_id: created.broadcastId,
+        youtube_lifecycle_status: 'ready',
+        stream_key: stream.stream_key,
+        rtmp_url: stream.rtmp_url
+      }).catch(() => {});
+    }
+  } catch (err) {
+    console.error(`[StreamingService] Error ensuring fresh YouTube broadcast for stream #${stream?.id}:`, err.message);
+    addStreamLog(stream?.id, `[YouTube] Catatan siaran: ${err.message}`);
+  }
+}
+
+/**
  * Synchronize stream_key and rtmp_url from YouTube broadcast's bound liveStream before starting FFmpeg.
  * This guarantees that FFmpeg is pushing video to the EXACT stream key YouTube Studio is expecting.
  * @param {Object} stream - Stream model instance
@@ -1802,12 +1959,13 @@ async function startStream(streamId) {
       }
     }
     
-    // BUG FIX: Synchronize stream key from YouTube broadcast if linked, ensuring FFmpeg pushes to the exact key
-    if (stream.platform === 'YouTube' && stream.youtube_broadcast_id) {
+    // BUG FIX: Ensure fresh YouTube broadcast for recurring daily / once streams before starting FFmpeg
+    if (stream.platform === 'YouTube' || stream.youtube_broadcast_id) {
       try {
+        await ensureFreshYouTubeBroadcastForStream(stream);
         await syncYouTubeStreamKeyBeforeStart(stream);
       } catch (keySyncErr) {
-        console.warn(`[StreamingService] Stream key pre-sync warning for stream #${streamId}:`, keySyncErr.message);
+        console.warn(`[StreamingService] YouTube broadcast pre-sync warning for stream #${streamId}:`, keySyncErr.message);
       }
     }
 
@@ -3103,6 +3261,7 @@ module.exports = {
   isYouTubeMonitored,
   endYouTubeBroadcastForStream,
   ensureYouTubeBroadcastLive,
+  ensureFreshYouTubeBroadcastForStream,
   syncYouTubeStreamKeyBeforeStart,
   // RTMP health monitor exports
   getRTMPHealthStatus,

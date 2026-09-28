@@ -168,14 +168,27 @@ class YouTubeStatusSync {
 
       console.log(`[YouTubeStatusSync] Found broadcast ${resolvedBroadcastId} for stream ${streamId}, status: ${initialStatus}`);
 
-      // Start polling interval
+      // Start polling interval (regular 15m)
       const intervalId = setInterval(async () => {
         await this.checkBroadcastStatus(streamId);
       }, POLLING_INTERVAL_MS);
 
+      // Fast early checks (15s, 30s, 60s, 120s) so upcoming broadcasts auto-recover to LIVE quickly
+      const earlyTimeouts = [];
+      [15000, 30000, 60000, 120000].forEach(delay => {
+        const tId = setTimeout(async () => {
+          if (this.activeChecks.has(streamId)) {
+            console.log(`[YouTubeStatusSync] Early live check (${delay / 1000}s) for stream ${streamId}...`);
+            await this.checkBroadcastStatus(streamId);
+          }
+        }, delay);
+        earlyTimeouts.push(tId);
+      });
+
       // Store monitoring state
       this.activeChecks.set(streamId, {
         intervalId,
+        earlyTimeouts,
         broadcastId: resolvedBroadcastId,
         userId,
         credentials,
@@ -200,9 +213,12 @@ class YouTubeStatusSync {
     const check = this.activeChecks.get(streamId);
     if (!check) return;
 
-    // Clear interval
+    // Clear interval and any pending early timeouts
     if (check.intervalId) {
       clearInterval(check.intervalId);
+    }
+    if (Array.isArray(check.earlyTimeouts)) {
+      check.earlyTimeouts.forEach(t => clearTimeout(t));
     }
 
     // Remove from map

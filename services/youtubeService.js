@@ -1202,28 +1202,42 @@ class YouTubeService {
         if (tErrMsg.includes('redundantTransition') || tErrMsg.includes('already live')) {
           return { success: true, lifeCycleStatus: 'live', alreadyLive: true };
         }
-        // If auto-start prevents manual transition, disable autoStart and retry
+        // If auto-start is enabled, YouTube handles transition automatically once RTMP stream is active.
+        // Only force-disable autoStart if stream is confirmed active or user explicitly forces it.
         if (tErrMsg.toLowerCase().includes('auto-start') || tErrMsg.toLowerCase().includes('autostart')) {
-          console.log(`[YouTubeService.transitionBroadcast] Auto-start prevented transition for ${broadcastId}. Disabling auto-start to force transition...`);
-          try {
-            await youtube.liveBroadcasts.update({
-              part: 'id,snippet,contentDetails',
-              requestBody: {
-                id: broadcastId,
-                snippet: item.snippet,
-                contentDetails: {
-                  ...item.contentDetails,
-                  enableAutoStart: false
+          console.log(`[YouTubeService.transitionBroadcast] Auto-start is enabled for broadcast ${broadcastId}. Checking bound stream status before overriding...`);
+          let isStreamActive = false;
+          if (item.contentDetails?.boundStreamId) {
+            const boundStream = await this.getBoundStreamDetails(accessToken, item.contentDetails.boundStreamId);
+            isStreamActive = boundStream?.streamStatus === 'active';
+            console.log(`[YouTubeService.transitionBroadcast] Bound stream status: ${boundStream?.streamStatus || 'unknown'}`);
+          }
+
+          if (isStreamActive) {
+            console.log(`[YouTubeService.transitionBroadcast] Stream is active but auto-start hasn't triggered. Disabling auto-start to force transition...`);
+            try {
+              await youtube.liveBroadcasts.update({
+                part: 'id,snippet,contentDetails',
+                requestBody: {
+                  id: broadcastId,
+                  snippet: item.snippet,
+                  contentDetails: {
+                    ...item.contentDetails,
+                    enableAutoStart: false
+                  }
                 }
-              }
-            });
-            transitionRes = await youtube.liveBroadcasts.transition({
-              part: 'id,status',
-              id: broadcastId,
-              broadcastStatus: target
-            });
-          } catch (autoErr) {
-            throw autoErr;
+              });
+              transitionRes = await youtube.liveBroadcasts.transition({
+                part: 'id,status',
+                id: broadcastId,
+                broadcastStatus: target
+              });
+            } catch (autoErr) {
+              throw autoErr;
+            }
+          } else {
+            console.log(`[YouTubeService.transitionBroadcast] Auto-start is active; preserving enableAutoStart:true while YouTube buffers RTMP stream.`);
+            return { success: false, lifeCycleStatus, error: 'Auto-start enabled, waiting for RTMP stream to become active on YouTube' };
           }
         } else {
           throw tErr;
@@ -1316,6 +1330,8 @@ class YouTubeService {
 
   /**
    * Poll and ensure YouTube broadcast transitions to live once RTMP stream is receiving data
+   * Handles both enableAutoStart: true (waiting for active stream + auto-transition)
+   * and enableAutoStart: false (manual transition once stream is active).
    * @param {string} accessToken
    * @param {string} broadcastId
    * @param {number} [maxAttempts=15]
@@ -1328,23 +1344,67 @@ class YouTubeService {
 
     console.log(`[YouTubeService.startBroadcastLive] Starting live verification and transition for broadcast: ${broadcastId}`);
 
+    let activeStreamCount = 0;
+
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       console.log(`[YouTubeService.startBroadcastLive] Verification attempt ${attempt}/${maxAttempts} for ${broadcastId}...`);
-      const transResult = await this.transitionBroadcast(accessToken, broadcastId, 'live');
-      
-      if (transResult.success && transResult.lifeCycleStatus === 'live') {
+
+      // 1. Check broadcast status directly
+      const bDetails = await this.getBroadcastDetails(accessToken, broadcastId);
+      const lifeCycleStatus = bDetails?.status?.lifeCycleStatus;
+      const isAutoStart = Boolean(bDetails?.contentDetails?.enableAutoStart);
+      const boundStreamId = bDetails?.contentDetails?.boundStreamId;
+
+      console.log(`[YouTubeService.startBroadcastLive] Broadcast status: '${lifeCycleStatus || 'unknown'}', autoStart: ${isAutoStart}, boundStream: ${boundStreamId || 'none'}`);
+
+      if (lifeCycleStatus === 'live') {
         console.log(`[YouTubeService.startBroadcastLive] ✅ Broadcast ${broadcastId} is confirmed LIVE on YouTube Studio!`);
-        return transResult;
+        return { success: true, lifeCycleStatus: 'live' };
       }
 
-      // If already complete or revoked, don't keep polling
-      if (transResult.lifeCycleStatus === 'complete' || transResult.lifeCycleStatus === 'revoked') {
-        return transResult;
+      if (lifeCycleStatus === 'complete' || lifeCycleStatus === 'completed' || lifeCycleStatus === 'revoked') {
+        console.warn(`[YouTubeService.startBroadcastLive] Broadcast ${broadcastId} is in terminal state '${lifeCycleStatus}'.`);
+        return { success: false, lifeCycleStatus, error: `Broadcast is already ${lifeCycleStatus}` };
       }
 
-      // If YouTube reports stream data not yet active or still starting, wait and retry
+      // 2. Check bound RTMP stream status
+      let streamStatus = 'unknown';
+      if (boundStreamId) {
+        const streamDetails = await this.getBoundStreamDetails(accessToken, boundStreamId);
+        streamStatus = streamDetails?.streamStatus || 'unknown';
+        console.log(`[YouTubeService.startBroadcastLive] Bound RTMP stream status on YouTube: '${streamStatus}'`);
+      }
+
+      if (streamStatus === 'active') {
+        activeStreamCount++;
+        console.log(`[YouTubeService.startBroadcastLive] RTMP stream is ACTIVE on YouTube CDN (detected ${activeStreamCount} times)`);
+
+        // If autoStart is enabled, YouTube usually flips to 'live' automatically within 5-15s of active stream
+        // If after 3 active detections (approx 12s) it's still not live, attempt fallback manual transition
+        if (isAutoStart && activeStreamCount < 3) {
+          console.log(`[YouTubeService.startBroadcastLive] Waiting for YouTube auto-start engine to flip status to LIVE...`);
+        } else {
+          // Manual transition or fallback
+          console.log(`[YouTubeService.startBroadcastLive] Triggering transitionBroadcast to 'live'...`);
+          const transResult = await this.transitionBroadcast(accessToken, broadcastId, 'live');
+          if (transResult.success && transResult.lifeCycleStatus === 'live') {
+            console.log(`[YouTubeService.startBroadcastLive] ✅ Broadcast ${broadcastId} successfully transitioned to LIVE on YouTube Studio!`);
+            return transResult;
+          }
+        }
+      } else {
+        // Stream not yet active on YouTube side (still buffering RTMP handshake)
+        if (!isAutoStart && attempt >= 3) {
+          // Attempt manual transition anyway if manual mode
+          const transResult = await this.transitionBroadcast(accessToken, broadcastId, 'live');
+          if (transResult.success && transResult.lifeCycleStatus === 'live') {
+            return transResult;
+          }
+        }
+      }
+
       if (attempt < maxAttempts) {
-        console.log(`[YouTubeService.startBroadcastLive] Broadcast not yet live (status: ${transResult.lifeCycleStatus || 'unknown'}, err: ${transResult.error || 'waiting for RTMP ingest'}). Retrying in ${delayMs / 1000}s...`);
+        console.log(`[YouTubeService.startBroadcastLive] Waiting for live status (broadcast: ${lifeCycleStatus || 'unknown'}, stream: ${streamStatus}). Retrying in ${delayMs / 1000}s...`);
         await new Promise(r => setTimeout(r, delayMs));
       }
     }

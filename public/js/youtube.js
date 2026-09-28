@@ -8198,7 +8198,14 @@ function calculateUpcomingDateTimeForSlot(timeStr, pattern = 'daily', days = nul
     return `${wibNow.year}-${pad(wibNow.month)}-${pad(wibNow.day)}T${pad(h)}:${pad(m)}`;
   }
 
-  // If time has passed today, schedule for tomorrow preserving exact hour & minute
+  // For 'none' or 'once' pattern: time has passed today, schedule 12 minutes from NOW today!
+  if (pattern === 'none' || pattern === 'once') {
+    const safeNowUtc = new Date(now.getTime() + minFutureMs);
+    const safeParts = getBrowserWIBParts(safeNowUtc);
+    return `${safeParts.year}-${pad(safeParts.month)}-${pad(safeParts.day)}T${pad(safeParts.hours)}:${pad(safeParts.minutes)}`;
+  }
+
+  // For recurring daily: schedule for tomorrow preserving exact hour & minute
   const tomUtc = new Date(Date.UTC(wibNow.year, wibNow.month - 1, wibNow.day + 1, h - 7, m, 0, 0));
   const tomParts = getBrowserWIBParts(tomUtc);
   return `${tomParts.year}-${pad(tomParts.month)}-${pad(tomParts.day)}T${pad(h)}:${pad(m)}`;
