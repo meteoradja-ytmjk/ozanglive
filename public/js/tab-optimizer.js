@@ -42,10 +42,11 @@
       if (!shouldPrefetchLink(link)) {
         return;
       }
-      // Prefetch saat hover (desktop) atau touchstart (mobile)
+      // Prefetch saat hover (desktop) atau touchstart (mobile) non-blocking
       link.addEventListener('mouseenter', () => prefetchPage(link.href, { priority: 'low' }), { once: false, passive: true });
-      link.addEventListener('touchstart', () => prefetchPage(link.href, { priority: 'high' }), { once: false, passive: true });
-      link.addEventListener('pointerdown', () => prefetchPage(link.href, { priority: 'high' }), { once: false, passive: true });
+      link.addEventListener('touchstart', () => {
+        setTimeout(() => prefetchPage(link.href, { priority: 'high' }), 50);
+      }, { once: false, passive: true });
     });
   }
 
@@ -207,11 +208,9 @@
     // Blocking touchend with e.preventDefault() was freezing touch scrolling on multiple browsers.
   }
 
-  // Smooth scroll ke top saat pindah halaman
+  // Scroll ke top saat inisialisasi tanpa mengunci scroll gesture browser
   function smoothScrollToTop() {
-    if ('scrollBehavior' in document.documentElement.style) {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    } else {
+    if (window.scrollY > 0) {
       window.scrollTo(0, 0);
     }
   }

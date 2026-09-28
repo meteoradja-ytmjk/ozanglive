@@ -316,24 +316,29 @@
   /* Universal viewport & scroll settings across all browsers (Desktop, Tablet, Mobile, PWA) */
   html {
     overflow-x: hidden;
-    overflow-y: auto !important;
-    height: auto !important;
+    overflow-y: auto;
+    height: 100%;
     min-height: 100%;
     -webkit-text-size-adjust: 100%;
-    scroll-behavior: smooth;
   }
 
   body {
     width: 100%;
-    height: auto !important;
+    min-height: 100%;
     min-height: 100vh;
     min-height: 100dvh;
     position: relative;
     margin: 0;
     padding: 0;
-    overflow-x: hidden;
-    overflow-y: visible !important;
+    /* CRITICAL FIX FOR CROSS-BROWSER SCROLL FREEZE:
+       body MUST remain overflow: visible. Setting overflow-x: hidden on body
+       forces Firefox & Safari to compute overflow-y: auto, causing a dual-scroller
+       conflict where body traps wheel & touch events and freezes vertical scrolling.
+       Horizontal overflow clipping is handled entirely by html. */
+    overflow: visible !important;
+    touch-action: pan-y;
     -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: auto;
   }
 
   /* Safe wrapper for content flow without flexbox height traps */
@@ -461,8 +466,8 @@
   /* Mobile specific fixes */
   @media (max-width: 1023px) {
     html {
-      overflow-y: auto !important;
-      height: auto !important;
+      overflow-x: hidden;
+      overflow-y: auto;
     }
 
     body {
@@ -470,9 +475,10 @@
       padding-bottom: 0 !important;
       min-height: 100vh;
       min-height: 100dvh;
-      height: auto !important;
-      overflow-y: visible !important;
+      overflow: visible !important;
       position: relative !important;
+      touch-action: pan-y;
+      overscroll-behavior-y: auto;
     }
 
     .mobile-safe-wrapper {
@@ -488,9 +494,7 @@
 
     .mobile-scroll-view {
       max-height: none !important;
-      overflow-y: visible !important;
-      -webkit-overflow-scrolling: touch;
-      overscroll-behavior-y: auto;
+      overflow: visible !important;
     }
 
     .main-container {
@@ -504,11 +508,6 @@
     .min-h-screen {
       min-height: auto !important;
       height: auto !important;
-    }
-
-    /* Force scrollable */
-    * {
-      -webkit-overflow-scrolling: touch;
     }
   }
 </style>
@@ -529,36 +528,65 @@
     }
   }
 
+  // Universal Scroll Guardian: Ensures scrolling is never locked/frozen when modals close
+  function isAnyModalActive() {
+    const modals = document.querySelectorAll(
+      '.modal-overlay:not(.hidden), [id*="Modal"]:not(.hidden), [id*="modal"]:not(.hidden)'
+    );
+    for (let i = 0; i < modals.length; i++) {
+      const el = modals[i];
+      if (el.id === 'profile-dropdown' || el.id === 'mobile-profile-popup') continue;
+      const style = window.getComputedStyle(el);
+      if (style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0') {
+        const rect = el.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  function restoreScrollIfNeeded() {
+    if (!isAnyModalActive()) {
+      if (document.body && (document.body.style.overflow === 'hidden' || document.body.style.overflowY === 'hidden')) {
+        document.body.style.removeProperty('overflow');
+        document.body.style.removeProperty('overflow-y');
+      }
+      if (document.documentElement && (document.documentElement.style.overflow === 'hidden' || document.documentElement.style.overflowY === 'hidden')) {
+        document.documentElement.style.removeProperty('overflow');
+        document.documentElement.style.removeProperty('overflow-y');
+      }
+    }
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
     // 1. Ensure scroll is cleanly unlocked on page load
-    document.body.style.removeProperty('overflow');
-    document.documentElement.style.removeProperty('overflow');
+    restoreScrollIfNeeded();
 
     // 2. Global Escape key handler to ensure scroll restoration
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
-        document.body.style.removeProperty('overflow');
-        document.documentElement.style.removeProperty('overflow');
+        setTimeout(restoreScrollIfNeeded, 80);
       }
     });
 
-    // 3. Fallback click handler on modal close triggers/overlays
-    document.addEventListener('click', (e) => {
-      if (e.target.closest('[onclick*="Modal"], [onclick*="modal"], [data-close-modal], .modal-overlay')) {
-        setTimeout(() => {
-          const hasOpenModal = document.querySelector(
-            '#newStreamModal.active, #newStreamModal:not(.hidden), ' +
-            '#scheduleModal:not(.hidden), #scheduleEditModal:not(.hidden), ' +
-            '#autoPilotCampaignModal:not(.hidden), #youtubeGuideModal:not(.hidden), ' +
-            '#recreateModal:not(.hidden), #qris-modal.flex:not(.hidden)'
-          );
-          if (!hasOpenModal) {
-            document.body.style.removeProperty('overflow');
-            document.documentElement.style.removeProperty('overflow');
-          }
-        }, 250);
-      }
+    // 3. Fallback click handler on any click / modal close triggers
+    document.addEventListener('click', () => {
+      setTimeout(restoreScrollIfNeeded, 150);
     });
+
+    // 4. Safe body style observer to prevent stuck overflow:hidden
+    if (typeof MutationObserver !== 'undefined' && document.body) {
+      const scrollObserver = new MutationObserver(() => {
+        if (!isAnyModalActive()) {
+          if (document.body.style.overflow === 'hidden' || document.documentElement.style.overflow === 'hidden') {
+            restoreScrollIfNeeded();
+          }
+        }
+      });
+      scrollObserver.observe(document.body, { attributes: true, attributeFilter: ['style', 'class'] });
+    }
 
     // Desktop profile dropdown
     const profileButton = document.getElementById('profile-menu-button');

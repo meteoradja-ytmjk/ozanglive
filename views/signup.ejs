@@ -14,11 +14,17 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.30.0/tabler-icons.min.css">
   <link rel="stylesheet" href="/css/styles.css">
   <style>
+    html {
+      overflow-x: hidden;
+      overflow-y: auto;
+      height: 100%;
+    }
     body {
       font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
       background-color: #070611;
-      overflow-x: hidden;
+      overflow: visible;
       min-height: 100vh;
+      touch-action: pan-y;
     }
     input { font-size: 15px !important; }
     

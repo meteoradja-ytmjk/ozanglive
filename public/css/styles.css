@@ -240,11 +240,14 @@ body {
 
 /* Mobile responsiveness fixes */
 @media (max-width: 767px) {
-  /* Ensure proper touch scrolling */
-  html, body {
+  /* Ensure proper single root scroller on html without body overflow traps */
+  html {
     overflow-x: hidden;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+  }
+  body {
+    overflow: visible !important;
   }
   
   /* Fix for content visibility */
@@ -823,10 +826,10 @@ img[data-src] {
     user-select: none;
   }
   
-  /* Prevent scroll jank on mobile */
+  /* Natural scrolling on mobile without chaining containment */
   body {
     -webkit-overflow-scrolling: touch;
-    overscroll-behavior-y: contain;
+    overscroll-behavior-y: auto;
   }
   
   /* Faster transitions on mobile */
