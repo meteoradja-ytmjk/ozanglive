@@ -1016,10 +1016,10 @@ class ScheduleService {
           const title = replaceTitlePlaceholders(finalTitle, now);
           const description = b.description ? replaceTitlePlaceholders(b.description, now) : '';
           
-          // Calculate scheduled start time
+          // Calculate scheduled start time (1 minute from now for immediate transition when stream starts)
           const scheduledStartTime = isSingleSlotMode
-            ? new Date(now.getTime() + 10 * 60 * 1000)
-            : new Date(now.getTime() + (10 + i * 2) * 60 * 1000);
+            ? new Date(now.getTime() + 60 * 1000)
+            : new Date(now.getTime() + (60 + i * 15) * 1000);
           
           // Log broadcast privacy status for debugging
           console.log(`[ScheduleService] Broadcast ${broadcastIndex + 1} privacyStatus from template: ${b.privacyStatus}`);
@@ -1295,8 +1295,8 @@ class ScheduleService {
         const title = replaceTitlePlaceholders(finalTitle, now);
         const description = template.description ? replaceTitlePlaceholders(template.description, now) : '';
         
-        // Calculate scheduled start time (10 minutes from now)
-        const scheduledStartTime = new Date(now.getTime() + 10 * 60 * 1000);
+        // Calculate scheduled start time (1 minute from now for immediate transition when stream starts)
+        const scheduledStartTime = new Date(now.getTime() + 60 * 1000);
         
         // Log template privacy_status for debugging
         console.log(`[ScheduleService] Template privacy_status: ${template.privacy_status}`);
