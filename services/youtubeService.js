@@ -389,9 +389,9 @@ class YouTubeService {
       const parsedDate = scheduledStartTime ? (parseWIBDateTimeLocal(scheduledStartTime) || new Date(scheduledStartTime)) : null;
       startTimeIso = (parsedDate && !isNaN(parsedDate.getTime())) 
         ? parsedDate.toISOString() 
-        : new Date(Date.now() + 15 * 60 * 1000).toISOString();
+        : new Date(Date.now() + 60 * 1000).toISOString();
     } catch (e) {
-      startTimeIso = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+      startTimeIso = new Date(Date.now() + 60 * 1000).toISOString();
     }
 
     const finalTags = Array.isArray(tags) ? [...tags] : (typeof tags === 'string' ? tags.split(/[\r\n,]+/).map(t => t.trim()).filter(Boolean) : []);
@@ -1220,10 +1220,15 @@ class YouTubeService {
                 part: 'id,snippet,contentDetails',
                 requestBody: {
                   id: broadcastId,
-                  snippet: item.snippet,
+                  snippet: {
+                    title: item.snippet?.title || '',
+                    description: item.snippet?.description || '',
+                    scheduledStartTime: item.snippet?.scheduledStartTime || new Date(Date.now() + 60 * 1000).toISOString()
+                  },
                   contentDetails: {
-                    ...item.contentDetails,
-                    enableAutoStart: false
+                    enableAutoStart: false,
+                    enableAutoStop: item.contentDetails?.enableAutoStop !== false,
+                    recordFromStart: item.contentDetails?.recordFromStart !== false
                   }
                 }
               });
@@ -1233,6 +1238,7 @@ class YouTubeService {
                 broadcastStatus: target
               });
             } catch (autoErr) {
+              console.warn(`[YouTubeService.transitionBroadcast] Disabling auto-start to force transition error:`, autoErr.message);
               throw autoErr;
             }
           } else {

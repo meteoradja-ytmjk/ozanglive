@@ -11279,13 +11279,14 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       }
     }
 
-    // Validate scheduled time (at least 10 minutes in future)
+    // Validate scheduled time (at least 10 minutes in future for schedules; 1 minute for immediate live start)
     let finalScheduledStartTime = scheduledStartTime;
     const reqScheduleType = req.body.scheduleType || (matchedSlot ? matchedSlot.scheduleType : null) || (templateObj ? templateObj.schedule_type : null) || 'once';
     const reqRecurringTime = req.body.recurringTime || (templateObj ? templateObj.recurring_time : null);
     const reqScheduleDays = req.body.scheduleDays || (templateObj ? templateObj.recurring_days : null);
     const isRecurringReq = reqScheduleType === 'daily' || reqScheduleType === 'weekly';
     const isFromTemplate = !!templateId;
+    const isStartImmediately = (req.body.startImmediately === 'true');
     const minTime = new Date(Date.now() + 10 * 60 * 1000);
 
     // Parse scheduledStartTime sent from client (either WIB datetime-local or ISO string)
@@ -11293,7 +11294,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
     let scheduledDate = parsedWibStart || (finalScheduledStartTime ? new Date(finalScheduledStartTime) : null);
 
     // Only fallback to Stream.getNextScheduledTime IF scheduledStartTime was NOT provided or invalid
-    if ((!scheduledDate || isNaN(scheduledDate.getTime())) && isRecurringReq && reqRecurringTime) {
+    if (!isStartImmediately && (!scheduledDate || isNaN(scheduledDate.getTime())) && isRecurringReq && reqRecurringTime) {
       let scheduleDaysParsed = null;
       if (reqScheduleDays) {
         try {
@@ -11313,12 +11314,13 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       }
     }
 
-    if (!scheduledDate || isNaN(scheduledDate.getTime()) || scheduledDate < minTime) {
-      if (req.body.startImmediately === 'true') {
-        // Automatically adjust to 15 minutes ahead so YouTube API accepts immediate live without 400 error
-        finalScheduledStartTime = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-        console.log('[API] Auto-adjusted scheduledStartTime for immediate start:', finalScheduledStartTime);
-      } else if (isRecurringReq) {
+    if (isStartImmediately) {
+      // Immediate live start requested via "Mulai Live" button:
+      // Schedule exactly 60 seconds ahead so YouTube API accepts without past-time error AND goes live immediately without waiting
+      finalScheduledStartTime = new Date(Date.now() + 60 * 1000).toISOString();
+      console.log('[API] Immediate live start requested - scheduledStartTime set to 1 minute ahead:', finalScheduledStartTime);
+    } else if (!scheduledDate || isNaN(scheduledDate.getTime()) || scheduledDate < minTime) {
+      if (isRecurringReq) {
         // FIX: For recurring schedules (daily/weekly) where the input slot time has already passed today,
         // ROLL OVER to tomorrow (or the next scheduled weekly day) PRESERVING the exact same WIB hour & minute!
         let targetHours = 13;
@@ -11991,7 +11993,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         console.log('[API] Created associated Stream record:', createdStream.id, 'for broadcast:', broadcast.broadcastId, 'schedule_time:', scheduleIso);
       }
 
-      if (req.body.startImmediately === 'true' && createdStream && req.body.videoId) {
+      if (req.body.startImmediately === 'true' && createdStream && (req.body.videoId || videoId || createdStream.video_id)) {
         if (typeof streamingService !== 'undefined' && typeof streamingService.startStream === 'function') {
           try {
             streamStartResult = await streamingService.startStream(createdStream.id);

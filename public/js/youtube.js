@@ -4641,9 +4641,9 @@ function submitBroadcastAndStartNow() {
   const form = document.getElementById('createBroadcastForm');
   if (!form) return;
 
-  // Validation: Ensure a video is selected before starting live
-  const videoId = document.getElementById('studioSelectedVideoId')?.value;
-  if (!videoId) {
+  // Validation: Ensure a video is selected before starting live if studio video selector is present
+  const videoInput = document.getElementById('studioSelectedVideoId');
+  if (videoInput && !videoInput.value) {
     if (typeof showToast === 'function') {
       showToast('Pilih video dari galeri terlebih dahulu untuk mulai live!', 'warning');
     }
@@ -4652,15 +4652,21 @@ function submitBroadcastAndStartNow() {
     return;
   }
 
-  // Always ensure scheduledStartTime and studioScheduleStartTime are set to at least 15 minutes ahead so YouTube API accepts the broadcast
-  const defaultDate = new Date(Date.now() + 15 * 60 * 1000);
+  // Set scheduledStartTime to 1 minute ahead for immediate live start (safe from YouTube past-time rejection while going live instantly)
+  const defaultDate = new Date(Date.now() + 60 * 1000);
   const defaultDateStr = typeof formatDateTimeLocal === 'function' ? formatDateTimeLocal(defaultDate) : defaultDate.toISOString().slice(0, 16);
 
   const scheduledInput = document.getElementById('scheduledStartTime');
-  if (scheduledInput) scheduledInput.value = defaultDateStr;
+  if (scheduledInput) {
+    scheduledInput.removeAttribute('min');
+    scheduledInput.value = defaultDateStr;
+  }
 
   const studioStart = document.getElementById('studioScheduleStartTime');
-  if (studioStart) studioStart.value = defaultDateStr;
+  if (studioStart) {
+    studioStart.removeAttribute('min');
+    studioStart.value = defaultDateStr;
+  }
 
   form.dataset.startImmediately = 'true';
   form.requestSubmit();

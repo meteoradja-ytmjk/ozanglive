@@ -310,7 +310,7 @@ async function ensureFreshYouTubeBroadcastForStream(stream) {
       }
     }
 
-    const scheduledStartTime = new Date(Date.now() + 12 * 60 * 1000).toISOString();
+    const scheduledStartTime = new Date(Date.now() + 60 * 1000).toISOString();
 
     const created = await youtubeService.createBroadcast(accessToken, {
       title: stream.title || 'Live Stream',
