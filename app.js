@@ -24,7 +24,7 @@ const compression = require('compression'); // Performance: Gzip compression
 const BrandingSettings = require('./models/BrandingSettings'); // White Label
 const { loadBrandingSettings, clearBrandingCache } = require('./middleware/brandingMiddleware'); // White Label
 const User = require('./models/User');
-const { db, checkIfUsersExist, checkIfAdminExists, waitForDbInit, verifyTables, checkConnectivity, closeDatabase } = require('./db/database');
+const { db, checkIfUsersExist, checkIfAdminExists, waitForDbInit, verifyTables, checkConnectivity, closeDatabase, isDbInitialized, getInitError } = require('./db/database');
 const systemMonitor = require('./services/systemMonitor');
 const { uploadVideo, upload, uploadAudio, uploadBackup, uploadChunk, uploadLogo, uploadFavicon, checkStorageLimit } = require('./middleware/uploadMiddleware');
 const { ensureDirectories, getUniqueFilename, paths } = require('./utils/storage');
@@ -1382,7 +1382,7 @@ app.get('/health', async (req, res) => {
   try {
     const activeStreams = streamingService.getActiveStreams();
 
-    // Check database connectivity
+    // Check database connectivity and initialization
     let dbStatus = { connected: false, latency: 0 };
     try {
       dbStatus = await checkConnectivity();
@@ -1390,9 +1390,11 @@ app.get('/health', async (req, res) => {
       dbStatus = { connected: false, latency: 0, error: dbErr.message };
     }
 
+    const dbHealthy = dbStatus.connected && isDbInitialized() && !getInitError();
+
     // Determine overall status
     const components = {
-      database: dbStatus.connected ? 'healthy' : 'unhealthy',
+      database: dbHealthy ? 'healthy' : 'unhealthy',
       streaming: 'healthy',
       scheduler: 'healthy'
     };

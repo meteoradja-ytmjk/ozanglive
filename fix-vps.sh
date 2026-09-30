@@ -62,8 +62,16 @@ fi
 pm2 save
 
 echo "[6/6] Verifikasi respon aplikasi..."
-sleep 3
-if curl -fsSIL --max-time 3 http://127.0.0.1:7575/health >/dev/null 2>&1 || curl -fsSIL --max-time 3 http://127.0.0.1:7575/login >/dev/null 2>&1; then
+local_online=false
+for i in 1 2 3 4 5 6; do
+  if curl -fsSIL --max-time 3 http://127.0.0.1:7575/health >/dev/null 2>&1 || curl -fsSIL --max-time 3 http://127.0.0.1:7575/login >/dev/null 2>&1; then
+    local_online=true
+    break
+  fi
+  sleep 2
+done
+
+if [ "$local_online" = "true" ]; then
   echo "  ✓ Aplikasi online dan merespon normal di port 7575!"
 else
   echo "  ⚠️ Sedang warming up, merefresh PM2..."

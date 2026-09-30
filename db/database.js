@@ -17,7 +17,8 @@ const REQUIRED_TABLES = [
   'users', 'videos', 'streams', 'stream_history',
   'playlists', 'playlist_videos', 'playlist_audios', 'audios',
   'system_settings', 'stream_templates', 'youtube_credentials',
-  'broadcast_templates', 'recurring_schedules', 'branding_settings'
+  'broadcast_templates', 'recurring_schedules', 'branding_settings',
+  'youtube_broadcast_settings', 'title_folders', 'title_suggestions'
 ];
 
 let dbConnectResolve;
@@ -113,8 +114,9 @@ function runTableQuery(sql, tableName) {
   return new Promise((resolve, reject) => {
     db.run(sql, (err) => {
       if (err) {
-        // Ignore "duplicate column" errors for ALTER TABLE
-        if (err.message && err.message.includes('duplicate column name')) {
+        // Ignore "duplicate column" errors for ALTER TABLE and "already exists" for tables/indexes
+        const errMsg = (err.message || '').toLowerCase();
+        if (errMsg.includes('duplicate column') || errMsg.includes('already exists')) {
           resolve();
           return;
         }
@@ -354,25 +356,13 @@ async function createCoreTablesAsync() {
   await runTableQuery(`ALTER TABLE streams ADD COLUMN title_folder_id TEXT`, 'streams.title_folder_id');
   await runTableQuery(`ALTER TABLE streams ADD COLUMN template_id TEXT`, 'streams.template_id');
 
-  // Backfill template_id for streams previously created by templates
-  await runTableQuery(`UPDATE streams 
-    SET template_id = (
-      SELECT template_id FROM youtube_broadcast_settings 
-      WHERE youtube_broadcast_settings.broadcast_id = streams.youtube_broadcast_id 
-        AND template_id IS NOT NULL AND template_id != ''
-      LIMIT 1
-    )
-    WHERE (template_id IS NULL OR template_id = '') 
-      AND youtube_broadcast_id IS NOT NULL AND youtube_broadcast_id != '' 
-      AND EXISTS (
-        SELECT 1 FROM youtube_broadcast_settings 
-        WHERE youtube_broadcast_settings.broadcast_id = streams.youtube_broadcast_id 
-          AND template_id IS NOT NULL AND template_id != ''
-      )`, 'streams.backfill_template_id');
-
   // Migrate stream_duration_hours to stream_duration_minutes
-  await runTableQuery(`UPDATE streams SET stream_duration_minutes = stream_duration_hours * 60 
-          WHERE stream_duration_hours IS NOT NULL AND stream_duration_minutes IS NULL`, 'streams.duration_migration');
+  try {
+    await runTableQuery(`UPDATE streams SET stream_duration_minutes = stream_duration_hours * 60 
+            WHERE stream_duration_hours IS NOT NULL AND stream_duration_minutes IS NULL`, 'streams.duration_migration');
+  } catch (durErr) {
+    console.warn('[DB] Warning migrating stream duration:', durErr.message);
+  }
 
   await runTableQuery(`CREATE TABLE IF NOT EXISTS system_settings (
     key TEXT PRIMARY KEY,
@@ -427,19 +417,23 @@ async function createCoreTablesAsync() {
   await runTableQuery(`ALTER TABLE youtube_credentials ADD COLUMN last_refresh_error TEXT`, 'youtube_credentials.last_refresh_error');
 
   // Set existing single accounts as primary
-  await runTableQuery(`UPDATE youtube_credentials SET is_primary = 1 WHERE is_primary = 0 AND id IN (
-    SELECT MIN(id) FROM youtube_credentials GROUP BY user_id
-  )`, 'youtube_credentials.primary_migration');
+  try {
+    await runTableQuery(`UPDATE youtube_credentials SET is_primary = 1 WHERE is_primary = 0 AND id IN (
+      SELECT MIN(id) FROM youtube_credentials GROUP BY user_id
+    )`, 'youtube_credentials.primary_migration');
 
-  // Ensure at most one primary account per user (prevent duplicate is_primary flags)
-  await runTableQuery(`UPDATE youtube_credentials SET is_primary = 0 WHERE is_primary = 1 AND id NOT IN (
-    SELECT MIN(id) FROM youtube_credentials WHERE is_primary = 1 GROUP BY user_id
-  )`, 'youtube_credentials.fix_duplicate_primary');
+    // Ensure at most one primary account per user (prevent duplicate is_primary flags)
+    await runTableQuery(`UPDATE youtube_credentials SET is_primary = 0 WHERE is_primary = 1 AND id NOT IN (
+      SELECT MIN(id) FROM youtube_credentials WHERE is_primary = 1 GROUP BY user_id
+    )`, 'youtube_credentials.fix_duplicate_primary');
 
-  // Clean up any existing duplicate streams sharing the same youtube_broadcast_id
-  await runTableQuery(`DELETE FROM streams WHERE id NOT IN (
-    SELECT MIN(id) FROM streams GROUP BY youtube_broadcast_id, user_id
-  ) AND youtube_broadcast_id IS NOT NULL AND youtube_broadcast_id != ''`, 'streams.cleanup_duplicate_broadcast_streams');
+    // Clean up any existing duplicate streams sharing the same youtube_broadcast_id
+    await runTableQuery(`DELETE FROM streams WHERE id NOT IN (
+      SELECT MIN(id) FROM streams GROUP BY youtube_broadcast_id, user_id
+    ) AND youtube_broadcast_id IS NOT NULL AND youtube_broadcast_id != ''`, 'streams.cleanup_duplicate_broadcast_streams');
+  } catch (cleanErr) {
+    console.warn('[DB] Warning during youtube_credentials/streams cleanup migration:', cleanErr.message);
+  }
 
   // Run migration for youtube_credentials table if needed
   await migrateYouTubeCredentialsTableAsync();
@@ -710,6 +704,26 @@ async function createCoreTablesAsync() {
   await runTableQuery(`ALTER TABLE youtube_broadcast_settings ADD COLUMN title_folder_id TEXT`, 'youtube_broadcast_settings.title_folder_id');
   await runTableQuery(`ALTER TABLE youtube_broadcast_settings ADD COLUMN audio_id TEXT`, 'youtube_broadcast_settings.audio_id');
   await runTableQuery(`ALTER TABLE youtube_broadcast_settings ADD COLUMN video_id TEXT`, 'youtube_broadcast_settings.video_id');
+
+  // Backfill template_id for streams previously created by templates (safely run now that youtube_broadcast_settings exists)
+  try {
+    await runTableQuery(`UPDATE streams 
+      SET template_id = (
+        SELECT template_id FROM youtube_broadcast_settings 
+        WHERE youtube_broadcast_settings.broadcast_id = streams.youtube_broadcast_id 
+          AND template_id IS NOT NULL AND template_id != ''
+        LIMIT 1
+      )
+      WHERE (template_id IS NULL OR template_id = '') 
+        AND youtube_broadcast_id IS NOT NULL AND youtube_broadcast_id != '' 
+        AND EXISTS (
+          SELECT 1 FROM youtube_broadcast_settings 
+          WHERE youtube_broadcast_settings.broadcast_id = streams.youtube_broadcast_id 
+            AND template_id IS NOT NULL AND template_id != ''
+        )`, 'streams.backfill_template_id');
+  } catch (backfillErr) {
+    console.warn('[DB] Warning backfilling stream template_id:', backfillErr.message);
+  }
 
   // Create stream_key_folder_mapping table for storing stream key to thumbnail folder binding
   await runTableQuery(`CREATE TABLE IF NOT EXISTS stream_key_folder_mapping (
