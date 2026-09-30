@@ -3752,6 +3752,9 @@ function openCreateBroadcastModal(options = {}) {
     if (autoStopToggle && !isEditing) {
       autoStopToggle.checked = false;
     }
+    if (!isEditing && !isReusingOrTemplate) {
+      if (typeof toggleStudioUnlimitedMode === 'function') toggleStudioUnlimitedMode(true);
+    }
     if (typeof updateAutoStopBadge === 'function') updateAutoStopBadge();
     if (typeof updateStudioDurationSummary === 'function') updateStudioDurationSummary();
   } catch (e) {
@@ -4373,17 +4376,67 @@ function syncStudioRecurringToScheduledStartTime() {
   if (studioStart) studioStart.value = formattedVal;
 }
 
+function toggleStudioUnlimitedMode(isUnlimited) {
+  const customSection = document.getElementById('studioCustomDurationSection');
+  const badge = document.getElementById('studioUnlimitedBadge');
+  const pill = document.getElementById('studioDurationModePill');
+  const hInput = document.getElementById('studioStreamDurationHours');
+  const mInput = document.getElementById('studioStreamDurationMinutes');
+  const loopToggle = document.getElementById('studioLoopVideoToggle');
+  const unlimitedToggle = document.getElementById('studioUnlimitedToggle');
+
+  if (unlimitedToggle && unlimitedToggle.checked !== isUnlimited) {
+    unlimitedToggle.checked = isUnlimited;
+  }
+
+  if (isUnlimited) {
+    if (customSection) customSection.classList.add('hidden');
+    if (badge) {
+      badge.textContent = 'Aktif';
+      badge.className = 'text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.2 rounded font-semibold';
+    }
+    if (pill) {
+      pill.innerHTML = '<i class="ti ti-infinity text-xs"></i> Mode Unlimited (24/7)';
+      pill.className = 'text-[10px] px-2 py-0.5 rounded-full font-medium bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center gap-1';
+    }
+    if (hInput) hInput.value = '';
+    if (mInput) mInput.value = '';
+    if (loopToggle) loopToggle.checked = true;
+    const endInput = document.getElementById('studioScheduleEndTime');
+    if (endInput) endInput.value = '';
+  } else {
+    if (customSection) customSection.classList.remove('hidden');
+    if (badge) {
+      badge.textContent = 'Nonaktif (Durasi)';
+      badge.className = 'text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.2 rounded font-semibold';
+    }
+    if (pill) {
+      pill.innerHTML = '<i class="ti ti-clock text-xs"></i> Durasi Tertentu';
+      pill.className = 'text-[10px] px-2 py-0.5 rounded-full font-medium bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center gap-1';
+    }
+  }
+
+  updateStudioDurationSummary();
+}
+window.toggleStudioUnlimitedMode = toggleStudioUnlimitedMode;
+
 function updateStudioDurationSummary() {
   const type = document.getElementById('studioScheduleType')?.value || 'once';
   const hours = parseInt(document.getElementById('studioStreamDurationHours')?.value || 0, 10) || 0;
   const minutes = parseInt(document.getElementById('studioStreamDurationMinutes')?.value || 0, 10) || 0;
   const totalMinutes = hours * 60 + minutes;
   const summaryText = document.getElementById('studioDurationSummaryText');
+  const summaryIcon = document.getElementById('studioDurationSummaryIcon');
+  const summaryNotice = document.getElementById('studioDurationSummaryNotice');
+  const unlimitedToggle = document.getElementById('studioUnlimitedToggle');
+  const isUnlimited = unlimitedToggle ? unlimitedToggle.checked : (totalMinutes === 0);
+  const pill = document.getElementById('studioDurationModePill');
+
   if (!summaryText) return;
 
   if (type === 'once') {
     const eVal = document.getElementById('studioScheduleEndTime')?.value;
-    if (totalMinutes > 0) {
+    if (totalMinutes > 0 && !isUnlimited) {
       let eStr = '';
       if (eVal) {
         const eDate = parseWibDateTime(eVal);
@@ -4393,18 +4446,42 @@ function updateStudioDurationSummary() {
           eStr = ` (Selesai pukul ${timeOnly} WIB)`;
         }
       }
-      summaryText.textContent = 'Durasi: ' + (hours > 0 ? hours + ' Jam ' : '') + (minutes > 0 ? minutes + ' Menit' : '') + eStr + ' • Server akan menutup siaran secara otomatis.';
+      summaryText.textContent = 'Durasi Siaran: ' + (hours > 0 ? hours + ' Jam ' : '') + (minutes > 0 ? minutes + ' Menit' : '') + eStr + ' • Server akan menutup siaran secara otomatis.';
+      if (summaryIcon) summaryIcon.className = 'ti ti-clock-check text-blue-400 text-base flex-shrink-0';
+      if (summaryNotice) summaryNotice.className = 'p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/30 text-xs text-blue-200 flex items-center gap-2 transition-all shadow-xs';
+      if (pill) {
+        pill.innerHTML = `<i class="ti ti-clock text-xs"></i> Durasi: ${hours > 0 ? hours + 'j ' : ''}${minutes > 0 ? minutes + 'm' : ''}`;
+        pill.className = 'text-[10px] px-2 py-0.5 rounded-full font-medium bg-blue-500/15 text-blue-300 border border-blue-500/30 flex items-center gap-1';
+      }
+    } else if (!isUnlimited && totalMinutes === 0) {
+      summaryText.textContent = 'Durasi Belum Diisi: Sistem otomatis menjalankan siaran dalam Mode Unlimited (24/7) hingga Anda mengisi angka jam / menit.';
+      if (summaryIcon) summaryIcon.className = 'ti ti-info-circle text-amber-400 text-base flex-shrink-0';
+      if (summaryNotice) summaryNotice.className = 'p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-200 flex items-center gap-2 transition-all shadow-xs';
+      if (pill) {
+        pill.innerHTML = '<i class="ti ti-infinity text-xs"></i> Auto-Unlimited (0 jam)';
+        pill.className = 'text-[10px] px-2 py-0.5 rounded-full font-medium bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center gap-1';
+      }
     } else {
-      summaryText.textContent = 'Mode Unlimited: Siaran berjalan tanpa batas (loop terus hingga dihentikan manual).';
+      summaryText.textContent = 'Mode Unlimited Aktif: Siaran berjalan tanpa batas waktu (loop video terus hingga dihentikan manual).';
+      if (summaryIcon) summaryIcon.className = 'ti ti-infinity text-emerald-400 text-base flex-shrink-0';
+      if (summaryNotice) summaryNotice.className = 'p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-200 flex items-center gap-2 transition-all shadow-xs';
+      if (pill) {
+        pill.innerHTML = '<i class="ti ti-infinity text-xs"></i> Mode Unlimited (24/7)';
+        pill.className = 'text-[10px] px-2 py-0.5 rounded-full font-medium bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center gap-1';
+      }
     }
   } else if (type === 'daily') {
     const rTime = document.getElementById('studioRecurringTime')?.value || '--:--';
     summaryText.textContent = 'Setiap Hari (Daily): Mulai setiap ' + rTime + ' WIB' + (totalMinutes > 0 ? ' selama ' + (hours > 0 ? hours + ' Jam ' : '') + (minutes > 0 ? minutes + ' Menit' : '') : ' (Unlimited / loop video)') + '.';
+    if (summaryIcon) summaryIcon.className = 'ti ti-calendar-repeat text-purple-400 text-base flex-shrink-0';
+    if (summaryNotice) summaryNotice.className = 'p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/30 text-xs text-purple-200 flex items-center gap-2 transition-all shadow-xs';
   } else if (type === 'weekly') {
     const dayNames = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
     const selectedNames = (studioSelectedDays || []).slice().sort((a, b) => a - b).map(d => dayNames[d]).join(', ');
     const rTime = document.getElementById('studioRecurringTime')?.value || '--:--';
     summaryText.textContent = 'Mingguan (Weekly): [' + (selectedNames || 'Pilih Hari') + '] pukul ' + rTime + ' WIB' + (totalMinutes > 0 ? ' selama ' + (hours > 0 ? hours + ' Jam ' : '') + (minutes > 0 ? minutes + ' Menit' : '') : ' (Unlimited / loop video)') + '.';
+    if (summaryIcon) summaryIcon.className = 'ti ti-calendar-event text-purple-400 text-base flex-shrink-0';
+    if (summaryNotice) summaryNotice.className = 'p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/30 text-xs text-purple-200 flex items-center gap-2 transition-all shadow-xs';
   }
 }
 window.updateStudioDurationSummary = updateStudioDurationSummary;
@@ -4436,6 +4513,20 @@ function syncEndTimeFromDuration() {
   const minutes = parseInt(document.getElementById('studioStreamDurationMinutes')?.value || 0, 10) || 0;
   const totalMinutes = hours * 60 + minutes;
   const endInput = document.getElementById('studioScheduleEndTime');
+
+  if (totalMinutes > 0) {
+    const unlimitedToggle = document.getElementById('studioUnlimitedToggle');
+    if (unlimitedToggle && unlimitedToggle.checked) {
+      unlimitedToggle.checked = false;
+      const customSection = document.getElementById('studioCustomDurationSection');
+      if (customSection) customSection.classList.remove('hidden');
+      const badge = document.getElementById('studioUnlimitedBadge');
+      if (badge) {
+        badge.textContent = 'Nonaktif (Durasi)';
+        badge.className = 'text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.2 rounded font-semibold';
+      }
+    }
+  }
 
   if (endInput) {
     if (totalMinutes > 0 && startVal) {
@@ -4778,8 +4869,15 @@ window.openEditStudioModal = function(stream) {
   const minutesInput = document.getElementById('studioStreamDurationMinutes');
   const loopToggle = document.getElementById('studioLoopVideoToggle');
 
-  if (hoursInput) hoursInput.value = hours > 0 ? hours : '';
-  if (minutesInput) minutesInput.value = minutes > 0 ? minutes : '';
+  if (totalMin > 0) {
+    if (typeof toggleStudioUnlimitedMode === 'function') toggleStudioUnlimitedMode(false);
+    if (hoursInput) hoursInput.value = hours > 0 ? hours : '';
+    if (minutesInput) minutesInput.value = minutes > 0 ? minutes : '';
+  } else {
+    if (typeof toggleStudioUnlimitedMode === 'function') toggleStudioUnlimitedMode(true);
+    if (hoursInput) hoursInput.value = '';
+    if (minutesInput) minutesInput.value = '';
+  }
   if (loopToggle) loopToggle.checked = stream.loop_video !== false;
 
   // Schedule Type
@@ -4957,6 +5055,7 @@ function closeCreateBroadcastModal() {
   if (minutesInput) minutesInput.value = '';
   const loopToggle = document.getElementById('studioLoopVideoToggle');
   if (loopToggle) loopToggle.checked = true;
+  if (typeof toggleStudioUnlimitedMode === 'function') toggleStudioUnlimitedMode(true);
 
   const scheduledInput = document.getElementById('scheduledStartTime');
   if (scheduledInput) scheduledInput.value = '';
