@@ -4396,8 +4396,8 @@ function toggleStudioUnlimitedMode(isUnlimited) {
       badge.className = 'text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.2 rounded font-semibold';
     }
     if (pill) {
-      pill.innerHTML = '<i class="ti ti-infinity text-xs"></i> Mode Unlimited (24/7)';
-      pill.className = 'text-[10px] px-2 py-0.5 rounded-full font-medium bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center gap-1';
+      pill.innerHTML = '<i class="ti ti-infinity text-xs"></i> 24/7 Unlimited';
+      pill.className = 'text-[10px] px-2 py-0.5 rounded-full font-medium bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center gap-1 shrink-0';
     }
     if (hInput) hInput.value = '';
     if (mInput) mInput.value = '';
@@ -4412,7 +4412,7 @@ function toggleStudioUnlimitedMode(isUnlimited) {
     }
     if (pill) {
       pill.innerHTML = '<i class="ti ti-clock text-xs"></i> Durasi Tertentu';
-      pill.className = 'text-[10px] px-2 py-0.5 rounded-full font-medium bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center gap-1';
+      pill.className = 'text-[10px] px-2 py-0.5 rounded-full font-medium bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center gap-1 shrink-0';
     }
   }
 
@@ -4443,45 +4443,45 @@ function updateStudioDurationSummary() {
         if (eDate && !isNaN(eDate.getTime())) {
           const eFormatted = formatDateTimeLocal(eDate);
           const timeOnly = eFormatted.slice(11, 16);
-          eStr = ` (Selesai pukul ${timeOnly} WIB)`;
+          eStr = ` (selesai ${timeOnly} WIB)`;
         }
       }
-      summaryText.textContent = 'Durasi Siaran: ' + (hours > 0 ? hours + ' Jam ' : '') + (minutes > 0 ? minutes + ' Menit' : '') + eStr + ' • Server akan menutup siaran secara otomatis.';
-      if (summaryIcon) summaryIcon.className = 'ti ti-clock-check text-blue-400 text-base flex-shrink-0';
-      if (summaryNotice) summaryNotice.className = 'p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/30 text-xs text-blue-200 flex items-center gap-2 transition-all shadow-xs';
+      summaryText.textContent = 'Durasi: ' + (hours > 0 ? hours + 'j ' : '') + (minutes > 0 ? minutes + 'm' : '') + eStr + ' • Selesai otomatis.';
+      if (summaryIcon) summaryIcon.className = 'ti ti-clock-check text-blue-400 text-xs shrink-0';
+      if (summaryNotice) summaryNotice.className = 'px-3 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-[11px] text-blue-300 flex items-center gap-2 overflow-hidden';
       if (pill) {
-        pill.innerHTML = `<i class="ti ti-clock text-xs"></i> Durasi: ${hours > 0 ? hours + 'j ' : ''}${minutes > 0 ? minutes + 'm' : ''}`;
-        pill.className = 'text-[10px] px-2 py-0.5 rounded-full font-medium bg-blue-500/15 text-blue-300 border border-blue-500/30 flex items-center gap-1';
+        pill.innerHTML = `<i class="ti ti-clock text-xs"></i> ${hours > 0 ? hours + 'j ' : ''}${minutes > 0 ? minutes + 'm' : ''}`;
+        pill.className = 'text-[10px] px-2 py-0.5 rounded-full font-medium bg-blue-500/15 text-blue-300 border border-blue-500/30 flex items-center gap-1 shrink-0';
       }
     } else if (!isUnlimited && totalMinutes === 0) {
-      summaryText.textContent = 'Durasi Belum Diisi: Sistem otomatis menjalankan siaran dalam Mode Unlimited (24/7) hingga Anda mengisi angka jam / menit.';
-      if (summaryIcon) summaryIcon.className = 'ti ti-info-circle text-amber-400 text-base flex-shrink-0';
-      if (summaryNotice) summaryNotice.className = 'p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-200 flex items-center gap-2 transition-all shadow-xs';
+      summaryText.textContent = 'Durasi kosong: Otomatis mode unlimited (24/7).';
+      if (summaryIcon) summaryIcon.className = 'ti ti-info-circle text-amber-400 text-xs shrink-0';
+      if (summaryNotice) summaryNotice.className = 'px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-300 flex items-center gap-2 overflow-hidden';
       if (pill) {
-        pill.innerHTML = '<i class="ti ti-infinity text-xs"></i> Auto-Unlimited (0 jam)';
-        pill.className = 'text-[10px] px-2 py-0.5 rounded-full font-medium bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center gap-1';
+        pill.innerHTML = '<i class="ti ti-infinity text-xs"></i> Auto-Unlimited';
+        pill.className = 'text-[10px] px-2 py-0.5 rounded-full font-medium bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center gap-1 shrink-0';
       }
     } else {
-      summaryText.textContent = 'Mode Unlimited Aktif: Siaran berjalan tanpa batas waktu (loop video terus hingga dihentikan manual).';
-      if (summaryIcon) summaryIcon.className = 'ti ti-infinity text-emerald-400 text-base flex-shrink-0';
-      if (summaryNotice) summaryNotice.className = 'p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-200 flex items-center gap-2 transition-all shadow-xs';
+      summaryText.textContent = 'Mode Unlimited: Siaran berputar tanpa batas waktu.';
+      if (summaryIcon) summaryIcon.className = 'ti ti-infinity text-emerald-400 text-xs shrink-0';
+      if (summaryNotice) summaryNotice.className = 'px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-[11px] text-emerald-300 flex items-center gap-2 overflow-hidden';
       if (pill) {
-        pill.innerHTML = '<i class="ti ti-infinity text-xs"></i> Mode Unlimited (24/7)';
-        pill.className = 'text-[10px] px-2 py-0.5 rounded-full font-medium bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center gap-1';
+        pill.innerHTML = '<i class="ti ti-infinity text-xs"></i> 24/7 Unlimited';
+        pill.className = 'text-[10px] px-2 py-0.5 rounded-full font-medium bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center gap-1 shrink-0';
       }
     }
   } else if (type === 'daily') {
     const rTime = document.getElementById('studioRecurringTime')?.value || '--:--';
-    summaryText.textContent = 'Setiap Hari (Daily): Mulai setiap ' + rTime + ' WIB' + (totalMinutes > 0 ? ' selama ' + (hours > 0 ? hours + ' Jam ' : '') + (minutes > 0 ? minutes + ' Menit' : '') : ' (Unlimited / loop video)') + '.';
-    if (summaryIcon) summaryIcon.className = 'ti ti-calendar-repeat text-purple-400 text-base flex-shrink-0';
-    if (summaryNotice) summaryNotice.className = 'p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/30 text-xs text-purple-200 flex items-center gap-2 transition-all shadow-xs';
+    summaryText.textContent = 'Daily: Setiap ' + rTime + ' WIB' + (totalMinutes > 0 ? ' (' + (hours > 0 ? hours + 'j ' : '') + (minutes > 0 ? minutes + 'm' : '') + ')' : ' (Unlimited)') + '.';
+    if (summaryIcon) summaryIcon.className = 'ti ti-calendar-repeat text-purple-400 text-xs shrink-0';
+    if (summaryNotice) summaryNotice.className = 'px-3 py-1.5 rounded-lg bg-purple-500/10 border border-purple-500/20 text-[11px] text-purple-300 flex items-center gap-2 overflow-hidden';
   } else if (type === 'weekly') {
     const dayNames = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
     const selectedNames = (studioSelectedDays || []).slice().sort((a, b) => a - b).map(d => dayNames[d]).join(', ');
     const rTime = document.getElementById('studioRecurringTime')?.value || '--:--';
-    summaryText.textContent = 'Mingguan (Weekly): [' + (selectedNames || 'Pilih Hari') + '] pukul ' + rTime + ' WIB' + (totalMinutes > 0 ? ' selama ' + (hours > 0 ? hours + ' Jam ' : '') + (minutes > 0 ? minutes + ' Menit' : '') : ' (Unlimited / loop video)') + '.';
-    if (summaryIcon) summaryIcon.className = 'ti ti-calendar-event text-purple-400 text-base flex-shrink-0';
-    if (summaryNotice) summaryNotice.className = 'p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/30 text-xs text-purple-200 flex items-center gap-2 transition-all shadow-xs';
+    summaryText.textContent = 'Weekly: [' + (selectedNames || 'Pilih Hari') + '] ' + rTime + ' WIB' + (totalMinutes > 0 ? ' (' + (hours > 0 ? hours + 'j ' : '') + (minutes > 0 ? minutes + 'm' : '') + ')' : ' (Unlimited)') + '.';
+    if (summaryIcon) summaryIcon.className = 'ti ti-calendar-event text-purple-400 text-xs shrink-0';
+    if (summaryNotice) summaryNotice.className = 'px-3 py-1.5 rounded-lg bg-purple-500/10 border border-purple-500/20 text-[11px] text-purple-300 flex items-center gap-2 overflow-hidden';
   }
 }
 window.updateStudioDurationSummary = updateStudioDurationSummary;
