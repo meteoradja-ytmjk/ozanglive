@@ -1373,6 +1373,120 @@ async function buildFFmpegArgsForAudioOnlyPlaylist(stream, playlist, durationSec
   return args;
 }
 
+/**
+ * Pre-render multiple video files in a playlist into a single seamless MP4 file.
+ * Fast stream-copy concat is attempted first (<1s, 0% CPU). If formats/codecs differ,
+ * falls back to ultrafast re-encode to ensure seamless playback.
+ */
+function prerenderPlaylistVideos(videoPaths, outputFile) {
+  return new Promise((resolve) => {
+    if (!Array.isArray(videoPaths) || videoPaths.length === 0) {
+      return resolve(null);
+    }
+
+    const outDir = path.dirname(outputFile);
+    if (!fs.existsSync(outDir)) {
+      try { fs.mkdirSync(outDir, { recursive: true }); } catch (_) {}
+    }
+
+    // Remove any previous output file
+    try { if (fs.existsSync(outputFile)) fs.unlinkSync(outputFile); } catch (_) {}
+
+    const concatTxt = path.join(outDir, `concat_v_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.txt`);
+    const lines = videoPaths.map(p => `file '${formatConcatFilePath(p)}'`);
+    try {
+      fs.writeFileSync(concatTxt, lines.join('\n'), 'utf8');
+    } catch (wErr) {
+      console.error('[StreamingService] Failed to write concat file for playlist pre-render:', wErr.message);
+      return resolve(null);
+    }
+
+    // Attempt 1: Fast stream-copy concat (<1 second, 0% CPU)
+    const copyArgs = [
+      '-fflags', '+genpts',
+      '-f', 'concat',
+      '-safe', '0',
+      '-i', concatTxt,
+      '-c:v', 'copy',
+      '-c:a', 'aac',
+      '-profile:a', 'aac_low',
+      '-b:a', '128k',
+      '-ar', '44100',
+      '-ac', '2',
+      '-movflags', '+faststart',
+      '-y',
+      outputFile
+    ];
+
+    const copyProc = spawn(ffmpegPath, copyArgs, { stdio: ['ignore', 'ignore', 'pipe'] });
+    let copyStderr = '';
+    copyProc.stderr.on('data', (chunk) => {
+      copyStderr = (copyStderr + chunk.toString()).slice(-4096);
+    });
+
+    copyProc.on('close', (code) => {
+      if (code === 0 && fs.existsSync(outputFile) && fs.statSync(outputFile).size > 10000) {
+        try { if (fs.existsSync(concatTxt)) fs.unlinkSync(concatTxt); } catch (_) {}
+        console.log(`[StreamingService] ✅ Fast stream-copy pre-rendered ${videoPaths.length} videos: ${outputFile}`);
+        return resolve(outputFile);
+      }
+
+      console.warn(`[StreamingService] Fast stream-copy pre-render failed (code=${code}), falling back to ultrafast re-encode:`, copyStderr.slice(-300));
+      try { if (fs.existsSync(outputFile)) fs.unlinkSync(outputFile); } catch (_) {}
+
+      // Attempt 2: Ultrafast re-encode fallback (handles mixed resolutions/codecs)
+      const encodeArgs = [
+        '-fflags', '+genpts',
+        '-f', 'concat',
+        '-safe', '0',
+        '-i', concatTxt,
+        '-c:v', 'libx264',
+        '-preset', 'ultrafast',
+        '-tune', 'zerolatency',
+        '-pix_fmt', 'yuv420p',
+        '-c:a', 'aac',
+        '-profile:a', 'aac_low',
+        '-b:a', '128k',
+        '-ar', '44100',
+        '-ac', '2',
+        '-af', 'aresample=async=1:first_pts=0',
+        '-movflags', '+faststart',
+        '-y',
+        outputFile
+      ];
+
+      const encProc = spawn(ffmpegPath, encodeArgs, { stdio: ['ignore', 'ignore', 'pipe'] });
+      let encStderr = '';
+      encProc.stderr.on('data', (chunk) => {
+        encStderr = (encStderr + chunk.toString()).slice(-4096);
+      });
+
+      encProc.on('close', (encCode) => {
+        try { if (fs.existsSync(concatTxt)) fs.unlinkSync(concatTxt); } catch (_) {}
+        if (encCode === 0 && fs.existsSync(outputFile) && fs.statSync(outputFile).size > 10000) {
+          console.log(`[StreamingService] ✅ Re-encode pre-rendered ${videoPaths.length} videos: ${outputFile}`);
+          return resolve(outputFile);
+        }
+        console.error(`[StreamingService] ❌ Re-encode pre-render failed (code=${encCode}):`, encStderr.slice(-300));
+        try { if (fs.existsSync(outputFile)) fs.unlinkSync(outputFile); } catch (_) {}
+        resolve(null);
+      });
+
+      encProc.on('error', (err) => {
+        try { if (fs.existsSync(concatTxt)) fs.unlinkSync(concatTxt); } catch (_) {}
+        console.error('[StreamingService] Pre-render encode spawn error:', err.message);
+        resolve(null);
+      });
+    });
+
+    copyProc.on('error', (err) => {
+      try { if (fs.existsSync(concatTxt)) fs.unlinkSync(concatTxt); } catch (_) {}
+      console.error('[StreamingService] Pre-render copy spawn error:', err.message);
+      resolve(null);
+    });
+  });
+}
+
 // BUG FIX #8: Added reconnecting param so shuffle is NOT re-randomized on reconnect
 async function buildFFmpegArgsForPlaylist(stream, playlist, durationOverrideSeconds = null, reconnecting = false) {
   const hasVideos = Array.isArray(playlist.videos) && playlist.videos.length > 0;
@@ -1470,148 +1584,104 @@ async function buildFFmpegArgsForPlaylist(stream, playlist, durationOverrideSeco
       console.error(`[StreamingService] Missing playlist audio: title=${audio.title}, filepath=${audio.filepath}, checked=${audio.checkedPath}`);
     });
   }
-  
-  const concatFile = path.join(projectRoot, 'temp', `playlist_${stream.id}.txt`);
-  const audioConcatFile = path.join(projectRoot, 'temp', `playlist_${stream.id}_audio.txt`);
-  
-  const tempDir = path.dirname(concatFile);
-  if (!fs.existsSync(tempDir)) {
-    fs.mkdirSync(tempDir, { recursive: true });
+
+  // Also check if stream itself has audio_id selected
+  if (audioPaths.length === 0 && stream.audio_id) {
+    try {
+      const Audio = require('../models/Audio');
+      const audioPlaylist = await Playlist.findByIdWithMedia(stream.audio_id).catch(() => null);
+      if (audioPlaylist && Array.isArray(audioPlaylist.audios) && audioPlaylist.audios.length > 0) {
+        let extraAudios = [...audioPlaylist.audios];
+        if (audioPlaylist.play_mode === 'shuffle' && !reconnecting) {
+          extraAudios.sort(() => Math.random() - 0.5);
+        }
+        extraAudios.forEach(a => {
+          const ap = resolvePublicMediaPath(a.filepath);
+          if (fs.existsSync(ap)) audioPaths.push(ap);
+        });
+      } else {
+        const extraAudio = await Audio.findById(stream.audio_id).catch(() => null);
+        if (extraAudio && extraAudio.filepath) {
+          const ap = resolvePublicMediaPath(extraAudio.filepath);
+          if (fs.existsSync(ap)) audioPaths.push(ap);
+        }
+      }
+    } catch (_) {}
   }
   
-  // Loop the playlist when the user enabled loop OR when a finite duration is set.
-  // A finite duration means the stream MUST run for the full configured time, so the
-  // playlist has to repeat to fill it. Without this, FFmpeg exits as soon as the
-  // playlist ends — the "stream stops before the configured duration" bug.
-  // We use the FFmpeg `-stream_loop -1` input flag (added to args below) for a true
-  // Loop the playlist when user enabled loop, OR when a finite duration is set (to fill duration).
-  // When loop is disabled and no duration is set, playlist plays once and stops naturally.
-  const shouldLoopPlaylist = (stream.loop_video !== false && stream.loop_video !== 0 && stream.loop_video !== 'false') || (durationSeconds && durationSeconds > 0);
+  // Resolve target video file: 1 video -> use directly; multiple videos -> seamless pre-render
+  let targetVideoFile = null;
+  if (videoPaths.length === 1) {
+    targetVideoFile = videoPaths[0];
+  } else {
+    const mergedVideoFile = path.join(projectRoot, 'temp', `playlist_${stream.id}_video_merged.mp4`);
+    console.log(`[StreamingService] Pre-rendering ${videoPaths.length} playlist video file(s)...`);
+    const merged = await prerenderPlaylistVideos(videoPaths, mergedVideoFile);
+    if (merged) {
+      targetVideoFile = merged;
+      console.log(`[StreamingService] Video playlist pre-render ready: ${merged}`);
+    } else {
+      console.warn('[StreamingService] Video playlist pre-render failed, falling back to first video.');
+      targetVideoFile = videoPaths[0];
+    }
+  }
 
-  let concatContent = '';
-  videoPaths.forEach(videoPath => {
-    concatContent += `file '${formatConcatFilePath(videoPath)}'\n`;
-  });
-
-  fs.writeFileSync(concatFile, concatContent);
-
-  // Build a single seamless audio file when the playlist has audios.
-  // We try pre-rendering with the concat filter first (sample-accurate, truly
-  // gapless). If that fails for any reason, we fall back to the older concat
-  // demuxer list so the live stream still gets audio.
+  // Resolve target audio file
   let usePlaylistAudio = false;
-  let useGaplessAudio = false;
   let gaplessAudioFile = null;
 
   if (audioPaths.length > 0) {
     if (audioPaths.length === 1) {
-      // Single track: nothing to "join" — use it directly, no pre-render needed.
       gaplessAudioFile = audioPaths[0];
-      useGaplessAudio = true;
       usePlaylistAudio = true;
     } else {
       const mergedAudioFile = path.join(projectRoot, 'temp', `playlist_${stream.id}_audio_merged.m4a`);
-      // Remove any stale merge output from a previous run before re-rendering
       try { if (fs.existsSync(mergedAudioFile)) fs.unlinkSync(mergedAudioFile); } catch (_) { /* noop */ }
 
       console.log(`[StreamingService] Pre-rendering ${audioPaths.length} playlist audio file(s) into a gapless track...`);
       const merged = await prerenderGaplessAudio(audioPaths, mergedAudioFile);
       if (merged) {
         gaplessAudioFile = merged;
-        useGaplessAudio = true;
         usePlaylistAudio = true;
         console.log(`[StreamingService] Gapless audio ready: ${merged}`);
       } else {
-        console.warn('[StreamingService] Gapless pre-render failed, falling back to concat-demuxer (may have small gaps between tracks).');
-
-        let audioConcatContent = '';
-        audioPaths.forEach(audioPath => {
-          audioConcatContent += `file '${formatConcatFilePath(audioPath)}'\n`;
-        });
-        fs.writeFileSync(audioConcatFile, audioConcatContent);
+        gaplessAudioFile = audioPaths[0];
         usePlaylistAudio = true;
       }
     }
   }
 
-  // Make sure no stale audio concat file from a previous run lingers when we
-  // are not using the demuxer fallback this time.
-  if (!usePlaylistAudio || useGaplessAudio) {
-    try {
-      if (fs.existsSync(audioConcatFile)) fs.unlinkSync(audioConcatFile);
-    } catch (_) { /* noop */ }
-  }
-  
-  // Playlist streams are always normalized before RTMP output.
-  // Copy mode is fragile for playlists because files can have different codecs,
-  // resolutions, timestamps, or audio formats that FLV/RTMP cannot accept.
-  const resolution = stream.resolution || '1280x720';
-  const bitrate = stream.bitrate || 2500;
-  const fps = stream.fps || 30;
+  const shouldLoopPlaylist = (stream.loop_video !== false && stream.loop_video !== 0 && stream.loop_video !== 'false') || (durationSeconds && durationSeconds > 0);
 
-  const args = [
-    '-re',
-  ];
+  const args = ['-re'];
 
-  // Loop the concatenated playlist input when required (see shouldLoopPlaylist above).
-  // -stream_loop must be placed BEFORE the -i it applies to.
+  // Loop the video input infinitely when required
   if (shouldLoopPlaylist) {
     args.push('-stream_loop', '-1');
+    args.push('-fflags', '+genpts');
   }
+  args.push('-i', targetVideoFile);
 
-  args.push(
-    '-fflags', '+genpts',
-    '-f', 'concat',
-    '-safe', '0',
-    '-i', concatFile,
-  );
-
-  if (usePlaylistAudio) {
-    if (useGaplessAudio) {
-      // Single pre-rendered seamless track. No concat demuxer here — just loop
-      // the file. Because boundaries inside the merged file are sample-
-      // accurate, looping back to the start is also gapless.
-      args.push(
-        '-stream_loop', '-1',
-        '-i', gaplessAudioFile,
-        '-map', '0:v:0',
-        '-map', '1:a:0'
-      );
-    } else {
-      // Fallback: concat demuxer (per-file, may show tiny gaps between tracks)
-      args.push(
-        '-stream_loop', '-1',
-        '-f', 'concat',
-        '-safe', '0',
-        '-i', audioConcatFile,
-        '-map', '0:v:0',
-        '-map', '1:a:0'
-      );
+  if (usePlaylistAudio && gaplessAudioFile) {
+    if (shouldLoopPlaylist) {
+      args.push('-stream_loop', '-1');
     }
+    args.push('-i', gaplessAudioFile);
+    args.push('-map', '0:v:0', '-map', '1:a:0');
   } else {
-    args.push(
-      '-map', '0:v:0',
-      '-map', '0:a?'
-    );
+    args.push('-map', '0:v:0', '-map', '0:a?');
   }
 
+  // Stream-copy video directly for ~0% CPU, encode audio to standard YouTube AAC stereo
   args.push(
-    '-c:v', 'libx264',
-    '-preset', 'ultrafast',
-    '-tune', 'zerolatency',
-    '-b:v', `${bitrate}k`,
-    '-bufsize', `${bitrate * 2}k`,
-    '-maxrate', `${Math.floor(bitrate * 1.5)}k`,
-    '-pix_fmt', 'yuv420p',
-    '-g', `${fps * 2}`,
-    '-s', resolution,
-    '-r', fps.toString(),
+    '-c:v', 'copy',
     '-c:a', 'aac',
     '-profile:a', 'aac_low',
     '-b:a', '128k',
     '-ar', '44100',
     '-ac', '2',
-    '-af', 'aresample=async=1:first_pts=0'
+    '-af', 'aresample=async=1:first_pts=0',
+    '-sn', '-dn'
   );
 
   // CRITICAL: -t must be placed BEFORE -f flv and output URL
@@ -1623,13 +1693,7 @@ async function buildFFmpegArgsForPlaylist(stream, playlist, durationOverrideSeco
   args.push('-f', 'flv');
   args.push(rtmpUrl);
   console.log(
-    `[StreamingService] Playlist: normalized encoding mode${
-      usePlaylistAudio
-        ? useGaplessAudio
-          ? ' with playlist audio (gapless pre-rendered)'
-          : ` with playlist audio (${audioPaths.length} track(s), concat demuxer fallback)`
-        : ''
-    }`
+    `[StreamingService] Playlist video stream ready (videos: ${videoPaths.length}, audio: ${usePlaylistAudio ? 'custom' : 'original'}, loop: ${shouldLoopPlaylist}, duration: ${durationSeconds ? durationSeconds + 's' : 'unlimited'})`
   );
   return args;
 }
@@ -2695,6 +2759,7 @@ async function stopStream(streamId) {
     const tempConcatFile = path.join(__dirname, '..', 'temp', `playlist_${streamId}.txt`);
     const tempAudioConcatFile = path.join(__dirname, '..', 'temp', `playlist_${streamId}_audio.txt`);
     const tempMergedAudioFile = path.join(__dirname, '..', 'temp', `playlist_${streamId}_audio_merged.m4a`);
+    const tempMergedVideoFile = path.join(__dirname, '..', 'temp', `playlist_${streamId}_video_merged.mp4`);
     const tempStreamMergedAudioFile = path.join(__dirname, '..', 'temp', `stream_${streamId}_audio_merged.m4a`);
     try {
       if (fs.existsSync(tempConcatFile)) {
@@ -2708,6 +2773,10 @@ async function stopStream(streamId) {
       if (fs.existsSync(tempMergedAudioFile)) {
         fs.unlinkSync(tempMergedAudioFile);
         console.log(`[StreamingService] Cleaned up merged playlist audio file: ${tempMergedAudioFile}`);
+      }
+      if (fs.existsSync(tempMergedVideoFile)) {
+        fs.unlinkSync(tempMergedVideoFile);
+        console.log(`[StreamingService] Cleaned up merged playlist video file: ${tempMergedVideoFile}`);
       }
       if (fs.existsSync(tempStreamMergedAudioFile)) {
         fs.unlinkSync(tempStreamMergedAudioFile);
