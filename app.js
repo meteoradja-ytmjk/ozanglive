@@ -6721,133 +6721,26 @@ async function savePlaylistMediaToGallery(playlistId, userId) {
     }
   };
 
-  // Helper function to build joined video (multi-video concat with YouTube Live AAC audio & smart normalization)
-  const buildJoinedVideo = async (srcVideoPaths, targetOutPath) => {
-    if (srcVideoPaths.length === 1) {
-      await runFfmpeg((cmd) => {
-        return cmd
-          .input(srcVideoPaths[0])
-          .outputOptions([
-            '-c:v', 'copy',
-            '-c:a', 'aac',
-            '-profile:a', 'aac_low',
-            '-b:a', '128k',
-            '-ar', '44100',
-            '-ac', '2',
-            '-af', 'aresample=async=1:first_pts=0',
-            '-movflags', '+faststart',
-            '-y'
-          ])
-          .output(targetOutPath);
-      });
-      return targetOutPath;
-    }
+  // Helper function to normalize an individual video clip (720p 30fps + AAC Stereo)
+  const normalizeSingleVideoClip = async (srcPath, outClipPath) => {
+    let hasAudio = false;
+    try {
+      const meta = await ffprobeAsync(srcPath);
+      hasAudio = Array.isArray(meta?.streams) && meta.streams.some(s => s.codec_type === 'audio');
+    } catch (_) {}
 
-    // Probe all videos to check specifications
-    const metas = await Promise.all(srcVideoPaths.map(async (p) => {
-      try {
-        const data = await ffprobeAsync(p);
-        const vStream = data?.streams?.find(s => s.codec_type === 'video');
-        const aStream = data?.streams?.find(s => s.codec_type === 'audio');
-        const fpsStr = vStream?.avg_frame_rate || vStream?.r_frame_rate || '30/1';
-        let fps = 30;
-        try {
-          const parts = fpsStr.split('/');
-          fps = parts.length === 2 && Number(parts[1]) > 0 ? Math.round(Number(parts[0]) / Number(parts[1])) : parseInt(fpsStr, 10);
-        } catch (_) {}
-        return {
-          width: vStream?.width || 1280,
-          height: vStream?.height || 720,
-          fps: Math.min(Math.max(fps || 30, 15), 60),
-          duration: Number(data?.format?.duration || 0),
-          hasAudio: !!aStream
-        };
-      } catch (_) {
-        return { width: 1280, height: 720, fps: 30, duration: 0, hasAudio: true };
-      }
-    }));
-
-    const allSameRes = metas.every(m => m.width === metas[0].width && m.height === metas[0].height);
-    const allSameFps = metas.every(m => Math.abs(m.fps - metas[0].fps) < 1);
-    const allHaveAudio = metas.every(m => m.hasAudio);
-    const isStrictlyIdentical = allSameRes && allSameFps && allHaveAudio;
-
-    if (isStrictlyIdentical) {
-      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pl-video-'));
-      try {
-        const concatTxt = path.join(tempDir, 'videos.txt');
-        const lines = srcVideoPaths.map(p => `file '${formatConcatPath(p)}'`);
-        fs.writeFileSync(concatTxt, lines.join('\n'), 'utf8');
-
-        let copySuccess = false;
-        try {
-          await runFfmpeg((cmd) => {
-            return cmd
-              .input(concatTxt)
-              .inputOptions(['-f', 'concat', '-safe', '0'])
-              .outputOptions([
-                '-c:v', 'copy',
-                '-c:a', 'aac',
-                '-profile:a', 'aac_low',
-                '-b:a', '128k',
-                '-ar', '44100',
-                '-ac', '2',
-                '-movflags', '+faststart',
-                '-y'
-              ])
-              .output(targetOutPath);
-          });
-          if (fs.existsSync(targetOutPath) && fs.statSync(targetOutPath).size > 10000) {
-            copySuccess = true;
-          }
-        } catch (err) {
-          console.warn('[Playlist Gallery] Video stream-copy concat failed:', err.message);
-        }
-
-        if (copySuccess) {
-          return targetOutPath;
-        }
-      } finally {
-        try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch (_) {}
-      }
-    }
-
-    // Smart Normalized Multi-Input Concat Filter for mixed footage
-    console.log(`[Playlist Gallery] Standardizing and joining ${srcVideoPaths.length} mixed video(s)...`);
-    const targetWidth = metas[0].width || 1280;
-    const targetHeight = metas[0].height || 720;
-    const targetFps = metas[0].fps || 30;
-
-    let filterComplex = '';
-    for (let i = 0; i < srcVideoPaths.length; i++) {
-      const dur = Math.max(1, metas[i].duration || 5);
-      filterComplex += `[${i}:v]scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=decrease,pad=${targetWidth}:${targetHeight}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=${targetFps},format=yuv420p[v${i}];`;
-      if (metas[i].hasAudio) {
-        filterComplex += `[${i}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,aresample=async=1:first_pts=0[a${i}];`;
-      } else {
-        filterComplex += `anullsrc=r=44100:cl=stereo,atrim=duration=${dur}[a${i}];`;
-      }
-    }
-    for (let i = 0; i < srcVideoPaths.length; i++) {
-      filterComplex += `[v${i}][a${i}]`;
-    }
-    filterComplex += `concat=n=${srcVideoPaths.length}:v=1:a=1[outv][outa]`;
-
-    try { if (fs.existsSync(targetOutPath)) fs.unlinkSync(targetOutPath); } catch (_) {}
-
-    await runFfmpeg((cmd) => {
-      srcVideoPaths.forEach(p => { cmd.input(p); });
-      return cmd
-        .complexFilter(filterComplex)
-        .outputOptions([
-          '-map', '[outv]',
-          '-map', '[outa]',
+    return new Promise((resolve, reject) => {
+      const vf = 'scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30,format=yuv420p';
+      let args = [];
+      if (hasAudio) {
+        args = [
+          '-i', srcPath,
+          '-vf', vf,
           '-c:v', 'libx264',
-          '-preset', 'veryfast',
-          '-crf', '23',
-          '-pix_fmt', 'yuv420p',
-          '-g', String(targetFps * 2),
-          '-keyint_min', String(targetFps),
+          '-preset', 'ultrafast',
+          '-crf', '22',
+          '-g', '60',
+          '-keyint_min', '30',
           '-sc_threshold', '0',
           '-c:a', 'aac',
           '-profile:a', 'aac_low',
@@ -6856,12 +6749,101 @@ async function savePlaylistMediaToGallery(playlistId, userId) {
           '-ac', '2',
           '-af', 'aresample=async=1:first_pts=0',
           '-movflags', '+faststart',
-          '-y'
-        ])
-        .output(targetOutPath);
-    });
+          '-y',
+          outClipPath
+        ];
+      } else {
+        args = [
+          '-i', srcPath,
+          '-f', 'lavfi',
+          '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100',
+          '-map', '0:v:0',
+          '-map', '1:a:0',
+          '-vf', vf,
+          '-c:v', 'libx264',
+          '-preset', 'ultrafast',
+          '-crf', '22',
+          '-g', '60',
+          '-keyint_min', '30',
+          '-sc_threshold', '0',
+          '-c:a', 'aac',
+          '-profile:a', 'aac_low',
+          '-b:a', '128k',
+          '-ar', '44100',
+          '-ac', '2',
+          '-shortest',
+          '-movflags', '+faststart',
+          '-y',
+          outClipPath
+        ];
+      }
 
-    return targetOutPath;
+      const proc = spawn(ffmpegPath, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+      let stderrText = '';
+      proc.stderr.on('data', d => { stderrText = (stderrText + d.toString()).slice(-2048); });
+      proc.on('close', code => {
+        if (code === 0 && fs.existsSync(outClipPath) && fs.statSync(outClipPath).size > 1000) {
+          resolve(outClipPath);
+        } else {
+          reject(new Error(`Gagal normalisasi klip: ${stderrText.slice(-300)}`));
+        }
+      });
+      proc.on('error', reject);
+    });
+  };
+
+  // Helper function to build joined video (multi-video concat with YouTube Live AAC audio & smart normalization)
+  const buildJoinedVideo = async (srcVideoPaths, targetOutPath) => {
+    if (srcVideoPaths.length === 1) {
+      await normalizeSingleVideoClip(srcVideoPaths[0], targetOutPath);
+      return targetOutPath;
+    }
+
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pl-gallery-norm-'));
+    console.log(`[Playlist Gallery] Normalizing & joining ${srcVideoPaths.length} video(s)...`);
+
+    try {
+      const normalizedClips = [];
+      for (let i = 0; i < srcVideoPaths.length; i++) {
+        const clipOut = path.join(tempDir, `clip_${i}.mp4`);
+        console.log(`[Playlist Gallery] Processing clip ${i + 1}/${srcVideoPaths.length}: ${srcVideoPaths[i]}`);
+        await normalizeSingleVideoClip(srcVideoPaths[i], clipOut);
+        normalizedClips.push(clipOut);
+      }
+
+      // Concat demuxer stream copy on guaranteed uniform clips
+      const concatTxt = path.join(tempDir, 'concat_list.txt');
+      const lines = normalizedClips.map(p => `file '${formatConcatPath(p)}'`);
+      fs.writeFileSync(concatTxt, lines.join('\n'), 'utf8');
+
+      await new Promise((resolve, reject) => {
+        const concatArgs = [
+          '-f', 'concat',
+          '-safe', '0',
+          '-i', concatTxt,
+          '-c', 'copy',
+          '-movflags', '+faststart',
+          '-y',
+          targetOutPath
+        ];
+        const proc = spawn(ffmpegPath, concatArgs, { stdio: ['ignore', 'ignore', 'pipe'] });
+        let stderrText = '';
+        proc.stderr.on('data', d => { stderrText = (stderrText + d.toString()).slice(-2048); });
+        proc.on('close', code => {
+          if (code === 0 && fs.existsSync(targetOutPath) && fs.statSync(targetOutPath).size > 5000) {
+            console.log(`[Playlist Gallery] ✅ Successfully saved joined video to: ${targetOutPath}`);
+            resolve(targetOutPath);
+          } else {
+            reject(new Error(`Concat demuxer failed (code=${code}): ${stderrText.slice(-300)}`));
+          }
+        });
+        proc.on('error', reject);
+      });
+
+      return targetOutPath;
+    } finally {
+      try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch (_) {}
+    }
   };
 
   // CASE 1: Audio Only -> Save to Audio Gallery (as AAC standard) AND ready-to-stream Video Gallery
