@@ -962,12 +962,12 @@ function getStatusAfterStreamEnd(stream) {
 function isUnlimitedStream(stream) {
   if (!stream) return false;
   
-  const hasDuration = stream.stream_duration_minutes && stream.stream_duration_minutes > 0;
+  const hasDuration = (stream.stream_duration_minutes && stream.stream_duration_minutes > 0) || (stream.duration && stream.duration > 0);
   const isOnce = !stream.schedule_type || stream.schedule_type === 'once';
   const hasEndTime = isOnce && stream.end_time && new Date(stream.end_time) > new Date();
   
-  // User must have loop_video enabled (not false and not 0) for unlimited live
-  const loopEnabled = stream.loop_video !== false && stream.loop_video !== 0;
+  // User must have loop_video enabled (not false and not 0/'0'/'false') for unlimited live
+  const loopEnabled = stream.loop_video !== false && stream.loop_video !== 0 && stream.loop_video !== '0' && stream.loop_video !== 'false';
 
   return !hasDuration && !hasEndTime && loopEnabled;
 }

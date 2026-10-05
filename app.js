@@ -11736,13 +11736,21 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         }
       }
 
+      const isExplicitUnlimited = req.body.isUnlimited === 'true' || req.body.isUnlimited === true;
       let hours = parseInt(req.body.streamDurationHours) || 0;
       let minutes = parseInt(req.body.streamDurationMinutes) || 0;
       let totalMinutes = parseInt(req.body.streamTotalMinutes) || ((hours * 60) + minutes);
-      let loopVideo = req.body.loopVideo !== undefined ? (req.body.loopVideo === 'true' || req.body.loopVideo === true) : true;
+      let loopVideo = req.body.loopVideo !== undefined ? (req.body.loopVideo === 'true' || req.body.loopVideo === true || req.body.loopVideo === 1 || req.body.loopVideo === '1') : true;
       let videoId = req.body.videoId || null;
       let audioId = req.body.audioId || null;
       let scheduleType = req.body.scheduleType || 'once';
+
+      if (isExplicitUnlimited) {
+        hours = 0;
+        minutes = 0;
+        totalMinutes = 0;
+        loopVideo = true;
+      }
 
       // If created from a template, inherit duration and stream settings from template
       if (!templateObj && templateId) {
@@ -11758,7 +11766,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
           matchedSlot = templateObj.broadcasts.find(b => b.title === title || b.title === broadcast.title) || templateObj.broadcasts[0];
         }
 
-        if (totalMinutes === 0) {
+        if (!isExplicitUnlimited && totalMinutes === 0) {
           if (matchedSlot) {
             totalMinutes = parseInt(matchedSlot.streamDurationMinutes) || (((parseInt(matchedSlot.durationHours) || 0) * 60) + (parseInt(matchedSlot.durationMinutes) || 0));
             if (totalMinutes > 0) {
@@ -11776,7 +11784,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         }
 
         // Inherit loop_video
-        if (req.body.loopVideo === undefined) {
+        if (req.body.loopVideo === undefined && !isExplicitUnlimited) {
           if (matchedSlot && matchedSlot.loopVideo !== undefined) {
             loopVideo = matchedSlot.loopVideo !== false && matchedSlot.loopVideo !== 0 && matchedSlot.loopVideo !== '0';
           } else if (templateObj.loop_video !== undefined) {
@@ -11821,8 +11829,8 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         }
       }
 
-      // Fallback: if totalMinutes is still 0, search previous streams for user by streamId or title
-      if (totalMinutes === 0 && (streamId || broadcast.title || title)) {
+      // Fallback: ONLY if NOT explicitly unlimited AND totalMinutes is still 0 AND not a manual zero-duration stream
+      if (!isExplicitUnlimited && totalMinutes === 0 && (streamId || broadcast.title || title) && isFromTemplate) {
         try {
           const prevStream = await new Promise((resolve) => {
             db.get(
@@ -11868,7 +11876,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       }
 
       const rawStartTime = req.body.scheduleStartTime || req.body.scheduledStartTime;
-      const rawEndTime = req.body.scheduleEndTime;
+      const rawEndTime = isExplicitUnlimited ? null : req.body.scheduleEndTime;
       let scheduleIso = null;
       let endIso = null;
       let sDate = null;
@@ -11880,13 +11888,13 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         sDate = parseWIBDateTimeLocal(rawStartTime);
         if (sDate) scheduleIso = sDate.toISOString();
       }
-      if (rawEndTime) {
+      if (rawEndTime && !isExplicitUnlimited) {
         eDate = parseWIBDateTimeLocal(rawEndTime);
         if (eDate) endIso = eDate.toISOString();
       }
 
-      // If user provided start and end times but left duration hours/minutes at 0, calculate duration from difference (ONLY for 'once')
-      if (scheduleType === 'once' && totalMinutes === 0 && sDate && eDate && eDate > sDate) {
+      // If user provided start and end times but left duration hours/minutes at 0, calculate duration from difference (ONLY for 'once' and NOT unlimited)
+      if (!isExplicitUnlimited && scheduleType === 'once' && totalMinutes === 0 && sDate && eDate && eDate > sDate) {
         totalMinutes = Math.round((eDate.getTime() - sDate.getTime()) / (1000 * 60));
         hours = Math.floor(totalMinutes / 60);
         minutes = totalMinutes % 60;
@@ -11939,8 +11947,8 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         scheduleDaysFormatted = typeof scheduleDays === 'string' ? scheduleDays : JSON.stringify(scheduleDays);
       }
 
-      // Recurring streams MUST NOT store a static end_time in DB
-      const finalEndTime = scheduleType === 'once' ? endIso : null;
+      // Recurring streams or unlimited streams MUST NOT store a static end_time in DB
+      const finalEndTime = (scheduleType === 'once' && !isExplicitUnlimited && totalMinutes > 0) ? endIso : null;
 
       const isScheduled = isRecurring || (scheduleIso !== null);
 
@@ -11957,10 +11965,10 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         resolution: '1280x720',
         fps: 30,
         orientation: 'horizontal',
-        loop_video: loopVideo,
-        stream_duration_hours: hours,
-        stream_duration_minutes: totalMinutes > 0 ? totalMinutes : null,
-        duration: totalMinutes > 0 ? totalMinutes : null,
+        loop_video: isExplicitUnlimited ? 1 : (loopVideo ? 1 : 0),
+        stream_duration_hours: (isExplicitUnlimited || totalMinutes <= 0) ? null : hours,
+        stream_duration_minutes: (isExplicitUnlimited || totalMinutes <= 0) ? null : totalMinutes,
+        duration: (isExplicitUnlimited || totalMinutes <= 0) ? null : totalMinutes,
         schedule_type: scheduleType,
         schedule_time: scheduleIso,
         end_time: finalEndTime,

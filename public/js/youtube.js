@@ -5296,13 +5296,15 @@ if (createBroadcastForm) {
       if (titleFolderId) formData.append('titleFolderId', titleFolderId);
 
       // Duration and Schedule fields
-      const durationHours = document.getElementById('studioStreamDurationHours')?.value || '0';
-      const durationMinutes = document.getElementById('studioStreamDurationMinutes')?.value || '0';
-      const loopVideo = document.getElementById('studioLoopVideoToggle')?.checked ? 'true' : 'false';
-      const scheduleEndTime = scheduleType === 'once' ? (document.getElementById('studioScheduleEndTime')?.value || '') : '';
+      const isUnlimited = document.getElementById('studioUnlimitedToggle')?.checked ?? true;
+      const durationHours = isUnlimited ? '0' : (document.getElementById('studioStreamDurationHours')?.value || '0');
+      const durationMinutes = isUnlimited ? '0' : (document.getElementById('studioStreamDurationMinutes')?.value || '0');
+      const loopVideo = isUnlimited ? 'true' : (document.getElementById('studioLoopVideoToggle')?.checked ? 'true' : 'false');
+      const scheduleEndTime = (scheduleType === 'once' && !isUnlimited) ? (document.getElementById('studioScheduleEndTime')?.value || '') : '';
       const scheduleDays = document.getElementById('studioScheduleDays')?.value || '[]';
       const recurringEnabled = document.getElementById('studioRecurringEnabled')?.checked ? 'true' : 'false';
 
+      formData.append('isUnlimited', isUnlimited ? 'true' : 'false');
       formData.append('streamDurationHours', durationHours);
       formData.append('streamDurationMinutes', durationMinutes);
       formData.append('loopVideo', loopVideo);
