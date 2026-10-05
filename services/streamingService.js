@@ -6,7 +6,7 @@ const tempDir = path.join(projectRoot, 'temp');
 if (!fs.existsSync(tempDir)) {
   try { fs.mkdirSync(tempDir, { recursive: true }); } catch (_) {}
 }
-const { getFFmpegPath } = require('../utils/ffmpegPath');
+const { getFFmpegPath, getFFprobePath } = require('../utils/ffmpegPath');
 const schedulerService = require('./schedulerService');
 const LiveLimitService = require('./liveLimitService');
 const youtubeStatusSync = require('./youtubeStatusSync');
@@ -17,6 +17,7 @@ const Stream = require('../models/Stream');
 const Playlist = require('../models/Playlist');
 const { calculateDurationSeconds, calculateRemainingDuration, formatDuration } = require('../utils/durationCalculator');
 const ffmpegPath = getFFmpegPath();
+const ffprobePath = getFFprobePath();
 console.log('[StreamingService] Using FFmpeg at:', ffmpegPath);
 const Video = require('../models/Video');
 const Audio = require('../models/Audio');
@@ -1374,114 +1375,243 @@ async function buildFFmpegArgsForAudioOnlyPlaylist(stream, playlist, durationSec
 }
 
 /**
- * Pre-render multiple video files in a playlist into a single seamless MP4 file.
- * Fast stream-copy concat is attempted first (<1s, 0% CPU). If formats/codecs differ,
- * falls back to ultrafast re-encode to ensure seamless playback.
+ * Safely format file path for concat demuxer
  */
-function prerenderPlaylistVideos(videoPaths, outputFile) {
+function formatConcatFilePath(filePath) {
+  return String(filePath).replace(/\\/g, '/').replace(/'/g, "'\\''");
+}
+
+/**
+ * Probe video and audio metadata for a file to check compatibility and determine normalization parameters.
+ */
+function probeVideoMetadata(filePath) {
   return new Promise((resolve) => {
-    if (!Array.isArray(videoPaths) || videoPaths.length === 0) {
-      return resolve(null);
-    }
-
-    const outDir = path.dirname(outputFile);
-    if (!fs.existsSync(outDir)) {
-      try { fs.mkdirSync(outDir, { recursive: true }); } catch (_) {}
-    }
-
-    // Remove any previous output file
-    try { if (fs.existsSync(outputFile)) fs.unlinkSync(outputFile); } catch (_) {}
-
-    const concatTxt = path.join(outDir, `concat_v_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.txt`);
-    const lines = videoPaths.map(p => `file '${formatConcatFilePath(p)}'`);
-    try {
-      fs.writeFileSync(concatTxt, lines.join('\n'), 'utf8');
-    } catch (wErr) {
-      console.error('[StreamingService] Failed to write concat file for playlist pre-render:', wErr.message);
-      return resolve(null);
-    }
-
-    // Attempt 1: Fast stream-copy concat (<1 second, 0% CPU)
-    const copyArgs = [
-      '-fflags', '+genpts',
-      '-f', 'concat',
-      '-safe', '0',
-      '-i', concatTxt,
-      '-c:v', 'copy',
-      '-c:a', 'aac',
-      '-profile:a', 'aac_low',
-      '-b:a', '128k',
-      '-ar', '44100',
-      '-ac', '2',
-      '-movflags', '+faststart',
-      '-y',
-      outputFile
-    ];
-
-    const copyProc = spawn(ffmpegPath, copyArgs, { stdio: ['ignore', 'ignore', 'pipe'] });
-    let copyStderr = '';
-    copyProc.stderr.on('data', (chunk) => {
-      copyStderr = (copyStderr + chunk.toString()).slice(-4096);
-    });
-
-    copyProc.on('close', (code) => {
-      if (code === 0 && fs.existsSync(outputFile) && fs.statSync(outputFile).size > 10000) {
-        try { if (fs.existsSync(concatTxt)) fs.unlinkSync(concatTxt); } catch (_) {}
-        console.log(`[StreamingService] ✅ Fast stream-copy pre-rendered ${videoPaths.length} videos: ${outputFile}`);
-        return resolve(outputFile);
+    const ffprobeBin = (typeof getFFprobePath === 'function' ? getFFprobePath() : null) || 'ffprobe';
+    const proc = spawn(ffprobeBin, [
+      '-v', 'error',
+      '-select_streams', 'v:0',
+      '-show_entries', 'stream=width,height,r_frame_rate,avg_frame_rate,sample_aspect_ratio,pix_fmt',
+      '-show_entries', 'format=duration',
+      '-of', 'json',
+      filePath
+    ]);
+    let out = '';
+    proc.stdout.on('data', d => { out += d.toString(); });
+    proc.on('close', (code) => {
+      let width = 1280, height = 720, fps = 30, duration = 0;
+      if (code === 0 && out) {
+        try {
+          const json = JSON.parse(out);
+          const v = json.streams && json.streams[0];
+          if (v) {
+            width = parseInt(v.width, 10) || 1280;
+            height = parseInt(v.height, 10) || 720;
+            const rFps = v.avg_frame_rate || v.r_frame_rate || '30/1';
+            const parts = rFps.split('/');
+            if (parts.length === 2 && Number(parts[1]) > 0) {
+              fps = Math.round(Number(parts[0]) / Number(parts[1])) || 30;
+            } else {
+              fps = parseInt(rFps, 10) || 30;
+            }
+          }
+          if (json.format && json.format.duration) {
+            duration = parseFloat(json.format.duration) || 0;
+          }
+        } catch (_) {}
       }
 
-      console.warn(`[StreamingService] Fast stream-copy pre-render failed (code=${code}), falling back to ultrafast re-encode:`, copyStderr.slice(-300));
-      try { if (fs.existsSync(outputFile)) fs.unlinkSync(outputFile); } catch (_) {}
+      // Check audio track presence
+      const aProc = spawn(ffprobeBin, [
+        '-v', 'error',
+        '-select_streams', 'a:0',
+        '-show_entries', 'stream=codec_type,sample_rate,channels',
+        '-of', 'json',
+        filePath
+      ]);
+      let aOut = '';
+      aProc.stdout.on('data', d => { aOut += d.toString(); });
+      aProc.on('close', (aCode) => {
+        let hasAudio = false;
+        let sampleRate = 44100;
+        let channels = 2;
+        if (aCode === 0 && aOut) {
+          try {
+            const aJson = JSON.parse(aOut);
+            if (aJson.streams && aJson.streams.length > 0) {
+              hasAudio = true;
+              sampleRate = parseInt(aJson.streams[0].sample_rate, 10) || 44100;
+              channels = parseInt(aJson.streams[0].channels, 10) || 2;
+            }
+          } catch (_) {}
+        }
+        resolve({
+          width,
+          height,
+          fps: Math.min(Math.max(fps, 15), 60),
+          duration,
+          hasAudio,
+          sampleRate,
+          channels
+        });
+      });
+      aProc.on('error', () => {
+        resolve({ width, height, fps: 30, duration, hasAudio: false, sampleRate: 44100, channels: 2 });
+      });
+    });
+    proc.on('error', () => {
+      resolve({ width: 1280, height: 720, fps: 30, duration: 0, hasAudio: true, sampleRate: 44100, channels: 2 });
+    });
+  });
+}
 
-      // Attempt 2: Ultrafast re-encode fallback (handles mixed resolutions/codecs)
-      const encodeArgs = [
+/**
+ * Pre-render multiple video files in a playlist into a single seamless, glitch-free MP4 file.
+ * Handles mixed resolutions (1080p, 720p, vertical Shorts), mixed framerates, and silent videos.
+ */
+async function prerenderPlaylistVideos(videoPaths, outputFile) {
+  if (!Array.isArray(videoPaths) || videoPaths.length === 0) {
+    return null;
+  }
+  if (videoPaths.length === 1) {
+    return videoPaths[0];
+  }
+
+  const outDir = path.dirname(outputFile);
+  if (!fs.existsSync(outDir)) {
+    try { fs.mkdirSync(outDir, { recursive: true }); } catch (_) {}
+  }
+  try { if (fs.existsSync(outputFile)) fs.unlinkSync(outputFile); } catch (_) {}
+
+  // 1. Probe all source videos to evaluate specifications
+  console.log(`[StreamingService] Probing metadata for ${videoPaths.length} playlist video(s)...`);
+  const metas = await Promise.all(videoPaths.map(p => probeVideoMetadata(p)));
+
+  const allSameRes = metas.every(m => m.width === metas[0].width && m.height === metas[0].height);
+  const allSameFps = metas.every(m => Math.abs(m.fps - metas[0].fps) < 1);
+  const allHaveAudio = metas.every(m => m.hasAudio);
+  const isStrictlyIdentical = allSameRes && allSameFps && allHaveAudio;
+
+  // Attempt 1: Fast stream-copy concat ONLY if 100% identical
+  if (isStrictlyIdentical) {
+    const concatTxt = path.join(outDir, `concat_v_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.txt`);
+    try {
+      const lines = videoPaths.map(p => `file '${formatConcatFilePath(p)}'`);
+      fs.writeFileSync(concatTxt, lines.join('\n'), 'utf8');
+
+      const copyArgs = [
         '-fflags', '+genpts',
         '-f', 'concat',
         '-safe', '0',
         '-i', concatTxt,
-        '-c:v', 'libx264',
-        '-preset', 'ultrafast',
-        '-tune', 'zerolatency',
-        '-pix_fmt', 'yuv420p',
+        '-c:v', 'copy',
         '-c:a', 'aac',
         '-profile:a', 'aac_low',
         '-b:a', '128k',
         '-ar', '44100',
         '-ac', '2',
-        '-af', 'aresample=async=1:first_pts=0',
         '-movflags', '+faststart',
         '-y',
         outputFile
       ];
 
-      const encProc = spawn(ffmpegPath, encodeArgs, { stdio: ['ignore', 'ignore', 'pipe'] });
-      let encStderr = '';
-      encProc.stderr.on('data', (chunk) => {
-        encStderr = (encStderr + chunk.toString()).slice(-4096);
+      const copySuccess = await new Promise((resolve) => {
+        const proc = spawn(ffmpegPath, copyArgs, { stdio: ['ignore', 'ignore', 'pipe'] });
+        proc.on('close', (code) => {
+          try { if (fs.existsSync(concatTxt)) fs.unlinkSync(concatTxt); } catch (_) {}
+          resolve(code === 0 && fs.existsSync(outputFile) && fs.statSync(outputFile).size > 10000);
+        });
+        proc.on('error', () => {
+          try { if (fs.existsSync(concatTxt)) fs.unlinkSync(concatTxt); } catch (_) {}
+          resolve(false);
+        });
       });
 
-      encProc.on('close', (encCode) => {
-        try { if (fs.existsSync(concatTxt)) fs.unlinkSync(concatTxt); } catch (_) {}
-        if (encCode === 0 && fs.existsSync(outputFile) && fs.statSync(outputFile).size > 10000) {
-          console.log(`[StreamingService] ✅ Re-encode pre-rendered ${videoPaths.length} videos: ${outputFile}`);
-          return resolve(outputFile);
-        }
-        console.error(`[StreamingService] ❌ Re-encode pre-render failed (code=${encCode}):`, encStderr.slice(-300));
-        try { if (fs.existsSync(outputFile)) fs.unlinkSync(outputFile); } catch (_) {}
-        resolve(null);
-      });
+      if (copySuccess) {
+        console.log(`[StreamingService] ✅ Fast stream-copy pre-rendered ${videoPaths.length} identical videos: ${outputFile}`);
+        return outputFile;
+      }
+    } catch (err) {
+      console.warn('[StreamingService] Fast copy failed, proceeding to normalized multi-input filter:', err.message);
+    }
+  }
 
-      encProc.on('error', (err) => {
-        try { if (fs.existsSync(concatTxt)) fs.unlinkSync(concatTxt); } catch (_) {}
-        console.error('[StreamingService] Pre-render encode spawn error:', err.message);
-        resolve(null);
-      });
+  // Attempt 2: Smart Normalized Filter Complex Concat (Guarantees smooth playback for ALL mixed footage)
+  console.log(`[StreamingService] Running smart normalized multi-input filter for ${videoPaths.length} video(s)...`);
+  try { if (fs.existsSync(outputFile)) fs.unlinkSync(outputFile); } catch (_) {}
+
+  return new Promise((resolve) => {
+    // Target base resolution & fps
+    const targetWidth = metas[0].width || 1280;
+    const targetHeight = metas[0].height || 720;
+    const targetFps = metas[0].fps || 30;
+
+    const ffmpegArgs = [];
+    // Feed each video as a separate input
+    videoPaths.forEach(p => {
+      ffmpegArgs.push('-i', p);
     });
 
-    copyProc.on('error', (err) => {
-      try { if (fs.existsSync(concatTxt)) fs.unlinkSync(concatTxt); } catch (_) {}
-      console.error('[StreamingService] Pre-render copy spawn error:', err.message);
+    // Build filter complex: scale + pad + setsar + constant fps + audio normalization per stream
+    let filterComplex = '';
+    for (let i = 0; i < videoPaths.length; i++) {
+      const dur = Math.max(1, metas[i].duration || 5);
+      // Video standardization filter
+      filterComplex += `[${i}:v]scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=decrease,pad=${targetWidth}:${targetHeight}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=${targetFps},format=yuv420p[v${i}];`;
+
+      // Audio standardization filter (inject silent audio if video has no sound)
+      if (metas[i].hasAudio) {
+        filterComplex += `[${i}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,aresample=async=1:first_pts=0[a${i}];`;
+      } else {
+        filterComplex += `anullsrc=r=44100:cl=stereo,atrim=duration=${dur}[a${i}];`;
+      }
+    }
+
+    // Concat all standardized streams
+    for (let i = 0; i < videoPaths.length; i++) {
+      filterComplex += `[v${i}][a${i}]`;
+    }
+    filterComplex += `concat=n=${videoPaths.length}:v=1:a=1[outv][outa]`;
+
+    ffmpegArgs.push(
+      '-filter_complex', filterComplex,
+      '-map', '[outv]',
+      '-map', '[outa]',
+      '-c:v', 'libx264',
+      '-preset', 'veryfast',
+      '-crf', '23',
+      '-pix_fmt', 'yuv420p',
+      '-g', String(targetFps * 2),
+      '-keyint_min', String(targetFps),
+      '-sc_threshold', '0',
+      '-c:a', 'aac',
+      '-profile:a', 'aac_low',
+      '-b:a', '128k',
+      '-ar', '44100',
+      '-ac', '2',
+      '-af', 'aresample=async=1:first_pts=0',
+      '-movflags', '+faststart',
+      '-y',
+      outputFile
+    );
+
+    const encProc = spawn(ffmpegPath, ffmpegArgs, { stdio: ['ignore', 'ignore', 'pipe'] });
+    let encStderr = '';
+    encProc.stderr.on('data', (chunk) => {
+      encStderr = (encStderr + chunk.toString()).slice(-4096);
+    });
+
+    encProc.on('close', (encCode) => {
+      if (encCode === 0 && fs.existsSync(outputFile) && fs.statSync(outputFile).size > 10000) {
+        console.log(`[StreamingService] ✅ Smart normalized pre-rendered ${videoPaths.length} videos: ${outputFile}`);
+        return resolve(outputFile);
+      }
+      console.error(`[StreamingService] ❌ Smart normalized pre-render failed (code=${encCode}):`, encStderr.slice(-400));
+      try { if (fs.existsSync(outputFile)) fs.unlinkSync(outputFile); } catch (_) {}
+      resolve(null);
+    });
+
+    encProc.on('error', (err) => {
+      console.error('[StreamingService] Pre-render encode spawn error:', err.message);
       resolve(null);
     });
   });
