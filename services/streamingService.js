@@ -178,16 +178,22 @@ async function endYouTubeBroadcastForStream(stream, broadcastIdHint) {
     console.log(`[StreamingService] End YouTube broadcast result for ${broadcastId}:`, endResult);
 
     try {
-      if (endResult && endResult.lifeCycleStatus) {
-        await Stream.update(stream.id, { youtube_lifecycle_status: endResult.lifeCycleStatus });
-      }
+      const finalStatus = (endResult && endResult.lifeCycleStatus) ? endResult.lifeCycleStatus : 'complete';
+      await Stream.update(stream.id, { youtube_lifecycle_status: finalStatus });
     } catch (statusUpdateErr) {
       // ignore
+    }
+
+    if (stream.user_id && typeof global.invalidateBroadcastsCache === 'function') {
+      global.invalidateBroadcastsCache(stream.user_id);
     }
 
     return endResult;
   } catch (error) {
     console.error(`[StreamingService] Error ending YouTube broadcast for stream ${stream?.id}:`, error.message);
+    if (stream?.user_id && typeof global.invalidateBroadcastsCache === 'function') {
+      global.invalidateBroadcastsCache(stream.user_id);
+    }
     return { success: false, error: error.message };
   }
 }
@@ -207,6 +213,7 @@ async function ensureFreshYouTubeBroadcastForStream(stream) {
 
   try {
     const YouTubeCredentials = require('../models/YouTubeCredentials');
+    const YouTubeBroadcastSettings = require('../models/YouTubeBroadcastSettings');
     let credentials = null;
     if (stream.youtube_account_id) {
       credentials = await YouTubeCredentials.findById(stream.youtube_account_id);
@@ -247,21 +254,20 @@ async function ensureFreshYouTubeBroadcastForStream(stream) {
         }
       }
     } else {
-      // Platform is YouTube but has no broadcastId linked
+      // Platform is YouTube but has no broadcastId linked (e.g. created via delayed 'Jadwal Live')
       needsNewBroadcast = true;
     }
 
     if (!needsNewBroadcast) return;
 
     console.log(`[StreamingService] Resolving fresh YouTube broadcast for stream #${stream.id} ("${stream.title}")...`);
-    addStreamLog(stream.id, `[YouTube] Mempersiapkan siaran YouTube baru untuk sesi live saat ini...`);
+    addStreamLog(stream.id, `[YouTube] Mempersiapkan siaran YouTube baru sesaat sebelum live dimulai...`);
 
-    // 1. Try finding an existing upcoming broadcast on this channel that matches this stream or key
+    // 1. Try finding an existing upcoming broadcast on this channel that matches this stream key
     let matchingBroadcast = null;
     try {
       const upcomingList = await youtubeService.listBroadcasts(accessToken, 'upcoming');
       if (Array.isArray(upcomingList) && upcomingList.length > 0) {
-        // First match by stream key if available
         if (stream.stream_key) {
           for (const item of upcomingList) {
             const bId = item.id;
@@ -275,14 +281,6 @@ async function ensureFreshYouTubeBroadcastForStream(stream) {
               }
             }
           }
-        }
-        // Second match by title if not found by stream key
-        if (!matchingBroadcast && stream.title) {
-          const streamTitleClean = stream.title.trim().toLowerCase();
-          matchingBroadcast = upcomingList.find(b => {
-            const t = (b.snippet?.title || '').trim().toLowerCase();
-            return t === streamTitleClean;
-          });
         }
       }
     } catch (findErr) {
@@ -301,30 +299,58 @@ async function ensureFreshYouTubeBroadcastForStream(stream) {
       return;
     }
 
-    // 2. No matching upcoming broadcast found; automatically create a fresh broadcast!
-    console.log(`[StreamingService] Creating a new fresh YouTube broadcast for stream #${stream.id}...`);
+    // 2. Fetch saved broadcast settings from DB if available (e.g., from scheduled_stream_X or previous settings)
+    let savedSettings = null;
+    try {
+      const db = require('../db/database').getDb();
+      const placeholderId = `scheduled_stream_${stream.id}`;
+      savedSettings = await new Promise((resolve) => {
+        db.get(
+          `SELECT * FROM youtube_broadcast_settings 
+           WHERE broadcast_id = ? OR broadcast_id = ? OR (user_id = ? AND (title = ? OR title_folder_id = ?))
+           ORDER BY id DESC LIMIT 1`,
+          [placeholderId, stream.youtube_broadcast_id || '', stream.user_id, stream.title || '', stream.title_folder_id || ''],
+          (err, row) => resolve(row)
+        );
+      });
+    } catch (sErr) {
+      console.warn('[StreamingService] Warning fetching saved broadcast settings:', sErr.message);
+    }
+
+    // 3. No matching upcoming broadcast found; automatically create a fresh broadcast!
+    console.log(`[StreamingService] Creating a fresh YouTube broadcast for scheduled stream #${stream.id}...`);
     let parsedTags = [];
-    if (stream.tags) {
+    const rawTags = stream.tags || savedSettings?.tags;
+    if (rawTags) {
       try {
-        parsedTags = typeof stream.tags === 'string' ? JSON.parse(stream.tags) : stream.tags;
+        parsedTags = typeof rawTags === 'string' ? JSON.parse(rawTags) : rawTags;
       } catch (_) {
-        parsedTags = String(stream.tags).split(',').map(t => t.trim()).filter(Boolean);
+        parsedTags = String(rawTags).split(',').map(t => t.trim()).filter(Boolean);
       }
     }
 
+    const { replaceTitlePlaceholders } = require('../utils/recurringUtils');
+    const finalTitle = replaceTitlePlaceholders(stream.title || savedSettings?.title || 'Live Stream', new Date());
+    const finalDescription = replaceTitlePlaceholders(stream.description || savedSettings?.description || '', new Date());
     const scheduledStartTime = new Date(Date.now() + 60 * 1000).toISOString();
+    const finalPrivacy = stream.privacy_status || savedSettings?.privacy_status || savedSettings?.original_privacy_status || 'unlisted';
+    const finalCategory = stream.category_id || savedSettings?.category_id || '22';
+    const isDualStream = Boolean(stream.dual_stream || savedSettings?.dual_stream);
+    const isAlteredContent = Boolean(savedSettings?.altered_content);
+    const resolvedStreamId = stream.stream_id || null;
 
     const created = await youtubeService.createBroadcast(accessToken, {
-      title: stream.title || 'Live Stream',
-      description: stream.description || '',
+      title: finalTitle,
+      description: finalDescription,
       scheduledStartTime,
-      privacyStatus: stream.privacy_status || 'unlisted',
-      streamId: stream.stream_id || undefined,
+      privacyStatus: finalPrivacy,
+      streamId: resolvedStreamId,
       tags: parsedTags,
-      categoryId: stream.category_id || '24',
+      categoryId: finalCategory,
       enableAutoStart: true,
-      enableAutoStop: true,
-      dualStream: false
+      enableAutoStop: savedSettings ? (savedSettings.enable_auto_stop === 1 || savedSettings.enable_auto_stop === true) : true,
+      dualStream: isDualStream,
+      alteredContent: isAlteredContent
     });
 
     if (created && created.broadcastId) {
@@ -342,6 +368,78 @@ async function ensureFreshYouTubeBroadcastForStream(stream) {
         stream_key: stream.stream_key,
         rtmp_url: stream.rtmp_url
       }).catch(() => {});
+
+      // Safe upload thumbnail helper
+      const safeUploadThumb = (buf) => Promise.race([
+        youtubeService.uploadThumbnail(accessToken, created.broadcastId, buf),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Thumbnail upload timeout')), 8000))
+      ]);
+
+      // Upload thumbnail if available
+      try {
+        const thumbPath = savedSettings?.thumbnail_path;
+        const thumbFolder = savedSettings?.thumbnail_folder;
+        let uploaded = false;
+
+        if (thumbPath) {
+          const absPath = path.isAbsolute(thumbPath) ? thumbPath : path.join(__dirname, '..', 'public', thumbPath.replace(/^\//, ''));
+          if (fs.existsSync(absPath)) {
+            const buf = fs.readFileSync(absPath);
+            await safeUploadThumb(buf);
+            console.log(`[StreamingService] ✅ Uploaded thumbnail for fresh broadcast ${created.broadcastId}: ${thumbPath}`);
+            uploaded = true;
+          }
+        }
+
+        if (!uploaded && thumbFolder !== undefined && thumbFolder !== null) {
+          const scheduleService = require('./scheduleService');
+          const thumbIndex = savedSettings?.thumbnail_index || 0;
+          const thumbRes = await scheduleService.getSequentialThumbnailFromFolder(stream.user_id, thumbFolder, thumbIndex);
+          if (thumbRes && thumbRes.path) {
+            const absPath = path.join(__dirname, '..', 'public', thumbRes.path.replace(/^\//, ''));
+            if (fs.existsSync(absPath)) {
+              const buf = fs.readFileSync(absPath);
+              await safeUploadThumb(buf);
+              console.log(`[StreamingService] ✅ Uploaded rotated thumbnail for fresh broadcast ${created.broadcastId}: ${thumbRes.path}`);
+            }
+          }
+        }
+      } catch (thumbErr) {
+        console.warn(`[StreamingService] Warning uploading thumbnail for broadcast ${created.broadcastId}:`, thumbErr.message);
+      }
+
+      // Upsert full settings with the newly created broadcast ID
+      try {
+        await YouTubeBroadcastSettings.upsert({
+          broadcastId: created.broadcastId,
+          userId: stream.user_id,
+          accountId: credentials.id,
+          title: finalTitle,
+          description: finalDescription,
+          categoryId: finalCategory,
+          privacyStatus: finalPrivacy,
+          enableAutoStart: true,
+          enableAutoStop: savedSettings ? Boolean(savedSettings.enable_auto_stop) : true,
+          unlistReplayOnEnd: savedSettings ? Boolean(savedSettings.unlist_replay_on_end) : true,
+          originalPrivacyStatus: finalPrivacy,
+          thumbnailFolder: savedSettings?.thumbnail_folder || null,
+          thumbnailIndex: savedSettings?.thumbnail_index || 0,
+          thumbnailPath: savedSettings?.thumbnail_path || null,
+          alteredContent: isAlteredContent ? 1 : 0,
+          dualStream: isDualStream ? 1 : 0,
+          verticalStreamKey: savedSettings?.vertical_stream_key || null,
+          tags: parsedTags.length > 0 ? JSON.stringify(parsedTags) : null,
+          titleFolderId: stream.title_folder_id || savedSettings?.title_folder_id || null,
+          audioId: stream.audio_id || savedSettings?.audio_id || null,
+          videoId: stream.video_id || savedSettings?.video_id || null
+        });
+      } catch (saveErr) {
+        console.warn('[StreamingService] Warning upserting broadcast settings:', saveErr.message);
+      }
+
+      if (typeof global.invalidateBroadcastsCache === 'function') {
+        global.invalidateBroadcastsCache(stream.user_id);
+      }
     }
   } catch (err) {
     console.error(`[StreamingService] Error ensuring fresh YouTube broadcast for stream #${stream?.id}:`, err.message);

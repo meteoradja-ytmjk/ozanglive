@@ -400,6 +400,10 @@ class YouTubeStatusSync {
         console.error(`[YouTubeStatusSync] Error stopping stream ${streamId}:`, err.message);
       }
     }
+
+    if (check?.userId && typeof global.invalidateBroadcastsCache === 'function') {
+      global.invalidateBroadcastsCache(check.userId);
+    }
   }
 
   /**

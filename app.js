@@ -10841,14 +10841,15 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
     
     console.log(`[Cache MISS] Fetching fresh broadcasts for ${cacheKey} (force: ${forceRefresh})`);
 
-    // Helper to retrieve all locally recorded broadcasts for this user across both streams and youtube_broadcast_settings
+    // Helper to retrieve all locally recorded active/scheduled broadcasts for this user across both streams and youtube_broadcast_settings
     const getLocalStreams = () => new Promise((resolve) => {
       db.all(
         `SELECT id, title, rtmp_url, stream_key, schedule_time, youtube_broadcast_id, youtube_account_id, status 
          FROM streams 
          WHERE (user_id = ? OR CAST(user_id AS TEXT) = CAST(? AS TEXT)) 
            AND youtube_broadcast_id IS NOT NULL 
-           AND youtube_broadcast_id != ''`,
+           AND youtube_broadcast_id != ''
+           AND status IN ('scheduled', 'live')`,
         [userId, String(userId)],
         (err, streamRows) => {
           const sRows = (err ? [] : (streamRows || []));
@@ -10858,7 +10859,8 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
              FROM youtube_broadcast_settings
              WHERE (user_id = ? OR CAST(user_id AS TEXT) = CAST(? AS TEXT))
                AND broadcast_id IS NOT NULL 
-               AND broadcast_id != ''`,
+               AND broadcast_id != ''
+               AND broadcast_id NOT LIKE 'scheduled_stream_%'`,
             [userId, String(userId)],
             (settingsErr, settingsRows) => {
               const setRows = (settingsErr ? [] : (settingsRows || []));
@@ -10975,11 +10977,15 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
         }
       }
       
-      // Deduplicate result by broadcast ID
+      // Deduplicate result by broadcast ID & strictly filter out complete/revoked/ended broadcasts
       const seenResultIds = new Set();
       const dedupedResult = [];
       result.forEach(b => {
         const bId = b && (b.id || b.broadcastId || b.youtube_broadcast_id);
+        const status = (b && (b.lifeCycleStatus || b.status?.lifeCycleStatus)) || '';
+        if (status === 'complete' || status === 'completed' || status === 'revoked' || status === 'ended') {
+          return; // Skip ended broadcasts completely
+        }
         if (bId && !seenResultIds.has(bId)) {
           seenResultIds.add(bId);
           dedupedResult.push(b);
@@ -11101,12 +11107,16 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
       // Wait for all promises to resolve
       const broadcastArrays = await Promise.all(broadcastPromises);
       
-      // Flatten array of arrays and deduplicate by broadcast ID
+      // Flatten array of arrays and deduplicate by broadcast ID & filter completed/revoked
       const seenIds = new Set();
       const allBroadcasts = [];
       broadcastArrays.flat().forEach(b => {
         if (!b) return;
         const bId = b.id || b.broadcastId || b.youtube_broadcast_id;
+        const status = (b.lifeCycleStatus || b.status?.lifeCycleStatus) || '';
+        if (status === 'complete' || status === 'completed' || status === 'revoked' || status === 'ended') {
+          return; // Skip ended broadcasts completely
+        }
         if (bId && !seenIds.has(bId)) {
           seenIds.add(bId);
           allBroadcasts.push({ ...b, id: bId });
@@ -11472,33 +11482,22 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
     const isDualStream = req.body.dualStream === 'true' || req.body.dualStream === true || req.body.dualStream === 'on' || req.body.dualStream === 1 || req.body.dualStream === '1';
     const verticalStreamKey = (req.body.verticalStreamKey || req.body.backupRtmpUrl || req.body.secondaryRtmpUrl || '').trim();
 
-    const accessToken = await youtubeService.getAccessToken(credentials.clientId, credentials.clientSecret, credentials.refreshToken, 0, credentials.id, 0, credentials.id);
-
-    const finalCategoryId = categoryId || (templateObj ? templateObj.category_id : null) || '22';
-    // Only resolve streamId if it is a real stream ID, never fallback to streamKey
-    let resolvedStreamId = streamId || (matchedSlot ? matchedSlot.streamId : null) || (templateObj ? templateObj.stream_id : null) || null;
-    const currentStreamKey = req.body.streamKey || (matchedSlot ? (matchedSlot.streamKey || matchedSlot.stream_key) : null) || (templateObj ? (templateObj.stream_key || templateObj.streamKey) : null);
-    if (resolvedStreamId && currentStreamKey && resolvedStreamId.trim() === currentStreamKey.trim()) {
-      console.log('[API] resolvedStreamId matches streamKey, treating as new stream creation');
-      resolvedStreamId = null;
+    const rawStartTime = req.body.scheduleStartTime || req.body.scheduledStartTime;
+    let sDate = null;
+    if (isStartImmediately) {
+      sDate = new Date(finalScheduledStartTime);
+    } else if (rawStartTime) {
+      sDate = parseWIBDateTimeLocal(rawStartTime);
+    } else if (finalScheduledStartTime) {
+      sDate = new Date(finalScheduledStartTime);
     }
-    console.log('[API] Create broadcast - using categoryId:', finalCategoryId, 'dualStream:', isDualStream, 'verticalKey:', !!verticalStreamKey, 'alteredContent:', isAlteredContent, 'streamId:', resolvedStreamId);
 
-    const broadcast = await youtubeService.createBroadcast(accessToken, {
-      title,
-      description: description || '',
-      scheduledStartTime: finalScheduledStartTime,
-      privacyStatus: privacyStatus || 'unlisted',
-      streamId: resolvedStreamId,
-      tags: parsedTags,
-      categoryId: finalCategoryId,
-      enableAutoStart: enableAutoStart === 'true' || enableAutoStart === true,
-      enableAutoStop: enableAutoStop === 'true' || enableAutoStop === true, // Default to false for anti-endlive protection
-      monetizationEnabled: monetizationEnabled === 'true' || monetizationEnabled === true,
-      adFrequency: adFrequency || 'medium',
-      alteredContent: isAlteredContent,
-      dualStream: isDualStream
-    });
+    const scheduleTypeReq = req.body.scheduleType || (matchedSlot ? matchedSlot.scheduleType : null) || (templateObj ? templateObj.schedule_type : 'once');
+    const isRecurringSchedule = (scheduleTypeReq === 'daily' || scheduleTypeReq === 'weekly');
+    const isFutureSchedule = !isStartImmediately && (
+      isRecurringSchedule ||
+      (sDate && !isNaN(sDate.getTime()) && (sDate.getTime() - Date.now() > 2 * 60 * 1000))
+    );
 
     // Get thumbnail folder from request or inherit from template/slot
     let thumbnailFolder = req.body.thumbnailFolder;
@@ -11518,6 +11517,306 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         thumbnailPathFromRequest = templateObj.pinned_thumbnail || templateObj.thumbnail_path;
       }
     }
+
+    // Save uploaded file locally if provided
+    if (req.file) {
+      try {
+        const uploadDir = path.join(__dirname, 'public', 'uploads', 'thumbnails');
+        if (!fs.existsSync(uploadDir)) {
+          fs.mkdirSync(uploadDir, { recursive: true });
+        }
+        const ext = path.extname(req.file.originalname || '.jpg') || '.jpg';
+        const fileName = `thumb_${Date.now()}_${Math.random().toString(36).substring(2, 7)}${ext}`;
+        const filePath = path.join(uploadDir, fileName);
+        fs.writeFileSync(filePath, req.file.buffer);
+        thumbnailPathFromRequest = `/uploads/thumbnails/${fileName}`;
+      } catch (fErr) {
+        console.warn('[API] Warning saving uploaded thumbnail file:', fErr.message);
+      }
+    }
+
+    const finalCategoryId = categoryId || (templateObj ? templateObj.category_id : null) || '22';
+    // Only resolve streamId if it is a real stream ID, never fallback to streamKey
+    let resolvedStreamId = streamId || (matchedSlot ? matchedSlot.streamId : null) || (templateObj ? templateObj.stream_id : null) || null;
+    const currentStreamKey = req.body.streamKey || (matchedSlot ? (matchedSlot.streamKey || matchedSlot.stream_key) : null) || (templateObj ? (templateObj.stream_key || templateObj.streamKey) : null);
+    if (resolvedStreamId && currentStreamKey && resolvedStreamId.trim() === currentStreamKey.trim()) {
+      console.log('[API] resolvedStreamId matches streamKey, treating as new stream creation');
+      resolvedStreamId = null;
+    }
+    console.log('[API] Create broadcast - using categoryId:', finalCategoryId, 'dualStream:', isDualStream, 'verticalKey:', !!verticalStreamKey, 'alteredContent:', isAlteredContent, 'streamId:', resolvedStreamId, 'isFutureSchedule:', isFutureSchedule);
+
+    // ==========================================
+    // CASE 1: JADWAL LIVE DI MASA DEPAN (> 2 menit)
+    // Jangan buat broadcast di YouTube sekarang (agar tidak "upcoming" berjam-jam/hari sebelumnya).
+    // Simpan ke DB lokal, broadcast YouTube resmi dibuat otomatis beberapa menit sebelum live.
+    // ==========================================
+    if (isFutureSchedule) {
+      const finalTitleFolderId = req.body.titleFolderId || (matchedSlot ? (matchedSlot.titleFolderId || matchedSlot.title_folder_id) : null) || (templateObj ? templateObj.title_folder_id : null) || null;
+      const finalAudioId = req.body.audioId || (matchedSlot ? (matchedSlot.audioId || matchedSlot.audio_id) : null) || (templateObj ? templateObj.audio_id : null) || null;
+      const finalVideoId = req.body.videoId || (matchedSlot ? (matchedSlot.videoId || matchedSlot.video_id) : null) || (templateObj ? templateObj.video_id : null) || null;
+
+      const isExplicitUnlimited = req.body.isUnlimited === 'true' || req.body.isUnlimited === true;
+      let hours = parseInt(req.body.streamDurationHours) || 0;
+      let minutes = parseInt(req.body.streamDurationMinutes) || 0;
+      let totalMinutes = parseInt(req.body.streamTotalMinutes) || ((hours * 60) + minutes);
+      let loopVideo = req.body.loopVideo !== undefined ? (req.body.loopVideo === 'true' || req.body.loopVideo === true || req.body.loopVideo === 1 || req.body.loopVideo === '1') : true;
+      let videoId = finalVideoId;
+      let audioId = finalAudioId;
+      let scheduleType = scheduleTypeReq;
+
+      if (isExplicitUnlimited) {
+        hours = 0;
+        minutes = 0;
+        totalMinutes = 0;
+        loopVideo = true;
+      }
+
+      if (templateObj) {
+        if (!matchedSlot && Array.isArray(templateObj.broadcasts) && templateObj.broadcasts.length > 0) {
+          matchedSlot = templateObj.broadcasts.find(b => b.title === title) || templateObj.broadcasts[0];
+        }
+        if (!isExplicitUnlimited && totalMinutes === 0) {
+          if (matchedSlot) {
+            totalMinutes = parseInt(matchedSlot.streamDurationMinutes) || (((parseInt(matchedSlot.durationHours) || 0) * 60) + (parseInt(matchedSlot.durationMinutes) || 0));
+            if (totalMinutes > 0) {
+              hours = parseInt(matchedSlot.durationHours) || Math.floor(totalMinutes / 60);
+              minutes = totalMinutes % 60;
+            }
+          }
+          if (totalMinutes === 0 && templateObj.stream_duration_minutes > 0) {
+            totalMinutes = templateObj.stream_duration_minutes;
+            hours = templateObj.duration_hours || Math.floor(totalMinutes / 60);
+            minutes = totalMinutes % 60;
+          }
+        }
+      }
+
+      let finalStreamKey = req.body.streamKey || (matchedSlot ? (matchedSlot.streamKey || matchedSlot.stream_key) : null) || (templateObj ? (templateObj.stream_key || templateObj.streamKey) : '') || '';
+      if (!finalStreamKey && resolvedStreamId) {
+        try {
+          const accessToken = await youtubeService.getAccessToken(credentials.clientId, credentials.clientSecret, credentials.refreshToken, 0, credentials.id, 0, credentials.id);
+          const streamsList = await youtubeService.listStreams(accessToken);
+          const matchingStream = streamsList.find(s => s.id === resolvedStreamId);
+          if (matchingStream && matchingStream.streamKey) {
+            finalStreamKey = matchingStream.streamKey;
+          }
+        } catch (keyErr) {
+          console.warn('[API] Could not resolve stream key for future schedule:', keyErr.message);
+        }
+      }
+
+      const rawEndTime = isExplicitUnlimited ? null : req.body.scheduleEndTime;
+      let scheduleIso = sDate ? sDate.toISOString() : (finalScheduledStartTime || new Date().toISOString());
+      let endIso = null;
+      let eDate = null;
+      if (rawEndTime && !isExplicitUnlimited) {
+        eDate = parseWIBDateTimeLocal(rawEndTime);
+        if (eDate) endIso = eDate.toISOString();
+      }
+
+      if (!isExplicitUnlimited && scheduleType === 'once' && totalMinutes === 0 && sDate && eDate && eDate > sDate) {
+        totalMinutes = Math.round((eDate.getTime() - sDate.getTime()) / (1000 * 60));
+        hours = Math.floor(totalMinutes / 60);
+        minutes = totalMinutes % 60;
+      }
+
+      const isRecurring = (scheduleType === 'daily' || scheduleType === 'weekly');
+      const recurringEnabledVal = (req.body.recurringEnabled === 'true' || req.body.recurringEnabled === true || req.body.recurringEnabled === 'on' || req.body.recurringEnabled === 1 || req.body.recurringEnabled === '1' || isRecurring) ? 1 : 0;
+
+      let finalRecurringTime = req.body.recurringTime || null;
+      if (!finalRecurringTime && isRecurring && sDate) {
+        try {
+          finalRecurringTime = formatWIBTimeOnly(sDate);
+        } catch (e) {}
+      }
+      if (!finalRecurringTime && templateObj && templateObj.recurring_time) {
+        finalRecurringTime = templateObj.recurring_time;
+      }
+      if (finalRecurringTime && typeof finalRecurringTime === 'string' && finalRecurringTime.includes(',')) {
+        const parts = finalRecurringTime.split(/[\s,]+/).filter(t => /^[0-2]?[0-9]:[0-5][0-9]$/.test(t));
+        const slotIdx = req.body.slotIndex !== undefined ? parseInt(req.body.slotIndex, 10) : 0;
+        finalRecurringTime = parts[slotIdx] || parts[0] || finalRecurringTime;
+      }
+
+      let scheduleDays = req.body.scheduleDays || (templateObj ? templateObj.recurring_days : null) || null;
+      if (typeof scheduleDays === 'string') {
+        try { scheduleDays = JSON.parse(scheduleDays); } catch (e) {}
+      }
+
+      if (isRecurring) {
+        if (!scheduleIso && finalRecurringTime) {
+          const tempStream = {
+            schedule_type: scheduleType,
+            recurring_time: finalRecurringTime,
+            schedule_days: scheduleDays
+          };
+          const nextDate = Stream.getNextScheduledTime(tempStream);
+          if (nextDate) {
+            scheduleIso = nextDate.toISOString();
+          }
+        }
+      }
+
+      let scheduleDaysFormatted = null;
+      if (scheduleDays) {
+        scheduleDaysFormatted = typeof scheduleDays === 'string' ? scheduleDays : JSON.stringify(scheduleDays);
+      }
+
+      const finalEndTime = (scheduleType === 'once' && !isExplicitUnlimited && totalMinutes > 0) ? endIso : null;
+
+      const streamData = {
+        title: title || 'Scheduled Live',
+        video_id: videoId,
+        audio_id: audioId,
+        title_folder_id: finalTitleFolderId,
+        rtmp_url: 'rtmp://a.rtmp.youtube.com/live2',
+        stream_key: finalStreamKey || (resolvedStreamId ? String(resolvedStreamId) : ''),
+        platform: 'YouTube',
+        platform_icon: 'ti-brand-youtube',
+        bitrate: 2500,
+        resolution: '1280x720',
+        fps: 30,
+        orientation: 'horizontal',
+        loop_video: isExplicitUnlimited ? 1 : (loopVideo ? 1 : 0),
+        stream_duration_hours: (isExplicitUnlimited || totalMinutes <= 0) ? null : hours,
+        stream_duration_minutes: (isExplicitUnlimited || totalMinutes <= 0) ? null : totalMinutes,
+        duration: (isExplicitUnlimited || totalMinutes <= 0) ? null : totalMinutes,
+        schedule_type: scheduleType,
+        schedule_time: scheduleIso,
+        end_time: finalEndTime,
+        schedule_days: scheduleDaysFormatted,
+        recurring_time: finalRecurringTime,
+        recurring_enabled: recurringEnabledVal,
+        user_id: req.session.userId,
+        youtube_broadcast_id: null, // Broadcast YouTube akan dibuat otomatis sesaat sebelum live
+        youtube_account_id: accountId || (credentials ? credentials.id : null),
+        dual_stream: isDualStream ? 1 : 0,
+        vertical_stream_key: isDualStream ? (verticalStreamKey || null) : null,
+        backup_rtmp_url: isDualStream ? (verticalStreamKey || null) : null,
+        tags: parsedTags && parsedTags.length > 0 ? JSON.stringify(parsedTags) : null,
+        status: 'scheduled'
+      };
+
+      const createdStream = await Stream.create(streamData);
+      console.log('[API] ✅ Created scheduled Stream record (pending YouTube broadcast):', createdStream.id, 'schedule_time:', scheduleIso);
+
+      const placeholderBroadcastId = `scheduled_stream_${createdStream.id}`;
+
+      try {
+        await YouTubeBroadcastSettings.upsert({
+          broadcastId: placeholderBroadcastId,
+          userId: req.session.userId,
+          accountId: accountId || credentials?.id || null,
+          title: title || '',
+          description: description || '',
+          categoryId: finalCategoryId,
+          privacyStatus: privacyStatus || 'unlisted',
+          enableAutoStart: enableAutoStart === 'true' || enableAutoStart === true,
+          enableAutoStop: enableAutoStop === 'true' || enableAutoStop === true,
+          unlistReplayOnEnd: unlistReplayOnEnd === 'true' || unlistReplayOnEnd === true,
+          originalPrivacyStatus: privacyStatus || 'unlisted',
+          thumbnailFolder: thumbnailFolder !== undefined ? thumbnailFolder : null,
+          thumbnailIndex: thumbnailIndex,
+          thumbnailPath: thumbnailPathFromRequest || null,
+          alteredContent: isAlteredContent ? 1 : 0,
+          dualStream: isDualStream ? 1 : 0,
+          verticalStreamKey: isDualStream ? (verticalStreamKey || null) : null,
+          tags: parsedTags && parsedTags.length > 0 ? JSON.stringify(parsedTags) : null,
+          templateId: templateId ? String(templateId) : null,
+          titleFolderId: finalTitleFolderId,
+          audioId: finalAudioId,
+          videoId: finalVideoId
+        });
+        console.log('[API] Saved broadcast settings for scheduled placeholder:', placeholderBroadcastId);
+      } catch (settingsErr) {
+        console.error('[API] Error saving broadcast settings for scheduled stream:', settingsErr.message);
+      }
+
+      if (templateId) {
+        try {
+          const nowDate = new Date();
+          let executedTimeStr = null;
+          if (finalScheduledStartTime && typeof finalScheduledStartTime === 'string' && finalScheduledStartTime.includes('T')) {
+            const parsedTime = parseWIBDateTimeLocal(finalScheduledStartTime);
+            if (parsedTime) {
+              const wib = getWIBTime(parsedTime);
+              executedTimeStr = `${String(wib.hours).padStart(2, '0')}:${String(wib.minutes).padStart(2, '0')}`;
+            }
+          }
+          if (!executedTimeStr && req.body.recurringTime) {
+            executedTimeStr = String(req.body.recurringTime).slice(0, 5);
+          }
+          if (typeof scheduleService !== 'undefined' && executedTimeStr && typeof scheduleService.markSlotExecuted === 'function') {
+            scheduleService.markSlotExecuted(templateId, executedTimeStr, nowDate);
+          }
+
+          let nextRunIso = null;
+          try {
+            const { calculateNextRun, formatNextRunAt } = require('./utils/recurringUtils');
+            const pattern = templateObj?.recurring_pattern || req.body.recurringPattern || 'daily';
+            const rTime = templateObj?.recurring_time || req.body.recurringTime || executedTimeStr;
+            let rDays = templateObj?.recurring_days || req.body.scheduleDays;
+            if (typeof rDays === 'string') {
+              try { rDays = JSON.parse(rDays); } catch (_) {}
+            }
+            if (rTime) {
+              const nRun = calculateNextRun({
+                recurring_pattern: pattern,
+                recurring_time: rTime,
+                recurring_days: rDays
+              });
+              if (nRun) nextRunIso = formatNextRunAt(nRun);
+            }
+          } catch (nErr) {}
+
+          const updateFields = { last_run_at: nowDate.toISOString() };
+          if (nextRunIso) updateFields.next_run_at = nextRunIso;
+          await BroadcastTemplate.update(templateId, updateFields);
+          console.log(`[API] Marked template ${templateId} executed at ${executedTimeStr || 'now'}, next_run_at set to: ${nextRunIso || 'none'}`);
+        } catch (markErr) {
+          console.warn('[API] Warning updating template run info:', markErr.message);
+        }
+      }
+
+      invalidateBroadcastsCache(req.session.userId);
+      return res.json({
+        success: true,
+        isScheduledPending: true,
+        stream: createdStream,
+        broadcast: {
+          id: placeholderBroadcastId,
+          title: createdStream.title,
+          description: description || '',
+          scheduledStartTime: createdStream.schedule_time,
+          privacyStatus: privacyStatus || 'unlisted',
+          status: 'scheduled',
+          isPendingYouTubeCreation: true
+        },
+        message: '✓ Jadwal live berhasil disimpan! Siaran YouTube akan dibuat otomatis mendekati jam tayang.'
+      });
+    }
+
+    // ==========================================
+    // CASE 2: LIVE SEGERA ATAU WAKTU JADWAL SUDAH TIBA (<= 2 menit)
+    // Buat siaran langsung di YouTube API
+    // ==========================================
+    const accessToken = await youtubeService.getAccessToken(credentials.clientId, credentials.clientSecret, credentials.refreshToken, 0, credentials.id, 0, credentials.id);
+
+    const broadcast = await youtubeService.createBroadcast(accessToken, {
+      title,
+      description: description || '',
+      scheduledStartTime: finalScheduledStartTime,
+      privacyStatus: privacyStatus || 'unlisted',
+      streamId: resolvedStreamId,
+      tags: parsedTags,
+      categoryId: finalCategoryId,
+      enableAutoStart: enableAutoStart === 'true' || enableAutoStart === true,
+      enableAutoStop: enableAutoStop === 'true' || enableAutoStop === true,
+      monetizationEnabled: monetizationEnabled === 'true' || monetizationEnabled === true,
+      adFrequency: adFrequency || 'medium',
+      alteredContent: isAlteredContent,
+      dualStream: isDualStream
+    });
 
     console.log('[API] Create broadcast - thumbnail settings:', {
       thumbnailFolder: thumbnailFolder,

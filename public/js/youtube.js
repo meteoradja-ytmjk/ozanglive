@@ -489,7 +489,14 @@ function renderBroadcastsGrouped(broadcasts, accounts, accountErrors) {
   const groupedBroadcasts = {};
   broadcasts.forEach(broadcast => {
     if (!broadcast) return;
+    const lifeStatus = String(broadcast.lifeCycleStatus || broadcast.lifecycle_status || broadcast.status || '').toLowerCase();
+    if (lifeStatus === 'complete' || lifeStatus === 'completed' || lifeStatus === 'ended' || lifeStatus === 'revoked') {
+      return;
+    }
     const bId = broadcast.id || broadcast.broadcastId || broadcast.youtube_broadcast_id;
+    if (bId && String(bId).startsWith('scheduled_stream_')) {
+      return;
+    }
     if (bId) {
       if (seenBroadcastIds.has(bId)) {
         console.log('[renderBroadcastsGrouped] Skipping duplicate broadcast ID:', bId);
@@ -1091,6 +1098,15 @@ function renderBroadcasts(broadcasts) {
   container.innerHTML = '';
   
   broadcasts.forEach(broadcast => {
+    if (!broadcast) return;
+    const lifeStatus = String(broadcast.lifeCycleStatus || broadcast.lifecycle_status || broadcast.status || '').toLowerCase();
+    if (lifeStatus === 'complete' || lifeStatus === 'completed' || lifeStatus === 'ended' || lifeStatus === 'revoked') {
+      return;
+    }
+    const bId = broadcast.id || broadcast.broadcastId || broadcast.youtube_broadcast_id;
+    if (bId && String(bId).startsWith('scheduled_stream_')) {
+      return;
+    }
     const broadcastCard = createBroadcastCard(broadcast);
     container.appendChild(broadcastCard);
   });
@@ -5373,6 +5389,8 @@ if (createBroadcastForm) {
         
         if (isStartNow && data.streamStartResult && !data.streamStartResult.success) {
           showToast(`Broadcast dibuat, tetapi stream gagal dimulai: ${data.streamStartResult.error || 'Terjadi kesalahan'}`, 'warning');
+        } else if (data.isScheduledPending) {
+          showToast('✓ Jadwal live berhasil disimpan! Broadcast YouTube akan otomatis dibuat mendekati jam tayang.', 'success');
         } else {
           showToast(isStartNow ? '✓ Live streaming berhasil dimulai!' : '✓ Broadcast & Jadwal Live berhasil dibuat!');
         }
