@@ -10844,62 +10844,97 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
     // Helper to retrieve all locally recorded active/scheduled broadcasts for this user across both streams and youtube_broadcast_settings
     const getLocalStreams = () => new Promise((resolve) => {
       db.all(
-        `SELECT id, title, rtmp_url, stream_key, schedule_time, youtube_broadcast_id, youtube_account_id, status 
-         FROM streams 
-         WHERE (user_id = ? OR CAST(user_id AS TEXT) = CAST(? AS TEXT)) 
-           AND youtube_broadcast_id IS NOT NULL 
-           AND youtube_broadcast_id != ''
-           AND status IN ('scheduled', 'live')`,
+        `SELECT s.*,
+                COALESCE(yc.channel_name, 'YouTube Channel') AS channel_name
+         FROM streams s
+         LEFT JOIN youtube_credentials yc ON s.youtube_account_id = yc.id
+         WHERE (s.user_id = ? OR CAST(s.user_id AS TEXT) = CAST(? AS TEXT)) 
+           AND s.status IN ('scheduled', 'live')`,
         [userId, String(userId)],
         (err, streamRows) => {
           const sRows = (err ? [] : (streamRows || []));
           
           db.all(
-            `SELECT broadcast_id, user_id, account_id, original_privacy_status, thumbnail_path, created_at
+            `SELECT broadcast_id, user_id, account_id, title, description, category_id, original_privacy_status, thumbnail_path, tags, created_at
              FROM youtube_broadcast_settings
              WHERE (user_id = ? OR CAST(user_id AS TEXT) = CAST(? AS TEXT))
                AND broadcast_id IS NOT NULL 
-               AND broadcast_id != ''
-               AND broadcast_id NOT LIKE 'scheduled_stream_%'`,
+               AND broadcast_id != ''`,
             [userId, String(userId)],
             (settingsErr, settingsRows) => {
               const setRows = (settingsErr ? [] : (settingsRows || []));
               
+              // Settings map by broadcastId
+              const settingsMap = new Map();
+              setRows.forEach(st => {
+                if (st.broadcast_id) {
+                  settingsMap.set(st.broadcast_id, st);
+                }
+              });
+
               // Combine and deduplicate by broadcast ID
               const mergedMap = new Map();
               
               setRows.forEach(st => {
-                if (st.broadcast_id) {
+                if (st.broadcast_id && !st.broadcast_id.startsWith('scheduled_stream_')) {
                   mergedMap.set(st.broadcast_id, {
-                    id: null,
-                    title: 'YouTube Scheduled Broadcast',
+                    id: st.broadcast_id,
+                    broadcastId: st.broadcast_id,
+                    title: st.title || 'YouTube Scheduled Broadcast',
+                    description: st.description || '',
                     rtmp_url: 'rtmp://a.rtmp.youtube.com/live2',
                     stream_key: '',
                     schedule_time: st.created_at || null,
+                    scheduledStartTime: st.created_at || null,
                     youtube_broadcast_id: st.broadcast_id,
                     youtube_account_id: st.account_id ? parseInt(st.account_id) : null,
+                    accountId: st.account_id ? parseInt(st.account_id) : null,
                     privacyStatus: st.original_privacy_status || 'unlisted',
                     thumbnailPath: st.thumbnail_path || null,
-                    status: 'scheduled'
+                    status: 'scheduled',
+                    lifeCycleStatus: 'scheduled',
+                    isLocalScheduled: true
                   });
                 }
               });
               
               sRows.forEach(sr => {
-                if (sr.youtube_broadcast_id) {
-                  const existing = mergedMap.get(sr.youtube_broadcast_id);
-                  mergedMap.set(sr.youtube_broadcast_id, {
-                    ...existing,
-                    id: sr.id,
-                    title: sr.title || (existing ? existing.title : 'YouTube Broadcast'),
-                    rtmp_url: sr.rtmp_url || 'rtmp://a.rtmp.youtube.com/live2',
-                    stream_key: sr.stream_key || '',
-                    schedule_time: sr.schedule_time || (existing ? existing.schedule_time : null),
-                    youtube_broadcast_id: sr.youtube_broadcast_id,
-                    youtube_account_id: sr.youtube_account_id ? parseInt(sr.youtube_account_id) : (existing ? existing.youtube_account_id : null),
-                    status: sr.status || 'scheduled'
-                  });
-                }
+                const bKey = sr.youtube_broadcast_id || `scheduled_stream_${sr.id}`;
+                const savedSetting = settingsMap.get(bKey) || settingsMap.get(sr.youtube_broadcast_id || '') || settingsMap.get(`scheduled_stream_${sr.id}`) || null;
+                const existing = mergedMap.get(bKey) || (sr.youtube_broadcast_id ? mergedMap.get(sr.youtube_broadcast_id) : null);
+                
+                mergedMap.set(bKey, {
+                  ...existing,
+                  id: bKey,
+                  broadcastId: bKey,
+                  streamId: sr.id,
+                  title: sr.title || (savedSetting ? savedSetting.title : (existing ? existing.title : 'Scheduled Broadcast')),
+                  description: (savedSetting && savedSetting.description) || sr.description || (existing ? existing.description : ''),
+                  rtmp_url: sr.rtmp_url || 'rtmp://a.rtmp.youtube.com/live2',
+                  stream_key: sr.stream_key || '',
+                  streamKey: sr.stream_key || '',
+                  schedule_time: sr.schedule_time || (existing ? existing.schedule_time : null),
+                  scheduledStartTime: sr.schedule_time || (existing ? existing.scheduledStartTime : null),
+                  youtube_broadcast_id: sr.youtube_broadcast_id || bKey,
+                  youtube_account_id: sr.youtube_account_id ? parseInt(sr.youtube_account_id) : (savedSetting?.account_id ? parseInt(savedSetting.account_id) : (existing ? existing.youtube_account_id : null)),
+                  accountId: sr.youtube_account_id ? parseInt(sr.youtube_account_id) : (savedSetting?.account_id ? parseInt(savedSetting.account_id) : (existing ? existing.accountId : null)),
+                  channelName: sr.channel_name || (existing ? existing.channelName : 'YouTube Channel'),
+                  privacyStatus: (savedSetting && savedSetting.original_privacy_status) || sr.privacy_status || (existing ? existing.privacyStatus : 'unlisted'),
+                  thumbnailPath: (savedSetting && savedSetting.thumbnail_path) || sr.thumbnail_path || (existing ? existing.thumbnailPath : null),
+                  status: sr.status || 'scheduled',
+                  lifeCycleStatus: sr.status === 'live' ? 'live' : 'scheduled',
+                  isScheduledPending: !sr.youtube_broadcast_id || sr.youtube_broadcast_id.startsWith('scheduled_stream_'),
+                  isLocalScheduled: true,
+                  videoId: sr.video_id,
+                  audioId: sr.audio_id,
+                  scheduleType: sr.schedule_type || 'once',
+                  recurringTime: sr.recurring_time,
+                  scheduleDays: sr.schedule_days,
+                  streamDurationHours: sr.stream_duration_hours,
+                  streamDurationMinutes: sr.stream_duration_minutes,
+                  duration: sr.duration || sr.stream_duration_minutes,
+                  loopVideo: sr.loop_video === 1
+                });
               });
               
               resolve(Array.from(mergedMap.values()));
@@ -10940,42 +10975,19 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
         console.warn(`[Broadcasts API] listBroadcasts error for account ${accountId}:`, listErr.message);
       }
 
-      let result = broadcasts.map(b => ({ 
-        ...b, 
-        accountId: credentials.id, 
-        channelName: credentials.channelName 
-      }));
-
-      // Check if any local streams belonging to this account are missing from YouTube API response
-      const fetchedIds = new Set(result.map(b => b.id));
-      const missingLocal = localStreams.filter(s => 
-        (!s.youtube_account_id || String(s.youtube_account_id) === String(credentials.id)) &&
-        !fetchedIds.has(s.youtube_broadcast_id)
-      );
-
-      if (missingLocal.length > 0) {
-        const missingIds = missingLocal.map(s => s.youtube_broadcast_id);
-        console.log(`[Broadcasts API] Querying ${missingIds.length} locally recorded broadcast(s) directly from YouTube for account ${credentials.id}...`);
-        try {
-          const directBroadcasts = await youtubeService.getBroadcastsByIds(accessToken, missingIds);
-          const directIds = new Set(directBroadcasts.map(b => b.id));
-          directBroadcasts.forEach(db_item => {
-            const loc = missingLocal.find(s => s.youtube_broadcast_id === db_item.id);
-            if (!result.some(b => (b.id || b.broadcastId) === db_item.id)) {
-              result.push({
-                ...db_item,
-                streamId: db_item.streamId || (loc ? loc.stream_key : null),
-                streamKey: db_item.streamKey || (loc ? loc.stream_key : ''),
-                rtmpUrl: db_item.rtmpUrl || (loc ? loc.rtmp_url : 'rtmp://a.rtmp.youtube.com/live2'),
-                accountId: credentials.id,
-                channelName: credentials.channelName
-              });
-            }
-          });
-        } catch (byIdErr) {
-          console.warn('[Broadcasts API] getBroadcastsByIds error:', byIdErr.message);
+      // Include any local scheduled broadcasts belonging to this account (e.g. pending YouTube broadcast creation)
+      localStreams.forEach(ls => {
+        if (!ls.youtube_account_id || String(ls.youtube_account_id) === String(credentials.id)) {
+          const lsId = ls.id || ls.broadcastId || ls.youtube_broadcast_id;
+          if (lsId && !result.some(b => (b.id || b.broadcastId || b.youtube_broadcast_id) === lsId)) {
+            result.push({
+              ...ls,
+              accountId: credentials.id,
+              channelName: credentials.channelName
+            });
+          }
         }
-      }
+      });
       
       // Deduplicate result by broadcast ID & strictly filter out complete/revoked/ended broadcasts
       const seenResultIds = new Set();
@@ -11120,6 +11132,15 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
         if (bId && !seenIds.has(bId)) {
           seenIds.add(bId);
           allBroadcasts.push({ ...b, id: bId });
+        }
+      });
+
+      // Also include any local scheduled broadcasts (e.g. pending YouTube broadcast creation)
+      localStreams.forEach(ls => {
+        const lsId = ls.id || ls.broadcastId || ls.youtube_broadcast_id;
+        if (lsId && !seenIds.has(lsId)) {
+          seenIds.add(lsId);
+          allBroadcasts.push(ls);
         }
       });
       
@@ -12463,9 +12484,25 @@ app.put('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
     }
 
     let credentials;
-    let result;
+    let result = { id: req.params.id, title, description, scheduledStartTime: finalScheduledStartTime, privacyStatus };
 
-    if (accountId) {
+    const isLocalPending = String(req.params.id).startsWith('scheduled_stream_');
+
+    if (isLocalPending) {
+      // Local pending scheduled stream - does not exist on YouTube API yet
+      console.log('[API] Updating local scheduled placeholder broadcast:', req.params.id);
+      const rawStreamId = req.params.id.replace('scheduled_stream_', '');
+      db.run(
+        `UPDATE streams SET 
+           title = COALESCE(?, title),
+           schedule_time = COALESCE(?, schedule_time),
+           dual_stream = ?,
+           tags = COALESCE(?, tags),
+           title_folder_id = COALESCE(?, title_folder_id)
+         WHERE id = ? AND user_id = ?`,
+        [title || null, finalScheduledStartTime || null, isDualStream ? 1 : 0, tags ? (Array.isArray(tags) ? JSON.stringify(tags) : tags) : null, req.body.titleFolderId || null, rawStreamId, req.session.userId]
+      );
+    } else if (accountId) {
       credentials = await YouTubeCredentials.findById(accountId);
       if (!credentials || credentials.userId !== req.session.userId) {
         return res.status(404).json({ success: false, error: 'Account not found' });
@@ -12551,8 +12588,8 @@ app.put('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
            dual_stream = ?,
            tags = COALESCE(?, tags),
            title_folder_id = COALESCE(?, title_folder_id)
-         WHERE youtube_broadcast_id = ? AND user_id = ?`,
-        [title || null, finalScheduledStartTime || null, finalDual ? 1 : 0, tags ? (Array.isArray(tags) ? JSON.stringify(tags) : tags) : null, req.body.titleFolderId || null, req.params.id, req.session.userId]
+         WHERE (youtube_broadcast_id = ? OR id = ?) AND user_id = ?`,
+        [title || null, finalScheduledStartTime || null, finalDual ? 1 : 0, tags ? (Array.isArray(tags) ? JSON.stringify(tags) : tags) : null, req.body.titleFolderId || null, req.params.id, req.params.id.replace('scheduled_stream_', ''), req.session.userId]
       );
     } catch (settingsErr) {
       console.warn('[API] Error saving broadcast settings on update:', settingsErr.message);
@@ -12574,16 +12611,18 @@ app.delete('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
   const broadcastId = req.params.id;
   const userId = req.session.userId;
   const accountId = req.query.accountId ? parseInt(req.query.accountId) : null;
+  const isLocalPending = String(broadcastId).startsWith('scheduled_stream_');
+  const rawStreamId = broadcastId.replace('scheduled_stream_', '');
 
   // Always remove from local database (streams and youtube_broadcast_settings)
   const cleanupLocalBroadcast = () => new Promise((resolve) => {
     db.run(
-      'DELETE FROM youtube_broadcast_settings WHERE broadcast_id = ? AND (user_id = ? OR CAST(user_id AS TEXT) = CAST(? AS TEXT))',
-      [broadcastId, userId, String(userId)],
+      'DELETE FROM youtube_broadcast_settings WHERE (broadcast_id = ? OR broadcast_id = ?) AND (user_id = ? OR CAST(user_id AS TEXT) = CAST(? AS TEXT))',
+      [broadcastId, `scheduled_stream_${rawStreamId}`, userId, String(userId)],
       () => {
         db.run(
-          'DELETE FROM streams WHERE youtube_broadcast_id = ? AND (user_id = ? OR CAST(user_id AS TEXT) = CAST(? AS TEXT))',
-          [broadcastId, userId, String(userId)],
+          'DELETE FROM streams WHERE (youtube_broadcast_id = ? OR id = ?) AND (user_id = ? OR CAST(user_id AS TEXT) = CAST(? AS TEXT))',
+          [broadcastId, rawStreamId, userId, String(userId)],
           () => {
             resolve();
           }
@@ -12593,36 +12632,38 @@ app.delete('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
   });
 
   try {
-    let accountsToTry = [];
+    if (!isLocalPending) {
+      let accountsToTry = [];
 
-    if (accountId) {
-      const credentials = await YouTubeCredentials.findById(accountId);
-      if (credentials && String(credentials.userId) === String(userId)) {
-        accountsToTry.push(credentials);
+      if (accountId) {
+        const credentials = await YouTubeCredentials.findById(accountId);
+        if (credentials && String(credentials.userId) === String(userId)) {
+          accountsToTry.push(credentials);
+        }
       }
-    }
 
-    if (accountsToTry.length === 0) {
-      accountsToTry = await YouTubeCredentials.findAllByUserId(userId);
-    }
+      if (accountsToTry.length === 0) {
+        accountsToTry = await YouTubeCredentials.findAllByUserId(userId);
+      }
 
-    // Try deleting on YouTube API
-    let deletedOnYouTube = false;
-    for (const account of accountsToTry) {
-      try {
-        const accessToken = await youtubeService.getAccessToken(account.clientId, account.clientSecret, account.refreshToken, 0, account.id);
-        const ok = await youtubeService.deleteBroadcast(accessToken, broadcastId);
-        if (ok) {
-          deletedOnYouTube = true;
-          break;
+      // Try deleting on YouTube API
+      let deletedOnYouTube = false;
+      for (const account of accountsToTry) {
+        try {
+          const accessToken = await youtubeService.getAccessToken(account.clientId, account.clientSecret, account.refreshToken, 0, account.id);
+          const ok = await youtubeService.deleteBroadcast(accessToken, broadcastId);
+          if (ok) {
+            deletedOnYouTube = true;
+            break;
+          }
+        } catch (err) {
+          if (err.code === 404 || err.status === 404 || (err.message && err.message.toLowerCase().includes('not found'))) {
+            console.log(`[DeleteBroadcast] Broadcast ${broadcastId} was already removed on YouTube Studio for account ${account.channelName}`);
+            deletedOnYouTube = true;
+            break;
+          }
+          console.warn(`[DeleteBroadcast] Account ${account.channelName} failed to delete on YouTube:`, err.message);
         }
-      } catch (err) {
-        if (err.code === 404 || err.status === 404 || (err.message && err.message.toLowerCase().includes('not found'))) {
-          console.log(`[DeleteBroadcast] Broadcast ${broadcastId} was already removed on YouTube Studio for account ${account.channelName}`);
-          deletedOnYouTube = true;
-          break;
-        }
-        console.warn(`[DeleteBroadcast] Account ${account.channelName} failed to delete on YouTube:`, err.message);
       }
     }
 

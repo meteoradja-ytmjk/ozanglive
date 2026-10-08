@@ -494,9 +494,6 @@ function renderBroadcastsGrouped(broadcasts, accounts, accountErrors) {
       return;
     }
     const bId = broadcast.id || broadcast.broadcastId || broadcast.youtube_broadcast_id;
-    if (bId && String(bId).startsWith('scheduled_stream_')) {
-      return;
-    }
     if (bId) {
       if (seenBroadcastIds.has(bId)) {
         console.log('[renderBroadcastsGrouped] Skipping duplicate broadcast ID:', bId);
@@ -707,7 +704,10 @@ function createBroadcastRowHtml(broadcast, index) {
           </div>
           <div class="w-8 text-center text-xs text-gray-500">${index + 1}</div>
           <div class="flex-1 min-w-0">
-            <span class="text-sm font-medium text-white truncate block" title="${safeTitle}">${safeTitle}</span>
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="text-sm font-medium text-white truncate block" title="${safeTitle}">${safeTitle}</span>
+              ${(broadcast.lifeCycleStatus === 'scheduled' || broadcast.status === 'scheduled' || broadcast.isScheduledPending) ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0"><i class="ti ti-clock text-xs"></i> Scheduled</span>` : ''}
+            </div>
             ${scheduledTimeStr ? `<span class="text-[11px] text-gray-400 flex items-center gap-1 mt-0.5"><i class="ti ti-calendar-time text-xs text-primary/70 font-loaded"></i> ${scheduledTimeStr}</span>` : ''}
           </div>
           <div class="w-20 text-center">
@@ -763,6 +763,7 @@ function createBroadcastRowHtml(broadcast, index) {
               <div class="flex items-center gap-1.5 min-w-0">
                 <span class="text-[10px] font-bold text-primary bg-primary/15 px-1 py-0.5 rounded shrink-0">#${index + 1}</span>
                 <span class="text-xs sm:text-sm font-semibold text-white truncate min-w-0 flex-1 leading-snug" title="${safeTitle}">${safeTitle}</span>
+                ${(broadcast.lifeCycleStatus === 'scheduled' || broadcast.status === 'scheduled' || broadcast.isScheduledPending) ? `<span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0"><i class="ti ti-clock text-[10px]"></i> Scheduled</span>` : ''}
               </div>
 
               <!-- Row 2: Status Badge + Date/Time + Stream Key (with copy) -->
@@ -1103,10 +1104,6 @@ function renderBroadcasts(broadcasts) {
     if (lifeStatus === 'complete' || lifeStatus === 'completed' || lifeStatus === 'ended' || lifeStatus === 'revoked') {
       return;
     }
-    const bId = broadcast.id || broadcast.broadcastId || broadcast.youtube_broadcast_id;
-    if (bId && String(bId).startsWith('scheduled_stream_')) {
-      return;
-    }
     const broadcastCard = createBroadcastCard(broadcast);
     container.appendChild(broadcastCard);
   });
@@ -1158,7 +1155,7 @@ function createBroadcastCard(broadcast) {
     hour12: false
   }) + ' WIB') : '--';
   
-  const statusBadge = getStatusBadge(broadcast.lifeCycleStatus);
+  const statusBadge = getStatusBadge(broadcast.lifeCycleStatus || broadcast.status);
   const privacyBadge = getPrivacyBadge(broadcast.privacyStatus);
   
   div.innerHTML = `
@@ -1218,15 +1215,16 @@ function createBroadcastCard(broadcast) {
 // Get status badge HTML
 function getStatusBadge(status) {
   const statusMap = {
+    'scheduled': { color: 'amber', icon: 'ti-clock', text: 'Scheduled' },
     'ready': { color: 'green', icon: 'ti-check', text: 'Ready' },
     'live': { color: 'red', icon: 'ti-broadcast', text: 'Live' },
     'complete': { color: 'gray', icon: 'ti-check-circle', text: 'Complete' },
     'testing': { color: 'yellow', icon: 'ti-flask', text: 'Testing' }
   };
   
-  const badge = statusMap[status] || { color: 'gray', icon: 'ti-circle', text: status };
+  const badge = statusMap[status] || { color: 'gray', icon: 'ti-circle', text: status || 'Unknown' };
   
-  return `<span class="px-2 py-0.5 bg-${badge.color}-500/20 text-${badge.color}-400 text-xs rounded-full font-medium flex items-center gap-1">
+  return `<span class="px-2 py-0.5 bg-${badge.color}-500/20 text-${badge.color}-400 text-xs rounded-full font-medium flex items-center gap-1 border border-${badge.color}-500/30">
     <i class="ti ${badge.icon} text-xs"></i>
     ${badge.text}
   </span>`;
