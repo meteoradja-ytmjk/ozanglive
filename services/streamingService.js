@@ -3300,14 +3300,14 @@ const scheduledCleanups = new Map();
 /**
  * Auto-cleanup finished streams from Control Room after live session ends.
  * - Recurring schedules (daily/weekly) remain intact for future broadcasts.
- * - One-time / template / manual broadcasts that finished live are cleaned up after grace period so Control Room stays clean.
+ * - One-time / manual broadcasts that finished live are deleted immediately from streams table
+ *   so Control Room stays clean (history is already stored in stream_history).
  *
  * @param {Object} stream - Stream object
  * @param {string} source - Originating trigger ('stopStream', 'ffmpeg-exit', etc.)
- * @param {number} delayMs - Delay in milliseconds (default 15,000 ms = 15s)
- * @returns {Promise<boolean>} True if cleanup scheduled or performed, false otherwise
+ * @returns {Promise<boolean>} True if cleanup performed, false otherwise
  */
-async function autoCleanupTemplateStream(stream, source = 'stop', delayMs = 15000) {
+async function autoCleanupTemplateStream(stream, source = 'stop') {
   if (!stream || !stream.id) return false;
 
   const streamId = stream.id;
@@ -3322,63 +3322,46 @@ async function autoCleanupTemplateStream(stream, source = 'stop', delayMs = 1500
       return false;
     }
 
-    // Set status to 'completed' immediately so Control Room displays 'Selesai' briefly before vanishing
-    try {
-      await Stream.updateStatus(streamId, 'completed', userId);
-    } catch (statusErr) {
-      console.warn(`[AutoCleanup] Could not set stream #${streamId} to 'completed':`, statusErr.message);
-    }
-
-    console.log(`[AutoCleanup] Stream #${streamId} ("${stream.title}") entered grace period (${source}). Will vanish from Control Room in ${delayMs / 1000}s...`);
+    console.log(`[AutoCleanup] Deleting completed non-recurring stream #${streamId} ("${stream.title}") from Control Room (${source})...`);
 
     // Cancel any existing timer for this stream
     if (scheduledCleanups.has(streamId)) {
       clearTimeout(scheduledCleanups.get(streamId));
+      scheduledCleanups.delete(streamId);
     }
 
-    const timer = setTimeout(async () => {
-      scheduledCleanups.delete(streamId);
+    // Delete the stream record from streams table
+    await Stream.delete(streamId, userId);
 
-      // Re-verify stream is not currently streaming in memory
-      if (activeStreams.has(streamId)) {
-        console.log(`[AutoCleanup] Stream #${streamId} became active again. Aborting cleanup.`);
-        return;
-      }
+    // Delete associated settings if any
+    const bId = stream.youtube_broadcast_id || `scheduled_stream_${streamId}`;
+    db.run(
+      'DELETE FROM youtube_broadcast_settings WHERE broadcast_id = ? OR broadcast_id = ?',
+      [bId, `scheduled_stream_${streamId}`]
+    );
 
+    // Clean up temporary files
+    const tempConcatFile = path.join(__dirname, '..', 'temp', `playlist_${streamId}.txt`);
+    const tempAudioConcatFile = path.join(__dirname, '..', 'temp', `playlist_${streamId}_audio.txt`);
+    const tempMergedAudioFile = path.join(__dirname, '..', 'temp', `playlist_${streamId}_audio_merged.m4a`);
+    const tempMergedVideoFile = path.join(__dirname, '..', 'temp', `playlist_${streamId}_video_merged.mp4`);
+    const tempStreamMergedAudioFile = path.join(__dirname, '..', 'temp', `stream_${streamId}_audio_merged.m4a`);
+    [tempConcatFile, tempAudioConcatFile, tempMergedAudioFile, tempMergedVideoFile, tempStreamMergedAudioFile].forEach(f => {
       try {
-        console.log(`[AutoCleanup] Grace period elapsed for stream #${streamId}. Removing from Control Room...`);
+        if (fs.existsSync(f)) fs.unlinkSync(f);
+      } catch (e) {}
+    });
 
-        // Delete the stream record from streams table
-        await Stream.delete(streamId, userId);
-
-        // Clean up temporary files
-        const tempConcatFile = path.join(__dirname, '..', 'temp', `playlist_${streamId}.txt`);
-        const tempAudioConcatFile = path.join(__dirname, '..', 'temp', `playlist_${streamId}_audio.txt`);
-        const tempMergedAudioFile = path.join(__dirname, '..', 'temp', `playlist_${streamId}_audio_merged.m4a`);
-        const tempMergedVideoFile = path.join(__dirname, '..', 'temp', `playlist_${streamId}_video_merged.mp4`);
-        const tempStreamMergedAudioFile = path.join(__dirname, '..', 'temp', `stream_${streamId}_audio_merged.m4a`);
-        [tempConcatFile, tempAudioConcatFile, tempMergedAudioFile, tempMergedVideoFile, tempStreamMergedAudioFile].forEach(f => {
-          try {
-            if (fs.existsSync(f)) fs.unlinkSync(f);
-          } catch (e) {}
-        });
-
-        console.log(`[AutoCleanup] ✅ Successfully auto-vanished completed stream #${streamId} from Control Room.`);
-      } catch (delErr) {
-        console.error(`[AutoCleanup] Error deleting stream #${streamId} after grace period:`, delErr.message);
-      }
-    }, delayMs);
-
-    scheduledCleanups.set(streamId, timer);
+    console.log(`[AutoCleanup] ✅ Successfully deleted completed stream #${streamId} from Control Room.`);
     return true;
   } catch (err) {
-    console.error(`[AutoCleanup] Error during auto-cleanup scheduling for stream #${streamId}:`, err.message);
+    console.error(`[AutoCleanup] Error during auto-cleanup deletion for stream #${streamId}:`, err.message);
     return false;
   }
 }
 
 /**
- * Periodic background sweeper to clean up expired completed streams.
+ * Periodic background sweeper to clean up stale completed streams.
  * Ensures Control Room stays clean with zero zombie streams even after app restart.
  */
 let sweeperInterval = null;
@@ -3386,7 +3369,6 @@ function startAutoCleanupSweeper() {
   if (sweeperInterval) return;
   sweeperInterval = setInterval(async () => {
     try {
-      const oneMinuteAgo = new Date(Date.now() - 60000).toISOString();
       const query = `
         SELECT s.* 
         FROM streams s
@@ -3402,27 +3384,23 @@ function startAutoCleanupSweeper() {
             OR s.template_id IS NOT NULL 
             OR ybs.template_id IS NOT NULL
           )
-          AND (
-            (s.status = 'completed' AND (s.status_updated_at <= ? OR s.end_time <= ?))
-            OR (s.status = 'offline' AND s.start_time IS NOT NULL AND (s.status_updated_at <= ? OR s.end_time <= ?))
-            OR (s.youtube_lifecycle_status = 'complete' AND (s.status_updated_at <= ? OR s.end_time <= ?))
-            OR (s.end_time IS NOT NULL AND s.end_time <= ?)
-          )
       `;
       const candidates = await new Promise((resolve) => {
-        db.all(query, [oneMinuteAgo, oneMinuteAgo, oneMinuteAgo, oneMinuteAgo, oneMinuteAgo, oneMinuteAgo], (err, rows) => resolve(err ? [] : (rows || [])));
+        db.all(query, [], (err, rows) => resolve(err ? [] : (rows || [])));
       });
 
       for (const stream of candidates) {
         if (!activeStreams.has(stream.id)) {
-          console.log(`[AutoCleanup] Sweeper: tolerance expired for completed stream #${stream.id} ("${stream.title}"). Removing from Control Room.`);
+          console.log(`[AutoCleanup] Sweeper: Removing stale completed stream #${stream.id} ("${stream.title}") from Control Room.`);
           await Stream.delete(stream.id, stream.user_id);
+          const bId = stream.youtube_broadcast_id || `scheduled_stream_${stream.id}`;
+          db.run('DELETE FROM youtube_broadcast_settings WHERE broadcast_id = ? OR broadcast_id = ?', [bId, `scheduled_stream_${stream.id}`]);
         }
       }
     } catch (err) {
       // ignore
     }
-  }, 30000);
+  }, 15000);
 }
 
 // Start the 30s background sweeper immediately

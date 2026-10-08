@@ -10841,7 +10841,7 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
     
     console.log(`[Cache MISS] Fetching fresh broadcasts for ${cacheKey} (force: ${forceRefresh})`);
 
-    // Helper to retrieve all locally recorded active/scheduled broadcasts for this user across both streams and youtube_broadcast_settings
+    // Helper to retrieve all locally recorded active/scheduled broadcasts for this user from streams table only
     const getLocalStreams = () => new Promise((resolve) => {
       db.all(
         `SELECT s.*,
@@ -10853,6 +10853,9 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
         [userId, String(userId)],
         (err, streamRows) => {
           const sRows = (err ? [] : (streamRows || []));
+          if (sRows.length === 0) {
+            return resolve([]);
+          }
           
           db.all(
             `SELECT broadcast_id, user_id, account_id, title, description, category_id, original_privacy_status, thumbnail_path, tags, created_at
@@ -10872,55 +10875,29 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
                 }
               });
 
-              // Combine and deduplicate by broadcast ID
-              const mergedMap = new Map();
-              
-              setRows.forEach(st => {
-                if (st.broadcast_id && !st.broadcast_id.startsWith('scheduled_stream_')) {
-                  mergedMap.set(st.broadcast_id, {
-                    id: st.broadcast_id,
-                    broadcastId: st.broadcast_id,
-                    title: st.title || 'YouTube Scheduled Broadcast',
-                    description: st.description || '',
-                    rtmp_url: 'rtmp://a.rtmp.youtube.com/live2',
-                    stream_key: '',
-                    schedule_time: st.created_at || null,
-                    scheduledStartTime: st.created_at || null,
-                    youtube_broadcast_id: st.broadcast_id,
-                    youtube_account_id: st.account_id ? parseInt(st.account_id) : null,
-                    accountId: st.account_id ? parseInt(st.account_id) : null,
-                    privacyStatus: st.original_privacy_status || 'unlisted',
-                    thumbnailPath: st.thumbnail_path || null,
-                    status: 'scheduled',
-                    lifeCycleStatus: 'scheduled',
-                    isLocalScheduled: true
-                  });
-                }
-              });
+              const resultList = [];
               
               sRows.forEach(sr => {
                 const bKey = sr.youtube_broadcast_id || `scheduled_stream_${sr.id}`;
                 const savedSetting = settingsMap.get(bKey) || settingsMap.get(sr.youtube_broadcast_id || '') || settingsMap.get(`scheduled_stream_${sr.id}`) || null;
-                const existing = mergedMap.get(bKey) || (sr.youtube_broadcast_id ? mergedMap.get(sr.youtube_broadcast_id) : null);
                 
-                mergedMap.set(bKey, {
-                  ...existing,
+                resultList.push({
                   id: bKey,
                   broadcastId: bKey,
                   streamId: sr.id,
-                  title: sr.title || (savedSetting ? savedSetting.title : (existing ? existing.title : 'Scheduled Broadcast')),
-                  description: (savedSetting && savedSetting.description) || sr.description || (existing ? existing.description : ''),
+                  title: sr.title || (savedSetting ? savedSetting.title : 'Scheduled Broadcast'),
+                  description: (savedSetting && savedSetting.description) || sr.description || '',
                   rtmp_url: sr.rtmp_url || 'rtmp://a.rtmp.youtube.com/live2',
                   stream_key: sr.stream_key || '',
                   streamKey: sr.stream_key || '',
-                  schedule_time: sr.schedule_time || (existing ? existing.schedule_time : null),
-                  scheduledStartTime: sr.schedule_time || (existing ? existing.scheduledStartTime : null),
+                  schedule_time: sr.schedule_time || null,
+                  scheduledStartTime: sr.schedule_time || null,
                   youtube_broadcast_id: sr.youtube_broadcast_id || bKey,
-                  youtube_account_id: sr.youtube_account_id ? parseInt(sr.youtube_account_id) : (savedSetting?.account_id ? parseInt(savedSetting.account_id) : (existing ? existing.youtube_account_id : null)),
-                  accountId: sr.youtube_account_id ? parseInt(sr.youtube_account_id) : (savedSetting?.account_id ? parseInt(savedSetting.account_id) : (existing ? existing.accountId : null)),
-                  channelName: sr.channel_name || (existing ? existing.channelName : 'YouTube Channel'),
-                  privacyStatus: (savedSetting && savedSetting.original_privacy_status) || sr.privacy_status || (existing ? existing.privacyStatus : 'unlisted'),
-                  thumbnailPath: (savedSetting && savedSetting.thumbnail_path) || sr.thumbnail_path || (existing ? existing.thumbnailPath : null),
+                  youtube_account_id: sr.youtube_account_id ? parseInt(sr.youtube_account_id) : (savedSetting?.account_id ? parseInt(savedSetting.account_id) : null),
+                  accountId: sr.youtube_account_id ? parseInt(sr.youtube_account_id) : (savedSetting?.account_id ? parseInt(savedSetting.account_id) : null),
+                  channelName: sr.channel_name || 'YouTube Channel',
+                  privacyStatus: (savedSetting && savedSetting.original_privacy_status) || sr.privacy_status || 'unlisted',
+                  thumbnailPath: (savedSetting && savedSetting.thumbnail_path) || sr.thumbnail_path || null,
                   status: sr.status || 'scheduled',
                   lifeCycleStatus: sr.status === 'live' ? 'live' : 'scheduled',
                   isScheduledPending: !sr.youtube_broadcast_id || sr.youtube_broadcast_id.startsWith('scheduled_stream_'),
@@ -10937,7 +10914,7 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
                 });
               });
               
-              resolve(Array.from(mergedMap.values()));
+              resolve(resultList);
             }
           );
         }
@@ -12745,9 +12722,16 @@ app.post('/api/youtube/broadcasts/:id/end', isAuthenticated, async (req, res) =>
       }
     }
 
-    // 3. Update associated stream status to offline
+    // 3. Clean up associated stream - delete if once/non-recurring, or set to scheduled if recurring
     if (associatedStream) {
-      await Stream.updateStatus(associatedStream.id, 'offline', userId);
+      const isRecurring = (associatedStream.schedule_type === 'daily' || associatedStream.schedule_type === 'weekly') && (associatedStream.recurring_enabled === 1 || associatedStream.recurring_enabled === true);
+      if (!isRecurring) {
+        console.log(`[API End Broadcast] Deleting completed non-recurring stream ${associatedStream.id}`);
+        await Stream.delete(associatedStream.id, userId);
+        db.run('DELETE FROM youtube_broadcast_settings WHERE broadcast_id = ? OR broadcast_id = ?', [broadcastId, `scheduled_stream_${associatedStream.id}`]);
+      } else {
+        await Stream.updateStatus(associatedStream.id, 'scheduled', userId);
+      }
     }
 
     invalidateBroadcastsCache(userId);
