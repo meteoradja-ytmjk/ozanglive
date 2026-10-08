@@ -1899,37 +1899,8 @@ app.get('/schedule', isAuthenticated, async (req, res) => {
   }
 });
 
-app.get('/history', isAuthenticated, async (req, res) => {
-  try {
-    const db = require('./db/database').db;
-    const history = await new Promise((resolve, reject) => {
-      db.all(
-        `SELECT h.*, v.thumbnail_path 
-         FROM stream_history h 
-         LEFT JOIN videos v ON h.video_id = v.id 
-         WHERE h.user_id = ? 
-         ORDER BY h.start_time DESC`,
-        [req.session.userId],
-        (err, rows) => {
-          if (err) reject(err);
-          else resolve(rows);
-        }
-      );
-    });
-    res.render('history', {
-      active: 'history',
-      title: 'Stream History',
-      history: history,
-      helpers: app.locals.helpers
-    });
-  } catch (error) {
-    console.error('Error fetching stream history:', error);
-    res.status(500).render('error', {
-      title: 'Error',
-      message: 'Failed to load stream history',
-      error: error
-    });
-  }
+app.get('/history', isAuthenticated, (req, res) => {
+  res.redirect('/dashboard');
 });
 app.delete('/api/history/:id', isAuthenticated, async (req, res) => {
   try {
