@@ -10820,7 +10820,8 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
          FROM streams s
          LEFT JOIN youtube_credentials yc ON s.youtube_account_id = yc.id
          WHERE (s.user_id = ? OR CAST(s.user_id AS TEXT) = CAST(? AS TEXT)) 
-           AND s.status IN ('scheduled', 'live')`,
+           AND (s.status IN ('scheduled', 'live', 'liveStarting') OR s.youtube_broadcast_id IS NOT NULL)
+           AND s.status != 'completed'`,
         [userId, String(userId)],
         (err, streamRows) => {
           const sRows = (err ? [] : (streamRows || []));
@@ -10846,11 +10847,19 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
                 }
               });
 
+              const activeStreamIds = new Set(
+                (typeof streamingService !== 'undefined' && typeof streamingService.getActiveStreams === 'function')
+                  ? streamingService.getActiveStreams().map(s => String(s.id))
+                  : []
+              );
+
               const resultList = [];
               
               sRows.forEach(sr => {
                 const bKey = sr.youtube_broadcast_id || `scheduled_stream_${sr.id}`;
                 const savedSetting = settingsMap.get(bKey) || settingsMap.get(sr.youtube_broadcast_id || '') || settingsMap.get(`scheduled_stream_${sr.id}`) || null;
+                const isActiveInMemory = activeStreamIds.has(String(sr.id));
+                const currentStatus = isActiveInMemory ? 'live' : (sr.status || 'scheduled');
                 
                 resultList.push({
                   id: bKey,
@@ -10869,8 +10878,8 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
                   channelName: sr.channel_name || 'YouTube Channel',
                   privacyStatus: (savedSetting && savedSetting.original_privacy_status) || sr.privacy_status || 'unlisted',
                   thumbnailPath: (savedSetting && savedSetting.thumbnail_path) || sr.thumbnail_path || null,
-                  status: sr.status || 'scheduled',
-                  lifeCycleStatus: sr.status === 'live' ? 'live' : 'scheduled',
+                  status: currentStatus,
+                  lifeCycleStatus: currentStatus === 'live' ? 'live' : 'scheduled',
                   isScheduledPending: !sr.youtube_broadcast_id || sr.youtube_broadcast_id.startsWith('scheduled_stream_'),
                   isLocalScheduled: true,
                   videoId: sr.video_id,
@@ -10921,6 +10930,43 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
         broadcasts = await youtubeService.listBroadcasts(accessToken, { broadcastStatus: 'all' });
       } catch (listErr) {
         console.warn(`[Broadcasts API] listBroadcasts error for account ${accountId}:`, listErr.message);
+      }
+
+      let result = broadcasts.map(b => ({
+        ...b,
+        accountId: credentials.id,
+        channelName: credentials.channelName
+      }));
+
+      // Sync with local streams for this account if missing from YouTube API response
+      const fetchedIds = new Set(result.map(b => b.id));
+      const missingLocal = localStreams.filter(s => 
+        (!s.youtube_account_id || String(s.youtube_account_id) === String(credentials.id)) &&
+        s.youtube_broadcast_id &&
+        !fetchedIds.has(s.youtube_broadcast_id)
+      );
+
+      if (missingLocal.length > 0) {
+        const missingIds = missingLocal.map(s => s.youtube_broadcast_id);
+        console.log(`[Broadcasts API] Account ${credentials.channelName}: querying ${missingIds.length} local broadcast(s) directly...`);
+        try {
+          const directBroadcasts = await youtubeService.getBroadcastsByIds(accessToken, missingIds);
+          directBroadcasts.forEach(db_item => {
+            const loc = missingLocal.find(s => s.youtube_broadcast_id === db_item.id);
+            if (!result.some(b => (b.id || b.broadcastId) === db_item.id)) {
+              result.push({
+                ...db_item,
+                streamId: db_item.streamId || (loc ? loc.stream_key : null),
+                streamKey: db_item.streamKey || (loc ? loc.stream_key : ''),
+                rtmpUrl: db_item.rtmpUrl || (loc ? loc.rtmp_url : 'rtmp://a.rtmp.youtube.com/live2'),
+                accountId: credentials.id,
+                channelName: credentials.channelName
+              });
+            }
+          });
+        } catch (directErr) {
+          console.warn(`[Broadcasts API] Account ${credentials.channelName} direct ID query warning:`, directErr.message);
+        }
       }
 
       // Include any local scheduled broadcasts belonging to this account (e.g. pending YouTube broadcast creation)
@@ -12293,7 +12339,8 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         vertical_stream_key: isDualStream ? (verticalStreamKey || null) : null,
         backup_rtmp_url: isDualStream ? (verticalStreamKey || null) : null,
         tags: parsedTags && parsedTags.length > 0 ? JSON.stringify(parsedTags) : null,
-        status: req.body.startImmediately === 'true' ? 'offline' : (isScheduled ? 'scheduled' : 'offline')
+        start_time: req.body.startImmediately === 'true' ? new Date().toISOString() : null,
+        status: req.body.startImmediately === 'true' ? 'live' : (isScheduled ? 'scheduled' : 'offline')
       };
 
       // Check if an associated stream record already exists for this broadcast to prevent duplicates

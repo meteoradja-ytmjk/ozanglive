@@ -16,7 +16,7 @@ class Stream {
       resolution,
       fps = 30,
       orientation = 'horizontal',
-      loop_video = true,
+      start_time = null,
       schedule_time = null,
       end_time = null,
       duration = null,
@@ -66,16 +66,16 @@ class Stream {
         `INSERT INTO streams (
           id, title, video_id, audio_id, rtmp_url, stream_key, platform, platform_icon,
           bitrate, resolution, fps, orientation, loop_video,
-          schedule_time, end_time, duration, stream_duration_minutes,
+          start_time, schedule_time, end_time, duration, stream_duration_minutes,
           schedule_type, schedule_days, recurring_time, recurring_enabled,
           original_settings, status, status_updated_at, user_id,
           youtube_broadcast_id, youtube_account_id, youtube_lifecycle_status,
           dual_stream, backup_rtmp_url, vertical_stream_key, tags, title_folder_id, template_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id, title, video_id, audio_id, rtmp_url, stream_key, platform, platform_icon,
           bitrate, resolution, fps, orientation, loop_video_int,
-          schedule_time, end_time, duration, stream_duration_minutes,
+          start_time, schedule_time, end_time, duration, stream_duration_minutes,
           schedule_type, schedule_days_json, recurring_time, recurring_enabled_int,
           original_settings_json, final_status, status_updated_at, user_id,
           youtube_broadcast_id, youtube_account_id, youtube_lifecycle_status,

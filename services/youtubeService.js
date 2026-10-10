@@ -616,17 +616,19 @@ class YouTubeService {
 
     if (targetStatus === 'all') {
       try {
-        console.log('[YouTubeService.listBroadcasts] Fetching live broadcasts (upcoming + active)...');
-        const [upcomingRes, activeRes] = await Promise.allSettled([
+        console.log('[YouTubeService.listBroadcasts] Fetching live broadcasts (upcoming + active + recent)...');
+        const [upcomingRes, activeRes, allRecentRes] = await Promise.allSettled([
           youtube.liveBroadcasts.list({ part: 'snippet,status,contentDetails', mine: true, broadcastStatus: 'upcoming', maxResults: 50 }),
-          youtube.liveBroadcasts.list({ part: 'snippet,status,contentDetails', mine: true, broadcastStatus: 'active', maxResults: 50 })
+          youtube.liveBroadcasts.list({ part: 'snippet,status,contentDetails', mine: true, broadcastStatus: 'active', maxResults: 50 }),
+          youtube.liveBroadcasts.list({ part: 'snippet,status,contentDetails', mine: true, broadcastStatus: 'all', maxResults: 30 })
         ]);
         
         console.log('[YouTubeService.listBroadcasts] Upcoming result:', upcomingRes.status, upcomingRes.status === 'fulfilled' ? upcomingRes.value.data.items?.length : (upcomingRes.reason?.message || 'error'));
         console.log('[YouTubeService.listBroadcasts] Active result:', activeRes.status, activeRes.status === 'fulfilled' ? activeRes.value.data.items?.length : (activeRes.reason?.message || 'error'));
+        console.log('[YouTubeService.listBroadcasts] All Recent result:', allRecentRes.status, allRecentRes.status === 'fulfilled' ? allRecentRes.value.data.items?.length : (allRecentRes.reason?.message || 'error'));
         
         // Detect critical token / authentication errors
-        const rejectedReasons = [upcomingRes, activeRes]
+        const rejectedReasons = [upcomingRes, activeRes, allRecentRes]
           .filter(r => r.status === 'rejected')
           .map(r => r.reason);
 
@@ -636,7 +638,7 @@ class YouTubeService {
           err?.message?.includes('expired') ||
           err?.message?.includes('revoked')
         );
-        if (authErr && rejectedReasons.length === 2) {
+        if (authErr && rejectedReasons.length === 3) {
           throw new Error('TOKEN_EXPIRED: YouTube token has expired or been revoked. Please reconnect your YouTube account.');
         }
 
@@ -648,6 +650,10 @@ class YouTubeService {
         if (activeRes.status === 'fulfilled' && activeRes.value.data.items) {
           console.log('[YouTubeService.listBroadcasts] Adding', activeRes.value.data.items.length, 'active broadcasts');
           rawItems.push(...activeRes.value.data.items);
+        }
+        if (allRecentRes.status === 'fulfilled' && allRecentRes.value.data.items) {
+          console.log('[YouTubeService.listBroadcasts] Adding', allRecentRes.value.data.items.length, 'recent broadcasts');
+          rawItems.push(...allRecentRes.value.data.items);
         }
 
         // Additional fallback: Query user's upcoming channel live events via search.list

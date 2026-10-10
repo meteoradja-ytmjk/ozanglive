@@ -3369,12 +3369,19 @@ function startAutoCleanupSweeper() {
   if (sweeperInterval) return;
   sweeperInterval = setInterval(async () => {
     try {
+      const oneMinuteAgo = new Date(Date.now() - 60000).toISOString();
       const query = `
         SELECT s.* 
         FROM streams s
         LEFT JOIN youtube_broadcast_settings ybs ON s.youtube_broadcast_id = ybs.broadcast_id
         WHERE s.status != 'live'
           AND s.status != 'scheduled'
+          AND (
+            s.status = 'completed'
+            OR (s.status = 'offline' AND s.start_time IS NOT NULL AND (s.status_updated_at <= ? OR s.end_time <= ?))
+            OR (s.youtube_lifecycle_status = 'complete' AND (s.status_updated_at <= ? OR s.end_time <= ?))
+            OR (s.end_time IS NOT NULL AND s.end_time <= ?)
+          )
           AND (
             s.schedule_type = 'once' 
             OR s.schedule_type IS NULL 
@@ -3386,7 +3393,7 @@ function startAutoCleanupSweeper() {
           )
       `;
       const candidates = await new Promise((resolve) => {
-        db.all(query, [], (err, rows) => resolve(err ? [] : (rows || [])));
+        db.all(query, [oneMinuteAgo, oneMinuteAgo, oneMinuteAgo, oneMinuteAgo, oneMinuteAgo], (err, rows) => resolve(err ? [] : (rows || [])));
       });
 
       for (const stream of candidates) {
