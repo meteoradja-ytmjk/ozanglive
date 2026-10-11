@@ -447,7 +447,7 @@ function renderEmptyState(accountErrors) {
       </div>
       <p class="text-gray-200 font-semibold mb-2 text-base">No scheduled broadcasts</p>
       <p class="text-gray-400 text-sm max-w-md mx-auto leading-relaxed">
-        Belum ada siaran terjadwal. Gunakan tombol <strong class="text-white">Broadcast</strong> di atas untuk membuat siaran baru, atau <strong class="text-white">Sync YouTube</strong> untuk mengambil siaran dari YouTube.
+        Belum ada siaran terjadwal. Siaran channel utama YouTube disinkronkan otomatis di latar belakang. Gunakan tombol <strong class="text-white">Broadcast</strong> di atas untuk membuat siaran baru.
       </p>
     </div>
   `;
@@ -1351,6 +1351,7 @@ async function disconnectAccount(accountId, channelName) {
 // Set primary account
 async function setPrimaryAccount(accountId) {
   try {
+    showToast('Mengatur channel utama & menyinkronkan siaran di background...', 'info');
     const response = await fetch(`/api/youtube/credentials/${accountId}/primary`, {
       method: 'PUT',
       headers: {
@@ -1361,7 +1362,11 @@ async function setPrimaryAccount(accountId) {
     const data = await response.json();
     
     if (data.success) {
-      showToast('Primary account updated');
+      showToast('Channel utama berhasil diatur & disinkronkan!', 'success');
+      if (typeof broadcastsCache !== 'undefined' && broadcastsCache) {
+        broadcastsCache.data = null;
+        broadcastsCache.timestamp = null;
+      }
       setTimeout(() => window.location.reload(), 1000);
     } else {
       showToast(data.error || 'Failed to set primary', 'error');

@@ -9065,6 +9065,13 @@ app.get('/api/youtube/oauth/callback', async (req, res) => {
         });
         console.log(`[OAuth] Connected new account - channel: ${channelInfo.title}`);
       }
+
+      // Otomatis sinkronisasi siaran YouTube di background setelah akun terhubung
+      if (typeof global.performBackgroundYouTubeSync === 'function') {
+        global.performBackgroundYouTubeSync(targetUserId).catch(err => {
+          console.warn('[Auto-Sync OAuth] Warning:', err.message);
+        });
+      }
     }
     
     // Clean up session OAuth data
@@ -9567,7 +9574,15 @@ app.put('/api/youtube/credentials/:id/primary', isAuthenticated, async (req, res
     }
 
     await YouTubeCredentials.setPrimary(req.session.userId, credentialId);
-    res.json({ success: true, message: 'Primary account updated' });
+
+    // Otomatis sinkronisasi siaran YouTube di background untuk channel primary baru
+    if (typeof global.performBackgroundYouTubeSync === 'function') {
+      global.performBackgroundYouTubeSync(req.session.userId, credentialId).catch(err => {
+        console.warn('[Auto-Sync Primary] Error:', err.message);
+      });
+    }
+
+    res.json({ success: true, message: 'Primary account updated & syncing broadcasts in background' });
   } catch (error) {
     console.error('Error setting primary account:', error);
     res.status(500).json({ success: false, error: 'Failed to set primary account' });
@@ -10934,6 +10949,69 @@ async function syncYouTubeBroadcastsToLocalStreams(broadcastsList, userId) {
   return broadcastsList;
 }
 
+/**
+ * Automatically perform YouTube broadcast sync in the background
+ * (e.g. when an account is marked primary, reconnects, or connects for the first time)
+ */
+async function performBackgroundYouTubeSync(userId, targetAccountId = null) {
+  if (!userId) return { success: false, error: 'User ID missing' };
+  try {
+    invalidateBroadcastsCache(userId);
+
+    let accounts = [];
+    if (targetAccountId) {
+      const acc = await YouTubeCredentials.findById(targetAccountId);
+      if (acc && String(acc.userId) === String(userId)) {
+        accounts = [acc];
+      }
+    }
+    
+    // If no target account specified, find primary account or all accounts
+    if (accounts.length === 0) {
+      const primaryAcc = await YouTubeCredentials.getPrimary(userId);
+      if (primaryAcc) {
+        accounts = [primaryAcc];
+      } else {
+        accounts = await YouTubeCredentials.findAllByUserId(userId);
+      }
+    }
+
+    if (!accounts || accounts.length === 0) {
+      return { success: false, error: 'Tidak ada akun YouTube yang terhubung.' };
+    }
+
+    let allFetchedBroadcasts = [];
+    for (const acc of accounts) {
+      try {
+        const accessToken = await youtubeService.getAccessToken(acc.clientId, acc.clientSecret, acc.refreshToken, 0, acc.id);
+        const broadcasts = await youtubeService.listBroadcasts(accessToken, { broadcastStatus: 'all' });
+        if (Array.isArray(broadcasts)) {
+          broadcasts.forEach(b => {
+            allFetchedBroadcasts.push({
+              ...b,
+              accountId: acc.id,
+              channelName: acc.channelName
+            });
+          });
+        }
+      } catch (accErr) {
+        console.warn(`[Auto-Sync] Error fetching for account ${acc.channelName}:`, accErr.message);
+      }
+    }
+
+    if (allFetchedBroadcasts.length > 0) {
+      await syncYouTubeBroadcastsToLocalStreams(allFetchedBroadcasts, userId);
+    }
+    invalidateBroadcastsCache(userId);
+    console.log(`[Auto-Sync] Background sync completed for user ${userId} (${allFetchedBroadcasts.length} broadcasts processed)`);
+    return { success: true, count: allFetchedBroadcasts.length };
+  } catch (err) {
+    console.error('[Auto-Sync] Error in background sync:', err.message);
+    return { success: false, error: err.message };
+  }
+}
+global.performBackgroundYouTubeSync = performBackgroundYouTubeSync;
+
 app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
   try {
     const accountId = req.query.accountId ? parseInt(req.query.accountId) : null;
@@ -11442,40 +11520,19 @@ app.get('/api/youtube/broadcasts/debug', isAuthenticated, async (req, res) => {
 app.post('/api/youtube/sync', isAuthenticated, async (req, res) => {
   try {
     const userId = req.session.userId;
-    invalidateBroadcastsCache(userId);
+    const result = typeof global.performBackgroundYouTubeSync === 'function'
+      ? await global.performBackgroundYouTubeSync(userId)
+      : { success: false, error: 'Layanan sinkronisasi tidak tersedia' };
 
-    const accounts = await YouTubeCredentials.findAllByUserId(userId);
-    if (!accounts || accounts.length === 0) {
-      return res.status(400).json({ success: false, error: 'Tidak ada akun YouTube yang terhubung.' });
+    if (result.success) {
+      return res.json({
+        success: true,
+        message: `Sinkronisasi selesai! ${result.count || 0} siaran diproses dari YouTube.`,
+        count: result.count || 0
+      });
+    } else {
+      return res.status(400).json({ success: false, error: result.error || 'Gagal sinkronisasi YouTube' });
     }
-
-    let allFetchedBroadcasts = [];
-    for (const acc of accounts) {
-      try {
-        const accessToken = await youtubeService.getAccessToken(acc.clientId, acc.clientSecret, acc.refreshToken, 0, acc.id);
-        const broadcasts = await youtubeService.listBroadcasts(accessToken, { broadcastStatus: 'all' });
-        if (Array.isArray(broadcasts)) {
-          broadcasts.forEach(b => {
-            allFetchedBroadcasts.push({
-              ...b,
-              accountId: acc.id,
-              channelName: acc.channelName
-            });
-          });
-        }
-      } catch (accErr) {
-        console.warn(`[Sync API] Error fetching for account ${acc.channelName}:`, accErr.message);
-      }
-    }
-
-    await syncYouTubeBroadcastsToLocalStreams(allFetchedBroadcasts, userId);
-    invalidateBroadcastsCache(userId);
-
-    return res.json({
-      success: true,
-      message: `Sinkronisasi selesai! ${allFetchedBroadcasts.length} siaran diproses dari YouTube.`,
-      count: allFetchedBroadcasts.length
-    });
   } catch (err) {
     console.error('[Sync API] Error:', err);
     return res.status(500).json({ success: false, error: 'Gagal sinkronisasi YouTube: ' + err.message });
