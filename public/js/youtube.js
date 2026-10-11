@@ -441,24 +441,14 @@ function renderEmptyState(accountErrors) {
 
   container.innerHTML = `
     ${errorBanner}
-    <div class="bg-gray-800 rounded-lg p-10 text-center">
-      <div class="w-16 h-16 bg-dark-700 rounded-full flex items-center justify-center mx-auto mb-4">
-        <i class="ti ti-broadcast text-gray-500 text-2xl"></i>
+    <div class="bg-gray-800/80 border border-gray-750/70 rounded-xl p-8 sm:p-10 text-center shadow-sm">
+      <div class="w-16 h-16 bg-dark-700/90 rounded-full flex items-center justify-center mx-auto mb-4 border border-gray-700/50">
+        <i class="ti ti-broadcast text-gray-400 text-2xl"></i>
       </div>
-      <p class="text-gray-300 font-semibold mb-1 text-base">No scheduled broadcasts</p>
-      <p class="text-gray-400 text-sm mb-5">Belum ada siaran terjadwal atau siaran baru sedang disinkronkan dari YouTube</p>
-      <div class="flex flex-wrap items-center justify-center gap-3">
-        <button onclick="refreshBroadcasts()"
-          class="bg-dark-700 hover:bg-dark-600 text-white border border-gray-600 hover:border-primary px-4 py-2.5 rounded-lg transition-colors inline-flex items-center gap-2 text-sm font-medium">
-          <i class="ti ti-refresh text-primary"></i>
-          <span>Sinkronisasi dari YouTube</span>
-        </button>
-        <button onclick="openCreateBroadcastModal()"
-          class="bg-red-500 hover:bg-red-600 text-white px-4 py-2.5 rounded-lg transition-colors inline-flex items-center gap-2 text-sm font-medium shadow-md shadow-red-500/20">
-          <i class="ti ti-plus"></i>
-          <span>Create Broadcast</span>
-        </button>
-      </div>
+      <p class="text-gray-200 font-semibold mb-2 text-base">No scheduled broadcasts</p>
+      <p class="text-gray-400 text-sm max-w-md mx-auto leading-relaxed">
+        Belum ada siaran terjadwal. Gunakan tombol <strong class="text-white">Broadcast</strong> di atas untuk membuat siaran baru, atau <strong class="text-white">Sync YouTube</strong> untuk mengambil siaran dari YouTube.
+      </p>
     </div>
   `;
 }
