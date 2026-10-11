@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+  <% if (typeof csrfToken !=='undefined' ) { %>
+    <meta name="csrf-token" content="<%= csrfToken %>">
+    <% } %>
+      <title>
+        <%= title %> - <%= typeof branding !== 'undefined' ? branding.app_name : 'StreamFlow' %>
+      </title>
+      <link rel="icon" href="<%= (typeof branding !== 'undefined' && branding && branding.favicon_path) ? branding.favicon_path : '/images/favicon-default.png' %>" type="image/png">
+      <link rel="preconnect" href="https://fonts.googleapis.com">
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+      <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.30.0/tabler-icons.min.css">
+      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+      <script src="https://cdn.tailwindcss.com"></script>
+      <link rel="stylesheet" href="/css/styles.css">
+      <link href="https://vjs.zencdn.net/7.20.3/video-js.css" rel="stylesheet" />
+      <script src="https://vjs.zencdn.net/7.20.3/video.min.js"></script>
+      <script>
+        tailwind.config = {
+          darkMode: 'class',
+          theme: {
+            fontFamily: {
+              'inter': ['Inter', 'sans-serif'],
+              'sans': ['Inter', 'system-ui', 'sans-serif']
+            },
+            extend: {
+              colors: {
+                'primary': '<%= typeof branding !== "undefined" ? branding.primary_color : "#8B5CF6" %>',
+                'secondary': '<%= typeof branding !== "undefined" ? branding.secondary_color : "#7C3AED" %>',
+                'accent': '<%= typeof branding !== "undefined" ? branding.accent_color : "#A78BFA" %>',
+                'dark': {
+                  '900': '#0F172A',
+                  '800': '#1E293B',
+                  '700': '#334155',
+                  '600': '#475569',
+                  '500': '#64748B',
+                  '400': '#94A3B8',
+                  '300': '#CBD5E1',
+                  '200': '#E2E8F0',
+                  '100': '#F1F5F9',
+                },
+                'gray': {
+                  '900': '#0F172A',
+                  '800': '#1E293B',
+                  '700': '#334155',
+                  '600': '#475569',
+                  '500': '#64748B',
+                  '400': '#94A3B8',
+                  '300': '#CBD5E1',
+                  '200': '#E2E8F0',
+                  '100': '#F1F5F9',
+                  '50': '#F8FAFC',
+                }
+              }
+            }
+          }
+        }
+      </script>
+      <script src="/js/stream-modal.js?v=1.0.9" defer></script>
+      <script src="/js/tab-optimizer.js" defer></script>
+      <script>
+        (function() {
+          function markLoaded(root) {
+            var scope = root && root.querySelectorAll ? root : document;
+            scope.querySelectorAll('.ti:not(.font-loaded)').forEach(function (icon) {
+              icon.classList.add('font-loaded');
+            });
+          }
+          if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() { markLoaded(); });
+          } else {
+            markLoaded();
+          }
+          if (document.fonts && document.fonts.ready) {
+            document.fonts.ready.then(function() { markLoaded(); });
+          }
+          if (typeof MutationObserver !== 'undefined') {
+            var observer = new MutationObserver(function(mutations) {
+              mutations.forEach(function(m) {
+                if (m.addedNodes && m.addedNodes.length) {
+                  m.addedNodes.forEach(function(node) {
+                    if (node.nodeType === 1) {
+                      if (node.classList && node.classList.contains('ti')) {
+                        node.classList.add('font-loaded');
+                      }
+                      markLoaded(node);
+                    }
+                  });
+                }
+              });
+            });
+            observer.observe(document.documentElement, { childList: true, subtree: true });
+          }
+        })();
+      </script>
+
+      <!-- White Label: Custom CSS -->
+      <% if (typeof branding !== 'undefined' && branding.custom_css) { %>
+      <style>
+        <%= branding.custom_css %>
+      </style>
+      <% } %>
+
+      <!-- White Label: Custom CSS Injection -->
+      <% if (typeof branding !== 'undefined' && branding.custom_css) { %>
+      <style id="custom-branding-css">
+        <%= branding.custom_css %>
+      </style>
+      <% } %>
+</head>
+
+<body class="bg-dark-900 text-white font-inter">
+  <!-- Mobile Header -->
+  <div
+    class="lg:hidden fixed top-0 left-0 right-0 h-16 bg-dark-800 shadow-lg flex items-center justify-between px-4 z-30">
+    <div class="flex items-center">
+      <img src="<%= (typeof branding !== 'undefined' && branding && branding.logo_path) ? branding.logo_path : '/images/logo-default.png' %>"
+           onerror="this.onerror=null; this.src='/images/logo-default.png';"
+           alt="<%= (typeof branding !== 'undefined' && branding && branding.app_name) ? branding.app_name : 'MonsterLive' %> Logo"
+           class="h-12 w-auto object-contain">
+    </div>
+    <div class="flex items-center gap-2">
+      <% if (typeof branding !== 'undefined' && branding.whatsapp_number) { %>
+      <a href="https://wa.me/<%= branding.whatsapp_number %>" target="_blank"
+        class="flex items-center justify-center h-6 text-green-500 hover:text-green-400 transition-colors"
+        title="WhatsApp">
+        <i class="ti ti-brand-whatsapp text-xl"></i>
+      </a>
+      <% } %>
+      <% if (typeof branding !== 'undefined' && branding.qris_image_path) { %>
+      <a href="#" onclick="showQrisModal(); return false;"
+        class="flex items-center justify-center h-6 text-blue-400 hover:text-blue-300 transition-colors"
+        title="Pembayaran QRIS">
+        <i class="ti ti-qrcode text-xl"></i>
+      </a>
+      <% } %>
+    </div>
+  </div>
+
+  <div class="block w-full mobile-safe-wrapper">
+    <!-- Desktop Sidebar -->
+    <div class="hidden lg:flex lg:fixed lg:flex-col w-20 h-screen pt-2 bg-dark-800 shadow-lg overflow-visible z-20">
+      <!-- Logo meluap keluar sidebar -->
+      <div class="desktop-logo-container">
+        <img src="<%= (typeof branding !== 'undefined' && branding && branding.logo_path) ? branding.logo_path : '/images/logo-default.png' %>"
+             onerror="this.onerror=null; this.src='/images/logo-default.png';"
+             alt="<%= (typeof branding !== 'undefined' && branding && branding.app_name) ? branding.app_name : 'MonsterLive' %> Logo"
+             class="desktop-logo">
+      </div>
+      <!-- Spacer untuk logo - UKURAN PAS -->
+      <div class="h-28 mb-3"></div>
+      <div class="flex-1 overflow-hidden">
+        <a href="/dashboard" class="sidebar-icon group <%= active === 'dashboard' || active === 'youtube' ? 'bg-primary' : '' %>">
+          <i class="ti ti-broadcast text-xl"></i>
+          <span class="text-xs mt-1">Live Studio</span>
+          <span class="sidebar-tooltip group-hover:scale-100">Live Studio Hub</span>
+        </a>
+        <a href="/gallery" class="sidebar-icon group <%= active === 'gallery' ? 'bg-primary' : '' %>">
+          <i class="ti ti-folder-filled text-xl"></i>
+          <span class="text-xs mt-1">Gallery</span>
+          <span class="sidebar-tooltip group-hover:scale-100">Video Gallery</span>
+        </a>
+        <a href="/playlist" class="sidebar-icon group <%= active === 'playlist' ? 'bg-primary' : '' %>">
+          <i class="ti ti-list-details text-xl"></i>
+          <span class="text-xs mt-1">Playlist</span>
+          <span class="sidebar-tooltip group-hover:scale-100">Playlist Manager</span>
+        </a>
+        <a href="/render-jobs" class="sidebar-icon group <%= active === 'render-jobs' ? 'bg-primary' : '' %>">
+          <i class="ti ti-movie text-xl"></i>
+          <span class="text-xs mt-1">Render</span>
+          <span class="sidebar-tooltip group-hover:scale-100">Render Jobs</span>
+        </a>
+        <% if (req.session && req.session.user_role==='admin' ) { %>
+          <a href="/users" class="sidebar-icon group <%= active === 'users' ? 'bg-primary' : '' %>">
+            <i class="ti ti-users-group text-xl"></i>
+            <span class="text-xs mt-1">Users</span>
+            <span class="sidebar-tooltip group-hover:scale-100">User Management</span>
+          </a>
+          <% } %>
+      </div>
+      <div class="mt-auto overflow-hidden">
+        <div class="h-px bg-gray-700 w-full"></div>
+        <div class="relative" id="profile-menu-container">
+          <div class="h-20 flex items-center justify-center px-3 py-4 hover:bg-dark-700/50 transition-colors">
+            <button id="profile-menu-button"
+              class="w-12 h-12 rounded-full flex items-center justify-center overflow-hidden ring-2 ring-gray-700 hover:ring-primary transition-all">
+              <%- helpers.getAvatar(req) %>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Profile Dropdown -->
+    <div id="profile-dropdown" class="fixed bg-dark-800 shadow-xl border border-gray-700 hidden">
+      <div class="px-4 py-2 border-b border-gray-700">
+        <div class="font-medium">
+          <%= helpers.getUsername(req) %>
+        </div>
+        <div class="mt-1"><%- helpers.getRoleBadge(req) %></div>
+      </div>
+      <a href="/settings"
+        class="flex items-center px-4 py-2.5 text-sm text-gray-300 hover:bg-dark-700 hover:text-white transition-colors">
+        <i class="ti ti-settings mr-3"></i><span>Settings</span>
+      </a>
+      <div class="h-px bg-gray-700 mx-4"></div>
+      <a href="/logout" class="flex items-center px-4 py-2.5 text-sm text-logout hover:bg-dark-700 transition-colors">
+        <i class="ti ti-logout mr-3"></i><span>Sign Out</span>
+      </a>
+    </div>
+
+    <!-- Main Content -->
+    <div class="w-full lg:w-[calc(100%-5rem)] lg:ml-20 main-container">
+      <!-- Desktop Header -->
+      <div
+        class="hidden lg:fixed lg:flex top-0 right-0 left-20 items-center justify-end h-14 px-6 bg-dark-800 shadow-md z-10 gap-3">
+        <% if (typeof branding !== 'undefined' && branding.whatsapp_number) { %>
+        <a href="https://wa.me/<%= branding.whatsapp_number %>" target="_blank"
+          class="flex items-center justify-center h-7 text-green-500 hover:text-green-400 transition-colors"
+          title="WhatsApp">
+          <i class="ti ti-brand-whatsapp text-2xl"></i>
+        </a>
+        <% } %>
+        <% if (typeof branding !== 'undefined' && branding.qris_image_path) { %>
+        <a href="#" onclick="showQrisModal(); return false;"
+          class="flex items-center justify-center h-7 text-blue-400 hover:text-blue-300 transition-colors"
+          title="Pembayaran QRIS">
+          <i class="ti ti-qrcode text-2xl"></i>
+        </a>
+        <% } %>
+      </div>
+
+      <!-- Page Content -->
+      <div class="p-4 lg:p-6 pt-4 lg:pt-20 pb-20 lg:pb-6 main-content-wrapper mobile-scroll-view">
+        <%- body %>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Mobile Bottom Navigation -->
+  <div class="lg:hidden fixed bottom-0 left-0 right-0 bg-dark-800 border-t border-gray-700 z-30" style="box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.1), 0 -2px 4px -1px rgba(0, 0, 0, 0.06);">
+    <nav class="flex justify-around items-center h-16">
+      <a href="/dashboard" class="bottom-nav-item <%= active === 'dashboard' || active === 'youtube' ? 'bottom-nav-active' : '' %>">
+        <i class="ti ti-broadcast"></i><span>Studio</span>
+      </a>
+      <a href="/gallery" class="bottom-nav-item <%= active === 'gallery' ? 'bottom-nav-active' : '' %>">
+        <i class="ti ti-folder-filled"></i><span>Gallery</span>
+      </a>
+      <a href="/playlist" class="bottom-nav-item <%= active === 'playlist' ? 'bottom-nav-active' : '' %>">
+        <i class="ti ti-list-details"></i><span>Playlist</span>
+      </a>
+      <a href="/render-jobs" class="bottom-nav-item <%= active === 'render-jobs' ? 'bottom-nav-active' : '' %>">
+        <i class="ti ti-movie"></i><span>Render</span>
+      </a>
+      <button id="mobile-profile-btn" class="bottom-nav-item">
+        <div class="relative">
+          <div class="w-6 h-6 rounded-full overflow-hidden mx-auto"><%- helpers.getAvatar(req) %></div>
+        </div>
+        <span>Profile</span>
+      </button>
+    </nav>
+    <div id="mobile-profile-popup"
+      class="fixed bottom-20 right-2 bg-dark-800 rounded-lg shadow-xl border border-gray-700 overflow-hidden w-48 z-50 transition-all duration-200 ease-out"
+      style="display: none;">
+      <div class="py-3 px-4">
+        <div class="text-sm font-medium mb-1">
+          <%= helpers.getUsername(req) %>
+        </div>
+        <div class="mb-2"><%- helpers.getRoleBadge(req) %></div>
+        <div class="h-px bg-gray-700 my-2"></div>
+        <% if (req.session && req.session.user_role==='admin' ) { %>
+          <a href="/users"
+            class="flex items-center py-2.5 text-gray-300 hover:text-white text-sm active:bg-dark-700 rounded">
+            <i class="ti ti-users mr-2"></i><span>Users</span>
+          </a>
+          <% } %>
+            <a href="/settings"
+              class="flex items-center py-2.5 text-gray-300 hover:text-white text-sm active:bg-dark-700 rounded">
+              <i class="ti ti-settings mr-2"></i><span>Settings</span>
+            </a>
+            <div class="h-px bg-gray-700 my-2"></div>
+            <a href="/logout"
+              class="flex items-center py-2.5 text-red-400 hover:text-red-300 text-sm active:bg-dark-700 rounded">
+              <i class="ti ti-logout mr-2"></i><span>Sign Out</span>
+            </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- QRIS Payment Modal -->
+  <% if (typeof branding !== 'undefined' && branding.qris_image_path) { %>
+  <div id="qris-modal" class="fixed inset-0 z-[999] hidden items-center justify-center bg-black/70 backdrop-blur-sm" onclick="hideQrisModal()">
+    <div class="bg-dark-800 rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl border border-gray-700" onclick="event.stopPropagation()">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-semibold text-white flex items-center gap-2">
+          <i class="ti ti-qrcode text-blue-400"></i>
+          Pembayaran QRIS
+        </h3>
+        <button onclick="hideQrisModal()" class="text-gray-400 hover:text-white transition-colors">
+          <i class="ti ti-x text-xl"></i>
+        </button>
+      </div>
+      <div class="bg-white rounded-xl p-4 flex items-center justify-center">
+        <img src="<%= branding.qris_image_path %>" alt="QRIS Payment" class="max-w-full h-auto rounded-lg">
+      </div>
+      <p class="text-center text-sm text-gray-400 mt-4">Scan QR code di atas untuk melakukan pembayaran</p>
+    </div>
+  </div>
+  <% } %>
+
+</body>
+
+</html>
+<style>
+  /* Universal viewport & scroll settings across all browsers (Desktop, Tablet, Mobile, PWA) */
+  html {
+    overflow-x: hidden;
+    overflow-y: auto;
+    height: 100%;
+    min-height: 100%;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    width: 100%;
+    min-height: 100%;
+    min-height: 100vh;
+    min-height: 100dvh;
+    position: relative;
+    margin: 0;
+    padding: 0;
+    /* CRITICAL FIX FOR CROSS-BROWSER SCROLL FREEZE:
+       body MUST remain overflow: visible. Setting overflow-x: hidden on body
+       forces Firefox & Safari to compute overflow-y: auto, causing a dual-scroller
+       conflict where body traps wheel & touch events and freezes vertical scrolling.
+       Horizontal overflow clipping is handled entirely by html. */
+    overflow: visible !important;
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: auto;
+  }
+
+  /* Safe wrapper for content flow without flexbox height traps */
+  .mobile-safe-wrapper {
+    display: block !important;
+    width: 100%;
+    overflow: visible !important;
+    min-height: 100%;
+  }
+
+  /* Main content wrapper */
+  .main-content-wrapper {
+    width: 100%;
+    overflow: visible !important;
+  }
+
+  .mobile-scroll-view {
+    overflow-y: visible !important;
+  }
+
+  .main-container {
+    min-height: 100vh;
+    min-height: 100dvh;
+    overflow: visible !important;
+    box-sizing: border-box;
+  }
+
+  @media (min-width: 1024px) {
+    .main-container {
+      display: flex;
+      flex-direction: column;
+      width: calc(100% - 5rem) !important;
+      max-width: calc(100% - 5rem) !important;
+      margin-left: 5rem !important;
+      box-sizing: border-box;
+    }
+  }
+
+  #profile-dropdown {
+    position: fixed;
+    z-index: 100;
+    min-width: 220px;
+    border-radius: 8px;
+    bottom: 80px;
+    left: 15px;
+  }
+
+  /* Desktop logo overflow styling - POJOK KIRI ATAS, UKURAN PAS */
+  .desktop-logo-container {
+    position: absolute !important;
+    top: 4px;
+    left: 8px;
+    overflow: visible !important;
+    width: auto !important;
+    height: auto !important;
+    z-index: 50;
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-start;
+  }
+
+  .desktop-logo {
+    position: relative;
+    width: auto !important;
+    height: 90px !important;
+    max-width: none !important;
+    object-fit: contain !important;
+    object-position: left top !important;
+    filter: drop-shadow(2px 2px 4px rgba(0, 0, 0, 0.3));
+  }
+
+  #profile-dropdown.hidden {
+    opacity: 0;
+    pointer-events: none;
+    visibility: hidden;
+  }
+
+  .text-logout {
+    color: #FF5555;
+  }
+
+  .text-logout:hover {
+    color: #FF7777;
+  }
+
+  .kirim-tip-button {
+    border-radius: 5px;
+    background: linear-gradient(45deg, #8B5CF6, #A78BFA);
+  }
+
+  .bottom-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    padding: 8px 0;
+    color: #8F8F8F;
+    font-size: 11px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    user-select: none;
+  }
+
+  .bottom-nav-item i {
+    font-size: 22px;
+    margin-bottom: 4px;
+  }
+
+  .bottom-nav-active {
+    color: #8B5CF6;
+  }
+
+  /* Mobile profile popup */
+  #mobile-profile-popup {
+    z-index: 100;
+  }
+
+  #mobile-profile-btn {
+    position: relative;
+    z-index: 31;
+  }
+
+  /* Mobile specific fixes */
+  @media (max-width: 1023px) {
+    html {
+      overflow-x: hidden;
+      overflow-y: auto;
+    }
+
+    body {
+      padding-top: 64px;
+      padding-bottom: 0 !important;
+      min-height: 100vh;
+      min-height: 100dvh;
+      overflow: visible !important;
+      position: relative !important;
+      touch-action: pan-y;
+      overscroll-behavior-y: auto;
+    }
+
+    .mobile-safe-wrapper {
+      display: block !important;
+      width: 100%;
+      overflow: visible !important;
+    }
+
+    .main-content-wrapper {
+      padding-bottom: 5rem !important; /* 80px: preserves comfortable space above 64px mobile nav bar without excessive void */
+      overflow: visible !important;
+    }
+
+    .mobile-scroll-view {
+      max-height: none !important;
+      overflow: visible !important;
+    }
+
+    .main-container {
+      min-height: 100vh;
+      min-height: 100dvh;
+      overflow: visible !important;
+      display: block !important;
+    }
+
+    /* Remove any height restrictions */
+    .min-h-screen {
+      min-height: auto !important;
+      height: auto !important;
+    }
+  }
+</style>
+<script>
+  // QRIS Modal functions
+  function showQrisModal() {
+    const modal = document.getElementById('qris-modal');
+    if (modal) {
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+  }
+  function hideQrisModal() {
+    const modal = document.getElementById('qris-modal');
+    if (modal) {
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+  }
+
+  // Universal Scroll Guardian: Ensures scrolling is never locked/frozen when modals close
+  function isAnyModalActive() {
+    const modals = document.querySelectorAll(
+      '.modal-overlay:not(.hidden), [id*="Modal"]:not(.hidden), [id*="modal"]:not(.hidden)'
+    );
+    for (let i = 0; i < modals.length; i++) {
+      const el = modals[i];
+      if (el.id === 'profile-dropdown' || el.id === 'mobile-profile-popup') continue;
+      const style = window.getComputedStyle(el);
+      if (style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0') {
+        const rect = el.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  function restoreScrollIfNeeded() {
+    if (!isAnyModalActive()) {
+      if (document.body && (document.body.style.overflow === 'hidden' || document.body.style.overflowY === 'hidden')) {
+        document.body.style.removeProperty('overflow');
+        document.body.style.removeProperty('overflow-y');
+      }
+      if (document.documentElement && (document.documentElement.style.overflow === 'hidden' || document.documentElement.style.overflowY === 'hidden')) {
+        document.documentElement.style.removeProperty('overflow');
+        document.documentElement.style.removeProperty('overflow-y');
+      }
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    // 1. Ensure scroll is cleanly unlocked on page load
+    restoreScrollIfNeeded();
+
+    // 2. Global Escape key handler to ensure scroll restoration
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        setTimeout(restoreScrollIfNeeded, 80);
+      }
+    });
+
+    // 3. Fallback click handler on any click / modal close triggers
+    document.addEventListener('click', () => {
+      setTimeout(restoreScrollIfNeeded, 150);
+    });
+
+    // 4. Safe body style observer to prevent stuck overflow:hidden
+    if (typeof MutationObserver !== 'undefined' && document.body) {
+      const scrollObserver = new MutationObserver(() => {
+        if (!isAnyModalActive()) {
+          if (document.body.style.overflow === 'hidden' || document.documentElement.style.overflow === 'hidden') {
+            restoreScrollIfNeeded();
+          }
+        }
+      });
+      scrollObserver.observe(document.body, { attributes: true, attributeFilter: ['style', 'class'] });
+    }
+
+    // Desktop profile dropdown
+    const profileButton = document.getElementById('profile-menu-button');
+    const profileDropdown = document.getElementById('profile-dropdown');
+    if (profileButton && profileDropdown) {
+      profileButton.addEventListener('click', (e) => {
+        e.stopPropagation();
+        profileDropdown.classList.toggle('hidden');
+      });
+      document.addEventListener('click', (e) => {
+        if (!profileDropdown.contains(e.target) && !profileButton.contains(e.target)) {
+          profileDropdown.classList.add('hidden');
+        }
+      });
+    }
+
+    // Mobile profile popup - Fixed for touch devices
+    const mobileProfileBtn = document.getElementById('mobile-profile-btn');
+    const mobileProfilePopup = document.getElementById('mobile-profile-popup');
+
+    if (mobileProfileBtn && mobileProfilePopup) {
+      // Toggle popup on click/touch
+      mobileProfileBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const isVisible = mobileProfilePopup.style.display === 'block';
+
+        if (isVisible) {
+          mobileProfilePopup.style.display = 'none';
+        } else {
+          mobileProfilePopup.style.display = 'block';
+        }
+      });
+
+      // Also handle touchend for better mobile response
+      mobileProfileBtn.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const isVisible = mobileProfilePopup.style.display === 'block';
+
+        if (isVisible) {
+          mobileProfilePopup.style.display = 'none';
+        } else {
+          mobileProfilePopup.style.display = 'block';
+        }
+      }, { passive: false });
+
+      // Close popup when clicking outside
+      document.addEventListener('click', (e) => {
+        if (!mobileProfilePopup.contains(e.target) && !mobileProfileBtn.contains(e.target)) {
+          mobileProfilePopup.style.display = 'none';
+        }
+      });
+
+      // Close popup when touching outside
+      document.addEventListener('touchstart', (e) => {
+        if (!mobileProfilePopup.contains(e.target) && !mobileProfileBtn.contains(e.target)) {
+          mobileProfilePopup.style.display = 'none';
+        }
+      }, { passive: true });
+    }
+  });
+</script>

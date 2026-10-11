@@ -65,7 +65,11 @@
               <label class="block text-sm font-medium text-gray-300 mb-2">Application Logo</label>
               <div class="flex items-start gap-4">
                 <div class="w-20 h-20 bg-dark-900 rounded-xl flex items-center justify-center overflow-hidden flex-shrink-0 border border-gray-700 shadow-inner">
-                  <img id="logo-preview" src="<%= branding.logo_path %>" alt="Logo" class="max-w-full max-h-full object-contain">
+                  <img id="logo-preview" 
+                       src="<%= (typeof branding !== 'undefined' && branding && branding.logo_path) ? branding.logo_path : '/images/logo-default.png' %>" 
+                       onerror="this.onerror=null; this.src='/images/logo-default.png';"
+                       alt="Logo" 
+                       class="max-w-full max-h-full object-contain">
                 </div>
                 <div class="flex-1">
                   <input type="file" id="logo-upload" accept="image/png,image/svg+xml,image/jpeg" class="hidden">
@@ -84,7 +88,11 @@
               <label class="block text-sm font-medium text-gray-300 mb-2">Favicon</label>
               <div class="flex items-start gap-4">
                 <div class="w-16 h-16 bg-dark-900 rounded-xl flex items-center justify-center overflow-hidden flex-shrink-0 border border-gray-700 shadow-inner">
-                  <img id="favicon-preview" src="<%= branding.favicon_path %>" alt="Favicon" class="max-w-full max-h-full object-contain">
+                  <img id="favicon-preview" 
+                       src="<%= (typeof branding !== 'undefined' && branding && branding.favicon_path) ? branding.favicon_path : '/images/favicon-default.png' %>" 
+                       onerror="this.onerror=null; this.src='/images/favicon-default.png';"
+                       alt="Favicon" 
+                       class="max-w-full max-h-full object-contain">
                 </div>
                 <div class="flex-1">
                   <input type="file" id="favicon-upload" accept="image/x-icon,image/png" class="hidden">
@@ -485,7 +493,7 @@
         console.error('Error uploading logo:', error);
         showNotification(error.message || 'Failed to upload logo', 'error');
         // Revert preview
-        logoPreview.src = '<%= branding.logo_path %>';
+        logoPreview.src = '<%= (typeof branding !== "undefined" && branding && branding.logo_path) ? branding.logo_path : "/images/logo-default.png" %>';
       }
     });
   }
@@ -539,7 +547,7 @@
         console.error('Error uploading favicon:', error);
         showNotification(error.message || 'Failed to upload favicon', 'error');
         // Revert preview
-        faviconPreview.src = '<%= branding.favicon_path %>';
+        faviconPreview.src = '<%= (typeof branding !== "undefined" && branding && branding.favicon_path) ? branding.favicon_path : "/images/favicon-default.png" %>';
       }
     });
   }
