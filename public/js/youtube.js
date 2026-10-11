@@ -726,7 +726,11 @@ function createBroadcastRowHtml(broadcast, index) {
               <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8v-2a2 2 0 0 0 -2 -2h-8a2 2 0 0 0 -2 2v8a2 2 0 0 0 2 2h2" /></svg>
             </button>
           </div>
-          <div class="w-44 flex items-center justify-center gap-1.5">
+          <div class="w-52 flex items-center justify-center gap-1.5">
+            <button type="button" data-action="play" onclick="playBroadcastFromStudio('${broadcast.id}', '${broadcast.streamId || ''}', ${broadcast.accountId || 'null'}, this)"
+              class="w-8.5 h-8.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 active:bg-emerald-500/40 text-emerald-400 border border-emerald-500/30 flex items-center justify-center transition-all duration-150 hover:scale-105 active:scale-90 touch-manipulation cursor-pointer shadow-sm select-none" title="Mulai Live">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 pointer-events-none fill-current" viewBox="0 0 24 24"><path d="M7 4v16l13 -8z"/></svg>
+            </button>
             <button type="button" data-action="edit" onclick="editBroadcast('${broadcast.id}', ${broadcast.accountId || 'null'}, this)"
               class="w-8.5 h-8.5 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 active:bg-blue-500/40 text-blue-400 border border-blue-500/30 flex items-center justify-center transition-all duration-150 hover:scale-105 active:scale-90 touch-manipulation cursor-pointer shadow-sm select-none" title="Edit">
               <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" /><path d="M13.5 6.5l4 4" /></svg>
@@ -793,6 +797,10 @@ function createBroadcastRowHtml(broadcast, index) {
 
           <!-- Right: Compact Action Buttons (Single Row, Flushed Right) -->
           <div class="flex items-center gap-1 shrink-0">
+            <button type="button" data-action="play" onclick="playBroadcastFromStudio('${broadcast.id}', '${broadcast.streamId || ''}', ${broadcast.accountId || 'null'}, this)"
+              class="w-7 h-7 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 active:bg-emerald-500/40 text-emerald-400 border border-emerald-500/30 flex items-center justify-center transition-all duration-150 active:scale-90 touch-manipulation cursor-pointer shadow-sm select-none" title="Mulai Live">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 pointer-events-none fill-current" viewBox="0 0 24 24"><path d="M7 4v16l13 -8z"/></svg>
+            </button>
             <button type="button" data-action="edit" onclick="editBroadcast('${broadcast.id}', ${broadcast.accountId || 'null'}, this)"
               class="w-7 h-7 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 active:bg-blue-500/40 text-blue-400 border border-blue-500/30 flex items-center justify-center transition-all duration-150 active:scale-90 touch-manipulation cursor-pointer shadow-sm select-none" title="Edit">
               <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" /><path d="M13.5 6.5l4 4" /></svg>
@@ -1179,6 +1187,11 @@ function createBroadcastCard(broadcast) {
         </div>
         
         <div class="flex items-center gap-1 flex-wrap">
+          <button onclick="playBroadcastFromStudio('${broadcast.id}', '${broadcast.streamId || ''}', ${broadcast.accountId || 'null'}, this)" 
+            class="px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 rounded-lg text-xs transition-colors flex items-center gap-1">
+            <i class="ti ti-player-play text-sm font-loaded"></i>
+            <span>Play</span>
+          </button>
           <button onclick="editBroadcast('${broadcast.id}', ${broadcast.accountId}, this)" 
             class="px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg text-xs transition-colors flex items-center gap-1">
             <i class="ti ti-edit text-sm font-loaded"></i>
@@ -5558,6 +5571,101 @@ async function deleteBroadcast(broadcastId, title = null, accountId = null, trig
     _deletingBroadcastIds.delete(key);
   }
 }
+
+// Play / Start live broadcast directly from YouTube Studio UI
+async function playBroadcastFromStudio(broadcastId, streamId, accountId, triggerBtn = null) {
+  let targetStreamId = streamId;
+
+  // If streamId was not rendered or is empty, lookup matching stream from database
+  if (!targetStreamId || targetStreamId === 'undefined' || targetStreamId === 'null') {
+    try {
+      const res = await fetch('/api/streams');
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        const found = data.find(s => s.youtube_broadcast_id === broadcastId);
+        if (found) targetStreamId = found.id;
+      }
+    } catch (_) {}
+  }
+
+  // If still missing local streamId, open edit broadcast so user can configure & connect it
+  if (!targetStreamId) {
+    if (typeof showToast === 'function') {
+      showToast('Siaran belum terhubung ke engine live. Membuka form pengaturan...', 'info');
+    }
+    editBroadcast(broadcastId, accountId, triggerBtn);
+    return;
+  }
+
+  // Check if stream already has a video attached
+  try {
+    const streamRes = await fetch(`/api/streams/${targetStreamId}`);
+    if (streamRes.ok) {
+      const streamData = await streamRes.json();
+      if (!streamData.video_id) {
+        if (typeof showToast === 'function') {
+          showToast('Silakan pilih video dari galeri terlebih dahulu untuk memulai live!', 'warning');
+        }
+        editBroadcast(broadcastId, accountId, triggerBtn);
+        return;
+      }
+    }
+  } catch (_) {}
+
+  if (!confirm('Mulai siaran langsung untuk broadcast ini sekarang?')) {
+    return;
+  }
+
+  const origHtml = triggerBtn ? triggerBtn.innerHTML : '';
+  if (triggerBtn) {
+    triggerBtn.disabled = true;
+    triggerBtn.innerHTML = '<svg class="w-3.5 h-3.5 animate-spin text-emerald-400 pointer-events-none" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
+  }
+
+  try {
+    const startRes = await fetch(`/api/streams/${targetStreamId}/start`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+    const result = await startRes.json();
+    if (result.success) {
+      if (typeof showToast === 'function') {
+        showToast('✓ Live streaming berhasil dimulai!');
+      }
+      if (typeof loadBroadcasts === 'function') {
+        loadBroadcasts(true);
+      }
+      if (typeof window.loadStreams === 'function') {
+        window.loadStreams();
+      }
+    } else {
+      if (result.error && (result.error.toLowerCase().includes('no video') || result.error.toLowerCase().includes('video'))) {
+        if (typeof showToast === 'function') {
+          showToast('Silakan pilih video dari galeri terlebih dahulu!', 'warning');
+        }
+        editBroadcast(broadcastId, accountId, triggerBtn);
+      } else {
+        if (typeof showToast === 'function') {
+          showToast(result.error || 'Gagal memulai live', 'error');
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[PlayBroadcast] Error:', err);
+    if (typeof showToast === 'function') {
+      showToast('Koneksi error saat memulai live', 'error');
+    }
+  } finally {
+    if (triggerBtn) {
+      triggerBtn.disabled = false;
+      triggerBtn.innerHTML = origHtml;
+    }
+  }
+}
+window.playBroadcastFromStudio = playBroadcastFromStudio;
 
 // Edit Broadcast (Instant 0ms response, NO button loading spinner, identical to duplicate broadcast modal)
 async function editBroadcast(broadcastId, accountId, triggerBtn = null) {

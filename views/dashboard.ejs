@@ -421,6 +421,15 @@
           <i class="ti ti-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none"></i>
         </div>
 
+        <!-- Sync YouTube Button -->
+        <button onclick="syncBroadcastsFromYouTube(this)"
+          id="syncYouTubeBtn"
+          class="h-10 px-3.5 flex items-center justify-center gap-1.5 bg-dark-800/90 hover:bg-red-500/10 border border-gray-700/60 hover:border-red-500/50 text-gray-200 hover:text-red-400 rounded-xl transition-all text-xs sm:text-sm font-medium shadow-sm active:scale-[0.98]"
+          title="Sinkronkan Siaran dari YouTube.com">
+          <i class="ti ti-brand-youtube text-red-500 text-base"></i>
+          <span>Sync YouTube</span>
+        </button>
+
         <!-- Schedule Dropdown -->
         <div class="relative" id="scheduleDropdown">
           <button onclick="toggleScheduleDropdown()"
@@ -511,6 +520,14 @@
             <i class="ti ti-filter absolute left-2.5 top-1/2 -translate-y-1/2 text-primary text-sm pointer-events-none"></i>
             <i class="ti ti-chevron-down absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none"></i>
           </div>
+
+          <!-- Mobile Sync YouTube Button -->
+          <button onclick="syncBroadcastsFromYouTube(this)" type="button"
+            id="syncYouTubeBtnMobile"
+            class="w-10 h-10 flex items-center justify-center bg-dark-800/90 hover:bg-red-500/10 active:bg-dark-700 border border-gray-700/60 hover:border-red-500/50 text-red-500 rounded-xl transition-all shadow-sm active:scale-95 cursor-pointer shrink-0"
+            title="Sinkronkan Siaran dari YouTube.com" aria-label="Sync YouTube">
+            <i class="ti ti-brand-youtube text-lg text-red-500"></i>
+          </button>
 
           <!-- Schedule Dropdown Button -->
           <div class="relative shrink-0" id="scheduleDropdownMobile">
@@ -2606,6 +2623,13 @@
               { showWhatsapp: Boolean(whatsappUrl), whatsappUrl }
             );
             loadLiveLimitInfo();
+          } else if (result.error && (result.error.toLowerCase().includes('no video') || result.error.toLowerCase().includes('video'))) {
+            if (typeof showCenterToast === 'function') {
+              showCenterToast('warning', 'Siaran ini belum memiliki video. Silakan pilih video dari galeri terlebih dahulu!', 6000);
+            }
+            if (typeof editStream === 'function') {
+              editStream(id);
+            }
           } else if (typeof showCenterToast === 'function') {
             showCenterToast('error', result.error || 'Failed to start stream', 7000);
           }
@@ -2871,6 +2895,7 @@
         if (result.success) {
           loadStreams();
           loadLiveLimitInfo();
+          if (typeof loadBroadcasts === 'function') loadBroadcasts(true);
         } else {
           setStreamButtonBusy(btn, false);
         }
@@ -2959,6 +2984,53 @@
       if (menuDesktop) menuDesktop.classList.toggle('hidden');
       if (menuMobile) menuMobile.classList.toggle('hidden');
     }
+
+    // Global YouTube Sync Function
+    window.syncBroadcastsFromYouTube = async function(triggerBtn) {
+      const btn = triggerBtn || document.getElementById('syncYouTubeBtn') || document.getElementById('syncYouTubeBtnMobile') || document.getElementById('syncYouTubeStudioBtn');
+      let originalHtml = '';
+      if (btn) {
+        originalHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="ti ti-loader animate-spin text-base text-red-500"></i><span class="hidden sm:inline">Syncing...</span>';
+      }
+
+      try {
+        const res = await fetch('/api/youtube/sync', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': typeof getCsrfToken === 'function' ? getCsrfToken() : ''
+          }
+        });
+        const data = await res.json();
+        if (data.success) {
+          if (typeof showCenterToast === 'function') {
+            showCenterToast('success', data.message || 'Sinkronisasi YouTube berhasil!', 4000);
+          }
+          if (typeof loadStreams === 'function') {
+            await loadStreams();
+          }
+          if (typeof loadBroadcasts === 'function') {
+            loadBroadcasts(true);
+          }
+        } else {
+          if (typeof showCenterToast === 'function') {
+            showCenterToast('error', data.error || 'Gagal sinkronisasi YouTube', 5000);
+          }
+        }
+      } catch (err) {
+        console.error('[SyncYouTube] Error:', err);
+        if (typeof showCenterToast === 'function') {
+          showCenterToast('error', 'Koneksi error saat sinkronisasi YouTube', 5000);
+        }
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = originalHtml;
+        }
+      }
+    };
 
     // Schedule Modal Functions
     let currentScheduleType = 'once';

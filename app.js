@@ -48,6 +48,7 @@ const schedulerService = require('./services/schedulerService');
 const YouTubeCredentials = require('./models/YouTubeCredentials');
 const youtubeService = require('./services/youtubeService');
 const tokenRefreshScheduler = require('./services/tokenRefreshScheduler');
+const youtubeAutoSyncScheduler = require('./services/youtubeAutoSyncScheduler');
 const BroadcastTemplate = require('./models/BroadcastTemplate');
 const TitleSuggestion = require('./models/TitleSuggestion');
 const TitleFolder = require('./models/TitleFolder');
@@ -6101,7 +6102,30 @@ app.delete('/api/streams/:id', isAuthenticated, async (req, res) => {
     if (stream.user_id !== req.session.userId) {
       return res.status(403).json({ success: false, error: 'Not authorized to delete this stream' });
     }
+
+    // Jika siaran terhubung ke broadcast YouTube nyata, hapus juga di YouTube Studio
+    if (stream.youtube_broadcast_id && !String(stream.youtube_broadcast_id).startsWith('scheduled_stream_')) {
+      try {
+        const YouTubeCredentials = require('./models/YouTubeCredentials');
+        const accountsToTry = stream.youtube_account_id 
+          ? [await YouTubeCredentials.findById(stream.youtube_account_id)].filter(Boolean)
+          : await YouTubeCredentials.findAllByUserId(req.session.userId);
+
+        for (const acc of accountsToTry) {
+          try {
+            const accessToken = await youtubeService.getAccessToken(acc.clientId, acc.clientSecret, acc.refreshToken, 0, acc.id);
+            await youtubeService.deleteBroadcast(accessToken, stream.youtube_broadcast_id);
+            break;
+          } catch (_) {}
+        }
+      } catch (ytDelErr) {
+        console.warn('[Stream.delete] Warning deleting broadcast from YouTube API:', ytDelErr.message);
+      }
+    }
+
+    db.run('DELETE FROM youtube_broadcast_settings WHERE broadcast_id = ? OR broadcast_id = ?', [stream.youtube_broadcast_id || '', `scheduled_stream_${stream.id}`], () => {});
     await Stream.delete(req.params.id, req.session.userId);
+    invalidateBroadcastsCache(req.session.userId);
     res.json({ success: true, message: 'Stream deleted successfully' });
   } catch (error) {
     console.error('Error deleting stream:', error);
@@ -10603,6 +10627,9 @@ function invalidateBroadcastsCache(userId) {
   }
 }
 global.invalidateBroadcastsCache = invalidateBroadcastsCache;
+if (typeof youtubeAutoSyncScheduler !== 'undefined' && typeof youtubeAutoSyncScheduler.setCacheInvalidator === 'function') {
+  youtubeAutoSyncScheduler.setCacheInvalidator(invalidateBroadcastsCache);
+}
 
 // Helper to merge local broadcast settings (dual_stream, altered_content, unlist_replay_on_end, etc.) into YouTube API broadcast objects
 async function attachLocalSettingsToBroadcasts(broadcastsList, userId) {
@@ -10781,6 +10808,127 @@ async function attachLocalSettingsToBroadcasts(broadcastsList, userId) {
     });
   } catch (err) {
     console.warn('[Broadcasts API] Error attaching local settings:', err.message);
+  }
+
+  return broadcastsList;
+}
+
+/**
+ * Synchronize incoming YouTube broadcasts with the local streams database.
+ * If a broadcast exists on YouTube (e.g. created on YouTube Studio web) but is missing from
+ * the local streams table, insert it so it appears in Control Room and can be controlled/deleted.
+ */
+async function syncYouTubeBroadcastsToLocalStreams(broadcastsList, userId) {
+  if (!Array.isArray(broadcastsList) || broadcastsList.length === 0 || !userId) {
+    return broadcastsList;
+  }
+
+  try {
+    const db = require('./db/database').getDb();
+    
+    // Get all existing streams for this user
+    const existingStreams = await new Promise((resolve) => {
+      db.all(
+        `SELECT id, title, youtube_broadcast_id, stream_key, schedule_time, status, video_id, youtube_account_id
+         FROM streams
+         WHERE (user_id = ? OR CAST(user_id AS TEXT) = CAST(? AS TEXT))`,
+        [userId, String(userId)],
+        (err, rows) => resolve(err ? [] : (rows || []))
+      );
+    });
+
+    const streamByBroadcastId = new Map();
+    existingStreams.forEach(st => {
+      if (st.youtube_broadcast_id) {
+        streamByBroadcastId.set(st.youtube_broadcast_id, st);
+      }
+    });
+
+    for (const b of broadcastsList) {
+      if (!b) continue;
+      const bId = b.id || b.broadcastId || b.youtube_broadcast_id;
+      if (!bId) continue;
+
+      // Ignore local scheduled placeholders that haven't been pushed to YouTube yet
+      if (String(bId).startsWith('scheduled_stream_')) {
+        continue;
+      }
+
+      // Ignore completed, ended, or revoked broadcasts
+      const lifeCycle = String((b.lifeCycleStatus || b.status?.lifeCycleStatus || b.status || '')).toLowerCase();
+      if (lifeCycle === 'complete' || lifeCycle === 'completed' || lifeCycle === 'revoked' || lifeCycle === 'ended') {
+        continue;
+      }
+
+      const existing = streamByBroadcastId.get(bId);
+      if (existing) {
+        // Attach local streamId to broadcast object so UI knows its database record
+        b.streamId = existing.id;
+        
+        // Update stream key locally if it was missing previously
+        const newStreamKey = b.streamKey || b.stream_key || '';
+        const currentStreamKey = existing.stream_key || '';
+        if (newStreamKey && !currentStreamKey) {
+          db.run('UPDATE streams SET stream_key = ? WHERE id = ?', [newStreamKey, existing.id], () => {});
+        }
+      } else {
+        // Broadcast from YouTube.com that has not been saved into local streams table!
+        try {
+          const rawSchedule = b.scheduledStartTime || b.schedule_time || b.snippet?.scheduledStartTime || null;
+          let scheduleIso = null;
+          if (rawSchedule) {
+            const parsed = new Date(rawSchedule);
+            if (!isNaN(parsed.getTime())) scheduleIso = parsed.toISOString();
+          }
+
+          const newStreamData = {
+            title: b.title || b.snippet?.title || 'YouTube Live Broadcast',
+            video_id: null, // User can select video when clicking Start / Edit
+            audio_id: null,
+            rtmp_url: b.rtmpUrl || b.rtmp_url || 'rtmp://a.rtmp.youtube.com/live2',
+            stream_key: b.streamKey || b.stream_key || '',
+            platform: 'YouTube',
+            platform_icon: 'ti-brand-youtube',
+            bitrate: 2500,
+            resolution: '1280x720',
+            fps: 30,
+            orientation: 'horizontal',
+            loop_video: 1,
+            schedule_type: 'once',
+            schedule_time: scheduleIso,
+            status: (lifeCycle === 'live' || lifeCycle === 'activelive') ? 'live' : 'scheduled',
+            user_id: userId,
+            youtube_broadcast_id: bId,
+            youtube_account_id: b.accountId || b.youtube_account_id || null
+          };
+
+          const created = await Stream.create(newStreamData);
+          if (created && created.id) {
+            b.streamId = created.id;
+            streamByBroadcastId.set(bId, created);
+            console.log(`[SyncYouTube] ✅ Synced YouTube broadcast "${newStreamData.title}" (${bId}) to local stream #${created.id}`);
+
+            try {
+              await YouTubeBroadcastSettings.upsert({
+                broadcastId: bId,
+                userId: userId,
+                accountId: b.accountId || b.youtube_account_id || null,
+                title: newStreamData.title,
+                description: b.description || b.snippet?.description || '',
+                privacyStatus: b.privacyStatus || b.status?.privacyStatus || 'unlisted',
+                thumbnailPath: b.thumbnailPath || b.thumbnailUrl || b.snippet?.thumbnails?.high?.url || null
+              });
+            } catch (setErr) {
+              // Non-blocking
+            }
+          }
+        } catch (createErr) {
+          console.warn(`[SyncYouTube] Warning creating stream record for broadcast ${bId}:`, createErr.message);
+        }
+      }
+    }
+  } catch (syncErr) {
+    console.error('[SyncYouTube] Error during broadcast sync:', syncErr.message);
   }
 
   return broadcastsList;
@@ -11001,6 +11149,7 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
 
       // Attach local settings (dualStream, alteredContent, unlistReplayOnEnd)
       await attachLocalSettingsToBroadcasts(result, userId);
+      await syncYouTubeBroadcastsToLocalStreams(result, userId);
       
       console.log(`[DEBUG] Final broadcasts for account ${accountId}: ${result.length}`);
       
@@ -11140,6 +11289,7 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
       
       // Attach local settings (dualStream, alteredContent, unlistReplayOnEnd) to all broadcasts
       await attachLocalSettingsToBroadcasts(allBroadcasts, userId);
+      await syncYouTubeBroadcastsToLocalStreams(allBroadcasts, userId);
       
       console.log(`[DEBUG] Total unique broadcasts fetched: ${allBroadcasts.length}`);
       
@@ -11285,6 +11435,50 @@ app.get('/api/youtube/broadcasts/debug', isAuthenticated, async (req, res) => {
       success: false, 
       error: error.message 
     });
+  }
+});
+
+// Sync broadcasts from YouTube.com to local application database
+app.post('/api/youtube/sync', isAuthenticated, async (req, res) => {
+  try {
+    const userId = req.session.userId;
+    invalidateBroadcastsCache(userId);
+
+    const accounts = await YouTubeCredentials.findAllByUserId(userId);
+    if (!accounts || accounts.length === 0) {
+      return res.status(400).json({ success: false, error: 'Tidak ada akun YouTube yang terhubung.' });
+    }
+
+    let allFetchedBroadcasts = [];
+    for (const acc of accounts) {
+      try {
+        const accessToken = await youtubeService.getAccessToken(acc.clientId, acc.clientSecret, acc.refreshToken, 0, acc.id);
+        const broadcasts = await youtubeService.listBroadcasts(accessToken, { broadcastStatus: 'all' });
+        if (Array.isArray(broadcasts)) {
+          broadcasts.forEach(b => {
+            allFetchedBroadcasts.push({
+              ...b,
+              accountId: acc.id,
+              channelName: acc.channelName
+            });
+          });
+        }
+      } catch (accErr) {
+        console.warn(`[Sync API] Error fetching for account ${acc.channelName}:`, accErr.message);
+      }
+    }
+
+    await syncYouTubeBroadcastsToLocalStreams(allFetchedBroadcasts, userId);
+    invalidateBroadcastsCache(userId);
+
+    return res.json({
+      success: true,
+      message: `Sinkronisasi selesai! ${allFetchedBroadcasts.length} siaran diproses dari YouTube.`,
+      count: allFetchedBroadcasts.length
+    });
+  } catch (err) {
+    console.error('[Sync API] Error:', err);
+    return res.status(500).json({ success: false, error: 'Gagal sinkronisasi YouTube: ' + err.message });
   }
 });
 
@@ -16360,6 +16554,19 @@ async function startServer() {
     } catch (error) {
       console.error('[Startup] Error starting token refresh scheduler:', error.message);
       // Don't crash - scheduler can be retried
+    }
+
+    // Initialize YouTube Auto-Sync Background Scheduler
+    // Automatically synchronizes upcoming and active YouTube broadcasts every 60 seconds (zero CPU overhead)
+    try {
+      console.log('[Startup] Starting YouTube auto-sync background scheduler...');
+      const autoSyncInterval = youtubeAutoSyncScheduler.start();
+      if (autoSyncInterval) {
+        activeIntervals.push(autoSyncInterval);
+      }
+      console.log('[Startup] YouTube auto-sync background scheduler started');
+    } catch (error) {
+      console.error('[Startup] Error starting YouTube auto-sync scheduler:', error.message);
     }
 
     // Initialize YouTube task scheduler
