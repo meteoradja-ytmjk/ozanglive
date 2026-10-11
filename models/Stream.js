@@ -16,6 +16,7 @@ class Stream {
       resolution,
       fps = 30,
       orientation = 'horizontal',
+      loop_video = 1,
       start_time = null,
       schedule_time = null,
       end_time = null,
@@ -38,7 +39,7 @@ class Stream {
       status,
       user_id
     } = streamData;
-    const loop_video_int = loop_video ? 1 : 0;
+    const loop_video_int = (loop_video === 1 || loop_video === true || loop_video === '1' || loop_video === 'true') ? 1 : 0;
     const recurring_enabled_int = recurring_enabled ? 1 : 0;
     const dual_stream_int = dual_stream ? 1 : 0;
     const vertical_key_val = vertical_stream_key || backup_rtmp_url || null;

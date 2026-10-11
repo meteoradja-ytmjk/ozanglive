@@ -2304,6 +2304,10 @@
         return;
       }
 
+      if (emptyState) {
+        emptyState.style.display = 'none';
+      }
+
       // Deduplicate streams by ID and youtube_broadcast_id to guarantee no duplicate cards in control room
       const seenIds = new Set();
       const seenBroadcasts = new Set();

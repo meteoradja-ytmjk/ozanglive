@@ -11608,6 +11608,15 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
     const isRecurringReq = reqScheduleType === 'daily' || reqScheduleType === 'weekly';
     const isFromTemplate = !!templateId;
     const isStartImmediately = (req.body.startImmediately === 'true' || req.body.startImmediately === true || req.body.startImmediately === 1 || req.body.startImmediately === '1');
+    if (isStartImmediately) {
+      const checkVideoId = req.body.videoId || (matchedSlot ? (matchedSlot.videoId || matchedSlot.video_id) : null) || (templateObj ? templateObj.video_id : null) || null;
+      if (!checkVideoId) {
+        return res.status(400).json({
+          success: false,
+          error: 'Pilih video dari galeri terlebih dahulu untuk mulai live langsung!'
+        });
+      }
+    }
     const minTime = new Date(Date.now() + 10 * 60 * 1000);
 
     // Parse scheduledStartTime sent from client (either WIB datetime-local or ISO string)
@@ -12592,7 +12601,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         backup_rtmp_url: isDualStream ? (verticalStreamKey || null) : null,
         tags: parsedTags && parsedTags.length > 0 ? JSON.stringify(parsedTags) : null,
         start_time: isStartImmediately ? new Date().toISOString() : null,
-        status: isStartImmediately ? 'live' : (isScheduled ? 'scheduled' : 'offline')
+        status: isStartImmediately ? 'starting' : (isScheduled ? 'scheduled' : 'offline')
       };
 
       // Check if an associated stream record already exists for this broadcast to prevent duplicates
@@ -12618,9 +12627,13 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
           try {
             streamStartResult = await streamingService.startStream(createdStream.id);
             console.log('[API] Stream engine started immediately for stream ID:', createdStream.id, 'result:', streamStartResult);
+            if (streamStartResult && !streamStartResult.success) {
+              await Stream.update(createdStream.id, { status: 'offline' }).catch(() => {});
+            }
           } catch (startErr) {
             console.error('[API] Error starting stream engine immediately:', startErr.message);
             streamStartResult = { success: false, error: startErr.message };
+            await Stream.update(createdStream.id, { status: 'offline' }).catch(() => {});
           }
         }
       }

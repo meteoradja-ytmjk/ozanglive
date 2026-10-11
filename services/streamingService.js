@@ -2151,8 +2151,8 @@ async function startStream(streamId) {
       return { success: false, error: 'Stream not found' };
     }
     
-    // Check live limit before starting stream
-    const limitInfo = await LiveLimitService.validateAndGetInfo(stream.user_id);
+    // Check live limit before starting stream (exclude this stream so it doesn't block itself)
+    const limitInfo = await LiveLimitService.validateAndGetInfo(stream.user_id, stream.id);
     if (!limitInfo.canStart) {
       console.log(`[StreamingService] User ${stream.user_id} has reached live limit (${limitInfo.activeStreams}/${limitInfo.effectiveLimit})`);
       return { 

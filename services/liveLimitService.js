@@ -81,13 +81,20 @@ class LiveLimitService {
   /**
    * Count the number of active (live) streams for a user
    * @param {string} userId - User ID
+   * @param {string} [excludeStreamId] - Optional stream ID to exclude from counting
    * @returns {Promise<number>} Number of active streams
    */
-  static countActiveStreams(userId) {
+  static countActiveStreams(userId, excludeStreamId = null) {
     return new Promise((resolve, reject) => {
+      let query = "SELECT COUNT(*) as count FROM streams WHERE user_id = ? AND status = 'live'";
+      const params = [userId];
+      if (excludeStreamId) {
+        query += " AND id != ?";
+        params.push(excludeStreamId);
+      }
       db.get(
-        "SELECT COUNT(*) as count FROM streams WHERE user_id = ? AND status = 'live'",
-        [userId],
+        query,
+        params,
         (err, row) => {
           if (err) {
             console.error('Error counting active streams:', err.message);
@@ -102,25 +109,27 @@ class LiveLimitService {
   /**
    * Check if a user can start a new stream
    * @param {string} userId - User ID
+   * @param {string} [excludeStreamId] - Optional stream ID to exclude from counting
    * @returns {Promise<boolean>} True if user can start a new stream
    */
-  static async canStartStream(userId) {
+  static async canStartStream(userId, excludeStreamId = null) {
     const limit = await this.getEffectiveLimit(userId);
-    const activeCount = await this.countActiveStreams(userId);
+    const activeCount = await this.countActiveStreams(userId, excludeStreamId);
     return activeCount < limit;
   }
 
   /**
    * Get full validation info for a user
    * @param {string} userId - User ID
+   * @param {string} [excludeStreamId] - Optional stream ID to exclude from counting
    * @returns {Promise<Object>} Validation info object
    */
-  static async validateAndGetInfo(userId) {
+  static async validateAndGetInfo(userId, excludeStreamId = null) {
     const isAdmin = await this.isAdmin(userId);
     
     // Admin always has unlimited
     if (isAdmin) {
-      const activeStreams = await this.countActiveStreams(userId);
+      const activeStreams = await this.countActiveStreams(userId, excludeStreamId);
       return {
         userId,
         effectiveLimit: Infinity,
@@ -138,7 +147,7 @@ class LiveLimitService {
     const customLimit = await User.getLiveLimit(userId);
     const defaultLimit = await SystemSettings.getDefaultLiveLimit();
     const isCustomLimit = customLimit !== null && customLimit > 0;
-    const activeStreams = await this.countActiveStreams(userId);
+    const activeStreams = await this.countActiveStreams(userId, excludeStreamId);
 
     // Expired members: live limit forced to 0, cannot start streams
     const expired = await this.isExpired(userId);

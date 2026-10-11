@@ -4754,9 +4754,9 @@ function submitBroadcastAndStartNow() {
   const form = document.getElementById('createBroadcastForm');
   if (!form) return;
 
-  // Validation: Ensure a video is selected before starting live if studio video selector is present
+  // Validation: Ensure a video is selected before starting live
   const videoInput = document.getElementById('studioSelectedVideoId');
-  if (videoInput && !videoInput.value) {
+  if (!videoInput || !videoInput.value) {
     if (typeof showToast === 'function') {
       showToast('Pilih video dari galeri terlebih dahulu untuk mulai live!', 'warning');
     }
