@@ -1,0 +1,2649 @@
+const { google } = require('googleapis');
+const { parseWIBDateTimeLocal } = require('../utils/wibTime');
+
+// YouTube OAuth scopes needed for broadcast management
+const YOUTUBE_SCOPES = [
+  'https://www.googleapis.com/auth/youtube',
+  'https://www.googleapis.com/auth/youtube.force-ssl',
+  'https://www.googleapis.com/auth/youtube.upload'
+];
+
+class YouTubeService {
+  /**
+   * Generate OAuth2 authorization URL for browser-based consent flow
+   * @param {string} clientId - Google Client ID
+   * @param {string} clientSecret - Google Client Secret
+   * @param {string} redirectUri - Callback URL (e.g., http://localhost:7575/api/youtube/oauth/callback)
+   * @param {string} state - CSRF state token
+   * @returns {string} Authorization URL to redirect user to
+   */
+  generateAuthUrl(clientId, clientSecret, redirectUri, state) {
+    const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+    
+    return oauth2Client.generateAuthUrl({
+      access_type: 'offline',
+      prompt: 'consent select_account',
+      scope: YOUTUBE_SCOPES,
+      state: state,
+      include_granted_scopes: true
+    });
+  }
+
+  /**
+   * Exchange authorization code for tokens (access_token + refresh_token)
+   * @param {string} clientId - Google Client ID
+   * @param {string} clientSecret - Google Client Secret
+   * @param {string} redirectUri - Same redirect URI used in authorization
+   * @param {string} code - Authorization code from Google callback
+   * @returns {Promise<{access_token: string, refresh_token: string, expiry_date: number}>}
+   */
+  async exchangeCodeForTokens(clientId, clientSecret, redirectUri, code) {
+    const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+    
+    const { tokens } = await oauth2Client.getToken(code);
+    
+    return {
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token || null,
+      expiry_date: tokens.expiry_date
+    };
+  }
+
+  async uploadRegularVideo(accessToken, { 
+    title, 
+    description, 
+    filePath, 
+    privacyStatus = 'unlisted', 
+    tags = [], 
+    categoryId = '22',
+    madeForKids = false,
+    alteredContent = false,
+    publishAt = null,
+    thumbnailBuffer = null,
+    thumbnailMimeType = 'image/jpeg'
+  }) {
+    const oauth2Client = new google.auth.OAuth2();
+    oauth2Client.setCredentials({ access_token: accessToken });
+    const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+    const fs = require('fs');
+
+    const finalTags = Array.isArray(tags) ? [...tags] : (typeof tags === 'string' ? tags.split(',').map(t => t.trim()).filter(Boolean) : []);
+    if (alteredContent && !finalTags.includes('AlteredOrSyntheticContent')) {
+      finalTags.push('AlteredOrSyntheticContent');
+    }
+
+    let finalDescription = description || '';
+    if (alteredContent && !finalDescription.includes('Altered or synthetic content')) {
+      finalDescription = (finalDescription ? finalDescription + '\n\n' : '') + '✨ This content is created or modified with AI / altered or synthetic media.';
+    }
+
+    const requestBody = {
+      snippet: {
+        title: title || 'Rendered Video',
+        description: finalDescription,
+        categoryId: categoryId || '22' // Default: People & Blogs
+      },
+      status: {
+        privacyStatus: publishAt ? 'private' : privacyStatus,
+        selfDeclaredMadeForKids: !!madeForKids
+      }
+    };
+
+    // Scheduled publish configuration for YouTube Data API v3
+    if (publishAt) {
+      try {
+        const isoDate = new Date(publishAt).toISOString();
+        requestBody.status.publishAt = isoDate;
+        requestBody.status.privacyStatus = 'private'; // Mandatory when publishAt is set
+        console.log(`[YouTubeService.uploadRegularVideo] Scheduled publish configured for: ${isoDate}`);
+      } catch (scheduleErr) {
+        console.warn('[YouTubeService.uploadRegularVideo] Invalid publishAt format, falling back to privacyStatus:', publishAt, scheduleErr.message);
+      }
+    }
+    
+    // Add synthetic media flag if supported by YouTube API
+    if (alteredContent) {
+      requestBody.status.containsSyntheticMedia = true;
+    }
+    
+    // Add tags if provided
+    if (finalTags.length > 0) {
+      requestBody.snippet.tags = finalTags;
+    }
+
+    const response = await youtube.videos.insert({
+      part: 'snippet,status',
+      requestBody,
+      media: {
+        body: fs.createReadStream(filePath)
+      }
+    });
+
+    const videoData = response.data;
+    const videoId = videoData?.id;
+
+    // Upload custom thumbnail if provided
+    if (videoId && thumbnailBuffer && thumbnailBuffer.length > 0) {
+      try {
+        console.log(`[YouTubeService.uploadRegularVideo] Setting custom thumbnail for ${videoId}, size: ${thumbnailBuffer.length} bytes`);
+        const { Readable } = require('stream');
+        await youtube.thumbnails.set({
+          videoId: videoId,
+          media: {
+            mimeType: thumbnailMimeType || 'image/jpeg',
+            body: Readable.from(thumbnailBuffer)
+          }
+        });
+        console.log(`[YouTubeService.uploadRegularVideo] Thumbnail set successfully for ${videoId} ✓`);
+      } catch (thumbError) {
+        console.warn(`[YouTubeService.uploadRegularVideo] Thumbnail upload warning (video was uploaded, but thumbnail failed):`, thumbError.message);
+      }
+    }
+
+    return videoData;
+  }
+  /**
+   * Get access token from refresh token with retry logic
+   * NEW: Now uses cached token from database if still valid (updated by tokenRefreshScheduler)
+   * Only calls Google API if cache is expired or missing
+   * 
+   * @param {string} clientId - Google Client ID
+   * @param {string} clientSecret - Google Client Secret
+   * @param {string} refreshToken - Refresh Token
+   * @param {number} retryCount - Current retry count (internal use)
+   * @param {number} accountId - Optional account ID for cache lookup
+   * @returns {Promise<string>} Access token
+   */
+  async getAccessToken(clientId, clientSecret, refreshToken, retryCount = 0, accountId = null) {
+    const maxRetries = 3;
+    const retryDelay = 2000; // 2 seconds
+    
+    try {
+      // Validate inputs
+      if (!clientId || !clientSecret || !refreshToken) {
+        throw new Error('Missing credentials: clientId, clientSecret, or refreshToken is empty');
+      }
+      
+      // TRY CACHE FIRST - use tokenRefreshScheduler's cached token
+      if (accountId) {
+        try {
+          const tokenRefreshScheduler = require('./tokenRefreshScheduler');
+          const cachedToken = await tokenRefreshScheduler.getCachedAccessToken(accountId);
+          if (cachedToken) {
+            console.log(`[YouTubeService.getAccessToken] Using cached token for account ${accountId}`);
+            return cachedToken;
+          }
+        } catch (cacheErr) {
+          console.warn(`[YouTubeService.getAccessToken] Cache lookup failed: ${cacheErr.message}, falling back to direct refresh`);
+        }
+      }
+      
+      // FALLBACK: Refresh token directly from Google
+      console.log('[YouTubeService.getAccessToken] No cached token available, refreshing from Google...');
+      const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
+      oauth2Client.setCredentials({ refresh_token: refreshToken });
+      
+      const { credentials } = await oauth2Client.refreshAccessToken();
+      
+      if (!credentials || !credentials.access_token) {
+        throw new Error('Failed to obtain access token from refresh token');
+      }
+      
+      // Update cache and refresh_token if we have accountId
+      if (accountId) {
+        try {
+          const tokenRefreshScheduler = require('./tokenRefreshScheduler');
+          if (credentials.refresh_token && credentials.refresh_token !== refreshToken) {
+            await tokenRefreshScheduler.updateRefreshToken(accountId, credentials.refresh_token);
+            console.log(`[YouTubeService.getAccessToken] Saved updated refresh_token for account ${accountId}`);
+          }
+          await tokenRefreshScheduler.updateTokenInfo(accountId, {
+            accessToken: credentials.access_token,
+            tokenExpiresAt: credentials.expiry_date 
+              ? new Date(credentials.expiry_date).toISOString() 
+              : new Date(Date.now() + 3600 * 1000).toISOString(),
+            lastRefreshedAt: new Date().toISOString(),
+            tokenStatus: 'active',
+            lastRefreshError: null
+          });
+          console.log(`[YouTubeService.getAccessToken] Updated cache for account ${accountId}`);
+        } catch (updateErr) {
+          console.warn(`[YouTubeService.getAccessToken] Failed to update cache: ${updateErr.message}`);
+        }
+      }
+      
+      return credentials.access_token;
+    } catch (error) {
+      const errorMessage = error.message || 'Unknown error';
+      
+      // Check if error is retryable
+      const isRetryable = 
+        errorMessage.includes('ECONNRESET') ||
+        errorMessage.includes('ETIMEDOUT') ||
+        errorMessage.includes('ENOTFOUND') ||
+        errorMessage.includes('socket hang up') ||
+        errorMessage.includes('network') ||
+        errorMessage.includes('timeout') ||
+        (error.code && ['ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND', 'EAI_AGAIN'].includes(error.code));
+      
+      if (isRetryable && retryCount < maxRetries) {
+        console.warn(`[YouTubeService.getAccessToken] Retryable error (attempt ${retryCount + 1}/${maxRetries}): ${errorMessage}`);
+        await new Promise(resolve => setTimeout(resolve, retryDelay * (retryCount + 1)));
+        return this.getAccessToken(clientId, clientSecret, refreshToken, retryCount + 1, accountId);
+      }
+      
+      // Check for specific OAuth errors
+      if (errorMessage.includes('invalid_grant') || errorMessage.includes('Token has been expired or revoked')) {
+        console.error('[YouTubeService.getAccessToken] Token expired or revoked - user needs to re-authenticate');
+        
+        // Mark token as expired in database
+        if (accountId) {
+          try {
+            const tokenRefreshScheduler = require('./tokenRefreshScheduler');
+            await tokenRefreshScheduler.updateTokenInfo(accountId, {
+              tokenStatus: 'expired',
+              lastRefreshError: 'Token expired or revoked'
+            });
+          } catch (updateErr) {
+            console.warn(`[YouTubeService.getAccessToken] Failed to mark token as expired: ${updateErr.message}`);
+          }
+        }
+        
+        throw new Error('TOKEN_EXPIRED: YouTube token has expired or been revoked. Please reconnect your YouTube account.');
+      }
+      
+      if (errorMessage.includes('invalid_client')) {
+        console.error('[YouTubeService.getAccessToken] Invalid client credentials');
+        throw new Error('INVALID_CLIENT: YouTube client credentials are invalid. Please check your API settings.');
+      }
+      
+      console.error(`[YouTubeService.getAccessToken] Failed to get access token: ${errorMessage}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Get access token with graceful fallback (returns null instead of throwing)
+   * Useful for non-critical operations like displaying channel name
+   * BUG FIX #9: Added accountId parameter so cached tokens are used instead of
+   * always hitting Google API. Without this, every call bypassed the cache.
+   * @param {string} clientId - Google Client ID
+   * @param {string} clientSecret - Google Client Secret
+   * @param {string} refreshToken - Refresh Token
+   * @param {number|null} accountId - Optional account ID for cache lookup
+   * @returns {Promise<string|null>} Access token or null if failed
+   */
+  async getAccessTokenSafe(clientId, clientSecret, refreshToken, accountId = null) {
+    try {
+      return await this.getAccessToken(clientId, clientSecret, refreshToken, 0, accountId);
+    } catch (error) {
+      console.warn(`[YouTubeService.getAccessTokenSafe] Failed to get token: ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * Validate credentials by testing API connection
+   * @param {string} clientId - Google Client ID
+   * @param {string} clientSecret - Google Client Secret
+   * @param {string} refreshToken - Refresh Token
+   * @returns {Promise<{valid: boolean, channelName?: string, channelId?: string, error?: string}>}
+   */
+  async validateCredentials(clientId, clientSecret, refreshToken) {
+    try {
+      const accessToken = await this.getAccessToken(clientId, clientSecret, refreshToken);
+      const channelInfo = await this.getChannelInfo(accessToken);
+      
+      return {
+        valid: true,
+        channelName: channelInfo.title,
+        channelId: channelInfo.id,
+        channelThumbnail: channelInfo.thumbnail
+      };
+    } catch (error) {
+      const errorMessage = error.message || 'Invalid credentials';
+      
+      // Provide more specific error messages
+      if (errorMessage.includes('TOKEN_EXPIRED')) {
+        return {
+          valid: false,
+          error: 'Token expired - please reconnect your YouTube account',
+          errorCode: 'TOKEN_EXPIRED'
+        };
+      }
+      
+      if (errorMessage.includes('INVALID_CLIENT')) {
+        return {
+          valid: false,
+          error: 'Invalid client credentials',
+          errorCode: 'INVALID_CLIENT'
+        };
+      }
+      
+      return {
+        valid: false,
+        error: errorMessage
+      };
+    }
+  }
+
+  /**
+   * Get channel info from access token
+   * @param {string} accessToken - Access token
+   * @returns {Promise<{id: string, title: string, thumbnail: string}>}
+   */
+  async getChannelInfo(accessToken) {
+    const oauth2Client = new google.auth.OAuth2();
+    oauth2Client.setCredentials({ access_token: accessToken });
+    
+    const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+    
+    const response = await youtube.channels.list({
+      part: 'snippet',
+      mine: true
+    });
+    
+    if (!response.data.items || response.data.items.length === 0) {
+      throw new Error('No channel found for this account');
+    }
+    
+    const channel = response.data.items[0];
+    return {
+      id: channel.id,
+      title: channel.snippet?.title || (`Channel ${channel.id}`) || 'YouTube Channel',
+      thumbnail: channel.snippet?.thumbnails?.default?.url || ''
+    };
+  }
+
+
+  /**
+   * Create a scheduled broadcast on YouTube
+   * @param {string} accessToken - Access token
+   * @param {Object} data - Broadcast data
+   * @param {string} [data.streamId] - Optional existing stream ID to bind
+   * @param {string[]} [data.tags] - Optional tags for the broadcast
+   * @param {string} [data.categoryId] - Optional category ID
+   * @param {boolean} [data.monetizationEnabled] - Optional monetization status
+   * @param {string} [data.adFrequency] - Optional ad frequency (high/medium/low)
+   * @param {boolean} [data.alteredContent] - Optional altered content declaration
+   * @returns {Promise<{broadcastId: string, streamKey: string, rtmpUrl: string}>}
+   */
+  async createBroadcast(accessToken, { title, description, scheduledStartTime, privacyStatus, streamId, tags, categoryId, enableAutoStart, enableAutoStop, monetizationEnabled, adFrequency, alteredContent, dualStream }) {
+    const oauth2Client = new google.auth.OAuth2();
+    oauth2Client.setCredentials({ access_token: accessToken });
+    
+    const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+    
+    console.log('[YouTubeService.createBroadcast] Received streamId:', streamId);
+    console.log('[YouTubeService.createBroadcast] Settings: autoStart=%s, autoStop=%s, dualStream=%s, alteredContent=%s', enableAutoStart, enableAutoStop, !!dualStream, !!alteredContent);
+    console.log('[YouTubeService.createBroadcast] Received categoryId:', categoryId);
+    
+    // Build snippet - Note: categoryId is NOT supported by liveBroadcasts API
+    // Category will be set separately using Videos API after broadcast is created
+    // YouTube category IDs: 22 = People & Blogs, 20 = Gaming, 10 = Music, 24 = Entertainment, etc.
+    const finalCategoryId = categoryId || '22';
+    console.log('[YouTubeService.createBroadcast] Will set categoryId:', finalCategoryId);
+    
+    let startTimeIso;
+    try {
+      const parsedDate = scheduledStartTime ? (parseWIBDateTimeLocal(scheduledStartTime) || new Date(scheduledStartTime)) : null;
+      startTimeIso = (parsedDate && !isNaN(parsedDate.getTime())) 
+        ? parsedDate.toISOString() 
+        : new Date(Date.now() + 60 * 1000).toISOString();
+    } catch (e) {
+      startTimeIso = new Date(Date.now() + 60 * 1000).toISOString();
+    }
+
+    const finalTags = Array.isArray(tags) ? [...tags] : (typeof tags === 'string' ? tags.split(/[\r\n,]+/).map(t => t.trim()).filter(Boolean) : []);
+    if (alteredContent) {
+      ['AlteredOrSyntheticContent', 'AI Generated', 'Synthetic Media'].forEach(t => {
+        if (!finalTags.includes(t)) finalTags.push(t);
+      });
+    }
+
+    let finalDescription = description || '';
+    if (alteredContent && !finalDescription.includes('Altered or synthetic content')) {
+      finalDescription = (finalDescription ? finalDescription + '\n\n' : '') + '✨ This content is created or modified with AI / altered or synthetic media.';
+    }
+
+    const snippet = {
+      title: title,
+      description: finalDescription,
+      scheduledStartTime: startTimeIso
+    };
+    
+    // Add tags if provided (YouTube API accepts tags in snippet)
+    if (finalTags.length > 0) {
+      snippet.tags = finalTags;
+    }
+    
+    // Build contentDetails with auto-start/stop settings
+    const contentDetails = {
+      enableAutoStart: enableAutoStart === true || enableAutoStart === 'true',
+      enableAutoStop: enableAutoStop !== false && enableAutoStop !== 'false', // Default true
+      monitorStream: {
+        enableMonitorStream: false
+      },
+      // Record from start - always enabled for replay
+      recordFromStart: true
+    };
+    
+    // Build status with privacy settings
+    const status = {
+      privacyStatus: privacyStatus || 'unlisted',
+      selfDeclaredMadeForKids: false
+    };
+    
+    // Create the broadcast
+    const broadcastResponse = await youtube.liveBroadcasts.insert({
+      part: 'snippet,status,contentDetails',
+      requestBody: {
+        snippet,
+        status,
+        contentDetails
+      }
+    });
+    
+    const broadcast = broadcastResponse.data;
+    
+    let stream;
+    
+    // Ingestion CDN settings:
+    // If dualStream is enabled, use variable resolution & frameRate so YouTube Studio activates dual-format (vertical/Shorts + horizontal) ingest
+    const cdnConfig = dualStream ? {
+      frameRate: 'variable',
+      ingestionType: 'rtmp',
+      resolution: 'variable'
+    } : {
+      frameRate: '30fps',
+      ingestionType: 'rtmp',
+      resolution: '1080p'
+    };
+
+    // Use existing stream or create new one
+    if (streamId) {
+      console.log('[YouTubeService.createBroadcast] Using existing stream:', streamId);
+      // Fetch existing stream info safely
+      let streamResponse = null;
+      try {
+        streamResponse = await youtube.liveStreams.list({
+          part: 'snippet,cdn',
+          id: streamId
+        });
+      } catch (listErr) {
+        console.warn('[YouTubeService.createBroadcast] Warning: Failed to query existing stream with id "' + streamId + '":', listErr.message);
+        streamResponse = null;
+      }
+      
+      if (!streamResponse || !streamResponse.data?.items || streamResponse.data.items.length === 0) {
+        console.log('[YouTubeService.createBroadcast] Stream not found or invalid, creating new one with cdn:', cdnConfig);
+        // Stream not found, create a new one
+        const newStreamResponse = await youtube.liveStreams.insert({
+          part: 'snippet,cdn',
+          requestBody: {
+            snippet: {
+              title: dualStream ? `Dual Stream for ${title}` : `Stream for ${title}`
+            },
+            cdn: cdnConfig
+          }
+        });
+        stream = newStreamResponse.data;
+      } else {
+        stream = streamResponse.data.items[0];
+        console.log('[YouTubeService.createBroadcast] Found existing stream:', stream.snippet?.title, 'cdn resolution:', stream.cdn?.resolution);
+        if (dualStream && stream.cdn?.resolution !== 'variable') {
+          try {
+            console.log('[YouTubeService.createBroadcast] Attempting to update existing stream CDN to variable for Dual Stream...');
+            const updateStreamRes = await youtube.liveStreams.update({
+              part: 'cdn',
+              requestBody: {
+                id: stream.id,
+                cdn: cdnConfig
+              }
+            });
+            stream = updateStreamRes.data;
+            console.log('[YouTubeService.createBroadcast] Stream CDN updated to variable successfully');
+          } catch (cdnErr) {
+            console.warn('[YouTubeService.createBroadcast] Note: Stream CDN update to variable skipped:', cdnErr.message);
+          }
+        }
+      }
+    } else {
+      console.log('[YouTubeService.createBroadcast] No streamId provided, creating new stream with cdn:', cdnConfig);
+      // Create a new stream
+      const streamResponse = await youtube.liveStreams.insert({
+        part: 'snippet,cdn',
+        requestBody: {
+          snippet: {
+            title: dualStream ? `Dual Stream for ${title}` : `Stream for ${title}`
+          },
+          cdn: cdnConfig
+        }
+      });
+      
+      stream = streamResponse.data;
+    }
+    
+    // Bind the stream to the broadcast
+    let bindSuccess = false;
+    try {
+      await youtube.liveBroadcasts.bind({
+        part: 'id,contentDetails',
+        id: broadcast.id,
+        streamId: stream.id
+      });
+      bindSuccess = true;
+      console.log('[YouTubeService.createBroadcast] Successfully bound stream:', stream.id);
+    } catch (bindErr) {
+      console.error('[YouTubeService.createBroadcast] Warning: Failed to bind stream to broadcast:', bindErr.message);
+      // If binding an existing stream failed (e.g. stream key busy or already bound to another broadcast), try creating a fresh stream and binding once
+      if (streamId) {
+        try {
+          console.log('[YouTubeService.createBroadcast] Fallback: Creating a new stream with cdnConfig and binding...');
+          const fallbackStreamRes = await youtube.liveStreams.insert({
+            part: 'snippet,cdn',
+            requestBody: {
+              snippet: { title: dualStream ? `Dual Stream for ${title}` : `Stream for ${title}` },
+              cdn: cdnConfig
+            }
+          });
+          stream = fallbackStreamRes.data;
+          await youtube.liveBroadcasts.bind({
+            part: 'id,contentDetails',
+            id: broadcast.id,
+            streamId: stream.id
+          });
+          bindSuccess = true;
+          console.log('[YouTubeService.createBroadcast] Fallback bind successful with new stream:', stream.id);
+        } catch (fallbackErr) {
+          console.error('[YouTubeService.createBroadcast] Fallback stream bind failed:', fallbackErr.message);
+        }
+      }
+    }
+    
+    const resolvedStreamKey = stream.cdn?.ingestionInfo?.streamName || '';
+    const resolvedRtmpUrl = stream.cdn?.ingestionInfo?.ingestionAddress || 'rtmp://a.rtmp.youtube.com/live2';
+    const resolvedBackupRtmpUrl = stream.cdn?.ingestionInfo?.backupIngestionAddress || 'rtmp://b.rtmp.youtube.com/live2?backup=1';
+    console.log('[YouTubeService.createBroadcast] Stream resolved:', stream.id, 'key present:', !!resolvedStreamKey, 'backup present:', !!resolvedBackupRtmpUrl);
+    
+    // Update video category, tags, and AI synthetic media status using Videos API
+    let actualCategoryId = broadcast.snippet?.categoryId || finalCategoryId;
+    try {
+      console.log('[YouTubeService.createBroadcast] Updating video category to:', finalCategoryId, 'tags:', finalTags.length, 'alteredContent:', !!alteredContent);
+      const categoryResult = await this.updateVideoCategory(accessToken, broadcast.id, finalCategoryId, finalTags, finalDescription, alteredContent);
+      actualCategoryId = categoryResult.categoryId;
+      console.log('[YouTubeService.createBroadcast] Video metadata updated successfully to:', actualCategoryId);
+    } catch (categoryError) {
+      console.error('[YouTubeService.createBroadcast] Failed to update category/tags:', categoryError.message);
+      // Continue anyway, category update is not critical
+    }
+    
+    return {
+      broadcastId: broadcast.id,
+      streamId: stream.id,
+      streamKey: resolvedStreamKey,
+      rtmpUrl: resolvedRtmpUrl,
+      backupRtmpUrl: resolvedBackupRtmpUrl,
+      title: broadcast.snippet?.title || title,
+      description: finalDescription,
+      scheduledStartTime: broadcast.snippet?.scheduledStartTime || startTimeIso,
+      privacyStatus: broadcast.status?.privacyStatus || privacyStatus,
+      categoryId: actualCategoryId,
+      tags: finalTags,
+      alteredContent: !!alteredContent,
+      thumbnailUrl: broadcast.snippet?.thumbnails?.default?.url || ''
+    };
+  }
+
+  /**
+   * List broadcasts with flexible query options
+   * @param {string} accessToken - Access token
+   * @param {Object|string} [options='upcoming'] - Query options or broadcastStatus string
+   * @returns {Promise<Array>} List of broadcasts
+   */
+  async listBroadcasts(accessToken, options = 'all') {
+    const oauth2Client = new google.auth.OAuth2();
+    oauth2Client.setCredentials({ access_token: accessToken });
+    
+    const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+    
+    const queryOpts = typeof options === 'string' ? { broadcastStatus: options } : (options || {});
+    const targetStatus = queryOpts.broadcastStatus || 'all';
+    console.log('[YouTubeService.listBroadcasts] Fetching broadcasts with options:', queryOpts);
+    console.log('[YouTubeService.listBroadcasts] Target status:', targetStatus);
+    
+    let broadcasts = [];
+
+    if (targetStatus === 'all') {
+      try {
+        console.log('[YouTubeService.listBroadcasts] Fetching live broadcasts (upcoming + active + recent)...');
+        const [upcomingRes, activeRes, allRecentRes] = await Promise.allSettled([
+          youtube.liveBroadcasts.list({ part: 'snippet,status,contentDetails', mine: true, broadcastStatus: 'upcoming', maxResults: 50 }),
+          youtube.liveBroadcasts.list({ part: 'snippet,status,contentDetails', mine: true, broadcastStatus: 'active', maxResults: 50 }),
+          youtube.liveBroadcasts.list({ part: 'snippet,status,contentDetails', mine: true, broadcastStatus: 'all', maxResults: 30 })
+        ]);
+        
+        console.log('[YouTubeService.listBroadcasts] Upcoming result:', upcomingRes.status, upcomingRes.status === 'fulfilled' ? upcomingRes.value.data.items?.length : (upcomingRes.reason?.message || 'error'));
+        console.log('[YouTubeService.listBroadcasts] Active result:', activeRes.status, activeRes.status === 'fulfilled' ? activeRes.value.data.items?.length : (activeRes.reason?.message || 'error'));
+        console.log('[YouTubeService.listBroadcasts] All Recent result:', allRecentRes.status, allRecentRes.status === 'fulfilled' ? allRecentRes.value.data.items?.length : (allRecentRes.reason?.message || 'error'));
+        
+        // Detect critical token / authentication errors
+        const rejectedReasons = [upcomingRes, activeRes, allRecentRes]
+          .filter(r => r.status === 'rejected')
+          .map(r => r.reason);
+
+        const authErr = rejectedReasons.find(err => 
+          err?.code === 401 || err?.status === 401 ||
+          err?.message?.includes('invalid_grant') ||
+          err?.message?.includes('expired') ||
+          err?.message?.includes('revoked')
+        );
+        if (authErr && rejectedReasons.length === 3) {
+          throw new Error('TOKEN_EXPIRED: YouTube token has expired or been revoked. Please reconnect your YouTube account.');
+        }
+
+        const rawItems = [];
+        if (upcomingRes.status === 'fulfilled' && upcomingRes.value.data.items) {
+          console.log('[YouTubeService.listBroadcasts] Adding', upcomingRes.value.data.items.length, 'upcoming broadcasts');
+          rawItems.push(...upcomingRes.value.data.items);
+        }
+        if (activeRes.status === 'fulfilled' && activeRes.value.data.items) {
+          console.log('[YouTubeService.listBroadcasts] Adding', activeRes.value.data.items.length, 'active broadcasts');
+          rawItems.push(...activeRes.value.data.items);
+        }
+        if (allRecentRes.status === 'fulfilled' && allRecentRes.value.data.items) {
+          console.log('[YouTubeService.listBroadcasts] Adding', allRecentRes.value.data.items.length, 'recent broadcasts');
+          rawItems.push(...allRecentRes.value.data.items);
+        }
+
+        // Additional fallback: Query user's upcoming channel live events via search.list
+        try {
+          const searchRes = await youtube.search.list({
+            part: 'id',
+            forMine: true,
+            type: 'video',
+            eventType: 'upcoming',
+            maxResults: 50
+          });
+          if (searchRes.data?.items && searchRes.data.items.length > 0) {
+            const searchIds = searchRes.data.items.map(it => it.id?.videoId).filter(Boolean);
+            const existingIds = new Set(rawItems.map(b => b.id));
+            const missingSearchIds = searchIds.filter(id => !existingIds.has(id));
+            if (missingSearchIds.length > 0) {
+              console.log(`[YouTubeService.listBroadcasts] search.list found ${missingSearchIds.length} upcoming broadcast ID(s) not in standard index, fetching by ID...`);
+              const directSearchItems = await this.getBroadcastsByIds(accessToken, missingSearchIds);
+              // Direct broadcast objects map to full structure
+              directSearchItems.forEach(b => {
+                rawItems.push({
+                  id: b.id,
+                  snippet: {
+                    title: b.title,
+                    description: b.description,
+                    scheduledStartTime: b.scheduledStartTime,
+                    categoryId: b.categoryId,
+                    tags: b.tags,
+                    thumbnails: { default: { url: b.thumbnailUrl } }
+                  },
+                  status: {
+                    privacyStatus: b.privacyStatus,
+                    lifeCycleStatus: b.lifeCycleStatus
+                  },
+                  contentDetails: {
+                    boundStreamId: b.streamId
+                  },
+                  _directStreamKey: b.streamKey,
+                  _directRtmpUrl: b.rtmpUrl
+                });
+              });
+            }
+          }
+        } catch (searchErr) {
+          console.log('[YouTubeService.listBroadcasts] search.list fallback info:', searchErr.message);
+        }
+
+        // Deduplicate raw broadcasts by ID, strictly filtering out completed/revoked broadcasts
+        const seenRawIds = new Set();
+        for (const item of rawItems) {
+          if (!item || !item.id) continue;
+          const status = item.status?.lifeCycleStatus;
+          if (status === 'complete' || status === 'completed' || status === 'revoked') {
+            console.log(`[YouTubeService.listBroadcasts] Skipping broadcast ${item.id} with completed/revoked status: ${status}`);
+            continue;
+          }
+          if (!seenRawIds.has(item.id)) {
+            seenRawIds.add(item.id);
+            broadcasts.push(item);
+          }
+        }
+      } catch (err) {
+        console.error('[YouTubeService.listBroadcasts] Error fetching all broadcasts:', err.message);
+        if (err.message && err.message.includes('TOKEN_EXPIRED')) {
+          throw err;
+        }
+      }
+    } else {
+      const params = {
+        part: 'snippet,status,contentDetails',
+        mine: true,
+        broadcastStatus: targetStatus,
+        maxResults: 50
+      };
+      try {
+        const response = await youtube.liveBroadcasts.list(params);
+        const fetched = response.data.items || [];
+        broadcasts = (targetStatus === 'completed')
+          ? fetched
+          : fetched.filter(item => {
+              const st = item.status?.lifeCycleStatus;
+              return st !== 'complete' && st !== 'completed' && st !== 'revoked';
+            });
+      } catch (err) {
+        console.error('[YouTubeService.listBroadcasts] Error fetching broadcasts:', err.message);
+        if (err.message && (err.message.includes('invalid_grant') || err.message.includes('revoked') || err.code === 401)) {
+          throw new Error('TOKEN_EXPIRED: YouTube token has expired or been revoked. Please reconnect your YouTube account.');
+        }
+      }
+    }
+    
+    console.log(`[YouTubeService.listBroadcasts] Found ${broadcasts.length} unique broadcasts`);
+    
+    // OPTIMIZATION: Collect all unique stream IDs first
+    const streamIds = broadcasts
+      .map(b => b.contentDetails?.boundStreamId)
+      .filter(id => id); // Remove null/undefined
+    
+    console.log(`[YouTubeService.listBroadcasts] Found ${streamIds.length} stream IDs to fetch`);
+    
+    // OPTIMIZATION: Fetch all streams in ONE batch request (max 50 IDs)
+    let streamsMap = {};
+    if (streamIds.length > 0) {
+      try {
+        const uniqueStreamIds = [...new Set(streamIds)]; // Remove duplicates
+        console.log(`[YouTubeService.listBroadcasts] Fetching ${uniqueStreamIds.length} unique streams in batch...`);
+        
+        const streamResponse = await youtube.liveStreams.list({
+          part: 'snippet,cdn',
+          id: uniqueStreamIds.join(','),
+          maxResults: 50
+        });
+        
+        console.log(`[YouTubeService.listBroadcasts] Batch fetch returned ${streamResponse.data.items?.length || 0} streams`);
+        
+        if (streamResponse.data.items) {
+          streamResponse.data.items.forEach(stream => {
+            streamsMap[stream.id] = {
+              streamKey: stream.cdn?.ingestionInfo?.streamName || '',
+              rtmpUrl: stream.cdn?.ingestionInfo?.ingestionAddress || 'rtmp://a.rtmp.youtube.com/live2',
+              title: stream.snippet?.title || ''
+            };
+          });
+        }
+      } catch (err) {
+        console.error('[YouTubeService.listBroadcasts] Error fetching streams in batch:', err.message);
+      }
+    }
+    
+    // Map broadcasts with stream info from the batch result
+    const result = broadcasts.map(broadcast => {
+      let streamKey = '';
+      let streamId = null;
+      let rtmpUrl = 'rtmp://a.rtmp.youtube.com/live2';
+      
+      if (broadcast.contentDetails?.boundStreamId) {
+        streamId = broadcast.contentDetails.boundStreamId;
+        const streamInfo = streamsMap[streamId];
+        if (streamInfo) {
+          streamKey = streamInfo.streamKey;
+          rtmpUrl = streamInfo.rtmpUrl;
+        }
+      }
+      if (!streamKey && broadcast._directStreamKey) {
+        streamKey = broadcast._directStreamKey;
+        rtmpUrl = broadcast._directRtmpUrl || rtmpUrl;
+      }
+      
+      return {
+        id: broadcast.id,
+        title: broadcast.snippet?.title || 'Untitled Broadcast',
+        description: broadcast.snippet?.description || '',
+        scheduledStartTime: broadcast.snippet?.scheduledStartTime || null,
+        privacyStatus: broadcast.status?.privacyStatus || 'unlisted',
+        lifeCycleStatus: broadcast.status?.lifeCycleStatus || 'created',
+        categoryId: broadcast.snippet?.categoryId || '22',
+        tags: broadcast.snippet?.tags || [],
+        thumbnailUrl: broadcast.snippet?.thumbnails?.medium?.url || broadcast.snippet?.thumbnails?.default?.url || '',
+        streamId,
+        streamKey,
+        rtmpUrl
+      };
+    });
+    
+    console.log(`[YouTubeService.listBroadcasts] ========================================`);
+    console.log(`[YouTubeService.listBroadcasts] FINAL RESULT: ${result.length} broadcasts`);
+    console.log(`[YouTubeService.listBroadcasts] ========================================`);
+    if (result.length > 0) {
+      console.log('[YouTubeService.listBroadcasts] Sample broadcasts (first 3):');
+      result.slice(0, 3).forEach((b, i) => {
+        console.log(`  ${i + 1}. "${b.title}" - Status: ${b.lifeCycleStatus} - Privacy: ${b.privacyStatus} - ID: ${b.id}`);
+      });
+    } else {
+      console.log('[YouTubeService.listBroadcasts] ⚠️ NO BROADCASTS FOUND!');
+    }
+    console.log(`[YouTubeService.listBroadcasts] ========================================`);
+    
+    return result;
+  }
+
+  /**
+   * Fetch specific broadcasts by an array of broadcast IDs directly
+   * Bypasses search indexing propagation delay and status filters
+   * @param {string} accessToken - Access token
+   * @param {Array<string>} broadcastIds - List of YouTube broadcast IDs
+   * @returns {Promise<Array>} List of broadcasts
+   */
+  async getBroadcastsByIds(accessToken, broadcastIds) {
+    if (!broadcastIds || !Array.isArray(broadcastIds) || broadcastIds.length === 0) {
+      return [];
+    }
+
+    try {
+      const oauth2Client = new google.auth.OAuth2();
+      oauth2Client.setCredentials({ access_token: accessToken });
+      const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+
+      const uniqueIds = [...new Set(broadcastIds.filter(id => Boolean(id)))];
+      if (uniqueIds.length === 0) return [];
+
+      console.log(`[YouTubeService.getBroadcastsByIds] Querying ${uniqueIds.length} broadcasts by ID...`);
+
+      // YouTube API allows comma-separated IDs (max 50 per batch)
+      const batches = [];
+      for (let i = 0; i < uniqueIds.length; i += 50) {
+        batches.push(uniqueIds.slice(i, i + 50));
+      }
+
+      let allFoundItems = [];
+      for (const batch of batches) {
+        try {
+          const response = await youtube.liveBroadcasts.list({
+            part: 'snippet,status,contentDetails',
+            id: batch.join(',')
+          });
+          if (response.data.items && response.data.items.length > 0) {
+            allFoundItems.push(...response.data.items);
+          }
+        } catch (batchErr) {
+          console.warn('[YouTubeService.getBroadcastsByIds] Batch query error:', batchErr.message);
+        }
+      }
+
+      console.log(`[YouTubeService.getBroadcastsByIds] Found ${allFoundItems.length} broadcasts from ${uniqueIds.length} IDs`);
+      // Only keep active or upcoming broadcasts; completed/revoked broadcasts are ended/past streams
+      allFoundItems = allFoundItems.filter(b => {
+        const st = b.status?.lifeCycleStatus;
+        return st !== 'complete' && st !== 'completed' && st !== 'revoked';
+      });
+      if (allFoundItems.length === 0) return [];
+
+      // Fetch bound stream keys if available
+      const streamIds = allFoundItems
+        .map(b => b.contentDetails?.boundStreamId)
+        .filter(id => Boolean(id));
+
+      let streamsMap = {};
+      if (streamIds.length > 0) {
+        try {
+          const uniqueStreamIds = [...new Set(streamIds)];
+          const streamResponse = await youtube.liveStreams.list({
+            part: 'snippet,cdn',
+            id: uniqueStreamIds.join(','),
+            maxResults: 50
+          });
+          if (streamResponse.data.items) {
+            streamResponse.data.items.forEach(stream => {
+              streamsMap[stream.id] = {
+                streamKey: stream.cdn?.ingestionInfo?.streamName || '',
+                rtmpUrl: stream.cdn?.ingestionInfo?.ingestionAddress || 'rtmp://a.rtmp.youtube.com/live2',
+                title: stream.snippet?.title || ''
+              };
+            });
+          }
+        } catch (sErr) {
+          console.warn('[YouTubeService.getBroadcastsByIds] Stream resolution warning:', sErr.message);
+        }
+      }
+
+      return allFoundItems.map(broadcast => {
+        let streamKey = '';
+        let streamId = null;
+        let rtmpUrl = 'rtmp://a.rtmp.youtube.com/live2';
+
+        if (broadcast.contentDetails?.boundStreamId) {
+          streamId = broadcast.contentDetails.boundStreamId;
+          const sInfo = streamsMap[streamId];
+          if (sInfo) {
+            streamKey = sInfo.streamKey;
+            rtmpUrl = sInfo.rtmpUrl;
+          }
+        }
+
+        return {
+          id: broadcast.id,
+          title: broadcast.snippet?.title || 'Untitled Broadcast',
+          description: broadcast.snippet?.description || '',
+          scheduledStartTime: broadcast.snippet?.scheduledStartTime || null,
+          privacyStatus: broadcast.status?.privacyStatus || 'unlisted',
+          lifeCycleStatus: broadcast.status?.lifeCycleStatus || 'created',
+          categoryId: broadcast.snippet?.categoryId || '22',
+          tags: broadcast.snippet?.tags || [],
+          thumbnailUrl: broadcast.snippet?.thumbnails?.medium?.url || broadcast.snippet?.thumbnails?.default?.url || '',
+          streamId,
+          streamKey,
+          rtmpUrl
+        };
+      });
+    } catch (err) {
+      console.error('[YouTubeService.getBroadcastsByIds] Error:', err.message);
+      return [];
+    }
+  }
+
+  /**
+   * List available live streams (stream keys)
+   * @param {string} accessToken - Access token
+   * @returns {Promise<Array<{id: string, title: string, streamKey: string, rtmpUrl: string, resolution: string, frameRate: string}>>}
+   */
+  async listStreams(accessToken) {
+    const oauth2Client = new google.auth.OAuth2();
+    oauth2Client.setCredentials({ access_token: accessToken });
+    
+    const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+    
+    console.log('[YouTubeService.listStreams] Fetching streams...');
+    
+    let result = [];
+    const seenStreamKeys = new Set();
+    const seenStreamIds = new Set();
+    
+    try {
+      const response = await youtube.liveStreams.list({
+        part: 'snippet,cdn',
+        mine: true,
+        maxResults: 50
+      });
+      
+      const streams = response.data.items || [];
+      console.log('[YouTubeService.listStreams] Raw liveStreams response items:', streams.length);
+      
+      streams.forEach((stream, idx) => {
+        const streamKey = stream.cdn?.ingestionInfo?.streamName || '';
+        const id = stream.id || `stream_${idx}`;
+        if (id) seenStreamIds.add(id);
+        if (streamKey) seenStreamKeys.add(streamKey);
+        
+        result.push({
+          id: id,
+          title: stream.snippet?.title || `Stream Key ${idx + 1}`,
+          streamKey: streamKey,
+          rtmpUrl: stream.cdn?.ingestionInfo?.ingestionAddress || 'rtmp://a.rtmp.youtube.com/live2',
+          resolution: stream.cdn?.resolution || 'variable',
+          frameRate: stream.cdn?.frameRate || 'variable',
+          source: 'stream'
+        });
+      });
+    } catch (err) {
+      console.error('[YouTubeService.listStreams] Error fetching liveStreams:', err.message);
+    }
+
+    // Also fetch ALL broadcasts to catch broadcast-bound stream keys from YouTube Studio
+    try {
+      const broadcasts = await this.listBroadcasts(accessToken, { broadcastStatus: 'all' });
+      if (broadcasts && broadcasts.length > 0) {
+        broadcasts.forEach(b => {
+          if (b.streamKey) {
+            const existingIndex = result.findIndex(r => r.streamKey === b.streamKey || r.id === b.streamId);
+            if (existingIndex >= 0) {
+              const currentTitle = result[existingIndex].title || '';
+              if (!currentTitle || currentTitle.toLowerCase().includes('untitled') || currentTitle.toLowerCase().includes('default') || currentTitle === 'YouTube Live Stream') {
+                result[existingIndex].title = b.title;
+              }
+            } else {
+              seenStreamKeys.add(b.streamKey);
+              result.push({
+                id: b.streamId || b.id,
+                title: b.title || 'YouTube Broadcast Stream',
+                streamKey: b.streamKey,
+                rtmpUrl: b.rtmpUrl || 'rtmp://a.rtmp.youtube.com/live2',
+                resolution: 'variable',
+                frameRate: 'variable',
+                source: 'broadcast'
+              });
+            }
+          }
+        });
+      }
+    } catch (bErr) {
+      console.error('[YouTubeService.listStreams] Error merging broadcasts:', bErr.message);
+    }
+
+    // Auto-create a stream key if the channel has no stream keys or bound broadcasts
+    if (result.length === 0) {
+      try {
+        console.log('[YouTubeService.listStreams] No existing stream keys found on channel. Auto-creating a new default stream key...');
+        const newStream = await this.createStreamKey(accessToken, 'OzangLive Auto Stream Key');
+        if (newStream && newStream.streamKey) {
+          result.push(newStream);
+          console.log('[YouTubeService.listStreams] Successfully auto-created default stream key:', newStream.streamKey.substring(0, 8) + '...');
+        }
+      } catch (autoCreateErr) {
+        console.error('[YouTubeService.listStreams] Error auto-creating stream key:', autoCreateErr.message);
+      }
+    }
+    
+    console.log('[YouTubeService.listStreams] Total mapped streams:', result.map(s => `${s.title} (${s.streamKey ? 'KEY_OK' : 'NO_KEY'})`));
+    
+    return result;
+  }
+
+  /**
+   * Create a new stream key on YouTube
+   * @param {string} accessToken - YouTube access token
+   * @param {string} [title='OzangLive Stream Key'] - Stream title
+   * @returns {Promise<Object>} Created stream object
+   */
+  async createStreamKey(accessToken, title = 'OzangLive Stream Key') {
+    const oauth2Client = new google.auth.OAuth2();
+    oauth2Client.setCredentials({ access_token: accessToken });
+    const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+
+    const response = await youtube.liveStreams.insert({
+      part: 'snippet,cdn',
+      requestBody: {
+        snippet: {
+          title: title || 'OzangLive Stream Key'
+        },
+        cdn: {
+          frameRate: 'variable',
+          ingestionType: 'rtmp',
+          resolution: 'variable'
+        }
+      }
+    });
+
+    const stream = response.data;
+    return {
+      id: stream.id,
+      title: stream.snippet?.title || title,
+      streamKey: stream.cdn?.ingestionInfo?.streamName || '',
+      rtmpUrl: stream.cdn?.ingestionInfo?.ingestionAddress || 'rtmp://a.rtmp.youtube.com/live2',
+      resolution: stream.cdn?.resolution || 'variable',
+      frameRate: stream.cdn?.frameRate || 'variable',
+      source: 'auto-created'
+    };
+  }
+
+  /**
+   * End a live broadcast on YouTube (transition to 'complete')
+   * This immediately ends the live stream on YouTube Studio / dashboard.
+   * @param {string} accessToken - Access token
+   * @param {string} broadcastId - Broadcast ID to end
+   * @returns {Promise<{success: boolean, lifeCycleStatus?: string, alreadyComplete?: boolean, message?: string, error?: string}>}
+   */
+  async endBroadcast(accessToken, broadcastId) {
+    if (!accessToken || !broadcastId) {
+      return { success: false, error: 'Missing accessToken or broadcastId' };
+    }
+
+    const oauth2Client = new google.auth.OAuth2();
+    oauth2Client.setCredentials({ access_token: accessToken });
+    const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+
+    try {
+      console.log(`[YouTubeService.endBroadcast] Checking status for broadcast ${broadcastId}...`);
+      const statusRes = await youtube.liveBroadcasts.list({
+        part: 'id,status',
+        id: broadcastId
+      });
+
+      const item = statusRes.data?.items?.[0];
+      if (!item) {
+        console.warn(`[YouTubeService.endBroadcast] Broadcast ${broadcastId} not found on YouTube`);
+        return { success: false, error: 'Broadcast not found' };
+      }
+
+      const lifeCycleStatus = item.status?.lifeCycleStatus;
+      console.log(`[YouTubeService.endBroadcast] Current lifeCycleStatus for ${broadcastId}: ${lifeCycleStatus}`);
+
+      if (lifeCycleStatus === 'complete' || lifeCycleStatus === 'completed') {
+        console.log(`[YouTubeService.endBroadcast] Broadcast ${broadcastId} is already complete.`);
+        return { success: true, lifeCycleStatus: 'complete', alreadyComplete: true };
+      }
+
+      // If active / live / testing / liveStarting / testStarting, transition to complete
+      if (['live', 'testing', 'liveStarting', 'testStarting'].includes(lifeCycleStatus)) {
+        console.log(`[YouTubeService.endBroadcast] Transitioning broadcast ${broadcastId} from '${lifeCycleStatus}' to 'complete'...`);
+        const transitionRes = await youtube.liveBroadcasts.transition({
+          part: 'id,status',
+          id: broadcastId,
+          broadcastStatus: 'complete'
+        });
+        const finalStatus = transitionRes.data?.status?.lifeCycleStatus || 'complete';
+        console.log(`[YouTubeService.endBroadcast] Successfully ended broadcast ${broadcastId} on YouTube. Status: ${finalStatus}`);
+        return { success: true, lifeCycleStatus: finalStatus };
+      }
+
+      // If lifeCycleStatus is 'ready' or 'created' (upcoming / never went live)
+      console.log(`[YouTubeService.endBroadcast] Broadcast ${broadcastId} is in '${lifeCycleStatus}' state (not live on YouTube).`);
+      return { success: true, lifeCycleStatus: lifeCycleStatus || 'unknown', message: 'Broadcast was not live on YouTube' };
+    } catch (err) {
+      const errMsg = err.message || '';
+      console.warn(`[YouTubeService.endBroadcast] Error transitioning broadcast ${broadcastId}:`, errMsg);
+      // If error indicates already complete or redundant transition, treat as success
+      if (errMsg.includes('redundantTransition') || errMsg.includes('already complete') || errMsg.includes('complete')) {
+        return { success: true, lifeCycleStatus: 'complete', alreadyComplete: true };
+      }
+      return { success: false, error: errMsg };
+    }
+  }
+
+  /**
+   * Transition a YouTube broadcast to 'live' (or 'testing')
+   * Ensures the broadcast on YouTube Studio actually goes live.
+   * @param {string} accessToken - Access token
+   * @param {string} broadcastId - Broadcast ID to start
+   * @param {string} [targetStatus='live'] - Target status
+   * @returns {Promise<{success: boolean, lifeCycleStatus?: string, alreadyLive?: boolean, message?: string, error?: string}>}
+   */
+  async transitionBroadcast(accessToken, broadcastId, targetStatus = 'live') {
+    if (!accessToken || !broadcastId) {
+      return { success: false, error: 'Missing accessToken or broadcastId' };
+    }
+
+    const oauth2Client = new google.auth.OAuth2();
+    oauth2Client.setCredentials({ access_token: accessToken });
+    const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+
+    try {
+      console.log(`[YouTubeService.transitionBroadcast] Checking status for broadcast ${broadcastId}...`);
+      const statusRes = await youtube.liveBroadcasts.list({
+        part: 'id,status,contentDetails',
+        id: broadcastId
+      });
+
+      const item = statusRes.data?.items?.[0];
+      if (!item) {
+        console.warn(`[YouTubeService.transitionBroadcast] Broadcast ${broadcastId} not found on YouTube`);
+        return { success: false, error: 'Broadcast not found' };
+      }
+
+      const lifeCycleStatus = item.status?.lifeCycleStatus;
+      console.log(`[YouTubeService.transitionBroadcast] Current lifeCycleStatus for ${broadcastId}: ${lifeCycleStatus}`);
+
+      if (lifeCycleStatus === 'live') {
+        console.log(`[YouTubeService.transitionBroadcast] Broadcast ${broadcastId} is already live.`);
+        return { success: true, lifeCycleStatus: 'live', alreadyLive: true };
+      }
+
+      if (lifeCycleStatus === 'complete' || lifeCycleStatus === 'completed' || lifeCycleStatus === 'revoked') {
+        console.log(`[YouTubeService.transitionBroadcast] Broadcast ${broadcastId} is already ${lifeCycleStatus}.`);
+        return { success: false, lifeCycleStatus, error: `Broadcast is already ${lifeCycleStatus}` };
+      }
+
+      const monitorStream = item.contentDetails?.monitorStream?.enableMonitorStream;
+      let target = targetStatus;
+      if (monitorStream && lifeCycleStatus === 'ready' && targetStatus === 'live') {
+        target = 'testing';
+      }
+
+      console.log(`[YouTubeService.transitionBroadcast] Transitioning broadcast ${broadcastId} from '${lifeCycleStatus}' to '${target}'...`);
+      let transitionRes;
+      try {
+        transitionRes = await youtube.liveBroadcasts.transition({
+          part: 'id,status',
+          id: broadcastId,
+          broadcastStatus: target
+        });
+      } catch (tErr) {
+        const tErrMsg = tErr.message || '';
+        if (tErrMsg.includes('redundantTransition') || tErrMsg.includes('already live')) {
+          return { success: true, lifeCycleStatus: 'live', alreadyLive: true };
+        }
+        // If auto-start is enabled, YouTube handles transition automatically once RTMP stream is active.
+        // Only force-disable autoStart if stream is confirmed active or user explicitly forces it.
+        if (tErrMsg.toLowerCase().includes('auto-start') || tErrMsg.toLowerCase().includes('autostart')) {
+          console.log(`[YouTubeService.transitionBroadcast] Auto-start is enabled for broadcast ${broadcastId}. Checking bound stream status before overriding...`);
+          let isStreamActive = false;
+          if (item.contentDetails?.boundStreamId) {
+            const boundStream = await this.getBoundStreamDetails(accessToken, item.contentDetails.boundStreamId);
+            isStreamActive = boundStream?.streamStatus === 'active';
+            console.log(`[YouTubeService.transitionBroadcast] Bound stream status: ${boundStream?.streamStatus || 'unknown'}`);
+          }
+
+          if (isStreamActive) {
+            console.log(`[YouTubeService.transitionBroadcast] Stream is active but auto-start hasn't triggered. Disabling auto-start to force transition...`);
+            try {
+              await youtube.liveBroadcasts.update({
+                part: 'id,snippet,contentDetails',
+                requestBody: {
+                  id: broadcastId,
+                  snippet: {
+                    title: item.snippet?.title || '',
+                    description: item.snippet?.description || '',
+                    scheduledStartTime: item.snippet?.scheduledStartTime || new Date(Date.now() + 60 * 1000).toISOString()
+                  },
+                  contentDetails: {
+                    enableAutoStart: false,
+                    enableAutoStop: item.contentDetails?.enableAutoStop !== false,
+                    recordFromStart: item.contentDetails?.recordFromStart !== false
+                  }
+                }
+              });
+              transitionRes = await youtube.liveBroadcasts.transition({
+                part: 'id,status',
+                id: broadcastId,
+                broadcastStatus: target
+              });
+            } catch (autoErr) {
+              console.warn(`[YouTubeService.transitionBroadcast] Disabling auto-start to force transition error:`, autoErr.message);
+              throw autoErr;
+            }
+          } else {
+            console.log(`[YouTubeService.transitionBroadcast] Auto-start is active; preserving enableAutoStart:true while YouTube buffers RTMP stream.`);
+            return { success: false, lifeCycleStatus, error: 'Auto-start enabled, waiting for RTMP stream to become active on YouTube' };
+          }
+        } else {
+          throw tErr;
+        }
+      }
+
+      const finalStatus = transitionRes?.data?.status?.lifeCycleStatus || target;
+      console.log(`[YouTubeService.transitionBroadcast] Successfully transitioned broadcast ${broadcastId} to '${finalStatus}'`);
+
+      if (finalStatus === 'testing' && targetStatus === 'live') {
+        console.log(`[YouTubeService.transitionBroadcast] Waiting 3 seconds in testing state before final transition to live...`);
+        await new Promise(r => setTimeout(r, 3000));
+        try {
+          const liveRes = await youtube.liveBroadcasts.transition({
+            part: 'id,status',
+            id: broadcastId,
+            broadcastStatus: 'live'
+          });
+          const liveStatus = liveRes.data?.status?.lifeCycleStatus || 'live';
+          console.log(`[YouTubeService.transitionBroadcast] Final live transition result: ${liveStatus}`);
+          return { success: true, lifeCycleStatus: liveStatus };
+        } catch (lErr) {
+          console.warn(`[YouTubeService.transitionBroadcast] Transition testing->live warning:`, lErr.message);
+        }
+      }
+
+      return { success: true, lifeCycleStatus: finalStatus };
+    } catch (err) {
+      const errMsg = err.message || '';
+      console.warn(`[YouTubeService.transitionBroadcast] Error transitioning broadcast ${broadcastId}:`, errMsg);
+      if (errMsg.includes('redundantTransition') || errMsg.includes('already live')) {
+        return { success: true, lifeCycleStatus: 'live', alreadyLive: true };
+      }
+      return { success: false, error: errMsg };
+    }
+  }
+
+  /**
+   * Get broadcast details with contentDetails and status
+   * @param {string} accessToken
+   * @param {string} broadcastId
+   */
+  async getBroadcastDetails(accessToken, broadcastId) {
+    if (!accessToken || !broadcastId) return null;
+    const oauth2Client = new google.auth.OAuth2();
+    oauth2Client.setCredentials({ access_token: accessToken });
+    const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+    try {
+      const res = await youtube.liveBroadcasts.list({
+        part: 'id,snippet,status,contentDetails',
+        id: broadcastId
+      });
+      return res.data?.items?.[0] || null;
+    } catch (err) {
+      console.warn(`[YouTubeService.getBroadcastDetails] Error:`, err.message);
+      return null;
+    }
+  }
+
+  /**
+   * Get bound liveStream details (stream key, ingestion URL, status)
+   * @param {string} accessToken
+   * @param {string} streamId
+   */
+  async getBoundStreamDetails(accessToken, streamId) {
+    if (!accessToken || !streamId) return null;
+    const oauth2Client = new google.auth.OAuth2();
+    oauth2Client.setCredentials({ access_token: accessToken });
+    const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+    try {
+      const res = await youtube.liveStreams.list({
+        part: 'id,cdn,status',
+        id: streamId
+      });
+      const item = res.data?.items?.[0];
+      if (!item) return null;
+      return {
+        id: item.id,
+        streamKey: item.cdn?.ingestionInfo?.streamName,
+        rtmpUrl: item.cdn?.ingestionInfo?.ingestionAddress,
+        backupRtmpUrl: item.cdn?.ingestionInfo?.backupIngestionAddress,
+        streamStatus: item.status?.streamStatus,
+        healthStatus: item.status?.healthStatus?.status
+      };
+    } catch (err) {
+      console.warn(`[YouTubeService.getBoundStreamDetails] Error:`, err.message);
+      return null;
+    }
+  }
+
+  /**
+   * Poll and ensure YouTube broadcast transitions to live once RTMP stream is receiving data
+   * Handles both enableAutoStart: true (waiting for active stream + auto-transition)
+   * and enableAutoStart: false (manual transition once stream is active).
+   * @param {string} accessToken
+   * @param {string} broadcastId
+   * @param {number} [maxAttempts=15]
+   * @param {number} [delayMs=4000]
+   */
+  async startBroadcastLive(accessToken, broadcastId, maxAttempts = 15, delayMs = 4000) {
+    if (!accessToken || !broadcastId) {
+      return { success: false, error: 'Missing accessToken or broadcastId' };
+    }
+
+    console.log(`[YouTubeService.startBroadcastLive] Starting live verification and transition for broadcast: ${broadcastId}`);
+
+    let activeStreamCount = 0;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      console.log(`[YouTubeService.startBroadcastLive] Verification attempt ${attempt}/${maxAttempts} for ${broadcastId}...`);
+
+      // 1. Check broadcast status directly
+      const bDetails = await this.getBroadcastDetails(accessToken, broadcastId);
+      const lifeCycleStatus = bDetails?.status?.lifeCycleStatus;
+      const isAutoStart = Boolean(bDetails?.contentDetails?.enableAutoStart);
+      const boundStreamId = bDetails?.contentDetails?.boundStreamId;
+
+      console.log(`[YouTubeService.startBroadcastLive] Broadcast status: '${lifeCycleStatus || 'unknown'}', autoStart: ${isAutoStart}, boundStream: ${boundStreamId || 'none'}`);
+
+      if (lifeCycleStatus === 'live') {
+        console.log(`[YouTubeService.startBroadcastLive] ✅ Broadcast ${broadcastId} is confirmed LIVE on YouTube Studio!`);
+        return { success: true, lifeCycleStatus: 'live' };
+      }
+
+      if (lifeCycleStatus === 'complete' || lifeCycleStatus === 'completed' || lifeCycleStatus === 'revoked') {
+        console.warn(`[YouTubeService.startBroadcastLive] Broadcast ${broadcastId} is in terminal state '${lifeCycleStatus}'.`);
+        return { success: false, lifeCycleStatus, error: `Broadcast is already ${lifeCycleStatus}` };
+      }
+
+      // 2. Check bound RTMP stream status
+      let streamStatus = 'unknown';
+      if (boundStreamId) {
+        const streamDetails = await this.getBoundStreamDetails(accessToken, boundStreamId);
+        streamStatus = streamDetails?.streamStatus || 'unknown';
+        console.log(`[YouTubeService.startBroadcastLive] Bound RTMP stream status on YouTube: '${streamStatus}'`);
+      }
+
+      if (streamStatus === 'active') {
+        activeStreamCount++;
+        console.log(`[YouTubeService.startBroadcastLive] RTMP stream is ACTIVE on YouTube CDN (detected ${activeStreamCount} times)`);
+
+        // If autoStart is enabled, YouTube usually flips to 'live' automatically within 5-15s of active stream
+        // If after 3 active detections (approx 12s) it's still not live, attempt fallback manual transition
+        if (isAutoStart && activeStreamCount < 3) {
+          console.log(`[YouTubeService.startBroadcastLive] Waiting for YouTube auto-start engine to flip status to LIVE...`);
+        } else {
+          // Manual transition or fallback
+          console.log(`[YouTubeService.startBroadcastLive] Triggering transitionBroadcast to 'live'...`);
+          const transResult = await this.transitionBroadcast(accessToken, broadcastId, 'live');
+          if (transResult.success && transResult.lifeCycleStatus === 'live') {
+            console.log(`[YouTubeService.startBroadcastLive] ✅ Broadcast ${broadcastId} successfully transitioned to LIVE on YouTube Studio!`);
+            return transResult;
+          }
+        }
+      } else {
+        // Stream not yet active on YouTube side (still buffering RTMP handshake)
+        if (!isAutoStart && attempt >= 3) {
+          // Attempt manual transition anyway if manual mode
+          const transResult = await this.transitionBroadcast(accessToken, broadcastId, 'live');
+          if (transResult.success && transResult.lifeCycleStatus === 'live') {
+            return transResult;
+          }
+        }
+      }
+
+      if (attempt < maxAttempts) {
+        console.log(`[YouTubeService.startBroadcastLive] Waiting for live status (broadcast: ${lifeCycleStatus || 'unknown'}, stream: ${streamStatus}). Retrying in ${delayMs / 1000}s...`);
+        await new Promise(r => setTimeout(r, delayMs));
+      }
+    }
+
+    // Final check
+    const finalBroadcast = await this.getBroadcastDetails(accessToken, broadcastId);
+    const finalStatus = finalBroadcast?.status?.lifeCycleStatus;
+    if (finalStatus === 'live') {
+      return { success: true, lifeCycleStatus: 'live' };
+    }
+
+    return { 
+      success: false, 
+      lifeCycleStatus: finalStatus || 'unknown',
+      error: `Broadcast status after ${maxAttempts} attempts is '${finalStatus || 'unknown'}'` 
+    };
+  }
+
+  /**
+   * Delete a broadcast
+   * @param {string} accessToken - Access token
+   * @param {string} broadcastId - Broadcast ID to delete
+   * @returns {Promise<boolean>} True if deleted successfully
+   */
+  async deleteBroadcast(accessToken, broadcastId) {
+    const oauth2Client = new google.auth.OAuth2();
+    oauth2Client.setCredentials({ access_token: accessToken });
+    
+    const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+    
+    try {
+      await youtube.liveBroadcasts.delete({
+        id: broadcastId
+      });
+      console.log(`[YouTubeService.deleteBroadcast] Deleted broadcast on YouTube: ${broadcastId}`);
+      return true;
+    } catch (err) {
+      if (err.code === 404 || err.status === 404 || (err.message && err.message.toLowerCase().includes('not found'))) {
+        console.log(`[YouTubeService.deleteBroadcast] Broadcast ${broadcastId} already deleted or not found on YouTube (treated as success)`);
+        return true;
+      }
+      
+      // Fallback: If liveBroadcasts.delete fails (e.g. broadcast state error or converted into video), try deleting via videos API
+      try {
+        console.log(`[YouTubeService.deleteBroadcast] liveBroadcasts.delete failed (${err.message}), attempting videos.delete fallback for ${broadcastId}...`);
+        await youtube.videos.delete({ id: broadcastId });
+        console.log(`[YouTubeService.deleteBroadcast] Deleted via videos.delete on YouTube: ${broadcastId}`);
+        return true;
+      } catch (vidErr) {
+        if (vidErr.code === 404 || vidErr.status === 404 || (vidErr.message && vidErr.message.toLowerCase().includes('not found'))) {
+          console.log(`[YouTubeService.deleteBroadcast] Video ${broadcastId} already deleted or not found (treated as success)`);
+          return true;
+        }
+        console.warn(`[YouTubeService.deleteBroadcast] videos.delete fallback also failed for ${broadcastId}:`, vidErr.message);
+      }
+
+      console.error(`[YouTubeService.deleteBroadcast] Error deleting broadcast ${broadcastId}:`, err.message);
+      throw err;
+    }
+  }
+
+  /**
+   * Update a broadcast
+   * @param {string} accessToken - Access token
+   * @param {string} broadcastId - Broadcast ID to update
+   * @param {Object} data - Update data
+   * @param {string} [data.title] - New title
+   * @param {string} [data.description] - New description
+   * @param {string} [data.scheduledStartTime] - New scheduled start time
+   * @param {string} [data.privacyStatus] - New privacy status
+   * @param {string} [data.categoryId] - Category ID
+   * @returns {Promise<Object>} Updated broadcast info
+   */
+  async updateBroadcast(accessToken, broadcastId, { title, description, scheduledStartTime, privacyStatus, categoryId, tags, alteredContent }) {
+    const oauth2Client = new google.auth.OAuth2();
+    oauth2Client.setCredentials({ access_token: accessToken });
+    
+    const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+    
+    console.log('[YouTubeService.updateBroadcast] Updating broadcast:', broadcastId, 'alteredContent:', !!alteredContent);
+    console.log('[YouTubeService.updateBroadcast] Input categoryId:', categoryId);
+    
+    // First, get the current broadcast to preserve existing values
+    const currentResponse = await youtube.liveBroadcasts.list({
+      part: 'snippet,status',
+      id: broadcastId
+    });
+    
+    if (!currentResponse.data.items || currentResponse.data.items.length === 0) {
+      throw new Error('Broadcast not found');
+    }
+    
+    const current = currentResponse.data.items[0];
+    console.log('[YouTubeService.updateBroadcast] Current categoryId:', current.snippet.categoryId);
+    
+    // Determine final categoryId - use provided value or keep existing
+    const finalCategoryId = categoryId !== undefined && categoryId !== null && categoryId !== '' 
+      ? String(categoryId) 
+      : (current.snippet.categoryId || '22');
+    
+    console.log('[YouTubeService.updateBroadcast] Final categoryId:', finalCategoryId);
+    
+    let parsedStartTime = current.snippet.scheduledStartTime;
+    if (scheduledStartTime) {
+      try {
+        const d = parseWIBDateTimeLocal(scheduledStartTime) || new Date(scheduledStartTime);
+        if (!isNaN(d.getTime())) {
+          parsedStartTime = d.toISOString();
+        }
+      } catch (e) {}
+    }
+
+    let finalDesc = description !== undefined ? description : current.snippet.description;
+    if (alteredContent && !finalDesc.includes('Altered or synthetic content')) {
+      finalDesc = (finalDesc ? finalDesc + '\n\n' : '') + '✨ This content is created or modified with AI / altered or synthetic media.';
+    }
+
+    const updateRequest = {
+      id: broadcastId,
+      snippet: {
+        title: title !== undefined && title !== '' ? title : current.snippet.title,
+        description: finalDesc,
+        scheduledStartTime: parsedStartTime
+      },
+      status: {
+        privacyStatus: privacyStatus !== undefined && privacyStatus !== '' ? privacyStatus : current.status.privacyStatus,
+        selfDeclaredMadeForKids: current.status.selfDeclaredMadeForKids || false
+      }
+    };
+    
+    console.log('[YouTubeService.updateBroadcast] Update request:', JSON.stringify(updateRequest, null, 2));
+    
+    // Update the broadcast (for title, description, scheduledStartTime, privacyStatus)
+    const response = await youtube.liveBroadcasts.update({
+      part: 'snippet,status',
+      requestBody: updateRequest
+    });
+    
+    const broadcast = response.data;
+    
+    // Update category and tags using Videos API
+    let actualCategoryId = broadcast.snippet.categoryId || '22';
+    try {
+      console.log('[YouTubeService.updateBroadcast] Updating video category and metadata via Videos API...');
+      const categoryResult = await this.updateVideoCategory(accessToken, broadcastId, finalCategoryId, tags, finalDesc, alteredContent);
+      actualCategoryId = categoryResult.categoryId;
+      console.log('[YouTubeService.updateBroadcast] Video metadata updated successfully to category:', actualCategoryId);
+    } catch (categoryError) {
+      console.error('[YouTubeService.updateBroadcast] Failed to update category/tags:', categoryError.message);
+    }
+    
+    console.log('[YouTubeService.updateBroadcast] Final categoryId:', actualCategoryId);
+    
+    return {
+      id: broadcast.id,
+      title: broadcast.snippet.title,
+      description: broadcast.snippet.description,
+      scheduledStartTime: broadcast.snippet.scheduledStartTime,
+      privacyStatus: broadcast.status.privacyStatus,
+      categoryId: actualCategoryId,
+      tags: broadcast.snippet.tags || []
+    };
+  }
+
+  /**
+   * Update video category, tags, and AI disclosure description using Videos API
+   * NOTE: Do NOT send containsSyntheticMedia in status because YouTube Data API v3 rejects it with 400 Bad Request
+   * @param {string} accessToken - Access token
+   * @param {string} videoId - Video/Broadcast ID
+   * @param {string} categoryId - Category ID (e.g., '22' for People & Blogs)
+   * @param {Array<string>|null} tags - Tags list
+   * @param {string|null} description - Video description
+   * @param {boolean} alteredContent - Whether altered/synthetic content is declared
+   * @returns {Promise<Object>} Updated video info
+   */
+  async updateVideoCategory(accessToken, videoId, categoryId, tags = null, description = null, alteredContent = false) {
+    const oauth2Client = new google.auth.OAuth2();
+    oauth2Client.setCredentials({ access_token: accessToken });
+    
+    const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+    
+    console.log('[YouTubeService.updateVideoCategory] Updating video:', videoId, 'to category:', categoryId, 'tags count:', tags ? (Array.isArray(tags) ? tags.length : 1) : 0, 'alteredContent:', alteredContent);
+    
+    // First, get the current video to preserve existing values
+    const currentResponse = await youtube.videos.list({
+      part: 'snippet,status',
+      id: videoId
+    });
+    
+    if (!currentResponse.data.items || currentResponse.data.items.length === 0) {
+      console.warn('[YouTubeService.updateVideoCategory] Video not yet found in index, skipping category update for:', videoId);
+      return { id: videoId, categoryId };
+    }
+    
+    const current = currentResponse.data.items[0];
+    let finalTags = [];
+    if (tags && Array.isArray(tags)) {
+      finalTags = [...tags];
+    } else if (tags && typeof tags === 'string') {
+      try {
+        const parsed = JSON.parse(tags);
+        finalTags = Array.isArray(parsed) ? parsed : [tags];
+      } catch (e) {
+        finalTags = tags.split(/[\r\n,]+/).map(t => t.trim()).filter(Boolean);
+      }
+    } else {
+      finalTags = current.snippet?.tags || [];
+    }
+
+    // If alteredContent is true, ensure official YouTube AI disclosure tags are present
+    if (alteredContent) {
+      const aiTags = ['AlteredOrSyntheticContent', 'AI Generated', 'Synthetic Media'];
+      aiTags.forEach(t => {
+        if (!finalTags.includes(t)) finalTags.push(t);
+      });
+    }
+    
+    let finalDesc = description !== null ? description : (current.snippet?.description || '');
+    if (alteredContent && !finalDesc.includes('Altered or synthetic content')) {
+      finalDesc = (finalDesc ? finalDesc + '\n\n' : '') + '✨ This content is created or modified with AI / altered or synthetic media.';
+    }
+
+    // Update snippet and status (including containsSyntheticMedia for AI content disclosure)
+    let video;
+    try {
+      const statusPayload = {
+        privacyStatus: current.status?.privacyStatus || 'unlisted',
+        selfDeclaredMadeForKids: current.status?.selfDeclaredMadeForKids !== undefined ? Boolean(current.status.selfDeclaredMadeForKids) : false,
+        containsSyntheticMedia: Boolean(alteredContent)
+      };
+      console.log('[YouTubeService.updateVideoCategory] Updating with part: snippet,status. containsSyntheticMedia:', statusPayload.containsSyntheticMedia);
+
+      const response = await youtube.videos.update({
+        part: 'snippet,status',
+        requestBody: {
+          id: videoId,
+          snippet: {
+            title: current.snippet?.title || '',
+            description: finalDesc,
+            categoryId: categoryId || current.snippet?.categoryId || '22',
+            tags: finalTags
+          },
+          status: statusPayload
+        }
+      });
+      video = response.data;
+      console.log('[YouTubeService.updateVideoCategory] Updated snippet & status successfully! containsSyntheticMedia:', video.status?.containsSyntheticMedia);
+    } catch (statusErr) {
+      console.warn('[YouTubeService.updateVideoCategory] Update with status failed (' + statusErr.message + '), falling back to snippet only');
+      const response = await youtube.videos.update({
+        part: 'snippet',
+        requestBody: {
+          id: videoId,
+          snippet: {
+            title: current.snippet?.title || '',
+            description: finalDesc,
+            categoryId: categoryId || current.snippet?.categoryId || '22',
+            tags: finalTags
+          }
+        }
+      });
+      video = response.data;
+    }
+    console.log('[YouTubeService.updateVideoCategory] Updated video metadata successfully to category:', video.snippet?.categoryId, 'tags count:', video.snippet?.tags?.length || 0);
+    
+    return {
+      id: video.id,
+      title: video.snippet?.title,
+      categoryId: video.snippet?.categoryId,
+      tags: video.snippet?.tags || []
+    };
+  }
+
+  /**
+   * Get channel default settings for broadcasts
+   * Fetches from channel branding settings and last broadcast for better defaults
+   * @param {string} accessToken - Access token
+   * @returns {Promise<{title: string, description: string, tags: string[], monetizationEnabled: boolean, alteredContent: boolean, categoryId: string}>}
+   */
+  async getChannelDefaults(accessToken) {
+    const oauth2Client = new google.auth.OAuth2();
+    oauth2Client.setCredentials({ access_token: accessToken });
+    
+    const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+    
+    // Fetch channel with brandingSettings and status for monetization info
+    const channelResponse = await youtube.channels.list({
+      part: 'brandingSettings,status,snippet,contentDetails',
+      mine: true
+    });
+    
+    if (!channelResponse.data.items || channelResponse.data.items.length === 0) {
+      throw new Error('No channel found for this account');
+    }
+    
+    const channel = channelResponse.data.items[0];
+    const brandingSettings = channel.brandingSettings || {};
+    const channelSettings = brandingSettings.channel || {};
+    
+    // Try to get defaults from the most recent broadcast or recent upload
+    let lastBroadcastDefaults = { title: '', description: '', tags: [], categoryId: null };
+    try {
+      // 1. Fetch live broadcasts with mine: true across all and complete statuses
+      const broadcastQueries = [
+        youtube.liveBroadcasts.list({ part: 'snippet', mine: true, broadcastStatus: 'all', maxResults: 15 }),
+        youtube.liveBroadcasts.list({ part: 'snippet', mine: true, broadcastStatus: 'complete', maxResults: 15 })
+      ];
+      
+      const settledBroadcasts = await Promise.allSettled(broadcastQueries);
+      const allBroadcastItems = [];
+      const seenBroadcastIds = new Set();
+      for (const res of settledBroadcasts) {
+        if (res.status === 'fulfilled' && res.value?.data?.items) {
+          for (const item of res.value.data.items) {
+            if (item.id && !seenBroadcastIds.has(item.id)) {
+              seenBroadcastIds.add(item.id);
+              allBroadcastItems.push(item);
+            }
+          }
+        }
+      }
+
+      if (allBroadcastItems.length > 0) {
+        // Sort descending: newest scheduledStartTime or publishedAt first!
+        allBroadcastItems.sort((a, b) => {
+          const timeA = new Date(a.snippet?.scheduledStartTime || a.snippet?.publishedAt || 0).getTime();
+          const timeB = new Date(b.snippet?.scheduledStartTime || b.snippet?.publishedAt || 0).getTime();
+          return timeB - timeA;
+        });
+
+        for (const bc of allBroadcastItems) {
+          if (!lastBroadcastDefaults.title && bc.snippet?.title) {
+            lastBroadcastDefaults.title = bc.snippet.title;
+          }
+          if (!lastBroadcastDefaults.description && bc.snippet?.description && bc.snippet.description.trim()) {
+            lastBroadcastDefaults.description = bc.snippet.description.trim();
+          }
+          if (bc.snippet?.categoryId && !lastBroadcastDefaults.categoryId) {
+            lastBroadcastDefaults.categoryId = bc.snippet.categoryId;
+          }
+
+          // Fetch actual tags and full description from Videos API if needed
+          if (bc.id && (lastBroadcastDefaults.tags.length === 0 || !lastBroadcastDefaults.description)) {
+            try {
+              const videoRes = await youtube.videos.list({
+                part: 'snippet',
+                id: bc.id
+              });
+              const vSnippet = videoRes.data?.items?.[0]?.snippet;
+              if (vSnippet) {
+                if (lastBroadcastDefaults.tags.length === 0 && vSnippet.tags?.length > 0) {
+                  lastBroadcastDefaults.tags = vSnippet.tags;
+                  console.log(`[YouTubeService.getChannelDefaults] Found ${lastBroadcastDefaults.tags.length} tags from broadcast ${bc.id}`);
+                }
+                if (!lastBroadcastDefaults.description && vSnippet.description && vSnippet.description.trim()) {
+                  lastBroadcastDefaults.description = vSnippet.description.trim();
+                }
+                if (!lastBroadcastDefaults.categoryId && vSnippet.categoryId) {
+                  lastBroadcastDefaults.categoryId = vSnippet.categoryId;
+                }
+              }
+            } catch (vErr) {
+              // Ignore individual video fetch error
+            }
+          }
+          if (lastBroadcastDefaults.title && lastBroadcastDefaults.description && lastBroadcastDefaults.tags.length > 0) {
+            break;
+          }
+        }
+      }
+
+      // 2. Fallback: Check uploads playlist if description still empty (costs only 1-2 quota units, reverse-chronological)
+      if ((lastBroadcastDefaults.tags.length === 0 || !lastBroadcastDefaults.description) && channel.contentDetails?.relatedPlaylists?.uploads) {
+        try {
+          const uploadsRes = await youtube.playlistItems.list({
+            part: 'snippet,contentDetails',
+            playlistId: channel.contentDetails.relatedPlaylists.uploads,
+            maxResults: 10
+          });
+          if (uploadsRes.data?.items?.length > 0) {
+            const vidIds = uploadsRes.data.items.map(it => it.contentDetails?.videoId).filter(Boolean);
+            if (vidIds.length > 0) {
+              const vidsRes = await youtube.videos.list({
+                part: 'snippet',
+                id: vidIds.join(',')
+              });
+              for (const vItem of (vidsRes.data?.items || [])) {
+                if (!lastBroadcastDefaults.title && vItem.snippet?.title) {
+                  lastBroadcastDefaults.title = vItem.snippet.title;
+                }
+                if (!lastBroadcastDefaults.description && vItem.snippet?.description && vItem.snippet.description.trim()) {
+                  lastBroadcastDefaults.description = vItem.snippet.description.trim();
+                }
+                if (lastBroadcastDefaults.tags.length === 0 && vItem.snippet?.tags?.length > 0) {
+                  lastBroadcastDefaults.tags = vItem.snippet.tags;
+                  console.log(`[YouTubeService.getChannelDefaults] Found ${lastBroadcastDefaults.tags.length} tags from recent upload ${vItem.id}`);
+                }
+                if (!lastBroadcastDefaults.categoryId && vItem.snippet?.categoryId) {
+                  lastBroadcastDefaults.categoryId = vItem.snippet.categoryId;
+                }
+                if (lastBroadcastDefaults.tags.length > 0 && lastBroadcastDefaults.description) {
+                  break;
+                }
+              }
+            }
+          }
+        } catch (upErr) {
+          // Ignore
+        }
+      }
+    } catch (err) {
+      console.log('[YouTubeService] Could not fetch last broadcast for defaults:', err.message);
+    }
+    
+    // Use channel keywords as fallback for tags
+    const channelKeywords = channelSettings.keywords 
+      ? channelSettings.keywords.split(/[,\s]+/).map(t => t.trim().replace(/^"|"$/g, '')).filter(t => t)
+      : [];
+    
+    // Return combined defaults - ONLY use broadcast/video title & description!
+    // NEVER fall back to channel.snippet.description or channelSettings.description (which is the channel About page bio)
+    return {
+      title: lastBroadcastDefaults.title || '',
+      description: lastBroadcastDefaults.description || '',
+      tags: lastBroadcastDefaults.tags.length > 0 ? lastBroadcastDefaults.tags : channelKeywords,
+      monetizationEnabled: channel.status?.isLinked || false,
+      alteredContent: false, // YouTube API doesn't expose this default, user must set
+      categoryId: lastBroadcastDefaults.categoryId || channelSettings.defaultCategory || '22' // Default to People & Blogs category
+    };
+  }
+
+  /**
+   * Upload thumbnail for a broadcast
+   * @param {string} accessToken - Access token
+   * @param {string} broadcastId - Broadcast ID (video ID)
+   * @param {Buffer} imageBuffer - Image buffer
+   * @param {string} mimeType - Image mime type (image/jpeg or image/png)
+   * @returns {Promise<{thumbnailUrl: string}>}
+   */
+  async uploadThumbnail(accessToken, broadcastId, imageBuffer, mimeType = 'image/jpeg') {
+    try {
+      const oauth2Client = new google.auth.OAuth2();
+      oauth2Client.setCredentials({ access_token: accessToken });
+      
+      const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+      
+      console.log(`[YouTubeService.uploadThumbnail] Uploading thumbnail for broadcast ${broadcastId}, size: ${imageBuffer.length} bytes, type: ${mimeType}`);
+      
+      // Validate buffer
+      if (!imageBuffer || imageBuffer.length === 0) {
+        throw new Error('Image buffer is empty');
+      }
+      
+      const response = await youtube.thumbnails.set({
+        videoId: broadcastId,
+        media: {
+          mimeType: mimeType,
+          body: require('stream').Readable.from(imageBuffer)
+        }
+      });
+      
+      console.log('[YouTubeService.uploadThumbnail] Response:', JSON.stringify(response.data, null, 2));
+      
+      return {
+        thumbnailUrl: response.data.items?.[0]?.default?.url || response.data.items?.[0]?.medium?.url || ''
+      };
+    } catch (error) {
+      console.error('[YouTubeService.uploadThumbnail] Error:', error.message);
+      if (error.response) {
+        console.error('[YouTubeService.uploadThumbnail] Response error:', JSON.stringify(error.response.data, null, 2));
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Get broadcast status by ID
+   * Used for status sync to check if broadcast is still active
+   * @param {string} accessToken - Access token
+   * @param {string} broadcastId - Broadcast ID
+   * @returns {Promise<{lifeCycleStatus: string, exists: boolean, error?: string}>}
+   */
+  async getBroadcastStatus(accessToken, broadcastId) {
+    try {
+      const oauth2Client = new google.auth.OAuth2();
+      oauth2Client.setCredentials({ access_token: accessToken });
+      
+      const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+      
+      const response = await youtube.liveBroadcasts.list({
+        part: 'status',
+        id: broadcastId
+      });
+      
+      if (!response.data.items || response.data.items.length === 0) {
+        return { exists: false, lifeCycleStatus: null };
+      }
+      
+      const broadcast = response.data.items[0];
+      return {
+        exists: true,
+        lifeCycleStatus: broadcast.status.lifeCycleStatus
+      };
+    } catch (error) {
+      // Check for quota exceeded error
+      if (error.code === 403 && error.message?.includes('quota')) {
+        return { exists: true, lifeCycleStatus: null, error: 'quota_exceeded' };
+      }
+      // For other errors, assume broadcast might still exist
+      return { exists: true, lifeCycleStatus: null, error: error.message };
+    }
+  }
+
+  /**
+   * Find broadcast by stream key
+   * Searches active broadcasts (live, testing, ready) to find one matching the stream key
+   * @param {string} accessToken - Access token
+   * @param {string} streamKey - Stream key to search for
+   * @returns {Promise<{broadcastId: string, lifeCycleStatus: string} | null>}
+   */
+  async findBroadcastByStreamKey(accessToken, streamKey) {
+    try {
+      const oauth2Client = new google.auth.OAuth2();
+      oauth2Client.setCredentials({ access_token: accessToken });
+      
+      const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+      
+      // Get all active broadcasts (live, testing, ready, upcoming)
+      const statuses = ['active', 'upcoming'];
+      let allBroadcasts = [];
+      
+      for (const status of statuses) {
+        try {
+          const response = await youtube.liveBroadcasts.list({
+            part: 'status,contentDetails',
+            broadcastStatus: status,
+            maxResults: 50
+          });
+          
+          if (response.data.items) {
+            allBroadcasts = allBroadcasts.concat(response.data.items);
+          }
+        } catch (err) {
+          console.log(`[YouTubeService] Error fetching ${status} broadcasts:`, err.message);
+        }
+      }
+      
+      // For each broadcast, get the bound stream and check stream key
+      for (const broadcast of allBroadcasts) {
+        if (!broadcast.contentDetails?.boundStreamId) continue;
+        
+        try {
+          const streamResponse = await youtube.liveStreams.list({
+            part: 'cdn',
+            id: broadcast.contentDetails.boundStreamId
+          });
+          
+          if (streamResponse.data.items && streamResponse.data.items.length > 0) {
+            const stream = streamResponse.data.items[0];
+            const broadcastStreamKey = stream.cdn?.ingestionInfo?.streamName;
+            
+            if (broadcastStreamKey === streamKey) {
+              return {
+                broadcastId: broadcast.id,
+                lifeCycleStatus: broadcast.status.lifeCycleStatus
+              };
+            }
+          }
+        } catch (err) {
+          console.log(`[YouTubeService] Error fetching stream for broadcast ${broadcast.id}:`, err.message);
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('[YouTubeService] Error finding broadcast by stream key:', error.message);
+      return null;
+    }
+  }
+
+  /**
+   * List active broadcasts (live and testing status)
+   * Used for status sync to monitor ongoing broadcasts
+   * @param {string} accessToken - Access token
+   * @returns {Promise<Array<{id: string, streamKey: string, lifeCycleStatus: string}>>}
+   */
+  async listActiveBroadcasts(accessToken) {
+    try {
+      const oauth2Client = new google.auth.OAuth2();
+      oauth2Client.setCredentials({ access_token: accessToken });
+      
+      const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+      
+      // Get active broadcasts (includes live and testing)
+      const response = await youtube.liveBroadcasts.list({
+        part: 'status,contentDetails',
+        broadcastStatus: 'active',
+        maxResults: 50
+      });
+      
+      const broadcasts = response.data.items || [];
+      const result = [];
+      
+      // Get stream key for each broadcast
+      for (const broadcast of broadcasts) {
+        let streamKey = '';
+        
+        if (broadcast.contentDetails?.boundStreamId) {
+          try {
+            const streamResponse = await youtube.liveStreams.list({
+              part: 'cdn',
+              id: broadcast.contentDetails.boundStreamId
+            });
+            
+            if (streamResponse.data.items && streamResponse.data.items.length > 0) {
+              streamKey = streamResponse.data.items[0].cdn?.ingestionInfo?.streamName || '';
+            }
+          } catch (err) {
+            console.log(`[YouTubeService] Error fetching stream for broadcast ${broadcast.id}:`, err.message);
+          }
+        }
+        
+        result.push({
+          id: broadcast.id,
+          streamKey,
+          lifeCycleStatus: broadcast.status.lifeCycleStatus
+        });
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('[YouTubeService] Error listing active broadcasts:', error.message);
+      return [];
+    }
+  }
+
+  /**
+   * Update broadcast/video privacy status to unlisted
+   * Used to unlist live replay once stream ends
+   * Uses Videos API instead of LiveBroadcasts API for better compatibility
+   * @param {string} accessToken - Access token
+   * @param {string} videoId - Video/Broadcast ID
+   * @param {number} retryCount - Current retry count (for delayed processing)
+   * @returns {Promise<{success: boolean, error?: string, needsRetry?: boolean}>}
+   */
+  async unlistBroadcast(accessToken, videoId, retryCount = 0) {
+    const maxRetries = 3;
+    
+    try {
+      // Validate inputs
+      if (!accessToken || !videoId) {
+        console.error('[YouTubeService.unlistBroadcast] Missing required parameters');
+        return { success: false, error: 'Missing accessToken or videoId' };
+      }
+      
+      const oauth2Client = new google.auth.OAuth2();
+      oauth2Client.setCredentials({ access_token: accessToken });
+      
+      const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+      
+      console.log(`[YouTubeService.unlistBroadcast] Unlisting video ${videoId} (attempt ${retryCount + 1}/${maxRetries + 1})`);
+      
+      // Use Videos API instead of LiveBroadcasts API
+      // This works better for completed broadcasts/replays
+      const currentResponse = await youtube.videos.list({
+        part: 'snippet,status',
+        id: videoId
+      });
+      
+      if (!currentResponse.data.items || currentResponse.data.items.length === 0) {
+        console.log(`[YouTubeService.unlistBroadcast] Video ${videoId} not found yet`);
+        
+        // Video might not be available yet (processing), retry if within limit
+        if (retryCount < maxRetries) {
+          console.log(`[YouTubeService.unlistBroadcast] Video not ready, will retry`);
+          return { success: false, needsRetry: true, error: 'Video not ready yet' };
+        }
+        
+        return { success: false, error: 'Video not found after retries' };
+      }
+      
+      const current = currentResponse.data.items[0];
+      
+      // Validate video data
+      if (!current.status || !current.snippet) {
+        console.error(`[YouTubeService.unlistBroadcast] Invalid video data for ${videoId}`);
+        return { success: false, error: 'Invalid video data' };
+      }
+      
+      // Check if already unlisted
+      if (current.status.privacyStatus === 'unlisted') {
+        console.log(`[YouTubeService.unlistBroadcast] Video ${videoId} is already unlisted`);
+        return { success: true };
+      }
+      
+      // Check if video is still processing
+      if (current.status.uploadStatus === 'processing') {
+        console.log(`[YouTubeService.unlistBroadcast] Video ${videoId} is still processing`);
+        
+        if (retryCount < maxRetries) {
+          console.log(`[YouTubeService.unlistBroadcast] Will retry after processing completes`);
+          return { success: false, needsRetry: true, error: 'Video still processing' };
+        }
+      }
+      
+      // Build update request with safe defaults
+      const updateRequest = {
+        id: videoId,
+        snippet: {
+          title: current.snippet.title || 'Untitled',
+          description: current.snippet.description || '',
+          categoryId: current.snippet.categoryId || '22'
+        },
+        status: {
+          privacyStatus: 'unlisted',
+          selfDeclaredMadeForKids: current.status.selfDeclaredMadeForKids || false
+        }
+      };
+      
+      // Add tags if they exist
+      if (current.snippet.tags && Array.isArray(current.snippet.tags)) {
+        updateRequest.snippet.tags = current.snippet.tags;
+      }
+      
+      // Preserve embeddable and publicStatsViewable if they exist
+      if (current.status.embeddable !== undefined) {
+        updateRequest.status.embeddable = current.status.embeddable;
+      }
+      if (current.status.publicStatsViewable !== undefined) {
+        updateRequest.status.publicStatsViewable = current.status.publicStatsViewable;
+      }
+      
+      // Attempt to update
+      await youtube.videos.update({
+        part: 'snippet,status',
+        requestBody: updateRequest
+      });
+      
+      console.log(`[YouTubeService.unlistBroadcast] Successfully unlisted video ${videoId}`);
+      return { success: true };
+      
+    } catch (error) {
+      const errorMessage = error.message || 'Unknown error';
+      console.error(`[YouTubeService.unlistBroadcast] Error unlisting video ${videoId}:`, errorMessage);
+      
+      // Check for specific error types
+      if (error.code === 403) {
+        // Quota exceeded or permission denied
+        if (errorMessage.includes('quota')) {
+          return { success: false, error: 'API quota exceeded', needsRetry: false };
+        }
+        return { success: false, error: 'Permission denied', needsRetry: false };
+      }
+      
+      if (error.code === 401) {
+        // Token expired
+        return { success: false, error: 'Token expired', needsRetry: false };
+      }
+      
+      // Check if it's a retryable error
+      const isRetryable = 
+        error.code === 404 ||
+        error.code === 503 ||
+        errorMessage.includes('not found') ||
+        errorMessage.includes('processing') ||
+        errorMessage.includes('timeout') ||
+        errorMessage.includes('ECONNRESET');
+      
+      if (isRetryable && retryCount < maxRetries) {
+        console.log(`[YouTubeService.unlistBroadcast] Retryable error, will retry`);
+        return { success: false, needsRetry: true, error: errorMessage };
+      }
+      
+      return { success: false, error: errorMessage, needsRetry: false };
+    }
+  }
+
+  /**
+   * Get live stream statistics (viewers, health, etc.)
+   * @param {string} accessToken - Access token
+   * @param {string} broadcastId - Broadcast ID
+   * @returns {Promise<{concurrentViewers: number, totalChatMessages: number, streamHealth: string, streamHealthStatus: object}>}
+   */
+  async getLiveStreamStats(accessToken, broadcastId) {
+    try {
+      const oauth2Client = new google.auth.OAuth2();
+      oauth2Client.setCredentials({ access_token: accessToken });
+      
+      const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+      
+      // Get broadcast details with liveStreamingDetails
+      const broadcastResponse = await youtube.liveBroadcasts.list({
+        part: 'snippet,status,statistics,contentDetails',
+        id: broadcastId
+      });
+      
+      if (!broadcastResponse.data.items || broadcastResponse.data.items.length === 0) {
+        return { error: 'Broadcast not found' };
+      }
+      
+      const broadcast = broadcastResponse.data.items[0];
+      const lifeCycleStatus = broadcast.status?.lifeCycleStatus;
+      
+      // Get video statistics for concurrent viewers
+      const videoResponse = await youtube.videos.list({
+        part: 'liveStreamingDetails,statistics',
+        id: broadcastId
+      });
+      
+      let concurrentViewers = 0;
+      let totalChatMessages = 0;
+      
+      if (videoResponse.data.items && videoResponse.data.items.length > 0) {
+        const video = videoResponse.data.items[0];
+        concurrentViewers = parseInt(video.liveStreamingDetails?.concurrentViewers || '0');
+        // Note: totalChatMessages is not directly available, using activeLiveChatId presence as indicator
+      }
+      
+      // Get stream health if broadcast has bound stream
+      let streamHealth = 'unknown';
+      let streamHealthStatus = {};
+      
+      if (broadcast.contentDetails?.boundStreamId) {
+        try {
+          const streamResponse = await youtube.liveStreams.list({
+            part: 'status,cdn,snippet',
+            id: broadcast.contentDetails.boundStreamId
+          });
+          
+          if (streamResponse.data.items && streamResponse.data.items.length > 0) {
+            const stream = streamResponse.data.items[0];
+            streamHealth = stream.status?.streamStatus || 'unknown';
+            streamHealthStatus = {
+              streamStatus: stream.status?.streamStatus,
+              healthStatus: stream.status?.healthStatus?.status,
+              configurationIssues: stream.status?.healthStatus?.configurationIssues || [],
+              lastUpdateTime: stream.status?.healthStatus?.lastUpdateTimeSeconds
+            };
+          }
+        } catch (err) {
+          console.error('[YouTubeService.getLiveStreamStats] Error fetching stream health:', err.message);
+        }
+      }
+      
+      return {
+        broadcastId,
+        lifeCycleStatus,
+        concurrentViewers,
+        streamHealth,
+        streamHealthStatus,
+        title: broadcast.snippet?.title,
+        thumbnailUrl: broadcast.snippet?.thumbnails?.medium?.url || broadcast.snippet?.thumbnails?.default?.url
+      };
+    } catch (error) {
+      console.error('[YouTubeService.getLiveStreamStats] Error:', error.message);
+      
+      // Check for quota exceeded
+      if (error.code === 403 && error.message?.includes('quota')) {
+        return { error: 'quota_exceeded' };
+      }
+      
+      return { error: error.message };
+    }
+  }
+
+  /**
+   * Get all live broadcasts with their stats for a channel
+   * @param {string} accessToken - Access token
+   * @returns {Promise<Array<{broadcastId: string, title: string, concurrentViewers: number, streamHealth: string}>>}
+   */
+  async getAllLiveBroadcastsWithStats(accessToken) {
+    try {
+      const oauth2Client = new google.auth.OAuth2();
+      oauth2Client.setCredentials({ access_token: accessToken });
+      
+      const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+      
+      // Get active broadcasts (live and testing)
+      const broadcastResponse = await youtube.liveBroadcasts.list({
+        part: 'snippet,status,contentDetails',
+        broadcastStatus: 'active',
+        maxResults: 50
+      });
+      
+      const broadcasts = broadcastResponse.data.items || [];
+      const results = [];
+      
+      for (const broadcast of broadcasts) {
+        // Get video stats for concurrent viewers
+        let concurrentViewers = 0;
+        try {
+          const videoResponse = await youtube.videos.list({
+            part: 'liveStreamingDetails',
+            id: broadcast.id
+          });
+          
+          if (videoResponse.data.items && videoResponse.data.items.length > 0) {
+            concurrentViewers = parseInt(videoResponse.data.items[0].liveStreamingDetails?.concurrentViewers || '0');
+          }
+        } catch (err) {
+          console.log(`[YouTubeService] Error fetching viewers for ${broadcast.id}:`, err.message);
+        }
+        
+        // Get stream health
+        let streamHealth = 'unknown';
+        let healthDetails = {};
+        
+        if (broadcast.contentDetails?.boundStreamId) {
+          try {
+            const streamResponse = await youtube.liveStreams.list({
+              part: 'status',
+              id: broadcast.contentDetails.boundStreamId
+            });
+            
+            if (streamResponse.data.items && streamResponse.data.items.length > 0) {
+              const stream = streamResponse.data.items[0];
+              streamHealth = stream.status?.streamStatus || 'unknown';
+              healthDetails = {
+                status: stream.status?.healthStatus?.status || 'noData',
+                configurationIssues: stream.status?.healthStatus?.configurationIssues || []
+              };
+            }
+          } catch (err) {
+            console.log(`[YouTubeService] Error fetching stream health for ${broadcast.id}:`, err.message);
+          }
+        }
+        
+        results.push({
+          broadcastId: broadcast.id,
+          title: broadcast.snippet?.title,
+          lifeCycleStatus: broadcast.status?.lifeCycleStatus,
+          concurrentViewers,
+          streamHealth,
+          healthDetails,
+          streamKey: '', // Will be populated if needed
+          thumbnailUrl: broadcast.snippet?.thumbnails?.default?.url
+        });
+      }
+      
+      return results;
+    } catch (error) {
+      console.error('[YouTubeService.getAllLiveBroadcastsWithStats] Error:', error.message);
+      
+      if (error.code === 403 && error.message?.includes('quota')) {
+        return { error: 'quota_exceeded' };
+      }
+      
+      return [];
+    }
+  }
+
+  /**
+   * Get YouTube API quota usage estimate
+   * Note: YouTube API doesn't provide direct quota endpoint, so we estimate based on usage
+   * Daily quota is typically 10,000 units
+   * @returns {Object} Quota information
+   */
+  getQuotaInfo() {
+    // YouTube API quota costs (approximate):
+    // - liveBroadcasts.list: 1 unit
+    // - liveBroadcasts.insert: 50 units
+    // - liveBroadcasts.update: 50 units
+    // - liveBroadcasts.delete: 50 units
+    // - liveStreams.list: 1 unit
+    // - liveStreams.insert: 50 units
+    // - videos.list: 1 unit
+    // - videos.update: 50 units
+    // - thumbnails.set: 50 units
+    // - channels.list: 1 unit
+    
+    // Since YouTube doesn't expose quota directly, we return static info
+    // In production, you'd track usage in a database
+    return {
+      dailyLimit: 10000,
+      estimatedUsed: 0, // Would need to track this
+      resetTime: this.getQuotaResetTime(),
+      costReference: {
+        'list operations': 1,
+        'insert/update/delete': 50,
+        'thumbnail upload': 50
+      }
+    };
+  }
+
+  /**
+   * Get quota reset time (Pacific Time midnight)
+   * @returns {string} ISO string of next reset time
+   */
+  getQuotaResetTime() {
+    const now = new Date();
+    // YouTube quota resets at midnight Pacific Time
+    const pacificOffset = -8; // PST (or -7 for PDT)
+    const utcHours = now.getUTCHours();
+    const pacificHours = (utcHours + pacificOffset + 24) % 24;
+    
+    const resetDate = new Date(now);
+    if (pacificHours >= 0) {
+      // Reset is tomorrow
+      resetDate.setUTCDate(resetDate.getUTCDate() + 1);
+    }
+    resetDate.setUTCHours(-pacificOffset, 0, 0, 0);
+    
+    return resetDate.toISOString();
+  }
+
+  /**
+   * Test API connection and get quota status
+   * @param {string} accessToken - Access token
+   * @returns {Promise<{connected: boolean, quotaOk: boolean, error?: string}>}
+   */
+  async testConnection(accessToken) {
+    try {
+      const oauth2Client = new google.auth.OAuth2();
+      oauth2Client.setCredentials({ access_token: accessToken });
+      
+      const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+      
+      // Simple API call to test connection (1 quota unit)
+      const response = await youtube.channels.list({
+        part: 'id',
+        mine: true
+      });
+      
+      return {
+        connected: true,
+        quotaOk: true,
+        channelId: response.data.items?.[0]?.id
+      };
+    } catch (error) {
+      if (error.code === 403 && error.message?.includes('quota')) {
+        return {
+          connected: true,
+          quotaOk: false,
+          error: 'API quota exceeded'
+        };
+      }
+      
+      return {
+        connected: false,
+        quotaOk: false,
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * List all videos from channel
+   * @param {string} accessToken - Access token
+   * @param {Object} options - Query options
+   * @returns {Promise<Array>}
+   */
+  async listChannelVideos(accessToken, options = {}) {
+    try {
+      const oauth2Client = new google.auth.OAuth2();
+      oauth2Client.setCredentials({ access_token: accessToken });
+      
+      const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+      
+      const { maxResults = 50, pageToken = null } = options;
+      
+      // Get channel's uploads playlist
+      const channelResponse = await youtube.channels.list({
+        part: 'contentDetails',
+        mine: true
+      });
+      
+      if (!channelResponse.data.items || channelResponse.data.items.length === 0) {
+        return { videos: [], nextPageToken: null };
+      }
+      
+      const uploadsPlaylistId = channelResponse.data.items[0].contentDetails.relatedPlaylists.uploads;
+      
+      // Get videos from uploads playlist
+      const playlistResponse = await youtube.playlistItems.list({
+        part: 'snippet,contentDetails',
+        playlistId: uploadsPlaylistId,
+        maxResults,
+        pageToken
+      });
+      
+      const videoIds = playlistResponse.data.items.map(item => item.contentDetails.videoId);
+      
+      // Get detailed video info
+      const videosResponse = await youtube.videos.list({
+        part: 'snippet,status,statistics,contentDetails',
+        id: videoIds.join(',')
+      });
+      
+      const videos = (videosResponse.data.items || []).map(video => ({
+        id: video.id,
+        title: video.snippet.title,
+        description: video.snippet.description,
+        publishedAt: video.snippet.publishedAt,
+        thumbnailUrl: video.snippet.thumbnails?.medium?.url || video.snippet.thumbnails?.default?.url,
+        privacyStatus: video.status.privacyStatus,
+        categoryId: video.snippet.categoryId,
+        tags: video.snippet.tags || [],
+        duration: video.contentDetails.duration,
+        viewCount: parseInt(video.statistics?.viewCount || '0'),
+        likeCount: parseInt(video.statistics?.likeCount || '0'),
+        commentCount: parseInt(video.statistics?.commentCount || '0')
+      }));
+      
+      return {
+        videos,
+        nextPageToken: playlistResponse.data.nextPageToken || null
+      };
+    } catch (error) {
+      console.error('[YouTubeService.listChannelVideos] Error:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Update video metadata (bulk edit support)
+   * @param {string} accessToken - Access token
+   * @param {string} videoId - Video ID
+   * @param {Object} updates - Updates to apply
+   * @returns {Promise<Object>}
+   */
+  async updateVideoMetadata(accessToken, videoId, updates) {
+    try {
+      const oauth2Client = new google.auth.OAuth2();
+      oauth2Client.setCredentials({ access_token: accessToken });
+      
+      const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+      
+      // Get current video data
+      const currentResponse = await youtube.videos.list({
+        part: 'snippet,status',
+        id: videoId
+      });
+      
+      if (!currentResponse.data.items || currentResponse.data.items.length === 0) {
+        throw new Error('Video not found');
+      }
+      
+      const current = currentResponse.data.items[0];
+      
+      // Build update request
+      const updateRequest = {
+        id: videoId,
+        snippet: {
+          title: updates.title !== undefined ? updates.title : current.snippet.title,
+          description: updates.description !== undefined ? updates.description : current.snippet.description,
+          categoryId: updates.categoryId !== undefined ? updates.categoryId : current.snippet.categoryId,
+          tags: updates.tags !== undefined ? updates.tags : (current.snippet.tags || [])
+        },
+        status: {
+          privacyStatus: updates.privacyStatus !== undefined ? updates.privacyStatus : current.status.privacyStatus,
+          selfDeclaredMadeForKids: current.status.selfDeclaredMadeForKids || false
+        }
+      };
+      
+      // Update video
+      const response = await youtube.videos.update({
+        part: 'snippet,status',
+        requestBody: updateRequest
+      });
+      
+      return {
+        id: response.data.id,
+        title: response.data.snippet.title,
+        description: response.data.snippet.description,
+        privacyStatus: response.data.status.privacyStatus,
+        categoryId: response.data.snippet.categoryId,
+        tags: response.data.snippet.tags || []
+      };
+    } catch (error) {
+      console.error('[YouTubeService.updateVideoMetadata] Error:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete video from YouTube
+   * @param {string} accessToken - Access token
+   * @param {string} videoId - Video ID
+   * @returns {Promise<boolean>}
+   */
+  async deleteVideo(accessToken, videoId) {
+    try {
+      const oauth2Client = new google.auth.OAuth2();
+      oauth2Client.setCredentials({ access_token: accessToken });
+      
+      const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+      
+      await youtube.videos.delete({
+        id: videoId
+      });
+      
+      return true;
+    } catch (error) {
+      console.error('[YouTubeService.deleteVideo] Error:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Bulk update videos with same metadata
+   * @param {string} accessToken - Access token
+   * @param {Array<string>} videoIds - Array of video IDs
+   * @param {Object} updates - Updates to apply to all videos
+   * @returns {Promise<{success: number, failed: number, errors: Array}>}
+   */
+  async bulkUpdateVideos(accessToken, videoIds, updates) {
+    const results = {
+      success: 0,
+      failed: 0,
+      errors: []
+    };
+    
+    for (const videoId of videoIds) {
+      try {
+        await this.updateVideoMetadata(accessToken, videoId, updates);
+        results.success++;
+      } catch (error) {
+        results.failed++;
+        results.errors.push({
+          videoId,
+          error: error.message
+        });
+      }
+    }
+    
+    return results;
+  }
+}
+
+module.exports = new YouTubeService();

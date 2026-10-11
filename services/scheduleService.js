@@ -1,0 +1,1841 @@
+/**
+ * Schedule Service for Recurring Broadcasts
+ * Manages automatic broadcast creation based on templates with recurring enabled
+ */
+
+const fs = require('fs');
+const path = require('path');
+const BroadcastTemplate = require('../models/BroadcastTemplate');
+const TitleSuggestion = require('../models/TitleSuggestion');
+const YouTubeBroadcastSettings = require('../models/YouTubeBroadcastSettings');
+const youtubeService = require('./youtubeService');
+const Stream = require('../models/Stream');
+const streamingService = require('./streamingService');
+const { calculateNextRun, formatNextRunAt, replaceTitlePlaceholders, isScheduleMissed, parseRecurringTimes } = require('../utils/recurringUtils');
+const { db } = require('../db/database');
+
+/**
+ * Get GLOBAL thumbnail index for a folder (shared across all stream keys)
+ * This ensures consistent rotation: stream key A gets #3, stream key B gets #4, etc.
+ * @param {string} userId - User ID
+ * @param {string} folderName - Folder name (empty string for root)
+ * @returns {Promise<{thumbnailIndex: number, folderName: string|null}>} Thumbnail index and folder name
+ */
+async function getGlobalThumbnailIndex(userId, folderName = '') {
+  const globalStreamKeyId = '__GLOBAL__' + (folderName || '');
+  return new Promise((resolve) => {
+    db.get(
+      `SELECT thumbnail_index, folder_name FROM stream_key_folder_mapping WHERE user_id = ? AND stream_key_id = ?`,
+      [userId, globalStreamKeyId],
+      (err, row) => {
+        if (err || !row) {
+          console.log(`[ScheduleService] No GLOBAL index found for folder "${folderName || 'root'}", starting from 0`);
+          return resolve({ thumbnailIndex: 0, folderName: folderName || '' });
+        }
+        console.log(`[ScheduleService] Got GLOBAL thumbnail index for folder "${folderName || 'root'}": ${row.thumbnail_index || 0}`);
+        resolve({ 
+          thumbnailIndex: row.thumbnail_index || 0, 
+          folderName: row.folder_name !== undefined ? row.folder_name : (folderName || '')
+        });
+      }
+    );
+  });
+}
+
+/**
+ * Update GLOBAL thumbnail index for a folder (shared across all stream keys)
+ * @param {string} userId - User ID
+ * @param {string} folderName - Folder name (empty string for root)
+ * @param {number} newIndex - New thumbnail index
+ * @returns {Promise<boolean>}
+ */
+async function updateGlobalThumbnailIndex(userId, folderName = '', newIndex) {
+  const globalStreamKeyId = '__GLOBAL__' + (folderName || '');
+  return new Promise((resolve) => {
+    // Use UPSERT to handle both insert and update in one query
+    db.run(
+      `INSERT INTO stream_key_folder_mapping (user_id, stream_key_id, folder_name, thumbnail_index, updated_at) 
+       VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+       ON CONFLICT(user_id, stream_key_id) DO UPDATE SET 
+         thumbnail_index = excluded.thumbnail_index,
+         folder_name = excluded.folder_name,
+         updated_at = CURRENT_TIMESTAMP`,
+      [userId, globalStreamKeyId, folderName || '', newIndex],
+      function(err) {
+        if (err) {
+          console.error(`[ScheduleService] Error updating GLOBAL thumbnail index:`, err.message);
+          return resolve(false);
+        }
+        console.log(`[ScheduleService] ✅ Updated GLOBAL thumbnail index for folder "${folderName || 'root'}": ${newIndex}`);
+        resolve(true);
+      }
+    );
+  });
+}
+
+/**
+ * Get thumbnail index for a specific stream key (legacy - kept for backward compatibility)
+ * Also returns the folder_name to check for folder consistency
+ * @param {string} userId - User ID
+ * @param {string} streamKeyId - Stream Key ID
+ * @returns {Promise<{thumbnailIndex: number, folderName: string|null}>} Thumbnail index and folder name
+ */
+async function getStreamKeyThumbnailIndex(userId, streamKeyId) {
+  return new Promise((resolve) => {
+    db.get(
+      `SELECT thumbnail_index, folder_name FROM stream_key_folder_mapping WHERE user_id = ? AND stream_key_id = ?`,
+      [userId, streamKeyId],
+      (err, row) => {
+        if (err || !row) {
+          return resolve({ thumbnailIndex: 0, folderName: null });
+        }
+        resolve({ 
+          thumbnailIndex: row.thumbnail_index || 0, 
+          folderName: row.folder_name !== undefined ? row.folder_name : null 
+        });
+      }
+    );
+  });
+}
+
+/**
+ * Update thumbnail index for a specific stream key (legacy - kept for backward compatibility)
+ * Also updates folder_name to ensure consistency
+ * @param {string} userId - User ID
+ * @param {string} streamKeyId - Stream Key ID
+ * @param {number} newIndex - New thumbnail index
+ * @param {string} folderName - Folder name being used (for consistency tracking)
+ * @returns {Promise<boolean>}
+ */
+async function updateStreamKeyThumbnailIndex(userId, streamKeyId, newIndex, folderName = '') {
+  return new Promise((resolve) => {
+    // Use UPSERT to handle both insert and update in one query
+    db.run(
+      `INSERT INTO stream_key_folder_mapping (user_id, stream_key_id, folder_name, thumbnail_index, updated_at) 
+       VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+       ON CONFLICT(user_id, stream_key_id) DO UPDATE SET 
+         thumbnail_index = excluded.thumbnail_index,
+         folder_name = excluded.folder_name,
+         updated_at = CURRENT_TIMESTAMP`,
+      [userId, streamKeyId, folderName, newIndex],
+      function(err) {
+        if (err) {
+          console.error(`[ScheduleService] Error updating stream key thumbnail index:`, err.message);
+          return resolve(false);
+        }
+        console.log(`[ScheduleService] Updated stream key thumbnail index: ${streamKeyId} -> ${newIndex} (folder: ${folderName || 'root'})`);
+        resolve(true);
+      }
+    );
+  });
+}
+
+/**
+ * Get user title rotation settings from database
+ * @param {string} userId - User ID
+ * @returns {Promise<{enabled: boolean, folderId: string|null, currentIndex: number}>}
+ */
+async function getUserTitleRotationSettings(userId) {
+  return new Promise((resolve) => {
+    db.get(
+      `SELECT * FROM user_title_rotation_settings WHERE user_id = ?`,
+      [userId],
+      (err, row) => {
+        if (err || !row) {
+          return resolve({ enabled: false, folderId: null, currentIndex: 0 });
+        }
+        resolve({
+          enabled: !!row.enabled,
+          folderId: row.folder_id || null,
+          currentIndex: row.current_index || 0
+        });
+      }
+    );
+  });
+}
+
+/**
+ * Update user title rotation index
+ * @param {string} userId - User ID
+ * @param {number} newIndex - New index
+ * @returns {Promise<boolean>}
+ */
+async function updateUserTitleRotationIndex(userId, newIndex) {
+  return new Promise((resolve) => {
+    db.run(
+      `UPDATE user_title_rotation_settings SET current_index = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?`,
+      [newIndex, userId],
+      function(err) {
+        resolve(!err && this.changes > 0);
+      }
+    );
+  });
+}
+
+/**
+ * Get current time in Asia/Jakarta timezone (WIB)
+ * Uses Intl.DateTimeFormat for accurate timezone conversion
+ * @param {Date} date - Date object to convert
+ * @returns {Object} Object with hours, minutes, seconds, day, year, month, dayOfMonth
+ */
+function getWIBTime(date = new Date()) {
+  try {
+    // Use Intl.DateTimeFormat for accurate timezone conversion
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Jakarta',
+      hour: 'numeric',
+      minute: 'numeric',
+      second: 'numeric',
+      weekday: 'short',
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour12: false
+    });
+    
+    const parts = formatter.formatToParts(date);
+    let hours = 0, minutes = 0, seconds = 0, dayName = '', year = 0, month = 0, dayOfMonth = 0;
+    
+    for (const part of parts) {
+      if (part.type === 'hour') hours = parseInt(part.value, 10);
+      if (part.type === 'minute') minutes = parseInt(part.value, 10);
+      if (part.type === 'second') seconds = parseInt(part.value, 10);
+      if (part.type === 'weekday') dayName = part.value;
+      if (part.type === 'year') year = parseInt(part.value, 10);
+      if (part.type === 'month') month = parseInt(part.value, 10) - 1; // 0-indexed
+      if (part.type === 'day') dayOfMonth = parseInt(part.value, 10);
+    }
+    
+    // Convert day name to number (0=Sun, 1=Mon, etc.)
+    const dayMap = { 'Sun': 0, 'Mon': 1, 'Tue': 2, 'Wed': 3, 'Thu': 4, 'Fri': 5, 'Sat': 6 };
+    const day = dayMap[dayName] ?? date.getDay();
+    
+    return { hours, minutes, seconds, day, year, month, dayOfMonth };
+  } catch (e) {
+    // Fallback to manual calculation if Intl fails
+    console.warn('[ScheduleService] Intl.DateTimeFormat failed, using manual WIB calculation');
+    const wibOffset = 7 * 60 * 60 * 1000; // 7 hours in ms
+    const wibDate = new Date(date.getTime() + wibOffset);
+    
+    return {
+      hours: wibDate.getUTCHours(),
+      minutes: wibDate.getUTCMinutes(),
+      seconds: wibDate.getUTCSeconds(),
+      day: wibDate.getUTCDay(),
+      year: wibDate.getUTCFullYear(),
+      month: wibDate.getUTCMonth(),
+      dayOfMonth: wibDate.getUTCDate()
+    };
+  }
+}
+
+/**
+ * Convert a WIB time to UTC Date object
+ * @param {number} year - Year in WIB
+ * @param {number} month - Month in WIB (0-indexed)
+ * @param {number} dayOfMonth - Day of month in WIB
+ * @param {number} hours - Hours in WIB (0-23)
+ * @param {number} minutes - Minutes in WIB (0-59)
+ * @returns {Date} UTC Date object
+ */
+function wibToUTC(year, month, dayOfMonth, hours, minutes) {
+  // WIB is UTC+7, so subtract 7 hours to get UTC
+  const utcHours = hours - 7;
+  
+  let adjustedDay = dayOfMonth;
+  let adjustedMonth = month;
+  let adjustedYear = year;
+  let adjustedHours = utcHours;
+  
+  if (utcHours < 0) {
+    adjustedHours = utcHours + 24;
+    adjustedDay = dayOfMonth - 1;
+    
+    if (adjustedDay < 1) {
+      adjustedMonth = month - 1;
+      if (adjustedMonth < 0) {
+        adjustedMonth = 11;
+        adjustedYear = year - 1;
+      }
+      adjustedDay = new Date(adjustedYear, adjustedMonth + 1, 0).getDate();
+    }
+  }
+  
+  return new Date(Date.UTC(adjustedYear, adjustedMonth, adjustedDay, adjustedHours, minutes, 0, 0));
+}
+
+class ScheduleService {
+  constructor() {
+    this.jobs = new Map(); // Map of templateId -> job info
+    this.checkInterval = null;
+    this.initialized = false;
+    this.executingTemplates = new Set(); // Track templates currently being executed to prevent duplicates
+    this.executedSlots = new Set(); // Track executed slots: `${templateId}_${wibDateStr}_${slotTime}`
+  }
+
+  /**
+   * Initialize the schedule service
+   * Loads all templates with recurring enabled and starts checking
+   */
+  async init() {
+    if (this.initialized) return;
+    
+    try {
+      console.log('[ScheduleService] Initializing...');
+      
+      // Start the schedule checker (runs every minute)
+      this.startChecker();
+      
+      // Load all templates with recurring enabled
+      const templates = await BroadcastTemplate.findWithRecurringEnabled();
+      console.log(`[ScheduleService] Found ${templates.length} templates with recurring enabled`);
+      
+      const now = new Date();
+      let missedCount = 0;
+      
+      for (const template of templates) {
+        // Check for missed schedules on startup
+        const missed = this.shouldExecuteMissed(template, now);
+        if (missed && missed.shouldRun) {
+          console.log(`[ScheduleService] Found missed schedule for template: ${template.name}`);
+          missedCount++;
+          try {
+            await this.executeTemplate(template, 0, missed.slotIndex);
+            console.log(`[ScheduleService] Executed missed schedule for: ${template.name}`);
+          } catch (error) {
+            console.error(`[ScheduleService] Failed to execute missed schedule for ${template.name}:`, error.message);
+          }
+        } else {
+          await this.scheduleJob(template);
+        }
+      }
+      
+      if (missedCount > 0) {
+        console.log(`[ScheduleService] Executed ${missedCount} missed schedules`);
+      }
+      
+      this.initialized = true;
+      console.log('[ScheduleService] Initialized successfully');
+    } catch (error) {
+      console.error('[ScheduleService] Initialization error:', error.message);
+    }
+  }
+
+  /**
+   * Start the schedule checker that runs every 2 minutes
+   * OPTIMIZED: Increased from 60s to 120s to reduce CPU usage
+   * With 5-minute execution window, 2-minute check interval is sufficient
+   */
+  startChecker() {
+    if (this.checkInterval) return;
+    
+    // Check every 120 seconds (2 minutes) - optimized for CPU usage
+    // With 5-minute execution window, we have 2-3 chances to catch the schedule
+    // This reduces CPU usage by 50% compared to 60-second interval
+    this.checkInterval = setInterval(async () => {
+      await this.checkSchedules();
+    }, 120000); // 120 seconds = 2 minutes
+    
+    console.log('[ScheduleService] Schedule checker started (2 min interval - CPU optimized)');
+    
+    // Also run immediately on start
+    setTimeout(() => this.checkSchedules(), 5000);
+  }
+
+  /**
+   * Stop the schedule checker
+   */
+  stopChecker() {
+    if (this.checkInterval) {
+      clearInterval(this.checkInterval);
+      this.checkInterval = null;
+    }
+  }
+
+
+  /**
+   * Check all templates with recurring and execute if it's time
+   * Uses WIB timezone for all time comparisons
+   * OPTIMIZED: Reduced logging to minimize I/O overhead
+   */
+  async checkSchedules() {
+    try {
+      const templates = await BroadcastTemplate.findWithRecurringEnabled();
+      const now = new Date();
+      const wibTime = getWIBTime(now);
+      const nowMs = now.getTime();
+      
+      // OPTIMIZED: Only log detailed info when there are templates to check
+      if (templates.length === 0) {
+        return; // Silent return when no templates
+      }
+      
+      // Log current WIB time for debugging (only when templates exist)
+      const wibTimeStr = `${String(wibTime.hours).padStart(2,'0')}:${String(wibTime.minutes).padStart(2,'0')}`;
+      const wibDateStr = `${wibTime.year}-${String(wibTime.month + 1).padStart(2,'0')}-${String(wibTime.dayOfMonth).padStart(2,'0')}`;
+      
+      console.log(`[ScheduleService] Check: ${wibDateStr} ${wibTimeStr} WIB | ${templates.length} templates`);
+      
+      // Day names for comparison (lowercase)
+      const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+      const todayWIB = dayNames[wibTime.day];
+      
+      for (const template of templates) {
+        try {
+          // Skip if this template is currently being executed (prevent duplicate execution)
+          if (this.executingTemplates.has(template.id)) {
+            continue; // Silent skip
+          }
+          
+          // Check if today is a valid day for this schedule (in WIB)
+          let isTodayValid = false;
+          
+          if (template.recurring_pattern === 'daily') {
+            isTodayValid = true;
+          } else if (template.recurring_pattern === 'weekly') {
+            const scheduledDays = (template.recurring_days || []).map(d => d.toLowerCase());
+            isTodayValid = scheduledDays.includes(todayWIB);
+          }
+          
+          if (!isTodayValid) {
+            continue; // Silent skip - not scheduled for today
+          }
+          
+          // Housekeeping: remove old executed slots from previous days
+          for (const key of this.executedSlots) {
+            if (!key.includes(wibDateStr)) {
+              this.executedSlots.delete(key);
+            }
+          }
+
+          // Parse all scheduled times (supports schedule bertingkat / multi-time)
+          const times = parseRecurringTimes(template.recurring_time);
+          if (times.length === 0) {
+            continue; // Silent skip - no valid time set
+          }
+
+          // Iterate through all configured slots for today
+          let executedSlot = false;
+          for (let slotIndex = 0; slotIndex < times.length; slotIndex++) {
+            const slotTime = times[slotIndex];
+            if (this.hasRunSlot(template, slotTime, now)) {
+              continue; // Already executed for this slot
+            }
+
+            const [schedHour, schedMin] = slotTime.split(':').map(Number);
+            const scheduleMinutesWIB = schedHour * 60 + schedMin;
+            const currentMinutesWIB = wibTime.hours * 60 + wibTime.minutes;
+            const timeDiffMinutes = currentMinutesWIB - scheduleMinutesWIB;
+
+            // Trigger if within window: -2m (early) to +5m (exact/past)
+            if ((timeDiffMinutes >= 0 && timeDiffMinutes <= 5) || (timeDiffMinutes >= -2 && timeDiffMinutes < 0)) {
+              console.log(`[ScheduleService] EXEC: "${template.name}" slot ${slotTime} WIB (${timeDiffMinutes}m from schedule) [slot #${slotIndex + 1}/${times.length}]`);
+              const slotKey = `${template.id}_${wibDateStr}_${slotTime}`;
+              this.executedSlots.add(slotKey);
+              const execRes = await this.executeTemplate(template, 0, slotIndex);
+              if (execRes && (execRes.error === 'RECENTLY_EXECUTED' || execRes.error === 'RECENTLY_CREATED')) {
+                await this.updateNextRunToFuture(template);
+              }
+              executedSlot = true;
+              break; // Execute one slot per check
+            }
+          }
+
+          if (executedSlot) {
+            continue;
+          }
+
+          // Condition: Check next_run_at for overdue schedules
+          if (template.next_run_at) {
+            const nextRunAt = new Date(template.next_run_at);
+            const timeDiffMs = nowMs - nextRunAt.getTime();
+            const timeDiffFromNextRun = Math.floor(timeDiffMs / (1000 * 60));
+
+            // Execute if next_run_at is overdue but within 60 minutes only
+            if (timeDiffFromNextRun > 0 && timeDiffFromNextRun <= 60) {
+              const nextRunWib = getWIBTime(nextRunAt);
+              const nextRunTimeStr = `${String(nextRunWib.hours).padStart(2, '0')}:${String(nextRunWib.minutes).padStart(2, '0')}`;
+
+              // PREVENT DOUBLE BROADCAST: If this slot has already run today, advance next_run_at and skip
+              if (this.hasRunSlot(template, nextRunTimeStr, now)) {
+                console.log(`[ScheduleService] SKIPPED overdue check: "${template.name}" slot ${nextRunTimeStr} already executed today.`);
+                await this.updateNextRunToFuture(template);
+                continue;
+              }
+
+              console.log(`[ScheduleService] EXEC: "${template.name}" (next_run_at overdue ${timeDiffFromNextRun}m)`);
+              const overdueSlotIndex = times.indexOf(nextRunTimeStr);
+              const execRes = await this.executeTemplate(template, 0, overdueSlotIndex >= 0 ? overdueSlotIndex : null);
+              if (execRes && (execRes.error === 'RECENTLY_EXECUTED' || execRes.error === 'RECENTLY_CREATED' || execRes.error === 'ALREADY_EXECUTING')) {
+                await this.updateNextRunToFuture(template);
+              }
+              continue;
+            }
+
+            // If overdue by more than 60 minutes, update next_run_at to future
+            if (timeDiffFromNextRun > 60) {
+              await this.updateNextRunToFuture(template);
+            }
+          }
+          
+          // OPTIMIZED: No logging for waiting templates (reduces I/O)
+        } catch (templateError) {
+          console.error(`[ScheduleService] Error processing template "${template.name}":`, templateError.message);
+          // Continue with next template
+        }
+      }
+    } catch (error) {
+      console.error('[ScheduleService] Check schedules error:', error.message);
+      console.error(error.stack);
+    }
+  }
+
+  /**
+   * Check if a missed schedule should be executed
+   * Uses WIB timezone for all comparisons
+   * Returns { shouldRun: true, slotIndex: number|null } or null
+   * @param {Object} template - Template object with recurring config
+   * @param {Date} now - Current time
+   * @returns {Object|null}
+   */
+  shouldExecuteMissed(template, now) {
+    if (this.hasRunToday(template, now)) {
+      return null;
+    }
+    
+    const wibTime = getWIBTime(now);
+    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    const todayWIB = dayNames[wibTime.day];
+    let isTodayValid = false;
+    
+    if (template.recurring_pattern === 'daily') {
+      isTodayValid = true;
+    } else if (template.recurring_pattern === 'weekly') {
+      const scheduledDays = (template.recurring_days || []).map(d => d.toLowerCase());
+      isTodayValid = scheduledDays.includes(todayWIB);
+    }
+    
+    // Check if scheduled time has passed today (within 60 minutes) in WIB
+    if (isTodayValid && template.recurring_time) {
+      const times = parseRecurringTimes(template.recurring_time);
+      for (let slotIndex = 0; slotIndex < times.length; slotIndex++) {
+        const slotTime = times[slotIndex];
+        if (this.hasRunSlot(template, slotTime, now)) {
+          continue;
+        }
+        const [schedHour, schedMin] = slotTime.split(':').map(Number);
+        const scheduleMinutesWIB = schedHour * 60 + schedMin;
+        const currentMinutesWIB = wibTime.hours * 60 + wibTime.minutes;
+        const timeDiffMinutes = currentMinutesWIB - scheduleMinutesWIB;
+        
+        if (timeDiffMinutes >= 0 && timeDiffMinutes <= 60) {
+          console.log(`[ScheduleService] Detected missed schedule for template: ${template.name}, slot: ${slotTime} WIB (slot #${slotIndex + 1})`);
+          return { shouldRun: true, slotIndex };
+        }
+      }
+    }
+    
+    // Also check next_run_at for schedules from previous days
+    if (template.next_run_at) {
+      const nextRunAt = new Date(template.next_run_at);
+      const overdueMs = now.getTime() - nextRunAt.getTime();
+      const overdueMinutes = Math.floor(overdueMs / (1000 * 60));
+      
+      if (overdueMinutes > 0 && overdueMinutes <= 60) {
+        console.log(`[ScheduleService] Detected OVERDUE schedule for template: ${template.name}, next_run_at: ${template.next_run_at}`);
+        return { shouldRun: true, slotIndex: null };
+      } else if (overdueMinutes > 60) {
+        console.log(`[ScheduleService] Skipping very old schedule for template: ${template.name} (overdue ${overdueMinutes} min > 60 min)`);
+        this.updateNextRunToFuture(template);
+        return null;
+      }
+    }
+    
+    return null;
+  }
+
+  /**
+   * Update next_run_at to future date when schedule is too old
+   * @param {Object} template - Template object
+   */
+  async updateNextRunToFuture(template) {
+    try {
+      const { calculateNextRun, formatNextRunAt } = require('../utils/recurringUtils');
+      const nextRun = calculateNextRun({
+        recurring_pattern: template.recurring_pattern,
+        recurring_time: template.recurring_time,
+        recurring_days: template.recurring_days
+      });
+      
+      if (nextRun) {
+        await BroadcastTemplate.update(template.id, { next_run_at: formatNextRunAt(nextRun) });
+        console.log(`[ScheduleService] Updated next_run_at for template ${template.name} to ${formatNextRunAt(nextRun)}`);
+      }
+    } catch (error) {
+      console.error(`[ScheduleService] Failed to update next_run_at for template ${template.name}:`, error.message);
+    }
+  }
+
+  /**
+   * Check if a template should execute now
+   * Uses WIB timezone for all comparisons
+   * @param {Object} template - Template object with recurring config
+   * @param {Date} now - Current time
+   * @returns {boolean}
+   */
+  shouldExecute(template, now) {
+    if (!template.recurring_time) return false;
+    
+    const times = parseRecurringTimes(template.recurring_time);
+    if (times.length === 0) return false;
+
+    const wibTime = getWIBTime(now);
+    const currentMinutesWIB = wibTime.hours * 60 + wibTime.minutes;
+    
+    if (template.recurring_pattern === 'weekly') {
+      const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+      const todayWIB = dayNames[wibTime.day];
+      const scheduledDays = (template.recurring_days || []).map(d => d.toLowerCase());
+      if (!scheduledDays.includes(todayWIB)) {
+        return false;
+      }
+    }
+
+    for (const slotTime of times) {
+      if (this.hasRunSlot(template, slotTime, now)) continue;
+      const [schedHour, schedMin] = slotTime.split(':').map(Number);
+      const scheduleMinutesWIB = schedHour * 60 + schedMin;
+      const timeDiffMinutes = currentMinutesWIB - scheduleMinutesWIB;
+      if (timeDiffMinutes >= 0 && timeDiffMinutes <= 5) {
+        return true;
+      }
+    }
+    
+    return false;
+  }
+
+  /**
+   * Check if template has already run for a specific slot time today (in WIB timezone)
+   * @param {Object} template - Template object
+   * @param {string} slotTime - Time string HH:MM
+   * @param {Date} now - Current time
+   * @returns {boolean}
+   */
+  hasRunSlot(template, slotTime, now) {
+    const nowDateStr = this.getWIBDateString(now);
+    const slotKey = `${template.id}_${nowDateStr}_${slotTime}`;
+
+    // Fast-path: Check in-memory slot execution cache first
+    if (this.executedSlots && this.executedSlots.has(slotKey)) {
+      return true;
+    }
+
+    if (!template.last_run_at) return false;
+
+    const lastRun = new Date(template.last_run_at);
+    const lastRunDateStr = this.getWIBDateString(lastRun);
+
+    // If last run was on a different day, this slot hasn't run today
+    if (nowDateStr !== lastRunDateStr) {
+      return false;
+    }
+
+    // Check if the last run corresponds to this slot's time (fallback after restart)
+    const allTimes = parseRecurringTimes(template.recurring_time);
+    const maxDiff = allTimes.length > 1 ? 3 : 5;
+    const lastRunWib = getWIBTime(lastRun);
+    const [slotH, slotM] = slotTime.split(':').map(Number);
+    const slotMinutes = slotH * 60 + slotM;
+    const lastRunMinutes = lastRunWib.hours * 60 + lastRunWib.minutes;
+    const diff = Math.abs(lastRunMinutes - slotMinutes);
+
+    // If last run was within maxDiff minutes of this slot time today, treat as already executed
+    if (diff <= maxDiff) {
+      if (this.executedSlots) this.executedSlots.add(slotKey);
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Mark a slot as manually executed (e.g. from frontend rebroadcast)
+   * Prevents schedule checker from running this slot again today
+   * @param {string} templateId - Template ID
+   * @param {string} slotTime - Time in HH:MM format
+   * @param {Date} now - Current time
+   */
+  markSlotExecuted(templateId, slotTime, now = new Date()) {
+    if (!slotTime) return;
+    const nowDateStr = this.getWIBDateString(now);
+    const cleanTime = String(slotTime).slice(0, 5);
+    const slotKey = `${templateId}_${nowDateStr}_${cleanTime}`;
+    if (!this.executedSlots) {
+      this.executedSlots = new Set();
+    }
+    this.executedSlots.add(slotKey);
+    console.log(`[ScheduleService] Manually marked slot as executed: ${slotKey}`);
+  }
+
+  /**
+   * Mark all slots of a template as executed today to prevent duplicate runs
+   * @param {string} templateId - Template ID
+   * @param {string|string[]} recurringTime - Recurring time or times
+   * @param {Date} now - Current time
+   */
+  markAllSlotsExecuted(templateId, recurringTime, now = new Date()) {
+    if (!templateId) return;
+    const times = parseRecurringTimes(recurringTime);
+    const nowDateStr = this.getWIBDateString(now);
+    if (!this.executedSlots) {
+      this.executedSlots = new Set();
+    }
+    times.forEach(t => {
+      this.executedSlots.add(`${templateId}_${nowDateStr}_${t}`);
+    });
+    this.executedSlots.add(`${templateId}_${nowDateStr}_TODAY`);
+    console.log(`[ScheduleService] Marked all slots executed for template ${templateId}`);
+  }
+
+  /**
+   * Check if template has already run today (in WIB timezone)
+   * For single time: returns true if already run today.
+   * For multi-time schedule bertingkat: returns true only if all slots ran today.
+   * @param {Object} template - Template object
+   * @param {Date} now - Current time
+   * @returns {boolean}
+   */
+  hasRunToday(template, now) {
+    if (!template.last_run_at) return false;
+
+    const times = parseRecurringTimes(template.recurring_time);
+    if (times.length > 0) {
+      // Check if all slots have already run today
+      return times.every(slot => this.hasRunSlot(template, slot, now));
+    }
+    
+    // Fallback single time check
+    const nowDateStr = this.getWIBDateString(now);
+    const lastRunDateStr = this.getWIBDateString(new Date(template.last_run_at));
+    return nowDateStr === lastRunDateStr;
+  }
+
+  /**
+   * Get date string in WIB timezone (YYYY-MM-DD format)
+   * Uses Intl.DateTimeFormat for accurate timezone conversion
+   * @param {Date} date - Date object
+   * @returns {string} Date string in WIB (YYYY-MM-DD)
+   */
+  getWIBDateString(date) {
+    try {
+      // Use en-CA locale which outputs YYYY-MM-DD format
+      const formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Jakarta',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      });
+      return formatter.format(date);
+    } catch (e) {
+      // Fallback: manually calculate WIB date
+      const wibTime = getWIBTime(date);
+      return `${wibTime.year}-${String(wibTime.month + 1).padStart(2,'0')}-${String(wibTime.dayOfMonth).padStart(2,'0')}`;
+    }
+  }
+
+  /**
+   * Schedule a job for a specific template
+   * @param {Object} template - Template object with recurring config
+   */
+  async scheduleJob(template) {
+    // Calculate and update next run time
+    const nextRun = calculateNextRun({
+      recurring_pattern: template.recurring_pattern,
+      recurring_time: template.recurring_time,
+      recurring_days: template.recurring_days
+    });
+    
+    if (nextRun) {
+      await BroadcastTemplate.update(template.id, { next_run_at: formatNextRunAt(nextRun) });
+    }
+    
+    this.jobs.set(template.id, { template, nextRun });
+    console.log(`[ScheduleService] Scheduled: ${template.name} - Next run: ${nextRun?.toISOString() || 'N/A'}`);
+  }
+
+  /**
+   * Cancel a scheduled job
+   * @param {string} templateId - Template ID
+   */
+  cancelJob(templateId) {
+    if (this.jobs.has(templateId)) {
+      this.jobs.delete(templateId);
+      console.log(`[ScheduleService] Cancelled job: ${templateId}`);
+    }
+  }
+
+  /**
+   * Execute a template - create broadcast(s)
+   * Handles token errors gracefully and updates next_run_at even on failure
+   * CRITICAL FIX: Added database-level duplicate check before execution
+   * @param {Object} template - Template object with recurring config
+   * @param {number} retryCount - Current retry count
+   * @param {number|null} targetSlotIndex - Specific slot index to execute (for multi-broadcast 1-to-1 execution)
+   */
+  async executeTemplate(template, retryCount = 0, targetSlotIndex = null) {
+    const maxRetries = 3;
+    const now = new Date();
+    
+    // CRITICAL FIX 1: Check if this template is already being executed (prevent duplicate execution)
+    if (this.executingTemplates.has(template.id)) {
+      console.log(`[ScheduleService] BLOCKED: Template "${template.name}" (${template.id}) is already being executed`);
+      return { error: 'ALREADY_EXECUTING', template: template.name };
+    }
+    
+    // CRITICAL FIX 2: Database-level duplicate check - verify last_run_at before execution
+    // For multi-slot schedules, use 2-minute cooldown so distinct slots can run without false blocks
+    try {
+      const recurringTimes = parseRecurringTimes(template.recurring_time);
+      const isMultiSlot = recurringTimes.length > 1;
+      const cooldownMinutes = isMultiSlot ? 2 : 15;
+      const recentWindow = isMultiSlot ? '-2 minutes' : '-15 minutes';
+
+      const freshTemplate = await BroadcastTemplate.findById(template.id);
+      if (freshTemplate && freshTemplate.last_run_at) {
+        const lastRunTime = new Date(freshTemplate.last_run_at);
+        const timeSinceLastRun = now.getTime() - lastRunTime.getTime();
+        const minutesSinceLastRun = Math.floor(timeSinceLastRun / (1000 * 60));
+        
+        if (minutesSinceLastRun < cooldownMinutes) {
+          console.log(`[ScheduleService] BLOCKED: Template "${template.name}" was executed ${minutesSinceLastRun} minutes ago (< ${cooldownMinutes} min cooldown)`);
+          return { error: 'RECENTLY_EXECUTED', template: template.name, minutesAgo: minutesSinceLastRun };
+        }
+      }
+
+      // Check if a broadcast was recently created for this template in the database
+      const recentBroadcast = await new Promise((resolve) => {
+        db.get(
+          `SELECT broadcast_id FROM youtube_broadcast_settings 
+           WHERE template_id = ? 
+             AND created_at >= datetime('now', '${recentWindow}')
+           LIMIT 1`,
+          [template.id],
+          (err, row) => resolve(row)
+        );
+      });
+      if (recentBroadcast) {
+        console.log(`[ScheduleService] BLOCKED: Broadcast ${recentBroadcast.broadcast_id} was already created for template "${template.name}" within ${cooldownMinutes} minutes`);
+        return { error: 'RECENTLY_CREATED', template: template.name, broadcastId: recentBroadcast.broadcast_id };
+      }
+    } catch (dbError) {
+      console.error(`[ScheduleService] Error checking last_run_at for template ${template.id}:`, dbError.message);
+      // Continue execution if database check fails (don't block legitimate execution)
+    }
+    
+    // Mark template as executing BEFORE any async operations
+    this.executingTemplates.add(template.id);
+    console.log(`[ScheduleService] LOCKED: Template "${template.name}" (${template.id}) - starting execution`);
+    
+    // Helper function to release lock
+    const releaseLock = () => {
+      this.executingTemplates.delete(template.id);
+      console.log(`[ScheduleService] UNLOCKED: Template "${template.name}" (${template.id})`);
+    };
+    
+    // Helper function to update next_run_at on failure
+    const updateNextRunOnFailure = async (reason) => {
+      try {
+        const { calculateNextRun, formatNextRunAt } = require('../utils/recurringUtils');
+        const nextRun = calculateNextRun({
+          recurring_pattern: template.recurring_pattern,
+          recurring_time: template.recurring_time,
+          recurring_days: template.recurring_days
+        });
+        
+        if (nextRun) {
+          await BroadcastTemplate.updateLastRun(
+            template.id,
+            now.toISOString(),
+            formatNextRunAt(nextRun)
+          );
+          console.log(`[ScheduleService] Updated next_run_at for template "${template.name}" to ${formatNextRunAt(nextRun)} (${reason})`);
+        }
+      } catch (err) {
+        console.error(`[ScheduleService] Failed to update next_run_at:`, err.message);
+      }
+    };
+    
+    try {
+      // Check if credentials are available
+      if (!template.client_id || !template.client_secret || !template.refresh_token) {
+        console.error(`[ScheduleService] Cannot execute template "${template.name}": YouTube credentials not found or invalid (account_id: ${template.account_id})`);
+        await updateNextRunOnFailure('credentials missing');
+        releaseLock();
+        return { error: 'YouTube credentials not found', template: template.name };
+      }
+      
+      // Get access token from credentials with error handling
+      let accessToken;
+      try {
+        accessToken = await youtubeService.getAccessToken(template.client_id, template.client_secret, template.refresh_token, 0, template.account_id, 0, template.account_id);
+      } catch (tokenError) {
+        const errorMsg = tokenError.message || 'Unknown token error';
+        console.error(`[ScheduleService] Token error for template "${template.name}": ${errorMsg}`);
+        
+        // Check if token is expired/revoked
+        if (errorMsg.includes('TOKEN_EXPIRED') || errorMsg.includes('invalid_grant') || errorMsg.includes('revoked')) {
+          console.error(`[ScheduleService] Token expired for template "${template.name}" - user needs to reconnect YouTube account`);
+          await updateNextRunOnFailure('token expired');
+          releaseLock();
+          return { error: 'TOKEN_EXPIRED', template: template.name, message: 'YouTube token expired - please reconnect account' };
+        }
+        
+        // For network errors, retry (but release lock first so retry can re-acquire)
+        if (retryCount < maxRetries - 1) {
+          console.log(`[ScheduleService] Retrying token fetch in 30 seconds... (attempt ${retryCount + 1}/${maxRetries})`);
+          releaseLock();
+          await new Promise(resolve => setTimeout(resolve, 30000));
+          return this.executeTemplate(template, retryCount + 1);
+        }
+        
+        await updateNextRunOnFailure('token fetch failed');
+        releaseLock();
+        return { error: errorMsg, template: template.name };
+      }
+      
+      // Check if this is a multi-broadcast template
+      let broadcasts = [];
+      try {
+        if (template.description && template.description.startsWith('[')) {
+          broadcasts = JSON.parse(template.description);
+          console.log(`[ScheduleService] Multi-broadcast template detected: ${broadcasts.length} broadcasts`);
+        }
+      } catch (e) {
+        // Not a multi-broadcast template
+      }
+      
+      const results = [];
+      
+      if (broadcasts.length > 0) {
+        // Multi-broadcast template - check if executing a specific slot or batch
+        const recurringTimes = parseRecurringTimes(template.recurring_time);
+        let targetBroadcasts = broadcasts;
+        let isSingleSlotMode = false;
+        let broadcastOffset = 0;
+
+        // Only enter single-slot mode if template has multiple recurring times configured
+        if (targetSlotIndex !== null && broadcasts[targetSlotIndex] && recurringTimes.length > 1) {
+          targetBroadcasts = [broadcasts[targetSlotIndex]];
+          isSingleSlotMode = true;
+          broadcastOffset = targetSlotIndex;
+          const slotLabel = recurringTimes[targetSlotIndex] ? `${recurringTimes[targetSlotIndex]} WIB` : `slot #${targetSlotIndex + 1}`;
+          console.log(`[ScheduleService] Single-slot execution mode: running broadcast #${targetSlotIndex + 1}/${broadcasts.length} ("${targetBroadcasts[0].title}") for ${slotLabel}`);
+        } else {
+          console.log(`[ScheduleService] Batch execution mode: running all ${broadcasts.length} broadcasts for template "${template.name}"`);
+        }
+
+        // Check user title rotation settings first
+        let titleFolderId = template.title_folder_id || null;
+        let currentTitleIndex = template.title_index || 0;
+        let useUserRotation = false;
+        
+        if (!titleFolderId) {
+          const userRotationSettings = await getUserTitleRotationSettings(template.user_id);
+          if (userRotationSettings.enabled) {
+            titleFolderId = userRotationSettings.folderId;
+            currentTitleIndex = userRotationSettings.currentIndex;
+            useUserRotation = true;
+            console.log(`[ScheduleService] Multi-broadcast using user title rotation: folder=${titleFolderId || 'all'}, index=${currentTitleIndex}`);
+          }
+        }
+
+        // Smart continuation: If template title_index is 0 or null, continue after initial template titles
+        if ((currentTitleIndex === 0 || currentTitleIndex === null) && broadcasts && broadcasts.length > 0) {
+          try {
+            const templateTitles = broadcasts.map(b => b.title).filter(Boolean);
+            const contIndex = await TitleSuggestion.getContinuationIndex(template.user_id, titleFolderId, templateTitles);
+            if (contIndex > 0) {
+              currentTitleIndex = contIndex;
+              console.log(`[ScheduleService] Auto-advanced title rotation start index to ${contIndex} following template initial titles`);
+            }
+          } catch (contErr) {
+            console.warn('[ScheduleService] Error computing continuation index:', contErr.message);
+          }
+        }
+
+        // Setup thumbnail index with continuation
+        const templateThumbFolder = (template.thumbnail_folder !== undefined && template.thumbnail_folder !== null) ? template.thumbnail_folder : (broadcasts[0]?.thumbnailFolder || '');
+        const globalThumbData = await getGlobalThumbnailIndex(template.user_id, templateThumbFolder);
+        let currentThumbIndex = (template.thumbnail_index && template.thumbnail_index > 0)
+          ? template.thumbnail_index
+          : globalThumbData.thumbnailIndex;
+
+        if ((currentThumbIndex === 0 || currentThumbIndex === null) && broadcasts && broadcasts.length > 0) {
+          try {
+            const templateThumbnails = broadcasts.map(b => b.thumbnailPath || b.pinnedThumbnail).filter(Boolean);
+            if (template.thumbnail_path) templateThumbnails.push(template.thumbnail_path);
+            const contThumbIndex = this.getThumbnailContinuationIndex(template.user_id, templateThumbFolder, templateThumbnails);
+            if (contThumbIndex > 0) {
+              currentThumbIndex = contThumbIndex;
+              console.log(`[ScheduleService] Auto-advanced thumbnail start index to ${contThumbIndex} following template initial thumbnails`);
+            }
+          } catch (contThumbErr) {
+            console.warn('[ScheduleService] Error computing thumbnail continuation index:', contThumbErr.message);
+          }
+        }
+        
+        for (let i = 0; i < targetBroadcasts.length; i++) {
+          const b = targetBroadcasts[i];
+          const broadcastIndex = isSingleSlotMode ? broadcastOffset : i;
+          const bFolderId = b.titleFolderId || titleFolderId;
+          
+          // Get title from rotation - ignorePinned true so all broadcasts get unique sequential titles
+          let finalTitle = b.title;
+          const titleResult = await this.getNextTitleForBroadcast(
+            template.user_id,
+            currentTitleIndex,
+            bFolderId,
+            true // ignorePinned for distinct sequential titles across streamkeys
+          );
+          
+          if (titleResult.title) {
+            finalTitle = titleResult.title.title;
+            console.log(`[ScheduleService] Broadcast ${broadcastIndex + 1} using rotated title: "${finalTitle}" (index: ${titleResult.currentPosition}/${titleResult.totalCount})`);
+            
+            // Advance index for next broadcast
+            currentTitleIndex = titleResult.nextIndex;
+            
+            // Increment use count
+            try {
+              await TitleSuggestion.incrementUseCount(titleResult.title.id, template.user_id);
+            } catch (err) {
+              console.error(`[ScheduleService] Failed to increment title use count:`, err.message);
+            }
+          }
+          
+          const title = replaceTitlePlaceholders(finalTitle, now);
+          const description = b.description ? replaceTitlePlaceholders(b.description, now) : '';
+          
+          // Calculate scheduled start time (1 minute from now for immediate transition when stream starts)
+          const scheduledStartTime = isSingleSlotMode
+            ? new Date(now.getTime() + 60 * 1000)
+            : new Date(now.getTime() + (60 + i * 15) * 1000);
+          
+          // Log broadcast privacy status for debugging
+          console.log(`[ScheduleService] Broadcast ${broadcastIndex + 1} privacyStatus from template: ${b.privacyStatus}`);
+          
+          const broadcastData = {
+            title,
+            description,
+            scheduledStartTime: scheduledStartTime.toISOString(),
+            privacyStatus: b.privacyStatus || 'unlisted',
+            tags: b.tags || [],
+            categoryId: b.categoryId || '20',
+            streamId: b.streamId || null,  // Use saved stream ID
+            // IMPORTANT: Always enable auto-start when creating from recurring template
+            // This ensures YouTube broadcast starts automatically when stream begins
+            enableAutoStart: true,
+            enableAutoStop: true,
+            dualStream: !!(template.dual_stream || b.dualStream),
+            alteredContent: !!(template.altered_content || b.alteredContent)
+          };
+          
+          console.log(`[ScheduleService] Creating broadcast ${broadcastIndex + 1}/${broadcasts.length}: ${title}`);
+          console.log(`[ScheduleService] Using privacyStatus: ${broadcastData.privacyStatus}`);
+          console.log(`[ScheduleService] Using streamId: ${b.streamId || 'none (will create new)'}`);
+          
+          try {
+            const result = await youtubeService.createBroadcast(accessToken, broadcastData);
+            results.push(result);
+            console.log(`[ScheduleService] Broadcast ${i + 1} created: ${result.broadcastId || result.id}`);
+            
+            // Determine thumbnail folder from stream key mapping if available
+            // Priority: stream_key_folder_mapping > b.thumbnailFolder
+            let thumbnailFolder = null;
+            
+            // First check stream_key_folder_mapping for this stream key
+            if (b.streamId && template.stream_key_folder_mapping) {
+              const mappedFolder = template.stream_key_folder_mapping[b.streamId];
+              if (mappedFolder !== undefined) {
+                thumbnailFolder = mappedFolder;
+                console.log(`[ScheduleService] Using mapped folder for stream key ${b.streamId}: ${thumbnailFolder === '' ? 'root' : thumbnailFolder}`);
+              }
+            }
+            
+            // Fallback to b.thumbnailFolder if no mapping found
+            if (thumbnailFolder === null && b.thumbnailFolder !== null && b.thumbnailFolder !== undefined) {
+              thumbnailFolder = b.thumbnailFolder;
+              console.log(`[ScheduleService] Using broadcast thumbnailFolder: ${thumbnailFolder === '' ? 'root' : thumbnailFolder}`);
+            }
+            if (thumbnailFolder === null && template.thumbnail_folder !== null && template.thumbnail_folder !== undefined) {
+              thumbnailFolder = template.thumbnail_folder;
+              console.log(`[ScheduleService] Using template thumbnail_folder: ${thumbnailFolder === '' ? 'root' : thumbnailFolder}`);
+            }
+            
+            // Save broadcast settings including thumbnail folder
+            try {
+              await YouTubeBroadcastSettings.upsert({
+                broadcastId: result.broadcastId || result.id,
+                userId: template.user_id,
+                accountId: template.account_id || null,
+                enableAutoStart: true,
+                enableAutoStop: true,
+                unlistReplayOnEnd: template.unlist_replay_on_end !== undefined ? !!template.unlist_replay_on_end : false,
+                originalPrivacyStatus: b.privacyStatus || 'unlisted',
+                thumbnailFolder: thumbnailFolder !== null ? thumbnailFolder : null,
+                templateId: template.id,
+                alteredContent: template.altered_content ? 1 : 0,
+                dualStream: template.dual_stream ? 1 : 0,
+                verticalStreamKey: template.vertical_stream_key || null
+              });
+              console.log(`[ScheduleService] Saved broadcast settings for ${result.broadcastId || result.id}, thumbnailFolder: ${thumbnailFolder !== null ? (thumbnailFolder === '' ? 'root' : thumbnailFolder) : 'null'}, templateId: ${template.id}`);
+            } catch (settingsErr) {
+              console.error(`[ScheduleService] Failed to save broadcast settings:`, settingsErr.message);
+            }
+
+            // Create Stream record so streamingService/schedulerService can stream the media automatically!
+            const resolvedStreamKey = result.streamKey || b.streamKey || template.stream_key || (b.streamId ? String(b.streamId) : '');
+            const resolvedRtmpUrl = result.rtmpUrl || b.rtmpUrl || 'rtmp://a.rtmp.youtube.com/live2';
+            const resolvedVideoId = b.videoId || template.video_id || null;
+            const resolvedAudioId = b.audioId || template.audio_id || null;
+            
+            try {
+              const streamData = {
+                title: title,
+                video_id: resolvedVideoId,
+                audio_id: resolvedAudioId,
+                rtmp_url: resolvedRtmpUrl,
+                stream_key: resolvedStreamKey,
+                platform: 'YouTube',
+                platform_icon: 'ti-brand-youtube',
+                bitrate: 2500,
+                resolution: '1280x720',
+                fps: 30,
+                orientation: 'horizontal',
+                loop_video: (b.loopVideo !== undefined) ? (b.loopVideo !== false && b.loopVideo !== 0 && b.loopVideo !== '0') : (template.loop_video !== false),
+                stream_duration_hours: b.durationHours !== undefined ? (parseInt(b.durationHours) || 0) : (template.duration_hours || 0),
+                stream_duration_minutes: b.streamDurationMinutes || (((parseInt(b.durationHours) || 0) * 60) + (parseInt(b.durationMinutes) || 0)) || template.stream_duration_minutes || null,
+                duration: b.streamDurationMinutes || (((parseInt(b.durationHours) || 0) * 60) + (parseInt(b.durationMinutes) || 0)) || template.stream_duration_minutes || null,
+                schedule_type: template.schedule_type || template.recurring_pattern || 'daily',
+                schedule_time: now.toISOString(),
+                end_time: null,
+                schedule_days: template.recurring_days || null,
+                recurring_time: template.recurring_time || null,
+                recurring_enabled: 1,
+                user_id: template.user_id,
+                youtube_broadcast_id: result.broadcastId || result.id,
+                youtube_account_id: template.account_id || null,
+                dual_stream: (template.dual_stream || b.dualStream) ? 1 : 0,
+                vertical_stream_key: b.verticalStreamKey || template.vertical_stream_key || null,
+                backup_rtmp_url: b.verticalStreamKey || template.vertical_stream_key || null,
+                tags: template.tags && template.tags.length > 0 ? (typeof template.tags === 'string' ? template.tags : JSON.stringify(template.tags)) : null,
+                template_id: template.id,
+                status: 'scheduled'
+              };
+
+              const createdStream = await Stream.create(streamData);
+              console.log(`[ScheduleService] Created Stream record #${createdStream.id} for multi-broadcast ${result.broadcastId || result.id}`);
+
+              if (createdStream && createdStream.video_id) {
+                try {
+                  console.log(`[ScheduleService] Automatically starting live stream #${createdStream.id} for template "${template.name}"...`);
+                  const startRes = await streamingService.startStream(createdStream.id);
+                  if (startRes && startRes.success) {
+                    console.log(`[ScheduleService] ✅ Live stream #${createdStream.id} successfully started!`);
+                  } else {
+                    console.warn(`[ScheduleService] ⚠️ Live stream #${createdStream.id} start returned:`, startRes?.error);
+                  }
+                } catch (startErr) {
+                  console.error(`[ScheduleService] Failed to auto-start stream #${createdStream.id}:`, startErr.message);
+                }
+              } else {
+                console.warn(`[ScheduleService] Multi-broadcast item #${i + 1} has no video_id! Live streaming could not be started automatically.`);
+              }
+            } catch (streamCreateErr) {
+              console.error(`[ScheduleService] Error creating Stream record for multi-broadcast:`, streamCreateErr.message);
+            }
+            
+            // Upload thumbnail - sequential selection from folder with GLOBAL index and continuation
+            if (thumbnailFolder !== null || b.thumbnailPath || b.pinnedThumbnail) {
+              const currentFolder = thumbnailFolder !== null ? thumbnailFolder : '';
+              console.log(`[ScheduleService] Broadcast ${i + 1} uploading thumbnail for folder "${currentFolder || 'root'}", index: ${currentThumbIndex}`);
+              
+              const uploadResult = await this.uploadThumbnailForBroadcast(
+                accessToken, 
+                result.broadcastId || result.id, 
+                b.thumbnailPath,
+                thumbnailFolder,
+                template.user_id,
+                b.pinnedThumbnail,
+                null,
+                currentThumbIndex,
+                thumbnailFolder !== null // ignorePinned for multi-broadcast rotation
+              );
+              
+              if (uploadResult && uploadResult.newIndex !== undefined) {
+                currentThumbIndex = uploadResult.newIndex;
+                await updateGlobalThumbnailIndex(template.user_id, currentFolder, currentThumbIndex);
+                console.log(`[ScheduleService] Broadcast ${i + 1} thumbnail uploaded: index advanced to ${currentThumbIndex}`);
+              }
+            }
+          } catch (err) {
+            console.error(`[ScheduleService] Failed to create broadcast ${i + 1}:`, err.message);
+          }
+          
+          // Small delay between broadcasts to avoid rate limiting
+          if (i < broadcasts.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
+        }
+        
+        // Update thumbnail index for multi-broadcast template after all broadcasts
+        if (currentThumbIndex !== (template.thumbnail_index || 0)) {
+          try {
+            await BroadcastTemplate.updateThumbnailIndex(template.id, currentThumbIndex);
+            console.log(`[ScheduleService] Updated multi-broadcast template ${template.id} thumbnail_index to: ${currentThumbIndex}`);
+          } catch (tIndexErr) {
+            console.warn('[ScheduleService] Failed to update template thumbnail_index:', tIndexErr.message);
+          }
+        }
+        
+        // Update title index for multi-broadcast template after all broadcasts
+        if (currentTitleIndex !== (template.title_index || 0)) {
+          if (useUserRotation) {
+            // Update user-level rotation index
+            try {
+              await updateUserTitleRotationIndex(template.user_id, currentTitleIndex);
+              console.log(`[ScheduleService] Updated user title rotation index to ${currentTitleIndex}`);
+            } catch (err) {
+              console.error(`[ScheduleService] Failed to update user title rotation index:`, err.message);
+            }
+          } else {
+            // Update template-level rotation index
+            try {
+              await BroadcastTemplate.updateTitleIndex(template.id, currentTitleIndex);
+              console.log(`[ScheduleService] Updated multi-template ${template.id} title_index to ${currentTitleIndex}`);
+            } catch (err) {
+              console.error(`[ScheduleService] Failed to update title index:`, err.message);
+            }
+          }
+        }
+      } else {
+        // Single broadcast template
+        
+        // Get title from rotation
+        // Priority: 1. Template title_folder_id, 2. User title rotation settings, 3. All titles
+        let finalTitle = template.title;
+        let titleFolderId = template.title_folder_id || null;
+        let titleIndex = template.title_index || 0;
+        let useUserRotation = false;
+        
+        // If template doesn't have specific folder, check user title rotation settings
+        if (!titleFolderId) {
+          const userRotationSettings = await getUserTitleRotationSettings(template.user_id);
+          if (userRotationSettings.enabled) {
+            titleFolderId = userRotationSettings.folderId;
+            titleIndex = userRotationSettings.currentIndex;
+            useUserRotation = true;
+            console.log(`[ScheduleService] Using user title rotation settings: folder=${titleFolderId || 'all'}, index=${titleIndex}`);
+          }
+        }
+
+        // Smart continuation for single broadcast template if title_index is 0:
+        if ((titleIndex === 0 || titleIndex === null) && template.title) {
+          try {
+            const contIndex = await TitleSuggestion.getContinuationIndex(template.user_id, titleFolderId, [template.title]);
+            if (contIndex > 0) {
+              titleIndex = contIndex;
+              console.log(`[ScheduleService] Auto-advanced single template title start index to ${contIndex}`);
+            }
+          } catch (contErr) {}
+        }
+        
+        const titleResult = await this.getNextTitleForBroadcast(
+          template.user_id,
+          titleIndex,
+          titleFolderId,
+          true // ignorePinned for true rotation
+        );
+        
+        if (titleResult.title) {
+          finalTitle = titleResult.title.title;
+          console.log(`[ScheduleService] Using rotated title: "${finalTitle}" (index: ${titleResult.currentPosition}/${titleResult.totalCount}, pinned: ${titleResult.isPinned}, folder: ${titleFolderId || 'all'})`);
+          
+          // Update title index for next run (only if not pinned)
+          if (!titleResult.isPinned) {
+            if (useUserRotation) {
+              // Update user-level rotation index
+              try {
+                await updateUserTitleRotationIndex(template.user_id, titleResult.nextIndex);
+                console.log(`[ScheduleService] Updated user title rotation index to ${titleResult.nextIndex}`);
+              } catch (err) {
+                console.error(`[ScheduleService] Failed to update user title rotation index:`, err.message);
+              }
+            } else if (template.id) {
+              // Update template-level rotation index
+              try {
+                await BroadcastTemplate.updateTitleIndex(template.id, titleResult.nextIndex);
+                console.log(`[ScheduleService] Updated template ${template.id} title_index to ${titleResult.nextIndex}`);
+              } catch (err) {
+                console.error(`[ScheduleService] Failed to update title index:`, err.message);
+              }
+            }
+          }
+          
+          // Increment use count for the title
+          try {
+            await TitleSuggestion.incrementUseCount(titleResult.title.id, template.user_id);
+          } catch (err) {
+            console.error(`[ScheduleService] Failed to increment title use count:`, err.message);
+          }
+        } else {
+          console.log(`[ScheduleService] No titles found for rotation, using template title: "${template.title}"`);
+        }
+        
+        const title = replaceTitlePlaceholders(finalTitle, now);
+        const description = template.description ? replaceTitlePlaceholders(template.description, now) : '';
+        
+        // Calculate scheduled start time (1 minute from now for immediate transition when stream starts)
+        const scheduledStartTime = new Date(now.getTime() + 60 * 1000);
+        
+        // Log template privacy_status for debugging
+        console.log(`[ScheduleService] Template privacy_status: ${template.privacy_status}`);
+        
+        const broadcastData = {
+          title,
+          description,
+          scheduledStartTime: scheduledStartTime.toISOString(),
+          privacyStatus: template.privacy_status || 'unlisted',
+          tags: template.tags || [],
+          categoryId: template.category_id || '20',
+          streamId: template.stream_id || null,
+          // IMPORTANT: Always enable auto-start when creating from recurring template
+          // This ensures YouTube broadcast starts automatically when stream begins
+          enableAutoStart: true,
+          enableAutoStop: true,
+          dualStream: !!template.dual_stream,
+          alteredContent: !!template.altered_content
+        };
+        
+        console.log(`[ScheduleService] Creating single broadcast: ${title}`);
+        console.log(`[ScheduleService] Using privacyStatus: ${broadcastData.privacyStatus}`);
+        console.log(`[ScheduleService] Using streamId: ${template.stream_id || 'none (will create new)'}`);
+        
+        const result = await youtubeService.createBroadcast(accessToken, broadcastData);
+        results.push(result);
+        console.log(`[ScheduleService] Broadcast created: ${result.broadcastId || result.id}`);
+        
+        // Determine thumbnail folder from stream key mapping if available
+        // Priority: stream_key_folder_mapping > template.thumbnail_folder
+        let thumbnailFolder = null;
+        
+        // First check stream_key_folder_mapping for this stream key
+        if (template.stream_id && template.stream_key_folder_mapping) {
+          const mappedFolder = template.stream_key_folder_mapping[template.stream_id];
+          if (mappedFolder !== undefined) {
+            thumbnailFolder = mappedFolder;
+            console.log(`[ScheduleService] Using mapped folder for stream key ${template.stream_id}: ${thumbnailFolder === '' ? 'root' : thumbnailFolder}`);
+          }
+        }
+        
+        // Fallback to template.thumbnail_folder if no mapping found
+        if (thumbnailFolder === null && template.thumbnail_folder !== null && template.thumbnail_folder !== undefined) {
+          thumbnailFolder = template.thumbnail_folder;
+          console.log(`[ScheduleService] Using template thumbnail_folder: ${thumbnailFolder === '' ? 'root' : thumbnailFolder}`);
+        }
+        
+        // Save broadcast settings including thumbnail folder
+        try {
+          await YouTubeBroadcastSettings.upsert({
+            broadcastId: result.broadcastId || result.id,
+            userId: template.user_id,
+            accountId: template.account_id || null,
+            enableAutoStart: true,
+            enableAutoStop: true,
+            unlistReplayOnEnd: template.unlist_replay_on_end !== undefined ? !!template.unlist_replay_on_end : false,
+            originalPrivacyStatus: template.privacy_status || 'unlisted',
+            thumbnailFolder: thumbnailFolder !== null ? thumbnailFolder : null,
+            templateId: template.id,
+            alteredContent: template.altered_content ? 1 : 0,
+            dualStream: template.dual_stream ? 1 : 0,
+            verticalStreamKey: template.vertical_stream_key || null
+          });
+          console.log(`[ScheduleService] Saved broadcast settings for ${result.broadcastId || result.id}, thumbnailFolder: ${thumbnailFolder !== null ? (thumbnailFolder === '' ? 'root' : thumbnailFolder) : 'null'}, templateId: ${template.id}`);
+        } catch (settingsErr) {
+          console.error(`[ScheduleService] Failed to save broadcast settings:`, settingsErr.message);
+        }
+
+        // Create Stream record so streamingService/schedulerService can stream the media automatically!
+        const resolvedStreamKey = result.streamKey || template.stream_key || (template.stream_id ? String(template.stream_id) : '');
+        const resolvedRtmpUrl = result.rtmpUrl || 'rtmp://a.rtmp.youtube.com/live2';
+        
+        try {
+          const streamData = {
+            title: title,
+            video_id: template.video_id || null,
+            audio_id: template.audio_id || null,
+            rtmp_url: resolvedRtmpUrl,
+            stream_key: resolvedStreamKey,
+            platform: 'YouTube',
+            platform_icon: 'ti-brand-youtube',
+            bitrate: 2500,
+            resolution: '1280x720',
+            fps: 30,
+            orientation: 'horizontal',
+            loop_video: template.loop_video !== false,
+            stream_duration_hours: template.duration_hours || 0,
+            stream_duration_minutes: template.stream_duration_minutes || null,
+            duration: template.stream_duration_minutes || null,
+            schedule_type: template.schedule_type || template.recurring_pattern || 'daily',
+            schedule_time: now.toISOString(),
+            end_time: null,
+            schedule_days: template.recurring_days || null,
+            recurring_time: template.recurring_time || null,
+            recurring_enabled: 1,
+            user_id: template.user_id,
+            youtube_broadcast_id: result.broadcastId || result.id,
+            youtube_account_id: template.account_id || null,
+            dual_stream: template.dual_stream ? 1 : 0,
+            vertical_stream_key: template.vertical_stream_key || null,
+            backup_rtmp_url: template.vertical_stream_key || null,
+            tags: template.tags && template.tags.length > 0 ? (typeof template.tags === 'string' ? template.tags : JSON.stringify(template.tags)) : null,
+            template_id: template.id,
+            status: 'scheduled'
+          };
+
+          const createdStream = await Stream.create(streamData);
+          console.log(`[ScheduleService] Created Stream record #${createdStream.id} for broadcast ${result.broadcastId || result.id}`);
+
+          if (createdStream && createdStream.video_id) {
+            try {
+              console.log(`[ScheduleService] Automatically starting live stream #${createdStream.id} for template "${template.name}"...`);
+              const startRes = await streamingService.startStream(createdStream.id);
+              if (startRes && startRes.success) {
+                console.log(`[ScheduleService] ✅ Live stream #${createdStream.id} successfully started!`);
+              } else {
+                console.warn(`[ScheduleService] ⚠️ Live stream #${createdStream.id} start returned:`, startRes?.error);
+              }
+            } catch (startErr) {
+              console.error(`[ScheduleService] Failed to auto-start stream #${createdStream.id}:`, startErr.message);
+            }
+          } else {
+            console.warn(`[ScheduleService] Template "${template.name}" has no video_id! Live streaming could not be started automatically.`);
+          }
+        } catch (streamCreateErr) {
+          console.error(`[ScheduleService] Error creating Stream record:`, streamCreateErr.message);
+        }
+        
+        // Upload thumbnail - use sequential selection from folder with GLOBAL index
+        // GLOBAL index ensures consistent rotation across all stream keys
+        if (thumbnailFolder !== null || template.thumbnail_path || template.pinned_thumbnail) {
+          // Get GLOBAL thumbnail index for this folder (shared across all stream keys)
+          const currentFolder = thumbnailFolder !== null ? thumbnailFolder : '';
+          const indexData = await getGlobalThumbnailIndex(template.user_id, currentFolder);
+          let thumbnailIndex = (template.thumbnail_index && template.thumbnail_index > 0)
+            ? template.thumbnail_index
+            : indexData.thumbnailIndex;
+
+          if (thumbnailIndex === 0 && template.thumbnail_path) {
+            const contIndex = this.getThumbnailContinuationIndex(template.user_id, currentFolder, [template.thumbnail_path]);
+            if (contIndex > 0) {
+              thumbnailIndex = contIndex;
+              console.log(`[ScheduleService] Single broadcast thumbnail continuation index: ${contIndex}`);
+            }
+          }
+          
+          console.log(`[ScheduleService] GLOBAL thumbnail index for folder "${currentFolder || 'root'}": ${thumbnailIndex}`);
+          console.log(`[ScheduleService] Uploading thumbnail: folder=${thumbnailFolder || 'none'}, currentIndex=${thumbnailIndex}`);
+          const uploadResult = await this.uploadThumbnailForBroadcast(
+            accessToken, 
+            result.broadcastId || result.id, 
+            template.thumbnail_path,
+            thumbnailFolder,
+            template.user_id,
+            template.pinned_thumbnail,
+            null,
+            thumbnailIndex,
+            thumbnailFolder !== null // ignorePinned when folder rotation is active
+          );
+          
+          // Update GLOBAL and template thumbnail index after successful upload
+          if (uploadResult && uploadResult.newIndex !== undefined && !uploadResult.usedPinned) {
+            await updateGlobalThumbnailIndex(template.user_id, currentFolder, uploadResult.newIndex);
+            try {
+              await BroadcastTemplate.updateThumbnailIndex(template.id, uploadResult.newIndex);
+            } catch (tErr) {}
+            console.log(`[ScheduleService] GLOBAL & template thumbnail_index updated: ${thumbnailIndex} -> ${uploadResult.newIndex} (folder: ${currentFolder || 'root'})`);
+          } else if (uploadResult && uploadResult.usedPinned) {
+            console.log(`[ScheduleService] Using pinned thumbnail, GLOBAL index NOT updated (stays at ${thumbnailIndex})`);
+          }
+        } else {
+          console.log(`[ScheduleService] No thumbnail to upload (folder=${thumbnailFolder}, path=${template.thumbnail_path}, pinned=${template.pinned_thumbnail})`);
+        }
+      }
+      
+      // Update last run and calculate next run
+      const nextRun = calculateNextRun({
+        recurring_pattern: template.recurring_pattern,
+        recurring_time: template.recurring_time,
+        recurring_days: template.recurring_days
+      });
+      
+      await BroadcastTemplate.updateLastRun(
+        template.id,
+        now.toISOString(),
+        nextRun ? formatNextRunAt(nextRun) : null
+      );
+      
+      if (template.user_id && typeof global.invalidateBroadcastsCache === 'function') {
+        global.invalidateBroadcastsCache(template.user_id);
+      }
+
+      releaseLock();
+      return results;
+    } catch (error) {
+      const errorMsg = error.message || 'Unknown error';
+      console.error(`[ScheduleService] Execute error for "${template.name}" (attempt ${retryCount + 1}/${maxRetries}):`, errorMsg);
+      
+      // Check for token-related errors - don't retry these
+      if (errorMsg.includes('TOKEN_EXPIRED') || errorMsg.includes('invalid_grant') || errorMsg.includes('revoked')) {
+        console.error(`[ScheduleService] Token error - not retrying. User needs to reconnect YouTube account.`);
+        // Still update next_run_at so schedule continues
+        try {
+          const nextRun = calculateNextRun({
+            recurring_pattern: template.recurring_pattern,
+            recurring_time: template.recurring_time,
+            recurring_days: template.recurring_days
+          });
+          if (nextRun) {
+            await BroadcastTemplate.updateLastRun(
+              template.id,
+              new Date().toISOString(),
+              formatNextRunAt(nextRun)
+            );
+            console.log(`[ScheduleService] Updated next_run_at despite token error: ${formatNextRunAt(nextRun)}`);
+          }
+        } catch (updateErr) {
+          console.error(`[ScheduleService] Failed to update next_run_at:`, updateErr.message);
+        }
+        releaseLock();
+        return { error: 'TOKEN_EXPIRED', template: template.name };
+      }
+      
+      // For other errors, retry if attempts remaining (release lock first so retry can re-acquire)
+      if (retryCount < maxRetries - 1) {
+        console.log(`[ScheduleService] Retrying in 30 seconds...`);
+        releaseLock();
+        await new Promise(resolve => setTimeout(resolve, 30000));
+        return this.executeTemplate(template, retryCount + 1);
+      }
+      
+      // All retries failed - still update next_run_at so schedule continues
+      console.error(`[ScheduleService] All retries failed for template: ${template.name}`);
+      try {
+        const nextRun = calculateNextRun({
+          recurring_pattern: template.recurring_pattern,
+          recurring_time: template.recurring_time,
+          recurring_days: template.recurring_days
+        });
+        if (nextRun) {
+          await BroadcastTemplate.updateLastRun(
+            template.id,
+            new Date().toISOString(),
+            formatNextRunAt(nextRun)
+          );
+          console.log(`[ScheduleService] Updated next_run_at after all retries failed: ${formatNextRunAt(nextRun)}`);
+        }
+      } catch (updateErr) {
+        console.error(`[ScheduleService] Failed to update next_run_at:`, updateErr.message);
+      }
+      
+      releaseLock();
+      return { error: errorMsg, template: template.name };
+    }
+  }
+
+  /**
+   * Upload thumbnail for a broadcast
+   * @param {string} accessToken - YouTube access token
+   * @param {string} broadcastId - Broadcast ID to upload thumbnail for
+   * @param {string} thumbnailPath - Path to thumbnail file relative to /public
+   * @param {string} thumbnailFolder - Folder name for thumbnail selection
+   * @param {string} userId - User ID for folder-based thumbnail lookup
+   * @param {string} pinnedThumbnail - Pinned thumbnail path (highest priority)
+   * @param {string} templateId - Template ID for updating thumbnail index (null if using per-stream-key index)
+   * @param {number} currentIndex - Current thumbnail index for sequential mode
+   * @returns {Promise<{success: boolean, newIndex: number, usedPinned: boolean}|false>} Result with newIndex or false on failure
+   */
+  /**
+   * Get all thumbnails in a user's folder sorted numerically/alphabetically
+   * @param {string} userId - User ID
+   * @param {string} folderName - Folder name (empty string for root)
+   * @returns {Array<{filename: string, path: string, url: string}>}
+   */
+  getThumbnailsInFolder(userId, folderName = '') {
+    try {
+      const basePath = path.join(__dirname, '..', 'public', 'uploads', 'thumbnails', String(userId));
+      let targetPath = basePath;
+      if (folderName && String(folderName).trim()) {
+        targetPath = path.join(basePath, String(folderName).trim());
+      }
+      if (!fs.existsSync(targetPath)) return [];
+
+      const files = fs.readdirSync(targetPath)
+        .filter(file => {
+          const ext = path.extname(file).toLowerCase();
+          return ['.jpg', '.jpeg', '.png'].includes(ext);
+        })
+        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+
+      return files.map(file => {
+        const relPath = (folderName && String(folderName).trim())
+          ? `/uploads/thumbnails/${userId}/${String(folderName).trim()}/${file}`
+          : `/uploads/thumbnails/${userId}/${file}`;
+        return {
+          filename: file,
+          path: relPath,
+          url: relPath
+        };
+      });
+    } catch (e) {
+      return [];
+    }
+  }
+
+  /**
+   * Find continuation index for thumbnails in folder based on existing template thumbnails
+   * @param {string} userId - User ID
+   * @param {string} folderName - Folder name
+   * @param {Array<string>} existingThumbnails - List of filenames or relative paths
+   * @returns {number} Continuation start index
+   */
+  getThumbnailContinuationIndex(userId, folderName = '', existingThumbnails = []) {
+    try {
+      const thumbnails = this.getThumbnailsInFolder(userId, folderName);
+      if (thumbnails.length === 0) return 0;
+      if (!Array.isArray(existingThumbnails) || existingThumbnails.length === 0) return 0;
+
+      const norm = (s) => (s || '').toLowerCase().replace(/\\/g, '/').split('/').pop().trim();
+      const existingNames = new Set(existingThumbnails.map(norm).filter(Boolean));
+
+      let highestIndex = -1;
+      thumbnails.forEach((t, idx) => {
+        const fname = norm(t.filename);
+        if (existingNames.has(fname)) {
+          highestIndex = Math.max(highestIndex, idx);
+        }
+      });
+
+      if (highestIndex >= 0) {
+        return (highestIndex + 1) % thumbnails.length;
+      }
+      return 0;
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  /**
+   * Upload thumbnail for a broadcast with support for sequential folder selection and pinned thumbnails
+   * @param {string} accessToken - YouTube OAuth access token
+   * @param {string} broadcastId - YouTube broadcast ID
+   * @param {string} thumbnailPath - Specific thumbnail path (optional)
+   * @param {string} thumbnailFolder - Folder name for sequential selection
+   * @param {string} userId - User ID for folder-based thumbnail lookup
+   * @param {string} pinnedThumbnail - Pinned thumbnail path (highest priority)
+   * @param {string} templateId - Template ID for updating thumbnail index (null if using per-stream-key index)
+   * @param {number} currentIndex - Current thumbnail index for sequential mode
+   * @param {boolean} ignorePinned - If true, bypass pinned thumbnail to enforce sequential rotation
+   * @returns {Promise<{success: boolean, newIndex: number, usedPinned: boolean, path: string|null}|false>} Result with newIndex or false on failure
+   */
+  async uploadThumbnailForBroadcast(accessToken, broadcastId, thumbnailPath, thumbnailFolder = null, userId = null, pinnedThumbnail = null, templateId = null, currentIndex = 0, ignorePinned = false) {
+    try {
+      let fullPath = null;
+      let newThumbnailIndex = currentIndex;
+      let usedPinned = false;
+      const hasFolder = (thumbnailFolder !== null && thumbnailFolder !== undefined && userId);
+      
+      // Priority 1: Use pinned thumbnail if explicitly set and not ignored
+      // IMPORTANT: Only treat as pinned if ignorePinned is false AND pinnedThumbnail is not just a duplicate of an old thumbnailPath
+      if (!ignorePinned && pinnedThumbnail && userId && pinnedThumbnail !== thumbnailPath) {
+        fullPath = path.join(__dirname, '..', 'public', pinnedThumbnail);
+        if (fs.existsSync(fullPath)) {
+          console.log(`[ScheduleService] Using pinned thumbnail: ${pinnedThumbnail}`);
+          usedPinned = true;
+        } else {
+          console.warn(`[ScheduleService] Pinned thumbnail not found: ${fullPath}, falling back to sequential`);
+          fullPath = null;
+        }
+      }
+      
+      // Priority 2: If thumbnail_folder is specified, select thumbnail sequentially from that folder
+      if (!fullPath && hasFolder) {
+        const result = await this.getSequentialThumbnailFromFolder(userId, thumbnailFolder, currentIndex);
+        if (result.path) {
+          fullPath = path.join(__dirname, '..', 'public', result.path);
+          newThumbnailIndex = result.newIndex;
+          console.log(`[ScheduleService] Selected sequential thumbnail from folder "${thumbnailFolder}": ${result.path} (index: ${currentIndex} -> ${newThumbnailIndex})`);
+          
+          if (templateId) {
+            try {
+              await BroadcastTemplate.updateThumbnailIndex(templateId, newThumbnailIndex);
+              console.log(`[ScheduleService] Updated template ${templateId} thumbnail_index to ${newThumbnailIndex}`);
+            } catch (err) {
+              console.error(`[ScheduleService] Failed to update thumbnail index:`, err.message);
+            }
+          }
+        }
+      }
+      
+      // Priority 3: Fallback to specific thumbnail_path if no folder or selection failed
+      if (!fullPath && thumbnailPath) {
+        fullPath = path.join(__dirname, '..', 'public', thumbnailPath);
+      }
+      
+      if (!fullPath || !fs.existsSync(fullPath)) {
+        console.warn(`[ScheduleService] No valid thumbnail found for upload: ${fullPath}`);
+        return false;
+      }
+
+      const thumbnailBuffer = fs.readFileSync(fullPath);
+      await youtubeService.uploadThumbnail(accessToken, broadcastId, thumbnailBuffer);
+      console.log(`[ScheduleService] Thumbnail uploaded for broadcast: ${broadcastId} (${fullPath})`);
+      
+      return { success: true, newIndex: newThumbnailIndex, usedPinned, path: fullPath };
+    } catch (error) {
+      console.error(`[ScheduleService] Thumbnail upload failed for ${broadcastId}:`, error.message);
+      return false;
+    }
+  }
+
+  /**
+   * Get sequential thumbnail from a user's folder
+   * @param {string} userId - User ID
+   * @param {string} folderName - Folder name (empty string for root)
+   * @param {number} currentIndex - Current thumbnail index
+   * @returns {Promise<{path: string|null, newIndex: number, totalCount: number}>} Thumbnail info
+   */
+  async getSequentialThumbnailFromFolder(userId, folderName, currentIndex = 0) {
+    try {
+      const basePath = path.join(__dirname, '..', 'public', 'uploads', 'thumbnails', userId);
+      let targetPath = basePath;
+      
+      if (folderName && folderName.trim()) {
+        targetPath = path.join(basePath, folderName);
+      }
+      
+      if (!fs.existsSync(targetPath)) {
+        console.warn(`[ScheduleService] Thumbnail folder not found: ${targetPath}`);
+        return { path: null, newIndex: 0, totalCount: 0 };
+      }
+      
+      // Get all image files in the folder, sorted alphabetically for consistent order
+      const files = fs.readdirSync(targetPath)
+        .filter(file => {
+          const ext = path.extname(file).toLowerCase();
+          return ['.jpg', '.jpeg', '.png'].includes(ext);
+        })
+        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+      
+      if (files.length === 0) {
+        console.warn(`[ScheduleService] No thumbnails found in folder: ${targetPath}`);
+        return { path: null, newIndex: 0, totalCount: 0 };
+      }
+      
+      // Calculate the actual index (wrap around if needed for file selection)
+      const actualIndex = currentIndex % files.length;
+      const selectedFile = files[actualIndex];
+      
+      // Calculate next index for next run
+      // IMPORTANT: Don't use modulo here! Store the raw incremented value.
+      // The modulo will be applied when selecting the next thumbnail.
+      // This ensures NEXT indicator shows the correct position.
+      const newIndex = currentIndex + 1;
+      
+      console.log(`[ScheduleService] Sequential thumbnail: currentIndex=${currentIndex}, actualIndex=${actualIndex}/${files.length - 1}, file: ${selectedFile}, newIndex: ${newIndex}`);
+      
+      // Return relative path from /public
+      let thumbnailPath;
+      if (folderName && folderName.trim()) {
+        thumbnailPath = `/uploads/thumbnails/${userId}/${folderName}/${selectedFile}`;
+      } else {
+        thumbnailPath = `/uploads/thumbnails/${userId}/${selectedFile}`;
+      }
+      
+      return { path: thumbnailPath, newIndex, totalCount: files.length };
+    } catch (error) {
+      console.error(`[ScheduleService] Error getting sequential thumbnail:`, error.message);
+      return { path: null, newIndex: 0, totalCount: 0 };
+    }
+  }
+
+  /**
+   * Get next title for broadcast using sequential rotation
+   * @param {string} userId - User ID
+   * @param {number} currentIndex - Current title index
+   * @param {string} folderId - Optional folder ID to filter titles
+   * @param {boolean} ignorePinned - Optional flag to ignore pinned title for true sequential rotation
+   * @returns {Promise<{title: Object|null, nextIndex: number, isPinned: boolean, totalCount: number, currentPosition: number}>}
+   */
+  async getNextTitleForBroadcast(userId, currentIndex = 0, folderId = null, ignorePinned = false) {
+    try {
+      // Use TitleSuggestion.getNextTitle for sequential rotation with optional folder filter
+      const result = await TitleSuggestion.getNextTitle(userId, currentIndex, folderId, ignorePinned);
+      
+      if (result.title) {
+        return {
+          title: result.title,
+          nextIndex: result.nextIndex,
+          isPinned: result.isPinned,
+          totalCount: result.totalCount || 1,
+          currentPosition: result.currentPosition || 1
+        };
+      }
+      
+      // No title found
+      return {
+        title: null,
+        nextIndex: 0,
+        isPinned: false,
+        totalCount: 0,
+        currentPosition: 0
+      };
+    } catch (error) {
+      console.error(`[ScheduleService] Error getting next title:`, error.message);
+      return {
+        title: null,
+        nextIndex: currentIndex,
+        isPinned: false,
+        totalCount: 0,
+        currentPosition: 0
+      };
+    }
+  }
+
+  /**
+   * Reload a specific template
+   * @param {string} templateId - Template ID
+   */
+  async reloadTemplate(templateId) {
+    this.cancelJob(templateId);
+    
+    const template = await BroadcastTemplate.findById(templateId);
+    if (template && template.recurring_enabled) {
+      await this.scheduleJob(template);
+    }
+  }
+
+  /**
+   * Shutdown the service
+   */
+  shutdown() {
+    this.stopChecker();
+    this.jobs.clear();
+    this.executingTemplates.clear(); // Clear execution locks
+    this.initialized = false;
+    console.log('[ScheduleService] Shutdown complete');
+  }
+}
+
+// Export singleton instance
+module.exports = new ScheduleService();

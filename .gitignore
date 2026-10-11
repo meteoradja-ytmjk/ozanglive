@@ -1,0 +1,94 @@
+node_modules
+
+# Logs
+logs/
+*.log
+
+# Database files (runtime data, not source code)
+db/*.db
+db/*.db-shm
+db/*.db-wal
+db/backups/
+
+# Environment
+.env
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# White Label: Uploaded branding assets
+public/uploads/branding/*
+!public/uploads/branding/.gitkeep
+
+# Uploaded media (user content)
+public/uploads/videos/
+public/uploads/audios/
+public/uploads/thumbnails/
+public/uploads/avatars/
+public/uploads/rendered/
+
+# Temp files
+temp/
+
+# ---------------------------------------------------------------------------
+# Local dev artifacts (not part of the application source)
+# ---------------------------------------------------------------------------
+
+# db/ scratch & test output (the real database is already ignored above)
+db/*.mp4
+db/*.png
+db/*.aac
+db/*.txt
+db/*.bat
+
+# Local helper / test scripts (Windows)
+check-pixels.js
+test-real.bat
+test-viz.bat
+verify-fix.bat
+BUKA-APLIKASI.bat
+BUKA-APLIKASI-PORT-7576.bat
+BUKA-FIREWALL-PORT-7575.bat
+
+# Local dev notes / session summaries
+AKSES-VPS-GUIDE.md
+BOTTOM-NAV-SHADOW-FIX.md
+CHECK-RENDER-ERROR.md
+GIT-PUSH-GALLERY-ROLLBACK.md
+GIT-PUSH-RENDER-FIX-SUCCESS.md
+GIT-PUSH-SUCCESS-DURATION-FIX.md
+GIT-PUSH-SUCCESS.md
+GIT-PUSH-UPLOAD-OPTIMIZATION.md
+IMPLEMENTASI-COMPLETE.md
+IMPLEMENTASI-SELESAI.md
+MOBILE-COMPARISON.md
+PERBAIKAN-BUG-SESI-2-SELESAI.md
+PORT-7575-RESTORED.md
+QUICK-SUMMARY-RENDER-FIX.md
+REALTIME-FOLDER-OPERATIONS.md
+REALTIME-PUSH-SUCCESS.md
+RENDER-TAB-DEBUG-STEPS.md
+RENDER-UPLOAD-OPTIMIZATION-TASK.md
+ROLLBACK-FILEQUEUEMANAGER.md
+ROLLBACK-SUCCESS-SUMMARY.md
+ROLLBACK-SUMMARY.md
+SYNTAX-ERROR-FIX.md
+VIDEO-LOADING-DELETE-BUTTON-FIX.md
+WINDOWS-COMPATIBILITY-FIX.md
+
+# ---------------------------------------------------------------------------
+# SECURITY: local credential / diagnostic files (contain real login info)
+# These must never be committed to a public repository.
+# ---------------------------------------------------------------------------
+test-creds.json
+test-settings-access.js
+test-real-vps.js
+test-login-flow.js
+test-login.js
+test-quick-reconnect.js
+test-duration-accuracy.js
+diagnose-vps-settings.js
+diagnose-settings.sh
+check-vps-code.sh
+fix-vps.sh

@@ -15828,32 +15828,56 @@ async function checkHealthEndpoint(healthUrl, attempts = 8, intervalMs = 3000) {
 // Get current version & last updated date
 app.get('/api/system/version', isAuthenticated, async (req, res) => {
   try {
-    // Read package.json fresh (don't use require cache)
-    const packagePath = path.join(__dirname, 'package.json');
-    const packageData = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
-    
+    const appDir = __dirname;
+    const packagePath = path.join(appDir, 'package.json');
+    let currentVersion = '2.2.1';
+
+    try {
+      if (fs.existsSync(packagePath)) {
+        const packageData = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
+        if (packageData.version) currentVersion = packageData.version;
+      }
+    } catch (e) {
+      console.warn('[Version] Failed to read package.json:', e.message);
+    }
+
     let lastUpdated = null;
     try {
       const { execSync } = require('child_process');
-      const gitDate = execSync('git log -1 --format=%cI', { cwd: __dirname, encoding: 'utf8', timeout: 3000, stdio: 'pipe' }).trim();
+      const gitDate = execSync('git -c safe.directory=* log -1 --format=%cI', { cwd: appDir, encoding: 'utf8', timeout: 3000, stdio: 'pipe' }).trim();
       if (gitDate) {
         lastUpdated = gitDate;
       }
     } catch (e) {
+      // Fallback to file timestamp
+    }
+
+    if (!lastUpdated) {
       try {
-        const stat = fs.statSync(packagePath);
-        lastUpdated = stat.mtime.toISOString();
-      } catch (err) {}
+        if (fs.existsSync(packagePath)) {
+          const stat = fs.statSync(packagePath);
+          lastUpdated = stat.mtime.toISOString();
+        } else {
+          const stat = fs.statSync(path.join(appDir, 'app.js'));
+          lastUpdated = stat.mtime.toISOString();
+        }
+      } catch (err) {
+        lastUpdated = new Date().toISOString();
+      }
     }
 
     res.json({
       success: true,
-      currentVersion: packageData.version || 'Unknown',
+      currentVersion,
       lastUpdated
     });
   } catch (error) {
     console.error('Error getting version:', error);
-    res.status(500).json({ success: false, error: 'Failed to get version', details: error.message });
+    res.json({
+      success: true,
+      currentVersion: '2.2.1',
+      lastUpdated: new Date().toISOString()
+    });
   }
 });
 
@@ -15861,195 +15885,228 @@ app.get('/api/system/version', isAuthenticated, async (req, res) => {
 app.get('/api/system/check-update', isAuthenticated, isAdmin, async (req, res) => {
   try {
     const { execSync } = require('child_process');
-
-    // Read package.json fresh
-    const packagePath = path.join(__dirname, 'package.json');
-    const packageData = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
-    const currentVersion = packageData.version || '0.0.0';
-
-    // Get the app directory
     const appDir = __dirname;
+
+    // Helper for safe git execution with safe.directory
+    const runGit = (command, options = {}) => {
+      return execSync(`git -c safe.directory=* ${command}`, {
+        cwd: appDir,
+        encoding: 'utf8',
+        stdio: 'pipe',
+        timeout: options.timeout || 15000,
+        ...options
+      });
+    };
+
+    // Safely read package.json
+    let currentVersion = '2.2.1';
+    const packagePath = path.join(appDir, 'package.json');
+    try {
+      if (fs.existsSync(packagePath)) {
+        const packageData = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
+        if (packageData.version) currentVersion = packageData.version;
+      }
+    } catch (pkgErr) {
+      console.warn('[CheckUpdate] Could not read package.json:', pkgErr.message);
+    }
 
     // Check if git is available
     try {
-      execSync('git --version', { cwd: appDir, encoding: 'utf8', timeout: 5000 });
+      runGit('--version', { timeout: 5000 });
     } catch (gitCheckErr) {
       return res.json({
         success: false,
-        error: 'Git is not installed or not available in PATH.'
+        error: 'Git tidak terinstal atau tidak tersedia di PATH sistem.'
       });
     }
 
     // Check if this is a git repository
     try {
-      execSync('git rev-parse --git-dir', { cwd: appDir, encoding: 'utf8', timeout: 5000 });
+      runGit('rev-parse --git-dir', { timeout: 5000 });
     } catch (repoErr) {
       return res.json({
         success: false,
-        error: 'This directory is not a git repository.'
+        error: 'Direktori aplikasi ini bukan merupakan git repository.'
       });
     }
 
     // Fetch latest from remote
     try {
-      execSync('git fetch origin', { cwd: appDir, encoding: 'utf8', timeout: 60000, stdio: 'pipe' });
+      runGit('fetch origin', { timeout: 60000 });
     } catch (fetchErr) {
-      console.error('Git fetch error:', fetchErr.message);
+      console.warn('[CheckUpdate] Git fetch error:', fetchErr.message);
+      try {
+        const remotes = runGit('remote', { timeout: 5000 }).trim().split('\n').filter(Boolean);
+        if (remotes.length === 0) {
+          return res.json({
+            success: false,
+            error: 'Tidak ada git remote yang terkonfigurasi pada repositori ini.'
+          });
+        }
+      } catch (rErr) {}
+
       return res.json({
         success: false,
-        error: 'Failed to fetch updates. Check your internet connection and git remote configuration.'
+        error: 'Gagal mengambil pembaruan dari remote. Periksa koneksi internet VPS dan konfigurasi remote.'
       });
     }
 
-    // Check if there are updates available
-    let behindCount = 0;
-    let changelog = [];
+    // Determine current branch safely (handle detached HEAD)
     let currentBranch = 'main';
-
     try {
-      // Get current branch
-      currentBranch = execSync('git rev-parse --abbrev-ref HEAD', { cwd: appDir, encoding: 'utf8', stdio: 'pipe' }).trim();
+      const branchOutput = runGit('rev-parse --abbrev-ref HEAD', { timeout: 5000 }).trim();
+      if (branchOutput && branchOutput !== 'HEAD') {
+        currentBranch = branchOutput;
+      }
+    } catch (bErr) {
+      currentBranch = 'main';
+    }
 
-      // Count commits behind
-      const behindOutput = execSync(`git rev-list HEAD..origin/${currentBranch} --count`, { cwd: appDir, encoding: 'utf8', stdio: 'pipe' }).trim();
-      behindCount = parseInt(behindOutput, 10) || 0;
-
-      // Get changelog from CHANGELOG.md file (remote version)
-      if (behindCount > 0) {
+    // Determine target remote reference
+    let targetRemoteRef = `origin/${currentBranch}`;
+    try {
+      runGit(`rev-parse --verify ${targetRemoteRef}`, { timeout: 5000 });
+    } catch (refErr) {
+      try {
+        runGit('rev-parse --verify origin/main', { timeout: 5000 });
+        targetRemoteRef = 'origin/main';
+        currentBranch = 'main';
+      } catch (mainErr) {
         try {
-          // Try to get remote CHANGELOG.md
-          const remoteChangelog = execSync(`git show origin/${currentBranch}:CHANGELOG.md`, { cwd: appDir, encoding: 'utf8', stdio: 'pipe' });
+          runGit('rev-parse --verify origin/master', { timeout: 5000 });
+          targetRemoteRef = 'origin/master';
+          currentBranch = 'master';
+        } catch (masterErr) {
+          targetRemoteRef = 'origin/HEAD';
+        }
+      }
+    }
 
-          // Parse changelog to get entries for versions newer than current
-          const parseChangelog = (content, currentVer, latestVer) => {
-            const lines = content.split('\n');
-            const entries = [];
-            let inTargetVersion = false;
-            let currentSection = '';
+    // Count commits behind
+    let behindCount = 0;
+    try {
+      const behindOutput = runGit(`rev-list HEAD..${targetRemoteRef} --count`, { timeout: 10000 }).trim();
+      behindCount = parseInt(behindOutput, 10) || 0;
+    } catch (countErr) {
+      console.warn('[CheckUpdate] Could not count commits behind:', countErr.message);
+      behindCount = 0;
+    }
 
-            for (const line of lines) {
-              // Match version header like ## [2.2.0] - 2026-01-12
-              const versionMatch = line.match(/^## \[(\d+\.\d+\.\d+)\]/);
-              if (versionMatch) {
-                const version = versionMatch[1];
-                // Check if this version is newer than current
-                if (compareVersions(version, currentVer) > 0) {
-                  inTargetVersion = true;
-                  entries.push(`📦 Version ${version}`);
-                } else {
-                  inTargetVersion = false;
-                }
-                continue;
-              }
+    // Changelog extraction
+    let changelog = [];
+    if (behindCount > 0) {
+      try {
+        const remoteChangelog = runGit(`show ${targetRemoteRef}:CHANGELOG.md`, { timeout: 10000 });
 
-              if (inTargetVersion) {
-                // Match section headers like ### Added, ### Changed, ### Fixed
-                const sectionMatch = line.match(/^### (Added|Changed|Fixed|Removed|Security|Deprecated)/);
-                if (sectionMatch) {
-                  currentSection = sectionMatch[1];
-                  continue;
-                }
+        const compareVersions = (v1, v2) => {
+          const parts1 = String(v1 || '0').split('.').map(Number);
+          const parts2 = String(v2 || '0').split('.').map(Number);
+          for (let i = 0; i < 3; i++) {
+            const p1 = parts1[i] || 0;
+            const p2 = parts2[i] || 0;
+            if (p1 > p2) return 1;
+            if (p1 < p2) return -1;
+          }
+          return 0;
+        };
 
-                // Match list items
-                const itemMatch = line.match(/^- (.+)/);
-                if (itemMatch && currentSection) {
-                  const icon = currentSection === 'Added' ? '✨' :
-                    currentSection === 'Changed' ? '🔄' :
-                      currentSection === 'Fixed' ? '🐛' :
-                        currentSection === 'Removed' ? '🗑️' :
-                          currentSection === 'Security' ? '🔒' : '📝';
-                  entries.push(`${icon} ${itemMatch[1]}`);
-                }
-              }
+        const lines = remoteChangelog.split('\n');
+        let inTargetVersion = false;
+        let currentSection = '';
+
+        for (const line of lines) {
+          const versionMatch = line.match(/^## \[(\d+\.\d+\.\d+)\]/);
+          if (versionMatch) {
+            const version = versionMatch[1];
+            if (compareVersions(version, currentVersion) > 0) {
+              inTargetVersion = true;
+              changelog.push(`📦 Version ${version}`);
+            } else {
+              inTargetVersion = false;
+            }
+            continue;
+          }
+
+          if (inTargetVersion) {
+            const sectionMatch = line.match(/^### (Added|Changed|Fixed|Removed|Security|Deprecated)/);
+            if (sectionMatch) {
+              currentSection = sectionMatch[1];
+              continue;
             }
 
-            return entries.slice(0, 15); // Limit to 15 entries
-          };
-
-          // Simple version comparison function
-          const compareVersions = (v1, v2) => {
-            const parts1 = v1.split('.').map(Number);
-            const parts2 = v2.split('.').map(Number);
-            for (let i = 0; i < 3; i++) {
-              if (parts1[i] > parts2[i]) return 1;
-              if (parts1[i] < parts2[i]) return -1;
+            const itemMatch = line.match(/^- (.+)/);
+            if (itemMatch && currentSection) {
+              const icon = currentSection === 'Added' ? '✨' :
+                currentSection === 'Changed' ? '🔄' :
+                  currentSection === 'Fixed' ? '🐛' :
+                    currentSection === 'Removed' ? '🗑️' :
+                      currentSection === 'Security' ? '🔒' : '📝';
+              changelog.push(`${icon} ${itemMatch[1]}`);
             }
-            return 0;
-          };
-
-          // Get remote version first
-          let remoteVersion = currentVersion;
-          try {
-            const remotePackage = execSync(`git show origin/${currentBranch}:package.json`, { cwd: appDir, encoding: 'utf8', stdio: 'pipe' });
-            const remotePkg = JSON.parse(remotePackage);
-            remoteVersion = remotePkg.version || currentVersion;
-          } catch (e) { }
-
-          changelog = parseChangelog(remoteChangelog, currentVersion, remoteVersion);
-
-        } catch (changelogErr) {
-          // Fallback to git commit messages if CHANGELOG.md not found
-          console.log('Could not get CHANGELOG.md, falling back to git log:', changelogErr.message);
-          try {
-            const logOutput = execSync(`git log HEAD..origin/${currentBranch} --oneline --no-merges -n 10`, { cwd: appDir, encoding: 'utf8', stdio: 'pipe' });
-            changelog = logOutput.trim().split('\n').filter(l => l.trim()).map(l => {
-              // Remove commit hash prefix
-              return l.replace(/^[a-f0-9]+\s+/, '');
-            });
-          } catch (logErr) {
-            console.log('Could not get changelog:', logErr.message);
           }
         }
-      }
-
-      // Try to get remote package.json version
-      let latestVersion = currentVersion;
-      try {
-        const remotePackage = execSync(`git show origin/${currentBranch}:package.json`, { cwd: appDir, encoding: 'utf8', stdio: 'pipe' });
-        const remotePkg = JSON.parse(remotePackage);
-        latestVersion = remotePkg.version || currentVersion;
-      } catch (e) {
-        // If can't get remote version, use current + indicator
-        if (behindCount > 0) {
-          latestVersion = `${currentVersion} (+${behindCount} commits)`;
+        changelog = changelog.slice(0, 15);
+      } catch (clErr) {
+        try {
+          const logOutput = runGit(`log HEAD..${targetRemoteRef} --oneline --no-merges -n 10`, { timeout: 10000 });
+          changelog = logOutput.trim().split('\n').filter(l => l.trim()).map(l => {
+            return l.replace(/^[a-f0-9]+\s+/, '');
+          });
+        } catch (logErr) {
+          console.warn('[CheckUpdate] Could not get git log changelog:', logErr.message);
         }
       }
-
-      const versionPoint = getVersionPoint(currentVersion, latestVersion);
-
-      let lastUpdated = null;
-      try {
-        const gitDate = execSync('git log -1 --format=%cI', { cwd: appDir, encoding: 'utf8', timeout: 3000, stdio: 'pipe' }).trim();
-        if (gitDate) lastUpdated = gitDate;
-      } catch (e) {
-        try {
-          const stat = fs.statSync(packagePath);
-          lastUpdated = stat.mtime.toISOString();
-        } catch (err) {}
-      }
-
-      res.json({
-        success: true,
-        currentVersion,
-        latestVersion,
-        lastUpdated,
-        versionPoint,
-        updateAvailable: behindCount > 0,
-        commitsAhead: 0,
-        commitsBehind: behindCount,
-        branch: currentBranch,
-        changelog
-      });
-    } catch (gitErr) {
-      console.error('Git check error:', gitErr.message);
-      res.json({
-        success: false,
-        error: 'Failed to check for updates: ' + gitErr.message
-      });
     }
+
+    // Try to get remote package.json version
+    let latestVersion = currentVersion;
+    try {
+      const remotePackage = runGit(`show ${targetRemoteRef}:package.json`, { timeout: 5000 });
+      const remotePkg = JSON.parse(remotePackage);
+      latestVersion = remotePkg.version || currentVersion;
+    } catch (e) {
+      if (behindCount > 0) {
+        latestVersion = `${currentVersion} (+${behindCount} commits)`;
+      }
+    }
+
+    const versionPoint = getVersionPoint(currentVersion, latestVersion);
+
+    let lastUpdated = null;
+    try {
+      const gitDate = runGit('log -1 --format=%cI', { timeout: 3000 }).trim();
+      if (gitDate) lastUpdated = gitDate;
+    } catch (e) {
+      try {
+        if (fs.existsSync(packagePath)) {
+          lastUpdated = fs.statSync(packagePath).mtime.toISOString();
+        } else {
+          lastUpdated = fs.statSync(path.join(appDir, 'app.js')).mtime.toISOString();
+        }
+      } catch (err) {
+        lastUpdated = new Date().toISOString();
+      }
+    }
+
+    return res.json({
+      success: true,
+      currentVersion,
+      latestVersion,
+      lastUpdated,
+      versionPoint,
+      updateAvailable: behindCount > 0,
+      commitsAhead: 0,
+      commitsBehind: behindCount,
+      branch: currentBranch,
+      changelog
+    });
+
   } catch (error) {
     console.error('Error checking for updates:', error);
-    res.status(500).json({ success: false, error: 'Failed to check for updates: ' + error.message });
+    return res.json({
+      success: false,
+      error: 'Gagal memeriksa pembaruan: ' + (error.message || 'Kesalahan sistem')
+    });
   }
 });
 
@@ -16069,12 +16126,20 @@ app.post('/api/system/perform-update', isAuthenticated, isAdmin, async (req, res
       log.push(message);
     };
 
+    const runGitAsync = (cmd, opts = {}) => {
+      return execAsync(`git -c safe.directory=* ${cmd}`, {
+        cwd: appDir,
+        timeout: opts.timeout || 30000,
+        ...opts
+      });
+    };
+
     addLog('Starting update process...');
 
     // Capture current commit for rollback
     let previousHead = '';
     try {
-      previousHead = (await execAsync('git rev-parse HEAD', { cwd: appDir, timeout: 5000 })).stdout.trim();
+      previousHead = (await runGitAsync('rev-parse HEAD', { timeout: 5000 })).stdout.trim();
       addLog(`Current commit: ${previousHead}`);
     } catch (err) {
       addLog(`Warning: Unable to capture current commit (${err.message})`);
@@ -16084,8 +16149,10 @@ app.post('/api/system/perform-update', isAuthenticated, isAdmin, async (req, res
     let previousVersion = 'Unknown';
     try {
       const packagePath = path.join(appDir, 'package.json');
-      const packageData = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
-      previousVersion = packageData.version || 'Unknown';
+      if (fs.existsSync(packagePath)) {
+        const packageData = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
+        previousVersion = packageData.version || 'Unknown';
+      }
     } catch (versionErr) {
       addLog(`Warning: Unable to read current version (${versionErr.message})`);
     }
@@ -16104,10 +16171,13 @@ app.post('/api/system/perform-update', isAuthenticated, isAdmin, async (req, res
       });
     }
 
-    // Get current branch
+    // Get current branch safely
     let currentBranch = 'main';
     try {
-      currentBranch = (await execAsync('git rev-parse --abbrev-ref HEAD', { cwd: appDir, timeout: 5000 })).stdout.trim();
+      const branchOutput = (await runGitAsync('rev-parse --abbrev-ref HEAD', { timeout: 5000 })).stdout.trim();
+      if (branchOutput && branchOutput !== 'HEAD') {
+        currentBranch = branchOutput;
+      }
     } catch (e) {
       currentBranch = 'main';
     }
@@ -16115,7 +16185,7 @@ app.post('/api/system/perform-update', isAuthenticated, isAdmin, async (req, res
     // Check for local changes
     let hasLocalChanges = false;
     try {
-      const { stdout: statusOutput } = await execAsync('git status --porcelain', { cwd: appDir, timeout: 10000 });
+      const { stdout: statusOutput } = await runGitAsync('status --porcelain', { timeout: 10000 });
       hasLocalChanges = statusOutput.trim().length > 0;
       if (hasLocalChanges) {
         addLog('Detected local changes in repository');
@@ -16126,20 +16196,18 @@ app.post('/api/system/perform-update', isAuthenticated, isAdmin, async (req, res
 
     // Handle based on mode
     if (mode === 'stash' && hasLocalChanges) {
-      // Stash local changes
       addLog('Stashing local changes...');
       try {
-        await execAsync('git stash push -m "Auto-stash before update"', { cwd: appDir, timeout: 30000 });
+        await runGitAsync('stash push -m "Auto-stash before update"', { timeout: 30000 });
         addLog('Local changes stashed successfully');
       } catch (stashErr) {
         addLog(`Stash warning: ${stashErr.message}`);
       }
     } else if (mode === 'force') {
-      // Force reset to remote
       addLog('Force resetting to remote version...');
       try {
-        await execAsync(`git fetch origin ${currentBranch}`, { cwd: appDir, timeout: 60000 });
-        await execAsync(`git reset --hard origin/${currentBranch}`, { cwd: appDir, timeout: 30000 });
+        await runGitAsync(`fetch origin ${currentBranch}`, { timeout: 60000 });
+        await runGitAsync(`reset --hard origin/${currentBranch}`, { timeout: 30000 });
         addLog('Force reset completed');
       } catch (resetErr) {
         addLog(`Reset error: ${resetErr.message}`);
@@ -16155,12 +16223,11 @@ app.post('/api/system/perform-update', isAuthenticated, isAdmin, async (req, res
     if (mode !== 'force') {
       addLog('Pulling latest changes from repository...');
       try {
-        const { stdout: pullOutput, stderr: pullStderr } = await execAsync('git pull', { cwd: appDir, timeout: 120000 });
+        const { stdout: pullOutput, stderr: pullStderr } = await runGitAsync(`pull origin ${currentBranch}`, { timeout: 120000 });
         addLog(pullOutput.trim() || pullStderr.trim() || 'Git pull completed');
       } catch (pullErr) {
         const errorMsg = pullErr.message || '';
 
-        // Check if error is due to local changes
         if (errorMsg.includes('local changes') || errorMsg.includes('would be overwritten') || errorMsg.includes('Please commit') || errorMsg.includes('Please stash')) {
           addLog(`Git pull error: ${errorMsg}`);
           return res.json({
@@ -16175,7 +16242,7 @@ app.post('/api/system/perform-update', isAuthenticated, isAdmin, async (req, res
         addLog(`Git pull error: ${errorMsg}`);
         return res.json({
           success: false,
-          error: 'Failed to pull updates from repository',
+          error: 'Failed to pull updates from repository: ' + errorMsg,
           log
         });
       }
@@ -16185,7 +16252,7 @@ app.post('/api/system/perform-update', isAuthenticated, isAdmin, async (req, res
     if (mode === 'stash' && hasLocalChanges) {
       addLog('Restoring stashed changes...');
       try {
-        await execAsync('git stash pop', { cwd: appDir, timeout: 30000 });
+        await runGitAsync('stash pop', { timeout: 30000 });
         addLog('Stashed changes restored');
       } catch (popErr) {
         addLog(`Warning: Could not restore stashed changes automatically. Use 'git stash pop' manually if needed.`);
@@ -16201,22 +16268,23 @@ app.post('/api/system/perform-update', isAuthenticated, isAdmin, async (req, res
       addLog(npmLines || 'npm install completed');
     } catch (npmErr) {
       addLog(`npm install warning: ${npmErr.message}`);
-      // Don't fail on npm warnings, continue
     }
 
     // Capture target commit + version after update for rollback metadata
     let updatedHead = '';
     let updatedVersion = 'Unknown';
     try {
-      updatedHead = (await execAsync('git rev-parse HEAD', { cwd: appDir, timeout: 5000 })).stdout.trim();
+      updatedHead = (await runGitAsync('rev-parse HEAD', { timeout: 5000 })).stdout.trim();
     } catch (headErr) {
       addLog(`Warning: Unable to capture updated commit (${headErr.message})`);
     }
 
     try {
       const packagePath = path.join(appDir, 'package.json');
-      const packageData = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
-      updatedVersion = packageData.version || 'Unknown';
+      if (fs.existsSync(packagePath)) {
+        const packageData = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
+        updatedVersion = packageData.version || 'Unknown';
+      }
     } catch (versionErr) {
       addLog(`Warning: Unable to read updated version (${versionErr.message})`);
     }
@@ -16234,7 +16302,6 @@ app.post('/api/system/perform-update', isAuthenticated, isAdmin, async (req, res
     addLog('Update completed successfully!');
     addLog('Restarting application and running health check...');
 
-    // Send response before restart
     res.json({
       success: true,
       message: 'Update completed successfully. Application will restart.',
@@ -16248,7 +16315,7 @@ app.post('/api/system/perform-update', isAuthenticated, isAdmin, async (req, res
 
   } catch (error) {
     console.error('Error performing update:', error);
-    res.status(500).json({
+    res.json({
       success: false,
       error: 'Failed to perform update: ' + error.message,
       log: [`Error: ${error.message}`]
@@ -16279,7 +16346,7 @@ app.get('/api/system/rollback-status', isAuthenticated, isAdmin, async (req, res
     });
   } catch (error) {
     console.error('Error getting rollback status:', error);
-    res.status(500).json({ success: false, error: 'Failed to get rollback status: ' + error.message });
+    res.json({ success: false, error: 'Failed to get rollback status: ' + error.message });
   }
 });
 
@@ -16309,7 +16376,7 @@ app.post('/api/system/rollback-update', isAuthenticated, isAdmin, async (req, re
     }
 
     addLog(`Validating rollback target ${state.previousHead}...`);
-    await execAsync(`git rev-parse --verify ${state.previousHead}^{commit}`, { cwd: appDir, timeout: 15000 });
+    await execAsync(`git -c safe.directory=* rev-parse --verify ${state.previousHead}^{commit}`, { cwd: appDir, timeout: 15000 });
 
     addLog('Stopping app via PM2 before rollback...');
     try {
@@ -16320,7 +16387,7 @@ app.post('/api/system/rollback-update', isAuthenticated, isAdmin, async (req, re
     }
 
     addLog(`Rolling back to commit ${state.previousHead}...`);
-    await execAsync(`git reset --hard ${state.previousHead}`, { cwd: appDir, timeout: 60000 });
+    await execAsync(`git -c safe.directory=* reset --hard ${state.previousHead}`, { cwd: appDir, timeout: 60000 });
 
     if (state.backupBase) {
       addLog('Restoring database backup from pre-update snapshot...');
@@ -16372,7 +16439,7 @@ app.post('/api/system/rollback-update', isAuthenticated, isAdmin, async (req, re
     });
   } catch (error) {
     console.error('Error performing rollback:', error);
-    res.status(500).json({
+    res.json({
       success: false,
       error: 'Failed to rollback update: ' + error.message
     });
