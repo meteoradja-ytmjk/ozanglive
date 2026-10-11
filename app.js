@@ -11356,7 +11356,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
     const reqScheduleDays = req.body.scheduleDays || (templateObj ? templateObj.recurring_days : null);
     const isRecurringReq = reqScheduleType === 'daily' || reqScheduleType === 'weekly';
     const isFromTemplate = !!templateId;
-    const isStartImmediately = (req.body.startImmediately === 'true');
+    const isStartImmediately = (req.body.startImmediately === 'true' || req.body.startImmediately === true || req.body.startImmediately === 1 || req.body.startImmediately === '1');
     const minTime = new Date(Date.now() + 10 * 60 * 1000);
 
     // Parse scheduledStartTime sent from client (either WIB datetime-local or ISO string)
@@ -11501,18 +11501,19 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
     let sDate = null;
     if (isStartImmediately) {
       sDate = new Date(finalScheduledStartTime);
-    } else if (rawStartTime) {
-      sDate = parseWIBDateTimeLocal(rawStartTime);
     } else if (finalScheduledStartTime) {
-      sDate = new Date(finalScheduledStartTime);
+      sDate = parseWIBDateTimeLocal(finalScheduledStartTime) || new Date(finalScheduledStartTime);
+      if (sDate && isNaN(sDate.getTime())) sDate = null;
+    } else if (rawStartTime) {
+      sDate = parseWIBDateTimeLocal(rawStartTime) || new Date(rawStartTime);
+      if (sDate && isNaN(sDate.getTime())) sDate = null;
     }
 
     const scheduleTypeReq = req.body.scheduleType || (matchedSlot ? matchedSlot.scheduleType : null) || (templateObj ? templateObj.schedule_type : 'once');
     const isRecurringSchedule = (scheduleTypeReq === 'daily' || scheduleTypeReq === 'weekly');
-    const isFutureSchedule = !isStartImmediately && (
-      isRecurringSchedule ||
-      (sDate && !isNaN(sDate.getTime()) && (sDate.getTime() - Date.now() > 2 * 60 * 1000))
-    );
+    // Siaran berjadwal TIDAK BOLEH dibuat langsung di YouTube API sebelum jam yang ditentukan.
+    // Hanya jika pengguna memilih "Mulai Live" langsung (isStartImmediately === true), broadcast dibuat sekarang di YouTube.
+    const isFutureSchedule = !isStartImmediately;
 
     // Get thumbnail folder from request or inherit from template/slot
     let thumbnailFolder = req.body.thumbnailFolder;
