@@ -12239,7 +12239,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       let endIso = null;
       let sDate = null;
       let eDate = null;
-      if (req.body.startImmediately === 'true') {
+      if (isStartImmediately) {
         scheduleIso = finalScheduledStartTime;
         sDate = new Date(finalScheduledStartTime);
       } else if (rawStartTime) {
@@ -12340,8 +12340,8 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         vertical_stream_key: isDualStream ? (verticalStreamKey || null) : null,
         backup_rtmp_url: isDualStream ? (verticalStreamKey || null) : null,
         tags: parsedTags && parsedTags.length > 0 ? JSON.stringify(parsedTags) : null,
-        start_time: req.body.startImmediately === 'true' ? new Date().toISOString() : null,
-        status: req.body.startImmediately === 'true' ? 'live' : (isScheduled ? 'scheduled' : 'offline')
+        start_time: isStartImmediately ? new Date().toISOString() : null,
+        status: isStartImmediately ? 'live' : (isScheduled ? 'scheduled' : 'offline')
       };
 
       // Check if an associated stream record already exists for this broadcast to prevent duplicates
@@ -12362,7 +12362,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         console.log('[API] Created associated Stream record:', createdStream.id, 'for broadcast:', broadcast.broadcastId, 'schedule_time:', scheduleIso);
       }
 
-      if (req.body.startImmediately === 'true' && createdStream && (req.body.videoId || videoId || createdStream.video_id)) {
+      if (isStartImmediately && createdStream && (req.body.videoId || videoId || createdStream.video_id)) {
         if (typeof streamingService !== 'undefined' && typeof streamingService.startStream === 'function') {
           try {
             streamStartResult = await streamingService.startStream(createdStream.id);
