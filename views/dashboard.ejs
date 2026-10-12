@@ -2472,9 +2472,14 @@
       </td>
       <td class="px-3 py-4">
         <div class="flex items-center flex-wrap gap-1">
+          ${stream.status === 'live' ? `
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-500/20 text-red-400 border border-red-500/30 animate-pulse shadow-sm">
+            <span class="w-2 h-2 rounded-full bg-red-500 inline-block animate-ping"></span>
+            <i class="ti ti-broadcast text-xs"></i> Live
+          </span>` : `
           <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusClass} text-white">
             ${statusText}
-          </span>
+          </span>`}
           ${youtubeStatusBadge}
         </div>
       </td>
@@ -2517,9 +2522,14 @@
         <div class="flex-1 min-w-0 mr-1">
           <div class="flex items-center gap-2 mb-1">
             <span class="text-[11px] font-mono text-gray-500">#${index}</span>
+            ${stream.status === 'live' ? `
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-red-500/20 text-red-400 border border-red-500/30 animate-pulse shadow-xs">
+              <span class="w-1.5 h-1.5 rounded-full bg-red-500 inline-block animate-ping"></span>
+              <i class="ti ti-broadcast text-[11px]"></i> Live
+            </span>` : `
             <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold ${statusClass} text-white shadow-xs">
               ${statusText}
-            </span>
+            </span>`}
             ${youtubeStatusBadge}
           </div>
           <h4 class="font-medium text-white text-xs sm:text-sm truncate leading-tight">${escapeHtml(stream.title)}</h4>

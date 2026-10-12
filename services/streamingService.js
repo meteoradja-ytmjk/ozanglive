@@ -183,7 +183,10 @@ async function endYouTubeBroadcastForStream(stream, broadcastIdHint) {
 
     try {
       const finalStatus = (endResult && endResult.lifeCycleStatus) ? endResult.lifeCycleStatus : 'complete';
-      await Stream.update(stream.id, { youtube_lifecycle_status: finalStatus });
+      await Stream.update(stream.id, { 
+        youtube_lifecycle_status: finalStatus,
+        status: 'completed'
+      });
     } catch (statusUpdateErr) {
       // ignore
     }

@@ -6246,7 +6246,7 @@ app.post('/api/streams/:id/start', isAuthenticated, async (req, res) => {
     if (!stream) {
       return res.status(404).json({ success: false, error: 'Stream not found' });
     }
-    if (stream.user_id !== req.session.userId) {
+    if (String(stream.user_id) !== String(req.session.userId)) {
       return res.status(403).json({ success: false, error: 'Not authorized' });
     }
     if (stream.status === 'live') {
@@ -6255,11 +6255,26 @@ app.post('/api/streams/:id/start', isAuthenticated, async (req, res) => {
     if (!stream.video_id) {
       return res.json({ success: false, error: 'No video attached to this stream' });
     }
+
+    // Set status to 'live' immediately and clear schedule_time for once streams so status is realtime live
+    const updateFields = { status: 'live', start_time: new Date().toISOString() };
+    if (stream.schedule_type === 'once') {
+      updateFields.schedule_time = null;
+    }
+    await Stream.update(streamId, updateFields);
+
     const result = await streamingService.startStream(streamId);
     if (result.success) {
+      if (typeof invalidateBroadcastsCache === 'function') {
+        invalidateBroadcastsCache(req.session.userId);
+      }
       const updatedStream = await Stream.getStreamWithVideo(streamId);
       return res.json({ success: true, stream: updatedStream });
     } else {
+      // Revert if start failed
+      const revertStatus = (stream.schedule_type === 'daily' || stream.schedule_type === 'weekly') ? 'scheduled' : 'offline';
+      await Stream.update(streamId, { status: revertStatus });
+
       // Check if limit reached
       if (result.limitReached) {
         return res.status(403).json({
@@ -6298,12 +6313,16 @@ app.post('/api/streams/:id/stop', isAuthenticated, async (req, res) => {
       const isRecurring = (stream.schedule_type === 'daily' || stream.schedule_type === 'weekly') && (stream.recurring_enabled === 1 || stream.recurring_enabled === true);
       if (stream.schedule_type === 'once') {
         try {
-          await Stream.update(streamId, { schedule_time: null, status: 'offline' });
+          await Stream.update(streamId, { schedule_time: null, status: 'completed', youtube_lifecycle_status: 'complete' });
         } catch (_) {}
       } else if (isRecurring) {
         if (typeof schedulerService !== 'undefined' && typeof schedulerService.markAsTriggered === 'function') {
           schedulerService.markAsTriggered(streamId);
         }
+      }
+
+      if (typeof invalidateBroadcastsCache === 'function') {
+        invalidateBroadcastsCache(req.session.userId);
       }
 
       const updatedStream = await Stream.getStreamWithVideo(streamId);
@@ -11072,8 +11091,9 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
          FROM streams s
          LEFT JOIN youtube_credentials yc ON s.youtube_account_id = yc.id
          WHERE (s.user_id = ? OR CAST(s.user_id AS TEXT) = CAST(? AS TEXT)) 
-           AND (s.status IN ('scheduled', 'live', 'liveStarting') OR s.youtube_broadcast_id IS NOT NULL)
-           AND s.status != 'completed'`,
+           AND s.status IN ('scheduled', 'live', 'liveStarting', 'starting')
+           AND s.status NOT IN ('completed', 'offline')
+           AND (s.youtube_lifecycle_status IS NULL OR s.youtube_lifecycle_status NOT IN ('complete', 'completed', 'revoked', 'ended'))`,
         [userId, String(userId)],
         (err, streamRows) => {
           const sRows = (err ? [] : (streamRows || []));
@@ -11241,9 +11261,9 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
       const dedupedResult = [];
       result.forEach(b => {
         const bId = b && (b.id || b.broadcastId || b.youtube_broadcast_id);
-        const status = (b && (b.lifeCycleStatus || b.status?.lifeCycleStatus)) || '';
+        const status = String((b && (b.lifeCycleStatus || b.status?.lifeCycleStatus || b.status)) || '').toLowerCase();
         if (status === 'complete' || status === 'completed' || status === 'revoked' || status === 'ended') {
-          return; // Skip ended broadcasts completely
+          return; // Skip ended broadcasts completely so list is cleared! Broadcast remains as VOD on YouTube!
         }
         if (bId && !seenResultIds.has(bId)) {
           seenResultIds.add(bId);
@@ -11373,9 +11393,9 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
       broadcastArrays.flat().forEach(b => {
         if (!b) return;
         const bId = b.id || b.broadcastId || b.youtube_broadcast_id;
-        const status = (b.lifeCycleStatus || b.status?.lifeCycleStatus) || '';
+        const status = String((b && (b.lifeCycleStatus || b.status?.lifeCycleStatus || b.status)) || '').toLowerCase();
         if (status === 'complete' || status === 'completed' || status === 'revoked' || status === 'ended') {
-          return; // Skip ended broadcasts completely
+          return; // Skip ended broadcasts completely so list is cleared! Broadcast remains as VOD on YouTube!
         }
         if (bId && !seenIds.has(bId)) {
           seenIds.add(bId);
@@ -11385,6 +11405,11 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
 
       // Also include any local scheduled broadcasts (e.g. pending YouTube broadcast creation)
       localStreams.forEach(ls => {
+        if (!ls) return;
+        const lsStatus = String(ls.status || ls.youtube_lifecycle_status || '').toLowerCase();
+        if (lsStatus === 'complete' || lsStatus === 'completed' || lsStatus === 'revoked' || lsStatus === 'ended' || lsStatus === 'offline') {
+          return;
+        }
         const lsId = ls.id || ls.broadcastId || ls.youtube_broadcast_id;
         if (lsId && !seenIds.has(lsId)) {
           seenIds.add(lsId);
@@ -12527,8 +12552,8 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       let sDate = null;
       let eDate = null;
       if (isStartImmediately) {
-        scheduleIso = finalScheduledStartTime;
-        sDate = new Date(finalScheduledStartTime);
+        scheduleIso = null;
+        sDate = new Date();
       } else if (rawStartTime) {
         sDate = parseWIBDateTimeLocal(rawStartTime);
         if (sDate) scheduleIso = sDate.toISOString();
@@ -12615,7 +12640,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         stream_duration_minutes: (isExplicitUnlimited || totalMinutes <= 0) ? null : totalMinutes,
         duration: (isExplicitUnlimited || totalMinutes <= 0) ? null : totalMinutes,
         schedule_type: scheduleType,
-        schedule_time: scheduleIso,
+        schedule_time: isStartImmediately ? null : scheduleIso,
         end_time: finalEndTime,
         schedule_days: scheduleDaysFormatted,
         recurring_time: finalRecurringTime,
@@ -12628,7 +12653,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         backup_rtmp_url: isDualStream ? (verticalStreamKey || null) : null,
         tags: parsedTags && parsedTags.length > 0 ? JSON.stringify(parsedTags) : null,
         start_time: isStartImmediately ? new Date().toISOString() : null,
-        status: isStartImmediately ? 'starting' : (isScheduled ? 'scheduled' : 'offline')
+        status: isStartImmediately ? 'live' : (isScheduled ? 'scheduled' : 'offline')
       };
 
       // Check if an associated stream record already exists for this broadcast to prevent duplicates
@@ -12654,7 +12679,11 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
           try {
             streamStartResult = await streamingService.startStream(createdStream.id);
             console.log('[API] Stream engine started immediately for stream ID:', createdStream.id, 'result:', streamStartResult);
-            if (streamStartResult && !streamStartResult.success) {
+            if (streamStartResult && streamStartResult.success) {
+              await Stream.update(createdStream.id, { status: 'live', schedule_time: null }).catch(() => {});
+              createdStream.status = 'live';
+              createdStream.schedule_time = null;
+            } else {
               await Stream.update(createdStream.id, { status: 'offline' }).catch(() => {});
             }
           } catch (startErr) {
@@ -12717,7 +12746,14 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
     }
 
     invalidateBroadcastsCache(req.session.userId);
-    res.json({ success: true, broadcast, stream: createdStream, streamStartResult });
+    const returnBroadcast = isStartImmediately ? {
+      ...broadcast,
+      status: 'live',
+      lifeCycleStatus: 'live',
+      isLocalScheduled: false,
+      scheduledStartTime: null
+    } : broadcast;
+    res.json({ success: true, broadcast: returnBroadcast, stream: createdStream, streamStartResult });
   } catch (error) {
     console.error('Error creating broadcast:', error);
     res.status(500).json({
