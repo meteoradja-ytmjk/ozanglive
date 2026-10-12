@@ -30,6 +30,10 @@ const streamRetryCount = new Map();
 const MAX_RETRY_ATTEMPTS = 20; // Generous CONSECUTIVE-failure budget for timed streams (resets to 0 on each successful reconnect)
 const MAX_RETRY_ATTEMPTS_UNLIMITED = 999; // Virtually infinite for unlimited streams
 const manuallyStoppingStreams = new Set();
+
+function isManuallyStopping(streamId) {
+  return manuallyStoppingStreams.has(streamId);
+}
 const MAX_LOG_LINES = 50; // OPTIMIZED: Reduced from 100 to 50 to save memory
 
 // MEMORY LEAK FIX: Hard limits for all Maps to prevent unbounded growth
@@ -2486,8 +2490,9 @@ async function startStream(streamId) {
       
       if (isManualStop) {
         console.log(`[StreamingService] Stream ${streamId} stop reason: manual stop`);
-        addStreamLog(streamId, `Stream stop reason: manual stop`);
-        manuallyStoppingStreams.delete(streamId);
+        setTimeout(() => {
+          manuallyStoppingStreams.delete(streamId);
+        }, 15000);
         clearDurationInfo(streamId);
         clearOriginalTiming(streamId);
         if (wasActive) {
@@ -2898,23 +2903,38 @@ async function stopStream(streamId) {
     addStreamLog(streamId, 'Stopping stream...');
     console.log(`[StreamingService] Stopping active stream ${streamId}`);
     manuallyStoppingStreams.add(streamId);
+
+    const pid = streamPids.get(streamId) || (ffmpegProcess ? ffmpegProcess.pid : null);
+    if (process.platform === 'win32' && pid) {
+      try {
+        exec(`taskkill /F /T /PID ${pid}`, (err) => {
+          if (err && !err.message.includes('not found')) {
+            console.log(`[StreamingService] taskkill pid ${pid} info:`, err.message);
+          }
+        });
+      } catch (_) {}
+    }
+
     try {
       ffmpegProcess.kill('SIGTERM');
       
       // Wait a bit and force kill if still running
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      if (!ffmpegProcess.killed) {
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      if (process.platform === 'win32' && pid) {
+        try { exec(`taskkill /F /T /PID ${pid}`); } catch (_) {}
+      } else if (!ffmpegProcess.killed) {
         console.log(`[StreamingService] FFmpeg didn't respond to SIGTERM, sending SIGKILL`);
-        ffmpegProcess.kill('SIGKILL');
+        try { ffmpegProcess.kill('SIGKILL'); } catch (_) {}
       }
     } catch (killError) {
       console.error(`[StreamingService] Error killing FFmpeg process: ${killError.message}`);
-      manuallyStoppingStreams.delete(streamId);
-      
-      // Fallback: try to kill by stream key
-      if (stream && stream.stream_key) {
+    }
+
+    // Always ensure any orphaned FFmpeg process with this stream key is killed
+    if (stream && stream.stream_key) {
+      try {
         await killFFmpegByStreamKey(stream.stream_key);
-      }
+      } catch (_) {}
     }
     activeStreams.delete(streamId);
     streamPids.delete(streamId); // Clean up PID tracking
@@ -2974,7 +2994,9 @@ async function stopStream(streamId) {
     }
     return { success: true, message: 'Stream stopped successfully' };
   } catch (error) {
-    manuallyStoppingStreams.delete(streamId);
+    setTimeout(() => {
+      manuallyStoppingStreams.delete(streamId);
+    }, 15000);
     // Clean up duration tracking even on error
     clearDurationInfo(streamId);
     console.error(`[StreamingService] Error stopping stream ${streamId}:`, error);
@@ -3310,6 +3332,11 @@ const scheduledCleanups = new Map();
 async function autoCleanupTemplateStream(stream, source = 'stop') {
   if (!stream || !stream.id) return false;
 
+  // Only auto-cleanup streams instantiated from a template. Manual streams created in Control Room are never deleted.
+  if (!stream.template_id) {
+    return false;
+  }
+
   const streamId = stream.id;
   const userId = stream.user_id;
 
@@ -3383,13 +3410,8 @@ function startAutoCleanupSweeper() {
             OR (s.end_time IS NOT NULL AND s.end_time <= ?)
           )
           AND (
-            s.schedule_type = 'once' 
-            OR s.schedule_type IS NULL 
-            OR s.schedule_type = '' 
-            OR s.recurring_enabled = 0 
-            OR s.recurring_enabled IS NULL
-            OR s.template_id IS NOT NULL 
-            OR ybs.template_id IS NOT NULL
+            (s.template_id IS NOT NULL AND s.template_id != '') 
+            OR (ybs.template_id IS NOT NULL AND ybs.template_id != '')
           )
       `;
       const candidates = await new Promise((resolve) => {
@@ -3463,6 +3485,7 @@ module.exports = {
   startStream,
   stopStream,
   isStreamActive,
+  isManuallyStopping,
   getActiveStreams,
   getStreamLogs,
   syncStreamStatuses,

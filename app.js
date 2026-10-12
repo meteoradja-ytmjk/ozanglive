@@ -6286,7 +6286,7 @@ app.post('/api/streams/:id/stop', isAuthenticated, async (req, res) => {
     if (!stream) {
       return res.status(404).json({ success: false, error: 'Stream not found' });
     }
-    if (stream.user_id !== req.session.userId) {
+    if (String(stream.user_id) !== String(req.session.userId)) {
       return res.status(403).json({ success: false, error: 'Not authorized' });
     }
     if (stream.status === 'live') {
@@ -6294,10 +6294,20 @@ app.post('/api/streams/:id/stop', isAuthenticated, async (req, res) => {
       if (!result.success) {
         console.warn('Failed to stop FFmpeg process:', result.error);
       }
-      // streamingService.stopStream already sets the correct status based on schedule type
-      // So we just need to get the updated stream
+      
+      const isRecurring = (stream.schedule_type === 'daily' || stream.schedule_type === 'weekly') && (stream.recurring_enabled === 1 || stream.recurring_enabled === true);
+      if (stream.schedule_type === 'once') {
+        try {
+          await Stream.update(streamId, { schedule_time: null, status: 'offline' });
+        } catch (_) {}
+      } else if (isRecurring) {
+        if (typeof schedulerService !== 'undefined' && typeof schedulerService.markAsTriggered === 'function') {
+          schedulerService.markAsTriggered(streamId);
+        }
+      }
+
       const updatedStream = await Stream.getStreamWithVideo(streamId);
-      return res.json({ success: true, stream: updatedStream });
+      return res.json({ success: true, stream: updatedStream || stream });
     }
 
     // For non-live streams, determine correct status based on schedule type
@@ -6305,7 +6315,23 @@ app.post('/api/streams/:id/stop', isAuthenticated, async (req, res) => {
     const isRecurring = (stream.schedule_type === 'daily' || stream.schedule_type === 'weekly') && isRecurringEnabled;
     const finalStatus = isRecurring ? 'scheduled' : 'offline';
 
-    await Stream.updateStatus(streamId, finalStatus, req.session.userId);
+    // Also stop any orphan FFmpeg process for this stream key just in case
+    if (stream.stream_key && typeof streamingService.killFFmpegByStreamKey === 'function') {
+      try {
+        await streamingService.killFFmpegByStreamKey(stream.stream_key);
+      } catch (_) {}
+    }
+
+    if (stream.schedule_type === 'once') {
+      try {
+        await Stream.update(streamId, { schedule_time: null, status: 'offline' });
+      } catch (_) {}
+    } else {
+      await Stream.updateStatus(streamId, finalStatus, req.session.userId);
+      if (isRecurring && typeof schedulerService !== 'undefined' && typeof schedulerService.markAsTriggered === 'function') {
+        schedulerService.markAsTriggered(streamId);
+      }
+    }
 
     // If stream is associated with YouTube, ensure broadcast on YouTube is ended as well
     if (stream.youtube_broadcast_id || stream.platform === 'YouTube') {
@@ -6319,7 +6345,7 @@ app.post('/api/streams/:id/stop', isAuthenticated, async (req, res) => {
     }
 
     const updatedStream = await Stream.getStreamWithVideo(streamId);
-    return res.json({ success: true, stream: updatedStream });
+    return res.json({ success: true, stream: updatedStream || stream });
   } catch (error) {
     console.error('Error stopping stream:', error);
     res.status(500).json({ success: false, error: 'Failed to stop stream' });
@@ -11075,7 +11101,7 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
 
               const activeStreamIds = new Set(
                 (typeof streamingService !== 'undefined' && typeof streamingService.getActiveStreams === 'function')
-                  ? streamingService.getActiveStreams().map(s => String(s.id))
+                  ? streamingService.getActiveStreams().map(s => String(typeof s === 'object' && s !== null ? s.id : s))
                   : []
               );
 
@@ -11085,7 +11111,8 @@ app.get('/api/youtube/broadcasts', isAuthenticated, async (req, res) => {
                 const bKey = sr.youtube_broadcast_id || `scheduled_stream_${sr.id}`;
                 const savedSetting = settingsMap.get(bKey) || settingsMap.get(sr.youtube_broadcast_id || '') || settingsMap.get(`scheduled_stream_${sr.id}`) || null;
                 const isActiveInMemory = activeStreamIds.has(String(sr.id));
-                const currentStatus = isActiveInMemory ? 'live' : (sr.status || 'scheduled');
+                const isLive = isActiveInMemory || sr.status === 'live';
+                const currentStatus = isLive ? 'live' : (sr.status || 'scheduled');
                 
                 resultList.push({
                   id: bKey,

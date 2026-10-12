@@ -640,5 +640,7 @@ module.exports = {
   checkRecurringSchedules,
   shouldTriggerDaily,
   shouldTriggerWeekly,
-  calculateNextRun
+  calculateNextRun,
+  markAsTriggered,
+  wasRecentlyTriggered
 };

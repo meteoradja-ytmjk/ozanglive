@@ -223,6 +223,13 @@ class RTMPHealthMonitor {
    * @param {boolean} isUnlimited - Whether this is an unlimited stream
    */
   async attemptReconnect(streamId, remainingMs, isUnlimited = false) {
+    // Check if stream is manually stopping or stopped
+    if (this.streamingService && typeof this.streamingService.isManuallyStopping === 'function' && this.streamingService.isManuallyStopping(streamId)) {
+      console.log(`[RTMPHealthMonitor] Stream ${streamId}: Manually stopping, aborting reconnect`);
+      this.stopMonitoring(streamId);
+      return;
+    }
+
     // Prevent multiple simultaneous reconnects
     if (this.reconnectingStreams.has(streamId)) {
       console.log(`[RTMPHealthMonitor] Stream ${streamId}: Reconnect already in progress`);
@@ -246,6 +253,13 @@ class RTMPHealthMonitor {
       
       console.log(`[RTMPHealthMonitor] Stream ${streamId}: Waiting ${baseDelay}ms before reconnect`);
       await new Promise(resolve => setTimeout(resolve, baseDelay));
+
+      // Re-check after delay if stream was manually stopped during wait
+      if (this.streamingService && typeof this.streamingService.isManuallyStopping === 'function' && this.streamingService.isManuallyStopping(streamId)) {
+        console.log(`[RTMPHealthMonitor] Stream ${streamId}: Stopped during reconnect delay, aborting`);
+        this.stopMonitoring(streamId);
+        return;
+      }
 
       // Get stream data
       const stream = await Stream.findById(streamId);
