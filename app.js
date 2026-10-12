@@ -6103,8 +6103,10 @@ app.delete('/api/streams/:id', isAuthenticated, async (req, res) => {
       return res.status(403).json({ success: false, error: 'Not authorized to delete this stream' });
     }
 
-    // Jika siaran terhubung ke broadcast YouTube nyata, hapus juga di YouTube Studio
-    if (stream.youtube_broadcast_id && !String(stream.youtube_broadcast_id).startsWith('scheduled_stream_')) {
+    // Jika siaran terhubung ke broadcast YouTube nyata dan MASIH BERJADWAL (belum pernah live), batalkan di YouTube
+    // PENTING: Jika siaran sudah selesai atau pernah live, JANGAN hapus di YouTube agar video tetap aman menjadi VOD!
+    const isCompletedOrAired = stream.status === 'completed' || stream.status === 'offline' || stream.status === 'live' || stream.youtube_lifecycle_status === 'complete' || stream.youtube_lifecycle_status === 'completed';
+    if (!isCompletedOrAired && stream.status === 'scheduled' && stream.youtube_broadcast_id && !String(stream.youtube_broadcast_id).startsWith('scheduled_stream_')) {
       try {
         const YouTubeCredentials = require('./models/YouTubeCredentials');
         const accountsToTry = stream.youtube_account_id 
@@ -6119,7 +6121,7 @@ app.delete('/api/streams/:id', isAuthenticated, async (req, res) => {
           } catch (_) {}
         }
       } catch (ytDelErr) {
-        console.warn('[Stream.delete] Warning deleting broadcast from YouTube API:', ytDelErr.message);
+        console.warn('[Stream.delete] Warning cancelling upcoming schedule from YouTube API:', ytDelErr.message);
       }
     }
 
@@ -6324,6 +6326,12 @@ app.post('/api/streams/:id/stop', isAuthenticated, async (req, res) => {
       if (typeof invalidateBroadcastsCache === 'function') {
         invalidateBroadcastsCache(req.session.userId);
       }
+
+      // Immediately clean up temporary ghost files
+      try {
+        const StorageService = require('./services/storageService');
+        StorageService.cleanupGhostFiles().catch(() => {});
+      } catch (_) {}
 
       const updatedStream = await Stream.getStreamWithVideo(streamId);
       return res.json({ success: true, stream: updatedStream || stream });
@@ -12929,13 +12937,14 @@ app.put('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
   }
 });
 
-// Delete YouTube broadcast - supports accountId parameter and guarantees local DB cleanup
+// Delete / Clear YouTube broadcast - supports accountId & clearOnly, preserves YouTube VODs
 app.delete('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
   const broadcastId = req.params.id;
   const userId = req.session.userId;
   const accountId = req.query.accountId ? parseInt(req.query.accountId) : null;
   const isLocalPending = String(broadcastId).startsWith('scheduled_stream_');
   const rawStreamId = broadcastId.replace('scheduled_stream_', '');
+  const isClearOnly = req.query.clearOnly === 'true' || req.query.clear === 'true';
 
   // Always remove from local database (streams and youtube_broadcast_settings)
   const cleanupLocalBroadcast = () => new Promise((resolve) => {
@@ -12955,38 +12964,67 @@ app.delete('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
   });
 
   try {
-    if (!isLocalPending) {
-      let accountsToTry = [];
+    // Only attempt YouTube API deletion if NOT clearOnly, NOT a local placeholder
+    if (!isLocalPending && !isClearOnly) {
+      // Check if associated stream was already aired or completed
+      const associatedStream = await new Promise((resolve) => {
+        db.get(
+          'SELECT status, youtube_lifecycle_status FROM streams WHERE (youtube_broadcast_id = ? OR id = ?) AND (user_id = ? OR CAST(user_id AS TEXT) = CAST(? AS TEXT))',
+          [broadcastId, rawStreamId, userId, String(userId)],
+          (err, row) => resolve(row)
+        );
+      });
 
-      if (accountId) {
-        const credentials = await YouTubeCredentials.findById(accountId);
-        if (credentials && String(credentials.userId) === String(userId)) {
-          accountsToTry.push(credentials);
-        }
-      }
+      const isCompletedStream = associatedStream && (
+        associatedStream.status === 'completed' || 
+        associatedStream.status === 'offline' || 
+        associatedStream.status === 'live' ||
+        associatedStream.youtube_lifecycle_status === 'complete' ||
+        associatedStream.youtube_lifecycle_status === 'completed' ||
+        associatedStream.youtube_lifecycle_status === 'ended'
+      );
 
-      if (accountsToTry.length === 0) {
-        accountsToTry = await YouTubeCredentials.findAllByUserId(userId);
-      }
+      // CRITICAL: NEVER delete broadcast on YouTube if it already went live or is completed!
+      // This guarantees the video replay remains 100% intact as a VOD on the user's YouTube channel!
+      if (!isCompletedStream) {
+        let accountsToTry = [];
 
-      // Try deleting on YouTube API
-      let deletedOnYouTube = false;
-      for (const account of accountsToTry) {
-        try {
-          const accessToken = await youtubeService.getAccessToken(account.clientId, account.clientSecret, account.refreshToken, 0, account.id);
-          const ok = await youtubeService.deleteBroadcast(accessToken, broadcastId);
-          if (ok) {
-            deletedOnYouTube = true;
-            break;
+        if (accountId) {
+          const credentials = await YouTubeCredentials.findById(accountId);
+          if (credentials && String(credentials.userId) === String(userId)) {
+            accountsToTry.push(credentials);
           }
-        } catch (err) {
-          if (err.code === 404 || err.status === 404 || (err.message && err.message.toLowerCase().includes('not found'))) {
-            console.log(`[DeleteBroadcast] Broadcast ${broadcastId} was already removed on YouTube Studio for account ${account.channelName}`);
-            deletedOnYouTube = true;
-            break;
-          }
-          console.warn(`[DeleteBroadcast] Account ${account.channelName} failed to delete on YouTube:`, err.message);
         }
+
+        if (accountsToTry.length === 0) {
+          accountsToTry = await YouTubeCredentials.findAllByUserId(userId);
+        }
+
+        // Try deleting pure future un-aired schedule on YouTube API
+        for (const account of accountsToTry) {
+          try {
+            const accessToken = await youtubeService.getAccessToken(account.clientId, account.clientSecret, account.refreshToken, 0, account.id);
+            // Check status on YouTube first: if complete, DO NOT DELETE!
+            const details = await youtubeService.getBroadcastDetails(accessToken, broadcastId).catch(() => null);
+            const status = details?.status?.lifeCycleStatus;
+            if (status === 'complete' || status === 'completed' || status === 'ended') {
+              console.log(`[DeleteBroadcast] Broadcast ${broadcastId} is ${status} on YouTube. Preserving as VOD, clearing only locally.`);
+              break;
+            }
+            const ok = await youtubeService.deleteBroadcast(accessToken, broadcastId);
+            if (ok) {
+              break;
+            }
+          } catch (err) {
+            if (err.code === 404 || err.status === 404 || (err.message && err.message.toLowerCase().includes('not found'))) {
+              console.log(`[DeleteBroadcast] Broadcast ${broadcastId} was already removed on YouTube Studio for account ${account.channelName}`);
+              break;
+            }
+            console.warn(`[DeleteBroadcast] Account ${account.channelName} failed to delete on YouTube:`, err.message);
+          }
+        }
+      } else {
+        console.log(`[DeleteBroadcast] Broadcast ${broadcastId} is completed/aired. Clearing from app list without deleting from YouTube (VOD preserved).`);
       }
     }
 
@@ -12996,16 +13034,16 @@ app.delete('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
 
     return res.json({ 
       success: true, 
-      message: 'Broadcast deleted successfully' 
+      message: 'Broadcast dibersihkan dari daftar (VOD tersimpan aman di YouTube)' 
     });
   } catch (error) {
-    console.error('Error deleting broadcast:', error);
+    console.error('Error deleting/clearing broadcast:', error);
     // Still clean up locally so user is never stuck with stale/undeletable broadcasts
     await cleanupLocalBroadcast();
     invalidateBroadcastsCache(userId);
     return res.json({ 
       success: true, 
-      message: 'Broadcast removed' 
+      message: 'Broadcast dibersihkan dari daftar' 
     });
   }
 });

@@ -5482,9 +5482,12 @@ async function deleteBroadcast(broadcastId, title = null, accountId = null, trig
 
   // Resolve title cleanly from DOM if not passed
   const row = document.querySelector(`.broadcast-row[data-broadcast-id="${broadcastId}"]`);
-  const resolvedTitle = title || row?.querySelector('.truncate')?.textContent?.trim() || 'this broadcast';
+  const isCompleted = row?.textContent?.includes('Completed') || row?.textContent?.includes('Selesai');
+  const confirmMsg = isCompleted 
+    ? `Bersihkan "${resolvedTitle}" dari daftar broadcast? (Video siaran tetap aman tersimpan sebagai VOD di channel YouTube Anda)`
+    : `Yakin ingin menghapus jadwal "${resolvedTitle}"?`;
 
-  if (!confirm(`Are you sure you want to delete "${resolvedTitle}"?`)) {
+  if (!confirm(confirmMsg)) {
     return;
   }
 
@@ -5509,9 +5512,10 @@ async function deleteBroadcast(broadcastId, title = null, accountId = null, trig
 
   try {
     let url = `/api/youtube/broadcasts/${encodeURIComponent(broadcastId)}`;
-    if (resolvedAccountId) {
-      url += `?accountId=${encodeURIComponent(resolvedAccountId)}`;
-    }
+    const queryParams = [];
+    if (resolvedAccountId) queryParams.push(`accountId=${encodeURIComponent(resolvedAccountId)}`);
+    if (isCompleted) queryParams.push('clearOnly=true');
+    if (queryParams.length > 0) url += `?${queryParams.join('&')}`;
 
     const response = await fetch(url, {
       method: 'DELETE',
@@ -5526,7 +5530,7 @@ async function deleteBroadcast(broadcastId, title = null, accountId = null, trig
 
     // Idempotent: treat success, 200 OK, or 404 (already gone) as successful deletion
     if (data.success || response.status === 404 || response.ok) {
-      showToast('Broadcast deleted');
+      showToast(isCompleted ? '✓ Broadcast dibersihkan dari daftar' : '✓ Broadcast berhasil dihapus');
       removeBroadcastRowsFromDOM([broadcastId]);
       if (typeof broadcastsCache !== 'undefined' && broadcastsCache && broadcastsCache.data) {
         broadcastsCache.data = broadcastsCache.data.filter(b => String(b.id) !== String(broadcastId));

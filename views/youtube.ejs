@@ -896,8 +896,8 @@
           <label class="text-sm font-medium text-white block mb-2">Privacy Status</label>
           <select id="privacyStatus" name="privacyStatus"
             class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none">
+            <option value="public" selected>Public</option>
             <option value="unlisted">Unlisted</option>
-            <option value="public">Public</option>
             <option value="private">Private</option>
           </select>
         </div>
@@ -1054,7 +1054,7 @@
               <p class="text-[10px] text-gray-400 leading-tight truncate">Unlisted saat selesai</p>
             </div>
             <div class="relative ml-1 sm:ml-2 flex-shrink-0">
-              <input type="checkbox" id="unlistReplayOnEnd" name="unlistReplayOnEnd" value="true" checked
+              <input type="checkbox" id="unlistReplayOnEnd" name="unlistReplayOnEnd" value="false"
                 class="sr-only peer"
                 onchange="this.value = this.checked ? 'true' : 'false'">
               <div class="w-9 h-5 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary pointer-events-none"></div>

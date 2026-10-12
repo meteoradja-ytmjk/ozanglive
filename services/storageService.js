@@ -1,3 +1,5 @@
+const fs = require('fs');
+const path = require('path');
 const { db } = require('../db/database');
 
 // Simple in-memory cache for storage limits
@@ -243,6 +245,157 @@ class StorageService {
       );
     });
   }
+
+  /**
+   * Automatically cleans up ghost files and temporary garbage from storage.
+   * Cleans:
+   * 1. temp/ (playlist_*.txt, *_merged.*, stream_*_merged.*) older than 10 mins
+   * 2. tmp/upload-chunks/ (stale upload chunk fragments older than 30 mins)
+   * 3. public/uploads/rendered/ (temp renders older than 24 hours)
+   * 4. public/uploads/thumbnails/ (temporary thumb_* older than 2 hours and not in DB)
+   * 5. Orphan records in youtube_broadcast_settings
+   */
+  static async cleanupGhostFiles() {
+    let deletedFiles = 0;
+    let freedBytes = 0;
+    const now = Date.now();
+
+    // 1. Clean temp/ directory
+    try {
+      const tempDir = path.join(__dirname, '../temp');
+      if (fs.existsSync(tempDir)) {
+        const files = fs.readdirSync(tempDir);
+        for (const file of files) {
+          const filePath = path.join(tempDir, file);
+          try {
+            const stats = fs.statSync(filePath);
+            const ageMs = now - stats.mtimeMs;
+            if (ageMs > 10 * 60 * 1000) {
+              freedBytes += stats.size;
+              fs.unlinkSync(filePath);
+              deletedFiles++;
+            }
+          } catch (_) {}
+        }
+      }
+    } catch (e) {
+      console.warn('[StorageService] Error cleaning temp directory:', e.message);
+    }
+
+    // 2. Clean tmp/upload-chunks/
+    try {
+      const chunksDir = path.join(__dirname, '../tmp/upload-chunks');
+      if (fs.existsSync(chunksDir)) {
+        const files = fs.readdirSync(chunksDir);
+        for (const file of files) {
+          const filePath = path.join(chunksDir, file);
+          try {
+            const stats = fs.statSync(filePath);
+            const ageMs = now - stats.mtimeMs;
+            if (ageMs > 30 * 60 * 1000) {
+              if (stats.isDirectory()) {
+                fs.rmSync(filePath, { recursive: true, force: true });
+              } else {
+                freedBytes += stats.size;
+                fs.unlinkSync(filePath);
+              }
+              deletedFiles++;
+            }
+          } catch (_) {}
+        }
+      }
+    } catch (e) {
+      console.warn('[StorageService] Error cleaning chunks directory:', e.message);
+    }
+
+    // 3. Clean public/uploads/rendered/
+    try {
+      const renderedDir = path.join(__dirname, '../public/uploads/rendered');
+      if (fs.existsSync(renderedDir)) {
+        const files = fs.readdirSync(renderedDir);
+        for (const file of files) {
+          const filePath = path.join(renderedDir, file);
+          try {
+            const stats = fs.statSync(filePath);
+            const ageMs = now - stats.mtimeMs;
+            if (ageMs > 24 * 60 * 60 * 1000) {
+              freedBytes += stats.size;
+              fs.unlinkSync(filePath);
+              deletedFiles++;
+            }
+          } catch (_) {}
+        }
+      }
+    } catch (e) {
+      console.warn('[StorageService] Error cleaning rendered directory:', e.message);
+    }
+
+    // 4. Clean orphan temp upload thumbnails
+    try {
+      const thumbDir = path.join(__dirname, '../public/uploads/thumbnails');
+      if (fs.existsSync(thumbDir)) {
+        const files = fs.readdirSync(thumbDir);
+        for (const file of files) {
+          if (file.startsWith('thumb_')) {
+            const filePath = path.join(thumbDir, file);
+            try {
+              const stats = fs.statSync(filePath);
+              const ageMs = now - stats.mtimeMs;
+              if (ageMs > 2 * 60 * 60 * 1000) {
+                const relPath = `/uploads/thumbnails/${file}`;
+                const isReferenced = await new Promise((resolve) => {
+                  db.get(
+                    `SELECT 1 FROM youtube_broadcast_settings WHERE thumbnail_path = ?
+                     UNION
+                     SELECT 1 FROM videos WHERE thumbnail_path = ?
+                     LIMIT 1`,
+                    [relPath, relPath],
+                    (err, row) => resolve(Boolean(row))
+                  );
+                });
+                if (!isReferenced) {
+                  freedBytes += stats.size;
+                  fs.unlinkSync(filePath);
+                  deletedFiles++;
+                }
+              }
+            } catch (_) {}
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[StorageService] Error cleaning thumbnails:', e.message);
+    }
+
+    // 5. Clean orphan records in youtube_broadcast_settings
+    try {
+      await new Promise((resolve) => {
+        db.run(
+          `DELETE FROM youtube_broadcast_settings 
+           WHERE broadcast_id NOT IN (SELECT COALESCE(youtube_broadcast_id, '') FROM streams WHERE youtube_broadcast_id IS NOT NULL)
+             AND broadcast_id LIKE 'scheduled_stream_%'
+             AND broadcast_id NOT IN (SELECT 'scheduled_stream_' || id FROM streams)`,
+          () => resolve()
+        );
+      });
+    } catch (_) {}
+
+    if (deletedFiles > 0) {
+      console.log(`[StorageService] 🧹 Ghost files cleanup completed: Deleted ${deletedFiles} ghost files, freed ${(freedBytes / (1024 * 1024)).toFixed(2)} MB`);
+    }
+
+    return { deletedFiles, freedBytes };
+  }
 }
+
+// Background sweeper to automatically clean up ghost files every 30 minutes
+setInterval(() => {
+  StorageService.cleanupGhostFiles().catch(() => {});
+}, 30 * 60 * 1000);
+
+// Initial ghost file cleanup 5 seconds after boot
+setTimeout(() => {
+  StorageService.cleanupGhostFiles().catch(() => {});
+}, 5000);
 
 module.exports = StorageService;

@@ -425,7 +425,9 @@ class YouTubeService {
         enableMonitorStream: false
       },
       // Record from start - always enabled for replay
-      recordFromStart: true
+      recordFromStart: true,
+      // Enable DVR - ensures full live recording buffer converts to VOD
+      enableDvr: true
     };
     
     // Build status with privacy settings
@@ -1234,7 +1236,8 @@ class YouTubeService {
                   contentDetails: {
                     enableAutoStart: false,
                     enableAutoStop: item.contentDetails?.enableAutoStop !== false,
-                    recordFromStart: item.contentDetails?.recordFromStart !== false
+                    recordFromStart: item.contentDetails?.recordFromStart !== false,
+                    enableDvr: true
                   }
                 }
               });
