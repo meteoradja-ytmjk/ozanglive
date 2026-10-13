@@ -1028,23 +1028,16 @@ async function isFFmpegStreamingToKey(streamKey) {
 /**
  * Determine the correct status after a stream ends
  * For recurring streams (daily/weekly), status should be 'scheduled' so they can run again
- * For one-time streams, status should be 'offline'
+ * For one-time streams (manual or template), status is 'completed'
  * 
  * @param {Object} stream - Stream object from database
- * @returns {string} The status to set ('offline' or 'scheduled')
+ * @returns {string} The status to set ('completed' or 'scheduled')
  */
 function getStatusAfterStreamEnd(stream) {
-  if (!stream) return 'offline';
-  
-  // If this stream was generated from a template, set status to 'completed'
-  // so Control Room displays 'Selesai' during the 2-minute grace period before auto-vanishing
-  if (stream.template_id) {
-    console.log(`[StreamingService] Template stream ${stream.id} finished - setting status to 'completed'`);
-    return 'completed';
-  }
+  if (!stream) return 'completed';
 
   // Handle recurring_enabled as both boolean and integer (SQLite stores as 0/1)
-  const isRecurringEnabled = stream.recurring_enabled === true || stream.recurring_enabled === 1;
+  const isRecurringEnabled = stream.recurring_enabled === true || stream.recurring_enabled === 1 || stream.recurring_enabled === '1';
   
   // For manual recurring streams (daily/weekly) that are enabled, set back to 'scheduled'
   if ((stream.schedule_type === 'daily' || stream.schedule_type === 'weekly') && isRecurringEnabled) {
@@ -1052,8 +1045,9 @@ function getStatusAfterStreamEnd(stream) {
     return 'scheduled';
   }
   
-  // For one-time streams or disabled recurring streams, set to 'offline'
-  return 'offline';
+  // For one-time streams (manual or template), mark as 'completed'
+  console.log(`[StreamingService] Stream ${stream.id} finished - setting status to 'completed'`);
+  return 'completed';
 }
 
 /**
@@ -2480,6 +2474,9 @@ async function startStream(streamId) {
               // End YouTube broadcast so YouTube Studio / dashboard stops immediately
               await endYouTubeBroadcastForStream(streamData);
               await handleUnlistReplayOnEnd(streamData);
+
+              // Auto-cleanup completed stream from Control Room
+              await autoCleanupTemplateStream(updatedStream || streamData, 'duration-exceeded');
             }
             if (typeof schedulerService !== 'undefined' && schedulerService.cancelStreamTermination) {
               schedulerService.handleStreamStopped(streamId);
@@ -2504,6 +2501,9 @@ async function startStream(streamId) {
             const streamData = await Stream.findById(streamId);
             const newStatus = getStatusAfterStreamEnd(streamData);
             await Stream.updateStatus(streamId, newStatus, streamData?.user_id);
+            const updatedStream = await Stream.findById(streamId);
+            await saveStreamHistory(updatedStream);
+            await autoCleanupTemplateStream(updatedStream || streamData, 'manual-stop-exit');
             if (typeof schedulerService !== 'undefined' && schedulerService.cancelStreamTermination) {
               schedulerService.handleStreamStopped(streamId);
             }
@@ -2626,6 +2626,11 @@ async function startStream(streamId) {
                   // FIXED: Use correct status based on schedule type
                   const newStatus = getStatusAfterStreamEnd(streamData);
                   await Stream.updateStatus(streamId, newStatus, streamData.user_id);
+                  const updatedStream = await Stream.findById(streamId);
+                  await saveStreamHistory(updatedStream);
+                  await endYouTubeBroadcastForStream(streamData);
+                  await handleUnlistReplayOnEnd(streamData);
+                  await autoCleanupTemplateStream(updatedStream || streamData, 'duration-reached-error');
                 }
                 if (typeof schedulerService !== 'undefined' && schedulerService.cancelStreamTermination) {
                   schedulerService.handleStreamStopped(streamId);
@@ -3335,8 +3340,8 @@ const scheduledCleanups = new Map();
 async function autoCleanupTemplateStream(stream, source = 'stop') {
   if (!stream || !stream.id) return false;
 
-  // Only auto-cleanup streams instantiated from a template. Manual streams created in Control Room are never deleted.
-  if (!stream.template_id) {
+  // Never auto-cleanup streams that are actively live or scheduled for the future
+  if (stream.status === 'live' || stream.status === 'scheduled') {
     return false;
   }
 
@@ -3345,10 +3350,10 @@ async function autoCleanupTemplateStream(stream, source = 'stop') {
 
   try {
     // Check if this stream is recurring
-    const isRecurring = (stream.schedule_type === 'daily' || stream.schedule_type === 'weekly') && (stream.recurring_enabled === 1 || stream.recurring_enabled === true);
+    const isRecurring = (stream.schedule_type === 'daily' || stream.schedule_type === 'weekly') && (stream.recurring_enabled === 1 || stream.recurring_enabled === '1' || stream.recurring_enabled === true);
 
     if (isRecurring) {
-      // Recurring stream should stay in Control Room / Schedule list for tomorrow's live
+      // Recurring stream should stay in Control Room / Schedule list for future live
       return false;
     }
 
@@ -3382,6 +3387,10 @@ async function autoCleanupTemplateStream(stream, source = 'stop') {
       } catch (e) {}
     });
 
+    if (userId && typeof global.invalidateBroadcastsCache === 'function') {
+      global.invalidateBroadcastsCache(userId);
+    }
+
     console.log(`[AutoCleanup] ✅ Successfully deleted completed stream #${streamId} from Control Room.`);
     return true;
   } catch (err) {
@@ -3399,26 +3408,25 @@ function startAutoCleanupSweeper() {
   if (sweeperInterval) return;
   sweeperInterval = setInterval(async () => {
     try {
-      const oneMinuteAgo = new Date(Date.now() - 60000).toISOString();
+      const tenSecondsAgo = new Date(Date.now() - 10000).toISOString();
       const query = `
         SELECT s.* 
         FROM streams s
-        LEFT JOIN youtube_broadcast_settings ybs ON s.youtube_broadcast_id = ybs.broadcast_id
         WHERE s.status != 'live'
           AND s.status != 'scheduled'
           AND (
             s.status = 'completed'
-            OR (s.status = 'offline' AND s.start_time IS NOT NULL AND (s.status_updated_at <= ? OR s.end_time <= ?))
-            OR (s.youtube_lifecycle_status = 'complete' AND (s.status_updated_at <= ? OR s.end_time <= ?))
+            OR (s.status = 'offline' AND s.start_time IS NOT NULL)
+            OR s.youtube_lifecycle_status = 'complete'
             OR (s.end_time IS NOT NULL AND s.end_time <= ?)
           )
-          AND (
-            (s.template_id IS NOT NULL AND s.template_id != '') 
-            OR (ybs.template_id IS NOT NULL AND ybs.template_id != '')
+          AND NOT (
+            (s.schedule_type = 'daily' OR s.schedule_type = 'weekly')
+            AND (s.recurring_enabled = 1 OR s.recurring_enabled = '1' OR s.recurring_enabled = true)
           )
       `;
       const candidates = await new Promise((resolve) => {
-        db.all(query, [oneMinuteAgo, oneMinuteAgo, oneMinuteAgo, oneMinuteAgo, oneMinuteAgo], (err, rows) => resolve(err ? [] : (rows || [])));
+        db.all(query, [tenSecondsAgo], (err, rows) => resolve(err ? [] : (rows || [])));
       });
 
       for (const stream of candidates) {
@@ -3427,19 +3435,22 @@ function startAutoCleanupSweeper() {
           await Stream.delete(stream.id, stream.user_id);
           const bId = stream.youtube_broadcast_id || `scheduled_stream_${stream.id}`;
           db.run('DELETE FROM youtube_broadcast_settings WHERE broadcast_id = ? OR broadcast_id = ?', [bId, `scheduled_stream_${stream.id}`]);
+          if (stream.user_id && typeof global.invalidateBroadcastsCache === 'function') {
+            global.invalidateBroadcastsCache(stream.user_id);
+          }
         }
       }
     } catch (err) {
       // ignore
     }
-  }, 15000);
+  }, 10000);
 }
 
-// Start the 30s background sweeper immediately
+// Start the 10s background sweeper immediately
 startAutoCleanupSweeper();
 
 /**
- * Bulk cleanup all completed template streams from the database.
+ * Bulk cleanup all completed streams (manual + template) from the database.
  * Used by manual trigger or on system startup to eliminate accumulated zombie streams.
  *
  * @param {string|null} userId - User ID (optional, cleans for specific user or all)
@@ -3450,10 +3461,18 @@ async function cleanupAllCompletedTemplateStreams(userId = null) {
     let query = `
       SELECT s.id, s.title, s.user_id, s.status, s.youtube_broadcast_id, s.template_id
       FROM streams s
-      LEFT JOIN youtube_broadcast_settings ybs ON s.youtube_broadcast_id = ybs.broadcast_id
-      WHERE (s.template_id IS NOT NULL AND s.template_id != '' 
-             OR (ybs.template_id IS NOT NULL AND ybs.template_id != ''))
-        AND s.status != 'live'
+      WHERE s.status != 'live'
+        AND s.status != 'scheduled'
+        AND (
+          s.status = 'completed'
+          OR (s.status = 'offline' AND s.start_time IS NOT NULL)
+          OR s.youtube_lifecycle_status = 'complete'
+          OR s.end_time IS NOT NULL
+        )
+        AND NOT (
+          (s.schedule_type = 'daily' OR s.schedule_type = 'weekly')
+          AND (s.recurring_enabled = 1 OR s.recurring_enabled = '1' OR s.recurring_enabled = true)
+        )
     `;
     const params = [];
     if (userId) {
@@ -3472,14 +3491,20 @@ async function cleanupAllCompletedTemplateStreams(userId = null) {
     for (const stream of candidateStreams) {
       if (!activeStreams.has(stream.id)) {
         await Stream.delete(stream.id, stream.user_id);
+        const bId = stream.youtube_broadcast_id || `scheduled_stream_${stream.id}`;
+        db.run('DELETE FROM youtube_broadcast_settings WHERE broadcast_id = ? OR broadcast_id = ?', [bId, `scheduled_stream_${stream.id}`]);
         deletedCount++;
       }
     }
 
-    console.log(`[AutoCleanup] Cleaned up ${deletedCount} completed template streams from Control Room.`);
+    if (userId && typeof global.invalidateBroadcastsCache === 'function') {
+      global.invalidateBroadcastsCache(userId);
+    }
+
+    console.log(`[AutoCleanup] Cleaned up ${deletedCount} completed streams from Control Room.`);
     return { success: true, deletedCount };
   } catch (err) {
-    console.error('[AutoCleanup] Error during bulk cleanup of completed template streams:', err.message);
+    console.error('[AutoCleanup] Error during bulk cleanup of completed streams:', err.message);
     return { success: false, error: err.message, deletedCount: 0 };
   }
 }
@@ -3513,9 +3538,11 @@ module.exports = {
   // RTMP health monitor exports
   getRTMPHealthStatus,
   isRTMPHealthMonitored,
-  // Template auto-cleanup exports
+  // Template / Stream auto-cleanup exports
   autoCleanupTemplateStream,
+  autoCleanupStream: autoCleanupTemplateStream,
   cleanupAllCompletedTemplateStreams,
+  cleanupAllCompletedStreams: cleanupAllCompletedTemplateStreams,
   // Shutdown function for graceful cleanup
   shutdown,
   // Export for testing

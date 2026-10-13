@@ -6196,7 +6196,7 @@ app.post('/api/streams/:id/status', isAuthenticated, [
         // streamingService.stopStream already sets the correct status based on schedule type
         // So we don't need to update status again here
         const updatedStream = await Stream.getStreamWithVideo(streamId);
-        return res.json({ success: true, stream: updatedStream });
+        return res.json({ success: true, stream: updatedStream || stream });
       } else if (stream.status === 'scheduled') {
         // For scheduled streams that haven't started yet, set to offline
         // But for recurring streams, keep them as scheduled
