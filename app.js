@@ -5807,6 +5807,11 @@ app.put('/api/streams/:id', isAuthenticated, async (req, res) => {
       const isAltered = req.body.alteredContent === 'true' || req.body.alteredContent === true || req.body.altered_content === 1 || req.body.altered_content === '1' || req.body.altered_content === true;
       updateData.altered_content = isAltered ? 1 : 0;
     }
+    if (req.body.enableDvr !== undefined || req.body.enable_dvr !== undefined) {
+      const isDvr = req.body.enableDvr === 'true' || req.body.enableDvr === true || req.body.enable_dvr === 1 || req.body.enable_dvr === '1' || req.body.enable_dvr === true;
+      updateData.enable_dvr = isDvr ? 1 : 0;
+      updateData.youtube_enable_dvr = isDvr ? 1 : 0;
+    }
     if (req.body.unlistReplayOnEnd !== undefined || req.body.unlist_replay_on_end !== undefined) {
       const isUnlist = req.body.unlistReplayOnEnd === 'true' || req.body.unlistReplayOnEnd === true || req.body.unlist_replay_on_end === 1 || req.body.unlist_replay_on_end === '1' || req.body.unlist_replay_on_end === true;
       updateData.unlist_replay_on_end = isUnlist ? 1 : 0;
@@ -5821,7 +5826,7 @@ app.put('/api/streams/:id', isAuthenticated, async (req, res) => {
       updateData.tags = Array.isArray(req.body.tags) ? JSON.stringify(req.body.tags) : (req.body.tags || null);
     }
 
-    // Sync altered_content and unlist_replay_on_end to youtube_broadcast_settings if this stream is bound to a YouTube broadcast
+    // Sync altered_content, enable_dvr, and unlist_replay_on_end to youtube_broadcast_settings if this stream is bound to a YouTube broadcast
     if (stream.youtube_broadcast_id) {
       try {
         const YouTubeBroadcastSettings = require('./models/YouTubeBroadcastSettings');
@@ -5831,6 +5836,9 @@ app.put('/api/streams/:id', isAuthenticated, async (req, res) => {
         const finalAltered = (req.body.alteredContent !== undefined || req.body.altered_content !== undefined)
           ? (req.body.alteredContent === 'true' || req.body.alteredContent === true || req.body.altered_content === 1 || req.body.altered_content === '1' || req.body.altered_content === true)
           : !!existingSettings.alteredContent;
+        const finalDvr = (req.body.enableDvr !== undefined || req.body.enable_dvr !== undefined)
+          ? (req.body.enableDvr === 'true' || req.body.enableDvr === true || req.body.enable_dvr === 1 || req.body.enable_dvr === '1' || req.body.enable_dvr === true)
+          : !!existingSettings.enableDvr;
         const finalUnlist = (req.body.unlistReplayOnEnd !== undefined || req.body.unlist_replay_on_end !== undefined)
           ? (req.body.unlistReplayOnEnd === 'true' || req.body.unlistReplayOnEnd === true || req.body.unlist_replay_on_end === 1 || req.body.unlist_replay_on_end === '1' || req.body.unlist_replay_on_end === true)
           : (existingSettings.unlistReplayOnEnd !== undefined ? existingSettings.unlistReplayOnEnd : true);
@@ -5845,6 +5853,7 @@ app.put('/api/streams/:id', isAuthenticated, async (req, res) => {
           accountId: stream.youtube_account_id || existingSettings.accountId || null,
           enableAutoStart: existingSettings.enableAutoStart !== false,
           enableAutoStop: finalAutoStop,
+          enableDvr: finalDvr,
           unlistReplayOnEnd: finalUnlist,
           originalPrivacyStatus: existingSettings.originalPrivacyStatus || 'unlisted',
           thumbnailFolder: existingSettings.thumbnailFolder,
@@ -10555,6 +10564,7 @@ app.get('/api/youtube/broadcast-settings/:broadcastId', isAuthenticated, async (
           templateId: settings.templateId,
           enableAutoStart: settings.enableAutoStart,
           enableAutoStop: settings.enableAutoStop,
+          enableDvr: settings.enableDvr,
           unlistReplayOnEnd: settings.unlistReplayOnEnd,
           thumbnailIndex: settings.thumbnailIndex || 0,
           thumbnailPath: settings.thumbnailPath || null,
@@ -10709,7 +10719,7 @@ async function attachLocalSettingsToBroadcasts(broadcastsList, userId) {
     const placeholders = broadcastIds.map(() => '?').join(',');
     const settingsRows = await new Promise((resolve) => {
       db.all(
-        `SELECT broadcast_id, dual_stream, altered_content, unlist_replay_on_end, vertical_stream_key, thumbnail_folder, thumbnail_path, tags,
+        `SELECT broadcast_id, dual_stream, altered_content, enable_dvr, unlist_replay_on_end, vertical_stream_key, thumbnail_folder, thumbnail_path, tags,
                 title_folder_id, audio_id, video_id
          FROM youtube_broadcast_settings 
          WHERE broadcast_id IN (${placeholders})`,
@@ -10720,7 +10730,7 @@ async function attachLocalSettingsToBroadcasts(broadcastsList, userId) {
 
     const streamRows = await new Promise((resolve) => {
       db.all(
-        `SELECT s.youtube_broadcast_id, s.stream_key, s.stream_id, s.dual_stream, s.altered_content, s.unlist_replay_on_end, s.vertical_stream_key, s.tags,
+        `SELECT s.youtube_broadcast_id, s.stream_key, s.stream_id, s.dual_stream, s.altered_content, s.enable_dvr, s.unlist_replay_on_end, s.vertical_stream_key, s.tags,
                 s.stream_duration_hours, s.stream_duration_minutes, s.duration, s.loop_video, s.video_id, s.audio_id, s.schedule_type, s.recurring_time, s.schedule_days,
                 s.recurring_enabled, s.schedule_time, s.title_folder_id,
                 v.title AS video_title,
@@ -10741,6 +10751,7 @@ async function attachLocalSettingsToBroadcasts(broadcastsList, userId) {
         settingsMap.set(row.broadcast_id, {
           dual_stream: row.dual_stream === 1 || row.dual_stream === '1' || row.dual_stream === true,
           altered_content: row.altered_content === 1 || row.altered_content === '1' || row.altered_content === true,
+          enable_dvr: row.enable_dvr === 1 || row.enable_dvr === '1' || row.enable_dvr === true,
           unlist_replay_on_end: row.unlist_replay_on_end !== 0 && row.unlist_replay_on_end !== '0' && row.unlist_replay_on_end !== false,
           vertical_stream_key: row.vertical_stream_key || null,
           thumbnail_folder: row.thumbnail_folder || null,
@@ -10758,6 +10769,7 @@ async function attachLocalSettingsToBroadcasts(broadcastsList, userId) {
         const existing = settingsMap.get(s.youtube_broadcast_id) || {};
         const isDual = existing.dual_stream || s.dual_stream === 1 || s.dual_stream === '1' || s.dual_stream === true;
         const isAltered = existing.altered_content || s.altered_content === 1 || s.altered_content === '1' || s.altered_content === true;
+        const isDvr = existing.enable_dvr || s.enable_dvr === 1 || s.enable_dvr === '1' || s.enable_dvr === true;
         const isUnlist = existing.unlist_replay_on_end !== undefined ? existing.unlist_replay_on_end : (s.unlist_replay_on_end !== 0 && s.unlist_replay_on_end !== '0' && s.unlist_replay_on_end !== false);
         const durationMins = parseInt(s.stream_duration_minutes) || ((parseInt(s.stream_duration_hours) || 0) * 60);
         const durationHours = parseInt(s.stream_duration_hours) || Math.floor(durationMins / 60);
@@ -10766,6 +10778,7 @@ async function attachLocalSettingsToBroadcasts(broadcastsList, userId) {
           ...existing,
           dual_stream: isDual,
           altered_content: isAltered,
+          enable_dvr: isDvr,
           unlist_replay_on_end: isUnlist,
           vertical_stream_key: existing.vertical_stream_key || s.vertical_stream_key || null,
           stream_key: s.stream_key || null,
@@ -10846,6 +10859,8 @@ async function attachLocalSettingsToBroadcasts(broadcastsList, userId) {
       b.dualStream = !!s.dual_stream;
       b.altered_content = s.altered_content ? 1 : 0;
       b.alteredContent = !!s.altered_content;
+      b.enable_dvr = s.enable_dvr ? 1 : 0;
+      b.enableDvr = !!s.enable_dvr;
       b.unlist_replay_on_end = s.unlist_replay_on_end !== undefined ? (s.unlist_replay_on_end ? 1 : 0) : 1;
       b.unlistReplayOnEnd = s.unlist_replay_on_end !== undefined ? !!s.unlist_replay_on_end : true;
       if (s.vertical_stream_key) b.vertical_stream_key = s.vertical_stream_key;
@@ -11621,7 +11636,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       });
     }
 
-    const { title, description, scheduledStartTime, privacyStatus, streamId, tags, categoryId, enableAutoStart, enableAutoStop, unlistReplayOnEnd, monetizationEnabled, adFrequency, alteredContent } = req.body;
+    const { title, description, scheduledStartTime, privacyStatus, streamId, tags, categoryId, enableAutoStart, enableAutoStop, unlistReplayOnEnd, monetizationEnabled, adFrequency, alteredContent, enableDvr } = req.body;
 
     console.log('[API] Create broadcast - categoryId received:', categoryId);
 
@@ -11815,6 +11830,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
 
     const isAlteredContent = alteredContent === 'true' || alteredContent === true || alteredContent === 'on' || alteredContent === 1 || alteredContent === '1';
     const isDualStream = req.body.dualStream === 'true' || req.body.dualStream === true || req.body.dualStream === 'on' || req.body.dualStream === 1 || req.body.dualStream === '1';
+    const isEnableDvr = enableDvr === 'true' || enableDvr === true || enableDvr === 'on' || enableDvr === 1 || enableDvr === '1' || req.body.enableDvr === 'true' || req.body.enableDvr === true;
     const verticalStreamKey = (req.body.verticalStreamKey || req.body.backupRtmpUrl || req.body.secondaryRtmpUrl || '').trim();
 
     const rawStartTime = req.body.scheduleStartTime || req.body.scheduledStartTime;
@@ -12027,6 +12043,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         youtube_broadcast_id: null, // Broadcast YouTube akan dibuat otomatis sesaat sebelum live
         youtube_account_id: accountId || (credentials ? credentials.id : null),
         dual_stream: isDualStream ? 1 : 0,
+        enable_dvr: isEnableDvr ? 1 : 0,
         vertical_stream_key: isDualStream ? (verticalStreamKey || null) : null,
         backup_rtmp_url: isDualStream ? (verticalStreamKey || null) : null,
         tags: parsedTags && parsedTags.length > 0 ? JSON.stringify(parsedTags) : null,
@@ -12049,6 +12066,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
           privacyStatus: privacyStatus || 'unlisted',
           enableAutoStart: enableAutoStart === 'true' || enableAutoStart === true,
           enableAutoStop: enableAutoStop === 'true' || enableAutoStop === true,
+          enableDvr: isEnableDvr,
           unlistReplayOnEnd: unlistReplayOnEnd === 'true' || unlistReplayOnEnd === true,
           originalPrivacyStatus: privacyStatus || 'unlisted',
           thumbnailFolder: thumbnailFolder !== undefined ? thumbnailFolder : null,
@@ -12151,7 +12169,8 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       monetizationEnabled: monetizationEnabled === 'true' || monetizationEnabled === true,
       adFrequency: adFrequency || 'medium',
       alteredContent: isAlteredContent,
-      dualStream: isDualStream
+      dualStream: isDualStream,
+      enableDvr: isEnableDvr
     });
 
     console.log('[API] Create broadcast - thumbnail settings:', {
@@ -12166,7 +12185,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
     const finalAudioId = req.body.audioId || (matchedSlot ? (matchedSlot.audioId || matchedSlot.audio_id) : null) || (templateObj ? templateObj.audio_id : null) || null;
     const finalVideoId = req.body.videoId || (matchedSlot ? (matchedSlot.videoId || matchedSlot.video_id) : null) || (templateObj ? templateObj.video_id : null) || null;
 
-    // Save broadcast settings for later use (e.g., unlist replay on end, thumbnail folder, dual stream, altered content)
+    // Save broadcast settings for later use (e.g., unlist replay on end, thumbnail folder, dual stream, altered content, enable DVR)
     try {
       await YouTubeBroadcastSettings.upsert({
         broadcastId: broadcast.broadcastId,
@@ -12178,6 +12197,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         privacyStatus: privacyStatus || 'unlisted',
         enableAutoStart: enableAutoStart === 'true' || enableAutoStart === true,
         enableAutoStop: enableAutoStop === 'true' || enableAutoStop === true,
+        enableDvr: isEnableDvr,
         unlistReplayOnEnd: unlistReplayOnEnd === 'true' || unlistReplayOnEnd === true,
         originalPrivacyStatus: privacyStatus || 'unlisted',
         thumbnailFolder: thumbnailFolder !== undefined ? thumbnailFolder : null,
@@ -12786,12 +12806,14 @@ app.put('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
       thumbnailPath,
       dualStream,
       alteredContent,
+      enableDvr,
       unlistReplayOnEnd,
       tags 
     } = req.body;
 
     const isAlteredContent = alteredContent !== undefined ? (alteredContent === 'true' || alteredContent === true || alteredContent === 1 || alteredContent === '1') : undefined;
     const isDualStream = dualStream !== undefined ? (dualStream === 'true' || dualStream === true || dualStream === 1 || dualStream === '1') : undefined;
+    const isEnableDvr = enableDvr !== undefined ? (enableDvr === 'true' || enableDvr === true || enableDvr === 1 || enableDvr === '1') : undefined;
 
     console.log('[API] Update broadcast request:', {
       broadcastId: req.params.id,
@@ -12883,6 +12905,7 @@ app.put('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
       const existingSettings = await YouTubeBroadcastSettings.findByBroadcastId(req.params.id) || {};
       const finalDual = isDualStream !== undefined ? isDualStream : !!existingSettings.dualStream;
       const finalAltered = isAlteredContent !== undefined ? isAlteredContent : !!existingSettings.alteredContent;
+      const finalDvr = isEnableDvr !== undefined ? isEnableDvr : !!existingSettings.enableDvr;
       const finalUnlist = unlistReplayOnEnd !== undefined 
         ? (unlistReplayOnEnd === 'true' || unlistReplayOnEnd === true || unlistReplayOnEnd === 1 || unlistReplayOnEnd === '1')
         : (existingSettings.unlistReplayOnEnd !== undefined ? existingSettings.unlistReplayOnEnd : true);
@@ -12897,6 +12920,7 @@ app.put('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
         privacyStatus: privacyStatus || existingSettings.privacyStatus || existingSettings.originalPrivacyStatus || 'unlisted',
         enableAutoStart: existingSettings.enableAutoStart !== false,
         enableAutoStop: existingSettings.enableAutoStop !== false,
+        enableDvr: finalDvr,
         unlistReplayOnEnd: finalUnlist,
         originalPrivacyStatus: privacyStatus || existingSettings.originalPrivacyStatus || 'unlisted',
         thumbnailFolder: thumbnailFolder !== undefined ? thumbnailFolder : existingSettings.thumbnailFolder,

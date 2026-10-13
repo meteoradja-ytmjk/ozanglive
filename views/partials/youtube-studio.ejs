@@ -1286,10 +1286,10 @@
           <input type="hidden" id="enableAutoStart" name="enableAutoStart" value="true">
           <input type="hidden" id="enableAutoStop" name="enableAutoStop" value="true">
 
-          <!-- Grid: AI USE & Unlist Replay (Kiri & Kanan - Tipis & Sangat Responsif) -->
-          <div class="grid grid-cols-2 gap-2 sm:gap-2.5">
+          <!-- Grid: AI USE, Enable DVR & Unlist Replay (Single Line) -->
+          <div class="grid grid-cols-3 gap-2 sm:gap-2.5">
             <!-- AI USE / Altered Content (Kiri) -->
-            <label for="alteredContentToggle" class="bg-dark-700/50 hover:bg-dark-700/80 rounded-lg p-2.5 border border-gray-700/70 hover:border-gray-600 flex items-center justify-between cursor-pointer select-none transition-all active:scale-[0.99] group">
+            <label for="alteredContentToggle" class="bg-dark-700/50 hover:bg-dark-700/80 rounded-lg p-2.5 border border-gray-700/70 hover:border-gray-600 flex items-center justify-between cursor-pointer select-none transition-all active:scale-[0.99] group min-w-0">
               <div class="flex-1 pr-1.5 sm:pr-2 min-w-0">
                 <div class="flex items-center gap-1 sm:gap-1.5 mb-0.5">
                   <i class="ti ti-robot text-purple-400 text-xs shrink-0"></i>
@@ -1305,8 +1305,25 @@
               </div>
             </label>
 
+            <!-- Enable DVR (Tengah - Default Off) -->
+            <label for="enableDvrToggle" class="bg-dark-700/50 hover:bg-dark-700/80 rounded-lg p-2.5 border border-gray-700/70 hover:border-gray-600 flex items-center justify-between cursor-pointer select-none transition-all active:scale-[0.99] group min-w-0">
+              <div class="flex-1 pr-1.5 sm:pr-2 min-w-0">
+                <div class="flex items-center gap-1 sm:gap-1.5 mb-0.5">
+                  <i class="ti ti-history text-blue-400 text-xs shrink-0"></i>
+                  <span class="text-xs font-semibold text-white truncate">Enable DVR</span>
+                </div>
+                <p class="text-[10px] text-gray-400 leading-tight truncate">Rewind siaran live</p>
+              </div>
+              <div class="relative ml-1 sm:ml-2 flex-shrink-0">
+                <input type="checkbox" id="enableDvrToggle" name="enableDvr" value="false"
+                  class="sr-only peer"
+                  onchange="this.value = this.checked ? 'true' : 'false'">
+                <div class="w-9 h-5 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600 pointer-events-none"></div>
+              </div>
+            </label>
+
             <!-- Unlist Replay on End (Kanan) -->
-            <label for="unlistReplayOnEnd" class="bg-dark-700/50 hover:bg-dark-700/80 rounded-lg p-2.5 border border-gray-700/70 hover:border-gray-600 flex items-center justify-between cursor-pointer select-none transition-all active:scale-[0.99] group">
+            <label for="unlistReplayOnEnd" class="bg-dark-700/50 hover:bg-dark-700/80 rounded-lg p-2.5 border border-gray-700/70 hover:border-gray-600 flex items-center justify-between cursor-pointer select-none transition-all active:scale-[0.99] group min-w-0">
               <div class="flex-1 pr-1.5 sm:pr-2 min-w-0">
                 <div class="flex items-center gap-1 sm:gap-1.5 mb-0.5">
                   <i class="ti ti-eye-off text-primary text-xs shrink-0"></i>

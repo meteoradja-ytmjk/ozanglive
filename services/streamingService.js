@@ -344,6 +344,7 @@ async function ensureFreshYouTubeBroadcastForStream(stream) {
     const finalCategory = stream.category_id || savedSettings?.category_id || '22';
     const isDualStream = Boolean(stream.dual_stream || savedSettings?.dual_stream);
     const isAlteredContent = Boolean(savedSettings?.altered_content);
+    const isEnableDvr = Boolean(stream.enable_dvr || savedSettings?.enable_dvr);
     const resolvedStreamId = stream.stream_id || null;
 
     const created = await youtubeService.createBroadcast(accessToken, {
@@ -357,7 +358,8 @@ async function ensureFreshYouTubeBroadcastForStream(stream) {
       enableAutoStart: true,
       enableAutoStop: savedSettings ? (savedSettings.enable_auto_stop === 1 || savedSettings.enable_auto_stop === true) : true,
       dualStream: isDualStream,
-      alteredContent: isAlteredContent
+      alteredContent: isAlteredContent,
+      enableDvr: isEnableDvr
     });
 
     if (created && created.broadcastId) {
@@ -427,6 +429,7 @@ async function ensureFreshYouTubeBroadcastForStream(stream) {
           privacyStatus: finalPrivacy,
           enableAutoStart: true,
           enableAutoStop: savedSettings ? Boolean(savedSettings.enable_auto_stop) : true,
+          enableDvr: isEnableDvr,
           unlistReplayOnEnd: savedSettings ? Boolean(savedSettings.unlist_replay_on_end) : true,
           originalPrivacyStatus: finalPrivacy,
           thumbnailFolder: savedSettings?.thumbnail_folder || null,

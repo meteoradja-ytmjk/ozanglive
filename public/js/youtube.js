@@ -4937,6 +4937,18 @@ window.openEditStudioModal = function(stream) {
     alteredToggle.value = hasAltered ? 'true' : 'false';
   }
 
+  // Enable DVR Toggle (Default OFF / false)
+  const dvrToggle = document.getElementById('enableDvrToggle');
+  if (dvrToggle) {
+    const hasDvr = stream.enable_dvr !== undefined 
+      ? (stream.enable_dvr === 1 || stream.enable_dvr === true || stream.enable_dvr === '1' || stream.enable_dvr === 'true')
+      : (stream.enableDvr !== undefined 
+          ? (stream.enableDvr === 1 || stream.enableDvr === true || stream.enableDvr === '1' || stream.enableDvr === 'true')
+          : false);
+    dvrToggle.checked = hasDvr;
+    dvrToggle.value = hasDvr ? 'true' : 'false';
+  }
+
   // Unlist Replay on End Toggle
   const unlistToggle = document.getElementById('unlistReplayOnEnd');
   if (unlistToggle) {
@@ -5078,6 +5090,12 @@ function closeCreateBroadcastModal() {
   const alteredToggle = document.getElementById('alteredContentToggle');
   if (alteredToggle) alteredToggle.checked = false;
 
+  const dvrToggle = document.getElementById('enableDvrToggle');
+  if (dvrToggle) {
+    dvrToggle.checked = false;
+    dvrToggle.value = 'false';
+  }
+
   const autoStopToggle = document.getElementById('studioEnableAutoStopToggle');
   if (autoStopToggle) autoStopToggle.checked = false;
   if (typeof updateAutoStopBadge === 'function') updateAutoStopBadge();
@@ -5181,6 +5199,8 @@ if (createBroadcastForm) {
           dualStream: document.getElementById('dualStreamToggle')?.checked ? 1 : 0,
           altered_content: document.getElementById('alteredContentToggle')?.checked ? 1 : 0,
           alteredContent: document.getElementById('alteredContentToggle')?.checked ? 1 : 0,
+          enable_dvr: document.getElementById('enableDvrToggle')?.checked ? 1 : 0,
+          enableDvr: document.getElementById('enableDvrToggle')?.checked ? 1 : 0,
           unlist_replay_on_end: document.getElementById('unlistReplayOnEnd')?.checked !== false,
           unlistReplayOnEnd: document.getElementById('unlistReplayOnEnd')?.checked !== false,
           tags: currentTags.length > 0 ? JSON.stringify(currentTags) : null
@@ -5217,6 +5237,7 @@ if (createBroadcastForm) {
                   scheduledStartTime: finalScheduleStartTime,
                   dualStream: updatePayload.dual_stream,
                   alteredContent: updatePayload.altered_content,
+                  enableDvr: updatePayload.enable_dvr,
                   unlistReplayOnEnd: updatePayload.unlist_replay_on_end,
                   tags: currentTags
                 })
@@ -5331,6 +5352,10 @@ if (createBroadcastForm) {
       // AI USE / Altered Content (On/Off)
       const isAlteredContent = !!document.getElementById('alteredContentToggle')?.checked;
       formData.append('alteredContent', isAlteredContent ? 'true' : 'false');
+
+      // Enable DVR (On/Off - Default False)
+      const isEnableDvr = !!document.getElementById('enableDvrToggle')?.checked;
+      formData.append('enableDvr', isEnableDvr ? 'true' : 'false');
 
       const isAutoStop = document.getElementById('studioEnableAutoStopToggle')?.checked ? 'true' : 'false';
       formData.append('enableAutoStart', 'true');
@@ -7784,6 +7809,16 @@ async function createFromTemplate(templateId) {
         const alteredToggle = document.getElementById('alteredContentToggle');
         if (alteredToggle) {
           alteredToggle.checked = !!(template.altered_content && template.altered_content !== 0 && template.altered_content !== '0');
+        }
+      }
+
+      // Set Enable DVR if template has it
+      if (template.enable_dvr !== undefined && template.enable_dvr !== null) {
+        const dvrToggle = document.getElementById('enableDvrToggle');
+        if (dvrToggle) {
+          const hasDvr = !!(template.enable_dvr && template.enable_dvr !== 0 && template.enable_dvr !== '0');
+          dvrToggle.checked = hasDvr;
+          dvrToggle.value = hasDvr ? 'true' : 'false';
         }
       }
       

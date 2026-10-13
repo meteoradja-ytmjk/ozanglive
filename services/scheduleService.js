@@ -1037,7 +1037,8 @@ class ScheduleService {
             enableAutoStart: true,
             enableAutoStop: true,
             dualStream: !!(template.dual_stream || b.dualStream),
-            alteredContent: !!(template.altered_content || b.alteredContent)
+            alteredContent: !!(template.altered_content || b.alteredContent),
+            enableDvr: !!(template.enable_dvr || b.enableDvr)
           };
           
           console.log(`[ScheduleService] Creating broadcast ${broadcastIndex + 1}/${broadcasts.length}: ${title}`);
@@ -1080,6 +1081,7 @@ class ScheduleService {
                 accountId: template.account_id || null,
                 enableAutoStart: true,
                 enableAutoStop: true,
+                enableDvr: !!(template.enable_dvr || b.enableDvr),
                 unlistReplayOnEnd: template.unlist_replay_on_end !== undefined ? !!template.unlist_replay_on_end : false,
                 originalPrivacyStatus: b.privacyStatus || 'unlisted',
                 thumbnailFolder: thumbnailFolder !== null ? thumbnailFolder : null,
@@ -1314,7 +1316,8 @@ class ScheduleService {
           enableAutoStart: true,
           enableAutoStop: true,
           dualStream: !!template.dual_stream,
-          alteredContent: !!template.altered_content
+          alteredContent: !!template.altered_content,
+          enableDvr: !!template.enable_dvr
         };
         
         console.log(`[ScheduleService] Creating single broadcast: ${title}`);
@@ -1352,6 +1355,7 @@ class ScheduleService {
             accountId: template.account_id || null,
             enableAutoStart: true,
             enableAutoStop: true,
+            enableDvr: !!template.enable_dvr,
             unlistReplayOnEnd: template.unlist_replay_on_end !== undefined ? !!template.unlist_replay_on_end : false,
             originalPrivacyStatus: template.privacy_status || 'unlisted',
             thumbnailFolder: thumbnailFolder !== null ? thumbnailFolder : null,

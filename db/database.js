@@ -355,6 +355,8 @@ async function createCoreTablesAsync() {
   await runTableQuery(`ALTER TABLE streams ADD COLUMN tags TEXT`, 'streams.tags');
   await runTableQuery(`ALTER TABLE streams ADD COLUMN title_folder_id TEXT`, 'streams.title_folder_id');
   await runTableQuery(`ALTER TABLE streams ADD COLUMN template_id TEXT`, 'streams.template_id');
+  await runTableQuery(`ALTER TABLE streams ADD COLUMN enable_dvr INTEGER DEFAULT 0`, 'streams.enable_dvr');
+  await runTableQuery(`ALTER TABLE streams ADD COLUMN youtube_enable_dvr INTEGER DEFAULT 0`, 'streams.youtube_enable_dvr');
 
   // Migrate stream_duration_hours to stream_duration_minutes
   try {
@@ -665,6 +667,7 @@ async function createCoreTablesAsync() {
     account_id INTEGER,
     enable_auto_start INTEGER DEFAULT 1,
     enable_auto_stop INTEGER DEFAULT 1,
+    enable_dvr INTEGER DEFAULT 0,
     unlist_replay_on_end INTEGER DEFAULT 1,
     original_privacy_status TEXT DEFAULT 'public',
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -704,6 +707,7 @@ async function createCoreTablesAsync() {
   await runTableQuery(`ALTER TABLE youtube_broadcast_settings ADD COLUMN title_folder_id TEXT`, 'youtube_broadcast_settings.title_folder_id');
   await runTableQuery(`ALTER TABLE youtube_broadcast_settings ADD COLUMN audio_id TEXT`, 'youtube_broadcast_settings.audio_id');
   await runTableQuery(`ALTER TABLE youtube_broadcast_settings ADD COLUMN video_id TEXT`, 'youtube_broadcast_settings.video_id');
+  await runTableQuery(`ALTER TABLE youtube_broadcast_settings ADD COLUMN enable_dvr INTEGER DEFAULT 0`, 'youtube_broadcast_settings.enable_dvr');
 
   // Backfill template_id for streams previously created by templates (safely run now that youtube_broadcast_settings exists)
   try {

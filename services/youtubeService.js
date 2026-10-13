@@ -368,14 +368,14 @@ class YouTubeService {
    * @param {boolean} [data.alteredContent] - Optional altered content declaration
    * @returns {Promise<{broadcastId: string, streamKey: string, rtmpUrl: string}>}
    */
-  async createBroadcast(accessToken, { title, description, scheduledStartTime, privacyStatus, streamId, tags, categoryId, enableAutoStart, enableAutoStop, monetizationEnabled, adFrequency, alteredContent, dualStream }) {
+  async createBroadcast(accessToken, { title, description, scheduledStartTime, privacyStatus, streamId, tags, categoryId, enableAutoStart, enableAutoStop, monetizationEnabled, adFrequency, alteredContent, dualStream, enableDvr }) {
     const oauth2Client = new google.auth.OAuth2();
     oauth2Client.setCredentials({ access_token: accessToken });
     
     const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
     
     console.log('[YouTubeService.createBroadcast] Received streamId:', streamId);
-    console.log('[YouTubeService.createBroadcast] Settings: autoStart=%s, autoStop=%s, dualStream=%s, alteredContent=%s', enableAutoStart, enableAutoStop, !!dualStream, !!alteredContent);
+    console.log('[YouTubeService.createBroadcast] Settings: autoStart=%s, autoStop=%s, dualStream=%s, alteredContent=%s, enableDvr=%s', enableAutoStart, enableAutoStop, !!dualStream, !!alteredContent, !!enableDvr);
     console.log('[YouTubeService.createBroadcast] Received categoryId:', categoryId);
     
     // Build snippet - Note: categoryId is NOT supported by liveBroadcasts API
@@ -417,7 +417,7 @@ class YouTubeService {
       snippet.tags = finalTags;
     }
     
-    // Build contentDetails with auto-start/stop settings
+    // Build contentDetails with auto-start/stop and DVR settings
     const contentDetails = {
       enableAutoStart: enableAutoStart === true || enableAutoStart === 'true',
       enableAutoStop: enableAutoStop !== false && enableAutoStop !== 'false', // Default true
@@ -426,8 +426,8 @@ class YouTubeService {
       },
       // Record from start - always enabled for replay
       recordFromStart: true,
-      // Enable DVR - ensures full live recording buffer converts to VOD
-      enableDvr: true
+      // Enable DVR - user controlled, default false (tidak default on)
+      enableDvr: enableDvr === true || enableDvr === 'true' || enableDvr === 1 || enableDvr === '1'
     };
     
     // Build status with privacy settings
@@ -1237,7 +1237,7 @@ class YouTubeService {
                     enableAutoStart: false,
                     enableAutoStop: item.contentDetails?.enableAutoStop !== false,
                     recordFromStart: item.contentDetails?.recordFromStart !== false,
-                    enableDvr: true
+                    enableDvr: item.contentDetails?.enableDvr !== undefined ? Boolean(item.contentDetails.enableDvr) : false
                   }
                 }
               });

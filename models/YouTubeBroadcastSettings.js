@@ -17,6 +17,7 @@ class YouTubeBroadcastSettings {
       privacyStatus = null,
       enableAutoStart = true,
       enableAutoStop = true,
+      enableDvr = false,
       unlistReplayOnEnd = true,
       originalPrivacyStatus = 'public',
       thumbnailFolder = null,
@@ -35,12 +36,13 @@ class YouTubeBroadcastSettings {
     const tagsJson = Array.isArray(tags) ? JSON.stringify(tags) : (tags || null);
     const alteredContentInt = (alteredContent === true || alteredContent === 1 || alteredContent === 'true') ? 1 : 0;
     const dualStreamInt = (dualStream === true || dualStream === 1 || dualStream === 'true') ? 1 : 0;
+    const enableDvrInt = (enableDvr === true || enableDvr === 1 || enableDvr === 'true') ? 1 : 0;
 
     return new Promise((resolve, reject) => {
       db.run(
         `INSERT INTO youtube_broadcast_settings 
-         (broadcast_id, user_id, account_id, title, description, category_id, privacy_status, enable_auto_start, enable_auto_stop, unlist_replay_on_end, original_privacy_status, thumbnail_folder, template_id, thumbnail_index, thumbnail_path, altered_content, tags, dual_stream, vertical_stream_key, title_folder_id, audio_id, video_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         (broadcast_id, user_id, account_id, title, description, category_id, privacy_status, enable_auto_start, enable_auto_stop, enable_dvr, unlist_replay_on_end, original_privacy_status, thumbnail_folder, template_id, thumbnail_index, thumbnail_path, altered_content, tags, dual_stream, vertical_stream_key, title_folder_id, audio_id, video_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(broadcast_id) DO UPDATE SET
            account_id = COALESCE(excluded.account_id, youtube_broadcast_settings.account_id),
            title = COALESCE(excluded.title, youtube_broadcast_settings.title),
@@ -49,6 +51,7 @@ class YouTubeBroadcastSettings {
            privacy_status = COALESCE(excluded.privacy_status, youtube_broadcast_settings.privacy_status),
            enable_auto_start = excluded.enable_auto_start,
            enable_auto_stop = excluded.enable_auto_stop,
+           enable_dvr = excluded.enable_dvr,
            unlist_replay_on_end = excluded.unlist_replay_on_end,
            original_privacy_status = excluded.original_privacy_status,
            thumbnail_folder = excluded.thumbnail_folder,
@@ -72,6 +75,7 @@ class YouTubeBroadcastSettings {
           privacyStatus || originalPrivacyStatus || null,
           enableAutoStart ? 1 : 0,
           enableAutoStop ? 1 : 0,
+          enableDvrInt,
           unlistReplayOnEnd ? 1 : 0,
           originalPrivacyStatus,
           thumbnailFolder,
@@ -102,6 +106,7 @@ class YouTubeBroadcastSettings {
             privacyStatus,
             enableAutoStart,
             enableAutoStop,
+            enableDvr: enableDvrInt === 1,
             unlistReplayOnEnd,
             originalPrivacyStatus,
             thumbnailFolder,
@@ -183,6 +188,7 @@ class YouTubeBroadcastSettings {
           if (row) {
             row.enableAutoStart = row.enable_auto_start === 1;
             row.enableAutoStop = row.enable_auto_stop === 1;
+            row.enableDvr = row.enable_dvr === 1;
             row.unlistReplayOnEnd = row.unlist_replay_on_end === 1;
             row.originalPrivacyStatus = row.original_privacy_status;
             row.thumbnailFolder = row.thumbnail_folder;
@@ -242,6 +248,7 @@ class YouTubeBroadcastSettings {
             ...row,
             enableAutoStart: row.enable_auto_start === 1,
             enableAutoStop: row.enable_auto_stop === 1,
+            enableDvr: row.enable_dvr === 1,
             unlistReplayOnEnd: row.unlist_replay_on_end === 1,
             originalPrivacyStatus: row.original_privacy_status
           }));
@@ -273,6 +280,7 @@ class YouTubeBroadcastSettings {
           if (row) {
             row.enableAutoStart = row.enable_auto_start === 1;
             row.enableAutoStop = row.enable_auto_stop === 1;
+            row.enableDvr = row.enable_dvr === 1;
             row.unlistReplayOnEnd = row.unlist_replay_on_end === 1;
             row.alteredContent = row.altered_content === 1;
             row.dualStream = row.dual_stream === 1;
