@@ -3763,8 +3763,8 @@ async function refreshConnectionStatus() {
 }
 
 // Update live stats UI
-// Track collapsed channels state
-let collapsedChannels = new Set();
+// Track expanded channels state (default: all channels collapsed for minimalist UI)
+let expandedChannels = new Set();
 
 function updateLiveStatsUI(stats) {
   const activeStreamsContainer = document.getElementById('activeStreamsContainer');
@@ -3808,74 +3808,141 @@ function updateLiveStatsUI(stats) {
   
   const channelNames = Object.keys(channelGroups);
   
-  // Render grouped channels
+  // Render grouped channels (default: collapsed)
   activeStreamsList.innerHTML = channelNames.map(channelName => {
     const group = channelGroups[channelName];
-    const isCollapsed = collapsedChannels.has(channelName);
-    const channelId = channelName.replace(/[^a-zA-Z0-9]/g, '_');
+    // Safe deterministic channel identifier for DOM and state
+    const channelId = 'ch_' + Math.abs(Array.from(channelName).reduce((acc, c) => ((acc << 5) - acc) + c.charCodeAt(0) | 0, 0)).toString(36) + '_' + channelName.replace(/[^a-zA-Z0-9]/g, '').slice(0, 16);
+    const isExpanded = expandedChannels.has(channelId);
     
     return `
-      <div class="channel-group" data-channel="${escapeHtml(channelName)}">
-        <!-- Channel Header -->
-        <div class="flex items-center justify-between px-3 py-2 bg-dark-700/60 rounded-lg cursor-pointer hover:bg-dark-700 transition-colors"
-          onclick="toggleChannel('${escapeHtml(channelName)}')">
+      <div class="channel-group mb-1.5" data-channel="${escapeHtml(channelName)}">
+        <!-- Channel Header (Click to collapse/expand) -->
+        <div class="flex items-center justify-between px-3 py-2 bg-dark-700/60 hover:bg-dark-700/90 rounded-lg cursor-pointer transition-all select-none border border-transparent hover:border-gray-700/60"
+          onclick="toggleChannel('${channelId}')">
           <div class="flex items-center gap-2 min-w-0 flex-1">
-            <span class="w-2 h-2 bg-red-500 rounded-full animate-pulse flex-shrink-0"></span>
-            <span class="text-sm text-white truncate">${escapeHtml(channelName)}</span>
-            <span class="text-xs text-gray-500">${group.streams.length}</span>
+            <span class="w-2 h-2 bg-red-500 rounded-full animate-pulse flex-shrink-0" title="Live Sekarang"></span>
+            <span class="text-sm font-medium text-white truncate">${escapeHtml(channelName)}</span>
+            <span class="text-[11px] px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-400 border border-red-500/25 font-semibold" title="Jumlah Live">${group.streams.length} live</span>
           </div>
-          <div class="flex items-center gap-2 flex-shrink-0">
-            <span class="text-sm font-medium text-white">${formatNumber(group.totalViewers)}</span>
-            <span class="text-xs text-gray-500 hidden sm:inline">viewers</span>
-            <i class="ti ti-chevron-${isCollapsed ? 'right' : 'down'} text-gray-500 text-xs" id="chevron_${channelId}"></i>
+          <div class="flex items-center gap-2.5 flex-shrink-0">
+            <div class="flex items-center gap-1" title="Total Penonton">
+              <i class="ti ti-users text-xs text-yellow-400"></i>
+              <span class="text-sm font-semibold text-white">${formatNumber(group.totalViewers)}</span>
+              <span class="text-xs text-gray-500 hidden sm:inline">viewers</span>
+            </div>
+            <i class="ti ti-chevron-${isExpanded ? 'down' : 'right'} text-gray-400 text-xs transition-transform duration-200" id="chevron_${channelId}"></i>
           </div>
         </div>
         
-        <!-- Channel Streams -->
-        <div id="streams_${channelId}" class="${isCollapsed ? 'hidden' : ''} mt-1 ml-4 space-y-1">
-          ${group.streams.map(stream => `
-            <div class="flex items-center justify-between px-2.5 py-1.5 bg-dark-700/30 rounded border-l-2 border-red-500/40 text-xs">
-              <span class="text-gray-300 truncate flex-1 mr-2">${escapeHtml(stream.title || 'Untitled')}</span>
-              <div class="flex items-center gap-2 flex-shrink-0">
-                <span class="text-white font-medium">${formatNumber(stream.concurrentViewers || 0)}</span>
-                ${getStatusBadge(stream.streamHealth, stream.healthDetails)}
+        <!-- Channel Streams (Collapsed by default) -->
+        <div id="streams_${channelId}" class="${isExpanded ? '' : 'hidden'} mt-1.5 pl-3 sm:pl-4 space-y-1.5">
+          ${group.streams.map(stream => {
+            const isBad = (stream.healthDetails?.status === 'bad' || stream.healthDetails?.status === 'ok' || stream.streamHealth === 'error' || (stream.healthDetails?.configurationIssues && stream.healthDetails.configurationIssues.length > 0));
+            const borderClass = isBad ? 'border-amber-500/70' : 'border-emerald-500/70';
+
+            return `
+              <div class="flex items-center justify-between px-2.5 py-1.5 bg-dark-700/40 hover:bg-dark-700/60 rounded border-l-2 ${borderClass} text-xs transition-colors">
+                <div class="flex items-center gap-2 min-w-0 flex-1 mr-2">
+                  <i class="ti ti-video text-gray-400 text-xs flex-shrink-0"></i>
+                  <span class="text-gray-200 font-medium truncate" title="${escapeHtml(stream.title || 'Untitled')}">${escapeHtml(stream.title || 'Untitled')}</span>
+                </div>
+                <div class="flex items-center gap-2.5 flex-shrink-0">
+                  <div class="flex items-center gap-1 text-gray-300" title="Penonton">
+                    <i class="ti ti-user text-[11px] text-gray-400"></i>
+                    <span class="font-semibold text-white">${formatNumber(stream.concurrentViewers || 0)}</span>
+                  </div>
+                  ${getStreamHealthBadge(stream.streamHealth, stream.healthDetails)}
+                </div>
               </div>
-            </div>
-          `).join('')}
+            `;
+          }).join('')}
         </div>
       </div>
     `;
   }).join('');
 }
 
-// Toggle channel visibility
-function toggleChannel(channelName) {
-  const channelId = channelName.replace(/[^a-zA-Z0-9]/g, '_');
+// Toggle channel visibility (default: collapsed)
+function toggleChannel(channelId) {
   const streamsDiv = document.getElementById(`streams_${channelId}`);
   const chevron = document.getElementById(`chevron_${channelId}`);
+  if (!streamsDiv) return;
   
-  if (collapsedChannels.has(channelName)) {
-    collapsedChannels.delete(channelName);
-    streamsDiv?.classList.remove('hidden');
-    chevron?.classList.replace('ti-chevron-right', 'ti-chevron-down');
+  if (expandedChannels.has(channelId)) {
+    expandedChannels.delete(channelId);
+    streamsDiv.classList.add('hidden');
+    if (chevron) {
+      chevron.classList.remove('ti-chevron-down');
+      chevron.classList.add('ti-chevron-right');
+    }
   } else {
-    collapsedChannels.add(channelName);
-    streamsDiv?.classList.add('hidden');
-    chevron?.classList.replace('ti-chevron-down', 'ti-chevron-right');
+    expandedChannels.add(channelId);
+    streamsDiv.classList.remove('hidden');
+    if (chevron) {
+      chevron.classList.remove('ti-chevron-right');
+      chevron.classList.add('ti-chevron-down');
+    }
   }
 }
 
-// Compact status badge
+// Stream health indicator: pulse hijau jika sehat/baik, pulse kuning jika buruk/warning
+function getStreamHealthBadge(streamHealth, healthDetails) {
+  const healthStatus = (healthDetails?.status || '').toLowerCase();
+  const streamStatus = (streamHealth || '').toLowerCase();
+  const issues = (healthDetails?.configurationIssues || []).map(i => i.description || i.reason || i.type || i).filter(Boolean);
+  const issuesText = issues.join(', ');
+
+  const isBad = healthStatus === 'bad' || healthStatus === 'ok' || streamStatus === 'error' || issues.length > 0;
+  const isGood = healthStatus === 'good' || (!isBad && (streamStatus === 'active' || healthStatus === 'active'));
+
+  if (isGood) {
+    return `
+      <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 select-none shadow-sm" title="Kualitas Stream: Sangat Baik / Sehat">
+        <span class="relative flex h-2 w-2">
+          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+          <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+        </span>
+        <span>Sehat</span>
+      </span>
+    `;
+  }
+
+  if (isBad) {
+    return `
+      <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30 select-none shadow-sm" title="Kualitas Stream: Buruk / Kurang Stabil${issuesText ? ' (' + escapeHtml(issuesText) + ')' : ''}">
+        <span class="relative flex h-2 w-2">
+          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+          <span class="relative inline-flex rounded-full h-2 w-2 bg-amber-400"></span>
+        </span>
+        <span>Buruk</span>
+      </span>
+    `;
+  }
+
+  if (streamStatus === 'ready') {
+    return `
+      <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-500/15 text-blue-400 border border-blue-500/30 select-none" title="Stream Siap / Menunggu Data">
+        <span class="h-1.5 w-1.5 rounded-full bg-blue-400"></span>
+        <span>Ready</span>
+      </span>
+    `;
+  }
+
+  return `
+    <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 select-none shadow-sm" title="Kualitas Stream: Aktif">
+      <span class="relative flex h-2 w-2">
+        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+        <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+      </span>
+      <span>Sehat</span>
+    </span>
+  `;
+}
+
+// Backward compatibility helper
 function getStatusBadge(streamHealth, healthDetails) {
-  const status = healthDetails?.status || streamHealth || 'unknown';
-  const badges = {
-    'good': '<span class="px-1.5 py-0.5 bg-green-500/20 text-green-400 text-[10px] rounded">Good</span>',
-    'ok': '<span class="px-1.5 py-0.5 bg-yellow-500/20 text-yellow-400 text-[10px] rounded">OK</span>',
-    'bad': '<span class="px-1.5 py-0.5 bg-red-500/20 text-red-400 text-[10px] rounded">Poor</span>',
-    'active': '<span class="px-1.5 py-0.5 bg-green-500/20 text-green-400 text-[10px] rounded">Good</span>',
-    'ready': '<span class="px-1.5 py-0.5 bg-blue-500/20 text-blue-400 text-[10px] rounded">Ready</span>',
-  };
-  return badges[status] || '<span class="px-1.5 py-0.5 bg-gray-500/20 text-gray-400 text-[10px] rounded">-</span>';
+  return getStreamHealthBadge(streamHealth, healthDetails);
 }
 
 // Update connection UI
