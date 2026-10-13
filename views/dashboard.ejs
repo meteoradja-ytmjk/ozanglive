@@ -2400,13 +2400,7 @@
           stream.status === 'scheduled' ? 'Scheduled' :
           isCompleted ? 'Selesai' : 'Offline';
 
-        // YouTube status badge (only for live YouTube streams)
-        let youtubeStatusBadge = '';
-        if (stream.status === 'live' && stream.platform === 'YouTube') {
-          youtubeStatusBadge = `<span id="yt-status-${stream.id}" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/20 text-red-400 ml-1" title="YouTube Status">
-        <i class="ti ti-brand-youtube mr-1"></i>Syncing...
-      </span>`;
-        }
+        // YouTube status badge intentionally removed for cleaner UI; YouTube sync remains active in background
 
         // Format duration using utility function (supports hours + minutes)
         const duration = formatDuration(stream.stream_duration_minutes);
@@ -2480,7 +2474,6 @@
           <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusClass} text-white">
             ${statusText}
           </span>`}
-          ${youtubeStatusBadge}
         </div>
       </td>
       <td class="px-3 py-4 text-right w-40 min-w-[150px]">
@@ -2530,7 +2523,6 @@
             <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold ${statusClass} text-white shadow-xs">
               ${statusText}
             </span>`}
-            ${youtubeStatusBadge}
           </div>
           <h4 class="font-medium text-white text-xs sm:text-sm truncate leading-tight">${escapeHtml(stream.title)}</h4>
           <p class="text-[11px] text-gray-400 truncate mt-0.5">${escapeHtml(stream.video_title || 'No video')} • ${durationMobileText}</p>
