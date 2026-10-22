@@ -505,6 +505,7 @@ class Stream {
         WHERE s.recurring_enabled = 1
         AND s.schedule_type IN ('daily', 'weekly')
         AND s.status IN ('scheduled', 'offline')
+        AND (s.template_id IS NULL OR s.template_id = '')
       `;
       const params = [];
       if (scheduleType) {

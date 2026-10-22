@@ -294,24 +294,13 @@ class ScheduleService {
       let missedCount = 0;
       
       for (const template of templates) {
-        // Check for missed schedules on startup
-        const missed = this.shouldExecuteMissed(template, now);
-        if (missed && missed.shouldRun) {
-          console.log(`[ScheduleService] Found missed schedule for template: ${template.name}`);
-          missedCount++;
-          try {
-            await this.executeTemplate(template, 0, missed.slotIndex);
-            console.log(`[ScheduleService] Executed missed schedule for: ${template.name}`);
-          } catch (error) {
-            console.error(`[ScheduleService] Failed to execute missed schedule for ${template.name}:`, error.message);
-          }
+        // Advance past next_run_at to future date on startup so server restart does not spawn unwanted/duplicate live streams
+        if (template.next_run_at && new Date(template.next_run_at).getTime() < now.getTime()) {
+          console.log(`[ScheduleService] Advancing past next_run_at on startup for template: ${template.name}`);
+          await this.updateNextRunToFuture(template);
         } else {
           await this.scheduleJob(template);
         }
-      }
-      
-      if (missedCount > 0) {
-        console.log(`[ScheduleService] Executed ${missedCount} missed schedules`);
       }
       
       this.initialized = true;
@@ -427,8 +416,8 @@ class ScheduleService {
             const currentMinutesWIB = wibTime.hours * 60 + wibTime.minutes;
             const timeDiffMinutes = currentMinutesWIB - scheduleMinutesWIB;
 
-            // Trigger if within window: -2m (early) to +5m (exact/past)
-            if ((timeDiffMinutes >= 0 && timeDiffMinutes <= 5) || (timeDiffMinutes >= -2 && timeDiffMinutes < 0)) {
+            // Trigger strictly at or after scheduled time (0 to 5 minutes after schedule)
+            if (timeDiffMinutes >= 0 && timeDiffMinutes <= 5) {
               console.log(`[ScheduleService] EXEC: "${template.name}" slot ${slotTime} WIB (${timeDiffMinutes}m from schedule) [slot #${slotIndex + 1}/${times.length}]`);
               const slotKey = `${template.id}_${wibDateStr}_${slotTime}`;
               this.executedSlots.add(slotKey);
@@ -829,6 +818,22 @@ class ScheduleService {
           console.log(`[ScheduleService] BLOCKED: Broadcast ${recentBroadcast.broadcast_id} was already created for template "${template.name}" within ${cooldownMinutes} minutes`);
           return { error: 'RECENTLY_CREATED', template: template.name, broadcastId: recentBroadcast.broadcast_id };
         }
+
+        // PREVENT DUPLICATE LIVE: Check if this template already has an active live stream in streams table
+        const activeLiveStream = await new Promise((resolve) => {
+          db.get(
+            `SELECT id, title, stream_key FROM streams 
+             WHERE (template_id = ? OR (stream_key IS NOT NULL AND stream_key != '' AND stream_key = ?))
+               AND status = 'live'
+             LIMIT 1`,
+            [template.id, template.stream_key || ''],
+            (err, row) => resolve(row)
+          );
+        });
+        if (activeLiveStream) {
+          console.log(`[ScheduleService] BLOCKED: Template "${template.name}" already has active live stream #${activeLiveStream.id} (key: ${activeLiveStream.stream_key ? '***' : 'none'}). Preventing duplicate live.`);
+          return { error: 'ALREADY_LIVE', template: template.name, streamId: activeLiveStream.id };
+        }
       } catch (dbError) {
         console.error(`[ScheduleService] Error checking last_run_at for template ${template.id}:`, dbError.message);
         // Continue execution if database check fails (don't block legitimate execution)
@@ -1105,7 +1110,9 @@ class ScheduleService {
             }
 
             // Create Stream record so streamingService/schedulerService can stream the media automatically!
-            const resolvedStreamKey = result.streamKey || b.streamKey || template.stream_key || (b.streamId ? String(b.streamId) : '');
+            // Preserve user-inputted stream key from the template/slot
+            const targetSlotStreamKey = (b.streamKey || b.stream_key || template.stream_key || '').trim();
+            const resolvedStreamKey = targetSlotStreamKey || result.streamKey || (b.streamId ? String(b.streamId) : '');
             const resolvedRtmpUrl = result.rtmpUrl || b.rtmpUrl || 'rtmp://a.rtmp.youtube.com/live2';
             const resolvedVideoId = b.videoId || template.video_id || null;
             const resolvedAudioId = b.audioId || template.audio_id || null;
@@ -1132,7 +1139,7 @@ class ScheduleService {
                 end_time: null,
                 schedule_days: template.recurring_days || null,
                 recurring_time: template.recurring_time || null,
-                recurring_enabled: 1,
+                recurring_enabled: 0,
                 user_id: template.user_id,
                 youtube_broadcast_id: result.broadcastId || result.id,
                 youtube_account_id: template.account_id || null,
@@ -1380,7 +1387,9 @@ class ScheduleService {
         }
 
         // Create Stream record so streamingService/schedulerService can stream the media automatically!
-        const resolvedStreamKey = result.streamKey || template.stream_key || (template.stream_id ? String(template.stream_id) : '');
+        // Preserve user-inputted stream key from the template
+        const targetStreamKey = (template.stream_key || '').trim();
+        const resolvedStreamKey = targetStreamKey || result.streamKey || (template.stream_id ? String(template.stream_id) : '');
         const resolvedRtmpUrl = result.rtmpUrl || 'rtmp://a.rtmp.youtube.com/live2';
         
         try {
@@ -1405,7 +1414,7 @@ class ScheduleService {
             end_time: null,
             schedule_days: template.recurring_days || null,
             recurring_time: template.recurring_time || null,
-            recurring_enabled: 1,
+            recurring_enabled: 0,
             user_id: template.user_id,
             youtube_broadcast_id: result.broadcastId || result.id,
             youtube_account_id: template.account_id || null,

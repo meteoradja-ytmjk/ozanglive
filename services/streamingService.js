@@ -507,14 +507,18 @@ async function syncYouTubeStreamKeyBeforeStart(stream) {
     if (boundStream && boundStream.streamKey) {
       const liveKey = boundStream.streamKey.trim();
       const liveRtmp = (boundStream.rtmpUrl || 'rtmp://a.rtmp.youtube.com/live2').trim();
-      if (stream.stream_key !== liveKey || (liveRtmp && stream.rtmp_url !== liveRtmp)) {
-        console.log(`[StreamingService] Synchronized stream #${stream.id} stream key from YouTube broadcast ${stream.youtube_broadcast_id}: old="${stream.stream_key ? '***' : 'none'}" -> new="${liveKey ? '***' : 'none'}"`);
+      // PRESERVE INPUTTED STREAM KEY: Only synchronize if stream had NO stream key set from the start
+      if (!stream.stream_key && liveKey) {
+        console.log(`[StreamingService] Synchronized missing stream key for stream #${stream.id} from YouTube broadcast ${stream.youtube_broadcast_id}: ${liveKey ? '***' : 'none'}`);
         stream.stream_key = liveKey;
         if (liveRtmp) stream.rtmp_url = liveRtmp;
         await Stream.update(stream.id, {
           stream_key: liveKey,
           rtmp_url: liveRtmp
         }).catch(() => {});
+      } else if (liveRtmp && stream.rtmp_url !== liveRtmp) {
+        stream.rtmp_url = liveRtmp;
+        await Stream.update(stream.id, { rtmp_url: liveRtmp }).catch(() => {});
       }
     }
   } catch (err) {
@@ -2170,6 +2174,20 @@ async function startStream(streamId) {
     if (!stream) {
       return { success: false, error: 'Stream not found' };
     }
+
+    // PREVENT DUPLICATE LIVE: Check if another stream is already active with the same stream_key or youtube_broadcast_id
+    for (const [activeId, activeData] of activeStreams.entries()) {
+      if (String(activeId) !== String(streamId)) {
+        if (stream.stream_key && activeData.stream?.stream_key && activeData.stream.stream_key === stream.stream_key) {
+          console.warn(`[StreamingService] BLOCKED DUPLICATE: Stream #${streamId} cannot start because stream #${activeId} is already actively streaming to the same stream key!`);
+          return { success: false, error: `Stream key sedang digunakan oleh live stream #${activeId}` };
+        }
+        if (stream.youtube_broadcast_id && activeData.stream?.youtube_broadcast_id && activeData.stream.youtube_broadcast_id === stream.youtube_broadcast_id) {
+          console.warn(`[StreamingService] BLOCKED DUPLICATE: Stream #${streamId} cannot start because broadcast ${stream.youtube_broadcast_id} is already actively streaming on stream #${activeId}!`);
+          return { success: false, error: `Broadcast YouTube sudah aktif di stream #${activeId}` };
+        }
+      }
+    }
     
     // Check live limit before starting stream (exclude this stream so it doesn't block itself)
     const limitInfo = await LiveLimitService.validateAndGetInfo(stream.user_id, stream.id);
@@ -3368,11 +3386,11 @@ async function autoCleanupTemplateStream(stream, source = 'stop') {
   const userId = stream.user_id;
 
   try {
-    // Check if this stream is recurring
+    // Check if this stream is recurring (manual recurring without template_id)
     const isRecurring = (stream.schedule_type === 'daily' || stream.schedule_type === 'weekly') && (stream.recurring_enabled === 1 || stream.recurring_enabled === '1' || stream.recurring_enabled === true);
 
-    if (isRecurring) {
-      // Recurring stream should stay in Control Room / Schedule list for future live
+    if (isRecurring && !stream.template_id) {
+      // Manual recurring stream without template should stay in Control Room / Schedule list for future live
       return false;
     }
 

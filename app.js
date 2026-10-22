@@ -12678,13 +12678,15 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
 
       const isScheduled = isRecurring || (scheduleIso !== null);
 
+      const userProvidedStreamKey = (currentStreamKey || (typeof finalStreamKey !== 'undefined' && finalStreamKey ? finalStreamKey : '') || req.body.streamKey || (matchedSlot ? (matchedSlot.streamKey || matchedSlot.stream_key) : null) || (templateObj ? (templateObj.stream_key || templateObj.streamKey) : null) || '').trim();
+
       const streamData = {
         title: broadcast.title || title,
         video_id: videoId,
         audio_id: audioId,
         title_folder_id: finalTitleFolderId,
         rtmp_url: broadcast.rtmpUrl || 'rtmp://a.rtmp.youtube.com/live2',
-        stream_key: broadcast.streamKey || currentStreamKey || (typeof finalStreamKey !== 'undefined' ? finalStreamKey : '') || (streamId ? String(streamId) : ''),
+        stream_key: userProvidedStreamKey || broadcast.streamKey || (streamId ? String(streamId) : ''),
         platform: 'YouTube',
         platform_icon: 'ti-brand-youtube',
         bitrate: 2500,

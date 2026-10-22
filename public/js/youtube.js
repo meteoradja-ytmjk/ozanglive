@@ -6454,20 +6454,8 @@ function renderTemplateList(templates) {
           </div>
         </div>
 
-        <!-- Sisi Kanan: Action Buttons (Play Run Now, Edit Pensil, Hapus Jadwal, Rebroadcast, Trash) -->
+        <!-- Sisi Kanan: Action Buttons (Hapus Jadwal, Rebroadcast, Trash) -->
         <div class="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
-          <button onclick="runTemplateNow('${template.id}', '${escapeJsString(template.name)}')"
-            class="w-8 h-8 rounded-xl bg-[#0d2a22] hover:bg-[#133e32] text-[#34d399] border border-[#1b5e48] flex items-center justify-center transition-all cursor-pointer shadow-xs active:scale-95 flex-shrink-0"
-            title="Jalankan sekarang (Buat siaran YouTube langsung)">
-            <i class="ti ti-player-play text-sm"></i>
-          </button>
-
-          <button onclick="editTemplate('${template.id}')"
-            class="w-8 h-8 rounded-xl bg-[#132238] hover:bg-[#1c3252] text-[#60a5fa] border border-[#254673] flex items-center justify-center transition-all cursor-pointer shadow-xs active:scale-95 flex-shrink-0"
-            title="Edit konfigurasi template">
-            <i class="ti ti-edit text-sm"></i>
-          </button>
-
           ${hasRecurring ? `
           <button onclick="removeTemplateRecurringSchedule('${template.id}', '${escapeJsString(template.name)}')"
             class="w-8 h-8 rounded-xl bg-[#2a1b0e] hover:bg-[#3d2714] text-[#f59e0b] border border-[#6b3c12] flex items-center justify-center transition-all cursor-pointer shadow-xs active:scale-95 flex-shrink-0"

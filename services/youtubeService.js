@@ -500,10 +500,10 @@ class YouTubeService {
           const matchingStream = mineStreams.find(s => {
             const sKey = (s.cdn?.ingestionInfo?.streamName || '').trim();
             const sId = (s.id || '').trim();
-            return (targetIdStr && sId === targetIdStr) ||
-                   (targetKeyStr && sKey === targetKeyStr) ||
-                   (targetIdStr && sKey === targetIdStr) ||
-                   (targetKeyStr && sId === targetKeyStr);
+            return (targetKeyStr && sKey === targetKeyStr) ||
+                   (targetIdStr && sId === targetIdStr) ||
+                   (targetKeyStr && sId === targetKeyStr) ||
+                   (targetIdStr && sKey === targetIdStr);
           });
 
           if (matchingStream) {
@@ -670,7 +670,7 @@ class YouTubeService {
       id: broadcast.id,
       broadcastId: broadcast.id,
       streamId: stream.id,
-      streamKey: resolvedStreamKey,
+      streamKey: (streamKey && String(streamKey).trim()) ? String(streamKey).trim() : resolvedStreamKey,
       rtmpUrl: resolvedRtmpUrl,
       backupRtmpUrl: resolvedBackupRtmpUrl,
       title: broadcast.snippet?.title || title,
