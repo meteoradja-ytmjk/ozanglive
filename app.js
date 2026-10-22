@@ -14200,19 +14200,24 @@ app.put('/api/youtube/templates/:id', isAuthenticated, async (req, res) => {
     const updateData = {};
     if (name !== undefined) updateData.name = name;
     if (title !== undefined) updateData.title = title;
-    if (description !== undefined) {
-      updateData.description = description;
-    } else if (template.description && template.description.startsWith('[')) {
-      // Sync multi-broadcast template array with updated title/privacy/folder
+    if (template.description && template.description.startsWith('[')) {
+      // Preserve and sync multi-broadcast template array with updated title/privacy/folder
       try {
         const list = JSON.parse(template.description);
         if (Array.isArray(list) && list.length > 0) {
           if (title !== undefined) list[0].title = title;
           if (privacyStatus !== undefined) list.forEach(b => { b.privacyStatus = privacyStatus; });
           if (thumbnailFolder !== undefined) list.forEach(b => { b.thumbnailFolder = thumbnailFolder; });
+          if (description && !description.startsWith('[')) {
+            list[0].description = description;
+          }
           updateData.description = JSON.stringify(list);
         }
-      } catch (e) {}
+      } catch (e) {
+        if (description !== undefined) updateData.description = description;
+      }
+    } else if (description !== undefined) {
+      updateData.description = description;
     }
     if (privacyStatus !== undefined) updateData.privacy_status = privacyStatus;
     if (tags !== undefined) updateData.tags = tags;
@@ -14556,25 +14561,31 @@ app.post('/api/youtube/templates/:id/create-broadcast', isAuthenticated, async (
     console.log('[create-broadcast-from-template] Using streamId:', template.stream_id, 'streamKey:', template.stream_key ? '***' : 'none');
 
     // Create broadcast on YouTube
+    const cleanDescription = (template.description && !template.description.startsWith('[')) ? template.description : '';
     const broadcast = await youtubeService.createBroadcast(accessToken, {
       title: template.title,
-      description: template.description || '',
+      description: cleanDescription,
       scheduledStartTime: new Date(scheduledStartTime).toISOString(),
       privacyStatus: template.privacy_status || 'unlisted',
       tags: template.tags || [],
       categoryId: template.category_id || '22',
       streamId: template.stream_id || null,
       streamKey: template.stream_key || null,
+      dualStream: !!template.dual_stream,
+      alteredContent: !!template.altered_content,
+      enableDvr: template.enable_dvr !== false,
       // IMPORTANT: Always enable auto-start when creating from template
       // This ensures YouTube broadcast starts automatically when stream begins
       enableAutoStart: true,
       enableAutoStop: true
     });
 
+    const broadcastId = broadcast.id || broadcast.broadcastId;
+
     // Save broadcast settings for auto-start sync
     try {
       await YouTubeBroadcastSettings.upsert({
-        broadcastId: broadcast.broadcastId || broadcast.id,
+        broadcastId: broadcastId,
         userId: req.session.userId,
         accountId: template.account_id || null,
         enableAutoStart: true,
@@ -14582,7 +14593,10 @@ app.post('/api/youtube/templates/:id/create-broadcast', isAuthenticated, async (
         unlistReplayOnEnd: true,
         originalPrivacyStatus: template.privacy_status || 'unlisted',
         thumbnailFolder: template.thumbnail_folder !== undefined ? template.thumbnail_folder : null,
-        templateId: template.id
+        templateId: template.id,
+        dualStream: !!template.dual_stream,
+        alteredContent: !!template.altered_content,
+        enableDvr: template.enable_dvr !== false
       });
     } catch (settingsErr) {
       console.error('[create-broadcast-from-template] Error saving broadcast settings:', settingsErr.message);
@@ -14607,21 +14621,24 @@ app.post('/api/youtube/templates/:id/create-broadcast', isAuthenticated, async (
         schedule_time: new Date(scheduledStartTime).toISOString(),
         user_id: req.session.userId,
         template_id: template.id ? String(template.id) : null,
-        youtube_broadcast_id: broadcast.id || broadcast.broadcastId,
+        youtube_broadcast_id: broadcastId,
         youtube_account_id: template.account_id || null,
+        dual_stream: !!template.dual_stream,
+        altered_content: !!template.altered_content,
+        vertical_stream_key: template.vertical_stream_key || null,
         status: 'scheduled'
       });
     } catch (streamErr) {
       console.error('[create-broadcast-from-template] Error creating stream record:', streamErr.message);
     }
 
-    console.log('[create-broadcast-from-template] Created broadcast with streamKey:', broadcast.streamKey);
+    console.log('[create-broadcast-from-template] Created broadcast with streamKey:', broadcast.streamKey, 'id:', broadcastId);
 
     // Upload thumbnail if template has one
     if (template.thumbnail_path) {
       try {
         const thumbnailBuffer = fs.readFileSync(path.join(__dirname, 'public', template.thumbnail_path));
-        await youtubeService.uploadThumbnail(accessToken, broadcast.id, thumbnailBuffer);
+        await youtubeService.uploadThumbnail(accessToken, broadcastId, thumbnailBuffer);
       } catch (thumbError) {
         console.error('Error uploading thumbnail:', thumbError);
         // Continue without thumbnail
@@ -14633,7 +14650,8 @@ app.post('/api/youtube/templates/:id/create-broadcast', isAuthenticated, async (
     res.json({
       success: true,
       broadcast: {
-        id: broadcast.id,
+        id: broadcastId,
+        broadcastId: broadcastId,
         title: broadcast.title,
         scheduledStartTime: broadcast.scheduledStartTime,
         streamKey: broadcast.streamKey
@@ -14707,25 +14725,31 @@ app.post('/api/youtube/templates/:id/bulk-create', isAuthenticated, async (req, 
     // Create broadcasts for each schedule
     for (const schedule of schedules) {
       try {
+        const cleanDescription = (template.description && !template.description.startsWith('[')) ? template.description : '';
         const broadcast = await youtubeService.createBroadcast(accessToken, {
           title: template.title,
-          description: template.description || '',
+          description: cleanDescription,
           scheduledStartTime: new Date(schedule).toISOString(),
           privacyStatus: template.privacy_status || 'unlisted',
           tags: template.tags || [],
           categoryId: template.category_id || '22',
           streamId: template.stream_id || null,
           streamKey: template.stream_key || null,
+          dualStream: !!template.dual_stream,
+          alteredContent: !!template.altered_content,
+          enableDvr: template.enable_dvr !== false,
           // IMPORTANT: Always enable auto-start when creating from template
           // This ensures YouTube broadcast starts automatically when stream begins
           enableAutoStart: true,
           enableAutoStop: true
         });
 
+        const bulkBroadcastId = broadcast.id || broadcast.broadcastId;
+
         // Save broadcast settings for auto-start sync
         try {
           await YouTubeBroadcastSettings.upsert({
-            broadcastId: broadcast.broadcastId,
+            broadcastId: bulkBroadcastId,
             userId: req.session.userId,
             accountId: template.account_id || null,
             enableAutoStart: true,
@@ -14733,7 +14757,10 @@ app.post('/api/youtube/templates/:id/bulk-create', isAuthenticated, async (req, 
             unlistReplayOnEnd: true,
             originalPrivacyStatus: template.privacy_status || 'unlisted',
             thumbnailFolder: template.thumbnail_folder !== undefined ? template.thumbnail_folder : null,
-            templateId: template.id
+            templateId: template.id,
+            dualStream: !!template.dual_stream,
+            alteredContent: !!template.altered_content,
+            enableDvr: template.enable_dvr !== false
           });
         } catch (settingsErr) {
           console.error('[bulk-create] Error saving broadcast settings:', settingsErr.message);
@@ -14743,7 +14770,7 @@ app.post('/api/youtube/templates/:id/bulk-create', isAuthenticated, async (req, 
         if (template.thumbnail_path) {
           try {
             const thumbnailBuffer = fs.readFileSync(path.join(__dirname, 'public', template.thumbnail_path));
-            await youtubeService.uploadThumbnail(accessToken, broadcast.broadcastId, thumbnailBuffer);
+            await youtubeService.uploadThumbnail(accessToken, bulkBroadcastId, thumbnailBuffer);
           } catch (thumbError) {
             console.error('Error uploading thumbnail for bulk create:', thumbError);
           }
@@ -14768,8 +14795,11 @@ app.post('/api/youtube/templates/:id/bulk-create', isAuthenticated, async (req, 
             schedule_time: new Date(schedule).toISOString(),
             user_id: req.session.userId,
             template_id: template.id ? String(template.id) : null,
-            youtube_broadcast_id: broadcast.broadcastId,
+            youtube_broadcast_id: bulkBroadcastId,
             youtube_account_id: template.account_id || null,
+            dual_stream: !!template.dual_stream,
+            altered_content: !!template.altered_content,
+            vertical_stream_key: template.vertical_stream_key || null,
             status: 'scheduled'
           });
         } catch (streamErr) {
@@ -15027,8 +15057,18 @@ app.post('/api/youtube/templates/:id/run-now', isAuthenticated, async (req, res)
     };
 
     console.log(`[API] Manual trigger for template: ${template.name}`);
-    const result = await scheduleService.executeTemplate(templateWithCreds);
+    const result = await scheduleService.executeTemplate(templateWithCreds, 0, null, { isManual: true });
     invalidateBroadcastsCache(req.session.userId);
+
+    if (result && result.error) {
+      return res.status(400).json({
+        success: false,
+        error: result.error === 'ALREADY_EXECUTING' ? 'Template is currently already executing' :
+               result.error === 'RECENTLY_EXECUTED' ? `Template was executed recently (${result.minutesAgo} mins ago)` :
+               result.error,
+        results: result
+      });
+    }
 
     res.json({
       success: true,

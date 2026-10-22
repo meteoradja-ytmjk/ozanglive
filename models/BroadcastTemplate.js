@@ -453,6 +453,12 @@ class BroadcastTemplate {
         }
         fields.push(`${key} = ?`);
         values.push(value.trim());
+      } else if (key === 'stream_key_folder_mapping') {
+        fields.push(`${key} = ?`);
+        values.push(typeof value === 'object' && value !== null ? JSON.stringify(value) : (value || null));
+      } else if (key === 'dual_stream' || key === 'altered_content') {
+        fields.push(`${key} = ?`);
+        values.push(value ? 1 : 0);
       } else if (key !== 'id' && key !== 'user_id' && key !== 'created_at') {
         fields.push(`${key} = ?`);
         values.push(value);

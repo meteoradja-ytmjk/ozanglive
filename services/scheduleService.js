@@ -782,9 +782,10 @@ class ScheduleService {
    * @param {number} retryCount - Current retry count
    * @param {number|null} targetSlotIndex - Specific slot index to execute (for multi-broadcast 1-to-1 execution)
    */
-  async executeTemplate(template, retryCount = 0, targetSlotIndex = null) {
+  async executeTemplate(template, retryCount = 0, targetSlotIndex = null, options = {}) {
     const maxRetries = 3;
     const now = new Date();
+    const isManual = !!(options && options.isManual);
     
     // CRITICAL FIX 1: Check if this template is already being executed (prevent duplicate execution)
     if (this.executingTemplates.has(template.id)) {
@@ -793,43 +794,47 @@ class ScheduleService {
     }
     
     // CRITICAL FIX 2: Database-level duplicate check - verify last_run_at before execution
-    // For multi-slot schedules, use 2-minute cooldown so distinct slots can run without false blocks
-    try {
-      const recurringTimes = parseRecurringTimes(template.recurring_time);
-      const isMultiSlot = recurringTimes.length > 1;
-      const cooldownMinutes = isMultiSlot ? 2 : 15;
-      const recentWindow = isMultiSlot ? '-2 minutes' : '-15 minutes';
+    // Skipped if triggered manually by user (isManual: true)
+    if (!isManual) {
+      try {
+        const recurringTimes = parseRecurringTimes(template.recurring_time);
+        const isMultiSlot = recurringTimes.length > 1;
+        const cooldownMinutes = isMultiSlot ? 2 : 15;
+        const recentWindow = isMultiSlot ? '-2 minutes' : '-15 minutes';
 
-      const freshTemplate = await BroadcastTemplate.findById(template.id);
-      if (freshTemplate && freshTemplate.last_run_at) {
-        const lastRunTime = new Date(freshTemplate.last_run_at);
-        const timeSinceLastRun = now.getTime() - lastRunTime.getTime();
-        const minutesSinceLastRun = Math.floor(timeSinceLastRun / (1000 * 60));
-        
-        if (minutesSinceLastRun < cooldownMinutes) {
-          console.log(`[ScheduleService] BLOCKED: Template "${template.name}" was executed ${minutesSinceLastRun} minutes ago (< ${cooldownMinutes} min cooldown)`);
-          return { error: 'RECENTLY_EXECUTED', template: template.name, minutesAgo: minutesSinceLastRun };
+        const freshTemplate = await BroadcastTemplate.findById(template.id);
+        if (freshTemplate && freshTemplate.last_run_at) {
+          const lastRunTime = new Date(freshTemplate.last_run_at);
+          const timeSinceLastRun = now.getTime() - lastRunTime.getTime();
+          const minutesSinceLastRun = Math.floor(timeSinceLastRun / (1000 * 60));
+          
+          if (minutesSinceLastRun < cooldownMinutes) {
+            console.log(`[ScheduleService] BLOCKED: Template "${template.name}" was executed ${minutesSinceLastRun} minutes ago (< ${cooldownMinutes} min cooldown)`);
+            return { error: 'RECENTLY_EXECUTED', template: template.name, minutesAgo: minutesSinceLastRun };
+          }
         }
-      }
 
-      // Check if a broadcast was recently created for this template in the database
-      const recentBroadcast = await new Promise((resolve) => {
-        db.get(
-          `SELECT broadcast_id FROM youtube_broadcast_settings 
-           WHERE template_id = ? 
-             AND created_at >= datetime('now', '${recentWindow}')
-           LIMIT 1`,
-          [template.id],
-          (err, row) => resolve(row)
-        );
-      });
-      if (recentBroadcast) {
-        console.log(`[ScheduleService] BLOCKED: Broadcast ${recentBroadcast.broadcast_id} was already created for template "${template.name}" within ${cooldownMinutes} minutes`);
-        return { error: 'RECENTLY_CREATED', template: template.name, broadcastId: recentBroadcast.broadcast_id };
+        // Check if a broadcast was recently created for this template in the database
+        const recentBroadcast = await new Promise((resolve) => {
+          db.get(
+            `SELECT broadcast_id FROM youtube_broadcast_settings 
+             WHERE template_id = ? 
+               AND created_at >= datetime('now', '${recentWindow}')
+             LIMIT 1`,
+            [template.id],
+            (err, row) => resolve(row)
+          );
+        });
+        if (recentBroadcast) {
+          console.log(`[ScheduleService] BLOCKED: Broadcast ${recentBroadcast.broadcast_id} was already created for template "${template.name}" within ${cooldownMinutes} minutes`);
+          return { error: 'RECENTLY_CREATED', template: template.name, broadcastId: recentBroadcast.broadcast_id };
+        }
+      } catch (dbError) {
+        console.error(`[ScheduleService] Error checking last_run_at for template ${template.id}:`, dbError.message);
+        // Continue execution if database check fails (don't block legitimate execution)
       }
-    } catch (dbError) {
-      console.error(`[ScheduleService] Error checking last_run_at for template ${template.id}:`, dbError.message);
-      // Continue execution if database check fails (don't block legitimate execution)
+    } else {
+      console.log(`[ScheduleService] Manual run triggered for template "${template.name}" - skipping cron cooldown checks`);
     }
     
     // Mark template as executing BEFORE any async operations

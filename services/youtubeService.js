@@ -667,6 +667,7 @@ class YouTubeService {
     }
     
     return {
+      id: broadcast.id,
       broadcastId: broadcast.id,
       streamId: stream.id,
       streamKey: resolvedStreamKey,

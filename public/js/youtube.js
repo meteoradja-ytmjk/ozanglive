@@ -6437,11 +6437,37 @@ function renderTemplateList(templates) {
               </span>` : ''}
 
             ${thumbnailBadge}
+
+            ${(() => {
+              const totalMins = template.stream_duration_minutes || ((template.duration_hours || 0) * 60 + (template.duration_minutes || 0));
+              if (totalMins > 0) {
+                const h = Math.floor(totalMins / 60);
+                const m = totalMins % 60;
+                const durStr = h > 0 ? (m > 0 ? `${h}j ${m}m` : `${h} jam`) : `${m} mnt`;
+                return `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-[#1e293b] text-blue-300 border border-blue-900/40 flex-shrink-0 whitespace-nowrap shadow-2xs" title="Durasi: ${durStr}">
+                  <i class="ti ti-clock text-[10px]"></i>
+                  <span>${durStr}</span>
+                </span>`;
+              }
+              return '';
+            })()}
           </div>
         </div>
 
-        <!-- Sisi Kanan: Action Buttons (Square Hapus Jadwal, Rounded Rect Rebroadcast, Square Trash) -->
+        <!-- Sisi Kanan: Action Buttons (Play Run Now, Edit Pensil, Hapus Jadwal, Rebroadcast, Trash) -->
         <div class="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+          <button onclick="runTemplateNow('${template.id}', '${escapeJsString(template.name)}')"
+            class="w-8 h-8 rounded-xl bg-[#0d2a22] hover:bg-[#133e32] text-[#34d399] border border-[#1b5e48] flex items-center justify-center transition-all cursor-pointer shadow-xs active:scale-95 flex-shrink-0"
+            title="Jalankan sekarang (Buat siaran YouTube langsung)">
+            <i class="ti ti-player-play text-sm"></i>
+          </button>
+
+          <button onclick="editTemplate('${template.id}')"
+            class="w-8 h-8 rounded-xl bg-[#132238] hover:bg-[#1c3252] text-[#60a5fa] border border-[#254673] flex items-center justify-center transition-all cursor-pointer shadow-xs active:scale-95 flex-shrink-0"
+            title="Edit konfigurasi template">
+            <i class="ti ti-edit text-sm"></i>
+          </button>
+
           ${hasRecurring ? `
           <button onclick="removeTemplateRecurringSchedule('${template.id}', '${escapeJsString(template.name)}')"
             class="w-8 h-8 rounded-xl bg-[#2a1b0e] hover:bg-[#3d2714] text-[#f59e0b] border border-[#6b3c12] flex items-center justify-center transition-all cursor-pointer shadow-xs active:scale-95 flex-shrink-0"
@@ -6531,6 +6557,9 @@ function openCreateTemplateModal() {
   
   // Load title folders for template modal
   loadTemplateTitleFolders();
+
+  // Load video and audio media options for template modal
+  loadTemplateMediaOptions();
 }
 
 // Load thumbnail folders for template modal
@@ -6618,6 +6647,114 @@ async function loadTemplateTitleFolders(selectedFolderId = null) {
   } catch (error) {
     console.error('Error loading title folders:', error);
     select.innerHTML = '<option value="">Error loading folders</option>';
+  }
+}
+
+// Load video and audio media options for create template modal
+async function loadTemplateMediaOptions() {
+  const videoSelect = document.getElementById('templateVideoId');
+  const audioSelect = document.getElementById('templateAudioId');
+  
+  if (videoSelect) {
+    videoSelect.innerHTML = '<option value="">-- Memuat galeri video... --</option>';
+    try {
+      const res = await fetch('/api/videos', { headers: { 'X-CSRF-Token': getCsrfToken() } });
+      const data = await res.json();
+      const videos = data.videos || (Array.isArray(data) ? data : []);
+      videoSelect.innerHTML = '<option value="">-- Pilih Video dari Galeri (Opsional) --</option>';
+      videos.forEach(v => {
+        const durSec = parseInt(v.duration, 10) || 0;
+        const durText = durSec > 0 ? ` (${Math.floor(durSec / 60)}m ${durSec % 60}s)` : '';
+        const opt = document.createElement('option');
+        opt.value = v.id;
+        opt.textContent = (v.title || v.filename || `Video #${v.id}`) + durText;
+        opt.dataset.durationSeconds = durSec;
+        videoSelect.appendChild(opt);
+      });
+
+      videoSelect.onchange = function() {
+        const chosen = videoSelect.selectedOptions ? videoSelect.selectedOptions[0] : null;
+        const durSec = chosen ? parseInt(chosen.dataset.durationSeconds, 10) : 0;
+        if (durSec > 0) {
+          const hInput = document.getElementById('templateDurationHours');
+          const mInput = document.getElementById('templateDurationMinutes');
+          if (hInput && mInput && parseInt(hInput.value, 10) === 0 && parseInt(mInput.value, 10) === 0) {
+            hInput.value = Math.floor(durSec / 3600);
+            mInput.value = Math.ceil((durSec % 3600) / 60);
+          }
+        }
+      };
+    } catch (e) {
+      console.warn('Failed to load videos for template:', e);
+      videoSelect.innerHTML = '<option value="">-- Pilih Video dari Galeri (Opsional) --</option>';
+    }
+  }
+
+  if (audioSelect) {
+    try {
+      const res = await fetch('/api/audios', { headers: { 'X-CSRF-Token': getCsrfToken() } });
+      const data = await res.json();
+      const audios = data.audios || (Array.isArray(data) ? data : []);
+      audioSelect.innerHTML = '<option value="">-- Suara Video Asli (Default) --</option>';
+      audios.forEach(a => {
+        const opt = document.createElement('option');
+        opt.value = a.id;
+        opt.textContent = a.title || a.filename || `Audio #${a.id}`;
+        audioSelect.appendChild(opt);
+      });
+    } catch (e) {
+      console.warn('Failed to load audios for template:', e);
+    }
+  }
+}
+
+// Load video and audio media options for edit template modal
+async function loadEditTemplateMediaOptions(selectedVideoId = null, selectedAudioId = null) {
+  const videoSelect = document.getElementById('editTemplateVideoId');
+  const audioSelect = document.getElementById('editTemplateAudioId');
+
+  if (videoSelect) {
+    videoSelect.innerHTML = '<option value="">-- Memuat galeri video... --</option>';
+    try {
+      const res = await fetch('/api/videos', { headers: { 'X-CSRF-Token': getCsrfToken() } });
+      const data = await res.json();
+      const videos = data.videos || (Array.isArray(data) ? data : []);
+      videoSelect.innerHTML = '<option value="">-- Pilih Video dari Galeri (Opsional) --</option>';
+      videos.forEach(v => {
+        const durSec = parseInt(v.duration, 10) || 0;
+        const durText = durSec > 0 ? ` (${Math.floor(durSec / 60)}m ${durSec % 60}s)` : '';
+        const opt = document.createElement('option');
+        opt.value = v.id;
+        opt.textContent = (v.title || v.filename || `Video #${v.id}`) + durText;
+        if (selectedVideoId && String(v.id) === String(selectedVideoId)) {
+          opt.selected = true;
+        }
+        videoSelect.appendChild(opt);
+      });
+    } catch (e) {
+      console.warn('Failed to load videos for edit template:', e);
+      videoSelect.innerHTML = '<option value="">-- Pilih Video dari Galeri (Opsional) --</option>';
+    }
+  }
+
+  if (audioSelect) {
+    try {
+      const res = await fetch('/api/audios', { headers: { 'X-CSRF-Token': getCsrfToken() } });
+      const data = await res.json();
+      const audios = data.audios || (Array.isArray(data) ? data : []);
+      audioSelect.innerHTML = '<option value="">-- Suara Video Asli (Default) --</option>';
+      audios.forEach(a => {
+        const opt = document.createElement('option');
+        opt.value = a.id;
+        opt.textContent = a.title || a.filename || `Audio #${a.id}`;
+        if (selectedAudioId && String(a.id) === String(selectedAudioId)) {
+          opt.selected = true;
+        }
+        audioSelect.appendChild(opt);
+      });
+    } catch (e) {
+      console.warn('Failed to load audios for edit template:', e);
+    }
   }
 }
 
@@ -6771,6 +6908,15 @@ if (createTemplateForm) {
       const templateChosenOpt = templateStreamSelect?.selectedOptions ? templateStreamSelect.selectedOptions[0] : null;
       const templateChosenStreamKey = templateChosenOpt?.dataset?.streamKey || null;
 
+      const durHours = parseInt(document.getElementById('templateDurationHours')?.value, 10) || 0;
+      const durMins = parseInt(document.getElementById('templateDurationMinutes')?.value, 10) || 0;
+      const totalDurMins = (durHours * 60) + durMins;
+      const videoId = document.getElementById('templateVideoId')?.value || null;
+      const audioId = document.getElementById('templateAudioId')?.value || null;
+      const loopVideo = document.getElementById('templateLoopVideo')?.checked !== false;
+      const dualStream = !!document.getElementById('templateDualStream')?.checked;
+      const alteredContent = !!document.getElementById('templateAlteredContent')?.checked;
+
       const templateData = {
         name: document.getElementById('templateName').value,
         accountId: document.getElementById('templateAccountSelect').value,
@@ -6780,6 +6926,14 @@ if (createTemplateForm) {
         categoryId: document.getElementById('templateCategoryId').value || '22',
         streamId: templateChosenStreamId,
         streamKey: templateChosenStreamKey,
+        videoId: videoId,
+        audioId: audioId,
+        durationHours: durHours,
+        durationMinutes: durMins,
+        streamDurationMinutes: totalDurMins,
+        loopVideo: loopVideo,
+        dualStream: dualStream,
+        alteredContent: alteredContent,
         // IMPORTANT: Use the selected folder from the dropdown, NOT currentThumbnailFolder
         thumbnailFolder: thumbnailFolder,
         // Title folder for rotation
@@ -7361,6 +7515,15 @@ async function openEditTemplateModal(template) {
   if (editDurMinsInput) editDurMinsInput.value = editMins || 0;
   if (editLoopCheckbox) editLoopCheckbox.checked = template.loop_video !== false;
 
+  const editDualStream = document.getElementById('editTemplateDualStream');
+  if (editDualStream) editDualStream.checked = !!template.dual_stream;
+
+  const editAlteredContent = document.getElementById('editTemplateAlteredContent');
+  if (editAlteredContent) editAlteredContent.checked = !!template.altered_content;
+
+  // Load and preselect video & audio in edit modal
+  loadEditTemplateMediaOptions(template.video_id || null, template.audio_id || null);
+
   // Populate Accounts dropdown
   const accountSelect = document.getElementById('editTemplateAccountSelect');
   if (accountSelect) {
@@ -7683,6 +7846,18 @@ if (editTemplateForm) {
       updateData.durationMinutes = durMinsVal;
       updateData.streamDurationMinutes = (durHoursVal * 60) + durMinsVal;
       updateData.loopVideo = loopVideoVal;
+
+      const editVideoSelect = document.getElementById('editTemplateVideoId');
+      if (editVideoSelect) updateData.videoId = editVideoSelect.value || null;
+
+      const editAudioSelect = document.getElementById('editTemplateAudioId');
+      if (editAudioSelect) updateData.audioId = editAudioSelect.value || null;
+
+      const editDualStream = document.getElementById('editTemplateDualStream');
+      if (editDualStream) updateData.dualStream = editDualStream.checked;
+
+      const editAlteredContent = document.getElementById('editTemplateAlteredContent');
+      if (editAlteredContent) updateData.alteredContent = editAlteredContent.checked;
       
       console.log('[editTemplate] Updating full template:', updateData);
       
