@@ -725,7 +725,7 @@ function createBroadcastRowHtml(broadcast, index) {
               class="w-8.5 h-8.5 rounded-lg bg-yellow-500/15 hover:bg-yellow-500/25 active:bg-yellow-500/40 text-yellow-400 border border-yellow-500/30 flex items-center justify-center transition-all duration-150 hover:scale-105 active:scale-90 touch-manipulation cursor-pointer shadow-sm select-none" title="Save as Template">
               <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h6a2 2 0 0 1 2 2v14l-5 -3l-5 3v-14a2 2 0 0 1 2 -2" /></svg>
             </button>
-            <button type="button" data-action="delete" onclick="deleteBroadcast('${broadcast.id}', null, ${broadcast.accountId || 'null'}, this)"
+            <button type="button" data-action="delete" onclick="deleteBroadcast('${broadcast.id}', '${safeTitleJs}', ${broadcast.accountId || 'null'}, this)"
               class="w-8.5 h-8.5 rounded-lg bg-red-500/15 hover:bg-red-500/25 active:bg-red-500/40 text-red-400 border border-red-500/30 flex items-center justify-center transition-all duration-150 hover:scale-105 active:scale-90 touch-manipulation cursor-pointer shadow-sm select-none" title="Hapus">
               <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7l16 0" /><path d="M10 11l0 6" /><path d="M14 11l0 6" /><path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12" /><path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3" /></svg>
             </button>
@@ -787,7 +787,7 @@ function createBroadcastRowHtml(broadcast, index) {
               class="w-7 h-7 rounded-lg bg-yellow-500/15 hover:bg-yellow-500/25 active:bg-yellow-500/40 text-yellow-400 border border-yellow-500/30 flex items-center justify-center transition-all duration-150 active:scale-90 touch-manipulation cursor-pointer shadow-sm select-none" title="Save as Template">
               <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h6a2 2 0 0 1 2 2v14l-5 -3l-5 3v-14a2 2 0 0 1 2 -2" /></svg>
             </button>
-            <button type="button" data-action="delete" onclick="deleteBroadcast('${broadcast.id}', null, ${broadcast.accountId || 'null'}, this)"
+            <button type="button" data-action="delete" onclick="deleteBroadcast('${broadcast.id}', '${safeTitleJs}', ${broadcast.accountId || 'null'}, this)"
               class="w-7 h-7 rounded-lg bg-red-500/15 hover:bg-red-500/25 active:bg-red-500/40 text-red-400 border border-red-500/30 flex items-center justify-center transition-all duration-150 active:scale-90 touch-manipulation cursor-pointer shadow-sm select-none" title="Hapus">
               <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7l16 0" /><path d="M10 11l0 6" /><path d="M14 11l0 6" /><path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12" /><path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3" /></svg>
             </button>
@@ -5512,12 +5512,13 @@ async function deleteBroadcast(broadcastId, title = null, accountId = null, trig
   // Guard: ignore repeated clicks while a delete for this broadcast is in flight
   if (_deletingBroadcastIds.has(key)) return;
 
-  // Resolve title cleanly from DOM if not passed
+  // Resolve title cleanly from DOM or arguments
   const row = document.querySelector(`.broadcast-row[data-broadcast-id="${broadcastId}"]`);
+  const resolvedTitle = title || row?.querySelector('.truncate, .font-medium, h3, h4')?.textContent?.trim() || 'siaran';
   const isCompleted = row?.textContent?.includes('Completed') || row?.textContent?.includes('Selesai');
   const confirmMsg = isCompleted 
     ? `Bersihkan "${resolvedTitle}" dari daftar broadcast? (Video siaran tetap aman tersimpan sebagai VOD di channel YouTube Anda)`
-    : `Yakin ingin menghapus jadwal "${resolvedTitle}"?`;
+    : `Apakah Anda yakin ingin menghapus siaran "${resolvedTitle}"?\n\nTindakan ini akan menghapus siaran dari aplikasi dan dashboard YouTube.`;
 
   if (!confirm(confirmMsg)) {
     return;
@@ -7988,7 +7989,7 @@ async function deleteSelectedBroadcasts() {
     return;
   }
 
-  if (!confirm(`Are you sure you want to delete ${selected.length} broadcast(s)?`)) {
+  if (!confirm(`Apakah Anda yakin ingin menghapus ${selected.length} siaran terpilih?\n\nSemua siaran ini akan dihapus dari aplikasi dan dashboard YouTube.`)) {
     return;
   }
 

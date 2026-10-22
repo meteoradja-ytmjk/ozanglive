@@ -2873,8 +2873,19 @@
     // ============================================
 
     async function deleteStream(id, event) {
-      // No confirmation dialog - delete immediately for faster workflow
-      // No toast notifications - silent delete
+      const targetStream = (typeof allStreamsData !== 'undefined' && Array.isArray(allStreamsData))
+        ? allStreamsData.find(s => String(s.id) === String(id))
+        : null;
+      const streamTitle = targetStream?.title || 'siaran ini';
+      const isYouTube = targetStream?.platform === 'YouTube' || !!targetStream?.youtube_broadcast_id;
+      const confirmMsg = isYouTube
+        ? `Apakah Anda yakin ingin menghapus "${streamTitle}"?\n\nSiaran ini akan dihapus dari aplikasi dan dashboard YouTube.`
+        : `Apakah Anda yakin ingin menghapus "${streamTitle}"?`;
+
+      if (!confirm(confirmMsg)) {
+        return;
+      }
+
       const lockKey = `delete:${id}`;
       if (streamActionLocks.has(lockKey)) return; // ignore rapid repeat taps
       streamActionLocks.add(lockKey);
@@ -2884,14 +2895,23 @@
         const response = await fetch(`/api/streams/${id}`, { method: 'DELETE' });
         const result = await response.json();
         if (result.success) {
+          if (typeof showToast === 'function') {
+            showToast(isYouTube ? '✓ Siaran berhasil dihapus dari aplikasi dan YouTube' : '✓ Siaran berhasil dihapus', 'success');
+          }
           loadStreams();
           loadLiveLimitInfo();
           if (typeof loadBroadcasts === 'function') loadBroadcasts(true);
         } else {
+          if (typeof showToast === 'function') {
+            showToast(result.error || 'Gagal menghapus siaran', 'error');
+          }
           setStreamButtonBusy(btn, false);
         }
       } catch (error) {
         console.error('Error deleting stream:', error);
+        if (typeof showToast === 'function') {
+          showToast('Terjadi kesalahan saat menghapus siaran', 'error');
+        }
         setStreamButtonBusy(btn, false);
       } finally {
         streamActionLocks.delete(lockKey);
