@@ -92,7 +92,8 @@ const BROADCAST_TEMPLATE_FIELDS = [
   'recurring_time',
   'recurring_days',
   'next_run_at',
-  'last_run_at'
+  'last_run_at',
+  'shuffle_daily'
 ];
 
 // Recurring Schedule export fields
@@ -1149,7 +1150,8 @@ async function importBroadcastTemplatesData(templates, userId, options = {}, thu
         recurring_pattern: template.recurring_pattern,
         recurring_time: template.recurring_time,
         recurring_days: template.recurring_days,
-        next_run_at: template.next_run_at
+        next_run_at: template.next_run_at,
+        shuffle_daily: template.shuffle_daily ? 1 : 0
       });
       result.imported++;
     } catch (error) {

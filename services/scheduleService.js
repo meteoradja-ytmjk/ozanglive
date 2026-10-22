@@ -264,6 +264,67 @@ function wibToUTC(year, month, dayOfMonth, hours, minutes) {
   return new Date(Date.UTC(adjustedYear, adjustedMonth, adjustedDay, adjustedHours, minutes, 0, 0));
 }
 
+/**
+ * Convert string to 32-bit positive integer seed
+ */
+function stringToSeed(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  return Math.abs(hash);
+}
+
+/**
+ * Mulberry32 PRNG (deterministic pseudo-random generator)
+ */
+function mulberry32(seed) {
+  return function() {
+    let t = seed += 0x6D2B79F5;
+    t = Math.imul(t ^ t >>> 15, t | 1);
+    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * Get deterministic daily shuffled indices for a template on a given WIB date
+ * Guarantees every slot gets a unique broadcast, completely consistent throughout the day
+ * @param {string} templateId - Template ID
+ * @param {string} dateStr - WIB date string YYYY-MM-DD
+ * @param {number} count - Total items to shuffle
+ * @returns {number[]} Array of shuffled indices
+ */
+function getDailyShuffledIndices(templateId, dateStr, count) {
+  const indices = Array.from({ length: count }, (_, i) => i);
+  if (count <= 1) return indices;
+  const seed = stringToSeed(`${templateId}_${dateStr}_shuffle_v1`);
+  const random = mulberry32(seed);
+
+  // Fisher-Yates shuffle
+  for (let i = indices.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [indices[i], indices[j]] = [indices[j], indices[i]];
+  }
+  return indices;
+}
+
+/**
+ * Get deterministic micro-jitter in minutes (0 to 5 minutes)
+ * Keeps broadcast start time organic and human-like for YouTube's algorithm
+ * @param {string} templateId - Template ID
+ * @param {string} dateStr - WIB date string YYYY-MM-DD
+ * @param {number} slotIndex - Slot index
+ * @returns {number} Offset in minutes (0 to 5)
+ */
+function getDailySlotJitter(templateId, dateStr, slotIndex) {
+  const seed = stringToSeed(`${templateId}_${dateStr}_jitter_${slotIndex}_v1`);
+  const random = mulberry32(seed);
+  return Math.floor(random() * 6); // 0..5 minutes
+}
+
 class ScheduleService {
   constructor() {
     this.jobs = new Map(); // Map of templateId -> job info
@@ -413,12 +474,22 @@ class ScheduleService {
 
             const [schedHour, schedMin] = slotTime.split(':').map(Number);
             const scheduleMinutesWIB = schedHour * 60 + schedMin;
-            const currentMinutesWIB = wibTime.hours * 60 + wibTime.minutes;
-            const timeDiffMinutes = currentMinutesWIB - scheduleMinutesWIB;
 
-            // Trigger strictly at or after scheduled time (0 to 5 minutes after schedule)
+            // Micro-jitter: apply 0 to 5 minutes organic offset if shuffle_daily is enabled
+            let jitterMinutes = 0;
+            if (template.shuffle_daily) {
+              jitterMinutes = getDailySlotJitter(template.id, wibDateStr, slotIndex);
+            }
+            const effectiveScheduleMinutesWIB = scheduleMinutesWIB + jitterMinutes;
+            const currentMinutesWIB = wibTime.hours * 60 + wibTime.minutes;
+            const timeDiffMinutes = currentMinutesWIB - effectiveScheduleMinutesWIB;
+
+            // Trigger strictly at or after scheduled time (0 to 5 minutes after effective schedule)
             if (timeDiffMinutes >= 0 && timeDiffMinutes <= 5) {
-              console.log(`[ScheduleService] EXEC: "${template.name}" slot ${slotTime} WIB (${timeDiffMinutes}m from schedule) [slot #${slotIndex + 1}/${times.length}]`);
+              const effectiveH = Math.floor(effectiveScheduleMinutesWIB / 60);
+              const effectiveM = effectiveScheduleMinutesWIB % 60;
+              const effectiveTimeStr = `${String(effectiveH).padStart(2, '0')}:${String(effectiveM).padStart(2, '0')}`;
+              console.log(`[ScheduleService] EXEC: "${template.name}" slot ${slotTime} WIB (effective ${effectiveTimeStr} WIB, jitter +${jitterMinutes}m) [slot #${slotIndex + 1}/${times.length}]${template.shuffle_daily ? ' [SHUFFLE ACTIVE]' : ''}`);
               const slotKey = `${template.id}_${wibDateStr}_${slotTime}`;
               this.executedSlots.add(slotKey);
               const execRes = await this.executeTemplate(template, 0, slotIndex);
@@ -933,13 +1004,33 @@ class ScheduleService {
         let isSingleSlotMode = false;
         let broadcastOffset = 0;
 
+        // Daily Shuffle determination for today
+        const wibTime = getWIBTime(now);
+        const wibDateStr = `${wibTime.year}-${String(wibTime.month + 1).padStart(2, '0')}-${String(wibTime.dayOfMonth).padStart(2, '0')}`;
+        let shuffledIndices = null;
+        if (template.shuffle_daily && broadcasts.length > 1) {
+          shuffledIndices = getDailyShuffledIndices(template.id, wibDateStr, broadcasts.length);
+          console.log(`[ScheduleService] Daily Shuffle active for "${template.name}" on ${wibDateStr}: permutation [${shuffledIndices.map(idx => `#${idx + 1}`).join(', ')}]`);
+        }
+
         // Only enter single-slot mode if template has multiple recurring times configured
-        if (targetSlotIndex !== null && broadcasts[targetSlotIndex] && recurringTimes.length > 1) {
-          targetBroadcasts = [broadcasts[targetSlotIndex]];
-          isSingleSlotMode = true;
-          broadcastOffset = targetSlotIndex;
-          const slotLabel = recurringTimes[targetSlotIndex] ? `${recurringTimes[targetSlotIndex]} WIB` : `slot #${targetSlotIndex + 1}`;
-          console.log(`[ScheduleService] Single-slot execution mode: running broadcast #${targetSlotIndex + 1}/${broadcasts.length} ("${targetBroadcasts[0].title}") for ${slotLabel}`);
+        if (targetSlotIndex !== null && recurringTimes.length > 1) {
+          let actualBroadcastIndex = targetSlotIndex;
+          if (shuffledIndices) {
+            actualBroadcastIndex = shuffledIndices[targetSlotIndex % broadcasts.length];
+          }
+          if (broadcasts[actualBroadcastIndex]) {
+            targetBroadcasts = [broadcasts[actualBroadcastIndex]];
+            isSingleSlotMode = true;
+            broadcastOffset = actualBroadcastIndex;
+            const slotLabel = recurringTimes[targetSlotIndex] ? `${recurringTimes[targetSlotIndex]} WIB` : `slot #${targetSlotIndex + 1}`;
+            const bDuration = targetBroadcasts[0].streamDurationMinutes || targetBroadcasts[0].durationMinutes || 'default';
+            console.log(`[ScheduleService] Single-slot execution mode: running broadcast #${actualBroadcastIndex + 1}/${broadcasts.length} ("${targetBroadcasts[0].title}") for ${slotLabel} (slot #${targetSlotIndex + 1}) [Duration: ${bDuration} mins]${template.shuffle_daily ? ' [SHUFFLE ACTIVE]' : ''}`);
+          }
+        } else if (shuffledIndices) {
+          // Batch execution mode with Daily Shuffle: reorder targetBroadcasts according to shuffledIndices
+          targetBroadcasts = shuffledIndices.map(idx => broadcasts[idx]).filter(Boolean);
+          console.log(`[ScheduleService] Batch execution mode: running all ${broadcasts.length} broadcasts in shuffled order for template "${template.name}"`);
         } else {
           console.log(`[ScheduleService] Batch execution mode: running all ${broadcasts.length} broadcasts for template "${template.name}"`);
         }

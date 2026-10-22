@@ -91,6 +91,7 @@ class BroadcastTemplate {
     row.audio_id = row.audio_id || null;
     row.stream_key = row.stream_key || row.stream_id || null;
     row.stream_id = row.stream_id || null;
+    row.shuffle_daily = (row.shuffle_daily === 1 || row.shuffle_daily === '1' || row.shuffle_daily === true);
 
     // Parse description for multi-broadcast templates
     if (row.description && typeof row.description === 'string' && row.description.trim().startsWith('[')) {
@@ -168,7 +169,8 @@ class BroadcastTemplate {
       loop_video = 1,
       video_id = null,
       audio_id = null,
-      schedule_type = 'once'
+      schedule_type = 'once',
+      shuffle_daily = 0
     } = templateData;
 
     // Validate required fields
@@ -217,8 +219,8 @@ class BroadcastTemplate {
           recurring_enabled, recurring_pattern, recurring_time, recurring_days, next_run_at,
           channel_name, channel_id, altered_content, dual_stream, vertical_stream_key,
           duration_hours, duration_minutes, stream_duration_minutes, loop_video,
-          video_id, audio_id, schedule_type, stream_key
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          video_id, audio_id, schedule_type, stream_key, shuffle_daily
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id, user_id, account_id, name.trim(), title, description,
           privacy_status, tagsJson, category_id, thumbnail_path, thumbnail_folder,
@@ -228,7 +230,8 @@ class BroadcastTemplate {
           channel_name, channel_id, altered_content ? 1 : 0, dual_stream ? 1 : 0,
           vertical_stream_key ? vertical_stream_key.trim() : null,
           finalDurationHours, finalDurationMinutes, totalDurationMins, loopVideoInt,
-          video_id || null, audio_id || null, schedule_type || 'once', stream_key || null
+          video_id || null, audio_id || null, schedule_type || 'once', stream_key || null,
+          shuffle_daily ? 1 : 0
         ],
         function (err) {
           if (err) {
@@ -275,6 +278,7 @@ class BroadcastTemplate {
             video_id: video_id || null,
             audio_id: audio_id || null,
             schedule_type: schedule_type || 'once',
+            shuffle_daily: !!shuffle_daily,
             last_run_at: null,
             created_at: new Date().toISOString()
           });
@@ -456,7 +460,7 @@ class BroadcastTemplate {
       } else if (key === 'stream_key_folder_mapping') {
         fields.push(`${key} = ?`);
         values.push(typeof value === 'object' && value !== null ? JSON.stringify(value) : (value || null));
-      } else if (key === 'dual_stream' || key === 'altered_content') {
+      } else if (key === 'dual_stream' || key === 'altered_content' || key === 'shuffle_daily') {
         fields.push(`${key} = ?`);
         values.push(value ? 1 : 0);
       } else if (key !== 'id' && key !== 'user_id' && key !== 'created_at') {

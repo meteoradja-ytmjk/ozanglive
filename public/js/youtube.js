@@ -6436,6 +6436,12 @@ function renderTemplateList(templates) {
                 <span>Auto</span>
               </span>` : ''}
 
+            ${Boolean(template.shuffle_daily) ? `
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold bg-[#2a133d] text-[#c084fc] border border-[#581c87] flex-shrink-0 whitespace-nowrap shadow-2xs" title="Daily Shuffle aktif: Urutan siaran & durasi diacak otomatis setiap hari">
+                <i class="ti ti-arrows-shuffle text-[10px]"></i>
+                <span>Shuffle</span>
+              </span>` : ''}
+
             ${thumbnailBadge}
 
             ${(() => {
@@ -8890,6 +8896,9 @@ function openRecreateFromTemplateModal(template) {
         const shortDays = daysArr.map(d => dayMap[d.toLowerCase()] || d).join(', ');
         timeText = `${timeText} (${shortDays})`;
       }
+      if (template.shuffle_daily) {
+        timeText = `${timeText} • 🔀 Shuffle`;
+      }
       if (scheduleTimeDisplay) {
         scheduleTimeDisplay.textContent = timeText;
       }
@@ -10142,6 +10151,15 @@ function setRecreateRecurringMode(mode) {
     }
   }
 
+  const shuffleContainer = document.getElementById('recreateShuffleContainer');
+  if (shuffleContainer) {
+    if (mode === 'daily' || mode === 'weekly') {
+      shuffleContainer.classList.remove('hidden');
+    } else {
+      shuffleContainer.classList.add('hidden');
+    }
+  }
+
   const recreateActionGrid = document.getElementById('recreateActionGrid');
   const recreateSaveRecurringOnlyBtn = document.getElementById('recreateSaveRecurringOnlyBtn');
   const btnText = document.getElementById('recreateBtnText');
@@ -10233,6 +10251,7 @@ async function handleRecreateSaveRecurringOnly() {
     }
 
     // 1. Update recurring configuration
+    const shuffleDailyVal = document.getElementById('recreateShuffleDailyInput')?.checked ? 1 : 0;
     const res = await fetch(`/api/youtube/templates/${template.id}/recurring`, {
       method: 'PUT',
       headers: {
@@ -10243,7 +10262,8 @@ async function handleRecreateSaveRecurringOnly() {
         recurring_enabled: true,
         recurring_pattern: patternVal,
         recurring_time: recurringTimeStr,
-        recurring_days: recurringDays
+        recurring_days: recurringDays,
+        shuffle_daily: shuffleDailyVal
       })
     });
 
@@ -10465,6 +10485,11 @@ function loadRecreateRecurringSettings(template) {
   dayCheckboxes.forEach(cb => {
     cb.checked = days.includes(cb.value.toLowerCase());
   });
+
+  const shuffleInput = document.getElementById('recreateShuffleDailyInput');
+  if (shuffleInput) {
+    shuffleInput.checked = Boolean(template.shuffle_daily);
+  }
 }
 window.loadRecreateRecurringSettings = loadRecreateRecurringSettings;
 
@@ -11215,6 +11240,7 @@ if (recreateFromTemplateForm) {
         }
 
         try {
+          const shuffleDailyVal = document.getElementById('recreateShuffleDailyInput')?.checked ? 1 : 0;
           await fetch(`/api/youtube/templates/${template.id}/recurring`, {
             method: 'PUT',
             headers: {
@@ -11225,7 +11251,8 @@ if (recreateFromTemplateForm) {
               recurring_enabled: isRecurring,
               recurring_pattern: pattern,
               recurring_time: recurringTimeStr,
-              recurring_days: recurringDays
+              recurring_days: recurringDays,
+              shuffle_daily: shuffleDailyVal
             })
           });
           console.log('[recreate] Updated recurring configuration for template:', template.id, {

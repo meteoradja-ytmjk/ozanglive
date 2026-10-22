@@ -13580,7 +13580,8 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
       loop_video: loopVid ? 1 : 0,
       video_id: vidId,
       audio_id: audId,
-      schedule_type: schedType
+      schedule_type: schedType,
+      shuffle_daily: req.body.shuffle_daily ? 1 : 0
     });
 
     // Reload in scheduleService immediately if recurring is enabled
@@ -13805,7 +13806,8 @@ app.post('/api/youtube/templates/multi', isAuthenticated, async (req, res) => {
       loop_video: topLoopVideo ? 1 : 0,
       video_id: broadcastsWithStreamId[0]?.videoId || null,
       audio_id: broadcastsWithStreamId[0]?.audioId || null,
-      schedule_type: broadcastsWithStreamId[0]?.scheduleType || 'once'
+      schedule_type: broadcastsWithStreamId[0]?.scheduleType || 'once',
+      shuffle_daily: req.body.shuffle_daily ? 1 : 0
     });
 
     res.json({ success: true, template, broadcastCount: broadcasts.length });
@@ -14371,7 +14373,7 @@ app.delete('/api/youtube/templates/:id', isAuthenticated, async (req, res) => {
 // Update recurring configuration for a template
 app.put('/api/youtube/templates/:id/recurring', isAuthenticated, async (req, res) => {
   try {
-    const { recurring_enabled, recurring_pattern, recurring_time, recurring_days } = req.body;
+    const { recurring_enabled, recurring_pattern, recurring_time, recurring_days, shuffle_daily } = req.body;
 
     // Get template first to verify ownership
     const template = await BroadcastTemplate.findById(req.params.id);
@@ -14386,6 +14388,10 @@ app.put('/api/youtube/templates/:id/recurring', isAuthenticated, async (req, res
     const updateData = {
       recurring_enabled: !!recurring_enabled
     };
+
+    if (shuffle_daily !== undefined) {
+      updateData.shuffle_daily = shuffle_daily ? 1 : 0;
+    }
 
     if (recurring_enabled) {
       const { validateRecurringConfig, calculateNextRun, formatNextRunAt } = require('./utils/recurringUtils');

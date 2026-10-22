@@ -516,6 +516,7 @@ async function createCoreTablesAsync() {
   await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN audio_id TEXT`, 'broadcast_templates.audio_id');
   await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN schedule_type TEXT DEFAULT 'once'`, 'broadcast_templates.schedule_type');
   await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN stream_key TEXT`, 'broadcast_templates.stream_key');
+  await runTableQuery(`ALTER TABLE broadcast_templates ADD COLUMN shuffle_daily INTEGER DEFAULT 0`, 'broadcast_templates.shuffle_daily');
 
   // Auto-recovery migration: populate duration and stream_key for saved templates from matching streams
   try {
