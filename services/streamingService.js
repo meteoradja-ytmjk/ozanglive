@@ -3427,7 +3427,7 @@ function startAutoCleanupSweeper() {
   if (sweeperInterval) return;
   sweeperInterval = setInterval(async () => {
     try {
-      const tenSecondsAgo = new Date(Date.now() - 10000).toISOString();
+      const fiveSecondsAgo = new Date(Date.now() - 5000).toISOString();
       const query = `
         SELECT s.* 
         FROM streams s
@@ -3445,7 +3445,7 @@ function startAutoCleanupSweeper() {
           )
       `;
       const candidates = await new Promise((resolve) => {
-        db.all(query, [tenSecondsAgo], (err, rows) => resolve(err ? [] : (rows || [])));
+        db.all(query, [fiveSecondsAgo], (err, rows) => resolve(err ? [] : (rows || [])));
       });
 
       for (const stream of candidates) {
@@ -3462,11 +3462,14 @@ function startAutoCleanupSweeper() {
     } catch (err) {
       // ignore
     }
-  }, 10000);
+  }, 5000);
 }
 
-// Start the 10s background sweeper immediately
+// Start the 5s background sweeper immediately
 startAutoCleanupSweeper();
+setTimeout(() => {
+  cleanupAllCompletedTemplateStreams().catch(() => {});
+}, 2000);
 
 /**
  * Bulk cleanup all completed streams (manual + template) from the database.

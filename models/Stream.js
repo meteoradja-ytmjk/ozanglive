@@ -191,6 +191,10 @@ class Stream {
         }
       }
 
+      // Automatically exclude finished/completed non-recurring streams so Control Room stays clean
+      conditions.push("s.status != 'completed'");
+      conditions.push("NOT (s.status = 'offline' AND COALESCE(s.youtube_lifecycle_status, '') = 'complete' AND NOT ((s.schedule_type = 'daily' OR s.schedule_type = 'weekly') AND (s.recurring_enabled = 1 OR s.recurring_enabled = '1' OR s.recurring_enabled = true)))");
+
       if (conditions.length > 0) {
         query += ' WHERE ' + conditions.join(' AND ');
       }
