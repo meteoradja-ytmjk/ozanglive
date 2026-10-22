@@ -1024,6 +1024,9 @@ class ScheduleService {
           // Log broadcast privacy status for debugging
           console.log(`[ScheduleService] Broadcast ${broadcastIndex + 1} privacyStatus from template: ${b.privacyStatus}`);
           
+          const targetSlotStreamId = b.streamId || b.stream_id || template.stream_id || null;
+          const targetSlotStreamKey = b.streamKey || b.stream_key || template.stream_key || null;
+
           const broadcastData = {
             title,
             description,
@@ -1031,7 +1034,8 @@ class ScheduleService {
             privacyStatus: b.privacyStatus || 'unlisted',
             tags: b.tags || [],
             categoryId: b.categoryId || '20',
-            streamId: b.streamId || null,  // Use saved stream ID
+            streamId: targetSlotStreamId,  // Use saved stream ID
+            streamKey: targetSlotStreamKey, // Use saved stream key
             // IMPORTANT: Always enable auto-start when creating from recurring template
             // This ensures YouTube broadcast starts automatically when stream begins
             enableAutoStart: true,
@@ -1043,7 +1047,7 @@ class ScheduleService {
           
           console.log(`[ScheduleService] Creating broadcast ${broadcastIndex + 1}/${broadcasts.length}: ${title}`);
           console.log(`[ScheduleService] Using privacyStatus: ${broadcastData.privacyStatus}`);
-          console.log(`[ScheduleService] Using streamId: ${b.streamId || 'none (will create new)'}`);
+          console.log(`[ScheduleService] Using streamId: ${targetSlotStreamId || 'none'}, streamKey: ${targetSlotStreamKey ? '***' : 'none'}`);
           
           try {
             const result = await youtubeService.createBroadcast(accessToken, broadcastData);
@@ -1311,6 +1315,7 @@ class ScheduleService {
           tags: template.tags || [],
           categoryId: template.category_id || '20',
           streamId: template.stream_id || null,
+          streamKey: template.stream_key || null,
           // IMPORTANT: Always enable auto-start when creating from recurring template
           // This ensures YouTube broadcast starts automatically when stream begins
           enableAutoStart: true,
@@ -1322,7 +1327,7 @@ class ScheduleService {
         
         console.log(`[ScheduleService] Creating single broadcast: ${title}`);
         console.log(`[ScheduleService] Using privacyStatus: ${broadcastData.privacyStatus}`);
-        console.log(`[ScheduleService] Using streamId: ${template.stream_id || 'none (will create new)'}`);
+        console.log(`[ScheduleService] Using streamId: ${template.stream_id || 'none'}, streamKey: ${template.stream_key ? '***' : 'none'}`);
         
         const result = await youtubeService.createBroadcast(accessToken, broadcastData);
         results.push(result);

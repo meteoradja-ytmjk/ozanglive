@@ -1908,6 +1908,7 @@ async function fetchStreams(accountId = null) {
       data.streams.forEach((stream, index) => {
         const option = document.createElement('option');
         option.value = stream.id;
+        option.dataset.streamKey = stream.streamKey || '';
         option.textContent = `${index + 1}. ${stream.title} (${stream.resolution} @ ${stream.frameRate})`;
         select.appendChild(option);
       });
@@ -5194,7 +5195,7 @@ if (createBroadcastForm) {
           recurringTime: recurringTime,
           scheduleDays: document.getElementById('studioScheduleDays')?.value || '[]',
           recurringEnabled: document.getElementById('studioRecurringEnabled')?.checked ? 'true' : 'false',
-          streamKey: document.getElementById('streamKeySelect')?.value || '',
+          streamKey: document.getElementById('streamKeySelect')?.selectedOptions?.[0]?.dataset?.streamKey || document.getElementById('streamKeySelect')?.value || '',
           dual_stream: document.getElementById('dualStreamToggle')?.checked ? 1 : 0,
           dualStream: document.getElementById('dualStreamToggle')?.checked ? 1 : 0,
           altered_content: document.getElementById('alteredContentToggle')?.checked ? 1 : 0,
@@ -5302,9 +5303,15 @@ if (createBroadcastForm) {
       formData.append('scheduledStartTime', topStartTime);
       formData.append('privacyStatus', document.getElementById('privacyStatus').value);
       
-      const streamId = document.getElementById('streamKeySelect').value;
+      const streamKeySelectEl = document.getElementById('streamKeySelect');
+      const streamId = streamKeySelectEl ? streamKeySelectEl.value : '';
       if (streamId) {
         formData.append('streamId', streamId);
+        const selectedOpt = streamKeySelectEl.selectedOptions ? streamKeySelectEl.selectedOptions[0] : null;
+        const streamKeyVal = selectedOpt?.dataset?.streamKey;
+        if (streamKeyVal) {
+          formData.append('streamKey', streamKeyVal);
+        }
       }
       
       // Video and Audio inputs
@@ -6685,6 +6692,7 @@ async function fetchTemplateStreamKeys(accountId) {
       data.streams.forEach(stream => {
         const option = document.createElement('option');
         option.value = stream.id;
+        option.dataset.streamKey = stream.streamKey || '';
         option.textContent = `${stream.title} (${stream.resolution} @ ${stream.frameRate})`;
         select.appendChild(option);
       });
@@ -6757,6 +6765,11 @@ if (createTemplateForm) {
       const titleFolderSelect = document.getElementById('templateTitleFolder');
       const titleFolderId = titleFolderSelect ? (titleFolderSelect.value || null) : null;
       
+      const templateStreamSelect = document.getElementById('templateStreamKeySelect');
+      const templateChosenStreamId = templateStreamSelect ? (templateStreamSelect.value || null) : null;
+      const templateChosenOpt = templateStreamSelect?.selectedOptions ? templateStreamSelect.selectedOptions[0] : null;
+      const templateChosenStreamKey = templateChosenOpt?.dataset?.streamKey || null;
+
       const templateData = {
         name: document.getElementById('templateName').value,
         accountId: document.getElementById('templateAccountSelect').value,
@@ -6764,7 +6777,8 @@ if (createTemplateForm) {
         description: document.getElementById('templateDescription').value,
         privacyStatus: document.getElementById('templatePrivacyStatus').value,
         categoryId: document.getElementById('templateCategoryId').value || '22',
-        streamId: document.getElementById('templateStreamKeySelect').value || null,
+        streamId: templateChosenStreamId,
+        streamKey: templateChosenStreamKey,
         // IMPORTANT: Use the selected folder from the dropdown, NOT currentThumbnailFolder
         thumbnailFolder: thumbnailFolder,
         // Title folder for rotation
@@ -7111,9 +7125,9 @@ if (saveAsTemplateForm) {
       const titleFolderInput = document.getElementById('saveTemplateTitleFolder');
       const chosenTitleFolderId = (titleFolderInput && titleFolderInput.value) ? titleFolderInput.value : (broadcast.titleFolderId || broadcast.title_folder_id || rowData.titleFolderId || rowData.title_folder_id || null);
 
-      // Ensure streamId is only used if it is not identical to streamKey
+      // Keep streamId and streamKey intact so the stream key can be reused without creating new stream
       const rawStreamId = broadcast.streamId || rowData.streamId || null;
-      const validStreamId = (rawStreamId && resolvedStreamKey && rawStreamId.trim() !== resolvedStreamKey.trim()) ? rawStreamId.trim() : null;
+      const validStreamId = rawStreamId ? rawStreamId.trim() : null;
 
       // Create template from broadcast - include ALL data for reuse and automatic live streaming
       const templateData = {
@@ -7128,8 +7142,8 @@ if (saveAsTemplateForm) {
         thumbnailPath: broadcast.thumbnailPath || rowData.thumbnailPath || null,
         pinnedThumbnail: broadcast.pinnedThumbnail || broadcast.thumbnailPath || rowData.thumbnailPath || null,
         thumbnailFolder: (broadcast.thumbnailFolder !== undefined && broadcast.thumbnailFolder !== null) ? broadcast.thumbnailFolder : (rowData.thumbnailFolder !== undefined ? rowData.thumbnailFolder : (currentThumbnailFolder || null)),
-        streamId: validStreamId,  // Save stream ID only if valid and distinct from key
-        streamKey: resolvedStreamKey,  // Save stream key for reuse
+        streamId: validStreamId,
+        streamKey: resolvedStreamKey || null,  // Save stream key for reuse
         durationHours: durHours,
         durationMinutes: remMins,
         streamDurationMinutes: durMins,
@@ -8354,7 +8368,12 @@ async function fetchStreamIdsForAccount(accountId) {
       return null;
     }
 
-    return new Set(data.streams.map(s => s.id).filter(Boolean));
+    const validIds = new Set();
+    data.streams.forEach(s => {
+      if (s.id) validIds.add(String(s.id).trim());
+      if (s.streamKey) validIds.add(String(s.streamKey).trim());
+    });
+    return validIds;
   } catch (error) {
     console.warn('[recreate] Error fetching account streams:', error.message);
     return null;
@@ -10848,21 +10867,17 @@ if (recreateFromTemplateForm) {
             formData.append('tags', typeof tags === 'string' ? tags : JSON.stringify(tags));
           }
           
-          // Stream ID reuse: Only pass streamId if it is a real YouTube stream ID (not streamKey) and present in reusableStreamIds
+          // Stream ID / Stream Key reuse: pass both candidateStreamId and candidateStreamKey
           const candidateStreamId = slot.streamId !== undefined ? slot.streamId : template.stream_id;
           const candidateStreamKey = slot.streamKey !== undefined ? slot.streamKey : (template.stream_key || '');
-          const isKeyNotId = candidateStreamId && candidateStreamKey && candidateStreamId.trim() === candidateStreamKey.trim();
-          
-          if (candidateStreamId && !isKeyNotId) {
-            if (reusableStreamIds && reusableStreamIds.has(candidateStreamId)) {
-              formData.append('streamId', candidateStreamId);
-              console.log('[recreate] Reusing valid streamId for selected account:', candidateStreamId);
-            } else if (!reusableStreamIds) {
-              console.log('[recreate] Stream list unavailable, omitting streamId so YouTube generates new stream');
-            } else {
-              console.log('[recreate] streamId not present in account streams, YouTube will generate new key');
-            }
+
+          if (candidateStreamId) {
+            formData.append('streamId', candidateStreamId);
           }
+          if (candidateStreamKey) {
+            formData.append('streamKey', candidateStreamKey);
+          }
+          console.log('[recreate] Reusing stream credentials:', { streamId: candidateStreamId, streamKey: candidateStreamKey ? '***' : 'none' });
           
           // Determine thumbnail folder - priority:
           // 1. Slot-specific thumbnailFolder (jika diubah di Edit Full)

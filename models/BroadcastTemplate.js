@@ -89,7 +89,8 @@ class BroadcastTemplate {
     row.schedule_type = row.schedule_type || 'once';
     row.video_id = row.video_id || null;
     row.audio_id = row.audio_id || null;
-    row.stream_key = row.stream_key || null;
+    row.stream_key = row.stream_key || row.stream_id || null;
+    row.stream_id = row.stream_id || null;
 
     // Parse description for multi-broadcast templates
     if (row.description && typeof row.description === 'string' && row.description.trim().startsWith('[')) {
@@ -99,6 +100,7 @@ class BroadcastTemplate {
           row.isMultiBroadcast = true;
           row.broadcasts = broadcasts.map(b => ({
             ...b,
+            streamId: b.streamId || b.stream_id || row.stream_id || null,
             streamKey: b.streamKey || b.stream_key || row.stream_key || '',
             durationHours: b.durationHours !== undefined ? (parseInt(b.durationHours) || 0) : row.duration_hours,
             durationMinutes: b.durationMinutes !== undefined ? (parseInt(b.durationMinutes) || 0) : row.duration_minutes,

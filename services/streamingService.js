@@ -344,8 +344,22 @@ async function ensureFreshYouTubeBroadcastForStream(stream) {
     const finalCategory = stream.category_id || savedSettings?.category_id || '22';
     const isDualStream = Boolean(stream.dual_stream || savedSettings?.dual_stream);
     const isAlteredContent = Boolean(savedSettings?.altered_content);
-    const isEnableDvr = Boolean(stream.enable_dvr || savedSettings?.enable_dvr);
-    const resolvedStreamId = stream.stream_id || null;
+    let resolvedStreamId = stream.stream_id || null;
+    let targetStreamKey = (stream.stream_key || '').trim() || null;
+
+    // Check template if streamId or streamKey not fully present on stream record
+    if ((!resolvedStreamId || !targetStreamKey) && (stream.template_id || savedSettings?.template_id)) {
+      try {
+        const BroadcastTemplate = require('../models/BroadcastTemplate');
+        const tmpl = await BroadcastTemplate.findById(stream.template_id || savedSettings?.template_id);
+        if (tmpl) {
+          if (!resolvedStreamId && tmpl.stream_id) resolvedStreamId = tmpl.stream_id;
+          if (!targetStreamKey && tmpl.stream_key) targetStreamKey = tmpl.stream_key;
+        }
+      } catch (_) {}
+    }
+
+    console.log(`[StreamingService] Creating fresh YouTube broadcast with streamId: ${resolvedStreamId || 'none'}, streamKey: ${targetStreamKey ? '***' : 'none'}`);
 
     const created = await youtubeService.createBroadcast(accessToken, {
       title: finalTitle,
@@ -353,6 +367,7 @@ async function ensureFreshYouTubeBroadcastForStream(stream) {
       scheduledStartTime,
       privacyStatus: finalPrivacy,
       streamId: resolvedStreamId,
+      streamKey: targetStreamKey,
       tags: parsedTags,
       categoryId: finalCategory,
       enableAutoStart: true,
@@ -368,7 +383,8 @@ async function ensureFreshYouTubeBroadcastForStream(stream) {
 
       stream.youtube_broadcast_id = created.broadcastId;
       stream.youtube_lifecycle_status = 'ready';
-      if (created.streamKey) stream.stream_key = created.streamKey;
+      // Only set stream_key from created if local stream had no stream_key configured
+      if (created.streamKey && (!stream.stream_key || !targetStreamKey)) stream.stream_key = created.streamKey;
       if (created.rtmpUrl) stream.rtmp_url = created.rtmpUrl;
 
       await Stream.update(stream.id, {

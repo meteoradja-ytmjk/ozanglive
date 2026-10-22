@@ -11888,14 +11888,29 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
     }
 
     const finalCategoryId = categoryId || (templateObj ? templateObj.category_id : null) || '22';
-    // Only resolve streamId if it is a real stream ID, never fallback to streamKey
-    let resolvedStreamId = streamId || (matchedSlot ? matchedSlot.streamId : null) || (templateObj ? templateObj.stream_id : null) || null;
-    const currentStreamKey = req.body.streamKey || (matchedSlot ? (matchedSlot.streamKey || matchedSlot.stream_key) : null) || (templateObj ? (templateObj.stream_key || templateObj.streamKey) : null);
-    if (resolvedStreamId && currentStreamKey && resolvedStreamId.trim() === currentStreamKey.trim()) {
-      console.log('[API] resolvedStreamId matches streamKey, treating as new stream creation');
-      resolvedStreamId = null;
+    let resolvedStreamId = streamId || (matchedSlot ? (matchedSlot.streamId || matchedSlot.stream_id) : null) || (templateObj ? (templateObj.stream_id || templateObj.streamId) : null) || null;
+    let currentStreamKey = req.body.streamKey || (matchedSlot ? (matchedSlot.streamKey || matchedSlot.stream_key) : null) || (templateObj ? (templateObj.stream_key || templateObj.streamKey) : null);
+
+    // If streamId or streamKey was selected/provided, resolve against account streams to obtain both valid id & key
+    if (resolvedStreamId || currentStreamKey) {
+      try {
+        const accessTokenForLookup = await youtubeService.getAccessToken(credentials.clientId, credentials.clientSecret, credentials.refreshToken, 0, credentials.id, 0, credentials.id);
+        const existingStreams = await youtubeService.listStreams(accessTokenForLookup);
+        if (existingStreams && existingStreams.length > 0) {
+          const matched = existingStreams.find(s =>
+            (resolvedStreamId && (s.id === resolvedStreamId || s.streamKey === resolvedStreamId)) ||
+            (currentStreamKey && (s.streamKey === currentStreamKey || s.id === currentStreamKey))
+          );
+          if (matched) {
+            resolvedStreamId = matched.id;
+            if (matched.streamKey) currentStreamKey = matched.streamKey;
+          }
+        }
+      } catch (lookupErr) {
+        console.warn('[API] Warning looking up streams for broadcast:', lookupErr.message);
+      }
     }
-    console.log('[API] Create broadcast - using categoryId:', finalCategoryId, 'dualStream:', isDualStream, 'verticalKey:', !!verticalStreamKey, 'alteredContent:', isAlteredContent, 'streamId:', resolvedStreamId, 'isFutureSchedule:', isFutureSchedule);
+    console.log('[API] Create broadcast - using categoryId:', finalCategoryId, 'dualStream:', isDualStream, 'verticalKey:', !!verticalStreamKey, 'alteredContent:', isAlteredContent, 'streamId:', resolvedStreamId, 'streamKey:', currentStreamKey ? '***' : 'none', 'isFutureSchedule:', isFutureSchedule);
 
     // ==========================================
     // CASE 1: JADWAL LIVE DI MASA DEPAN (> 2 menit)
@@ -11943,12 +11958,12 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         }
       }
 
-      let finalStreamKey = req.body.streamKey || (matchedSlot ? (matchedSlot.streamKey || matchedSlot.stream_key) : null) || (templateObj ? (templateObj.stream_key || templateObj.streamKey) : '') || '';
+      let finalStreamKey = currentStreamKey || req.body.streamKey || (matchedSlot ? (matchedSlot.streamKey || matchedSlot.stream_key) : null) || (templateObj ? (templateObj.stream_key || templateObj.streamKey) : '') || '';
       if (!finalStreamKey && resolvedStreamId) {
         try {
           const accessToken = await youtubeService.getAccessToken(credentials.clientId, credentials.clientSecret, credentials.refreshToken, 0, credentials.id, 0, credentials.id);
           const streamsList = await youtubeService.listStreams(accessToken);
-          const matchingStream = streamsList.find(s => s.id === resolvedStreamId);
+          const matchingStream = streamsList.find(s => s.id === resolvedStreamId || s.streamKey === resolvedStreamId);
           if (matchingStream && matchingStream.streamKey) {
             finalStreamKey = matchingStream.streamKey;
           }
@@ -12040,6 +12055,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         recurring_time: finalRecurringTime,
         recurring_enabled: recurringEnabledVal,
         user_id: req.session.userId,
+        template_id: templateId ? String(templateId) : (templateObj ? String(templateObj.id) : null),
         youtube_broadcast_id: null, // Broadcast YouTube akan dibuat otomatis sesaat sebelum live
         youtube_account_id: accountId || (credentials ? credentials.id : null),
         dual_stream: isDualStream ? 1 : 0,
@@ -12162,6 +12178,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       scheduledStartTime: finalScheduledStartTime,
       privacyStatus: privacyStatus || 'unlisted',
       streamId: resolvedStreamId,
+      streamKey: currentStreamKey,
       tags: parsedTags,
       categoryId: finalCategoryId,
       enableAutoStart: enableAutoStart === 'true' || enableAutoStart === true,
@@ -12656,7 +12673,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         audio_id: audioId,
         title_folder_id: finalTitleFolderId,
         rtmp_url: broadcast.rtmpUrl || 'rtmp://a.rtmp.youtube.com/live2',
-        stream_key: finalStreamKey || (streamId ? String(streamId) : ''),
+        stream_key: broadcast.streamKey || currentStreamKey || (typeof finalStreamKey !== 'undefined' ? finalStreamKey : '') || (streamId ? String(streamId) : ''),
         platform: 'YouTube',
         platform_icon: 'ti-brand-youtube',
         bitrate: 2500,
@@ -12674,6 +12691,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         recurring_time: finalRecurringTime,
         recurring_enabled: recurringEnabledVal,
         user_id: req.session.userId,
+        template_id: templateId ? String(templateId) : (templateObj ? String(templateObj.id) : null),
         youtube_broadcast_id: broadcast.broadcastId,
         youtube_account_id: accountId || (credentials ? credentials.id : null),
         dual_stream: isDualStream ? 1 : 0,
@@ -13488,8 +13506,27 @@ app.post('/api/youtube/templates', isAuthenticated, async (req, res) => {
       final: finalThumbnailFolder
     });
 
-    const finalStreamKey = (streamKey || req.body.streamKey || '').trim() || null;
-    const finalStreamId = (streamId && finalStreamKey && streamId.trim() === finalStreamKey.trim()) ? null : (streamId || null);
+    let finalStreamKey = (streamKey || req.body.streamKey || '').trim() || null;
+    let finalStreamId = (streamId || req.body.streamId || '').trim() || null;
+
+    if (finalStreamId || finalStreamKey) {
+      try {
+        const accessTokenForTemplate = await youtubeService.getAccessToken(credentials.clientId, credentials.clientSecret, credentials.refreshToken, 0, credentials.id, 0, credentials.id);
+        const streamsList = await youtubeService.listStreams(accessTokenForTemplate);
+        if (streamsList && streamsList.length > 0) {
+          const match = streamsList.find(s =>
+            (finalStreamId && (s.id === finalStreamId || s.streamKey === finalStreamId)) ||
+            (finalStreamKey && (s.streamKey === finalStreamKey || s.id === finalStreamKey))
+          );
+          if (match) {
+            finalStreamId = match.id;
+            if (match.streamKey) finalStreamKey = match.streamKey;
+          }
+        }
+      } catch (errResolve) {
+        console.warn('[create-template] Error resolving stream details:', errResolve.message);
+      }
+    }
 
     let initialThumbnailIndex = 0;
     if (finalThumbnailFolder) {
@@ -14501,9 +14538,12 @@ app.post('/api/youtube/templates/:id/create-broadcast', isAuthenticated, async (
     // Get access token
     const accessToken = await youtubeService.getAccessToken(credentials.clientId, credentials.clientSecret, credentials.refreshToken, 0, credentials.id, 0, credentials.id);
 
-    if (template.stream_id) {
+    if (template.stream_id || template.stream_key) {
       const accountStreams = await youtubeService.listStreams(accessToken);
-      const hasMatchingStream = accountStreams.some(stream => String(stream.id) === String(template.stream_id));
+      const hasMatchingStream = accountStreams.some(stream =>
+        (template.stream_id && (String(stream.id) === String(template.stream_id) || String(stream.streamKey) === String(template.stream_id))) ||
+        (template.stream_key && (String(stream.streamKey) === String(template.stream_key) || String(stream.id) === String(template.stream_key)))
+      );
 
       if (!hasMatchingStream) {
         return res.status(400).json({
@@ -14513,7 +14553,7 @@ app.post('/api/youtube/templates/:id/create-broadcast', isAuthenticated, async (
       }
     }
 
-    console.log('[create-broadcast-from-template] Using streamId:', template.stream_id);
+    console.log('[create-broadcast-from-template] Using streamId:', template.stream_id, 'streamKey:', template.stream_key ? '***' : 'none');
 
     // Create broadcast on YouTube
     const broadcast = await youtubeService.createBroadcast(accessToken, {
@@ -14524,6 +14564,7 @@ app.post('/api/youtube/templates/:id/create-broadcast', isAuthenticated, async (
       tags: template.tags || [],
       categoryId: template.category_id || '22',
       streamId: template.stream_id || null,
+      streamKey: template.stream_key || null,
       // IMPORTANT: Always enable auto-start when creating from template
       // This ensures YouTube broadcast starts automatically when stream begins
       enableAutoStart: true,
@@ -14555,7 +14596,7 @@ app.post('/api/youtube/templates/:id/create-broadcast', isAuthenticated, async (
         video_id: template.video_id || null,
         audio_id: template.audio_id || null,
         rtmp_url: broadcast.rtmpUrl || 'rtmp://a.rtmp.youtube.com/live2',
-        stream_key: broadcast.streamKey || '',
+        stream_key: broadcast.streamKey || template.stream_key || '',
         platform: 'YouTube',
         platform_icon: 'ti-brand-youtube',
         loop_video: template.loop_video !== false,
@@ -14565,6 +14606,7 @@ app.post('/api/youtube/templates/:id/create-broadcast', isAuthenticated, async (
         schedule_type: template.schedule_type || 'once',
         schedule_time: new Date(scheduledStartTime).toISOString(),
         user_id: req.session.userId,
+        template_id: template.id ? String(template.id) : null,
         youtube_broadcast_id: broadcast.id || broadcast.broadcastId,
         youtube_account_id: template.account_id || null,
         status: 'scheduled'
@@ -14639,9 +14681,12 @@ app.post('/api/youtube/templates/:id/bulk-create', isAuthenticated, async (req, 
     // Get access token
     const accessToken = await youtubeService.getAccessToken(credentials.clientId, credentials.clientSecret, credentials.refreshToken, 0, credentials.id, 0, credentials.id);
 
-    if (template.stream_id) {
+    if (template.stream_id || template.stream_key) {
       const accountStreams = await youtubeService.listStreams(accessToken);
-      const hasMatchingStream = accountStreams.some(stream => String(stream.id) === String(template.stream_id));
+      const hasMatchingStream = accountStreams.some(stream =>
+        (template.stream_id && (String(stream.id) === String(template.stream_id) || String(stream.streamKey) === String(template.stream_id))) ||
+        (template.stream_key && (String(stream.streamKey) === String(template.stream_key) || String(stream.id) === String(template.stream_key)))
+      );
 
       if (!hasMatchingStream) {
         return res.status(400).json({
@@ -14670,6 +14715,7 @@ app.post('/api/youtube/templates/:id/bulk-create', isAuthenticated, async (req, 
           tags: template.tags || [],
           categoryId: template.category_id || '22',
           streamId: template.stream_id || null,
+          streamKey: template.stream_key || null,
           // IMPORTANT: Always enable auto-start when creating from template
           // This ensures YouTube broadcast starts automatically when stream begins
           enableAutoStart: true,
@@ -14711,7 +14757,7 @@ app.post('/api/youtube/templates/:id/bulk-create', isAuthenticated, async (req, 
             video_id: template.video_id || null,
             audio_id: template.audio_id || null,
             rtmp_url: broadcast.rtmpUrl || 'rtmp://a.rtmp.youtube.com/live2',
-            stream_key: broadcast.streamKey || '',
+            stream_key: broadcast.streamKey || template.stream_key || '',
             platform: 'YouTube',
             platform_icon: 'ti-brand-youtube',
             loop_video: template.loop_video !== false,
@@ -14721,6 +14767,7 @@ app.post('/api/youtube/templates/:id/bulk-create', isAuthenticated, async (req, 
             schedule_type: template.schedule_type || 'once',
             schedule_time: new Date(schedule).toISOString(),
             user_id: req.session.userId,
+            template_id: template.id ? String(template.id) : null,
             youtube_broadcast_id: broadcast.broadcastId,
             youtube_account_id: template.account_id || null,
             status: 'scheduled'
