@@ -264,6 +264,16 @@ function wibToUTC(year, month, dayOfMonth, hours, minutes) {
   return new Date(Date.UTC(adjustedYear, adjustedMonth, adjustedDay, adjustedHours, minutes, 0, 0));
 }
 
+const DAY_INDEX_MAP = {
+  'sunday': 0, 'minggu': 0, 'sun': 0,
+  'monday': 1, 'senin': 1, 'mon': 1,
+  'tuesday': 2, 'selasa': 2, 'tue': 2,
+  'wednesday': 3, 'rabu': 3, 'wed': 3,
+  'thursday': 4, 'kamis': 4, 'thu': 4,
+  'friday': 5, 'jumat': 5, 'fri': 5,
+  'saturday': 6, 'sabtu': 6, 'sat': 6
+};
+
 /**
  * Convert string to 32-bit positive integer seed
  */
@@ -379,17 +389,15 @@ class ScheduleService {
   startChecker() {
     if (this.checkInterval) return;
     
-    // Check every 120 seconds (2 minutes) - optimized for CPU usage
-    // With 5-minute execution window, we have 2-3 chances to catch the schedule
-    // This reduces CPU usage by 50% compared to 60-second interval
+    // Check every 30 seconds for precise, punctual schedule triggering
     this.checkInterval = setInterval(async () => {
       await this.checkSchedules();
-    }, 120000); // 120 seconds = 2 minutes
+    }, 30000); // 30 seconds
     
-    console.log('[ScheduleService] Schedule checker started (2 min interval - CPU optimized)');
+    console.log('[ScheduleService] Schedule checker started (30s interval - high precision)');
     
     // Also run immediately on start
-    setTimeout(() => this.checkSchedules(), 5000);
+    setTimeout(() => this.checkSchedules(), 3000);
   }
 
   /**
@@ -443,8 +451,11 @@ class ScheduleService {
           if (template.recurring_pattern === 'daily') {
             isTodayValid = true;
           } else if (template.recurring_pattern === 'weekly') {
-            const scheduledDays = (template.recurring_days || []).map(d => d.toLowerCase());
-            isTodayValid = scheduledDays.includes(todayWIB);
+            const scheduledDays = Array.isArray(template.recurring_days) ? template.recurring_days : [];
+            isTodayValid = scheduledDays.some(d => {
+              const norm = String(d).toLowerCase().trim();
+              return norm === todayWIB || DAY_INDEX_MAP[norm] === wibTime.day || parseInt(norm, 10) === wibTime.day;
+            });
           }
           
           if (!isTodayValid) {
@@ -475,26 +486,23 @@ class ScheduleService {
             const [schedHour, schedMin] = slotTime.split(':').map(Number);
             const scheduleMinutesWIB = schedHour * 60 + schedMin;
 
-            // Micro-jitter: apply 0 to 5 minutes organic offset if shuffle_daily is enabled
-            let jitterMinutes = 0;
-            if (template.shuffle_daily) {
-              jitterMinutes = getDailySlotJitter(template.id, wibDateStr, slotIndex);
-            }
-            const effectiveScheduleMinutesWIB = scheduleMinutesWIB + jitterMinutes;
             const currentMinutesWIB = wibTime.hours * 60 + wibTime.minutes;
-            const timeDiffMinutes = currentMinutesWIB - effectiveScheduleMinutesWIB;
+            const timeDiffMinutes = currentMinutesWIB - scheduleMinutesWIB;
 
-            // Trigger strictly at or after scheduled time (0 to 5 minutes after effective schedule)
-            if (timeDiffMinutes >= 0 && timeDiffMinutes <= 5) {
-              const effectiveH = Math.floor(effectiveScheduleMinutesWIB / 60);
-              const effectiveM = effectiveScheduleMinutesWIB % 60;
-              const effectiveTimeStr = `${String(effectiveH).padStart(2, '0')}:${String(effectiveM).padStart(2, '0')}`;
-              console.log(`[ScheduleService] EXEC: "${template.name}" slot ${slotTime} WIB (effective ${effectiveTimeStr} WIB, jitter +${jitterMinutes}m) [slot #${slotIndex + 1}/${times.length}]${template.shuffle_daily ? ' [SHUFFLE ACTIVE]' : ''}`);
+            // Trigger strictly at or after scheduled time (0 to 10 minutes window)
+            // Precise triggering with no jitter delay so live starts exactly at scheduled time
+            if (timeDiffMinutes >= 0 && timeDiffMinutes <= 10) {
+              console.log(`[ScheduleService] EXEC: "${template.name}" slot ${slotTime} WIB (${timeDiffMinutes}m from schedule) [slot #${slotIndex + 1}/${times.length}]${template.shuffle_daily ? ' [SHUFFLE ACTIVE]' : ''}`);
               const slotKey = `${template.id}_${wibDateStr}_${slotTime}`;
               this.executedSlots.add(slotKey);
               const execRes = await this.executeTemplate(template, 0, slotIndex);
-              if (execRes && (execRes.error === 'RECENTLY_EXECUTED' || execRes.error === 'RECENTLY_CREATED')) {
-                await this.updateNextRunToFuture(template);
+              if (execRes && execRes.error) {
+                if (execRes.error === 'RECENTLY_EXECUTED' || execRes.error === 'RECENTLY_CREATED') {
+                  await this.updateNextRunToFuture(template);
+                } else if (execRes.error !== 'ALREADY_LIVE') {
+                  // Do not permanently lock the slot if it failed due to a temporary error
+                  this.executedSlots.delete(slotKey);
+                }
               }
               executedSlot = true;
               break; // Execute one slot per check
@@ -571,8 +579,11 @@ class ScheduleService {
     if (template.recurring_pattern === 'daily') {
       isTodayValid = true;
     } else if (template.recurring_pattern === 'weekly') {
-      const scheduledDays = (template.recurring_days || []).map(d => d.toLowerCase());
-      isTodayValid = scheduledDays.includes(todayWIB);
+      const scheduledDays = Array.isArray(template.recurring_days) ? template.recurring_days : [];
+      isTodayValid = scheduledDays.some(d => {
+        const norm = String(d).toLowerCase().trim();
+        return norm === todayWIB || DAY_INDEX_MAP[norm] === wibTime.day || parseInt(norm, 10) === wibTime.day;
+      });
     }
     
     // Check if scheduled time has passed today (within 60 minutes) in WIB
@@ -655,8 +666,12 @@ class ScheduleService {
     if (template.recurring_pattern === 'weekly') {
       const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
       const todayWIB = dayNames[wibTime.day];
-      const scheduledDays = (template.recurring_days || []).map(d => d.toLowerCase());
-      if (!scheduledDays.includes(todayWIB)) {
+      const scheduledDays = Array.isArray(template.recurring_days) ? template.recurring_days : [];
+      const isTodayValid = scheduledDays.some(d => {
+        const norm = String(d).toLowerCase().trim();
+        return norm === todayWIB || DAY_INDEX_MAP[norm] === wibTime.day || parseInt(norm, 10) === wibTime.day;
+      });
+      if (!isTodayValid) {
         return false;
       }
     }
@@ -666,7 +681,7 @@ class ScheduleService {
       const [schedHour, schedMin] = slotTime.split(':').map(Number);
       const scheduleMinutesWIB = schedHour * 60 + schedMin;
       const timeDiffMinutes = currentMinutesWIB - scheduleMinutesWIB;
-      if (timeDiffMinutes >= 0 && timeDiffMinutes <= 5) {
+      if (timeDiffMinutes >= 0 && timeDiffMinutes <= 10) {
         return true;
       }
     }
@@ -692,6 +707,11 @@ class ScheduleService {
 
     if (!template.last_run_at) return false;
 
+    // If template was updated AFTER last_run_at, the user edited/rescheduled after the previous run
+    if (template.updated_at && new Date(template.updated_at).getTime() > new Date(template.last_run_at).getTime()) {
+      return false;
+    }
+
     const lastRun = new Date(template.last_run_at);
     const lastRunDateStr = this.getWIBDateString(lastRun);
 
@@ -701,8 +721,7 @@ class ScheduleService {
     }
 
     // Check if the last run corresponds to this slot's time (fallback after restart)
-    const allTimes = parseRecurringTimes(template.recurring_time);
-    const maxDiff = allTimes.length > 1 ? 3 : 5;
+    const maxDiff = 2; // Strict 2-minute window to avoid falsely blocking adjacent slots
     const lastRunWib = getWIBTime(lastRun);
     const [slotH, slotM] = slotTime.split(':').map(Number);
     const slotMinutes = slotH * 60 + slotM;
@@ -767,6 +786,11 @@ class ScheduleService {
    */
   hasRunToday(template, now) {
     if (!template.last_run_at) return false;
+
+    // If template was updated AFTER last_run_at, previous runs don't count for today's new schedule
+    if (template.updated_at && new Date(template.updated_at).getTime() > new Date(template.last_run_at).getTime()) {
+      return false;
+    }
 
     const times = parseRecurringTimes(template.recurring_time);
     if (times.length > 0) {
@@ -857,27 +881,32 @@ class ScheduleService {
     // Skipped if triggered manually by user (isManual: true)
     if (!isManual) {
       try {
-        const recurringTimes = parseRecurringTimes(template.recurring_time);
-        const isMultiSlot = recurringTimes.length > 1;
-        const cooldownMinutes = isMultiSlot ? 2 : 15;
-        const recentWindow = isMultiSlot ? '-2 minutes' : '-15 minutes';
+        const cooldownMinutes = 2;
+        const recentWindow = '-2 minutes';
 
         const freshTemplate = await BroadcastTemplate.findById(template.id);
+        const templateUpdatedAt = (freshTemplate?.updated_at || template.updated_at)
+          ? new Date(freshTemplate?.updated_at || template.updated_at).getTime()
+          : 0;
+
         if (freshTemplate && freshTemplate.last_run_at) {
-          const lastRunTime = new Date(freshTemplate.last_run_at);
-          const timeSinceLastRun = now.getTime() - lastRunTime.getTime();
-          const minutesSinceLastRun = Math.floor(timeSinceLastRun / (1000 * 60));
-          
-          if (minutesSinceLastRun < cooldownMinutes) {
-            console.log(`[ScheduleService] BLOCKED: Template "${template.name}" was executed ${minutesSinceLastRun} minutes ago (< ${cooldownMinutes} min cooldown)`);
-            return { error: 'RECENTLY_EXECUTED', template: template.name, minutesAgo: minutesSinceLastRun };
+          const lastRunTime = new Date(freshTemplate.last_run_at).getTime();
+          // Only enforce cooldown if template was NOT updated after the last run
+          if (templateUpdatedAt <= lastRunTime) {
+            const timeSinceLastRun = now.getTime() - lastRunTime;
+            const minutesSinceLastRun = Math.floor(timeSinceLastRun / (1000 * 60));
+            
+            if (minutesSinceLastRun < cooldownMinutes) {
+              console.log(`[ScheduleService] BLOCKED: Template "${template.name}" was executed ${minutesSinceLastRun} minutes ago (< ${cooldownMinutes} min cooldown)`);
+              return { error: 'RECENTLY_EXECUTED', template: template.name, minutesAgo: minutesSinceLastRun };
+            }
           }
         }
 
         // Check if a broadcast was recently created for this template in the database
         const recentBroadcast = await new Promise((resolve) => {
           db.get(
-            `SELECT broadcast_id FROM youtube_broadcast_settings 
+            `SELECT broadcast_id, created_at FROM youtube_broadcast_settings 
              WHERE template_id = ? 
                AND created_at >= datetime('now', '${recentWindow}')
              LIMIT 1`,
@@ -886,8 +915,11 @@ class ScheduleService {
           );
         });
         if (recentBroadcast) {
-          console.log(`[ScheduleService] BLOCKED: Broadcast ${recentBroadcast.broadcast_id} was already created for template "${template.name}" within ${cooldownMinutes} minutes`);
-          return { error: 'RECENTLY_CREATED', template: template.name, broadcastId: recentBroadcast.broadcast_id };
+          const broadcastCreatedAt = new Date(recentBroadcast.created_at).getTime();
+          if (templateUpdatedAt <= broadcastCreatedAt) {
+            console.log(`[ScheduleService] BLOCKED: Broadcast ${recentBroadcast.broadcast_id} was already created for template "${template.name}" within ${cooldownMinutes} minutes`);
+            return { error: 'RECENTLY_CREATED', template: template.name, broadcastId: recentBroadcast.broadcast_id };
+          }
         }
 
         // PREVENT DUPLICATE LIVE: Check if this template already has an active live stream in streams table
@@ -902,8 +934,18 @@ class ScheduleService {
           );
         });
         if (activeLiveStream) {
-          console.log(`[ScheduleService] BLOCKED: Template "${template.name}" already has active live stream #${activeLiveStream.id} (key: ${activeLiveStream.stream_key ? '***' : 'none'}). Preventing duplicate live.`);
-          return { error: 'ALREADY_LIVE', template: template.name, streamId: activeLiveStream.id };
+          // Verify with streamingService if the stream is ACTUALLY running (active ffmpeg process)
+          const isReallyActive = typeof streamingService.isStreamActive === 'function'
+            ? streamingService.isStreamActive(activeLiveStream.id)
+            : false;
+
+          if (isReallyActive) {
+            console.log(`[ScheduleService] BLOCKED: Template "${template.name}" already has active live stream #${activeLiveStream.id} (key: ${activeLiveStream.stream_key ? '***' : 'none'}). Preventing duplicate live.`);
+            return { error: 'ALREADY_LIVE', template: template.name, streamId: activeLiveStream.id };
+          } else {
+            console.log(`[ScheduleService] Stale live stream #${activeLiveStream.id} detected in DB (no active ffmpeg process). Healing DB status to 'offline'.`);
+            db.run(`UPDATE streams SET status = 'offline', end_time = CURRENT_TIMESTAMP WHERE id = ?`, [activeLiveStream.id]);
+          }
         }
       } catch (dbError) {
         console.error(`[ScheduleService] Error checking last_run_at for template ${template.id}:`, dbError.message);
@@ -1928,15 +1970,28 @@ class ScheduleService {
 
   /**
    * Reload a specific template
+   * Clears cached executed slots so newly scheduled or rescheduled times can execute immediately
    * @param {string} templateId - Template ID
    */
   async reloadTemplate(templateId) {
     this.cancelJob(templateId);
     
+    // CRITICAL: Clear cached executed slots for this template so newly scheduled/rescheduled slots can run!
+    if (this.executedSlots) {
+      for (const slotKey of Array.from(this.executedSlots)) {
+        if (slotKey.startsWith(`${templateId}_`)) {
+          this.executedSlots.delete(slotKey);
+        }
+      }
+    }
+    // Clear execution lock if stuck
+    this.executingTemplates.delete(templateId);
+
     const template = await BroadcastTemplate.findById(templateId);
     if (template && template.recurring_enabled) {
       await this.scheduleJob(template);
     }
+    console.log(`[ScheduleService] Reloaded template ${templateId}: cleared executedSlots cache and refreshed schedule`);
   }
 
   /**

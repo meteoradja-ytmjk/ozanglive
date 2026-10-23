@@ -14416,6 +14416,8 @@ app.put('/api/youtube/templates/:id/recurring', isAuthenticated, async (req, res
       updateData.recurring_pattern = recurring_pattern;
       updateData.recurring_time = recurring_time;
       updateData.recurring_days = normalizedDays;
+      // CRITICAL: Reset last_run_at on reschedule so previous execution history does not block new schedules
+      updateData.last_run_at = null;
 
       // Calculate next run time
       const nextRun = calculateNextRun({
@@ -14431,13 +14433,16 @@ app.put('/api/youtube/templates/:id/recurring', isAuthenticated, async (req, res
       updateData.recurring_time = null;
       updateData.recurring_days = null;
       updateData.next_run_at = null;
+      updateData.last_run_at = null;
     }
 
     const updatedTemplate = await BroadcastTemplate.update(req.params.id, updateData);
 
     try {
       await scheduleService.reloadTemplate(req.params.id);
-    } catch (rErr) {}
+    } catch (rErr) {
+      console.warn('[recurring] Error reloading template in scheduleService:', rErr.message);
+    }
 
     res.json({ success: true, template: updatedTemplate });
   } catch (error) {
@@ -14489,6 +14494,8 @@ app.post('/api/youtube/templates/:id/recurring/toggle', isAuthenticated, async (
         recurring_days: template.recurring_days
       });
       next_run_at = formatNextRunAt(nextRun);
+      // Reset last_run_at so previous runs don't block newly enabled schedule
+      await BroadcastTemplate.update(req.params.id, { last_run_at: null });
     }
 
     // Toggle recurring
@@ -14496,7 +14503,9 @@ app.post('/api/youtube/templates/:id/recurring/toggle', isAuthenticated, async (
 
     try {
       await scheduleService.reloadTemplate(req.params.id);
-    } catch (rErr) {}
+    } catch (rErr) {
+      console.warn('[recurring-toggle] Error reloading template in scheduleService:', rErr.message);
+    }
 
     res.json({
       success: true,

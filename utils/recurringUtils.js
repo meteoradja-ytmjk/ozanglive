@@ -253,7 +253,7 @@ function calculateNextDailyRun(timeInput, fromDate = new Date()) {
   for (const t of times) {
     const { hours, minutes } = parseTime(t);
     const scheduleMinutes = hours * 60 + minutes;
-    if (scheduleMinutes > currentMinutes) {
+    if (scheduleMinutes >= currentMinutes) {
       return createWIBDate(wibNow.year, wibNow.month, wibNow.dayOfMonth, hours, minutes);
     }
   }
@@ -304,7 +304,7 @@ function calculateNextWeeklyRun(timeInput, days, fromDate = new Date()) {
     for (const t of times) {
       const { hours, minutes } = parseTime(t);
       const scheduleMinutes = hours * 60 + minutes;
-      if (scheduleMinutes > currentMinutes) {
+      if (scheduleMinutes >= currentMinutes) {
         return createWIBDate(wibNow.year, wibNow.month, wibNow.dayOfMonth, hours, minutes);
       }
     }
