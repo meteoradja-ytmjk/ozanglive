@@ -328,11 +328,14 @@ class YouTubeStatusSync {
         }
       }
 
-      // Check if broadcast ended - but only stop if it's a definitive end
+      // Check if broadcast ended - but only stop if it's a definitive end and stream duration has genuinely elapsed
       // 'complete' means the broadcast was properly ended
       // 'revoked' means it was cancelled
       if (result.lifeCycleStatus === 'complete' || result.lifeCycleStatus === 'revoked') {
-        // Check if RTMP health monitor thinks stream should still be running
+        let streamShouldKeepRunning = false;
+        let remText = 'unknown';
+
+        // Check 1: RTMP Health Monitor
         if (this.rtmpHealthMonitor) {
           const timeStatus = typeof this.rtmpHealthMonitor.getStreamTimeStatus === 'function'
             ? this.rtmpHealthMonitor.getStreamTimeStatus(streamId)
@@ -341,10 +344,48 @@ class YouTubeStatusSync {
           const isUnlimited = monitor?.isUnlimited || (timeStatus && timeStatus.remainingMs === null && timeStatus.shouldBeRunning);
 
           if (isUnlimited || (timeStatus && timeStatus.shouldBeRunning && (timeStatus.remainingMs === null || timeStatus.remainingMs > 15000))) {
-            const remText = isUnlimited ? 'unlimited mode' : `${Math.round((timeStatus.remainingMs || 0) / 1000)}s remaining`;
-            console.log(`[YouTubeStatusSync] Broadcast ended (${result.lifeCycleStatus}) but stream should still be running (${remText}) - allowing reconnect`);
-            return;
+            streamShouldKeepRunning = true;
+            remText = isUnlimited ? 'unlimited mode' : `${Math.round((timeStatus?.remainingMs || 0) / 1000)}s remaining`;
           }
+        }
+
+        // Check 2: StreamingService original timing
+        if (!streamShouldKeepRunning && this.streamingService) {
+          const origRemaining = typeof this.streamingService.getOriginalRemainingMs === 'function'
+            ? this.streamingService.getOriginalRemainingMs(streamId)
+            : null;
+          if (origRemaining !== null && origRemaining > 15000) {
+            streamShouldKeepRunning = true;
+            remText = `${Math.round(origRemaining / 1000)}s remaining`;
+          }
+        }
+
+        // Check 3: Direct database stream duration check
+        if (!streamShouldKeepRunning) {
+          try {
+            const streamObj = await Stream.findById(streamId);
+            if (streamObj && streamObj.status === 'live' && streamObj.start_time) {
+              const { calculateDurationSeconds } = require('../utils/durationCalculator');
+              const durSeconds = (streamObj.stream_duration_minutes && streamObj.stream_duration_minutes > 0)
+                ? streamObj.stream_duration_minutes * 60
+                : calculateDurationSeconds(streamObj);
+              if (durSeconds && durSeconds > 0) {
+                const expectedEnd = new Date(new Date(streamObj.start_time).getTime() + durSeconds * 1000);
+                const remainingMs = expectedEnd.getTime() - Date.now();
+                if (remainingMs > 15000) {
+                  streamShouldKeepRunning = true;
+                  remText = `${Math.round(remainingMs / 1000)}s remaining`;
+                }
+              }
+            }
+          } catch (dbCheckErr) {
+            console.warn(`[YouTubeStatusSync] Error checking stream duration in DB:`, dbCheckErr.message);
+          }
+        }
+
+        if (streamShouldKeepRunning) {
+          console.log(`[YouTubeStatusSync] Broadcast ended (${result.lifeCycleStatus}) but stream should still be running (${remText}) - allowing reconnect and NOT stopping`);
+          return;
         }
         
         console.log(`[YouTubeStatusSync] Broadcast ${check.broadcastId} ended (${result.lifeCycleStatus}), stopping stream ${streamId}`);

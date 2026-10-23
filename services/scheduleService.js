@@ -1182,7 +1182,9 @@ class ScheduleService {
             // IMPORTANT: Always enable auto-start when creating from recurring template
             // This ensures YouTube broadcast starts automatically when stream begins
             enableAutoStart: true,
-            enableAutoStop: true,
+            // CRITICAL: Disable auto-stop on YouTube side so minor network blips/reconnects don't kill the live stream.
+            // Ozanglive manages the stream duration accurately and will stop YouTube via API when duration is reached.
+            enableAutoStop: false,
             dualStream: !!(template.dual_stream || b.dualStream),
             alteredContent: !!(template.altered_content || b.alteredContent),
             enableDvr: !!(template.enable_dvr || b.enableDvr)
@@ -1227,7 +1229,7 @@ class ScheduleService {
                 userId: template.user_id,
                 accountId: template.account_id || null,
                 enableAutoStart: true,
-                enableAutoStop: true,
+                enableAutoStop: false,
                 enableDvr: !!(template.enable_dvr || b.enableDvr),
                 unlistReplayOnEnd: template.unlist_replay_on_end !== undefined ? !!template.unlist_replay_on_end : false,
                 originalPrivacyStatus: b.privacyStatus || 'unlisted',
@@ -1265,8 +1267,8 @@ class ScheduleService {
                 orientation: 'horizontal',
                 loop_video: (b.loopVideo !== undefined) ? (b.loopVideo !== false && b.loopVideo !== 0 && b.loopVideo !== '0') : (template.loop_video !== false),
                 stream_duration_hours: b.durationHours !== undefined ? (parseInt(b.durationHours) || 0) : (template.duration_hours || 0),
-                stream_duration_minutes: b.streamDurationMinutes || (((parseInt(b.durationHours) || 0) * 60) + (parseInt(b.durationMinutes) || 0)) || template.stream_duration_minutes || null,
-                duration: b.streamDurationMinutes || (((parseInt(b.durationHours) || 0) * 60) + (parseInt(b.durationMinutes) || 0)) || template.stream_duration_minutes || null,
+                stream_duration_minutes: b.streamDurationMinutes || (((parseInt(b.durationHours) || 0) * 60) + (parseInt(b.durationMinutes) || 0)) || template.stream_duration_minutes || (((parseInt(template.duration_hours) || 0) * 60) + (parseInt(template.duration_minutes) || 0)) || null,
+                duration: b.streamDurationMinutes || (((parseInt(b.durationHours) || 0) * 60) + (parseInt(b.durationMinutes) || 0)) || template.stream_duration_minutes || (((parseInt(template.duration_hours) || 0) * 60) + (parseInt(template.duration_minutes) || 0)) || null,
                 schedule_type: template.schedule_type || template.recurring_pattern || 'daily',
                 schedule_time: now.toISOString(),
                 end_time: null,
@@ -1464,7 +1466,9 @@ class ScheduleService {
           // IMPORTANT: Always enable auto-start when creating from recurring template
           // This ensures YouTube broadcast starts automatically when stream begins
           enableAutoStart: true,
-          enableAutoStop: true,
+          // CRITICAL: Disable auto-stop on YouTube side so minor network blips/reconnects don't kill the live stream.
+          // Ozanglive manages the stream duration accurately and will stop YouTube via API when duration is reached.
+          enableAutoStop: false,
           dualStream: !!template.dual_stream,
           alteredContent: !!template.altered_content,
           enableDvr: !!template.enable_dvr
@@ -1504,7 +1508,7 @@ class ScheduleService {
             userId: template.user_id,
             accountId: template.account_id || null,
             enableAutoStart: true,
-            enableAutoStop: true,
+            enableAutoStop: false,
             enableDvr: !!template.enable_dvr,
             unlistReplayOnEnd: template.unlist_replay_on_end !== undefined ? !!template.unlist_replay_on_end : false,
             originalPrivacyStatus: template.privacy_status || 'unlisted',
@@ -1525,6 +1529,8 @@ class ScheduleService {
         const resolvedStreamKey = targetStreamKey || result.streamKey || (template.stream_id ? String(template.stream_id) : '');
         const resolvedRtmpUrl = result.rtmpUrl || 'rtmp://a.rtmp.youtube.com/live2';
         
+        const resolvedSingleDurationMins = template.stream_duration_minutes || (((parseInt(template.duration_hours) || 0) * 60) + (parseInt(template.duration_minutes) || 0)) || null;
+
         try {
           const streamData = {
             title: title,
@@ -1539,9 +1545,9 @@ class ScheduleService {
             fps: 30,
             orientation: 'horizontal',
             loop_video: template.loop_video !== false,
-            stream_duration_hours: template.duration_hours || 0,
-            stream_duration_minutes: template.stream_duration_minutes || null,
-            duration: template.stream_duration_minutes || null,
+            stream_duration_hours: template.duration_hours || (resolvedSingleDurationMins ? Math.floor(resolvedSingleDurationMins / 60) : 0),
+            stream_duration_minutes: resolvedSingleDurationMins,
+            duration: resolvedSingleDurationMins,
             schedule_type: template.schedule_type || template.recurring_pattern || 'daily',
             schedule_time: now.toISOString(),
             end_time: null,

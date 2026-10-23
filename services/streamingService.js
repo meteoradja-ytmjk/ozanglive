@@ -371,7 +371,7 @@ async function ensureFreshYouTubeBroadcastForStream(stream) {
       tags: parsedTags,
       categoryId: finalCategory,
       enableAutoStart: true,
-      enableAutoStop: savedSettings ? (savedSettings.enable_auto_stop === 1 || savedSettings.enable_auto_stop === true) : true,
+      enableAutoStop: savedSettings && savedSettings.enable_auto_stop !== undefined ? (savedSettings.enable_auto_stop === 1 || savedSettings.enable_auto_stop === true) : false,
       dualStream: isDualStream,
       alteredContent: isAlteredContent,
       enableDvr: isEnableDvr
@@ -444,7 +444,7 @@ async function ensureFreshYouTubeBroadcastForStream(stream) {
           categoryId: finalCategory,
           privacyStatus: finalPrivacy,
           enableAutoStart: true,
-          enableAutoStop: savedSettings ? Boolean(savedSettings.enable_auto_stop) : true,
+          enableAutoStop: savedSettings && savedSettings.enable_auto_stop !== undefined ? Boolean(savedSettings.enable_auto_stop) : false,
           enableDvr: isEnableDvr,
           unlistReplayOnEnd: savedSettings ? Boolean(savedSettings.unlist_replay_on_end) : true,
           originalPrivacyStatus: finalPrivacy,
@@ -922,9 +922,50 @@ async function checkStreamProcessHealth() {
       }
     }
     
-    // OPTIMIZED: Removed heavy database check for "live" streams not in memory
-    // This was spawning external processes for each orphaned stream
-    // The cleanup is now handled by cleanupStaleMaps() which runs less frequently
+    // Safety net: check if any streams are marked 'live' in DB but have no active FFmpeg process in memory
+    try {
+      const liveStreamsInDb = await Stream.findAll(null, 'live');
+      if (Array.isArray(liveStreamsInDb) && liveStreamsInDb.length > 0) {
+        for (const s of liveStreamsInDb) {
+          if (activeStreams.has(s.id) || manuallyStoppingStreams.has(s.id)) {
+            continue;
+          }
+          // Found an orphaned stream marked live in DB without an active process
+          const remainingMs = getOriginalRemainingMs(s.id);
+          let shouldKeepRunning = remainingMs === null || remainingMs > 15000;
+          if (remainingMs === null && s.start_time) {
+            const { calculateDurationSeconds } = require('../utils/durationCalculator');
+            const durSeconds = (s.stream_duration_minutes && s.stream_duration_minutes > 0)
+              ? s.stream_duration_minutes * 60
+              : calculateDurationSeconds(s);
+            if (durSeconds && durSeconds > 0) {
+              const expectedEndTime = new Date(new Date(s.start_time).getTime() + durSeconds * 1000);
+              shouldKeepRunning = (expectedEndTime.getTime() - Date.now()) > 15000;
+            }
+          }
+
+          if (shouldKeepRunning) {
+            const retries = streamRetryCount.get(s.id) || 0;
+            const maxRetries = getMaxRetryAttempts(s);
+            if (retries < maxRetries) {
+              console.log(`[ProcessHealthCheck] Rescuing orphaned live stream #${s.id} ("${s.title}") - starting reconnect #${retries + 1}...`);
+              addStreamLog(s.id, `[AUTO-RESCUE] Reconnecting inactive live stream...`);
+              streamRetryCount.set(s.id, retries + 1);
+              await startStream(s.id);
+            }
+          } else {
+            console.log(`[ProcessHealthCheck] Live stream #${s.id} duration expired while inactive. Ending stream cleanly.`);
+            const newStatus = getStatusAfterStreamEnd(s);
+            await Stream.updateStatus(s.id, newStatus, s.user_id);
+            await endYouTubeBroadcastForStream(s);
+            clearOriginalTiming(s.id);
+            clearDurationInfo(s.id);
+          }
+        }
+      }
+    } catch (dbRescueErr) {
+      console.warn(`[ProcessHealthCheck] Warning checking DB live streams:`, dbRescueErr.message);
+    }
   } catch (error) {
     console.error('[ProcessHealthCheck] Error during health check:', error.message);
   }
@@ -1490,6 +1531,9 @@ async function buildFFmpegArgsForAudioOnlyPlaylist(stream, playlist, durationSec
     '-af', 'aresample=async=1:first_pts=0',
     '-map', '0:v:0',
     '-map', '1:a:0',
+    '-avoid_negative_ts', 'make_zero',
+    '-max_interleave_delta', '0',
+    '-flvflags', 'no_duration_filesize',
     '-f', 'flv',
     rtmpUrl
   );
@@ -1849,7 +1893,7 @@ async function buildFFmpegArgsForPlaylist(stream, playlist, durationOverrideSeco
   // Loop the video input infinitely when required
   if (shouldLoopPlaylist) {
     args.push('-stream_loop', '-1');
-    args.push('-fflags', '+genpts');
+    args.push('-fflags', '+genpts+nobuffer');
   }
   args.push('-i', targetVideoFile);
 
@@ -1880,6 +1924,8 @@ async function buildFFmpegArgsForPlaylist(stream, playlist, durationOverrideSeco
     args.push('-t', durationSeconds.toString());
   }
 
+  args.push('-avoid_negative_ts', 'make_zero');
+  args.push('-max_interleave_delta', '0');
   args.push('-flvflags', 'no_duration_filesize');
   args.push('-f', 'flv');
   args.push(rtmpUrl);
@@ -2026,7 +2072,7 @@ function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds
   const shouldLoopVideo = (loopVideo !== false && loopVideo !== 0 && loopVideo !== 'false') || (durationSeconds && durationSeconds > 0);
   if (shouldLoopVideo) {
     args.push('-stream_loop', '-1');
-    args.push('-fflags', '+genpts');
+    args.push('-fflags', '+genpts+nobuffer');
   }
   args.push('-i', videoPath);
   
@@ -2048,6 +2094,8 @@ function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds
     console.log(`[StreamingService] Audio-merge: duration limit set to ${durationSeconds} seconds (${durationSeconds / 60} minutes)`);
   }
   
+  args.push('-avoid_negative_ts', 'make_zero');
+  args.push('-max_interleave_delta', '0');
   args.push('-flvflags', 'no_duration_filesize');
   args.push('-f', 'flv');
   args.push(rtmpUrl);
@@ -2071,7 +2119,7 @@ function buildFFmpegArgsVideoOnly(videoPath, rtmpUrl, durationSeconds, loopVideo
   const shouldLoopVideo = (loopVideo !== false && loopVideo !== 0 && loopVideo !== 'false') || (durationSeconds && durationSeconds > 0);
   if (shouldLoopVideo) {
     args.push('-stream_loop', '-1');
-    args.push('-fflags', '+genpts');
+    args.push('-fflags', '+genpts+nobuffer');
   }
   args.push('-i', videoPath);
   args.push('-c', 'copy');
@@ -2084,6 +2132,8 @@ function buildFFmpegArgsVideoOnly(videoPath, rtmpUrl, durationSeconds, loopVideo
     console.log(`[StreamingService] Video-only: duration limit set to ${durationSeconds} seconds (${durationSeconds / 60} minutes)`);
   }
   
+  args.push('-avoid_negative_ts', 'make_zero');
+  args.push('-max_interleave_delta', '0');
   args.push('-flvflags', 'no_duration_filesize');
   args.push('-f', 'flv');
   args.push(rtmpUrl);
@@ -2486,9 +2536,6 @@ async function startStream(streamId) {
       const wasActive = activeStreams.delete(streamId);
       streamPids.delete(streamId); // Clean up PID tracking
       
-      // Stop RTMP health monitoring on exit
-      rtmpHealthMonitor.stopMonitoring(streamId);
-      
       const isManualStop = manuallyStoppingStreams.has(streamId);
       
       // Check if duration was exceeded - if so, this is a normal termination
@@ -2496,6 +2543,7 @@ async function startStream(streamId) {
       if (durationExceeded) {
         console.log(`[StreamingService] Stream ${streamId} stop reason: duration reached`);
         addStreamLog(streamId, `Stream stop reason: duration reached`);
+        rtmpHealthMonitor.stopMonitoring(streamId);
         clearDurationInfo(streamId);
         clearOriginalTiming(streamId);
         if (wasActive) {
@@ -2530,6 +2578,7 @@ async function startStream(streamId) {
         setTimeout(() => {
           manuallyStoppingStreams.delete(streamId);
         }, 15000);
+        rtmpHealthMonitor.stopMonitoring(streamId);
         clearDurationInfo(streamId);
         clearOriginalTiming(streamId);
         if (wasActive) {
@@ -2572,243 +2621,138 @@ async function startStream(streamId) {
       const streamShouldKeepRunning = isUnlimited
         || (effectiveRemainingMs !== null && effectiveRemainingMs > RECONNECT_MIN_REMAINING_MS);
 
-      // Legacy flag used by the SIGSEGV / error branches below.
-      const shouldNotRestart = !streamShouldKeepRunning;
-      
-      if (signal === 'SIGSEGV') {
-        if (shouldNotRestart) {
-          console.log(`[StreamingService] Stream ${streamId} crashed but duration almost reached (${remainingTime}ms remaining) - NOT restarting`);
-          addStreamLog(streamId, `Stream crashed but duration almost reached - not restarting`);
-          clearDurationInfo(streamId);
-          clearOriginalTiming(streamId);
-          if (wasActive) {
-            try {
-              if (streamData) {
-                // FIXED: Use correct status based on schedule type
-                const newStatus = getStatusAfterStreamEnd(streamData);
-                await Stream.updateStatus(streamId, newStatus, streamData.user_id);
-              }
-              if (typeof schedulerService !== 'undefined' && schedulerService.cancelStreamTermination) {
-                schedulerService.handleStreamStopped(streamId);
-              }
-            } catch (error) {
-              console.error(`[StreamingService] Error updating stream status: ${error.message}`);
-            }
-          }
-          return;
-        }
-        
+      if (streamShouldKeepRunning) {
         const retryCount = streamRetryCount.get(streamId) || 0;
         const maxRetries = getMaxRetryAttempts(streamData);
+
         if (retryCount < maxRetries) {
-          streamRetryCount.set(streamId, retryCount + 1);
-          console.log(`[StreamingService] FFmpeg crashed with SIGSEGV. Attempting restart #${retryCount + 1}${isUnlimited ? ' (unlimited mode)' : ''} for stream ${streamId}`);
-          addStreamLog(streamId, `FFmpeg crashed with SIGSEGV. Attempting restart #${retryCount + 1}${isUnlimited ? ' (unlimited mode)' : ''}`);
-          // Clear duration info before restart - it will be recalculated
+          const nextRetry = retryCount + 1;
+          streamRetryCount.set(streamId, nextRetry);
+          const remainingLabel = isUnlimited
+            ? 'unlimited'
+            : `${(effectiveRemainingMs / 60000).toFixed(1)} min remaining`;
+
+          const exitReason = signal ? `signal ${signal}` : `exit code ${code}`;
+          console.log(`[StreamingService] Stream ${streamId} exited (${exitReason}) but should keep running (${remainingLabel}). Scheduling reconnect attempt #${nextRetry}/${maxRetries}...`);
+          addStreamLog(streamId, `Exited (${exitReason}) but ${remainingLabel} - auto-reconnecting #${nextRetry}/${maxRetries}`);
+
+          // Clear duration info before restart - will be recalculated on reconnect
           clearDurationInfo(streamId);
-          
-          // For unlimited streams, use exponential backoff
-          const backoffDelay = isUnlimited 
-            ? Math.min(3000 + (retryCount * 2000), 30000) 
-            : 3000;
-          
-          setTimeout(async () => {
-            try {
-              const streamInfo = await Stream.findById(streamId);
-              if (streamInfo) {
+          const backoffDelay = isUnlimited
+            ? Math.min(3000 + (retryCount * 2000), 30000)
+            : Math.min(3000 + (retryCount * 2000), 20000);
+
+          const scheduleReconnect = (delayMs) => {
+            setTimeout(async () => {
+              try {
+                if (manuallyStoppingStreams.has(streamId)) {
+                  console.log(`[StreamingService] Stream ${streamId} was manually stopped during reconnect wait.`);
+                  rtmpHealthMonitor.stopMonitoring(streamId);
+                  return;
+                }
+
+                const streamInfo = await Stream.findById(streamId);
+                if (!streamInfo || streamInfo.status !== 'live') {
+                  console.log(`[StreamingService] Stream ${streamId} is no longer live in DB (status: ${streamInfo?.status}), aborting reconnect.`);
+                  clearOriginalTiming(streamId);
+                  rtmpHealthMonitor.stopMonitoring(streamId);
+                  return;
+                }
+
+                const currentRemaining = getOriginalRemainingMs(streamId);
+                if (!isUnlimitedStream(streamInfo) && currentRemaining !== null && currentRemaining <= 15000) {
+                  console.log(`[StreamingService] Stream ${streamId} duration elapsed during reconnect wait. Ending stream cleanly.`);
+                  rtmpHealthMonitor.stopMonitoring(streamId);
+                  clearOriginalTiming(streamId);
+                  clearDurationInfo(streamId);
+                  const newStatus = getStatusAfterStreamEnd(streamInfo);
+                  await Stream.updateStatus(streamId, newStatus, streamInfo.user_id);
+                  await endYouTubeBroadcastForStream(streamInfo);
+                  return;
+                }
+
+                const currentAttempt = streamRetryCount.get(streamId) || 1;
+                const maxAttempts = getMaxRetryAttempts(streamInfo);
+                console.log(`[StreamingService] Executing auto-reconnect attempt #${currentAttempt}/${maxAttempts} for stream ${streamId}...`);
+
                 const result = await startStream(streamId);
-                if (result.success) {
+                if (result && result.success) {
+                  console.log(`[StreamingService] ✅ Stream ${streamId} reconnected successfully!`);
+                  addStreamLog(streamId, `✅ Reconnected successfully (attempt #${currentAttempt})`);
                   streamRetryCount.set(streamId, 0); // Reset on success
                 } else {
-                  console.error(`[StreamingService] Failed to restart stream: ${result.error}`);
-                  // Only update status if not unlimited or max retries reached
-                  if (!isUnlimitedStream(streamInfo) || (streamRetryCount.get(streamId) || 0) >= getMaxRetryAttempts(streamInfo)) {
+                  console.error(`[StreamingService] ⚠️ Reconnect attempt #${currentAttempt} failed: ${result?.error || 'Unknown error'}`);
+                  addStreamLog(streamId, `Reconnect attempt #${currentAttempt} failed: ${result?.error || 'Unknown error'}`);
+
+                  if (currentAttempt < maxAttempts) {
+                    const nextAttempt = currentAttempt + 1;
+                    streamRetryCount.set(streamId, nextAttempt);
+                    const nextDelay = isUnlimitedStream(streamInfo)
+                      ? Math.min(3000 + (currentAttempt * 2000), 30000)
+                      : Math.min(3000 + (currentAttempt * 2000), 20000);
+                    console.log(`[StreamingService] Scheduling retry #${nextAttempt} in ${nextDelay}ms for stream ${streamId}...`);
+                    scheduleReconnect(nextDelay);
+                  } else {
+                    console.error(`[StreamingService] ❌ Max reconnect attempts (${maxAttempts}) reached for stream ${streamId}`);
+                    addStreamLog(streamId, `❌ Max reconnect attempts reached, stopping stream`);
+                    rtmpHealthMonitor.stopMonitoring(streamId);
+                    clearOriginalTiming(streamId);
+                    clearDurationInfo(streamId);
                     const newStatus = getStatusAfterStreamEnd(streamInfo);
-                    await Stream.updateStatus(streamId, newStatus);
+                    await Stream.updateStatus(streamId, newStatus, streamInfo.user_id);
+                    await endYouTubeBroadcastForStream(streamInfo);
                   }
                 }
-              } else {
-                console.error(`[StreamingService] Cannot restart stream ${streamId}: not found in database`);
+              } catch (reconnectErr) {
+                console.error(`[StreamingService] Error during reconnect execution for stream ${streamId}:`, reconnectErr.message);
               }
-            } catch (error) {
-              console.error(`[StreamingService] Error during stream restart: ${error.message}`);
-              try {
-                // Fallback to offline if we can't determine schedule type
-                await Stream.updateStatus(streamId, 'offline');
-              } catch (dbError) {
-                console.error(`Error updating stream status: ${dbError.message}`);
-              }
-            }
-          }, 3000);
+            }, delayMs);
+          };
+
+          scheduleReconnect(backoffDelay);
           return;
         } else {
-          console.error(`[StreamingService] Maximum retry attempts (${MAX_RETRY_ATTEMPTS}) reached for stream ${streamId}`);
-          addStreamLog(streamId, `Maximum retry attempts (${MAX_RETRY_ATTEMPTS}) reached, stopping stream`);
-          clearDurationInfo(streamId);
-          clearOriginalTiming(streamId);
+          console.error(`[StreamingService] Stream ${streamId} exited early but max reconnect attempts (${maxRetries}) reached - giving up`);
+          addStreamLog(streamId, `Max reconnect attempts reached after early exit, stopping`);
+          rtmpHealthMonitor.stopMonitoring(streamId);
         }
       }
-      else {
-        let errorMessage = '';
-        if (code !== 0 && code !== null) {
-          // Check if we should not restart due to duration (already calculated above with streamData)
-          if (shouldNotRestart) {
-            console.log(`[StreamingService] Stream ${streamId} exited with error but duration almost reached - NOT restarting`);
-            addStreamLog(streamId, `Stream exited with error but duration almost reached - not restarting`);
-            clearDurationInfo(streamId);
-            clearOriginalTiming(streamId);
-            if (wasActive) {
-              try {
-                if (streamData) {
-                  // FIXED: Use correct status based on schedule type
-                  const newStatus = getStatusAfterStreamEnd(streamData);
-                  await Stream.updateStatus(streamId, newStatus, streamData.user_id);
-                  const updatedStream = await Stream.findById(streamId);
-                  await saveStreamHistory(updatedStream);
-                  await endYouTubeBroadcastForStream(streamData);
-                  await handleUnlistReplayOnEnd(streamData);
-                  await autoCleanupTemplateStream(updatedStream || streamData, 'duration-reached-error');
-                }
-                if (typeof schedulerService !== 'undefined' && schedulerService.cancelStreamTermination) {
-                  schedulerService.handleStreamStopped(streamId);
-                }
-              } catch (error) {
-                console.error(`[StreamingService] Error updating stream status: ${error.message}`);
-              }
-            }
-            return;
-          }
-          
-          errorMessage = `FFmpeg process exited with error code ${code}`;
-          addStreamLog(streamId, errorMessage);
-          console.error(`[StreamingService] ${errorMessage} for stream ${streamId}`);
-          const retryCount = streamRetryCount.get(streamId) || 0;
-          const maxRetries = getMaxRetryAttempts(streamData);
-          if (retryCount < maxRetries) {
-            streamRetryCount.set(streamId, retryCount + 1);
-            console.log(`[StreamingService] FFmpeg exited with code ${code}. Attempting restart #${retryCount + 1}${isUnlimited ? ' (unlimited mode)' : ''} for stream ${streamId}`);
-            // Clear duration info before restart
-            clearDurationInfo(streamId);
-            
-            // For unlimited streams, use exponential backoff
-            const backoffDelay = isUnlimited 
-              ? Math.min(3000 + (retryCount * 2000), 30000) 
-              : 3000;
-            
-            setTimeout(async () => {
-              try {
-                const streamInfo = await Stream.findById(streamId);
-                if (streamInfo) {
-                  const result = await startStream(streamId);
-                  if (result.success) {
-                    streamRetryCount.set(streamId, 0); // Reset on success
-                  } else {
-                    console.error(`[StreamingService] Failed to restart stream: ${result.error}`);
-                    // Only update status if not unlimited or max retries reached
-                    if (!isUnlimitedStream(streamInfo) || (streamRetryCount.get(streamId) || 0) >= getMaxRetryAttempts(streamInfo)) {
-                      const newStatus = getStatusAfterStreamEnd(streamInfo);
-                      await Stream.updateStatus(streamId, newStatus);
-                    }
-                  }
-                }
-              } catch (error) {
-                console.error(`[StreamingService] Error during stream restart: ${error.message}`);
-                // For unlimited streams, don't immediately set offline
-                const streamCheck = await Stream.findById(streamId).catch(() => null);
-                if (!isUnlimitedStream(streamCheck)) {
-                  await Stream.updateStatus(streamId, 'offline');
-                }
-              }
-            }, backoffDelay);
-            return;
-          }
-        }
-        
-        // Normal exit (code 0). FFmpeg's -t makes it exit 0 exactly when the configured
-        // duration is reached (that genuine end is already handled by the durationExceeded
-        // check at the top of this handler). If we reach here with code 0 but the stream
-        // SHOULD still be running, FFmpeg stopped early (RTMP/YouTube closed the connection,
-        // input read ended, a -stream_loop boundary glitch, etc.). We MUST reconnect so the
-        // real end-live time matches the duration the user configured. This applies to BOTH
-        // unlimited streams AND timed streams (Once/Daily/Weekly) that still have time left.
-        if (code === 0 && streamShouldKeepRunning) {
-          const retryCount = streamRetryCount.get(streamId) || 0;
-          const maxRetries = getMaxRetryAttempts(streamData);
-          if (retryCount < maxRetries) {
-            streamRetryCount.set(streamId, retryCount + 1);
-            const remainingLabel = isUnlimited
-              ? 'unlimited'
-              : `${(effectiveRemainingMs / 60000).toFixed(1)} min remaining`;
-            console.log(`[StreamingService] Stream ${streamId} exited early (code 0) but should keep running (${remainingLabel}). Reconnecting #${retryCount + 1}...`);
-            addStreamLog(streamId, `Stopped early (code 0) but ${remainingLabel} - auto-reconnecting #${retryCount + 1}`);
-            // Preserve original timing so the reconnect uses the correct remaining duration.
-            clearDurationInfo(streamId);
-            const backoffDelay = isUnlimited
-              ? Math.min(3000 + (retryCount * 2000), 30000)
-              : 3000;
-            setTimeout(async () => {
-              try {
-                const streamInfo = await Stream.findById(streamId);
-                if (streamInfo && streamInfo.status === 'live') {
-                  const result = await startStream(streamId);
-                  if (result.success) {
-                    console.log(`[StreamingService] Stream ${streamId} reconnected successfully after early exit`);
-                    streamRetryCount.set(streamId, 0);
-                  } else {
-                    console.error(`[StreamingService] Failed to reconnect stream ${streamId} after early exit: ${result.error}`);
-                    // Give up only after exhausting the consecutive-failure budget.
-                    if ((streamRetryCount.get(streamId) || 0) >= getMaxRetryAttempts(streamInfo)) {
-                      const newStatus = getStatusAfterStreamEnd(streamInfo);
-                      await Stream.updateStatus(streamId, newStatus, streamInfo.user_id);
-                      clearOriginalTiming(streamId);
-                    }
-                  }
-                } else {
-                  // No longer live (e.g. manually stopped meanwhile) - clean up timing.
-                  clearOriginalTiming(streamId);
-                }
-              } catch (error) {
-                console.error(`[StreamingService] Error reconnecting stream ${streamId} after early exit: ${error.message}`);
-              }
-            }, backoffDelay);
-            return;
-          }
-          console.error(`[StreamingService] Stream ${streamId} exited early (code 0) but max reconnect attempts (${maxRetries}) reached - giving up`);
-          addStreamLog(streamId, `Max reconnect attempts reached after early exit, stopping`);
-        }
-        
-        if (code === 0) {
-          console.log(`[StreamingService] Stream ${streamId} ended normally with exit code 0`);
-          addStreamLog(streamId, `Stream ended normally`);
-        }
-        
-        clearDurationInfo(streamId);
-        clearOriginalTiming(streamId);
-        if (wasActive) {
-          try {
-            // FIXED: Use correct status based on schedule type
-            const newStatus = getStatusAfterStreamEnd(streamData);
-            console.log(`[StreamingService] Updating stream ${streamId} status to '${newStatus}' after FFmpeg exit`);
-            if (streamData) {
-              await Stream.updateStatus(streamId, newStatus, streamData.user_id);
-              const updatedStream = await Stream.findById(streamId);
-              await saveStreamHistory(updatedStream);
 
-              // End YouTube broadcast so YouTube Studio / dashboard stops immediately
-              await endYouTubeBroadcastForStream(updatedStream || streamData);
+      // Stream should not restart (duration finished or less than 15s remaining, or max retries exceeded)
+      if (code === 0) {
+        console.log(`[StreamingService] Stream ${streamId} ended normally with exit code 0`);
+        addStreamLog(streamId, `Stream ended normally`);
+      } else {
+        console.log(`[StreamingService] Stream ${streamId} ending (code ${code}, signal ${signal}) - duration finished or max retries reached`);
+      }
 
-              // Handle unlist replay on end for YouTube streams
-              await handleUnlistReplayOnEnd(updatedStream || streamData);
+      rtmpHealthMonitor.stopMonitoring(streamId);
+      clearDurationInfo(streamId);
+      clearOriginalTiming(streamId);
+      if (wasActive) {
+        try {
+          // FIXED: Use correct status based on schedule type
+          const newStatus = getStatusAfterStreamEnd(streamData);
+          console.log(`[StreamingService] Updating stream ${streamId} status to '${newStatus}' after FFmpeg exit`);
+          if (streamData) {
+            await Stream.updateStatus(streamId, newStatus, streamData.user_id);
+            const updatedStream = await Stream.findById(streamId);
+            await saveStreamHistory(updatedStream);
 
-              // Auto-cleanup template stream from Control Room
-              await autoCleanupTemplateStream(updatedStream || streamData, 'ffmpeg-exit');
-            }
-            if (typeof schedulerService !== 'undefined' && schedulerService.cancelStreamTermination) {
-              schedulerService.handleStreamStopped(streamId);
-            }
-          } catch (error) {
-            console.error(`[StreamingService] Error updating stream status after exit: ${error.message}`);
+            // End YouTube broadcast so YouTube Studio / dashboard stops immediately
+            await endYouTubeBroadcastForStream(updatedStream || streamData);
+
+            // Handle unlist replay on end for YouTube streams
+            await handleUnlistReplayOnEnd(updatedStream || streamData);
+
+            // Auto-cleanup template stream from Control Room
+            await autoCleanupTemplateStream(updatedStream || streamData, 'ffmpeg-exit');
           }
+          if (typeof schedulerService !== 'undefined' && schedulerService.cancelStreamTermination) {
+            schedulerService.handleStreamStopped(streamId);
+          }
+        } catch (error) {
+          console.error(`[StreamingService] Error updating stream status after exit: ${error.message}`);
         }
       }
     });

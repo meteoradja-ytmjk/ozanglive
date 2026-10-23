@@ -276,6 +276,12 @@ async function checkStreamDurations() {
           console.error(`[Scheduler] Stream ${stream.id} has invalid start_time: ${stream.start_time}`);
           continue;
         }
+
+        // Defensive: if start_time is in the future (clock drift), don't check duration yet
+        if (actualStartTime.getTime() > now.getTime()) {
+          console.log(`[Scheduler] Stream ${stream.id} start_time is in the future (${actualStartTime.toISOString()}), skipping`);
+          continue;
+        }
         
         // Use centralized duration calculator for consistent priority
         let durationSeconds = null;
@@ -313,11 +319,13 @@ async function checkStreamDurations() {
 
         // If we have an end time, check if we need to take action
         if (shouldEndAt) {
+          const durationMs = durationSeconds * 1000;
+          const elapsed = now.getTime() - actualStartTime.getTime();
           const timeOverdue = now.getTime() - shouldEndAt.getTime();
           const timeOverdueMinutes = timeOverdue / 60000;
           
-          // FORCE STOP: If stream exceeds duration by more than 30 seconds, force stop immediately
-          if (timeOverdue > FORCE_STOP_BUFFER_MS) {
+          // FORCE STOP: If stream exceeds duration by more than 30 seconds AND actually ran full duration, force stop immediately
+          if (timeOverdue > FORCE_STOP_BUFFER_MS && elapsed >= durationMs) {
             console.log(`[Scheduler] ⚠️ FORCE STOP: Stream ${stream.id} "${stream.title}" exceeded duration by ${timeOverdueMinutes.toFixed(1)} min`);
             console.log(`[Scheduler]   - Configured duration: ${stream.stream_duration_minutes} minutes`);
             console.log(`[Scheduler]   - Started: ${actualStartTime.toISOString()}`);
@@ -333,8 +341,8 @@ async function checkStreamDurations() {
             continue;
           }
           
-          // If stream has exceeded end time (within buffer), stop it immediately
-          if (timeOverdue >= 0) {
+          // If stream has exceeded end time (within buffer) AND actually ran full duration, stop it cleanly
+          if (timeOverdue >= 0 && elapsed >= durationMs) {
             console.log(`[Scheduler] ⏰ Stopping stream ${stream.id} "${stream.title}" - duration reached`);
             console.log(`[Scheduler]   - Configured duration: ${stream.stream_duration_minutes} minutes`);
             console.log(`[Scheduler]   - Started: ${actualStartTime.toISOString()}`);
