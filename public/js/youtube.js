@@ -2049,6 +2049,9 @@ async function onStreamKeyChange(streamKeyId) {
 
 // Current thumbnail folder state
 let currentThumbnailFolder = null;
+if (typeof window !== 'undefined') {
+  window.currentThumbnailFolder = null;
+}
 
 // Fetch thumbnail folders
 async function fetchThumbnailFolders() {
@@ -2067,23 +2070,40 @@ async function fetchThumbnailFolders() {
     if (data.success && data.folders) {
       folderList.innerHTML = '';
       
+      if (data.folders.length === 0) {
+        folderList.innerHTML = `
+          <div class="col-span-full py-2.5 px-3 text-center text-xs text-gray-400 bg-dark-750/50 rounded-lg border border-dashed border-gray-700/60 flex items-center justify-center gap-1.5">
+            <i class="ti ti-folder-off text-gray-500 text-sm"></i>
+            <span>Belum ada folder thumbnail</span>
+          </div>
+        `;
+        return;
+      }
+      
       data.folders.forEach(folder => {
+        const isCurrent = currentThumbnailFolder === folder.name;
         const div = document.createElement('div');
-        div.className = `folder-item flex items-center gap-2 py-1.5 text-sm cursor-pointer transition-colors hover:bg-dark-600/50 rounded border-b border-gray-700/50 ${
-          currentThumbnailFolder === folder.name 
-            ? 'text-primary' 
-            : 'text-white'
+        div.className = `folder-item flex items-center justify-between gap-2 py-2 px-2.5 text-xs sm:text-sm cursor-pointer transition-all rounded-lg border min-w-0 select-none ${
+          isCurrent 
+            ? 'bg-primary/20 text-primary border-primary/40 font-semibold shadow-xs' 
+            : 'bg-dark-700/40 hover:bg-dark-700/80 text-gray-200 border-gray-700/60 hover:border-gray-600 hover:text-white'
         }`;
+        div.dataset.folder = folder.name;
         div.onclick = () => openThumbnailFolder(folder.name);
         div.innerHTML = `
-          <i class="ti ti-folder text-gray-400 shrink-0"></i>
-          <span class="flex-1 truncate">${escapeHtml(folder.name)}</span>
-          <button type="button" class="shrink-0 text-blue-400 hover:text-blue-300" onclick="event.stopPropagation(); openRenameFolderModal('${escapeJsString(folder.name)}')" title="Rename">
-            <i class="ti ti-pencil text-sm"></i>
-          </button>
-          <button type="button" class="shrink-0 text-red-500 hover:text-red-400 font-bold" onclick="event.stopPropagation(); deleteThumbnailFolder('${escapeJsString(folder.name)}')" title="Delete">
-            ✕
-          </button>
+          <div class="flex items-center gap-2 min-w-0 flex-1">
+            <i class="ti ti-folder ${isCurrent ? 'text-primary' : 'text-primary/70'} shrink-0 text-sm sm:text-base"></i>
+            <span class="truncate flex-1 min-w-0 font-medium ${isCurrent ? 'text-primary' : 'text-gray-200'} text-xs sm:text-sm" title="${escapeHtml(folder.name)}">${escapeHtml(folder.name)}</span>
+            ${folder.count !== undefined ? `<span class="text-[10px] bg-dark-600/80 text-gray-400 px-1.5 py-0.5 rounded-full shrink-0 font-mono">${folder.count}</span>` : ''}
+          </div>
+          <div class="flex items-center gap-1 shrink-0 ml-1">
+            <button type="button" class="w-6 h-6 rounded flex items-center justify-center text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 active:scale-95 transition-all" onclick="event.stopPropagation(); openRenameFolderModal('${escapeJsString(folder.name)}')" title="Rename folder">
+              <i class="ti ti-pencil text-xs sm:text-sm"></i>
+            </button>
+            <button type="button" class="w-6 h-6 rounded flex items-center justify-center text-red-400 hover:text-red-300 hover:bg-red-500/10 active:scale-95 transition-all text-xs font-bold" onclick="event.stopPropagation(); deleteThumbnailFolder('${escapeJsString(folder.name)}')" title="Hapus folder">
+              ✕
+            </button>
+          </div>
         `;
         folderList.appendChild(div);
       });
@@ -2096,6 +2116,9 @@ async function fetchThumbnailFolders() {
 // Open thumbnail folder
 function openThumbnailFolder(folderName) {
   currentThumbnailFolder = folderName;
+  if (typeof window !== 'undefined') {
+    window.currentThumbnailFolder = folderName;
+  }
   
   // Update hidden input
   const folderInput = document.getElementById('currentThumbnailFolder');
@@ -2111,7 +2134,10 @@ function openThumbnailFolder(folderName) {
   
   if (folderName) {
     if (indicator) indicator.classList.remove('hidden');
-    if (folderNameEl) folderNameEl.textContent = folderName;
+    if (folderNameEl) {
+      folderNameEl.textContent = folderName;
+      folderNameEl.title = folderName;
+    }
     if (editFolderBtn) editFolderBtn.disabled = false;
     if (rootBtn) {
       rootBtn.classList.remove('bg-primary/20', 'text-primary');
@@ -2128,13 +2154,31 @@ function openThumbnailFolder(folderName) {
   
   // Update folder items
   document.querySelectorAll('.folder-item').forEach(item => {
-    const itemFolder = item.querySelector('span.truncate')?.textContent;
+    const itemFolder = item.dataset.folder || item.querySelector('span.truncate')?.textContent;
+    const folderSpan = item.querySelector('span.truncate');
+    const folderIcon = item.querySelector('i.ti-folder');
     if (itemFolder === folderName) {
-      item.classList.add('text-primary');
-      item.classList.remove('text-white');
+      item.classList.add('text-primary', 'bg-primary/20', 'border-primary/40', 'font-semibold', 'shadow-xs');
+      item.classList.remove('text-white', 'text-gray-200', 'bg-dark-700/40', 'border-gray-700/60');
+      if (folderSpan) {
+        folderSpan.classList.add('text-primary');
+        folderSpan.classList.remove('text-white', 'text-gray-200');
+      }
+      if (folderIcon) {
+        folderIcon.classList.add('text-primary');
+        folderIcon.classList.remove('text-primary/70', 'text-gray-400');
+      }
     } else {
-      item.classList.remove('text-primary');
-      item.classList.add('text-white');
+      item.classList.remove('text-primary', 'bg-primary/20', 'border-primary/40', 'font-semibold', 'shadow-xs');
+      item.classList.add('text-gray-200', 'bg-dark-700/40', 'border-gray-700/60');
+      if (folderSpan) {
+        folderSpan.classList.remove('text-primary');
+        folderSpan.classList.add('text-gray-200');
+      }
+      if (folderIcon) {
+        folderIcon.classList.remove('text-primary');
+        folderIcon.classList.add('text-primary/70');
+      }
     }
   });
   
@@ -2605,15 +2649,24 @@ function openRenameFolderModal(folderName) {
   const newNameDisplay = document.getElementById('renameFolderNewNameDisplay');
   const charCount = document.getElementById('renameFolderCharCount');
   
+  const targetFolder = (typeof folderName === 'string' && folderName.trim()) 
+    ? folderName.trim() 
+    : (currentThumbnailFolder || (typeof window !== 'undefined' ? window.currentThumbnailFolder : null) || document.getElementById('currentThumbnailFolder')?.value || '');
+  
+  if (!targetFolder) {
+    if (typeof showToast === 'function') showToast('Pilih folder terlebih dahulu untuk diedit', 'warning');
+    return;
+  }
+  
   if (modal && oldNameInput && newNameInput) {
     modal.classList.remove('hidden');
-    oldNameInput.value = folderName;
-    newNameInput.value = folderName;
+    oldNameInput.value = targetFolder;
+    newNameInput.value = targetFolder;
     
     // Update preview displays
-    if (oldNameDisplay) oldNameDisplay.textContent = folderName;
-    if (newNameDisplay) newNameDisplay.textContent = folderName;
-    if (charCount) charCount.textContent = folderName.length;
+    if (oldNameDisplay) oldNameDisplay.textContent = targetFolder;
+    if (newNameDisplay) newNameDisplay.textContent = targetFolder;
+    if (charCount) charCount.textContent = targetFolder.length;
     
     newNameInput.focus();
     newNameInput.select();
@@ -3789,6 +3842,7 @@ function openCreateBroadcastModal(options = {}) {
   
   // Reset thumbnail folder to root
   currentThumbnailFolder = null;
+  if (typeof window !== 'undefined') window.currentThumbnailFolder = null;
   const folderInput = document.getElementById('currentThumbnailFolder');
   if (folderInput) folderInput.value = '';
   const indicator = document.getElementById('currentFolderIndicator');
