@@ -1413,7 +1413,6 @@ function prerenderGaplessAudio(audioPaths, outputFile) {
       '-b:a', '128k',
       '-ar', '44100',
       '-ac', '2',
-      '-af', 'aresample=async=1:first_pts=0',
       '-movflags', '+faststart',
       '-y',
       outputFile
@@ -1454,7 +1453,6 @@ function prerenderGaplessAudio(audioPaths, outputFile) {
           '-b:a', '128k',
           '-ar', '44100',
           '-ac', '2',
-          '-af', 'aresample=async=1:first_pts=0',
           '-movflags', '+faststart',
           '-y',
           outputFile

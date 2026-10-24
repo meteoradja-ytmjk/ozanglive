@@ -70,11 +70,13 @@ class StreamTemplate {
     return new Promise((resolve, reject) => {
       db.get(
         `SELECT st.*,
-                v.title AS video_title,
-                a.title AS audio_title
+                COALESCE(v.title, p.name) AS video_title,
+                COALESCE(a.title, pla.name) AS audio_title
          FROM stream_templates st
          LEFT JOIN videos v ON st.video_id = v.id
+         LEFT JOIN playlists p ON st.video_id = p.id
          LEFT JOIN audios a ON st.audio_id = a.id
+         LEFT JOIN playlists pla ON st.audio_id = pla.id
          WHERE st.id = ?`,
         [id],
         (err, row) => {
@@ -107,11 +109,13 @@ class StreamTemplate {
     return new Promise((resolve, reject) => {
       db.all(
         `SELECT st.*,
-                v.title AS video_title,
-                a.title AS audio_title
+                COALESCE(v.title, p.name) AS video_title,
+                COALESCE(a.title, pla.name) AS audio_title
          FROM stream_templates st
          LEFT JOIN videos v ON st.video_id = v.id
+         LEFT JOIN playlists p ON st.video_id = p.id
          LEFT JOIN audios a ON st.audio_id = a.id
+         LEFT JOIN playlists pla ON st.audio_id = pla.id
          WHERE st.user_id = ?
          ORDER BY st.created_at DESC`,
         [userId],

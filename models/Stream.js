@@ -378,12 +378,13 @@ class Stream {
                 v.filepath AS video_filepath,
                 COALESCE(v.thumbnail_path, '/images/playlist-thumbnail.svg') AS video_thumbnail,
                 v.duration AS video_duration,
-                a.title AS audio_title,
+                COALESCE(a.title, pla.name) AS audio_title,
                 CASE WHEN p.id IS NOT NULL THEN 'playlist' ELSE 'video' END AS video_type
          FROM streams s
          LEFT JOIN videos v ON s.video_id = v.id
          LEFT JOIN playlists p ON s.video_id = p.id
          LEFT JOIN audios a ON s.audio_id = a.id
+         LEFT JOIN playlists pla ON s.audio_id = pla.id
          WHERE s.id = ?`,
         [id],
         (err, row) => {
@@ -794,7 +795,7 @@ class Stream {
                v.resolution AS video_resolution,
                v.bitrate AS video_bitrate,
                v.fps AS video_fps,
-               a.title AS audio_title,
+               COALESCE(a.title, pla.name) AS audio_title,
                CASE WHEN p.id IS NOT NULL THEN 'playlist' ELSE 'video' END AS video_type,
                COALESCE(yc.channel_name, yc_broadcast.channel_name, yc_primary.channel_name, CASE WHEN s.platform = 'YouTube' THEN 'YouTube Channel' ELSE COALESCE(s.platform, 'Custom RTMP') END) AS channel_name,
                COALESCE(yc.channel_id, yc_broadcast.channel_id, yc_primary.channel_id) AS channel_id
@@ -802,6 +803,7 @@ class Stream {
         LEFT JOIN videos v ON s.video_id = v.id
         LEFT JOIN playlists p ON s.video_id = p.id
         LEFT JOIN audios a ON s.audio_id = a.id
+        LEFT JOIN playlists pla ON s.audio_id = pla.id
         LEFT JOIN youtube_credentials yc ON s.youtube_account_id = yc.id
         LEFT JOIN youtube_broadcast_settings ybs ON s.youtube_broadcast_id = ybs.broadcast_id
         LEFT JOIN youtube_credentials yc_broadcast ON ybs.account_id = yc_broadcast.id
@@ -1043,12 +1045,13 @@ class Stream {
       db.get(
         `SELECT s.*,
                 COALESCE(v.title, p.name) AS video_title,
-                a.title AS audio_title,
+                COALESCE(a.title, pla.name) AS audio_title,
                 CASE WHEN p.id IS NOT NULL THEN 'playlist' ELSE 'video' END AS video_type
          FROM streams s
          LEFT JOIN videos v ON s.video_id = v.id
          LEFT JOIN playlists p ON s.video_id = p.id
          LEFT JOIN audios a ON s.audio_id = a.id
+         LEFT JOIN playlists pla ON s.audio_id = pla.id
          WHERE s.stream_key = ? AND s.user_id = ?`,
         [streamKey, userId],
         (err, row) => {

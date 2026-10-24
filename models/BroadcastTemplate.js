@@ -298,12 +298,13 @@ class BroadcastTemplate {
         `SELECT bt.*, 
                 COALESCE(yc.channel_name, bt.channel_name) AS channel_name,
                 COALESCE(v.title, p.name) AS video_title,
-                a.title AS audio_title
+                COALESCE(a.title, pla.name) AS audio_title
          FROM broadcast_templates bt
          LEFT JOIN youtube_credentials yc ON bt.account_id = yc.id
          LEFT JOIN videos v ON bt.video_id = v.id
          LEFT JOIN playlists p ON bt.video_id = p.id
          LEFT JOIN audios a ON bt.audio_id = a.id
+         LEFT JOIN playlists pla ON bt.audio_id = pla.id
          WHERE bt.id = ?`,
         [id],
         (err, row) => {
@@ -320,11 +321,12 @@ class BroadcastTemplate {
           if (needsFallback && (parsed.stream_key || parsed.stream_id || parsed.title)) {
             db.get(
               `SELECT s.stream_duration_hours, s.stream_duration_minutes, s.loop_video, s.video_id, s.audio_id, s.schedule_type, s.stream_key,
-                      COALESCE(v.title, p.name) AS video_title, a.title AS audio_title
+                      COALESCE(v.title, p.name) AS video_title, COALESCE(a.title, pla.name) AS audio_title
                FROM streams s
                LEFT JOIN videos v ON s.video_id = v.id
                LEFT JOIN playlists p ON s.video_id = p.id
                LEFT JOIN audios a ON s.audio_id = a.id
+               LEFT JOIN playlists pla ON s.audio_id = pla.id
                WHERE s.user_id = ? AND (s.stream_key = ? OR s.stream_key = ? OR s.title = ?)
                ORDER BY s.id DESC LIMIT 1`,
               [parsed.user_id, parsed.stream_key || '', parsed.stream_id || '', parsed.title || ''],
