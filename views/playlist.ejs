@@ -101,6 +101,13 @@
         
         <!-- Right: Action Buttons Dock (Single Line) -->
         <div class="flex items-center gap-1.5 flex-shrink-0">
+          <button onclick="playPlaylistDirectly('<%= playlist.id %>')" 
+            class="h-8 px-2.5 sm:px-3 rounded-lg bg-emerald-600/20 hover:bg-emerald-600 border border-emerald-500/30 text-emerald-400 hover:text-white text-xs font-semibold flex items-center gap-1 active:scale-95 transition-all shadow-sm"
+            title="Putar Playlist Sekarang">
+            <i class="ti ti-player-play text-sm"></i>
+            <span class="hidden md:inline">Play</span>
+          </button>
+
           <button onclick="viewPlaylist('<%= playlist.id %>')" 
             class="h-8 px-2.5 sm:px-3 rounded-lg bg-primary/15 hover:bg-primary/25 border border-primary/30 text-primary hover:text-white text-xs font-semibold flex items-center gap-1 active:scale-95 transition-all shadow-sm"
             title="Open playlist details">
@@ -295,7 +302,11 @@
         <!-- Rendered dynamically by JS -->
       </div>
       <div class="flex items-center gap-2 shrink-0">
-        <button id="saveToGalleryBtn" type="button" class="h-8 px-3 rounded-lg text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 shadow-sm active:scale-95 transition-all inline-flex items-center gap-1.5 whitespace-nowrap" title="Simpan / Render playlist ini ke Galeri Media">
+        <button id="playAllTopBtn" type="button" onclick="startPlaylistPlayback()" class="h-8 px-3 rounded-lg text-xs font-semibold text-white bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 shadow-sm active:scale-95 transition-all inline-flex items-center gap-1.5 whitespace-nowrap" title="Putar semua media dalam playlist ini">
+          <i class="ti ti-player-play text-sm"></i>
+          <span>Putar Playlist</span>
+        </button>
+        <button id="saveToGalleryBtn" type="button" class="h-8 px-3 rounded-lg text-xs font-semibold text-white bg-dark-750 hover:bg-dark-700 border border-gray-600/60 hover:border-gray-500 text-gray-300 hover:text-white shadow-sm active:scale-95 transition-all inline-flex items-center gap-1.5 whitespace-nowrap" title="Simpan / Render playlist ini ke Galeri Media">
           <i class="ti ti-device-floppy text-sm"></i>
           <span class="hidden sm:inline">Simpan ke Galeri</span>
           <span class="sm:hidden">Simpan</span>
@@ -307,18 +318,46 @@
       </div>
     </div>
 
-    <!-- Shared preview player (single instance to keep CPU/memory low) -->
-    <div id="previewPlayerWrapper" class="hidden mb-4 bg-dark-900 rounded-2xl border border-gray-700/70 overflow-hidden shadow-xl">
-      <div class="flex items-center justify-between px-3.5 py-2.5 border-b border-gray-700/60 bg-dark-750">
-        <div class="flex items-center gap-2 min-w-0">
-          <i id="previewPlayerIcon" class="ti ti-player-play text-primary flex-shrink-0"></i>
-          <span id="previewPlayerTitle" class="text-xs sm:text-sm font-medium text-white truncate"></span>
+    <!-- Shared preview player (modern playlist player with auto-play next, shuffle, sequential, prev/next) -->
+    <div id="previewPlayerWrapper" class="hidden mb-4 bg-dark-900 rounded-2xl border border-gray-700/80 overflow-hidden shadow-2xl transition-all">
+      <div class="flex items-center justify-between px-3.5 py-2.5 border-b border-gray-700/70 bg-gradient-to-r from-dark-800 to-dark-750 gap-2">
+        <div class="flex items-center gap-2 min-w-0 flex-1">
+          <div class="w-7 h-7 rounded-lg bg-primary/20 border border-primary/30 flex items-center justify-center text-primary flex-shrink-0">
+            <i id="previewPlayerIcon" class="ti ti-music text-sm"></i>
+          </div>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-2">
+              <span id="previewTrackBadge" class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-primary/20 text-primary border border-primary/30 font-semibold shrink-0">1/1</span>
+              <span id="previewPlayerTitle" class="text-xs sm:text-sm font-medium text-white truncate"></span>
+            </div>
+          </div>
         </div>
-        <button type="button" onclick="closePreviewPlayer()" class="text-gray-400 hover:text-white flex-shrink-0" title="Close preview">
-          <i class="ti ti-x"></i>
-        </button>
+
+        <!-- Controls: Prev, Next, Shuffle Toggle, Loop Toggle, Close -->
+        <div class="flex items-center gap-1 shrink-0">
+          <button type="button" onclick="playPrevTrack()" title="Track Sebelumnya (Prev)" 
+            class="w-7 h-7 flex items-center justify-center rounded-lg bg-dark-700/80 hover:bg-dark-600 text-gray-300 hover:text-white border border-gray-600/50 active:scale-95 transition-all">
+            <i class="ti ti-player-skip-back text-xs"></i>
+          </button>
+          <button type="button" onclick="playNextTrack()" title="Track Berikutnya (Next)" 
+            class="w-7 h-7 flex items-center justify-center rounded-lg bg-dark-700/80 hover:bg-dark-600 text-gray-300 hover:text-white border border-gray-600/50 active:scale-95 transition-all">
+            <i class="ti ti-player-skip-forward text-xs"></i>
+          </button>
+          <button type="button" id="playerShuffleToggleBtn" onclick="togglePlayerShuffle()" title="Klik untuk beralih mode Shuffle / Sequential" 
+            class="h-7 px-2 flex items-center gap-1 rounded-lg bg-dark-700/80 hover:bg-dark-600 text-gray-300 hover:text-white border border-gray-600/50 text-[11px] font-medium active:scale-95 transition-all">
+            <i id="playerShuffleIcon" class="ti ti-list-numbers text-xs"></i>
+            <span id="playerShuffleLabel">Sequential</span>
+          </button>
+          <button type="button" id="playerLoopToggleBtn" onclick="togglePlayerLoop()" title="Ulangi Playlist (Loop)" 
+            class="w-7 h-7 flex items-center justify-center rounded-lg bg-primary/20 text-primary border border-primary/40 active:scale-95 transition-all">
+            <i class="ti ti-repeat text-xs"></i>
+          </button>
+          <button type="button" onclick="closePreviewPlayer()" class="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-dark-700/80 transition-colors ml-1" title="Tutup Pemutar">
+            <i class="ti ti-x text-sm"></i>
+          </button>
+        </div>
       </div>
-      <div id="previewPlayerSlot" class="bg-black"></div>
+      <div id="previewPlayerSlot" class="bg-black/95 p-2 sm:p-2.5"></div>
     </div>
     
     <div id="playlistVideos" class="space-y-2">
@@ -738,12 +777,15 @@ function editPlaylist(playlistId) {
     });
 }
 
-function viewPlaylist(playlistId) {
+function viewPlaylist(playlistId, autoPlay = false) {
   fetch(`/api/playlists/${playlistId}`)
     .then(response => response.json())
     .then(data => {
       if (data.success) {
         const playlist = data.playlist;
+        currentPlaylistData = playlist;
+        isPlayerShuffle = Boolean(playlist.shuffle || playlist.is_shuffle);
+        isPlayerLoop = true;
 
         // Always start with a clean slate so previous preview never lingers
         closePreviewPlayer();
@@ -780,12 +822,11 @@ function viewPlaylist(playlistId) {
           `;
         }
 
-        const isShuffle = playlist.shuffle || playlist.is_shuffle;
         badgesHtml += `
-          <span class="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-lg bg-dark-700/80 border border-gray-700/60 text-gray-300 text-xs font-medium whitespace-nowrap">
-            <i class="ti ${isShuffle ? 'ti-arrows-shuffle text-purple-400' : 'ti-list-numbers text-primary'} text-sm"></i>
-            <span>${isShuffle ? 'Shuffle' : 'Sequential'}</span>
-          </span>
+          <button type="button" onclick="togglePlayerShuffle()" title="Klik untuk beralih mode Shuffle / Sequential" class="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-lg bg-dark-700/80 hover:bg-dark-600/80 border border-gray-700/60 text-gray-300 hover:text-white text-xs font-medium whitespace-nowrap cursor-pointer transition-all active:scale-95">
+            <i id="toolbarModeIcon" class="ti ${isPlayerShuffle ? 'ti-arrows-shuffle text-purple-400' : 'ti-list-numbers text-primary'} text-sm"></i>
+            <span id="toolbarModeText">${isPlayerShuffle ? 'Shuffle' : 'Sequential'}</span>
+          </button>
         `;
 
         const badgesContainer = document.getElementById('viewMediaBadges');
@@ -796,7 +837,7 @@ function viewPlaylist(playlistId) {
         const videosContainer = document.getElementById('playlistVideos');
         let contentHtml = '';
         
-        // Videos section — compact rows so many items fit at once
+        // Videos section — compact rows with play buttons & click-to-play
         if (playlist.videos && playlist.videos.length > 0) {
           contentHtml += `
             <div class="flex items-center justify-between mb-1.5 px-0.5">
@@ -804,7 +845,15 @@ function viewPlaylist(playlistId) {
                 <i class="ti ti-video text-blue-400"></i>
                 <span>Videos</span>
               </h4>
-              <span class="text-[11px] px-2 py-0.5 rounded-full bg-dark-700 border border-gray-700 text-gray-400 font-semibold">${playlist.videos.length}</span>
+              <div class="flex items-center gap-2">
+                <span class="text-[11px] px-2 py-0.5 rounded-full bg-dark-700 border border-gray-700 text-gray-400 font-semibold">${playlist.videos.length}</span>
+                <button type="button" onclick="playAllMedia('video')" 
+                  class="h-6 px-2 rounded-md bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border border-blue-500/40 text-[11px] font-semibold inline-flex items-center gap-1 active:scale-95 transition-all" 
+                  title="Putar semua video dalam playlist">
+                  <i class="ti ti-player-play text-xs"></i>
+                  <span>Putar Video</span>
+                </button>
+              </div>
             </div>
             <div class="bg-dark-750/90 rounded-xl border border-gray-700/70 divide-y divide-gray-700/50 mb-3.5 max-h-72 overflow-y-auto custom-scrollbar">
           `;
@@ -814,14 +863,17 @@ function viewPlaylist(playlistId) {
               ? Math.floor(video.duration / 60) + ':' + String(Math.floor(video.duration % 60)).padStart(2, '0')
               : '0:00';
             return `
-              <div class="flex items-center gap-2.5 px-3 py-2 hover:bg-dark-700/60 transition-colors">
-                <span class="text-xs text-gray-500 w-5 text-center flex-shrink-0 font-medium">${index + 1}</span>
+              <div id="playlist-row-video-${index}" class="playlist-media-row flex items-center gap-2.5 px-3 py-2 hover:bg-dark-700/60 transition-all rounded-lg" data-index="${index}">
+                <span class="text-xs text-gray-500 w-5 text-center flex-shrink-0 font-medium row-num">${index + 1}</span>
                 <img src="${video.thumbnail_path || '/images/default-thumbnail.jpg'}" alt="${safeTitle}" class="w-10 h-6 object-cover rounded-md flex-shrink-0 border border-gray-700/50" loading="lazy" onerror="this.src='/images/default-thumbnail.jpg'">
-                <p class="text-xs sm:text-sm font-medium text-white truncate flex-1 min-w-0">${safeTitle}</p>
+                <div class="flex-1 min-w-0 cursor-pointer" onclick="playTrackAtIndex('video', ${index})">
+                  <p class="text-xs sm:text-sm font-medium text-white truncate row-title">${safeTitle}</p>
+                </div>
                 <span class="text-[11px] text-gray-400 tabular-nums flex-shrink-0 font-mono">${dur}</span>
-                <button type="button" onclick="previewMedia('video', '${video.id}')"
-                  class="text-gray-400 hover:text-white hover:bg-dark-600/70 w-7 h-7 flex items-center justify-center rounded-lg flex-shrink-0 transition-colors"
-                  title="Preview">
+                <button type="button" onclick="playTrackAtIndex('video', ${index})"
+                  id="play-btn-video-${index}"
+                  class="row-play-btn text-gray-400 hover:text-white hover:bg-dark-600/70 w-7 h-7 flex items-center justify-center rounded-lg flex-shrink-0 transition-colors"
+                  title="Putar video ini">
                   <i class="ti ti-player-play text-xs"></i>
                 </button>
               </div>
@@ -830,7 +882,7 @@ function viewPlaylist(playlistId) {
           contentHtml += '</div>';
         }
         
-        // Audios section — same compact layout
+        // Audios section — compact rows with play buttons & click-to-play
         if (playlist.audios && playlist.audios.length > 0) {
           contentHtml += `
             <div class="flex items-center justify-between mb-1.5 px-0.5">
@@ -838,7 +890,15 @@ function viewPlaylist(playlistId) {
                 <i class="ti ti-music text-purple-400"></i>
                 <span>Audios</span>
               </h4>
-              <span class="text-[11px] px-2 py-0.5 rounded-full bg-dark-700 border border-gray-700 text-gray-400 font-semibold">${playlist.audios.length}</span>
+              <div class="flex items-center gap-2">
+                <span class="text-[11px] px-2 py-0.5 rounded-full bg-dark-700 border border-gray-700 text-gray-400 font-semibold">${playlist.audios.length}</span>
+                <button type="button" onclick="playAllMedia('audio')" 
+                  class="h-6 px-2 rounded-md bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/40 text-[11px] font-semibold inline-flex items-center gap-1 active:scale-95 transition-all" 
+                  title="Putar semua audio dalam playlist">
+                  <i class="ti ti-player-play text-xs"></i>
+                  <span>Putar Lagu</span>
+                </button>
+              </div>
             </div>
             <div class="bg-dark-750/90 rounded-xl border border-gray-700/70 divide-y divide-gray-700/50 max-h-72 overflow-y-auto custom-scrollbar">
           `;
@@ -848,16 +908,19 @@ function viewPlaylist(playlistId) {
               ? Math.floor(audio.duration / 60) + ':' + String(Math.floor(audio.duration % 60)).padStart(2, '0')
               : '0:00';
             return `
-              <div class="flex items-center gap-2.5 px-3 py-2 hover:bg-dark-700/60 transition-colors">
-                <span class="text-xs text-gray-500 w-5 text-center flex-shrink-0 font-medium">${index + 1}</span>
+              <div id="playlist-row-audio-${index}" class="playlist-media-row flex items-center gap-2.5 px-3 py-2 hover:bg-dark-700/60 transition-all rounded-lg" data-index="${index}">
+                <span class="text-xs text-gray-500 w-5 text-center flex-shrink-0 font-medium row-num">${index + 1}</span>
                 <div class="w-8 h-8 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center flex-shrink-0">
                   <i class="ti ti-music text-purple-400 text-sm"></i>
                 </div>
-                <p class="text-xs sm:text-sm font-medium text-white truncate flex-1 min-w-0">${safeTitle}</p>
+                <div class="flex-1 min-w-0 cursor-pointer" onclick="playTrackAtIndex('audio', ${index})">
+                  <p class="text-xs sm:text-sm font-medium text-white truncate row-title">${safeTitle}</p>
+                </div>
                 <span class="text-[11px] text-gray-400 tabular-nums flex-shrink-0 font-mono">${dur}</span>
-                <button type="button" onclick="previewMedia('audio', '${audio.id}')"
-                  class="text-gray-400 hover:text-white hover:bg-dark-600/70 w-7 h-7 flex items-center justify-center rounded-lg flex-shrink-0 transition-colors"
-                  title="Preview">
+                <button type="button" onclick="playTrackAtIndex('audio', ${index})"
+                  id="play-btn-audio-${index}"
+                  class="row-play-btn text-gray-400 hover:text-white hover:bg-dark-600/70 w-7 h-7 flex items-center justify-center rounded-lg flex-shrink-0 transition-colors"
+                  title="Putar lagu ini">
                   <i class="ti ti-player-play text-xs"></i>
                 </button>
               </div>
@@ -872,7 +935,7 @@ function viewPlaylist(playlistId) {
         
         videosContainer.innerHTML = contentHtml;
 
-        // Cache media on the modal so previewMedia() can resolve filepath without refetching
+        // Cache media on the modal so player can resolve tracks
         currentViewPlaylistMedia = {
           videos: Array.isArray(playlist.videos) ? playlist.videos : [],
           audios: Array.isArray(playlist.audios) ? playlist.audios : []
@@ -889,9 +952,17 @@ function viewPlaylist(playlistId) {
             manualSaveToGallery(playlistId, saveToGalBtn);
           };
         }
+
+        updatePlayerModeControls();
         
         document.getElementById('viewPlaylistModal').classList.remove('hidden');
         document.getElementById('viewPlaylistModal').classList.add('flex');
+
+        if (autoPlay) {
+          setTimeout(() => {
+            startPlaylistPlayback();
+          }, 100);
+        }
       }
     })
     .catch(error => {
@@ -900,8 +971,16 @@ function viewPlaylist(playlistId) {
     });
 }
 
-// Track which media is currently displayed in the View modal so preview can find filepath
+// Track which media is currently displayed in the View modal so preview can find tracks
+let currentPlaylistData = null;
 let currentViewPlaylistMedia = { videos: [], audios: [] };
+let activePlaybackKind = 'audio';
+let activeTrackIndex = -1;
+let isPlayerShuffle = false;
+let isPlayerLoop = true;
+let playerShuffleQueue = [];
+let playerShufflePointer = 0;
+let playerHistory = [];
 
 // Lightweight HTML escaper for titles inserted via innerHTML
 function escapeHtml(str) {
@@ -913,55 +992,319 @@ function escapeHtml(str) {
     .replace(/'/g, '&#39;');
 }
 
-/**
- * Single shared media element for previewing playlist items.
- * - Only one preview plays at a time (CPU-friendly).
- * - The element is created lazily on first use, then reused (no DOM churn).
- * - preload="none" so nothing is fetched until the user actually presses play.
- */
-function previewMedia(kind, id) {
+function shuffleArray(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function initShuffleQueue(kind, startingIndex = 0) {
   const list = kind === 'video' ? currentViewPlaylistMedia.videos : currentViewPlaylistMedia.audios;
-  const item = list.find(m => String(m.id) === String(id));
-  if (!item || !item.filepath) {
-    showToast('Media file not found', 'error');
+  if (!list || list.length === 0) {
+    playerShuffleQueue = [];
+    playerShufflePointer = 0;
     return;
   }
+  if (list.length === 1) {
+    playerShuffleQueue = [0];
+    playerShufflePointer = 0;
+    return;
+  }
+  const allIndices = list.map((_, i) => i);
+  if (startingIndex >= 0 && startingIndex < list.length) {
+    const remaining = allIndices.filter(i => i !== startingIndex);
+    const shuffled = shuffleArray(remaining);
+    playerShuffleQueue = [startingIndex, ...shuffled];
+  } else {
+    playerShuffleQueue = shuffleArray(allIndices);
+  }
+  playerShufflePointer = 0;
+}
+
+function updatePlayerModeControls() {
+  const shuffleBtn = document.getElementById('playerShuffleToggleBtn');
+  const shuffleIcon = document.getElementById('playerShuffleIcon');
+  const shuffleLabel = document.getElementById('playerShuffleLabel');
+  const loopBtn = document.getElementById('playerLoopToggleBtn');
+  const toolbarIcon = document.getElementById('toolbarModeIcon');
+  const toolbarText = document.getElementById('toolbarModeText');
+
+  if (shuffleIcon && shuffleLabel) {
+    if (isPlayerShuffle) {
+      shuffleIcon.className = 'ti ti-arrows-shuffle text-xs text-purple-400';
+      shuffleLabel.textContent = 'Shuffle';
+      if (shuffleBtn) {
+        shuffleBtn.className = 'h-7 px-2 flex items-center gap-1 rounded-lg bg-purple-500/20 text-purple-300 border border-purple-500/40 text-[11px] font-medium active:scale-95 transition-all';
+      }
+    } else {
+      shuffleIcon.className = 'ti ti-list-numbers text-xs text-cyan-400';
+      shuffleLabel.textContent = 'Sequential';
+      if (shuffleBtn) {
+        shuffleBtn.className = 'h-7 px-2 flex items-center gap-1 rounded-lg bg-dark-700/80 hover:bg-dark-600 text-gray-300 hover:text-white border border-gray-600/50 text-[11px] font-medium active:scale-95 transition-all';
+      }
+    }
+  }
+
+  if (loopBtn) {
+    if (isPlayerLoop) {
+      loopBtn.className = 'w-7 h-7 flex items-center justify-center rounded-lg bg-primary/25 text-primary border border-primary/40 active:scale-95 transition-all';
+      loopBtn.title = 'Loop Playlist: Aktif';
+    } else {
+      loopBtn.className = 'w-7 h-7 flex items-center justify-center rounded-lg bg-dark-700/60 text-gray-400 hover:text-white border border-gray-700/60 active:scale-95 transition-all';
+      loopBtn.title = 'Loop Playlist: Nonaktif';
+    }
+  }
+
+  if (toolbarIcon && toolbarText) {
+    toolbarIcon.className = `ti ${isPlayerShuffle ? 'ti-arrows-shuffle text-purple-400' : 'ti-list-numbers text-primary'} text-sm`;
+    toolbarText.textContent = isPlayerShuffle ? 'Shuffle' : 'Sequential';
+  }
+}
+
+function updateActiveRowHighlight(kind, index) {
+  document.querySelectorAll('.playlist-media-row').forEach(row => {
+    row.classList.remove('bg-primary/15', 'ring-1', 'ring-primary/40', 'border-primary/40');
+  });
+  document.querySelectorAll('.row-play-btn i').forEach(icon => {
+    icon.className = 'ti ti-player-play text-xs text-gray-400';
+  });
+
+  const activeRow = document.getElementById(`playlist-row-${kind}-${index}`);
+  if (activeRow) {
+    activeRow.classList.add('bg-primary/15', 'ring-1', 'ring-primary/40', 'border-primary/40');
+    const playBtn = document.getElementById(`play-btn-${kind}-${index}`);
+    if (playBtn) {
+      const icon = playBtn.querySelector('i');
+      if (icon) {
+        icon.className = 'ti ti-player-pause text-xs text-primary animate-pulse';
+      }
+    }
+    activeRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+}
+
+function playTrackAtIndex(kind, index) {
+  const list = kind === 'video' ? currentViewPlaylistMedia.videos : currentViewPlaylistMedia.audios;
+  if (!list || !list[index]) {
+    console.warn(`[Playlist Player] Track at index ${index} not found for kind: ${kind}`);
+    return;
+  }
+
+  const item = list[index];
+  if (!item.filepath) {
+    showToast('File media tidak ditemukan di server', 'error');
+    return;
+  }
+
+  activePlaybackKind = kind;
+  activeTrackIndex = index;
+  playerHistory.push({ kind, index });
+  if (playerHistory.length > 50) playerHistory.shift();
 
   const wrapper = document.getElementById('previewPlayerWrapper');
   const slot = document.getElementById('previewPlayerSlot');
   const titleEl = document.getElementById('previewPlayerTitle');
   const iconEl = document.getElementById('previewPlayerIcon');
+  const trackBadge = document.getElementById('previewTrackBadge');
 
-  // Stop any current playback before swapping element type
   stopCurrentPreview();
 
   let el;
   if (kind === 'video') {
     el = document.createElement('video');
     el.controls = true;
-    el.preload = 'none';
+    el.preload = 'auto';
     el.playsInline = true;
-    el.className = 'w-full max-h-[360px] bg-black';
-    iconEl.className = 'ti ti-video text-primary flex-shrink-0';
+    el.className = 'w-full max-h-[360px] bg-black rounded-lg';
+    if (iconEl) iconEl.className = 'ti ti-video text-primary text-sm';
   } else {
     el = document.createElement('audio');
     el.controls = true;
-    el.preload = 'none';
-    el.className = 'w-full';
-    iconEl.className = 'ti ti-music text-primary flex-shrink-0';
+    el.preload = 'auto';
+    el.className = 'w-full h-10 accent-primary';
+    if (iconEl) iconEl.className = 'ti ti-music text-purple-400 text-sm';
   }
+
   el.src = item.filepath;
+
+  // Auto-play next track when current ends (crucial for continuous playlist playback!)
+  el.addEventListener('ended', () => {
+    console.log(`[Playlist Player] "${item.title}" selesai. Memutar track berikutnya...`);
+    playNextTrack();
+  });
+
+  // Safe fallback if track encounters playback error
+  el.addEventListener('error', (err) => {
+    console.warn(`[Playlist Player] Error loading "${item.title}":`, err);
+    showToast(`Gagal memutar: ${item.title || 'media'}. Melanjutkan ke lagu berikutnya...`, 'error');
+    setTimeout(() => {
+      playNextTrack();
+    }, 1200);
+  });
 
   slot.innerHTML = '';
   slot.appendChild(el);
-  titleEl.textContent = item.title || (kind === 'video' ? 'Video preview' : 'Audio preview');
-  wrapper.classList.remove('hidden');
 
-  // Auto-play once user explicitly requested preview; muted-by-default not needed for audio
-  el.play().catch(() => { /* ignore autoplay rejection; user can press play */ });
+  if (titleEl) {
+    titleEl.textContent = item.title || (kind === 'video' ? 'Video' : 'Audio');
+    titleEl.title = item.title || '';
+  }
+  if (trackBadge) {
+    trackBadge.textContent = `${index + 1}/${list.length}`;
+  }
 
-  // Bring preview into view
+  updateActiveRowHighlight(kind, index);
+  updatePlayerModeControls();
+
+  if (wrapper) wrapper.classList.remove('hidden');
+
+  el.play().catch(e => {
+    console.log('[Playlist Player] Autoplay note:', e.message);
+  });
+
   wrapper.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function playNextTrack() {
+  const list = activePlaybackKind === 'video' ? currentViewPlaylistMedia.videos : currentViewPlaylistMedia.audios;
+  if (!list || list.length === 0) return;
+
+  if (list.length === 1) {
+    if (isPlayerLoop) {
+      playTrackAtIndex(activePlaybackKind, 0);
+    } else {
+      stopCurrentPreview();
+    }
+    return;
+  }
+
+  if (isPlayerShuffle) {
+    playerShufflePointer++;
+    if (playerShufflePointer >= playerShuffleQueue.length) {
+      if (isPlayerLoop) {
+        const lastIdx = playerShuffleQueue[playerShuffleQueue.length - 1];
+        initShuffleQueue(activePlaybackKind, -1);
+        if (playerShuffleQueue[0] === lastIdx && playerShuffleQueue.length > 1) {
+          const swap = 1 + Math.floor(Math.random() * (playerShuffleQueue.length - 1));
+          [playerShuffleQueue[0], playerShuffleQueue[swap]] = [playerShuffleQueue[swap], playerShuffleQueue[0]];
+        }
+        playerShufflePointer = 0;
+        playTrackAtIndex(activePlaybackKind, playerShuffleQueue[0]);
+      } else {
+        showToast('Semua lagu dalam playlist selesai diputar', 'info');
+        stopCurrentPreview();
+      }
+    } else {
+      playTrackAtIndex(activePlaybackKind, playerShuffleQueue[playerShufflePointer]);
+    }
+  } else {
+    let nextIdx = activeTrackIndex + 1;
+    if (nextIdx >= list.length) {
+      if (isPlayerLoop) {
+        playTrackAtIndex(activePlaybackKind, 0);
+      } else {
+        showToast('Semua lagu dalam playlist selesai diputar', 'info');
+        stopCurrentPreview();
+      }
+    } else {
+      playTrackAtIndex(activePlaybackKind, nextIdx);
+    }
+  }
+}
+
+function playPrevTrack() {
+  const list = activePlaybackKind === 'video' ? currentViewPlaylistMedia.videos : currentViewPlaylistMedia.audios;
+  if (!list || list.length === 0) return;
+
+  const slot = document.getElementById('previewPlayerSlot');
+  const media = slot ? slot.querySelector('video, audio') : null;
+  if (media && media.currentTime > 3) {
+    media.currentTime = 0;
+    media.play().catch(() => {});
+    return;
+  }
+
+  if (isPlayerShuffle) {
+    if (playerShufflePointer > 0) {
+      playerShufflePointer--;
+      playTrackAtIndex(activePlaybackKind, playerShuffleQueue[playerShufflePointer]);
+    } else {
+      let prevIdx = (activeTrackIndex - 1 + list.length) % list.length;
+      playTrackAtIndex(activePlaybackKind, prevIdx);
+    }
+  } else {
+    let prevIdx = activeTrackIndex - 1;
+    if (prevIdx < 0) prevIdx = isPlayerLoop ? list.length - 1 : 0;
+    playTrackAtIndex(activePlaybackKind, prevIdx);
+  }
+}
+
+function togglePlayerShuffle() {
+  isPlayerShuffle = !isPlayerShuffle;
+  updatePlayerModeControls();
+
+  if (isPlayerShuffle) {
+    initShuffleQueue(activePlaybackKind, activeTrackIndex >= 0 ? activeTrackIndex : 0);
+    showToast('Mode playback diubah ke: Shuffle (Acak)', 'info');
+  } else {
+    showToast('Mode playback diubah ke: Sequential (Berurutan)', 'info');
+  }
+}
+
+function togglePlayerLoop() {
+  isPlayerLoop = !isPlayerLoop;
+  updatePlayerModeControls();
+  showToast(`Loop playlist: ${isPlayerLoop ? 'Aktif (Berulang terus)' : 'Nonaktif (Berhenti di akhir)'}`, 'info');
+}
+
+function startPlaylistPlayback() {
+  const hasAudios = currentViewPlaylistMedia.audios && currentViewPlaylistMedia.audios.length > 0;
+  const hasVideos = currentViewPlaylistMedia.videos && currentViewPlaylistMedia.videos.length > 0;
+
+  if (hasAudios) {
+    playAllMedia('audio');
+  } else if (hasVideos) {
+    playAllMedia('video');
+  } else {
+    showToast('Playlist ini belum memiliki video atau audio', 'info');
+  }
+}
+
+function playAllMedia(kind) {
+  const list = kind === 'video' ? currentViewPlaylistMedia.videos : currentViewPlaylistMedia.audios;
+  if (!list || list.length === 0) {
+    showToast(`Tidak ada ${kind} dalam playlist`, 'info');
+    return;
+  }
+
+  activePlaybackKind = kind;
+  if (isPlayerShuffle) {
+    const randomStart = Math.floor(Math.random() * list.length);
+    initShuffleQueue(kind, randomStart);
+    playTrackAtIndex(kind, playerShuffleQueue[0]);
+  } else {
+    playTrackAtIndex(kind, 0);
+  }
+}
+
+function playPlaylistDirectly(playlistId) {
+  viewPlaylist(playlistId, true);
+}
+
+function previewMedia(kind, id) {
+  const list = kind === 'video' ? currentViewPlaylistMedia.videos : currentViewPlaylistMedia.audios;
+  const index = list.findIndex(m => String(m.id) === String(id));
+  if (index !== -1) {
+    if (isPlayerShuffle) {
+      initShuffleQueue(kind, index);
+    }
+    playTrackAtIndex(kind, index);
+  } else {
+    showToast('Media tidak ditemukan dalam playlist', 'error');
+  }
 }
 
 function stopCurrentPreview() {
@@ -971,18 +1314,24 @@ function stopCurrentPreview() {
   if (media) {
     try {
       media.pause();
-    } catch (_) { /* noop */ }
-    // Detaching the source frees the network/decoder buffers immediately
+    } catch (_) {}
     media.removeAttribute('src');
     media.load();
   }
   slot.innerHTML = '';
+  document.querySelectorAll('.playlist-media-row').forEach(row => {
+    row.classList.remove('bg-primary/15', 'ring-1', 'ring-primary/40', 'border-primary/40');
+  });
+  document.querySelectorAll('.row-play-btn i').forEach(icon => {
+    icon.className = 'ti ti-player-play text-xs text-gray-400';
+  });
 }
 
 function closePreviewPlayer() {
   stopCurrentPreview();
   const wrapper = document.getElementById('previewPlayerWrapper');
   if (wrapper) wrapper.classList.add('hidden');
+  activeTrackIndex = -1;
 }
 
 function deletePlaylist(playlistId, playlistName) {

@@ -1387,19 +1387,22 @@ function prerenderGaplessAudio(audioPaths, outputFile) {
       args.push('-i', p);
     });
 
-    // Use smooth acrossfade filter (1.5s overlap) when 2 or more tracks
+    // CRITICAL: Normalize each input audio stream to stereo, 44100Hz before acrossfade or concat
+    // This prevents sample rate / channel layout mismatch errors between different audio files!
+    const normFilters = audioPaths.map((_, i) => `[${i}:a]aformat=sample_rates=44100:channel_layouts=stereo,aresample=44100[in${i}]`).join(';');
+
     let filter = '';
     if (audioPaths.length >= 2) {
-      let lastOut = '0:a';
+      let acrossfadeChain = '';
+      let lastOut = 'in0';
       for (let i = 1; i < audioPaths.length; i++) {
         const nextOut = (i === audioPaths.length - 1) ? 'aout' : `a${i}`;
-        filter += `[${lastOut}][${i}:a]acrossfade=d=1.5:c1=tri:c2=tri[${nextOut}];`;
+        acrossfadeChain += `[${lastOut}][in${i}]acrossfade=d=1.0:c1=tri:c2=tri[${nextOut}];`;
         lastOut = nextOut;
       }
-      filter = filter.replace(/;$/, '');
+      filter = `${normFilters};${acrossfadeChain}`.replace(/;$/, '');
     } else {
-      filter = audioPaths.map((_, i) => `[${i}:a:0]`).join('') +
-        `concat=n=${audioPaths.length}:v=0:a=1[aout]`;
+      filter = `${normFilters};[in0]anull[aout]`;
     }
 
     args.push(
@@ -1429,16 +1432,20 @@ function prerenderGaplessAudio(audioPaths, outputFile) {
     });
 
     proc.on('close', (code) => {
-      if (code === 0 && fs.existsSync(outputFile) && fs.statSync(outputFile).size > 0) {
+      if (code === 0 && fs.existsSync(outputFile) && fs.statSync(outputFile).size > 1000) {
         resolve(outputFile);
       } else {
-        console.error(`[StreamingService] prerenderGaplessAudio with acrossfade failed (exit=${code}). Attempting simple concat fallback...`);
-        // Fallback: standard concat filter without acrossfade
+        console.warn(`[StreamingService] prerenderGaplessAudio acrossfade failed (exit=${code}, stderr=${stderrTail.slice(-300)}). Attempting normalized concat fallback...`);
         try { if (fs.existsSync(outputFile)) fs.unlinkSync(outputFile); } catch (_) { /* noop */ }
         
+        // Fallback: standard concat filter on normalized 44.1k stereo streams
         const fallbackArgs = [];
         audioPaths.forEach((p) => { fallbackArgs.push('-i', p); });
-        const fallbackFilter = audioPaths.map((_, i) => `[${i}:a:0]`).join('') + `concat=n=${audioPaths.length}:v=0:a=1[aout]`;
+        
+        const fallbackNormFilters = audioPaths.map((_, i) => `[${i}:a]aformat=sample_rates=44100:channel_layouts=stereo,aresample=44100[fnorm${i}]`).join(';');
+        const concatInputs = audioPaths.map((_, i) => `[fnorm${i}]`).join('');
+        const fallbackFilter = `${fallbackNormFilters};${concatInputs}concat=n=${audioPaths.length}:v=0:a=1[aout]`;
+        
         fallbackArgs.push(
           '-filter_complex', fallbackFilter,
           '-map', '[aout]',
@@ -1452,11 +1459,17 @@ function prerenderGaplessAudio(audioPaths, outputFile) {
           '-y',
           outputFile
         );
-        const fbProc = spawn(ffmpegPath, fallbackArgs, { stdio: ['ignore', 'ignore', 'ignore'] });
+        const fbProc = spawn(ffmpegPath, fallbackArgs, { stdio: ['ignore', 'ignore', 'pipe'] });
+        let fbStderrTail = '';
+        fbProc.stderr.on('data', (chunk) => {
+          fbStderrTail = (fbStderrTail + chunk.toString()).slice(-4096);
+        });
         fbProc.on('close', (fbCode) => {
-          if (fbCode === 0 && fs.existsSync(outputFile) && fs.statSync(outputFile).size > 0) {
+          if (fbCode === 0 && fs.existsSync(outputFile) && fs.statSync(outputFile).size > 1000) {
+            console.log(`[StreamingService] ✅ Normalized concat fallback succeeded: ${outputFile}`);
             resolve(outputFile);
           } else {
+            console.error(`[StreamingService] Normalized concat fallback also failed (exit=${fbCode}, stderr=${fbStderrTail.slice(-300)})`);
             try { if (fs.existsSync(outputFile)) fs.unlinkSync(outputFile); } catch (_) {}
             resolve(null);
           }
@@ -1827,7 +1840,7 @@ async function buildFFmpegArgsForPlaylist(stream, playlist, durationOverrideSeco
       const audioPlaylist = await Playlist.findByIdWithMedia(stream.audio_id).catch(() => null);
       if (audioPlaylist && Array.isArray(audioPlaylist.audios) && audioPlaylist.audios.length > 0) {
         let extraAudios = [...audioPlaylist.audios];
-        if (audioPlaylist.play_mode === 'shuffle' && !reconnecting) {
+        if ((audioPlaylist.is_shuffle || audioPlaylist.shuffle) && !reconnecting) {
           extraAudios.sort(() => Math.random() - 0.5);
         }
         extraAudios.forEach(a => {
@@ -1974,7 +1987,7 @@ async function buildFFmpegArgs(stream, durationOverrideSeconds = null, reconnect
     const audioPlaylist = await Playlist.findByIdWithMedia(stream.audio_id).catch(() => null);
     if (audioPlaylist && Array.isArray(audioPlaylist.audios) && audioPlaylist.audios.length > 0) {
       let playlistAudios = [...audioPlaylist.audios];
-      if (audioPlaylist.play_mode === 'shuffle' && !reconnecting) {
+      if ((audioPlaylist.is_shuffle || audioPlaylist.shuffle) && !reconnecting) {
         for (let i = playlistAudios.length - 1; i > 0; i--) {
           const j = Math.floor(Math.random() * (i + 1));
           [playlistAudios[i], playlistAudios[j]] = [playlistAudios[j], playlistAudios[i]];
