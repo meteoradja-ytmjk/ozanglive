@@ -90,16 +90,40 @@ select:-webkit-autofill:focus {
 }
 
 /* ==========================================================================
-   2. CORE STABILITY & ANTI-CDN FAILURE FALLBACKS (MODE PC & ALL BROWSERS)
-   Mencegah halaman rusak / modal bertumpuk jika Tailwind CDN lambat atau diblokir.
+   2. CORE STABILITY & MODAL OVERLAY FALLBACKS
+   Menyembunyikan modal popup dan popup tersembunyi tanpa menimpa utility responsif.
    ========================================================================== */
-.hidden,
-[hidden],
 .modal-overlay.hidden,
 [id*="Modal"].hidden,
 [id*="modal"].hidden,
-.studio-tab-panel.hidden {
+.studio-tab-panel.hidden,
+#profile-dropdown.hidden,
+#mobile-profile-popup.hidden,
+[hidden] {
   display: none !important;
+}
+
+/* Ensure Tailwind responsive show utilities always display properly on Desktop/PC */
+@media (min-width: 640px) {
+  .sm\:flex { display: flex !important; }
+  .sm\:block { display: block !important; }
+  .sm\:inline { display: inline !important; }
+  .sm\:grid { display: grid !important; }
+}
+
+@media (min-width: 768px) {
+  .md\:flex { display: flex !important; }
+  .md\:block { display: block !important; }
+  .md\:grid { display: grid !important; }
+  .md\:inline { display: inline !important; }
+  .md\:table-cell { display: table-cell !important; }
+}
+
+@media (min-width: 1024px) {
+  .lg\:flex { display: flex !important; }
+  .lg\:block { display: block !important; }
+  .lg\:grid { display: grid !important; }
+  .lg\:inline { display: inline !important; }
 }
 
 /* Smooth font rendering across all PC browsers */
