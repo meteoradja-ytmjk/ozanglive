@@ -2,6 +2,25 @@
 // Partial: YouTube Studio Component (Embedded in Live Studio)
 %>
 <style>
+  /* Jaminan teks input terlihat jelas saat mengetik di semua browser */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+  textarea,
+  select {
+    color: #f8fafc !important;
+    -webkit-text-fill-color: #f8fafc !important;
+    caret-color: #a855f7 !important;
+  }
+  input::placeholder,
+  textarea::placeholder {
+    color: #94a3b8 !important;
+    -webkit-text-fill-color: #94a3b8 !important;
+    opacity: 1 !important;
+  }
+  select option {
+    background-color: #1e293b !important;
+    color: #f8fafc !important;
+  }
+
   /* Custom scrollbar for thumbnail folder list */
   #thumbnailFolderList::-webkit-scrollbar,
   #tagsContainer::-webkit-scrollbar {

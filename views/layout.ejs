@@ -17,11 +17,12 @@
       <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.30.0/tabler-icons.min.css">
       <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
         rel="stylesheet">
-      <script src="https://cdn.tailwindcss.com"></script>
       <link rel="stylesheet" href="/css/styles.css">
       <link href="https://vjs.zencdn.net/7.20.3/video-js.css" rel="stylesheet" />
-      <script src="https://vjs.zencdn.net/7.20.3/video.min.js"></script>
+      <script src="https://vjs.zencdn.net/7.20.3/video.min.js" defer></script>
+      <script src="https://cdn.tailwindcss.com"></script>
       <script>
+        window.tailwind = window.tailwind || {};
         tailwind.config = {
           darkMode: 'class',
           theme: {
@@ -67,10 +68,13 @@
       <script>
         (function() {
           function markLoaded(root) {
-            var scope = root && root.querySelectorAll ? root : document;
-            scope.querySelectorAll('.ti:not(.font-loaded)').forEach(function (icon) {
-              icon.classList.add('font-loaded');
-            });
+            try {
+              var scope = root && root.querySelectorAll ? root : document;
+              var icons = scope.querySelectorAll('.ti:not(.font-loaded)');
+              for (var i = 0; i < icons.length; i++) {
+                icons[i].classList.add('font-loaded');
+              }
+            } catch (e) {}
           }
           if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', function() { markLoaded(); });
@@ -78,24 +82,7 @@
             markLoaded();
           }
           if (document.fonts && document.fonts.ready) {
-            document.fonts.ready.then(function() { markLoaded(); });
-          }
-          if (typeof MutationObserver !== 'undefined') {
-            var observer = new MutationObserver(function(mutations) {
-              mutations.forEach(function(m) {
-                if (m.addedNodes && m.addedNodes.length) {
-                  m.addedNodes.forEach(function(node) {
-                    if (node.nodeType === 1) {
-                      if (node.classList && node.classList.contains('ti')) {
-                        node.classList.add('font-loaded');
-                      }
-                      markLoaded(node);
-                    }
-                  });
-                }
-              });
-            });
-            observer.observe(document.documentElement, { childList: true, subtree: true });
+            document.fonts.ready.then(function() { markLoaded(); }).catch(function() {});
           }
         })();
       </script>
@@ -345,6 +332,39 @@
     touch-action: pan-y;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-y: auto;
+  }
+
+  /* Universal Input & Form Control Visibility Protection (Desktop & Mobile) */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+  textarea,
+  select {
+    color: #f8fafc !important;
+    -webkit-text-fill-color: #f8fafc !important;
+    caret-color: #a855f7 !important;
+  }
+  input::placeholder,
+  textarea::placeholder {
+    color: #94a3b8 !important;
+    -webkit-text-fill-color: #94a3b8 !important;
+    opacity: 1 !important;
+  }
+  input:focus,
+  textarea:focus,
+  select:focus {
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+  }
+  select option {
+    background-color: #1e293b !important;
+    color: #f8fafc !important;
+  }
+  input:-webkit-autofill,
+  textarea:-webkit-autofill,
+  select:-webkit-autofill {
+    -webkit-text-fill-color: #ffffff !important;
+    -webkit-box-shadow: 0 0 0px 1000px #1e293b inset !important;
+    box-shadow: 0 0 0px 1000px #1e293b inset !important;
+    caret-color: #ffffff !important;
   }
 
   /* Safe wrapper for content flow without flexbox height traps */

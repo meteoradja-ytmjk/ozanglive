@@ -18,6 +18,97 @@
   visibility: visible;
 }
 
+/* ==========================================================================
+   1. UNIVERSAL INPUT & FORM CONTROL VISIBILITY FIX (CROSS-BROWSER PC & MOBILE)
+   Mengatasi bug teks tidak terlihat saat mengetik di form/input gelap.
+   Menjamin teks selalu putih terang, placeholder jelas, kursor ungu tampak,
+   dan mengatasi browser autofill (Chrome, Edge, Firefox, Safari).
+   ========================================================================== */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+textarea,
+select {
+  color: #f8fafc !important; /* Bright White / Slate 50 */
+  -webkit-text-fill-color: #f8fafc !important;
+  caret-color: #a855f7 !important; /* Purple cursor */
+}
+
+/* Placeholder styling: Kontras & Jelas */
+input::placeholder,
+textarea::placeholder {
+  color: #94a3b8 !important; /* Gray 400 */
+  -webkit-text-fill-color: #94a3b8 !important;
+  opacity: 1 !important;
+}
+
+/* Focus state: Maksimal kecerahan */
+input:focus,
+textarea:focus,
+select:focus {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+
+/* Disabled & Readonly state */
+input:disabled,
+textarea:disabled,
+select:disabled,
+input[readonly],
+textarea[readonly] {
+  color: #94a3b8 !important;
+  -webkit-text-fill-color: #94a3b8 !important;
+  opacity: 0.8 !important;
+  cursor: not-allowed;
+}
+
+/* Fix Dropdown options on Windows Chrome/Edge/Firefox */
+select option {
+  background-color: #1e293b !important;
+  color: #f8fafc !important;
+}
+select option:checked {
+  background-color: #7c3aed !important;
+  color: #ffffff !important;
+}
+
+/* Fix WebKit/Blink Autofill (Chrome, Edge, Opera, Brave, Safari) */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus,
+textarea:-webkit-autofill:active,
+select:-webkit-autofill,
+select:-webkit-autofill:hover,
+select:-webkit-autofill:focus {
+  -webkit-text-fill-color: #ffffff !important;
+  -webkit-box-shadow: 0 0 0px 1000px #1e293b inset !important;
+  box-shadow: 0 0 0px 1000px #1e293b inset !important;
+  transition: background-color 5000s ease-in-out 0s !important;
+  caret-color: #ffffff !important;
+}
+
+/* ==========================================================================
+   2. CORE STABILITY & ANTI-CDN FAILURE FALLBACKS (MODE PC & ALL BROWSERS)
+   Mencegah halaman rusak / modal bertumpuk jika Tailwind CDN lambat atau diblokir.
+   ========================================================================== */
+.hidden,
+[hidden],
+.modal-overlay.hidden,
+[id*="Modal"].hidden,
+[id*="modal"].hidden,
+.studio-tab-panel.hidden {
+  display: none !important;
+}
+
+/* Smooth font rendering across all PC browsers */
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
 .sidebar-icon {
   position: relative;
   display: flex;
@@ -1177,7 +1268,7 @@ a[href]:hover::after {
    the cramped mobile layout.
    ============================================ */
 
-@media (orientation: landscape) and (max-width: 900px) and (min-width: 480px) {
+@media (orientation: landscape) and (max-width: 900px) and (min-width: 480px) and (hover: none) and (pointer: coarse) {
 
   /* --- STREAM TAB: Show desktop, hide mobile --- */
 

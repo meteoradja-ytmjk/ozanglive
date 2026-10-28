@@ -101,7 +101,7 @@
     fetch(url, {
       method: 'GET',
       credentials: 'same-origin',
-      cache: 'force-cache',
+      cache: 'default',
       headers: {
         'X-Prefetch': '1'
       },
