@@ -1342,6 +1342,7 @@ class ScheduleService {
               const currentFolder = thumbnailFolder !== null ? thumbnailFolder : '';
               console.log(`[ScheduleService] Broadcast ${i + 1} uploading thumbnail for folder "${currentFolder || 'root'}", index: ${currentThumbIndex}`);
               
+              const shouldIgnorePinned = (thumbnailFolder !== null && !b.pinnedThumbnail);
               const uploadResult = await this.uploadThumbnailForBroadcast(
                 accessToken, 
                 result.broadcastId || result.id, 
@@ -1351,7 +1352,7 @@ class ScheduleService {
                 b.pinnedThumbnail,
                 null,
                 currentThumbIndex,
-                thumbnailFolder !== null // ignorePinned for multi-broadcast rotation
+                shouldIgnorePinned
               );
               
               if (uploadResult && uploadResult.newIndex !== undefined) {

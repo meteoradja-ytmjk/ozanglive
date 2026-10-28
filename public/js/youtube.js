@@ -10362,13 +10362,26 @@ function saveRecreateSlotFullEdit() {
   const durMInput = document.getElementById('recreateSlotEditDurationMinutes');
   const loopToggle = document.getElementById('recreateSlotEditLoopToggle');
 
-  const h = parseInt(durHInput?.value, 10) || 0;
-  const m = parseInt(durMInput?.value, 10) || 0;
+  let h = parseInt(durHInput?.value, 10) || 0;
+  let m = parseInt(durMInput?.value, 10) || 0;
+  let totalM = (h * 60) + m;
   const isLoop = loopToggle ? loopToggle.checked : true;
+
+  if (totalM === 0 && group.videoId && Array.isArray(window.allStudioVideos)) {
+    const matchedV = window.allStudioVideos.find(v => String(v.id) === String(group.videoId));
+    if (matchedV && matchedV.duration) {
+      const vSecs = Math.round(Number(matchedV.duration));
+      if (vSecs > 0) {
+        totalM = Math.max(1, Math.round(vSecs / 60));
+        h = Math.floor(totalM / 60);
+        m = totalM % 60;
+      }
+    }
+  }
 
   group.durationHours = h;
   group.durationMinutes = m;
-  group.streamDurationMinutes = (h * 60) + m;
+  group.streamDurationMinutes = totalM;
   group.loopVideo = isLoop;
 
   // Tutup modal, sinkronkan slot, dan refresh render tampilan card
