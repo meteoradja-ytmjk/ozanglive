@@ -2249,10 +2249,13 @@
     <div class="bg-dark-800 rounded-xl shadow-2xl w-full max-w-lg border border-gray-700/80 overflow-hidden">
       <div class="flex items-center justify-between p-4 sm:p-5 border-b border-gray-700 bg-dark-750">
         <div class="flex items-center gap-2">
-          <i class="ti ti-bookmark text-primary text-xl font-loaded"></i>
-          <h3 class="text-base sm:text-lg font-semibold text-white">Save as Template</h3>
+          <i class="ti ti-brand-youtube text-red-500 text-xl font-loaded"></i>
+          <div>
+            <h3 class="text-base sm:text-lg font-semibold text-white">Simpan Template Siaran YouTube</h3>
+            <p class="text-[11px] text-gray-400">Template khusus ekosistem YouTube Live Streaming</p>
+          </div>
         </div>
-        <button onclick="closeSaveAsTemplateModal()" class="text-gray-400 hover:text-white transition-colors p-1">
+        <button type="button" onclick="closeSaveAsTemplateModal()" class="text-gray-400 hover:text-white transition-colors p-1">
           <i class="ti ti-x text-xl"></i>
         </button>
       </div>
@@ -2274,7 +2277,7 @@
         <!-- Folder Tujuan Judul (Title Folder) -->
         <div>
           <label class="text-xs font-semibold text-gray-200 block mb-1 flex items-center justify-between">
-            <span class="flex items-center gap-1"><i class="ti ti-folder text-sky-400 font-loaded"></i>Folder Tujuan Judul (Rotasi Judul)</span>
+            <span class="flex items-center gap-1"><i class="ti ti-folder text-sky-400 font-loaded"></i>Folder Tujuan Judul (Rotasi Judul YouTube)</span>
             <span class="text-[10px] text-gray-400">Pilih folder daftar judul</span>
           </label>
           <select id="saveTemplateTitleFolder"
@@ -2301,11 +2304,51 @@
           </div>
         </div>
 
+        <!-- Durasi Siaran & Stream (Wajib Tersimpan, Anti-Unlimited 0 0) -->
+        <div class="space-y-2.5 bg-dark-700/80 p-3 rounded-lg border border-amber-500/40">
+          <div class="flex items-center justify-between">
+            <label class="text-xs font-semibold text-gray-200 flex items-center gap-1.5">
+              <i class="ti ti-clock text-amber-400 font-loaded"></i>
+              Durasi Siaran Live YouTube <span class="text-red-400">*</span>
+            </label>
+            <span id="saveTemplateVideoDurationHint" class="text-[10px] text-primary font-mono hidden bg-primary/10 border border-primary/20 px-1.5 py-0.5 rounded">
+              Durasi File: <span id="saveTemplateVideoDurationVal">-</span>
+            </span>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[11px] text-gray-400 block mb-1">Durasi (Jam)</label>
+              <input type="number" id="saveTemplateDurationHours" name="durationHours" min="0" max="72" value="0"
+                class="w-full px-3 py-1.5 bg-dark-700 border border-gray-600 rounded-lg text-xs text-white focus:border-primary focus:outline-none transition-colors"
+                oninput="updateSaveTemplateDurationSummary()" onchange="updateSaveTemplateDurationSummary()">
+            </div>
+            <div>
+              <label class="text-[11px] text-gray-400 block mb-1">Durasi (Menit)</label>
+              <input type="number" id="saveTemplateDurationMinutes" name="durationMinutes" min="0" max="59" value="0"
+                class="w-full px-3 py-1.5 bg-dark-700 border border-gray-600 rounded-lg text-xs text-white focus:border-primary focus:outline-none transition-colors"
+                oninput="updateSaveTemplateDurationSummary()" onchange="updateSaveTemplateDurationSummary()">
+            </div>
+          </div>
+          <div class="flex items-center justify-between pt-1">
+            <label class="flex items-center gap-2 cursor-pointer select-none">
+              <input type="checkbox" id="saveTemplateLoopVideo" name="loopVideo" checked class="w-4 h-4 text-primary bg-dark-700 border-gray-600 rounded focus:ring-primary">
+              <span class="text-xs text-gray-300">Loop Video (Putar Ulang Otomatis)</span>
+            </label>
+            <button type="button" id="saveTemplateAutoFillVideoDurBtn" onclick="autoFillSaveTemplateVideoDuration()" class="hidden text-[10px] text-amber-300 hover:text-amber-200 underline font-medium">
+              Gunakan Durasi Video
+            </button>
+          </div>
+          <p class="text-[10px] text-gray-400 leading-snug">
+            <i class="ti ti-shield-check text-emerald-400 mr-0.5"></i>
+            Durasi ini akan tersimpan permanen pada template agar siaran otomatis berhenti tepat waktu (tidak 0 0 / unlimited tanpa henti).
+          </p>
+        </div>
+
         <!-- Stream Key Section -->
         <div>
           <label class="text-xs font-semibold text-gray-200 block mb-1 flex items-center justify-between">
             <span class="flex items-center gap-1"><i class="ti ti-key text-yellow-400 font-loaded"></i>Stream Key YouTube</span>
-            <span class="text-[10px] text-gray-400">Tersimpan dari broadcast</span>
+            <span class="text-[10px] text-gray-400">Tersimpan dari broadcast YouTube</span>
           </label>
           <input type="text" id="saveTemplateStreamKey"
             class="w-full px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg font-mono text-xs text-primary focus:border-primary focus:outline-none transition-colors"
@@ -2317,7 +2360,7 @@
           <div>
             <div class="flex items-center justify-between mb-1">
               <label class="text-xs font-semibold text-gray-200 flex items-center gap-1">
-                <i class="ti ti-robot text-purple-400 font-loaded"></i>Mode Otomasi Template
+                <i class="ti ti-robot text-purple-400 font-loaded"></i>Mode Otomasi Template YouTube
               </label>
               <span class="text-[10px] text-purple-300 bg-purple-500/20 px-2 py-0.5 rounded border border-purple-500/30 font-medium">Auto-Pilot Center</span>
             </div>
@@ -2382,7 +2425,7 @@
         </div>
         
         <div id="saveTemplatePreview" class="bg-dark-700 rounded-lg p-3 border border-gray-600/80">
-          <p class="text-xs text-gray-400 mb-1.5 font-medium">Ringkasan Pengaturan:</p>
+          <p class="text-xs text-gray-400 mb-1.5 font-medium">Ringkasan Pengaturan YouTube:</p>
           <div class="text-xs text-gray-400 space-y-1">
             <p class="truncate"><span class="text-gray-400">Judul Siaran:</span> <span id="previewTitle" class="text-white font-medium">-</span></p>
             <p><span class="text-gray-400">Privasi:</span> <span id="previewPrivacy" class="text-white uppercase font-medium">-</span></p>
@@ -2411,7 +2454,13 @@
   <div class="flex min-h-screen items-center justify-center p-4">
     <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-lg">
       <div class="flex items-center justify-between p-6 border-b border-gray-700">
-        <h3 class="text-lg font-semibold">Create New Template</h3>
+        <div>
+          <h3 class="text-lg font-semibold flex items-center gap-2">
+            <i class="ti ti-brand-youtube text-red-500 text-xl"></i>
+            <span>Buat Template Siaran YouTube</span>
+          </h3>
+          <p class="text-xs text-gray-400 mt-0.5">Simpan preset konfigurasi live streaming khusus channel YouTube</p>
+        </div>
         <button onclick="closeCreateTemplateModal()" class="text-gray-400 hover:text-white">
           <i class="ti ti-x text-xl"></i>
         </button>
@@ -2529,10 +2578,17 @@
 
         <!-- Duration & Loop Settings -->
         <div class="border-t border-gray-700 pt-4 mt-4">
-          <label class="text-sm font-medium text-white block mb-2 flex items-center gap-2">
-            <i class="ti ti-clock text-primary"></i>
-            Durasi Siaran & Stream
-          </label>
+          <div class="flex items-center justify-between mb-2">
+            <label class="text-sm font-medium text-white flex items-center gap-2">
+              <i class="ti ti-clock text-primary"></i>
+              Durasi Siaran & Stream (YouTube Live)
+            </label>
+            <button type="button" onclick="autoFillTemplateDurationFromVideo('templateVideoId', 'templateDurationHours', 'templateDurationMinutes')" 
+              class="text-[11px] text-primary hover:text-primary/80 flex items-center gap-1 font-medium bg-primary/10 hover:bg-primary/20 px-2 py-0.5 rounded transition-colors"
+              title="Samakan durasi jam & menit dengan durasi file video yang dipilih">
+              <i class="ti ti-wand"></i> Samakan Durasi Video
+            </button>
+          </div>
           <div class="grid grid-cols-2 gap-3">
             <div>
               <label class="text-xs text-gray-400 block mb-1">Durasi (Jam)</label>
@@ -2545,10 +2601,14 @@
                 class="w-full px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none text-sm text-white">
             </div>
           </div>
+          <p class="text-[11px] text-amber-400/90 mt-1.5 flex items-center gap-1">
+            <i class="ti ti-alert-circle text-xs"></i>
+            <span>Durasi > 0 mencegah siaran live berjalan unlimited tanpa henti di YouTube.</span>
+          </p>
           <div class="mt-2.5">
             <label class="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" id="templateLoopVideo" name="loopVideo" checked class="w-4 h-4 text-primary bg-dark-700 border-gray-600 rounded focus:ring-primary">
-              <span class="text-xs text-gray-300">Loop Video (Putar Ulang Otomatis)</span>
+              <span class="text-xs text-gray-300">Loop Video (Putar Ulang Otomatis jika durasi lebih panjang dari video)</span>
             </label>
           </div>
 
@@ -2689,12 +2749,12 @@
         <div class="pt-4 flex gap-3">
           <button type="button" onclick="closeCreateTemplateModal()"
             class="flex-1 bg-dark-700 hover:bg-dark-600 text-white px-4 py-2.5 rounded-lg transition-colors">
-            Cancel
+            Batal
           </button>
           <button type="submit" id="createTemplateBtn"
-            class="flex-1 bg-primary hover:bg-primary/80 text-white px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
-            <i class="ti ti-template"></i>
-            <span>Create Template</span>
+            class="flex-1 bg-primary hover:bg-primary/80 text-white px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2 font-medium">
+            <i class="ti ti-brand-youtube"></i>
+            <span>Simpan Template YouTube</span>
           </button>
         </div>
       </form>
@@ -2707,10 +2767,13 @@
   <div class="flex min-h-screen items-center justify-center p-4">
     <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
       <div class="flex items-center justify-between p-6 border-b border-gray-700 flex-shrink-0">
-        <h3 class="text-lg font-semibold flex items-center gap-2">
-          <i class="ti ti-edit text-primary"></i>
-          <span>Edit Full Broadcast / Template</span>
-        </h3>
+        <div>
+          <h3 class="text-lg font-semibold flex items-center gap-2">
+            <i class="ti ti-brand-youtube text-red-500 text-xl"></i>
+            <span>Edit Template Siaran YouTube</span>
+          </h3>
+          <p class="text-xs text-gray-400 mt-0.5">Sesuaikan parameter broadcast, durasi siaran, dan jadwal YouTube Live</p>
+        </div>
         <button onclick="closeEditTemplateModal()" class="text-gray-400 hover:text-white">
           <i class="ti ti-x text-xl"></i>
         </button>
@@ -2796,9 +2859,16 @@
 
         <!-- Duration Settings -->
         <div class="border-t border-gray-700 pt-3">
-          <label class="text-sm font-medium text-white block mb-1 flex items-center gap-1.5">
-            <i class="ti ti-clock text-primary"></i> Durasi Siaran & Stream
-          </label>
+          <div class="flex items-center justify-between mb-1.5">
+            <label class="text-sm font-medium text-white flex items-center gap-1.5">
+              <i class="ti ti-clock text-primary"></i> Durasi Siaran & Stream (YouTube Live)
+            </label>
+            <button type="button" onclick="autoFillTemplateDurationFromVideo('editTemplateVideoId', 'editTemplateDurationHours', 'editTemplateDurationMinutes')" 
+              class="text-[11px] text-primary hover:text-primary/80 flex items-center gap-1 font-medium bg-primary/10 hover:bg-primary/20 px-2 py-0.5 rounded transition-colors"
+              title="Samakan durasi jam & menit dengan durasi file video yang dipilih">
+              <i class="ti ti-wand"></i> Samakan Durasi Video
+            </button>
+          </div>
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-xs text-gray-400 block mb-1">Durasi (Jam)</label>
@@ -2811,10 +2881,14 @@
                 class="w-full px-3 py-1.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none text-sm text-white">
             </div>
           </div>
+          <p class="text-[11px] text-amber-400/90 mt-1 flex items-center gap-1">
+            <i class="ti ti-alert-circle text-xs"></i>
+            <span>Durasi > 0 mencegah siaran live berjalan unlimited tanpa henti di YouTube.</span>
+          </p>
           <div class="mt-2">
             <label class="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" id="editTemplateLoopVideo" name="loopVideo" checked class="w-4 h-4 text-primary bg-dark-700 border-gray-600 rounded focus:ring-primary">
-              <span class="text-xs text-gray-300">Loop Video (Putar Ulang Otomatis)</span>
+              <span class="text-xs text-gray-300">Loop Video (Putar Ulang Otomatis jika durasi lebih panjang dari video)</span>
             </label>
           </div>
           <div class="grid grid-cols-2 gap-2 mt-2">
@@ -2963,7 +3037,13 @@
   <div class="flex min-h-screen items-center justify-center p-4">
     <div class="bg-dark-800 rounded-lg shadow-xl w-full max-w-md">
       <div class="flex items-center justify-between p-6 border-b border-gray-700">
-        <h3 class="text-lg font-semibold">Save Selected as Template</h3>
+        <div>
+          <h3 class="text-lg font-semibold flex items-center gap-2">
+            <i class="ti ti-brand-youtube text-red-500 text-xl"></i>
+            <span>Simpan Sebagai Template YouTube</span>
+          </h3>
+          <p class="text-xs text-gray-400 mt-0.5">Simpan siaran YouTube yang dipilih menjadi template multi-broadcast</p>
+        </div>
         <button onclick="closeMultiSaveTemplateModal()" class="text-gray-400 hover:text-white">
           <i class="ti ti-x text-xl"></i>
         </button>
@@ -2971,17 +3051,17 @@
       
       <form id="multiSaveTemplateForm" class="p-6 space-y-4">
         <div>
-          <label class="text-sm font-medium text-white block mb-2">Template Name <span class="text-red-400">*</span></label>
+          <label class="text-sm font-medium text-white block mb-2">Nama Template YouTube <span class="text-red-400">*</span></label>
           <input type="text" id="multiTemplateName" name="name" required
             class="w-full px-4 py-2.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none"
-            placeholder="Enter template name">
+            placeholder="Contoh: Paket Siaran Pagi 3 Channel">
         </div>
         
         <!-- Broadcasts Preview with auto-loaded folders -->
         <div>
           <label class="text-sm font-medium text-white block mb-2">
             <i class="ti ti-broadcast text-primary mr-1"></i>
-            Broadcasts & Folder Thumbnail
+            Siaran YouTube & Folder Thumbnail
           </label>
           <div id="multiTemplatePreview" class="bg-dark-700 rounded-lg p-3 max-h-64 overflow-y-auto space-y-2">
             <!-- Preview will be rendered here -->
@@ -2998,19 +3078,19 @@
         <div class="bg-dark-700/50 rounded-lg p-3 border border-gray-600/50">
           <p class="text-xs text-gray-400">
             <i class="ti ti-info-circle text-primary mr-1"></i>
-            Folder thumbnail diambil otomatis dari binding stream key yang sudah Anda set sebelumnya.
+            Folder thumbnail diambil otomatis dari binding stream key YouTube yang sudah diatur sebelumnya.
           </p>
         </div>
         
         <div class="pt-2 flex gap-3">
           <button type="button" onclick="closeMultiSaveTemplateModal()"
             class="flex-1 bg-dark-700 hover:bg-dark-600 text-white px-4 py-2.5 rounded-lg transition-colors">
-            Cancel
+            Batal
           </button>
           <button type="submit" id="multiSaveTemplateBtn"
-            class="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
-            <i class="ti ti-template"></i>
-            <span>Save Template</span>
+            class="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2 font-medium">
+            <i class="ti ti-brand-youtube"></i>
+            <span>Simpan Template YouTube</span>
           </button>
         </div>
       </form>

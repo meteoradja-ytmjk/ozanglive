@@ -14205,13 +14205,19 @@ app.put('/api/youtube/templates/:id', isAuthenticated, async (req, res) => {
     if (name !== undefined) updateData.name = name;
     if (title !== undefined) updateData.title = title;
     if (template.description && template.description.startsWith('[')) {
-      // Preserve and sync multi-broadcast template array with updated title/privacy/folder
+      // Preserve and sync multi-broadcast template array with updated title/privacy/folder/duration/media
       try {
         const list = JSON.parse(template.description);
         if (Array.isArray(list) && list.length > 0) {
           if (title !== undefined) list[0].title = title;
           if (privacyStatus !== undefined) list.forEach(b => { b.privacyStatus = privacyStatus; });
           if (thumbnailFolder !== undefined) list.forEach(b => { b.thumbnailFolder = thumbnailFolder; });
+          if (durationHours !== undefined) list[0].durationHours = parseInt(durationHours) || 0;
+          if (durationMinutes !== undefined) list[0].durationMinutes = parseInt(durationMinutes) || 0;
+          if (streamDurationMinutes !== undefined) list[0].streamDurationMinutes = parseInt(streamDurationMinutes) || 0;
+          if (loopVideo !== undefined) list[0].loopVideo = (loopVideo === 'true' || loopVideo === true || loopVideo === 1 || loopVideo === '1');
+          if (videoId !== undefined) list[0].videoId = videoId || null;
+          if (audioId !== undefined) list[0].audioId = audioId || null;
           if (description && !description.startsWith('[')) {
             list[0].description = description;
           }

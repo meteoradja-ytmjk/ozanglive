@@ -43,6 +43,25 @@ async function getGlobalThumbnailIndex(userId, folderName = '') {
 }
 
 /**
+ * Get video duration in minutes from database as safety fallback
+ * @param {string|number} videoId
+ * @returns {Promise<number|null>}
+ */
+async function getVideoDurationMins(videoId) {
+  if (!videoId) return null;
+  return new Promise((resolve) => {
+    db.get('SELECT duration FROM videos WHERE id = ?', [videoId], (err, row) => {
+      if (err || !row || !row.duration) return resolve(null);
+      const secs = Math.round(Number(row.duration));
+      if (secs > 0) {
+        return resolve(Math.max(1, Math.round(secs / 60)));
+      }
+      resolve(null);
+    });
+  });
+}
+
+/**
  * Update GLOBAL thumbnail index for a folder (shared across all stream keys)
  * @param {string} userId - User ID
  * @param {string} folderName - Folder name (empty string for root)
@@ -1252,6 +1271,16 @@ class ScheduleService {
             const resolvedVideoId = b.videoId || template.video_id || null;
             const resolvedAudioId = b.audioId || template.audio_id || null;
             
+            // Resolve duration with smart fallback to video library so it never runs unlimited unintentionally
+            let resolvedSlotDurationMins = b.streamDurationMinutes || (((parseInt(b.durationHours) || 0) * 60) + (parseInt(b.durationMinutes) || 0)) || template.stream_duration_minutes || (((parseInt(template.duration_hours) || 0) * 60) + (parseInt(template.duration_minutes) || 0)) || null;
+            if (!resolvedSlotDurationMins && resolvedVideoId) {
+              resolvedSlotDurationMins = await getVideoDurationMins(resolvedVideoId);
+              if (resolvedSlotDurationMins) {
+                console.log(`[ScheduleService] Multi-broadcast item #${i + 1} auto-resolved duration from video #${resolvedVideoId}: ${resolvedSlotDurationMins} mins`);
+              }
+            }
+            const resolvedSlotHours = resolvedSlotDurationMins ? Math.floor(resolvedSlotDurationMins / 60) : (b.durationHours !== undefined ? (parseInt(b.durationHours) || 0) : (template.duration_hours || 0));
+
             try {
               const streamData = {
                 title: title,
@@ -1266,9 +1295,9 @@ class ScheduleService {
                 fps: 30,
                 orientation: 'horizontal',
                 loop_video: (b.loopVideo !== undefined) ? (b.loopVideo !== false && b.loopVideo !== 0 && b.loopVideo !== '0') : (template.loop_video !== false),
-                stream_duration_hours: b.durationHours !== undefined ? (parseInt(b.durationHours) || 0) : (template.duration_hours || 0),
-                stream_duration_minutes: b.streamDurationMinutes || (((parseInt(b.durationHours) || 0) * 60) + (parseInt(b.durationMinutes) || 0)) || template.stream_duration_minutes || (((parseInt(template.duration_hours) || 0) * 60) + (parseInt(template.duration_minutes) || 0)) || null,
-                duration: b.streamDurationMinutes || (((parseInt(b.durationHours) || 0) * 60) + (parseInt(b.durationMinutes) || 0)) || template.stream_duration_minutes || (((parseInt(template.duration_hours) || 0) * 60) + (parseInt(template.duration_minutes) || 0)) || null,
+                stream_duration_hours: resolvedSlotHours,
+                stream_duration_minutes: resolvedSlotDurationMins,
+                duration: resolvedSlotDurationMins,
                 schedule_type: template.schedule_type || template.recurring_pattern || 'daily',
                 schedule_time: now.toISOString(),
                 end_time: null,
@@ -1529,7 +1558,14 @@ class ScheduleService {
         const resolvedStreamKey = targetStreamKey || result.streamKey || (template.stream_id ? String(template.stream_id) : '');
         const resolvedRtmpUrl = result.rtmpUrl || 'rtmp://a.rtmp.youtube.com/live2';
         
-        const resolvedSingleDurationMins = template.stream_duration_minutes || (((parseInt(template.duration_hours) || 0) * 60) + (parseInt(template.duration_minutes) || 0)) || null;
+        let resolvedSingleDurationMins = template.stream_duration_minutes || (((parseInt(template.duration_hours) || 0) * 60) + (parseInt(template.duration_minutes) || 0)) || null;
+        if (!resolvedSingleDurationMins && template.video_id) {
+          resolvedSingleDurationMins = await getVideoDurationMins(template.video_id);
+          if (resolvedSingleDurationMins) {
+            console.log(`[ScheduleService] Template "${template.name}" auto-resolved duration from video #${template.video_id}: ${resolvedSingleDurationMins} mins`);
+          }
+        }
+        const resolvedSingleHours = resolvedSingleDurationMins ? Math.floor(resolvedSingleDurationMins / 60) : (template.duration_hours || 0);
 
         try {
           const streamData = {
@@ -1545,7 +1581,7 @@ class ScheduleService {
             fps: 30,
             orientation: 'horizontal',
             loop_video: template.loop_video !== false,
-            stream_duration_hours: template.duration_hours || (resolvedSingleDurationMins ? Math.floor(resolvedSingleDurationMins / 60) : 0),
+            stream_duration_hours: resolvedSingleHours,
             stream_duration_minutes: resolvedSingleDurationMins,
             duration: resolvedSingleDurationMins,
             schedule_type: template.schedule_type || template.recurring_pattern || 'daily',

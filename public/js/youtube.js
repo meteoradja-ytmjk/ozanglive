@@ -6779,6 +6779,19 @@ async function loadEditTemplateMediaOptions(selectedVideoId = null, selectedAudi
         }
         videoSelect.appendChild(opt);
       });
+
+      videoSelect.onchange = function() {
+        const chosen = videoSelect.selectedOptions ? videoSelect.selectedOptions[0] : null;
+        const durSec = chosen ? parseInt(chosen.dataset.durationSeconds, 10) : 0;
+        if (durSec > 0) {
+          const hInput = document.getElementById('editTemplateDurationHours');
+          const mInput = document.getElementById('editTemplateDurationMinutes');
+          if (hInput && mInput && parseInt(hInput.value, 10) === 0 && parseInt(mInput.value, 10) === 0) {
+            hInput.value = Math.floor(durSec / 3600);
+            mInput.value = Math.ceil((durSec % 3600) / 60);
+          }
+        }
+      };
     } catch (e) {
       console.warn('Failed to load videos for edit template:', e);
       videoSelect.innerHTML = '<option value="">-- Pilih Video dari Galeri (Opsional) --</option>';
@@ -6805,6 +6818,36 @@ async function loadEditTemplateMediaOptions(selectedVideoId = null, selectedAudi
     }
   }
 }
+
+// Global helper to autofill template duration from selected video in galleries
+function autoFillTemplateDurationFromVideo(videoSelectId, hoursInputId, minsInputId) {
+  const videoSelect = document.getElementById(videoSelectId);
+  const hoursInput = document.getElementById(hoursInputId);
+  const minsInput = document.getElementById(minsInputId);
+  if (!videoSelect || !hoursInput || !minsInput) return;
+
+  const selectedOpt = videoSelect.selectedOptions ? videoSelect.selectedOptions[0] : null;
+  let durSec = selectedOpt ? parseInt(selectedOpt.dataset.durationSeconds, 10) : 0;
+  
+  if (!durSec && videoSelect.value && Array.isArray(window.allStudioVideos)) {
+    const v = window.allStudioVideos.find(x => String(x.id) === String(videoSelect.value));
+    if (v && v.duration) durSec = parseInt(v.duration, 10);
+  }
+
+  if (durSec > 0) {
+    const totalMins = Math.ceil(durSec / 60);
+    hoursInput.value = Math.floor(totalMins / 60);
+    minsInput.value = totalMins % 60;
+    if (typeof showToast === 'function') {
+      showToast(`Durasi disesuaikan dengan video: ${hoursInput.value} jam ${minsInput.value} menit`, 'success');
+    }
+  } else {
+    if (typeof showToast === 'function') {
+      showToast('Pilih video yang valid terlebih dahulu dari galeri.', 'warning');
+    }
+  }
+}
+window.autoFillTemplateDurationFromVideo = autoFillTemplateDurationFromVideo;
 
 // Handle thumbnail folder change in template modal
 async function onTemplateThumbnailFolderChange(folderValue) {
@@ -6956,10 +6999,29 @@ if (createTemplateForm) {
       const templateChosenOpt = templateStreamSelect?.selectedOptions ? templateStreamSelect.selectedOptions[0] : null;
       const templateChosenStreamKey = templateChosenOpt?.dataset?.streamKey || null;
 
-      const durHours = parseInt(document.getElementById('templateDurationHours')?.value, 10) || 0;
-      const durMins = parseInt(document.getElementById('templateDurationMinutes')?.value, 10) || 0;
-      const totalDurMins = (durHours * 60) + durMins;
+      let durHours = parseInt(document.getElementById('templateDurationHours')?.value, 10) || 0;
+      let durMins = parseInt(document.getElementById('templateDurationMinutes')?.value, 10) || 0;
+      let totalDurMins = (durHours * 60) + durMins;
       const videoId = document.getElementById('templateVideoId')?.value || null;
+
+      // Fallback durasi dari video jika durasi belum diisi (0 0)
+      if (totalDurMins === 0 && videoId) {
+        const vidOpt = document.getElementById('templateVideoId')?.selectedOptions?.[0];
+        const vidDurSec = vidOpt ? parseInt(vidOpt.dataset.durationSeconds, 10) : 0;
+        if (vidDurSec > 0) {
+          totalDurMins = Math.ceil(vidDurSec / 60);
+          durHours = Math.floor(totalDurMins / 60);
+          durMins = totalDurMins % 60;
+        } else if (Array.isArray(window.allStudioVideos)) {
+          const foundV = window.allStudioVideos.find(v => String(v.id) === String(videoId));
+          if (foundV && foundV.duration > 0) {
+            totalDurMins = Math.ceil(foundV.duration / 60);
+            durHours = Math.floor(totalDurMins / 60);
+            durMins = totalDurMins % 60;
+          }
+        }
+      }
+
       const audioId = document.getElementById('templateAudioId')?.value || null;
       const loopVideo = document.getElementById('templateLoopVideo')?.checked !== false;
       const dualStream = !!document.getElementById('templateDualStream')?.checked;
@@ -7079,6 +7141,43 @@ async function loadSaveTemplateTitleFolders(selectedFolderId = null) {
   }
 }
 
+// Helper: Realtime duration summary updater for Save as Template Modal
+function updateSaveTemplateDurationSummary() {
+  const durHInput = document.getElementById('saveTemplateDurationHours');
+  const durMInput = document.getElementById('saveTemplateDurationMinutes');
+  const prevDurEl = document.getElementById('previewDuration');
+  if (!prevDurEl) return;
+  const h = parseInt(durHInput?.value, 10) || 0;
+  const m = parseInt(durMInput?.value, 10) || 0;
+  const total = (h * 60) + m;
+  if (total > 0) {
+    prevDurEl.textContent = `${h > 0 ? h + ' Jam ' : ''}${m > 0 ? m + ' Menit' : (h === 0 ? '0 Menit' : '')}`.trim();
+    prevDurEl.className = 'text-emerald-400 font-medium';
+  } else {
+    prevDurEl.textContent = '0 Jam 0 Menit (⚠️ Tak terbatas / Unlimited)';
+    prevDurEl.className = 'text-red-400 font-medium';
+  }
+}
+window.updateSaveTemplateDurationSummary = updateSaveTemplateDurationSummary;
+
+// Helper: Auto-fill video file duration for Save as Template Modal
+function autoFillSaveTemplateVideoDuration() {
+  const totalMins = window._lastSaveTemplateVideoDurationMins || 0;
+  if (totalMins > 0) {
+    const h = Math.floor(totalMins / 60);
+    const m = totalMins % 60;
+    const durHInput = document.getElementById('saveTemplateDurationHours');
+    const durMInput = document.getElementById('saveTemplateDurationMinutes');
+    if (durHInput) durHInput.value = h;
+    if (durMInput) durMInput.value = m;
+    updateSaveTemplateDurationSummary();
+    if (typeof showToast === 'function') {
+      showToast(`Durasi otomatis diisi dari file video: ${h} jam ${m} menit`, 'info');
+    }
+  }
+}
+window.autoFillSaveTemplateVideoDuration = autoFillSaveTemplateVideoDuration;
+
 // Save as Template Modal
 function openSaveAsTemplateModal(broadcastId, accountId, title, privacyStatus) {
   const modal = document.getElementById('saveAsTemplateModal');
@@ -7101,19 +7200,6 @@ function openSaveAsTemplateModal(broadcastId, accountId, title, privacyStatus) {
   // Load title folders and preselect if broadcast has folder
   loadSaveTemplateTitleFolders(bData.titleFolderId || bData.title_folder_id || null);
 
-  // Format and show duration in preview
-  const prevDurEl = document.getElementById('previewDuration');
-  if (prevDurEl) {
-    let durText = 'Tak terbatas';
-    const mins = parseInt(bData.streamDurationMinutes) || parseInt(bData.duration) || 0;
-    const hrs = parseInt(bData.streamDurationHours) || Math.floor(mins / 60);
-    const remMins = mins % 60;
-    if (mins > 0 || hrs > 0) {
-      durText = `${hrs > 0 ? hrs + ' Jam ' : ''}${remMins > 0 ? remMins + ' Menit' : (hrs === 0 ? '0 Menit' : '')}`.trim();
-    }
-    prevDurEl.textContent = durText;
-  }
-
   // Populate streamKey & media info
   const streamKeyInput = document.getElementById('saveTemplateStreamKey');
   if (streamKeyInput) {
@@ -7135,11 +7221,17 @@ function openSaveAsTemplateModal(broadcastId, accountId, title, privacyStatus) {
     audioIdInput.value = bData.audioId || '';
   }
 
-  // Video title lookup
+  // Video title and duration lookup from allStudioVideos
   let vTitle = bData.videoTitle || '';
-  if (!vTitle && bData.videoId && Array.isArray(window.allStudioVideos)) {
+  let videoDurationSecs = 0;
+  if (bData.videoId && Array.isArray(window.allStudioVideos)) {
     const foundVid = window.allStudioVideos.find(v => String(v.id) === String(bData.videoId));
-    if (foundVid) vTitle = foundVid.title;
+    if (foundVid) {
+      if (!vTitle) vTitle = foundVid.title || foundVid.name;
+      if (foundVid.duration) {
+        videoDurationSecs = Math.round(Number(foundVid.duration));
+      }
+    }
   }
   const videoTitleEl = document.getElementById('saveTemplateVideoTitle');
   if (videoTitleEl) {
@@ -7151,13 +7243,57 @@ function openSaveAsTemplateModal(broadcastId, accountId, title, privacyStatus) {
   let aTitle = bData.audioTitle || '';
   if (!aTitle && bData.audioId && Array.isArray(window.allStudioAudios)) {
     const foundAud = window.allStudioAudios.find(a => String(a.id) === String(bData.audioId));
-    if (foundAud) aTitle = foundAud.title;
+    if (foundAud) aTitle = foundAud.title || foundAud.name;
   }
   const audioTitleEl = document.getElementById('saveTemplateAudioTitle');
   if (audioTitleEl) {
     audioTitleEl.textContent = aTitle || (bData.audioId ? `Audio #${bData.audioId}` : 'Audio bawaan video / default');
     audioTitleEl.title = audioTitleEl.textContent;
   }
+
+  // Calculate duration accurately from broadcast data
+  let durMins = parseInt(bData.streamDurationMinutes) || parseInt(bData.duration) || 0;
+  let durHours = parseInt(bData.streamDurationHours) || Math.floor(durMins / 60);
+  let remMins = durMins % 60;
+
+  // If broadcast duration is 0, but a video file with duration exists, prefill with video duration!
+  if (durMins === 0 && videoDurationSecs > 0) {
+    durMins = Math.max(1, Math.round(videoDurationSecs / 60));
+    durHours = Math.floor(durMins / 60);
+    remMins = durMins % 60;
+  }
+
+  // Populate duration inputs
+  const durHInput = document.getElementById('saveTemplateDurationHours');
+  const durMInput = document.getElementById('saveTemplateDurationMinutes');
+  const loopVideoCheckbox = document.getElementById('saveTemplateLoopVideo');
+  if (durHInput) durHInput.value = durHours;
+  if (durMInput) durMInput.value = remMins;
+  if (loopVideoCheckbox) loopVideoCheckbox.checked = bData.loopVideo !== false && bData.loop_video !== false;
+
+  // Video duration badge & autofill helper button
+  const vHint = document.getElementById('saveTemplateVideoDurationHint');
+  const vVal = document.getElementById('saveTemplateVideoDurationVal');
+  const autoBtn = document.getElementById('saveTemplateAutoFillVideoDurBtn');
+  if (videoDurationSecs > 0) {
+    const vHours = Math.floor(videoDurationSecs / 3600);
+    const vMinutes = Math.floor((videoDurationSecs % 3600) / 60);
+    const vSecs = videoDurationSecs % 60;
+    const vFormatted = vHours > 0 
+      ? `${vHours}:${String(vMinutes).padStart(2, '0')}:${String(vSecs).padStart(2, '0')}`
+      : `${vMinutes}:${String(vSecs).padStart(2, '0')}`;
+    if (vVal) vVal.textContent = vFormatted;
+    if (vHint) vHint.classList.remove('hidden');
+    if (autoBtn) autoBtn.classList.remove('hidden');
+    window._lastSaveTemplateVideoDurationMins = Math.max(1, Math.round(videoDurationSecs / 60));
+  } else {
+    if (vHint) vHint.classList.add('hidden');
+    if (autoBtn) autoBtn.classList.add('hidden');
+    window._lastSaveTemplateVideoDurationMins = 0;
+  }
+
+  // Update summary preview
+  updateSaveTemplateDurationSummary();
 
   // Schedule setup
   const schedSelect = document.getElementById('saveTemplateScheduleType');
@@ -7223,7 +7359,7 @@ if (saveAsTemplateForm) {
     
     const saveBtn = document.getElementById('saveTemplateBtn');
     const originalText = saveBtn.innerHTML;
-    saveBtn.innerHTML = '<i class="ti ti-loader animate-spin"></i> Saving...';
+    saveBtn.innerHTML = '<i class="ti ti-loader animate-spin"></i> Menyimpan...';
     saveBtn.disabled = true;
     
     try {
@@ -7258,7 +7394,7 @@ if (saveAsTemplateForm) {
         console.warn('[saveAsTemplate] Error querying broadcast list from API:', fetchErr.message);
       }
       
-      // Fallback: If not found in API response (e.g. YouTube API indexing lag right after broadcast creation), use rowData from DOM
+      // Fallback: If not found in API response, use rowData from DOM
       if (!broadcast) {
         console.log('[saveAsTemplate] Broadcast not in API response, falling back to rowData from table row');
         broadcast = {
@@ -7285,17 +7421,6 @@ if (saveAsTemplateForm) {
         streamKey: broadcast.streamKey ? '***' : 'none',
         thumbnailPath: broadcast.thumbnailPath
       });
-      
-      // Parse broadcast duration and stream settings
-      let durMins = parseInt(broadcast.streamDurationMinutes) || parseInt(broadcast.stream_duration_minutes) || parseInt(broadcast.duration) || 0;
-      let durHours = parseInt(broadcast.streamDurationHours) || parseInt(broadcast.stream_duration_hours) || Math.floor(durMins / 60);
-      let remMins = durMins % 60;
-
-      if (durMins === 0 && rowData) {
-        durMins = parseInt(rowData.streamDurationMinutes) || parseInt(rowData.duration) || 0;
-        durHours = parseInt(rowData.streamDurationHours) || Math.floor(durMins / 60);
-        remMins = durMins % 60;
-      }
 
       // Gather form inputs
       const streamKeyInput = document.getElementById('saveTemplateStreamKey');
@@ -7328,6 +7453,44 @@ if (saveAsTemplateForm) {
       const titleFolderInput = document.getElementById('saveTemplateTitleFolder');
       const chosenTitleFolderId = (titleFolderInput && titleFolderInput.value) ? titleFolderInput.value : (broadcast.titleFolderId || broadcast.title_folder_id || rowData.titleFolderId || rowData.title_folder_id || null);
 
+      // Parse user-specified duration from modal inputs (STRICT & PRECISE)
+      const inputHoursEl = document.getElementById('saveTemplateDurationHours');
+      const inputMinutesEl = document.getElementById('saveTemplateDurationMinutes');
+      const inputLoopEl = document.getElementById('saveTemplateLoopVideo');
+
+      let durHours = inputHoursEl ? (parseInt(inputHoursEl.value, 10) || 0) : 0;
+      let remMins = inputMinutesEl ? (parseInt(inputMinutesEl.value, 10) || 0) : 0;
+      let durMins = (durHours * 60) + remMins;
+
+      // Fallback 1: check broadcast or row data if input was left 0
+      if (durMins === 0) {
+        durMins = parseInt(broadcast.streamDurationMinutes) || parseInt(broadcast.stream_duration_minutes) || parseInt(broadcast.duration) || 0;
+        if (durMins === 0 && rowData) {
+          durMins = parseInt(rowData.streamDurationMinutes) || parseInt(rowData.duration) || 0;
+          durHours = parseInt(rowData.streamDurationHours) || Math.floor(durMins / 60);
+          remMins = durMins % 60;
+        } else if (durMins > 0) {
+          durHours = parseInt(broadcast.streamDurationHours) || Math.floor(durMins / 60);
+          remMins = durMins % 60;
+        }
+      }
+
+      // Fallback 2: check video duration from gallery if still 0
+      if (durMins === 0 && chosenVideoId && Array.isArray(window.allStudioVideos)) {
+        const foundVid = window.allStudioVideos.find(v => String(v.id) === String(chosenVideoId));
+        if (foundVid && foundVid.duration) {
+          const vSecs = Math.round(Number(foundVid.duration));
+          if (vSecs > 0) {
+            durMins = Math.max(1, Math.round(vSecs / 60));
+            durHours = Math.floor(durMins / 60);
+            remMins = durMins % 60;
+            console.log(`[saveAsTemplate] Auto-saved duration from video file: ${durHours}h ${remMins}m (${durMins} mins)`);
+          }
+        }
+      }
+
+      const loopVideoVal = inputLoopEl ? inputLoopEl.checked : (broadcast.loopVideo !== false && broadcast.loop_video !== false);
+
       // Keep streamId and streamKey intact so the stream key can be reused without creating new stream
       const rawStreamId = broadcast.streamId || rowData.streamId || null;
       const validStreamId = rawStreamId ? rawStreamId.trim() : null;
@@ -7350,7 +7513,7 @@ if (saveAsTemplateForm) {
         durationHours: durHours,
         durationMinutes: remMins,
         streamDurationMinutes: durMins,
-        loopVideo: broadcast.loopVideo !== false && broadcast.loop_video !== false,
+        loopVideo: loopVideoVal,
         videoId: chosenVideoId,
         audioId: chosenAudioId,
         scheduleType: chosenSchedType,
@@ -7886,17 +8049,37 @@ if (editTemplateForm) {
       }
 
       // Duration fields
-      const durHoursVal = parseInt(document.getElementById('editTemplateDurationHours')?.value, 10) || 0;
-      const durMinsVal = parseInt(document.getElementById('editTemplateDurationMinutes')?.value, 10) || 0;
+      let durHoursVal = parseInt(document.getElementById('editTemplateDurationHours')?.value, 10) || 0;
+      let durMinsVal = parseInt(document.getElementById('editTemplateDurationMinutes')?.value, 10) || 0;
+      let editTotalDurMins = (durHoursVal * 60) + durMinsVal;
       const loopVideoVal = document.getElementById('editTemplateLoopVideo')?.checked !== false;
+
+      const editVideoSelect = document.getElementById('editTemplateVideoId');
+      const editVideoIdVal = editVideoSelect ? (editVideoSelect.value || null) : null;
+
+      // Fallback durasi dari video jika durasi bernilai 0 0
+      if (editTotalDurMins === 0 && editVideoIdVal) {
+        const vidOpt = editVideoSelect?.selectedOptions?.[0];
+        const vidDurSec = vidOpt ? parseInt(vidOpt.dataset.durationSeconds, 10) : 0;
+        if (vidDurSec > 0) {
+          editTotalDurMins = Math.ceil(vidDurSec / 60);
+          durHoursVal = Math.floor(editTotalDurMins / 60);
+          durMinsVal = editTotalDurMins % 60;
+        } else if (Array.isArray(window.allStudioVideos)) {
+          const foundV = window.allStudioVideos.find(v => String(v.id) === String(editVideoIdVal));
+          if (foundV && foundV.duration > 0) {
+            editTotalDurMins = Math.ceil(foundV.duration / 60);
+            durHoursVal = Math.floor(editTotalDurMins / 60);
+            durMinsVal = editTotalDurMins % 60;
+          }
+        }
+      }
 
       updateData.durationHours = durHoursVal;
       updateData.durationMinutes = durMinsVal;
-      updateData.streamDurationMinutes = (durHoursVal * 60) + durMinsVal;
+      updateData.streamDurationMinutes = editTotalDurMins;
       updateData.loopVideo = loopVideoVal;
-
-      const editVideoSelect = document.getElementById('editTemplateVideoId');
-      if (editVideoSelect) updateData.videoId = editVideoSelect.value || null;
+      updateData.videoId = editVideoIdVal;
 
       const editAudioSelect = document.getElementById('editTemplateAudioId');
       if (editAudioSelect) updateData.audioId = editAudioSelect.value || null;
@@ -8059,14 +8242,85 @@ async function createFromTemplate(templateId) {
           dvrToggle.value = hasDvr ? 'true' : 'false';
         }
       }
+
+      // Prefill Duration and Loop Settings from template (Anti-0 0 / Unlimited)
+      const templateTotalMins = parseInt(template.stream_duration_minutes, 10) ||
+        (((parseInt(template.duration_hours, 10) || 0) * 60) + (parseInt(template.duration_minutes, 10) || 0));
+      const templateHours = parseInt(template.duration_hours, 10) || Math.floor(templateTotalMins / 60);
+      const templateMins = parseInt(template.duration_minutes, 10) || (templateTotalMins % 60);
+      const templateLoop = template.loop_video !== false && template.loop_video !== 0 && template.loop_video !== '0';
+
+      const unlimToggle = document.getElementById('studioUnlimitedToggle');
+      const durHoursInput = document.getElementById('studioStreamDurationHours');
+      const durMinsInput = document.getElementById('studioStreamDurationMinutes');
+      const loopToggle = document.getElementById('studioLoopVideoToggle');
+
+      if (templateTotalMins > 0) {
+        if (unlimToggle) {
+          unlimToggle.checked = false;
+          if (typeof toggleStudioUnlimitedMode === 'function') {
+            toggleStudioUnlimitedMode(false);
+          }
+        }
+        if (durHoursInput) durHoursInput.value = templateHours;
+        if (durMinsInput) durMinsInput.value = templateMins;
+      } else {
+        if (unlimToggle) {
+          unlimToggle.checked = true;
+          if (typeof toggleStudioUnlimitedMode === 'function') {
+            toggleStudioUnlimitedMode(true);
+          }
+        }
+      }
+      if (loopToggle) loopToggle.checked = templateLoop;
+
+      // Prefill Video from template
+      if (template.video_id) {
+        if (Array.isArray(window.allStudioVideos) && window.allStudioVideos.length > 0) {
+          const matchedVid = window.allStudioVideos.find(v => String(v.id) === String(template.video_id));
+          if (matchedVid && typeof selectStudioVideo === 'function') {
+            selectStudioVideo(matchedVid);
+          } else {
+            const hiddenVid = document.getElementById('studioSelectedVideoId');
+            if (hiddenVid) hiddenVid.value = template.video_id;
+            const lbl = document.getElementById('studioSelectedVideo');
+            if (lbl) lbl.textContent = template.video_title || `Video #${template.video_id}`;
+          }
+        } else {
+          const hiddenVid = document.getElementById('studioSelectedVideoId');
+          if (hiddenVid) hiddenVid.value = template.video_id;
+          const lbl = document.getElementById('studioSelectedVideo');
+          if (lbl) lbl.textContent = template.video_title || `Video #${template.video_id}`;
+        }
+      }
+
+      // Prefill Audio from template
+      if (template.audio_id) {
+        if (Array.isArray(window.allStudioAudios) && window.allStudioAudios.length > 0) {
+          const matchedAud = window.allStudioAudios.find(a => String(a.id) === String(template.audio_id));
+          if (matchedAud && typeof selectStudioAudio === 'function') {
+            selectStudioAudio(matchedAud);
+          } else {
+            const hiddenAud = document.getElementById('studioSelectedAudioId');
+            if (hiddenAud) hiddenAud.value = template.audio_id;
+            const lbl = document.getElementById('studioSelectedAudio');
+            if (lbl) lbl.textContent = template.audio_title || `Audio #${template.audio_id}`;
+          }
+        } else {
+          const hiddenAud = document.getElementById('studioSelectedAudioId');
+          if (hiddenAud) hiddenAud.value = template.audio_id;
+          const lbl = document.getElementById('studioSelectedAudio');
+          if (lbl) lbl.textContent = template.audio_title || `Audio #${template.audio_id}`;
+        }
+      }
       
-      showToast('Template loaded. Please set schedule time.', 'info');
+      showToast('Template YouTube berhasil dimuat dengan semua durasi dan media!', 'info');
     } else {
-      showToast(data.error || 'Failed to load template', 'error');
+      showToast(data.error || 'Gagal memuat template YouTube', 'error');
     }
   } catch (error) {
     console.error('Error:', error);
-    showToast('An error occurred', 'error');
+    showToast('Terjadi kesalahan saat memuat template', 'error');
   }
 }
 
@@ -8804,6 +9058,30 @@ function openRecreateFromTemplateModal(template) {
       const bThumbFolder = b.thumbnailFolder !== undefined ? b.thumbnailFolder : template.thumbnail_folder;
       const bPinnedThumb = b.pinnedThumbnail || (bThumbFolder ? null : (b.thumbnailPath || template.pinned_thumbnail || null));
 
+      // Calculate slot duration with smart fallback to parent template and video duration
+      let bTotalMins = parseInt(b.streamDurationMinutes, 10) || (((parseInt(b.durationHours, 10) || 0) * 60) + (parseInt(b.durationMinutes, 10) || 0));
+      let bHours = parseInt(b.durationHours, 10) || Math.floor(bTotalMins / 60);
+      let bMins = parseInt(b.durationMinutes, 10) || (bTotalMins % 60);
+
+      if (bTotalMins === 0 && totalTemplateMins > 0) {
+        bTotalMins = totalTemplateMins;
+        bHours = tHours;
+        bMins = tMins;
+      }
+
+      const slotVideoId = b.videoId || b.video_id || template.video_id || null;
+      if (bTotalMins === 0 && slotVideoId && Array.isArray(window.allStudioVideos)) {
+        const matchedVid = window.allStudioVideos.find(v => String(v.id) === String(slotVideoId));
+        if (matchedVid && matchedVid.duration) {
+          const vSecs = Math.round(Number(matchedVid.duration));
+          if (vSecs > 0) {
+            bTotalMins = Math.max(1, Math.round(vSecs / 60));
+            bHours = Math.floor(bTotalMins / 60);
+            bMins = bTotalMins % 60;
+          }
+        }
+      }
+
       window.recreateBroadcastGroups.push({
         title: b.title || template.title,
         originalTitle: b.title || template.title,
@@ -8812,11 +9090,11 @@ function openRecreateFromTemplateModal(template) {
         thumbnailFolder: bThumbFolder,
         pinnedThumbnail: bPinnedThumb,
         thumbnailPath: b.thumbnailPath || template.thumbnail_path || null,
-        durationHours: b.durationHours !== undefined ? (parseInt(b.durationHours, 10) || 0) : tHours,
-        durationMinutes: b.durationMinutes !== undefined ? (parseInt(b.durationMinutes, 10) || 0) : tMins,
-        streamDurationMinutes: b.streamDurationMinutes !== undefined ? (parseInt(b.streamDurationMinutes, 10) || 0) : totalTemplateMins,
+        durationHours: bHours,
+        durationMinutes: bMins,
+        streamDurationMinutes: bTotalMins,
         loopVideo: b.loopVideo !== undefined ? (b.loopVideo !== false && b.loopVideo !== 0 && b.loopVideo !== '0') : (template.loop_video !== false),
-        videoId: b.videoId || b.video_id || template.video_id || null,
+        videoId: slotVideoId,
         videoName: b.videoName || b.videoTitle || template.video_title || template.video_name || null,
         audioId: b.audioId || b.audio_id || template.audio_id || null,
         audioName: b.audioName || b.audioTitle || template.audio_title || template.audio_name || null,
@@ -8863,6 +9141,21 @@ function openRecreateFromTemplateModal(template) {
     const sThumbFolder = template.thumbnail_folder !== undefined ? template.thumbnail_folder : null;
     const sPinnedThumb = template.pinned_thumbnail || (!sThumbFolder ? (template.thumbnail_path || null) : null);
 
+    let finalSingleTotalMins = totalTemplateMins;
+    let finalSingleHours = tHours;
+    let finalSingleMins = tMins;
+    if (finalSingleTotalMins === 0 && template.video_id && Array.isArray(window.allStudioVideos)) {
+      const matchedVid = window.allStudioVideos.find(v => String(v.id) === String(template.video_id));
+      if (matchedVid && matchedVid.duration) {
+        const vSecs = Math.round(Number(matchedVid.duration));
+        if (vSecs > 0) {
+          finalSingleTotalMins = Math.max(1, Math.round(vSecs / 60));
+          finalSingleHours = Math.floor(finalSingleTotalMins / 60);
+          finalSingleMins = finalSingleTotalMins % 60;
+        }
+      }
+    }
+
     window.recreateBroadcastGroups.push({
       title: template.title,
       originalTitle: template.title,
@@ -8871,9 +9164,9 @@ function openRecreateFromTemplateModal(template) {
       thumbnailFolder: sThumbFolder,
       pinnedThumbnail: sPinnedThumb,
       thumbnailPath: template.thumbnail_path || null,
-      durationHours: tHours,
-      durationMinutes: tMins,
-      streamDurationMinutes: totalTemplateMins,
+      durationHours: finalSingleHours,
+      durationMinutes: finalSingleMins,
+      streamDurationMinutes: finalSingleTotalMins,
       loopVideo: template.loop_video !== false && template.loop_video !== 0 && template.loop_video !== '0',
       videoId: template.video_id || null,
       videoName: template.video_title || template.video_name || null,
@@ -9642,8 +9935,15 @@ async function openRecreateGroupFullEditor(groupIndex) {
   const durMInput = document.getElementById('recreateSlotEditDurationMinutes');
   const loopToggle = document.getElementById('recreateSlotEditLoopToggle');
 
-  const h = group.durationHours !== undefined ? parseInt(group.durationHours, 10) : (parseInt(template.duration_hours, 10) || 0);
-  const m = group.durationMinutes !== undefined ? parseInt(group.durationMinutes, 10) : (parseInt(template.duration_minutes, 10) || 0);
+  let h = group.durationHours !== undefined ? parseInt(group.durationHours, 10) : (parseInt(template.duration_hours, 10) || 0);
+  let m = group.durationMinutes !== undefined ? parseInt(group.durationMinutes, 10) : (parseInt(template.duration_minutes, 10) || 0);
+  if (h === 0 && m === 0) {
+    const parentTotal = parseInt(template.stream_duration_minutes, 10) || (((parseInt(template.duration_hours, 10) || 0) * 60) + (parseInt(template.duration_minutes, 10) || 0));
+    if (parentTotal > 0) {
+      h = Math.floor(parentTotal / 60);
+      m = parentTotal % 60;
+    }
+  }
   const isLoop = group.loopVideo !== undefined ? (group.loopVideo !== false && group.loopVideo !== 0 && group.loopVideo !== '0') : (template.loop_video !== false);
 
   if (durHInput) durHInput.value = isNaN(h) ? 0 : h;

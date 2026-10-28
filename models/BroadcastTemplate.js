@@ -99,24 +99,29 @@ class BroadcastTemplate {
         const broadcasts = JSON.parse(row.description);
         if (Array.isArray(broadcasts) && broadcasts.length > 0 && typeof broadcasts[0] === 'object' && broadcasts[0] !== null && ('title' in broadcasts[0] || 'streamKey' in broadcasts[0] || 'streamId' in broadcasts[0])) {
           row.isMultiBroadcast = true;
-          row.broadcasts = broadcasts.map(b => ({
-            ...b,
-            streamId: b.streamId || b.stream_id || row.stream_id || null,
-            streamKey: b.streamKey || b.stream_key || row.stream_key || '',
-            durationHours: b.durationHours !== undefined ? (parseInt(b.durationHours) || 0) : row.duration_hours,
-            durationMinutes: b.durationMinutes !== undefined ? (parseInt(b.durationMinutes) || 0) : row.duration_minutes,
-            streamDurationMinutes: b.streamDurationMinutes !== undefined 
-              ? (parseInt(b.streamDurationMinutes) || 0) 
-              : (b.durationHours !== undefined ? ((parseInt(b.durationHours) || 0) * 60 + (parseInt(b.durationMinutes) || 0)) : row.stream_duration_minutes),
-            loopVideo: b.loopVideo !== undefined ? (b.loopVideo !== false && b.loopVideo !== 0 && b.loopVideo !== '0') : row.loop_video,
-            videoId: b.videoId || b.video_id || row.video_id || null,
-            audioId: b.audioId || b.audio_id || row.audio_id || null,
-            titleFolderId: b.titleFolderId !== undefined ? b.titleFolderId : (b.title_folder_id || row.title_folder_id || null),
-            scheduleType: b.scheduleType || row.schedule_type || 'once',
-            thumbnailFolder: (b.thumbnailFolder !== undefined && b.thumbnailFolder !== null) ? b.thumbnailFolder : row.thumbnail_folder,
-            thumbnailPath: b.thumbnailPath || b.thumbnail_path || null,
-            pinnedThumbnail: (b.pinnedThumbnail || null)
-          }));
+          row.broadcasts = broadcasts.map(b => {
+            const slotTotalMins = parseInt(b.streamDurationMinutes) || (((parseInt(b.durationHours) || 0) * 60) + (parseInt(b.durationMinutes) || 0));
+            const finalSlotMins = slotTotalMins > 0 ? slotTotalMins : (row.stream_duration_minutes || 0);
+            const finalSlotHours = finalSlotMins > 0 ? Math.floor(finalSlotMins / 60) : (parseInt(b.durationHours) || row.duration_hours || 0);
+            const finalSlotRemMins = finalSlotMins > 0 ? (finalSlotMins % 60) : (parseInt(b.durationMinutes) || row.duration_minutes || 0);
+
+            return {
+              ...b,
+              streamId: b.streamId || b.stream_id || row.stream_id || null,
+              streamKey: b.streamKey || b.stream_key || row.stream_key || '',
+              durationHours: finalSlotHours,
+              durationMinutes: finalSlotRemMins,
+              streamDurationMinutes: finalSlotMins,
+              loopVideo: b.loopVideo !== undefined ? (b.loopVideo !== false && b.loopVideo !== 0 && b.loopVideo !== '0') : row.loop_video,
+              videoId: b.videoId || b.video_id || row.video_id || null,
+              audioId: b.audioId || b.audio_id || row.audio_id || null,
+              titleFolderId: b.titleFolderId !== undefined ? b.titleFolderId : (b.title_folder_id || row.title_folder_id || null),
+              scheduleType: b.scheduleType || row.schedule_type || 'once',
+              thumbnailFolder: (b.thumbnailFolder !== undefined && b.thumbnailFolder !== null) ? b.thumbnailFolder : row.thumbnail_folder,
+              thumbnailPath: b.thumbnailPath || b.thumbnail_path || null,
+              pinnedThumbnail: (b.pinnedThumbnail || null)
+            };
+          });
         }
       } catch (e) {}
     }
@@ -437,7 +442,33 @@ class BroadcastTemplate {
     const fields = [];
     const values = [];
 
-    Object.entries(templateData).forEach(([key, value]) => {
+    // Synchronize duration fields so hours, minutes, and total minutes are always in sync
+    const sanitizedData = { ...templateData };
+    if (sanitizedData.duration_hours !== undefined || sanitizedData.duration_minutes !== undefined || sanitizedData.stream_duration_minutes !== undefined) {
+      let dHours = sanitizedData.duration_hours !== undefined ? (parseInt(sanitizedData.duration_hours) || 0) : null;
+      let dMins = sanitizedData.duration_minutes !== undefined ? (parseInt(sanitizedData.duration_minutes) || 0) : null;
+      let dTotal = sanitizedData.stream_duration_minutes !== undefined ? (parseInt(sanitizedData.stream_duration_minutes) || 0) : null;
+
+      if (dTotal === null && dHours !== null && dMins !== null) {
+        dTotal = (dHours * 60) + dMins;
+      } else if (dTotal !== null && (dHours === null || dMins === null)) {
+        dHours = Math.floor(dTotal / 60);
+        dMins = dTotal % 60;
+      } else if (dTotal !== null && dHours !== null && dMins !== null) {
+        const calculated = (dHours * 60) + dMins;
+        if (calculated > 0 && dTotal === 0) dTotal = calculated;
+        if (dTotal > 0 && calculated === 0) {
+          dHours = Math.floor(dTotal / 60);
+          dMins = dTotal % 60;
+        }
+      }
+
+      if (dHours !== null) sanitizedData.duration_hours = dHours;
+      if (dMins !== null) sanitizedData.duration_minutes = dMins;
+      if (dTotal !== null) sanitizedData.stream_duration_minutes = dTotal;
+    }
+
+    Object.entries(sanitizedData).forEach(([key, value]) => {
       if (key === 'tags' && Array.isArray(value)) {
         fields.push(`${key} = ?`);
         values.push(JSON.stringify(value));
