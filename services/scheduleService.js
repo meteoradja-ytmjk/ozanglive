@@ -1214,7 +1214,22 @@ class ScheduleService {
           console.log(`[ScheduleService] Using streamId: ${targetSlotStreamId || 'none'}, streamKey: ${targetSlotStreamKey ? '***' : 'none'}`);
           
           try {
-            const result = await youtubeService.createBroadcast(accessToken, broadcastData);
+            // Support slot-specific channel accountId for multi-broadcast
+            let slotAccessToken = accessToken;
+            const slotAccountId = b.accountId ? parseInt(b.accountId) : template.account_id;
+            if (slotAccountId && slotAccountId !== template.account_id) {
+              try {
+                const bCreds = await YouTubeCredentials.findById(slotAccountId);
+                if (bCreds && String(bCreds.userId) === String(template.user_id)) {
+                  slotAccessToken = await youtubeService.getAccessToken(bCreds.clientId, bCreds.clientSecret, bCreds.refreshToken, 0, bCreds.id);
+                  console.log(`[ScheduleService] Using channel account #${slotAccountId} (${bCreds.channelName}) for broadcast #${broadcastIndex + 1}`);
+                }
+              } catch (slotTokenErr) {
+                console.warn(`[ScheduleService] Fallback to template token for account #${slotAccountId}:`, slotTokenErr.message);
+              }
+            }
+
+            const result = await youtubeService.createBroadcast(slotAccessToken, broadcastData);
             results.push(result);
             console.log(`[ScheduleService] Broadcast ${i + 1} created: ${result.broadcastId || result.id}`);
             
@@ -1306,7 +1321,7 @@ class ScheduleService {
                 recurring_enabled: 0,
                 user_id: template.user_id,
                 youtube_broadcast_id: result.broadcastId || result.id,
-                youtube_account_id: template.account_id || null,
+                youtube_account_id: slotAccountId || template.account_id || null,
                 dual_stream: (template.dual_stream || b.dualStream) ? 1 : 0,
                 vertical_stream_key: b.verticalStreamKey || template.vertical_stream_key || null,
                 backup_rtmp_url: b.verticalStreamKey || template.vertical_stream_key || null,
@@ -1344,7 +1359,7 @@ class ScheduleService {
               
               const shouldIgnorePinned = (thumbnailFolder !== null && !b.pinnedThumbnail);
               const uploadResult = await this.uploadThumbnailForBroadcast(
-                accessToken, 
+                slotAccessToken, 
                 result.broadcastId || result.id, 
                 b.thumbnailPath,
                 thumbnailFolder,

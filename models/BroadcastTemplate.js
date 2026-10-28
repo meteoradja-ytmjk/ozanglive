@@ -107,6 +107,8 @@ class BroadcastTemplate {
 
             return {
               ...b,
+              accountId: b.accountId ? parseInt(b.accountId) : (row.account_id || null),
+              channelName: b.channelName || b.channel_name || row.channel_name || null,
               streamId: b.streamId || b.stream_id || row.stream_id || null,
               streamKey: b.streamKey || b.stream_key || row.stream_key || '',
               durationHours: finalSlotHours,

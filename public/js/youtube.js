@@ -8747,6 +8747,8 @@ if (multiSaveTemplateForm) {
           const bRemMins = bMins % 60;
           return {
             broadcastId: b.id,
+            accountId: b.accountId || b.account_id || broadcasts[0].accountId,
+            channelName: b.channelName || null,
             title: b.title,
             description: b.description || '',
             privacyStatus: b.privacyStatus || 'unlisted',
@@ -9083,6 +9085,8 @@ function openRecreateFromTemplateModal(template) {
       }
 
       window.recreateBroadcastGroups.push({
+        accountId: b.accountId || b.account_id || template.account_id,
+        channelName: b.channelName || b.channel_name || template.channel_name || null,
         title: b.title || template.title,
         originalTitle: b.title || template.title,
         streamId: b.streamId || template.stream_id || null,
@@ -11266,6 +11270,8 @@ if (recreateFromTemplateForm) {
 
           if (finalSched) {
             broadcastsToCreate.push({
+              accountId: grp.accountId || template.account_id,
+              channelName: grp.channelName || template.channel_name || null,
               title: grp.title || template.title,
               originalTitle: grp.originalTitle || template.title,
               customTitle: grp.customTitle,
@@ -11327,6 +11333,7 @@ if (recreateFromTemplateForm) {
       for (let i = 0; i < slots.length; i++) {
         const slot = slots[i];
         const schedule = schedules[i];
+        const slotAccountId = slot.accountId || accountId;
         
         // Determine title - use rotated title if enabled (unless manually edited or rotation disabled for this slot)
         let finalTitle = slot.title || template.title;
@@ -11338,7 +11345,7 @@ if (recreateFromTemplateForm) {
         
         try {
           const formData = new FormData();
-          formData.append('accountId', accountId);
+          formData.append('accountId', slotAccountId);
           formData.append('title', finalTitle);
           formData.append('description', slot.description !== undefined ? slot.description : (template.description || ''));
           formData.append('scheduledStartTime', schedule);

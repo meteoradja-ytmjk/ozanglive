@@ -13727,6 +13727,9 @@ app.post('/api/youtube/templates/multi', isAuthenticated, async (req, res) => {
       }
 
       return {
+        broadcastId: b.broadcastId || b.id || null,
+        accountId: b.accountId ? parseInt(b.accountId) : parseInt(accountId),
+        channelName: b.channelName || credentials.channelName || null,
         title: b.title,
         description: b.description || '',
         privacyStatus: b.privacyStatus || 'unlisted',
