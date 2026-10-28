@@ -344,6 +344,7 @@ async function ensureFreshYouTubeBroadcastForStream(stream) {
     const finalCategory = stream.category_id || savedSettings?.category_id || '22';
     const isDualStream = Boolean(stream.dual_stream || savedSettings?.dual_stream);
     const isAlteredContent = Boolean(savedSettings?.altered_content);
+    const isEnableDvr = Boolean(stream.enable_dvr || savedSettings?.enable_dvr);
     let resolvedStreamId = stream.stream_id || null;
     let targetStreamKey = (stream.stream_key || '').trim() || null;
 
@@ -383,8 +384,8 @@ async function ensureFreshYouTubeBroadcastForStream(stream) {
 
       stream.youtube_broadcast_id = created.broadcastId;
       stream.youtube_lifecycle_status = 'ready';
-      // Only set stream_key from created if local stream had no stream_key configured
-      if (created.streamKey && (!stream.stream_key || !targetStreamKey)) stream.stream_key = created.streamKey;
+      // Synchronize stream_key to the confirmed streamKey bound to the new YouTube broadcast
+      if (created.streamKey) stream.stream_key = created.streamKey;
       if (created.rtmpUrl) stream.rtmp_url = created.rtmpUrl;
 
       await Stream.update(stream.id, {
@@ -507,9 +508,10 @@ async function syncYouTubeStreamKeyBeforeStart(stream) {
     if (boundStream && boundStream.streamKey) {
       const liveKey = boundStream.streamKey.trim();
       const liveRtmp = (boundStream.rtmpUrl || 'rtmp://a.rtmp.youtube.com/live2').trim();
-      // PRESERVE INPUTTED STREAM KEY: Only synchronize if stream had NO stream key set from the start
-      if (!stream.stream_key && liveKey) {
-        console.log(`[StreamingService] Synchronized missing stream key for stream #${stream.id} from YouTube broadcast ${stream.youtube_broadcast_id}: ${liveKey ? '***' : 'none'}`);
+      // GUARANTEE SYNC TO BOUND STREAM KEY:
+      // If the broadcast is bound to a specific liveStream on YouTube, FFmpeg MUST stream to that exact stream key
+      if (liveKey && stream.stream_key !== liveKey) {
+        console.log(`[StreamingService] Synchronized stream key for stream #${stream.id} to bound YouTube stream key (was: ${stream.stream_key ? '***' : 'empty'} -> now: ***)`);
         stream.stream_key = liveKey;
         if (liveRtmp) stream.rtmp_url = liveRtmp;
         await Stream.update(stream.id, {
@@ -586,8 +588,8 @@ async function ensureYouTubeBroadcastLive(stream, broadcastIdHint) {
     // Give FFmpeg 5 seconds to establish RTMP handshake and send initial keyframes
     await new Promise(r => setTimeout(r, 5000));
 
-    // Poll and transition broadcast to 'live' (15 attempts x 4s = 60s max)
-    const liveResult = await youtubeService.startBroadcastLive(accessToken, broadcastId, 15, 4000);
+    // Poll and transition broadcast to 'live' (25 attempts x 4s = 100s max to allow YouTube CDN buffer)
+    const liveResult = await youtubeService.startBroadcastLive(accessToken, broadcastId, 25, 4000);
 
     if (liveResult && liveResult.success) {
       console.log(`[StreamingService.ensureLive] ✅ Stream #${streamId} broadcast ${broadcastId} is verified LIVE on YouTube.com!`);
@@ -3230,8 +3232,8 @@ async function saveStreamHistory(stream) {
       id: uuidv4(),
       stream_id: stream.id,
       title: stream.title,
-      platform: stream.platform || 'Custom',
-      platform_icon: stream.platform_icon,
+      platform: stream.platform || 'YouTube',
+      platform_icon: stream.platform_icon || 'ti-brand-youtube',
       video_id: stream.video_id,
       video_title: videoDetails ? videoDetails.title : null,
       resolution: stream.resolution,

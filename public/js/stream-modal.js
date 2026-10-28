@@ -535,24 +535,8 @@ document.addEventListener('DOMContentLoaded', function () {
   });
   function updatePlatformIcon(iconClass) {
     const currentIcon = platformSelector.querySelector('i');
-    const iconParts = iconClass.split(' ');
-    const brandIconPart = iconParts.filter(part => part.startsWith('ti-'))[0];
-    currentIcon.className = `ti ${brandIconPart} text-center`;
-    if (brandIconPart.includes('youtube')) {
-      currentIcon.classList.add('text-red-500');
-    } else if (brandIconPart.includes('twitch')) {
-      currentIcon.classList.add('text-purple-500');
-    } else if (brandIconPart.includes('facebook')) {
-      currentIcon.classList.add('text-blue-500');
-    } else if (brandIconPart.includes('instagram')) {
-      currentIcon.classList.add('text-pink-500');
-    } else if (brandIconPart.includes('tiktok')) {
-      currentIcon.classList.add('text-white');
-    } else if (brandIconPart.includes('shopee')) {
-      currentIcon.classList.add('text-orange-500');
-    } else if (brandIconPart.includes('live-photo')) {
-      currentIcon.classList.add('text-teal-500');
-    }
+    if (!currentIcon) return;
+    currentIcon.className = 'ti ti-brand-youtube text-center text-red-500';
   }
   if (typeof showToast !== 'function') {
     window.showToast = function (type, message) {
@@ -562,24 +546,7 @@ document.addEventListener('DOMContentLoaded', function () {
   const streamKeyInput = document.getElementById('streamKey');
   if (streamKeyInput && rtmpInput) {
     rtmpInput.addEventListener('input', function () {
-      const url = this.value.toLowerCase();
-      if (url.includes('youtube.com')) {
-        currentPlatform = 'YouTube';
-      } else if (url.includes('facebook.com')) {
-        currentPlatform = 'Facebook';
-      } else if (url.includes('twitch.tv')) {
-        currentPlatform = 'Twitch';
-      } else if (url.includes('tiktok.com')) {
-        currentPlatform = 'TikTok';
-      } else if (url.includes('instagram.com')) {
-        currentPlatform = 'Instagram';
-      } else if (url.includes('shopee.io')) {
-        currentPlatform = 'Shopee Live';
-      } else if (url.includes('restream.io')) {
-        currentPlatform = 'Restream.io';
-      } else {
-        currentPlatform = 'Custom';
-      }
+      currentPlatform = 'YouTube';
       if (streamKeyInput.value) {
         validateStreamKeyForPlatform(streamKeyInput.value, currentPlatform);
       }

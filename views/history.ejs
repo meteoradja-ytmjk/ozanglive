@@ -10,16 +10,11 @@
           class="bg-dark-700 border border-gray-600 text-white pl-9 pr-4 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary w-full">
         <i class="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
       </div>
-      <div class="w-32">
+      <div class="w-36">
         <select id="platform-filter"
-          class="bg-dark-700 border border-gray-600 text-white px-4 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary w-full">
-          <option value="all">All Platforms</option>
-          <option value="YouTube">YouTube</option>
-          <option value="Facebook">Facebook</option>
-          <option value="Twitch">Twitch</option>
-          <option value="TikTok">TikTok</option>
-          <option value="Instagram">Instagram</option>
-          <option value="Custom">Custom</option>
+          class="bg-dark-700 border border-gray-600 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary w-full text-sm">
+          <option value="all">Semua Platform</option>
+          <option value="YouTube" selected>YouTube</option>
         </select>
       </div>
     </div>
@@ -117,28 +112,10 @@
   </div>
   <script>
     function getPlatformIcon(platform) {
-      switch (platform) {
-        case 'YouTube': return 'youtube';
-        case 'Facebook': return 'facebook';
-        case 'Twitch': return 'twitch';
-        case 'TikTok': return 'tiktok';
-        case 'Instagram': return 'instagram';
-        case 'Shopee Live': return 'shopping-bag';
-        case 'Restream.io': return 'live-photo';
-        default: return 'broadcast';
-      }
+      return 'youtube';
     }
     function getPlatformColor(platform) {
-      switch (platform) {
-        case 'YouTube': return 'red-500';
-        case 'Facebook': return 'blue-500';
-        case 'Twitch': return 'purple-500';
-        case 'TikTok': return 'gray-100';
-        case 'Instagram': return 'pink-500';
-        case 'Shopee Live': return 'orange-500';
-        case 'Restream.io': return 'teal-500';
-        default: return 'gray-400';
-      }
+      return 'red-500';
     }
     function formatDateTime(isoString) {
       if (!isoString) return '--';

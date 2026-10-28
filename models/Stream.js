@@ -8,10 +8,10 @@ class Stream {
       title,
       video_id,
       audio_id = null,
-      rtmp_url,
+      rtmp_url = 'rtmp://a.rtmp.youtube.com/live2',
       stream_key,
-      platform,
-      platform_icon,
+      platform = 'YouTube',
+      platform_icon = 'ti-brand-youtube',
       bitrate = 2500,
       resolution,
       fps = 30,
@@ -99,7 +99,7 @@ class Stream {
                 COALESCE(v.title, p.name) AS video_title,
                 COALESCE(a.title, pla.name) AS audio_title,
                 CASE WHEN p.id IS NOT NULL THEN 'playlist' ELSE 'video' END AS video_type,
-                COALESCE(yc.channel_name, yc_broadcast.channel_name, yc_primary.channel_name, CASE WHEN s.platform = 'YouTube' THEN 'YouTube Channel' ELSE COALESCE(s.platform, 'Custom RTMP') END) AS channel_name,
+                COALESCE(yc.channel_name, yc_broadcast.channel_name, yc_primary.channel_name, 'YouTube Channel') AS channel_name,
                 COALESCE(yc.channel_id, yc_broadcast.channel_id, yc_primary.channel_id) AS channel_id
          FROM streams s
          LEFT JOIN videos v ON s.video_id = v.id
@@ -155,7 +155,7 @@ class Stream {
                v.fps AS video_fps,
                COALESCE(a.title, pla.name) AS audio_title,
                CASE WHEN p.id IS NOT NULL THEN 'playlist' ELSE 'video' END AS video_type,
-               COALESCE(yc.channel_name, yc_broadcast.channel_name, yc_primary.channel_name, CASE WHEN s.platform = 'YouTube' THEN 'YouTube Channel' ELSE COALESCE(s.platform, 'Custom RTMP') END) AS channel_name,
+               COALESCE(yc.channel_name, yc_broadcast.channel_name, yc_primary.channel_name, 'YouTube Channel') AS channel_name,
                COALESCE(yc.channel_id, yc_broadcast.channel_id, yc_primary.channel_id) AS channel_id
         FROM streams s
         LEFT JOIN videos v ON s.video_id = v.id
@@ -797,7 +797,7 @@ class Stream {
                v.fps AS video_fps,
                COALESCE(a.title, pla.name) AS audio_title,
                CASE WHEN p.id IS NOT NULL THEN 'playlist' ELSE 'video' END AS video_type,
-               COALESCE(yc.channel_name, yc_broadcast.channel_name, yc_primary.channel_name, CASE WHEN s.platform = 'YouTube' THEN 'YouTube Channel' ELSE COALESCE(s.platform, 'Custom RTMP') END) AS channel_name,
+               COALESCE(yc.channel_name, yc_broadcast.channel_name, yc_primary.channel_name, 'YouTube Channel') AS channel_name,
                COALESCE(yc.channel_id, yc_broadcast.channel_id, yc_primary.channel_id) AS channel_id
         FROM streams s
         LEFT JOIN videos v ON s.video_id = v.id

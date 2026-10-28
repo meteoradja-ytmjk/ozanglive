@@ -173,9 +173,9 @@ class YouTubeStatusSync {
         await this.checkBroadcastStatus(streamId);
       }, POLLING_INTERVAL_MS);
 
-      // Fast early checks (15s, 30s, 60s, 120s) so upcoming broadcasts auto-recover to LIVE quickly
+      // Fast early checks (15s, 30s, 60s, 90s, 120s, 180s) so upcoming broadcasts auto-recover to LIVE quickly
       const earlyTimeouts = [];
-      [15000, 30000, 60000, 120000].forEach(delay => {
+      [15000, 30000, 60000, 90000, 120000, 180000].forEach(delay => {
         const tId = setTimeout(async () => {
           if (this.activeChecks.has(streamId)) {
             console.log(`[YouTubeStatusSync] Early live check (${delay / 1000}s) for stream ${streamId}...`);

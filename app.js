@@ -641,28 +641,10 @@ app.locals.helpers = {
     return '<img src="/images/default-avatar.jpg" alt="Default Profile" class="w-full h-full object-cover">';
   },
   getPlatformIcon: function (platform) {
-    switch (platform) {
-      case 'YouTube': return 'youtube';
-      case 'Facebook': return 'facebook';
-      case 'Twitch': return 'twitch';
-      case 'TikTok': return 'tiktok';
-      case 'Instagram': return 'instagram';
-      case 'Shopee Live': return 'shopping-bag';
-      case 'Restream.io': return 'live-photo';
-      default: return 'broadcast';
-    }
+    return 'youtube';
   },
   getPlatformColor: function (platform) {
-    switch (platform) {
-      case 'YouTube': return 'red-500';
-      case 'Facebook': return 'blue-500';
-      case 'Twitch': return 'purple-500';
-      case 'TikTok': return 'gray-100';
-      case 'Instagram': return 'pink-500';
-      case 'Shopee Live': return 'orange-500';
-      case 'Restream.io': return 'teal-500';
-      default: return 'gray-400';
-    }
+    return 'red-500';
   },
   formatDateTime: function (isoString) {
     return formatWIBDisplay(isoString);
@@ -5316,30 +5298,8 @@ app.post('/api/streams', isAuthenticated, autoResolveYouTubeStreamKey, [
     if (!errors.isEmpty()) {
       return res.status(400).json({ success: false, error: errors.array()[0].msg });
     }
-    let platform = 'Custom';
-    let platform_icon = 'ti-broadcast';
-    if (req.body.rtmpUrl.includes('youtube.com')) {
-      platform = 'YouTube';
-      platform_icon = 'ti-brand-youtube';
-    } else if (req.body.rtmpUrl.includes('facebook.com')) {
-      platform = 'Facebook';
-      platform_icon = 'ti-brand-facebook';
-    } else if (req.body.rtmpUrl.includes('twitch.tv')) {
-      platform = 'Twitch';
-      platform_icon = 'ti-brand-twitch';
-    } else if (req.body.rtmpUrl.includes('tiktok.com')) {
-      platform = 'TikTok';
-      platform_icon = 'ti-brand-tiktok';
-    } else if (req.body.rtmpUrl.includes('instagram.com')) {
-      platform = 'Instagram';
-      platform_icon = 'ti-brand-instagram';
-    } else if (req.body.rtmpUrl.includes('shopee.io')) {
-      platform = 'Shopee Live';
-      platform_icon = 'ti-brand-shopee';
-    } else if (req.body.rtmpUrl.includes('restream.io')) {
-      platform = 'Restream.io';
-      platform_icon = 'ti-live-photo';
-    }
+    const platform = 'YouTube';
+    const platform_icon = 'ti-brand-youtube';
     // Parse schedule days if provided
     let scheduleDays = null;
     if (req.body.scheduleDays) {
@@ -5754,32 +5714,8 @@ app.put('/api/streams/:id', isAuthenticated, async (req, res) => {
     if (req.body.rtmpUrl) {
       updateData.rtmp_url = req.body.rtmpUrl;
 
-      let platform = 'Custom';
-      let platform_icon = 'ti-broadcast';
-      if (req.body.rtmpUrl.includes('youtube.com')) {
-        platform = 'YouTube';
-        platform_icon = 'ti-brand-youtube';
-      } else if (req.body.rtmpUrl.includes('facebook.com')) {
-        platform = 'Facebook';
-        platform_icon = 'ti-brand-facebook';
-      } else if (req.body.rtmpUrl.includes('twitch.tv')) {
-        platform = 'Twitch';
-        platform_icon = 'ti-brand-twitch';
-      } else if (req.body.rtmpUrl.includes('tiktok.com')) {
-        platform = 'TikTok';
-        platform_icon = 'ti-brand-tiktok';
-      } else if (req.body.rtmpUrl.includes('instagram.com')) {
-        platform = 'Instagram';
-        platform_icon = 'ti-brand-instagram';
-      } else if (req.body.rtmpUrl.includes('shopee.io')) {
-        platform = 'Shopee Live';
-        platform_icon = 'ti-brand-shopee';
-      } else if (req.body.rtmpUrl.includes('restream.io')) {
-        platform = 'Restream.io';
-        platform_icon = 'ti-live-photo';
-      }
-      updateData.platform = platform;
-      updateData.platform_icon = platform_icon;
+      updateData.platform = 'YouTube';
+      updateData.platform_icon = 'ti-brand-youtube';
     }
 
     if (req.body.streamKey) updateData.stream_key = req.body.streamKey;
@@ -12686,7 +12622,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         audio_id: audioId,
         title_folder_id: finalTitleFolderId,
         rtmp_url: broadcast.rtmpUrl || 'rtmp://a.rtmp.youtube.com/live2',
-        stream_key: userProvidedStreamKey || broadcast.streamKey || (streamId ? String(streamId) : ''),
+        stream_key: (broadcast.streamKey && String(broadcast.streamKey).trim()) ? String(broadcast.streamKey).trim() : (userProvidedStreamKey || (streamId ? String(streamId) : '')),
         platform: 'YouTube',
         platform_icon: 'ti-brand-youtube',
         bitrate: 2500,

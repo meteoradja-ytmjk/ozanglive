@@ -670,7 +670,7 @@ class YouTubeService {
       id: broadcast.id,
       broadcastId: broadcast.id,
       streamId: stream.id,
-      streamKey: (streamKey && String(streamKey).trim()) ? String(streamKey).trim() : resolvedStreamKey,
+      streamKey: (resolvedStreamKey && resolvedStreamKey.trim()) ? resolvedStreamKey.trim() : ((streamKey && String(streamKey).trim()) ? String(streamKey).trim() : ''),
       rtmpUrl: resolvedRtmpUrl,
       backupRtmpUrl: resolvedBackupRtmpUrl,
       title: broadcast.snippet?.title || title,
@@ -1255,7 +1255,7 @@ class YouTubeService {
     try {
       console.log(`[YouTubeService.transitionBroadcast] Checking status for broadcast ${broadcastId}...`);
       const statusRes = await youtube.liveBroadcasts.list({
-        part: 'id,status,contentDetails',
+        part: 'id,snippet,status,contentDetails',
         id: broadcastId
       });
 
@@ -1316,7 +1316,7 @@ class YouTubeService {
                 requestBody: {
                   id: broadcastId,
                   snippet: {
-                    title: item.snippet?.title || '',
+                    title: item.snippet?.title || 'Live Stream',
                     description: item.snippet?.description || '',
                     scheduledStartTime: item.snippet?.scheduledStartTime || new Date(Date.now() + 60 * 1000).toISOString()
                   },
@@ -1439,7 +1439,7 @@ class YouTubeService {
    * @param {number} [maxAttempts=15]
    * @param {number} [delayMs=4000]
    */
-  async startBroadcastLive(accessToken, broadcastId, maxAttempts = 15, delayMs = 4000) {
+  async startBroadcastLive(accessToken, broadcastId, maxAttempts = 25, delayMs = 4000) {
     if (!accessToken || !broadcastId) {
       return { success: false, error: 'Missing accessToken or broadcastId' };
     }
@@ -1481,15 +1481,15 @@ class YouTubeService {
         activeStreamCount++;
         console.log(`[YouTubeService.startBroadcastLive] RTMP stream is ACTIVE on YouTube CDN (detected ${activeStreamCount} times)`);
 
-        // If autoStart is enabled, YouTube usually flips to 'live' automatically within 5-15s of active stream
-        // If after 3 active detections (approx 12s) it's still not live, attempt fallback manual transition
-        if (isAutoStart && activeStreamCount < 3) {
+        // If autoStart is enabled, YouTube usually flips to 'live' automatically within 5-10s of active stream
+        // If after 2 active detections (approx 8s) it's still not live, attempt fallback manual transition
+        if (isAutoStart && activeStreamCount < 2) {
           console.log(`[YouTubeService.startBroadcastLive] Waiting for YouTube auto-start engine to flip status to LIVE...`);
         } else {
           // Manual transition or fallback
           console.log(`[YouTubeService.startBroadcastLive] Triggering transitionBroadcast to 'live'...`);
           const transResult = await this.transitionBroadcast(accessToken, broadcastId, 'live');
-          if (transResult.success && transResult.lifeCycleStatus === 'live') {
+          if (transResult.success && (transResult.lifeCycleStatus === 'live' || transResult.alreadyLive)) {
             console.log(`[YouTubeService.startBroadcastLive] ✅ Broadcast ${broadcastId} successfully transitioned to LIVE on YouTube Studio!`);
             return transResult;
           }
