@@ -27,9 +27,11 @@
 input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
 textarea,
 select {
+  background-color: #0f172a;
   color: #f8fafc !important; /* Bright White / Slate 50 */
   -webkit-text-fill-color: #f8fafc !important;
   caret-color: #a855f7 !important; /* Purple cursor */
+  color-scheme: dark;
 }
 
 /* Placeholder styling: Kontras & Jelas */

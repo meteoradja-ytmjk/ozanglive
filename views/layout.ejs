@@ -36,9 +36,13 @@
                 'secondary': '<%= typeof branding !== "undefined" ? branding.secondary_color : "#7C3AED" %>',
                 'accent': '<%= typeof branding !== "undefined" ? branding.accent_color : "#A78BFA" %>',
                 'dark': {
+                  '950': '#080d1a',
                   '900': '#0F172A',
+                  '850': '#172033',
                   '800': '#1E293B',
+                  '750': '#263347',
                   '700': '#334155',
+                  '650': '#3D4C61',
                   '600': '#475569',
                   '500': '#64748B',
                   '400': '#94A3B8',
@@ -338,9 +342,11 @@
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
   textarea,
   select {
+    background-color: #0f172a;
     color: #f8fafc !important;
     -webkit-text-fill-color: #f8fafc !important;
     caret-color: #a855f7 !important;
+    color-scheme: dark;
   }
   input::placeholder,
   textarea::placeholder {
@@ -362,8 +368,8 @@
   textarea:-webkit-autofill,
   select:-webkit-autofill {
     -webkit-text-fill-color: #ffffff !important;
-    -webkit-box-shadow: 0 0 0px 1000px #1e293b inset !important;
-    box-shadow: 0 0 0px 1000px #1e293b inset !important;
+    -webkit-box-shadow: 0 0 0px 1000px #0f172a inset !important;
+    box-shadow: 0 0 0px 1000px #0f172a inset !important;
     caret-color: #ffffff !important;
   }
 

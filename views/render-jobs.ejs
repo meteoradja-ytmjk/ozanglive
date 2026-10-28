@@ -1,6 +1,129 @@
 <% layout('layout') -%>
 
 <style>
+/* ==========================================================================
+   RENDER TAB - ULTRA-CLEAR INPUT & TEXT CONTRAST FIX
+   Memperbaiki teks judul & input text yang tidak terlihat karena kontras background.
+   Memastikan background gelap solid (#0f172a), border tegas, teks putih tajam (#ffffff),
+   dan focus ring ungu yang kontras serta mudah dibaca.
+   ========================================================================== */
+#title,
+#targetAccountId,
+#durationHours,
+#durationMinutes,
+#videoSearchInput,
+#audioSearchInput,
+#loopCount,
+#loopTargetAccountId,
+#scheduleDate,
+#scheduleTime,
+#delayHours,
+#delayMinutes,
+#delaySeconds,
+#uploadTitle,
+#uploadDescription,
+#uploadTags,
+#uploadTargetChannel,
+#uploadCategory,
+#uploadPrivacy,
+#uploadPublishAt {
+  background-color: #0f172a !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  border: 1px solid #334155 !important;
+  caret-color: #a855f7 !important;
+  color-scheme: dark !important;
+  font-weight: 500;
+}
+
+#title:hover,
+#targetAccountId:hover,
+#durationHours:hover,
+#durationMinutes:hover,
+#videoSearchInput:hover,
+#audioSearchInput:hover,
+#loopCount:hover,
+#loopTargetAccountId:hover,
+#scheduleDate:hover,
+#scheduleTime:hover,
+#delayHours:hover,
+#delayMinutes:hover,
+#delaySeconds:hover,
+#uploadTitle:hover,
+#uploadDescription:hover,
+#uploadTags:hover,
+#uploadTargetChannel:hover,
+#uploadCategory:hover,
+#uploadPrivacy:hover,
+#uploadPublishAt:hover {
+  border-color: #64748b !important;
+  background-color: #0b1120 !important;
+}
+
+#title:focus,
+#targetAccountId:focus,
+#durationHours:focus,
+#durationMinutes:focus,
+#videoSearchInput:focus,
+#audioSearchInput:focus,
+#loopCount:focus,
+#loopTargetAccountId:focus,
+#scheduleDate:focus,
+#scheduleTime:focus,
+#delayHours:focus,
+#delayMinutes:focus,
+#delaySeconds:focus,
+#uploadTitle:focus,
+#uploadDescription:focus,
+#uploadTags:focus,
+#uploadTargetChannel:focus,
+#uploadCategory:focus,
+#uploadPrivacy:focus,
+#uploadPublishAt:focus {
+  background-color: #080d1a !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  border-color: #8b5cf6 !important;
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.3) !important;
+  outline: none !important;
+}
+
+#title::placeholder,
+#videoSearchInput::placeholder,
+#audioSearchInput::placeholder,
+#uploadTitle::placeholder,
+#uploadDescription::placeholder,
+#uploadTags::placeholder {
+  color: #94a3b8 !important;
+  -webkit-text-fill-color: #94a3b8 !important;
+  opacity: 1 !important;
+}
+
+#title::selection,
+#videoSearchInput::selection,
+#audioSearchInput::selection,
+#uploadTitle::selection,
+#uploadDescription::selection,
+#uploadTags::selection {
+  background-color: #8b5cf6 !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+
+#title:-webkit-autofill,
+#title:-webkit-autofill:hover,
+#title:-webkit-autofill:focus,
+#title:-webkit-autofill:active,
+#uploadTitle:-webkit-autofill,
+#uploadTitle:-webkit-autofill:hover,
+#uploadTitle:-webkit-autofill:focus,
+#uploadTitle:-webkit-autofill:active {
+  -webkit-text-fill-color: #ffffff !important;
+  -webkit-box-shadow: 0 0 0px 1000px #0f172a inset !important;
+  box-shadow: 0 0 0px 1000px #0f172a inset !important;
+  caret-color: #ffffff !important;
+}
+
 /* Step-by-Step Flow Styling - ULTRA CLEAN */
 .step-section {
   padding: 0.75rem 0;
@@ -707,14 +830,14 @@ button[onclick*="deleteJob"] {
             <label class="text-xs font-semibold text-gray-300 block mb-1.5">
               <i class="ti ti-text-size text-xs mr-1 text-primary"></i>Video Title
             </label>
-            <input type="text" id="title" value="1" placeholder="Enter video title" class="w-full bg-dark-750/90 text-white px-3.5 py-2.5 border border-gray-700/70 rounded-xl text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all">
+            <input type="text" id="title" value="1" placeholder="Enter video title" class="w-full bg-dark-900 text-white px-3.5 py-2.5 border border-gray-700 rounded-xl text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all font-medium">
           </div>
           
           <div>
             <label class="text-xs font-semibold text-gray-300 block mb-1.5">
               <i class="ti ti-brand-youtube text-xs mr-1 text-red-400"></i>Target Channel (Optional)
             </label>
-            <select id="targetAccountId" class="w-full bg-dark-750/90 text-white px-3.5 py-2.5 border border-gray-700/70 rounded-xl text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all">
+            <select id="targetAccountId" class="w-full bg-dark-900 text-white px-3.5 py-2.5 border border-gray-700 rounded-xl text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all font-medium">
               <option value="">-- Select Channel --</option>
             </select>
           </div>
@@ -748,14 +871,14 @@ button[onclick*="deleteJob"] {
                   <i class="ti ti-clock-hour-4 text-xs mr-1"></i>Hours
                 </label>
                 <input type="number" id="durationHours" min="0" value="0" 
-                  class="w-full bg-dark-750/90 text-white px-3 py-2.5 rounded-xl text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 text-center font-bold border border-gray-700/70 transition-all">
+                  class="w-full bg-dark-900 text-white px-3 py-2.5 rounded-xl text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 text-center font-bold border border-gray-700 transition-all">
               </div>
               <div>
                 <label class="text-xs font-medium text-gray-400 block mb-2">
                   <i class="ti ti-clock text-xs mr-1"></i>Minutes
                 </label>
                 <input type="number" id="durationMinutes" min="0" max="59" value="0" 
-                  class="w-full bg-dark-750/90 text-white px-3 py-2.5 rounded-xl text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 text-center font-bold border border-gray-700/70 transition-all">
+                  class="w-full bg-dark-900 text-white px-3 py-2.5 rounded-xl text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 text-center font-bold border border-gray-700 transition-all">
               </div>
             </div>
 
@@ -885,7 +1008,7 @@ button[onclick*="deleteJob"] {
             <div class="mb-2.5">
               <div class="relative">
                 <input type="text" id="videoSearchInput" placeholder="Search videos or folders..." 
-                  class="w-full bg-dark-750/90 text-white px-3 py-2 pl-9 border border-gray-700/70 rounded-xl text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                  class="w-full bg-dark-900 text-white px-3 py-2 pl-9 border border-gray-700 rounded-xl text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all font-medium"
                   oninput="filterMedia('video')">
                 <i class="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
               </div>
@@ -901,7 +1024,7 @@ button[onclick*="deleteJob"] {
             <div class="mb-2.5">
               <div class="relative">
                 <input type="text" id="audioSearchInput" placeholder="Search audio or folders..." 
-                  class="w-full bg-dark-750/90 text-white px-3 py-2 pl-9 border border-gray-700/70 rounded-xl text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                  class="w-full bg-dark-900 text-white px-3 py-2 pl-9 border border-gray-700 rounded-xl text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all font-medium"
                   oninput="filterMedia('audio')">
                 <i class="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
               </div>
@@ -1371,13 +1494,13 @@ button[onclick*="deleteJob"] {
       <div class="p-6">
         <div class="mb-4">
           <label class="text-xs font-semibold text-gray-300 block mb-1.5">Jumlah Loop</label>
-          <input type="number" id="loopCount" min="2" max="100" value="2" class="w-full bg-dark-750/90 text-white px-4 py-2.5 border border-gray-700/70 rounded-xl focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 text-sm transition-all">
+          <input type="number" id="loopCount" min="2" max="100" value="2" class="w-full bg-dark-900 text-white px-4 py-2.5 border border-gray-700 rounded-xl focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 text-sm transition-all font-medium">
           <p class="text-[11px] text-gray-400 mt-1">Berapa kali video akan di-loop (2-100x)</p>
         </div>
         
         <div class="mb-4">
           <label class="text-xs font-semibold text-gray-300 block mb-1.5">Target Channel (Optional)</label>
-          <select id="loopTargetAccountId" class="w-full bg-dark-750/90 text-white px-4 py-2.5 border border-gray-700/70 rounded-xl focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 text-sm transition-all">
+          <select id="loopTargetAccountId" class="w-full bg-dark-900 text-white px-4 py-2.5 border border-gray-700 rounded-xl focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 text-sm transition-all font-medium">
             <option value="">-- Pilih Channel (Optional) --</option>
           </select>
           <p class="text-[11px] text-gray-400 mt-1">Pilih channel untuk auto-upload setelah loop selesai</p>
@@ -1536,13 +1659,13 @@ button[onclick*="deleteJob"] {
             <label class="text-xs font-semibold text-gray-300 block mb-1.5">
               <i class="ti ti-calendar mr-1 text-purple-400"></i>Date
             </label>
-            <input type="date" id="scheduleDate" class="w-full bg-dark-750/90 text-white px-4 py-2.5 border border-gray-700/70 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 text-sm transition-all">
+            <input type="date" id="scheduleDate" class="w-full bg-dark-900 text-white px-4 py-2.5 border border-gray-700 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 text-sm transition-all font-medium">
           </div>
           <div class="mb-3.5">
             <label class="text-xs font-semibold text-gray-300 block mb-1.5">
               <i class="ti ti-clock mr-1 text-purple-400"></i>Time
             </label>
-            <input type="time" id="scheduleTime" class="w-full bg-dark-750/90 text-white px-4 py-2.5 border border-gray-700/70 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 text-sm transition-all">
+            <input type="time" id="scheduleTime" class="w-full bg-dark-900 text-white px-4 py-2.5 border border-gray-700 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 text-sm transition-all font-medium">
           </div>
         </div>
 
@@ -1553,15 +1676,15 @@ button[onclick*="deleteJob"] {
             <div class="grid grid-cols-3 gap-2">
               <div>
                 <label class="text-[11px] text-gray-400 block mb-1">Hours</label>
-                <input type="number" id="delayHours" min="0" max="24" value="0" class="w-full bg-dark-750/90 text-white px-2 py-2 rounded-xl text-sm border border-gray-700/70 focus:outline-none focus:border-purple-500 text-center font-bold">
+                <input type="number" id="delayHours" min="0" max="24" value="0" class="w-full bg-dark-900 text-white px-2 py-2 rounded-xl text-sm border border-gray-700 focus:outline-none focus:border-purple-500 text-center font-bold">
               </div>
               <div>
                 <label class="text-[11px] text-gray-400 block mb-1">Minutes</label>
-                <input type="number" id="delayMinutes" min="0" max="59" value="30" class="w-full bg-dark-750/90 text-white px-2 py-2 rounded-xl text-sm border border-gray-700/70 focus:outline-none focus:border-purple-500 text-center font-bold">
+                <input type="number" id="delayMinutes" min="0" max="59" value="30" class="w-full bg-dark-900 text-white px-2 py-2 rounded-xl text-sm border border-gray-700 focus:outline-none focus:border-purple-500 text-center font-bold">
               </div>
               <div>
                 <label class="text-[11px] text-gray-400 block mb-1">Seconds</label>
-                <input type="number" id="delaySeconds" min="0" max="59" value="0" class="w-full bg-dark-750/90 text-white px-2 py-2 rounded-xl text-sm border border-gray-700/70 focus:outline-none focus:border-purple-500 text-center font-bold">
+                <input type="number" id="delaySeconds" min="0" max="59" value="0" class="w-full bg-dark-900 text-white px-2 py-2 rounded-xl text-sm border border-gray-700 focus:outline-none focus:border-purple-500 text-center font-bold">
               </div>
             </div>
           </div>
@@ -1664,7 +1787,7 @@ button[onclick*="deleteJob"] {
           <label class="text-sm font-medium text-white block mb-2">
             <i class="ti ti-text-size mr-1"></i>Video Title
           </label>
-          <input type="text" id="uploadTitle" class="w-full bg-dark-700 text-white px-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" placeholder="Enter video title">
+          <input type="text" id="uploadTitle" class="w-full bg-dark-900 text-white px-4 py-2.5 border border-gray-700 rounded-xl focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 font-medium" placeholder="Enter video title">
           <p class="text-xs text-gray-400 mt-1">Rename your video before uploading</p>
         </div>
         
@@ -1673,7 +1796,7 @@ button[onclick*="deleteJob"] {
           <label class="text-sm font-medium text-white block mb-2">
             <i class="ti ti-brand-youtube mr-1"></i>Target Channel
           </label>
-          <select id="uploadTargetChannel" class="w-full bg-dark-700 text-white px-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" onchange="loadChannelDefaults()">
+          <select id="uploadTargetChannel" class="w-full bg-dark-900 text-white px-4 py-2.5 border border-gray-700 rounded-xl focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 font-medium" onchange="loadChannelDefaults()">
             <option value="">-- Select Channel --</option>
           </select>
           <p class="text-xs text-gray-400 mt-1">Select channel to load defaults</p>
@@ -1684,7 +1807,7 @@ button[onclick*="deleteJob"] {
           <label class="text-sm font-medium text-white block mb-2">
             <i class="ti ti-file-text mr-1"></i>Description
           </label>
-          <textarea id="uploadDescription" rows="4" class="w-full bg-dark-700 text-white px-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary resize-none" placeholder="Video description..."></textarea>
+          <textarea id="uploadDescription" rows="4" class="w-full bg-dark-900 text-white px-4 py-2.5 border border-gray-700 rounded-xl focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 resize-none font-medium" placeholder="Video description..."></textarea>
           <p class="text-xs text-gray-400 mt-1">Edit description or keep channel default</p>
         </div>
         
@@ -1693,7 +1816,7 @@ button[onclick*="deleteJob"] {
           <label class="text-sm font-medium text-white block mb-2">
             <i class="ti ti-tags mr-1"></i>Tags
           </label>
-          <input type="text" id="uploadTags" class="w-full bg-dark-700 text-white px-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" placeholder="tag1, tag2, tag3">
+          <input type="text" id="uploadTags" class="w-full bg-dark-900 text-white px-4 py-2.5 border border-gray-700 rounded-xl focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 font-medium" placeholder="tag1, tag2, tag3">
           <p class="text-xs text-gray-400 mt-1">Separate tags with commas</p>
         </div>
         
@@ -1702,7 +1825,7 @@ button[onclick*="deleteJob"] {
           <label class="text-sm font-medium text-white block mb-2">
             <i class="ti ti-category mr-1"></i>Category
           </label>
-          <select id="uploadCategory" class="w-full bg-dark-700 text-white px-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
+          <select id="uploadCategory" class="w-full bg-dark-900 text-white px-4 py-2.5 border border-gray-700 rounded-xl focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 font-medium">
             <option value="1">Film & Animation</option>
             <option value="2">Autos & Vehicles</option>
             <option value="10">Music</option>
@@ -1726,7 +1849,7 @@ button[onclick*="deleteJob"] {
           <label class="text-sm font-medium text-white block mb-2">
             <i class="ti ti-lock mr-1"></i>Privacy
           </label>
-          <select id="uploadPrivacy" class="w-full bg-dark-700 text-white px-4 py-2.5 border border-gray-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
+          <select id="uploadPrivacy" class="w-full bg-dark-900 text-white px-4 py-2.5 border border-gray-700 rounded-xl focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 font-medium">
             <option value="private">Private</option>
             <option value="unlisted" selected>Unlisted</option>
             <option value="public">Public</option>
