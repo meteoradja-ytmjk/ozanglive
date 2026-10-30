@@ -328,6 +328,13 @@ class YouTubeStatusSync {
         }
       }
 
+      // Check if stream was manually stopped by user
+      if (this.streamingService && typeof this.streamingService.isManuallyStopping === 'function' && this.streamingService.isManuallyStopping(streamId)) {
+        console.log(`[YouTubeStatusSync] Stream ${streamId} was manually stopped, stopping monitor`);
+        this.stopMonitoring(streamId);
+        return;
+      }
+
       // Check if broadcast ended - but only stop if it's a definitive end and stream duration has genuinely elapsed
       // 'complete' means the broadcast was properly ended
       // 'revoked' means it was cancelled

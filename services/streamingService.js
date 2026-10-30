@@ -28,8 +28,9 @@ const streamRetryCount = new Map();
 // IMPROVED: For unlimited streams (once without duration), allow infinite retries
 // For timed streams, use standard retry limit
 const MAX_RETRY_ATTEMPTS = 20; // Generous CONSECUTIVE-failure budget for timed streams (resets to 0 on each successful reconnect)
-const MAX_RETRY_ATTEMPTS_UNLIMITED = 999; // Virtually infinite for unlimited streams
+const MAX_RETRY_ATTEMPTS_UNLIMITED = Number.MAX_SAFE_INTEGER; // Unlimited streams run indefinitely until manually stopped
 const manuallyStoppingStreams = new Set();
+const pendingReconnectTimeouts = new Map();
 
 function isManuallyStopping(streamId) {
   return manuallyStoppingStreams.has(streamId);
@@ -862,13 +863,13 @@ async function checkStreamProcessHealth() {
             try {
               const stream = await Stream.findById(streamId);
               if (stream && stream.status === 'live') {
+                const isUnlimited = isUnlimitedStream(stream);
                 const retryCount = streamRetryCount.get(streamId) || 0;
                 const maxRetries = getMaxRetryAttempts(stream);
-                if (retryCount < maxRetries) {
+                if (isUnlimited || retryCount < maxRetries) {
                   streamRetryCount.set(streamId, retryCount + 1);
                   
                   // For unlimited streams, add exponential backoff with cap
-                  const isUnlimited = isUnlimitedStream(stream);
                   const backoffDelay = isUnlimited 
                     ? Math.min(3000 + (retryCount * 2000), 30000) // 3s, 5s, 7s... max 30s
                     : 3000;
@@ -2693,7 +2694,8 @@ async function startStream(streamId) {
             : Math.min(3000 + (retryCount * 2000), 20000);
 
           const scheduleReconnect = (delayMs) => {
-            setTimeout(async () => {
+            const timerId = setTimeout(async () => {
+              pendingReconnectTimeouts.delete(streamId);
               try {
                 if (manuallyStoppingStreams.has(streamId)) {
                   console.log(`[StreamingService] Stream ${streamId} was manually stopped during reconnect wait.`);
@@ -2734,7 +2736,7 @@ async function startStream(streamId) {
                   console.error(`[StreamingService] ⚠️ Reconnect attempt #${currentAttempt} failed: ${result?.error || 'Unknown error'}`);
                   addStreamLog(streamId, `Reconnect attempt #${currentAttempt} failed: ${result?.error || 'Unknown error'}`);
 
-                  if (currentAttempt < maxAttempts) {
+                  if (isUnlimitedStream(streamInfo) || currentAttempt < maxAttempts) {
                     const nextAttempt = currentAttempt + 1;
                     streamRetryCount.set(streamId, nextAttempt);
                     const nextDelay = isUnlimitedStream(streamInfo)
@@ -2757,6 +2759,7 @@ async function startStream(streamId) {
                 console.error(`[StreamingService] Error during reconnect execution for stream ${streamId}:`, reconnectErr.message);
               }
             }, delayMs);
+            pendingReconnectTimeouts.set(streamId, timerId);
           };
 
           scheduleReconnect(backoffDelay);
@@ -2877,6 +2880,13 @@ async function startStream(streamId) {
   }
 }
 async function stopStream(streamId) {
+  manuallyStoppingStreams.add(streamId);
+  if (pendingReconnectTimeouts.has(streamId)) {
+    clearTimeout(pendingReconnectTimeouts.get(streamId));
+    pendingReconnectTimeouts.delete(streamId);
+    console.log(`[StreamingService] Cleared pending reconnect timer for stream ${streamId}`);
+  }
+
   try {
     // CRITICAL: Retrieve broadcastIdHint BEFORE stopping monitoring if activeChecks has it
     let broadcastIdHint = null;

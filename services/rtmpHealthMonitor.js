@@ -22,8 +22,8 @@ const HEALTH_CHECK_INTERVAL_MS = 1 * 60 * 1000;
 // down before we stop trying. Kept high so long streams (e.g. 5h) survive repeated
 // drops and still honor their configured end time.
 const MAX_CONSECUTIVE_FAILURES = 30;
-// For unlimited streams, allow many more failures before giving up
-const MAX_CONSECUTIVE_FAILURES_UNLIMITED = 100;
+// For unlimited streams, allow indefinite failures (runs forever until manual stop)
+const MAX_CONSECUTIVE_FAILURES_UNLIMITED = Number.MAX_SAFE_INTEGER;
 
 // Reconnect delay: 3 seconds base, with exponential backoff for unlimited
 const RECONNECT_DELAY_MS = 3 * 1000;
@@ -205,10 +205,9 @@ class RTMPHealthMonitor {
         }
       }
 
-      // Check if max failures reached (use higher limit for unlimited streams)
-      const maxFailures = monitor.isUnlimited ? MAX_CONSECUTIVE_FAILURES_UNLIMITED : MAX_CONSECUTIVE_FAILURES;
-      if (monitor.consecutiveFailures >= maxFailures) {
-        console.log(`[RTMPHealthMonitor] Stream ${streamId}: Max failures reached (${maxFailures}), stopping monitor`);
+      // Check if max failures reached (unlimited streams NEVER give up due to failures, runs forever until user stops it)
+      if (!monitor.isUnlimited && monitor.consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+        console.log(`[RTMPHealthMonitor] Stream ${streamId}: Max failures reached (${MAX_CONSECUTIVE_FAILURES}), stopping monitor`);
         this.stopMonitoring(streamId);
         return;
       }
