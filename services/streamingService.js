@@ -242,19 +242,42 @@ async function ensureFreshYouTubeBroadcastForStream(stream) {
     const accessToken = await youtubeService.getAccessTokenSafe(clientId, clientSecret, refreshToken, credentials.id);
     if (!accessToken) return;
 
+    // CRITICAL FIX: NEVER create fresh YouTube broadcasts on stream reconnect
+    if (isReconnect(stream.id)) {
+      console.log(`[StreamingService] Stream #${stream.id} is reconnecting. Preserving existing YouTube broadcast (${stream.youtube_broadcast_id || 'none'}).`);
+      return;
+    }
+
+    // CRITICAL FIX: Once and Unlimited streams are single broadcast events.
+    // If they already have a youtube_broadcast_id, NEVER create additional/unwanted broadcasts!
+    const isOnceOrUnlimited = !stream.schedule_type || stream.schedule_type === 'once' || isUnlimitedStream(stream);
+    if (isOnceOrUnlimited && stream.youtube_broadcast_id) {
+      console.log(`[StreamingService] Stream #${stream.id} is a once/unlimited broadcast with existing ID ${stream.youtube_broadcast_id}. Will NOT create duplicate broadcast.`);
+      return;
+    }
+
     let needsNewBroadcast = false;
     let oldStatus = null;
 
     if (stream.youtube_broadcast_id) {
       const currentBroadcast = await youtubeService.getBroadcastDetails(accessToken, stream.youtube_broadcast_id);
       if (!currentBroadcast) {
-        console.log(`[StreamingService] Broadcast ${stream.youtube_broadcast_id} not found on YouTube. Needs fresh broadcast.`);
-        needsNewBroadcast = true;
+        console.log(`[StreamingService] Broadcast ${stream.youtube_broadcast_id} not found on YouTube.`);
+        if (stream.schedule_type === 'daily' || stream.schedule_type === 'weekly') {
+          needsNewBroadcast = true;
+        } else {
+          return;
+        }
       } else {
         oldStatus = currentBroadcast.status?.lifeCycleStatus;
         if (oldStatus === 'complete' || oldStatus === 'completed' || oldStatus === 'revoked') {
-          console.log(`[StreamingService] Broadcast ${stream.youtube_broadcast_id} is in terminal state '${oldStatus}'. Needs fresh broadcast for today.`);
-          needsNewBroadcast = true;
+          if (stream.schedule_type === 'daily' || stream.schedule_type === 'weekly') {
+            console.log(`[StreamingService] Broadcast ${stream.youtube_broadcast_id} is in terminal state '${oldStatus}'. Needs fresh broadcast for recurring schedule.`);
+            needsNewBroadcast = true;
+          } else {
+            console.log(`[StreamingService] Broadcast ${stream.youtube_broadcast_id} is in terminal state '${oldStatus}' for once/unlimited stream #${stream.id}. Will NOT create unwanted broadcast.`);
+            return;
+          }
         } else {
           // Broadcast is valid and upcoming / live / ready / testing / created
           return;
@@ -1129,14 +1152,19 @@ function getStatusAfterStreamEnd(stream) {
 function isUnlimitedStream(stream) {
   if (!stream) return false;
   
+  // Explicit flags
+  if (stream.is_24_7 === 1 || stream.is_24_7 === true || stream.is_unlimited === 1 || stream.is_unlimited === true || stream.isUnlimited === true || stream.isUnlimited === 'true') {
+    return true;
+  }
+
   const hasDuration = (stream.stream_duration_minutes && stream.stream_duration_minutes > 0) || (stream.duration && stream.duration > 0);
+  if (hasDuration) return false;
+
   const isOnce = !stream.schedule_type || stream.schedule_type === 'once';
   const hasEndTime = isOnce && stream.end_time && new Date(stream.end_time) > new Date();
-  
-  // User must have loop_video enabled (not false and not 0/'0'/'false') for unlimited live
-  const loopEnabled = stream.loop_video !== false && stream.loop_video !== 0 && stream.loop_video !== '0' && stream.loop_video !== 'false';
+  if (hasEndTime) return false;
 
-  return !hasDuration && !hasEndTime && loopEnabled;
+  return true;
 }
 
 /**
@@ -2095,9 +2123,10 @@ function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds
   
   // Map video from file 0, audio from file 1
   args.push('-map', '0:v:0', '-map', '1:a:0');
-  // Copy video directly (0% CPU), encode audio to standard AAC stereo (works with MP3, WAV, AAC, M4A)
+  // Copy video directly (0% CPU), encode audio to standard AAC stereo with dynamic sample sync
   args.push('-c:v', 'copy');
   args.push('-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2');
+  args.push('-af', 'aresample=async=1:first_pts=0');
   args.push('-sn', '-dn');
   
   // CRITICAL: -t must be placed BEFORE -f flv and output URL
@@ -2135,7 +2164,15 @@ function buildFFmpegArgsVideoOnly(videoPath, rtmpUrl, durationSeconds, loopVideo
     args.push('-fflags', '+genpts+nobuffer');
   }
   args.push('-i', videoPath);
-  args.push('-c', 'copy');
+  if (shouldLoopVideo) {
+    // When looping, copy video directly (0% CPU) and sync audio samples to prevent A/V timestamp drift over hours
+    args.push('-map', '0:v:0', '-map', '0:a?');
+    args.push('-c:v', 'copy');
+    args.push('-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2');
+    args.push('-af', 'aresample=async=1:first_pts=0');
+  } else {
+    args.push('-c', 'copy');
+  }
   args.push('-sn', '-dn');
   
   // CRITICAL: -t must be placed BEFORE -f flv and output URL

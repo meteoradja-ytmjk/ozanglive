@@ -1236,7 +1236,7 @@
             <div class="flex items-center justify-between pt-1">
               <label class="text-xs text-gray-300">Aktifkan Jadwal Berulang</label>
               <label class="relative inline-flex items-center cursor-pointer">
-                <input type="checkbox" id="studioRecurringEnabled" name="recurringEnabled" class="sr-only peer" checked>
+                <input type="checkbox" id="studioRecurringEnabled" name="recurringEnabled" class="sr-only peer">
                 <div class="w-11 h-6 bg-dark-700 rounded-full peer peer-checked:bg-primary"></div>
                 <div class="absolute left-[2px] top-[2px] w-5 h-5 bg-white rounded-full transition-all peer-checked:translate-x-5"></div>
               </label>
@@ -1301,9 +1301,9 @@
             <input type="hidden" id="tagsHidden" name="tags" value="">
           </div>
 
-          <!-- Auto-start and Auto-stop (hidden, always ON) -->
+          <!-- Auto-start and Auto-stop (auto-stop default false to prevent premature end on network drops) -->
           <input type="hidden" id="enableAutoStart" name="enableAutoStart" value="true">
-          <input type="hidden" id="enableAutoStop" name="enableAutoStop" value="true">
+          <input type="hidden" id="enableAutoStop" name="enableAutoStop" value="false">
 
           <!-- Grid: AI USE, Enable DVR & Unlist Replay (Responsive: 1 Kolom di Mobile, 3 Kolom di Desktop) -->
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-2.5">

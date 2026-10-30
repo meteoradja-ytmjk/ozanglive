@@ -420,7 +420,7 @@ class YouTubeService {
     // Build contentDetails with auto-start/stop and DVR settings
     const contentDetails = {
       enableAutoStart: enableAutoStart === true || enableAutoStart === 'true',
-      enableAutoStop: enableAutoStop !== false && enableAutoStop !== 'false', // Default true
+      enableAutoStop: enableAutoStop === true || enableAutoStop === 'true' || enableAutoStop === 1 || enableAutoStop === '1', // Default false to prevent YouTube prematurely closing live broadcasts on minor network hiccups
       monitorStream: {
         enableMonitorStream: false
       },

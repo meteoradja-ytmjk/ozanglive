@@ -16,7 +16,7 @@ class YouTubeBroadcastSettings {
       categoryId = null,
       privacyStatus = null,
       enableAutoStart = true,
-      enableAutoStop = true,
+      enableAutoStop = false,
       enableDvr = false,
       unlistReplayOnEnd = true,
       originalPrivacyStatus = 'public',

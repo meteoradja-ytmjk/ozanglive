@@ -364,17 +364,23 @@ class YouTubeStatusSync {
         if (!streamShouldKeepRunning) {
           try {
             const streamObj = await Stream.findById(streamId);
-            if (streamObj && streamObj.status === 'live' && streamObj.start_time) {
-              const { calculateDurationSeconds } = require('../utils/durationCalculator');
-              const durSeconds = (streamObj.stream_duration_minutes && streamObj.stream_duration_minutes > 0)
-                ? streamObj.stream_duration_minutes * 60
-                : calculateDurationSeconds(streamObj);
-              if (durSeconds && durSeconds > 0) {
-                const expectedEnd = new Date(new Date(streamObj.start_time).getTime() + durSeconds * 1000);
-                const remainingMs = expectedEnd.getTime() - Date.now();
-                if (remainingMs > 15000) {
-                  streamShouldKeepRunning = true;
-                  remText = `${Math.round(remainingMs / 1000)}s remaining`;
+            if (streamObj && streamObj.status === 'live') {
+              const { isUnlimitedStream } = require('./streamingService');
+              if (isUnlimitedStream(streamObj)) {
+                streamShouldKeepRunning = true;
+                remText = 'unlimited stream (runs continuously)';
+              } else if (streamObj.start_time) {
+                const { calculateDurationSeconds } = require('../utils/durationCalculator');
+                const durSeconds = (streamObj.stream_duration_minutes && streamObj.stream_duration_minutes > 0)
+                  ? streamObj.stream_duration_minutes * 60
+                  : calculateDurationSeconds(streamObj);
+                if (durSeconds && durSeconds > 0) {
+                  const expectedEnd = new Date(new Date(streamObj.start_time).getTime() + durSeconds * 1000);
+                  const remainingMs = expectedEnd.getTime() - Date.now();
+                  if (remainingMs > 15000) {
+                    streamShouldKeepRunning = true;
+                    remText = `${Math.round(remainingMs / 1000)}s remaining`;
+                  }
                 }
               }
             }

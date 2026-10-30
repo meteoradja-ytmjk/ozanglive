@@ -32,6 +32,18 @@ function calculateDurationSeconds(stream) {
     return null;
   }
 
+  // Explicit unlimited flag check
+  if (stream.is_24_7 === 1 || stream.is_24_7 === true || stream.is_unlimited === 1 || stream.is_unlimited === true || stream.isUnlimited === true || stream.isUnlimited === 'true' || stream.duration_type === 'unlimited') {
+    console.log('[DurationCalculator] Stream has explicit unlimited flag - returning null');
+    return null;
+  }
+
+  // If stream_duration_minutes is explicitly set to 0, it means unlimited
+  if (stream.stream_duration_minutes === 0 || stream.stream_duration_minutes === '0') {
+    console.log('[DurationCalculator] stream_duration_minutes is explicitly 0 (unlimited) - returning null');
+    return null;
+  }
+
   // Priority 1: stream_duration_minutes (primary field)
   // If user explicitly set duration (hours + minutes), this takes absolute priority
   if (stream.stream_duration_minutes && stream.stream_duration_minutes > 0) {

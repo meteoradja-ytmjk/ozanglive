@@ -282,6 +282,15 @@ async function checkStreamDurations() {
           console.log(`[Scheduler] Stream ${stream.id} start_time is in the future (${actualStartTime.toISOString()}), skipping`);
           continue;
         }
+
+        const isUnlimited = stream.is_24_7 === 1 || stream.is_24_7 === true || 
+                            stream.is_unlimited === 1 || stream.is_unlimited === true || 
+                            stream.isUnlimited === true || stream.isUnlimited === 'true' || 
+                            stream.duration_type === 'unlimited';
+        if (isUnlimited) {
+          console.log(`[Scheduler] Stream ${stream.id} "${stream.title}" is explicitly marked unlimited - will run indefinitely`);
+          continue;
+        }
         
         // Use centralized duration calculator for consistent priority
         let durationSeconds = null;

@@ -11935,7 +11935,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       }
 
       const isRecurring = (scheduleType === 'daily' || scheduleType === 'weekly');
-      const recurringEnabledVal = (req.body.recurringEnabled === 'true' || req.body.recurringEnabled === true || req.body.recurringEnabled === 'on' || req.body.recurringEnabled === 1 || req.body.recurringEnabled === '1' || isRecurring) ? 1 : 0;
+      const recurringEnabledVal = isRecurring && (req.body.recurringEnabled === 'true' || req.body.recurringEnabled === true || req.body.recurringEnabled === 'on' || req.body.recurringEnabled === 1 || req.body.recurringEnabled === '1') ? 1 : 0;
 
       let finalRecurringTime = req.body.recurringTime || null;
       if (!finalRecurringTime && isRecurring && sDate) {
@@ -12028,7 +12028,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
           categoryId: finalCategoryId,
           privacyStatus: privacyStatus || 'unlisted',
           enableAutoStart: enableAutoStart === 'true' || enableAutoStart === true,
-          enableAutoStop: enableAutoStop === 'true' || enableAutoStop === true,
+          enableAutoStop: !isExplicitUnlimited && (enableAutoStop === 'true' || enableAutoStop === true || enableAutoStop === '1' || enableAutoStop === 1),
           enableDvr: isEnableDvr,
           unlistReplayOnEnd: unlistReplayOnEnd === 'true' || unlistReplayOnEnd === true,
           originalPrivacyStatus: privacyStatus || 'unlisted',
@@ -12129,7 +12129,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       tags: parsedTags,
       categoryId: finalCategoryId,
       enableAutoStart: enableAutoStart === 'true' || enableAutoStart === true,
-      enableAutoStop: enableAutoStop === 'true' || enableAutoStop === true,
+      enableAutoStop: !isExplicitUnlimited && (enableAutoStop === 'true' || enableAutoStop === true || enableAutoStop === '1' || enableAutoStop === 1),
       monetizationEnabled: monetizationEnabled === 'true' || monetizationEnabled === true,
       adFrequency: adFrequency || 'medium',
       alteredContent: isAlteredContent,
@@ -12160,7 +12160,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         categoryId: finalCategoryId,
         privacyStatus: privacyStatus || 'unlisted',
         enableAutoStart: enableAutoStart === 'true' || enableAutoStart === true,
-        enableAutoStop: enableAutoStop === 'true' || enableAutoStop === true,
+        enableAutoStop: !isExplicitUnlimited && (enableAutoStop === 'true' || enableAutoStop === true || enableAutoStop === '1' || enableAutoStop === 1),
         enableDvr: isEnableDvr,
         unlistReplayOnEnd: unlistReplayOnEnd === 'true' || unlistReplayOnEnd === true,
         originalPrivacyStatus: privacyStatus || 'unlisted',
@@ -12564,7 +12564,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       }
 
       const isRecurring = (scheduleType === 'daily' || scheduleType === 'weekly');
-      const recurringEnabledVal = (req.body.recurringEnabled === 'true' || req.body.recurringEnabled === true || req.body.recurringEnabled === 'on' || req.body.recurringEnabled === 1 || req.body.recurringEnabled === '1' || isRecurring) ? 1 : 0;
+      const recurringEnabledVal = isRecurring && (req.body.recurringEnabled === 'true' || req.body.recurringEnabled === true || req.body.recurringEnabled === 'on' || req.body.recurringEnabled === 1 || req.body.recurringEnabled === '1') ? 1 : 0;
 
       let finalRecurringTime = req.body.recurringTime || null;
       if (!finalRecurringTime && isRecurring && sDate) {

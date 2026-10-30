@@ -5385,7 +5385,7 @@ if (createBroadcastForm) {
       const loopVideo = isUnlimited ? 'true' : (document.getElementById('studioLoopVideoToggle')?.checked ? 'true' : 'false');
       const scheduleEndTime = (scheduleType === 'once' && !isUnlimited) ? (document.getElementById('studioScheduleEndTime')?.value || '') : '';
       const scheduleDays = document.getElementById('studioScheduleDays')?.value || '[]';
-      const recurringEnabled = document.getElementById('studioRecurringEnabled')?.checked ? 'true' : 'false';
+      const recurringEnabled = (scheduleType === 'daily' || scheduleType === 'weekly') && document.getElementById('studioRecurringEnabled')?.checked ? 'true' : 'false';
 
       formData.append('isUnlimited', isUnlimited ? 'true' : 'false');
       formData.append('streamDurationHours', durationHours);
@@ -11362,7 +11362,7 @@ if (recreateFromTemplateForm) {
           
           // IMPORTANT: Always enable auto-start when re-creating from template
           formData.append('enableAutoStart', 'true');
-          formData.append('enableAutoStop', 'true');
+          formData.append('enableAutoStop', 'false');
           formData.append('unlistReplayOnEnd', 'true');
 
           // Durasi dan Loop Video diwariskan 100% otomatis dari slot/template
@@ -16342,7 +16342,7 @@ async function submitDuplicateBroadcast(event) {
     if (tags) formData.append('tags', tags);
     if (thumbnailPath) formData.append('thumbnailPath', thumbnailPath);
     formData.append('enableAutoStart', 'true');
-    formData.append('enableAutoStop', 'true');
+    formData.append('enableAutoStop', 'false');
 
     const response = await fetch('/api/youtube/broadcasts', {
       method: 'POST',

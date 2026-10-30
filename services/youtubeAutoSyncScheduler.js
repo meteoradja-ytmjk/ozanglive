@@ -219,7 +219,17 @@ class YouTubeAutoSyncScheduler {
           continue;
         }
 
-        const existing = streamByBroadcastId.get(bId);
+        let existing = streamByBroadcastId.get(bId);
+        if (!existing && (b.streamKey || b.stream_key)) {
+          const targetKey = (b.streamKey || b.stream_key).trim();
+          existing = existingStreams.find(s => !s.youtube_broadcast_id && s.stream_key && s.stream_key.trim() === targetKey);
+          if (existing) {
+            db.run('UPDATE streams SET youtube_broadcast_id = ? WHERE id = ?', [bId, existing.id], () => {});
+            existing.youtube_broadcast_id = bId;
+            streamByBroadcastId.set(bId, existing);
+          }
+        }
+
         if (existing) {
           b.streamId = existing.id;
           const newStreamKey = b.streamKey || b.stream_key || '';
