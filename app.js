@@ -11935,7 +11935,9 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       }
 
       const isRecurring = (scheduleType === 'daily' || scheduleType === 'weekly');
-      const recurringEnabledVal = isRecurring && (req.body.recurringEnabled === 'true' || req.body.recurringEnabled === true || req.body.recurringEnabled === 'on' || req.body.recurringEnabled === 1 || req.body.recurringEnabled === '1') ? 1 : 0;
+      const recurringEnabledVal = isRecurring
+        ? ((req.body.recurringEnabled === 'false' || req.body.recurringEnabled === false || req.body.recurringEnabled === 0 || req.body.recurringEnabled === '0') ? 0 : 1)
+        : 0;
 
       let finalRecurringTime = req.body.recurringTime || null;
       if (!finalRecurringTime && isRecurring && sDate) {
@@ -12564,7 +12566,9 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       }
 
       const isRecurring = (scheduleType === 'daily' || scheduleType === 'weekly');
-      const recurringEnabledVal = isRecurring && (req.body.recurringEnabled === 'true' || req.body.recurringEnabled === true || req.body.recurringEnabled === 'on' || req.body.recurringEnabled === 1 || req.body.recurringEnabled === '1') ? 1 : 0;
+      const recurringEnabledVal = isRecurring
+        ? ((req.body.recurringEnabled === 'false' || req.body.recurringEnabled === false || req.body.recurringEnabled === 0 || req.body.recurringEnabled === '0') ? 0 : 1)
+        : 0;
 
       let finalRecurringTime = req.body.recurringTime || null;
       if (!finalRecurringTime && isRecurring && sDate) {

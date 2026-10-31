@@ -4649,6 +4649,12 @@ function setStudioScheduleType(type) {
     }
   });
 
+  // Sync recurring enabled toggle based on schedule type
+  const studioRecurringToggle = document.getElementById('studioRecurringEnabled');
+  if (studioRecurringToggle) {
+    studioRecurringToggle.checked = (type === 'daily' || type === 'weekly');
+  }
+
   if (type === 'once') {
     if (onceBtn) onceBtn.className = activeClass;
     if (onceSection) onceSection.classList.remove('hidden');

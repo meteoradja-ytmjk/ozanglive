@@ -41,7 +41,9 @@ class Stream {
     } = streamData;
     const loop_video_int = (loop_video === 1 || loop_video === true || loop_video === '1' || loop_video === 'true') ? 1 : 0;
     const isRecurringSchedule = (schedule_type === 'daily' || schedule_type === 'weekly');
-    const recurring_enabled_int = isRecurringSchedule ? ((recurring_enabled === true || recurring_enabled === 1 || recurring_enabled === '1' || recurring_enabled === 'true') ? 1 : 0) : 0;
+    const recurring_enabled_int = isRecurringSchedule
+      ? ((recurring_enabled === false || recurring_enabled === 0 || recurring_enabled === '0' || recurring_enabled === 'false') ? 0 : 1)
+      : 0;
     const dual_stream_int = dual_stream ? 1 : 0;
     const vertical_key_val = vertical_stream_key || backup_rtmp_url || null;
     const schedule_days_json = schedule_days ? (typeof schedule_days === 'string' ? schedule_days : JSON.stringify(schedule_days)) : null;
