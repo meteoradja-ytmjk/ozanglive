@@ -5191,7 +5191,9 @@ if (createBroadcastForm) {
     const otherBtn = isStartNow ? createBtn : startNowBtn;
     const originalText = activeBtn ? activeBtn.innerHTML : '';
     if (activeBtn) {
-      activeBtn.innerHTML = '<i class="ti ti-loader animate-spin mr-1"></i> Proses...';
+      activeBtn.innerHTML = isStartNow
+        ? '<i class="ti ti-loader animate-spin mr-1"></i> Menyiapkan Siaran Live...'
+        : '<i class="ti ti-loader animate-spin mr-1"></i> Menyimpan Broadcast...';
       activeBtn.disabled = true;
     }
     if (otherBtn) {

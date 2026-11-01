@@ -1691,6 +1691,17 @@ async function comprehensiveImport(backupData, userId, options = {}) {
     warnings: []
   };
 
+  // Auto-migrate old format if detected
+  const migrationHelper = require('./migration-helper');
+  const originalData = backupData;
+  backupData = migrationHelper.autoMigrate(backupData);
+
+  // Add migration warning if data was migrated
+  if (backupData !== originalData && backupData.metadata && backupData.metadata.migrated) {
+    results.warnings.push('Backup file was in old format and has been automatically converted to new format.');
+    console.log('[Import] Old format detected and migrated');
+  }
+
   console.log('[comprehensiveImport] Starting import for user:', userId);
   console.log('[comprehensiveImport] Options:', options);
 
@@ -2162,6 +2173,12 @@ module.exports = {
   exportRecurringSchedules,
   exportStreamTemplates,
   exportPlaylists,
+  // Import data functions (used by comprehensiveImport)
+  importYouTubeCredentialsData,
+  importBroadcastTemplatesData,
+  importRecurringSchedulesData,
+  importStreamTemplatesData,
+  importPlaylistsData,
   // Title Manager functions
   exportTitleFolders,
   exportTitleSuggestions,

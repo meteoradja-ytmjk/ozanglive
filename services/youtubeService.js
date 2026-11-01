@@ -654,17 +654,16 @@ class YouTubeService {
     const resolvedBackupRtmpUrl = stream.cdn?.ingestionInfo?.backupIngestionAddress || 'rtmp://b.rtmp.youtube.com/live2?backup=1';
     console.log('[YouTubeService.createBroadcast] Stream resolved:', stream.id, 'key present:', !!resolvedStreamKey, 'backup present:', !!resolvedBackupRtmpUrl);
     
-    // Update video category, tags, and AI synthetic media status using Videos API
+    // Update video category, tags, and AI synthetic media status using Videos API asynchronously (non-blocking for fast broadcast response)
     let actualCategoryId = broadcast.snippet?.categoryId || finalCategoryId;
-    try {
-      console.log('[YouTubeService.createBroadcast] Updating video category to:', finalCategoryId, 'tags:', finalTags.length, 'alteredContent:', !!alteredContent);
-      const categoryResult = await this.updateVideoCategory(accessToken, broadcast.id, finalCategoryId, finalTags, finalDescription, alteredContent);
-      actualCategoryId = categoryResult.categoryId;
-      console.log('[YouTubeService.createBroadcast] Video metadata updated successfully to:', actualCategoryId);
-    } catch (categoryError) {
-      console.error('[YouTubeService.createBroadcast] Failed to update category/tags:', categoryError.message);
-      // Continue anyway, category update is not critical
-    }
+    this.updateVideoCategory(accessToken, broadcast.id, finalCategoryId, finalTags, finalDescription, alteredContent)
+      .then(categoryResult => {
+        if (categoryResult?.categoryId) actualCategoryId = categoryResult.categoryId;
+        console.log('[YouTubeService.createBroadcast] Video metadata updated successfully to:', categoryResult?.categoryId || actualCategoryId);
+      })
+      .catch(categoryError => {
+        console.error('[YouTubeService.createBroadcast] Failed to update category/tags:', categoryError.message);
+      });
     
     return {
       id: broadcast.id,

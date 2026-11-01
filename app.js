@@ -5338,8 +5338,10 @@ app.post('/api/streams', isAuthenticated, autoResolveYouTubeStreamKey, [
       schedule_type: req.body.scheduleType || 'once',
       schedule_days: scheduleDays,
       recurring_time: req.body.recurringTime || null,
-      // FIXED: Handle all possible truthy values for recurring_enabled
-      recurring_enabled: req.body.recurringEnabled === 'true' || req.body.recurringEnabled === true || req.body.recurringEnabled === 'on' || req.body.recurringEnabled === 1,
+      // FIXED: Ensure daily and weekly schedules enable recurring by default
+      recurring_enabled: (req.body.scheduleType === 'daily' || req.body.scheduleType === 'weekly')
+        ? ((req.body.recurringEnabled === 'false' || req.body.recurringEnabled === false || req.body.recurringEnabled === 0 || req.body.recurringEnabled === '0') ? 0 : 1)
+        : 0,
       youtube_account_id: req.body.youtubeAccountId ? parseInt(req.body.youtubeAccountId) : null,
       user_id: req.session.userId
     };
@@ -5855,8 +5857,9 @@ app.put('/api/streams/:id', isAuthenticated, async (req, res) => {
       }
       const recEnabledVal = req.body.recurringEnabled !== undefined ? req.body.recurringEnabled : req.body.recurring_enabled;
       if (recEnabledVal !== undefined) {
-        // FIXED: Handle all possible truthy values for recurring_enabled
-        updateData.recurring_enabled = (recEnabledVal === 'true' || recEnabledVal === true || recEnabledVal === 'on' || recEnabledVal === 1) ? 1 : 0;
+        updateData.recurring_enabled = (recEnabledVal === 'false' || recEnabledVal === false || recEnabledVal === 0 || recEnabledVal === '0') ? 0 : 1;
+      } else if (updateData.schedule_type === 'daily' || updateData.schedule_type === 'weekly') {
+        updateData.recurring_enabled = 1;
       }
     }
 
@@ -11838,8 +11841,8 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
     let resolvedStreamId = streamId || (matchedSlot ? (matchedSlot.streamId || matchedSlot.stream_id) : null) || (templateObj ? (templateObj.stream_id || templateObj.streamId) : null) || null;
     let currentStreamKey = req.body.streamKey || (matchedSlot ? (matchedSlot.streamKey || matchedSlot.stream_key) : null) || (templateObj ? (templateObj.stream_key || templateObj.streamKey) : null);
 
-    // If streamId or streamKey was selected/provided, resolve against account streams to obtain both valid id & key
-    if (resolvedStreamId || currentStreamKey) {
+    // If only one of streamId or streamKey was provided, resolve against account streams to obtain both valid id & key
+    if ((!resolvedStreamId || !currentStreamKey) && (resolvedStreamId || currentStreamKey)) {
       try {
         const accessTokenForLookup = await youtubeService.getAccessToken(credentials.clientId, credentials.clientSecret, credentials.refreshToken, 0, credentials.id, 0, credentials.id);
         const existingStreams = await youtubeService.listStreams(accessTokenForLookup);
@@ -12204,9 +12207,16 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
     if (req.file) {
       // Handle file upload (highest priority)
       try {
-        const thumbnailResult = await safeUploadThumbnail(req.file.buffer);
-        broadcast.thumbnailUrl = thumbnailResult.thumbnailUrl;
-        console.log('[API] Thumbnail uploaded from file upload');
+        if (isStartImmediately) {
+          safeUploadThumbnail(req.file.buffer).then(res => {
+            if (res && res.thumbnailUrl) broadcast.thumbnailUrl = res.thumbnailUrl;
+            console.log('[API] Thumbnail uploaded in background from file upload');
+          }).catch(thumbErr => console.error('[API] Error in background file thumbnail upload:', thumbErr.message));
+        } else {
+          const thumbnailResult = await safeUploadThumbnail(req.file.buffer);
+          broadcast.thumbnailUrl = thumbnailResult.thumbnailUrl;
+          console.log('[API] Thumbnail uploaded from file upload');
+        }
       } catch (thumbErr) {
         console.error('Error uploading thumbnail:', thumbErr.message);
       }
@@ -12217,9 +12227,16 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         console.log('[API] Using user-selected thumbnail:', thumbnailPath);
         if (fs.existsSync(fullPath)) {
           const imageBuffer = fs.readFileSync(fullPath);
-          const thumbnailResult = await safeUploadThumbnail(imageBuffer);
-          broadcast.thumbnailUrl = thumbnailResult.thumbnailUrl;
-          console.log('[API] Thumbnail uploaded from user selection:', thumbnailPath);
+          if (isStartImmediately) {
+            safeUploadThumbnail(imageBuffer).then(res => {
+              if (res && res.thumbnailUrl) broadcast.thumbnailUrl = res.thumbnailUrl;
+              console.log('[API] Thumbnail uploaded in background from user selection:', thumbnailPath);
+            }).catch(thumbErr => console.error('[API] Error in background gallery thumbnail upload:', thumbErr.message));
+          } else {
+            const thumbnailResult = await safeUploadThumbnail(imageBuffer);
+            broadcast.thumbnailUrl = thumbnailResult.thumbnailUrl;
+            console.log('[API] Thumbnail uploaded from user selection:', thumbnailPath);
+          }
 
           // Update youtube_broadcast_settings with the selected thumbnail path
           // thumbnailIndex from request is the index of the selected thumbnail
@@ -12365,14 +12382,23 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
             const imageBuffer = fs.readFileSync(fullPath);
             console.log('[API] Image buffer size:', imageBuffer.length, 'bytes');
 
-            try {
-              const thumbnailResult = await safeUploadThumbnail(imageBuffer);
-              broadcast.thumbnailUrl = thumbnailResult.thumbnailUrl;
-              console.log('[API] ✅ Thumbnail uploaded successfully to YouTube:', thumbnailResult.thumbnailUrl);
-            } catch (uploadErr) {
-              console.error('[API] ❌ Failed to upload thumbnail to YouTube:', uploadErr.message);
-              if (uploadErr.response) {
-                console.error('[API] YouTube API error:', JSON.stringify(uploadErr.response.data, null, 2));
+            if (isStartImmediately) {
+              safeUploadThumbnail(imageBuffer).then(thumbnailResult => {
+                if (thumbnailResult && thumbnailResult.thumbnailUrl) broadcast.thumbnailUrl = thumbnailResult.thumbnailUrl;
+                console.log('[API] ✅ Thumbnail uploaded in background to YouTube:', thumbnailResult?.thumbnailUrl);
+              }).catch(uploadErr => {
+                console.error('[API] ❌ Failed to upload background thumbnail to YouTube:', uploadErr.message);
+              });
+            } else {
+              try {
+                const thumbnailResult = await safeUploadThumbnail(imageBuffer);
+                broadcast.thumbnailUrl = thumbnailResult.thumbnailUrl;
+                console.log('[API] ✅ Thumbnail uploaded successfully to YouTube:', thumbnailResult.thumbnailUrl);
+              } catch (uploadErr) {
+                console.error('[API] ❌ Failed to upload thumbnail to YouTube:', uploadErr.message);
+                if (uploadErr.response) {
+                  console.error('[API] YouTube API error:', JSON.stringify(uploadErr.response.data, null, 2));
+                }
               }
             }
           } else {
@@ -12676,7 +12702,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       if (isStartImmediately && createdStream && (req.body.videoId || videoId || createdStream.video_id)) {
         if (typeof streamingService !== 'undefined' && typeof streamingService.startStream === 'function') {
           try {
-            streamStartResult = await streamingService.startStream(createdStream.id);
+            streamStartResult = await streamingService.startStream(createdStream.id, { skipYouTubePreSync: true });
             console.log('[API] Stream engine started immediately for stream ID:', createdStream.id, 'result:', streamStartResult);
             if (streamStartResult && streamStartResult.success) {
               await Stream.update(createdStream.id, { status: 'live', schedule_time: null }).catch(() => {});

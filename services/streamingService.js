@@ -2266,7 +2266,7 @@ function summarizeFFmpegError(stderr) {
   return 'Gagal memulai stream. Coba lagi sebentar.';
 }
 
-async function startStream(streamId) {
+async function startStream(streamId, options = {}) {
   try {
     if (activeStreams.has(streamId)) {
       return { success: false, error: 'Stream is already active' };
@@ -2330,7 +2330,8 @@ async function startStream(streamId) {
     }
     
     // BUG FIX: Ensure fresh YouTube broadcast for recurring daily / once streams before starting FFmpeg
-    if (stream.platform === 'YouTube' || stream.youtube_broadcast_id) {
+    // Skip redundant network pre-sync when starting immediately right after creating a fresh broadcast
+    if ((stream.platform === 'YouTube' || stream.youtube_broadcast_id) && !options.skipYouTubePreSync) {
       try {
         await ensureFreshYouTubeBroadcastForStream(stream);
         await syncYouTubeStreamKeyBeforeStart(stream);
@@ -2350,7 +2351,7 @@ async function startStream(streamId) {
     // correctly. Instead of failing immediately and showing a scary FFmpeg banner, we
     // retry the spawn a few times on transient network/RTMP errors so Play self-heals.
     const MAX_START_ATTEMPTS = 3;
-    const START_RETRY_DELAY_MS = 3000;
+    const START_RETRY_DELAY_MS = 1500;
 
     let ffmpegProcess = null;
     let startError = null;
@@ -2396,7 +2397,7 @@ async function startStream(streamId) {
             streamConfirmed = true;
             resolve(true);
           }
-        }, 2000); // Wait 2 seconds to confirm FFmpeg is running
+        }, 1200); // Wait 1.2 seconds to confirm FFmpeg is running
       });
 
       const isRunning = await Promise.race([earlyExitPromise, confirmationTimeout]);

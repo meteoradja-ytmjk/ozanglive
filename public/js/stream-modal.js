@@ -757,6 +757,12 @@ function setScheduleType(type) {
       recurringSettings.classList.remove('hidden');
     }
 
+    // Sync recurring enabled toggle based on schedule type
+    const recurringToggle = document.getElementById('recurringEnabled');
+    if (recurringToggle) {
+      recurringToggle.checked = (type === 'daily' || type === 'weekly');
+    }
+
     // Show/hide weekly day selector based on type
     if (type === 'weekly') {
       if (weeklyDaysSelector) {
