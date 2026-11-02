@@ -5084,7 +5084,7 @@ function closeCreateBroadcastModal() {
   const folderInput = document.getElementById('currentThumbnailFolder');
   if (folderInput) folderInput.value = '';
   
-  window.createSelectedThumbnailIndex = 0;
+  window.createSelectedThumbnailIndex = null;
   window.createSelectedThumbnailPath = null;
   
   const pinnedInput = document.getElementById('pinnedThumbnail');
@@ -5440,7 +5440,10 @@ if (createBroadcastForm) {
       if (thumbnailMode === 'pinned' && pinnedThumbnail) {
         formData.append('thumbnailPath', pinnedThumbnail);
       }
-      formData.append('thumbnailIndex', window.createSelectedThumbnailIndex || 0);
+      if (window.createSelectedThumbnailIndex !== null && window.createSelectedThumbnailIndex !== undefined) {
+        formData.append('thumbnailIndex', String(window.createSelectedThumbnailIndex));
+        formData.append('isCustomThumbnail', 'true');
+      }
       formData.append('thumbnailFolder', currentThumbnailFolder || '');
       if (pinnedThumbnail) {
         formData.append('pinnedThumbnail', pinnedThumbnail);

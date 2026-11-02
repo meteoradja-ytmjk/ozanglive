@@ -1794,11 +1794,11 @@ class ScheduleService {
       }
       if (!fs.existsSync(targetPath)) return [];
 
-      const files = fs.readdirSync(targetPath)
-        .filter(file => {
-          const ext = path.extname(file).toLowerCase();
-          return ['.jpg', '.jpeg', '.png'].includes(ext);
-        })
+      const allowedExts = new Set(['.jpg', '.jpeg', '.png', '.webp']);
+      const entries = fs.readdirSync(targetPath, { withFileTypes: true });
+      const files = entries
+        .filter(entry => entry.isFile() && allowedExts.has(path.extname(entry.name).toLowerCase()))
+        .map(entry => entry.name)
         .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
 
       return files.map(file => {
@@ -1943,12 +1943,12 @@ class ScheduleService {
         return { path: null, newIndex: 0, totalCount: 0 };
       }
       
-      // Get all image files in the folder, sorted alphabetically for consistent order
-      const files = fs.readdirSync(targetPath)
-        .filter(file => {
-          const ext = path.extname(file).toLowerCase();
-          return ['.jpg', '.jpeg', '.png'].includes(ext);
-        })
+      // Get all image files in the folder (excluding subdirectories), sorted alphabetically/naturally
+      const allowedExts = new Set(['.jpg', '.jpeg', '.png', '.webp']);
+      const entries = fs.readdirSync(targetPath, { withFileTypes: true });
+      const files = entries
+        .filter(entry => entry.isFile() && allowedExts.has(path.extname(entry.name).toLowerCase()))
+        .map(entry => entry.name)
         .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
       
       if (files.length === 0) {
@@ -1956,15 +1956,18 @@ class ScheduleService {
         return { path: null, newIndex: 0, totalCount: 0 };
       }
       
-      // Calculate the actual index (wrap around if needed for file selection)
-      const actualIndex = currentIndex % files.length;
+      // Robust index parsing: handle strings, NaN, or negative index cleanly
+      let parsedIndex = parseInt(currentIndex, 10);
+      if (isNaN(parsedIndex) || parsedIndex < 0) {
+        parsedIndex = 0;
+      }
+
+      // Calculate the actual index (wrap around smoothly)
+      const actualIndex = parsedIndex % files.length;
       const selectedFile = files[actualIndex];
       
-      // Calculate next index for next run
-      // IMPORTANT: Don't use modulo here! Store the raw incremented value.
-      // The modulo will be applied when selecting the next thumbnail.
-      // This ensures NEXT indicator shows the correct position.
-      const newIndex = currentIndex + 1;
+      // Calculate next index for next run (always an integer increment)
+      const newIndex = parsedIndex + 1;
       
       console.log(`[ScheduleService] Sequential thumbnail: currentIndex=${currentIndex}, actualIndex=${actualIndex}/${files.length - 1}, file: ${selectedFile}, newIndex: ${newIndex}`);
       

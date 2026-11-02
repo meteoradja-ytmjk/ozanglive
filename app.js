@@ -9993,7 +9993,7 @@ app.get('/api/thumbnails', isAuthenticated, async (req, res) => {
 
     const items = fs.readdirSync(thumbnailsDir, { withFileTypes: true });
     let thumbnails = items
-      .filter(item => item.isFile() && /\.(jpg|jpeg|png)$/i.test(item.name))
+      .filter(item => item.isFile() && /\.(jpg|jpeg|png|webp)$/i.test(item.name))
       .map(file => {
         const stat = fs.statSync(path.join(thumbnailsDir, file.name));
         return {
@@ -10072,7 +10072,7 @@ app.post('/api/thumbnails', isAuthenticated, handleThumbnailArrayUpload, async (
 
     // Check current count (only files, not subdirectories)
     const items = fs.readdirSync(thumbnailsDir, { withFileTypes: true });
-    const existingFiles = items.filter(item => item.isFile() && /\.(jpg|jpeg|png)$/i.test(item.name));
+    const existingFiles = items.filter(item => item.isFile() && /\.(jpg|jpeg|png|webp)$/i.test(item.name));
     const currentCount = existingFiles.length;
 
     if (!req.files || req.files.length === 0) {
@@ -12294,9 +12294,10 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
 
         const db = require('./db/database').getDb();
 
-        if (req.body.thumbnailIndex !== undefined && req.body.thumbnailIndex !== '' && !isNaN(parseInt(req.body.thumbnailIndex))) {
-          currentIndex = parseInt(req.body.thumbnailIndex);
-          console.log('[API] Using explicit thumbnailIndex from request body:', currentIndex);
+        const isCustomThumbnail = req.body.isCustomThumbnail === 'true' || req.body.isCustomThumbnail === true;
+        if (isCustomThumbnail && req.body.thumbnailIndex !== undefined && req.body.thumbnailIndex !== '' && !isNaN(parseInt(req.body.thumbnailIndex, 10))) {
+          currentIndex = parseInt(req.body.thumbnailIndex, 10);
+          console.log('[API] Using explicit custom thumbnailIndex from request body:', currentIndex);
         } else {
           // Get global index for this user + folder combination
           const globalMapping = await new Promise((resolve) => {
@@ -12310,12 +12311,12 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
               });
           });
 
-          if (globalMapping) {
-            currentIndex = globalMapping.thumbnail_index || 0;
+          if (globalMapping && globalMapping.thumbnail_index !== undefined && globalMapping.thumbnail_index !== null) {
+            currentIndex = parseInt(globalMapping.thumbnail_index, 10) || 0;
             console.log('[API] Got GLOBAL thumbnail index for folder "' + currentFolder + '":', currentIndex);
           } else {
             console.log('[API] No global index for folder "' + currentFolder + '", checking template index or 0');
-            currentIndex = (templateObj && templateObj.thumbnail_index) ? templateObj.thumbnail_index : 0;
+            currentIndex = (templateObj && templateObj.thumbnail_index !== undefined) ? (parseInt(templateObj.thumbnail_index, 10) || 0) : 0;
           }
         }
 

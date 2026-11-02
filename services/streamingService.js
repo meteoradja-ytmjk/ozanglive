@@ -425,33 +425,86 @@ async function ensureFreshYouTubeBroadcastForStream(stream) {
         new Promise((_, reject) => setTimeout(() => reject(new Error('Thumbnail upload timeout')), 8000))
       ]);
 
-      // Upload thumbnail if available
+      let finalThumbPath = savedSettings?.thumbnail_path || null;
+      let finalThumbIndex = (savedSettings?.thumbnail_index !== undefined && savedSettings.thumbnail_index !== null)
+        ? (parseInt(savedSettings.thumbnail_index, 10) || 0)
+        : 0;
+
+      // Upload thumbnail if available (Priority 1: sequential rotation if thumbnail_folder configured)
       try {
-        const thumbPath = savedSettings?.thumbnail_path;
         const thumbFolder = savedSettings?.thumbnail_folder;
         let uploaded = false;
 
-        if (thumbPath) {
-          const absPath = path.isAbsolute(thumbPath) ? thumbPath : path.join(__dirname, '..', 'public', thumbPath.replace(/^\//, ''));
-          if (fs.existsSync(absPath)) {
-            const buf = fs.readFileSync(absPath);
-            await safeUploadThumb(buf);
-            console.log(`[StreamingService] ✅ Uploaded thumbnail for fresh broadcast ${created.broadcastId}: ${thumbPath}`);
-            uploaded = true;
-          }
-        }
-
-        if (!uploaded && thumbFolder !== undefined && thumbFolder !== null) {
+        // If thumbnail_folder is set (even empty string for root folder), prioritize sequential rotation!
+        if (thumbFolder !== undefined && thumbFolder !== null) {
           const scheduleService = require('./scheduleService');
-          const thumbIndex = savedSettings?.thumbnail_index || 0;
-          const thumbRes = await scheduleService.getSequentialThumbnailFromFolder(stream.user_id, thumbFolder, thumbIndex);
+          const currentFolder = String(thumbFolder).trim();
+          const globalStreamKeyId = '__GLOBAL__' + currentFolder;
+          const db = require('../db/database').getDb();
+
+          // Read latest GLOBAL thumbnail index for this folder from stream_key_folder_mapping
+          let currentIndex = 0;
+          const globalMapping = await new Promise((resolve) => {
+            db.get(
+              `SELECT thumbnail_index FROM stream_key_folder_mapping WHERE user_id = ? AND stream_key_id = ?`,
+              [stream.user_id, globalStreamKeyId],
+              (err, row) => resolve(row)
+            );
+          });
+
+          if (globalMapping && globalMapping.thumbnail_index !== undefined && globalMapping.thumbnail_index !== null) {
+            currentIndex = parseInt(globalMapping.thumbnail_index, 10) || 0;
+          } else if (savedSettings?.thumbnail_index !== undefined && savedSettings.thumbnail_index !== null) {
+            currentIndex = parseInt(savedSettings.thumbnail_index, 10) || 0;
+          }
+
+          const thumbRes = await scheduleService.getSequentialThumbnailFromFolder(stream.user_id, currentFolder, currentIndex);
           if (thumbRes && thumbRes.path) {
-            const absPath = path.join(__dirname, '..', 'public', thumbRes.path.replace(/^\//, ''));
+            const absPath = path.isAbsolute(thumbRes.path) ? thumbRes.path : path.join(__dirname, '..', 'public', thumbRes.path.replace(/^\//, ''));
             if (fs.existsSync(absPath)) {
               const buf = fs.readFileSync(absPath);
               await safeUploadThumb(buf);
-              console.log(`[StreamingService] ✅ Uploaded rotated thumbnail for fresh broadcast ${created.broadcastId}: ${thumbRes.path}`);
+              console.log(`[StreamingService] ✅ Uploaded rotated thumbnail for fresh broadcast ${created.broadcastId}: ${thumbRes.path} (index: ${currentIndex} -> ${thumbRes.newIndex})`);
+              uploaded = true;
+              finalThumbPath = thumbRes.path;
+              finalThumbIndex = thumbRes.newIndex;
+
+              // Persist next index in GLOBAL stream_key_folder_mapping so rotation never gets stuck
+              await new Promise((resolve) => {
+                db.run(
+                  `INSERT INTO stream_key_folder_mapping (user_id, stream_key_id, folder_name, thumbnail_index, updated_at)
+                   VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                   ON CONFLICT(user_id, stream_key_id) DO UPDATE SET
+                     thumbnail_index = excluded.thumbnail_index,
+                     folder_name = excluded.folder_name,
+                     updated_at = CURRENT_TIMESTAMP`,
+                  [stream.user_id, globalStreamKeyId, currentFolder, thumbRes.newIndex],
+                  () => resolve()
+                );
+              });
+
+              // Also advance template thumbnail_index if linked to a broadcast template
+              if (stream.template_id || savedSettings?.template_id) {
+                try {
+                  const BroadcastTemplate = require('../models/BroadcastTemplate');
+                  await BroadcastTemplate.updateThumbnailIndex(stream.template_id || savedSettings.template_id, thumbRes.newIndex);
+                  console.log(`[StreamingService] ✅ Updated template thumbnail_index to: ${thumbRes.newIndex}`);
+                } catch (_) {}
+              }
             }
+          }
+        }
+
+        // Priority 2: Fallback to specific/pinned thumbnail_path if no folder rotation or folder had no files
+        if (!uploaded && savedSettings?.thumbnail_path) {
+          const absPath = path.isAbsolute(savedSettings.thumbnail_path)
+            ? savedSettings.thumbnail_path
+            : path.join(__dirname, '..', 'public', savedSettings.thumbnail_path.replace(/^\//, ''));
+          if (fs.existsSync(absPath)) {
+            const buf = fs.readFileSync(absPath);
+            await safeUploadThumb(buf);
+            console.log(`[StreamingService] ✅ Uploaded fallback thumbnail for fresh broadcast ${created.broadcastId}: ${savedSettings.thumbnail_path}`);
+            uploaded = true;
           }
         }
       } catch (thumbErr) {
@@ -473,9 +526,9 @@ async function ensureFreshYouTubeBroadcastForStream(stream) {
           enableDvr: isEnableDvr,
           unlistReplayOnEnd: savedSettings ? Boolean(savedSettings.unlist_replay_on_end) : true,
           originalPrivacyStatus: finalPrivacy,
-          thumbnailFolder: savedSettings?.thumbnail_folder || null,
-          thumbnailIndex: savedSettings?.thumbnail_index || 0,
-          thumbnailPath: savedSettings?.thumbnail_path || null,
+          thumbnailFolder: savedSettings?.thumbnail_folder !== undefined ? savedSettings.thumbnail_folder : null,
+          thumbnailIndex: finalThumbIndex,
+          thumbnailPath: finalThumbPath,
           alteredContent: isAlteredContent ? 1 : 0,
           dualStream: isDualStream ? 1 : 0,
           verticalStreamKey: savedSettings?.vertical_stream_key || null,
