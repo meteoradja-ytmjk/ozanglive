@@ -11613,7 +11613,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
               matchedSlot = templateObj.broadcasts.find(b => b.title === req.body.originalTitle);
             }
             if (!matchedSlot) {
-              matchedSlot = templateObj.broadcasts.find(b => b.title === title || b.title === broadcast.title);
+              matchedSlot = templateObj.broadcasts.find(b => b.title === title);
             }
             if (!matchedSlot) {
               matchedSlot = templateObj.broadcasts[0];
@@ -11633,6 +11633,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
     const isRecurringReq = reqScheduleType === 'daily' || reqScheduleType === 'weekly';
     const isFromTemplate = !!templateId;
     const isStartImmediately = (req.body.startImmediately === 'true' || req.body.startImmediately === true || req.body.startImmediately === 1 || req.body.startImmediately === '1');
+    const isExplicitUnlimited = (req.body.isUnlimited === 'true' || req.body.isUnlimited === true || req.body.isUnlimited === 1 || req.body.isUnlimited === '1');
     if (isStartImmediately) {
       const checkVideoId = req.body.videoId || (matchedSlot ? (matchedSlot.videoId || matchedSlot.video_id) : null) || (templateObj ? templateObj.video_id : null) || null;
       if (!checkVideoId) {
@@ -11872,7 +11873,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       const finalAudioId = req.body.audioId || (matchedSlot ? (matchedSlot.audioId || matchedSlot.audio_id) : null) || (templateObj ? templateObj.audio_id : null) || null;
       const finalVideoId = req.body.videoId || (matchedSlot ? (matchedSlot.videoId || matchedSlot.video_id) : null) || (templateObj ? templateObj.video_id : null) || null;
 
-      const isExplicitUnlimited = req.body.isUnlimited === 'true' || req.body.isUnlimited === true;
+      // isExplicitUnlimited resolved at route level
       let hours = parseInt(req.body.streamDurationHours) || 0;
       let minutes = parseInt(req.body.streamDurationMinutes) || 0;
       let totalMinutes = parseInt(req.body.streamTotalMinutes) || ((hours * 60) + minutes);
@@ -12427,13 +12428,13 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         }
       }
 
-      const isExplicitUnlimited = req.body.isUnlimited === 'true' || req.body.isUnlimited === true;
+      // isExplicitUnlimited resolved at route level
       let hours = parseInt(req.body.streamDurationHours) || 0;
       let minutes = parseInt(req.body.streamDurationMinutes) || 0;
       let totalMinutes = parseInt(req.body.streamTotalMinutes) || ((hours * 60) + minutes);
       let loopVideo = req.body.loopVideo !== undefined ? (req.body.loopVideo === 'true' || req.body.loopVideo === true || req.body.loopVideo === 1 || req.body.loopVideo === '1') : true;
-      let videoId = req.body.videoId || null;
-      let audioId = req.body.audioId || null;
+      let videoId = finalVideoId || req.body.videoId || null;
+      let audioId = finalAudioId || req.body.audioId || null;
       let scheduleType = req.body.scheduleType || 'once';
 
       if (isExplicitUnlimited) {
