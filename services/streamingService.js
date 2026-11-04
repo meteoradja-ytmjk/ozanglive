@@ -1425,7 +1425,51 @@ function resolvePublicMediaPath(mediaFilePath) {
 }
 
 function formatConcatFilePath(mediaFilePath) {
-  return mediaFilePath.replace(/\\/g, '/').replace(/'/g, "\\'");
+  return String(mediaFilePath).replace(/\\/g, '/').replace(/'/g, "'\\''");
+}
+
+/**
+ * Create a robust concat demuxer text file repeating all playlist audio files
+ * so the live stream seamlessly loops through all tracks without stopping.
+ */
+function createConcatTextFallback(audioPaths, baseFile) {
+  try {
+    const listFile = baseFile.replace(/\.[^.]+$/, '') + '_playlist.txt';
+    const lines = [];
+    for (let r = 0; r < 200; r++) {
+      for (const p of audioPaths) {
+        lines.push(`file '${formatConcatFilePath(p)}'`);
+      }
+    }
+    fs.writeFileSync(listFile, lines.join('\n'), 'utf8');
+    console.log(`[StreamingService] ✅ Multi-track concat demuxer file ready (${audioPaths.length} tracks x 200 loops): ${listFile}`);
+    return listFile;
+  } catch (err) {
+    console.error('[StreamingService] Failed to create concat text fallback:', err.message);
+    return audioPaths[0];
+  }
+}
+
+/**
+ * Generate lightweight hash from list of audio file paths, sizes, and mtimes
+ * to enable instant zero-overhead cache hits on subsequent starts.
+ */
+function getAudioPlaylistHash(audioPaths) {
+  try {
+    const crypto = require('crypto');
+    let str = '';
+    for (const p of audioPaths) {
+      try {
+        const stat = fs.statSync(p);
+        str += `${p}:${stat.size}:${stat.mtimeMs};`;
+      } catch (_) {
+        str += `${p};`;
+      }
+    }
+    return crypto.createHash('md5').update(str).digest('hex').slice(0, 12);
+  } catch (_) {
+    return 'default';
+  }
 }
 
 function addStreamLog(streamId, message) {
@@ -1460,38 +1504,47 @@ function prerenderGaplessAudio(audioPaths, outputFile) {
     if (!Array.isArray(audioPaths) || audioPaths.length === 0) {
       return resolve(null);
     }
+    if (audioPaths.length === 1) {
+      return resolve(audioPaths[0]);
+    }
 
     const outDir = path.dirname(outputFile);
     if (!fs.existsSync(outDir)) {
       try { fs.mkdirSync(outDir, { recursive: true }); } catch (_) {}
     }
 
+    // 1. SMART CACHE HIT:
+    // If outputFile already exists and has valid size, return immediately (0 ms!)
+    if (fs.existsSync(outputFile)) {
+      try {
+        const outStat = fs.statSync(outputFile);
+        if (outStat.size > 10000) {
+          console.log('[StreamingService] ✅ Instant audio playlist cache hit! Using pre-merged audio:', outputFile);
+          return resolve(outputFile);
+        }
+      } catch (_) {}
+    }
+
+    const tempOut = outputFile + '.tmp.m4a';
+    try { if (fs.existsSync(tempOut)) fs.unlinkSync(tempOut); } catch (_) {}
+
+    // 2. FAST NORMALIZED CONCAT FILTER:
+    // Instead of deep acrossfade chains that buffer-overflow on 10+ tracks and take >1 minute,
+    // this directly normalizes all audio inputs to 44.1kHz stereo and concatenates them with
+    // sample-accurate precision in seconds, preserving EVERY track in the playlist.
     const args = [];
     audioPaths.forEach((p) => {
       args.push('-i', p);
     });
 
-    // CRITICAL: Normalize each input audio stream to stereo, 44100Hz before acrossfade or concat
-    // This prevents sample rate / channel layout mismatch errors between different audio files!
-    const normFilters = audioPaths.map((_, i) => `[${i}:a]aformat=sample_rates=44100:channel_layouts=stereo,aresample=44100[in${i}]`).join(';');
-
-    let filter = '';
-    if (audioPaths.length >= 2) {
-      let acrossfadeChain = '';
-      let lastOut = 'in0';
-      for (let i = 1; i < audioPaths.length; i++) {
-        const nextOut = (i === audioPaths.length - 1) ? 'aout' : `a${i}`;
-        acrossfadeChain += `[${lastOut}][in${i}]acrossfade=d=1.0:c1=tri:c2=tri[${nextOut}];`;
-        lastOut = nextOut;
-      }
-      filter = `${normFilters};${acrossfadeChain}`.replace(/;$/, '');
-    } else {
-      filter = `${normFilters};[in0]anull[aout]`;
-    }
+    const normFilters = audioPaths.map((_, i) => `[${i}:a]aformat=sample_rates=44100:channel_layouts=stereo,aresample=44100[fnorm${i}]`).join(';');
+    const concatInputs = audioPaths.map((_, i) => `[fnorm${i}]`).join('');
+    const filter = `${normFilters};${concatInputs}concat=n=${audioPaths.length}:v=0:a=1[aout]`;
 
     args.push(
       '-filter_complex', filter,
       '-map', '[aout]',
+      '-vn', '-sn', '-dn',
       '-c:a', 'aac',
       '-profile:a', 'aac_low',
       '-b:a', '128k',
@@ -1499,11 +1552,10 @@ function prerenderGaplessAudio(audioPaths, outputFile) {
       '-ac', '2',
       '-movflags', '+faststart',
       '-y',
-      outputFile
+      tempOut
     );
 
     const proc = spawn(ffmpegPath, args, { stdio: ['ignore', 'ignore', 'pipe'] });
-
     let stderrTail = '';
     proc.stderr.on('data', (chunk) => {
       stderrTail = (stderrTail + chunk.toString()).slice(-4096);
@@ -1511,52 +1563,23 @@ function prerenderGaplessAudio(audioPaths, outputFile) {
 
     proc.on('error', (err) => {
       console.error('[StreamingService] prerenderGaplessAudio spawn error:', err.message);
-      resolve(null);
+      // Fallback: Generate multi-track concat text file so all 10+ tracks still play!
+      resolve(createConcatTextFallback(audioPaths, outputFile));
     });
 
     proc.on('close', (code) => {
-      if (code === 0 && fs.existsSync(outputFile) && fs.statSync(outputFile).size > 1000) {
+      if (code === 0 && fs.existsSync(tempOut) && fs.statSync(tempOut).size > 1000) {
+        try {
+          if (fs.existsSync(outputFile)) fs.unlinkSync(outputFile);
+          fs.renameSync(tempOut, outputFile);
+        } catch (_) {}
+        console.log(`[StreamingService] ✅ Seamlessly merged ${audioPaths.length} audio tracks to: ${outputFile}`);
         resolve(outputFile);
       } else {
-        console.warn(`[StreamingService] prerenderGaplessAudio acrossfade failed (exit=${code}, stderr=${stderrTail.slice(-300)}). Attempting normalized concat fallback...`);
-        try { if (fs.existsSync(outputFile)) fs.unlinkSync(outputFile); } catch (_) { /* noop */ }
-        
-        // Fallback: standard concat filter on normalized 44.1k stereo streams
-        const fallbackArgs = [];
-        audioPaths.forEach((p) => { fallbackArgs.push('-i', p); });
-        
-        const fallbackNormFilters = audioPaths.map((_, i) => `[${i}:a]aformat=sample_rates=44100:channel_layouts=stereo,aresample=44100[fnorm${i}]`).join(';');
-        const concatInputs = audioPaths.map((_, i) => `[fnorm${i}]`).join('');
-        const fallbackFilter = `${fallbackNormFilters};${concatInputs}concat=n=${audioPaths.length}:v=0:a=1[aout]`;
-        
-        fallbackArgs.push(
-          '-filter_complex', fallbackFilter,
-          '-map', '[aout]',
-          '-c:a', 'aac',
-          '-profile:a', 'aac_low',
-          '-b:a', '128k',
-          '-ar', '44100',
-          '-ac', '2',
-          '-movflags', '+faststart',
-          '-y',
-          outputFile
-        );
-        const fbProc = spawn(ffmpegPath, fallbackArgs, { stdio: ['ignore', 'ignore', 'pipe'] });
-        let fbStderrTail = '';
-        fbProc.stderr.on('data', (chunk) => {
-          fbStderrTail = (fbStderrTail + chunk.toString()).slice(-4096);
-        });
-        fbProc.on('close', (fbCode) => {
-          if (fbCode === 0 && fs.existsSync(outputFile) && fs.statSync(outputFile).size > 1000) {
-            console.log(`[StreamingService] ✅ Normalized concat fallback succeeded: ${outputFile}`);
-            resolve(outputFile);
-          } else {
-            console.error(`[StreamingService] Normalized concat fallback also failed (exit=${fbCode}, stderr=${fbStderrTail.slice(-300)})`);
-            try { if (fs.existsSync(outputFile)) fs.unlinkSync(outputFile); } catch (_) {}
-            resolve(null);
-          }
-        });
-        fbProc.on('error', () => resolve(null));
+        console.warn(`[StreamingService] Audio merge filter exit=${code} (stderr=${stderrTail.slice(-300)}). Activating multi-track concat playlist fallback...`);
+        try { if (fs.existsSync(tempOut)) fs.unlinkSync(tempOut); } catch (_) {}
+        // Fallback: Generate multi-track concat text file so all 10+ tracks still play!
+        resolve(createConcatTextFallback(audioPaths, outputFile));
       }
     });
   });
@@ -1586,10 +1609,10 @@ async function buildFFmpegArgsForAudioOnlyPlaylist(stream, playlist, durationSec
   if (audioPaths.length === 1) {
     gaplessAudioFile = audioPaths[0];
   } else {
-    const mergedAudioFile = path.join(projectRoot, 'temp', `playlist_${stream.id}_audio_merged.m4a`);
-    try { if (fs.existsSync(mergedAudioFile)) fs.unlinkSync(mergedAudioFile); } catch (_) {}
+    const audioHash = getAudioPlaylistHash(audioPaths);
+    const mergedAudioFile = path.join(projectRoot, 'temp', `playlist_${playlist.id}_${audioHash}.m4a`);
     const merged = await prerenderGaplessAudio(audioPaths, mergedAudioFile);
-    gaplessAudioFile = merged || audioPaths[0];
+    gaplessAudioFile = merged || createConcatTextFallback(audioPaths, mergedAudioFile);
   }
 
   const shouldLoop = (stream.loop_video !== false && stream.loop_video !== 0 && stream.loop_video !== 'false') || (durationSeconds && durationSeconds > 0);
@@ -1599,11 +1622,15 @@ async function buildFFmpegArgsForAudioOnlyPlaylist(stream, playlist, durationSec
   // Input 0: generated 1280x720 30fps black video canvas for RTMP live
   args.push('-f', 'lavfi', '-i', 'color=c=black:s=1280x720:r=30');
 
-  // Input 1: audio file
-  if (shouldLoop) {
-    args.push('-stream_loop', '-1');
+  // Input 1: audio file or concat list
+  if (typeof gaplessAudioFile === 'string' && gaplessAudioFile.endsWith('.txt')) {
+    args.push('-f', 'concat', '-safe', '0', '-i', gaplessAudioFile);
+  } else {
+    if (shouldLoop) {
+      args.push('-stream_loop', '-1');
+    }
+    args.push('-i', gaplessAudioFile);
   }
-  args.push('-i', gaplessAudioFile);
 
   if (durationSeconds && durationSeconds > 0) {
     args.push('-t', String(durationSeconds));
@@ -1965,17 +1992,15 @@ async function buildFFmpegArgsForPlaylist(stream, playlist, durationOverrideSeco
       gaplessAudioFile = audioPaths[0];
       usePlaylistAudio = true;
     } else {
-      const mergedAudioFile = path.join(projectRoot, 'temp', `playlist_${stream.id}_audio_merged.m4a`);
-      try { if (fs.existsSync(mergedAudioFile)) fs.unlinkSync(mergedAudioFile); } catch (_) { /* noop */ }
-
-      console.log(`[StreamingService] Pre-rendering ${audioPaths.length} playlist audio file(s) into a gapless track...`);
+      const audioHash = getAudioPlaylistHash(audioPaths);
+      const mergedAudioFile = path.join(projectRoot, 'temp', `playlist_audio_${stream.id}_${audioHash}.m4a`);
+      console.log(`[StreamingService] Processing ${audioPaths.length} playlist audio file(s)...`);
       const merged = await prerenderGaplessAudio(audioPaths, mergedAudioFile);
       if (merged) {
         gaplessAudioFile = merged;
         usePlaylistAudio = true;
-        console.log(`[StreamingService] Gapless audio ready: ${merged}`);
       } else {
-        gaplessAudioFile = audioPaths[0];
+        gaplessAudioFile = createConcatTextFallback(audioPaths, mergedAudioFile);
         usePlaylistAudio = true;
       }
     }
@@ -1993,10 +2018,14 @@ async function buildFFmpegArgsForPlaylist(stream, playlist, durationOverrideSeco
   args.push('-i', targetVideoFile);
 
   if (usePlaylistAudio && gaplessAudioFile) {
-    if (shouldLoopPlaylist) {
-      args.push('-stream_loop', '-1');
+    if (typeof gaplessAudioFile === 'string' && gaplessAudioFile.endsWith('.txt')) {
+      args.push('-f', 'concat', '-safe', '0', '-i', gaplessAudioFile);
+    } else {
+      if (shouldLoopPlaylist) {
+        args.push('-stream_loop', '-1');
+      }
+      args.push('-i', gaplessAudioFile);
     }
-    args.push('-i', gaplessAudioFile);
     args.push('-map', '0:v:0', '-map', '1:a:0');
   } else {
     args.push('-map', '0:v:0', '-map', '0:a?');
@@ -2086,16 +2115,14 @@ async function buildFFmpegArgs(stream, durationOverrideSeconds = null, reconnect
       if (audioPaths.length === 1) {
         audioPath = audioPaths[0];
       } else {
-        const mergedAudioFile = path.join(projectRoot, 'temp', `stream_${stream.id}_audio_merged.m4a`);
-        try { if (fs.existsSync(mergedAudioFile)) fs.unlinkSync(mergedAudioFile); } catch (_) {}
-        console.log(`[StreamingService] Merging ${audioPaths.length} tracks from audio playlist "${audioPlaylist.name}" for stream ${stream.id}...`);
+        const audioHash = getAudioPlaylistHash(audioPaths);
+        const mergedAudioFile = path.join(projectRoot, 'temp', `playlist_${audioPlaylist.id}_${audioHash}.m4a`);
+        console.log(`[StreamingService] Processing ${audioPaths.length} tracks from audio playlist "${audioPlaylist.name}" for stream ${stream.id}...`);
         audioPath = await prerenderGaplessAudio(audioPaths, mergedAudioFile);
         if (!audioPath) {
-          console.warn(`[StreamingService] Gapless audio merge failed or returned null, falling back to first track: ${audioPaths[0]}`);
-          audioPath = audioPaths[0];
-        } else {
-          console.log(`[StreamingService] Successfully merged gapless audio playlist to: ${audioPath}`);
+          audioPath = createConcatTextFallback(audioPaths, mergedAudioFile);
         }
+        console.log(`[StreamingService] Audio playlist input ready: ${audioPath}`);
       }
     } else {
       const audio = await Audio.findById(stream.audio_id);
@@ -2172,8 +2199,12 @@ function buildFFmpegArgsWithAudio(videoPath, audioPath, rtmpUrl, durationSeconds
   args.push('-i', videoPath);
   
   // Audio input with loop (loops independently of video length)
-  args.push('-stream_loop', '-1');
-  args.push('-i', audioPath);
+  if (typeof audioPath === 'string' && audioPath.endsWith('.txt')) {
+    args.push('-f', 'concat', '-safe', '0', '-i', audioPath);
+  } else {
+    args.push('-stream_loop', '-1');
+    args.push('-i', audioPath);
+  }
   
   // Map video from file 0, audio from file 1
   args.push('-map', '0:v:0', '-map', '1:a:0');
@@ -2555,15 +2586,16 @@ async function startStream(streamId, options = {}) {
       }
     }
     
-    // Start YouTube status sync if platform is YouTube
+    // Start YouTube status sync if platform is YouTube (run in background to avoid delaying start response)
     if (stream.platform === 'YouTube' && stream.stream_key) {
       try {
         youtubeStatusSync.setStreamingService(module.exports);
         youtubeStatusSync.setRTMPHealthMonitor(rtmpHealthMonitor);
-        await youtubeStatusSync.startMonitoring(streamId, stream.user_id, stream.stream_key, stream.youtube_account_id, stream.youtube_broadcast_id);
+        youtubeStatusSync.startMonitoring(streamId, stream.user_id, stream.stream_key, stream.youtube_account_id, stream.youtube_broadcast_id).catch(ytErr => {
+          console.warn(`[StreamingService] Background YouTube status sync warning for stream #${streamId}: ${ytErr.message}`);
+        });
       } catch (ytErr) {
         console.log(`[StreamingService] YouTube status sync not started: ${ytErr.message}`);
-        // Continue without sync - not critical
       }
 
       // CRITICAL FIX: Actively verify and transition YouTube broadcast to LIVE on YouTube.com dashboard
