@@ -2682,22 +2682,13 @@
               </div>
             </div>
             
-            <!-- Jadwal Bertingkat (Multi-time slots per day) -->
+            <!-- Jam Tayang -->
             <div>
-              <label class="text-xs font-medium text-gray-400 block mb-1.5">Jam Tayang (Schedule Bertingkat dalam 1 Hari)</label>
-              <div class="flex gap-2 items-center">
-                <input type="time" id="editRecurringTimeInput"
-                  class="flex-1 px-3 py-1.5 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none text-sm text-white [color-scheme:dark]">
-                <button type="button" onclick="addEditRecurringTimeSlot()"
-                  class="px-3 py-1.5 bg-primary/20 hover:bg-primary/30 text-primary border border-primary/40 rounded-lg text-xs font-medium flex items-center gap-1 transition-colors">
-                  <i class="ti ti-plus"></i> Tambah Jam
-                </button>
-              </div>
-              <input type="hidden" id="editRecurringTime" name="recurringTime">
-              <!-- Chips of scheduled times -->
-              <div id="editRecurringTimeChips" class="flex flex-wrap gap-1.5 mt-2 min-h-[28px]"></div>
+              <label class="text-xs font-medium text-gray-400 block mb-1.5">Jam Tayang</label>
+              <input type="time" id="editRecurringTime" name="recurringTime"
+                class="w-full px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg focus:border-primary focus:outline-none text-sm text-white [color-scheme:dark]">
               <p class="text-[11px] text-gray-400 mt-1">
-                <i class="ti ti-clock text-primary mr-0.5"></i> Anda bisa menambahkan beberapa jam (misal 08:00, 13:00, 19:00) untuk live bertingkat dalam 1 hari.
+                <i class="ti ti-clock text-primary mr-0.5"></i> Jam siaran live otomatis dimulai setiap jadwal aktif.
               </p>
             </div>
             

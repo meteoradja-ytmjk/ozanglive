@@ -859,6 +859,89 @@ class BroadcastTemplate {
       );
     });
   }
+
+  /**
+   * Duplicate / copy a broadcast template
+   * Duplicates all settings (including multi-broadcast slots, media, rotation, etc.)
+   * @param {string} id - Template ID to copy
+   * @param {number} userId - Owner user ID
+   * @returns {Promise<Object>} The newly created cloned template
+   */
+  static async duplicate(id, userId) {
+    const original = await this.findById(id);
+    if (!original) {
+      throw new Error('Template tidak ditemukan');
+    }
+    if (original.user_id !== userId && String(original.user_id) !== String(userId)) {
+      throw new Error('Akses ditolak: Anda bukan pemilik template ini');
+    }
+
+    // Determine unique name for copy
+    const baseCopyName = `${original.name} (Salinan)`;
+    let candidateName = baseCopyName;
+
+    // Check existing names for this user
+    const existing = await new Promise((resolve) => {
+      db.all(
+        'SELECT name FROM broadcast_templates WHERE user_id = ? AND (name = ? OR name LIKE ?)',
+        [userId, baseCopyName, `${original.name} (Salinan %)`],
+        (err, rows) => resolve(rows || [])
+      );
+    });
+
+    const existingNames = new Set((existing || []).map(r => (r.name || '').trim().toLowerCase()));
+    if (existingNames.has(baseCopyName.toLowerCase())) {
+      let counter = 2;
+      while (existingNames.has(`${original.name} (Salinan ${counter})`.toLowerCase())) {
+        counter++;
+      }
+      candidateName = `${original.name} (Salinan ${counter})`;
+    }
+
+    const newId = `template_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
+    const templateData = {
+      id: newId,
+      user_id: userId,
+      account_id: original.account_id,
+      name: candidateName,
+      title: original.title,
+      description: original.description || '',
+      privacy_status: original.privacy_status || 'unlisted',
+      tags: original.tags || [],
+      category_id: original.category_id || '22',
+      thumbnail_path: original.thumbnail_path || null,
+      thumbnail_folder: original.thumbnail_folder !== undefined ? original.thumbnail_folder : null,
+      thumbnail_index: original.thumbnail_index || 0,
+      pinned_thumbnail: original.pinned_thumbnail || null,
+      stream_key_folder_mapping: original.stream_key_folder_mapping || null,
+      stream_id: original.stream_id || null,
+      stream_key: original.stream_key || null,
+      title_index: original.title_index || 0,
+      pinned_title_id: original.pinned_title_id || null,
+      title_folder_id: original.title_folder_id || null,
+      recurring_enabled: false,
+      recurring_pattern: original.recurring_pattern || 'daily',
+      recurring_time: original.recurring_time || null,
+      recurring_days: original.recurring_days || [],
+      next_run_at: null,
+      channel_name: original.channel_name || null,
+      channel_id: original.channel_id || null,
+      altered_content: original.altered_content ? 1 : 0,
+      dual_stream: original.dual_stream ? 1 : 0,
+      vertical_stream_key: original.vertical_stream_key || null,
+      duration_hours: original.duration_hours || 0,
+      duration_minutes: original.duration_minutes || 0,
+      stream_duration_minutes: original.stream_duration_minutes || 0,
+      loop_video: original.loop_video !== false && original.loop_video !== 0 && original.loop_video !== '0' ? 1 : 0,
+      video_id: original.video_id || null,
+      audio_id: original.audio_id || null,
+      schedule_type: original.schedule_type || 'once',
+      shuffle_daily: original.shuffle_daily ? 1 : 0
+    };
+
+    return await this.create(templateData);
+  }
 }
 
 module.exports = BroadcastTemplate;

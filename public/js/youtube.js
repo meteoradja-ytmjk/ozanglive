@@ -1327,6 +1327,36 @@ async function disconnectAccount(accountId, channelName) {
   }
 }
 
+// Duplicate / Salin Template
+async function duplicateTemplate(templateId, templateName) {
+  if (!templateId) return;
+
+  try {
+    showToast(`Menduplikasi template "${templateName}"...`, 'info');
+    const response = await fetch(`/api/youtube/templates/${templateId}/duplicate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+
+    const data = await response.json();
+    if (data.success) {
+      showToast(data.message || `Template "${templateName}" berhasil disalin!`, 'success');
+      if (typeof window.loadTemplates === 'function') {
+        window.loadTemplates();
+      }
+    } else {
+      showToast(data.error || 'Gagal menduplikasi template', 'error');
+    }
+  } catch (err) {
+    console.error('Error duplicating template:', err);
+    showToast('Terjadi kesalahan saat menduplikasi template', 'error');
+  }
+}
+window.duplicateTemplate = duplicateTemplate;
+
 // Set primary account
 async function setPrimaryAccount(accountId) {
   try {
@@ -6541,6 +6571,12 @@ function renderTemplateList(templates) {
             <span>Rebroadcast</span>
           </button>
 
+          <button onclick="duplicateTemplate('${template.id}', '${escapeJsString(template.name)}')"
+            class="w-8 h-8 rounded-xl bg-[#162033] hover:bg-blue-500/20 text-[#94a3b8] hover:text-blue-400 border border-[#2b3a54] hover:border-blue-500/40 flex items-center justify-center transition-all cursor-pointer flex-shrink-0 shadow-xs active:scale-95"
+            title="Duplikasi Template (Salin isi menjadi template baru)">
+            <i class="ti ti-copy text-sm"></i>
+          </button>
+
           <button onclick="deleteTemplate('${template.id}', '${escapeJsString(template.name)}')"
             class="w-8 h-8 rounded-xl bg-[#162033] hover:bg-red-500/20 text-[#94a3b8] hover:text-red-400 border border-[#2b3a54] hover:border-red-500/40 flex items-center justify-center transition-all cursor-pointer flex-shrink-0 active:scale-95"
             title="Hapus Template">
@@ -7794,13 +7830,16 @@ async function openEditTemplateModal(template) {
   const patternRadio = document.querySelector(`input[name="editRecurringPattern"][value="${pattern}"]`);
   if (patternRadio) patternRadio.checked = true;
   
-  // Set multi-time slots for schedule bertingkat
-  window.editRecurringTimesList = [];
-  if (template.recurring_time) {
-    const rawTimes = template.recurring_time.split(/[\s,]+/).filter(Boolean);
-    window.editRecurringTimesList = rawTimes.filter(t => /^[0-2]?[0-9]:[0-5][0-9]$/.test(t));
+  // Set single recurring time (clean & simple)
+  const recTimeInput = document.getElementById('editRecurringTime');
+  if (recTimeInput) {
+    let cleanTime = '13:00';
+    if (template.recurring_time) {
+      const match = template.recurring_time.match(/[0-2]?[0-9]:[0-5][0-9]/);
+      if (match) cleanTime = match[0];
+    }
+    recTimeInput.value = cleanTime;
   }
-  renderEditRecurringTimeChips();
   
   // Reset and set days for weekly
   document.querySelectorAll('input[name="editRecurringDays"]').forEach(cb => cb.checked = false);
@@ -8105,24 +8144,19 @@ if (editTemplateForm) {
       
       if (recurringEnabled) {
         const pattern = document.querySelector('input[name="editRecurringPattern"]:checked')?.value;
-        let timesString = '';
-        if (Array.isArray(window.editRecurringTimesList) && window.editRecurringTimesList.length > 0) {
-          timesString = window.editRecurringTimesList.join(', ');
-        } else {
-          timesString = document.getElementById('editRecurringTime')?.value || '';
-        }
+        const timeVal = document.getElementById('editRecurringTime')?.value?.trim();
         
         if (!pattern) {
           showToast('Pilih pola perulangan (Daily atau Weekly)', 'error');
           return;
         }
-        if (!timesString) {
-          showToast('Tambahkan minimal 1 jam untuk jadwal live', 'error');
+        if (!timeVal) {
+          showToast('Pilih jam tayang untuk jadwal live', 'error');
           return;
         }
         
         updateData.recurringPattern = pattern;
-        updateData.recurringTime = timesString;
+        updateData.recurringTime = timeVal;
         
         if (pattern === 'weekly') {
           const days = Array.from(document.querySelectorAll('input[name="editRecurringDays"]:checked'))
@@ -9130,24 +9164,16 @@ function openRecreateFromTemplateModal(template) {
     // Single broadcast template:
     // IMPORTANT: If recurring is NOT active on template, strictly create ONLY 1 slot!
     // Never auto-expand leftover comma-separated times if user is scheduling once.
-    let groupTimes = [];
-    if (template.recurring_enabled && recurringTimes.length > 0) {
-      groupTimes = recurringTimes.map(t => ({
-        scheduleTime: parseSlotTime(t, 15),
-        timeOnly: t
-      })).sort((a, b) => new Date(a.scheduleTime) - new Date(b.scheduleTime));
-    } else {
-      // Single broadcast without active recurring: strictly 1 slot
-      const initialTimeStr = recurringTimes.length > 0 ? recurringTimes[0] : null;
-      const initialSched = parseSlotTime(initialTimeStr, 15);
-      const initialTimeOnly = initialTimeStr || (initialSched && initialSched.includes('T') ? initialSched.split('T')[1].slice(0, 5) : '13:00');
-      groupTimes = [
-        {
-          scheduleTime: initialSched,
-          timeOnly: initialTimeOnly
-        }
-      ];
-    }
+    // Single broadcast template: strictly 1 slot, no jam bertingkat
+    const initialTimeStr = recurringTimes.length > 0 ? recurringTimes[0] : (template.recurring_time ? template.recurring_time.split(/[\s,]+/)[0] : null);
+    const initialSched = parseSlotTime(initialTimeStr, 15);
+    const initialTimeOnly = initialTimeStr || (initialSched && initialSched.includes('T') ? initialSched.split('T')[1].slice(0, 5) : '13:00');
+    const groupTimes = [
+      {
+        scheduleTime: initialSched,
+        timeOnly: initialTimeOnly
+      }
+    ];
 
     const singleDesc = extractCleanDescription(template.description, 0);
     const singlePrivacy = template.privacy_status || template.privacyStatus || 'unlisted';
@@ -9530,119 +9556,66 @@ function renderRecreateSlotList() {
         </div>`;
     }
 
-    // Render scheduled times for this group
-    const timesHtml = (group.times || []).map((t, timeIndex) => {
-      const canDeleteTime = (group.times || []).length > 1;
-      const deleteTimeBtn = canDeleteTime
-        ? `<button type="button" onclick="removeTimeFromGroup(${groupIndex}, ${timeIndex})"
-             class="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded border border-gray-600/60 hover:border-red-500/40 transition-colors flex-shrink-0"
-             title="Hapus jam tayang ini">
-             <i class="ti ti-trash text-[11px]"></i>
-           </button>`
-        : '';
-
-      let timeInputHtml = '';
-      if (isRecurring) {
-        let timeVal = t.timeOnly || '13:00';
-        if (!timeVal && t.scheduleTime && t.scheduleTime.includes('T')) {
-          timeVal = t.scheduleTime.split('T')[1].slice(0, 5);
-        }
-        timeInputHtml = `
-          <div class="flex items-center gap-1.5 justify-end flex-shrink-0">
-            <input type="time" id="group_${groupIndex}_time_${timeIndex}" name="groupTime_${groupIndex}[]" required value="${timeVal}"
-              onchange="updateGroupSlotTime(${groupIndex}, ${timeIndex}, this.value, true)"
-              class="h-7 w-[95px] sm:w-[110px] px-1.5 bg-dark-600 border border-gray-600 rounded-lg text-xs font-semibold text-white text-center focus:border-primary focus:outline-none [color-scheme:dark]">
-            ${deleteTimeBtn}
-          </div>
-        `;
-      } else {
-        const compactDt = formatShortDateTimeDisplay(t.scheduleTime);
-        timeInputHtml = `
-          <div class="flex items-center gap-1.5 flex-1 justify-end min-w-0">
-            <div class="recreate-datetime-pill relative inline-flex items-center gap-1 sm:gap-1.5 h-7 px-2 sm:px-2.5 bg-dark-600 hover:bg-dark-500 border border-gray-600 hover:border-primary/60 rounded-lg cursor-pointer transition-colors shadow-sm select-none"
-                 onclick="openRecreateDateTimePicker(this)"
-                 title="Klik untuk memilih tanggal dan jam siaran">
-              <i class="ti ti-calendar text-gray-400 text-[11px] sm:text-xs flex-shrink-0 pointer-events-none"></i>
-              <!-- Tanggal singkat: 12/9/26 -->
-              <span class="recreate-date-text text-gray-300 font-mono text-[11px] sm:text-xs tracking-tight flex-shrink-0 whitespace-nowrap pointer-events-none">${compactDt.dateStr}</span>
-              <!-- Titik pemisah -->
-              <span class="text-gray-400 font-bold text-xs flex-shrink-0 pointer-events-none leading-none">.</span>
-              <!-- Jam jelas menonjol: 09.00 -->
-              <span class="recreate-time-text text-primary font-mono text-xs sm:text-[13px] font-bold tracking-wider flex-shrink-0 whitespace-nowrap pointer-events-none">${compactDt.timeStr}</span>
-              <i class="ti ti-clock text-primary/70 text-[10px] sm:text-xs ml-0.5 flex-shrink-0 pointer-events-none"></i>
-
-              <!-- Native input overlay for picking & form submission -->
-              <input type="datetime-local" id="group_${groupIndex}_datetime_${timeIndex}" name="groupDateTime_${groupIndex}[]" required min="${minDateStr}" value="${t.scheduleTime || ''}"
-                onchange="handleRecreateDateTimeChange(${groupIndex}, ${timeIndex}, this)"
-                oninput="handleRecreateDateTimeChange(${groupIndex}, ${timeIndex}, this)"
-                class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 [color-scheme:dark]">
-            </div>
-            ${deleteTimeBtn}
-          </div>
-        `;
+    const firstTime = (group.times && group.times[0]) ? group.times[0] : { scheduleTime: minDateStr, timeOnly: '13:00' };
+    let timeInputHtml = '';
+    if (isRecurring) {
+      let timeVal = firstTime.timeOnly || '13:00';
+      if (!timeVal && firstTime.scheduleTime && firstTime.scheduleTime.includes('T')) {
+        timeVal = firstTime.scheduleTime.split('T')[1].slice(0, 5);
       }
-
-      const badgeHtml = isRecurring
-        ? `<span class="text-[10px] text-green-400 bg-green-500/10 border border-green-500/20 px-1.5 py-0.5 rounded font-normal flex items-center gap-0.5 whitespace-nowrap">
-             <i class="ti ${badgeIcon} text-[10px]"></i> ${badgeText}
-           </span>`
-        : `<span class="text-[10px] text-blue-400 bg-blue-500/10 border border-blue-500/20 px-1.5 py-0.5 rounded font-normal whitespace-nowrap">
-             Sekali
-           </span>`;
-
-      return `
-        <div class="flex items-center justify-between gap-1.5 sm:gap-2 bg-dark-700/60 px-2 sm:px-2.5 py-1.5 rounded-lg border border-gray-600/40 flex-nowrap w-full">
-          <div class="flex items-center gap-1.5 text-xs text-gray-300 flex-shrink-0 whitespace-nowrap">
-            <span class="text-[11px] font-medium text-gray-300">Jam ${timeIndex + 1}:</span>
-            ${badgeHtml}
-          </div>
-          ${timeInputHtml}
+      timeInputHtml = `
+        <div class="flex items-center gap-1.5 justify-end flex-shrink-0">
+          <input type="time" id="group_${groupIndex}_time_0" name="groupTime_${groupIndex}[]" required value="${timeVal}"
+            onchange="updateGroupSlotTime(${groupIndex}, 0, this.value, true)"
+            class="h-7.5 w-[100px] sm:w-[115px] px-2 bg-dark-600 hover:bg-dark-500 border border-gray-600 focus:border-primary rounded-lg text-xs font-semibold text-white text-center focus:outline-none [color-scheme:dark] transition-colors shadow-2xs">
         </div>
       `;
-    }).join('');
+    } else {
+      const compactDt = formatShortDateTimeDisplay(firstTime.scheduleTime);
+      timeInputHtml = `
+        <div class="flex items-center gap-1.5 flex-1 justify-end min-w-0">
+          <div class="recreate-datetime-pill relative inline-flex items-center gap-1 sm:gap-1.5 h-7.5 px-2.5 bg-dark-600 hover:bg-dark-500 border border-gray-600 hover:border-primary/60 rounded-lg cursor-pointer transition-colors shadow-2xs select-none"
+               onclick="openRecreateDateTimePicker(this)"
+               title="Klik untuk memilih tanggal dan jam siaran">
+            <i class="ti ti-calendar text-gray-400 text-xs flex-shrink-0 pointer-events-none"></i>
+            <span class="recreate-date-text text-gray-300 font-mono text-xs tracking-tight flex-shrink-0 whitespace-nowrap pointer-events-none">${compactDt.dateStr}</span>
+            <span class="text-gray-400 font-bold text-xs flex-shrink-0 pointer-events-none leading-none">.</span>
+            <span class="recreate-time-text text-primary font-mono text-xs sm:text-sm font-bold tracking-wider flex-shrink-0 whitespace-nowrap pointer-events-none">${compactDt.timeStr}</span>
+            <i class="ti ti-clock text-primary/70 text-xs ml-0.5 flex-shrink-0 pointer-events-none"></i>
 
-    globalSlotOffset += (group.times || []).length;
+            <input type="datetime-local" id="group_${groupIndex}_datetime_0" name="groupDateTime_${groupIndex}[]" required min="${minDateStr}" value="${firstTime.scheduleTime || ''}"
+              onchange="handleRecreateDateTimeChange(${groupIndex}, 0, this)"
+              oninput="handleRecreateDateTimeChange(${groupIndex}, 0, this)"
+              class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 [color-scheme:dark]">
+          </div>
+        </div>
+      `;
+    }
+
+    const badgeHtml = isRecurring
+      ? `<span class="text-[10px] text-green-400 bg-green-500/10 border border-green-500/20 px-2 py-0.5 rounded font-medium flex items-center gap-1 whitespace-nowrap">
+           <i class="ti ${badgeIcon} text-[10px]"></i> ${badgeText}
+         </span>`
+      : `<span class="text-[10px] text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded font-medium whitespace-nowrap">
+           Sekali
+         </span>`;
+
+    globalSlotOffset += 1;
 
     return `
-      <div id="groupCard_${groupIndex}" class="bg-dark-700/80 rounded-xl p-2.5 sm:p-3 border border-gray-700/80 space-y-2.5 transition-colors hover:border-gray-600 shadow-sm">
-        <!-- Baris 1 & 2: Header Siaran (Judul Full) & Tombol Aksi (Edit Full & Lainnya) -->
+      <div id="groupCard_${groupIndex}" class="bg-dark-700/80 rounded-xl p-3 border border-gray-700/80 space-y-2.5 transition-colors hover:border-gray-600 shadow-sm overflow-hidden">
+        <!-- Baris 1 & 2: Header Siaran & Tombol Aksi -->
         ${titleContentHtml}
 
-        <!-- Baris Sub-kontainer Jam Tayang Khusus Siaran Ini -->
-        <div class="bg-dark-800/60 rounded-lg p-2 sm:p-2.5 border border-gray-700/50 space-y-2">
-          <div class="flex items-center justify-between text-xs text-gray-400 px-0.5 flex-nowrap w-full">
-            <span class="flex items-center gap-1 font-medium text-gray-300 truncate">
-              <i class="ti ti-clock text-primary text-xs flex-shrink-0"></i>
-              <span class="truncate">Jam Tayang Siaran #${groupIndex + 1}:</span>
-            </span>
-            <span class="text-[10px] text-gray-400 font-mono flex-shrink-0 whitespace-nowrap ml-1">${(group.times || []).length} jadwal</span>
+        <!-- Single Jam Tayang Bar (Bersih, Rapi & Ramping Tanpa Overflow) -->
+        <div class="bg-dark-800/70 rounded-lg px-3 py-2 border border-gray-700/60 flex items-center justify-between gap-2 w-full min-w-0">
+          <div class="flex items-center gap-1.5 text-xs text-gray-300 min-w-0 flex-shrink-0">
+            <i class="ti ti-clock text-primary text-xs flex-shrink-0"></i>
+            <span class="font-medium text-gray-200">Jam Tayang:</span>
+            ${badgeHtml}
           </div>
-
-          <!-- List Waktu Slot -->
-          <div class="space-y-1.5">
-            ${timesHtml}
-          </div>
-
-          <!-- Tombol Cepat dan Tambah Jam: STRICT SINGLE LINE (Tanpa ruang kosong, tanpa terputus) -->
-          <div class="flex items-center gap-1 sm:gap-1.5 pt-1.5 border-t border-gray-700/40 w-full flex-nowrap">
-            <button type="button" onclick="addQuickTimeToGroup(${groupIndex}, 1)"
-              class="h-7 flex-1 min-w-0 bg-dark-600 hover:bg-dark-500 hover:text-white text-gray-200 border border-gray-600/70 rounded-lg text-xs font-semibold transition-colors flex items-center justify-center whitespace-nowrap active:scale-95"
-              title="Tambah jam +1 jam dari jadwal terakhir">+1j</button>
-            <button type="button" onclick="addQuickTimeToGroup(${groupIndex}, 2)"
-              class="h-7 flex-1 min-w-0 bg-dark-600 hover:bg-dark-500 hover:text-white text-gray-200 border border-gray-600/70 rounded-lg text-xs font-semibold transition-colors flex items-center justify-center whitespace-nowrap active:scale-95"
-              title="Tambah jam +2 jam dari jadwal terakhir">+2j</button>
-            <button type="button" onclick="addQuickTimeToGroup(${groupIndex}, 3)"
-              class="h-7 flex-1 min-w-0 bg-dark-600 hover:bg-dark-500 hover:text-white text-gray-200 border border-gray-600/70 rounded-lg text-xs font-semibold transition-colors flex items-center justify-center whitespace-nowrap active:scale-95"
-              title="Tambah jam +3 jam dari jadwal terakhir">+3j</button>
-            <button type="button" onclick="addQuickTimeToGroup(${groupIndex}, 4)"
-              class="h-7 flex-1 min-w-0 bg-dark-600 hover:bg-dark-500 hover:text-white text-gray-200 border border-gray-600/70 rounded-lg text-xs font-semibold transition-colors flex items-center justify-center whitespace-nowrap active:scale-95"
-              title="Tambah jam +4 jam dari jadwal terakhir">+4j</button>
-            <button type="button" onclick="addCustomTimeToGroup(${groupIndex})"
-              class="h-7 flex-[1.8] min-w-0 px-2 bg-primary/20 hover:bg-primary/30 text-primary border border-primary/40 rounded-lg text-[11px] sm:text-xs font-semibold transition-colors flex items-center justify-center gap-1 whitespace-nowrap active:scale-95 flex-shrink-0"
-              title="Tambah jadwal jam baru untuk siaran ini">
-              <i class="ti ti-plus text-xs"></i>
-              <span class="truncate">Tambah Jam</span>
-            </button>
+          <div class="flex items-center gap-1.5 min-w-0 flex-shrink-0">
+            ${timeInputHtml}
           </div>
         </div>
       </div>
@@ -9650,56 +9623,14 @@ function renderRecreateSlotList() {
   }).join('');
 }
 
-// Add quick time to group
-function addQuickTimeToGroup(groupIndex, hoursToAdd = 2) {
-  if (!window.recreateBroadcastGroups || !window.recreateBroadcastGroups[groupIndex]) return;
-  const group = window.recreateBroadcastGroups[groupIndex];
-  const h = Number(hoursToAdd) || 2;
-
-  let nextDate;
-  if (group.times && group.times.length > 0) {
-    const lastT = group.times[group.times.length - 1];
-    if (lastT && lastT.scheduleTime) {
-      const parsed = new Date(lastT.scheduleTime);
-      if (!isNaN(parsed.getTime())) {
-        nextDate = new Date(parsed.getTime() + h * 60 * 60 * 1000);
-      }
-    }
-  }
-  if (!nextDate || isNaN(nextDate.getTime()) || nextDate.getTime() < Date.now() + 10 * 60 * 1000) {
-    nextDate = new Date(Date.now() + h * 60 * 60 * 1000);
-  }
-
-  const dtStr = formatLocalDateTime(nextDate);
-  const timeOnlyStr = dtStr.split('T')[1].slice(0, 5);
-
-  group.times.push({
-    scheduleTime: dtStr,
-    timeOnly: timeOnlyStr
-  });
-  group.times.sort((a, b) => new Date(a.scheduleTime) - new Date(b.scheduleTime));
-
-  renderRecreateSlotList();
-  showToast(`Jam ${timeOnlyStr} (+${h} jam) ditambahkan ke Siaran #${groupIndex + 1}`);
-}
+// Stubs for deprecated jam bertingkat helpers
+function addQuickTimeToGroup() {}
 window.addQuickTimeToGroup = addQuickTimeToGroup;
 
-function addCustomTimeToGroup(groupIndex) {
-  addQuickTimeToGroup(groupIndex, 2);
-}
+function addCustomTimeToGroup() {}
 window.addCustomTimeToGroup = addCustomTimeToGroup;
 
-// Remove time from group
-function removeTimeFromGroup(groupIndex, timeIndex) {
-  if (!window.recreateBroadcastGroups || !window.recreateBroadcastGroups[groupIndex]) return;
-  const group = window.recreateBroadcastGroups[groupIndex];
-  if (!group.times || group.times.length <= 1) {
-    showToast('Minimal harus ada 1 jadwal untuk siaran ini', 'warning');
-    return;
-  }
-  group.times.splice(timeIndex, 1);
-  renderRecreateSlotList();
-}
+function removeTimeFromGroup() {}
 window.removeTimeFromGroup = removeTimeFromGroup;
 
 // Remove entire broadcast group
@@ -11655,7 +11586,7 @@ if (recreateFromTemplateForm) {
       
       // Show results
       if (results.failed === 0) {
-        showToast(`Berhasil menjadwalkan ${results.success} siaran bertingkat!`);
+        showToast(`Berhasil menjadwalkan ${results.success} siaran dari template!`);
       } else {
         const errorDetails = results.errors.map(e => e.error).filter(Boolean);
         const uniqueErrors = Array.from(new Set(errorDetails));

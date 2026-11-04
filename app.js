@@ -14347,6 +14347,24 @@ app.delete('/api/youtube/templates/:id', isAuthenticated, async (req, res) => {
   }
 });
 
+// Duplicate / Copy YouTube Template
+app.post('/api/youtube/templates/:id/duplicate', isAuthenticated, async (req, res) => {
+  try {
+    const duplicated = await BroadcastTemplate.duplicate(req.params.id, req.session.userId);
+    res.json({
+      success: true,
+      template: duplicated,
+      message: `Template "${duplicated.name}" berhasil diduplikasi!`
+    });
+  } catch (error) {
+    console.error('Error duplicating template:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Gagal menduplikasi template'
+    });
+  }
+});
+
 // Update recurring configuration for a template
 app.put('/api/youtube/templates/:id/recurring', isAuthenticated, async (req, res) => {
   try {
