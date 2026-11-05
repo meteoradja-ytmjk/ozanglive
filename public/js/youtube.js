@@ -6501,24 +6501,24 @@ function renderTemplateList(templates) {
         </span>`;
 
     const div = document.createElement('div');
-    div.className = `template-list-item bg-[#0a0f1d] hover:bg-[#0d1424] border border-[#1e293b] hover:border-[#334155] rounded-xl p-2.5 sm:p-3 transition-all shadow-md flex flex-col gap-1.5 ${accountInvalid ? 'border-orange-500/40' : ''}`;
+    div.className = `template-list-item bg-[#0a0f1d] hover:bg-[#0d1424] border border-[#1e293b] hover:border-[#334155] rounded-xl p-2.5 sm:p-3 transition-all shadow-md flex flex-col gap-2 ${accountInvalid ? 'border-orange-500/40' : ''}`;
     div.innerHTML = `
-      <!-- Baris 1: Index + Nama Template (Atas) & Badges (Bawah) di Kiri, Tombol Aksi di Kanan -->
-      <div class="flex items-center justify-between gap-2 sm:gap-3 w-full">
-        <!-- Sisi Kiri: Judul di atas, Badges di bawah (Strict 2 lines, tidak bertumpuk) -->
-        <div class="flex flex-col gap-1 min-w-0 flex-1 justify-center">
-          <!-- Atas: Index Box + Nama Template -->
-          <div class="flex items-center gap-2 min-w-0">
+      <!-- Baris 1: Header Template (Index + Nama + Badges di Kiri, Tombol Aksi di Kanan / Bawah pada Mobile) -->
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 w-full">
+        <!-- Sisi Kiri: Judul di atas, Badges di bawah -->
+        <div class="flex flex-col gap-1.5 min-w-0 flex-1 justify-center">
+          <!-- Atas: Index Box + Nama Template (Full width di mobile, no truncate cutting off) -->
+          <div class="flex items-center gap-2 min-w-0 w-full">
             <span class="w-6 h-6 rounded-lg bg-[#1e153a] border border-[#482d77] text-[#a78bfa] font-bold text-xs flex items-center justify-center flex-shrink-0 shadow-2xs">
               ${index + 1}
             </span>
-            <h4 class="font-bold text-white text-sm sm:text-base truncate tracking-tight min-w-0 flex-1 leading-tight" title="${escapeHtml(template.name)}">
+            <h4 class="font-bold text-white text-sm sm:text-base break-words tracking-tight min-w-0 flex-1 leading-snug" title="${escapeHtml(template.name)}">
               ${escapeHtml(template.name)}
             </h4>
           </div>
 
-          <!-- Bawah: Badges (Broadcasts & Auto) - flex-nowrap agar TIDAK PERNAH tumpuk baris ke-3 -->
-          <div class="flex items-center gap-1.5 flex-nowrap min-w-0 overflow-hidden">
+          <!-- Bawah: Badges (Broadcasts & Auto & Shuffle & Duration) -->
+          <div class="flex items-center gap-1.5 flex-wrap sm:flex-nowrap min-w-0">
             ${isMulti ? `
               <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium bg-[#1e153a] text-[#a78bfa] border border-[#442c73] flex-shrink-0 whitespace-nowrap shadow-2xs">
                 <i class="ti ti-broadcast text-[10px]"></i>
@@ -6555,8 +6555,8 @@ function renderTemplateList(templates) {
           </div>
         </div>
 
-        <!-- Sisi Kanan: Action Buttons (Hapus Jadwal, Rebroadcast, Trash) -->
-        <div class="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+        <!-- Sisi Kanan: Action Buttons (Hapus Jadwal, Rebroadcast, Duplicate, Delete) -->
+        <div class="flex items-center justify-end sm:justify-start gap-1.5 sm:gap-2 flex-shrink-0 pt-1.5 sm:pt-0 border-t sm:border-t-0 border-gray-800/60 w-full sm:w-auto">
           ${hasRecurring ? `
           <button onclick="removeTemplateRecurringSchedule('${template.id}', '${escapeJsString(template.name)}')"
             class="w-8 h-8 rounded-xl bg-[#2a1b0e] hover:bg-[#3d2714] text-[#f59e0b] border border-[#6b3c12] flex items-center justify-center transition-all cursor-pointer shadow-xs active:scale-95 flex-shrink-0"
@@ -8864,6 +8864,15 @@ async function recreateFromTemplate(templateId) {
     if (data.success && data.template) {
       closeTemplateLibraryModal();
       
+      // Pre-load studio videos so each slot can resolve its own video duration
+      if (!window.allStudioVideos) {
+        try {
+          const resV = await fetch('/api/youtube/videos');
+          const vData = await resV.json();
+          window.allStudioVideos = Array.isArray(vData) ? vData : (vData.videos || []);
+        } catch (_) {}
+      }
+
       // Always use re-create modal (single or multi) so account fallback + stream reuse logic is consistent
       openRecreateFromTemplateModal(data.template);
     } else {
@@ -9105,18 +9114,12 @@ function openRecreateFromTemplateModal(template) {
       const bThumbFolder = b.thumbnailFolder !== undefined ? b.thumbnailFolder : template.thumbnail_folder;
       const bPinnedThumb = b.pinnedThumbnail || (bThumbFolder ? null : (b.thumbnailPath || template.pinned_thumbnail || null));
 
-      // Calculate slot duration with smart fallback to parent template and video duration
+      // Calculate slot duration with smart resolution: slot own duration -> slot video duration -> fallback
       let bTotalMins = parseInt(b.streamDurationMinutes, 10) || (((parseInt(b.durationHours, 10) || 0) * 60) + (parseInt(b.durationMinutes, 10) || 0));
       let bHours = parseInt(b.durationHours, 10) || Math.floor(bTotalMins / 60);
       let bMins = parseInt(b.durationMinutes, 10) || (bTotalMins % 60);
 
-      if (bTotalMins === 0 && totalTemplateMins > 0) {
-        bTotalMins = totalTemplateMins;
-        bHours = tHours;
-        bMins = tMins;
-      }
-
-      const slotVideoId = b.videoId || b.video_id || template.video_id || null;
+      const slotVideoId = b.videoId || b.video_id || (i === 0 ? template.video_id : null) || null;
       if (bTotalMins === 0 && slotVideoId && Array.isArray(window.allStudioVideos)) {
         const matchedVid = window.allStudioVideos.find(v => String(v.id) === String(slotVideoId));
         if (matchedVid && matchedVid.duration) {
@@ -9127,6 +9130,13 @@ function openRecreateFromTemplateModal(template) {
             bMins = bTotalMins % 60;
           }
         }
+      }
+
+      // Only fall back to parent template duration if this is the first slot (i === 0) and has 0 mins
+      if (bTotalMins === 0 && totalTemplateMins > 0 && i === 0) {
+        bTotalMins = totalTemplateMins;
+        bHours = tHours;
+        bMins = tMins;
       }
 
       window.recreateBroadcastGroups.push({
@@ -9465,25 +9475,37 @@ function renderRecreateSlotList() {
     let thumbnailBadgeHtml = '';
     if (group.pinnedThumbnail) {
       thumbnailBadgeHtml = `
-        <div class="mt-1 flex items-center gap-1 text-[10px] text-amber-400 font-mono">
+        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] text-amber-400 font-mono bg-amber-500/10 border border-amber-500/20 shadow-2xs">
           <i class="ti ti-pin text-[11px]"></i>
           <span>Thumbnail Dipin</span>
-        </div>`;
+        </span>`;
     } else if (rotatedThumb && rotatedThumb.filename) {
       const folderLabel = resolvedThumbFolder || 'Root';
       thumbnailBadgeHtml = `
-        <div class="mt-1 flex items-center gap-1.5 text-[10px] text-emerald-400 font-mono truncate" title="Thumbnail Rotasi: Folder ${escapeHtml(folderLabel)} • Urutan #${rotatedThumb.currentIndex + 1} (${escapeHtml(rotatedThumb.filename)})">
+        <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] text-emerald-400 font-mono bg-emerald-500/10 border border-emerald-500/20 truncate shadow-2xs" title="Thumbnail Rotasi: Folder ${escapeHtml(folderLabel)} • Urutan #${rotatedThumb.currentIndex + 1} (${escapeHtml(rotatedThumb.filename)})">
           <i class="ti ti-photo text-[11px] text-emerald-400 flex-shrink-0"></i>
-          <span class="truncate">📁 ${escapeHtml(folderLabel)} • <span class="text-white font-bold">#${rotatedThumb.currentIndex + 1}</span> (${escapeHtml(rotatedThumb.filename)})</span>
-        </div>`;
+          <span class="truncate">📁 ${escapeHtml(folderLabel)} • <span class="text-white font-bold">#${rotatedThumb.currentIndex + 1}</span></span>
+        </span>`;
     } else if (resolvedThumbFolder !== null && resolvedThumbFolder !== undefined) {
       const folderLabel = resolvedThumbFolder || 'Root';
       thumbnailBadgeHtml = `
-        <div class="mt-1 flex items-center gap-1.5 text-[10px] text-gray-400 font-mono truncate">
+        <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] text-gray-400 font-mono bg-gray-700/30 border border-gray-600/40 truncate shadow-2xs">
           <i class="ti ti-photo text-[11px] flex-shrink-0"></i>
           <span class="truncate">📁 Folder: ${escapeHtml(folderLabel)}</span>
-        </div>`;
+        </span>`;
     }
+
+    const durH = parseInt(group.durationHours, 10) || 0;
+    const durM = parseInt(group.durationMinutes, 10) || 0;
+    const durTotal = group.streamDurationMinutes !== undefined ? parseInt(group.streamDurationMinutes, 10) : ((durH * 60) + durM);
+    const durStr = durTotal === 0 ? 'Unlimited' : (durH > 0 ? (durM > 0 ? `${durH}j ${durM}m` : `${durH} jam`) : `${durM} mnt`);
+    const isLoop = group.loopVideo !== undefined ? (group.loopVideo !== false && group.loopVideo !== 0 && group.loopVideo !== '0') : true;
+
+    const durationBadgeHtml = `
+      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-medium ${durTotal === 0 ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30' : 'bg-blue-500/15 text-blue-300 border border-blue-500/30'} flex-shrink-0 shadow-2xs" title="Durasi siaran: ${durStr} • Loop: ${isLoop ? 'Aktif' : 'Mati'}">
+        <i class="ti ti-clock text-[10px]"></i>
+        <span>Durasi: <strong class="text-white">${durStr}</strong></span>
+      </span>`;
 
     let titleContentHtml = '';
     if (isEditingTitle) {
@@ -9533,7 +9555,10 @@ function renderRecreateSlotList() {
             <span class="px-2 py-0.5 bg-primary/20 text-primary font-bold text-[11px] rounded mt-0.5 flex-shrink-0">#${groupIndex + 1}</span>
             <div class="min-w-0 flex-1">
               ${titleDisplayBody}
-              ${thumbnailBadgeHtml}
+              <div class="flex items-center gap-2 flex-wrap mt-1.5">
+                ${thumbnailBadgeHtml}
+                ${durationBadgeHtml}
+              </div>
             </div>
           </div>
 
@@ -9881,11 +9906,31 @@ async function openRecreateGroupFullEditor(groupIndex) {
   const durMInput = document.getElementById('recreateSlotEditDurationMinutes');
   const loopToggle = document.getElementById('recreateSlotEditLoopToggle');
 
-  let h = group.durationHours !== undefined ? parseInt(group.durationHours, 10) : (parseInt(template.duration_hours, 10) || 0);
-  let m = group.durationMinutes !== undefined ? parseInt(group.durationMinutes, 10) : (parseInt(template.duration_minutes, 10) || 0);
-  if (h === 0 && m === 0) {
+  let h = group.durationHours !== undefined ? parseInt(group.durationHours, 10) : 0;
+  let m = group.durationMinutes !== undefined ? parseInt(group.durationMinutes, 10) : 0;
+  let totalM = group.streamDurationMinutes !== undefined ? parseInt(group.streamDurationMinutes, 10) : ((h * 60) + m);
+
+  // If slot duration is 0 and it has a video, resolve from video
+  if (totalM === 0 && group.videoId && Array.isArray(window.allStudioVideos)) {
+    const matchedV = window.allStudioVideos.find(v => String(v.id) === String(group.videoId));
+    if (matchedV && matchedV.duration) {
+      const vSecs = Math.round(Number(matchedV.duration));
+      if (vSecs > 0) {
+        totalM = Math.max(1, Math.round(vSecs / 60));
+        h = Math.floor(totalM / 60);
+        m = totalM % 60;
+      }
+    }
+  } else if (totalM > 0 && h === 0 && m === 0) {
+    h = Math.floor(totalM / 60);
+    m = totalM % 60;
+  }
+
+  // Only fall back to template duration if this is group #0 and it still has 0 mins
+  if (totalM === 0 && groupIndex === 0) {
     const parentTotal = parseInt(template.stream_duration_minutes, 10) || (((parseInt(template.duration_hours, 10) || 0) * 60) + (parseInt(template.duration_minutes, 10) || 0));
     if (parentTotal > 0) {
+      totalM = parentTotal;
       h = Math.floor(parentTotal / 60);
       m = parentTotal % 60;
     }
@@ -9946,6 +9991,28 @@ function updateRecreateSlotDurationSummary() {
   }
 }
 window.updateRecreateSlotDurationSummary = updateRecreateSlotDurationSummary;
+
+function handleRecreateSlotVideoChange(videoId) {
+  if (!videoId || !Array.isArray(window.allStudioVideos)) return;
+  const matched = window.allStudioVideos.find(v => String(v.id) === String(videoId));
+  if (matched && matched.duration) {
+    const vSecs = Math.round(Number(matched.duration));
+    if (vSecs > 0) {
+      const totalM = Math.max(1, Math.round(vSecs / 60));
+      const h = Math.floor(totalM / 60);
+      const m = totalM % 60;
+      const hInput = document.getElementById('recreateSlotEditDurationHours');
+      const mInput = document.getElementById('recreateSlotEditDurationMinutes');
+      if (hInput && mInput) {
+        hInput.value = h;
+        mInput.value = m;
+        updateRecreateSlotDurationSummary();
+        showToast(`Durasi disesuaikan dengan video: ${h > 0 ? `${h}j ${m}m` : `${m} menit`}`, 'info');
+      }
+    }
+  }
+}
+window.handleRecreateSlotVideoChange = handleRecreateSlotVideoChange;
 
 function toggleRecreateSlotRotation(checked) {
   // Real-time rotation toggle indicator

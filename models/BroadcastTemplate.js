@@ -100,10 +100,15 @@ class BroadcastTemplate {
         if (Array.isArray(broadcasts) && broadcasts.length > 0 && typeof broadcasts[0] === 'object' && broadcasts[0] !== null && ('title' in broadcasts[0] || 'streamKey' in broadcasts[0] || 'streamId' in broadcasts[0])) {
           row.isMultiBroadcast = true;
           row.broadcasts = broadcasts.map(b => {
+            const hasExplicitDur = (b.streamDurationMinutes !== undefined || b.durationHours !== undefined || b.durationMinutes !== undefined);
             const slotTotalMins = parseInt(b.streamDurationMinutes) || (((parseInt(b.durationHours) || 0) * 60) + (parseInt(b.durationMinutes) || 0));
-            const finalSlotMins = slotTotalMins > 0 ? slotTotalMins : (row.stream_duration_minutes || 0);
-            const finalSlotHours = finalSlotMins > 0 ? Math.floor(finalSlotMins / 60) : (parseInt(b.durationHours) || row.duration_hours || 0);
-            const finalSlotRemMins = finalSlotMins > 0 ? (finalSlotMins % 60) : (parseInt(b.durationMinutes) || row.duration_minutes || 0);
+            const finalSlotMins = hasExplicitDur ? slotTotalMins : (row.stream_duration_minutes || 0);
+            const finalSlotHours = hasExplicitDur
+              ? (b.durationHours !== undefined ? (parseInt(b.durationHours) || 0) : Math.floor(finalSlotMins / 60))
+              : (parseInt(b.durationHours) || row.duration_hours || Math.floor((row.stream_duration_minutes || 0) / 60) || 0);
+            const finalSlotRemMins = hasExplicitDur
+              ? (b.durationMinutes !== undefined ? (parseInt(b.durationMinutes) || 0) : (finalSlotMins % 60))
+              : (parseInt(b.durationMinutes) || row.duration_minutes || ((row.stream_duration_minutes || 0) % 60) || 0);
 
             return {
               ...b,

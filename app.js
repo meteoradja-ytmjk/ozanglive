@@ -13694,6 +13694,23 @@ app.post('/api/youtube/templates/multi', isAuthenticated, async (req, res) => {
         } catch (mLookupErr) {}
       }
 
+      // If duration is still 0 and video is present, auto-lookup duration from videos table
+      if (bMins === 0 && bVideoId) {
+        try {
+          const vRow = await new Promise(resolve => {
+            db.get(`SELECT duration FROM videos WHERE id = ?`, [bVideoId], (err, row) => resolve(row));
+          });
+          if (vRow && vRow.duration > 0) {
+            const vSecs = Math.round(Number(vRow.duration));
+            if (vSecs > 0) {
+              bMins = Math.max(1, Math.round(vSecs / 60));
+              bHours = Math.floor(bMins / 60);
+              bMinutes = bMins % 60;
+            }
+          }
+        } catch (_) {}
+      }
+
       return {
         broadcastId: b.broadcastId || b.id || null,
         accountId: b.accountId ? parseInt(b.accountId) : parseInt(accountId),
