@@ -6486,142 +6486,134 @@ function renderTemplateList(templates) {
     // Thumbnail badge - show mode info (only for pinned)
     let thumbnailBadge = '';
     if (hasPinnedThumbnail) {
-      thumbnailBadge = `<span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-green-500/20 text-green-400 text-[10px] font-medium rounded-full border border-green-500/30 flex-shrink-0 whitespace-nowrap" title="Pinned thumbnail"><i class="ti ti-pin-filled text-[9px]"></i> Pin</span>`;
+      thumbnailBadge = `<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-green-500/20 text-green-400 border border-green-500/30 flex-shrink-0 whitespace-nowrap shadow-2xs" title="Pinned thumbnail"><i class="ti ti-pin text-xs"></i> <span>Pin</span></span>`;
     }
     
     // Channel display with warning if account is invalid
     const channelDisplay = accountInvalid 
-      ? `<span class="text-[11px] sm:text-xs text-orange-400 flex items-center gap-1 font-medium truncate" title="YouTube account disconnected. Select a new account when re-creating.">
-          <i class="ti ti-alert-triangle text-[11px] flex-shrink-0"></i>
+      ? `<span class="text-xs text-orange-400 flex items-center gap-1.5 font-medium truncate" title="YouTube account disconnected. Select a new account when re-creating.">
+          <i class="ti ti-alert-triangle text-xs flex-shrink-0"></i>
           <span class="truncate">${escapeHtml(channelLabel)}</span>
         </span>`
-      : `<span class="text-[11px] sm:text-xs text-[#f87171] flex items-center gap-1 font-medium truncate">
-          <i class="ti ti-brand-youtube text-xs sm:text-sm flex-shrink-0"></i>
+      : `<span class="text-xs text-[#f87171] flex items-center gap-1.5 font-medium truncate">
+          <i class="ti ti-brand-youtube text-sm flex-shrink-0"></i>
           <span class="truncate">${escapeHtml(channelLabel)}</span>
         </span>`;
 
+    const totalMins = template.stream_duration_minutes || ((template.duration_hours || 0) * 60 + (template.duration_minutes || 0));
+    let durStr = '';
+    if (totalMins > 0) {
+      const h = Math.floor(totalMins / 60);
+      const m = totalMins % 60;
+      durStr = h > 0 ? (m > 0 ? `${h}j ${m}m` : `${h} jam`) : `${m} mnt`;
+    }
+
     const div = document.createElement('div');
-    div.className = `template-list-item bg-[#0a0f1d] hover:bg-[#0d1424] border border-[#1e293b] hover:border-[#334155] rounded-xl p-2.5 sm:p-3 transition-all shadow-md flex flex-col gap-2 ${accountInvalid ? 'border-orange-500/40' : ''}`;
+    div.className = `template-list-item bg-[#0a0f1d] hover:bg-[#0d1424] border border-[#1e293b] hover:border-[#334155] rounded-2xl p-3 sm:p-3.5 transition-all shadow-md flex flex-col gap-2.5 ${accountInvalid ? 'border-orange-500/40' : ''}`;
     div.innerHTML = `
-      <!-- Baris 1: Header Template (Index + Nama + Badges di Kiri, Tombol Aksi di Kanan / Bawah pada Mobile) -->
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 w-full">
-        <!-- Sisi Kiri: Judul di atas, Badges di bawah -->
-        <div class="flex flex-col gap-1.5 min-w-0 flex-1 justify-center">
-          <!-- Atas: Index Box + Nama Template (Full width di mobile, no truncate cutting off) -->
-          <div class="flex items-center gap-2 min-w-0 w-full">
-            <span class="w-6 h-6 rounded-lg bg-[#1e153a] border border-[#482d77] text-[#a78bfa] font-bold text-xs flex items-center justify-center flex-shrink-0 shadow-2xs">
-              ${index + 1}
-            </span>
-            <h4 class="font-bold text-white text-sm sm:text-base break-words tracking-tight min-w-0 flex-1 leading-snug" title="${escapeHtml(template.name)}">
-              ${escapeHtml(template.name)}
-            </h4>
-          </div>
-
-          <!-- Bawah: Badges (Broadcasts & Auto & Shuffle & Duration) -->
-          <div class="flex items-center gap-1.5 flex-wrap sm:flex-nowrap min-w-0">
-            ${isMulti ? `
-              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium bg-[#1e153a] text-[#a78bfa] border border-[#442c73] flex-shrink-0 whitespace-nowrap shadow-2xs">
-                <i class="ti ti-broadcast text-[10px]"></i>
-                <span>${broadcastCount} broadcasts</span>
-              </span>` : ''}
-
-            ${hasRecurring ? `
-              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold bg-[#0d2a22] text-[#34d399] border border-[#1b5e48] flex-shrink-0 whitespace-nowrap shadow-2xs" title="Jadwal otomatis aktif">
-                <span class="w-1.5 h-1.5 rounded-full bg-[#34d399]"></span>
-                <span>Auto</span>
-              </span>` : ''}
-
-            ${Boolean(template.shuffle_daily) ? `
-              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold bg-[#2a133d] text-[#c084fc] border border-[#581c87] flex-shrink-0 whitespace-nowrap shadow-2xs" title="Daily Shuffle aktif: Urutan siaran & durasi diacak otomatis setiap hari">
-                <i class="ti ti-arrows-shuffle text-[10px]"></i>
-                <span>Shuffle</span>
-              </span>` : ''}
-
-            ${thumbnailBadge}
-
-            ${(() => {
-              const totalMins = template.stream_duration_minutes || ((template.duration_hours || 0) * 60 + (template.duration_minutes || 0));
-              if (totalMins > 0) {
-                const h = Math.floor(totalMins / 60);
-                const m = totalMins % 60;
-                const durStr = h > 0 ? (m > 0 ? `${h}j ${m}m` : `${h} jam`) : `${m} mnt`;
-                return `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-[#1e293b] text-blue-300 border border-blue-900/40 flex-shrink-0 whitespace-nowrap shadow-2xs" title="Durasi: ${durStr}">
-                  <i class="ti ti-clock text-[10px]"></i>
-                  <span>${durStr}</span>
-                </span>`;
-              }
-              return '';
-            })()}
-          </div>
+      <!-- Baris 1: Index + Nama Template (Kiri), Durasi + Auto Badge (Kanan) -->
+      <div class="flex items-center justify-between gap-2.5 w-full">
+        <!-- Sisi Kiri: Index Box + Nama Template -->
+        <div class="flex items-center gap-2.5 min-w-0 flex-1">
+          <span class="w-7 h-7 rounded-xl bg-[#1e153a] border border-[#482d77] text-[#a78bfa] font-bold text-xs sm:text-sm flex items-center justify-center flex-shrink-0 shadow-2xs">
+            ${index + 1}
+          </span>
+          <h4 class="font-bold text-white text-sm sm:text-base tracking-tight truncate min-w-0 leading-tight" title="${escapeHtml(template.name)}">
+            ${escapeHtml(template.name)}
+          </h4>
         </div>
 
-        <!-- Sisi Kanan: Action Buttons (Hapus Jadwal, Rebroadcast, Duplicate, Delete) -->
-        <div class="flex items-center justify-end sm:justify-start gap-1.5 sm:gap-2 flex-shrink-0 pt-1.5 sm:pt-0 border-t sm:border-t-0 border-gray-800/60 w-full sm:w-auto">
+        <!-- Sisi Kanan: Durasi + Auto Badge -->
+        <div class="flex items-center gap-2 flex-shrink-0">
+          ${durStr ? `
+            <span class="text-xs text-gray-300 font-mono font-medium flex items-center gap-1" title="Total Durasi: ${durStr}">
+              <i class="ti ti-clock text-xs text-gray-400"></i>
+              <span>${durStr}</span>
+            </span>
+          ` : ''}
+
           ${hasRecurring ? `
-          <button onclick="removeTemplateRecurringSchedule('${template.id}', '${escapeJsString(template.name)}')"
-            class="w-8 h-8 rounded-xl bg-[#2a1b0e] hover:bg-[#3d2714] text-[#f59e0b] border border-[#6b3c12] flex items-center justify-center transition-all cursor-pointer shadow-xs active:scale-95 flex-shrink-0"
-            title="Hapus / Nonaktifkan penjadwalan otomatis untuk template ini">
-            <i class="ti ti-calendar-off text-sm"></i>
-          </button>` : ''}
-
-          <button onclick="recreateFromTemplate('${template.id}')"
-            class="h-8 px-2.5 sm:px-3.5 rounded-xl bg-[#36131c] hover:bg-[#4a1824] text-[#f87171] hover:text-white border border-[#7f1d2d] flex items-center gap-1.5 text-xs font-semibold transition-all cursor-pointer shadow-xs active:scale-95 flex-shrink-0"
-            title="Jadwalkan ulang broadcast dari template ini">
-            <i class="ti ti-broadcast text-sm"></i>
-            <span>Rebroadcast</span>
-          </button>
-
-          <button onclick="duplicateTemplate('${template.id}', '${escapeJsString(template.name)}')"
-            class="w-8 h-8 rounded-xl bg-[#162033] hover:bg-blue-500/20 text-[#94a3b8] hover:text-blue-400 border border-[#2b3a54] hover:border-blue-500/40 flex items-center justify-center transition-all cursor-pointer flex-shrink-0 shadow-xs active:scale-95"
-            title="Duplikasi Template (Salin isi menjadi template baru)">
-            <i class="ti ti-copy text-sm"></i>
-          </button>
-
-          <button onclick="deleteTemplate('${template.id}', '${escapeJsString(template.name)}')"
-            class="w-8 h-8 rounded-xl bg-[#162033] hover:bg-red-500/20 text-[#94a3b8] hover:text-red-400 border border-[#2b3a54] hover:border-red-500/40 flex items-center justify-center transition-all cursor-pointer flex-shrink-0 active:scale-95"
-            title="Hapus Template">
-            <i class="ti ti-trash text-sm"></i>
-          </button>
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#0d2a22] text-[#34d399] border border-[#1b5e48] shadow-2xs" title="Jadwal otomatis aktif">
+              <span class="w-1.5 h-1.5 rounded-full bg-[#34d399]"></span>
+              <span>Auto</span>
+            </span>
+          ` : ''}
         </div>
       </div>
 
-      <!-- Garis Pemisah Halus (Sangat Ramping, Tanpa Ruang Kosong Berlebih) -->
-      <div class="w-full border-t border-gray-800/70 my-0.5"></div>
+      <!-- Baris 2: Badges (Broadcasts Count, Shuffle, Recurring Pattern, Pin) -->
+      <div class="flex items-center gap-2 flex-wrap min-w-0">
+        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-[#1e153a] text-[#c084fc] border border-[#482d77] flex-shrink-0 whitespace-nowrap shadow-2xs">
+          <i class="ti ti-broadcast text-xs"></i>
+          <span>${broadcastCount} broadcast${broadcastCount > 1 ? 's' : ''}</span>
+        </span>
 
-      <!-- Baris 2: Sub-bar Konten Video & Channel di Kiri, Jadwal di Kanan (Ramping 1 Baris Penuh) -->
-      <div class="bg-[#080d1a]/90 rounded-xl px-2.5 py-1.5 border border-gray-800/80 flex items-center justify-between gap-2 text-xs w-full min-w-0">
-        <!-- Sisi Kiri: Video Title | Channel Name -->
-        <div class="flex items-center gap-2 min-w-0 flex-1">
-          <!-- Video Title -->
-          <div class="flex items-center gap-1 min-w-0 flex-1 truncate text-gray-300">
-            <i class="ti ti-video text-gray-400 text-xs flex-shrink-0"></i>
-            <span class="truncate text-[11px] sm:text-xs font-medium text-gray-300 min-w-0" title="${escapeHtml(template.title)}">
-              ${escapeHtml(template.title)}
-            </span>
-          </div>
+        ${Boolean(template.shuffle_daily) ? `
+          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-[#1e153a] text-[#c084fc] border border-[#482d77] flex-shrink-0 whitespace-nowrap shadow-2xs" title="Daily Shuffle aktif: Urutan siaran & durasi diacak otomatis setiap hari">
+            <i class="ti ti-arrows-shuffle text-xs"></i>
+            <span>Shuffle</span>
+          </span>
+        ` : ''}
 
-          <!-- Vertical Divider -->
-          <div class="h-3 w-px bg-gray-700/80 flex-shrink-0"></div>
+        ${hasRecurring && patternText ? `
+          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-[#0d2a22] text-[#34d399] border border-[#1b5e48] flex-shrink-0 whitespace-nowrap shadow-2xs truncate max-w-[200px] sm:max-w-none" title="${escapeHtml(patternText)}">
+            <i class="ti ti-repeat text-xs"></i>
+            <span class="truncate">${escapeHtml(patternText)}</span>
+          </span>
+        ` : ''}
 
-          <!-- Channel Name -->
-          <div class="flex items-center gap-1 flex-shrink-0 max-w-[85px] sm:max-w-[130px] truncate">
-            ${channelDisplay}
-          </div>
+        ${thumbnailBadge}
+      </div>
+
+      <!-- Baris 3: Action Buttons Bar (Cancel Recurring, Rebroadcast, Duplicate, Delete) -->
+      <div class="flex items-center gap-2 w-full">
+        ${hasRecurring ? `
+          <button onclick="removeTemplateRecurringSchedule('${template.id}', '${escapeJsString(template.name)}')"
+            class="h-10 sm:h-11 w-12 sm:w-14 rounded-2xl bg-[#2a1b0e] hover:bg-[#3d2714] text-[#f59e0b] border border-[#6b3c12] flex items-center justify-center transition-all cursor-pointer shadow-xs active:scale-95 flex-shrink-0"
+            title="Hapus / Nonaktifkan penjadwalan otomatis untuk template ini">
+            <i class="ti ti-calendar-off text-base sm:text-lg"></i>
+          </button>
+        ` : ''}
+
+        <button onclick="recreateFromTemplate('${template.id}')"
+          class="h-10 sm:h-11 flex-1 rounded-2xl bg-[#36131c] hover:bg-[#4a1824] text-[#f87171] hover:text-white border border-[#7f1d2d] flex items-center justify-center gap-2 text-xs sm:text-sm font-semibold transition-all cursor-pointer shadow-xs active:scale-95 min-w-0"
+          title="Jadwalkan ulang broadcast dari template ini">
+          <i class="ti ti-broadcast text-base sm:text-lg"></i>
+          <span>Rebroadcast</span>
+        </button>
+
+        <button onclick="duplicateTemplate('${template.id}', '${escapeJsString(template.name)}')"
+          class="h-10 sm:h-11 w-12 sm:w-14 rounded-2xl bg-[#162033] hover:bg-blue-500/20 text-[#94a3b8] hover:text-blue-400 border border-[#2b3a54] hover:border-blue-500/40 flex items-center justify-center transition-all cursor-pointer flex-shrink-0 shadow-xs active:scale-95"
+          title="Duplikasi Template (Salin isi menjadi template baru)">
+          <i class="ti ti-copy text-base sm:text-lg"></i>
+        </button>
+
+        <button onclick="deleteTemplate('${template.id}', '${escapeJsString(template.name)}')"
+          class="h-10 sm:h-11 w-12 sm:w-14 rounded-2xl bg-[#162033] hover:bg-red-500/20 text-[#94a3b8] hover:text-red-400 border border-[#2b3a54] hover:border-red-500/40 flex items-center justify-center transition-all cursor-pointer flex-shrink-0 active:scale-95"
+          title="Hapus Template">
+          <i class="ti ti-trash text-base sm:text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Garis Pemisah Halus -->
+      <div class="w-full border-t border-gray-800/80 my-0.5"></div>
+
+      <!-- Baris 4: Sub-bar Konten Video di Kiri, Channel di Kanan -->
+      <div class="bg-[#080d1a]/90 rounded-2xl px-3 py-2 border border-gray-800/80 flex items-center justify-between gap-2 text-xs w-full min-w-0">
+        <!-- Sisi Kiri: Video Title -->
+        <div class="flex items-center gap-1.5 min-w-0 flex-1 truncate text-gray-300">
+          <i class="ti ti-video text-gray-400 text-xs sm:text-sm flex-shrink-0"></i>
+          <span class="truncate text-xs font-medium text-gray-300 min-w-0" title="${escapeHtml(template.title)}">
+            ${escapeHtml(template.title)}
+          </span>
         </div>
 
-        <!-- Sisi Kanan: Status Jadwal Berulang (Kompak & Rapi) -->
-        <div class="flex-shrink-0">
-          ${hasRecurring ? `
-            <span class="px-2 py-0.5 bg-[#092b21] text-[#34d399] border border-[#165a44] rounded-lg text-[10px] sm:text-[11px] font-medium flex items-center gap-1 shadow-2xs whitespace-nowrap max-w-[130px] sm:max-w-none truncate" title="${escapeHtml(patternText)}">
-              <i class="ti ti-repeat text-[10px] text-[#34d399] flex-shrink-0"></i>
-              <span class="truncate">${escapeHtml(patternText)}</span>
-            </span>
-          ` : `
-            <span class="px-2 py-0.5 text-gray-500 text-[10px] sm:text-[11px] flex items-center gap-1 font-medium whitespace-nowrap">
-              <i class="ti ti-calendar-off text-[10px] text-gray-600"></i>
-              <span>Sekali</span>
-            </span>
-          `}
+        <!-- Vertical Divider -->
+        <div class="h-3.5 w-px bg-gray-700/80 flex-shrink-0"></div>
+
+        <!-- Sisi Kanan: Channel Name -->
+        <div class="flex items-center gap-1 flex-shrink-0 max-w-[140px] sm:max-w-[220px] truncate">
+          ${channelDisplay}
         </div>
       </div>
     `;
