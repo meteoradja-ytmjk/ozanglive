@@ -126,7 +126,7 @@ class BroadcastTemplate {
               scheduleType: b.scheduleType || row.schedule_type || 'once',
               thumbnailFolder: (b.thumbnailFolder !== undefined && b.thumbnailFolder !== null) ? b.thumbnailFolder : row.thumbnail_folder,
               thumbnailPath: b.thumbnailPath || b.thumbnail_path || null,
-              pinnedThumbnail: (b.pinnedThumbnail || null)
+              pinnedThumbnail: (b.pinnedThumbnail || b.pinned_thumbnail || null)
             };
           });
         }

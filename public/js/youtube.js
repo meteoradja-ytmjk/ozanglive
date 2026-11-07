@@ -634,6 +634,7 @@ function createBroadcastRowHtml(broadcast, index) {
       categoryId: broadcast.categoryId || "22",
       tags: broadcast.tags || [],
       thumbnailPath: broadcast.thumbnailPath || null,
+      pinnedThumbnail: broadcast.pinnedThumbnail || broadcast.pinned_thumbnail || null,
       streamDurationHours: durationHours,
       streamDurationMinutes: durationMinutes,
       duration: durationMinutes,
@@ -1109,6 +1110,7 @@ function createBroadcastCard(broadcast) {
       categoryId: broadcast.categoryId || '22',
       tags: broadcast.tags || [],
       thumbnailPath: broadcast.thumbnailPath || null,
+      pinnedThumbnail: broadcast.pinnedThumbnail || broadcast.pinned_thumbnail || null,
       streamDurationHours: broadcast.streamDurationHours || 0,
       streamDurationMinutes: broadcast.streamDurationMinutes || broadcast.duration || 0,
       duration: broadcast.streamDurationMinutes || broadcast.duration || 0,
@@ -2980,13 +2982,20 @@ function pinThumbnail(path, filename) {
   const indicator = document.getElementById('pinnedThumbnailIndicator');
   const nameEl = document.getElementById('pinnedThumbnailName');
   
+  // Toggle unpin if already pinned
+  if (pinnedInput && pinnedInput.value === path) {
+    unpinThumbnail();
+    return;
+  }
+  
   if (pinnedInput) {
     pinnedInput.value = path;
   }
   
+  const displayName = filename || (path ? path.split('/').pop() : 'Thumbnail');
   if (indicator && nameEl) {
     indicator.classList.remove('hidden');
-    nameEl.textContent = filename;
+    nameEl.textContent = displayName;
   }
   
   // Set thumbnail mode to pinned
@@ -2995,10 +3004,24 @@ function pinThumbnail(path, filename) {
     pinnedRadio.checked = true;
   }
   
+  // Synchronize selection input & preview so preview matches pinned thumbnail
+  const selectedPathInput = document.getElementById('selectedThumbnailPath');
+  if (selectedPathInput) {
+    selectedPathInput.value = path;
+  }
+  window.createSelectedThumbnailPath = path;
+  
+  const preview = document.getElementById('thumbnailPreview');
+  if (preview) {
+    preview.innerHTML = `<img src="${path}" class="w-full h-full object-cover">`;
+    preview.classList.add('border-primary');
+    preview.classList.remove('border-gray-600');
+  }
+  
   // Refresh gallery to show pin indicator
   fetchThumbnails(currentThumbnailFolder);
   
-  showToast(`Thumbnail "${filename}" di-pin`);
+  showToast(`Thumbnail "${displayName}" di-pin`, 'success');
 }
 
 // Unpin thumbnail
@@ -3023,7 +3046,7 @@ function unpinThumbnail() {
   // Refresh gallery to remove pin indicator
   fetchThumbnails(currentThumbnailFolder);
   
-  showToast('Pin thumbnail dihapus');
+  showToast('Pin thumbnail dihapus', 'info');
 }
 
 // Update thumbnail mode
@@ -3041,12 +3064,27 @@ function updateThumbnailMode(mode) {
     }
     fetchThumbnails(currentThumbnailFolder);
   } else if (mode === 'pinned') {
-    // Pinned mode - user will select a specific thumbnail
+    // Pinned mode: if a thumbnail is already selected, pin it immediately!
+    const selectedPath = document.getElementById('selectedThumbnailPath')?.value || window.createSelectedThumbnailPath;
+    if (selectedPath) {
+      const filename = selectedPath.split('/').pop();
+      pinThumbnail(selectedPath, filename);
+    } else {
+      showToast('Pilih salah satu thumbnail dari galeri di bawah untuk di-pin', 'info');
+    }
   }
 }
 
 // Select thumbnail from gallery
 function selectGalleryThumbnail(element, url, path) {
+  // If thumbnail mode is pinned, clicking a thumbnail immediately pins it!
+  const currentMode = document.querySelector('input[name="thumbnailMode"]:checked')?.value || 'sequential';
+  if (currentMode === 'pinned') {
+    const filename = element ? (element.dataset.filename || path.split('/').pop()) : path.split('/').pop();
+    pinThumbnail(path, filename);
+    return;
+  }
+  
   // Get the index from element dataset
   const index = element ? parseInt(element.dataset.index || '0') : 0;
   
@@ -5467,17 +5505,26 @@ if (createBroadcastForm) {
       const thumbnailPath = document.getElementById('selectedThumbnailPath')?.value;
       const pinnedThumbnail = document.getElementById('pinnedThumbnail')?.value;
       
-      if (thumbnailMode === 'pinned' && pinnedThumbnail) {
-        formData.append('thumbnailPath', pinnedThumbnail);
-      }
-      if (window.createSelectedThumbnailIndex !== null && window.createSelectedThumbnailIndex !== undefined) {
-        formData.append('thumbnailIndex', String(window.createSelectedThumbnailIndex));
+      formData.append('thumbnailMode', thumbnailMode);
+      if (thumbnailMode === 'pinned' && (pinnedThumbnail || thumbnailPath)) {
+        const finalPinned = pinnedThumbnail || thumbnailPath;
+        formData.append('thumbnailPath', finalPinned);
+        formData.append('pinnedThumbnail', finalPinned);
         formData.append('isCustomThumbnail', 'true');
+        formData.append('isPinnedThumbnail', 'true');
+      } else {
+        if (thumbnailPath) {
+          formData.append('thumbnailPath', thumbnailPath);
+        }
+        if (window.createSelectedThumbnailIndex !== null && window.createSelectedThumbnailIndex !== undefined) {
+          formData.append('thumbnailIndex', String(window.createSelectedThumbnailIndex));
+          formData.append('isCustomThumbnail', 'true');
+        }
+        if (pinnedThumbnail) {
+          formData.append('pinnedThumbnail', pinnedThumbnail);
+        }
       }
       formData.append('thumbnailFolder', currentThumbnailFolder || '');
-      if (pinnedThumbnail) {
-        formData.append('pinnedThumbnail', pinnedThumbnail);
-      }
       
       const response = await fetch('/api/youtube/broadcasts', {
         method: 'POST',
@@ -5916,16 +5963,21 @@ async function openEditBroadcastModal(broadcast) {
     }
   }
   
-  // Reset thumbnail mode to sequential
-  const sequentialRadio = document.querySelector('input[name="editThumbnailMode"][value="sequential"]');
-  if (sequentialRadio) sequentialRadio.checked = true;
-  
-  // Reset pinned thumbnail
+  // Initial thumbnail mode and pinned thumbnail from broadcast data
+  const initialPinned = broadcast.pinnedThumbnail || broadcast.pinned_thumbnail || '';
   const pinnedInput = document.getElementById('editPinnedThumbnail');
-  if (pinnedInput) pinnedInput.value = '';
+  if (pinnedInput) pinnedInput.value = initialPinned;
   
   const pinnedIndicator = document.getElementById('editPinnedThumbnailIndicator');
-  if (pinnedIndicator) pinnedIndicator.classList.add('hidden');
+  if (initialPinned) {
+    if (pinnedIndicator) pinnedIndicator.classList.remove('hidden');
+    const pinnedRadio = document.querySelector('input[name="editThumbnailMode"][value="pinned"]');
+    if (pinnedRadio) pinnedRadio.checked = true;
+  } else {
+    if (pinnedIndicator) pinnedIndicator.classList.add('hidden');
+    const sequentialRadio = document.querySelector('input[name="editThumbnailMode"][value="sequential"]');
+    if (sequentialRadio) sequentialRadio.checked = true;
+  }
   
   // Reset stream key folder mapping
   const mappingInput = document.getElementById('editStreamKeyFolderMapping');
@@ -5967,10 +6019,24 @@ async function openEditBroadcastModal(broadcast) {
       
       if (broadcastId && typeof getBroadcastSettingsFromServer === 'function') {
         const settings = await getBroadcastSettingsFromServer(broadcastId, accountId);
-        if (settings && settings.thumbnailFolder !== null && settings.thumbnailFolder !== undefined) {
-          boundFolder = settings.thumbnailFolder;
+        if (settings) {
+          if (settings.thumbnailFolder !== null && settings.thumbnailFolder !== undefined) {
+            boundFolder = settings.thumbnailFolder;
+          }
           savedThumbnailIndex = settings.thumbnailIndex || 0;
           savedThumbnailPath = settings.thumbnailPath || null;
+          
+          const pThumb = settings.pinnedThumbnail || settings.pinned_thumbnail || null;
+          if (pThumb) {
+            const pInput = document.getElementById('editPinnedThumbnail');
+            if (pInput) pInput.value = pThumb;
+            const pInd = document.getElementById('editPinnedThumbnailIndicator');
+            if (pInd) pInd.classList.remove('hidden');
+            const pRadio = document.querySelector('input[name="editThumbnailMode"][value="pinned"]');
+            if (pRadio) pRadio.checked = true;
+            savedThumbnailPath = pThumb;
+            console.log(`[openEditBroadcastModal] Restored pinned thumbnail: ${pThumb}`);
+          }
           console.log(`[openEditBroadcastModal] Using folder from broadcast settings: "${boundFolder || '(root)'}"`);
         }
       }
@@ -7085,6 +7151,7 @@ if (createTemplateForm) {
         alteredContent: alteredContent,
         // IMPORTANT: Use the selected folder from the dropdown, NOT currentThumbnailFolder
         thumbnailFolder: thumbnailFolder,
+        pinnedThumbnail: document.getElementById('templatePinnedThumbnail')?.value || document.getElementById('pinnedThumbnail')?.value || null,
         // Title folder for rotation
         titleFolderId: titleFolderId,
         // Include recurring data
@@ -8348,6 +8415,36 @@ async function createFromTemplate(templateId) {
           if (hiddenAud) hiddenAud.value = template.audio_id;
           const lbl = document.getElementById('studioSelectedAudio');
           if (lbl) lbl.textContent = template.audio_title || `Audio #${template.audio_id}`;
+        }
+      }
+
+      // Prefill Thumbnail settings from template
+      const templatePinned = template.pinned_thumbnail || template.pinnedThumbnail || null;
+      if (templatePinned) {
+        const pinRadio = document.querySelector('input[name="thumbnailMode"][value="pinned"]');
+        if (pinRadio) pinRadio.checked = true;
+        const pinnedInput = document.getElementById('pinnedThumbnail');
+        if (pinnedInput) pinnedInput.value = templatePinned;
+        const selPathInput = document.getElementById('selectedThumbnailPath');
+        if (selPathInput) selPathInput.value = templatePinned;
+        window.createSelectedThumbnailPath = templatePinned;
+        const indicator = document.getElementById('pinnedThumbnailIndicator');
+        const nameEl = document.getElementById('pinnedThumbnailName');
+        if (indicator && nameEl) {
+          indicator.classList.remove('hidden');
+          nameEl.textContent = templatePinned.split('/').pop();
+        }
+        const preview = document.getElementById('thumbnailPreview');
+        if (preview) {
+          preview.innerHTML = `<img src="${templatePinned}" class="w-full h-full object-cover">`;
+          preview.classList.add('border-primary');
+          preview.classList.remove('border-gray-600');
+        }
+      } else if (template.thumbnail_folder !== undefined && template.thumbnail_folder !== null) {
+        const seqRadio = document.querySelector('input[name="thumbnailMode"][value="sequential"]');
+        if (seqRadio) seqRadio.checked = true;
+        if (typeof openThumbnailFolder === 'function') {
+          openThumbnailFolder(template.thumbnail_folder === '' ? null : template.thumbnail_folder);
         }
       }
       
@@ -12728,7 +12825,13 @@ function updateEditThumbnailMode(mode) {
     }
     loadEditThumbnailFolder(currentEditThumbnailFolder);
   } else if (mode === 'pinned') {
-    // Pinned mode - user will select a specific thumbnail
+    // Pinned mode: if a thumbnail was already selected, pin it immediately!
+    const targetPath = window.editSavedThumbnailPath || window.editSelectedThumbnailPath;
+    if (targetPath) {
+      pinEditThumbnail(targetPath);
+    } else {
+      showToast('Pilih thumbnail di sebelah kanan untuk di-pin', 'info');
+    }
   }
 }
 
@@ -12785,6 +12888,12 @@ function pinEditThumbnail(path) {
   const indicator = document.getElementById('editPinnedThumbnailIndicator');
   const modeRadio = document.querySelector('input[name="editThumbnailMode"][value="pinned"]');
   
+  // Toggle off if already pinned
+  if (pinnedInput && pinnedInput.value === path) {
+    unpinEditThumbnail();
+    return;
+  }
+  
   if (pinnedInput) {
     pinnedInput.value = path;
   }
@@ -12796,11 +12905,32 @@ function pinEditThumbnail(path) {
   if (modeRadio) {
     modeRadio.checked = true;
   }
+
+  window.editSavedThumbnailPath = path;
+  window.editSelectedThumbnailPath = path;
+
+  // Update preview image
+  const preview = document.getElementById('editThumbnailPreview');
+  if (preview) {
+    preview.innerHTML = `<img src="${path}" class="w-full h-full object-cover">`;
+    if (indicator) {
+      preview.appendChild(indicator);
+    }
+  }
+
+  // Pre-load image as File for upload
+  fetch(path)
+    .then(res => res.blob())
+    .then(blob => {
+      window.editThumbnailFile = new File([blob], 'pinned_thumbnail.jpg', { type: blob.type });
+      window.editThumbnailFromHistory = true;
+    })
+    .catch(err => console.warn('[pinEditThumbnail] Fetch blob error:', err));
   
   // Refresh gallery to show pinned state with proper styling
   loadEditThumbnailFolder(currentEditThumbnailFolder);
   
-  showToast('Thumbnail di-pin');
+  showToast('Thumbnail di-pin', 'success');
 }
 
 /**
@@ -14227,6 +14357,10 @@ if (originalEditBroadcastForm) {
       console.log('[EditBroadcast] Category:', categoryId);
       console.log('[EditBroadcast] Stream ID:', streamId);
       
+      const editThumbnailMode = document.querySelector('input[name="editThumbnailMode"]:checked')?.value || 'sequential';
+      const editPinnedThumb = document.getElementById('editPinnedThumbnail')?.value || null;
+      const finalPinned = editThumbnailMode === 'pinned' ? editPinnedThumb : null;
+      
       const updateData = {
         title: document.getElementById('editBroadcastTitle').value,
         description: document.getElementById('editBroadcastDescription').value,
@@ -14234,6 +14368,8 @@ if (originalEditBroadcastForm) {
         privacyStatus: document.getElementById('editPrivacyStatus').value,
         categoryId: categoryId,
         thumbnailFolder: thumbnailFolder, // Include thumbnail folder in update
+        thumbnailPath: finalPinned || window.editSavedThumbnailPath || null,
+        pinnedThumbnail: finalPinned,
         titleFolderId: document.getElementById('editBroadcastTitleFolder')?.value || null
       };
       

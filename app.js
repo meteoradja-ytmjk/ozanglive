@@ -10518,6 +10518,7 @@ app.get('/api/youtube/broadcast-settings/:broadcastId', isAuthenticated, async (
           unlistReplayOnEnd: settings.unlistReplayOnEnd,
           thumbnailIndex: settings.thumbnailIndex || 0,
           thumbnailPath: settings.thumbnailPath || null,
+          pinnedThumbnail: settings.pinnedThumbnail || null,
           titleFolderId: settings.title_folder_id || null
         },
         found: true
@@ -10669,7 +10670,7 @@ async function attachLocalSettingsToBroadcasts(broadcastsList, userId) {
     const placeholders = broadcastIds.map(() => '?').join(',');
     const settingsRows = await new Promise((resolve) => {
       db.all(
-        `SELECT broadcast_id, dual_stream, altered_content, enable_dvr, unlist_replay_on_end, vertical_stream_key, thumbnail_folder, thumbnail_path, tags,
+        `SELECT broadcast_id, dual_stream, altered_content, enable_dvr, unlist_replay_on_end, vertical_stream_key, thumbnail_folder, thumbnail_path, pinned_thumbnail, tags,
                 title_folder_id, audio_id, video_id
          FROM youtube_broadcast_settings 
          WHERE broadcast_id IN (${placeholders})`,
@@ -10706,6 +10707,7 @@ async function attachLocalSettingsToBroadcasts(broadcastsList, userId) {
           vertical_stream_key: row.vertical_stream_key || null,
           thumbnail_folder: row.thumbnail_folder || null,
           thumbnail_path: row.thumbnail_path || null,
+          pinned_thumbnail: row.pinned_thumbnail || null,
           tags: row.tags,
           title_folder_id: row.title_folder_id || null,
           audio_id: row.audio_id || null,
@@ -10816,6 +10818,10 @@ async function attachLocalSettingsToBroadcasts(broadcastsList, userId) {
       if (s.vertical_stream_key) b.vertical_stream_key = s.vertical_stream_key;
       if (s.thumbnail_folder) b.thumbnailFolder = s.thumbnail_folder;
       if (s.thumbnail_path) b.thumbnailPath = s.thumbnail_path;
+      if (s.pinned_thumbnail) {
+        b.pinnedThumbnail = s.pinned_thumbnail;
+        b.pinned_thumbnail = s.pinned_thumbnail;
+      }
       b.stream_duration_hours = s.stream_duration_hours || 0;
       b.streamDurationHours = s.stream_duration_hours || 0;
       b.stream_duration_minutes = s.stream_duration_minutes || 0;
@@ -11813,6 +11819,17 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
     }
     const thumbnailIndex = parseInt(req.body.thumbnailIndex) || 0;
     let thumbnailPathFromRequest = req.body.thumbnailPath;
+    let pinnedThumbnailFromRequest = req.body.pinnedThumbnail || (req.body.thumbnailMode === 'pinned' ? req.body.thumbnailPath : null) || null;
+    if (!pinnedThumbnailFromRequest && (matchedSlot || templateObj)) {
+      if (matchedSlot && matchedSlot.pinnedThumbnail) {
+        pinnedThumbnailFromRequest = matchedSlot.pinnedThumbnail;
+      } else if (templateObj && templateObj.pinned_thumbnail) {
+        pinnedThumbnailFromRequest = templateObj.pinned_thumbnail;
+      }
+    }
+    if (pinnedThumbnailFromRequest) {
+      thumbnailPathFromRequest = pinnedThumbnailFromRequest;
+    }
     if (!thumbnailPathFromRequest && (matchedSlot || templateObj)) {
       if (matchedSlot && (matchedSlot.pinnedThumbnail || matchedSlot.thumbnailPath)) {
         thumbnailPathFromRequest = matchedSlot.pinnedThumbnail || matchedSlot.thumbnailPath;
@@ -12041,6 +12058,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
           thumbnailFolder: thumbnailFolder !== undefined ? thumbnailFolder : null,
           thumbnailIndex: thumbnailIndex,
           thumbnailPath: thumbnailPathFromRequest || null,
+          pinnedThumbnail: pinnedThumbnailFromRequest || null,
           alteredContent: isAlteredContent ? 1 : 0,
           dualStream: isDualStream ? 1 : 0,
           verticalStreamKey: isDualStream ? (verticalStreamKey || null) : null,
@@ -12173,6 +12191,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
         thumbnailFolder: thumbnailFolder !== undefined ? thumbnailFolder : null,
         thumbnailIndex: thumbnailIndex,
         thumbnailPath: thumbnailPathFromRequest || null,
+        pinnedThumbnail: pinnedThumbnailFromRequest || null,
         alteredContent: isAlteredContent ? 1 : 0,
         dualStream: isDualStream ? 1 : 0,
         verticalStreamKey: isDualStream ? (verticalStreamKey || null) : null,
@@ -12221,59 +12240,68 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       } catch (thumbErr) {
         console.error('Error uploading thumbnail:', thumbErr.message);
       }
-    } else if (thumbnailPath && (thumbnailFolder === undefined || thumbnailFolder === null || req.body.isCustomThumbnail === 'true')) {
-      // Handle gallery selection (user explicitly selected a thumbnail - second priority)
+    } else if (thumbnailPath && (thumbnailFolder === undefined || thumbnailFolder === null || req.body.isCustomThumbnail === 'true' || pinnedThumbnailFromRequest || req.body.thumbnailMode === 'pinned')) {
+      // Handle gallery selection or pinned thumbnail
       try {
-        const fullPath = path.join(__dirname, 'public', thumbnailPath);
-        console.log('[API] Using user-selected thumbnail:', thumbnailPath);
+        const isPinnedMode = !!(pinnedThumbnailFromRequest || req.body.thumbnailMode === 'pinned');
+        const chosenPath = (isPinnedMode && pinnedThumbnailFromRequest) ? pinnedThumbnailFromRequest : thumbnailPath;
+        const normalizedChosen = chosenPath.replace(/^\//, '');
+        const fullPath = path.isAbsolute(chosenPath) ? chosenPath : path.join(__dirname, 'public', normalizedChosen);
+        console.log(`[API] Using ${isPinnedMode ? 'pinned' : 'user-selected'} thumbnail:`, chosenPath);
         if (fs.existsSync(fullPath)) {
           const imageBuffer = fs.readFileSync(fullPath);
           if (isStartImmediately) {
             safeUploadThumbnail(imageBuffer).then(res => {
               if (res && res.thumbnailUrl) broadcast.thumbnailUrl = res.thumbnailUrl;
-              console.log('[API] Thumbnail uploaded in background from user selection:', thumbnailPath);
+              console.log(`[API] Thumbnail uploaded in background from ${isPinnedMode ? 'pinned' : 'user selection'}:`, chosenPath);
             }).catch(thumbErr => console.error('[API] Error in background gallery thumbnail upload:', thumbErr.message));
           } else {
             const thumbnailResult = await safeUploadThumbnail(imageBuffer);
             broadcast.thumbnailUrl = thumbnailResult.thumbnailUrl;
-            console.log('[API] Thumbnail uploaded from user selection:', thumbnailPath);
+            console.log(`[API] Thumbnail uploaded from ${isPinnedMode ? 'pinned' : 'user selection'}:`, chosenPath);
           }
 
           // Update youtube_broadcast_settings with the selected thumbnail path
           // thumbnailIndex from request is the index of the selected thumbnail
           try {
-            await YouTubeBroadcastSettings.updateThumbnailSelection(broadcast.broadcastId, thumbnailIndex, thumbnailPath);
-            console.log('[API] Updated broadcast settings with user-selected thumbnail index:', thumbnailIndex, 'path:', thumbnailPath);
+            await YouTubeBroadcastSettings.updateThumbnailSelection(broadcast.broadcastId, thumbnailIndex, chosenPath);
+            if (isPinnedMode) {
+              await YouTubeBroadcastSettings.updatePinnedThumbnail(broadcast.broadcastId, chosenPath);
+            }
+            console.log(`[API] Updated broadcast settings with ${isPinnedMode ? 'pinned' : 'user-selected'} thumbnail index:`, thumbnailIndex, 'path:', chosenPath);
           } catch (updateErr) {
             console.error('[API] Error updating broadcast thumbnail settings:', updateErr.message);
           }
 
-          // IMPORTANT: Update GLOBAL thumbnail index with the NEXT index (selected + 1)
-          // This ensures thumbnail rotation continues from the correct position
-          // Use GLOBAL index (__GLOBAL__ + folder) for consistency across all stream keys
-          const nextIndex = thumbnailIndex + 1;
-          const db = require('./db/database').getDb();
-          const globalStreamKeyId = '__GLOBAL__' + (thumbnailFolder || '');
-          await new Promise((resolve, reject) => {
-            db.run(`
-              INSERT INTO stream_key_folder_mapping (user_id, stream_key_id, folder_name, thumbnail_index, updated_at)
-              VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-              ON CONFLICT(user_id, stream_key_id) DO UPDATE SET
-                thumbnail_index = excluded.thumbnail_index,
-                folder_name = excluded.folder_name,
-                updated_at = CURRENT_TIMESTAMP
-            `, [req.session.userId, globalStreamKeyId, thumbnailFolder || '', nextIndex], function (err) {
-              if (err) {
-                console.error('[API] Error updating GLOBAL thumbnail index for user selection:', err.message);
-                reject(err);
-              } else {
-                console.log('[API] ✅ Updated GLOBAL thumbnail index for user selection:', globalStreamKeyId, '-> next index:', nextIndex, '(folder:', thumbnailFolder || 'root', ')');
-                resolve();
-              }
+          // IMPORTANT: Only update GLOBAL thumbnail index if NOT pinned!
+          // Pinned thumbnails must NOT advance rotation order so rotation continues seamlessly
+          if (!isPinnedMode) {
+            const nextIndex = thumbnailIndex + 1;
+            const db = require('./db/database').getDb();
+            const globalStreamKeyId = '__GLOBAL__' + (thumbnailFolder || '');
+            await new Promise((resolve, reject) => {
+              db.run(`
+                INSERT INTO stream_key_folder_mapping (user_id, stream_key_id, folder_name, thumbnail_index, updated_at)
+                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(user_id, stream_key_id) DO UPDATE SET
+                  thumbnail_index = excluded.thumbnail_index,
+                  folder_name = excluded.folder_name,
+                  updated_at = CURRENT_TIMESTAMP
+              `, [req.session.userId, globalStreamKeyId, thumbnailFolder || '', nextIndex], function (err) {
+                if (err) {
+                  console.error('[API] Error updating GLOBAL thumbnail index for user selection:', err.message);
+                  reject(err);
+                } else {
+                  console.log('[API] ✅ Updated GLOBAL thumbnail index for user selection:', globalStreamKeyId, '-> next index:', nextIndex, '(folder:', thumbnailFolder || 'root', ')');
+                  resolve();
+                }
+              });
             });
-          });
+          } else {
+            console.log('[API] Thumbnail is pinned, GLOBAL thumbnail index left unchanged');
+          }
         } else {
-          console.error('[API] User-selected thumbnail not found:', fullPath);
+          console.error('[API] User-selected/pinned thumbnail not found:', fullPath);
         }
       } catch (thumbErr) {
         console.error('Error uploading gallery thumbnail:', thumbErr.message);
@@ -12803,6 +12831,7 @@ app.put('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
       thumbnailFolder, 
       thumbnailIndex, 
       thumbnailPath,
+      pinnedThumbnail,
       dualStream,
       alteredContent,
       enableDvr,
@@ -12925,6 +12954,7 @@ app.put('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
         thumbnailFolder: thumbnailFolder !== undefined ? thumbnailFolder : existingSettings.thumbnailFolder,
         thumbnailIndex: thumbnailIndex !== undefined ? thumbnailIndex : existingSettings.thumbnailIndex,
         thumbnailPath: thumbnailPath !== undefined ? thumbnailPath : existingSettings.thumbnailPath,
+        pinnedThumbnail: pinnedThumbnail !== undefined ? pinnedThumbnail : (existingSettings.pinnedThumbnail || null),
         alteredContent: finalAltered ? 1 : 0,
         dualStream: finalDual ? 1 : 0,
         verticalStreamKey: finalDual ? (req.body.verticalStreamKey || existingSettings.verticalStreamKey || null) : null,
@@ -13158,6 +13188,27 @@ app.post('/api/youtube/broadcasts/:id/thumbnail', isAuthenticated, handleThumbna
 
     const broadcastId = req.params.id;
     const accountId = req.body.accountId ? parseInt(req.body.accountId) : (req.query.accountId ? parseInt(req.query.accountId) : null);
+
+    // If local scheduled broadcast placeholder, save file locally without calling YouTube API
+    if (String(broadcastId).startsWith('scheduled_stream_')) {
+      const uploadDir = path.join(__dirname, 'public', 'uploads', 'thumbnails', String(req.session.userId));
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+      const ext = path.extname(req.file.originalname || '.jpg') || '.jpg';
+      const fileName = `thumb_${Date.now()}_${Math.random().toString(36).substring(2, 7)}${ext}`;
+      const filePath = path.join(uploadDir, fileName);
+      fs.writeFileSync(filePath, req.file.buffer);
+      const localRelPath = `/uploads/thumbnails/${req.session.userId}/${fileName}`;
+
+      const isPinned = req.body.isPinned === 'true' || req.body.pinned === 'true' || req.body.thumbnailMode === 'pinned';
+      await YouTubeBroadcastSettings.updateThumbnailSelection(broadcastId, 0, localRelPath);
+      if (isPinned) {
+        await YouTubeBroadcastSettings.updatePinnedThumbnail(broadcastId, localRelPath);
+      }
+      console.log(`[Thumbnail Upload] Saved local thumbnail for scheduled placeholder ${broadcastId}: ${localRelPath} (pinned: ${isPinned})`);
+      return res.json({ success: true, thumbnailUrl: localRelPath, path: localRelPath });
+    }
 
     console.log('[Thumbnail Upload] File received:', {
       originalname: req.file.originalname,
@@ -14200,6 +14251,8 @@ app.put('/api/youtube/templates/:id', isAuthenticated, async (req, res) => {
           if (title !== undefined) list[0].title = title;
           if (privacyStatus !== undefined) list.forEach(b => { b.privacyStatus = privacyStatus; });
           if (thumbnailFolder !== undefined) list.forEach(b => { b.thumbnailFolder = thumbnailFolder; });
+          if (pinnedThumbnail !== undefined) list[0].pinnedThumbnail = pinnedThumbnail;
+          if (thumbnailPath !== undefined) list[0].thumbnailPath = thumbnailPath;
           if (durationHours !== undefined) list[0].durationHours = parseInt(durationHours) || 0;
           if (durationMinutes !== undefined) list[0].durationMinutes = parseInt(durationMinutes) || 0;
           if (streamDurationMinutes !== undefined) list[0].streamDurationMinutes = parseInt(streamDurationMinutes) || 0;

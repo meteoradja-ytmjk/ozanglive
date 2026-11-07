@@ -1668,7 +1668,7 @@ class ScheduleService {
             template.pinned_thumbnail,
             null,
             thumbnailIndex,
-            thumbnailFolder !== null // ignorePinned when folder rotation is active
+            (thumbnailFolder !== null && !template.pinned_thumbnail) // Only ignore pinned if template has no pinned thumbnail
           );
           
           // Update GLOBAL and template thumbnail index after successful upload
@@ -1870,9 +1870,9 @@ class ScheduleService {
       const hasFolder = (thumbnailFolder !== null && thumbnailFolder !== undefined && userId);
       
       // Priority 1: Use pinned thumbnail if explicitly set and not ignored
-      // IMPORTANT: Only treat as pinned if ignorePinned is false AND pinnedThumbnail is not just a duplicate of an old thumbnailPath
-      if (!ignorePinned && pinnedThumbnail && userId && pinnedThumbnail !== thumbnailPath) {
-        fullPath = path.join(__dirname, '..', 'public', pinnedThumbnail);
+      if (!ignorePinned && pinnedThumbnail) {
+        const normalizedPinned = pinnedThumbnail.replace(/^\//, '');
+        fullPath = path.isAbsolute(pinnedThumbnail) ? pinnedThumbnail : path.join(__dirname, '..', 'public', normalizedPinned);
         if (fs.existsSync(fullPath)) {
           console.log(`[ScheduleService] Using pinned thumbnail: ${pinnedThumbnail}`);
           usedPinned = true;

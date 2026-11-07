@@ -24,6 +24,7 @@ class YouTubeBroadcastSettings {
       templateId = null,
       thumbnailIndex = 0,
       thumbnailPath = null,
+      pinnedThumbnail = null,
       alteredContent = false,
       tags = null,
       dualStream = false,
@@ -41,8 +42,8 @@ class YouTubeBroadcastSettings {
     return new Promise((resolve, reject) => {
       db.run(
         `INSERT INTO youtube_broadcast_settings 
-         (broadcast_id, user_id, account_id, title, description, category_id, privacy_status, enable_auto_start, enable_auto_stop, enable_dvr, unlist_replay_on_end, original_privacy_status, thumbnail_folder, template_id, thumbnail_index, thumbnail_path, altered_content, tags, dual_stream, vertical_stream_key, title_folder_id, audio_id, video_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         (broadcast_id, user_id, account_id, title, description, category_id, privacy_status, enable_auto_start, enable_auto_stop, enable_dvr, unlist_replay_on_end, original_privacy_status, thumbnail_folder, template_id, thumbnail_index, thumbnail_path, pinned_thumbnail, altered_content, tags, dual_stream, vertical_stream_key, title_folder_id, audio_id, video_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(broadcast_id) DO UPDATE SET
            account_id = COALESCE(excluded.account_id, youtube_broadcast_settings.account_id),
            title = COALESCE(excluded.title, youtube_broadcast_settings.title),
@@ -58,6 +59,7 @@ class YouTubeBroadcastSettings {
            template_id = excluded.template_id,
            thumbnail_index = excluded.thumbnail_index,
            thumbnail_path = excluded.thumbnail_path,
+           pinned_thumbnail = excluded.pinned_thumbnail,
            altered_content = excluded.altered_content,
            tags = excluded.tags,
            dual_stream = excluded.dual_stream,
@@ -82,6 +84,7 @@ class YouTubeBroadcastSettings {
           templateId,
           thumbnailIndex || 0,
           thumbnailPath,
+          pinnedThumbnail || null,
           alteredContentInt,
           tagsJson,
           dualStreamInt,
@@ -113,6 +116,7 @@ class YouTubeBroadcastSettings {
             templateId,
             thumbnailIndex,
             thumbnailPath,
+            pinnedThumbnail: pinnedThumbnail || null,
             alteredContent: alteredContentInt === 1,
             tags: tagsJson,
             dualStream: dualStreamInt === 1,
@@ -120,6 +124,28 @@ class YouTubeBroadcastSettings {
             audioId,
             videoId
           });
+        }
+      );
+    });
+  }
+
+  /**
+   * Update pinned thumbnail for a broadcast
+   * @param {string} broadcastId - YouTube broadcast ID
+   * @param {string|null} pinnedThumbnail - Pinned thumbnail path or null to unpin
+   * @returns {Promise<boolean>}
+   */
+  static async updatePinnedThumbnail(broadcastId, pinnedThumbnail) {
+    return new Promise((resolve, reject) => {
+      db.run(
+        `UPDATE youtube_broadcast_settings SET pinned_thumbnail = ? WHERE broadcast_id = ?`,
+        [pinnedThumbnail, broadcastId],
+        function(err) {
+          if (err) {
+            console.error('[YouTubeBroadcastSettings.updatePinnedThumbnail] Error:', err.message);
+            return reject(err);
+          }
+          resolve(this.changes > 0);
         }
       );
     });
@@ -195,6 +221,7 @@ class YouTubeBroadcastSettings {
             row.templateId = row.template_id;
             row.thumbnailIndex = row.thumbnail_index || 0;
             row.thumbnailPath = row.thumbnail_path;
+            row.pinnedThumbnail = row.pinned_thumbnail || null;
             row.alteredContent = row.altered_content === 1;
             row.dualStream = row.dual_stream === 1;
             row.verticalStreamKey = row.vertical_stream_key;
@@ -250,7 +277,11 @@ class YouTubeBroadcastSettings {
             enableAutoStop: row.enable_auto_stop === 1,
             enableDvr: row.enable_dvr === 1,
             unlistReplayOnEnd: row.unlist_replay_on_end === 1,
-            originalPrivacyStatus: row.original_privacy_status
+            originalPrivacyStatus: row.original_privacy_status,
+            thumbnailFolder: row.thumbnail_folder,
+            thumbnailIndex: row.thumbnail_index || 0,
+            thumbnailPath: row.thumbnail_path,
+            pinnedThumbnail: row.pinned_thumbnail || null
           }));
           resolve(result);
         }

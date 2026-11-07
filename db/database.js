@@ -709,6 +709,7 @@ async function createCoreTablesAsync() {
   await runTableQuery(`ALTER TABLE youtube_broadcast_settings ADD COLUMN audio_id TEXT`, 'youtube_broadcast_settings.audio_id');
   await runTableQuery(`ALTER TABLE youtube_broadcast_settings ADD COLUMN video_id TEXT`, 'youtube_broadcast_settings.video_id');
   await runTableQuery(`ALTER TABLE youtube_broadcast_settings ADD COLUMN enable_dvr INTEGER DEFAULT 0`, 'youtube_broadcast_settings.enable_dvr');
+  await runTableQuery(`ALTER TABLE youtube_broadcast_settings ADD COLUMN pinned_thumbnail TEXT`, 'youtube_broadcast_settings.pinned_thumbnail');
 
   // Backfill template_id for streams previously created by templates (safely run now that youtube_broadcast_settings exists)
   try {

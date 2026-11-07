@@ -430,13 +430,30 @@ async function ensureFreshYouTubeBroadcastForStream(stream) {
         ? (parseInt(savedSettings.thumbnail_index, 10) || 0)
         : 0;
 
-      // Upload thumbnail if available (Priority 1: sequential rotation if thumbnail_folder configured)
+      // Upload thumbnail if available
       try {
         const thumbFolder = savedSettings?.thumbnail_folder;
+        const pinnedThumb = savedSettings?.pinned_thumbnail || savedSettings?.pinnedThumbnail || null;
         let uploaded = false;
 
-        // If thumbnail_folder is set (even empty string for root folder), prioritize sequential rotation!
-        if (thumbFolder !== undefined && thumbFolder !== null) {
+        // Priority 1: Use pinned thumbnail if explicitly set!
+        if (pinnedThumb) {
+          const absPath = path.isAbsolute(pinnedThumb)
+            ? pinnedThumb
+            : path.join(__dirname, '..', 'public', pinnedThumb.replace(/^\//, ''));
+          if (fs.existsSync(absPath)) {
+            const buf = fs.readFileSync(absPath);
+            await safeUploadThumb(buf);
+            console.log(`[StreamingService] ✅ Uploaded pinned thumbnail for fresh broadcast ${created.broadcastId}: ${pinnedThumb}`);
+            uploaded = true;
+            finalThumbPath = pinnedThumb;
+          } else {
+            console.warn(`[StreamingService] ⚠️ Pinned thumbnail not found on disk: ${absPath}`);
+          }
+        }
+
+        // Priority 2: Sequential rotation if thumbnail_folder configured (ONLY if not pinned)
+        if (!uploaded && thumbFolder !== undefined && thumbFolder !== null) {
           const scheduleService = require('./scheduleService');
           const currentFolder = String(thumbFolder).trim();
           const globalStreamKeyId = '__GLOBAL__' + currentFolder;
@@ -495,7 +512,7 @@ async function ensureFreshYouTubeBroadcastForStream(stream) {
           }
         }
 
-        // Priority 2: Fallback to specific/pinned thumbnail_path if no folder rotation or folder had no files
+        // Priority 3: Fallback to specific thumbnail_path if no pinned thumbnail and no folder rotation
         if (!uploaded && savedSettings?.thumbnail_path) {
           const absPath = path.isAbsolute(savedSettings.thumbnail_path)
             ? savedSettings.thumbnail_path
@@ -529,6 +546,7 @@ async function ensureFreshYouTubeBroadcastForStream(stream) {
           thumbnailFolder: savedSettings?.thumbnail_folder !== undefined ? savedSettings.thumbnail_folder : null,
           thumbnailIndex: finalThumbIndex,
           thumbnailPath: finalThumbPath,
+          pinnedThumbnail: savedSettings?.pinned_thumbnail || savedSettings?.pinnedThumbnail || null,
           alteredContent: isAlteredContent ? 1 : 0,
           dualStream: isDualStream ? 1 : 0,
           verticalStreamKey: savedSettings?.vertical_stream_key || null,
